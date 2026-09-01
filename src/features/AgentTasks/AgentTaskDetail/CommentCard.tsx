@@ -1,18 +1,8 @@
 import type { TaskDetailActivity } from '@lobechat/types';
 import { useEditor } from '@lobehub/editor/react';
 import { LexicalRenderer } from '@lobehub/editor/renderer';
-import {
-  ActionIcon,
-  Avatar,
-  Block,
-  type DropdownItem,
-  DropdownMenu,
-  Flexbox,
-  Icon,
-  Markdown,
-  Text,
-} from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
+import { Block, type DropdownItem, DropdownMenu, Flexbox, Icon, Markdown } from '@lobehub/ui';
+import { ActionIcon, Avatar, Button, confirmModal, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { MessageCircle, MoreHorizontal, Pencil, Trash } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';

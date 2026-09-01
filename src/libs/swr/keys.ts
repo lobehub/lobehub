@@ -172,6 +172,47 @@ export const topicCommentKeys = {
   ]),
 };
 
+// ---- document comment ---------------------------------------------------
+export const documentCommentKeys = {
+  replies: def(
+    'documentComment:replies',
+    (workspaceId: string | null, rootCommentId: string, cursor?: string) => [
+      'documentComment:replies',
+      workspaceId ?? '',
+      rootCommentId,
+      cursor ?? '',
+    ],
+  ),
+  summary: def('documentComment:summary', (documentId: string) => [
+    'documentComment:summary',
+    documentId,
+  ]),
+  threads: def(
+    'documentComment:threads',
+    (workspaceId: string | null, documentId: string, cursor?: string) => [
+      'documentComment:threads',
+      workspaceId ?? '',
+      documentId,
+      cursor ?? '',
+    ],
+  ),
+};
+
+export const isDocumentCommentKeyForEvent = (
+  key: unknown,
+  event: { documentId: string; rootCommentId?: string; workspaceId: string },
+): boolean => {
+  if (!Array.isArray(key)) return false;
+
+  if (key[0] === documentCommentKeys.summary.root) return key[1] === event.documentId;
+  if (key[1] !== event.workspaceId) return false;
+  if (key[0] === documentCommentKeys.threads.root) return key[2] === event.documentId;
+  if (key[0] === documentCommentKeys.replies.root) {
+    return !event.rootCommentId || key[2] === event.rootCommentId;
+  }
+  return false;
+};
+
 // ---- agent --------------------------------------------------------------
 export const agentKeys = {
   /** Sidebar agent list. */
@@ -276,6 +317,14 @@ export const isTaskListKey = (key: unknown): boolean =>
 export const isScheduledTaskListKey = (key: unknown): boolean =>
   Array.isArray(key) && key[0] === 'task:scheduledList';
 
+/**
+ * Goal Graph reads. Keyed by the `goals` row id (not the carrier task's
+ * identifier) because that is what every `goal.*` procedure takes.
+ */
+export const goalKeys = {
+  graph: def('goal:graph', (goalId: string) => ['goal:graph', goalId]),
+};
+
 export const taskKeys = {
   detail: def('task:detail', (taskId: string) => ['task:detail', taskId]),
   groupList: def(
@@ -283,7 +332,7 @@ export const taskKeys = {
     (
       agentKey: string | undefined,
       visibility: 'all' | 'private' | 'workspace' = 'all',
-      groupBy: 'assignee' | 'priority' | 'status' = 'status',
+      groupBy: 'assignee' | 'member' | 'priority' | 'status' = 'status',
       excludeStatuses?: string,
       projectId?: string,
       automated?: boolean,
@@ -678,12 +727,14 @@ export const evalKeys = {
   benchmarks: def('eval:benchmarks', () => ['eval:benchmarks']),
   datasetDetail: def('eval:datasetDetail', (id: string) => ['eval:datasetDetail', id]),
   datasetRuns: def('eval:datasetRuns', (datasetId: string) => ['eval:datasetRuns', datasetId]),
+  datasetsAll: def('eval:datasetsAll', () => ['eval:datasetsAll']),
   datasets: def('eval:datasets', (benchmarkId: string) => ['eval:datasets', benchmarkId]),
   experimentDetail: def('eval:experimentDetail', (id: string) => ['eval:experimentDetail', id]),
   experiments: def('eval:experiments', () => ['eval:experiments']),
   runDetail: def('eval:runDetail', (id: string) => ['eval:runDetail', id]),
   runResults: def('eval:runResults', (id: string) => ['eval:runResults', id]),
   runs: def('eval:runs', (benchmarkId?: string) => ['eval:runs', benchmarkId]),
+  testCaseDetail: def('eval:testCaseDetail', (id: string) => ['eval:testCaseDetail', id]),
   testCases: def('eval:testCases', (datasetId: string, limit?: number, offset?: number) => [
     'eval:testCases',
     datasetId,
@@ -979,10 +1030,12 @@ export const verifyKeys = {
       [...subjectIds].sort().join(','),
     ],
   ),
-  /** `limit` is part of the key: the merge picker asks for a wider window than the panel. */
-  acceptances: def('verify:acceptances', (limit?: number) => [
+  /** Query inputs are part of the key so server-side list filtering never reuses stale rows. */
+  acceptances: def('verify:acceptances', (limit?: number, q?: string, filter?: string) => [
     'verify:acceptances',
     String(limit ?? ''),
+    q ?? '',
+    filter ?? '',
   ]),
   criteria: def('verify:criteria', () => ['verify:criteria']),
   instruction: def('verify:instruction', (documentId: string) => [
@@ -1013,6 +1066,10 @@ export const verifyKeys = {
   tracing: def('verify:tracing', (tracingId: string) => ['verify:tracing', tracingId]),
 };
 
+/** Match every parameterized Acceptance list key (filter / limit / search variants). */
+export const isAcceptanceListKey = (key: unknown): boolean =>
+  Array.isArray(key) && key[0] === verifyKeys.acceptances.root;
+
 // ---- inbox / notifications ----------------------------------------------
 export const inboxKeys = {
   navigationCounts: def('inbox:navigationCounts', (workspaceId: string | null) => [
@@ -1038,6 +1095,7 @@ export const inboxKeys = {
 
 // ---- share (shared topic / page) ----------------------------------------
 export const shareKeys = {
+  artifact: def('share:artifact', (id: string) => ['share:artifact', id]),
   pageDocument: def('share:pageDocument', (documentId: string) => [
     'share:pageDocument',
     documentId,
@@ -1302,6 +1360,7 @@ export const swrKeys = {
   file: fileKeys,
   fork: forkKeys,
   gateway: gatewayKeys,
+  goal: goalKeys,
   global: globalKeys,
   group: groupKeys,
   home: homeKeys,
@@ -1332,6 +1391,7 @@ export const swrKeys = {
   tool: toolKeys,
   topic: topicKeys,
   topicComment: topicCommentKeys,
+  documentComment: documentCommentKeys,
   topicAction: topicActionKeys,
   user: userKeys,
   userMemory: userMemoryKeys,

@@ -4,7 +4,7 @@ import { isDesktop } from '@lobechat/const';
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import type { DeviceExecutionTarget } from '@lobechat/types';
 import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   CheckIcon,
@@ -12,6 +12,7 @@ import {
   ExternalLinkIcon,
   InfoIcon,
   MonitorDownIcon,
+  RefreshCwIcon,
   SettingsIcon,
   ShieldCheckIcon,
 } from 'lucide-react';
@@ -214,6 +215,12 @@ const styles = createStaticStyles(({ css }) => ({
 
     min-width: 0;
   `,
+  reconnectButton: css`
+    min-height: 18px;
+    padding-block: 0;
+    padding-inline: 2px;
+    font-size: 11px;
+  `,
   optionTitle: css`
     overflow: hidden;
 
@@ -400,7 +407,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   // Workspace-keyed SWR fetch — the raw lambdaQuery key has no workspace
   // dimension, so the picker kept showing the previous workspace's pool after
   // a switch.
-  const { data: devices, isLoading } = useDeviceList();
+  const { data: devices, isLoading, mutate: refreshDevices } = useDeviceList();
 
   // The current machine's own gateway deviceId (desktop only), used to badge the
   // matching device row with a "This device" tag and show the local-process
@@ -408,6 +415,40 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   useElectronStore((s) => s.useFetchGatewayDeviceInfo)();
   const gatewayDeviceInfo = useElectronStore((s) => s.gatewayDeviceInfo);
   const currentDeviceId = isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
+  const [reconnectingDeviceId, setReconnectingDeviceId] = useState<string>();
+
+  const handleReconnectDevice = useCallback(
+    async (deviceId: string) => {
+      setReconnectingDeviceId(deviceId);
+      try {
+        if (isDesktop && deviceId === currentDeviceId) {
+          await useElectronStore.getState().connectGateway();
+        } else {
+          window.location.href = `lobehub://device/reconnect?deviceId=${encodeURIComponent(deviceId)}`;
+        }
+
+        // The deep link crosses browser → desktop → gateway → server, so give
+        // the live device registry a short window to converge instead of
+        // making the user close and reopen the picker to see the result.
+        let connected = false;
+        for (let attempt = 0; attempt < 8; attempt += 1) {
+          const nextDevices = await refreshDevices();
+          if (nextDevices?.some((device) => device.deviceId === deviceId && device.online)) {
+            connected = true;
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+        if (!connected) toast.error(t('heteroAgent.executionTarget.reconnectFailed'));
+      } catch (error) {
+        console.error('Device reconnect failed:', error);
+        toast.error(t('heteroAgent.executionTarget.reconnectFailed'));
+      } finally {
+        setReconnectingDeviceId(undefined);
+      }
+    },
+    [currentDeviceId, refreshDevices, t],
+  );
 
   // A member's explicit target override may resolve `local`; without one the
   // raw shared fallback stays workspace-scoped so a legacy `local` value keeps
@@ -670,7 +711,26 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         label={d.friendlyName || d.hostname || d.deviceId}
         tag={isCurrentMachine ? t('heteroAgent.executionTarget.gateway') : undefined}
         desc={
-          isCurrentMachine ? t('heteroAgent.executionTarget.gatewayDesc') : renderDeviceStatus(d)
+          <>
+            {isCurrentMachine
+              ? t('heteroAgent.executionTarget.gatewayDesc')
+              : renderDeviceStatus(d)}
+            {d.online ? null : (
+              <Button
+                className={styles.reconnectButton}
+                icon={RefreshCwIcon}
+                loading={reconnectingDeviceId === d.deviceId}
+                size={'small'}
+                type={'text'}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void handleReconnectDevice(d.deviceId);
+                }}
+              >
+                {t('heteroAgent.executionTarget.reconnect')}
+              </Button>
+            )}
+          </>
         }
         onClick={() => void handleSelect('device', d.deviceId)}
       />

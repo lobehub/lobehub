@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildServerDefaultModelOptions,
   compactModelTriggerText,
+  resolveServerDefaultAgentModels,
   resolveServerDefaultModelMeta,
 } from './modelPicker';
 
@@ -16,6 +17,20 @@ const catalogItem = (partial: {
     abilities: {},
     ...partial,
   }) as LobeDefaultAiModelListItem;
+
+describe('resolveServerDefaultAgentModels', () => {
+  it('returns an empty list when an older server omits the requested agent entry', () => {
+    const legacyModels = {
+      'claude-code': [{ model: 'claude-sonnet-4-6' }],
+      'codex': [{ model: 'gpt-5.6' }],
+    };
+
+    expect(resolveServerDefaultAgentModels(legacyModels, 'kimi-code')).toEqual([]);
+    expect(resolveServerDefaultAgentModels(legacyModels, 'claude-code')).toEqual([
+      { model: 'claude-sonnet-4-6' },
+    ]);
+  });
+});
 
 describe('resolveServerDefaultModelMeta', () => {
   it('prefers the LobeHub catalog entry over another provider with the same id', () => {

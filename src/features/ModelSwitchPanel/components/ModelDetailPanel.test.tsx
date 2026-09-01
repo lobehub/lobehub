@@ -3,14 +3,14 @@
  */
 import { render, screen } from '@testing-library/react';
 import type { ModelRating } from 'model-bank';
-import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
 
 import ModelDetailPanel from './ModelDetailPanel';
 
-vi.mock('antd-style', () => ({
+vi.mock('antd-style', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   createStaticStyles: () => ({
     actionText: 'actionText',
     container: 'container',
@@ -44,39 +44,6 @@ vi.mock('./BenchmarkModal', () => ({
   openBenchmarkModal: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Accordion: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  AccordionItem: ({
-    action,
-    children,
-    title,
-  }: {
-    action?: ReactNode;
-    children?: ReactNode;
-    title?: ReactNode;
-  }) => (
-    <section>
-      <div>{title}</div>
-      <div>{action}</div>
-      <div>{children}</div>
-    </section>
-  ),
-  Flexbox: ({ children, ...props }: { children?: ReactNode }) => <div {...props}>{children}</div>,
-  Icon: () => <span />,
-  Tag: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-  Text: ({ children, ...props }: { children: ReactNode }) => {
-    const { type: _type, ...rest } = props as Record<string, unknown>;
-
-    return <p {...rest}>{children}</p>;
-  },
-  Tooltip: ({ children, title }: { children: ReactNode; title?: ReactNode }) => (
-    <span>
-      {title}
-      {children}
-    </span>
-  ),
-}));
-
 vi.mock('@/hooks/useEnabledChatModels', () => ({
   useEnabledChatModels: () => [],
 }));
@@ -89,7 +56,7 @@ vi.mock('@/business/client/hooks/useBusinessModelRating', () => ({
 
 const globalState = {
   status: {
-    modelDetailPanelExpandedKeys: ['pricing'],
+    modelDetailPanelExpandedKeys: ['pricing', 'rating'],
   },
   updateModelDetailPanelExpandedKeys: vi.fn(),
 };
@@ -414,7 +381,7 @@ describe('ModelDetailPanel rating', () => {
     );
 
     expect(container).toHaveTextContent('Benchmarks');
-    expect(container.querySelector('svg')).toBeInTheDocument();
+    expect(container.querySelector('[data-testid="radar-chart"]')).toBeInTheDocument();
     expect(container).toHaveTextContent('Intelligence');
     expect(container).toHaveTextContent('100');
     // agentic has no data: the dimension is omitted from the radar entirely
@@ -437,7 +404,7 @@ describe('ModelDetailPanel rating', () => {
     );
 
     expect(container).toHaveTextContent('Benchmarks');
-    expect(container.querySelector('svg')).not.toBeInTheDocument();
+    expect(container.querySelector('[data-testid="radar-chart"]')).not.toBeInTheDocument();
     expect(container).toHaveTextContent('Intelligence');
     expect(container).toHaveTextContent('91');
     // unrated dimensions are not listed in the fallback view

@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 
 // Cloud overrides this at the same path with the real workspaceRouter backed by cloudDB.
@@ -15,4 +16,5 @@ export const workspaceRouter = router({
         message: 'Workspace market organization is a cloud-only feature.',
       });
     }),
+  getById: wsCompatProcedure.query(() => null),
 });

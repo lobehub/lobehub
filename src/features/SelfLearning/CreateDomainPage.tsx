@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon, Flexbox, Icon, Input, Text, TextArea } from '@lobehub/ui';
-import { Button, Popover, toast } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Input, TextArea } from '@lobehub/ui';
+import { ActionIcon, Button, Popover, Text, toast } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
 import { createGlobalStyle, createStaticStyles, cssVar } from 'antd-style';
 import {

@@ -3,9 +3,25 @@ import { ModalHost } from '@lobehub/ui/base-ui';
 import { act, render, screen } from '@testing-library/react';
 import { motion } from 'motion/react';
 import { useState } from 'react';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import ImperativeModal from '.';
+
+// Real WAAPI animations under happy-dom get canceled when the tree unmounts on
+// test cleanup, which rejects each animation's pending `finished` promise with
+// an AbortError nothing awaits and flakes CI with unhandled rejections. Mark
+// every animation's `finished` promise as handled at creation time.
+const originalAnimate = Element.prototype.animate;
+beforeAll(() => {
+  Element.prototype.animate = function (this: Element, ...args) {
+    const animation = originalAnimate.apply(this, args);
+    animation.finished.catch(() => {});
+    return animation;
+  } as typeof originalAnimate;
+});
+afterAll(() => {
+  Element.prototype.animate = originalAnimate;
+});
 
 /** A modal whose input is controlled by state living in the CALLER's tree. */
 const Harness = ({ open = true }: { open?: boolean }) => {

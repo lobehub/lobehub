@@ -180,6 +180,36 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
   },
   {
     auth: {
+      docsUrl: 'https://docs.factory.ai/cli/getting-started/quickstart',
+      errorMessage:
+        'Factory Droid could not authenticate. Run `droid` to sign in or configure FACTORY_API_KEY, then retry.',
+      patterns: [
+        ...COMMON_AUTH_REQUIRED_PATTERNS,
+        'authentication required',
+        'factory_api_key',
+        'device pairing',
+      ],
+      signInCommand: 'droid',
+    },
+    defaultCommand: 'droid',
+    defaultTopicGroupMode: 'byProject',
+    iconId: 'Droid',
+    install: {
+      commands: [
+        'curl -fsSL https://app.factory.ai/cli | sh',
+        'irm https://app.factory.ai/cli/windows | iex',
+      ],
+      docsUrl: 'https://docs.factory.ai/cli/getting-started/quickstart',
+    },
+    kind: 'local-cli',
+    menuKey: 'newDroidAgent',
+    menuLabelKey: 'newDroidAgent',
+    resume: { supported: true },
+    title: 'Factory Droid',
+    type: 'droid',
+  },
+  {
+    auth: {
       docsUrl: 'https://docs.x.ai/build/overview',
       errorMessage: 'Grok Build could not authenticate. Run `grok login`, then retry.',
       patterns: [
@@ -338,15 +368,48 @@ export const LOCAL_HETEROGENEOUS_AGENT_TYPES = HETEROGENEOUS_AGENT_CONFIGS.map((
 
 export const LocalHeterogeneousAgentTypeSchema = z.enum(LOCAL_HETEROGENEOUS_AGENT_TYPES);
 
+export interface RemoteHeterogeneousAgentCliDescriptor {
+  command: string;
+  validation: {
+    helpKeywords?: readonly string[];
+    keywords?: readonly string[];
+    pattern?: string;
+  };
+  wellKnownHomePaths?: readonly string[];
+}
+
 export interface RemoteHeterogeneousAgentDescriptor {
+  cli: RemoteHeterogeneousAgentCliDescriptor;
   kind: 'remote-task';
   title: string;
   type: string;
 }
 
 export const REMOTE_HETEROGENEOUS_AGENT_CONFIGS = [
-  { kind: 'remote-task', title: 'OpenClaw', type: 'openclaw' },
-  { kind: 'remote-task', title: 'Hermes', type: 'hermes' },
+  {
+    cli: {
+      command: 'openclaw',
+      validation: {
+        helpKeywords: ['Usage: openclaw'],
+        keywords: ['openclaw'],
+        pattern: '^v?\\d+\\.\\d+\\.\\d+(?:[-+][\\dA-Za-z.-]+)?$',
+      },
+      wellKnownHomePaths: ['.openclaw/bin/openclaw', '.local/bin/openclaw'],
+    },
+    kind: 'remote-task',
+    title: 'OpenClaw',
+    type: 'openclaw',
+  },
+  {
+    cli: {
+      command: 'hermes',
+      validation: { keywords: ['hermes'] },
+      wellKnownHomePaths: ['.local/bin/hermes'],
+    },
+    kind: 'remote-task',
+    title: 'Hermes',
+    type: 'hermes',
+  },
 ] as const satisfies readonly RemoteHeterogeneousAgentDescriptor[];
 
 export type HeterogeneousAgentDescriptor =

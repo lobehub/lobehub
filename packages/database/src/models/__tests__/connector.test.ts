@@ -577,18 +577,18 @@ describe('ConnectorModel', () => {
       // We fixed this by matching the failed connectedAccountId in the health UPDATE.
       const model = new ConnectorModel(serverDB, userId);
       const created = await model.create({
-        identifier: 'github',
+        identifier: 'gmail',
         isEnabled: true,
         metadata: {
           composio: {
-            appSlug: 'github',
+            appSlug: 'gmail',
             authConfigId: 'auth-config',
             connectedAccountId: 'ca-current',
             linkedByUserId: userId,
             status: 'ACTIVE',
           },
         },
-        name: 'GitHub',
+        name: 'Gmail',
         sourceType: 'marketplace',
         status: 'connected',
       });

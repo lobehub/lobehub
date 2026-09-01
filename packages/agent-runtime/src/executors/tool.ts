@@ -637,8 +637,15 @@ export const callTool =
           topicId: runContext.topicId,
         });
       } else {
+        /**
+         * Preserve the durable row id in the in-memory turn. The next gateway
+         * step uses message ids to rebuild media refs before its DB rehydrate,
+         * and an id-less tool result makes that safety gate keep the stale
+         * snapshot instead.
+         */
         newState.messages.push({
           content: executionResult.content,
+          id: toolMessageId,
           plugin: tool,
           pluginState: executionResult.state,
           role: 'tool',
@@ -715,6 +722,9 @@ export const callTool =
         nextContext: {
           payload: {
             data: executionResult,
+            // Server-observed span vs the device's own — their difference is
+            // the dispatch overhead, which only the trace can show after the fact.
+            deviceExecutionTime: execution.result.deviceExecutionTime,
             executionTime,
             isSuccess,
             parentMessageId: toolMessageId,

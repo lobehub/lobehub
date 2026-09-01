@@ -653,6 +653,29 @@ describe('WechatAdapter', () => {
       expect(Buffer.from(uploadedBytes).equals(remoteBytes)).toBe(true);
     });
 
+    it('normalizes a fetchData() result that resolves to an ArrayBuffer', async () => {
+      const bytes = Buffer.from([9, 8, 7, 6]);
+      const arrayBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+
+      await adapter.postMessage(threadId, {
+        attachments: [
+          {
+            fetchData: async () => arrayBuffer,
+            mimeType: 'image/png',
+            name: 'lazy.png',
+            type: 'image',
+            url: '',
+          },
+        ],
+        raw: '',
+      });
+
+      expect(uploadSpy).toHaveBeenCalledTimes(1);
+      const uploadedBytes = uploadSpy.mock.calls[0][2];
+      expect(Buffer.isBuffer(uploadedBytes)).toBe(true);
+      expect(Buffer.from(uploadedBytes).equals(bytes)).toBe(true);
+    });
+
     it('promotes a FileUpload (no type field) to FILE based on mimeType', async () => {
       const bytes = Buffer.from('arbitrary bytes');
 

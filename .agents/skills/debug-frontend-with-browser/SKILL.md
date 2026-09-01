@@ -1,21 +1,22 @@
 ---
 name: debug-frontend-with-browser
-description: Frontend diagnosis extension for agent-testing. Use for intermittent rendering, ordering, stale-state, navigation, virtual-list, React/Zustand, optimistic-update, refresh-dependent, or browser-only failures where the first broken boundary may be DOM, component input, derived state, client cache, network data, or a pure transformation. Before any browser, Electron, or live-app interaction, this skill must load and follow agent-testing; it adds only boundary tracing, minimal fixture replay, and regression attribution.
+description: Frontend diagnosis extension for the acceptance skill. Use for intermittent rendering, ordering, stale-state, navigation, virtual-list, React/Zustand, optimistic-update, refresh-dependent, or browser-only failures where the first broken boundary may be DOM, component input, derived state, client cache, network data, or a pure transformation. Before any browser, Electron, or live-app interaction, this skill must load and follow the acceptance skill and the repository's `.agents/acceptance/` project layer; it adds only boundary tracing, minimal fixture replay, and regression attribution.
 ---
 
 # Debug Frontend with Browser
 
 Find the first boundary where correct data becomes incorrect. This skill extends
-`agent-testing`; it does not define a separate test workflow.
+`acceptance`; it does not define a separate test workflow.
 
 ## Mandatory foundation
 
 Before any browser, Electron, network, cache, or application interaction:
 
-1. Read [`../agent-testing/SKILL.md`](../agent-testing/SKILL.md) in full.
+1. Read [`../acceptance/SKILL.md`](../acceptance/SKILL.md) and the project's
+   [`PROCESS.md`](../../acceptance/PROCESS.md) in full.
 2. Follow its target grounding, living logs, project adapter, environment and auth
    checks, approval gate, evidence rules, publication, and teardown.
-3. Enter this diagnostic workflow only after `agent-testing` has established the
+3. Enter this diagnostic workflow only after `acceptance` has established the
    approved execution surface. If its environment or auth gate is blocked, stop
    there instead of inventing another execution path.
 4. Use the isolated environment and fixture strategy selected by the project
@@ -27,11 +28,11 @@ Before any browser, Electron, network, cache, or application interaction:
 6. Never read secret files or print credentials, tokens, private content, or full
    live objects. Return structural projections only.
 
-If `agent-testing` is unavailable, say so and stop before touching a live surface.
+If `acceptance` is unavailable, say so and stop before touching a live surface.
 
 ## Responsibility boundary
 
-| `agent-testing` owns                        | This skill adds                        |
+| `acceptance` owns                           | This skill adds                        |
 | ------------------------------------------- | -------------------------------------- |
 | Environment isolation and service lifecycle | Falsifiable symptom and event timeline |
 | Authentication and fixture seeding          | Boundary-by-boundary state comparison  |
@@ -39,8 +40,8 @@ If `agent-testing` is unavailable, say so and stop before touching a live surfac
 | Approval and mutation authority             | Pure-function replay and commit A/B    |
 | Evidence, report, publication, teardown     | Earliest-boundary fix guidance         |
 
-Do not duplicate or weaken `agent-testing` rules here. When the two skills appear
-to conflict, `agent-testing` and the project adapter control execution.
+Do not duplicate or weaken `acceptance` rules here. When the two skills appear
+to conflict, `acceptance` and the project layer control execution.
 
 ## Diagnostic workflow
 
@@ -65,7 +66,7 @@ before reading implementation code.
 - Use a GIF or video for flicker and other time-based behavior.
 - Re-snapshot after navigation or a major render because element references expire.
 
-Use the surface and capture method chosen by `agent-testing`; do not relaunch or
+Use the surface and capture method chosen by `acceptance`; do not relaunch or
 reattach to the user's resident application.
 
 ### 3. Find the first broken boundary
@@ -102,7 +103,7 @@ only fields required by the suspected boundary, such as:
 - branch or group metadata;
 - entity identifiers that affect selection or grouping.
 
-Store reusable inputs through the `agent-testing` fixture layout. Do not copy
+Store reusable inputs through the project's fixture layout. Do not copy
 private production content into fixtures or tracked files.
 
 ### 5. Attribute with the same fixture
@@ -124,9 +125,9 @@ Do not infer causality from PR timing or filenames.
 - Do not substitute timeouts, refreshes, DOM sorting, or downstream filters for a
   source-state fix.
 
-### 7. Return to agent-testing for verification
+### 7. Return to the acceptance workflow for verification
 
-After diagnosis or a fix, resume the parent `agent-testing` workflow. It owns the
+After diagnosis or a fix, resume the parent `acceptance` workflow. It owns the
 focused checks, isolated visual replay, evidence inspection, structured report,
 publication, and cleanup. Do not publish a separate browser-debugging verdict.
 

@@ -20,6 +20,23 @@ export interface ReadyWorkspaceHtmlPublishPlan {
   packed: PackedWorkspaceHtmlSite;
 }
 
+const base64ByteLength = (content: string): number => {
+  const compact = content.replaceAll(/\s+/g, '');
+  const padding = compact.endsWith('==') ? 2 : compact.endsWith('=') ? 1 : 0;
+  return Math.max(0, Math.floor((compact.length * 3) / 4) - padding);
+};
+
+export const getWorkspaceHtmlPublishSizeBytes = (plan: ReadyWorkspaceHtmlPublishPlan): number =>
+  new TextEncoder().encode(plan.packed.html).byteLength +
+  plan.packed.sidecars.reduce(
+    (total, file) =>
+      total +
+      (file.encoding === 'base64'
+        ? base64ByteLength(file.content)
+        : new TextEncoder().encode(file.content).byteLength),
+    0,
+  );
+
 export type WorkspaceHtmlPublishPlan =
   | {
       blocked: 'too-large' | 'too-many';
@@ -117,19 +134,26 @@ const workspaceHtmlPublishErrorMessage = (error: unknown): string => {
   if (error instanceof Error && error.message === 'unresolved-local-assets') {
     return t('workingPanel.localFile.publish.unresolvedLocals', { ns: 'chat' });
   }
-  if (error instanceof Error && error.message) return error.message;
   return t('workingPanel.localFile.publish.failed', { ns: 'chat' });
 };
 
 export const publishPreparedWorkspaceHtml = async ({
   agentId,
+  onError,
+  onUploadPhase,
+  onUploadProgress,
   plan,
   publish,
+  signal,
   topicId,
 }: {
   agentId?: string | null;
+  onError?: (error: unknown) => boolean;
+  onUploadPhase?: Parameters<WorkspaceHtmlArtifactPublisher['publish']>[0]['onUploadPhase'];
+  onUploadProgress?: Parameters<WorkspaceHtmlArtifactPublisher['publish']>[0]['onUploadProgress'];
   plan: ReadyWorkspaceHtmlPublishPlan;
   publish: WorkspaceHtmlArtifactPublisher['publish'];
+  signal?: AbortSignal;
   topicId: string;
 }): Promise<WorkspaceHtmlArtifactPublishResult | undefined> => {
   try {
@@ -138,7 +162,10 @@ export const publishPreparedWorkspaceHtml = async ({
       entryPath: plan.gathered.entryPath,
       files: plan.gathered.files,
       identifier: plan.gathered.identifier,
+      onUploadPhase,
+      onUploadProgress,
       packed: { html: plan.packed.html, sidecars: plan.packed.sidecars },
+      signal,
       title: plan.gathered.title,
       topicId,
     });
@@ -146,7 +173,7 @@ export const publishPreparedWorkspaceHtml = async ({
     toast.success(t('workingPanel.localFile.publish.success', { ns: 'chat' }));
     return result;
   } catch (error) {
-    toast.error(workspaceHtmlPublishErrorMessage(error));
+    if (!onError?.(error)) toast.error(workspaceHtmlPublishErrorMessage(error));
     return;
   }
 };

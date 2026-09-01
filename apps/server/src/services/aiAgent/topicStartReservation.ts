@@ -22,6 +22,7 @@ const delay = (milliseconds: number): Promise<void> =>
  */
 export const acquireTopicStartReservation = async ({
   allowRunningOperationId,
+  allowSameReservationReentry,
   ignoreRunningOperation,
   replacesOperationId,
   reservationId,
@@ -29,6 +30,7 @@ export const acquireTopicStartReservation = async ({
   topicModel,
 }: {
   allowRunningOperationId?: string;
+  allowSameReservationReentry?: boolean;
   /**
    * Serialize only on the short reservation, not on `runningOperation`. Set by
    * interactive sends — see `TopicModel.tryReserveTaskCallback`.
@@ -42,6 +44,7 @@ export const acquireTopicStartReservation = async ({
   for (let attempt = 0; attempt < MAX_RESERVATION_ATTEMPTS; attempt += 1) {
     const reservation = await topicModel.tryReserveTaskCallback(topicId, reservationId, {
       allowRunningOperationId,
+      allowSameReservationReentry,
       ignoreRunningOperation,
       replacesOperationId,
     });

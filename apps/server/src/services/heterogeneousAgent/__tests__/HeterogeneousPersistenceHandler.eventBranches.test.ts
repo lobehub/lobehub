@@ -7,6 +7,16 @@ import {
   HeterogeneousPersistenceHandler,
 } from '../HeterogeneousPersistenceHandler';
 
+const { acknowledgeAgentInterventionProducerResolution, notifyAgentInterventionRequired } =
+  vi.hoisted(() => ({
+    acknowledgeAgentInterventionProducerResolution: vi.fn(),
+    notifyAgentInterventionRequired: vi.fn(),
+  }));
+vi.mock('@/business/server/agent-run/agentInterventionReview', () => ({
+  acknowledgeAgentInterventionProducerResolution,
+  notifyAgentInterventionRequired,
+}));
+
 /**
  * Branch-coverage tests against every event type / sub-type the renderer
  * (`heterogeneousAgentExecutor.ts:1314–1632`) dispatches on. Each describe
@@ -58,6 +68,7 @@ const createHarness = (
     operationId?: string;
     topicAgentId?: string | null;
     topicId?: string;
+    userId?: string | null;
   } = {},
 ) => {
   const operationId = params.operationId ?? 'op-test';
@@ -160,6 +171,16 @@ const createHarness = (
       },
     ),
     listMessagePluginsByTopic: vi.fn(async (_topicId: string) => []),
+    updateMessagePlugin: vi.fn(async (id: string, patch: Record<string, unknown>) => {
+      const existing = messages.get(id);
+      if (existing) messages.set(id, { ...existing, plugin: { ...existing.plugin, ...patch } });
+    }),
+    updatePluginState: vi.fn(async (id: string, patch: Record<string, unknown>) => {
+      const existing = messages.get(id);
+      if (existing) {
+        messages.set(id, { ...existing, pluginState: { ...existing.pluginState, ...patch } });
+      }
+    }),
   };
 
   const threadModel = {
@@ -195,6 +216,7 @@ const createHarness = (
     messageModel: messageModel as any,
     threadModel: threadModel as any,
     topicModel: topicModel as any,
+    userId: params.userId === null ? undefined : (params.userId ?? 'user-test'),
   });
 
   return {
@@ -227,7 +249,11 @@ const ingest = async (h: ReturnType<typeof createHarness>, events: AgentStreamEv
   h.handler.ingest({ events, operationId: h.operationId, topicId: h.topicId });
 
 describe('HeterogeneousPersistenceHandler — event branch coverage', () => {
-  beforeEach(() => __resetOperationStatesForTesting());
+  beforeEach(() => {
+    __resetOperationStatesForTesting();
+    acknowledgeAgentInterventionProducerResolution.mockReset();
+    notifyAgentInterventionRequired.mockReset();
+  });
   afterEach(() => __resetOperationStatesForTesting());
 
   // ─── step_complete ────────────────────────────────────────────────────────
@@ -921,6 +947,337 @@ describe('HeterogeneousPersistenceHandler — event branch coverage', () => {
       // Terminal assistant has the authoritative summary
       expect(threadAssts.at(-1)?.content).toBe('final summary');
       // Run state cleaned up after finalize
+    });
+  });
+
+  describe('agent_intervention producer ACK', () => {
+    const materializeAskUserTool = async (
+      h: ReturnType<typeof createHarness>,
+      toolCallId: string,
+    ) =>
+      ingest(h, [
+        buildEvent('stream_chunk', 0, {
+          chunkType: 'tools_calling',
+          toolsCalling: [
+            {
+              apiName: 'askUserQuestion',
+              arguments: '{}',
+              id: toolCallId,
+              identifier: 'claude-code',
+              type: 'default',
+            },
+          ],
+        }),
+      ]);
+
+    const missingProviderRequest = (toolCallId: string) =>
+      buildEvent('agent_intervention_request', 1, {
+        apiName: 'askUserQuestion',
+        arguments: JSON.stringify({
+          questions: [
+            {
+              header: 'Question',
+              options: [{ label: 'Continue' }, { label: 'Stop' }],
+              question: 'Proceed?',
+            },
+          ],
+        }),
+        deadline: 1_900_000_000_000,
+        identifier: 'claude-code',
+        interactionKind: 'question',
+        toolCallId,
+      });
+
+    it('rejects an invalid first Cloud review before any intervention side effect', async () => {
+      const h = createHarness({ topicAgentId: 'agent-test' });
+      const toolCallId = 'invalid-cloud-question';
+      await materializeAskUserTool(h, toolCallId);
+      h.messageModel.updateMessagePlugin.mockClear();
+      h.messageModel.updatePluginState.mockClear();
+
+      await expect(ingest(h, [missingProviderRequest(toolCallId)])).rejects.toThrow(
+        `Unsafe heterogeneous intervention review payload toolCallId=${toolCallId}`,
+      );
+
+      expect(h.messageModel.updateMessagePlugin).not.toHaveBeenCalled();
+      expect(h.messageModel.updatePluginState).not.toHaveBeenCalled();
+      expect(notifyAgentInterventionRequired).not.toHaveBeenCalled();
+      expect(acknowledgeAgentInterventionProducerResolution).not.toHaveBeenCalled();
+      const toolMessage = [...h.messages.values()].find(
+        (message) => message.tool_call_id === toolCallId,
+      );
+      expect(toolMessage?.plugin).not.toHaveProperty('intervention');
+      expect(toolMessage?.pluginState).toBeUndefined();
+    });
+
+    it('preserves legacy intervention persistence without a userId', async () => {
+      const h = createHarness({ topicAgentId: 'agent-test', userId: null });
+      const toolCallId = 'legacy-question';
+      await materializeAskUserTool(h, toolCallId);
+      h.messageModel.updateMessagePlugin.mockClear();
+      h.messageModel.updatePluginState.mockClear();
+
+      await expect(ingest(h, [missingProviderRequest(toolCallId)])).resolves.toBeUndefined();
+
+      expect(h.messageModel.updateMessagePlugin).toHaveBeenCalledTimes(1);
+      expect(h.messageModel.updatePluginState).toHaveBeenCalledTimes(1);
+      expect(notifyAgentInterventionRequired).not.toHaveBeenCalled();
+      expect(acknowledgeAgentInterventionProducerResolution).not.toHaveBeenCalled();
+      const toolMessage = [...h.messages.values()].find(
+        (message) => message.tool_call_id === toolCallId,
+      );
+      expect(toolMessage?.plugin?.intervention).toEqual({ status: 'pending' });
+      expect(toolMessage?.pluginState?.heterogeneousIntervention).toMatchObject({
+        transition: 'pending',
+      });
+    });
+
+    it('canonicalizes an omitted Claude multiSelect before durable review notification', async () => {
+      const h = createHarness({ topicAgentId: 'agent-test' });
+
+      await ingest(h, [
+        buildEvent('agent_intervention_request', 0, {
+          apiName: 'askUserQuestion',
+          arguments: JSON.stringify({
+            questions: [
+              {
+                header: 'Producer ACK E2E',
+                options: [
+                  { description: 'Proceed with validation.', label: 'Continue' },
+                  { description: 'Halt validation.', label: 'Stop' },
+                ],
+                question: 'Continue read only validation?',
+              },
+            ],
+          }),
+          deadline: 1_900_000_000_000,
+          identifier: 'claude-code',
+          interactionKind: 'question',
+          provider: 'claude-code',
+          toolCallId: 'claude-question-1',
+        }),
+      ]);
+
+      expect(notifyAgentInterventionRequired).toHaveBeenCalledTimes(1);
+      expect(notifyAgentInterventionRequired.mock.calls[0][0].items[0]).toMatchObject({
+        detail: {
+          questions: [
+            {
+              header: 'Producer ACK E2E',
+              id: 'question_1',
+              multiple: false,
+              options: [
+                {
+                  description: 'Proceed with validation.',
+                  id: 'Continue',
+                  label: 'Continue',
+                },
+                {
+                  description: 'Halt validation.',
+                  id: 'Stop',
+                  label: 'Stop',
+                },
+              ],
+              question: 'Continue read only validation?',
+            },
+          ],
+          title: 'Producer ACK E2E',
+          type: 'question',
+        },
+        interactionKind: 'question',
+        provider: 'claude-code',
+      });
+      expect(h.messageModel.updatePluginState).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          heterogeneousIntervention: expect.objectContaining({
+            interactionKind: 'question',
+            provider: 'claude-code',
+          }),
+        }),
+      );
+    });
+
+    it('notifies pending once, ignores the publish leg, and notifies terminal only on ACK', async () => {
+      const h = createHarness({ topicAgentId: 'agent-test' });
+      const requestId = '018fbd8e-7baf-7c6d-8000-000000000001';
+      const request = buildEvent('agent_intervention_request', 0, {
+        apiName: 'askUserQuestion',
+        arguments: JSON.stringify({
+          privateRawArgument: 'must be stripped',
+          questions: [
+            {
+              header: 'Permission',
+              multiSelect: false,
+              options: [
+                { id: 'allow', label: 'Allow', raw: 'strip me' },
+                { id: 'deny', label: 'Deny' },
+              ],
+              question: 'Run command?',
+            },
+          ],
+        }),
+        deadline: 1_900_000_000_000,
+        identifier: 'claude-code',
+        interactionKind: 'permission',
+        provider: 'cursor',
+        toolCallId: 'permission-1',
+      });
+
+      await ingest(h, [request]);
+      await ingest(h, [{ ...request, timestamp: request.timestamp + 1 }]);
+
+      expect(notifyAgentInterventionRequired).toHaveBeenCalledTimes(1);
+      const pending = notifyAgentInterventionRequired.mock.calls[0][0];
+      expect(pending).toMatchObject({
+        agentId: 'agent-test',
+        approvalMode: 'manual',
+        batch: {
+          allowedActions: [],
+          id: 'op-test:0:asst-seeded:permission-1',
+          kind: 'single',
+          sealed: true,
+          stepIndex: 0,
+        },
+        context: {
+          assistantMessageId: 'asst-seeded',
+          operationId: 'op-test',
+          topicId: 'topic-test',
+        },
+        items: [
+          {
+            allowedActions: ['select_provider_option', 'skip_interaction'],
+            detail: {
+              description: 'Permission',
+              options: [
+                { description: undefined, id: 'allow', label: 'Allow' },
+                { description: undefined, id: 'deny', label: 'Deny' },
+              ],
+              title: 'Run command?',
+              type: 'permission',
+            },
+            interactionKind: 'permission',
+            provider: 'cursor',
+            sourceRef: {
+              operationId: 'op-test',
+              toolCallId: 'permission-1',
+              type: 'heterogeneous',
+            },
+            surface: 'form',
+          },
+        ],
+        systemActionEligibility: 'review_only',
+      });
+      expect(pending.batch.activityKey).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+      );
+      expect(pending.items[0].requestRevision).toEqual({
+        hash: expect.stringMatching(/^[0-9a-f]{64}$/),
+        version: 1,
+      });
+      expect(JSON.stringify(pending)).not.toContain('privateRawArgument');
+
+      await ingest(h, [
+        buildEvent('agent_intervention_response', 1, {
+          producerAck: false,
+          resolutionRequestId: requestId,
+          result: { 'Run command?': 'allow' },
+          toolCallId: 'permission-1',
+        }),
+      ]);
+      expect(notifyAgentInterventionRequired).toHaveBeenCalledTimes(1);
+      expect(acknowledgeAgentInterventionProducerResolution).not.toHaveBeenCalled();
+
+      const producerAck = buildEvent('agent_intervention_response', 2, {
+        producerAck: true,
+        resolutionRequestId: requestId,
+        result: { 'Run command?': 'allow' },
+        toolCallId: 'permission-1',
+      });
+      await ingest(h, [producerAck]);
+      await ingest(h, [{ ...producerAck, timestamp: producerAck.timestamp + 1 }]);
+
+      expect(notifyAgentInterventionRequired).toHaveBeenCalledTimes(1);
+      expect(acknowledgeAgentInterventionProducerResolution).toHaveBeenCalledTimes(1);
+      expect(acknowledgeAgentInterventionProducerResolution).toHaveBeenCalledWith({
+        operationId: 'op-test',
+        ownerUserId: 'user-test',
+        resolutionRequestId: requestId,
+        status: 'resolved',
+        toolCallId: 'permission-1',
+        workspaceId: undefined,
+      });
+    });
+
+    it('gives concurrent callbacks in one assistant step distinct sealed batch identities', async () => {
+      const h = createHarness({ topicAgentId: 'agent-test' });
+      const intervention = (toolCallId: string) =>
+        buildEvent('agent_intervention_request', 0, {
+          apiName: 'askUserQuestion',
+          arguments: JSON.stringify({
+            questions: [
+              {
+                header: 'Question',
+                multiSelect: false,
+                options: [{ label: 'Continue' }],
+                question: `Continue ${toolCallId}?`,
+              },
+            ],
+          }),
+          deadline: 1_900_000_000_000,
+          identifier: 'claude-code',
+          interactionKind: 'question',
+          provider: 'claude-code',
+          toolCallId,
+        });
+
+      await ingest(h, [intervention('question-1'), intervention('question-2')]);
+
+      expect(notifyAgentInterventionRequired).toHaveBeenCalledTimes(2);
+      const notifications = notifyAgentInterventionRequired.mock.calls.map(([params]) => params);
+      expect(notifications.map(({ batch }) => batch.id)).toEqual([
+        'op-test:0:asst-seeded:question-1',
+        'op-test:0:asst-seeded:question-2',
+      ]);
+      expect(new Set(notifications.map(({ batch }) => batch.activityKey)).size).toBe(2);
+      expect(notifications.every(({ batch }) => batch.allowedActions.length === 0)).toBe(true);
+      for (const notification of notifications) {
+        expect(notification.items[0].allowedActions).toEqual([
+          'submit_answers',
+          'skip_interaction',
+        ]);
+      }
+    });
+
+    it('matches Web plan actions without advertising reserved cancel', async () => {
+      const h = createHarness({ topicAgentId: 'agent-test' });
+      await ingest(h, [
+        buildEvent('agent_intervention_request', 0, {
+          apiName: 'askUserQuestion',
+          arguments: JSON.stringify({
+            questions: [
+              {
+                header: 'Plan',
+                multiSelect: false,
+                options: [{ id: 'accept', label: 'Accept plan' }],
+                question: 'Proceed with this plan?',
+              },
+            ],
+          }),
+          deadline: 1_900_000_000_000,
+          identifier: 'cursor',
+          interactionKind: 'plan',
+          provider: 'cursor',
+          toolCallId: 'plan-1',
+        }),
+      ]);
+
+      const pending = notifyAgentInterventionRequired.mock.calls[0][0];
+      expect(pending.items[0]).toMatchObject({
+        allowedActions: ['select_provider_option', 'skip_interaction'],
+        interactionKind: 'plan',
+      });
+      expect(pending.items[0].allowedActions).not.toContain('cancel_interaction');
     });
   });
 });

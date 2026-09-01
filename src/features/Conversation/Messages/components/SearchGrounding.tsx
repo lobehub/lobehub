@@ -1,4 +1,5 @@
-import { Flexbox, Icon, SearchResultCards, Tag } from '@lobehub/ui';
+import { Flexbox, Icon, SearchResultCards } from '@lobehub/ui';
+import { Tag } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDown, ChevronRight, Globe, Images } from 'lucide-react';
 import { AnimatePresence, m } from 'motion/react';

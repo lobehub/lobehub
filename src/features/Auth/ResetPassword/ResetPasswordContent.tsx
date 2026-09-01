@@ -1,5 +1,5 @@
-import { Block, Icon, InputPassword, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Block, Icon, InputPassword } from '@lobehub/ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
 import { Form } from 'antd';
 import { Lock } from 'lucide-react';
 import { useTranslation } from 'react-i18next';

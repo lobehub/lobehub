@@ -21,6 +21,11 @@ import {
 } from 'drizzle-orm';
 
 import type {
+  FtsSearchBackendEntity,
+  FtsSearchBackendFilters,
+  FtsSearchCandidateSource,
+} from '../../repositories/ftsSearch';
+import type {
   UserMemoryActivitiesWithoutVectors,
   UserMemoryContextsWithoutVectors,
   UserMemoryExperiencesWithoutVectors,
@@ -37,6 +42,7 @@ import {
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { normalizeBm25MatchQuery, SAFE_BM25_QUERY_OPTIONS } from '../../utils/bm25';
+import { inJsonStringArray } from '../../utils/inJsonStringArray';
 
 const DEFAULT_HYBRID_SEARCH_LIMIT = 5;
 const HYBRID_SEARCH_OVERFETCH_MULTIPLIER = 3;
@@ -70,11 +76,7 @@ export const buildBm25MatchCondition = (
 };
 
 export type SearchLayerKey =
-  | 'activities'
-  | 'contexts'
-  | 'experiences'
-  | 'identities'
-  | 'preferences';
+  'activities' | 'contexts' | 'experiences' | 'identities' | 'preferences';
 
 interface HybridLayerLimitRecord {
   activities?: number;
@@ -169,7 +171,7 @@ interface LayerScalarAggregationConfig {
   userIdColumn: AnyColumn;
 }
 
-const normalizeSearchQueries = (queries?: string[]): string[] => {
+export const normalizeUserMemorySearchQueries = (queries?: string[]): string[] => {
   if (!queries) return [];
 
   return [...new Set(queries.map((query) => query.trim()).filter(Boolean))];
@@ -180,6 +182,12 @@ const buildRetrievalQuery = (queries: string[]) => {
 
   return queries.join(' ');
 };
+
+/**
+ * Long conversation context is useful to embeddings but not to conjunction-based lexical search:
+ * requiring hundreds of analyzed terms to match one field produces no meaningful candidates.
+ */
+export const USER_MEMORY_LEXICAL_QUERY_CHARACTER_LIMIT = 256;
 
 const combineEmbeddings = (embeddings: number[][]) => {
   if (embeddings.length === 0) return undefined;
@@ -196,6 +204,13 @@ const combineEmbeddings = (embeddings: number[][]) => {
 
     return sum / embeddings.length;
   });
+};
+
+export const shouldRunUserMemoryLexicalSearch = (queries: string[], embeddings: number[][]) => {
+  const retrievalQuery = buildRetrievalQuery(queries);
+  if (!retrievalQuery || !combineEmbeddings(embeddings)) return true;
+
+  return Array.from(retrievalQuery).length <= USER_MEMORY_LEXICAL_QUERY_CHARACTER_LIMIT;
 };
 
 const normalizeSimilarityTerm = (value: string) => value.trim().toLowerCase();
@@ -662,10 +677,50 @@ export class UserMemoryQueryModel {
   constructor(
     private readonly db: LobeChatDatabase,
     private readonly userId: string,
+    private readonly ftsSearchCandidateSource?: FtsSearchCandidateSource,
   ) {}
 
   private memoryWhere(table: { userId: any }) {
     return eq(table.userId, this.userId);
+  }
+
+  private buildCandidateFilters(
+    entity: FtsSearchBackendEntity,
+    params: SearchMemoryParams,
+  ): FtsSearchBackendFilters {
+    const memoryTags = this.toSearchTags(params);
+
+    return {
+      ...(params.categories?.length ? { memoryCategories: params.categories } : {}),
+      ...(entity === 'memoryIdentities' && params.relationships?.length
+        ? { memoryRelationships: params.relationships }
+        : {}),
+      ...((entity === 'memoryActivities' || entity === 'memoryContexts') && params.status?.length
+        ? { memoryStatus: params.status }
+        : {}),
+      ...(memoryTags.length ? { memoryTags } : {}),
+      ...(params.timeRange ? { memoryTimeRange: params.timeRange } : {}),
+      ...(params.types?.length ? { memoryTypes: params.types } : {}),
+    };
+  }
+
+  private async fetchFtsSearchCandidates(params: {
+    entity: FtsSearchBackendEntity;
+    fields: string[];
+    limit: number;
+    query: string;
+    searchParams: SearchMemoryParams;
+  }) {
+    if (!this.ftsSearchCandidateSource?.ftsSearchCandidateEnabled) return undefined;
+
+    const { candidates } = await this.ftsSearchCandidateSource.ftsSearchCandidates({
+      entity: params.entity,
+      filters: this.buildCandidateFilters(params.entity, params.searchParams),
+      pagination: { limit: params.limit },
+      query: { fields: params.fields, text: params.query },
+    });
+
+    return candidates.map(({ id }) => id);
   }
 
   /**
@@ -768,7 +823,8 @@ export class UserMemoryQueryModel {
     params: SearchMemoryParams,
     queryEmbeddings: number[][] = [],
   ): Promise<UserMemoryHybridSearchAggregatedResult> => {
-    const appliedQueries = normalizeSearchQueries(params.queries);
+    const appliedQueries = normalizeUserMemorySearchQueries(params.queries);
+    const lexicalSearch = shouldRunUserMemoryLexicalSearch(appliedQueries, queryEmbeddings);
     const limits: HybridLayerLimitRecord = {
       activities: params.topK?.activities ?? DEFAULT_HYBRID_SEARCH_LIMIT,
       contexts: params.topK?.contexts ?? DEFAULT_HYBRID_SEARCH_LIMIT,
@@ -804,6 +860,7 @@ export class UserMemoryQueryModel {
       requestedLayers.has(LayersEnum.Activity)
         ? this.searchHybridActivities({
             embeddings: queryEmbeddings,
+            lexicalSearch,
             params,
             queries: appliedQueries,
           })
@@ -811,6 +868,7 @@ export class UserMemoryQueryModel {
       requestedLayers.has(LayersEnum.Context)
         ? this.searchHybridContexts({
             embeddings: queryEmbeddings,
+            lexicalSearch,
             params,
             queries: appliedQueries,
           })
@@ -818,6 +876,7 @@ export class UserMemoryQueryModel {
       requestedLayers.has(LayersEnum.Experience)
         ? this.searchHybridExperiences({
             embeddings: queryEmbeddings,
+            lexicalSearch,
             params,
             queries: appliedQueries,
           })
@@ -825,6 +884,7 @@ export class UserMemoryQueryModel {
       requestedLayers.has(LayersEnum.Identity)
         ? this.searchHybridIdentities({
             embeddings: queryEmbeddings,
+            lexicalSearch,
             params,
             queries: appliedQueries,
           })
@@ -832,6 +892,7 @@ export class UserMemoryQueryModel {
       requestedLayers.has(LayersEnum.Preference)
         ? this.searchHybridPreferences({
             embeddings: queryEmbeddings,
+            lexicalSearch,
             params,
             queries: appliedQueries,
           })
@@ -1585,6 +1646,7 @@ export class UserMemoryQueryModel {
 
   private async searchHybridActivities(params: {
     embeddings: number[][];
+    lexicalSearch: boolean;
     params: SearchMemoryParams;
     queries: string[];
   }) {
@@ -1599,7 +1661,7 @@ export class UserMemoryQueryModel {
         : [];
     const retrievalQuery = buildRetrievalQuery(params.queries);
     const lexicalLists =
-      retrievalQuery || this.hasSearchFilters(params.params)
+      params.lexicalSearch && (retrievalQuery || this.hasSearchFilters(params.params))
         ? [await this.searchActivitiesLexical(retrievalQuery, limit, params.params)]
         : [];
 
@@ -1621,6 +1683,7 @@ export class UserMemoryQueryModel {
 
   private async searchHybridContexts(params: {
     embeddings: number[][];
+    lexicalSearch: boolean;
     params: SearchMemoryParams;
     queries: string[];
   }) {
@@ -1635,7 +1698,7 @@ export class UserMemoryQueryModel {
         : [];
     const retrievalQuery = buildRetrievalQuery(params.queries);
     const lexicalLists =
-      retrievalQuery || this.hasSearchFilters(params.params)
+      params.lexicalSearch && (retrievalQuery || this.hasSearchFilters(params.params))
         ? [await this.searchContextsLexical(retrievalQuery, limit, params.params)]
         : [];
 
@@ -1657,6 +1720,7 @@ export class UserMemoryQueryModel {
 
   private async searchHybridExperiences(params: {
     embeddings: number[][];
+    lexicalSearch: boolean;
     params: SearchMemoryParams;
     queries: string[];
   }) {
@@ -1671,7 +1735,7 @@ export class UserMemoryQueryModel {
         : [];
     const retrievalQuery = buildRetrievalQuery(params.queries);
     const lexicalLists =
-      retrievalQuery || this.hasSearchFilters(params.params)
+      params.lexicalSearch && (retrievalQuery || this.hasSearchFilters(params.params))
         ? [await this.searchExperiencesLexical(retrievalQuery, limit, params.params)]
         : [];
 
@@ -1693,6 +1757,7 @@ export class UserMemoryQueryModel {
 
   private async searchHybridIdentities(params: {
     embeddings: number[][];
+    lexicalSearch: boolean;
     params: SearchMemoryParams;
     queries: string[];
   }) {
@@ -1707,7 +1772,7 @@ export class UserMemoryQueryModel {
         : [];
     const retrievalQuery = buildRetrievalQuery(params.queries);
     const lexicalLists =
-      retrievalQuery || this.hasSearchFilters(params.params)
+      params.lexicalSearch && (retrievalQuery || this.hasSearchFilters(params.params))
         ? [await this.searchIdentitiesLexical(retrievalQuery, limit, params.params)]
         : [];
 
@@ -1729,6 +1794,7 @@ export class UserMemoryQueryModel {
 
   private async searchHybridPreferences(params: {
     embeddings: number[][];
+    lexicalSearch: boolean;
     params: SearchMemoryParams;
     queries: string[];
   }) {
@@ -1743,7 +1809,7 @@ export class UserMemoryQueryModel {
         : [];
     const retrievalQuery = buildRetrievalQuery(params.queries);
     const lexicalLists =
-      retrievalQuery || this.hasSearchFilters(params.params)
+      params.lexicalSearch && (retrievalQuery || this.hasSearchFilters(params.params))
         ? [await this.searchPreferencesLexical(retrievalQuery, limit, params.params)]
         : [];
 
@@ -2089,6 +2155,22 @@ export class UserMemoryQueryModel {
     params: SearchMemoryParams,
   ) {
     const normalizedQuery = typeof query === 'string' ? query.trim() : '';
+    const candidateIds = normalizedQuery
+      ? await this.fetchFtsSearchCandidates({
+          entity: 'memoryActivities',
+          fields: [
+            'parent_title',
+            'parent_summary',
+            'parent_details',
+            'narrative',
+            'notes',
+            'feedback',
+          ],
+          limit,
+          query: normalizedQuery,
+          searchParams: params,
+        })
+      : undefined;
     const conditions = [
       this.memoryWhere(userMemoriesActivities),
       this.memoryWhere(userMemories),
@@ -2108,13 +2190,15 @@ export class UserMemoryQueryModel {
         params.timeRange,
       ),
       normalizedQuery
-        ? buildBm25MatchCondition(normalizedQuery, [
-            { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
-            {
-              fields: ['narrative', 'notes', 'feedback'],
-              keyColumn: userMemoriesActivities.id,
-            },
-          ])
+        ? candidateIds
+          ? inJsonStringArray(userMemoriesActivities.id, candidateIds)
+          : buildBm25MatchCondition(normalizedQuery, [
+              { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
+              {
+                fields: ['narrative', 'notes', 'feedback'],
+                keyColumn: userMemoriesActivities.id,
+              },
+            ])
         : undefined,
       this.buildExactTagFilterCondition(userMemoriesActivities.tags, userMemories.tags, params),
     ].filter((condition): condition is SQL => Boolean(condition));
@@ -2157,11 +2241,23 @@ export class UserMemoryQueryModel {
     params: SearchMemoryParams,
   ) {
     const normalizedQuery = typeof query === 'string' ? query.trim() : '';
+    const candidateIds = normalizedQuery
+      ? await this.fetchFtsSearchCandidates({
+          entity: 'memoryContexts',
+          fields: ['parent_text', 'title', 'description', 'current_status'],
+          limit,
+          query: normalizedQuery,
+          searchParams: params,
+        })
+      : undefined;
     const conditions = [
       this.memoryWhere(userMemoriesContexts),
       this.memoryWhere(userMemories),
       params.categories?.length
         ? inArray(userMemories.memoryCategory, params.categories)
+        : undefined,
+      params.status?.length
+        ? inArray(userMemoriesContexts.currentStatus, params.status)
         : undefined,
       params.types?.length ? inArray(userMemoriesContexts.type, params.types) : undefined,
       this.buildTimeRangeCondition(
@@ -2173,13 +2269,15 @@ export class UserMemoryQueryModel {
         params.timeRange,
       ),
       normalizedQuery
-        ? buildBm25MatchCondition(normalizedQuery, [
-            { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
-            {
-              fields: ['title', 'description', 'current_status'],
-              keyColumn: userMemoriesContexts.id,
-            },
-          ])
+        ? candidateIds
+          ? inJsonStringArray(userMemoriesContexts.id, candidateIds)
+          : buildBm25MatchCondition(normalizedQuery, [
+              { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
+              {
+                fields: ['title', 'description', 'current_status'],
+                keyColumn: userMemoriesContexts.id,
+              },
+            ])
         : undefined,
       this.buildExactTagFilterCondition(userMemoriesContexts.tags, userMemories.tags, params),
     ].filter((condition): condition is SQL => Boolean(condition));
@@ -2261,6 +2359,24 @@ export class UserMemoryQueryModel {
     params: SearchMemoryParams,
   ) {
     const normalizedQuery = typeof query === 'string' ? query.trim() : '';
+    const candidateIds = normalizedQuery
+      ? await this.fetchFtsSearchCandidates({
+          entity: 'memoryExperiences',
+          fields: [
+            'parent_title',
+            'parent_summary',
+            'parent_details',
+            'situation',
+            'reasoning',
+            'possible_outcome',
+            'action',
+            'key_learning',
+          ],
+          limit,
+          query: normalizedQuery,
+          searchParams: params,
+        })
+      : undefined;
     const conditions = [
       this.memoryWhere(userMemoriesExperiences),
       this.memoryWhere(userMemories),
@@ -2277,13 +2393,15 @@ export class UserMemoryQueryModel {
         params.timeRange,
       ),
       normalizedQuery
-        ? buildBm25MatchCondition(normalizedQuery, [
-            { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
-            {
-              fields: ['situation', 'key_learning', 'action', 'reasoning', 'possible_outcome'],
-              keyColumn: userMemoriesExperiences.id,
-            },
-          ])
+        ? candidateIds
+          ? inJsonStringArray(userMemoriesExperiences.id, candidateIds)
+          : buildBm25MatchCondition(normalizedQuery, [
+              { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
+              {
+                fields: ['situation', 'key_learning', 'action', 'reasoning', 'possible_outcome'],
+                keyColumn: userMemoriesExperiences.id,
+              },
+            ])
         : undefined,
       this.buildExactTagFilterCondition(userMemoriesExperiences.tags, userMemories.tags, params),
     ].filter((condition): condition is SQL => Boolean(condition));
@@ -2322,6 +2440,21 @@ export class UserMemoryQueryModel {
     params: SearchMemoryParams,
   ) {
     const normalizedQuery = typeof query === 'string' ? query.trim() : '';
+    const candidateIds = normalizedQuery
+      ? await this.fetchFtsSearchCandidates({
+          entity: 'memoryPreferences',
+          fields: [
+            'parent_title',
+            'parent_summary',
+            'parent_details',
+            'conclusion_directives',
+            'suggestions',
+          ],
+          limit,
+          query: normalizedQuery,
+          searchParams: params,
+        })
+      : undefined;
     const conditions = [
       this.memoryWhere(userMemoriesPreferences),
       this.memoryWhere(userMemories),
@@ -2338,13 +2471,15 @@ export class UserMemoryQueryModel {
         params.timeRange,
       ),
       normalizedQuery
-        ? buildBm25MatchCondition(normalizedQuery, [
-            { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
-            {
-              fields: ['conclusion_directives', 'suggestions'],
-              keyColumn: userMemoriesPreferences.id,
-            },
-          ])
+        ? candidateIds
+          ? inJsonStringArray(userMemoriesPreferences.id, candidateIds)
+          : buildBm25MatchCondition(normalizedQuery, [
+              { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
+              {
+                fields: ['conclusion_directives', 'suggestions'],
+                keyColumn: userMemoriesPreferences.id,
+              },
+            ])
         : undefined,
       this.buildExactTagFilterCondition(userMemoriesPreferences.tags, userMemories.tags, params),
     ].filter((condition): condition is SQL => Boolean(condition));
@@ -2380,6 +2515,15 @@ export class UserMemoryQueryModel {
     params: SearchMemoryParams,
   ) {
     const normalizedQuery = typeof query === 'string' ? query.trim() : '';
+    const candidateIds = normalizedQuery
+      ? await this.fetchFtsSearchCandidates({
+          entity: 'memoryIdentities',
+          fields: ['parent_title', 'parent_summary', 'parent_details', 'description', 'role'],
+          limit,
+          query: normalizedQuery,
+          searchParams: params,
+        })
+      : undefined;
     const conditions = [
       this.memoryWhere(userMemoriesIdentities),
       this.memoryWhere(userMemories),
@@ -2400,10 +2544,12 @@ export class UserMemoryQueryModel {
         params.timeRange,
       ),
       normalizedQuery
-        ? buildBm25MatchCondition(normalizedQuery, [
-            { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
-            { fields: ['description', 'role'], keyColumn: userMemoriesIdentities.id },
-          ])
+        ? candidateIds
+          ? inJsonStringArray(userMemoriesIdentities.id, candidateIds)
+          : buildBm25MatchCondition(normalizedQuery, [
+              { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
+              { fields: ['description', 'role'], keyColumn: userMemoriesIdentities.id },
+            ])
         : undefined,
       this.buildExactTagFilterCondition(userMemoriesIdentities.tags, userMemories.tags, params),
     ].filter((condition): condition is SQL => Boolean(condition));

@@ -1,3 +1,4 @@
+import type { ServerDefaultHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import { createStaticStyles } from 'antd-style';
 import type { LobeDefaultAiModelListItem } from 'model-bank';
 
@@ -7,6 +8,16 @@ export const MODEL_PICKER_STYLE = { minWidth: 200, width: 'initial' } as const;
 
 /** Closed trigger next to the composer send button — hug the label, cap growth. */
 export const COMPACT_MODEL_PICKER_STYLE = { maxWidth: 160, minWidth: 0, width: 'auto' } as const;
+
+interface ServerDefaultModel {
+  model: string;
+}
+
+/** A server deployed before an agent was added can omit that agent's model entry. */
+export const resolveServerDefaultAgentModels = (
+  models: Partial<Record<ServerDefaultHeterogeneousAgentType, ServerDefaultModel[]>> | undefined,
+  agentType: ServerDefaultHeterogeneousAgentType | undefined,
+): ServerDefaultModel[] => (agentType ? (models?.[agentType] ?? []) : []);
 
 export const modelPickerStyles = createStaticStyles(({ css }) => ({
   compactLabel: css`
@@ -40,7 +51,7 @@ export const compactModelTriggerText = (option: { title?: string; value?: unknow
 };
 
 export const buildServerDefaultModelOptions = (
-  models: Array<{ model: string }>,
+  models: ServerDefaultModel[],
   builtinAiModelList: LobeDefaultAiModelListItem[],
 ) =>
   models.map(({ model }) => {

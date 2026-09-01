@@ -2,7 +2,8 @@
 
 import type { EvalRubricScore } from '@lobechat/types';
 import { formatCost, formatShortenNumber } from '@lobechat/utils';
-import { Flexbox, Highlighter, Tag, Text } from '@lobehub/ui';
+import { Flexbox, Highlighter } from '@lobehub/ui';
+import { Tag, Text } from '@lobehub/ui/base-ui';
 import { Collapse } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo, type ReactNode } from 'react';

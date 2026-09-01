@@ -6,6 +6,7 @@ import { getTestDB } from '../../core/getTestDB';
 import {
   devices,
   resourcePermissions,
+  tasks,
   users,
   workspaceInvitations,
   workspaceMembers,
@@ -292,6 +293,53 @@ describe('WorkspaceMemberModel', () => {
       );
       expect(remaining).toHaveLength(3);
     });
+
+    it('clears only the departing member task assignments in that workspace', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.addMember({ userId: memberId, workspaceId });
+      await serverDB.insert(tasks).values([
+        {
+          assigneeUserId: memberId,
+          createdByUserId: inviterId,
+          id: 'wm-task-departing-member',
+          identifier: 'WM-1',
+          instruction: 'Assigned to the departing member',
+          seq: 1,
+          workspaceId,
+        },
+        {
+          assigneeUserId: otherUserId,
+          createdByUserId: inviterId,
+          id: 'wm-task-other-member',
+          identifier: 'WM-2',
+          instruction: 'Assigned to another member',
+          seq: 2,
+          workspaceId,
+        },
+        {
+          assigneeUserId: memberId,
+          createdByUserId: otherUserId,
+          id: 'wm-task-other-workspace',
+          identifier: 'OTHER-1',
+          instruction: 'Assigned in another workspace',
+          seq: 1,
+          workspaceId: otherWorkspaceId,
+        },
+      ]);
+
+      await model.removeMember(workspaceId, memberId);
+
+      const taskRows = await serverDB.select().from(tasks);
+      expect(
+        taskRows.find((task) => task.id === 'wm-task-departing-member')?.assigneeUserId,
+      ).toBeNull();
+      expect(taskRows.find((task) => task.id === 'wm-task-other-member')?.assigneeUserId).toBe(
+        otherUserId,
+      );
+      expect(taskRows.find((task) => task.id === 'wm-task-other-workspace')?.assigneeUserId).toBe(
+        memberId,
+      );
+    });
   });
 
   describe('updateMemberRole', () => {
@@ -317,6 +365,50 @@ describe('WorkspaceMemberModel', () => {
         .from(workspaceMembers)
         .where(eq(workspaceMembers.userId, memberId));
       expect(row.role).toBe('member');
+    });
+
+    it('clears task assignments when a member becomes a viewer', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.addMember({ role: 'member', userId: memberId, workspaceId });
+      await serverDB.insert(tasks).values({
+        assigneeUserId: memberId,
+        createdByUserId: inviterId,
+        id: 'wm-task-role-downgrade',
+        identifier: 'WM-ROLE-1',
+        instruction: 'Assigned before the role downgrade',
+        seq: 1,
+        workspaceId,
+      });
+
+      await model.updateMemberRole(workspaceId, memberId, 'viewer');
+
+      const [task] = await serverDB
+        .select()
+        .from(tasks)
+        .where(eq(tasks.id, 'wm-task-role-downgrade'));
+      expect(task.assigneeUserId).toBeNull();
+    });
+
+    it('preserves task assignments when a member changes to another eligible role', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.addMember({ role: 'member', userId: memberId, workspaceId });
+      await serverDB.insert(tasks).values({
+        assigneeUserId: memberId,
+        createdByUserId: inviterId,
+        id: 'wm-task-eligible-role',
+        identifier: 'WM-ROLE-2',
+        instruction: 'Assigned before the eligible role change',
+        seq: 1,
+        workspaceId,
+      });
+
+      await model.updateMemberRole(workspaceId, memberId, 'admin');
+
+      const [task] = await serverDB
+        .select()
+        .from(tasks)
+        .where(eq(tasks.id, 'wm-task-eligible-role'));
+      expect(task.assigneeUserId).toBe(memberId);
     });
   });
 

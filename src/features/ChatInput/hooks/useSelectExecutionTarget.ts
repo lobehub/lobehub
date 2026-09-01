@@ -2,6 +2,8 @@
 
 import { isDesktop } from '@lobechat/const';
 import type { DeviceExecutionTarget } from '@lobechat/types';
+import { toast } from '@lobehub/ui/base-ui';
+import { t } from 'i18next';
 import { useCallback } from 'react';
 
 import { useAgentManagementAccess } from '@/features/ResourcePermission/useAgentManagementAccess';
@@ -58,6 +60,13 @@ export interface SelectExecutionTargetOptions {
  * - **Private Workspace agent** — like a personal agent, writes go directly to
  *   `agents.agencyConfig`; the member-selection policy takes effect only after
  *   the Agent is published.
+ * - **`local` on ANY workspace agent** — always the per-user override, even for
+ *   managers and private-agent owners who otherwise write the shared row: a
+ *   `local` pick binds this member's personal desktop device, and the server
+ *   rejects a workspace agent whose shared config references a device not
+ *   enrolled in the workspace (`WorkspaceAgentRequiresWorkspaceDevice`).
+ *   Conversely, a manager's shared-target pick clears their own override's
+ *   routing keys so a previous `local` pick cannot keep shadowing it.
  *
  * `local` is stored verbatim (`{ executionTarget: 'local', boundDeviceId: <me> }`)
  * so both desktop dispatch (in-process IPC — the fast path) and web dispatch
@@ -69,6 +78,7 @@ export interface SelectExecutionTargetOptions {
 export const useSelectExecutionTarget = (agentId: string) => {
   const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
   const isHetero = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
+  const isWorkspaceAgent = useAgentStore((s) => Boolean(s.agentMap[agentId]?.workspaceId));
   const isPublicWorkspaceAgent = useAgentStore((s) => {
     const agent = s.agentMap[agentId];
     return !!agent?.workspaceId && agent.visibility !== 'private';
@@ -142,7 +152,11 @@ export const useSelectExecutionTarget = (agentId: string) => {
           : { localSandboxNetwork: options.localSandboxNetwork }),
       };
 
-      if (usesWorkspaceMemberSelection) {
+      // A `local` pick on a workspace agent is always this caller's own
+      // machine — a personal device the workspace-shared row must never
+      // reference (the server rejects it) — so it routes to the per-user
+      // override even for managers and private-agent owners.
+      if (usesWorkspaceMemberSelection || (isWorkspaceAgent && target === 'local')) {
         const nextOverrides = {
           ...workspaceUserPreference.agentDeviceOverrides,
           [agentId]: {
@@ -168,12 +182,53 @@ export const useSelectExecutionTarget = (agentId: string) => {
       // A silent caller is defaulting the target on mount, not answering a
       // pick — telling the user "your change was not applied" would be
       // reporting a change they never made (automatic corrections must not trigger phantom save-error toasts).
-      if (options?.silent) {
-        await updateAgentConfigById(agentId, nextConfig, { showErrorMessage: false });
+      //
+      // `rethrow` so a failed shared save (network error, server validation)
+      // stops here: the store already rolled the optimistic config back and
+      // toasted, and clearing the caller's override below would additionally
+      // destroy their previously valid personal target over a save that never
+      // happened.
+      try {
+        await updateAgentConfigById(agentId, nextConfig, {
+          rethrow: true,
+          ...(options?.silent ? { showErrorMessage: false } : {}),
+        });
+      } catch {
         return;
       }
 
-      await updateAgentConfigById(agentId, nextConfig);
+      // A manager's earlier `local` pick lives in their own override and would
+      // keep shadowing the shared target they just wrote — drop the override's
+      // routing keys. The sandbox fence stays: it qualifies their machine, not
+      // this pick.
+      const prevOverride = workspaceUserPreference.agentDeviceOverrides?.[agentId];
+      if (
+        isWorkspaceAgent &&
+        prevOverride &&
+        (prevOverride.executionTarget !== undefined || prevOverride.boundDeviceId !== undefined)
+      ) {
+        const { boundDeviceId: _device, executionTarget: _target, ...dormant } = prevOverride;
+        try {
+          await updateWorkspaceUserPreference({
+            agentDeviceOverrides: {
+              ...workspaceUserPreference.agentDeviceOverrides,
+              [agentId]: dormant,
+            },
+          });
+        } catch {
+          // The preference store rolled the override back, so the old `local`
+          // pick would keep shadowing the shared target that DID persist —
+          // split state. Compensate by restoring the previous shared config
+          // (best effort, no double toast) so the surviving override shadows
+          // the same target the user had before this pick.
+          await updateAgentConfigById(
+            agentId,
+            { agencyConfig: { ...agencyConfig } },
+            { showErrorMessage: false },
+          );
+          if (!options?.silent) toast.error(t('saveAgentConfigFail', { ns: 'common' }));
+        }
+      }
     },
     [
       agentId,
@@ -181,6 +236,7 @@ export const useSelectExecutionTarget = (agentId: string) => {
       currentDeviceId,
       isHetero,
       isAccessLoading,
+      isWorkspaceAgent,
       updateAgentConfigById,
       updateWorkspaceUserPreference,
       usesWorkspaceMemberSelection,

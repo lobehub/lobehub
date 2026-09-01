@@ -292,10 +292,14 @@ describe('LobeGoogleAI', () => {
     });
 
     it('should handle text messages correctly', async () => {
-      // Mock Google AI SDK's generateContentStream method to return a successful response stream
       const mockStream = new ReadableStream({
         start(controller) {
-          controller.enqueue('Hello, world!');
+          controller.enqueue({
+            candidates: [
+              { content: { parts: [{ text: 'Hello, world!' }], role: 'model' }, index: 0 },
+            ],
+            text: 'Hello, world!',
+          });
           controller.close();
         },
       });
@@ -310,7 +314,17 @@ describe('LobeGoogleAI', () => {
       });
 
       expect(result).toBeInstanceOf(Response);
-      // Additional assertions can be added, such as verifying the returned stream content
+
+      const reader = result.body!.getReader();
+      let sse = '';
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        sse += new TextDecoder().decode(value as Uint8Array);
+      }
+
+      expect(sse).toContain('event: text');
+      expect(sse).toContain('"Hello, world!"');
     });
 
     it.each([

@@ -105,5 +105,20 @@ describe('AgentTasksPage', () => {
         showViewOptions: true,
       });
     });
+
+    it('keeps the breadcrumb for a project scope and drops it for the global list', () => {
+      expect(
+        getTaskPageHeaderVisibility({ isEmptyHero: false, isMobile: false, projectId: 'p-1' }),
+      ).toEqual({
+        showBreadcrumb: true,
+        showTaskAgentPanelToggle: true,
+        showViewOptions: true,
+      });
+      expect(getTaskPageHeaderVisibility({ isEmptyHero: false, isMobile: false })).toEqual({
+        showBreadcrumb: false,
+        showTaskAgentPanelToggle: true,
+        showViewOptions: true,
+      });
+    });
   });
 });

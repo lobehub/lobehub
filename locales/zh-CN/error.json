@@ -107,7 +107,6 @@
   "response.RemoteServerTimeout": "连接服务器超时。这通常是本机网络问题——请检查网络质量、代理或 VPN 设置后重试。",
   "response.RemoteServerUnreachable": "无法连接到服务器。这通常是本机网络问题——请检查网络连接、代理或 VPN 设置后重试。",
   "response.ServerAgentRuntimeError": "助理运行服务暂不可用。请稍后再试，或邮件联系我们",
-  "response.SubscriptionKeyMismatch": "订阅状态同步异常。你可以点击下方按钮恢复订阅，或邮件联系我们",
   "response.SubscriptionPlanLimit": "订阅积分已用尽，暂时无法使用该功能。你可以升级计划，或配置自定义模型 API 后继续",
   "response.SubscriptionPlanLimitUltimate": "您的订阅积分已用尽，无法使用此功能。请充值积分或配置自定义模型 API 以继续使用。",
   "response.SystemTimeNotMatchError": "系统时间与服务器不一致。请校准系统时间后重试",

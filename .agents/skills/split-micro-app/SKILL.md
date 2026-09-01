@@ -84,8 +84,8 @@ tsconfig `include` must cover `app/`). Stack: `@react-router/dev@8` + `@cloudfla
 | Client-shim lambda            | Client `@/libs/trpc/client` is a cookie-only `httpLink` (`trpcClient.client.ts`). Do not ship the real `lambda.ts` — its `headers()` pulls image store → chat store + `model-bank` catalog.                                                                                                                                                                                                                                                                                                                        |
 | SSR-stub shiki langs          | On the SSR env, resolve `@shikijs/langs` / `@shikijs/themes` / shiki's `langs-bundle` / `themes` / wasm to `app/stubs/shiki.ts`. Do **not** stub the `shiki` package entry — Pierre diffs and Highlighter import named APIs from it.                                                                                                                                                                                                                                                                               |
 | Client shiki from CDN         | On the client env, resolve `shiki` / `shiki/*` / `@shikijs/*` to pinned `https://esm.sh/...@<installed shiki version>` as externals. Do not bundle grammars or wasm into `build/client`.                                                                                                                                                                                                                                                                                                                           |
-| Slot-inject app-only features | Context seam owned by the shared feature (see `src/features/Verify/Acceptance/originConversation.tsx`); app provides, micro app leaves null → affordances hide                                                                                                                                                                                                                                                                                                                                                     |
-| Bypass barrels                | Deep-path imports (`@/features/Verify/Acceptance`, not the barrel) — barrels evaluate sibling exports with side effects                                                                                                                                                                                                                                                                                                                                                                                            |
+| Slot-inject app-only features | Context seam owned by the shared feature (see `src/features/Acceptance/Viewer/originConversation.tsx`); app provides, micro app leaves null → affordances hide                                                                                                                                                                                                                                                                                                                                                     |
+| Bypass barrels                | Deep-path imports (`@/features/Acceptance/Acceptance`, not the barrel) — barrels evaluate sibling exports with side effects                                                                                                                                                                                                                                                                                                                                                                                        |
 | Compose capability atoms      | Shared UI is assembled per surface; the light app never imports the fat viewer. See **`compose-atoms`**. Do not add `readOnly` on the in-app page                                                                                                                                                                                                                                                                                                                                                                  |
 | Decouple dual-use components  | Lift store reads to optional props (see AudioPlayer `uploadState`/`onCancelUpload`)                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
@@ -105,6 +105,18 @@ tsconfig, glob dirs). New `import.meta.glob` patterns in shared code need a new 
 the one manual rule. See `apps/workbench/scripts/should-build.mjs` +
 `.github/workflows/deploy-workbench.yml`; the overlay-hosted variant is lobehub-cloud's
 `scripts/shouldBuildShare.ts` + `.github/workflows/deploy-share.yml` (§1b).
+
+**PR-time verify is a separate workflow per repo that can change the artifact** — deploy
+ownership (§1b) does not decide verify ownership. Each verify builds the worker, uploads a
+non-deployed preview **version** (`wrangler versions upload --preview-alias`, dry-run when
+secrets are absent), enforces the 8MB-gzip guard, and comments the preview URL behind an HTML
+marker (never `--edit-last` — other workflows comment as the same bot). Workbench: one repo,
+one `verify-workbench.yml`. Share: **both** repos, because either side's change flows into the
+deployed worker — OSS `verify-share.yml` + cloud `verify-share.yml`. Alias namespaces must not
+collide on the shared worker: OSS uses `pr<N>`, cloud uses `cloudpr<N>`. Manifest source
+differs by what the repo can read: cloud verify borrows the deploy's `share-deploy-state`
+artifact (same repo); OSS verify cannot read cloud artifacts, so it self-bootstraps from its
+own last successful run's `share-build-inputs` (first run always builds).
 
 ## 1b. When the surface renders Cloud-only code
 
@@ -137,6 +149,24 @@ Cloud-only file.
 **Whoever's code must be inside the artifact owns the build.** Share deploys from
 lobehub-cloud (`.github/workflows/deploy-share.yml`), not OSS. Never add a deploy workflow to a
 repo that can only produce the fallback.
+
+**OSS PRs can still verify with the real overlay.** Same-repo OSS PRs clone the overlay repo @
+HEAD via `.github/actions/business-overlay` (the clone+overlay step extracted from
+`desktop-build-setup`: overlay files land in `$GITHUB_WORKSPACE/..`, which works because the
+repo is named `lobehub` so the checkout already sits at the submodule path), then
+`cd .. && pnpm install` and run the overlay repo's own `bun run build:share` — the tsconfig /
+stub knowledge stays over there. **The OSS workflow never hardcodes the private repo
+name**: it comes from the Actions repository variable `OVERLAY_REPOSITORY`; the token reuses
+the pre-existing `LOBEHUB_CLOUD_TOKEN` secret (deliberately not renamed — the desktop release
+workflows already reference it, and a rename would mean reconfiguring the org secret). When
+either is unset (fork PRs always), the workflow falls back to the
+OSS-stub build + wrangler dry-run as a pure compile/size guard. Keep new public-facing CI
+wording on the neutral "business overlay" vocabulary — the older desktop release workflows
+still leak the internal naming and are the known remaining exception. One trap: an overlay
+build's `build-inputs.txt` is overlay-root-relative (`repoRoot =
+dirname(SHARE_TSCONFIG_PROJECT)`), so OSS files appear as `lobehub/src/...` — strip that
+prefix before exact-matching against the OSS repo's own diff (`sed 's#^lobehub/##'` in the
+verify workflow); the meta triggers already match both spellings.
 
 **Cloud affected-detection needs submodule history**: a bump is a single `lobehub` entry in the
 host diff, so the workflow runs `git -C lobehub fetch --unshallow` and compares the previous
@@ -187,8 +217,16 @@ gateway routes API to `app` instead), and redirect `/` + unknown paths to `WORKB
 - **Time-dependent output must be client-gated**: relative timestamps and anything else the
   server and client compute differently belong behind a `useHydrated()`
   (`useSyncExternalStore`) check, not in the SSR pass.
-- **Skeletons must not swallow SSR'd chrome**: a list that flips to a skeleton on mount blanks
-  the server-rendered header with it. Render the header slot in the skeleton branch too.
+- **Skeletons must not swallow SSR'd chrome — and must hold its position.** A list that flips
+  to a skeleton on mount blanks the server-rendered header with it: render the header slot in
+  the skeleton branch too. Presence is not enough — every phase (no-JS SSR fallback,
+  post-hydration skeleton, settled list) must put that chrome in the **same layout container**
+  as the final render, or the page jumps sideways when JS lands. Share's hero shipped left-flush
+  while the settled list centered it in a `min(960px, 100%)` column, twice: the SSR fallback
+  rendered `ShareHero` bare, and ChatList's `showSkeleton` branch rendered `headerSlot` outside
+  `WideScreenContainer`. Verify by measuring the element's `getBoundingClientRect().x` across
+  all three phases (stall the messages request to pin the skeleton phase), not by eyeballing
+  one screenshot.
 - **Preload the `error` namespace**, not just the render ones. The boundary shows exactly when a
   chunk failed to load — precisely when the client can no longer fetch a dictionary — and an
   untranslated boundary prints raw keys (`error.title`…). Cost for share: +6.3KB gzip/document.
@@ -247,7 +285,9 @@ protocol affinity for the landing pair; it consults `resolveRule` and lets other
 2. Scaffold `apps/<name>` (copy workbench/share shapes); routes + root + entry.server + worker.
 3. Build, run the module trace, cut SSR weight (gate/stub/slot/deep-import) until gzip sane —
    in the overlay repo too, if there is one.
-4. Wire CDN deploy (`deploy.ts`, stable `_<name>/` prefix) + wrangler vars + redirects.
+4. Wire CDN deploy (`deploy.ts`, stable `_<name>/` prefix) + wrangler vars + redirects, plus a
+   PR-time verify workflow in **every repo whose changes reach the artifact** (§1 PR-time
+   verify — preview version, size guard, non-colliding alias namespace).
 5. Loader data + SWR fallback + meta builder + i18n narrowing (+ `error`); verify with
    `/trpc`-blocked browser run (content must survive) and view-source (SSR content + meta present).
 6. Deploy worker; verify workers.dev standalone (API proxy, `/` redirect).

@@ -25,14 +25,6 @@ export {
   VerifyExecutorService,
 } from './executor';
 export { computeFalseFlags, VerifyFeedbackService } from './feedbackService';
-export { DEFAULT_GOAL_MAX_ROUNDS, resolveGoalRoundBudget } from './goalBudget';
-export {
-  goalExhaustedBriefCopy,
-  type GoalLoopOutcome,
-  goalReadyForReviewBriefCopy,
-  maybeContinueGoalLoop,
-  syncGoalToolState,
-} from './goalLoop';
 export { runVerifyOnCompletion } from './lifecycle';
 export {
   isHeterogeneousVerifyProvider,
@@ -49,6 +41,7 @@ export {
 } from './repairService';
 export { type GenerateReportParams, VerifyReporterService } from './reporter';
 export {
+  isCurrentReviewPrediction,
   type PredictReviewParams,
   REVIEW_PREDICT_CONCURRENCY,
   shouldSurfaceProposal,

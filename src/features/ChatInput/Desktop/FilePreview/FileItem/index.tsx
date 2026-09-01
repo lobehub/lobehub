@@ -1,4 +1,5 @@
-import { ActionIcon, Block, Center, Flexbox, Text } from '@lobehub/ui';
+import { Block, Center, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { RotateCwIcon, Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
@@ -36,12 +37,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   image: css`
     margin-block: 0 !important;
-  `,
-  status: css`
-    &.ant-tag {
-      padding-inline: 0;
-      background: none;
-    }
   `,
 }));
 

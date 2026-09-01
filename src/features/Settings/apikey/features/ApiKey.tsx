@@ -1,8 +1,8 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { Center, Empty, Flexbox, Text } from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui/base-ui';
+import { Center, Empty, Flexbox } from '@lobehub/ui';
+import { Button, Text, toast } from '@lobehub/ui/base-ui';
 import { useMutation } from '@tanstack/react-query';
 import { createStaticStyles } from 'antd-style';
 import { BookOpen, ChevronRight } from 'lucide-react';

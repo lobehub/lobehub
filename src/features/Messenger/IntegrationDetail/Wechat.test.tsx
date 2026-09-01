@@ -13,48 +13,8 @@ const messengerServiceMocks = vi.hoisted(() => ({
 }));
 const useSWRMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@lobehub/ui', () => ({
-  Alert: ({ message }: { message?: ReactNode }) => <div>{message}</div>,
-  Block: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Icon: () => <span />,
-  Input: ({
-    disabled,
-    onChange,
-    placeholder,
-    value,
-  }: {
-    disabled?: boolean;
-    onChange?: (event: { target: { value: string } }) => void;
-    placeholder?: string;
-    value?: string;
-  }) => (
-    <input
-      disabled={disabled}
-      placeholder={placeholder}
-      value={value}
-      onChange={(event) => onChange?.(event)}
-    />
-  ),
-  Skeleton: { Button: () => <span>Loading</span> },
-  Tag: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-}));
-
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Button: ({
-    children,
-    disabled,
-    onClick,
-  }: {
-    children?: ReactNode;
-    disabled?: boolean;
-    onClick?: () => void;
-  }) => (
-    <button disabled={disabled} type="button" onClick={onClick}>
-      {children}
-    </button>
-  ),
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   Select: ({
     onChange,
     options,
@@ -72,10 +32,10 @@ vi.mock('@lobehub/ui/base-ui', () => ({
       ))}
     </select>
   ),
-  toast: { error: vi.fn(), info: vi.fn(), success: vi.fn(), warning: vi.fn() },
 }));
 
-vi.mock('antd', () => ({
+vi.mock('antd', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   QRCode: ({
     'aria-label': ariaLabel,
     bgColor,
@@ -97,7 +57,8 @@ vi.mock('antd', () => ({
   ),
 }));
 
-vi.mock('antd-style', () => ({
+vi.mock('antd-style', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
   createStaticStyles: () => ({ error: 'error', qrSlot: 'qrSlot', setup: 'setup' }),
 }));
 
@@ -141,7 +102,6 @@ vi.mock('@/components/NeuralNetworkLoading', () => ({ default: () => <span>Loadi
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => vi.fn(),
 }));
-vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ allowed: true }) }));
 vi.mock('@/services/messenger', () => ({ messengerService: messengerServiceMocks }));
 vi.mock('../i18n', () => ({ getMessengerErrorMessage: () => 'error' }));
 vi.mock('./shared', () => ({

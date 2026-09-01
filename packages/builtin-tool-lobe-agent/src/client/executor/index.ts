@@ -9,10 +9,11 @@ import { LobeAgentManifest } from '../../manifest';
 import type { MediaFileItem } from '../../media';
 import {
   buildAnalyzeMediaContent,
-  createMediaFileItems,
+  createMediaFileItemsFromMessage,
   createUrlMediaFileItems,
   formatMediaUrlValidationError,
   getUnexpectedAnalyzeMediaArgumentKeys,
+  hasAnalyzableMediaFiles,
   hasUserMediaFiles,
   normalizeAnalyzeMediaInput,
   selectMediaFileItems,
@@ -265,14 +266,12 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
           : dbMessageSelectors.latestUserMessage(chatState);
       const activeMediaMessages = dbMessageSelectors
         .activeDbMessages(chatState)
-        .filter(hasUserMediaFiles);
+        .filter(hasAnalyzableMediaFiles);
       const mediaMessages = [
-        ...(hasUserMediaFiles(sourceMessage) ? [sourceMessage] : []),
+        ...(hasAnalyzableMediaFiles(sourceMessage) ? [sourceMessage] : []),
         ...activeMediaMessages.filter((message) => message.id !== sourceMessage?.id),
       ];
-      const files = mediaMessages.flatMap((message) =>
-        createMediaFileItems(message, message.imageList, message.videoList, message.audioList),
-      );
+      const files = mediaMessages.flatMap((message) => createMediaFileItemsFromMessage(message));
 
       if (files.length === 0) {
         return {

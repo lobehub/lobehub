@@ -1,8 +1,8 @@
 'use client';
 
 import type { MenuProps } from '@lobehub/ui';
-import { ActionIcon, DropdownMenu, Icon } from '@lobehub/ui';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { DropdownMenu, Icon } from '@lobehub/ui';
+import { ActionIcon, confirmModal, toast } from '@lobehub/ui/base-ui';
 import { FolderClosedIcon, MoreHorizontalIcon, PencilIcon, TrashIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

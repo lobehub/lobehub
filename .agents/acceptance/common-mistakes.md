@@ -157,6 +157,26 @@ the image lands unpaired and unlabeled. Publish a fresh round carrying the compl
 evidence set instead, and say in `report.md` that it re-publishes the same
 observations rather than re-running the cases.
 
+### L-E11b — Publishing a new round onto a check the reviewer already accepted
+
+**Wrong approach:** when new feedback arrives about a check the user has already
+accepted, reuse that check's id for the new work — because reusing ids is the rule for
+rejected checks.
+
+**Why it fails:** an accepted verdict is deliberately sticky (`acceptanceService`
+computes `stale` only for rejects, and a test pins that behaviour by name). A later
+result on a settled id therefore inherits the tick: the round publishes green and the
+reviewer is never told there is anything new to look at. Since 2026-08, `attachRun`
+refuses such a round outright — the error names the offending ids and nothing is
+written, so a partially attached round cannot happen.
+
+**Correct approach:** read `userReview.action` before writing the plan. `accept` means
+settled: the new work needs a NEW check id, which appears unreviewed and can actually
+be judged. Reuse the id only while the check is rejected or never reviewed. Decide by
+_is the criterion new, and has the old one been accepted_ — not by how big the change
+is: a presentation fix on a still-open check reuses its id (\[\[L-E1]]), while a newly
+raised criterion on an accepted check must not.
+
 ### L-E12 — Expressing multimodal disclosure through the `verifier` enum
 
 **Wrong approach:** write a value such as `"verifier": "multimodal LLM"` in a plan
@@ -285,6 +305,26 @@ it makes a green verification cover only half of what users can see.
 where the action key is actually enabled (grep each route's `leftActions` array, not
 the component's imports) and capture evidence for every surface that enables it. Mark
 any surface you deliberately skip as untested.
+
+### L-E19 — Hard-wrapping the prose inside a markdown evidence document
+
+**Wrong approach:** author a `markdown` / `text` evidence artifact the way you write
+a source file, folding every paragraph at \~80 columns, and assume the page reflows
+it like any other markdown.
+
+**Why it fails:** the Acceptance evidence renderer parses evidence documents in chat
+mode, where `remark-breaks` turns every single newline inside a paragraph into a
+`<br>`. The author's fold is frozen into the page: paragraphs break mid-sentence at a
+column count unrelated to the reader's viewport, next to a report body that reflows
+normally, so the same round shows two different text behaviours. Reviewers read the
+ragged block as a rendering defect and spend the round on the wrapping instead of the
+finding.
+
+**Correct approach:** keep each paragraph of evidence prose on ONE physical line and
+separate blocks with a blank line. Spend a newline only where it carries meaning —
+list items, table rows, fenced code, and literal transcript output, which are exactly
+the places the break is the content. Never run a proseWrap formatter over files under
+`assets/`.
 
 ## Product and interaction contracts
 
@@ -445,6 +485,25 @@ non-negative overflow is a defect regardless of how the screenshot reads. Bound 
 by the space the positioner publishes (`--available-height`, less the popup's own chrome)
 rather than relying on collision flipping.
 
+### L-D12 — Assuming a menu dispatches an item just because it rendered
+
+**Wrong approach:** add an entry to a message/context menu — especially a nested one under a
+submenu — confirm from a screenshot that the label and icon appear where intended, and call
+the entry verified.
+
+**Why it fails:** menu rendering and menu dispatch are separate contracts here. The dropdown
+only invokes an item that carries its own `onClick`, and the group wrapper attaches one to
+top-level items only, so a nested child renders perfectly and does nothing when clicked — the
+menu just closes, with no error, no toast, and no console output. Any routing the consumer
+writes on the parent's side (by `keyPath` or otherwise) never runs, because the click was
+dropped before it. A screenshot of an open submenu therefore proves placement and nothing
+else.
+
+**Correct approach:** for every menu entry you add, click it and assert the effect it is
+supposed to have — a dialog opens, a request fires, a store field changes. Treat "the menu
+closed and nothing happened" as the expected failure signature, not as a missed click. When
+the entry is nested, verify the child's own dispatch wiring, not the parent's.
+
 ## Environment safety
 
 ### L-S0 — Concluding a dependency moved from the root manifest alone
@@ -554,6 +613,16 @@ agent-browser --cdp 9222 eval "(async()=>{const t=await (await fetch('app://rend
 
 A wrong-worktree hit means the instance is someone else's session: do not restart or
 reuse it, start a pool instance (`electron-dev.sh start <id>`) or switch surface.
+
+**Same failure, third shape — the pool port is not owned by Electron at all.**
+`electron-dev.sh start <id>` treats a reachable `CDP_BASE + id` as "already running"
+and skips the launch with `CDP already reachable on <port>. Skipping start`, so the
+run then drives whatever owns it. Any other debugger on that port claims the slot —
+`workerd`/`wrangler` defaults to 9229, which is pool id 7. The give-away is that
+`electron-dev.sh list` does not list the instance as up while the port answers.
+Before picking a pool id, read `/json/version` on its port and require an Electron
+`Browser` string (a `wrangler/*` or `node` answer means pick another id), or check
+the port is free at all.
 
 ### L-S6 — Reading or writing the url from a portal'd sidebar on desktop
 
@@ -773,3 +842,18 @@ because it installs from scratch.
 expectations, delete the hidden `node_modules/.pnpm/lock.yaml` (or the whole
 node\_modules) in the affected workspace root and reinstall, then re-verify the
 actual resolved version via the importing package's symlink.
+
+### L-S16 — Treating a listening dev-server process as a healthy long-run probe
+
+**Wrong approach:** use process existence, an open TCP connection, or an unbounded
+`curl` as the health signal for an unattended LobeHub soak.
+
+**Why it fails:** Next dev can remain alive and accept a TCP connection while never
+returning an HTTP response. An unbounded probe then blocks the monitor itself, so the
+log stops exactly when the failure begins and makes the run look shorter rather than
+recording an unhealthy interval.
+
+**Correct approach:** give every HTTP and CLI probe explicit connect and total
+timeouts, record timeout/`000` as an observation, and keep the monitor advancing.
+Prove recovery with a successful application request after restarting the owned
+server; neither a PID nor a listening socket is sufficient.

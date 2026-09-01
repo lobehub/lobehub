@@ -32,6 +32,7 @@ import {
   sql,
 } from 'drizzle-orm';
 
+import type { FtsSearchCandidateSource } from '../repositories/ftsSearch';
 import type { TopicItem } from '../schemas';
 import {
   agentOperations,
@@ -48,6 +49,7 @@ import { COPIED_TOPIC_USAGE_RESET } from '../utils/copiedTranscript';
 import { markCopiedMessageMetadata } from '../utils/copyMessagesInDatabase';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
+import { inJsonStringArray } from '../utils/inJsonStringArray';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { recomputeTopicUsage } from './topicUsage';
 
@@ -289,12 +291,19 @@ const buildTopicOrderBy = (topicActivityAt: SQL, sortBy?: TopicQuerySortBy): SQL
 export class TopicModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private ftsSearchCandidateSource?: FtsSearchCandidateSource;
   private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    ftsSearchCandidateSource?: FtsSearchCandidateSource,
+  ) {
     this.userId = userId;
     this.db = db;
     this.workspaceId = workspaceId;
+    this.ftsSearchCandidateSource = ftsSearchCandidateSource;
   }
 
   private ownership = () =>
@@ -645,6 +654,13 @@ export class TopicModel {
     });
   };
 
+  findByIds = async (ids: string[]): Promise<TopicItem[]> => {
+    if (ids.length === 0) return [];
+    return this.db.query.topics.findMany({
+      where: and(inArray(topics.id, ids), this.ownership()),
+    });
+  };
+
   /**
    * Minimal creator projection for router-level workspace row checks on
    * batch-by-ids operations (batch delete / move).
@@ -837,6 +853,24 @@ export class TopicModel {
     const scopeCondition = this.matchKeywordScope(scopeOptions);
 
     const bm25Query = sanitizeBm25Query(keyword);
+    const candidateResults = this.ftsSearchCandidateSource?.ftsSearchCandidateEnabled
+      ? await Promise.all([
+          this.ftsSearchCandidateSource.ftsSearchCandidates({
+            entity: 'topics',
+            filters: { topicScope: scopeOptions },
+            pagination: {},
+            query: { fields: ['title'], text: keyword },
+          }),
+          this.ftsSearchCandidateSource.ftsSearchCandidates({
+            entity: 'messages',
+            filters: { topicScope: scopeOptions },
+            pagination: {},
+            query: { fields: ['content'], text: keyword },
+          }),
+        ])
+      : undefined;
+    const topicCandidateIds = candidateResults?.[0].candidates.map(({ id }) => id);
+    const messageCandidateIds = candidateResults?.[1].candidates.map(({ id }) => id);
 
     // Run title and message content searches in parallel
     const [topicsByTitle, topicIdsByMessages] = await Promise.all([
@@ -844,7 +878,15 @@ export class TopicModel {
       this.db
         .select()
         .from(topics)
-        .where(and(this.ownership(), scopeCondition, sql`${topics.title} @@@ ${bm25Query}`))
+        .where(
+          and(
+            this.ownership(),
+            scopeCondition,
+            topicCandidateIds
+              ? inJsonStringArray(topics.id, topicCandidateIds)
+              : sql`${topics.title} @@@ ${bm25Query}`,
+          ),
+        )
         .orderBy(desc(topics.updatedAt)),
       // Query topic IDs matching by message content (BM25)
       this.db
@@ -854,7 +896,9 @@ export class TopicModel {
         .where(
           and(
             this.messageOwnership(),
-            sql`${messages.content} @@@ ${bm25Query}`,
+            messageCandidateIds
+              ? inJsonStringArray(messages.id, messageCandidateIds)
+              : sql`${messages.content} @@@ ${bm25Query}`,
             this.ownership(),
             scopeCondition,
           ),
@@ -1350,6 +1394,23 @@ export class TopicModel {
       const runningOperation = existing?.metadata?.runningOperation;
       if (!runningOperation) {
         const currentMessage = existing?.metadata?.heteroCurrentMsgId;
+        if (
+          existing?.metadata?.lastSettledOperationId === operationId &&
+          existing.status === 'unread' &&
+          status === 'active'
+        ) {
+          await tx
+            .update(topics)
+            .set({ status: 'active', updatedAt: new Date() })
+            .where(and(eq(topics.id, id), this.ownership()));
+
+          return {
+            assistantMessageId:
+              currentMessage?.operationId === operationId ? currentMessage.msgId : undefined,
+            status: 'corrected' as const,
+          };
+        }
+
         return {
           assistantMessageId:
             currentMessage?.operationId === operationId ? currentMessage.msgId : undefined,
@@ -1366,6 +1427,7 @@ export class TopicModel {
 
       const metadata = {
         ...existing.metadata,
+        ...(isRoot ? { lastSettledOperationId: operationId } : {}),
         runningOperation: isRoot
           ? null
           : {
@@ -1739,6 +1801,13 @@ export class TopicModel {
        */
       allowRunningOperationId?: string;
       /**
+       * A deterministic intervention reservation is an initializer fence, not
+       * a reentrant mutex. Its concurrent same-id caller must wait until the
+       * owner releases (or the lease expires) instead of entering preparation
+       * and overwriting an already-running continuation state.
+       */
+      allowSameReservationReentry?: boolean;
+      /**
        * Skip the `runningOperation` check entirely and serialize only on the
        * short reservation. Set by interactive sends: "don't run two foreground
        * turns at once" is a UX policy the client already owns end to end (queue
@@ -1768,7 +1837,13 @@ export class TopicModel {
         Number.isFinite(reservedAt) &&
         Date.now() - reservedAt < TASK_CALLBACK_RESERVATION_TTL_MS;
 
-      if (reservation?.messageId === messageId && hasLiveReservation) return true;
+      if (
+        reservation?.messageId === messageId &&
+        hasLiveReservation &&
+        options?.allowSameReservationReentry !== false
+      ) {
+        return true;
+      }
 
       const runningOperation = existing.metadata?.runningOperation;
       const ownedRunningOperation =
@@ -1810,18 +1885,99 @@ export class TopicModel {
     });
 
   /**
+   * Repair the reconnect anchor after an intervention queue ACK. The same row
+   * lock also releases only this continuation's reservation, closing the crash
+   * window between provider ACK and execAgent's ordinary running-marker write.
+   */
+  repairAgentInterventionContinuation = async (params: {
+    active: boolean;
+    assistantMessageId: string;
+    continuationOperationId: string;
+    reservationId: string;
+    scope?: string | null;
+    sourceOperationId: string;
+    startedAt: string;
+    threadId?: string | null;
+    topicId: string;
+  }): Promise<'conflict' | 'repaired' | 'terminal'> =>
+    this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: topics.metadata })
+        .from(topics)
+        .where(and(eq(topics.id, params.topicId), this.ownership()))
+        .for('update');
+      if (!existing) return 'conflict';
+
+      const current = existing.metadata?.runningOperation;
+      const reservation = existing.metadata?.taskCallbackReservation;
+      const reservedAt = reservation ? Date.parse(reservation.reservedAt) : 0;
+      const hasLiveReservation =
+        !!reservation &&
+        Number.isFinite(reservedAt) &&
+        Date.now() - reservedAt < TASK_CALLBACK_RESERVATION_TTL_MS;
+      const ownsCurrent =
+        !current ||
+        current.operationId === params.sourceOperationId ||
+        current.operationId === params.continuationOperationId;
+      const ownsReservation = reservation?.messageId === params.reservationId;
+      if (hasLiveReservation && !ownsReservation) return 'conflict';
+      if (!ownsCurrent) {
+        if (ownsReservation) {
+          await tx
+            .update(topics)
+            .set({
+              metadata: { ...existing.metadata, taskCallbackReservation: null },
+              updatedAt: new Date(),
+            })
+            .where(and(eq(topics.id, params.topicId), this.ownership()));
+        }
+        return 'conflict';
+      }
+
+      const runningOperation = params.active
+        ? {
+            ...(current?.operationId === params.continuationOperationId ? current : {}),
+            assistantMessageId: params.assistantMessageId,
+            heteroType: null,
+            operationId: params.continuationOperationId,
+            scope: params.scope ?? undefined,
+            startedAt: params.startedAt,
+            threadId: params.threadId ?? undefined,
+          }
+        : null;
+      await tx
+        .update(topics)
+        .set({
+          metadata: {
+            ...existing.metadata,
+            runningOperation,
+            ...(ownsReservation || !hasLiveReservation ? { taskCallbackReservation: null } : {}),
+          },
+          updatedAt: new Date(),
+        })
+        .where(and(eq(topics.id, params.topicId), this.ownership()));
+
+      return params.active ? 'repaired' : 'terminal';
+    });
+
+  /**
    * Release only the caller's reservation. The ownership check prevents a
    * delayed finally block from clearing a newer callback's claim.
    */
-  releaseTaskCallbackReservation = async (id: string, messageId: string): Promise<void> => {
-    await this.db.transaction(async (tx) => {
+  releaseTaskCallbackReservation = async (
+    id: string,
+    messageId: string,
+  ): Promise<'absent' | 'foreign' | 'released'> =>
+    this.db.transaction(async (tx) => {
       const [existing] = await tx
         .select({ metadata: topics.metadata })
         .from(topics)
         .where(and(eq(topics.id, id), this.ownership()))
         .for('update');
 
-      if (existing?.metadata?.taskCallbackReservation?.messageId !== messageId) return;
+      const reservation = existing?.metadata?.taskCallbackReservation;
+      if (!reservation) return 'absent';
+      if (reservation.messageId !== messageId) return 'foreign';
 
       await tx
         .update(topics)
@@ -1832,8 +1988,8 @@ export class TopicModel {
           },
         })
         .where(and(eq(topics.id, id), this.ownership()));
+      return 'released';
     });
-  };
 
   /**
    * Arm a scheduled run on an owned topic: writes `metadata.scheduledRun` and

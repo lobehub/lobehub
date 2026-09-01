@@ -107,7 +107,6 @@
   "response.RemoteServerTimeout": "Połączenie z serwerem przekroczyło limit czasu. Zazwyczaj oznacza to problem z lokalną siecią — sprawdź jakość sieci, ustawienia serwera proxy lub VPN i spróbuj ponownie.",
   "response.RemoteServerUnreachable": "Nie można połączyć się z serwerem. Zazwyczaj oznacza to problem z lokalną siecią — sprawdź swoje połączenie internetowe, ustawienia serwera proxy lub VPN i spróbuj ponownie.",
   "response.ServerAgentRuntimeError": "Przepraszamy, usługa Agenta jest obecnie niedostępna. Spróbuj później lub skontaktuj się z nami mailowo.",
-  "response.SubscriptionKeyMismatch": "Przepraszamy za niedogodności. Z powodu tymczasowej awarii systemu Twoja subskrypcja jest nieaktywna. Kliknij przycisk poniżej, aby ją przywrócić lub skontaktuj się z nami mailowo.",
   "response.SubscriptionPlanLimit": "Wyczerpałeś punkty subskrypcji i nie możesz korzystać z tej funkcji. Uaktualnij plan lub skonfiguruj własny model API.",
   "response.SubscriptionPlanLimitUltimate": "Wyczerpałeś punkty subskrypcji i nie możesz korzystać z tej funkcji. Doładuj konto lub skonfiguruj własny model API.",
   "response.SystemTimeNotMatchError": "Przepraszamy, czas systemowy nie zgadza się z czasem serwera. Sprawdź ustawienia czasu i spróbuj ponownie.",

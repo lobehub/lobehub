@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import type { TargetIcon } from 'lucide-react';
 import {
@@ -59,11 +60,9 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 export interface GoalStatusLineProps {
-  maxRounds?: number;
   passed: number;
   phase: GoalWorkPhase;
   progress: number;
-  round: number;
   total: number;
 }
 
@@ -73,45 +72,37 @@ export interface GoalStatusLineProps {
  * Once the goal is achieved the coverage bar retires: "已达成" already implies
  * full coverage, so repeating "4/4 项通过" is noise.
  */
-const GoalStatusLine = memo<GoalStatusLineProps>(
-  ({ maxRounds, passed, phase, progress, round, total }) => {
-    const { t } = useTranslation('chat');
-    const meta = PHASE_META[phase];
-    const showChecks = total > 0 && phase !== 'achieved';
+const GoalStatusLine = memo<GoalStatusLineProps>(({ passed, phase, progress, total }) => {
+  const { t } = useTranslation('chat');
+  const meta = PHASE_META[phase];
+  const showChecks = total > 0 && phase !== 'achieved';
 
-    return (
-      <Flexbox horizontal align={'center'} gap={6}>
-        {phase !== 'running' && (
-          <>
-            <Icon
-              className={styles.statusIcon}
-              color={meta.color}
-              icon={meta.icon}
-              size={12}
-              spin={meta.spin}
-            />
-            <Text className={styles.status}>{t(`goalWork.status.${phase}`)}</Text>
-            <Text className={styles.status}>·</Text>
-          </>
-        )}
-        <Text className={styles.status}>
-          {maxRounds
-            ? t('goalWork.roundWithBudget', { current: round, total: maxRounds })
-            : t('goalWork.round', { current: round })}
-        </Text>
-        {showChecks && (
-          <>
-            <Text className={styles.status}>·</Text>
-            <div className={styles.progress}>
-              <div className={styles.progressFill} style={{ width: `${progress}%` }} />
-            </div>
-            <Text className={styles.status}>{t('goalWork.checks', { passed, total })}</Text>
-          </>
-        )}
-      </Flexbox>
-    );
-  },
-);
+  return (
+    <Flexbox horizontal align={'center'} gap={6}>
+      {phase !== 'running' && (
+        <>
+          <Icon
+            className={styles.statusIcon}
+            color={meta.color}
+            icon={meta.icon}
+            size={12}
+            spin={meta.spin}
+          />
+          <Text className={styles.status}>{t(`goalWork.status.${phase}`)}</Text>
+          <Text className={styles.status}>·</Text>
+        </>
+      )}
+      {showChecks && (
+        <>
+          <div className={styles.progress}>
+            <div className={styles.progressFill} style={{ width: `${progress}%` }} />
+          </div>
+          <Text className={styles.status}>{t('goalWork.workDone', { passed, total })}</Text>
+        </>
+      )}
+    </Flexbox>
+  );
+});
 
 GoalStatusLine.displayName = 'GoalStatusLine';
 

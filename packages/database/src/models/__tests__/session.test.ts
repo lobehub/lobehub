@@ -366,6 +366,80 @@ describe('SessionModel', () => {
     });
   });
 
+  describe('queryByKeyword with external candidates', () => {
+    it('hydrates only current-scope sessions and surfaces candidate failures', async () => {
+      await serverDB.insert(users).values({ id: 'candidate-other-user' });
+      await serverDB.insert(sessions).values([
+        { id: 'candidate-session-own-a', userId },
+        { id: 'candidate-session-own-a-secondary', userId },
+        { id: 'candidate-session-own-b', userId },
+        { id: 'candidate-session-other', userId: 'candidate-other-user' },
+      ]);
+      await serverDB.insert(agents).values([
+        { id: 'candidate-agent-own-a', title: 'Own A', userId },
+        { id: 'candidate-agent-own-b', title: 'Own B', userId },
+        { id: 'candidate-agent-own-unlinked', title: 'Own Unlinked', userId },
+        { id: 'candidate-agent-other', title: 'Other', userId: 'candidate-other-user' },
+      ]);
+      await serverDB.insert(agentsToSessions).values([
+        { agentId: 'candidate-agent-own-a', sessionId: 'candidate-session-own-a', userId },
+        {
+          agentId: 'candidate-agent-own-a',
+          sessionId: 'candidate-session-own-a-secondary',
+          userId,
+        },
+        { agentId: 'candidate-agent-own-b', sessionId: 'candidate-session-own-b', userId },
+        {
+          agentId: 'candidate-agent-other',
+          sessionId: 'candidate-session-other',
+          userId: 'candidate-other-user',
+        },
+      ]);
+      const ftsSearchCandidates = vi.fn().mockResolvedValue({
+        candidates: [
+          { id: 'candidate-agent-other', score: 10 },
+          { id: 'candidate-agent-deleted', score: 9 },
+          { id: 'candidate-agent-own-b', score: 8 },
+          { id: 'candidate-agent-own-unlinked', score: 7 },
+          { id: 'candidate-agent-own-a', score: 6 },
+        ],
+        total: 5,
+      });
+      const model = new SessionModel(serverDB, userId, undefined, {
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates,
+      });
+
+      const result = await model.queryByKeyword('candidate');
+      expect(result).toHaveLength(2);
+      expect(['candidate-session-own-a', 'candidate-session-own-a-secondary']).toContain(
+        result[0]?.id,
+      );
+      expect(result[1]?.id).toBe('candidate-session-own-b');
+      await expect(
+        model.findSessionsByKeywords({ current: 0, keyword: 'candidate', pageSize: 1 }),
+      ).resolves.toMatchObject([
+        { id: expect.stringMatching(/^candidate-session-own-a(?:-secondary)?$/) },
+      ]);
+      await expect(
+        model.findSessionsByKeywords({ current: 1, keyword: 'candidate', pageSize: 1 }),
+      ).resolves.toMatchObject([{ id: 'candidate-session-own-b' }]);
+      await expect(
+        model.findSessionsByKeywords({ current: 2, keyword: 'candidate', pageSize: 1 }),
+      ).resolves.toEqual([]);
+      expect(ftsSearchCandidates).toHaveBeenCalledWith({
+        entity: 'agents',
+        filters: {},
+        pagination: {},
+        query: { fields: ['title', 'description'], text: 'candidate' },
+      });
+
+      const providerError = new Error('candidate unavailable');
+      ftsSearchCandidates.mockRejectedValueOnce(providerError);
+      await expect(model.queryByKeyword('failure')).rejects.toBe(providerError);
+    });
+  });
+
   describe('create', () => {
     it('should create a new session', async () => {
       // Call the create method

@@ -1,4 +1,4 @@
-import { Text } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { memo, type PropsWithChildren } from 'react';
 
 const WorkspaceSettingsTitle = memo<PropsWithChildren>(({ children }) => (

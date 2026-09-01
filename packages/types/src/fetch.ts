@@ -10,8 +10,6 @@ export const ChatErrorType = {
   WorkspaceFrozenByAdmin: 'WorkspaceFrozenByAdmin', // Workspace manually frozen by admin (reason is operator-written, safe to surface)
   WorkspaceFrozenByRiskControl: 'WorkspaceFrozenByRiskControl', // Workspace auto-frozen by risk control (reason is engineer debug text, hide from user)
   WorkspaceSubscriptionInactive: 'WorkspaceSubscriptionInactive', // Workspace's paid subscription has lapsed — view-only for non-primary members; spend blocked until renewed
-  SubscriptionKeyMismatch: 'SubscriptionKeyMismatch', // Subscription key mismatch
-
   SupervisorDecisionFailed: 'SupervisorDecisionFailed', // Supervisor decision failed
 
   InvalidUserKey: 'InvalidUserKey', // is not valid User key

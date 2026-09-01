@@ -70,6 +70,7 @@ import {
 import { executeToolCall } from '../tools';
 import { cleanupAllProcesses } from '../tools/shell';
 import { log, setVerbose } from '../utils/logger';
+import { sweepLocalTraces } from '../utils/traceMaintenance';
 
 const CONNECT_SERVICE_NAME = CLI_CONNECT_SERVICE_NAME;
 
@@ -422,6 +423,16 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
 
   const startedAt = new Date();
   updateStatus('connecting');
+
+  // Housekeeping for the local trace store: partials left behind by killed
+  // agent processes become `interrupted` snapshots (so `lh trace op list` shows
+  // the crashed runs), and aged-out snapshots are deleted. Fire-and-forget —
+  // it must never delay the gateway connection.
+  void sweepLocalTraces().then(({ deleted, reconciled }) => {
+    if (reconciled > 0 || deleted > 0) {
+      info(`  Traces    : ${reconciled} interrupted run(s) closed, ${deleted} expired removed`);
+    }
+  });
 
   // Platform handlers for the shared `@lobechat/device-control` dispatcher.
   // File preview / index use the package's portable defaults (no
@@ -848,11 +859,16 @@ function bindGatewayClientHandlers(
       log.toolCall(toolCall.apiName, requestId, toolCall.arguments, operationId);
     }
 
+    // Timed on the DEVICE's clock. The server can only see the whole dispatch
+    // round trip, so reporting this back is what separates a slow tool from
+    // slow transport.
+    const startedAt = performance.now();
     const result = await executeToolCall(toolCall.apiName, toolCall.arguments, timeout);
+    const executionTimeMs = Math.round(performance.now() - startedAt);
 
     if (isDaemonChild) {
       appendLog(
-        `[RESULT] ${result.success ? 'OK' : 'FAIL'}${operationId ? ` op=${operationId}` : ''} (${requestId})`,
+        `[RESULT] ${result.success ? 'OK' : 'FAIL'} ${executionTimeMs}ms${operationId ? ` op=${operationId}` : ''} (${requestId})`,
       );
     } else {
       log.toolResult(requestId, result.success, result.content, operationId);
@@ -863,6 +879,7 @@ function bindGatewayClientHandlers(
       result: {
         content: result.content,
         error: result.error,
+        executionTimeMs,
         state: result.state,
         success: result.success,
       },

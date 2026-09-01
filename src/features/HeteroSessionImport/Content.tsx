@@ -6,8 +6,8 @@ import type {
   HeteroSessionDirPref,
   HeteroSessionImportStatus,
 } from '@lobechat/types';
-import { Flexbox, Icon, NeuralNetworkLoading, ScrollShadow, SearchBar, Text } from '@lobehub/ui';
-import { Button, Checkbox, useModalContext } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, NeuralNetworkLoading, ScrollShadow, SearchBar } from '@lobehub/ui';
+import { Button, Checkbox, Text, useModalContext } from '@lobehub/ui/base-ui';
 import { Progress } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Check, FolderSearch, TriangleAlert, X } from 'lucide-react';

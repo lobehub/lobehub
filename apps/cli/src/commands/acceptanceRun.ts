@@ -8,10 +8,11 @@ import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
 import { resolveServerUrl } from '../settings';
+import { ensureAcceptanceDirIgnored, ensureAcceptanceDirIgnoredFor } from '../utils/acceptanceDir';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
-import type { IgnoreResult, LinkResult } from '../utils/skillWiring';
-import { ensureSkillIgnored, linkHarnessSkills } from '../utils/skillWiring';
+import type { LinkResult } from '../utils/skillWiring';
+import { linkHarnessSkills } from '../utils/skillWiring';
 import { uploadLocalFile } from '../utils/uploadLocalFile';
 import {
   type Decision,
@@ -20,6 +21,7 @@ import {
   evidenceTypeForFile,
   genericContextFromResult,
   inlineTextEvidenceForFile,
+  interactionCostFromReportDir,
   metadataForReport,
   originFromEnv,
   parseSubjectRef,
@@ -49,7 +51,6 @@ import {
 interface InstallOptions {
   dir?: string;
   force?: boolean;
-  gitignore?: boolean;
   json?: boolean | string;
   skill: string;
 }
@@ -70,7 +71,9 @@ async function installAction(options: InstallOptions): Promise<void> {
 
   // The acceptance skeleton lands under `.agents/skills/<id>` — the harness dir
   // the project's own `.agents/acceptance/` adapter sits beside. Invariant: this
-  // is a materialized artifact, re-installed to update, never hand-edited.
+  // is a materialized artifact, re-installed to update, never hand-edited. It is
+  // meant to be COMMITTED: the consuming repo reviews skill changes like any
+  // other file, so install never writes an ignore entry for it.
   const baseDir = options.dir ? path.resolve(options.dir) : process.cwd();
   const skillDir = path.join(baseDir, '.agents', 'skills', bundle.identifier);
 
@@ -109,10 +112,10 @@ async function installAction(options: InstallOptions): Promise<void> {
   }
 
   const link = linkHarnessSkills(baseDir, bundle.identifier);
-  const ignored =
-    options.gitignore === false
-      ? []
-      : ensureSkillIgnored(baseDir, bundle.identifier, link.kind === 'linked');
+  // The skill is committed; its OUTPUT is not. Seed the artifact directory's own
+  // self-ignoring file now, so the first run's screenshots never land as
+  // untracked noise in a repo that has never heard of us.
+  const ignored = ensureAcceptanceDirIgnored(baseDir);
 
   const result = {
     dir: skillDir,
@@ -121,23 +124,27 @@ async function installAction(options: InstallOptions): Promise<void> {
     removed,
     skill: bundle.identifier,
     skipped,
+    // Recorded so a caller can tell which version now sits on disk; the
+    // installed SKILL.md carries the same value in its frontmatter.
+    version: bundle.version,
     written,
   };
   if (options.json !== undefined) {
     outputJson(result, typeof options.json === 'string' ? options.json : undefined);
     return;
   }
+  const versionLabel = bundle.version ? pc.dim(` v${bundle.version}`) : '';
   console.log(
-    `${pc.green('✓')} ${pc.bold(bundle.name)} skill → ${pc.dim(path.relative(process.cwd(), skillDir) || skillDir)}`,
+    `${pc.green('✓')} ${pc.bold(bundle.name)}${versionLabel} skill → ${pc.dim(path.relative(process.cwd(), skillDir) || skillDir)}`,
   );
   console.log(
     `  ${written.length} written${skipped.length ? `, ${skipped.length} skipped` : ''}${removed.length ? `, ${removed.length} stale removed` : ''}`,
   );
   if (skipped.length > 0) console.log(pc.dim(`  (skipped existing — pass --force to overwrite)`));
-  printWiring(link, ignored);
+  printWiring(link);
 }
 
-function printWiring(link: LinkResult, ignored: IgnoreResult[]): void {
+function printWiring(link: LinkResult): void {
   const arrow = pc.dim('  ↳');
   switch (link.kind) {
     case 'linked':
@@ -156,13 +163,6 @@ function printWiring(link: LinkResult, ignored: IgnoreResult[]): void {
     default: {
       break;
     }
-  }
-
-  for (const entry of ignored) {
-    if (entry.kind !== 'added') continue;
-    console.log(
-      `${arrow} ignored ${entry.entry} in ${pc.dim(path.relative(process.cwd(), entry.file))}`,
-    );
   }
 }
 
@@ -528,6 +528,10 @@ interface IngestReportOptions {
 
 async function ingestReportAction(reportDir: string, options: IngestReportOptions): Promise<void> {
   const dir = path.resolve(reportDir);
+  // The guarantee has to hold however the round got here — a project that never
+  // ran `acceptance install`, or an agent that wrote the round by hand, still
+  // must not leave evidence binaries untracked in someone's repo.
+  ensureAcceptanceDirIgnoredFor(dir);
   const resultPath = path.join(dir, 'result.json');
   if (!existsSync(resultPath)) {
     log.error(`result.json not found in ${dir}`);
@@ -688,6 +692,10 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   // Strictly the authoring conversation. `--operation` names the Agent Run
   // under test and is passed to `createRun` below — a different relation.
   const origin = originFromEnv();
+  // A UI run that traced its actions prices them here, with the platform's own
+  // counting logic; a run without a trace just has no interaction cost.
+  const tracedCost = interactionCostFromReportDir(dir, result);
+  if (tracedCost) result.interactionCost = tracedCost;
   const newRunMetadata = metadataForReport(result, undefined, origin);
 
   if (acceptance.status === 'accepted' || acceptance.status === 'closed') {
@@ -719,6 +727,12 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   // The chained round's index — `?r=<roundIndex>` on the acceptance URL
   // deep-links this round's report as the fixed snapshot view.
   const roundIndex = attached?.roundIndex ?? null;
+  const acceptanceUrl = new URL(
+    `/acceptance/${encodeURIComponent(acceptanceId)}`,
+    resolveServerUrl(),
+  ).toString();
+  const roundUrl =
+    roundIndex === null ? null : `${acceptanceUrl}?r=${encodeURIComponent(String(roundIndex))}`;
 
   // 2. Ingest each case as a check result + its evidence. `checkItemId` is
   //    the stable key within this immutable run.
@@ -831,6 +845,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
     outputJson(
       {
         acceptanceId,
+        acceptanceUrl,
         cases: cases.length,
         droppedProgrammaticChecks: droppedLabels,
         evidence: evidenceCount,
@@ -839,6 +854,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
         planItems: plan?.length ?? 0,
         pullRequest,
         roundIndex,
+        roundUrl,
         scenario,
         subject: subject!.ref,
         unplanned,
@@ -873,9 +889,9 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   if (options.open) {
     // The acceptance page is the only link surfaced to users — the raw /verify
     // page stays internal. `?r=<roundIndex>` is this round's fixed snapshot.
-    console.log(`${pc.bold('open acceptance')}: /acceptance/${acceptanceId}`);
-    if (roundIndex !== null) {
-      console.log(`${pc.bold('round snapshot')}: /acceptance/${acceptanceId}?r=${roundIndex}`);
+    console.log(`${pc.bold('open acceptance')}: ${acceptanceUrl}`);
+    if (roundUrl) {
+      console.log(`${pc.bold('round snapshot')}: ${roundUrl}`);
     }
   }
 }
@@ -890,7 +906,6 @@ function withInstallOptions(cmd: Command): Command {
     .option('--dir <path>', 'Target working directory (default: current dir)')
     .option('--skill <id>', 'Skill identifier to pull', 'acceptance')
     .option('--force', 'Overwrite existing skill files')
-    .option('--no-gitignore', 'Do not record the installed skill in .gitignore')
     .option('--json [fields]', 'Output JSON');
 }
 

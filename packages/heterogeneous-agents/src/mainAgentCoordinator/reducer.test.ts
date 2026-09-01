@@ -558,3 +558,96 @@ describe('reduceMainAgent — newStep idempotency key', () => {
     expect(ofKind(steps[1], 'createAssistant')).toHaveLength(1);
   });
 });
+
+describe('reduceMainAgent — heterogeneous intervention ACK boundary', () => {
+  const request = {
+    data: {
+      apiName: 'askUserQuestion',
+      arguments: JSON.stringify({
+        questions: [
+          {
+            header: 'Permission',
+            multiSelect: false,
+            options: [
+              { id: 'allow', label: 'Allow' },
+              { id: 'deny', label: 'Deny' },
+            ],
+            question: 'Run command?',
+          },
+        ],
+      }),
+      deadline: 1_900_000_000_000,
+      identifier: 'claude-code',
+      interactionKind: 'permission',
+      provider: 'cursor',
+      toolCallId: 'permission-1',
+    },
+    type: 'agent_intervention_request',
+  };
+
+  it('materializes a request-before-tool row and persists pending exactly once', () => {
+    const { state, steps } = run([request]);
+
+    expect(ofKind(steps[0], 'persistToolBatch')).toHaveLength(1);
+    expect(ofKind(steps[0], 'setToolIntervention')).toEqual([
+      expect.objectContaining({
+        request: expect.objectContaining({ interactionKind: 'permission', provider: 'cursor' }),
+        toolCallId: 'permission-1',
+        transition: 'pending',
+      }),
+    ]);
+    expect(state.interventionsByCallId.get('permission-1')?.transition).toBe('pending');
+  });
+
+  it('keeps the XADD publish leg non-terminal and resolves only on producer ACK', () => {
+    const requestId = '018fbd8e-7baf-7c6d-8000-000000000001';
+    const publishLeg = {
+      data: {
+        producerAck: false,
+        resolutionRequestId: requestId,
+        result: { 'Run command?': 'allow' },
+        toolCallId: 'permission-1',
+      },
+      type: 'agent_intervention_response',
+    };
+    const producerAck = {
+      data: { ...publishLeg.data, producerAck: true },
+      type: 'agent_intervention_response',
+    };
+    const { state, steps } = run([request, publishLeg, producerAck]);
+
+    expect(steps[1]).toEqual([]);
+    expect(ofKind(steps[2], 'setToolIntervention')).toEqual([
+      expect.objectContaining({
+        resolutionRequestId: requestId,
+        toolCallId: 'permission-1',
+        transition: 'resolved',
+      }),
+    ]);
+    expect(state.interventionsByCallId.get('permission-1')).toMatchObject({
+      resolutionRequestId: requestId,
+      transition: 'resolved',
+    });
+  });
+
+  it('buffers a producer ACK that beats the request and replays one terminal write', () => {
+    const producerAck = {
+      data: {
+        producerAck: true,
+        resolutionRequestId: '018fbd8e-7baf-7c6d-8000-000000000002',
+        result: { 'Run command?': 'deny' },
+        toolCallId: 'permission-1',
+      },
+      type: 'agent_intervention_response',
+    };
+    const { state, steps } = run([producerAck, request]);
+
+    expect(steps[0]).toEqual([]);
+    expect(ofKind(steps[1], 'setToolIntervention')).toHaveLength(1);
+    expect(ofKind(steps[1], 'setToolIntervention')[0]).toMatchObject({
+      request: expect.objectContaining({ provider: 'cursor' }),
+      transition: 'resolved',
+    });
+    expect(state.interventionsByCallId.get('permission-1')?.transition).toBe('resolved');
+  });
+});

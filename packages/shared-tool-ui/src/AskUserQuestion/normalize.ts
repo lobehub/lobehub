@@ -40,8 +40,10 @@ const normalizeOption = (value: unknown): AskUserQuestionOption | undefined => {
   const recommended = strippedLabel.length > 0 && strippedLabel !== rawLabel;
   const label = recommended ? strippedLabel : rawLabel;
   const description = pickString(option?.description);
+  const id = pickString(option?.id);
 
   return {
+    ...(id ? { id } : {}),
     label,
     ...(description ? { description } : {}),
     ...(recommended ? { recommended } : {}),

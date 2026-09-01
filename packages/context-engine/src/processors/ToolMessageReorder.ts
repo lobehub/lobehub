@@ -22,6 +22,29 @@ const DEFAULT_TOOL_FAILURE_CONTENT = JSON.stringify({
 });
 
 /**
+ * Whether a tool result still carries something the model can read.
+ *
+ * `MessageContentProcessor` rewrites a tool result that produced images (e.g.
+ * `readFile` on a screenshot, which uploads the file and carries the URL on
+ * `pluginState.images`) into multimodal parts — `[{ type: 'text' }, { type:
+ * 'image_url' }]` — whenever the model supports vision. A bare
+ * `typeof content === 'string'` guard therefore rejects exactly the results
+ * that carry an image: this pass would drop the parts and hand the model
+ * {@link DEFAULT_TOOL_FAILURE_CONTENT} instead, so a successful screenshot read
+ * arrived as "Tool call failed" and the image never reached the request at all.
+ */
+const hasUsableToolContent = (content: unknown, pluginErrorMessage?: string): boolean => {
+  // Multimodal parts (text + image_url / video_url / audio_url).
+  if (Array.isArray(content)) return content.length > 0;
+  if (typeof content !== 'string') return false;
+
+  // An empty string is a legitimate result for a tool that produced no output —
+  // unless the row also recorded an error, in which case the error text is the
+  // more useful thing to show the model.
+  return content.length > 0 || !pluginErrorMessage;
+};
+
+/**
  * Reorder tool messages to ensure that tool messages are displayed in the correct order.
  * see https://github.com/lobehub/lobe-chat/pull/3155
  */
@@ -151,11 +174,9 @@ export class ToolMessageReorder extends BaseProcessor {
 
           reorderedMessages.push({
             ...matchedToolMessage,
-            content:
-              typeof matchedToolMessage.content === 'string' &&
-              (matchedToolMessage.content.length > 0 || !pluginErrorMessage)
-                ? matchedToolMessage.content
-                : pluginErrorMessage || DEFAULT_TOOL_FAILURE_CONTENT,
+            content: hasUsableToolContent(matchedToolMessage.content, pluginErrorMessage)
+              ? matchedToolMessage.content
+              : pluginErrorMessage || DEFAULT_TOOL_FAILURE_CONTENT,
           });
           toolMessages.delete(toolCall.id);
           continue;

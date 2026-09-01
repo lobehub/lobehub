@@ -1,3 +1,4 @@
+import { isHeterogeneousAgentModelId } from '@lobechat/const';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -7,7 +8,10 @@ import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { createVerifierAgentRunner } from './agentVerifier';
-import { startEvidenceSubmission } from './evidenceSubmission';
+import {
+  recordHeterogeneousDeliverableEvidence,
+  startEvidenceSubmission,
+} from './evidenceSubmission';
 import { VerifyExecutorService } from './executor';
 import { resolveVerifyModelConfig } from './modelConfig';
 import { finalizeVerifyRun } from './settle';
@@ -105,21 +109,33 @@ const executeVerifyLifecycle = async (
       ).claimEvidenceCollection(run.id);
       if (evidenceClaimed) {
         try {
-          await startEvidenceSubmission({
-            db,
-            deliverable: params.deliverable,
-            goal: params.goal,
-            operation: op,
-            plan: run.plan,
-            userId,
-            workspaceId,
-          });
+          if (isHeterogeneousAgentModelId(op.model) || isHeterogeneousAgentModelId(op.provider)) {
+            await recordHeterogeneousDeliverableEvidence({
+              db,
+              deliverable: params.deliverable,
+              operation: op,
+              plan: run.plan,
+              userId,
+              workspaceId,
+            });
+            evidenceSubmitted = true;
+          } else {
+            await startEvidenceSubmission({
+              db,
+              deliverable: params.deliverable,
+              goal: params.goal,
+              operation: op,
+              plan: run.plan,
+              userId,
+              workspaceId,
+            });
+          }
         } catch (error) {
           await new VerifyRunModel(db, userId, workspaceId).updateStatus(run.id, 'planned');
           throw error;
         }
       }
-      return;
+      if (!evidenceSubmitted) return;
     }
 
     // Claim only after a task-bound builder has submitted evidence. Standalone

@@ -1,6 +1,7 @@
 'use client';
 
-import { ActionIcon, Avatar, Flexbox, SkeletonAvatar, SkeletonTitle, Tag, Text } from '@lobehub/ui';
+import { Flexbox, SkeletonAvatar, SkeletonTitle } from '@lobehub/ui';
+import { ActionIcon, Avatar, Tag, Text } from '@lobehub/ui/base-ui';
 import { Popconfirm } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { XIcon } from 'lucide-react';

@@ -1,5 +1,5 @@
 import { electronAPI } from '@electron-toolkit/preload';
-import type { ScreenCaptureSession } from '@lobechat/electron-client-ipc';
+import type { RendererMemoryInfo, ScreenCaptureSession } from '@lobechat/electron-client-ipc';
 import { contextBridge, ipcRenderer } from 'electron';
 
 import { readSystemLanguageArg } from '~common/systemLanguage';
@@ -32,6 +32,11 @@ export const setupElectronApi = () => {
 
   contextBridge.exposeInMainWorld('electronAPI', {
     getDesktopBootstrapIdentity: () => ipcRenderer.sendSync('desktop:get-bootstrap-identity'),
+    getRendererMemoryInfo: async (): Promise<RendererMemoryInfo> => {
+      const memory = await process.getProcessMemoryInfo();
+
+      return { privateBytes: memory.private * 1024 };
+    },
     invoke,
     onScreenCaptureSession: (listener: (session: ScreenCaptureSession) => void) => {
       screenCaptureSessionListeners.add(listener);

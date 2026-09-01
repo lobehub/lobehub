@@ -13,6 +13,8 @@ export {
   CODEX_CLI_INSTALL_DOCS_URL,
   CURSOR_CLI_INSTALL_COMMANDS,
   CURSOR_CLI_INSTALL_DOCS_URL,
+  DROID_CLI_INSTALL_COMMANDS,
+  DROID_CLI_INSTALL_DOCS_URL,
   GROK_BUILD_CLI_INSTALL_COMMANDS,
   GROK_BUILD_CLI_INSTALL_DOCS_URL,
   OPENCODE_CLI_INSTALL_COMMANDS,
@@ -144,5 +146,11 @@ export interface HeterogeneousAgentRuntimeStatus {
   staleDeadlineAt?: number;
   state: HeterogeneousAgentRuntimeState;
   transport:
-    'acp-stdio' | 'claude-sdk' | 'cli-spawn' | 'codex-app-server' | 'cursor-acp' | 'trae-acp';
+    | 'acp-stdio'
+    | 'claude-sdk'
+    | 'cli-spawn'
+    | 'codex-app-server'
+    | 'cursor-acp'
+    | 'droid-acp'
+    | 'trae-acp';
 }

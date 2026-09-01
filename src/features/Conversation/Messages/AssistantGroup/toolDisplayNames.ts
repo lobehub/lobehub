@@ -335,18 +335,16 @@ const WORKFLOW_SUMMARY_TOP_N = 3;
 export const getWorkflowSummaryText = (blocks: AssistantContentBlock[]): string => {
   const tools = blocks.flatMap((b) => b.tools ?? []);
 
-  const groups = new Map<string, { count: number; errorCount: number }>();
+  const groups = new Map<string, { count: number }>();
   for (const tool of tools) {
-    const existing = groups.get(tool.apiName) || { count: 0, errorCount: 0 };
+    const existing = groups.get(tool.apiName) || { count: 0 };
     existing.count++;
-    if (tool.result?.error) existing.errorCount++;
     groups.set(tool.apiName, existing);
   }
 
   const entries = [...groups.entries()];
   const totalKinds = entries.length;
   const totalCalls = entries.reduce((sum, [, { count }]) => sum + count, 0);
-  const totalErrors = entries.reduce((sum, [, { errorCount }]) => sum + errorCount, 0);
 
   const formatToolPart = ([apiName, info]: [string, { count: number }]): string => {
     const name = getToolDisplayName(apiName);
@@ -387,15 +385,6 @@ export const getWorkflowSummaryText = (blocks: AssistantContentBlock[]): string 
         ]
       : [toolsText];
 
-  if (totalErrors > 0) {
-    segments.push(
-      t('workflow.summaryFailed', {
-        count: totalErrors,
-        defaultValue: '{{count}} failed',
-        ns: 'chat',
-      }),
-    );
-  }
   let result = segments.join(' · ');
 
   const totalReasoningMs = blocks.reduce((sum, b) => sum + (b.reasoning?.duration ?? 0), 0);

@@ -1,15 +1,14 @@
 import { isDesktop } from '@lobechat/const';
 import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
 import type { UniformSearchResult } from '@lobechat/types';
-import { Flexbox, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import type { MouseEvent } from 'react';
 import { memo } from 'react';
 
 import WebFavicon from '@/components/WebFavicon';
 import { useGlobalStore } from '@/store/global';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
 import TitleExtra from './TitleExtra';
 import Video from './Video';
@@ -64,12 +63,11 @@ interface SearchResultProps extends UniformSearchResult {
 const SearchItem = memo<SearchResultProps>((props) => {
   const { content, url, score, engines, title, category } = props;
   const openInBrowserTab = useGlobalStore((s) => s.openInBrowserTab);
-  const enableInAppBrowser = useUserStore(labPreferSelectors.enableInAppBrowser);
 
   // Only claim the click when this onClick will actually handle it. Otherwise the
   // anchor's default behavior — and the desktop preload's external-link branch —
   // opens the system browser.
-  const handlesClick = isDesktop && enableInAppBrowser && !!url;
+  const handlesClick = isDesktop && !!url;
 
   const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
     if (!handlesClick) return;

@@ -690,6 +690,23 @@ describe('AgentRuntimeService', () => {
       mockCoordinator.getOperationMetadata.mockResolvedValue(mockMetadata);
     });
 
+    it('acks a delayed delivery after the durable operation was abandoned', async () => {
+      vi.spyOn((service as any).agentOperationModel, 'findById').mockResolvedValue({
+        id: mockParams.operationId,
+        status: 'abandoned',
+      });
+
+      const result = await service.executeStep(mockParams);
+
+      expect(result).toEqual({
+        nextStepScheduled: false,
+        state: { status: 'interrupted' },
+        stepResult: null,
+        success: true,
+      });
+      expect(mockCoordinator.tryClaimStep).not.toHaveBeenCalled();
+    });
+
     it('should pass resolved contextWindowTokens into compressionConfig', async () => {
       vi.mocked(getModelPropertyWithFallback).mockResolvedValueOnce(200_000);
 
@@ -1956,6 +1973,34 @@ describe('AgentRuntimeService', () => {
       expect(result).toEqual(stubMessages);
     });
 
+    it('scopes the snapshot to the run thread when the operation is a subtopic run', async () => {
+      // Regression: without `threadId` the snapshot is the topic's MAIN
+      // conversation, and the client writes it into the thread's bucket at
+      // step_start / agent_runtime_end — wiping the turn the run just produced,
+      // so a freshly created subtopic renders the main conversation instead.
+      const queryMessages = vi.fn().mockResolvedValue([]);
+      stubMessageService(service, queryMessages);
+
+      await service.queryUiMessages({
+        metadata: { agentId: 'agt_1', threadId: 'thd_1', topicId: 'tpc_1' },
+      } as any);
+
+      expect(queryMessages).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: 'agt_1', threadId: 'thd_1', topicId: 'tpc_1' }),
+      );
+    });
+
+    it('leaves threadId unset for a main-conversation run', async () => {
+      const queryMessages = vi.fn().mockResolvedValue([]);
+      stubMessageService(service, queryMessages);
+
+      await service.queryUiMessages({
+        metadata: { agentId: 'agt_1', topicId: 'tpc_1' },
+      } as any);
+
+      expect(queryMessages.mock.calls[0][0].threadId).toBeUndefined();
+    });
+
     it('returns undefined when agentId or topicId is missing (skips empty-array push)', async () => {
       const queryMessages = vi.fn();
       stubMessageService(service, queryMessages);
@@ -2437,6 +2482,73 @@ describe('AgentRuntimeService', () => {
       );
     });
 
+    // Regression: same as completeSubAgentBridge's hetero case — a
+    // heterogeneous isolated member never populates the coordinator's
+    // runtime state at all, so `loadAgentState` genuinely resolves `null`.
+    // Recover the real answer from the member's own isolation thread instead
+    // of falling through to the "no textual answer" stub.
+    it('single isolated member: recovers the answer from the isolation thread when the coordinator has no state at all (hetero)', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue(null);
+      (service as any).messageModel.query.mockResolvedValue(
+        buildPersistedToolChain('hello from the CLI'),
+      );
+
+      await service.completeGroupActionMember({
+        anchorMessageId: 'grp-tool-1',
+        expectedMembers: 1,
+        groupToolMessageId: 'grp-tool-1',
+        mode: 'isolated',
+        onComplete: 'resume',
+        operationId: 'child-1',
+        parentOperationId: 'parent-1',
+        reason: 'done',
+        threadId: 'thread-1',
+      });
+
+      expect((service as any).messageModel.query).toHaveBeenCalledWith({ threadId: 'thread-1' });
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'grp-tool-1',
+        expect.objectContaining({ content: 'hello from the CLI' }),
+      );
+    });
+
+    // Mirrors completeSubAgentBridge's identical Codex-flagged regression:
+    // the thread fallback must be gated on `!finalState`, not merely an
+    // empty `lastAssistantContent` — a real finalState whose last turn is
+    // legitimately textless must keep the stub, not risk a stale earlier
+    // reply from the thread's own history.
+    it('single isolated member: does not query the thread when a real finalState already says the final turn is textless', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        ...memberState,
+        messages: undefined,
+      });
+      (service as any).messageModel.query.mockResolvedValue(
+        buildPersistedToolChain(
+          JSON.stringify([{ image: 'https://example.com/image.png', type: 'image' }]),
+          { isMultimodal: true },
+        ),
+      );
+      const threadFallbackSpy = vi.spyOn(service as any, 'resolveLastAssistantContentFromThread');
+
+      await service.completeGroupActionMember({
+        anchorMessageId: 'grp-tool-1',
+        expectedMembers: 1,
+        groupToolMessageId: 'grp-tool-1',
+        mode: 'isolated',
+        onComplete: 'resume',
+        operationId: 'child-1',
+        parentOperationId: 'parent-1',
+        reason: 'done',
+        threadId: 'thread-1',
+      });
+
+      expect(threadFallbackSpy).not.toHaveBeenCalled();
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'grp-tool-1',
+        expect.objectContaining({ content: 'Agent member completed without a textual answer.' }),
+      );
+    });
+
     it('multi-member: holds (no group-tool backfill, no resume) until the barrier is met', async () => {
       (service as any).serverDB.query = {
         messagePlugins: { findFirst: vi.fn() },
@@ -2588,6 +2700,30 @@ describe('AgentRuntimeService', () => {
       );
     });
 
+    // Regression: a heterogeneous (CLI-driven) child never populates the
+    // coordinator's Redis-backed runtime state at all — `loadAgentState`
+    // genuinely resolves `null` for it, unlike the standard-runtime case
+    // above where it resolves a real (if message-stripped) state object.
+    // Without a thread-scoped fallback this always fell through to "Sub-agent
+    // completed without a textual answer.", even though the CLI produced a
+    // real reply — because the webhook's `eventFields` deliberately excludes
+    // `lastAssistantContent` (see `createSubAgentBridgeHook`) and hetero never
+    // writes into the coordinator, so nothing else could ever supply it.
+    it('recovers the answer from the isolation thread when the coordinator has no state at all (hetero)', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue(null);
+      (service as any).messageModel.query.mockResolvedValue(
+        buildPersistedToolChain('hello from the CLI'),
+      );
+
+      await service.completeSubAgentBridge(bridgeParams);
+
+      expect((service as any).messageModel.query).toHaveBeenCalledWith({ threadId: 'thread-1' });
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'tool-msg-1',
+        expect.objectContaining({ content: 'hello from the CLI' }),
+      );
+    });
+
     it('extracts a grouped final answer after webhook state is rehydrated from the DB', async () => {
       mockCoordinator.loadAgentState.mockResolvedValue({
         ...childState,
@@ -2642,6 +2778,36 @@ describe('AgentRuntimeService', () => {
 
       await service.completeSubAgentBridge(bridgeParams);
 
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'tool-msg-1',
+        expect.objectContaining({ content: 'Sub-agent completed without a textual answer.' }),
+      );
+    });
+
+    // Regression for a Codex review finding on the thread-fallback above: it
+    // must be gated on `!finalState` (no authoritative state at all — the
+    // heterogeneous case), not merely an empty `lastAssistantContent`.
+    // Otherwise a REAL, authoritative finalState whose last turn is
+    // legitimately textless would still trigger the thread re-query, and a
+    // lagging read that surfaces an EARLIER real reply from the same thread
+    // would silently show stale text instead of the correct empty-answer
+    // stub.
+    it('does not query the thread when a real finalState already says the final turn is textless', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        ...childState,
+        messages: undefined,
+      });
+      (service as any).messageModel.query.mockResolvedValue(
+        buildPersistedToolChain(
+          JSON.stringify([{ image: 'https://example.com/image.png', type: 'image' }]),
+          { isMultimodal: true },
+        ),
+      );
+      const threadFallbackSpy = vi.spyOn(service as any, 'resolveLastAssistantContentFromThread');
+
+      await service.completeSubAgentBridge(bridgeParams);
+
+      expect(threadFallbackSpy).not.toHaveBeenCalled();
       expect(updateToolMessage).toHaveBeenCalledWith(
         'tool-msg-1',
         expect.objectContaining({ content: 'Sub-agent completed without a textual answer.' }),

@@ -32,7 +32,7 @@ import { useChatStore } from '@/store/chat';
  */
 const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestionArgs>>((props) => {
   const { t } = useTranslation('tool');
-  const { actionsPortalTarget, args, messageId, onInteractionAction } = props;
+  const { actionsPortalTarget, args, disabled, messageId, onInteractionAction } = props;
 
   // Persisted draft — read from the tool message's pluginState so the form
   // stays where the user left it across unmount / HMR / refresh.
@@ -49,6 +49,7 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
   const form = useAskUserForm({
     args,
     countdownMs: DEFAULT_COUNTDOWN_MS,
+    disabled,
     onInteractionAction,
     persistedDraft,
     writeDraft,

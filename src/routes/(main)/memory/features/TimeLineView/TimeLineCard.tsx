@@ -1,4 +1,5 @@
-import { Block, Flexbox, Tag, Text } from '@lobehub/ui';
+import { Block, Flexbox } from '@lobehub/ui';
+import { Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { type ReactNode } from 'react';
 import { memo } from 'react';

@@ -1,11 +1,25 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { zstdDecompress } from 'node:zlib';
+import zlib from 'node:zlib';
 
 import type { ExecutionSnapshot } from '../types';
 
-const decompressZstd = promisify(zstdDecompress);
+/**
+ * `zlib.zstdDecompress` only exists from Node 22.15. Resolved lazily rather
+ * than promisified at module scope so that importing this file — which the
+ * `lh` command tree does at startup — cannot crash the whole CLI on an older
+ * runtime, and so the failure names the actual requirement.
+ */
+const decompressZstd = async (buf: Buffer): Promise<Buffer> => {
+  if (typeof zlib.zstdDecompress !== 'function') {
+    throw new Error(
+      'Reading a compressed trace snapshot requires Node >= 22.15 (node:zlib zstd support). ' +
+        `Current runtime: ${process.version}.`,
+    );
+  }
+  return promisify(zlib.zstdDecompress)(buf);
+};
 
 const REMOTE_DIR = '_remote';
 const ENV_FILE = '.env';

@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, MaterialFileTypeIcon, Text } from '@lobehub/ui';
-import { Alert } from '@lobehub/ui/base-ui';
+import { Flexbox, MaterialFileTypeIcon } from '@lobehub/ui';
+import { Alert, Text } from '@lobehub/ui/base-ui';
 import { Descriptions } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';

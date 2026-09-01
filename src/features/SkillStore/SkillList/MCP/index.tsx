@@ -1,6 +1,7 @@
 'use client';
 
-import { Center, Icon, Text } from '@lobehub/ui';
+import { Center, Icon } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { ServerCrash } from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';

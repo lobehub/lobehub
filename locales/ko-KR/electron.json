@@ -140,6 +140,7 @@
   "updater.downloadNewVersion": "새 버전 다운로드",
   "updater.downloadingUpdate": "업데이트 다운로드 중",
   "updater.downloadingUpdateDesc": "업데이트가 다운로드 중입니다. 잠시 기다려 주세요...",
+  "updater.ignore": "무시",
   "updater.installLater": "다음 시작 시 업데이트",
   "updater.isLatestVersion": "현재 최신 버전입니다",
   "updater.isLatestVersionDesc": "훌륭합니다! 사용 중인 버전 {{version}}은 최신 버전입니다.",

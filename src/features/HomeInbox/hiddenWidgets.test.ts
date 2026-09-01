@@ -98,6 +98,29 @@ describe('hasVisibleRailWidget', () => {
   it('keeps a column that hosts needs-you and unread on the same hidden set', () => {
     expect(hasVisibleRailWidget({ hiddenWidgets: ['running', 'news', 'suggestions'] })).toBe(true);
   });
+
+  // The usage widget is a business slot: it must hold the rail open only where
+  // the slot actually renders something, or an OSS page hiding the other rail
+  // widgets would keep an empty rail on screen.
+  it('counts the usage widget only while its slot is active', () => {
+    const everythingElseHidden = {
+      ...railColumn,
+      hiddenWidgets: ['goals', 'running', 'news', 'suggestions'],
+    };
+
+    expect(hasVisibleRailWidget(everythingElseHidden)).toBe(false);
+    expect(hasVisibleRailWidget({ ...everythingElseHidden, usageActive: true })).toBe(true);
+  });
+
+  it('drops the rail once an active usage widget is switched off with the rest', () => {
+    expect(
+      hasVisibleRailWidget({
+        ...railColumn,
+        hiddenWidgets: ['goals', 'running', 'news', 'suggestions', 'usage'],
+        usageActive: true,
+      }),
+    ).toBe(false);
+  });
 });
 
 describe('resolveInboxScopeToggleSection', () => {

@@ -76,6 +76,7 @@ export const claudeCodeDriver: HeterogeneousAgentDriver = {
         CLAUDE_CODE_SUBAGENT_MODEL: requestModel,
         CLAUDE_CONFIG_DIR: profileDir,
       },
+      operationTokenEnvKey: 'ANTHROPIC_AUTH_TOKEN',
     };
   },
 };

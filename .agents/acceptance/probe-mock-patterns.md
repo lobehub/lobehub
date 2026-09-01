@@ -217,6 +217,41 @@ before schema parsing.
 return a standard JSON chat completion for `stream: false`; set `STUB_TEXT` to the
 schema-valid JSON required by the check.
 
+#### Driving the Acceptance AI-review predictor locally: pinned Gemini, image fetch-back, and stub JSON
+
+**Situation:** verifying the ✨ "ask AI to review" round on `/acceptance/<id>` (the
+`review_predict` generation, its toast, the proposal cards) without a real vision key.
+
+**Doesn't work:** three separate things, each of which reads as "the predictor never
+ran" — the button spins, no card, no error.
+
+- Pointing any provider at `llm-stub.mjs`. The predictor does not follow the verifier's
+  model: it is pinned to `DEFAULT_REVIEW_PREDICT_{MODEL,PROVIDER}` in
+  `packages/business/const/src/llm.ts` (Gemini native protocol, which the OpenAI-shaped
+  stub cannot serve), so the provider you configured is simply never called.
+- Running the dev server without `SSRF_ALLOW_PRIVATE_IP_ADDRESS=1`. The OpenAI context
+  builder fetches every `image_url` back and inlines it as base64; the local s3rver
+  presigned URL is `127.0.0.1`, so the fetch is refused and the attempt lands as an
+  `errored` row with no model call (the "SSRF protection blocked request" entry above).
+- Expecting a `pending` state in `verify_review_predictions`. There is none: a check is
+  "awaiting" only while it has NO row for the current (provider, model, promptVersion);
+  `predictReviews` deletes the previous unadjudicated rows before dispatch, so reading
+  the table mid-batch shows gaps, not placeholders.
+
+**Works:** (1) temporarily pin the constants to `gpt-4o` / `openai` with an
+`[AGENT-TEST]` marker (snapshot the file first, restore byte-identically at teardown —
+the model-bank vision test guards the real value), then
+`aiInfra().updateAiProviderConfig('openai', { keyVaults: { apiKey: 'sk-stub', baseURL:
+'http://localhost:41100/v1' } })`; (2) start the dev server with
+`SSRF_ALLOW_PRIVATE_IP_ADDRESS=1`; (3) set `STUB_TEXT` to a `ReviewPredictionSchema`
+JSON (`{"action":"reject","regions":[{"imageIndex":0,...}]}`) — the runtime sends
+`response_format: json_schema` with `stream: false`, which the stub answers as a plain
+completion whose `content` is parsed as the object. A text-only evidence check is
+`skipped` without a call; `STUB_FAIL=500` yields `errored` — note the SDK retries a
+5xx three times, so any delay you put in front of the stub is paid ×3 on that path.
+Assert the round from three places together: the toast copy (a MutationObserver on
+`document.body`), the rows' `status`/`action`/`created_at`, and the card count.
+
 #### A CLI-created topic has no trigger/status and is filtered out of the Agent paged view
 
 **Situation:** building a topic fixture with `lh topic create`, writing fields such as
@@ -349,6 +384,54 @@ Then open `/agent/<agentId>/goals`. In the create-Goal dialog, "start from blank
 skips AI generation of the acceptance criteria (required when there is no local LLM
 key); the criteria editor and budget field are ordinary inputs, while the goal
 description is contenteditable (use `fill`; `type` does not support contenteditable).
+
+#### Reaching the Claude Code usage calendar: a local-execution agent, a live-CLI identity, and a four-table ledger fixture
+
+**Situation:** verifying the quota usage calendar (`AgentQuotaCalendar`), which needs
+both a way to open it and quota history to render.
+
+**Doesn't work:** three separate dead ends.
+
+- Opening the conversation of a heterogeneous agent whose `executionTarget` is
+  `device`. A bound-but-offline device renders the 设备未连接 state and the composer
+  never shows the quota badge, so the panel that owns the calendar entry does not
+  exist. Reads as "this build has no quota UI".
+- Seeding only `agent_quota_windows`. The window rows carry `observed_tokens`, but
+  the UI does not read them: `buildWindowStats` sums the **usage ledger** turns that
+  fall inside each window, and the day cells come from the same ledger. Windows
+  without ledger rows render as 历史未记录，which looks like a broken read model.
+- Assuming the DB account is the one the modal opens. The composer badge reads the
+  **live** identity from the local Claude Code CLI over Electron IPC and passes its
+  `externalAccountId` down; the modal then resolves that against
+  `agent_provider_accounts`. A fixture account whose `external_account_id` differs
+  from the machine's real Claude login yields 账号不可用 with no other signal.
+
+**Works:** set the agent to local execution, then seed four tables against the
+account row the app itself created when it first ingested the live snapshot.
+
+```bash
+# 1. the composer only mounts the quota panel for a local-execution hetero agent
+update agents set agency_config = '{"executionTarget":"local","heterogeneousProvider":{"type":"claude-code","command":"claude"}}'::jsonb where id='<agentId>';
+# 2. reuse the existing account row — its external_account_id already matches the live CLI identity
+select id, external_account_id from agent_provider_accounts where provider='claude-code';
+```
+
+Then insert `agent_quota_usage_ledger` turns (they drive both the day cells and the
+per-window totals), `agent_quota_windows` rows for the concrete reset windows, and
+`agent_quota_snapshots` readings — a reading whose `resets_at` is in the future is
+what makes a window "live" and draws the burn-down curve, and a model-scoped
+`weekly_scoped` reading is what adds the third segment. Derive every timestamp from
+the browser's own timezone, since the calendar groups by local day. After the agent
+config write, clear the SWR cache tiers before reloading or the composer keeps the
+previous execution target.
+
+One seeded value does not survive: opening the composer's quota panel makes the app
+ingest the machine's **live** CLI reading into the same account row. A seeded current
+window is therefore replaced by the real utilization (and the real `resets_at`, which
+merges with a seeded window inside the five-minute tolerance) as soon as the panel
+renders. Seed the history and the ledger, but never assert on the live window's own
+percentage — read it back from `agent_quota_snapshots` and report what the run
+actually rendered.
 
 ### Driving the UI
 
@@ -780,6 +863,84 @@ code A/B, re-dispatch after each edit rather than expecting react-refresh to kee
 the messages — and re-run the identical dispatch + expand + scroll sequence on both
 sides so the two frames differ only by the change.
 
+#### A client bucket that keeps reverting mid-run is the gateway `uiMessages` snapshot, not your write
+
+**Situation:** a store bucket (`dbMessagesMap[<key>]`) holds the right messages right
+after a gateway send, then silently loses them a second or two later and stays wrong
+for the rest of the session — while the database is correct the whole time.
+
+**Doesn't work:** treating it as a race in your own write and adding another
+`replaceMessages` / refetch earlier in the flow. The overwrite happens _after_ every
+write you control, so each new attempt is undone the same way. It also looks like a
+stale SWR tier (which it is not — a manual `refreshMessages()` fixes it, so the
+server clearly has the data).
+
+**Works:** the server pushes a canonical `uiMessages` snapshot at `step_start` and
+`agent_runtime_end`, and `gatewayEventHandler` applies it as source of truth. That
+snapshot is built by `AgentRuntimeService.queryUiMessages` from the operation's
+`state.metadata`, so it is only as scoped as that metadata — a field the run needs
+but the snapshot query omits makes every step boundary overwrite the bucket with a
+_differently scoped_ message list. Identify the writer instead of guessing: record
+every `replaceMessages` call with `new Error().stack` into a `window.__RM` ring
+buffer, run the flow once, and read `action` (`gateway/step_start`,
+`gateway/agent_runtime_end`) plus the frame. The `action` label alone names the
+culprit. Verified in this catalogue: a subtopic run whose snapshot lacked `threadId`
+kept replacing the thread's bucket with the topic's main spine.
+
+**Corollary — use the non-gateway path as the control.** The same UI action with
+`chatConfig.disableGatewayMode = true` runs through `sendMessageInServer` and never
+applies a pushed snapshot. If the behavior is correct there and wrong in gateway
+mode, the defect is in the gateway transport or in the server snapshot, and you have
+halved the search space before reading any code.
+
+#### `curl /health` does not prove the local agent-gateway trusts your key — run the JWT probe
+
+**Situation:** restarting the local agent-gateway between acceptance rounds and
+gating on `curl -s -o /dev/null -w '%{http_code}' http://localhost:<port>/health`.
+
+**Doesn't work:** treating a 200 as "the closed loop is up". `/health` answers before
+any key is checked, so it is equally 200 when `.dev.vars` carries a JWKS that has
+nothing to do with the app's. The failure then surfaces far from its cause: runs
+complete server-side (`agent_operations` = `done`, full content in `messages`) while
+the browser's `execServerAgentRuntime` op ends after \~100ms, the assistant bubble
+stays on the `...` placeholder for the rest of the session, and a cold reload shows
+the reply — reading exactly like a client-side streaming regression in the branch
+under test. The tells are `chat().gatewayConnections === {}`, no `GET /ws` in the
+gateway log (only server→gateway `push-event` lines, which use the static service
+token and keep working), and `[Gateway] Auth failed ... signature verification
+failed` in the browser console.
+
+**Works:** after every gateway (re)start, run the decisive handshake and require
+`auth_success` before collecting any evidence:
+
+```bash
+GATEWAY_PORT= < port > .agents/acceptance/scripts/agent-gateway/local-gateway-setup.sh
+GATEWAY_WS=ws://localhost: .agents/acceptance/scripts/agent-gateway/local-gateway-probe.mjs < port > node
+```
+
+`.dev.vars` is regenerated per app instance, so restoring it at teardown (or another
+worktree regenerating it) silently invalidates it for the next run — compare the
+`kid` in `agent-gateway/.dev.vars` against `.records/env/agent-testing-jwks.json`
+when in doubt.
+
+#### A required local service can be someone else's, and `preflight` will not tell you
+
+**Situation:** starting QStash / s3rver for a run through `init-dev-env.sh` in a
+worktree while another agent-testing session is already active on the machine.
+
+**Doesn't work:** trusting that a backgrounded `init-dev-env.sh qstash` (or `s3`)
+came up because `preflight` then reports the service reachable. Both use fixed ports
+(8080 / 29000), so the second starter dies immediately with
+`address already in use` while the sibling session's process keeps answering — and
+`preflight` is a reachability check, so it passes. The run works, but on services it
+does not own.
+
+**Works:** read the start log before assuming ownership
+(`.records/logs/qstash.log`, `.records/logs/s3.log`), and treat "already in use" as
+"this is not mine". It matters at teardown: stopping a service you did not start
+kills the other session's run. Only the dev server (`stop-dev`, which verifies PID
+ownership) and anything you launched on a port you chose yourself are yours to stop.
+
 #### Infinite-scroll failure states
 
 When the fixture is too short for the observer to fire, call the real load-more
@@ -797,6 +958,34 @@ error shapes through a window flag (e.g. plain `Error` vs
 `{ data: { code: 'FORBIDDEN' } }`) and prove HMR liveness with a module-level
 marker before clicking. Snapshot the dirty file first and restore byte-identically
 (cmp), never `git checkout --`.
+
+#### Render Gallery shows "No builtin tool renders registered." after a reload
+
+**Situation:** driving DevDock → Render Gallery to capture builtin-tool
+Inspector/Render evidence, after a renderer reload or an HMR update.
+
+**Doesn't work:** waiting. The gallery reads the builtin registries once through a
+`useMemo` with an empty dependency list, so a panel that mounts before the builtin
+tools finish registering caches an empty list for the lifetime of that mount. It
+renders "No builtin tool renders registered." indefinitely, which reads like the
+registries themselves broke.
+
+**Works:** remount the panel — click the dock's `Render Gallery` button twice
+(close, reopen) and re-select the toolset; the entries appear immediately. To land
+on the gallery straight after a reload, pre-seed the dock instead of clicking
+through it:
+
+```js
+localStorage.setItem(
+  'LOBE_DEV_DOCK_UI',
+  JSON.stringify({
+    ...JSON.parse(localStorage.getItem('LOBE_DEV_DOCK_UI') || '{}'),
+    activePanelId: 'render-gallery',
+    expanded: true,
+    maximized: true,
+  }),
+);
+```
 
 ### Capturing and publishing evidence
 
@@ -1190,6 +1379,23 @@ outside the harness's remit: mark the dark case untested and say why, rather tha
 flipping a device-level preference. Note the setting write is not free — it syncs to
 the account and affects other surfaces; restore it (`auto`) at teardown if you set it.
 
+#### A cold desktop boot renders English copy while `status.language` already says zh-CN
+
+**Situation:** asserting anything about localized UI copy on a freshly started
+`electron-dev.sh` instance — a label's text, or that a settings section rendered at all.
+
+**Doesn't work:** grepping the rendered text for the Chinese label while
+`window.__LOBE_STORES.global().status.language` reports `zh-CN`. The persisted language is
+restored into the store, but i18next is still on English until `switchLocale` runs once, so every
+Chinese-text assertion comes back false and reads as "the section never rendered". A full-reload
+`goto` puts it back into that state, so it recurs mid-run after each navigation.
+
+**Works:** never infer the rendered language from `status.language`. Decide from the DOM
+(test for both the Chinese and English label, or read a known-localized node), or normalize first
+by calling `window.__LOBE_STORES.global().switchLocale('<locale>')` — the same action the language
+select calls — and only then assert. When the check under test IS the language, drive the real
+select, and re-read `status.language` plus the DOM copy after every switch: the two can disagree.
+
 #### `app-probe.sh goto /` cannot reach the desktop Home route — seed the tab first
 
 **Situation:** driving the Electron shell to the Home route (`/`) to check the nav
@@ -1236,6 +1442,16 @@ agent-browser --cdp 9222 eval '(() => JSON.stringify(window.__LOBE_STORES.electr
 On `cloud`, verify open / render / close only, treat every submit as a user-owned decision, and
 prove afterwards that nothing was written (re-read the relevant store count). Note this also makes
 the whole local-server bring-up unnecessary — check the target before spending minutes on it.
+
+**Corollary — a preference key your branch ADDS cannot be proven to persist here.** The cloud
+server validates `user.updatePreference` against its own deployed `UserPreferenceSchema`, so a key
+that exists only in your working tree is accepted with HTTP 200 and then silently dropped: the
+next `user.getUserState` comes back without it and a reload shows the setting reverted, which
+reads exactly like a broken write path. Attribute it before reporting a defect — wrap `fetch`,
+confirm the request body carries the key, and confirm an ALREADY-shipped sibling key
+(`terminalFontFamily`) round-trips in the same response. Then mark persistence blocked on the
+server schema version rather than failing the change; only a local full stack running the branch's
+schema can close that loop.
 
 #### A global `indexedDB.open` stall holds the boot on web but kills the Electron renderer
 

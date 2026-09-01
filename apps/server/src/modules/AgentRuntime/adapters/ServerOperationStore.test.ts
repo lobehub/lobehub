@@ -6,7 +6,7 @@ import { ServerOperationStore } from './ServerOperationStore';
 
 const topicMock = {
   findById: vi.fn(),
-  takeRunningOperation: vi.fn(),
+  settleRunningOperation: vi.fn(),
 };
 
 vi.mock('@/database/models/topic', () => ({
@@ -28,7 +28,7 @@ const markedWith = (operationId: string) => ({
 describe('ServerOperationStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    topicMock.takeRunningOperation.mockResolvedValue(undefined);
+    topicMock.settleRunningOperation.mockResolvedValue({ status: 'settled' });
   });
 
   describe('clearRunningMark', () => {
@@ -37,7 +37,28 @@ describe('ServerOperationStore', () => {
 
       await createStore('op-main').clearRunningMark();
 
-      expect(topicMock.takeRunningOperation).toHaveBeenCalledWith('topic-1', 'op-main');
+      expect(topicMock.settleRunningOperation).toHaveBeenCalledWith('topic-1', 'op-main', 'unread');
+    });
+
+    // The bug this adapter caused: `finish` calls clearRunningMark BEFORE it
+    // publishes `execution_complete`, and the client only learns the run ended
+    // from that event — so the client's own settle always arrived to a mark this
+    // method had already dropped and returned 'missing'. Dropping the mark
+    // without writing a status therefore stranded `topics.status` on 'running'
+    // permanently: the one field a later settle matches on was gone. Observed on
+    // a self-hosted deployment as topics stuck 'running' whose
+    // `metadata.runningOperation` was present-and-JSON-null, operation rows
+    // already terminal, and the topic's last write landing ~100ms BEFORE the
+    // operation was finalised — i.e. this very call.
+    it('writes the terminal status with the clear, not just the mark', async () => {
+      topicMock.findById.mockResolvedValue(markedWith('op-main'));
+
+      await createStore('op-main').clearRunningMark();
+
+      // 'unread' is the honest terminal state here: the run finished and nothing
+      // on the server proves the user watched it. The client corrects to
+      // 'active' when it knows better.
+      expect(topicMock.settleRunningOperation).toHaveBeenCalledWith('topic-1', 'op-main', 'unread');
     });
 
     it('leaves the mark alone when it belongs to another operation', async () => {
@@ -50,7 +71,7 @@ describe('ServerOperationStore', () => {
 
       await createStore('op-child').clearRunningMark();
 
-      expect(topicMock.takeRunningOperation).not.toHaveBeenCalled();
+      expect(topicMock.settleRunningOperation).not.toHaveBeenCalled();
     });
 
     it('is a no-op when the topic carries no mark', async () => {
@@ -58,21 +79,21 @@ describe('ServerOperationStore', () => {
 
       await createStore('op-main').clearRunningMark();
 
-      expect(topicMock.takeRunningOperation).not.toHaveBeenCalled();
+      expect(topicMock.settleRunningOperation).not.toHaveBeenCalled();
     });
 
     it('skips the lookup entirely without a topic', async () => {
       await createTopiclessStore().clearRunningMark();
 
       expect(topicMock.findById).not.toHaveBeenCalled();
-      expect(topicMock.takeRunningOperation).not.toHaveBeenCalled();
+      expect(topicMock.settleRunningOperation).not.toHaveBeenCalled();
     });
 
     it('swallows lookup failures — clearing the mark is best-effort', async () => {
       topicMock.findById.mockRejectedValue(new Error('db down'));
 
       await expect(createStore('op-main').clearRunningMark()).resolves.toBeUndefined();
-      expect(topicMock.takeRunningOperation).not.toHaveBeenCalled();
+      expect(topicMock.settleRunningOperation).not.toHaveBeenCalled();
     });
 
     it('takes a matching child marker without clearing its parent', async () => {
@@ -87,7 +108,11 @@ describe('ServerOperationStore', () => {
 
       await createStore('op-child').clearRunningMark();
 
-      expect(topicMock.takeRunningOperation).toHaveBeenCalledWith('topic-1', 'op-child');
+      expect(topicMock.settleRunningOperation).toHaveBeenCalledWith(
+        'topic-1',
+        'op-child',
+        'unread',
+      );
     });
   });
 });

@@ -27,7 +27,14 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
   getServerDefaultHeterogeneousModels: getSupportedModels,
   initModelRuntimeFromServerConfig: initRuntime,
   resolveServerDefaultHeterogeneousModel: resolveModel,
-  SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES: ['claude-code', 'codex'],
+  SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES: [
+    'claude-code',
+    'codex',
+    'grok-build',
+    'kimi-code',
+    'pi',
+    'trae',
+  ],
 }));
 
 vi.mock('@/libs/trpc/utils/internalJwt', async (importOriginal) => ({
@@ -60,6 +67,10 @@ describe('server-default heterogeneous operation control', () => {
     getSupportedModels.mockResolvedValue({
       'claude-code': [{ model: 'claude-sonnet-4-6' }],
       'codex': [{ model: 'gpt-5.4' }],
+      'grok-build': [{ model: 'kimi-k2.6' }],
+      'kimi-code': [{ model: 'kimi-k2.6' }],
+      'pi': [{ model: 'kimi-k2.6' }],
+      'trae': [{ model: 'kimi-k2.6' }],
     });
     resolveModel.mockResolvedValue({ model: 'gpt-5.4', provider: 'lobehub' });
     initRuntime.mockResolvedValue({});
@@ -105,6 +116,31 @@ describe('server-default heterogeneous operation control', () => {
     });
   });
 
+  it('accepts and persists a newly supported Kimi Code operation', async () => {
+    resolveModel.mockResolvedValueOnce({ model: 'kimi-k2.6', provider: 'lobehub' });
+
+    await expect(
+      caller().beginServerDefaultHeterogeneousOperation({
+        agentType: 'kimi-code',
+        model: 'kimi-k2.6',
+        operationId: 'desktop-operation-kimi',
+        topicId,
+      }),
+    ).resolves.toMatchObject({ model: 'lobehub-default', token: 'operation-token' });
+
+    const [operation] = await testDB
+      .select()
+      .from(agentOperations)
+      .where(eq(agentOperations.id, 'desktop-operation-kimi'));
+    expect(operation).toMatchObject({
+      metadata: { agentType: 'kimi-code', serverDefaultHeterogeneous: true },
+      model: 'kimi-k2.6',
+      provider: 'lobehub',
+      status: 'running',
+    });
+    expect(resolveModel).toHaveBeenCalledWith('kimi-code', 'kimi-k2.6');
+  });
+
   it('requires a normal user OIDC token for the control plane', async () => {
     await expect(
       caller('hetero-operation').beginServerDefaultHeterogeneousOperation(
@@ -146,7 +182,7 @@ describe('server-default heterogeneous operation control', () => {
     expect(signOperationToken).not.toHaveBeenCalled();
   });
 
-  it('does not persist or mint for an agent/runtime pair outside the V1 support matrix', async () => {
+  it('does not persist or mint for an agent/runtime pair outside the support matrix', async () => {
     resolveModel.mockRejectedValueOnce(new Error('unsupported agent/runtime pair'));
 
     await expect(

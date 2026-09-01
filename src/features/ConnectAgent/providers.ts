@@ -7,7 +7,10 @@ import {
   isRemoteHeterogeneousType,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 } from '@lobechat/heterogeneous-agents';
-import { HETEROGENEOUS_AGENT_CLIENT_CONFIGS } from '@lobechat/heterogeneous-agents/client';
+import {
+  DroidIcon,
+  HETEROGENEOUS_AGENT_CLIENT_CONFIGS,
+} from '@lobechat/heterogeneous-agents/client';
 import {
   Amp,
   ClaudeCode,
@@ -39,6 +42,7 @@ export interface ConnectableProvider {
     | typeof CodeBuddy
     | typeof Codex
     | typeof Cursor
+    | typeof DroidIcon
     | typeof Grok
     | typeof HermesAgent
     | typeof Kimi
@@ -73,6 +77,7 @@ const CLI_BRANDS: Record<LocalHeterogeneousAgentType, ConnectableProvider['brand
   'codebuddy': CodeBuddy,
   'codex': Codex,
   'cursor': Cursor,
+  'droid': DroidIcon,
   'grok-build': Grok,
   'kimi-code': Kimi,
   'opencode': OpenCode,

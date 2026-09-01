@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatCountdown } from './TaskDetailRunPauseAction';
+import { formatCountdown, shouldPersistFallbackAssignee } from './TaskDetailRunPauseAction';
 
 describe('formatCountdown', () => {
   it('keeps the precise countdown for durations shorter than one day', () => {
@@ -20,5 +20,14 @@ describe('formatCountdown', () => {
 
   it('clamps expired countdowns to zero', () => {
     expect(formatCountdown(-1000)).toEqual({ countdown: '00:00', type: 'time' });
+  });
+});
+
+describe('shouldPersistFallbackAssignee', () => {
+  it('uses the inbox agent only when the task has no assignee', () => {
+    expect(shouldPersistFallbackAssignee(null, null, 'inbox-agent')).toBe(true);
+    expect(shouldPersistFallbackAssignee('agent-1', null, 'inbox-agent')).toBe(false);
+    expect(shouldPersistFallbackAssignee(null, 'user-1', 'inbox-agent')).toBe(false);
+    expect(shouldPersistFallbackAssignee(null, null, null)).toBe(false);
   });
 });

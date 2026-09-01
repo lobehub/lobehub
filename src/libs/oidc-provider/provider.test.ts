@@ -58,6 +58,34 @@ describe('OIDC Provider - Market Client Integration', () => {
   });
 
   describe('Provider Configuration', () => {
+    it('should accept both Cloud desktop callback origins during the apex migration', async () => {
+      vi.doMock('@/envs/app', () => ({
+        appEnv: {
+          APP_URL: 'https://app.lobehub.com',
+          MARKET_BASE_URL: undefined,
+        },
+      }));
+
+      const [{ default: Provider }, { defaultClients }] = await Promise.all([
+        import('oidc-provider'),
+        import('./config'),
+      ]);
+      const provider = new Provider('https://app.lobehub.com/oidc', { clients: defaultClients });
+      const desktopClient = await provider.Client.find('lobehub-desktop');
+
+      expect(
+        desktopClient?.redirectUriAllowed('https://app.lobehub.com/oidc/callback/desktop'),
+      ).toBe(true);
+      expect(desktopClient?.redirectUriAllowed('https://lobehub.com/oidc/callback/desktop')).toBe(
+        true,
+      );
+      expect(desktopClient?.redirectUriAllowed('https://example.com/oidc/callback/desktop')).toBe(
+        false,
+      );
+
+      vi.doUnmock('@/envs/app');
+    });
+
     it('should export API_AUDIENCE constant', async () => {
       vi.doMock('@/envs/app', () => ({
         appEnv: {

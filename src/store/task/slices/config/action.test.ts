@@ -149,6 +149,33 @@ describe('TaskConfigSliceAction', () => {
       });
     });
 
+    it('should preserve the responsible assignee when enabling automation', async () => {
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+
+      useTaskStore.setState({
+        taskDetailMap: {
+          'T-1': {
+            ...useTaskStore.getState().taskDetailMap['T-1'],
+            heartbeat: { interval: 1800 },
+            userId: 'user_member_1',
+          },
+        },
+      });
+
+      await useTaskStore.getState().setAutomationMode('T-1', 'heartbeat');
+
+      expect(taskService.update).toHaveBeenCalledWith('T-1', { automationMode: 'heartbeat' });
+      expect(useTaskStore.getState().taskDetailMap['T-1'].userId).toBe('user_member_1');
+    });
+
+    it('should not touch the assignee when disabling automation', async () => {
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+
+      await useTaskStore.getState().setAutomationMode('T-1', null);
+
+      expect(taskService.update).toHaveBeenCalledWith('T-1', { automationMode: null });
+    });
+
     it('should preserve existing heartbeat interval when re-entering heartbeat mode', async () => {
       vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
 

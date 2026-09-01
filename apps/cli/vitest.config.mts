@@ -29,6 +29,7 @@ export default defineConfig({
       reporter: ['text', 'json', 'lcov', 'text-summary'],
     },
     environment: 'node',
+    setupFiles: ['./tests/setup.ts'],
     // Suppress unhandled rejection warnings from Commander async actions with mocked process.exit
     onConsoleLog: () => true,
   },

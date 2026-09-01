@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { Flexbox, Skeleton } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { cx } from 'antd-style';
 
 import { useClientDataSWR } from '@/libs/swr';

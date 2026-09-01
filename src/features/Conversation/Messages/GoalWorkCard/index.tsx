@@ -1,12 +1,13 @@
 'use client';
 
-import { Center, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Center, Flexbox, Icon } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronRightIcon, TargetIcon } from 'lucide-react';
 import { memo } from 'react';
 
 import RingLoadingIcon from '@/components/RingLoading';
-import { useChatStore } from '@/store/chat';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 import type { OperationGoal } from './deriveOperationGoals';
 import GoalElapsedTime from './GoalElapsedTime';
@@ -55,15 +56,15 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const GoalCard = memo<{ goal: OperationGoal }>(({ goal }) => {
-  const openTaskDetail = useChatStore((s) => s.openTaskDetail);
-  const { progress, startedAt } = useGoalWorkStatus({
+  const navigate = useWorkspaceAwareNavigate();
+  const { agentId, progress, startedAt, title } = useGoalWorkStatus({
     criteriaCount: goal.criteriaCount,
-    goalKnown: true,
-    identifier: goal.identifier,
-    maxRounds: goal.maxRounds,
-    taskId: goal.taskId,
+    goalId: goal.goalId,
   });
   const isActive = ACTIVE_PHASES.has(progress.phase);
+  const openGoal = () => {
+    if (agentId) navigate(`/agent/${agentId}/goal/${goal.goalId}`);
+  };
 
   return (
     <Flexbox
@@ -73,11 +74,11 @@ const GoalCard = memo<{ goal: OperationGoal }>(({ goal }) => {
       gap={10}
       role={'button'}
       tabIndex={0}
-      onClick={() => openTaskDetail(goal.identifier)}
+      onClick={openGoal}
       onKeyDown={(event) => {
         if (event.key !== 'Enter' && event.key !== ' ') return;
         event.preventDefault();
-        openTaskDetail(goal.identifier);
+        openGoal();
       }}
     >
       <Center className={styles.icon}>
@@ -92,12 +93,9 @@ const GoalCard = memo<{ goal: OperationGoal }>(({ goal }) => {
         )}
       </Center>
       <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-        <Flexbox horizontal align={'center'} gap={8}>
-          <Text ellipsis className={styles.title}>
-            {goal.name}
-          </Text>
-          <Tag size={'small'}>{goal.identifier}</Tag>
-        </Flexbox>
+        <Text ellipsis className={styles.title}>
+          {title ?? goal.name}
+        </Text>
         <GoalStatusLine {...progress} />
       </Flexbox>
       {isActive && <GoalElapsedTime startedAt={startedAt} />}
@@ -114,7 +112,7 @@ const GoalWorkCard = memo<{ goals: OperationGoal[] }>(({ goals }) => {
   return (
     <Flexbox gap={8}>
       {goals.map((goal) => (
-        <GoalCard goal={goal} key={goal.taskId} />
+        <GoalCard goal={goal} key={goal.goalId} />
       ))}
     </Flexbox>
   );

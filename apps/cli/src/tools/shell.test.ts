@@ -1,15 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { cleanupAllProcesses, getCommandOutput, killCommand, runCommand } from './shell';
-
-vi.mock('../utils/logger', () => ({
-  log: {
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  },
-}));
 
 describe('shell tools (integration wrapper)', () => {
   afterEach(() => {

@@ -3,8 +3,8 @@ import { base64ToBytes, getMimeType } from '@lobechat/utils';
 import { cloudSandboxService } from '@/services/cloudSandbox';
 import { type LocalFilePreview, projectFileService } from '@/services/projectFile';
 
-export const WORKSPACE_HTML_ARTIFACT_MAX_FILE_BYTES = 8 * 1024 * 1024;
-export const WORKSPACE_HTML_ARTIFACT_MAX_TOTAL_BYTES = 20 * 1024 * 1024;
+export const WORKSPACE_HTML_ARTIFACT_MAX_FILE_BYTES = 50 * 1024 * 1024;
+export const WORKSPACE_HTML_ARTIFACT_MAX_TOTAL_BYTES = 50 * 1024 * 1024;
 export const WORKSPACE_HTML_ARTIFACT_MAX_FILES = 64;
 export const WORKSPACE_HTML_ARTIFACT_INLINE_MAX_BYTES = 32 * 1024;
 
@@ -20,6 +20,7 @@ export interface ReadWorkspaceAssetSuccess {
 export interface ReadWorkspaceAssetError {
   ok: false;
   reason: ReadWorkspaceAssetFailure;
+  sizeBytes?: number;
 }
 
 export type ReadWorkspaceAssetResult = ReadWorkspaceAssetError | ReadWorkspaceAssetSuccess;
@@ -100,7 +101,7 @@ const previewToBytes = async (
   if (preview.type === 'text') {
     const bytes = new TextEncoder().encode(preview.content);
     if (bytes.byteLength > WORKSPACE_HTML_ARTIFACT_MAX_FILE_BYTES) {
-      return { ok: false, reason: 'oversized' };
+      return { ok: false, reason: 'oversized', sizeBytes: bytes.byteLength };
     }
     return {
       bytes,
@@ -112,7 +113,7 @@ const previewToBytes = async (
 
   if (preview.type === 'image' || preview.type === 'document') {
     if (preview.blob.size > WORKSPACE_HTML_ARTIFACT_MAX_FILE_BYTES) {
-      return { ok: false, reason: 'oversized' };
+      return { ok: false, reason: 'oversized', sizeBytes: preview.blob.size };
     }
     const bytes = new Uint8Array(await preview.blob.arrayBuffer());
     const text = isTextContentType(preview.contentType)
@@ -151,7 +152,7 @@ export const readWorkspaceAsset = async ({
         const text = result.result.content;
         const bytes = new TextEncoder().encode(text);
         if (bytes.byteLength > WORKSPACE_HTML_ARTIFACT_MAX_FILE_BYTES) {
-          return { ok: false, reason: 'oversized' };
+          return { ok: false, reason: 'oversized', sizeBytes: bytes.byteLength };
         }
 
         return {
@@ -165,7 +166,7 @@ export const readWorkspaceAsset = async ({
       const bytes = await readSandboxBytes(path, sandboxTopicId);
       if (!bytes) return { ok: false, reason: 'unreadable' };
       if (bytes.byteLength > WORKSPACE_HTML_ARTIFACT_MAX_FILE_BYTES) {
-        return { ok: false, reason: 'oversized' };
+        return { ok: false, reason: 'oversized', sizeBytes: bytes.byteLength };
       }
 
       return { bytes, contentType, ok: true };
@@ -192,7 +193,7 @@ export const readWorkspaceAsset = async ({
     });
     if (!bytesResult) return { ok: false, reason: 'unreadable' };
     if (bytesResult.bytes.byteLength > WORKSPACE_HTML_ARTIFACT_MAX_FILE_BYTES) {
-      return { ok: false, reason: 'oversized' };
+      return { ok: false, reason: 'oversized', sizeBytes: bytesResult.bytes.byteLength };
     }
 
     const contentType = resolveWorkspaceAssetContentType(path, bytesResult.contentType);

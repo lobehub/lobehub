@@ -127,10 +127,13 @@ jobs:
         id: cloud-ref
         if: steps.check.outputs.should_build == 'true'
         env:
+          CLOUD_REPOSITORY: ${{ vars.OVERLAY_REPOSITORY }}
           CLOUD_TOKEN: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
         run: |
           set -euo pipefail
-          cloud_ref=$(git ls-remote "https://x-access-token:${CLOUD_TOKEN}@github.com/lobehub/lobehub-cloud.git" HEAD | cut -f1)
+          : "${CLOUD_REPOSITORY:?OVERLAY_REPOSITORY repository variable is not set}"
+          # checkout persist-credentials extraheader would send GITHUB_TOKEN and 404 the private cloud repo
+          cloud_ref=$(git -c http.https://github.com/.extraheader= ls-remote "https://x-access-token:${CLOUD_TOKEN}@github.com/${CLOUD_REPOSITORY}.git" HEAD | cut -f1)
           if [[ ! "$cloud_ref" =~ ^[0-9a-f]{40}$ ]]; then
             echo "Unable to resolve Cloud revision"
             exit 1
@@ -197,6 +200,15 @@ jobs:
             echo "EOF"
           } >> $GITHUB_OUTPUT
 
+  renderer-ota:
+    name: Publish Renderer OTA
+    needs: [calculate-version]
+    if: needs.calculate-version.outputs.should_build == 'true'
+    uses: ./.github/workflows/release-desktop-renderer-ota.yml
+    with:
+      channel: canary
+    secrets: inherit
+
   # ============================================
   # 代码质量检查
   # ============================================
@@ -239,6 +251,7 @@ jobs:
         uses: ./.github/actions/desktop-build-setup
         with:
           cloud-ref: ${{ needs.calculate-version.outputs.cloud_ref }}
+          cloud-repository: ${{ vars.OVERLAY_REPOSITORY }}
           cloud-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
           node-version: ${{ env.NODE_VERSION }}
 
@@ -337,8 +350,10 @@ jobs:
         uses: ./.github/actions/desktop-upload-artifacts
         with:
           artifact-name: release-${{ matrix.os }}
+          renderer-ota-private-key: ${{ secrets.RENDERER_OTA_PRIVATE_KEY }}
           renderer-ota-public-key: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
           retention-days: 3
+          update-channel: canary
 
   # ============================================
   # 合并 macOS 多架构 latest-mac.yml 文件

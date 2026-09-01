@@ -31,6 +31,8 @@ import { taskDetailPath } from '../shared/taskDetailPath';
 import HiddenColumnsPanel from './HiddenColumnsPanel';
 import {
   buildKanbanColumns,
+  canDropTaskIntoKanbanColumn,
+  getKanbanAssigneeUpdate,
   getKanbanTaskPatch,
   moveTaskBetweenKanbanGroups,
   normalizeKanbanGroupBy,
@@ -70,9 +72,9 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, options, projectId, route
   // Keep the SWR handle only for `error` + `mutate` (the error/Retry state).
   const { error, isLoading, isQueryScopeCurrent, mutate } = useFetchTaskGroupList(
     projectId
-      ? { excludeStatuses, groupBy, projectId }
+      ? { automated: false, excludeStatuses, groupBy, projectId }
       : agentId
-        ? { agentId, excludeStatuses, groupBy }
+        ? { agentId, automated: false, excludeStatuses, groupBy }
         : { allAgents: true, automated: false, excludeStatuses, groupBy },
   );
   // Drive the loading/empty boundary off the store's own init flag, NOT SWR's
@@ -126,20 +128,19 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, options, projectId, route
 
       const targetColumnKey = over.id as string;
       const column = columns.find((item) => item.key === targetColumnKey);
-      if (!column?.droppable) return;
 
       const task = active.data.current?.task as TaskListItem | undefined;
       if (!task) return;
+      if (!column || !canDropTaskIntoKanbanColumn(task, groupBy, column)) return;
 
       const patch = getKanbanTaskPatch(groupBy, column);
       if (!patch) return;
+      const assigneeUpdate =
+        groupBy === 'assignee' || groupBy === 'member'
+          ? getKanbanAssigneeUpdate(task, patch)
+          : undefined;
       if (groupBy === 'status' && task.status === patch.status) return;
-      if (
-        groupBy === 'assignee' &&
-        (task.assigneeAgentId ?? null) === (patch.assigneeAgentId ?? null)
-      ) {
-        return;
-      }
+      if ((groupBy === 'assignee' || groupBy === 'member') && !assigneeUpdate) return;
       if (groupBy === 'priority' && (task.priority ?? 0) === (patch.priority ?? 0)) return;
 
       const prevGroups = useTaskStore.getState().taskGroups;
@@ -149,8 +150,8 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, options, projectId, route
       try {
         if (groupBy === 'status' && column.targetStatus) {
           await updateTaskStatus(task.identifier, column.targetStatus);
-        } else if (groupBy === 'assignee') {
-          await updateTask(task.identifier, { assigneeAgentId: patch.assigneeAgentId ?? null });
+        } else if ((groupBy === 'assignee' || groupBy === 'member') && assigneeUpdate) {
+          await updateTask(task.identifier, assigneeUpdate);
         } else if (groupBy === 'priority') {
           await updateTask(task.identifier, { priority: patch.priority ?? 0 });
         }
@@ -267,10 +268,14 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, options, projectId, route
       <Flexbox horizontal className={styles.board}>
         {visibleColumns.map((col) => {
           const group = currentTaskGroups.find((item) => item.key === col.key);
+          const droppable =
+            canEditTask &&
+            col.droppable &&
+            (!activeTask || canDropTaskIntoKanbanColumn(activeTask, groupBy, col));
           return (
             <KanbanColumn
               columnKey={col.key}
-              droppable={canEditTask && col.droppable}
+              droppable={droppable}
               groupBy={groupBy}
               groupMeta={col.groupMeta}
               key={col.key}

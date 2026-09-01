@@ -22,8 +22,6 @@ vi.mock('@/libs/swr', async () => {
   };
 });
 
-vi.mock('zustand/traditional');
-
 // Mock version constants
 vi.mock('@/const/version', () => ({
   isDeprecatedEdition: false,

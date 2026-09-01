@@ -72,16 +72,17 @@ const PROJECT_FILE_GLOB_LIMIT = 5000;
 
 /**
  * Image extensions `readFile` uploads to file storage instead of refusing as
- * binary. The agent then sees the image (vision) via an `image_url` part,
+ * binary. The runtime can then route the image to downstream media analysis
  * rather than hitting "Unsupported binary file".
  *
- * Limited to the formats vision providers accept (Anthropic/OpenAI:
- * png/jpeg/gif/webp) — anything else would be silently dropped by the
- * model-runtime builders, which is worse than the binary refusal. SVG is
- * intentionally absent: it's text, and reading the source is more useful to
- * the model than a rasterization we can't produce here.
+ * AVIF is included for Analyze Media, whose request-boundary normalization
+ * converts unsupported image formats for its fallback vision model. This does
+ * not imply native AVIF support across providers. SVG is intentionally absent:
+ * it's text, and reading the source is more useful to the model than a
+ * rasterization we can't produce here.
  */
 const LOCAL_IMAGE_EXT_TO_MIME: Record<string, string> = {
+  avif: 'image/avif',
   gif: 'image/gif',
   jpeg: 'image/jpeg',
   jpg: 'image/jpeg',
