@@ -421,7 +421,7 @@
     "pathe": "^2.0.3",
     "pdf-parse": "^1.1.4",
     "pdfjs-dist": "5.4.530",
-    "pdfkit": "^0.17.2",
+    "pdfkit": "^0.20.2",
     "pg": "^8.23.0",
     "pinyin-pro": "^3.28.2",
     "plaiceholder": "^3.0.0",
