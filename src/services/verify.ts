@@ -32,6 +32,14 @@ export type AcceptanceListItem = Awaited<
   ReturnType<typeof lambdaClient.acceptance.list.query>
 >[number];
 
+export type AcceptanceListPage = Awaited<ReturnType<typeof lambdaClient.acceptance.listPage.query>>;
+
+/** The list's status split, shared by the flat and paged reads. */
+export type AcceptanceListFilter = 'active' | 'all' | 'completed';
+
+/** The lifecycle states a reviewer may set by hand from the acceptance list. */
+export type AcceptanceStatusOverride = 'accepted' | 'closed' | 'delivered' | 'rejected';
+
 /** Editable fields of a single delivery-check criterion. */
 export interface UpdateCriterionValue {
   description?: string | null;
@@ -167,11 +175,24 @@ export class VerifyService {
     requirement: string,
   ) => lambdaClient.acceptance.saveGoal.mutate({ requirement, subjectId, subjectType });
 
-  listAcceptances = (options?: { quiet?: boolean }): Promise<AcceptanceListItem[]> =>
+  listAcceptances = (options?: {
+    filter?: 'active' | 'all' | 'completed';
+    /** Widen the recency window (server-capped) — the merge picker asks for more. */
+    limit?: number;
+    q?: string;
+    quiet?: boolean;
+  }): Promise<AcceptanceListItem[]> =>
     lambdaClient.acceptance.list.query(
-      undefined,
+      options ? { filter: options.filter, limit: options.limit, q: options.q } : undefined,
       options?.quiet ? { context: { showNotification: false } } : undefined,
     );
+
+  /** One keyset page of the acceptance feed — what the list panel scrolls. */
+  listAcceptancePage = (params: {
+    cursor?: string;
+    filter?: AcceptanceListFilter;
+    limit?: number;
+  }): Promise<AcceptanceListPage> => lambdaClient.acceptance.listPage.query(params);
 
   /**
    * Acceptance status for a known set of subjects. `listAcceptances` is capped
@@ -262,12 +283,38 @@ export class VerifyService {
   renameAcceptance = (id: string, title: string) =>
     lambdaClient.acceptance.rename.mutate({ id, title });
 
+  /**
+   * File the acceptance under a project (`null` takes it out of one). Only the
+   * grouping moves — the delivery and its rounds stay exactly where they are.
+   */
+  setAcceptanceProject = (id: string, projectId: string | null) =>
+    lambdaClient.acceptance.setProject.mutate({ id, projectId });
+
   /** Owner override of the acceptance's decision state from the list. */
-  updateAcceptanceStatus = (id: string, status: 'accepted' | 'closed' | 'delivered' | 'rejected') =>
+  updateAcceptanceStatus = (id: string, status: AcceptanceStatusOverride) =>
     lambdaClient.acceptance.updateStatus.mutate({ id, status });
+
+  /**
+   * Sweep a multi-selection into one decision state. Reports what landed —
+   * rows that could not take the transition come back in `failedIds` instead
+   * of failing the whole sweep.
+   */
+  updateAcceptanceStatusBatch = (ids: string[], status: AcceptanceStatusOverride) =>
+    lambdaClient.acceptance.updateStatusBatch.mutate({ ids, status });
+
+  /**
+   * Fold one acceptance into another — the source's checks (and the rounds /
+   * evidence behind them) move onto the target, and the source entry is
+   * removed. Returns what the merge actually moved.
+   */
+  mergeAcceptance = (sourceId: string, targetId: string) =>
+    lambdaClient.acceptance.merge.mutate({ sourceId, targetId });
 
   /** Delete the acceptance aggregate (its round reports detach, not delete). */
   deleteAcceptance = (id: string) => lambdaClient.acceptance.remove.mutate({ id });
+
+  /** Batch twin of `deleteAcceptance` for the list's multi-selection. */
+  deleteAcceptanceBatch = (ids: string[]) => lambdaClient.acceptance.removeBatch.mutate({ ids });
 
   // ---- per-run plan ----
   getVerifyState = (operationId: string): Promise<VerifyStateResponse | null> =>
@@ -353,6 +400,26 @@ export class VerifyService {
     modelConfig: { model: string; provider: string };
   }): Promise<VerifyCriterionDraft[]> =>
     lambdaClient.verify.generateCriteria.mutate(input) as Promise<VerifyCriterionDraft[]>;
+
+  /** Draft the standing acceptance criteria used by the create-goal review step. */
+  generateGoalCriteria = (input: {
+    context?: string;
+    goal: string;
+    maxCriteria?: number;
+  }): Promise<VerifyCriterionDraft[]> =>
+    lambdaClient.verify.generateGoalCriteria.mutate(input) as Promise<VerifyCriterionDraft[]>;
+
+  /** Draft the title, instruction, and criteria used by the create-goal review step. */
+  generateGoalPlan = (input: {
+    context?: string;
+    goal: string;
+    maxCriteria?: number;
+  }): Promise<
+    { criteria: VerifyCriterionDraft[]; instruction: string; title: string } | undefined
+  > =>
+    lambdaClient.verify.generateGoalPlan.mutate(input) as Promise<
+      { criteria: VerifyCriterionDraft[]; instruction: string; title: string } | undefined
+    >;
 
   /** Persist (user-edited) drafts as standalone criteria; returns ids in order. */
   createCriteria = (drafts: VerifyCriterionDraft[]): Promise<string[]> =>

@@ -140,6 +140,7 @@
   "updater.downloadNewVersion": "Скачать новую версию",
   "updater.downloadingUpdate": "Загрузка обновления",
   "updater.downloadingUpdateDesc": "Обновление загружается, пожалуйста, подождите...",
+  "updater.ignore": "Игнорировать",
   "updater.installLater": "Обновить при следующем запуске",
   "updater.isLatestVersion": "У вас установлена последняя версия",
   "updater.isLatestVersionDesc": "Отлично! Установленная версия {{version}} является самой актуальной.",

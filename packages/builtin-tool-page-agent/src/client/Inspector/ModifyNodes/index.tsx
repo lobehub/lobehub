@@ -2,7 +2,8 @@
 
 import type { ModifyNodesArgs } from '@lobechat/editor-runtime';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Icon, Text } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { DiffIcon, Minus, Plus } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -64,8 +65,10 @@ export const ModifyNodesInspector = memo<BuiltinInspectorProps<ModifyNodesArgs, 
     // During streaming without operations yet, show init message
     if (isArgumentsStreaming && !hasOperations) {
       return (
-        <div className={cx(oneLineEllipsis, shinyTextStyles.shinyText)}>
-          <span>{t('builtins.lobe-page-agent.apiName.modifyNodes.init')}</span>
+        <div className={oneLineEllipsis}>
+          <span className={shinyTextStyles.shinyText}>
+            {t('builtins.lobe-page-agent.apiName.modifyNodes.init')}
+          </span>
         </div>
       );
     }
@@ -98,8 +101,10 @@ export const ModifyNodesInspector = memo<BuiltinInspectorProps<ModifyNodesArgs, 
     }
 
     return (
-      <div className={cx(oneLineEllipsis, isArgumentsStreaming && shinyTextStyles.shinyText)}>
-        <span className={styles.title}>{t('builtins.lobe-page-agent.apiName.modifyNodes')}</span>
+      <div className={oneLineEllipsis}>
+        <span className={cx(styles.title, isArgumentsStreaming && shinyTextStyles.shinyText)}>
+          {t('builtins.lobe-page-agent.apiName.modifyNodes')}
+        </span>
         {statsParts.length > 0 && (
           <>
             {' '}

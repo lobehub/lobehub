@@ -73,20 +73,30 @@ class ProjectFileService {
 
   /** Search files within a project working directory. Matching runs on the file host. */
   async searchProjectFiles({
+    changedOnly,
     deviceId,
+    excludeIgnored,
     limit,
     query,
     scope,
   }: {
+    changedOnly?: boolean;
     deviceId?: string;
+    excludeIgnored?: boolean;
     limit?: number;
     query: string;
     scope: string;
   }): Promise<ProjectFileSearchResult | undefined> {
     return deviceId
-      ? ((await lambdaClient.device.searchProjectFiles.query({ deviceId, limit, query, scope })) ??
-          undefined)
-      : localFileService.searchProjectFiles({ limit, query, scope });
+      ? ((await lambdaClient.device.searchProjectFiles.query({
+          changedOnly,
+          deviceId,
+          excludeIgnored,
+          limit,
+          query,
+          scope,
+        })) ?? undefined)
+      : localFileService.searchProjectFiles({ changedOnly, excludeIgnored, limit, query, scope });
   }
 
   /** File preview payload for a file in a project working directory. */

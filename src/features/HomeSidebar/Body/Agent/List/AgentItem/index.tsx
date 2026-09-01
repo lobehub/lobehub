@@ -1,6 +1,7 @@
 import type { SidebarAgentItem } from '@lobechat/types';
 import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
-import { ActionIcon, Icon } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Loader2, PinIcon } from 'lucide-react';
 import { type CSSProperties, type DragEvent } from 'react';
@@ -153,6 +154,7 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
       <Avatar
         avatar={typeof avatar === 'string' ? avatar : undefined}
         avatarBackground={backgroundColor || undefined}
+        title={displayTitle}
       />
     );
 
@@ -177,7 +179,7 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
     }
 
     return avatarNode;
-  }, [isUpdating, isLoading, avatar, backgroundColor, unreadCount]);
+  }, [isUpdating, isLoading, avatar, backgroundColor, displayTitle, unreadCount]);
 
   const dropdownMenu = useAgentDropdownMenu({
     anchor,

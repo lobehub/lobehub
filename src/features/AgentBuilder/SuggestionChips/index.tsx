@@ -1,6 +1,7 @@
 'use client';
 
-import { ActionIcon, Block, Flexbox, Skeleton as LobeSkeleton, Text } from '@lobehub/ui';
+import { Block, Flexbox, Skeleton as LobeSkeleton } from '@lobehub/ui';
+import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { RefreshCw } from 'lucide-react';
 import { memo, useCallback } from 'react';

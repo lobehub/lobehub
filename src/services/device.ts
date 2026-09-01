@@ -17,21 +17,18 @@ class DeviceService {
     return lambdaClient.device.updateDevice.mutate(input);
   }
 
-  /**
-   * Check whether a path exists on a device and is a directory (via the device's
-   * `statPath` RPC). Returns `null` when the device is unreachable — callers
-   * surface that as an unverified path instead of silently accepting.
-   */
-  statPath(deviceId: string, path: string) {
-    return lambdaClient.device.statPath.query({ deviceId, path });
+  /** List one directory on a device for remote filesystem clients. */
+  listDir(deviceId: string, path?: string) {
+    return lambdaClient.device.listDir.query({ deviceId, path });
   }
 
   /**
-   * List immediate child directories on a device (via `listDir` RPC). Returns
-   * `null` when the device is unreachable.
+   * Check whether a path exists on a device and is a directory (via the device's
+   * `statPath` RPC). Returns `null` when the device is unreachable — callers
+   * treat "can't verify" as non-blocking.
    */
-  listDir(deviceId: string, path?: string) {
-    return lambdaClient.device.listDir.query({ deviceId, path });
+  statPath(deviceId: string, path: string) {
+    return lambdaClient.device.statPath.query({ deviceId, path });
   }
 
   /** Probe whether an agent platform (openclaw / hermes) is available on a device. */

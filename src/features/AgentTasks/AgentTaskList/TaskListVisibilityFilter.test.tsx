@@ -12,8 +12,8 @@ const taskStoreMock = vi.hoisted(() => ({
   visibility: 'workspace',
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  ActionIcon: () => <span>Visibility</span>,
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   DropdownMenu: ({
     children,
     items,
@@ -33,10 +33,6 @@ vi.mock('@lobehub/ui', () => ({
   Icon: () => <span data-testid="menu-extra-icon" />,
 }));
 
-vi.mock('antd-style', () => ({
-  cssVar: { colorTextSecondary: '#666' },
-}));
-
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => 'workspace-1',
 }));
@@ -47,10 +43,6 @@ vi.mock('@/store/task', () => ({
       listVisibility: taskStoreMock.visibility,
       setListVisibility: taskStoreMock.setListVisibility,
     }),
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
 }));
 
 describe('TaskListVisibilityFilter', () => {

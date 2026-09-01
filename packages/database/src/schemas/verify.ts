@@ -52,6 +52,7 @@ import { createdAt, timestamps, timestamptz } from './_helpers';
 import { agentOperations } from './agentOperations';
 import { documents, files } from './file';
 import { llmGenerationTracing } from './llmGenerationTracing';
+import { projects } from './project';
 import { users } from './user';
 import { workspaces } from './workspace';
 
@@ -318,9 +319,12 @@ export const verifyEvidence = pgTable(
     /** Medium of the artifact (screenshot / gif / video / text / dom_snapshot / transcript). */
     type: text('type', { enum: verifyEvidenceTypes }).notNull(),
 
-    // ---- Payload: exactly one of `content` (inline text) or `fileId` (stored artifact) ----
+    // ---- Payload: exactly one of inline content, document, or stored file ----
     /** Inline payload for small text evidence (dom snapshot / console log / transcript). */
     content: text('content'),
+
+    /** LobeHub document used as evidence. Agent-document binding ids are never stored here. */
+    documentId: text('document_id').references(() => documents.id, { onDelete: 'set null' }),
 
     /**
      * Stored artifact (screenshot / gif / video, or large text persisted to storage).
@@ -349,6 +353,7 @@ export const verifyEvidence = pgTable(
   },
   (t) => [
     index('verify_evidence_check_result_id_idx').on(t.checkResultId),
+    index('verify_evidence_document_id_idx').on(t.documentId),
     index('verify_evidence_file_id_idx').on(t.fileId),
     index('verify_evidence_user_id_idx').on(t.userId),
     index('verify_evidence_workspace_id_idx').on(t.workspaceId),
@@ -370,6 +375,9 @@ export const acceptances = pgTable(
 
     /** Workspace this acceptance belongs to — scopes listing and cascades on workspace delete. */
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+
+    /** Project grouping captured from the accepted task/topic; deleted projects become ungrouped. */
+    projectId: text('project_id').references(() => projects.id, { onDelete: 'set null' }),
 
     /**
      * Polymorphic accepted object. No FK on purpose: an acceptance may target task,
@@ -420,6 +428,7 @@ export const acceptances = pgTable(
   (t) => [
     index('acceptances_user_id_idx').on(t.userId),
     index('acceptances_workspace_id_idx').on(t.workspaceId),
+    index('acceptances_project_id_idx').on(t.projectId),
     index('acceptances_subject_idx').on(t.subjectType, t.subjectId),
     index('acceptances_status_idx').on(t.status),
     index('acceptances_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.userId),

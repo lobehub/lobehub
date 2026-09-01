@@ -1,7 +1,8 @@
 import type { UIChatMessage } from '@lobechat/types';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
+  createQueueSendNowGate,
   getContextWindowMessages,
   getConversationChatInputUiState,
   toChatInputMessages,
@@ -13,6 +14,42 @@ const tokenMessages = [
   { content: 'latest tool', id: 'msg-3', role: 'tool' },
   { content: 'latest user', id: 'msg-4', role: 'user' },
 ] as UIChatMessage[];
+
+describe('createQueueSendNowGate', () => {
+  /**
+   * @example Two different queued rows are clicked before the first writer exits.
+   */
+  it('rejects an overlapping row while the first send-now task is settling', async () => {
+    // ROOT CAUSE:
+    //
+    // QueueTray previously keyed its in-flight guard by message id. Clicking a
+    // second row after the first cancellation marked the blocker as cancelled
+    // could therefore dispatch another turn while the native writer still exited.
+    //
+    // Before: each queued message owned an independent in-flight flag.
+    // After: the conversation tray owns one gate across all queued messages.
+    const gate = createQueueSendNowGate();
+    let releaseFirst!: () => void;
+    const firstTask = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseFirst = resolve;
+        }),
+    );
+    const secondTask = vi.fn(async () => {});
+
+    const first = gate.run(firstTask);
+    const second = gate.run(secondTask);
+
+    await expect(second).resolves.toBe(false);
+    expect(secondTask).not.toHaveBeenCalled();
+
+    releaseFirst();
+    await expect(first).resolves.toBe(true);
+    await expect(gate.run(secondTask)).resolves.toBe(true);
+    expect(secondTask).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe('toChatInputMessages', () => {
   it('preserves user, assistant, and tool messages with their real roles', () => {

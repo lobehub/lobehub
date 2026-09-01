@@ -6,7 +6,7 @@ documents its shape and how to turn it into a per-criterion worklist. You submit
 each criterion's evidence by its `checkItemId` — no separate upload handle to
 resolve.
 
-## (a) `lh verify plan state $LOBE_OPERATION_ID --json`
+## (a) `lh verify plan state $OPERATION_ID --json`
 
 Returns the run's verify state plus the **frozen plan** (immutable once
 confirmed):
@@ -51,7 +51,7 @@ The plan (a) is all you need. For each `verifyPlan[]` item with non-empty
 | `vci_a1b2c3` | Login flow reaches the workspace | `screenshot`     |
 
 ```bash
-OP="$LOBE_OPERATION_ID"
+OP="$OPERATION_ID"
 lh acceptance run result submit --operation "$OP" --item vci_a1b2c3 --type screenshot \
   --file ./proof/home.png --by agent-browser --desc "…"
 ```

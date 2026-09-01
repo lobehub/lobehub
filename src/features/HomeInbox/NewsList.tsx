@@ -1,6 +1,6 @@
 import { agentDisplayName } from '@lobechat/types';
-import { Avatar, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Markdown } from '@lobehub/ui';
+import { Avatar, Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
@@ -73,6 +73,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface NewsItemProps {
   bare?: boolean;
   brief: BriefItem;
+  showTime: boolean;
 }
 
 /**
@@ -80,7 +81,7 @@ interface NewsItemProps {
  * it leads the row; opening it reads it (there is nothing to decide) and drops
  * the finding's detail inline.
  */
-const NewsItem = memo<NewsItemProps>(({ bare, brief }) => {
+const NewsItem = memo<NewsItemProps>(({ bare, brief, showTime }) => {
   const markBriefRead = useBriefStore((s) => s.markBriefRead);
 
   const [expanded, setExpanded] = useState(false);
@@ -130,7 +131,7 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief }) => {
           >
             {brief.title}
           </Text>
-          <Time date={brief.createdAt} />
+          {showTime && <Time date={brief.createdAt} />}
           <Icon
             color={cssVar.colorTextQuaternary}
             icon={expanded ? ChevronDownIcon : ChevronRightIcon}
@@ -157,6 +158,8 @@ interface NewsListProps {
   /** Rendered inside a rail card, which already draws the shell. */
   bare?: boolean;
   news: BriefItem[];
+  /** Relative time is useful within today's feed, but redundant under a dated historical heading. */
+  showTime: boolean;
 }
 
 /**
@@ -164,7 +167,7 @@ interface NewsListProps {
  * recurring run, but there is nothing to decide. One line each — the detail
  * lives behind the click, so a week of findings still fits on screen.
  */
-const NewsList = memo<NewsListProps>(({ bare, news }) => {
+const NewsList = memo<NewsListProps>(({ bare, news, showTime }) => {
   const { t } = useTranslation('home');
   const [expanded, setExpanded] = useState(false);
 
@@ -178,7 +181,7 @@ const NewsList = memo<NewsListProps>(({ bare, news }) => {
   return (
     <Flexbox className={bare ? styles.bareList : styles.list}>
       {shown.map((brief) => (
-        <NewsItem bare={bare} brief={brief} key={brief.id} />
+        <NewsItem bare={bare} brief={brief} key={brief.id} showTime={showTime} />
       ))}
       {collapsed && (
         <Button

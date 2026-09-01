@@ -85,7 +85,7 @@ export const workbenchRoutes: RouteObject[] = [
       {
         children: [
           {
-            element: lazyElement(() => import('./routes/acceptance')),
+            element: <ExitWorkbench />,
             index: true,
           },
           {

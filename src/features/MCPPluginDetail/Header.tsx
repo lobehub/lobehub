@@ -1,17 +1,8 @@
 'use client';
 
 import { Github } from '@lobehub/icons';
-import {
-  ActionIcon,
-  Avatar,
-  Flexbox,
-  Icon,
-  stopPropagation,
-  Tag,
-  Text,
-  Tooltip,
-} from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, stopPropagation, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Avatar, Button, Tag, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import {
   BookmarkIcon,

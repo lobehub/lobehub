@@ -1,8 +1,8 @@
 'use client';
 
 import type { DeviceListItem } from '@lobechat/types';
-import { Avatar, DropdownMenu, Flexbox, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
+import { DropdownMenu, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Avatar, Button, confirmModal, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import {

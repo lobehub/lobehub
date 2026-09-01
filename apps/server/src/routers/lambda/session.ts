@@ -12,6 +12,7 @@ import { insertAgentSchema, insertSessionSchema } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 import { assertCanEditResource } from '@/server/services/resourcePermission';
 import { AgentChatConfigSchema } from '@/types/agent';
 import { LobeMetaDataSchema } from '@/types/meta';
@@ -61,6 +62,22 @@ const sessionProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
     ctx: {
       sessionGroupModel: new SessionGroupModel(ctx.serverDB, ctx.userId, wsId),
       sessionModel: new SessionModel(ctx.serverDB, ctx.userId, wsId),
+    },
+  });
+});
+
+const sessionSearchProcedure = sessionProcedure.use(async (opts) => {
+  const { ctx } = opts;
+  const workspaceId = ctx.workspaceId ?? undefined;
+  const ftsSearchRepo = await createFtsSearchRepo({
+    db: ctx.serverDB,
+    userId: ctx.userId,
+    workspaceId,
+  });
+
+  return opts.next({
+    ctx: {
+      sessionModel: new SessionModel(ctx.serverDB, ctx.userId, workspaceId, ftsSearchRepo),
     },
   });
 });
@@ -233,7 +250,7 @@ export const sessionRouter = router({
       return result;
     }),
 
-  searchSessions: sessionProcedure
+  searchSessions: sessionSearchProcedure
     .input(z.object({ keywords: z.string() }))
     .query(async ({ input, ctx }) => {
       return ctx.sessionModel.queryByKeyword(input.keywords);

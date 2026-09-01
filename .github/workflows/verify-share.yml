@@ -1,0 +1,189 @@
+# PR-time guard for the share micro app (apps/share). The deployed worker is
+# built with the private business overlay, so same-repo PRs overlay it (repo
+# name and token come from the OVERLAY_REPOSITORY variable and
+# OVERLAY_REPO_TOKEN secret — never hardcoded) and upload a preview version.
+# Without that configuration — fork PRs included — the workflow builds with the
+# open-source business stubs and dry-runs the worker upload as a pure
+# compile/size guard. The production deploy lives in the overlay repository,
+# which carries its own verify-share workflow for PRs on its side.
+name: Verify Share
+
+on:
+  pull_request: {}
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: verify-share-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+      USE_OVERLAY: ${{ github.event.pull_request.head.repo.full_name == github.repository && vars.OVERLAY_REPOSITORY != '' && secrets.LOBEHUB_CLOUD_TOKEN != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # The share deploy runs in the overlay repository, whose artifacts this
+      # repo cannot read — so the manifest comes from the last successful run
+      # of THIS workflow instead. First run: no manifest, build.
+      - name: Resolve last successful verify
+        id: base
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id=$(gh run list --repo "${{ github.repository }}" \
+            --workflow verify-share.yml --status success --limit 1 \
+            --json databaseId --jq '.[0].databaseId' || true)
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download last build-inputs manifest
+        id: manifest
+        if: steps.base.outputs.run_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh run download "${{ steps.base.outputs.run_id }}" --repo "${{ github.repository }}" \
+            -n share-build-inputs -D /tmp/share-manifest; then
+            # An overlay build records this repo's files under the submodule
+            # prefix (`lobehub/src/...`); strip it so the manifest exact-matches
+            # this repo's own diff paths. Overlay-only entries survive
+            # unprefixed and simply never match here.
+            sed -i 's#^lobehub/##' /tmp/share-manifest/build-inputs.txt
+            echo "path=/tmp/share-manifest/build-inputs.txt" >> "$GITHUB_OUTPUT"
+          else
+            echo "no manifest artifact on last successful run"
+          fi
+
+      - name: Detect share input changes
+        id: detect
+        env:
+          SHARE_MANIFEST: ${{ steps.manifest.outputs.path }}
+        run: |
+          if [ -z "$SHARE_MANIFEST" ]; then
+            echo "no previous verify manifest — building"
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          else
+            node apps/share/scripts/should-build.mjs \
+              "origin/${{ github.base_ref }}" HEAD
+          fi
+
+      - name: Overlay business repository
+        if: steps.detect.outputs.should_build == 'true' && env.USE_OVERLAY == 'true'
+        uses: ./.github/actions/business-overlay
+        with:
+          overlay-repository: ${{ vars.OVERLAY_REPOSITORY }}
+          overlay-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
+
+      - name: Setup environment
+        if: steps.detect.outputs.should_build == 'true'
+        uses: ./.github/actions/setup-env
+
+      - name: Install deps (overlay workspace)
+        if: steps.detect.outputs.should_build == 'true' && env.USE_OVERLAY == 'true'
+        # pnpm, not bun: the overlay root's `pnpm.overrides` is what redirects
+        # `@lobechat/business-*` onto the overlay packages, and its workspace
+        # list is the only one that includes `lobehub/apps/share`.
+        run: cd .. && pnpm install
+
+      - name: Install deps (open-source workspace)
+        if: steps.detect.outputs.should_build == 'true' && env.USE_OVERLAY != 'true'
+        run: pnpm install
+
+      - name: Build share (business overlay)
+        if: steps.detect.outputs.should_build == 'true' && env.USE_OVERLAY == 'true'
+        env:
+          # NODE_ENV is load-bearing: vite.config.rr.mts takes its dev branch otherwise and
+          # discards VITE_CDN_BASE without failing. A preview serves its own assets from its
+          # own workers.dev origin, the way production serves them from the CDN — never
+          # same-origin, because the gateway routes /assets to the landing target.
+          NODE_ENV: production
+          VITE_CDN_BASE: https://pr${{ github.event.pull_request.number }}-lobehub-share.lobeobjects-tg.workers.dev/
+        # `build:share` is the overlay repo's own build entry (tsconfig project,
+        # SSR stub list) — invoking it keeps that knowledge over there.
+        run: |
+          cd ..
+          bun run build:share
+          printf '/*\n  Access-Control-Allow-Origin: *\n' > lobehub/apps/share/build/client/_headers
+
+      - name: Build share (open-source stubs)
+        if: steps.detect.outputs.should_build == 'true' && env.USE_OVERLAY != 'true'
+        env:
+          NODE_ENV: production
+          NODE_OPTIONS: --max-old-space-size=8192
+        run: bun run build:rr
+        working-directory: apps/share
+
+      - name: Upload build-inputs manifest
+        if: steps.detect.outputs.should_build == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: share-build-inputs
+          path: apps/share/build-inputs.txt
+          retention-days: 90
+
+      - name: Upload preview version and validate worker bundle
+        if: steps.detect.outputs.should_build == 'true'
+        # Explicit `bash` rather than the default shell, whose lack of pipefail would let a
+        # wrangler failure pass as a green step through the `tee`.
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PREVIEW_API_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          if [ "$SAME_REPO" = 'true' ]; then
+            set -- --preview-alias "pr${PR}" --message "PR-${PR}"
+          else
+            set -- --dry-run
+          fi
+          node_modules/.bin/wrangler versions upload \
+            --config build/server/wrangler.json "$@" | tee /tmp/upload.log
+          gzip_kib=$(grep -Eo 'gzip: [0-9.]+ KiB' /tmp/upload.log | grep -Eo '[0-9.]+' | head -1)
+          echo "worker gzip size: ${gzip_kib} KiB"
+          if [ -n "$gzip_kib" ] && [ "$(printf '%.0f' "$gzip_kib")" -gt 8192 ]; then
+            echo "::error::worker bundle ${gzip_kib} KiB gzip exceeds the 8 MiB guard (plan limit is 10 MiB)"
+            exit 1
+          fi
+          if [ "$SAME_REPO" = 'true' ]; then
+            echo "Preview: https://pr${PR}-lobehub-share.lobeobjects-tg.workers.dev" >> "$GITHUB_STEP_SUMMARY"
+          fi
+        working-directory: apps/share
+
+      - name: Comment the preview URL
+        if: steps.detect.outputs.should_build == 'true' && env.SAME_REPO == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Matched on a marker rather than `gh pr comment --edit-last`, which edits the
+          # last comment by this actor — and other workflows in this repo comment as the
+          # same bot, so it would rewrite one of theirs.
+          marker='<!-- share-preview -->'
+          if [ -n "${OVERLAY_REF:-}" ]; then
+            build_note="Built with the business overlay @ ${OVERLAY_REF} — the same surfaces the deployed worker renders."
+          else
+            build_note="Built with the open-source business stubs — overlay surfaces render their fallback here."
+          fi
+          body="${marker}
+          ### Share preview
+
+          <https://pr${PR}-lobehub-share.lobeobjects-tg.workers.dev>
+
+          A version, not a deployment: it takes no production traffic. ${build_note}"
+          id=$(gh api "repos/${REPO}/issues/${PR}/comments" --paginate \
+            --jq "map(select(.body | startswith(\"${marker}\"))) | .[0].id // empty")
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/${REPO}/issues/comments/${id}" -f body="$body" > /dev/null
+          else
+            gh api -X POST "repos/${REPO}/issues/${PR}/comments" -f body="$body" > /dev/null
+          fi

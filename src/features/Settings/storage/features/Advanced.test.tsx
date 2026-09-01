@@ -19,61 +19,6 @@ vi.hoisted(() => {
   });
 });
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  Button: ({ children, onClick }: { children: ReactNode; onClick?: () => void }) => (
-    <button onClick={onClick}>{children}</button>
-  ),
-  Form: ({
-    items,
-  }: {
-    items: {
-      children: { children?: ReactNode; desc?: string; label: string }[];
-      title: string;
-    }[];
-  }) => (
-    <div>
-      {items.map((group) => (
-        <section key={group.title}>
-          <h2>{group.title}</h2>
-          {group.children.map((item) => (
-            <div key={item.label}>
-              <span>{item.label}</span>
-              {item.desc && <span>{item.desc}</span>}
-              {item.children}
-            </div>
-          ))}
-        </section>
-      ))}
-    </div>
-  ),
-  Icon: () => null,
-  ShikiLobeTheme: {},
-}));
-
-vi.mock('antd', () => ({
-  App: {
-    useApp: () => ({
-      message: { success: vi.fn() },
-      modal: { confirm: vi.fn() },
-    }),
-  },
-  Switch: ({ checked, onChange }: { checked?: boolean; onChange?: (checked: boolean) => void }) => (
-    <button
-      aria-checked={checked}
-      role="switch"
-      onClick={() => {
-        onChange?.(!checked);
-      }}
-    />
-  ),
-}));
-
 vi.mock('@/business/client/features/AccountDeletion', () => ({
   default: () => <div />,
 }));

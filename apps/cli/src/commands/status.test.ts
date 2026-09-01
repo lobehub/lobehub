@@ -20,16 +20,6 @@ vi.mock('../settings', () => ({
   saveSettings: vi.fn(),
 }));
 
-vi.mock('../utils/logger', () => ({
-  log: {
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  },
-  setVerbose: vi.fn(),
-}));
-
 // Track event handlers registered on GatewayClient instances
 let clientEventHandlers: Record<string, (...args: any[]) => any> = {};
 let connectCalled = false;

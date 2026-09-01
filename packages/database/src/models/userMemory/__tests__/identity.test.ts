@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { RelationshipEnum } from '@lobechat/types';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import type { NewUserMemoryIdentity } from '../../../schemas';
@@ -449,6 +449,36 @@ describe('UserMemoryIdentityModel', () => {
       const result = await identityModel.queryList({ pageSize: 200 });
 
       expect(result.pageSize).toBe(100);
+    });
+
+    it('hydrates external candidates through the default self relationship filter', async () => {
+      const ftsSearchCandidates = vi.fn().mockResolvedValue({
+        candidates: [
+          { id: 'other-list-id', score: 12 },
+          { id: 'deleted-list-id', score: 10 },
+          { id: 'list-id-3', score: 8 },
+          { id: 'list-id-2', score: 6 },
+        ],
+        total: 4,
+      });
+      const model = new UserMemoryIdentityModel(serverDB, userId, {
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates,
+      });
+
+      const result = await model.queryList({ q: 'candidate' });
+
+      expect(result.items.map(({ id }) => id)).toEqual(['list-id-2']);
+      expect(result.total).toBe(1);
+      expect(ftsSearchCandidates).toHaveBeenCalledWith({
+        entity: 'memoryIdentities',
+        filters: { memoryRelationships: [RelationshipEnum.Self] },
+        pagination: {},
+        query: {
+          fields: ['parent_title', 'description', 'role'],
+          text: 'candidate',
+        },
+      });
     });
 
     // BM25 search requires pg_search extension (ParadeDB), not available in PGlite

@@ -1,10 +1,15 @@
-import { createStaticStyles, keyframes } from 'antd-style';
+import { textGroupStyles, textStyles } from '@lobehub/ui/base-ui';
+import { createStaticStyles } from 'antd-style';
 
 /**
  * Inspector text style — ellipsis + secondary color + flex align
  */
 export const inspectorTextStyles = createStaticStyles(({ css, cssVar }) => ({
   root: css`
+    /* Coordinate space for the shiny sweep: every shimmering span in the row
+     * resolves its overlay against this box, so they read as one wave. */
+    ${textGroupStyles.shinyGroup}
+
     overflow: hidden;
     display: flex;
     align-items: center;
@@ -42,32 +47,13 @@ export const highlightTextStyles = createStaticStyles(({ css, cssVar }) => {
   };
 });
 
-const shine = keyframes`
-  0% {
-    background-position: 100%;
-  }
-
-  100% {
-    background-position: -100%;
-  }
-`;
-
 /**
  * Shiny loading text animation
  */
-export const shinyTextStyles = createStaticStyles(({ css, cssVar }) => ({
-  shinyText: css`
-    color: color-mix(in srgb, ${cssVar.colorText} 45%, transparent);
+export const shinyTextStyles = {
+  shinyText: textStyles.shiny,
+};
 
-    background: linear-gradient(
-      120deg,
-      color-mix(in srgb, ${cssVar.colorTextBase} 0%, transparent) 40%,
-      ${cssVar.colorTextSecondary} 50%,
-      color-mix(in srgb, ${cssVar.colorTextBase} 0%, transparent) 60%
-    );
-    background-clip: text;
-    background-size: 200% 100%;
-
-    animation: ${shine} 1.5s linear infinite;
-  `,
-}));
+export const shinyGroupStyles = {
+  shinyGroup: textGroupStyles.shinyGroup,
+};

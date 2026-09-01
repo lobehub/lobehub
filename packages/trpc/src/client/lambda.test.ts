@@ -13,7 +13,7 @@ const okTrpcResponse = (data: unknown) =>
     status: 200,
   });
 
-describe('lambdaClient transfer-job status transport', () => {
+describe('lambdaClient large-input query transport', () => {
   const fetchMock = vi.fn();
 
   beforeEach(() => {
@@ -38,6 +38,8 @@ describe('lambdaClient transfer-job status transport', () => {
           agentId: 'agt_test',
           topicIds: Array.from({ length: 1000 }, (_, i) => `tpc_${String(i).padStart(16, '0')}`),
         }),
+      'topicIds',
+      1000,
     ],
     [
       'group.getTransferJobStatus',
@@ -46,19 +48,24 @@ describe('lambdaClient transfer-job status transport', () => {
           groupId: 'grp_test',
           topicIds: Array.from({ length: 1000 }, (_, i) => `tpc_${String(i).padStart(16, '0')}`),
         }),
+      'topicIds',
+      1000,
     ],
-  ] as const)('sends %s with 1000 topicIds as a POST request', async (path, call) => {
-    fetchMock.mockResolvedValueOnce(okTrpcResponse(null));
+  ] as const)(
+    'sends %s with a large path/id array as a POST request',
+    async (path, call, arrayField, expectedLength) => {
+      fetchMock.mockResolvedValueOnce(okTrpcResponse(null));
 
-    await expect(call()).resolves.toBeNull();
+      await expect(call()).resolves.toBeNull();
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [input, init] = fetchMock.mock.calls[0] as [RequestInfo | URL, RequestInit];
-    expect(init.method).toBe('POST');
-    // The input travels in the body, not the query string.
-    expect(String(input)).toContain(`/trpc/lambda/${path}`);
-    expect(String(input).length).toBeLessThan(2083);
-    const body = JSON.parse(String(init.body)) as { json: { topicIds: string[] } };
-    expect(body.json.topicIds).toHaveLength(1000);
-  });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [input, init] = fetchMock.mock.calls[0] as [RequestInfo | URL, RequestInit];
+      expect(init.method).toBe('POST');
+      // The input travels in the body, not the query string.
+      expect(String(input)).toContain(`/trpc/lambda/${path}`);
+      expect(String(input).length).toBeLessThan(2083);
+      const body = JSON.parse(String(init.body)) as { json: Record<string, unknown[]> };
+      expect(body.json[arrayField]).toHaveLength(expectedLength);
+    },
+  );
 });

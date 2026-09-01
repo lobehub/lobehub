@@ -140,6 +140,7 @@
   "updater.downloadNewVersion": "دانلود نسخه جدید",
   "updater.downloadingUpdate": "در حال دانلود به‌روزرسانی",
   "updater.downloadingUpdateDesc": "به‌روزرسانی در حال دانلود است، لطفاً صبر کنید...",
+  "updater.ignore": "نادیده گرفتن",
   "updater.installLater": "نصب در راه‌اندازی بعدی",
   "updater.isLatestVersion": "شما از آخرین نسخه استفاده می‌کنید",
   "updater.isLatestVersionDesc": "عالی! نسخه {{version}} که استفاده می‌کنید، جدیدترین نسخه موجود است.",

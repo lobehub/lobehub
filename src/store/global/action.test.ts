@@ -9,8 +9,6 @@ import { useGlobalStore } from '@/store/global/index';
 import { createInitialSystemStatus, initialState } from '@/store/global/initialState';
 import { withSWR } from '~test-utils';
 
-vi.mock('zustand/traditional');
-
 vi.mock('@/utils/client/switchLang', () => ({
   switchLang: vi.fn(),
 }));
@@ -97,6 +95,38 @@ describe('createPreferenceSlice', () => {
     });
   });
 
+  describe('toggleWorkingOverview', () => {
+    it('toggles the overview independently from the workspace panel', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        useGlobalStore.setState({ isStatusInit: true });
+        result.current.toggleWorkingOverview(false);
+      });
+
+      expect(result.current.status.showWorkingOverview).toBe(false);
+      expect(result.current.status.showRightPanel).toBe(false);
+    });
+
+    it('derives a missing legacy overview flag from the workspace panel state', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        useGlobalStore.setState({
+          isStatusInit: true,
+          status: {
+            ...initialState.status,
+            showRightPanel: true,
+            showWorkingOverview: undefined,
+          },
+        });
+        result.current.toggleWorkingOverview();
+      });
+
+      expect(result.current.status.showWorkingOverview).toBe(true);
+    });
+  });
+
   describe('setWorkingSidebarTab', () => {
     it('emits a new request when the already-selected tab is requested again', () => {
       const { result } = renderHook(() => useGlobalStore());
@@ -120,6 +150,29 @@ describe('createPreferenceSlice', () => {
         nonce: (firstNonce ?? 0) + 1,
         tab: 'review',
       });
+    });
+  });
+
+  describe('openWorkingSidebar', () => {
+    it('opens a requested workspace tab and closes the independent overview atomically', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        useGlobalStore.setState({
+          isStatusInit: true,
+          status: {
+            ...initialState.status,
+            showRightPanel: false,
+            showWorkingOverview: true,
+          },
+        });
+        result.current.openWorkingSidebar('review');
+      });
+
+      expect(result.current.status.showRightPanel).toBe(true);
+      expect(result.current.status.showWorkingOverview).toBe(false);
+      expect(result.current.status.workingSidebarTab).toBe('review');
+      expect(result.current.status.workingSidebarTabRequest?.tab).toBe('review');
     });
   });
 

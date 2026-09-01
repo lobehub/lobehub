@@ -22,7 +22,8 @@ const modalConfirm = vi.hoisted(() => vi.fn());
 const openDocumentMock = vi.hoisted(() => vi.fn());
 const removeDocumentMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@lobehub/ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
   ActionIcon: ({
     icon,
     onClick,
@@ -36,16 +37,6 @@ vi.mock('@lobehub/ui', () => ({
       {title}
     </button>
   ),
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Icon: () => <span />,
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-}));
-
-vi.mock('@lobehub/ui/icons', () => ({
-  SkillsIcon: () => null,
-}));
-
-vi.mock('@lobehub/ui/base-ui', () => ({
   confirmModal: modalConfirm,
   DropdownMenu: ({
     children,
@@ -65,7 +56,8 @@ vi.mock('@lobehub/ui/base-ui', () => ({
   ),
 }));
 
-vi.mock('antd', () => ({
+vi.mock('antd', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   App: {
     useApp: () => ({
       message: { error: messageError, success: messageSuccess, warning: messageWarning },
@@ -82,12 +74,6 @@ vi.mock('@/services/agentDocument', () => ({
 
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => navigateMock,
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
 }));
 
 vi.mock('@/features/ExplorerTree', () => {
@@ -164,7 +150,16 @@ vi.mock('@/features/ExplorerTree', () => {
 
   return {
     DISABLE_ROW_TEXT_SELECTION_CSS: '',
+    DOCUMENT_TREE_ROW_CSS: '',
     DOCUMENT_TREE_ICON_CSS: '',
+    DOCUMENT_TREE_LAYOUT: {
+      fontSize: 14,
+      iconGap: 8,
+      iconSize: 16,
+      iconWidth: 16,
+      itemHeight: 36,
+      levelGap: 8,
+    },
     ExplorerTree,
     FOLDER_ICON_CSS: '',
     HIDE_POINTER_FOCUS_RING_CSS: '',

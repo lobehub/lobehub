@@ -10,6 +10,7 @@
   "dependencies": {
     "@hono/standard-validator": "^0.3.0",
     "@hono/zod-validator": "^0.7.6",
+    "@lobechat/heterogeneous-agents": "workspace:*",
     "@lobechat/model-runtime": "workspace:*",
     "@lobechat/types": "workspace:*",
     "@scalar/hono-api-reference": "^0.11.12",

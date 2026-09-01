@@ -1,5 +1,5 @@
 {
-  "duration.TPS": "TPS (Token mỗi giây): Số token tạo ra mỗi giây",
+  "duration.TPS": "tok/s (Token mỗi giây): Số token tạo ra mỗi giây",
   "duration.TTFT": "TTFT (Thời gian đến token đầu tiên): Độ trễ token đầu tiên",
   "duration.completion": "Thời gian hoàn tất đầu ra",
   "duration.latency": "Thời lượng",

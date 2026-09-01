@@ -1,6 +1,10 @@
-import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, TabsIndicator, TabsList, TabsRoot, TabsTab } from '@lobehub/ui/base-ui';
+import { Pagination } from 'antd';
 import { Plus } from 'lucide-react';
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import NavHeader from '@/features/NavHeader';
@@ -51,17 +55,22 @@ interface TaskPageHeaderVisibilityParams {
   agentId?: string;
   isEmptyHero: boolean;
   isMobile: boolean;
+  projectId?: string;
 }
 
 export const getTaskPageHeaderVisibility = ({
   agentId,
   isEmptyHero,
   isMobile,
+  projectId,
 }: TaskPageHeaderVisibilityParams) => {
-  const isGlobalEmpty = !agentId && isEmptyHero;
+  // The global page's own crumb is the `tasks` tab, so the breadcrumb only
+  // earns its place once the list is scoped to an agent or a project.
+  const isScoped = !!(agentId || projectId);
+  const isGlobalEmpty = !isScoped && isEmptyHero;
 
   return {
-    showBreadcrumb: !isGlobalEmpty,
+    showBreadcrumb: isScoped,
     showTaskAgentPanelToggle: !isGlobalEmpty && shouldRenderTaskAgentPanelToggle(isMobile),
     showViewOptions: !isGlobalEmpty,
   };
@@ -77,15 +86,45 @@ interface AgentTasksPageProps {
   projectId?: string;
 }
 
+type TaskCollection = 'scheduled' | 'tasks';
+const SCHEDULED_TASK_PAGE_SIZE = 50;
+
+export const resolveTaskCollection = (searchParams: URLSearchParams): TaskCollection =>
+  searchParams.get('collection') === 'scheduled' ? 'scheduled' : 'tasks';
+
+export const clampScheduledPage = (page: number, total: number): number =>
+  Math.min(page, Math.max(1, Math.ceil(total / SCHEDULED_TASK_PAGE_SIZE)));
+
+export const getScheduledTaskViewOptions = (
+  viewOptions: TaskListViewOptions,
+): TaskListViewOptions => ({
+  ...viewOptions,
+  groupBy: 'automationMode',
+  hideCompleted: false,
+  orderBy: 'updatedAt',
+  orderDirection: 'desc',
+});
+
 const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
+  const { t } = useTranslation('chat');
   const navigate = useWorkspaceAwareNavigate();
   const isMobile = useIsMobile();
   const { allowed: canCreateTask, reason } = usePermission('create_content');
   const viewMode = useGlobalStore(systemStatusSelectors.taskListViewMode);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [scheduledPage, setScheduledPage] = useState(1);
+  const collection = resolveTaskCollection(searchParams);
+  const isScheduledCollection = collection === 'scheduled';
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
   // Keep the SWR handle only for `error` + `mutate` (the error/Retry state).
+  // Every scope splits automated work out of the ordinary tab — it is the
+  // scheduled tab's content, and listing it twice makes the split meaningless.
   const { error, isLoading, mutate } = useFetchTaskList(
-    projectId ? { projectId, visibility: 'all' } : agentId ? { agentId } : { allAgents: true },
+    projectId
+      ? { automated: false, projectId, visibility: 'all' }
+      : agentId
+        ? { agentId, automated: false }
+        : { allAgents: true, automated: false },
   );
   // Drive the loading/empty boundary off the store's own init flag, NOT SWR's
   // per-key `data`. On a scope (agent ↔ all) or visibility switch the store
@@ -98,8 +137,27 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   // failed first load, so we surface loading only while there's no error (below).
   const isTaskListInit = useTaskStore(taskListSelectors.isTaskListInit);
   const isEmptyHero = useTaskStore(taskListSelectors.isListEmpty);
+  const useFetchScheduledTaskList = useTaskStore((s) => s.useFetchScheduledTaskList);
+  const scheduledSWR = useFetchScheduledTaskList({
+    agentId,
+    enabled: isScheduledCollection,
+    limit: SCHEDULED_TASK_PAGE_SIZE,
+    offset: (scheduledPage - 1) * SCHEDULED_TASK_PAGE_SIZE,
+    projectId,
+  });
+  const scheduledTasks = scheduledSWR.data?.data ?? [];
+  const scheduledTasksTotal = scheduledSWR.data?.total ?? 0;
+  const isScheduledTaskListInit = scheduledSWR.data !== undefined;
   const rawViewOptions = useGlobalStore(systemStatusSelectors.taskListViewOptions);
   const viewOptions = useMemo(() => normalizeTaskListViewOptions(rawViewOptions), [rawViewOptions]);
+  const scheduledViewOptions = useMemo(
+    () => getScheduledTaskViewOptions(viewOptions),
+    [viewOptions],
+  );
+  useEffect(() => {
+    if (!isScheduledTaskListInit) return;
+    setScheduledPage((page) => clampScheduledPage(page, scheduledTasksTotal));
+  }, [isScheduledTaskListInit, scheduledTasksTotal]);
   const inlineCollapsed = useGlobalStore(systemStatusSelectors.taskCreateInlineCollapsed);
   const [showTaskAgentPanel, toggleTaskAgentPanel] = useGlobalStore((s) => [
     systemStatusSelectors.showTaskAgentPanel(s),
@@ -109,7 +167,12 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   const routeScope = agentId ? 'agent' : 'global';
   const setViewOptions = useCallback(
     (updater: (prev: TaskListViewOptions) => TaskListViewOptions) => {
-      const next = normalizeTaskListViewOptions(updater(viewOptions));
+      const normalized = normalizeTaskListViewOptions(updater(viewOptions));
+      const next = {
+        ...normalized,
+        groupBy: normalized.groupBy === 'automationMode' ? 'status' : normalized.groupBy,
+        subGroupBy: normalized.subGroupBy === 'automationMode' ? 'none' : normalized.subGroupBy,
+      };
       updateSystemStatus({ taskListViewOptions: next }, 'updateTaskListViewOptions');
     },
     [updateSystemStatus, viewOptions],
@@ -146,16 +209,48 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
     setViewOptions((prev) => ({ ...prev, hideCompleted: false }));
   }, [setViewOptions]);
 
-  const headerVisibility = getTaskPageHeaderVisibility({ agentId, isEmptyHero, isMobile });
+  const handleCollectionChange = useCallback(
+    (value: string) => {
+      const next = new URLSearchParams(searchParams);
+      if (value === 'scheduled') {
+        next.set('collection', 'scheduled');
+      } else {
+        next.delete('collection');
+      }
+      setScheduledPage(1);
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+
+  const headerVisibility = getTaskPageHeaderVisibility({
+    agentId,
+    isEmptyHero: isScheduledCollection ? false : isEmptyHero,
+    isMobile,
+    projectId,
+  });
+
+  const headerLeft = (
+    <Flexbox horizontal align={'center'} gap={8}>
+      {headerVisibility.showBreadcrumb && <Breadcrumb />}
+      <TabsRoot size={'small'} value={collection} onValueChange={handleCollectionChange}>
+        <TabsList>
+          <TabsIndicator />
+          <TabsTab value={'tasks'}>{t('taskList.title')}</TabsTab>
+          <TabsTab value={'scheduled'}>{t('taskList.scheduled.title')}</TabsTab>
+        </TabsList>
+      </TabsRoot>
+    </Flexbox>
+  );
 
   return (
     <Flexbox flex={1} height={'100%'}>
       <NavHeader
-        left={headerVisibility.showBreadcrumb ? <Breadcrumb /> : undefined}
+        left={headerLeft}
         right={
           <Flexbox horizontal align={'center'} gap={4}>
-            {!agentId && !projectId && <TaskListVisibilityFilter />}
-            {(inlineCollapsed || viewMode === 'kanban') && (
+            {!isScheduledCollection && !agentId && !projectId && <TaskListVisibilityFilter />}
+            {!isScheduledCollection && (inlineCollapsed || viewMode === 'kanban') && (
               <ActionIcon
                 disabled={createActionBehavior.disabled}
                 icon={Plus}
@@ -164,7 +259,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
                 onClick={handleCreateTask}
               />
             )}
-            {headerVisibility.showViewOptions && (
+            {!isScheduledCollection && headerVisibility.showViewOptions && (
               <TasksGroupConfig options={viewOptions} setOptions={setViewOptions} />
             )}
             {headerVisibility.showTaskAgentPanelToggle && (
@@ -183,11 +278,46 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
           },
         }}
       />
-      {isEmptyHero ? (
+      {isScheduledCollection ? (
+        <WideScreenContainer
+          fullWidth
+          gap={16}
+          paddingBlock={16}
+          paddingInline={16}
+          wrapperStyle={{ flex: 1, overflowY: 'auto' }}
+        >
+          <TaskList
+            data={isScheduledTaskListInit || undefined}
+            emptyDescription={t('taskList.scheduled.empty')}
+            error={scheduledSWR.error}
+            isLoading={scheduledSWR.isLoading || (!isScheduledTaskListInit && !scheduledSWR.error)}
+            items={scheduledTasks}
+            options={scheduledViewOptions}
+            routeScope={routeScope}
+            onRetry={() => scheduledSWR.mutate()}
+          />
+          {(scheduledTasksTotal > SCHEDULED_TASK_PAGE_SIZE || scheduledPage > 1) && (
+            <Flexbox horizontal justify={'center'} paddingBlock={8}>
+              <Pagination
+                current={scheduledPage}
+                pageSize={SCHEDULED_TASK_PAGE_SIZE}
+                showSizeChanger={false}
+                total={scheduledTasksTotal}
+                onChange={setScheduledPage}
+              />
+            </Flexbox>
+          )}
+        </WideScreenContainer>
+      ) : isEmptyHero ? (
         <EmptyState agentId={agentId} projectId={projectId} />
       ) : viewMode === 'kanban' ? (
         <Flexbox flex={1} style={{ overflowX: 'auto', overflowY: 'hidden' }}>
-          <KanbanBoard agentId={agentId} projectId={projectId} routeScope={routeScope} />
+          <KanbanBoard
+            agentId={agentId}
+            options={viewOptions}
+            projectId={projectId}
+            routeScope={routeScope}
+          />
         </Flexbox>
       ) : (
         <WideScreenContainer

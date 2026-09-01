@@ -12,7 +12,7 @@ interface FileDownloadUrlOptions {
 /**
  * The file proxy normally returns an inline preview URL. Opting into its download
  * response lets the browser stream the file and expose native progress instead of
- * waiting for the whole file to become a client-side Blob (LOBE-12762).
+ * waiting for the whole file to become a client-side Blob.
  */
 export const getFileDownloadUrl = (url: string, options: FileDownloadUrlOptions = {}): string => {
   const baseUrl =

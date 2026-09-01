@@ -1,5 +1,6 @@
 import { type DivProps } from '@lobehub/ui';
-import { Avatar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { type ReactNode } from 'react';
 import { memo } from 'react';

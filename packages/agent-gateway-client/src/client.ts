@@ -341,7 +341,10 @@ export class AgentStreamClient extends TypedEmitter {
 
           if (terminal) {
             this.sessionEnded = true;
-            this.emit('session_complete');
+            this.emit('session_complete', {
+              source: 'resume_status',
+              status: message.status,
+            });
             this.disconnect();
           }
           // Non-terminal (running / waiting_input / waiting_confirmation): the
@@ -357,7 +360,7 @@ export class AgentStreamClient extends TypedEmitter {
           if (this.resumeMode) {
             this.flushResumeBuffer();
           }
-          this.emit('session_complete');
+          this.emit('session_complete', { source: 'raw_session_complete' });
           this.disconnect();
           break;
         }

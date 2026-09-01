@@ -2,11 +2,11 @@
 
 import { Suspense } from 'react';
 
-import SurfaceSkeleton from '@/components/Skeleton/Surface';
+import TopicsSkeleton from '@/components/Skeleton/Topics';
 import AgentTopicManager from '@/features/AgentTopicManager';
 
 const AgentTopicsPage = () => (
-  <Suspense fallback={<SurfaceSkeleton variant={'list'} />}>
+  <Suspense fallback={<TopicsSkeleton />}>
     <AgentTopicManager />
   </Suspense>
 );

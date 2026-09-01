@@ -1,6 +1,6 @@
 {
   "name": "@lobehub/cli",
-  "version": "0.0.48",
+  "version": "0.0.51",
   "type": "module",
   "bin": {
     "lh": "./dist/index.js",
@@ -32,10 +32,12 @@
   },
   "devDependencies": {
     "@lobechat/agent-gateway-client": "workspace:*",
+    "@lobechat/agent-tracing": "workspace:*",
     "@lobechat/const": "workspace:*",
     "@lobechat/device-control": "workspace:*",
     "@lobechat/device-gateway-client": "workspace:*",
     "@lobechat/device-identity": "workspace:*",
+    "@lobechat/eval-rubric": "workspace:*",
     "@lobechat/heterogeneous-agents": "workspace:*",
     "@lobechat/local-file-shell": "workspace:*",
     "@lobechat/tool-runtime": "workspace:*",
@@ -57,6 +59,9 @@
     "tree-kill": "^1.2.2",
     "tsdown": "^0.21.10",
     "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=22.15"
   },
   "publishConfig": {
     "access": "public",

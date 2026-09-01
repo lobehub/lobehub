@@ -142,11 +142,16 @@ describe('executeDeviceRpc', () => {
     expect(result.path).toBe(root);
   });
 
-  it('routes listDir and lists the requested directory', async () => {
+  it('routes listDir through the device filesystem', async () => {
     const result = (await executeDeviceRpc('listDir', { path: root }, makeDeps())) as {
+      entries: { name: string }[];
       path: string;
+      success: boolean;
     };
+
+    expect(result.success).toBe(true);
     expect(result.path).toBe(root);
+    expect(result.entries.map((entry) => entry.name)).toContain('AGENTS.md');
   });
 
   it('routes heterogeneous agent model discovery to the execution host', async () => {

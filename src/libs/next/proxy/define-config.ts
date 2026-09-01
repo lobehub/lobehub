@@ -13,6 +13,7 @@ import { parseBrowserLanguage } from '@/utils/locale';
 import { DEFAULT_LANG, locales, RouteVariants } from '@/utils/server/routeVariants';
 
 import { authSpaRoutes, nextjsOnlyRoutes } from '../nextjsOnlyRoutes';
+import { isShareSpaRoute } from '../shareRoutes';
 import { isAlwaysWorkbenchSpaRoute, isWorkbenchSpaRoute } from '../workbenchRoutes';
 import { createRouteMatcher } from './createRouteMatcher';
 
@@ -90,18 +91,11 @@ export function defineConfig() {
       locale,
     });
 
-    // These pages are responsive on their own; always serve the desktop bundle
-    // so mobile UA does not land on mobile-specific routes.
-    const desktopOnlyPaths = ['/share'];
-    const isDesktopOnlyPath = desktopOnlyPaths.some(
-      (path) => url.pathname === path || url.pathname.startsWith(`${path}/`),
-    );
-
     const safeLocale = toSafeLocale(locale);
 
     // 2. Create normalized preference values
     const route = RouteVariants.serializeVariants({
-      isMobile: !isDesktopOnlyPath && device.type === 'mobile',
+      isMobile: device.type === 'mobile',
       locale: safeLocale,
     });
 
@@ -139,6 +133,19 @@ export function defineConfig() {
       const authSpaPath = `/spa-auth/${safeLocale}${url.pathname}`;
       logDefault('Auth SPA route, rewriting to: %s', authSpaPath);
       url.pathname = authSpaPath;
+
+      const response = NextResponse.rewrite(url);
+      persistLocaleCookie(response, request, explicitlyLocale);
+
+      return response;
+    }
+
+    // Share pages are responsive on their own, so they get one bundle for every
+    // device rather than a mobile variant.
+    if (isShareSpaRoute(url.pathname)) {
+      const sharePath = `/spa-share/${safeLocale}${url.pathname}`;
+      logDefault('Share SPA route, rewriting to: %s', sharePath);
+      url.pathname = sharePath;
 
       const response = NextResponse.rewrite(url);
       persistLocaleCookie(response, request, explicitlyLocale);

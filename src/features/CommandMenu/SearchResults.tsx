@@ -5,7 +5,7 @@ import {
   GROUP_CHAT_URL,
 } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { Avatar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { Command } from 'cmdk';
 import dayjs from 'dayjs';
 import {
@@ -22,10 +22,11 @@ import {
   Sparkles,
   Users,
 } from 'lucide-react';
-import { memo, type ReactNode } from 'react';
+import { memo, type ReactNode, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type SearchResult } from '@/database/repositories/search';
+import Avatar from '@/components/Avatar';
+import type { FtsSearchResult } from '@/database/repositories/ftsSearch';
 import { useCommandMenuContext } from '@/features/CommandMenu/CommandMenuContext';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useImageStore } from '@/store/image';
@@ -34,16 +35,21 @@ import { useVideoStore } from '@/store/video';
 import { generationTopicSelectors as videoGenerationTopicSelectors } from '@/store/video/slices/generationTopic/selectors';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
+import type { CommandMenuResultClick } from './analytics';
 import { CommandItem } from './components';
 import { styles } from './styles';
 import { shouldShowMarketplaceFallback } from './utils/marketplaceFallback';
 import { type ValidSearchType } from './utils/queryParser';
+import { createVisibleResultPositionMap } from './utils/visibleResultPosition';
 
 interface SearchResultsProps {
   isLoading: boolean;
   onClose: () => void;
+  onResultClick: (input: CommandMenuResultClick) => void;
   onSetTypeFilter: (typeFilter: ValidSearchType | undefined) => void;
-  results: SearchResult[];
+  onTypeFilterChange: () => void;
+  onVisibleResultCountChange: (count: number) => void;
+  results: FtsSearchResult[];
   searchQuery: string;
   typeFilter: ValidSearchType | undefined;
 }
@@ -59,7 +65,17 @@ interface LocalGenerationTopicResult {
  * Search results from unified search index.
  */
 const SearchResults = memo<SearchResultsProps>(
-  ({ isLoading, onClose, onSetTypeFilter, results, searchQuery, typeFilter }) => {
+  ({
+    isLoading,
+    onClose,
+    onResultClick,
+    onSetTypeFilter,
+    onTypeFilterChange,
+    onVisibleResultCountChange,
+    results,
+    searchQuery,
+    typeFilter,
+  }) => {
     const { t } = useTranslation('common');
     const { t: tImage } = useTranslation('image');
     const { t: tVideo } = useTranslation('video');
@@ -70,7 +86,8 @@ const SearchResults = memo<SearchResultsProps>(
     const videoTopics = useVideoStore(videoGenerationTopicSelectors.generationTopics);
     const activeVideoTopicId = useVideoStore((s) => s.activeGenerationTopicId);
 
-    const handleNavigate = (result: SearchResult) => {
+    const handleNavigate = (result: FtsSearchResult, position: number) => {
+      onResultClick({ position, resultType: result.type });
       switch (result.type) {
         case 'agent': {
           navigate(`/agent/${result.id}?agent=${result.id}`);
@@ -157,7 +174,7 @@ const SearchResults = memo<SearchResultsProps>(
       onClose();
     };
 
-    const getIcon = (type: SearchResult['type']) => {
+    const getIcon = (type: FtsSearchResult['type']) => {
       switch (type) {
         case 'agent': {
           return <Sparkles size={16} />;
@@ -198,7 +215,7 @@ const SearchResults = memo<SearchResultsProps>(
       }
     };
 
-    const getTypeLabel = (type: SearchResult['type']) => {
+    const getTypeLabel = (type: FtsSearchResult['type']) => {
       switch (type) {
         case 'agent': {
           return t('cmdk.search.agent');
@@ -239,14 +256,14 @@ const SearchResults = memo<SearchResultsProps>(
       }
     };
 
-    const getItemValue = (result: SearchResult) => {
+    const getItemValue = (result: FtsSearchResult) => {
       const meta = [result.title, result.description].filter(Boolean).join(' ');
       // Prefix with "search-result" to ensure these items rank after built-in commands
       // Include ID to ensure uniqueness when multiple items have the same title
       return `search-result ${result.type} ${result.id} ${meta}`.trim();
     };
 
-    const getDescription = (result: SearchResult) => {
+    const getDescription = (result: FtsSearchResult) => {
       if (!result.description) return null;
       // Sanitize markdown content for message search results
       if (result.type === 'message') {
@@ -255,7 +272,7 @@ const SearchResults = memo<SearchResultsProps>(
       return result.description;
     };
 
-    const getSubtitle = (result: SearchResult): ReactNode => {
+    const getSubtitle = (result: FtsSearchResult): ReactNode => {
       const description = getDescription(result);
 
       // Topic results: prefix with agent identity (avatar + title) so users can
@@ -270,6 +287,7 @@ const SearchResults = memo<SearchResultsProps>(
             <Avatar
               avatar={result.agent.avatar || DEFAULT_AVATAR}
               background={result.agent.backgroundColor || undefined}
+              name={agentDisplayName(result.agent, t('defaultAgent'))}
               size={14}
             />
             <span style={{ flex: 'none' }}>
@@ -302,6 +320,7 @@ const SearchResults = memo<SearchResultsProps>(
     };
 
     const handleSearchMore = (type: ValidSearchType) => {
+      onTypeFilterChange();
       onSetTypeFilter(type);
     };
 
@@ -364,6 +383,29 @@ const SearchResults = memo<SearchResultsProps>(
     const pluginResults = results.filter((r) => r.type === 'plugin');
     const knowledgeBaseResults = results.filter((r) => r.type === 'knowledgeBase');
     const assistantResults = results.filter((r) => r.type === 'communityAgent');
+    const localResultCount = localImageTopicResults.length + localVideoTopicResults.length;
+    const visibleResultPositions = createVisibleResultPositionMap<FtsSearchResult>(
+      [
+        messageResults,
+        agentResults,
+        chatGroupResults,
+        topicResults,
+        pageResults,
+        memoryResults,
+        fileResults,
+        folderResults,
+        knowledgeBaseResults,
+        mcpResults,
+        pluginResults,
+        assistantResults,
+      ],
+      localResultCount,
+    );
+    const visibleResultCount = localResultCount + visibleResultPositions.size;
+
+    useLayoutEffect(() => {
+      onVisibleResultCountChange(visibleResultCount);
+    }, [onVisibleResultCountChange, visibleResultCount]);
 
     // Don't render anything if no results and not loading — except in the
     // unfiltered view, which always carries the permanent marketplace entries
@@ -374,7 +416,7 @@ const SearchResults = memo<SearchResultsProps>(
     }
 
     // Render a single result item with type prefix (like "Message > content")
-    const renderResultItem = (result: SearchResult) => {
+    const renderResultItem = (result: FtsSearchResult) => {
       const typeLabel = getTypeLabel(result.type);
       const subtitle = getSubtitle(result);
 
@@ -409,7 +451,7 @@ const SearchResults = memo<SearchResultsProps>(
           title={titleWithPrefix}
           value={getItemValue(result)}
           variant="detailed"
-          onSelect={() => handleNavigate(result)}
+          onSelect={() => handleNavigate(result, visibleResultPositions.get(result) ?? 1)}
         />
       );
     };
@@ -452,7 +494,7 @@ const SearchResults = memo<SearchResultsProps>(
       <>
         {localImageTopicResults.length > 0 && (
           <Command.Group forceMount>
-            {localImageTopicResults.map((result) => {
+            {localImageTopicResults.map((result, index) => {
               const formattedDate = dayjs(result.updatedAt).format('MMM D, YYYY');
               return (
                 <CommandItem
@@ -478,6 +520,7 @@ const SearchResults = memo<SearchResultsProps>(
                     </>
                   }
                   onSelect={() => {
+                    onResultClick({ position: index + 1, resultType: 'imageTopic' });
                     navigate(`/image?topic=${result.id}`);
                     onClose();
                   }}
@@ -489,7 +532,7 @@ const SearchResults = memo<SearchResultsProps>(
 
         {localVideoTopicResults.length > 0 && (
           <Command.Group forceMount>
-            {localVideoTopicResults.map((result) => {
+            {localVideoTopicResults.map((result, index) => {
               const formattedDate = dayjs(result.updatedAt).format('MMM D, YYYY');
               return (
                 <CommandItem
@@ -515,6 +558,10 @@ const SearchResults = memo<SearchResultsProps>(
                     </>
                   }
                   onSelect={() => {
+                    onResultClick({
+                      position: localImageTopicResults.length + index + 1,
+                      resultType: 'videoTopic',
+                    });
                     navigate(`/video?topic=${result.id}`);
                     onClose();
                   }}

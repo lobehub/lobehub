@@ -6,7 +6,16 @@ confused with the generic `M` catalogue.
 
 Keep this file at the level of durable LobeHub product and environment invariants.
 Exact copy, pixel values, component slot order, and one-off review directions belong
-in feature specifications or historical field notes, not in this living checklist.
+in feature specifications or in
+[the field notes](./references/common-mistakes-field-notes.md), not in this living
+checklist — the field notes keep the detailed incident narratives available without
+making them mandatory reading for every Acceptance run.
+
+Every entry lives under one of the three categories below, and its id prefix names
+that category: `L-E*` evidence and publication, `L-D*` product and interaction
+contracts, `L-S*` environment safety. Append a new entry inside the category it
+belongs to, with the next free number of that prefix — never after the last entry of
+the file.
 
 ## Evidence and publication
 
@@ -148,6 +157,26 @@ the image lands unpaired and unlabeled. Publish a fresh round carrying the compl
 evidence set instead, and say in `report.md` that it re-publishes the same
 observations rather than re-running the cases.
 
+### L-E11b — Publishing a new round onto a check the reviewer already accepted
+
+**Wrong approach:** when new feedback arrives about a check the user has already
+accepted, reuse that check's id for the new work — because reusing ids is the rule for
+rejected checks.
+
+**Why it fails:** an accepted verdict is deliberately sticky (`acceptanceService`
+computes `stale` only for rejects, and a test pins that behaviour by name). A later
+result on a settled id therefore inherits the tick: the round publishes green and the
+reviewer is never told there is anything new to look at. Since 2026-08, `attachRun`
+refuses such a round outright — the error names the offending ids and nothing is
+written, so a partially attached round cannot happen.
+
+**Correct approach:** read `userReview.action` before writing the plan. `accept` means
+settled: the new work needs a NEW check id, which appears unreviewed and can actually
+be judged. Reuse the id only while the check is rejected or never reviewed. Decide by
+_is the criterion new, and has the old one been accepted_ — not by how big the change
+is: a presentation fix on a still-open check reuses its id (\[\[L-E1]]), while a newly
+raised criterion on an accepted check must not.
+
 ### L-E12 — Expressing multimodal disclosure through the `verifier` enum
 
 **Wrong approach:** write a value such as `"verifier": "multimodal LLM"` in a plan
@@ -258,14 +287,44 @@ gateway/device route, then assert the complete persisted tree: original owner
 user, target assistant/tool call, tool result, and target final response. Also
 assert there is no owner assistant, `callAgent`, or synthetic target-user row.
 
-### L-E18 — 从「没有默认导入」推断某个 composer 表面是死代码
+### L-E18 — Concluding a composer surface is dead code because nothing imports it
 
-**Wrong approach:** 改动技能行这类被 ActionBar 复用的组件后，grep `ActionBar/Tools` 的默认导入没有命中，就断定该表面未挂载，只验证 `+` 菜单一条路径。
+**Wrong approach:** after changing a component the ActionBar reuses (a skill row, for
+instance), grep for a default import of `ActionBar/Tools`, find no hit, conclude the
+surface is not mounted, and verify only the `+` menu path.
 
-**Why it fails:** ActionBar 的表面不是靠直接 import 挂载的，而是靠 action key 注册表 + 各路由自己的 `leftActions` 数组启用。`ActionBar/config` 里 `tools: Tools` 一直注册着，真正决定它是否渲染的是
-`src/routes/(main)/**/MainChatInput` 里的 `leftActions`—— 群聊 composer 就启用了 `'tools'`，走的是 `PopoverContent → ToolsList` 这条与 `+` 菜单不同的组合路径。漏掉它会让一次绿色的验证只覆盖一半用户可见面。
+**Why it fails:** ActionBar surfaces are not mounted by a direct import. They are
+enabled by an action-key registry plus each route's own `leftActions` array.
+`ActionBar/config` registers `tools: Tools` at all times; what actually decides
+whether it renders is `leftActions` in `src/routes/(main)/**/MainChatInput` — the
+group-chat composer enables `'tools'` and reaches the component through
+`PopoverContent → ToolsList`, a different composition path from the `+` menu. Missing
+it makes a green verification cover only half of what users can see.
 
-**Correct approach:** 改动任何被 ActionBar 复用的组件后，先枚举 action key 的真实启用点（grep 各路由的 `leftActions` 数组，而不是组件的 import），对每个启用该 key 的表面分别取证；确实不打算验的表面要显式标记未测。
+**Correct approach:** after changing any component the ActionBar reuses, enumerate
+where the action key is actually enabled (grep each route's `leftActions` array, not
+the component's imports) and capture evidence for every surface that enables it. Mark
+any surface you deliberately skip as untested.
+
+### L-E19 — Hard-wrapping the prose inside a markdown evidence document
+
+**Wrong approach:** author a `markdown` / `text` evidence artifact the way you write
+a source file, folding every paragraph at \~80 columns, and assume the page reflows
+it like any other markdown.
+
+**Why it fails:** the Acceptance evidence renderer parses evidence documents in chat
+mode, where `remark-breaks` turns every single newline inside a paragraph into a
+`<br>`. The author's fold is frozen into the page: paragraphs break mid-sentence at a
+column count unrelated to the reader's viewport, next to a report body that reflows
+normally, so the same round shows two different text behaviours. Reviewers read the
+ragged block as a rendering defect and spend the round on the wrapping instead of the
+finding.
+
+**Correct approach:** keep each paragraph of evidence prose on ONE physical line and
+separate blocks with a blank line. Spend a newline only where it carries meaning —
+list items, table rows, fenced code, and literal transcript output, which are exactly
+the places the break is the content. Never run a proseWrap formatter over files under
+`assets/`.
 
 ## Product and interaction contracts
 
@@ -377,6 +436,74 @@ the envelope so the target assistant reply remains independently visible.
 Never infer authorship from agent-id differences or a parent tool call: a real
 cross-Agent user follow-up can have the same tree shape.
 
+### L-D9 — A Project conversation must preserve Project identity across routing and history
+
+**Wrong approach:** implement Project chat by navigating users to the Project coordinator's
+ordinary `/agent/:agentId/:topicId` surface and present that Agent's topic list as the Project
+history.
+
+**Why it fails:** the coordinator is an implementation detail. Leaving the Project route changes
+the visible owner and navigation contract, so users reasonably read the conversation as belonging
+to an Agent rather than to the Project that provides its tasks, goals, resources, and history.
+
+**Correct approach:** keep creation, topic selection, and resumed conversations under the Project
+route and Project sidebar. The coordinator may still execute the conversation internally, but the
+visible URL, active list, empty state, and navigation must consistently identify the Project.
+
+### L-D10 — Long `confirmModal` bodies overlay the footer
+
+**Wrong approach:** put a long list into `confirmModal({ content })` and assume the
+library pins Cancel / OK below a scroll area.
+
+**Why it fails:** `confirmModal` renders `ConfirmBody` (content + footer) inside
+`ModalContent`, which is itself `overflow: auto`. A tall list makes the dialog
+scroll as one column, or the footer paints over the last rows. Callers cannot pass
+content styles to change that.
+
+**Correct approach:** for any confirm body that can exceed a few lines, use
+`createModal` with a height-capped `ScrollArea` as `content` and put the actions in
+the modal `footer` slot. Assert `footer.top === scroller.bottom` at both ends of the
+list, not just that the dialog opened.
+
+### L-D11 — Trusting a popover to flip itself away from the viewport edge
+
+**Wrong approach:** anchor a hover card to a full-width list row, screenshot it once from a
+row near the top of the list, and assume the popover library will flip or shift the card
+when a lower row leaves no room below.
+
+**Why it fails:** popovers here render into the app's portal container, and side flipping
+does not kick in from it — the popup keeps `data-side="bottom"` and simply extends past the
+viewport, even when the space above the trigger would have fitted it. Adding
+`collisionPadding` does not change that. The screenshot still looks like a working card,
+because the part that fell off the bottom is the part you cannot see; only the tail of the
+content (the last evidence row, a footer hint, an action) becomes unreachable.
+
+**Correct approach:** for any hover/click popup whose content height is data-dependent,
+assert its rect against the viewport (`getBoundingClientRect().bottom` vs
+`window.innerHeight`) with the trigger at the **bottom** of its list, not the top — a
+non-negative overflow is a defect regardless of how the screenshot reads. Bound the content
+by the space the positioner publishes (`--available-height`, less the popup's own chrome)
+rather than relying on collision flipping.
+
+### L-D12 — Assuming a menu dispatches an item just because it rendered
+
+**Wrong approach:** add an entry to a message/context menu — especially a nested one under a
+submenu — confirm from a screenshot that the label and icon appear where intended, and call
+the entry verified.
+
+**Why it fails:** menu rendering and menu dispatch are separate contracts here. The dropdown
+only invokes an item that carries its own `onClick`, and the group wrapper attaches one to
+top-level items only, so a nested child renders perfectly and does nothing when clicked — the
+menu just closes, with no error, no toast, and no console output. Any routing the consumer
+writes on the parent's side (by `keyPath` or otherwise) never runs, because the click was
+dropped before it. A screenshot of an open submenu therefore proves placement and nothing
+else.
+
+**Correct approach:** for every menu entry you add, click it and assert the effect it is
+supposed to have — a dialog opens, a request fires, a store field changes. Treat "the menu
+closed and nothing happened" as the expected failure signature, not as a missed click. When
+the entry is nested, verify the child's own dispatch wiring, not the parent's.
+
 ## Environment safety
 
 ### L-S0 — Concluding a dependency moved from the root manifest alone
@@ -472,6 +599,31 @@ the user's LobeHub instance may expose no debugging port at all.
 renderer marker before collecting evidence. If needed, start an isolated pool
 instance on a distinct port rather than guessing.
 
+**Same failure, second shape — the instance is LobeHub, but a different worktree.**
+A product-level marker passes for every worktree, so it cannot answer the question
+that matters: does this renderer serve _my_ working tree? Sibling worktrees each run
+their own `electron-dev.sh` legacy instance, and the first one started owns the
+default CDP 9222 and Vite 5173. Ask the renderer for the absolute source path of a
+module the change touches — the dev transform embeds it — and require both the
+worktree path and a marker unique to the change:
+
+```bash
+agent-browser --cdp 9222 eval "(async()=>{const t=await (await fetch('app://renderer/<repo-relative>.tsx')).text();return t.match(/_jsxFileName = \"[^\"]*\"/)[0]+' '+t.includes('<CHANGE_MARKER>')})()"
+```
+
+A wrong-worktree hit means the instance is someone else's session: do not restart or
+reuse it, start a pool instance (`electron-dev.sh start <id>`) or switch surface.
+
+**Same failure, third shape — the pool port is not owned by Electron at all.**
+`electron-dev.sh start <id>` treats a reachable `CDP_BASE + id` as "already running"
+and skips the launch with `CDP already reachable on <port>. Skipping start`, so the
+run then drives whatever owns it. Any other debugger on that port claims the slot —
+`workerd`/`wrangler` defaults to 9229, which is pool id 7. The give-away is that
+`electron-dev.sh list` does not list the instance as up while the port answers.
+Before picking a pool id, read `/json/version` on its port and require an Electron
+`Browser` string (a `wrangler/*` or `node` answer means pick another id), or check
+the port is free at all.
+
 ### L-S6 — Reading or writing the url from a portal'd sidebar on desktop
 
 **Wrong approach:** use `useSearchParams`, `useQueryState`, `useParams`,
@@ -535,6 +687,41 @@ with unrelated identifiers — a component name like `SkillRow` also matches a C
 
 ---
 
+**Same failure, fourth shape — the dep optimizer is wedged, and only Vite needs
+restarting.** The SPA sits on the HTML loading shell (`rootChildren: 0`, `innerText`
+empty) with a clean console and `vite connected` — no error anywhere. Crawling the
+module graph from the entry is what names it: every direct import returns 200 while
+`node_modules/.vite/deps/*` answers **504**, so `import()` of the entry fails with the
+generic `Failed to fetch dynamically imported module`, which reads like a broken route
+tree in the branch under test. Recovery is `rm -rf node_modules/.vite/deps` plus a real
+Vite process restart — and Vite is its OWN process here (`bash -c source /tmp/dev-env.sh
+&& bun run dev:spa`), independent of the `next dev` tree, so a shared worktree's Next
+server does not have to be touched. Reuse the same env file the running pair was
+started from rather than re-deriving it.
+
+### L-S17 — Diagnosing the feature when the dev DB lost its seeded user row
+
+**Wrong approach:** see the product's own list endpoint return `{ items: [] }` and its
+write endpoints fail, and start debugging the query, the scope filter, or the change
+under test.
+
+**Why it fails:** the dev server resolves `ctx.userId` for the seeded account without
+needing a `sessions` row, so a database that lost its `users` row still reads as
+authenticated: `setup-auth.sh status --surface web` reports green, every read returns
+an empty result, and every write dies inside Postgres on the `user_id` foreign key.
+The tRPC error surfaces as a giant `Failed query: insert into "acceptances" …` whose
+FK cause is only visible in the params tail, so it reads as a schema or payload
+problem rather than a missing row. The managed acceptance Postgres is shared and
+long-lived, so a `clean-db` from any worktree leaves every later run in this state.
+
+**Correct approach:** when reads are empty AND writes fail, check the row before the
+code — `select id from users` in the DB the server actually uses. Resolve that DB from
+the env file the running server was launched with, never from `test-env.sh` defaults;
+a dev server started by another session can point somewhere else entirely. Re-seed with
+`init-dev-env.sh seed-user`, then prove the fix with a real product write (an `ensure`
+round-trip), and re-run `setup-auth.sh web-seed` because the SPA's client-side auth
+gate still redirects to `/signin` after the row is recreated.
+
 ### L-S8 — Reading a first-boot renderer crash as a defect of the change under test
 
 **Wrong approach:** treat the Electron dev instance's first renderer boot as
@@ -553,20 +740,6 @@ before drawing any conclusion. Only if the error survives a reload does it belon
 to the code. Never attribute it to the change under test without that A/B — and
 note that `electron-dev.sh start` reports "Ready" even when the renderer never
 became interactive, so its own readiness line is not the gate.
-
-### L-P1 — A Project conversation must preserve Project identity across routing and history
-
-**Wrong approach:** implement Project chat by navigating users to the Project coordinator's
-ordinary `/agent/:agentId/:topicId` surface and present that Agent's topic list as the Project
-history.
-
-**Why it fails:** the coordinator is an implementation detail. Leaving the Project route changes
-the visible owner and navigation contract, so users reasonably read the conversation as belonging
-to an Agent rather than to the Project that provides its tasks, goals, resources, and history.
-
-**Correct approach:** keep creation, topic selection, and resumed conversations under the Project
-route and Project sidebar. The coordinator may still execute the conversation internally, but the
-visible URL, active list, empty state, and navigation must consistently identify the Project.
 
 ### L-S9 — Trusting "migration pass" on the shared acceptance Postgres
 
@@ -614,22 +787,7 @@ input timing confirmed in a foreground tab — the user's window, or a screensho
 check that tolerates a frozen transition. A negative result from a hidden tab is not
 evidence of a defect.
 
-### L-S11 — Long `confirmModal` bodies overlay the footer
-
-**Wrong approach:** put a long list into `confirmModal({ content })` and assume the
-library pins Cancel / OK below a scroll area.
-
-**Why it fails:** `confirmModal` renders `ConfirmBody` (content + footer) inside
-`ModalContent`, which is itself `overflow: auto`. A tall list makes the dialog
-scroll as one column, or the footer paints over the last rows. Callers cannot pass
-content styles to change that.
-
-**Correct approach:** for any confirm body that can exceed a few lines, use
-`createModal` with a height-capped `ScrollArea` as `content` and put the actions in
-the modal `footer` slot. Assert `footer.top === scroller.bottom` at both ends of the
-list, not just that the dialog opened.
-
-### L-S12 — Bundled SPA HTML is not the whole site
+### L-S11 — Bundled SPA HTML is not the whole site
 
 **Wrong approach:** collect only tags and CSS `url()` from `index.html`, then treat
 a Vite/webpack `dist` as publishable.
@@ -645,7 +803,7 @@ references also cannot be inlined as data URIs: `import.meta.url` and SVG
 are under the inline size limit. Judge a Vite publish by the running page
 (images, icons, counter), not by whether `index.html` listed three tags.
 
-### L-S13 — macOS `/tmp` and `/private/tmp` are the same workspace
+### L-S12 — macOS `/tmp` and `/private/tmp` are the same workspace
 
 **Wrong approach:** treat a Files-tree path and the topic working directory as
 outside each other when one string starts with `/tmp` and the other with
@@ -661,8 +819,76 @@ containment. Prove a publish by fetching the public HTML (data URIs or 200
 sidecars) and opening the live page — in-app preview of the local file does not
 prove the hosted assets.
 
-## Historical source
+### L-S13 — Treating a workspace another session has rewritten as your own code
 
-Detailed incident narratives and retired pixel- or component-specific directions
-belong in [the field notes](./references/common-mistakes-field-notes.md), where they
-remain available without becoming mandatory rules for every Acceptance run.
+**Wrong approach:** edit and verify in place in this repo, and when the screenshots
+stop matching the source, suspect the Vite cache or your own CSS — restarting the
+dev server, adding more changes, and capturing again.
+
+**Why it fails:** a second session can be working on the same worktree. Its rebase
+helper stashes the **entire working tree** (stash message shaped like
+`pre-rebase2-<pr>-<sha>`), rebases the branch, and pops later; a conflicted pop
+leaves `<<<<<<<` markers inside the other session's files and breaks the whole SPA
+build. Both phases point away from the real cause: first "my change is written but
+has no effect" (the file was actually reverted to its HEAD version), then "the app
+will not open" (a conflict marker in someone else's file). Either one sends you
+debugging code you never broke.
+
+**Correct approach:** confirm your change is still on the tree both before and after
+capturing evidence — the file appears in `git status` and a marker unique to your
+change greps. On a mismatch, read `git stash list` timestamps and `git reflog`
+before suspecting the build cache. When your work has been stashed, recover only
+your own file with `git checkout stash@{n} -- <your file>`; **never pop or drop the
+whole stash** — it belongs to the other session, and popping it is that session's
+own action. When you find conflict markers in someone else's file, wait for them to
+resolve it rather than resolving it for them.
+
+### L-S14 — Claiming an image property from the prompt that asked for it
+
+**Wrong approach:** satisfy a requirement about a generated image (transparent
+background, exact aspect ratio, no text) by adding that wording to the prompt, then
+publish the prompt diff, a unit test asserting the wording, and a screenshot of the
+result as proof.
+
+**Why it fails:** the property lives in the returned bytes, not in the request. LobeHub's
+preferred artwork model returns JPEG, so an alpha channel is impossible regardless of
+wording — and asked for "a transparent background" the model _paints_ the grey-white
+checkerboard that UIs use to depict transparency. Both failures look correct in a
+screenshot and pass any prompt-level assertion.
+
+**Correct approach:** verify the produced artifact — decode it and assert the property
+numerically (alpha at the corners vs the subject, encoded format signature, dimensions),
+and where the property is compositional, show the artifact over a contrasting surface.
+When the model cannot deliver the property, produce it in code after generation rather
+than re-wording the prompt.
+
+### L-S15 — Trusting a lockfile-false workspace's node\_modules to track current specs
+
+**Wrong approach:** debug a "missing export" build failure in a workspace with
+`lockfile: false` by bumping package.json specs or running `pnpm up`, assuming the
+next install re-resolves.
+
+**Why it fails:** pnpm keeps a hidden `node_modules/.pnpm/lock.yaml` that freezes
+prior resolutions even with `lockfile: false`; `pnpm install` and `pnpm up` can
+report success while every symlink stays on the stale version. CI never hits this
+because it installs from scratch.
+
+**Correct approach:** when installed versions contradict fresh-resolution
+expectations, delete the hidden `node_modules/.pnpm/lock.yaml` (or the whole
+node\_modules) in the affected workspace root and reinstall, then re-verify the
+actual resolved version via the importing package's symlink.
+
+### L-S16 — Treating a listening dev-server process as a healthy long-run probe
+
+**Wrong approach:** use process existence, an open TCP connection, or an unbounded
+`curl` as the health signal for an unattended LobeHub soak.
+
+**Why it fails:** Next dev can remain alive and accept a TCP connection while never
+returning an HTTP response. An unbounded probe then blocks the monitor itself, so the
+log stops exactly when the failure begins and makes the run look shorter rather than
+recording an unhealthy interval.
+
+**Correct approach:** give every HTTP and CLI probe explicit connect and total
+timeouts, record timeout/`000` as an observation, and keep the monitor advancing.
+Prove recovery with a successful application request after restarting the owned
+server; neither a PID nor a listening socket is sufficient.

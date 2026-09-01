@@ -52,7 +52,10 @@ const WorkingDirectorySectionInner = memo<WorkingDirectorySectionProps>(({ agent
   // path that was never registered as a device working dir — so fall back to the
   // repoType persisted on the topic (the same snapshot the meta hover card reads).
   // Without this the whole GitStatus is gated out and branch/worktree/PR chips
-  // vanish even though the topic clearly carries git context.
+  // vanish even though the topic clearly carries git context. The same snapshot
+  // also feeds GitStatus's `fallbackGit`, which covers the harder case: the
+  // recorded worktree directory was DELETED, so the live branch probe reads
+  // nothing and the chips would vanish even with repoType resolved.
   const topicWorkingDirectoryConfig = useChatStore(
     (s) => topicSelectors.currentTopicMetadata(s)?.workingDirectoryConfig,
   );
@@ -96,6 +99,7 @@ const WorkingDirectorySectionInner = memo<WorkingDirectorySectionProps>(({ agent
         <GitStatus
           agentId={agentId}
           deviceId={isLocalDevice ? undefined : targetDeviceId}
+          fallbackGit={persistedConfig?.git}
           isGithub={repoType === 'github'}
           path={effectiveWorkingDirectory}
           sourcePath={sourceWorkingDirectory}

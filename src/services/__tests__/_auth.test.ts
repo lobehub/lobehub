@@ -16,9 +16,6 @@ const mockMistralAPIKey = 'mistral-api-key';
 const mockOpenRouterAPIKey = 'openrouter-api-key';
 const mockTogetherAIAPIKey = 'togetherai-api-key';
 
-// mock the traditional zustand
-vi.mock('zustand/traditional');
-
 const mockCryptoValue = (value: number) => {
   vi.stubGlobal('crypto', {
     getRandomValues: vi.fn((array: Uint32Array) => {

@@ -1,32 +1,64 @@
-import { homedir } from 'node:os';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { statPath } from '../workspace';
 
+let home: string;
+
+beforeAll(async () => {
+  home = await mkdtemp(path.join(tmpdir(), 'device-control-stat-path-'));
+  vi.stubEnv('HOME', home);
+  vi.stubEnv('USERPROFILE', home);
+  await mkdir(path.join(home, 'projects', 'demo'), { recursive: true });
+  await writeFile(path.join(home, 'file.txt'), 'file');
+});
+
+afterAll(async () => {
+  vi.unstubAllEnvs();
+  await rm(home, { force: true, recursive: true });
+});
+
 describe('statPath', () => {
-  it('expands a leading ~ before checking the filesystem', async () => {
-    const result = await statPath({ path: '~' });
+  it('expands the device home and returns the normalized absolute path', async () => {
+    const result = await statPath({ path: '~/projects/../projects/demo' });
 
-    expect(result.exists).toBe(true);
-    expect(result.isDirectory).toBe(true);
-    expect(result.path).toBe(homedir());
+    expect(result).toMatchObject({
+      exists: true,
+      isDirectory: true,
+      path: path.join(home, 'projects', 'demo'),
+    });
   });
 
-  it('expands ~/… and reports a missing path after expansion', async () => {
-    const result = await statPath({ path: '~/__lobehub_missing_working_dir__' });
+  it('resolves relative paths from the device home', async () => {
+    const result = await statPath({ path: 'projects/demo' });
 
-    expect(result.exists).toBe(false);
-    expect(result.isDirectory).toBe(false);
-    expect(result.path).toBe(path.join(homedir(), '__lobehub_missing_working_dir__'));
+    expect(result).toMatchObject({
+      exists: true,
+      isDirectory: true,
+      path: path.join(home, 'projects', 'demo'),
+    });
   });
 
-  it('leaves a literal absolute path untouched', async () => {
-    const result = await statPath({ path: homedir() });
+  it('returns the normalized path for a missing tilde path', async () => {
+    const result = await statPath({ path: '~/missing' });
 
-    expect(result.exists).toBe(true);
-    expect(result.isDirectory).toBe(true);
-    expect(result.path).toBe(homedir());
+    expect(result).toEqual({
+      exists: false,
+      isDirectory: false,
+      path: path.join(home, 'missing'),
+    });
+  });
+
+  it('distinguishes files from directories', async () => {
+    const result = await statPath({ path: '~/file.txt' });
+
+    expect(result).toEqual({
+      exists: true,
+      isDirectory: false,
+      path: path.join(home, 'file.txt'),
+    });
   });
 });

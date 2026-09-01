@@ -64,6 +64,8 @@ const createFakePersistenceHandler = () => {
   return handler as unknown as HeterogeneousPersistenceHandler & typeof handler;
 };
 
+const createFakeAgentOperationModel = () => ({ touchRunning: vi.fn(async () => true) });
+
 const buildEvent = (
   type: AgentStreamEvent['type'],
   stepIndex: number,
@@ -81,19 +83,22 @@ const createService = (
 ) => {
   const { manager, published } = createFakeStreamManager();
   const persistenceHandler = createFakePersistenceHandler();
+  const agentOperationModel = createFakeAgentOperationModel();
   const topicModel = {
     settleRunningOperation: vi.fn(async (_topicId: string, operationId: string): Promise<any> => ({
       assistantMessageId: 'asst-1',
       operationId,
       status: 'settled',
     })),
+    updateMetadata: vi.fn(async () => undefined),
   };
   const service = new HeterogeneousAgentService({} as any, 'user-test', {
+    agentOperationModel: agentOperationModel as any,
     persistenceHandler,
     streamEventManager: overrides.streamEventManager ?? manager,
     topicModel: topicModel as any,
   });
-  return { manager, persistenceHandler, published, service, topicModel };
+  return { agentOperationModel, manager, persistenceHandler, published, service, topicModel };
 };
 
 describe('HeterogeneousAgentService', () => {
@@ -140,6 +145,35 @@ describe('HeterogeneousAgentService', () => {
   });
 
   describe('heteroIngest', () => {
+    it('refreshes the durable operation lease before accepting a batch', async () => {
+      const { agentOperationModel, persistenceHandler, service } = createService();
+
+      await service.heteroIngest({
+        agentType: 'codex',
+        events: [buildEvent('stream_chunk', 0)],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      expect(agentOperationModel.touchRunning).toHaveBeenCalledWith('op-1');
+      expect(persistenceHandler.ingest).toHaveBeenCalledOnce();
+    });
+
+    it('ignores delayed batches after the operation lost its lease', async () => {
+      const { agentOperationModel, manager, persistenceHandler, service } = createService();
+      agentOperationModel.touchRunning.mockResolvedValue(false);
+
+      await service.heteroIngest({
+        agentType: 'claude-code',
+        events: [buildEvent('stream_chunk', 0)],
+        operationId: 'op-reclaimed',
+        topicId: 'topic-1',
+      });
+
+      expect(persistenceHandler.ingest).not.toHaveBeenCalled();
+      expect(manager.publishStreamEvent).not.toHaveBeenCalled();
+    });
+
     it('republishes every event through the stream manager preserving ordering', async () => {
       const { manager, published, service } = createService();
 
@@ -199,6 +233,7 @@ describe('HeterogeneousAgentService', () => {
       };
       const persistenceHandler = createFakePersistenceHandler();
       const service = new HeterogeneousAgentService({} as any, 'user-test', {
+        agentOperationModel: createFakeAgentOperationModel() as any,
         persistenceHandler,
         streamEventManager: manager as IStreamEventManager,
       });
@@ -269,6 +304,7 @@ describe('HeterogeneousAgentService', () => {
       };
       const persistenceHandler = createFakePersistenceHandler();
       const service = new HeterogeneousAgentService({} as any, 'user-test', {
+        agentOperationModel: createFakeAgentOperationModel() as any,
         persistenceHandler,
         streamEventManager: manager as IStreamEventManager,
       });
@@ -325,6 +361,7 @@ describe('HeterogeneousAgentService', () => {
         markEventPublished: vi.fn(),
       } as unknown as HeterogeneousPersistenceHandler;
       const service = new HeterogeneousAgentService({} as any, 'user-test', {
+        agentOperationModel: createFakeAgentOperationModel() as any,
         persistenceHandler,
         streamEventManager: manager as IStreamEventManager,
       });
@@ -350,6 +387,7 @@ describe('HeterogeneousAgentService', () => {
         }),
       } as unknown as HeterogeneousPersistenceHandler;
       const service = new HeterogeneousAgentService({} as any, 'user-test', {
+        agentOperationModel: createFakeAgentOperationModel() as any,
         persistenceHandler,
         streamEventManager: manager as IStreamEventManager,
       });
@@ -376,6 +414,7 @@ describe('HeterogeneousAgentService', () => {
         }),
       } as unknown as HeterogeneousPersistenceHandler;
       const service = new HeterogeneousAgentService({} as any, 'user-test', {
+        agentOperationModel: createFakeAgentOperationModel() as any,
         persistenceHandler,
         streamEventManager: manager as IStreamEventManager,
       });
@@ -476,14 +515,30 @@ describe('HeterogeneousAgentService', () => {
       });
     });
 
-    it('ignores a delayed finish when a newer operation owns the topic', async () => {
+    /**
+     * @example Operation A finishes after operation B owns the topic; A still becomes terminal.
+     */
+    it('settles a delayed finish without touching the newer topic operation', async () => {
+      // ROOT CAUSE:
+      //
+      // A delayed operation used to return on topic-owner conflict without
+      // settling its durable row. Persisting its session id before that conflict
+      // check could also overwrite the replacement operation's resume binding.
+      //
+      // Before: the old row remained running and its session binding could win.
+      // After: its message state flushes without a binding update, then its own
+      // row and terminal stream settle independently of the new topic owner.
       const { manager, published } = createFakeStreamManager();
       const persistenceHandler = createFakePersistenceHandler();
+      const settleRunningSpy = vi
+        .spyOn(AgentOperationModel.prototype, 'settleRunning')
+        .mockResolvedValue(true);
       const topicModel = {
         settleRunningOperation: vi.fn(async () => ({
           activeOperationId: 'op-new',
           status: 'conflict' as const,
         })),
+        updateMetadata: vi.fn(async () => undefined),
       } as any;
       const completeOperationSpy = vi
         .spyOn(CompletionLifecycle.prototype, 'completeOperation')
@@ -503,7 +558,13 @@ describe('HeterogeneousAgentService', () => {
       });
 
       expect(topicModel.settleRunningOperation).toHaveBeenCalledWith('topic-1', 'op-old');
-      expect(published).toHaveLength(0);
+      expect(topicModel.updateMetadata).not.toHaveBeenCalled();
+      expect(settleRunningSpy).toHaveBeenCalledWith('op-old', 'done');
+      expect(published).toHaveLength(1);
+      expect(published[0].event).toMatchObject({
+        data: { operationId: 'op-old', reason: 'success' },
+        type: 'agent_runtime_end',
+      });
       expect(completeOperationSpy).not.toHaveBeenCalled();
 
       completeOperationSpy.mockRestore();

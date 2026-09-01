@@ -28,8 +28,10 @@ export const InstallPluginInspector = memo<
   // Initial streaming state
   if (isArgumentsStreaming && !identifier) {
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-agent-builder.apiName.installPlugin')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-agent-builder.apiName.installPlugin')}
+        </span>
       </div>
     );
   }
@@ -39,13 +41,10 @@ export const InstallPluginInspector = memo<
   const hasResult = pluginState?.success !== undefined;
 
   return (
-    <div
-      className={cx(
-        inspectorTextStyles.root,
-        (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-      )}
-    >
-      <span>{t('builtins.lobe-agent-builder.apiName.installPlugin')}: </span>
+    <div className={inspectorTextStyles.root}>
+      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+        {t('builtins.lobe-agent-builder.apiName.installPlugin')}:{' '}
+      </span>
       {displayName && <span className={highlightTextStyles.primary}>{displayName}</span>}
       {!isLoading &&
         hasResult &&

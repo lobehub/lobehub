@@ -1,9 +1,4 @@
-import type {
-  CheckpointConfig,
-  CreateTaskGoalInput,
-  TaskAutomationMode,
-  TaskStatus,
-} from '@lobechat/types';
+import type { CheckpointConfig, TaskAutomationMode, TaskStatus } from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -17,7 +12,6 @@ class TaskService {
   list = async (params: {
     assigneeAgentId?: string;
     automated?: boolean;
-    hasGoal?: boolean;
     orderBy?: 'createdAt' | 'updatedAt';
     limit?: number;
     offset?: number;
@@ -31,17 +25,25 @@ class TaskService {
 
   groupList = async (params: {
     assigneeAgentId?: string;
-    groups: Array<{
+    automated?: boolean;
+    excludeStatuses?: TaskStatus[];
+    groupBy?: 'assignee' | 'member' | 'priority';
+    groups?: Array<{
       key: string;
       limit?: number;
       offset?: number;
       statuses: string[];
     }>;
-    hasGoal?: boolean;
     parentTaskId?: string | null;
     projectId?: string;
     visibility?: 'private' | 'public';
-  }) => lambdaClient.task.groupList.query(params);
+  }) =>
+    lambdaClient.task.groupList.query({
+      ...params,
+      // Keep `assignee`'s released hybrid API semantics for older clients.
+      // This UI's Agent board deliberately opts into the agent-only contract.
+      groupBy: params.groupBy === 'assignee' ? 'agent' : params.groupBy,
+    });
 
   getSubtasks = async (id: string) => lambdaClient.task.getSubtasks.query({ id });
 
@@ -70,7 +72,6 @@ class TaskService {
     description?: string;
     editorData?: unknown;
     /** Bind a goal entity (`goals` row) to the created task. */
-    goal?: CreateTaskGoalInput;
     identifierPrefix?: string;
     instruction: string;
     name?: string;
@@ -112,8 +113,6 @@ class TaskService {
   ) => lambdaClient.task.update.mutate({ id, ...data });
 
   delete = async (id: string) => lambdaClient.task.delete.mutate({ id });
-
-  deleteGoal = async (id: string) => lambdaClient.task.deleteGoal.mutate({ id });
 
   clearAll = async () => lambdaClient.task.clearAll.mutate();
 

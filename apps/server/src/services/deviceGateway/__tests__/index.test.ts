@@ -735,6 +735,90 @@ describe('DeviceGateway', () => {
     });
   });
 
+  describe('listDir', () => {
+    const configure = () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+    };
+
+    it('returns UNAVAILABLE when the gateway is not configured', async () => {
+      const proxy = new DeviceGateway();
+
+      const result = await proxy.listDir({
+        deviceId: 'dev-1',
+        path: '/projects',
+        userId: 'user-1',
+      });
+
+      expect(result).toEqual({
+        code: 'UNAVAILABLE',
+        home: '',
+        path: '/projects',
+        pathStyle: 'posix',
+        roots: [],
+        success: false,
+      });
+    });
+
+    it('passes successful and typed filesystem results through unchanged', async () => {
+      configure();
+      const success = {
+        entries: [],
+        home: '/home/user',
+        parent: '/home/user',
+        path: '/home/user/projects',
+        pathStyle: 'posix',
+        roots: ['/'],
+        success: true,
+      } as const;
+      const notFound = {
+        code: 'NOT_FOUND',
+        home: '/home/user',
+        path: '/home/user/missing',
+        pathStyle: 'posix',
+        roots: ['/'],
+        success: false,
+      } as const;
+      mockClient.invokeRpc
+        .mockResolvedValueOnce({ data: success, success: true })
+        .mockResolvedValueOnce({ data: notFound, success: true });
+
+      const proxy = new DeviceGateway();
+
+      await expect(
+        proxy.listDir({ deviceId: 'dev-1', path: '/home/user/projects', userId: 'user-1' }),
+      ).resolves.toEqual(success);
+      await expect(
+        proxy.listDir({ deviceId: 'dev-1', path: '/home/user/missing', userId: 'user-1' }),
+      ).resolves.toEqual(notFound);
+    });
+
+    it.each([
+      [
+        'an rpc failure',
+        () => mockClient.invokeRpc.mockResolvedValue({ error: 'offline', success: false }),
+      ],
+      ['a transport exception', () => mockClient.invokeRpc.mockRejectedValue(new Error('timeout'))],
+    ])('returns UNAVAILABLE for %s', async (_name, arrange) => {
+      configure();
+      arrange();
+
+      const proxy = new DeviceGateway();
+      const result = await proxy.listDir({
+        deviceId: 'dev-1',
+        path: 'C:\\projects',
+        userId: 'user-1',
+      });
+
+      expect(result).toMatchObject({
+        code: 'UNAVAILABLE',
+        path: 'C:\\projects',
+        pathStyle: 'windows',
+        success: false,
+      });
+    });
+  });
+
   describe('getLocalFilePreview', () => {
     const configure = () => {
       mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';

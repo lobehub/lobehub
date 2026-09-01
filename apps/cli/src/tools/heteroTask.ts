@@ -4,8 +4,10 @@ import os from 'node:os';
 import path from 'node:path';
 
 import type { RemoteHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+import { resolveRemotePlatformRuntime } from '@lobechat/heterogeneous-agents/scanHost';
 
 import { getTrpcClient } from '../api/client';
+import { CLI_PRODUCT_NAME, resolveCliDirName } from '../constants/identity';
 import { getTask, listTasks, removeTask, saveTask } from '../daemon/taskRegistry';
 import { log } from '../utils/logger';
 
@@ -13,7 +15,7 @@ import { log } from '../utils/logger';
 // Maps topicId → hermes session_id so multi-turn conversations can resume
 // the same session across separate `runHeteroTask` invocations.
 
-const LOBEHUB_DIR_NAME = process.env.LOBEHUB_CLI_HOME || '.lobehub';
+const LOBEHUB_DIR_NAME = resolveCliDirName();
 const HERMES_SESSIONS_FILE = path.join(os.homedir(), LOBEHUB_DIR_NAME, 'hermes-sessions.json');
 
 function parseHermesSessionId(stderr: string): string | undefined {
@@ -144,8 +146,8 @@ async function sendTerminalSignal(
  */
 function buildNotifyProtocol(lhPath: string, topicId: string): string {
   return (
-    `## Context: This task was dispatched by LobeHub\n\n` +
-    `This conversation / task was sent to you by the **LobeHub platform** on behalf of a user. You are running as a background agent; the user is waiting for your response inside the LobeHub chat interface.\n\n` +
+    `## Context: This task was dispatched by ${CLI_PRODUCT_NAME}\n\n` +
+    `This conversation / task was sent to you by the **${CLI_PRODUCT_NAME} platform** on behalf of a user. You are running as a background agent; the user is waiting for your response inside the ${CLI_PRODUCT_NAME} chat interface.\n\n` +
     `**When to call notify**: any time you have something meaningful to tell the user — a key finding, a decision you made, a result, a question, or your final answer. Think of it as speaking directly to the user in the chat window.\n\n` +
     `**What to hide**: internal work details such as tool call sequences, file reads, intermediate command output, retries, or low-level reasoning steps. The user cares about outcomes and insights, not your step-by-step mechanics.\n\n` +
     `## Sending messages back to the user\n\n` +
@@ -196,15 +198,30 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
   const sessionKey = parentOperationId ? operationId : topicId;
 
   if (agentType === 'openclaw') {
+    const runtime = await resolveRemotePlatformRuntime('openclaw', childEnv);
+    if (!runtime.available) {
+      throw new Error('OpenClaw executable not found');
+    }
+
     // openclaw agent --local is one-shot: each invocation processes one message and exits.
     // The --session-id links turns into the same conversation history on disk.
-    // Requires the `openclaw` binary to be on PATH with Node >=22.19.
     const openclawAgent = platformAgentId?.trim() || process.env.OPENCLAW_AGENT_ID || 'main';
 
     // Always inject the notify protocol so openclaw knows how to report results
     // back to the LobeHub UI — even if the previous turn failed and the session
     // history was not cleanly committed.
     const enrichedPrompt = `${prompt}\n\n${buildNotifyProtocol(lhPath, topicId)}`;
+    const openclawArgs = [
+      'agent',
+      '--agent',
+      openclawAgent,
+      '--session-id',
+      sessionKey,
+      '--message',
+      enrichedPrompt,
+      '--local',
+    ];
+    const spawnPlan = await runtime.prepareSpawn(openclawArgs);
 
     // Top-level turns reuse one topic session and replace an older process. Group
     // members intentionally share a topic, so isolate them by operation instead.
@@ -225,25 +242,12 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
       }
     }
 
-    const child = spawn(
-      'openclaw',
-      [
-        'agent',
-        '--agent',
-        openclawAgent,
-        '--session-id',
-        sessionKey,
-        '--message',
-        enrichedPrompt,
-        '--local',
-      ],
-      {
-        cwd: workDir,
-        detached: true,
-        env: childEnv,
-        stdio: 'ignore',
-      },
-    );
+    const child = spawn(spawnPlan.command, spawnPlan.args, {
+      cwd: workDir,
+      detached: true,
+      env: spawnPlan.env,
+      stdio: 'ignore',
+    });
 
     const pid = child.pid;
     if (pid === undefined) {
@@ -301,6 +305,19 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
   }
 
   if (agentType === 'hermes') {
+    const runtime = await resolveRemotePlatformRuntime('hermes', childEnv);
+    if (!runtime.available) {
+      throw new Error('Hermes executable not found');
+    }
+
+    // Resume the previous session for this topic if one exists.
+    const existingSessionId = getHermesSessionId(sessionKey);
+    const hermesArgs: string[] = ['chat', '--query', prompt, '--quiet', '--accept-hooks'];
+    if (existingSessionId) {
+      hermesArgs.push('--resume', existingSessionId);
+    }
+    const spawnPlan = await runtime.prepareSpawn(hermesArgs);
+
     // Preserve parallel group members; only top-level turns replace the previous
     // topic process, while an exact task retry replaces itself.
     for (const existing of listTasks()) {
@@ -318,19 +335,12 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
       }
     }
 
-    // Resume the previous session for this topic if one exists.
-    const existingSessionId = getHermesSessionId(sessionKey);
-    const hermesArgs: string[] = ['chat', '--query', prompt, '--quiet', '--accept-hooks'];
-    if (existingSessionId) {
-      hermesArgs.push('--resume', existingSessionId);
-    }
-
     // Hermes keeps stdout response-only in --quiet mode and prints the final
     // session_id to stderr so callers can resume the session on the next turn.
-    const child = spawn('hermes', hermesArgs, {
+    const child = spawn(spawnPlan.command, spawnPlan.args, {
       cwd: workDir,
       detached: true,
-      env: childEnv,
+      env: spawnPlan.env,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 

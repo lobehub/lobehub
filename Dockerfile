@@ -67,6 +67,7 @@ COPY packages ./packages
 COPY patches ./patches
 # workspace manifests must exist before pnpm i so --filter can resolve them
 COPY apps/desktop/src/main/package.json ./apps/desktop/src/main/package.json
+COPY apps/share/package.json ./apps/share/package.json
 COPY apps/workbench/package.json ./apps/workbench/package.json
 
 RUN set -e && \
@@ -93,6 +94,8 @@ RUN rm -rf src/app/desktop "src/app/(backend)/trpc/desktop"
 
 # run build standalone for docker version
 RUN npm run build:docker
+RUN pnpm exec esbuild scripts/elasticsearchReindex/index.ts --bundle --platform=node --format=cjs --outfile=/app/fts-search-elasticsearch-reindex.cjs --external:pg --external:drizzle-orm '--external:drizzle-orm/*'
+RUN pnpm exec esbuild scripts/elasticsearchSync/cli.ts --bundle --platform=node --format=cjs --outfile=/app/fts-search-elasticsearch-sync.cjs --external:pg --external:drizzle-orm '--external:drizzle-orm/*'
 
 # Preserve SWC helpers referenced through pnpm virtual-store symlinks by Next.js.
 RUN mkdir -p /runtime-deps && cp -a node_modules/.pnpm/@swc+helpers@* /runtime-deps/
@@ -108,11 +111,14 @@ COPY --from=builder /app/.next/standalone /app/
 COPY --from=builder /app/.next/static /app/.next/static
 # Copy SPA assets (Vite build output)
 COPY --from=builder /app/public/_spa /app/public/_spa
+COPY --from=builder /app/public/_spa-share /app/public/_spa-share
 COPY --from=builder /app/public/_spa-workbench /app/public/_spa-workbench
 # Copy database migrations
 COPY --from=builder /app/packages/database/migrations /app/migrations
 COPY --from=builder /app/scripts/migrateServerDB/docker.cjs /app/docker.cjs
 COPY --from=builder /app/scripts/migrateServerDB/errorHint.js /app/errorHint.js
+COPY --from=builder /app/fts-search-elasticsearch-reindex.cjs /app/fts-search-elasticsearch-reindex.cjs
+COPY --from=builder /app/fts-search-elasticsearch-sync.cjs /app/fts-search-elasticsearch-sync.cjs
 
 # copy dependencies
 COPY --from=builder /deps/node_modules/.pnpm /app/node_modules/.pnpm
@@ -166,6 +172,7 @@ ENV KEY_VAULTS_SECRET="" \
 ENV AUTH_SECRET="" \
     AUTH_SSO_PROVIDERS="" \
     AUTH_ALLOWED_EMAILS="" \
+    AUTH_ADDITIONAL_TRUSTED_ORIGINS="" \
     AUTH_TRUSTED_ORIGINS="" \
     AUTH_DISABLE_EMAIL_PASSWORD="" \
     AUTH_EMAIL_VERIFICATION="" \

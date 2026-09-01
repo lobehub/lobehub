@@ -2,7 +2,8 @@
 
 import { DEFAULT_AVATAR } from '@lobechat/const';
 import type { AgentGroupMember, BuiltinInspectorProps } from '@lobechat/types';
-import { Avatar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx, useTheme } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -62,20 +63,17 @@ export const BroadcastInspector = memo<BuiltinInspectorProps<BroadcastParams>>(
 
     if (isArgumentsStreaming && agents.length === 0) {
       return (
-        <div className={cx(styles.root, shinyTextStyles.shinyText)}>
-          <span>{t('builtins.lobe-group-management.apiName.broadcast')}</span>
+        <div className={styles.root}>
+          <span className={shinyTextStyles.shinyText}>
+            {t('builtins.lobe-group-management.apiName.broadcast')}
+          </span>
         </div>
       );
     }
 
     return (
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={cx(styles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}
-        gap={8}
-      >
-        <span className={styles.title}>
+      <Flexbox horizontal align={'center'} className={styles.root} gap={8}>
+        <span className={cx(styles.title, isArgumentsStreaming && shinyTextStyles.shinyText)}>
           {t('builtins.lobe-group-management.inspector.broadcast.title')}
         </span>
         {avatarItems.length > 0 && <Avatar.Group items={avatarItems} shape={'circle'} size={24} />}

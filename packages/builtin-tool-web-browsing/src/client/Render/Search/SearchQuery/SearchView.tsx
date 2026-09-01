@@ -1,4 +1,5 @@
-import { Block, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
+import { Block, Flexbox, Icon, Skeleton } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { SearchIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -40,7 +41,7 @@ const SearchBar = memo<SearchBarProps>(
           clickable
           horizontal
           align={'center'}
-          className={cx(styles.query, searching && shinyTextStyles.shinyText)}
+          className={styles.query}
           gap={8}
           variant={'borderless'}
           onClick={() => {
@@ -48,7 +49,7 @@ const SearchBar = memo<SearchBarProps>(
           }}
         >
           <Icon icon={SearchIcon} />
-          {defaultQuery}
+          <span className={cx(searching && shinyTextStyles.shinyText)}>{defaultQuery}</span>
         </Block>
 
         {searching ? (

@@ -1,22 +1,14 @@
 import type { TopicCommentJson } from '@lobechat/types';
-import type { IEditor, ISlashMenuOption } from '@lobehub/editor';
-import { INSERT_MENTION_COMMAND } from '@lobehub/editor';
 import { Editor, useEditor } from '@lobehub/editor/react';
-import { Avatar } from '@lobehub/ui';
 import type { Ref } from 'react';
-import { memo, useCallback, useImperativeHandle, useMemo } from 'react';
-
-import { useWorkspaceMembers } from '@/business/client/hooks/useWorkspaceMembers';
+import { memo, useCallback, useImperativeHandle } from 'react';
 
 import {
-  createTopicCommentMentionItems,
-  createTopicCommentMentionPayload,
-  type MentionableWorkspaceMember,
   readTopicCommentEditorValue,
   resolveTopicCommentEditorContent,
   type TopicCommentEditorValue,
-  writeTopicCommentMentionMarkdown,
 } from './editorUtils';
+import { useWorkspaceCommentMentionOption } from './useWorkspaceCommentMentionOption';
 
 export type { TopicCommentEditorValue } from './editorUtils';
 
@@ -27,9 +19,11 @@ export interface TopicCommentEditorRef {
   setValue: (value: TopicCommentEditorValue) => void;
 }
 
-interface TopicCommentEditorProps {
+export interface TopicCommentEditorProps {
   autoFocus?: boolean;
+  compact?: boolean;
   disabled?: boolean;
+  enableMarkdown?: boolean;
   initialContent: string;
   initialEditorData?: TopicCommentJson | null;
   onChange?: (value: TopicCommentEditorValue) => void;
@@ -41,7 +35,9 @@ const TopicCommentEditor = memo(
   ({
     ref,
     autoFocus,
+    compact = false,
     disabled,
+    enableMarkdown = false,
     initialContent,
     initialEditorData,
     onChange,
@@ -49,23 +45,7 @@ const TopicCommentEditor = memo(
     placeholder,
   }: TopicCommentEditorProps & { ref?: Ref<TopicCommentEditorRef> }) => {
     const editor = useEditor();
-    const workspaceMembers = useWorkspaceMembers() as MentionableWorkspaceMember[];
-
-    const mentionItems = useMemo<ISlashMenuOption[]>(
-      () =>
-        createTopicCommentMentionItems(workspaceMembers).map(({ avatar, ...item }) => ({
-          ...item,
-          icon: <Avatar avatar={avatar} size={24} />,
-        })),
-      [workspaceMembers],
-    );
-
-    const handleMentionSelect = useCallback((currentEditor: IEditor, option: ISlashMenuOption) => {
-      currentEditor.dispatchCommand(
-        INSERT_MENTION_COMMAND,
-        createTopicCommentMentionPayload(option),
-      );
-    }, []);
+    const mentionOption = useWorkspaceCommentMentionOption();
 
     const setValue = useCallback(
       (value: TopicCommentEditorValue) => {
@@ -96,18 +76,17 @@ const TopicCommentEditor = memo(
         debounceWait={0}
         editable={!disabled}
         editor={editor}
-        enablePasteMarkdown={false}
-        markdownOption={false}
+        enablePasteMarkdown={enableMarkdown}
+        markdownOption={enableMarkdown}
+        mentionOption={mentionOption}
         placeholder={placeholder}
-        style={{ maxHeight: 184, minHeight: 44, overflowY: 'auto', padding: 0 }}
         type={type}
         variant={'chat'}
-        mentionOption={{
-          fuseOptions: { keys: ['label', 'metadata.description'], threshold: 0.35 },
-          items: mentionItems,
-          markdownWriter: writeTopicCommentMentionMarkdown,
-          maxLength: 50,
-          onSelect: handleMentionSelect,
+        style={{
+          maxHeight: compact ? 120 : 184,
+          minHeight: compact ? 24 : 44,
+          overflowY: 'auto',
+          padding: 0,
         }}
         onPressEnter={({ event }) => onPressEnter?.(event)}
         onTextChange={(currentEditor) => onChange?.(readTopicCommentEditorValue(currentEditor))}

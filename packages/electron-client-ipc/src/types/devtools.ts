@@ -8,6 +8,10 @@ export interface AppProcessMetrics {
   gpu: GpuProcessMetrics | null;
 }
 
+export interface RendererMemoryInfo {
+  privateBytes: number;
+}
+
 export interface GpuStatus {
   displayType: string | null;
   featureStatus: Record<string, string>;

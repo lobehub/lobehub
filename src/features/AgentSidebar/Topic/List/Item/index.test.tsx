@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  */
 import { render, screen, waitFor } from '@testing-library/react';
-import type { CSSProperties, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import TopicItem from './index';
@@ -17,40 +17,13 @@ const topicMetaCardMock = vi.hoisted(() => ({
   value: undefined as { pullRequest?: { state: string } } | undefined,
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  ContextMenuTrigger: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  Flexbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
-    <div {...props}>{children}</div>
-  ),
+// Assertions key on the raw lucide displayName, which the real Icon does not
+// expose in the DOM.
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   Icon: ({ icon }: { icon?: { displayName?: string } }) => (
     <div data-icon={icon?.displayName} data-testid="topic-item-icon" />
   ),
-  Popover: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  Skeleton: {
-    Button: (props: Record<string, unknown>) => <div {...props} />,
-  },
-  Tag: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Text: ({ children, style }: { children?: ReactNode; style?: CSSProperties }) => (
-    <span style={style}>{children}</span>
-  ),
-  Tooltip: ({ children }: { children?: ReactNode }) => <>{children}</>,
-}));
-
-vi.mock('antd-style', () => ({
-  // `ContextMenuTrigger` comes from the base-ui barrel, which pulls in
-  // ScrollArea's global style at import time.
-  createGlobalStyle: () => () => null,
-  createStaticStyles: () => ({
-    dotContainer: 'dotContainer',
-    neonDot: 'neonDot',
-    neonDotWrapper: 'neonDotWrapper',
-  }),
-  cssVar: {
-    colorInfo: '#00f',
-    colorTextDescription: '#999',
-  },
-  keyframes: () => 'keyframes',
-  useTheme: () => ({ isDarkMode: false }),
 }));
 
 vi.mock('motion/react', () => ({
@@ -63,12 +36,6 @@ vi.mock('motion/react', () => ({
       <span {...props}>{children}</span>
     ),
   },
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
 }));
 
 vi.mock('@/const/version', () => ({ isDesktop: false }));

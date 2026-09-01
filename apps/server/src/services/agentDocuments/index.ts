@@ -65,6 +65,7 @@ interface UpsertDocumentParams {
 
 interface CreateAgentDocumentOptions {
   hintIsSkill?: boolean;
+  parentId?: string;
 }
 
 type AgentDocumentWithLiteXML = AgentDocument & { litexml?: string };
@@ -209,18 +210,20 @@ export class AgentDocumentsService {
       litexml: true,
     });
 
-    // Hydration of stale editorData (older Lexical schemas) can silently fail
-    // and leave the editor empty. When that happens, hydrate from the markdown
-    // column directly so readDocument never returns an empty doc for a row that
-    // actually has content.
-    if (snapshot.content.trim().length === 0 && doc.content.trim().length > 0) {
-      const fromMarkdown = await exportEditorDataSnapshot({
-        editorData: undefined,
-        fallbackContent: doc.content,
-        litexml: true,
+    if (snapshot.recoveredFromMarkdown) {
+      // Persist the repaired snapshot before exposing its LiteXML IDs. A later
+      // node edit must hydrate this exact state or the IDs can no longer target it.
+      await this.agentDocumentModel.update(doc.id, {
+        content: snapshot.content,
+        editorData: snapshot.editorData,
       });
-      const content = fromMarkdown.content.trim().length > 0 ? fromMarkdown.content : doc.content;
-      return { ...doc, content, litexml: fromMarkdown.litexml };
+
+      return {
+        ...doc,
+        content: snapshot.content,
+        editorData: snapshot.editorData,
+        litexml: snapshot.litexml,
+      };
     }
 
     return { ...doc, content: snapshot.content, litexml: snapshot.litexml };
@@ -234,6 +237,7 @@ export class AgentDocumentsService {
       loadPosition?: DocumentLoadPosition;
       loadRules?: DocumentLoadRules;
       metadata?: Record<string, unknown>;
+      parentId?: string;
       policy?: AgentDocumentPolicy;
       templateId?: string;
     },
@@ -243,7 +247,13 @@ export class AgentDocumentsService {
     let filename = baseFilename;
     let suffix = 2;
 
-    while (await this.agentDocumentModel.findByFilename(agentId, filename)) {
+    while (
+      await this.agentDocumentModel.findByParentAndFilename(
+        agentId,
+        params?.parentId ?? null,
+        filename,
+      )
+    ) {
       if (suffix > MAX_UNIQUE_FILENAME_ATTEMPTS) {
         throw new Error(
           `Unable to generate a unique filename for "${title}" after ${MAX_UNIQUE_FILENAME_ATTEMPTS} attempts.`,
@@ -514,6 +524,14 @@ export class AgentDocumentsService {
     content: string,
     options: CreateAgentDocumentOptions = {},
   ) {
+    if (options.parentId) {
+      const parent = await this.agentDocumentModel.findByDocumentId(agentId, options.parentId);
+      if (!parent) throw new Error(`Parent folder not found: ${options.parentId}`);
+      if (parent.fileType !== DOCUMENT_FOLDER_TYPE) {
+        throw new Error(`Parent document is not a folder: ${options.parentId}`);
+      }
+    }
+
     const { title: extractedTitle, content: strippedContent } = extractMarkdownH1Title(content);
     const finalTitle = extractedTitle || title;
     const metadata = options.hintIsSkill
@@ -525,12 +543,10 @@ export class AgentDocumentsService {
         }
       : undefined;
 
-    return this.createWithUniqueFilename(
-      agentId,
-      finalTitle,
-      strippedContent,
-      metadata ? { metadata } : undefined,
-    );
+    return this.createWithUniqueFilename(agentId, finalTitle, strippedContent, {
+      ...(metadata ? { metadata } : {}),
+      ...(options.parentId ? { parentId: options.parentId } : {}),
+    });
   }
 
   async createForTopic(
@@ -768,13 +784,19 @@ export class AgentDocumentsService {
     const doc = await this.getDocumentByIdInAgent(documentId, expectedAgentId);
     if (!doc) return undefined;
 
-    await this.documentService.trySaveCurrentDocumentHistory(doc.documentId, 'llm_call');
-
     const snapshot = await applyLiteXMLOperations({
       editorData: doc.editorData,
       fallbackContent: doc.content,
       operations,
     });
+
+    // History must capture the successfully hydrated pre-edit state. Persisted
+    // editorData may be the stale payload that forced Markdown recovery.
+    await this.documentService.trySaveCurrentDocumentHistory(
+      doc.documentId,
+      'llm_call',
+      snapshot.previousEditorData,
+    );
 
     await this.agentDocumentModel.update(documentId, {
       content: snapshot.content,

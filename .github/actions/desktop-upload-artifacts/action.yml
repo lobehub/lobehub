@@ -9,10 +9,47 @@ inputs:
     description: Number of days to retain artifacts
     required: false
     default: '5'
+  renderer-ota-public-key:
+    description: Public key embedded in the packaged binary
+    required: true
+  renderer-ota-private-key:
+    description: Private key used to sign the r0 renderer OTA baseline
+    required: false
+    default: ''
+  update-channel:
+    description: Desktop update channel (canary, beta, stable)
+    required: false
+    default: ''
 
 runs:
   using: composite
   steps:
+    - name: Validate renderer OTA base hash
+      shell: bash
+      run: |
+        set -euo pipefail
+        MAIN_HASH=$(cat apps/desktop/release/renderer-mainhash.txt)
+        if [[ ! "$MAIN_HASH" =~ ^[0-9a-f]{64}$ ]]; then
+          echo "Invalid renderer OTA main bundle hash"
+          exit 1
+        fi
+
+    - name: Sign renderer OTA r0 baseline
+      if: runner.os == 'Linux' && inputs.renderer-ota-private-key != '' && inputs.update-channel != ''
+      shell: bash
+      env:
+        RENDERER_OTA_PRIVATE_KEY: ${{ inputs.renderer-ota-private-key }}
+        RENDERER_OTA_PUBLIC_KEY: ${{ inputs.renderer-ota-public-key }}
+      run: |
+        set -euo pipefail
+        MAIN_HASH=$(cat apps/desktop/release/renderer-mainhash.txt)
+        node apps/desktop/scripts/buildRendererManifest.mjs \
+          --renderer=apps/desktop/dist/renderer \
+          --out=apps/desktop/release/renderer-ota \
+          --channel=${{ inputs.update-channel }} \
+          --version=r0 \
+          --mainHash="$MAIN_HASH"
+
     - name: Rename macOS *-mac.yml for multi-architecture support
       if: runner.os == 'macOS'
       shell: bash
@@ -42,6 +79,7 @@ runs:
       uses: actions/upload-artifact@v6
       with:
         name: ${{ inputs.artifact-name }}
+        if-no-files-found: warn
         path: |
           apps/desktop/release/*.yml
           apps/desktop/release/*.dmg*
@@ -52,4 +90,6 @@ runs:
           apps/desktop/release/*.snap*
           apps/desktop/release/*.rpm*
           apps/desktop/release/*.tar.gz*
+          apps/desktop/release/renderer-mainhash.txt
+          apps/desktop/release/renderer-ota
         retention-days: ${{ inputs.retention-days }}

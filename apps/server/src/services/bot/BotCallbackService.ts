@@ -25,6 +25,7 @@ import type {
 import {
   getBotReplyLocale,
   getStepReactionEmoji,
+  platformFromThreadId,
   platformRegistry,
   resolveBotProviderConfig,
 } from './platforms';
@@ -153,7 +154,7 @@ export class BotCallbackService {
       messengerInstallationKey,
       userId,
     } = body;
-    const platform = platformThreadId.split(':')[0];
+    const platform = platformFromThreadId(platformThreadId);
 
     const { client, connectionId, messenger, charLimit, settings, workspaceId } =
       await this.createMessenger({
@@ -679,7 +680,7 @@ export class BotCallbackService {
    */
   private renewGatewayTyping(connectionId: string, platformThreadId: string): void {
     if (!connectionId) return;
-    const client = getMessageGatewayClient();
+    const client = getMessageGatewayClient(platformFromThreadId(platformThreadId));
     if (!client.isEnabled) return;
 
     client.startTyping(connectionId, platformThreadId).catch((err) => {
@@ -689,7 +690,7 @@ export class BotCallbackService {
 
   private stopGatewayTyping(connectionId: string, platformThreadId: string): void {
     if (!connectionId) return;
-    const client = getMessageGatewayClient();
+    const client = getMessageGatewayClient(platformFromThreadId(platformThreadId));
     if (!client.isEnabled) return;
 
     client.stopTyping(connectionId, platformThreadId).catch((err) => {

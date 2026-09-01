@@ -6,19 +6,18 @@ import type {
 import type { HeterogeneousAgentSessionError } from '@lobechat/electron-client-ipc';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import {
-  buildClaudeCodeDirectEnv,
   buildHeterogeneousAgentAuthRequiredError,
   createMainAgentRunState,
   isHeterogeneousAgentAuthRequired,
+  isHeterogeneousProviderBindingSupported,
   isLocalHeterogeneousType,
+  isServerDefaultHeterogeneousAgentType,
   type MainAgentIntent,
   type MainAgentReduceCtx,
   type MainAgentRunState,
   reduceMainAgent,
   rehydrateSubagentRunsState,
   resolveHeterogeneousAgentCommand,
-  sanitizeClaudeCodeDirectArgs,
-  sanitizeClaudeCodeDirectEnv,
   type SubagentIntent,
   type SubagentRunSnapshot,
 } from '@lobechat/heterogeneous-agents';
@@ -44,14 +43,16 @@ import {
   normalizeHeterogeneousProviderConfig,
   ThreadStatus,
   ThreadType,
+  unwrapServerDefaultHeterogeneousModel,
 } from '@lobechat/types';
 import { createNanoId } from '@lobechat/utils';
 import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
-import { validateClaudeCodeApiBinding } from '@/helpers/claudeCodeApiBinding';
 import {
+  removeHeteroSessionBindingKeyForWorkingDirectory,
   removeHeteroSessionIdForWorkingDirectory,
+  setHeteroSessionBindingKeyForWorkingDirectory,
   setHeteroSessionIdForWorkingDirectory,
 } from '@/helpers/heteroSessionByWorkingDirectory';
 import { agentQuotaService } from '@/services/agentQuota';
@@ -63,7 +64,6 @@ import {
 } from '@/services/message';
 import { threadService } from '@/services/thread';
 import { workService } from '@/services/work';
-import { getAiInfraStoreState } from '@/store/aiInfra';
 import { topicSelectors } from '@/store/chat/selectors';
 import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
 import {
@@ -80,6 +80,7 @@ import { labPreferSelectors } from '@/store/user/selectors';
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
 import type { RunScope } from '../../lifecycle/types';
 import { createGatewayEventHandler, isCompletedRuntimeEnd } from '../gateway/gatewayEventHandler';
+import { getNativeHeteroSessionBindingKey } from './heteroResume';
 import { createMessageWriteBatcher, type ToolMessageUpdateOperation } from './messageWriteBatcher';
 import { createPendingCreateLedger } from './pendingCreateLedger';
 import { resolveQuotaAccountSpawnPlan } from './resolveQuotaAccountEnv';
@@ -223,6 +224,7 @@ export interface HeterogeneousAgentExecutorParams {
   operationId: string;
   pageSelections?: PageSelection[];
   /** CC session ID from previous execution in this topic (for --resume) */
+  resumeBindingKey?: string;
   resumeSessionId?: string;
   workingDirectory?: string;
   workingDirectoryConfig?: WorkingDirConfig;
@@ -463,6 +465,7 @@ export const executeHeterogeneousAgent = async (
     message,
     operationId,
     pageSelections,
+    resumeBindingKey,
     resumeSessionId,
     workingDirectory,
     workingDirectoryConfig,
@@ -472,6 +475,11 @@ export const executeHeterogeneousAgent = async (
     persistedHeterogeneousProvider,
   );
   const adapterType = heterogeneousProvider.type;
+  const serverDefaultConfiguredModel =
+    heterogeneousProvider.authMode === 'api' &&
+    heterogeneousProvider.apiConfig?.source === 'server-default'
+      ? heterogeneousProvider.apiConfig.model.trim() || undefined
+      : undefined;
 
   // Which real provider account this run consumes, resolved once after spawn
   // from the FINAL env (so an agent-env override is attributed correctly, not
@@ -489,7 +497,11 @@ export const executeHeterogeneousAgent = async (
     model?: string;
     usage: unknown;
   }) => {
-    if (adapterType !== 'claude-code' || heterogeneousProvider.authMode === 'api') return;
+    if (
+      adapterType !== 'claude-code' ||
+      (heterogeneousProvider.authMode ?? 'subscription') !== 'subscription'
+    )
+      return;
     const u = intent.usage as ModelUsage;
     agentQuotaService
       .recordUsage({
@@ -802,6 +814,11 @@ export const executeHeterogeneousAgent = async (
 
     const topicMetadata = getTopicMetadataById(get(), context.topicId);
     await updateTopicMetadata(context.topicId, {
+      heteroSessionBindingKey: undefined,
+      heteroSessionBindingKeyByWorkingDirectory: removeHeteroSessionBindingKeyForWorkingDirectory(
+        topicMetadata,
+        workingDirectory,
+      ),
       heteroSessionId: undefined,
       heteroSessionIdByWorkingDirectory: removeHeteroSessionIdForWorkingDirectory(
         topicMetadata,
@@ -812,6 +829,7 @@ export const executeHeterogeneousAgent = async (
     });
   };
   let persistedResumeSessionId: string | undefined;
+  let activeSessionBindingKey = getNativeHeteroSessionBindingKey(adapterType);
   let pendingResumeSessionId: string | undefined;
   let resumeSessionPersistQueue: Promise<void> = Promise.resolve();
   const persistResumeSessionId = (sessionId: string, source: string): Promise<void> => {
@@ -827,6 +845,12 @@ export const executeHeterogeneousAgent = async (
       .then(async () => {
         const topicMetadata = getTopicMetadataById(get(), topicId);
         await updateTopicMetadata(topicId, {
+          heteroSessionBindingKey: activeSessionBindingKey,
+          heteroSessionBindingKeyByWorkingDirectory: setHeteroSessionBindingKeyForWorkingDirectory(
+            topicMetadata,
+            workingDirectory,
+            activeSessionBindingKey,
+          ),
           heteroSessionId: sessionId,
           heteroSessionIdByWorkingDirectory: setHeteroSessionIdForWorkingDirectory(
             topicMetadata,
@@ -1772,6 +1796,19 @@ export const executeHeterogeneousAgent = async (
    * matches arrival.
    */
   const reduceAndApplyMain = async (event: AgentStreamEvent) => {
+    // Server-default CLIs report `lobehub/${catalogId}` (older Claude Code
+    // sessions used `lobehub-default`). Stamp the catalog id onto the message
+    // so the usage footer and model-card lookup resolve the real model.
+    if (serverDefaultConfiguredModel) {
+      const reported = event.data?.model;
+      if (typeof reported === 'string') {
+        const model = unwrapServerDefaultHeterogeneousModel(reported, serverDefaultConfiguredModel);
+        if (model && model !== reported) {
+          event = { ...event, data: { ...event.data, model } };
+        }
+      }
+    }
+
     // Capture the CC-native session id off the stream_start stream so every
     // message persisted below carries the session it belongs to (mirrors the
     // server handler). Stable per run; the copy makes a mid-topic fork visible.
@@ -1803,76 +1840,75 @@ export const executeHeterogeneousAgent = async (
 
   await rehydrateClientSubagentRuns();
 
-  let directEnv: Record<string, string> | undefined;
-  let directModel: string | undefined;
-  let spawnProvider = heterogeneousProvider;
-
-  if (adapterType === 'claude-code' && heterogeneousProvider.authMode === 'api') {
-    if (!labPreferSelectors.enableClaudeCodeApiMode(useUserStore.getState())) {
-      await persistTerminalError(
-        toHeterogeneousAgentMessageError(
-          new Error(t('heteroAgent.apiMode.labDisabled.title', { ns: 'chat' })),
-          adapterType,
-        ),
-      );
-      return;
-    }
-
-    const { apiConfig } = heterogeneousProvider;
-    const aiInfraState = getAiInfraStoreState();
-    const providerConfig = apiConfig
-      ? aiInfraState.aiProviderRuntimeConfig[apiConfig.providerId]
+  const providerBindingActive = heterogeneousProvider.authMode === 'api';
+  const serverDefaultApiConfig =
+    providerBindingActive && heterogeneousProvider.apiConfig?.source === 'server-default'
+      ? heterogeneousProvider.apiConfig
       : undefined;
-    const bindingError = validateClaudeCodeApiBinding({
-      apiConfig,
-      enabledModels: aiInfraState.enabledAiModels ?? [],
-      providerEnabled:
-        !!apiConfig &&
-        !!providerConfig &&
-        !!aiInfraState.enabledAiProviders?.some((provider) => provider.id === apiConfig.providerId),
-      providerSdkType: providerConfig?.settings.sdkType,
-    });
-    if (bindingError) {
-      const message =
-        bindingError.code === 'configMissing'
-          ? t('heteroAgent.apiMode.configMissing', { ns: 'chat' })
-          : t(`heteroAgent.apiMode.${bindingError.code}`, {
-              ...bindingError,
-              ns: 'chat',
-            });
-      await persistTerminalError(toHeterogeneousAgentMessageError(new Error(message), adapterType));
-      return;
-    }
+  const providerApiConfig =
+    providerBindingActive &&
+    heterogeneousProvider.apiConfig &&
+    heterogeneousProvider.apiConfig.source !== 'server-default'
+      ? heterogeneousProvider.apiConfig
+      : undefined;
+  const serverDefaultBindingActive = !!serverDefaultApiConfig;
+  const userProviderBindingActive = !!providerApiConfig;
+  // The Labs flag gates every API-mode path, including the server-default
+  // binding: with the flag off, an api-auth agent must behave exactly as it
+  // did before the feature existed — blocked with a pointer to Labs.
+  if (
+    providerBindingActive &&
+    !labPreferSelectors.enableAgentProviderBinding(useUserStore.getState())
+  ) {
+    await persistTerminalError(
+      toHeterogeneousAgentMessageError(
+        new Error(t('heteroAgent.apiMode.labDisabled.title', { ns: 'chat' })),
+        adapterType,
+      ),
+    );
+    return;
+  }
+  if (providerBindingActive && !serverDefaultBindingActive && !userProviderBindingActive) {
+    await persistTerminalError(
+      toHeterogeneousAgentMessageError(
+        new Error(t('heteroAgent.apiMode.configMissing', { ns: 'chat' })),
+        adapterType,
+      ),
+    );
+    return;
+  }
 
-    if (!apiConfig || !providerConfig) return;
+  if (
+    userProviderBindingActive &&
+    (!isHeterogeneousProviderBindingSupported(adapterType) ||
+      !providerApiConfig.providerId ||
+      !providerApiConfig.model.trim())
+  ) {
+    const message = !isHeterogeneousProviderBindingSupported(adapterType)
+      ? t('heteroAgent.apiMode.agentUnsupported', { name: adapterType, ns: 'chat' })
+      : t('heteroAgent.apiMode.configMissing', { ns: 'chat' });
+    await persistTerminalError(toHeterogeneousAgentMessageError(new Error(message), adapterType));
+    return;
+  }
 
-    const result = buildClaudeCodeDirectEnv({
-      keyVaults: providerConfig.keyVaults,
-      model: apiConfig.model,
-      sdkType: providerConfig.settings.sdkType,
-      smallFastModel: apiConfig.smallFastModel ?? undefined,
-    });
-    if (result.error) {
-      await persistTerminalError(
-        toHeterogeneousAgentMessageError(new Error(result.error), adapterType),
-      );
-      return;
-    }
-
-    directEnv = result.env;
-    directModel = apiConfig.model.trim();
-    spawnProvider = {
-      ...heterogeneousProvider,
-      args: sanitizeClaudeCodeDirectArgs(heterogeneousProvider.args),
-      model: undefined,
-    };
+  if (
+    serverDefaultBindingActive &&
+    (!serverDefaultApiConfig.model.trim() || !isServerDefaultHeterogeneousAgentType(adapterType))
+  ) {
+    await persistTerminalError(
+      toHeterogeneousAgentMessageError(
+        new Error(t('heteroAgent.apiMode.defaultProviderConfigMissing', { ns: 'chat' })),
+        adapterType,
+      ),
+    );
+    return;
   }
 
   try {
     // Account routing: realize the pinned/balanced account choice as spawn env
     // (CLAUDE_CONFIG_DIR profile). Unbound agents get {} and spawn exactly as
     // before; a quota-service failure must never block the run.
-    const quotaAccountPlan = directEnv
+    const quotaAccountPlan = providerBindingActive
       ? { env: {}, externalAccountId: undefined }
       : await resolveQuotaAccountSpawnPlan(context.agentId, adapterType);
 
@@ -1890,38 +1926,53 @@ export const executeHeterogeneousAgent = async (
       ...quotaAccountPlan.env,
       // The agent's own env is the most specific choice and keeps winning —
       // over both provenance and account routing.
-      ...(directEnv
-        ? sanitizeClaudeCodeDirectEnv(heterogeneousProvider.env)
-        : heterogeneousProvider.env),
-      ...directEnv,
+      ...heterogeneousProvider.env,
     };
 
-    const spawnArgs = buildHeteroSpawnArgs(spawnProvider);
-    const resolvedSpawnArgs =
-      directEnv && directModel ? [...(spawnArgs ?? []), '--model', directModel] : spawnArgs;
+    const spawnArgs = buildHeteroSpawnArgs(heterogeneousProvider);
+    const providerBinding = serverDefaultBindingActive
+      ? {
+          apiConfig: serverDefaultApiConfig,
+          kind: 'server-default' as const,
+          resumeBindingKey,
+        }
+      : userProviderBindingActive
+        ? {
+            apiConfig: providerApiConfig,
+            kind: 'provider' as const,
+            resumeBindingKey,
+          }
+        : undefined;
 
     // Start session (pass resumeSessionId for multi-turn --resume)
     const result = await heterogeneousAgentService.startSession({
       agentType: adapterType,
-      args: resolvedSpawnArgs,
+      args: spawnArgs,
       command: resolveHeterogeneousAgentCommand(adapterType, heterogeneousProvider.command),
       cwd: workingDirectory,
       env: sessionEnv,
       initialModel:
-        adapterType === 'trae' &&
+        (adapterType === 'droid' || adapterType === 'trae') &&
+        !providerBindingActive &&
         heterogeneousProvider.model &&
         heterogeneousProvider.model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION
           ? heterogeneousProvider.model
           : undefined,
+      providerBinding,
       resumeSessionId,
       useClaudeCodeSdk: labPreferSelectors.enableClaudeCodeSdk(useUserStore.getState()),
       useCodexAppServer: labPreferSelectors.enableCodexAppServer(useUserStore.getState()),
     });
+    activeSessionBindingKey =
+      result.providerBindingKey ?? getNativeHeteroSessionBindingKey(adapterType);
+    if (providerBindingActive && resumeSessionId && resumeBindingKey !== activeSessionBindingKey) {
+      await clearStaleResumeMetadata();
+    }
 
     // Attribute the run to the login the FINAL env actually resolves to (an
     // agent-env CLAUDE_CONFIG_DIR beats routing, and unbound agents use the
     // default login). Falls back to the routed choice when the file read fails.
-    if (adapterType === 'claude-code' && !directEnv) {
+    if (adapterType === 'claude-code' && !providerBindingActive) {
       heterogeneousAgentService
         .getClaudeCodeIdentity({ env: sessionEnv })
         .then((identity) => {
@@ -1940,8 +1991,15 @@ export const executeHeterogeneousAgent = async (
     // framework calls this; we SIGINT the CC process via the main-process IPC
     // so the CLI exits instead of running to completion off-screen.
     const sidForCancel = ipcRunSessionId;
-    get().onOperationCancel?.(operationId, () => {
-      heterogeneousAgentService.cancelSession(sidForCancel).catch(() => {});
+    get().onOperationCancel?.(operationId, async () => {
+      try {
+        await heterogeneousAgentService.cancelSession(sidForCancel);
+      } catch (error) {
+        // Let the operation layer report an unconfirmed cancellation so a
+        // replacement turn cannot start while the native writer may still live.
+        console.error('[HeterogeneousAgent] IPC session cancellation failed:', error);
+        throw error;
+      }
     });
 
     // ─── Debug tracing (dev only) ───

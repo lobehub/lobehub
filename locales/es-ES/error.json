@@ -107,7 +107,6 @@
   "response.RemoteServerTimeout": "La conexión con el servidor agotó el tiempo de espera. Esto generalmente indica un problema con la red local; por favor, verifica la calidad de tu red, proxy o configuración de VPN e inténtalo de nuevo.",
   "response.RemoteServerUnreachable": "No se pudo alcanzar el servidor. Esto generalmente indica un problema con la red local; por favor, verifica tu conexión a internet, proxy o configuración de VPN e inténtalo de nuevo.",
   "response.ServerAgentRuntimeError": "Lo sentimos, el servicio Agent no está disponible. Inténtalo más tarde o contáctanos.",
-  "response.SubscriptionKeyMismatch": "Lo sentimos, tu suscripción está inactiva. Haz clic abajo para restaurarla o contáctanos.",
   "response.SubscriptionPlanLimit": "Has agotado tus puntos de suscripción. Actualiza tu plan o configura una API personalizada.",
   "response.SubscriptionPlanLimitUltimate": "Has agotado tus puntos de suscripción. Recarga créditos o configura una API personalizada.",
   "response.SystemTimeNotMatchError": "Lo sentimos, la hora de tu sistema no coincide con la del servidor.",

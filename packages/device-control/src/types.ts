@@ -58,33 +58,46 @@ export interface ListProjectSkillsResult {
   source: ProjectSkillSource | null;
 }
 
+export type DevicePathStyle = 'posix' | 'windows';
+
+export type ListDirErrorCode =
+  'NOT_DIRECTORY' | 'NOT_FOUND' | 'PERMISSION_DENIED' | 'UNAVAILABLE' | 'UNKNOWN';
+
+export interface ListDirEntry {
+  hidden: boolean;
+  isSymlink: boolean;
+  name: string;
+  path: string;
+  type: 'directory' | 'file';
+}
+
+interface ListDirBaseResult {
+  /** Device home directory. Present on filesystem errors so the UI can recover. */
+  home: string;
+  path: string;
+  pathStyle: DevicePathStyle;
+  roots: string[];
+}
+
+export interface ListDirSuccessResult extends ListDirBaseResult {
+  entries: ListDirEntry[];
+  parent: string | null;
+  success: true;
+}
+
+export interface ListDirErrorResult extends ListDirBaseResult {
+  code: ListDirErrorCode;
+  success: false;
+}
+
+export type ListDirResult = ListDirErrorResult | ListDirSuccessResult;
+
 export interface StatPathResult {
   exists: boolean;
   isDirectory: boolean;
-  /**
-   * Path after expanding a leading `~`. Callers persist this so a pasted
-   * `~/projects` doesn't get stored as a literal tilde that later spawn
-   * cannot use as `cwd`.
-   */
+  /** Device-normalized absolute path after expanding a leading `~`. */
   path: string;
   repoType?: 'git' | 'github';
-}
-
-export interface ListDirEntry {
-  name: string;
-  path: string;
-}
-
-export interface ListDirResult {
-  dirs: ListDirEntry[];
-  /** Immediate parent, or `null` at a filesystem root (`/` / `C:\`). */
-  parent: string | null;
-  /**
-   * Directory after expanding a leading `~`. Empty / omitted path lists the
-   * device home so the picker has a starting folder without the caller knowing
-   * the remote home.
-   */
-  path: string;
 }
 
 // ─── File preview ───
@@ -161,6 +174,8 @@ export interface ProjectFileIndexResult {
 }
 
 export interface ProjectFileSearchParams extends ProjectFileIndexParams {
+  changedOnly?: boolean;
+  excludeIgnored?: boolean;
   limit?: number;
   query: string;
 }
@@ -265,7 +280,7 @@ export interface ListHeterogeneousAgentModelsParams {
   command?: string;
   cwd?: string;
   env?: Record<string, string>;
-  type: 'codebuddy' | 'cursor' | 'grok-build' | 'opencode' | 'pi' | 'qoder' | 'trae';
+  type: 'codebuddy' | 'cursor' | 'droid' | 'grok-build' | 'opencode' | 'pi' | 'qoder' | 'trae';
 }
 
 export interface HeterogeneousAgentModelCatalogItem {

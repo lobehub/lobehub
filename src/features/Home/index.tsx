@@ -4,6 +4,8 @@ import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { lazy, memo, Suspense, useCallback, useEffect, useState } from 'react';
 
+import { useHomeUsageWidgetActive } from '@/business/client/features/HomeUsageWidget';
+import { useHomePromoLine } from '@/business/client/features/useHomePromoLine';
 import HomeInbox from '@/features/HomeInbox';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
@@ -65,7 +67,7 @@ const COLLAPSED_CONTENT_GAIN = 140;
 const COLLAPSED_CONTENT_OFFSET = (RAIL_RECLAIMED_WIDTH - COLLAPSED_CONTENT_GAIN) / 2;
 /** Portrait width plus its inline inset and the gap the bubble keeps from it. */
 const PORTRAIT_LANE = 152 + 12 + 16;
-const BUBBLE_MAX_WIDTH = 336;
+const BUBBLE_MAX_WIDTH = 360;
 const BUBBLE_GAP = 16;
 /**
  * What the greeting must leave alone so the bubble never lands on it, measured
@@ -213,6 +215,7 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block-end: ${MINIMAL_LIFT}px;
   `,
   portrait: css`
+    pointer-events: none;
     grid-area: 1 / 2;
     transition: transform ${RAIL_TRANSITION_DURATION}ms ease-out;
 
@@ -297,7 +300,12 @@ const Home = memo(() => {
   const showHomeRail = useGlobalStore(systemStatusSelectors.showHomeRail);
   const showHomePortrait = useGlobalStore(systemStatusSelectors.showHomePortrait);
   const hiddenWidgets = useGlobalStore(systemStatusSelectors.hiddenHomeWidgets);
-  const minimal = isHomeMinimalLayout({ hiddenWidgets, showPortrait: showHomePortrait });
+  const promo = useHomePromoLine();
+  const usageActive = useHomeUsageWidgetActive();
+  const minimal = isHomeMinimalLayout(
+    { hiddenWidgets, showPortrait: showHomePortrait },
+    usageActive,
+  );
   const [mode, setMode] = useState<HomeMode>(() =>
     resolveInitialHomeMode(typeof window === 'undefined' ? '' : window.location.search),
   );
@@ -312,7 +320,7 @@ const Home = memo(() => {
   if (drawerTopicId && !drawerMounted) setDrawerMounted(true);
   const [acceptanceDrawerMounted, setAcceptanceDrawerMounted] = useState(false);
   if (acceptancePortalOpen && !acceptanceDrawerMounted) setAcceptanceDrawerMounted(true);
-  const railVisible = resolveRailVisibility({ hiddenWidgets, isLogin, showHomeRail });
+  const railVisible = resolveRailVisibility({ hiddenWidgets, isLogin, showHomeRail, usageActive });
   const railCollapsed = !railVisible;
   const portraitVisible = Boolean(isLogin && showHomePortrait);
 
@@ -355,10 +363,11 @@ const Home = memo(() => {
     <Flexbox className={styles.grid}>
       <div className={cx(styles.header, styles.content, railCollapsed && styles.contentCollapsed)}>
         <HomeHeader />
-        {/* The bubble is the portrait's line, so it goes wherever the portrait goes. */}
+        {/* The portrait has one voice: a live campaign temporarily speaks in
+            place of the daily brief, which returns when the campaign leaves. */}
         {portraitVisible && (
           <div className={cx(styles.bubbleSlot, railCollapsed && styles.bubbleSlotCollapsed)}>
-            <PortraitBubble />
+            <PortraitBubble promo={promo} />
           </div>
         )}
       </div>
@@ -374,14 +383,15 @@ const Home = memo(() => {
         data-testid={'home-main'}
         gap={24}
       >
-        <div className={styles.inputArea}>
+        <Flexbox className={styles.inputArea} gap={12}>
           <InputArea
+            showNewModelShortcuts
             inputValue={inputValue}
             mode={mode}
             onInputValueChange={handleInputValueChange}
             onModeChange={setMode}
           />
-        </div>
+        </Flexbox>
         <HomeModeContent
           inlineRail={railCollapsed && isLogin}
           mode={mode}

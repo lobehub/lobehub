@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon, Flexbox, Input } from '@lobehub/ui';
-import { Checkbox } from '@lobehub/ui/base-ui';
+import { Flexbox, Input } from '@lobehub/ui';
+import { ActionIcon, Checkbox } from '@lobehub/ui/base-ui';
 import type { InputRef } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { Plus } from 'lucide-react';

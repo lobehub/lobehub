@@ -156,7 +156,6 @@ const Conversation = memo(() => {
             <TopicMigrationPlaceholder agentId={context.agentId} topicId={context.topicId} />
           ) : (
             <ChatList
-              defaultWorkflowExpandLevel={isHeterogeneousAgent ? { streaming: 'full' } : undefined}
               headerSlot={<div aria-hidden className={styles.floatingHeaderSpacer} />}
               welcome={<AgentHome />}
               footerSlot={

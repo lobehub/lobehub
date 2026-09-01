@@ -1,12 +1,10 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { discoverService } from '@/services/discover';
 import { globalHelpers } from '@/store/global/helpers';
 
 import { useDiscoverStore as useStore } from '../../store';
-
-vi.mock('zustand/traditional');
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -47,6 +45,17 @@ describe('AssistantAction', () => {
       });
 
       expect(discoverService.getAssistantCategories).toHaveBeenCalledWith(params);
+    });
+
+    it('should skip the compatibility request when category counts come from the list', async () => {
+      const getAssistantCategories = vi.spyOn(discoverService, 'getAssistantCategories');
+
+      const { result } = renderHook(() =>
+        useStore.getState().useAssistantCategories({}, { enabled: false }),
+      );
+
+      expect(result.current.data).toBeUndefined();
+      expect(getAssistantCategories).not.toHaveBeenCalled();
     });
   });
 
@@ -112,6 +121,32 @@ describe('AssistantAction', () => {
   });
 
   describe('useAssistantList', () => {
+    it('should keep previous list data while a paginated request is loading', async () => {
+      const firstPage = { items: [{ identifier: 'first-page' }], total: 1 };
+      const secondPage = { items: [{ identifier: 'second-page' }], total: 1 };
+      let resolveSecondPage!: (value: typeof secondPage) => void;
+      const secondPageRequest = new Promise<typeof secondPage>((resolve) => {
+        resolveSecondPage = resolve;
+      });
+      vi.spyOn(discoverService, 'getAssistantList').mockImplementation(async (params) =>
+        params?.page === 2 ? secondPageRequest : (firstPage as any),
+      );
+      vi.spyOn(globalHelpers, 'getCurrentLanguage').mockReturnValue('en-US');
+
+      const q = `keep-previous-${Date.now()}`;
+      const { rerender, result } = renderHook(
+        ({ page }) => useStore.getState().useAssistantList({ page, q }, { keepPreviousData: true }),
+        { initialProps: { page: 1 } },
+      );
+      await waitFor(() => expect(result.current.data).toEqual(firstPage));
+
+      rerender({ page: 2 });
+      expect(result.current.data).toEqual(firstPage);
+
+      await act(async () => resolveSecondPage(secondPage));
+      await waitFor(() => expect(result.current.data).toEqual(secondPage));
+    });
+
     it('should fetch assistant list with default parameters', async () => {
       const mockList = {
         items: [{ identifier: 'assistant-1' }, { identifier: 'assistant-2' }],

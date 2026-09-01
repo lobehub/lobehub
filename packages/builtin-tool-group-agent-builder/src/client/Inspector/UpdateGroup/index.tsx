@@ -54,8 +54,10 @@ export const UpdateGroupInspector = memo<
   // Initial streaming state
   if (isArgumentsStreaming && !displayText) {
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-group-agent-builder.apiName.updateGroup')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-group-agent-builder.apiName.updateGroup')}
+        </span>
       </div>
     );
   }
@@ -63,13 +65,10 @@ export const UpdateGroupInspector = memo<
   const isSuccess = pluginState?.success;
 
   return (
-    <div
-      className={cx(
-        inspectorTextStyles.root,
-        (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-      )}
-    >
-      <span>{t('builtins.lobe-group-agent-builder.apiName.updateGroup')}</span>
+    <div className={inspectorTextStyles.root}>
+      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+        {t('builtins.lobe-group-agent-builder.apiName.updateGroup')}
+      </span>
       {displayText && (
         <>
           :<span className={highlightTextStyles.primary}>{displayText}</span>

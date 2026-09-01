@@ -1,396 +1,272 @@
 'use client';
 
-import type { TaskDetailSubtask, TaskStatus } from '@lobechat/types';
-import { Accordion, AccordionItem, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { Progress } from 'antd';
+import { Flexbox } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { BotIcon } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { memo, type ReactNode, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NotFound from '@/components/404';
 import AsyncError from '@/components/AsyncError';
-import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
+import CollapsibleContent from '@/components/CollapsibleContent';
 import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
-import { useActiveTaskDetail } from '@/features/AgentTasks/AgentTaskDetail';
-import TaskDetailTitleInput from '@/features/AgentTasks/AgentTaskDetail/TaskDetailTitleInput';
-import TaskInstruction from '@/features/AgentTasks/AgentTaskDetail/TaskInstruction';
-import TopicCard from '@/features/AgentTasks/AgentTaskDetail/TopicCard';
-import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
-import { useNavigateToTaskDetail } from '@/features/AgentTasks/shared/taskDetailPath';
+import RunningGlyph from '@/features/Home/components/RunningGlyph';
 import NavHeader from '@/features/NavHeader';
-import {
-  checkHeadMeta,
-  CriterionList,
-  CriterionRequiredChip,
-  CriterionRow,
-} from '@/features/Verify';
+import { PortalContent } from '@/features/Portal/router';
+import RightPanel from '@/features/RightPanel';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useActivityTime } from '@/hooks/useActivityTime';
-import { useTaskStore } from '@/store/task';
-import { taskDetailSelectors } from '@/store/task/selectors';
-import { useVerifyStore, verifySelectors } from '@/store/verify';
+import { useChatStore } from '@/store/chat';
+import { chatPortalSelectors } from '@/store/chat/selectors';
+import { type GoalMetricKind } from '@/store/chat/slices/portal/initialState';
+import { goalSelectors, useGoalStore } from '@/store/goal';
 
 import GoalDetailActions from './GoalDetailActions';
-import { getGoalPresentation } from './goalPresentation';
+import { formatSpan, goalStatusKey } from './goalPresentation';
 import GoalStatusGlyph from './GoalStatusGlyph';
-import {
-  formatGoalCost,
-  formatGoalDuration,
-  getGoalRunMetrics,
-  getGoalRuns,
-  getRecentGoalRuns,
-} from './goalViewModel';
+import ProcessControl from './ProcessControl';
+
+/**
+ * The goal detail page. A goal is a Goal Graph — it owns its own decomposition
+ * and dispatches Work Tasks — so the page reads the graph snapshot directly and
+ * the route is keyed by the `goals` row id.
+ *
+ * Every header metric is a drill-down entry: clicking one opens its detail in
+ * the right-hand Portal, the same panel the process-control band drills into
+ * (node → task → topic conversation).
+ */
 
 const styles = createStaticStyles(({ css }) => ({
-  executionSection: css`
-    padding-block: 18px;
-  `,
   header: css`
     padding-block: 8px 4px;
   `,
   metric: css`
+    cursor: pointer;
+
     min-width: 112px;
+    padding-block: 4px;
+    padding-inline: 10px;
+    border-radius: ${cssVar.borderRadius};
 
-    & + & {
-      padding-inline-start: 18px;
-      border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
+    transition: background 0.15s;
+
+    &:hover {
+      background: ${cssVar.colorFillQuaternary};
     }
   `,
-  title: css`
-    .ant-input {
-      flex: none;
-    }
-  `,
-  treeChildren: css`
-    margin-inline-start: 13px;
-    padding-inline-start: 20px;
-    border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  treeRow: css`
-    position: relative;
-    min-height: 40px;
-    padding-block: 8px;
-
-    &::before {
-      content: '';
-
-      position: absolute;
-      inset-block-start: 20px;
-      inset-inline-start: -20px;
-
-      width: 12px;
-      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    }
+  metrics: css`
+    /* Negative inline offset keeps the metric text aligned with the title while
+       the hover background still gets breathing room. */
+    margin-inline-start: -10px;
   `,
 }));
 
-interface GoalDetailPageProps {
-  agentId: string;
-  goalId: string;
-}
-
-const statusVisual = (status: string) =>
-  TASK_STATUS_VISUALS[status as TaskStatus] ?? TASK_STATUS_VISUALS.backlog;
-
-const TaskTreeItem = memo<{ task: TaskDetailSubtask }>(({ task }) => {
-  const navigateToTaskDetail = useNavigateToTaskDetail();
-  const visual = statusVisual(task.status);
-  const { text: updatedAt, title: updatedAtTitle } = useActivityTime(task.updatedAt);
-
-  return (
-    <Flexbox>
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={styles.treeRow}
-        gap={8}
-        style={{ cursor: 'pointer' }}
-        onClick={() => navigateToTaskDetail(task.identifier)}
-      >
-        <Icon color={visual.color} icon={visual.icon} size={14} />
-        <Text fontSize={12} type={'secondary'}>
-          {task.identifier}
-        </Text>
-        <Text ellipsis style={{ flex: 1, minWidth: 0 }}>
-          {task.name || task.identifier}
-        </Text>
-        <AssigneeAvatar agentId={task.assignee?.id} size={18} />
-        <Text fontSize={12} title={updatedAtTitle} type={'secondary'}>
-          {updatedAt || '—'}
-        </Text>
-      </Flexbox>
-      {task.children && task.children.length > 0 && (
-        <Flexbox className={styles.treeChildren}>
-          <TaskTreeRows tasks={task.children} />
-        </Flexbox>
-      )}
+const Metric = memo<{
+  label: string;
+  onClick: () => void;
+  value: ReactNode;
+}>(({ label, onClick, value }) => (
+  <Flexbox className={styles.metric} gap={2} onClick={onClick}>
+    <Flexbox horizontal align={'center'} gap={7} style={{ minHeight: 26 }}>
+      {value}
     </Flexbox>
+    <Text fontSize={12} type={'secondary'}>
+      {label}
+    </Text>
+  </Flexbox>
+));
+
+Metric.displayName = 'GoalHeaderMetric';
+
+/** Relative "last activity" readout; isolated so its refresh never re-renders the page. */
+const LivenessValue = memo<{ active: boolean; latest?: Date }>(({ active, latest }) => {
+  const { text } = useActivityTime(latest);
+  return (
+    <>
+      {active && <RunningGlyph size={14} />}
+      <Text fontSize={16} weight={600}>
+        {text || '—'}
+      </Text>
+    </>
   );
 });
 
-TaskTreeItem.displayName = 'GoalTaskTreeItem';
+LivenessValue.displayName = 'GoalLivenessValue';
 
-const TaskTreeRows = memo<{ depth?: number; tasks: TaskDetailSubtask[] }>(({ tasks }) => {
-  return tasks.map((item) => <TaskTreeItem key={item.identifier} task={item} />);
-});
-
-TaskTreeRows.displayName = 'GoalTaskTreeRows';
+interface GoalDetailPageProps {
+  /** Absent for a goal with no responsible agent — e.g. one created from a project. */
+  agentId?: string;
+  goalId: string;
+}
 
 const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
-  const { t } = useTranslation(['chat', 'verify']);
-  const navigateToTaskDetail = useNavigateToTaskDetail();
-  const { error, isInitialLoading, isNotFound, onRetry } = useActiveTaskDetail(goalId);
-  const task = useTaskStore(taskDetailSelectors.taskDetailById(goalId));
-  const useFetchAcceptanceBySubject = useVerifyStore((s) => s.useFetchAcceptanceBySubject);
-  const useFetchAcceptanceBundle = useVerifyStore((s) => s.useFetchAcceptanceBundle);
-  const acceptance = useVerifyStore(verifySelectors.acceptanceBySubject('task', task?.id));
-  const bundle = useVerifyStore(verifySelectors.acceptanceBundle(acceptance?.id));
-  const acceptanceQuery = useFetchAcceptanceBySubject('task', task?.id);
-  const bundleQuery = useFetchAcceptanceBundle(acceptance?.id);
-  const runs = useMemo(() => getGoalRuns(task?.activities), [task?.activities]);
-  const recentRuns = useMemo(() => getRecentGoalRuns(task?.activities), [task?.activities]);
-  const runMetrics = useMemo(() => getGoalRunMetrics(task?.activities), [task?.activities]);
-  const { text: rootUpdatedAt, title: rootUpdatedAtTitle } = useActivityTime(task?.updatedAt);
-  const presentation = getGoalPresentation({
-    acceptanceStatus: bundle?.acceptance.status,
-    checks: bundle?.checks,
-    goalStatus: task?.goal?.status,
-    maxRounds: task?.goal?.maxRounds,
-    rounds: task?.topicCount ?? 0,
-    taskStatus: task?.status ?? 'backlog',
-  });
-  const title = task?.name?.trim() || task?.instruction.trim() || goalId;
+  const { t } = useTranslation('chat');
+  const useFetchGoalGraph = useGoalStore((s) => s.useFetchGoalGraph);
+  const { error, isLoading, mutate } = useFetchGoalGraph(goalId);
+  const snapshot = useGoalStore(goalSelectors.goalGraph(goalId));
 
-  if (error) return <AsyncError error={error} variant={'page'} onRetry={onRetry} />;
-  if (isNotFound)
-    return (
+  const showPortal = useChatStore(chatPortalSelectors.showPortal);
+  const openGoalMetric = useChatStore((s) => s.openGoalMetric);
+  const clearPortalStack = useChatStore((s) => s.clearPortalStack);
+
+  // The portal stack belongs to this goal's inspection session — leaving the
+  // page (or switching goals) must not leak it into the conversation surface.
+  useEffect(() => () => clearPortalStack(), [clearPortalStack, goalId]);
+
+  const liveness = useMemo(() => {
+    if (!snapshot) return { active: false, latest: undefined };
+    let latest: Date | undefined;
+    let active = false;
+    for (const node of snapshot.nodes) {
+      if (!latest || node.updatedAt > latest) latest = node.updatedAt;
+      if (node.kind === 'task' && node.status === 'active') active = true;
+    }
+    return { active, latest };
+  }, [snapshot]);
+
+  if (error && !snapshot) return <AsyncError error={error} variant={'page'} onRetry={mutate} />;
+  if (!snapshot)
+    return isLoading ? (
+      <GoalDetailSkeleton />
+    ) : (
       <NotFound desc={t('goalDetail.notFoundDescription')} title={t('goalDetail.notFoundTitle')} />
     );
 
-  return (
-    <Flexbox flex={1} height={'100%'}>
-      <NavHeader
-        left={
-          <Flexbox horizontal align={'center'} gap={4}>
-            <AgentBreadcrumb agentId={agentId} extraItems={[title]} title={t('goalList.title')} />
-            <GoalDetailActions agentId={agentId} goalId={goalId} />
-          </Flexbox>
-        }
-      />
-      <Flexbox flex={1} style={{ overflowY: 'auto' }}>
-        <WideScreenContainer gap={20} paddingBlock={16}>
-          {isInitialLoading || !task ? (
-            <GoalDetailSkeleton showHeader={false} />
-          ) : (
-            <>
-              <Flexbox className={styles.header} gap={8}>
-                <Flexbox horizontal align={'flex-start'} gap={12}>
-                  <Flexbox className={styles.title} gap={5} style={{ flex: 1, minWidth: 0 }}>
-                    <TaskDetailTitleInput />
-                    {task.description && (
-                      <Text fontSize={15} style={{ lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>
-                        {task.description}
-                      </Text>
-                    )}
-                  </Flexbox>
-                </Flexbox>
+  const { goal, nodes } = snapshot;
+  const tasks = nodes.filter((node) => node.kind === 'task').length;
+  const findings = nodes.filter((node) => node.kind === 'finding').length;
+  const open = (metric: GoalMetricKind) => () => openGoalMetric(goalId, metric);
 
-                <Flexbox horizontal gap={18} wrap={'wrap'}>
-                  <Flexbox className={styles.metric} gap={2}>
-                    <Flexbox horizontal align={'center'} gap={7}>
-                      <Progress
-                        percent={presentation.progress}
-                        showInfo={false}
-                        size={24}
-                        strokeColor={cssVar.colorSuccess}
-                        type={'circle'}
-                      />
-                      <Text fontSize={18} weight={600}>
-                        {presentation.total > 0
-                          ? `${presentation.passed}/${presentation.total}`
-                          : '—'}
+  const durationText = goal.startedAt
+    ? formatSpan((goal.completedAt ?? new Date()).getTime() - goal.startedAt.getTime())
+    : '—';
+  const budgetText =
+    goal.maxTotalCost === null
+      ? goal.maxRounds === null
+        ? t('goalProcess.metrics.uncapped')
+        : t('goalProcess.metrics.roundsValue', { count: goal.maxRounds })
+      : `$${goal.maxTotalCost}`;
+
+  return (
+    <Flexbox horizontal flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
+      <Flexbox flex={1} height={'100%'} style={{ minWidth: 0 }}>
+        <NavHeader
+          left={
+            <Flexbox horizontal align={'center'} gap={4}>
+              {agentId ? (
+                <AgentBreadcrumb
+                  agentId={agentId}
+                  extraItems={[goal.title]}
+                  title={t('goalList.title')}
+                />
+              ) : (
+                <Text fontSize={14} weight={500}>
+                  {goal.title}
+                </Text>
+              )}
+              {/* Not nested under the breadcrumb: an agent-less goal still has to
+                  be deletable, and this menu is the only place that can do it. */}
+              <GoalDetailActions agentId={agentId} goalId={goal.id} projectId={goal.projectId} />
+            </Flexbox>
+          }
+        />
+        <Flexbox flex={1} style={{ overflowY: 'auto' }}>
+          <WideScreenContainer gap={20} paddingBlock={16}>
+            <Flexbox className={styles.header} gap={8}>
+              <Text as={'h1'} fontSize={22} weight={600}>
+                {goal.title}
+              </Text>
+              <Flexbox horizontal className={styles.metrics} gap={8} wrap={'wrap'}>
+                <Metric
+                  label={t('goalProcess.metrics.status')}
+                  value={
+                    <>
+                      <GoalStatusGlyph size={16} status={goal.status} />
+                      <Text fontSize={16} weight={600}>
+                        {t(goalStatusKey(goal.status))}
                       </Text>
-                    </Flexbox>
-                    <Text fontSize={12} type={'secondary'}>
-                      {t('goalDetail.metrics.progress')}
+                    </>
+                  }
+                  onClick={open('lifecycle')}
+                />
+                <Metric
+                  label={t('goalProcess.metrics.tasks')}
+                  value={
+                    <Text fontSize={16} weight={600}>
+                      {tasks}
                     </Text>
-                  </Flexbox>
-                  <Flexbox className={styles.metric} gap={2}>
-                    <Text fontSize={18} weight={600}>
-                      {task.topicCount ?? 0}
+                  }
+                  onClick={open('tasks')}
+                />
+                <Metric
+                  label={t('goalProcess.metrics.findings')}
+                  value={
+                    <Text fontSize={16} weight={600}>
+                      {findings}
                     </Text>
-                    <Text fontSize={12} type={'secondary'}>
-                      {t('goalDetail.metrics.taskExecutions')}
+                  }
+                  onClick={open('findings')}
+                />
+                <Metric
+                  label={t('goalProcess.metrics.budget')}
+                  value={
+                    <Text fontSize={16} weight={600}>
+                      {budgetText}
                     </Text>
-                  </Flexbox>
-                  <Flexbox className={styles.metric} gap={2}>
-                    <Text fontSize={18} weight={600}>
-                      {runs.length}
+                  }
+                  onClick={open('budget')}
+                />
+                <Metric
+                  label={t('goalProcess.metrics.duration')}
+                  value={
+                    <Text fontSize={16} weight={600}>
+                      {durationText}
                     </Text>
-                    <Text fontSize={12} type={'secondary'}>
-                      {t('goalDetail.metrics.agentRuns')}
-                    </Text>
-                  </Flexbox>
-                  <Flexbox className={styles.metric} gap={2}>
-                    <Text fontSize={18} weight={600}>
-                      {formatGoalDuration(runMetrics.duration)}
-                    </Text>
-                    <Text fontSize={12} type={'secondary'}>
-                      {t('goalDetail.metrics.totalDuration')}
-                    </Text>
-                  </Flexbox>
-                  <Flexbox className={styles.metric} gap={2}>
-                    <Text fontSize={18} weight={600}>
-                      {formatGoalCost(runMetrics.cost)}
-                    </Text>
-                    <Text fontSize={12} type={'secondary'}>
-                      {t('goalDetail.metrics.totalCost')}
-                    </Text>
-                  </Flexbox>
-                </Flexbox>
+                  }
+                  onClick={open('duration')}
+                />
+                <Metric
+                  label={t('goalProcess.metrics.liveness')}
+                  value={<LivenessValue active={liveness.active} latest={liveness.latest} />}
+                  onClick={open('liveness')}
+                />
+              </Flexbox>
+              {goal.requirement && (
                 <Flexbox gap={4} paddingBlock={'8px 0'}>
                   <Text fontSize={12} type={'secondary'} weight={500}>
-                    {t('goalDetail.instruction')}
+                    {t('goalProcess.requirement')}
                   </Text>
-                  <TaskInstruction />
-                </Flexbox>
-              </Flexbox>
-
-              <Flexbox gap={4}>
-                <Accordion defaultExpandedKeys={['acceptance']} gap={0}>
-                  <AccordionItem
-                    itemKey={'acceptance'}
-                    paddingBlock={6}
-                    paddingInline={0}
-                    title={
-                      <Flexbox horizontal align={'center'} gap={8}>
-                        <Text fontSize={14} weight={600}>
-                          {t('goalDetail.acceptance')}
-                        </Text>
-                        {presentation.total > 0 && <Tag size={'small'}>{presentation.total}</Tag>}
-                      </Flexbox>
-                    }
-                  >
-                    <Flexbox paddingBlock={8}>
-                      {acceptanceQuery.error || bundleQuery.error ? (
-                        <AsyncError
-                          error={acceptanceQuery.error || bundleQuery.error}
-                          variant={'inline'}
-                          onRetry={() => {
-                            void acceptanceQuery.mutate();
-                            if (acceptance?.id) void bundleQuery.mutate();
-                          }}
-                        />
-                      ) : acceptanceQuery.isLoading || bundleQuery.isLoading ? (
-                        <Text type={'secondary'}>{t('goalPage.loadingProgress')}</Text>
-                      ) : presentation.total === 0 ? (
-                        <Text type={'secondary'}>{t('goalDetail.noChecks')}</Text>
-                      ) : (
-                        <CriterionList>
-                          {bundle?.checks.map((check, index) => {
-                            const meta = checkHeadMeta(check);
-                            const verifierType = check.planItem?.verifierType;
-                            return (
-                              <CriterionRow
-                                key={check.id}
-                                seq={index + 1}
-                                title={check.title}
-                                icon={
-                                  <Icon
-                                    color={meta.color}
-                                    icon={meta.icon}
-                                    size={16}
-                                    style={{ flex: 'none' }}
-                                  />
-                                }
-                              >
-                                {verifierType ? (
-                                  <Tag>
-                                    {t(`criterion.verifierType.${verifierType}` as const, {
-                                      ns: 'verify',
-                                    })}
-                                  </Tag>
-                                ) : null}
-                                <CriterionRequiredChip required={check.required !== false} />
-                              </CriterionRow>
-                            );
-                          })}
-                        </CriterionList>
-                      )}
-                    </Flexbox>
-                  </AccordionItem>
-                </Accordion>
-
-                <Flexbox className={styles.executionSection} gap={12}>
-                  <Flexbox gap={5}>
-                    <Flexbox horizontal align={'center'} gap={8}>
-                      <Text fontSize={14} weight={600}>
-                        {t('goalDetail.executionOverview')}
-                      </Text>
-                      <Button
-                        size={'small'}
-                        type={'text'}
-                        onClick={() => navigateToTaskDetail(task.identifier, agentId)}
-                      >
-                        {t('goalDetail.viewPlan')}
-                      </Button>
-                    </Flexbox>
-                  </Flexbox>
-                  <Flexbox gap={4}>
-                    <Flexbox horizontal align={'center'} className={styles.treeRow} gap={8}>
-                      <GoalStatusGlyph size={14} statusKey={presentation.statusKey} />
-                      <Text fontSize={12} type={'secondary'}>
-                        {task.identifier}
-                      </Text>
-                      <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={600}>
-                        {task.name || task.identifier}
-                      </Text>
-                      <AssigneeAvatar agentId={task.agentId} size={18} />
-                      <Text fontSize={12} title={rootUpdatedAtTitle} type={'secondary'}>
-                        {rootUpdatedAt || '—'}
-                      </Text>
-                    </Flexbox>
-                    {task.subtasks && task.subtasks.length > 0 && (
-                      <Flexbox className={styles.treeChildren}>
-                        <TaskTreeRows tasks={task.subtasks} />
-                      </Flexbox>
-                    )}
-                  </Flexbox>
-                  <Flexbox horizontal align={'center'} gap={8} paddingBlock={'12px 0'}>
-                    <Text fontSize={13} weight={600}>
-                      {t('goalDetail.latestRuns')}
+                  {/* Generated acceptance criteria run long — clamp like the task
+                      instruction does, with the shared show-more affordance. */}
+                  <CollapsibleContent maxHeight={160}>
+                    <Text fontSize={14} style={{ lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>
+                      {goal.requirement}
                     </Text>
-                  </Flexbox>
-                  {runs.length > 0 ? (
-                    <Flexbox gap={12} paddingBlock={8}>
-                      {recentRuns.map((activity, index) => (
-                        <TopicCard
-                          activity={activity}
-                          key={activity.id || activity.topicId || index}
-                        />
-                      ))}
-                    </Flexbox>
-                  ) : (
-                    <Flexbox
-                      horizontal
-                      align={'center'}
-                      gap={8}
-                      paddingBlock={10}
-                      paddingInline={12}
-                    >
-                      <Icon color={cssVar.colorTextQuaternary} icon={BotIcon} size={15} />
-                      <Text type={'secondary'}>{t('goalDetail.noRuns')}</Text>
-                    </Flexbox>
-                  )}
+                  </CollapsibleContent>
                 </Flexbox>
-              </Flexbox>
-            </>
-          )}
-        </WideScreenContainer>
+              )}
+            </Flexbox>
+
+            <ProcessControl goalId={goal.id} />
+          </WideScreenContainer>
+        </Flexbox>
       </Flexbox>
+
+      {/* Same Portal the conversation surface uses — the drill-down chain
+          (metric / node → task detail → topic) rides its view stack, and the
+          header's back arrow and close come for free. */}
+      <RightPanel
+        defaultWidth={440}
+        expand={showPortal}
+        maxWidth={720}
+        minWidth={360}
+        onExpandChange={(next) => {
+          if (!next) clearPortalStack();
+        }}
+      >
+        <PortalContent />
+      </RightPanel>
     </Flexbox>
   );
 });

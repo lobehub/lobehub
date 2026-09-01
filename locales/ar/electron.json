@@ -140,6 +140,7 @@
   "updater.downloadNewVersion": "تحميل الإصدار الجديد",
   "updater.downloadingUpdate": "جارٍ تحميل التحديث",
   "updater.downloadingUpdateDesc": "جارٍ تحميل التحديث، يرجى الانتظار...",
+  "updater.ignore": "تجاهل",
   "updater.installLater": "تثبيت التحديث عند التشغيل التالي",
   "updater.isLatestVersion": "أنت تستخدم أحدث إصدار",
   "updater.isLatestVersionDesc": "رائع! الإصدار {{version}} الذي تستخدمه هو الأحدث المتاح.",

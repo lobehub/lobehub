@@ -1,7 +1,7 @@
 'use client';
 
-import { Center, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Center, Flexbox, Icon } from '@lobehub/ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
 import { FolderKanbanIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 

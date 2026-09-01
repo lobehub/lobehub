@@ -1,7 +1,7 @@
 'use client';
 
-import { Center, Flexbox, Tag, Text, TextArea } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Center, Flexbox, TextArea } from '@lobehub/ui';
+import { Button, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { SendHorizontalIcon, SparklesIcon } from 'lucide-react';
 import { memo, useState } from 'react';

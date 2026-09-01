@@ -14,7 +14,8 @@ const { manager, preference } = vi.hoisted(() => ({
   preference: { terminalFontFamily: '"JetBrains Mono"' },
 }));
 
-vi.mock('antd-style', () => ({
+vi.mock('antd-style', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   useTheme: () => ({ fontFamilyCode: 'Application Mono' }),
 }));
 

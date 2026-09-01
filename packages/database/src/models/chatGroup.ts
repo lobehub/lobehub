@@ -142,6 +142,33 @@ export class ChatGroupModel {
 
   // ******* Query Methods ******* //
 
+  /**
+   * The supervisor agent a group's conversation answers to, or `null`.
+   *
+   * Deliberately scoped by workspace rather than by {@link ownership}: callers
+   * use this to look up what the group's author decided (its supervisor's
+   * permission policies), which must not depend on whether *this* caller can
+   * see the group row. A visibility-scoped miss would return `null` and fail
+   * open.
+   */
+  getSupervisorAgentId = async (groupId: string): Promise<string | null> => {
+    const [row] = await this.db
+      .select({ agentId: chatGroupsAgents.agentId })
+      .from(chatGroupsAgents)
+      .where(
+        and(
+          eq(chatGroupsAgents.chatGroupId, groupId),
+          eq(chatGroupsAgents.role, GROUP_SUPERVISOR_ROLE),
+          this.workspaceId
+            ? eq(chatGroupsAgents.workspaceId, this.workspaceId)
+            : and(eq(chatGroupsAgents.userId, this.userId), isNull(chatGroupsAgents.workspaceId)),
+        ),
+      )
+      .limit(1);
+
+    return row?.agentId ?? null;
+  };
+
   async findById(id: string): Promise<ChatGroupItem | undefined> {
     const item = await this.db.query.chatGroups.findFirst({
       where: and(eq(chatGroups.id, id), this.ownership()),

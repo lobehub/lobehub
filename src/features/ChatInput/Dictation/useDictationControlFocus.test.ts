@@ -5,8 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RealtimeDictationStatus } from './contract';
 import { useDictationControlFocus } from './useDictationControlFocus';
 
-const mountControl = (ref: RefObject<HTMLDivElement | null>) => {
-  const control = document.createElement('div');
+const mountControl = (ref: RefObject<HTMLButtonElement | null>) => {
+  const control = document.createElement('button');
   control.tabIndex = 0;
   document.body.append(control);
   ref.current = control;
@@ -14,7 +14,7 @@ const mountControl = (ref: RefObject<HTMLDivElement | null>) => {
   return control;
 };
 
-const unmountControl = (ref: RefObject<HTMLDivElement | null>) => {
+const unmountControl = (ref: RefObject<HTMLButtonElement | null>) => {
   ref.current?.remove();
   ref.current = null;
 };

@@ -107,7 +107,6 @@
   "response.RemoteServerTimeout": "與伺服器的連線已逾時。這通常表示本地網路問題——請檢查您的網路品質、代理伺服器或 VPN 設定，然後再試一次。",
   "response.RemoteServerUnreachable": "無法連接到伺服器。這通常表示本地網路問題——請檢查您的網路連線、代理伺服器或 VPN 設定，然後再試一次。",
   "response.ServerAgentRuntimeError": "很抱歉，目前的 Agent 服務暫時無法使用，請稍後再試，或透過電子郵件聯絡我們以獲得支援",
-  "response.SubscriptionKeyMismatch": "很抱歉，由於系統偶發故障，當前訂閱用量暫時失效，請點擊下方按鈕恢復訂閱，或郵件聯繫我們獲取支持",
   "response.SubscriptionPlanLimit": "您的訂閱積分已用盡，無法使用該功能，請升級到更高計劃，或配置自訂模型 API 後繼續使用",
   "response.SubscriptionPlanLimitUltimate": "您的訂閱點數已用盡，無法使用此功能。請儲值點數或設定自訂模型 API 以繼續使用。",
   "response.SystemTimeNotMatchError": "很抱歉，您的系統時間與伺服器不匹配，請檢查您的系統時間後重試",

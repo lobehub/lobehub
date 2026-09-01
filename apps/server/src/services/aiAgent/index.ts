@@ -1,14 +1,5 @@
-import type {
-  Agent,
-  AgentRuntimeContext,
-  AgentState,
-  GeneralAgentConfig,
-} from '@lobechat/agent-runtime';
-import {
-  extractActivatedToolIdsFromMessages,
-  GeneralChatAgent,
-  GraphAgent,
-} from '@lobechat/agent-runtime';
+import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
+import { extractActivatedToolIdsFromMessages } from '@lobechat/agent-runtime';
 import {
   BUILTIN_AGENT_SLUGS,
   getAgentRuntimeConfig,
@@ -37,7 +28,6 @@ import {
 import {
   type AgentGroupConfig,
   type AgentManagementContext,
-  type BotPlatformContext,
   buildExpertiseContextSnapshot,
   type LobeToolManifest,
   SkillEngine,
@@ -48,8 +38,7 @@ import {
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import {
-  CLAUDE_CODE_API_LOCAL_ONLY_ERROR,
-  getHeterogeneousAgentConfig,
+  HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR,
   isLocalHeterogeneousType,
   isRemoteHeterogeneousType,
 } from '@lobechat/heterogeneous-agents';
@@ -58,28 +47,25 @@ import type {
   AgentModelOverride,
   ChatAudioItem,
   ChatFileItem,
-  ChatTopicBotContext,
   ChatVideoItem,
   ErrorType,
-  ExecAgentParams,
   ExecAgentResult,
   ExecGroupAgentParams,
   ExecGroupAgentResult,
   ExecSubAgentParams,
   ExecSubAgentResult,
   ExecVirtualSubAgentParams,
+  HeterogeneousTopicModel,
   LobeAgentAgencyConfig,
   LobeAgentChatConfig,
-  LobeAgentConfig,
   MessagePluginItem,
-  RuntimeMentionedAgent,
   ScheduleAgentRunParams,
   ScheduleAgentRunResult,
-  UserInterventionConfig,
+  WorkingDirConfig,
   WorkspaceInitResult,
 } from '@lobechat/types';
 import {
-  AgentGraphSchema,
+  applyTopicModelToHeterogeneousProvider,
   buildHeteroExecArgs,
   ChatErrorType,
   getActivePluginIds,
@@ -88,6 +74,7 @@ import {
   RequestTrigger,
   resolveAgentAgencyConfig,
   resolveAgentModelConfig,
+  resolveHeterogeneousProviderTopicModel,
   ThreadStatus,
   ThreadType,
 } from '@lobechat/types';
@@ -96,6 +83,11 @@ import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import type { ModelAbilities } from 'model-bank';
 
+import {
+  deriveAgentInterventionContinuationMessageId,
+  deriveAgentInterventionContinuationOperationId,
+  matchesAgentInterventionContinuationProvenance,
+} from '@/business/server/agent-run/agentInterventionIdentity';
 import { AgentModel } from '@/database/models/agent';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { AgentSkillModel } from '@/database/models/agentSkill';
@@ -107,7 +99,11 @@ import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { DeviceModel } from '@/database/models/device';
 import { ExpertiseModel } from '@/database/models/expertise';
 import { FileModel } from '@/database/models/file';
-import { MessageModel } from '@/database/models/message';
+import {
+  HumanApprovalAlreadyResolvedError,
+  type HumanApprovalResolution,
+  MessageModel,
+} from '@/database/models/message';
 import { PluginModel } from '@/database/models/plugin';
 import { TaskModel } from '@/database/models/task';
 import { ThreadModel } from '@/database/models/thread';
@@ -115,9 +111,9 @@ import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
-import { toolsEnv } from '@/envs/tools';
 import {
   type ExecutionPlan,
+  executionPlanToManifestExecutionEnv,
   executionTargetToRuntimeMode,
   isDeviceCapablePlan,
   isDeviceLockedPlan,
@@ -128,13 +124,13 @@ import {
 import { shouldEnableBuiltinSkill } from '@/helpers/skillFilters';
 import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
 import { patchManifestWithPermissions } from '@/libs/mcp/connectorPermissionCheck';
-import { signOperationJwt, signUserJWT } from '@/libs/trpc/utils/internalJwt';
+import { signHeteroOperationJWT, signUserJWT } from '@/libs/trpc/utils/internalJwt';
 import {
   createAgentStateManager,
   createStreamEventManager,
 } from '@/server/modules/AgentRuntime/factory';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import type { EvalContext, ServerAgentToolsContext } from '@/server/modules/Mecha';
+import type { ServerAgentToolsContext } from '@/server/modules/Mecha';
 import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
 import type { ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
 import { AgentService } from '@/server/services/agent';
@@ -154,9 +150,6 @@ import type {
   ExecGroupMemberParams,
   ExecGroupMemberResult,
   GroupActionMemberBridgeParams,
-  GroupActionMemberMode,
-  GroupActionOnComplete,
-  StepLifecycleCallbacks,
 } from '@/server/services/agentRuntime/types';
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import {
@@ -195,402 +188,34 @@ import {
   isDeviceToolIdentifier,
   REMOTE_DEVICE_TOOL_IDENTIFIERS,
 } from './deviceToolRegistry';
-import { ingestAttachment } from './ingestAttachment';
-import { pruneRegeneratedBranch } from './pruneRegeneratedBranch';
+import { createGraphAwareAgentFactory } from './helpers/agentFactory';
+import { buildBotConversationGroupContext, buildGroupAgentContext } from './helpers/groupContext';
 import {
-  resolveDeviceWorkingDirectory,
-  resolveDeviceWorkingDirectoryConfig,
-} from './resolveDeviceWorkingDirectory';
+  getHeterogeneousAgentTitle,
+  humanizeHeteroDispatchError,
+  resolveHeteroDispatchErrorType,
+  supportsCloudHeterogeneousSandbox,
+} from './helpers/heteroErrors';
+import {
+  getMediaAvailabilityFromFileTypes,
+  getMediaAvailabilityFromMessages,
+  isMultimodalUnderstandingConfigured,
+} from './helpers/mediaAvailability';
+import {
+  createGroupActionMemberBridgeHook,
+  createSubAgentBridgeHook,
+  createThreadHooks,
+} from './hooks/threadRunHooks';
+import { ingestAttachment } from './ingestAttachment';
+import { InterventionController } from './intervention/InterventionController';
+import { pruneRegeneratedBranch } from './pruneRegeneratedBranch';
+import { resolveDeviceWorkingDirectoryConfig } from './resolveDeviceWorkingDirectory';
 import { resolveServerSearchDecision } from './searchDecision';
 import { acquireTopicStartReservation } from './topicStartReservation';
+import type { InternalExecAgentParams, ResolvedWorkspaceInit } from './types';
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from './workspaceInitCache';
 
 const log = debug('lobe-server:ai-agent-service');
-
-const supportsCloudHeterogeneousSandbox = (type: HeterogeneousAgentType): boolean =>
-  type === 'claude-code' || type === 'codex';
-
-const getHeterogeneousAgentTitle = (type: HeterogeneousAgentType): string =>
-  getHeterogeneousAgentConfig(type)?.title ?? type;
-
-/**
- * Content written onto a tool row that the user stopped before it ran. Mirrors
- * the runtime's aborted-tool wording so a stopped call reads the same whether
- * it was settled here or by `resolve_aborted_tools`.
- */
-const STOPPED_TOOL_CONTENT = 'Tool execution was aborted by user.';
-
-const createGraphAwareAgentFactory =
-  (
-    upstreamFactory?: AgentRuntimeServiceOptions['agentFactory'],
-  ): ((config: GeneralAgentConfig) => Agent) =>
-  (config) => {
-    if (upstreamFactory) {
-      return upstreamFactory(config);
-    }
-
-    const runtimeAgentConfig = config.agentConfig as LobeAgentConfig | undefined;
-    // Graph Agent is an agency-level behavior: read from `agencyConfig`.
-    // Legacy rows stored the graph on `chatConfig` — fall back so existing
-    // agents keep running until their next write migrates them.
-    const agencyConfig = runtimeAgentConfig?.agencyConfig;
-    const legacyChatConfig = runtimeAgentConfig?.chatConfig as
-      (LobeAgentChatConfig & { enableGraphMode?: boolean; graph?: unknown }) | undefined;
-    const graph = agencyConfig?.graph ?? legacyChatConfig?.graph;
-    const graphEnabled =
-      (agencyConfig?.enableGraphMode ?? legacyChatConfig?.enableGraphMode) === true;
-    if (graphEnabled && graph) {
-      const graphResult = AgentGraphSchema.safeParse(graph);
-
-      if (graphResult.success) {
-        return new GraphAgent({ ...config, graph: graphResult.data });
-      }
-
-      log('Invalid graph agent snapshot, falling back to default runtime: %O', graphResult.error);
-    }
-
-    return new GeneralChatAgent(config);
-  };
-
-/**
- * Format error for storage in thread metadata
- * Handles Error objects which don't serialize properly with JSON.stringify
- */
-function formatErrorForMetadata(error: unknown): Record<string, any> | undefined {
-  if (!error) return undefined;
-
-  // Handle Error objects
-  if (error instanceof Error) {
-    return {
-      message: error.message,
-      name: error.name,
-    };
-  }
-
-  // Handle objects with message property (like ChatMessageError)
-  if (typeof error === 'object' && 'message' in error) {
-    return error as Record<string, any>;
-  }
-
-  // Fallback: wrap in object
-  return { message: String(error) };
-}
-
-const getMediaAvailabilityFromFileTypes = (fileTypes: string[]) => ({
-  hasAudios: fileTypes.some((fileType) => fileType.startsWith('audio')),
-  hasImages: fileTypes.some((fileType) => fileType.startsWith('image')),
-  hasVideos: fileTypes.some((fileType) => fileType.startsWith('video')),
-});
-
-interface MediaAvailabilityMessage {
-  audioList?: unknown[];
-  imageList?: unknown[];
-  role?: string;
-  videoList?: unknown[];
-}
-
-const getMediaAvailabilityFromMessages = (messages: MediaAvailabilityMessage[]) => ({
-  hasAudios: messages.some(
-    (message) => message.role === 'user' && (message.audioList?.length ?? 0) > 0,
-  ),
-  hasImages: messages.some(
-    (message) => message.role === 'user' && (message.imageList?.length ?? 0) > 0,
-  ),
-  hasVideos: messages.some(
-    (message) => message.role === 'user' && (message.videoList?.length ?? 0) > 0,
-  ),
-});
-
-const isMultimodalUnderstandingConfigured = () => {
-  try {
-    return (
-      !!toolsEnv.MULTIMODAL_UNDERSTANDING_PROVIDER && !!toolsEnv.MULTIMODAL_UNDERSTANDING_MODEL
-    );
-  } catch {
-    // The env proxy rejects server-only keys in client-like runtimes; treat that as disabled.
-    return false;
-  }
-};
-
-/**
- * Build the multi-agent group context from a group's member roster, mirroring
- * the client `contextEngineering.ts` `agentGroup` build. Carries every member's
- * real `agt_*` ID so the supervisor dispatches members by ID instead of role
- * name (role names don't resolve → "Agent member(s) failed to start."). Resolves
- * the responding agent's own role/name so GroupContextInjector marks it with
- * `you="true"` and the orchestration filter activates for participants.
- */
-const buildGroupAgentContext = (
-  currentAgentId: string,
-  group: { content?: string | null; title?: string | null } | undefined,
-  roster: Array<{ agentId: string; role: string | null; title: string | null }>,
-): AgentGroupConfig | undefined => {
-  if (roster.length === 0) return undefined;
-
-  const agentMap: AgentGroupConfig['agentMap'] = {};
-  const members: NonNullable<AgentGroupConfig['members']> = [];
-  let currentAgentName: string | undefined;
-  let currentAgentRole: 'supervisor' | 'participant' | undefined;
-
-  for (const member of roster) {
-    const role = member.role === 'supervisor' ? 'supervisor' : 'participant';
-    const name = member.title?.trim() || 'Untitled Agent';
-    agentMap[member.agentId] = { name, role };
-    members.push({ id: member.agentId, name, role });
-
-    if (member.agentId === currentAgentId) {
-      currentAgentName = name;
-      currentAgentRole = role;
-    }
-  }
-
-  return {
-    agentMap,
-    currentAgentId,
-    currentAgentName,
-    currentAgentRole,
-    groupTitle: group?.title || undefined,
-    members,
-    systemPrompt: group?.content || undefined,
-  };
-};
-
-/**
- * Bot-conversation fallback: a single bot agent has no real group, so build a
- * degenerate one-member context purely to give it its `<group_context>`
- * identity block. Only used when there is no `groupId`.
- */
-const buildBotConversationGroupContext = (
-  currentAgentId: string,
-  agentConfig: { description?: unknown; title?: unknown } | undefined,
-): AgentGroupConfig => {
-  const title = agentConfig?.title;
-  const description = agentConfig?.description;
-  const name = typeof title === 'string' && title.trim() ? title.trim() : 'Current Agent';
-
-  return {
-    agentMap: { [currentAgentId]: { name, role: 'participant' } },
-    currentAgentId,
-    currentAgentName: name,
-    currentAgentRole: 'participant',
-    members: [{ id: currentAgentId, name, role: 'participant' }],
-    systemPrompt: typeof description === 'string' ? description : undefined,
-  };
-};
-
-/**
- * Internal params for execAgent with step lifecycle callbacks
- * This extends the public ExecAgentParams with server-side only options
- */
-interface InternalExecAgentParams extends ExecAgentParams {
-  /** Additional plugin IDs to inject (e.g., task tool during task execution) */
-  additionalPluginIds?: string[];
-  /** Bot context for topic metadata (platform, applicationId, platformThreadId) */
-  botContext?: ChatTopicBotContext;
-  /** Bot platform context for injecting platform capabilities (e.g. markdown support) */
-  botPlatformContext?: BotPlatformContext;
-  /**
-   * chatConfig overrides (thinking / reasoning-effort extend params) merged over
-   * the executing agent's own chatConfig, skipping nulled keys. Internal-only:
-   * set by the callSubAgent thread-run path, never client-passable.
-   */
-  chatConfigOverride?: Partial<LobeAgentChatConfig> | null;
-  /** Cron job ID that triggered this execution (if trigger is 'cron') */
-  cronJobId?: string;
-  /** Disable only local-system while preserving other tools. Useful for signal-only evals. */
-  disableLocalSystem?: boolean;
-  /** Disable the self-iteration declaration tool for reviewer/runtime paths. */
-  disableSelfFeedbackIntentTool?: boolean;
-  /** Disable all tools (no plugins, no system manifests). Useful for eval/benchmark scenarios. */
-  disableTools?: boolean;
-  /** Discord context for injecting channel/guild info into agent system message */
-  discordContext?: any;
-  /**
-   * Inject a user-role message into the LLM context for this turn WITHOUT
-   * persisting it (no DB row, no Agent Signal). Used for ephemeral orchestration
-   * instructions — e.g. a group supervisor's `<speaker>` instruction to a member —
-   * so it drives the member's response without polluting the group conversation.
-   * Requires `suppressUserMessage` (the turn runs off existing history).
-   */
-  ephemeralUserMessage?: string;
-  /** Eval context for injecting environment prompts into system message */
-  evalContext?: EvalContext;
-  /** External files to upload to S3 and attach to the user message */
-  files?: Array<{
-    /** Pre-downloaded buffer (from adapter/platform layer) */
-    buffer?: Buffer;
-    mimeType?: string;
-    name?: string;
-    size?: number;
-    /** External URL — fetched if no buffer provided */
-    url?: string;
-  }>;
-  /** Client-side function tools from Response API — injected into LLM with source='client' */
-  functionTools?: Array<{ description?: string; name: string; parameters?: Record<string, any> }>;
-  /** External lifecycle hooks (auto-adapt to local/production mode) */
-  hooks?: AgentHook[];
-  /** Initial step count offset for resumed operations (accumulated from previous runs) */
-  initialStepCount?: number;
-  /** Maximum steps for the agent operation */
-  maxSteps?: number;
-  /**
-   * Agents the user @-mentioned in this message (multi-mention). When present
-   * (and non-group), the run enables the callAgent tool and persists the mentioned
-   * agents into the runtime `initialContext` so the context engine injects the
-   * delegation context at step time — making the supervisor delegate to them
-   * instead of answering itself. Mirrors the client runtime's mention wiring.
-   */
-  mentionedAgents?: RuntimeMentionedAgent[];
-  /** Parent message ID to continue from. Only takes effect when resume is true */
-  parentMessageId?: string;
-  queueRetries?: number;
-  queueRetryDelay?: string;
-  /** Whether to continue execution from an existing persisted message */
-  resume?: boolean;
-  /**
-   * When present, this execAgent call acts as the "continue" step for a
-   * previous op that hit `human_approve_required`. The service writes the
-   * decision to the target tool message and either runs the approved tool
-   * (`approved`), halts with `reason='human_rejected'` (`rejected`), or
-   * surfaces the rejection as user feedback so the LLM can respond
-   * (`rejected_continue`). `parentMessageId` must point at the pending tool
-   * message.
-   */
-  resumeApproval?: {
-    decision: 'approved' | 'rejected' | 'rejected_continue';
-    parentMessageId: string;
-    rejectionReason?: string;
-    toolCallId: string;
-  };
-  /**
-   * Batch form of `resumeApproval` — every decision the user made in ONE
-   * action ("approve all" on a parallel tool batch). The service applies each
-   * decision to its tool message and resumes with a single `call_tools_batch`
-   * covering all approved tools, so the LLM is continued exactly once with the
-   * complete result set.
-   *
-   * Resolving a parallel batch as N sequential `resumeApproval` calls instead
-   * produces N operations, and each one continues the LLM while the tools not
-   * yet approved are still empty rows. Mutually exclusive with
-   * `resumeApproval`; when both are absent nothing approval-related runs.
-   */
-  resumeApprovals?: {
-    decision: 'approved' | 'rejected' | 'rejected_continue';
-    parentMessageId: string;
-    rejectionReason?: string;
-    toolCallId: string;
-  }[];
-  /**
-   * When present, this execAgent call resumes a previous op that paused on a
-   * `humanIntervention: 'always'` tool (e.g. lobe-agent `askUserQuestion`). The
-   * service writes the human-provided `content` as the target tool message's
-   * result and resumes from `phase: 'tool_result'` — the tool is NOT
-   * re-executed. `parentMessageId` must point at the pending `role='tool'`
-   * message. Mutually exclusive with `resumeApproval`.
-   */
-  resumeToolResult?: {
-    content: string;
-    parentMessageId: string;
-    pluginState?: Record<string, unknown>;
-    toolCallId: string;
-  };
-  /**
-   * Tool identifiers the user @-mentioned in this message. Merged into the
-   * agent's plugin set for this run (alongside `additionalPluginIds`) so a
-   * mentioned tool that isn't pinned to the agent — e.g. a custom MCP connector
-   * picked from the @ list — is enabled and callable. User-scoped lookups
-   * downstream (connectors, installed plugins) keep it to the caller's own tools.
-   */
-  selectedToolIds?: string[];
-  /** Abort startup before the agent runtime operation is created */
-  signal?: AbortSignal;
-  /**
-   * Whether the LLM call should use streaming.
-   * Defaults to true. Set to false for non-streaming scenarios (e.g., bot integrations).
-   */
-  stream?: boolean;
-  /**
-   * Run the turn off existing topic history without injecting a new user message
-   * (no user-message row, no Agent Signal source event). The agent responds to
-   * whatever the context engine surfaces as the latest turn. Used by auto-repair,
-   * where the failure feedback already lives on the verify card in history.
-   * `prompt` is still used for the operation title / logs. Unlike `resume`, this
-   * starts a fresh operation and skips the resume-specific validation.
-   */
-  suppressUserMessage?: boolean;
-  /** Task ID that triggered this execution (if trigger is 'task') */
-  taskId?: string;
-  /**
-   * Custom title for the topic.
-   * When provided (including empty string), overrides the default prompt-based title.
-   * When undefined, falls back to prompt.slice(0, 50).
-   */
-  title?: string;
-  /**
-   * Force the effective `chatConfig.toolMode` for this run. Set by IM bot
-   * conversations where the user explicitly switched mode via `/mode` —
-   * an explicit per-conversation choice, so it wins over the agent's own
-   * chatConfig AND workspace member-mode overrides.
-   */
-  toolModeOverride?: 'agent' | 'chat';
-  /** Running operation that owns the topic for an internally spawned child run. */
-  topicStartOwnerOperationId?: string;
-  /**
-   * Re-enter a topic-start reservation already acquired by an upstream caller,
-   * such as TaskResultBridgeService.
-   */
-  topicStartReservationId?: string;
-  /** Topic creation trigger source ('cron' | 'chat' | 'api' | 'task') */
-  trigger?: string;
-  /**
-   * User intervention configuration
-   * Use { approvalMode: 'headless' } for async tasks that should never wait for human approval
-   */
-  userInterventionConfig?: UserInterventionConfig;
-}
-
-/**
- * Result of {@link AiAgentService.resolveWorkspaceInit}: the cacheable scan
- * (`workspace`) plus the per-run resolved bound directory (`boundCwd`).
- *
- * `boundCwd` is deliberately kept OUT of {@link WorkspaceInitResult}: that type
- * is persisted into `devices.workingDirs[].workspace` and read by the web UI,
- * and its scanned root is always the enclosing `WorkingDirEntry.path` — not a
- * field on the scan. Surfacing it here lets the caller fill the system prompt's
- * `{{workingDirectory}}` (and the tool cwd/scope downstream) without re-loading
- * the device + topic the scan already read.
- */
-interface ResolvedWorkspaceInit {
-  boundCwd?: string;
-  workspace: WorkspaceInitResult;
-}
-
-/**
- * Turn a raw device-gateway dispatch error code into a human-readable headline.
- * The gateway returns terse machine codes (e.g. `GATEWAY_NOT_CONFIGURED`) which,
- * surfaced verbatim, render as a cryptic error card. We rewrite the headline the
- * caller keeps for non-web surfaces (IM bots) while retaining the raw code in
- * `detail` for diagnostics. Web clients localize via the mapped error type below.
- */
-const HETERO_DISPATCH_ERROR_HEADLINES: Record<string, string> = {
-  GATEWAY_NOT_CONFIGURED:
-    "The run device gateway isn't configured on the server, so this agent can't reach a device to run on. Configure the device gateway, or switch this agent to a connected local device.",
-};
-
-const humanizeHeteroDispatchError = (raw?: string): string =>
-  (raw && HETERO_DISPATCH_ERROR_HEADLINES[raw]) || raw || 'Device dispatch failed';
-
-/**
- * Map a raw dispatch code to a dedicated `ChatErrorType` so the web client renders
- * its own localized headline (the generic `ServerAgentRuntimeError` copy would
- * otherwise mask the specific message). Unknown codes keep the generic type.
- */
-const HETERO_DISPATCH_ERROR_TYPES: Record<string, ErrorType> = {
-  GATEWAY_NOT_CONFIGURED: ChatErrorType.DeviceGatewayNotConfigured,
-};
-
-const resolveHeteroDispatchErrorType = (raw?: string): ErrorType =>
-  (raw && HETERO_DISPATCH_ERROR_TYPES[raw]) || ChatErrorType.ServerAgentRuntimeError;
 
 /**
  * AI Agent Service
@@ -615,6 +240,7 @@ export class AiAgentService {
   private readonly threadModel: ThreadModel;
   private readonly topicModel: TopicModel;
   private readonly agentRuntimeService: AgentRuntimeService;
+  private readonly interventionController: InterventionController;
   private _marketService?: MarketService;
   private readonly composioService: ComposioService;
 
@@ -681,6 +307,16 @@ export class AiAgentService {
       });
     }
     this.composioService = new ComposioService({ db, userId, workspaceId: wsId });
+    this.interventionController = new InterventionController({
+      agentOperationModel: this.agentOperationModel,
+      agentRuntimeService: this.agentRuntimeService,
+      db: this.db,
+      messageModel: this.messageModel,
+      resolveDeviceWorkspaceId: (deviceId) => this.resolveDeviceWorkspaceId(deviceId),
+      threadModel: this.threadModel,
+      topicModel: this.topicModel,
+      userId: this.userId,
+    });
   }
 
   private async getMarketService(): Promise<MarketService> {
@@ -816,10 +452,14 @@ export class AiAgentService {
       log('finalizeHeteroDispatchError: publishAgentRuntimeEnd failed (non-fatal): %O', err);
     }
 
-    // 3. The operation never started — drop the running marker so reconnect /
+    // 3. The operation never started — settle the topic so reconnect /
     //    heteroIngest validation and the next turn don't see a stale operation.
+    //    Settle, not take: dropping the marker alone would strand `status` on
+    //    'running' with nothing left for any later settle to match — see
+    //    `ServerOperationStore.clearRunningMark`. 'active' rather than 'unread'
+    //    because a dispatch that never started produced nothing to read.
     try {
-      await this.topicModel.takeRunningOperation(topicId, operationId);
+      await this.topicModel.settleRunningOperation(topicId, operationId, 'active');
     } catch (err) {
       log('finalizeHeteroDispatchError: clear runningOperation failed (non-fatal): %O', err);
     }
@@ -871,14 +511,17 @@ export class AiAgentService {
       // caller so the system prompt's {{workingDirectory}} reflects the same
       // bound directory the workspace scan used.
       const topic = await this.topicModel.findById(topicId);
-      const boundCwd = resolveDeviceWorkingDirectory({
+      const topicWorkingDirectory = topic?.metadata?.workingDirectory;
+      const boundCwdConfig = resolveDeviceWorkingDirectoryConfig({
         deviceDefaultCwd: device.defaultCwd,
         deviceId: activeDeviceId,
-        topicWorkingDirectory: topic?.metadata?.workingDirectory,
+        topicWorkingDirectory,
         topicWorkingDirectoryConfig: topic?.metadata?.workingDirectoryConfig,
         workingDirByDevice: agencyConfig?.workingDirByDevice,
       });
+      const boundCwd = getWorkingDirEffectivePath(boundCwdConfig);
       if (!boundCwd) return { workspace: empty };
+      const resolved = { boundCwd, boundCwdConfig, topicWorkingDirectory };
 
       const workingDirs = device.workingDirs ?? [];
       const cached = workingDirs.find(
@@ -887,7 +530,7 @@ export class AiAgentService {
 
       if (isWorkspaceCacheFresh(cached, Date.now()) && cached?.workspace) {
         log('execAgent: reusing cached workspace init for %s', boundCwd);
-        return { boundCwd, workspace: cached.workspace };
+        return { ...resolved, workspace: cached.workspace };
       }
 
       const scanned = await deviceGateway.initWorkspace({
@@ -901,9 +544,9 @@ export class AiAgentService {
         // cache rather than dropping the project's skills + instructions.
         if (cached?.workspace) {
           log('execAgent: workspace init scan failed, using stale cache for %s', boundCwd);
-          return { boundCwd, workspace: cached.workspace };
+          return { ...resolved, workspace: cached.workspace };
         }
-        return { boundCwd, workspace: empty };
+        return { ...resolved, workspace: empty };
       }
 
       // Persist the fresh scan back onto `workingDirs` (update in place or prepend
@@ -930,10 +573,48 @@ export class AiAgentService {
       }
       log('execAgent: scanned and cached workspace init for %s', boundCwd);
 
-      return { boundCwd, workspace: scanned };
+      return { ...resolved, workspace: scanned };
     } catch (error) {
       log('execAgent: resolveWorkspaceInit failed: %O', error);
       return { workspace: empty };
+    }
+  }
+
+  /**
+   * Pin a topic to the directory its run actually executes in.
+   *
+   * A topic created by a device-bound run starts with no cwd of its own: the
+   * directory was only ever recorded at agent level
+   * (`agencyConfig.workingDirByDevice`) or on the device (`defaultCwd`). Without
+   * this write the topic stays unbound — By-Project grouping files it under "No
+   * directory", and every later turn re-resolves from the agent config, so
+   * changing the agent's directory silently moves an old conversation to a new
+   * project (and makes hetero `--resume` unsafe).
+   *
+   * Shared by BOTH execution paths — hetero device dispatch and the normal
+   * agent runtime — so a native agent bound to a device gets the same binding a
+   * CLI agent does. Purely additive: a topic that already carries a cwd (the
+   * client resolved one and sent it as `initialTopicMetadata`, or an earlier
+   * turn bound it) is never rewritten, so the historical pin always wins.
+   */
+  private async bindTopicWorkingDirectory(params: {
+    config?: WorkingDirConfig;
+    currentWorkingDirectory?: string;
+    topicId: string;
+  }): Promise<void> {
+    const { config, currentWorkingDirectory, topicId } = params;
+    if (currentWorkingDirectory || !config) return;
+    const path = getWorkingDirEffectivePath(config);
+    if (!path) return;
+
+    try {
+      await this.topicModel.updateMetadata(topicId, {
+        workingDirectory: path,
+        workingDirectoryConfig: config,
+      });
+    } catch (err) {
+      // Metadata bookkeeping must never fail a run that is otherwise fine.
+      log('execAgent: bindTopicWorkingDirectory failed (non-fatal): %O', err);
     }
   }
 
@@ -1271,20 +952,68 @@ export class AiAgentService {
    *   → ServerMechaModule.ContextEngineering(input, config, messages)
    *   → AgentRuntimeService.createOperation(...)
    */
-  async execAgent(params: InternalExecAgentParams): Promise<ExecAgentResult> {
+  async execAgent(inputParams: InternalExecAgentParams): Promise<ExecAgentResult> {
+    // Creating the thread here (rather than inside the turn) means a run that
+    // asked for one is already a thread run by the time the reservation check
+    // below reads `appContext.threadId` — same isolation as a follow-up inside
+    // an existing thread.
+    const { createdThreadId, params } = await this.resolveNewThread(inputParams);
+    // The client needs the id back to pivot its optimistic `_new` thread bucket
+    // and refresh the sidebar; every return path below must carry it.
+    const withCreatedThread = (result: ExecAgentResult): ExecAgentResult =>
+      createdThreadId ? { ...result, createdThreadId } : result;
+
     const topicId = params.appContext?.topicId;
+    const interventionReservationId = params.approvalResolutionRequestId
+      ? deriveAgentInterventionContinuationOperationId({
+          resolutionRequestId: params.approvalResolutionRequestId,
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        })
+      : undefined;
+    if (
+      interventionReservationId &&
+      params.topicStartReservationId &&
+      params.topicStartReservationId !== interventionReservationId
+    ) {
+      throw new Error('Intervention continuation reservation identity conflict');
+    }
+    const reservationId =
+      interventionReservationId ?? params.topicStartReservationId ?? `agent-start-${nanoid()}`;
+    const isInterventionThreadStart = Boolean(
+      topicId &&
+      params.appContext?.threadId &&
+      interventionReservationId &&
+      params.approvalResolutionRequestId,
+    );
     // Thread runs are isolated under an explicit parent message and do not
     // advance the topic's main spine. They may start while their parent
     // operation owns `runningOperation` (for example callAgent/callSubAgent),
     // so making them wait for the topic-start claim deadlocks the child start.
-    if (!topicId || params.appContext?.threadId) {
-      return this.execAgentWithReservation(params);
+    if (!topicId || (params.appContext?.threadId && !isInterventionThreadStart)) {
+      return withCreatedThread(await this.execAgentWithApprovalRollback(params));
     }
 
-    const reservationId = params.topicStartReservationId ?? `agent-start-${nanoid()}`;
+    // A replacement is allowed to take over the topic marker, but the device
+    // process that owned the old marker may still hold a native Codex/CC writer.
+    // Settle that physical run before reserving and dispatching the replacement;
+    // otherwise two `lh hetero exec` wrappers can resume the same thread.
+    if (params.replacesOperationId && !isInterventionThreadStart) {
+      const interruption = await this.interruptTask({
+        operationId: params.replacesOperationId,
+        topicId,
+      });
+      if (interruption.deviceCancellationConfirmed === false) {
+        throw new Error('Replaced heterogeneous agent process did not confirm termination');
+      }
+    }
     const reserved = await acquireTopicStartReservation({
-      replacesOperationId: params.replacesOperationId,
+      allowSameReservationReentry: !params.approvalResolutionRequestId,
+      replacesOperationId: isInterventionThreadStart ? undefined : params.replacesOperationId,
       allowRunningOperationId: params.topicStartOwnerOperationId,
+      // A thread continuation shares the topic row but never owns/replaces its
+      // main runningOperation anchor. It uses only the short initializer fence.
+      ignoreRunningOperation: isInterventionThreadStart || params.interactiveStart,
       reservationId,
       topicId,
       topicModel: this.topicModel,
@@ -1295,23 +1024,121 @@ export class AiAgentService {
     }
 
     try {
-      return await this.execAgentWithReservation(params);
+      return withCreatedThread(await this.execAgentWithApprovalRollback(params));
     } finally {
       await this.topicModel.releaseTaskCallbackReservation(topicId, reservationId);
     }
   }
 
+  /**
+   * A human decision is claimed before the rest of operation preparation reads
+   * message history. Keep its rollback guard outside the large preparation
+   * routine so every throw and every early return before createOperation starts
+   * restores the exact pending rows, not only queue-start failures.
+   */
+  private async execAgentWithApprovalRollback(
+    params: InternalExecAgentParams,
+  ): Promise<ExecAgentResult> {
+    const approvalClaim = {
+      continuationPrepared: false,
+      continuationStarted: false,
+      rollbackSnapshot: [] as HumanApprovalResolution[],
+    };
+
+    try {
+      return await this.execAgentWithReservation(params, approvalClaim);
+    } finally {
+      if (
+        !approvalClaim.continuationPrepared &&
+        !approvalClaim.continuationStarted &&
+        approvalClaim.rollbackSnapshot.length > 0
+      ) {
+        await this.messageModel.restoreHumanApproval(approvalClaim.rollbackSnapshot);
+        log(
+          'execAgent: restored %d approval rows before continuation startup',
+          approvalClaim.rollbackSnapshot.length,
+        );
+      }
+    }
+  }
+
+  /**
+   * Materialise an `appContext.newThread` intent into a real thread row.
+   *
+   * The composer stages a subtopic client-side and the non-gateway send path
+   * creates it inside `sendMessageInServer` (`newThread`). The gateway path
+   * never makes that call, so the intent arrives here instead — without this
+   * the turn would persist onto the topic's main spine, no thread row would
+   * exist, and the subtopic would silently collapse back into the main
+   * conversation.
+   *
+   * Returns the params to run with: `appContext.threadId` rebound to the new
+   * thread so every downstream read (message writes, history queries, operation
+   * context) lands inside it. A no-op for every caller that doesn't ask for one.
+   */
+  private async resolveNewThread(params: InternalExecAgentParams): Promise<{
+    createdThreadId?: string;
+    params: InternalExecAgentParams;
+  }> {
+    const { appContext } = params;
+    const newThread = appContext?.newThread;
+
+    // `threadId` wins: that is a follow-up inside a thread that already exists,
+    // and creating a second row would orphan the earlier turns.
+    if (!newThread || appContext?.threadId) return { params };
+
+    // A subtopic branches off a persisted message, so its topic always exists by
+    // the time the send reaches here. Refusing is better than silently creating
+    // a thread on a topic this run is about to mint under a different id.
+    if (!appContext?.topicId) {
+      throw new Error('appContext.newThread requires an existing appContext.topicId');
+    }
+
+    const thread = await this.threadModel.create({
+      parentThreadId: newThread.parentThreadId,
+      sourceMessageId: newThread.sourceMessageId,
+      title: newThread.title,
+      topicId: appContext.topicId,
+      type: newThread.type,
+    });
+
+    // `ThreadModel.create` swallows insert conflicts and returns undefined.
+    // Falling through would persist the turn to the main spine — exactly the
+    // failure this path exists to prevent — so fail loudly instead.
+    if (!thread) {
+      throw new Error(`Failed to create thread on topic ${appContext.topicId}`);
+    }
+
+    log('execAgent: created thread %s on topic %s', thread.id, appContext.topicId);
+
+    return {
+      createdThreadId: thread.id,
+      params: {
+        ...params,
+        appContext: { ...appContext, threadId: thread.id },
+        createdThreadId: thread.id,
+      },
+    };
+  }
+
   private async execAgentWithReservation(
     params: InternalExecAgentParams,
+    approvalClaim: {
+      continuationPrepared: boolean;
+      continuationStarted: boolean;
+      rollbackSnapshot: HumanApprovalResolution[];
+    },
   ): Promise<ExecAgentResult> {
     const {
       additionalPluginIds,
+      exclusivePluginIds,
       agentId,
       slug,
       prompt,
       appContext,
       autoStart = true,
       botContext,
+      createdThreadId,
       clientIp,
       userAgent,
       deviceId: requestedDeviceId,
@@ -1334,6 +1161,7 @@ export class AiAgentService {
       cronJobId,
       taskId,
       evalContext,
+      evalRuntime,
       maxSteps,
       disableLocalSystem,
       initialStepCount,
@@ -1347,6 +1175,8 @@ export class AiAgentService {
       resumeApproval,
       resumeApprovals,
       resumeToolResult,
+      approvalResolutionRequestId: providedApprovalResolutionRequestId,
+      approvalSourceOperationId: providedApprovalSourceOperationId,
       selectedToolIds,
       mentionedAgents,
       suppressUserMessage,
@@ -1358,7 +1188,21 @@ export class AiAgentService {
     // parentMessageId), and a replayed id there would collide with the row the
     // original send already created — so those paths drop the ids defensively
     // rather than trusting every caller to omit them.
-    const isResumeLike = !!resume || !!resumeApproval || !!resumeToolResult || !!parentMessageId;
+    const interventionResumeCount = [resumeApproval, resumeApprovals, resumeToolResult].filter(
+      Boolean,
+    ).length;
+    if (interventionResumeCount > 1) {
+      throw new Error(
+        'Only one of resumeApproval, resumeApprovals, or resumeToolResult may be provided',
+      );
+    }
+
+    const isResumeLike =
+      !!resume ||
+      !!resumeApproval ||
+      !!resumeApprovals?.length ||
+      !!resumeToolResult ||
+      !!parentMessageId;
     const clientIds = isResumeLike ? undefined : params.clientIds;
 
     // Validate that either agentId or slug is provided
@@ -1761,12 +1605,16 @@ export class AiAgentService {
     }[] = [];
     /** Assistant that emitted this batch — the pending tool rows' shared parent. */
     let approvalOwnerAssistantId: string | undefined;
+    let approvalResolutionRequestId: string | undefined;
+    let approvalSourceOperationId: string | undefined;
+    let approvalSourceToolMessageIds: string[] = [];
 
     // Load and validate EVERY decision before applying any of them. The apply
     // step writes per entry, so validating inline would leave a rejected batch
     // half-persisted — some tools already marked approved with no run to
     // execute them.
     const validatedDecisions: {
+      alreadyClaimed: boolean;
       entry: (typeof approvalDecisions)[number];
       plugin: MessagePluginItem;
       targetMessage: NonNullable<typeof resumeParentMessage>;
@@ -1806,8 +1654,16 @@ export class AiAgentService {
             `stored=${plugin.toolCallId}, requested=${decisionEntry.toolCallId}`,
         );
       }
+      const expectedStatus = decisionEntry.decision === 'approved' ? 'approved' : 'rejected';
+      const alreadyClaimed =
+        plugin.intervention?.status === expectedStatus &&
+        Boolean(providedApprovalResolutionRequestId) &&
+        plugin.intervention.resolutionRequestId === providedApprovalResolutionRequestId;
+      if (plugin.intervention?.status !== 'pending' && !alreadyClaimed) {
+        throw new HumanApprovalAlreadyResolvedError(decisionEntry.parentMessageId);
+      }
 
-      validatedDecisions.push({ entry: decisionEntry, plugin, targetMessage });
+      validatedDecisions.push({ alreadyClaimed, entry: decisionEntry, plugin, targetMessage });
     }
 
     // A batch resume executes every approved tool as ONE `call_tools_batch`
@@ -1828,31 +1684,81 @@ export class AiAgentService {
       );
     }
 
+    if (validatedDecisions.length > 0) {
+      const sourceOperationIds = new Set(
+        validatedDecisions
+          .map(({ plugin }) => plugin.intervention?.operationId)
+          .filter((id): id is string => typeof id === 'string' && !!id),
+      );
+      if (
+        sourceOperationIds.size > 1 ||
+        (providedApprovalSourceOperationId &&
+          (sourceOperationIds.size !== 1 ||
+            !sourceOperationIds.has(providedApprovalSourceOperationId)))
+      ) {
+        throw new Error('Approval targets do not match the authoritative parked operation');
+      }
+      approvalSourceOperationId = providedApprovalSourceOperationId ?? [...sourceOperationIds][0];
+      approvalSourceToolMessageIds = validatedDecisions.map(({ entry }) => entry.parentMessageId);
+      approvalResolutionRequestId = providedApprovalResolutionRequestId ?? `legacy_${nanoid()}`;
+      const unclaimedDecisions = validatedDecisions.filter(({ alreadyClaimed }) => !alreadyClaimed);
+      const approvalRollbackSnapshot = unclaimedDecisions.map(({ plugin, targetMessage }) => ({
+        claimedResolutionRequestId: approvalResolutionRequestId,
+        ...(typeof targetMessage.content === 'string' ? { content: targetMessage.content } : {}),
+        id: targetMessage.id,
+        intervention: (plugin.intervention ?? { status: 'pending' }) as Record<string, unknown>,
+        pluginState: (plugin.state ?? null) as Record<string, unknown> | null,
+        replacePluginState: true,
+      }));
+
+      // Shared exactly-once boundary for Web, Mobile, Stop, and signed system
+      // actions. All rows are locked and checked before the first write.
+      if (unclaimedDecisions.length > 0) {
+        const claimState = await this.messageModel.resolveHumanApproval(
+          unclaimedDecisions.map(({ entry }) => {
+            if (entry.decision === 'approved') {
+              return {
+                id: entry.parentMessageId,
+                intervention: {
+                  resolutionRequestId: approvalResolutionRequestId,
+                  status: 'approved',
+                },
+              };
+            }
+            return {
+              content: entry.rejectionReason
+                ? `User reject this tool calling with reason: ${entry.rejectionReason}`
+                : 'User reject this tool calling without reason',
+              id: entry.parentMessageId,
+              intervention: {
+                rejectedReason: entry.rejectionReason,
+                resolutionRequestId: approvalResolutionRequestId,
+                status: 'rejected',
+              },
+            };
+          }),
+        );
+        if (claimState === 'applied') {
+          approvalClaim.rollbackSnapshot = approvalRollbackSnapshot;
+        }
+      }
+      if (providedApprovalResolutionRequestId) {
+        // A generic durable claim is recovered by this same request id. Never
+        // locally reopen its source rows: a concurrent reentrant same-id call
+        // may already have created the deterministic assistant/op/state.
+        approvalClaim.continuationPrepared = true;
+      }
+    }
+
     for (const { entry: decisionEntry, plugin, targetMessage } of validatedDecisions) {
-      const { decision, rejectionReason } = decisionEntry;
+      const { decision } = decisionEntry;
       if (decision === 'approved') {
-        await this.messageModel.updateMessagePlugin(decisionEntry.parentMessageId, {
-          intervention: { status: 'approved' },
-        });
         approvedToolEntries.push({
           createdAt: targetMessage.createdAt,
           plugin,
           toolMessageId: decisionEntry.parentMessageId,
         });
         approvalOwnerAssistantId ??= targetMessage.parentId ?? undefined;
-      } else {
-        // rejected / rejected_continue both write the same rejection content
-        // + intervention state. The difference surfaces later in how the new
-        // op's initial state/context are configured (halt vs. continue LLM).
-        const rejectionContent = rejectionReason
-          ? `User reject this tool calling with reason: ${rejectionReason}`
-          : 'User reject this tool calling without reason';
-        await this.messageModel.updateToolMessage(decisionEntry.parentMessageId, {
-          content: rejectionContent,
-        });
-        await this.messageModel.updateMessagePlugin(decisionEntry.parentMessageId, {
-          intervention: { rejectedReason: rejectionReason, status: 'rejected' },
-        });
       }
 
       // Kept for the single-decision resume context at 16b, which reads the
@@ -1920,18 +1826,67 @@ export class AiAgentService {
             `stored=${resumeToolResultPlugin.toolCallId}, requested=${resumeToolResult.toolCallId}`,
         );
       }
+      const skipped = resumeToolResult.outcome === 'skipped';
+      const expectedToolResultStatus = skipped ? 'rejected' : 'approved';
+      const alreadyClaimed =
+        resumeToolResultPlugin.intervention?.status === expectedToolResultStatus &&
+        Boolean(providedApprovalResolutionRequestId) &&
+        resumeToolResultPlugin.intervention.resolutionRequestId ===
+          providedApprovalResolutionRequestId &&
+        (!skipped || resumeToolResultPlugin.intervention.skipped === true);
+      if (resumeToolResultPlugin.intervention?.status !== 'pending' && !alreadyClaimed) {
+        throw new HumanApprovalAlreadyResolvedError(resumeToolResult.parentMessageId);
+      }
+      const toolResultSourceOperationId = resumeToolResultPlugin.intervention?.operationId;
+      if (
+        providedApprovalSourceOperationId &&
+        toolResultSourceOperationId !== providedApprovalSourceOperationId
+      ) {
+        throw new Error('Approval target does not match the authoritative parked operation');
+      }
+      approvalSourceOperationId =
+        providedApprovalSourceOperationId ?? toolResultSourceOperationId ?? undefined;
+      approvalSourceToolMessageIds = [resumeToolResult.parentMessageId];
 
-      await this.messageModel.updateToolMessage(resumeToolResult.parentMessageId, {
-        content: resumeToolResult.content,
-      });
-      await this.messageModel.updateMessagePlugin(resumeToolResult.parentMessageId, {
-        intervention: { status: 'approved' },
-      });
-      if (resumeToolResult.pluginState) {
-        await this.messageModel.updatePluginState(
-          resumeToolResult.parentMessageId,
-          resumeToolResult.pluginState,
-        );
+      approvalResolutionRequestId = providedApprovalResolutionRequestId ?? `legacy_${nanoid()}`;
+      const approvalRollbackSnapshot = alreadyClaimed
+        ? []
+        : [
+            {
+              claimedResolutionRequestId: approvalResolutionRequestId,
+              ...(typeof resumeParentMessage.content === 'string'
+                ? { content: resumeParentMessage.content }
+                : {}),
+              id: resumeToolResult.parentMessageId,
+              intervention: (resumeToolResultPlugin.intervention ?? {
+                status: 'pending',
+              }) as Record<string, unknown>,
+              pluginState: (resumeToolResultPlugin.state ?? null) as Record<string, unknown> | null,
+              replacePluginState: true,
+            },
+          ];
+      if (!alreadyClaimed) {
+        const claimState = await this.messageModel.resolveHumanApproval([
+          {
+            content: resumeToolResult.content,
+            id: resumeToolResult.parentMessageId,
+            intervention: skipped
+              ? {
+                  rejectedReason: resumeToolResult.rejectionReason,
+                  resolutionRequestId: approvalResolutionRequestId,
+                  skipped: true,
+                  status: 'rejected',
+                }
+              : { resolutionRequestId: approvalResolutionRequestId, status: 'approved' },
+            pluginState: resumeToolResult.pluginState,
+          },
+        ]);
+        if (claimState === 'applied') {
+          approvalClaim.rollbackSnapshot = approvalRollbackSnapshot;
+        }
+      }
+      if (providedApprovalResolutionRequestId) {
+        approvalClaim.continuationPrepared = true;
       }
 
       log(
@@ -1943,7 +1898,112 @@ export class AiAgentService {
 
     // 3. Handle topic creation: if no topicId provided, create a new topic; otherwise reuse existing
     let topicId = appContext?.topicId;
-    const isNewTopic = !topicId;
+    const continuationIdentity = providedApprovalResolutionRequestId
+      ? {
+          resolutionRequestId: providedApprovalResolutionRequestId,
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        }
+      : undefined;
+    const continuationOperationId = continuationIdentity
+      ? deriveAgentInterventionContinuationOperationId(continuationIdentity)
+      : undefined;
+    const continuationAssistantId = continuationIdentity
+      ? deriveAgentInterventionContinuationMessageId(continuationIdentity)
+      : undefined;
+
+    // This check runs *inside* the topic-start reservation. Two same-request
+    // callers may both probe before the first claim is visible, but only the
+    // winner reaches createOperation; the follower observes and reuses its
+    // deterministic state here instead of overwriting it. Idle state is
+    // explicitly requeued from its saved initialContext; operation+step locks
+    // de-duplicate concurrent queue delivery.
+    if (
+      continuationOperationId &&
+      continuationAssistantId &&
+      providedApprovalResolutionRequestId &&
+      approvalSourceOperationId &&
+      topicId
+    ) {
+      const existingState =
+        await this.agentRuntimeService.loadInterventionContinuationState(continuationOperationId);
+      const preparation = existingState?.metadata?.agentInterventionPreparation as
+        { resolutionRequestId?: unknown; state?: unknown } | undefined;
+      if (
+        existingState &&
+        preparation?.state === 'ready' &&
+        preparation.resolutionRequestId === providedApprovalResolutionRequestId
+      ) {
+        const existingOperation = await this.agentOperationModel.findById(continuationOperationId);
+        const expectedProvenance = {
+          resolutionRequestId: providedApprovalResolutionRequestId,
+          sourceOperationId: approvalSourceOperationId,
+          sourceToolMessageIds: [...approvalSourceToolMessageIds].sort(),
+        };
+        const existingAssistant = await this.messageModel.findById(continuationAssistantId);
+        const matches =
+          existingOperation?.agentId === resolvedAgentId &&
+          existingOperation.topicId === topicId &&
+          existingOperation.appContext?.sourceMessageId === parentMessageId &&
+          matchesAgentInterventionContinuationProvenance(
+            existingOperation.metadata?.agentInterventionContinuation,
+            expectedProvenance,
+          ) &&
+          existingState.operationId === continuationOperationId &&
+          existingState.metadata?.userId === this.userId &&
+          (existingState.metadata?.workspaceId ?? null) === (this.workspaceId ?? null) &&
+          existingState.metadata?.agentId === resolvedAgentId &&
+          existingState.metadata?.topicId === topicId &&
+          existingState.metadata?.sourceMessageId === parentMessageId &&
+          matchesAgentInterventionContinuationProvenance(
+            existingState.metadata?.agentInterventionContinuation,
+            expectedProvenance,
+          ) &&
+          existingAssistant?.role === 'assistant' &&
+          existingAssistant.topicId === topicId;
+        if (!matches) {
+          throw new Error(
+            `Intervention continuation operation identity conflict: ${continuationOperationId}`,
+          );
+        }
+
+        const start =
+          await this.agentRuntimeService.ensureInterventionContinuationStarted(
+            continuationOperationId,
+          );
+        if (start === 'missing') {
+          throw new Error(
+            `Intervention continuation state disappeared: ${continuationOperationId}`,
+          );
+        }
+        approvalClaim.continuationStarted = true;
+
+        let gatewayToken: string | undefined;
+        if (!this.withholdGatewayToken) {
+          try {
+            gatewayToken = await signUserJWT(this.userId);
+          } catch {
+            log('execAgent: failed to sign gateway JWT for reused intervention continuation');
+          }
+        }
+        const now = new Date().toISOString();
+        return {
+          agentId: resolvedAgentId,
+          assistantMessageId: continuationAssistantId,
+          autoStarted: true,
+          createdAt: now,
+          heteroType: null,
+          message: 'Agent intervention continuation already created',
+          operationId: continuationOperationId,
+          status: 'created',
+          success: true,
+          timestamp: now,
+          token: gatewayToken,
+          topicId,
+          userMessageId: parentMessageId ?? '',
+        };
+      }
+    }
     const isFixedExecutionTargetSelection =
       !!this.workspaceId && agentConfig.agencyConfig?.executionTargetSelectionPolicy === 'fixed';
     const isFixedDeviceTarget =
@@ -1965,6 +2025,11 @@ export class AiAgentService {
     // getTopicModelById).
     let model = agentConfig.model!;
     let provider = agentConfig.provider!;
+    const heterogeneousProvider = agentConfig.agencyConfig?.heterogeneousProvider;
+    const heterogeneousTopicModelSnapshot = heterogeneousProvider
+      ? resolveHeterogeneousProviderTopicModel(heterogeneousProvider)
+      : undefined;
+    let pinnedHeterogeneousTopicModel: HeterogeneousTopicModel | undefined;
 
     if (!topicId) {
       if (resume) {
@@ -2007,16 +2072,12 @@ export class AiAgentService {
           : undefined;
 
       const fallbackTitleSource = markdownToTxt(prompt);
-      // A heterogeneous agent has no chat model to snapshot: the external CLI
-      // owns model selection, so `model` here is a stale agent default and
-      // `provider` is NULL (defaulted to the platform chat provider) on every
-      // agent created before the runtime type was stamped on the agent row.
-      // Pin the runtime type and leave the model to the per-run backfill — the
-      // same rule the assistant placeholder below and the client's
-      // `snapshotAgentModel` follow. Detection mirrors the hetero early exit.
+      // Heterogeneous topics use the same snapshot rule as the client: persist
+      // the selected CLI model (including `default`) or user-provider API binding.
+      // Runtimes without a model selector, legacy rows, and Agent-scoped
+      // server-default API configs still pin only the runtime type.
       const heteroSnapshotType =
-        agentConfig.agencyConfig?.heterogeneousProvider?.type ??
-        (isHeterogeneousAgentModelId(model) ? model : undefined);
+        heterogeneousProvider?.type ?? (isHeterogeneousAgentModelId(model) ? model : undefined);
       // Second argument: the id the client already rendered this topic under
       // (sidebar row, message bucket). Absent → the model mints one as before.
       const newTopic = await this.topicModel.create(
@@ -2032,8 +2093,8 @@ export class AiAgentService {
           groupId: appContext?.groupId,
           metadata,
           // Snapshot the effective model as the topic's pinned model (config).
-          model: heteroSnapshotType ? undefined : model,
-          provider: heteroSnapshotType ?? provider,
+          model: heterogeneousTopicModelSnapshot?.model ?? (heteroSnapshotType ? undefined : model),
+          provider: heterogeneousTopicModelSnapshot?.provider ?? heteroSnapshotType ?? provider,
           title:
             title !== undefined
               ? title
@@ -2063,6 +2124,7 @@ export class AiAgentService {
       if (pinnedModel) {
         model = modelOverride || pinnedModel;
         provider = providerOverride || existingTopic?.provider || provider;
+        pinnedHeterogeneousTopicModel = { model, provider };
         log(
           'execAgent: using topic-pinned model=%s provider=%s for topic %s',
           model,
@@ -2095,7 +2157,7 @@ export class AiAgentService {
     // server-side LLM pipeline.  After topic + message creation we hand off to
     // the device gateway (desktop) or cloud sandbox, which will push events
     // back via `heteroIngest` / `heteroFinish` (amp / claude-code / codebuddy /
-    // codex / cursor / kimi-code / opencode / pi / qoder) or
+    // codex / cursor / droid / grok-build / kimi-code / opencode / pi / qoder / trae) or
     // `agentNotify.notify` (openclaw / hermes).
     //
     // Detection: prefer agencyConfig.heterogeneousProvider.type (set by the UI),
@@ -2146,6 +2208,12 @@ export class AiAgentService {
     const resolveUserMessageParentId = async () => {
       if (runFromHistory) return undefined;
       if (parentMessageId) return parentMessageId;
+      // A thread created for THIS turn is empty, so there is no spine head to
+      // anchor on. Its branch point is the source message — the same anchor the
+      // non-gateway path keeps for a brand-new thread. Without it the first turn
+      // persists as a second root and the renderer's parentId walk emits it out
+      // of order.
+      if (createdThreadId) return appContext?.newThread?.sourceMessageId;
 
       const threadId = appContext?.threadId ?? null;
       const spineId = await this.messageModel.getLatestSpineMessageId({ threadId, topicId });
@@ -2205,29 +2273,52 @@ export class AiAgentService {
     // / `turn_metadata` (backfilled by HeterogeneousPersistenceHandler), and
     // seeding the agent's chat model would leak it into the model tag. A normal
     // run seeds model + provider as usual.
-    const assistantMessageRecord = await this.messageModel.create(
-      {
-        agentId: assistantAgentId,
-        content: LOADING_FLAT,
-        // Stamp groupId so the assistant turn is visible in the group read path
-        // (MessageModel.query filters group chats by messages.groupId).
-        groupId: appContext?.groupId ?? undefined,
-        metadata: orchestrationMetadata,
-        model: isHeteroAgent ? undefined : model,
-        // Chain onto the user turn we just persisted; `parentMessageId` is the
-        // anchor only on a resume, where no user message is created. A batch
-        // approval overrides it with the assistant that emitted the batch — the
-        // previous LLM call — so the spine stays one node per call and never
-        // depends on which of the batch's tool rows the client sent as anchor.
-        parentId: userMessageRecord?.id ?? batchApprovalAnchorId ?? parentMessageId,
-        provider: isHeteroAgent ? heteroType : provider,
-        role: 'assistant',
-        threadId: appContext?.threadId ?? undefined,
-        topicId,
-      },
-      // The id the client's assistant placeholder already renders under.
-      clientIds?.assistantMessageId,
-    );
+    const assistantParentId = userMessageRecord?.id ?? batchApprovalAnchorId ?? parentMessageId;
+    const existingContinuationAssistant = continuationAssistantId
+      ? await this.messageModel.findById(continuationAssistantId)
+      : undefined;
+
+    if (
+      existingContinuationAssistant &&
+      (existingContinuationAssistant.role !== 'assistant' ||
+        existingContinuationAssistant.topicId !== topicId ||
+        (existingContinuationAssistant.threadId ?? undefined) !==
+          (appContext?.threadId ?? undefined) ||
+        (existingContinuationAssistant.parentId ?? undefined) !== assistantParentId ||
+        existingContinuationAssistant.agentId !== assistantAgentId)
+    ) {
+      throw new Error(
+        `Intervention continuation assistant identity conflict: ${continuationAssistantId}`,
+      );
+    }
+
+    const assistantMessageRecord =
+      existingContinuationAssistant ??
+      (await this.messageModel.create(
+        {
+          agentId: assistantAgentId,
+          content: LOADING_FLAT,
+          // Stamp groupId so the assistant turn is visible in the group read path
+          // (MessageModel.query filters group chats by messages.groupId).
+          groupId: appContext?.groupId ?? undefined,
+          metadata: orchestrationMetadata,
+          model: isHeteroAgent ? undefined : model,
+          // Chain onto the user turn we just persisted; `parentMessageId` is the
+          // anchor only on a resume, where no user message is created. A batch
+          // approval overrides it with the assistant that emitted the batch — the
+          // previous LLM call — so the spine stays one node per call and never
+          // depends on which of the batch's tool rows the client sent as anchor.
+          parentId: assistantParentId,
+          provider: isHeteroAgent ? heteroType : provider,
+          role: 'assistant',
+          threadId: appContext?.threadId ?? undefined,
+          topicId,
+        },
+        // Generic intervention continuations use a stable placeholder so a
+        // crash after this insert but before operation-state creation can
+        // safely re-enter without creating a second assistant turn.
+        continuationAssistantId ?? clientIds?.assistantMessageId,
+      ));
     selfMessageIds.add(assistantMessageRecord.id);
     assistantMessageRef.current = assistantMessageRecord.id;
     log('execAgent: created assistant message %s', assistantMessageRecord.id);
@@ -2273,41 +2364,28 @@ export class AiAgentService {
       // generated here (authoritative) and flows through to heteroIngest /
       // heteroFinish unchanged. Without this row the run is invisible to the
       // operation lifecycle: verify (ensureForOperation), repair (parent chain),
-      // judge (op.model/provider) and tracing all key off it. Terminal state +
-      // the trace snapshot are written back in heteroFinish. Non-fatal: a
-      // tracing/op-row insert hiccup must never fail the user's run.
-      try {
-        // Route through CompletionLifecycle — NOT the raw operation model — so the
-        // hetero run is a first-class lifecycle peer of the in-process runtime.
-        // recordStart additionally instantiates the task's verify plan when this
-        // is a top-level task op (taskId && !parentOperationId); the hetero finish
-        // side (heteroFinish → CompletionLifecycle.dispatchHooks) then runs the
-        // delivery-checker gate against that plan. Calling the bare operation model
-        // here is exactly what silently degraded verify to off for every hetero
-        // task run (the plan was never created at start).
-        await new CompletionLifecycle(this.db, this.userId, this.workspaceId).recordStart({
-          agentId: persistAgentId,
-          chatGroupId: appContext?.groupId ?? null,
-          maxSteps,
-          // Seed the heterogeneous provider (claude-code / codex / …), NOT the
-          // agent's configured chat provider — the run executes on the CLI, so
-          // `provider` (e.g. `lobehub`) and `model` (e.g. `deepseek-v4-pro`) are
-          // irrelevant. `model` is intentionally left unset: the real executed
-          // model arrives mid-stream and is backfilled by heteroFinish. Mirrors the
-          // assistant-message seeding above (provider: heteroType, model: undefined).
-          operationId,
-          // Top-level dispatch carries no parent; pass it through so the verify
-          // plan gate (taskId && !parentOperationId) reads the real lineage and a
-          // repair/verifier sub-run never re-instantiates its own plan here.
-          parentOperationId,
-          provider: heteroType,
-          taskId: operationTaskId ?? null,
-          threadId: appContext?.threadId ?? null,
-          topicId,
-          trigger,
-        });
-      } catch (err) {
-        log('execAgent: hetero recordStart failed (non-fatal): %O', err);
+      // judge (op.model/provider) and tracing all key off it. The durable row is
+      // also an authentication prerequisite: every callback
+      // re-authorizes its operation token against this exact principal. Do not
+      // mint a token or dispatch/spawn when persistence fails.
+      const operationPersisted = await new CompletionLifecycle(
+        this.db,
+        this.userId,
+        this.workspaceId,
+      ).recordStart({
+        agentId: persistAgentId,
+        chatGroupId: appContext?.groupId ?? null,
+        maxSteps,
+        operationId,
+        parentOperationId,
+        provider: heteroType,
+        taskId: operationTaskId ?? null,
+        threadId: appContext?.threadId ?? null,
+        topicId,
+        trigger,
+      });
+      if (!operationPersisted) {
+        throw new Error('Failed to persist heterogeneous agent operation');
       }
 
       // Read resume session id for next-turn continuity.
@@ -2319,7 +2397,12 @@ export class AiAgentService {
       // heteroIngest / heteroFinish without full user credentials.
       let operationJwt: string;
       try {
-        operationJwt = await signOperationJwt(this.userId);
+        operationJwt = await signHeteroOperationJWT({
+          capabilities: ['hetero:ingest', 'hetero:finish', 'hetero:intervention:read'],
+          operationId,
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        });
       } catch (err) {
         log('execAgent: failed to sign operation JWT for hetero run: %O', err);
         throw new Error('Failed to sign operation JWT for hetero agent', { cause: err });
@@ -2359,7 +2442,7 @@ export class AiAgentService {
       // a serialized duplicate. Amp threads are server-backed, so they rely on
       // native continuation exclusively and never need this local-file fallback.
       let conversationHistory: ConversationHistoryEntry[] | undefined;
-      if (resumeSessionId && heteroType !== 'amp') {
+      if (heteroType !== 'amp') {
         try {
           const recentMsgs = await this.messageModel.query({ topicId, pageSize: 200 });
           const turns = recentMsgs
@@ -2387,17 +2470,19 @@ export class AiAgentService {
       // retry; successful same-session runs never consume the duplicate history.
       const systemContext = buildCloudHeteroContext({
         agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+        conversationHistory: resumeSessionId ? undefined : conversationHistory,
         githubToken,
         repos: topicRepos,
       });
-      const resumeFallbackSystemContext = conversationHistory
-        ? buildCloudHeteroContext({
-            agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
-            conversationHistory,
-            githubToken,
-            repos: topicRepos,
-          })
-        : undefined;
+      const resumeFallbackSystemContext =
+        resumeSessionId && conversationHistory
+          ? buildCloudHeteroContext({
+              agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+              conversationHistory,
+              githubToken,
+              repos: topicRepos,
+            })
+          : undefined;
 
       // Feed the resolved images (signed URLs) to the dispatched CLI for vision —
       // mirrors the local-mode path, where the client feeds the persisted
@@ -2409,8 +2494,11 @@ export class AiAgentService {
           : undefined;
       const heteroExecArgs = isLocalHeterogeneousType(heteroType)
         ? buildHeteroExecArgs(
-            agentConfig.agencyConfig?.heterogeneousProvider?.type === heteroType
-              ? agentConfig.agencyConfig.heterogeneousProvider
+            heterogeneousProvider?.type === heteroType
+              ? applyTopicModelToHeterogeneousProvider(
+                  heterogeneousProvider,
+                  pinnedHeterogeneousTopicModel,
+                )
               : { type: heteroType },
           )
         : undefined;
@@ -2478,13 +2566,14 @@ export class AiAgentService {
       // boundary in queue mode.
       const childOperation = {
         assistantMessageId: assistantMessageRecord.id,
+        heteroType,
         hooks: serializedHooks,
+        startedAt: new Date().toISOString(),
         ...(isRemoteHetero && remoteDeviceId
           ? {
               deviceId: remoteDeviceId,
               deviceUserId: remoteDeviceUserId,
               deviceWorkspaceId: remoteDeviceWorkspaceId,
-              heteroType,
             }
           : {}),
         operationId,
@@ -2528,32 +2617,61 @@ export class AiAgentService {
             userMessageId: userMessageRecord?.id ?? parentMessageId ?? '',
           };
         }
-      } else {
+      } else if (appContext?.isolationThread && parentOperationId) {
+        // Isolation-thread children (callAgent / callSubAgent) run on the
+        // SPAWNER's topic and finish long before it does. heteroIngest and
+        // heteroFinish both require this child's operationId to resolve via
+        // topic.metadata.runningOperation (root or childOperations) — see
+        // the comment above childOperation — or every streamed batch is
+        // dropped as stale and the terminal onComplete hooks (including the
+        // callAgent resume bridge) never fire. Nest under the parent's own
+        // marker instead of claiming the topic-level root outright, so the
+        // parent's marker survives for the rest of its still-running turn.
+        const attachedToParent = await this.topicModel.appendRunningOperationChild(
+          topicId,
+          parentOperationId,
+          childOperation,
+        );
+        if (!attachedToParent) {
+          // Parent isn't (or is no longer) the topic's current root marker —
+          // e.g. a nested isolation chain, or the parent already settled.
+          // Fall back to claiming the marker directly so this child is still
+          // discoverable by its own operationId, rather than permanently
+          // unrecognized by heteroIngest/heteroFinish.
+          await this.topicModel.updateMetadata(topicId, { runningOperation: childOperation });
+        }
+      } else if (!appContext?.isolationThread) {
         await this.topicModel.updateMetadata(topicId, { runningOperation: childOperation });
       }
 
-      const persistMirrorTarget = async () => {
-        if (!params.topicStartOwnerOperationId) return;
+      // Always persist operation metadata (userId/workspaceId) to the state
+      // manager, not just for topic-owner-mirrored runs. `subAgentCallback`
+      // (the QStash-delivered completion bridge for callAgent/callSubAgent
+      // children) resolves `userId` from this same store to authorize
+      // resuming the parent — without it, a hetero child spawned via
+      // callAgent has no metadata row, the callback 401s, and the parent
+      // operation is never resumed (stays parked until the inactivity
+      // watchdog abandons it).
+      const persistOperationMetadata = async () => {
         try {
           await createAgentStateManager().createOperationMetadata(operationId, {
-            mirrorToOperationId: params.topicStartOwnerOperationId,
+            ...(params.topicStartOwnerOperationId && {
+              mirrorToOperationId: params.topicStartOwnerOperationId,
+            }),
             userId: this.userId,
             workspaceId: this.workspaceId,
           });
         } catch (err) {
-          log('execAgent: failed to persist hetero mirror target: %O', err);
+          log('execAgent: failed to persist hetero operation metadata: %O', err);
         }
       };
 
-      if (
-        agentConfig.agencyConfig?.heterogeneousProvider?.type === 'claude-code' &&
-        agentConfig.agencyConfig.heterogeneousProvider.authMode === 'api'
-      ) {
+      if (agentConfig.agencyConfig?.heterogeneousProvider?.authMode === 'api') {
         await this.finalizeHeteroDispatchError({
           agentId: resolvedAgentId,
           assistantMessageId: assistantMessageRecord.id,
-          detail: CLAUDE_CODE_API_LOCAL_ONLY_ERROR,
-          message: 'Claude Code API mode does not support this execution target',
+          detail: HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR,
+          message: 'Provider-bound heterogeneous agents do not support this execution target',
           operationId,
           topicId,
         });
@@ -2562,8 +2680,8 @@ export class AiAgentService {
           assistantMessageId: assistantMessageRecord.id,
           autoStarted: false,
           createdAt: new Date().toISOString(),
-          error: CLAUDE_CODE_API_LOCAL_ONLY_ERROR,
-          message: 'Claude Code API mode requires Desktop local execution',
+          error: HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR,
+          message: 'Heterogeneous agent provider binding requires Desktop local execution',
           operationId,
           status: 'error',
           success: false,
@@ -2638,7 +2756,7 @@ export class AiAgentService {
 
         // Open the stream channel so the gateway WS subscription can receive
         // notify_update events published by agentNotify.notify.
-        await persistMirrorTarget();
+        await persistOperationMetadata();
         const streamManager = createStreamEventManager();
         await streamManager
           .publishAgentRuntimeInit(operationId, {
@@ -2741,7 +2859,7 @@ export class AiAgentService {
         // the init only powers reconnect, not the run. `createStreamEventManager`
         // probes Redis synchronously, so guard construction too, not just publish.
         try {
-          await persistMirrorTarget();
+          await persistOperationMetadata();
           await createStreamEventManager().publishAgentRuntimeInit(operationId, {
             agentId: resolvedAgentId,
             assistantMessageId: assistantMessageRecord.id,
@@ -2817,29 +2935,31 @@ export class AiAgentService {
           });
           const deviceCwd = getWorkingDirEffectivePath(deviceCwdConfig);
 
-          // A brand-new topic has no pinned cwd yet: the directory was only
+          // An unbound topic has no pinned cwd yet: the directory was only
           // recorded at agent level (`workingDirByDevice`) when no topic existed.
           // Persist the resolved cwd onto the topic so the sidebar groups it
           // under the right project and the next turn reuses the same directory.
-          if (isNewTopic && deviceCwd && deviceCwd !== topic?.metadata?.workingDirectory) {
-            await this.topicModel.updateMetadata(topicId, {
-              workingDirectory: deviceCwd,
-              ...(deviceCwdConfig ? { workingDirectoryConfig: deviceCwdConfig } : {}),
-            });
-          }
+          await this.bindTopicWorkingDirectory({
+            config: deviceCwdConfig,
+            currentWorkingDirectory: topic?.metadata?.workingDirectory,
+            topicId,
+          });
 
           // Build only device-relevant context instead of reusing the cloud-sandbox one
           // (which describes an ephemeral /workspace + pre-cloned repos and would mislead
           // the agent). The spawned CLI already receives deviceCwd as its actual cwd.
           const deviceSystemContext = buildRemoteDeviceHeteroContext({
             agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+            conversationHistory: resumeSessionId ? undefined : conversationHistory,
           });
-          const deviceResumeFallbackSystemContext = conversationHistory
-            ? buildRemoteDeviceHeteroContext({
-                agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
-                conversationHistory,
-              })
-            : undefined;
+          const deviceResumeFallbackSystemContext =
+            resumeSessionId && conversationHistory
+              ? buildRemoteDeviceHeteroContext({
+                  agentSystemContext:
+                    agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+                  conversationHistory,
+                })
+              : undefined;
 
           const result = await deviceGateway.dispatchAgentRun({
             ...heteroParams,
@@ -2968,6 +3088,7 @@ export class AiAgentService {
         assistantMessageId: assistantMessageRecord.id,
         autoStarted: true,
         createdAt: new Date().toISOString(),
+        heteroType,
         message: 'Hetero agent dispatched successfully',
         operationId,
         status: 'created',
@@ -3052,16 +3173,18 @@ export class AiAgentService {
     // `additionalPluginIds` so a mentioned-but-not-pinned tool (e.g. a custom MCP
     // connector) is both queried for manifests and enabled by the tools engine.
     const isGoalTurn = isGoalPrompt(prompt);
-    let agentPlugins: string[] = isGoalTurn
-      ? [GoalIdentifier]
-      : [
-          ...new Set([
-            ...getActivePluginIds(agentConfig?.plugins),
-            ...(additionalPluginIds || []),
-            ...(selectedToolIds || []),
-            ...(hasMentionedAgents ? ['lobe-agent-management'] : []),
-          ]),
-        ];
+    let agentPlugins: string[] = exclusivePluginIds
+      ? [...new Set(exclusivePluginIds)]
+      : isGoalTurn
+        ? [GoalIdentifier]
+        : [
+            ...new Set([
+              ...getActivePluginIds(agentConfig?.plugins),
+              ...(additionalPluginIds || []),
+              ...(selectedToolIds || []),
+              ...(hasMentionedAgents ? ['lobe-agent-management'] : []),
+            ]),
+          ];
 
     // Model metadata is needed both for tool support checks and agent-management context.
     const { loadModels } = await import('@/business/client/model-bank/loadModels');
@@ -3517,6 +3640,7 @@ export class AiAgentService {
         canUseDevice,
         chatConfig: agentConfig.chatConfig ?? undefined,
         clientExecutionAvailable: gatewayConfigured,
+        localDeviceId,
         onlineDeviceIds: onlineDevices.map((device) => device.deviceId),
         requestedDeviceId,
         trigger: requestTriggerMetadata?.trigger,
@@ -3671,10 +3795,11 @@ export class AiAgentService {
         // lobe-agent drops `callSubAgent` so the model can't recurse into nested
         // sub-agents (which the runtime rejects, looping until the inactivity
         // watchdog kills the op). Mirrors the frontend `createAgentToolsEngine`.
-        // `executionEnv` mirrors the resolved plan so exec-capable tools
-        // (lobe-skills) can state where their commands actually run — most
-        // importantly the `device-unrouted` degradation, where the user picked
-        // a local device that is offline and exec silently lands in the sandbox.
+        // `executionEnv` mirrors the resolved plan, while preserving the local
+        // target for a routed desktop because its readFile implementation can
+        // return images. It also keeps the `device-unrouted` degradation, where
+        // the user picked a local device that is offline and exec silently lands
+        // in the sandbox.
         // For bot conversations we also pass the IM platform so `lobe-message`
         // can drop APIs the platform can't fulfil (e.g. WeChat has no
         // `readMessages`).
@@ -3686,7 +3811,7 @@ export class AiAgentService {
                 ?.unsupportedMessageApis,
             },
           }),
-          executionEnv: executionPlan.kind,
+          executionEnv: executionPlanToManifestExecutionEnv(executionPlan, localDeviceId),
           executionEnvUnroutedReason:
             executionPlan.kind === 'device-unrouted' ? executionPlan.reason : undefined,
           isSubAgent: appContext?.isSubAgent,
@@ -3698,18 +3823,20 @@ export class AiAgentService {
       });
 
       // 5f. Generate tools and manifest map
-      const pluginIds = [
-        ...new Set([
-          ...agentPlugins,
-          ...(disableLocalSystem ? [] : [LocalSystemManifest.identifier]),
-          RemoteDeviceManifest.identifier,
-          // Include LobeHub Skills and Composio tools so they are passed to generateToolsDetailed
-          ...activeLobehubSkillManifests.map((m) => m.identifier),
-          ...activeComposioManifests.map((m) => m.identifier),
-          // Connector manifests are also injected as additionalManifests
-          ...activeConnectorManifests.map((m) => m.identifier),
-        ]),
-      ];
+      const pluginIds = exclusivePluginIds
+        ? agentPlugins
+        : [
+            ...new Set([
+              ...agentPlugins,
+              ...(disableLocalSystem ? [] : [LocalSystemManifest.identifier]),
+              RemoteDeviceManifest.identifier,
+              // Include LobeHub Skills and Composio tools so they are passed to generateToolsDetailed
+              ...activeLobehubSkillManifests.map((m) => m.identifier),
+              ...activeComposioManifests.map((m) => m.identifier),
+              // Connector manifests are also injected as additionalManifests
+              ...activeConnectorManifests.map((m) => m.identifier),
+            ]),
+          ];
       log('execAgent: agent configured plugins: %O', pluginIds);
 
       const isManualMode = agentConfig.chatConfig?.skillActivateMode === 'manual';
@@ -3718,6 +3845,7 @@ export class AiAgentService {
         excludeDefaultToolIds: isManualMode ? manualModeExcludeToolIds : undefined,
         model,
         provider,
+        skipDefaultTools: !!exclusivePluginIds,
         toolIds: pluginIds,
       });
 
@@ -3740,6 +3868,7 @@ export class AiAgentService {
       // Enforced here (not as a point deletion after the seed) so the later
       // Skill/Composio ingest loops cannot re-add the identifier.
       const isManifestIngestAllowed = (identifier: string): boolean => {
+        if (exclusivePluginIds && !exclusivePluginIds.includes(identifier)) return false;
         if (disabledPluginIdSet.has(identifier)) return false;
         if (!canUseDevice && isDeviceToolIdentifier(identifier)) return false;
         if (deviceLocked && REMOTE_DEVICE_TOOL_IDENTIFIERS.has(identifier)) return false;
@@ -3755,7 +3884,7 @@ export class AiAgentService {
 
       // Also include discoverable builtin tools that are not yet in the map,
       // so the activator can find their manifests when dynamically enabling them
-      // (e.g., lobe-creds, lobe-cron). Exclude discoverable:false tools to prevent
+      // (e.g., lobe-creds, lobe-task). Exclude discoverable:false tools to prevent
       // internal infrastructure tools from being surfaced to the activator.
       const allowedBuiltinTools = buildAllowedBuiltinTools({
         canUseDevice,
@@ -4247,7 +4376,8 @@ export class AiAgentService {
 
     // 15. Generate operation ID: agt_{timestamp}_{agentId}_{topicId}_{random}
     const timestamp = Date.now();
-    const operationId = `op_${timestamp}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
+    const operationId =
+      continuationOperationId ?? `op_${timestamp}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
 
     if (params.topicStartOwnerOperationId) {
       const attached = await this.topicModel.appendRunningOperationChild(
@@ -4373,48 +4503,63 @@ export class AiAgentService {
     // intervention status, so `allMessages` reflects the decision for the
     // LLM / runner on the first step.
     //
-    // `rejected` and `rejected_continue` share the same server-side path:
-    // both surface the rejection to the LLM as user feedback via
-    // `phase: 'user_input'`. The client-side split (halt vs. continue) is
-    // only about the UX of the button and the optimistic writes — once the
-    // decision is persisted, there's nothing meaningful to do differently
-    // server-side, and letting the LLM produce a brief acknowledgement keeps
-    // the conversation cleanly terminated either way.
+    // `rejected` and `rejected_continue` share the same persisted tool-result
+    // path. Starting at `tool_result` (not `user_input`) is critical for a
+    // partial same-turn decision: GeneralChatAgent first checks for pending
+    // siblings and re-parks them, and only the final decision continues the
+    // LLM. A direct user_input continuation would fork an LLM call while the
+    // unresolved tool rows were still empty.
     // Batch approval: hand the runtime every approved tool at once so it runs a
     // single `call_tools_batch` against the existing pending rows and continues
     // the LLM exactly once, with the complete result set. Taken whenever the
     // caller used the batch wire form; the single `resumeApproval` form keeps
     // the established `call_tool` + `skipCreateToolMessage` path below.
-    if (resumeApprovals?.length && approvedToolEntries.length > 0) {
-      initialContext = {
-        initialContext: initialContext.initialContext,
-        payload: {
-          approvedToolCalls: approvedToolEntries.map(({ plugin }) => ({
-            apiName: plugin.apiName,
-            arguments: plugin.arguments,
-            id: plugin.toolCallId,
-            identifier: plugin.identifier,
-            type: plugin.type ?? 'default',
-          })),
-          assistantMessageId: assistantMessageRecord.id,
-          // The tool rows already exist and are parented to the assistant that
-          // emitted the calls; the batch executor addresses them through
-          // `toolMessageIds` and never inserts, so this only anchors the spine.
-          parentMessageId: approvalOwnerAssistantId ?? assistantMessageRecord.id,
-          toolMessageIds: Object.fromEntries(
-            approvedToolEntries
-              .filter(({ plugin }) => !!plugin.toolCallId)
-              .map(({ plugin, toolMessageId }) => [plugin.toolCallId!, toolMessageId]),
-          ),
-        } as any,
-        phase: 'human_approved_tool' as const,
-        session: {
-          messageCount: allMessages.length,
-          sessionId: operationId,
-          status: 'idle' as const,
-          stepCount: 0,
-        },
-      };
+    if (resumeApprovals?.length) {
+      initialContext =
+        approvedToolEntries.length > 0
+          ? {
+              initialContext: initialContext.initialContext,
+              payload: {
+                approvedToolCalls: approvedToolEntries.map(({ plugin }) => ({
+                  apiName: plugin.apiName,
+                  arguments: plugin.arguments,
+                  id: plugin.toolCallId,
+                  identifier: plugin.identifier,
+                  type: plugin.type ?? 'default',
+                })),
+                assistantMessageId: assistantMessageRecord.id,
+                // The tool rows already exist and are parented to the assistant that
+                // emitted the calls; the batch executor addresses them through
+                // `toolMessageIds` and never inserts, so this only anchors the spine.
+                parentMessageId: approvalOwnerAssistantId ?? assistantMessageRecord.id,
+                toolMessageIds: Object.fromEntries(
+                  approvedToolEntries
+                    .filter(({ plugin }) => !!plugin.toolCallId)
+                    .map(({ plugin, toolMessageId }) => [plugin.toolCallId!, toolMessageId]),
+                ),
+              } as any,
+              phase: 'human_approved_tool' as const,
+              session: {
+                messageCount: allMessages.length,
+                sessionId: operationId,
+                status: 'idle' as const,
+                stepCount: 0,
+              },
+            }
+          : {
+              initialContext: initialContext.initialContext,
+              payload: {
+                assistantMessageId: assistantMessageRecord.id,
+                parentMessageId: parentMessageId ?? resumeApprovals[0].parentMessageId,
+              } as any,
+              phase: 'tool_result' as const,
+              session: {
+                messageCount: allMessages.length,
+                sessionId: operationId,
+                status: 'idle' as const,
+                stepCount: 0,
+              },
+            };
     } else if (resumeApproval && resumeApprovalPlugin) {
       if (resumeApproval.decision === 'approved') {
         // Ask the runtime to execute the approved tool directly. Matches the
@@ -4447,12 +4592,17 @@ export class AiAgentService {
         };
       } else {
         initialContext = {
-          ...initialContext,
+          initialContext: initialContext.initialContext,
           payload: {
-            ...(initialContext.payload as any),
-            isFirstMessage: false,
-            message: [{ content: '' }],
+            assistantMessageId: assistantMessageRecord.id,
             parentMessageId: resumeApproval.parentMessageId,
+          } as any,
+          phase: 'tool_result' as const,
+          session: {
+            messageCount: allMessages.length,
+            sessionId: operationId,
+            status: 'idle' as const,
+            stepCount: 0,
           },
         };
       }
@@ -4492,6 +4642,41 @@ export class AiAgentService {
       allMessages.length,
       Object.keys(toolManifestMap).length,
     );
+
+    // Project skills + the root AGENTS.md are discovered server-side by
+    // scanning the device's bound project directory ("workspace init"), cached
+    // on `devices.workingDirs` and reused within the TTL. Skills surface in
+    // `<available_skills>` (metadata only — SKILL.md bodies are read lazily at
+    // activation via `local-system` readFile, which `serverRuntimes/skills.ts`
+    // re-gates on `activeDeviceId`). Only `location` (the absolute SKILL.md
+    // path) flows through; the directory tree is enumerated lazily, keeping the
+    // op-param payload small.
+    const workspaceInit = await this.resolveWorkspaceInit({
+      activeDeviceId,
+      agencyConfig: agentConfig.agencyConfig ?? undefined,
+      topicId,
+    });
+
+    // Feed the bound directory (resolved from the persisted device row) into
+    // the local-system tool's {{workingDirectory}} placeholder — the channel
+    // the model uses to know where it is and reach for absolute paths — and,
+    // downstream, the runCommand cwd / search scope (RuntimeExecutors reads
+    // state.metadata.deviceSystemInfo.workingDirectory). Resume-safe via the
+    // existing deviceSystemInfo plumbing (computeDeviceContext).
+    if (workspaceInit.boundCwd) {
+      deviceSystemInfo.workingDirectory = workspaceInit.boundCwd;
+    }
+
+    // Bind the topic to that very directory. A native (non-hetero) agent
+    // routed to a device used to resolve its cwd here for the prompt and the
+    // tools, but never write it back — so its topics stayed unbound while the
+    // run itself executed in the right place. Awaited (not fire-and-forget):
+    // the tool layer reads the topic's cwd on the same run.
+    await this.bindTopicWorkingDirectory({
+      config: workspaceInit.boundCwdConfig,
+      currentWorkingDirectory: workspaceInit.topicWorkingDirectory,
+      topicId,
+    });
 
     // 18. Build OperationSkillSet via SkillEngine
     // Combines builtin skills + user DB skills + agent-document skill bundles,
@@ -4558,30 +4743,6 @@ export class AiAgentService {
         identifier: skill.identifier,
         name: skill.name,
       }));
-
-      // Project skills + the root AGENTS.md are discovered server-side by
-      // scanning the device's bound project directory ("workspace init"), cached
-      // on `devices.workingDirs` and reused within the TTL. Skills surface in
-      // `<available_skills>` (metadata only — SKILL.md bodies are read lazily at
-      // activation via `local-system` readFile, which `serverRuntimes/skills.ts`
-      // re-gates on `activeDeviceId`). Only `location` (the absolute SKILL.md
-      // path) flows through; the directory tree is enumerated lazily, keeping the
-      // op-param payload small.
-      const workspaceInit = await this.resolveWorkspaceInit({
-        activeDeviceId,
-        agencyConfig: agentConfig.agencyConfig ?? undefined,
-        topicId,
-      });
-
-      // Feed the bound directory (resolved from the persisted device row) into
-      // the local-system tool's {{workingDirectory}} placeholder — the channel
-      // the model uses to know where it is and reach for absolute paths — and,
-      // downstream, the runCommand cwd / search scope (RuntimeExecutors reads
-      // state.metadata.deviceSystemInfo.workingDirectory). Resume-safe via the
-      // existing deviceSystemInfo plumbing (computeDeviceContext).
-      if (workspaceInit.boundCwd) {
-        deviceSystemInfo.workingDirectory = workspaceInit.boundCwd;
-      }
 
       const projectMetas = workspaceInit.workspace.skills.map((s) => ({
         description: s.description ?? '',
@@ -4736,6 +4897,7 @@ export class AiAgentService {
           // member ('member') from a genuine callSubAgent child.
           orchestrationRole: appContext?.orchestrationRole,
           scope: appContext?.scope,
+          sessionId: appContext?.sessionId,
           sourceMessageId: userMessageRecord?.id ?? parentMessageId ?? undefined,
           // Live-progress anchor for a callSubAgent child — carries the parked
           // parent's operationId + placeholder tool message so the child's step
@@ -4752,11 +4914,28 @@ export class AiAgentService {
         deviceAccessPolicy: { canUseDevice, reason: deviceAccessReason },
         discordContext,
         evalContext,
+        evalRuntime,
         enableExpertise,
         expertise,
         initialContext,
         initialMessages: allMessages,
         initialStepCount,
+        ...(providedApprovalResolutionRequestId && approvalSourceOperationId
+          ? {
+              interventionResolution: {
+                resolutionRequestId: providedApprovalResolutionRequestId,
+                sourceOperationId: approvalSourceOperationId,
+                sourceToolMessageIds: [...approvalSourceToolMessageIds].sort(),
+              },
+            }
+          : {}),
+        ...(providedApprovalResolutionRequestId
+          ? {
+              onInterventionPrepared: () => {
+                approvalClaim.continuationPrepared = true;
+              },
+            }
+          : {}),
         maxSteps,
         modelRuntimeConfig: { model, provider },
         hooks,
@@ -4780,6 +4959,17 @@ export class AiAgentService {
         userMemory,
         workspaceId: this.workspaceId,
       });
+      approvalClaim.continuationStarted = true;
+
+      // The approval continuation is a fresh operation. Legacy direct callers
+      // retire the old parked runtime here, only after createOperation has
+      // durably scheduled the replacement. Generic v2 calls carry a durable
+      // resolution id and defer this transition to the shared router dispatch
+      // boundary, which can retry it without losing this successful ExecAgent
+      // result (and therefore the WebSocket subscription credentials).
+      if (approvalSourceOperationId && !providedApprovalResolutionRequestId) {
+        await this.retirePendingApprovalOperation(approvalSourceOperationId);
+      }
 
       log('execAgent: created operation %s (autoStarted: %s)', operationId, result.autoStarted);
 
@@ -4795,12 +4985,20 @@ export class AiAgentService {
       // `appContext.subAgentProgress`.
       // `orchestrationRole` is public rendering metadata. Only the internally
       // propagated parent operation id proves child ownership of this topic.
-      if (!appContext?.isolationThread && !params.topicStartOwnerOperationId) {
+      if (
+        !appContext?.isolationThread &&
+        !appContext?.threadId &&
+        !params.topicStartOwnerOperationId
+      ) {
         await this.topicModel.updateMetadata(topicId, {
           runningOperation: {
             assistantMessageId: assistantMessageRecord.id,
+            heteroType: null,
             operationId,
             scope: appContext?.scope ?? undefined,
+            // Liveness stamp — without it this marker can never be proven dead
+            // and would hold the topic against background starts forever.
+            startedAt: new Date().toISOString(),
             threadId: appContext?.threadId ?? undefined,
           },
         });
@@ -4821,6 +5019,7 @@ export class AiAgentService {
         assistantMessageId: assistantMessageRecord.id,
         autoStarted: result.autoStarted,
         createdAt: new Date().toISOString(),
+        heteroType: null,
         message: 'Agent operation created successfully',
         messageId: result.messageId,
         operationId,
@@ -4838,6 +5037,13 @@ export class AiAgentService {
       if (isAbortError(error)) {
         await updateAbortedAssistantMessage(error.message);
         log('execAgent: createOperation aborted for %s: %s', operationId, error.message);
+        throw error;
+      }
+      if (providedApprovalResolutionRequestId && approvalClaim.continuationPrepared) {
+        // The source claim + deterministic state are now the retry record. A
+        // queue ACK may have been accepted even when its HTTP response or our
+        // follow-up marker write failed, so do not paint the stable assistant
+        // as terminal error and do not collapse this into success:false.
         throw error;
       }
 
@@ -5010,7 +5216,7 @@ export class AiAgentService {
         },
         {
           bridgeHookFactory: (threadId) =>
-            this.createGroupActionMemberBridgeHook({
+            createGroupActionMemberBridgeHook(this.agentRuntimeService, {
               anchorMessageId: params.anchorMessageId,
               expectedMembers: params.expectedMembers,
               groupToolMessageId: params.groupToolMessageId,
@@ -5145,7 +5351,7 @@ export class AiAgentService {
       disableTools,
       ephemeralUserMessage: speakerInstruction,
       hooks: [
-        this.createGroupActionMemberBridgeHook({
+        createGroupActionMemberBridgeHook(this.agentRuntimeService, {
           anchorMessageId,
           expectedMembers,
           groupToolMessageId,
@@ -5262,7 +5468,10 @@ export class AiAgentService {
     });
 
     // 3. Create hooks for updating Thread metadata and source message
-    const threadHooks = this.createThreadHooks(
+    const threadHooks = createThreadHooks(
+      this.agentRuntimeService,
+      this.threadModel,
+      this.messageModel,
       thread.id,
       startedAt,
       parentMessageId,
@@ -5278,7 +5487,12 @@ export class AiAgentService {
             ...threadHooks,
             options.bridgeHookFactory
               ? options.bridgeHookFactory(thread.id)
-              : this.createSubAgentBridgeHook(parentOperationId, parentMessageId, thread.id),
+              : createSubAgentBridgeHook(
+                  this.agentRuntimeService,
+                  parentOperationId,
+                  parentMessageId,
+                  thread.id,
+                ),
           ]
         : threadHooks;
 
@@ -5396,613 +5610,64 @@ export class AiAgentService {
   }
 
   /**
-   * Create step lifecycle callbacks for updating Thread metadata
-   * These callbacks accumulate metrics during execution and update Thread on completion
-   *
-   * @param threadId - The Thread ID to update
-   * @param startedAt - The start time ISO string
-   * @param sourceMessageId - The source message ID from Thread to update with summary
-   */
-  private createThreadMetadataCallbacks(
-    threadId: string,
-    startedAt: string,
-    sourceMessageId: string,
-    logScope: 'execSubAgent' | 'execVirtualSubAgent' = 'execSubAgent',
-  ): StepLifecycleCallbacks {
-    // Accumulator for tracking metrics across steps
-    let accumulatedToolCalls = 0;
-
-    return {
-      onAfterStep: async ({ state, stepResult }) => {
-        // Count tool calls from this step
-        const toolCallsInStep = stepResult?.events?.filter(
-          (e: { type: string }) => e.type === 'tool_call',
-        )?.length;
-        if (toolCallsInStep) {
-          accumulatedToolCalls += toolCallsInStep;
-        }
-
-        // Update Thread metadata with current progress
-        try {
-          await this.threadModel.update(threadId, {
-            metadata: {
-              operationId: state.operationId,
-              startedAt,
-              totalMessages: state.messages?.length ?? 0,
-              totalTokens: this.calculateTotalTokens(state.usage),
-              totalToolCalls: accumulatedToolCalls,
-            },
-          });
-          log('%s: updated thread %s metadata after step %d', logScope, threadId, state.stepCount);
-        } catch (error) {
-          log('%s: failed to update thread metadata: %O', logScope, error);
-        }
-      },
-
-      onComplete: async ({ finalState, reason }) => {
-        const completedAt = new Date().toISOString();
-        const duration = Date.now() - new Date(startedAt).getTime();
-
-        // Determine thread status based on completion reason
-        let status: ThreadStatus;
-        switch (reason) {
-          case 'done': {
-            status = ThreadStatus.Completed;
-            break;
-          }
-          case 'error': {
-            status = ThreadStatus.Failed;
-            break;
-          }
-          case 'interrupted': {
-            status = ThreadStatus.Cancel;
-            break;
-          }
-          case 'waiting_for_human': {
-            status = ThreadStatus.InReview;
-            break;
-          }
-          default: {
-            status = ThreadStatus.Completed;
-          }
-        }
-
-        // Log error when the isolated run fails
-        if (reason === 'error' && finalState.error) {
-          console.error('%s: run failed for thread %s:', logScope, threadId, finalState.error);
-        }
-
-        try {
-          // Extract summary from last assistant message and update source message content
-          const lastAssistantMessage = finalState.messages
-            ?.slice()
-            .reverse()
-            .find((m: { role: string }) => m.role === 'assistant');
-
-          if (lastAssistantMessage?.content) {
-            await this.messageModel.update(sourceMessageId, {
-              content: lastAssistantMessage.content,
-            });
-            log('%s: updated source message %s with summary', logScope, sourceMessageId);
-          }
-
-          // Format error for proper serialization (Error objects don't serialize with JSON.stringify)
-          const formattedError = formatErrorForMetadata(finalState.error);
-
-          // Update Thread metadata
-          await this.threadModel.update(threadId, {
-            metadata: {
-              completedAt,
-              duration,
-              error: formattedError,
-              operationId: finalState.operationId,
-              startedAt,
-              totalCost: finalState.cost?.total,
-              totalMessages: finalState.messages?.length ?? 0,
-              totalTokens: this.calculateTotalTokens(finalState.usage),
-              totalToolCalls: accumulatedToolCalls,
-            },
-            status,
-          });
-
-          log(
-            '%s: thread %s completed with status %s, reason: %s',
-            logScope,
-            threadId,
-            status,
-            reason,
-          );
-        } catch (error) {
-          console.error('%s: failed to update thread on completion: %O', logScope, error);
-        }
-      },
-    };
-  }
-
-  /**
-   * Create hooks for tracking Thread metadata updates during SubAgent execution.
-   * Replaces the legacy createThreadMetadataCallbacks with the hooks system.
-   */
-  private createThreadHooks(
-    threadId: string,
-    startedAt: string,
-    sourceMessageId: string,
-    logScope: 'execSubAgent' | 'execVirtualSubAgent',
-  ): AgentHook[] {
-    let accumulatedToolCalls = 0;
-
-    return [
-      {
-        handler: async (event) => {
-          const state = event.finalState;
-          if (!state) return;
-
-          // Count tool calls from step result
-          const stepToolCalls = state.session?.toolCalls || 0;
-          if (stepToolCalls > accumulatedToolCalls) {
-            accumulatedToolCalls = stepToolCalls;
-          }
-
-          try {
-            await this.threadModel.update(threadId, {
-              metadata: {
-                operationId: event.operationId,
-                startedAt,
-                totalMessages: state.messages?.length ?? 0,
-                totalTokens: this.calculateTotalTokens(state.usage),
-                totalToolCalls: accumulatedToolCalls,
-              },
-            });
-          } catch (error) {
-            log('%s: thread hook afterStep failed to update metadata: %O', logScope, error);
-          }
-        },
-        id: 'thread-metadata-update',
-        type: 'afterStep' as const,
-      },
-      {
-        handler: async (event) => {
-          const finalState = event.finalState;
-          if (!finalState) return;
-
-          const completedAt = new Date().toISOString();
-          const duration = Date.now() - new Date(startedAt).getTime();
-
-          // Map completion reason to ThreadStatus
-          let status: ThreadStatus;
-          switch (event.reason) {
-            case 'done': {
-              status = ThreadStatus.Completed;
-              break;
-            }
-            case 'error': {
-              status = ThreadStatus.Failed;
-              break;
-            }
-            case 'interrupted': {
-              status = ThreadStatus.Cancel;
-              break;
-            }
-            case 'waiting_for_human': {
-              status = ThreadStatus.InReview;
-              break;
-            }
-            default: {
-              status = ThreadStatus.Completed;
-            }
-          }
-
-          if (event.reason === 'error' && finalState.error) {
-            console.error(
-              '%s: thread hook onComplete run failed for thread %s:',
-              logScope,
-              threadId,
-              finalState.error,
-            );
-          }
-
-          try {
-            // Update source message with summary
-            const lastAssistantMessage = finalState.messages
-              ?.slice()
-              .reverse()
-              .find((m: { role: string }) => m.role === 'assistant');
-
-            if (lastAssistantMessage?.content) {
-              await this.messageModel.update(sourceMessageId, {
-                content: lastAssistantMessage.content,
-              });
-            }
-
-            const formattedError = formatErrorForMetadata(finalState.error);
-
-            await this.threadModel.update(threadId, {
-              metadata: {
-                completedAt,
-                duration,
-                error: formattedError,
-                operationId: finalState.operationId,
-                startedAt,
-                totalCost: finalState.cost?.total,
-                totalMessages: finalState.messages?.length ?? 0,
-                totalTokens: this.calculateTotalTokens(finalState.usage),
-                totalToolCalls: accumulatedToolCalls,
-              },
-              status,
-            });
-
-            log(
-              '%s: thread hook onComplete thread %s status=%s reason=%s',
-              logScope,
-              threadId,
-              status,
-              event.reason,
-            );
-          } catch (error) {
-            console.error('%s: thread hook onComplete failed to update: %O', logScope, error);
-          }
-        },
-        id: 'thread-completion',
-        type: 'onComplete' as const,
-      },
-    ];
-  }
-
-  /**
-   * Completion bridge for the server `callSubAgent` deferred-tool path.
-   *
-   * Fires on the sub-op's completion (success or failure) and delegates to
-   * `AgentRuntimeService.completeSubAgentBridge`: backfill the parent's
-   * placeholder tool message, then barrier-check + CAS-resume the parked
-   * parent op.
-   *
-   * Transport adapts to the runtime mode like every other lifecycle hook:
-   *   - local mode: the `handler` runs in-process with the child's finalState.
-   *   - queue mode: in-memory handlers don't survive cross-process steps, so
-   *     the serialized `webhook` config is delivered via QStash to
-   *     `/api/agent/webhooks/subagent-callback`, which re-enters the same
-   *     bridge method. `delivery: 'qstash'` is required — a plain fetch would
-   *     be rejected by the endpoint's QStash signature auth.
-   */
-  private createSubAgentBridgeHook(
-    parentOperationId: string,
-    toolMessageId: string,
-    threadId: string,
-  ): AgentHook {
-    return {
-      handler: async (event) => {
-        try {
-          await this.agentRuntimeService.completeSubAgentBridge({
-            finalState: event.finalState,
-            operationId: event.operationId,
-            parentOperationId,
-            reason: event.reason ?? 'done',
-            threadId,
-            toolMessageId,
-          });
-        } catch (error) {
-          console.error(
-            'Sub-agent bridge: failed to complete bridge for parent %s: %O',
-            parentOperationId,
-            error,
-          );
-        }
-      },
-      id: 'sub-agent-bridge',
-      type: 'onComplete' as const,
-      webhook: {
-        body: { parentOperationId, threadId, toolMessageId },
-        delivery: 'qstash' as const,
-        // Keep the payload lean: the endpoint reloads the child's final state
-        // from the coordinator, so everything beyond these ids is dead weight.
-        // The default (all event fields) would ship the child's entire final
-        // answer (`lastAssistantContent`) — and any tool-produced attachments
-        // the shared lifecycle event extractor inlines — through QStash.
-        eventFields: ['operationId', 'reason', 'status'],
-        // The endpoint sits behind QStash signature auth, so the unsigned
-        // fetch fallback could never authenticate — it would only mask a
-        // publish failure as a silently-dropped 401, stranding the parent.
-        fallback: 'none' as const,
-        url: '/api/agent/webhooks/subagent-callback',
-      },
-    };
-  }
-
-  /**
-   * Completion bridge for the group orchestration "call agent member" path.
-   *
-   * Fires on a member op's completion and delegates to
-   * `AgentRuntimeService.completeGroupActionMember`: backfill the member anchor,
-   * enforce the K=N member barrier, then resume/finish the parked supervisor.
-   * Transport mirrors {@link createSubAgentBridgeHook} — in-process in local
-   * mode, QStash → `/api/agent/webhooks/group-member-callback` in queue mode.
-   */
-  private createGroupActionMemberBridgeHook(params: {
-    anchorMessageId: string;
-    expectedMembers: number;
-    groupToolMessageId: string;
-    mode: GroupActionMemberMode;
-    onComplete: GroupActionOnComplete;
-    parentOperationId: string;
-    threadId?: string;
-  }): AgentHook {
-    const {
-      anchorMessageId,
-      expectedMembers,
-      groupToolMessageId,
-      mode,
-      onComplete,
-      parentOperationId,
-      threadId,
-    } = params;
-    return {
-      handler: async (event) => {
-        try {
-          await this.agentRuntimeService.completeGroupActionMember({
-            anchorMessageId,
-            expectedMembers,
-            finalState: event.finalState,
-            groupToolMessageId,
-            mode,
-            onComplete,
-            operationId: event.operationId,
-            parentOperationId,
-            reason: event.reason ?? 'done',
-            threadId,
-          });
-        } catch (error) {
-          console.error(
-            'Group-member bridge: failed to complete bridge for parent %s: %O',
-            parentOperationId,
-            error,
-          );
-        }
-      },
-      id: 'group-member-bridge',
-      type: 'onComplete' as const,
-      webhook: {
-        body: {
-          anchorMessageId,
-          expectedMembers,
-          groupToolMessageId,
-          mode,
-          onComplete,
-          parentOperationId,
-          threadId,
-        },
-        delivery: 'qstash' as const,
-        eventFields: ['operationId', 'reason', 'status'],
-        fallback: 'none' as const,
-        url: '/api/agent/webhooks/group-member-callback',
-      },
-    };
-  }
-
-  /**
-   * Calculate total tokens from AgentState usage object
-   * AgentState.usage is of type Usage from @lobechat/agent-runtime
-   */
-  private calculateTotalTokens(usage?: AgentState['usage']): number | undefined {
-    if (!usage) return undefined;
-    return usage.llm?.tokens?.total;
-  }
-
-  /**
-   * Interrupt a running task
-   *
-   * This method interrupts a SubAgent task by threadId or operationId.
-   * It updates both operation status and Thread status to cancelled state.
+   * Interrupts a running task and coordinates any device-hosted process shutdown.
+   * Delegates to {@link InterventionController}.
    */
   async interruptTask(params: {
     operationId?: string;
     threadId?: string;
     topicId?: string;
-  }): Promise<{ operationId?: string; success: boolean; threadId?: string }> {
-    const { threadId, operationId, topicId } = params;
+  }): Promise<{
+    deviceCancellationConfirmed?: boolean;
+    operationId?: string;
+    success: boolean;
+    threadId?: string;
+  }> {
+    return this.interventionController.interruptTask(params);
+  }
 
-    log('interruptTask: threadId=%s, operationId=%s', threadId, operationId);
+  /** Settle a parked approval batch and terminate its operation. */
+  stopPendingApproval(params: {
+    approvalResolutionRequestId?: string;
+    batchId: string;
+    operationId: string;
+    toolMessageIds: string[];
+    topicId: string;
+  }): Promise<{ operationId: string; settledToolMessageIds: string[]; success: boolean }> {
+    return this.interventionController.stopPendingApproval(params);
+  }
 
-    // 1. Get operationId and thread
-    let resolvedOperationId = operationId;
-    let thread;
+  /** Retire the operation segment parked on an approval. */
+  retirePendingApprovalOperation(operationId: string): Promise<void> {
+    return this.interventionController.retirePendingApprovalOperation(operationId);
+  }
 
-    if (threadId) {
-      thread = await this.threadModel.findById(threadId);
-      if (!thread) {
-        throw new Error('Thread not found');
-      }
-      resolvedOperationId = resolvedOperationId || thread.metadata?.operationId;
-    }
+  /** Owner-scoped runtime state used by the v2 router's crash-safe retry probe. */
+  loadInterventionContinuationState(operationId: string): Promise<AgentState | null> {
+    return this.interventionController.loadInterventionContinuationState(operationId);
+  }
 
-    if (!resolvedOperationId) {
-      throw new Error('Operation ID not found');
-    }
-
-    // Not every cancellation entry point knows the topic (reconnect, task,
-    // bot/messenger stop). Recover it from the owner-scoped operation row so
-    // device cancellation is symmetric across every caller.
-    let resolvedTopicId = topicId;
-    if (!resolvedTopicId) {
-      const operation = await this.agentOperationModel.findById(resolvedOperationId);
-      resolvedTopicId = operation?.topicId ?? undefined;
-    }
-
-    // 2. Cancel remote hetero process (openclaw / hermes) if applicable.
-    // Check topic.metadata.runningOperation for device + heteroType info seeded by execAgent.
-    // This runs regardless of whether interruptOperation succeeds — the remote process
-    // is independent of the local operation registry.
-    if (resolvedTopicId) {
-      const topic = await this.topicModel.findById(resolvedTopicId);
-      const runningOp = (topic?.metadata as any)?.runningOperation as
-        | {
-            deviceId?: string;
-            deviceUserId?: string;
-            deviceWorkspaceId?: string;
-            heteroType?: string;
-            operationId?: string;
-            childOperations?: Array<{
-              deviceId?: string;
-              deviceUserId?: string;
-              deviceWorkspaceId?: string;
-              heteroType?: string;
-              operationId?: string;
-            }>;
-          }
-        | undefined;
-      const targetOperation =
-        runningOp?.operationId === resolvedOperationId
-          ? runningOp
-          : runningOp?.childOperations?.find((child) => child.operationId === resolvedOperationId);
-
-      if (
-        targetOperation?.deviceId &&
-        targetOperation.heteroType &&
-        isRemoteHeterogeneousType(targetOperation.heteroType)
-      ) {
-        const taskId = targetOperation.operationId ?? resolvedOperationId;
-        log(
-          'interruptTask: cancelling remote hetero process heteroType=%s deviceId=%s taskId=%s',
-          targetOperation.heteroType,
-          targetOperation.deviceId,
-          taskId,
-        );
-        const cancelWorkspaceId =
-          targetOperation.deviceWorkspaceId ??
-          (await this.resolveDeviceWorkspaceId(targetOperation.deviceId));
-        await deviceGateway
-          .executeToolCall(
-            {
-              deviceId: targetOperation.deviceId,
-              userId: targetOperation.deviceUserId ?? this.userId,
-              workspaceId: cancelWorkspaceId,
-            },
-            {
-              apiName: 'cancelHeteroTask',
-              arguments: JSON.stringify({ signal: 'SIGINT', taskId }),
-              identifier: 'cancelHeteroTask',
-            },
-            5_000,
-          )
-          .catch((err) => log('interruptTask: cancelHeteroTask dispatch failed: %O', err));
-      }
-    }
-
-    // 3. Interrupt the runtime operation first. Only mark the thread cancelled
-    // after the runtime acknowledges the interrupt to avoid unlocking a live task.
-    const interrupted = await this.agentRuntimeService.interruptOperation(resolvedOperationId);
-    log(
-      'interruptTask: interruptOperation=%s for operationId=%s',
-      interrupted,
-      resolvedOperationId,
-    );
-
-    if (!interrupted) {
-      const alreadyCancelled = thread?.status === ThreadStatus.Cancel;
-
-      return {
-        operationId: resolvedOperationId,
-        success: alreadyCancelled,
-        threadId: thread?.id,
-      };
-    }
-
-    // 4. Update Thread status to cancel
-    if (thread) {
-      await this.threadModel.update(thread.id, {
-        metadata: {
-          ...thread.metadata,
-          completedAt: new Date().toISOString(),
-        },
-        status: ThreadStatus.Cancel,
-      });
-    }
-
-    return {
-      operationId: resolvedOperationId,
-      success: true,
-      threadId: thread?.id,
-    };
+  /** Requeue an idle deterministic continuation without rebuilding its assistant turn. */
+  ensureInterventionContinuationStarted(
+    operationId: string,
+  ): Promise<'already_started' | 'missing' | 'scheduled'> {
+    return this.interventionController.ensureInterventionContinuationStarted(operationId);
   }
 
   /**
-   * Stop a run that is parked waiting for tool approval: settle the pending
-   * tool rows and terminate the operation, WITHOUT executing anything and
-   * without continuing the model.
-   *
-   * This is the "from this step on, don't go any further" action. It is not the
-   * same as rejecting a tool — a rejection resumes the model so it can respond
-   * to the refusal, whereas stopping ends the turn outright.
-   *
-   * Why it can't reuse the ordinary cancel path: when the runtime parks it
-   * emits a stream-terminal `waiting_for_human`, so the client marks its own
-   * operation `completed` and prunes it ~30s later, and the topic's
-   * `runningOperation` pointer is cleared. By the time the user decides to
-   * stop, the client no longer knows the parked operation id — so we resolve it
-   * here from the topic instead of trusting the caller.
-   *
-   * The tool rows are settled IN PLACE (the approval pause already created one
-   * row per pending call). Inserting fresh aborted rows would duplicate every
-   * tool in the turn and leave the originals `pending`, which is exactly what
-   * keeps the approval cards on screen after a stop.
+   * Repair the topic reconnect marker and release the exact start reservation
+   * after a durable queue ACK. Delegates to {@link InterventionController}.
    */
-  async stopPendingApproval(params: { toolMessageIds: string[]; topicId: string }): Promise<{
-    operationId?: string;
-    settledToolMessageIds: string[];
-    success: boolean;
-  }> {
-    const { toolMessageIds, topicId } = params;
-
-    // Validate every target before writing any of them: a half-settled batch
-    // would clear some cards while leaving the rest pointing at a run that is
-    // already gone.
-    const targets: { id: string }[] = [];
-    for (const toolMessageId of toolMessageIds) {
-      const message = await this.messageModel.findById(toolMessageId);
-      if (!message)
-        throw new Error(`stopPendingApproval: tool message not found: ${toolMessageId}`);
-      if (message.role !== 'tool') {
-        throw new Error(
-          `stopPendingApproval.toolMessageIds must point at role='tool' messages, got role='${message.role}'`,
-        );
-      }
-      if (message.topicId !== topicId) {
-        throw new Error('stopPendingApproval: topicId does not match the target tool message');
-      }
-      targets.push({ id: toolMessageId });
-    }
-
-    for (const target of targets) {
-      await this.messageModel.updateToolMessage(target.id, {
-        content: STOPPED_TOOL_CONTENT,
-      });
-      await this.messageModel.updateMessagePlugin(target.id, {
-        intervention: { status: 'aborted' },
-      } as any);
-    }
-
-    // Retire the parked operation so the topic does not keep a run that can
-    // never be resumed. Resolved from the topic because the client has lost the
-    // id by now (see the doc comment above).
-    const parkedOperationId = await this.agentOperationModel.findLatestParkedOperationId(topicId);
-    if (parkedOperationId) {
-      await this.agentRuntimeService.interruptOperation(parkedOperationId);
-      await this.agentOperationModel.recordCompletion(parkedOperationId, {
-        completedAt: new Date(),
-        completionReason: 'interrupted',
-        status: 'interrupted',
-      });
-    }
-
-    log(
-      'stopPendingApproval: settled %d tool message(s), retired operation %s',
-      targets.length,
-      parkedOperationId ?? '(none)',
-    );
-
-    return {
-      operationId: parkedOperationId,
-      settledToolMessageIds: targets.map((t) => t.id),
-      success: true,
-    };
+  repairInterventionContinuationTopicAnchor(params: {
+    assistantMessageId: string;
+    continuationOperationId: string;
+    resolutionRequestId: string;
+    scope?: string | null;
+    sourceOperationId: string;
+    sourceToolMessageIds: string[];
+    threadId?: string | null;
+    topicId: string;
+  }): Promise<void> {
+    return this.interventionController.repairInterventionContinuationTopicAnchor(params);
   }
 }

@@ -32,6 +32,7 @@ const createStore = (dbMessagesMap: Record<string, UIChatMessage[]> = {}) =>
     internal_dispatchMessage: vi.fn(),
     internal_toggleToolCallingStreaming: vi.fn(),
     operations: {},
+    operationsByContext: {},
     replaceMessages: vi.fn(),
     startOperation: vi.fn(() => ({
       abortController: new AbortController(),
@@ -829,6 +830,136 @@ describe('createGatewayEventHandler', () => {
     );
   });
 
+  it('does not let a superseded run replace messages from a newer run', async () => {
+    const lifecycle = createLifecycle();
+    const store = createStore();
+    const contextKey = messageMapKey(context);
+    store.operations = {
+      'op-1': {
+        abortController: new AbortController(),
+        context,
+        id: 'op-1',
+        metadata: { startTime: 2 },
+        status: 'running',
+        type: 'execServerAgentRuntime',
+      },
+      'op-2': {
+        abortController: new AbortController(),
+        context,
+        id: 'op-2',
+        metadata: { startTime: 1 },
+        status: 'running',
+        type: 'sendMessage',
+      },
+    };
+    store.operationsByContext = { [contextKey]: ['op-1', 'op-2'] };
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'answer-msg',
+      context,
+      operationId: 'op-1',
+      runLifecycle: lifecycle as any,
+      runtimeType: 'gateway',
+    });
+
+    handler(
+      makeEvent('agent_runtime_end', {
+        reason: 'completed',
+        uiMessages: [
+          { content: 'old answer', id: 'answer-msg', role: 'assistant' },
+        ] as unknown as UIChatMessage[],
+      }),
+    );
+    await flush();
+
+    expect(store.replaceMessages).not.toHaveBeenCalled();
+    expect(lifecycle.completeRun).toHaveBeenCalled();
+  });
+
+  it('does not let a superseded run refetch an older terminal snapshot', async () => {
+    const lifecycle = createLifecycle();
+    const store = createStore();
+    const contextKey = messageMapKey(context);
+    store.operations = {
+      'op-1': {
+        abortController: new AbortController(),
+        context,
+        id: 'op-1',
+        metadata: { startTime: 1 },
+        status: 'running',
+        type: 'execServerAgentRuntime',
+      },
+      'op-2': {
+        abortController: new AbortController(),
+        context,
+        id: 'op-2',
+        metadata: { startTime: 2 },
+        status: 'running',
+        type: 'sendMessage',
+      },
+    };
+    store.operationsByContext = { [contextKey]: ['op-1', 'op-2'] };
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'answer-msg',
+      context,
+      operationId: 'op-1',
+      runLifecycle: lifecycle as any,
+      runtimeType: 'gateway',
+    });
+    const getMessages = vi.spyOn(messageService, 'getMessages');
+
+    handler(makeEvent('agent_runtime_end', { reason: 'completed' }));
+    await flush();
+
+    expect(getMessages).not.toHaveBeenCalled();
+    expect(store.replaceMessages).not.toHaveBeenCalled();
+    expect(lifecycle.completeRun).toHaveBeenCalled();
+  });
+
+  it('does not treat a later child operation as a new conversation owner', async () => {
+    const lifecycle = createLifecycle();
+    const store = createStore();
+    const contextKey = messageMapKey(context);
+    store.operations = {
+      'op-1': {
+        abortController: new AbortController(),
+        context,
+        id: 'op-1',
+        metadata: { startTime: 1 },
+        status: 'running',
+        type: 'execServerAgentRuntime',
+      },
+      'op-member': {
+        abortController: new AbortController(),
+        context,
+        id: 'op-member',
+        metadata: { startTime: 2 },
+        parentOperationId: 'op-1',
+        status: 'completed',
+        type: 'execServerAgentRuntime',
+      },
+    };
+    store.operationsByContext = { [contextKey]: ['op-1', 'op-member'] };
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'answer-msg',
+      context,
+      operationId: 'op-1',
+      runLifecycle: lifecycle as any,
+      runtimeType: 'gateway',
+    });
+    const uiMessages = [
+      { content: 'council result', id: 'answer-msg', role: 'assistant' },
+    ] as unknown as UIChatMessage[];
+
+    handler(makeEvent('agent_runtime_end', { reason: 'completed', uiMessages }));
+    await flush();
+
+    expect(store.replaceMessages).toHaveBeenCalledWith(uiMessages, {
+      action: 'gateway/agent_runtime_end',
+      context,
+    });
+    expect(lifecycle.completeRun).toHaveBeenCalled();
+  });
+
   it('falls back to the streamed accumulator when the terminal snapshot carries no assistant text', async () => {
     vi.spyOn(messageService, 'getMessages').mockResolvedValue([] as unknown as UIChatMessage[]);
     const lifecycle = createLifecycle();
@@ -894,5 +1025,115 @@ describe('createGatewayEventHandler', () => {
     await flush();
 
     expect(lifecycle.afterRunComplete).not.toHaveBeenCalled();
+  });
+
+  it('keeps a modern intervention resolving until the producer ACK arrives', async () => {
+    const key = messageMapKey(context);
+    const getMessages = vi
+      .spyOn(messageService, 'getMessages')
+      .mockResolvedValue([] as unknown as UIChatMessage[]);
+    const updateMessagePlugin = vi.spyOn(messageService, 'updateMessagePlugin');
+    const store = createStore({
+      [key]: [
+        {
+          content: '',
+          id: 'permission-message',
+          parentId: 'answer-msg',
+          pluginIntervention: {
+            batchId: 'batch-1',
+            operationId: 'op-1',
+            status: 'pending',
+          },
+          role: 'tool',
+          tool_call_id: 'permission-1',
+        } as UIChatMessage,
+      ],
+    });
+    store.updateTopicStatus = vi.fn().mockResolvedValue(undefined);
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'answer-msg',
+      context,
+      operationId: 'op-1',
+      runtimeType: 'hetero',
+    });
+    const resolutionRequestId = '018fbd8e-7baf-7c6d-8000-000000000001';
+
+    handler(
+      makeEvent('agent_intervention_request', {
+        apiName: 'askUserQuestion',
+        arguments: '{"questions":[]}',
+        deadline: Date.now() + 60_000,
+        identifier: 'claude-code',
+        interactionKind: 'permission',
+        provider: 'cursor',
+        toolCallId: 'permission-1',
+      }),
+    );
+    await flush();
+    expect(store.updateTopicStatus).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'waitingForHuman', topicId: 'topic-1' }),
+    );
+
+    vi.mocked(store.updateTopicStatus!).mockClear();
+    getMessages.mockClear();
+    handler(
+      makeEvent('agent_intervention_response', {
+        producerAck: false,
+        resolutionRequestId,
+        result: { approved: true },
+        toolCallId: 'permission-1',
+      }),
+    );
+    await flush();
+    expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+      {
+        id: 'permission-message',
+        type: 'updateMessage',
+        value: {
+          pluginIntervention: {
+            batchId: 'batch-1',
+            operationId: 'op-1',
+            resolving: true,
+            status: 'pending',
+          },
+        },
+      },
+      { context },
+    );
+    expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+      {
+        id: 'answer-msg',
+        tool_call_id: 'permission-1',
+        type: 'updateMessageTools',
+        value: {
+          intervention: {
+            batchId: 'batch-1',
+            operationId: 'op-1',
+            resolving: true,
+            status: 'pending',
+          },
+        },
+      },
+      { context },
+    );
+    expect(store.updateTopicStatus).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'waitingForHuman', topicId: 'topic-1' }),
+    );
+    expect(updateMessagePlugin).not.toHaveBeenCalled();
+    expect(getMessages).not.toHaveBeenCalled();
+
+    handler(
+      makeEvent('agent_intervention_response', {
+        producerAck: true,
+        resolutionRequestId,
+        result: { approved: true },
+        toolCallId: 'permission-1',
+      }),
+    );
+    await flush();
+    expect(getMessages).toHaveBeenCalledWith({ ...context, skipWorks: true });
+    expect(store.updateTopicStatus).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'running', topicId: 'topic-1' }),
+    );
   });
 });

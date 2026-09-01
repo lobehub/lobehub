@@ -5,15 +5,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { __resetForTest, extractAllIcons, extractAppIcon } from '../iconExtractor';
 
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 vi.mock('node:fs/promises', () => ({
   access: vi.fn(),
   mkdtemp: vi.fn(),

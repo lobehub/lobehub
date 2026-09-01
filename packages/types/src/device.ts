@@ -383,6 +383,50 @@ export interface DeviceListItem {
   workingDirs: WorkingDirEntry[];
 }
 
+export type DevicePathStyle = 'posix' | 'windows';
+
+export type DeviceListDirErrorCode =
+  'NOT_DIRECTORY' | 'NOT_FOUND' | 'PERMISSION_DENIED' | 'UNAVAILABLE' | 'UNKNOWN';
+
+export interface DeviceListDirEntry {
+  hidden: boolean;
+  isSymlink: boolean;
+  name: string;
+  /** Device-normalized absolute path. */
+  path: string;
+  type: 'directory' | 'file';
+}
+
+interface DeviceListDirBaseResult {
+  /** Device home directory. Present on filesystem errors so the UI can recover. */
+  home: string;
+  path: string;
+  pathStyle: DevicePathStyle;
+  /** Filesystem roots available from the current path (one drive on Windows). */
+  roots: string[];
+}
+
+export interface DeviceListDirSuccessResult extends DeviceListDirBaseResult {
+  entries: DeviceListDirEntry[];
+  parent: string | null;
+  success: true;
+}
+
+export interface DeviceListDirErrorResult extends DeviceListDirBaseResult {
+  code: DeviceListDirErrorCode;
+  success: false;
+}
+
+export type DeviceListDirResult = DeviceListDirErrorResult | DeviceListDirSuccessResult;
+
+export interface DeviceStatPathResult {
+  exists: boolean;
+  isDirectory: boolean;
+  /** Device-normalized absolute path after expanding a leading `~`. */
+  path: string;
+  repoType?: 'git' | 'github';
+}
+
 /**
  * Branch name + detached-HEAD flag for a working directory, returned by the
  * `getGitBranch` device RPC. Mirrors the desktop `GitBranchInfo`.

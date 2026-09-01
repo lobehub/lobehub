@@ -23,7 +23,7 @@ const createService = (overrides: Partial<ILocalSystemService> = {}): ILocalSyst
 });
 
 describe('LocalSystemExecutionRuntime.editFile', () => {
-  it('surfaces the underlying error message instead of UNKNOWN_EXEC_ERROR', async () => {
+  it('reports a failed edit as a failure, with the underlying message intact', async () => {
     const service = createService({
       editLocalFile: vi.fn().mockResolvedValue({
         error: 'The specified old_string was not found in the file',
@@ -40,9 +40,43 @@ describe('LocalSystemExecutionRuntime.editFile', () => {
       search: 'foo',
     });
 
-    expect(output.success).toBe(true);
+    // `success` drives the tool_end event, `usage.tools.byTool[].errors` and
+    // the trace inspector's ✓/✗ — an edit that changed nothing must not land
+    // in any of them as a success.
+    expect(output.success).toBe(false);
+    // …while `error` reaches `pluginError`, which the EditLocalFile renderer
+    // branches on to draw its "Edit Failed" alert.
+    expect((output.error as { message: string }).message).toBe(
+      'The specified old_string was not found in the file',
+    );
+    // The model reads `content`; it must still carry the real reason.
     expect(output.content).toBe('The specified old_string was not found in the file');
     expect(output.content).not.toContain('UNKNOWN_EXEC_ERROR');
+    expect((output.state as { replacements: number }).replacements).toBe(0);
+  });
+
+  // `executeToolWithRetry` escalates on `error.kind === 'retry'`. These
+  // failures were never retried while they claimed success; flipping the flag
+  // must not quietly enrol them in the retry loop.
+  it('does not mark a failed edit as retryable', async () => {
+    const service = createService({
+      editLocalFile: vi.fn().mockResolvedValue({
+        error: { kind: 'retry', message: 'transient' },
+        replacements: 0,
+        success: false,
+      }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.editFile({
+      all: false,
+      path: 'C:/foo.ts',
+      replace: 'bar',
+      search: 'foo',
+    });
+
+    expect(output.success).toBe(false);
+    expect((output.error as { kind?: string }).kind).toBeUndefined();
   });
 
   it('returns a formatted success result on a successful edit', async () => {

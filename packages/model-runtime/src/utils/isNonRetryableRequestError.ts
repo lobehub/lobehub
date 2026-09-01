@@ -17,6 +17,7 @@ const RETRYABLE_ERROR_CODES = new Set([
   'invalidapikey',
   'invalidproviderapikey',
   'insufficient_quota',
+  AgentRuntimeErrorType.InsufficientQuota.toLowerCase(),
   'model_not_found',
   'quota_exceeded',
   'rate_limit_exceeded',
@@ -53,6 +54,11 @@ const RETRYABLE_MESSAGE_PATTERNS = [
   'unauthorized',
 ];
 
+const IMAGE_DECODING_MESSAGE_PATTERNS = [
+  'failed to decode image data',
+  'unable to process input image',
+];
+
 const NON_RETRYABLE_MESSAGE_PATTERNS = [
   'assistant message prefill',
   'conversation must end with a user message',
@@ -60,6 +66,7 @@ const NON_RETRYABLE_MESSAGE_PATTERNS = [
   'context_length_exceeded',
   'does not support parameter',
   'expected a string',
+  ...IMAGE_DECODING_MESSAGE_PATTERNS,
   'input is too long',
   'input tokens exceed',
   'invalid input',
@@ -160,6 +167,14 @@ const collectStatusCodes = (
   return result;
 };
 
+export const isImageDecodingRequestError = (error: unknown): boolean => {
+  const combined = collectErrorStrings(error)
+    .map((value) => value.toLowerCase())
+    .join('\n');
+
+  return IMAGE_DECODING_MESSAGE_PATTERNS.some((pattern) => combined.includes(pattern));
+};
+
 export const isNonRetryableRequestError = (error: unknown): boolean => {
   const errorStrings = collectErrorStrings(error);
   const normalizedStrings = errorStrings.map((value) => value.toLowerCase());
@@ -171,15 +186,18 @@ export const isNonRetryableRequestError = (error: unknown): boolean => {
 
   if (isErrorCausedByContentFilter(error)) return true;
 
+  // Explicitly retryable HTTP statuses represent route or channel conditions.
+  // They take precedence over provider body text, which can reuse terminal
+  // request phrases such as "unable to process input image" for a 429 response.
+  const statusCodes = collectStatusCodes(error);
+  if (statusCodes.some((statusCode) => RETRYABLE_STATUS_CODES.has(statusCode))) return false;
+
   if (normalizedStrings.some((value) => RETRYABLE_ERROR_CODES.has(value))) return false;
   if (normalizedStrings.some((value) => NON_RETRYABLE_ERROR_CODES.has(value))) return true;
 
   const combined = normalizedStrings.join('\n');
   if (RETRYABLE_MESSAGE_PATTERNS.some((pattern) => combined.includes(pattern))) return false;
   if (NON_RETRYABLE_MESSAGE_PATTERNS.some((pattern) => combined.includes(pattern))) return true;
-
-  const statusCodes = collectStatusCodes(error);
-  if (statusCodes.some((statusCode) => RETRYABLE_STATUS_CODES.has(statusCode))) return false;
 
   return false;
 };

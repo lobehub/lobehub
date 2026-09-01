@@ -1,6 +1,7 @@
 'use client';
 
-import { Avatar, Block, Flexbox, Text } from '@lobehub/ui';
+import { Block, Flexbox } from '@lobehub/ui';
+import { Avatar, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';

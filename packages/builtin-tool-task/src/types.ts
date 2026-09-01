@@ -89,6 +89,8 @@ export interface GoalCriterionDraft {
 
 export interface CreateGoalParams {
   criteria: GoalCriterionDraft[];
+  /** ISO-8601 calendar-time budget; past it the coordinator stops dispatching. */
+  deadline?: string | null;
   instruction: string;
   maxIterations?: number | null;
   maxTotalCost?: number | null;
@@ -96,13 +98,13 @@ export interface CreateGoalParams {
 }
 
 export interface CreateGoalState {
-  identifier?: string;
+  /** The `goals` row the Goal Graph was created as — what the card opens. */
+  goalId?: string;
   name?: string;
-  operationId?: string;
   startedAt?: string;
   success: boolean;
+  /** The responsible task the first coordinator tick dispatched, when it got that far. */
   taskId?: string;
-  topicId?: string;
 }
 
 // ==================== createTasks (batch) ====================

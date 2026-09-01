@@ -58,6 +58,8 @@ export interface UpdateDocumentParams {
   breakAutosaveWindow?: boolean;
   content?: string;
   editorData?: Record<string, any>;
+  /** See `updateDocumentInputSchema.expectedUpdatedAt` — atomic version predicate. */
+  expectedUpdatedAt?: Date;
   fileType?: string;
   lockOwnerId?: string;
   metadata?: Record<string, any>;

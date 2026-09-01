@@ -1,6 +1,6 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { MouseEventHandler, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import InterestsRow from './InterestsRow';
@@ -9,24 +9,6 @@ const mocks = vi.hoisted(() => ({
   interests: [] as string[],
   saveToast: vi.fn(),
   updateInterests: vi.fn(),
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  Block: ({
-    children,
-    onClick,
-  }: {
-    children: ReactNode;
-    onClick?: MouseEventHandler<HTMLButtonElement>;
-  }) => (
-    <button type="button" onClick={onClick}>
-      {children}
-    </button>
-  ),
-  Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  Icon: () => null,
-  Input: () => null,
-  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -97,7 +79,7 @@ describe('InterestsRow', () => {
 
     render(<InterestsRow />);
 
-    await user.click(screen.getByRole('button', { name: '编程与开发' }));
+    await user.click(screen.getByText('编程与开发'));
 
     await waitFor(() => {
       expect(mocks.updateInterests).toHaveBeenCalledWith(['coding']);
@@ -110,7 +92,7 @@ describe('InterestsRow', () => {
 
     render(<InterestsRow />);
 
-    await user.click(screen.getByRole('button', { name: '编程与开发' }));
+    await user.click(screen.getByText('编程与开发'));
 
     await waitFor(() => {
       expect(mocks.updateInterests).toHaveBeenCalledWith(['自定义']);
@@ -124,7 +106,7 @@ describe('InterestsRow', () => {
 
     render(<InterestsRow />);
 
-    await user.click(screen.getByRole('button', { name: '编程与开发' }));
+    await user.click(screen.getByText('编程与开发'));
 
     await waitFor(() => {
       expect(mocks.saveToast).toHaveBeenCalledWith(failure, {
@@ -141,7 +123,7 @@ describe('InterestsRow', () => {
 
     render(<InterestsRow />);
 
-    await user.click(screen.getByRole('button', { name: '编程与开发' }));
+    await user.click(screen.getByText('编程与开发'));
 
     await waitFor(() => expect(mocks.saveToast).toHaveBeenCalled());
 

@@ -48,7 +48,7 @@ Common false positives (do NOT merge):
 
 - `db-migrations` vs `drizzle` — distinct workflows (migration files vs schema authoring).
 - `agent-runtime-hooks` vs `agent-tracing` vs `agent-signal` — different surfaces of the agent system.
-- `testing` vs `agent-testing` — different test types.
+- `testing` vs `acceptance` — different test types.
 
 ### 4 — Description format consistency
 

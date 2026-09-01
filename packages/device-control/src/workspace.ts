@@ -1,3 +1,4 @@
+import type { Dirent } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import * as os from 'node:os';
 import path from 'node:path';
@@ -7,8 +8,11 @@ import { detectRepoType } from '@lobechat/local-file-shell/git';
 import matter from 'gray-matter';
 
 import type {
+  DevicePathStyle,
   InitWorkspaceParams,
   InitWorkspaceResult,
+  ListDirEntry,
+  ListDirErrorCode,
   ListDirResult,
   ListProjectSkillsParams,
   ListProjectSkillsResult,
@@ -254,13 +258,117 @@ export const initWorkspace = async (
   return { instructions, root, skills };
 };
 
+const getDevicePathStyle = (): DevicePathStyle =>
+  process.platform === 'win32' ? 'windows' : 'posix';
+
+const resolveDevicePath = (raw?: string): string => {
+  const home = os.homedir();
+  const trimmed = raw?.trim();
+  if (!trimmed) return home;
+
+  const expanded = expandTilde(trimmed) ?? trimmed;
+  return path.normalize(path.isAbsolute(expanded) ? expanded : path.resolve(home, expanded));
+};
+
+const getPathRoots = (resolvedPath: string): string[] => {
+  const root = path.parse(resolvedPath).root;
+  return root ? [root] : [];
+};
+
+const getListDirErrorCode = (error: unknown): ListDirErrorCode => {
+  const code = (error as NodeJS.ErrnoException | undefined)?.code;
+  if (code === 'ENOENT') return 'NOT_FOUND';
+  if (code === 'ENOTDIR') return 'NOT_DIRECTORY';
+  if (code === 'EACCES' || code === 'EPERM') return 'PERMISSION_DENIED';
+  return 'UNKNOWN';
+};
+
+const createListDirError = (path: string, code: ListDirErrorCode): ListDirResult => ({
+  code,
+  home: os.homedir(),
+  path,
+  pathStyle: getDevicePathStyle(),
+  roots: getPathRoots(path),
+  success: false,
+});
+
+const resolveListDirEntry = async (parent: string, entry: Dirent): Promise<ListDirEntry | null> => {
+  const entryPath = path.join(parent, entry.name);
+  const base = {
+    hidden: entry.name.startsWith('.'),
+    isSymlink: entry.isSymbolicLink(),
+    name: entry.name,
+    path: entryPath,
+  };
+
+  if (entry.isDirectory()) return { ...base, type: 'directory' };
+  if (entry.isFile()) return { ...base, type: 'file' };
+  if (!entry.isSymbolicLink()) return null;
+
+  try {
+    const target = await stat(entryPath);
+    if (target.isDirectory()) return { ...base, type: 'directory' };
+    if (target.isFile()) return { ...base, type: 'file' };
+  } catch {
+    // Broken or inaccessible symlinks are not navigable and reveal no useful
+    // folder-picker target, so leave them out of the listing.
+  }
+  return null;
+};
+
+/**
+ * List one device-local directory for the remote folder picker. The device owns
+ * all path expansion and classification so a POSIX web server never has to
+ * parse a Windows path (or vice versa). Files stay classified in the transport
+ * result while the folder picker filters them before rendering.
+ */
+export const listDir = async (params: { path?: string } = {}): Promise<ListDirResult> => {
+  const resolved = resolveDevicePath(params.path);
+
+  let stats;
+  try {
+    stats = await stat(resolved);
+  } catch (error) {
+    return createListDirError(resolved, getListDirErrorCode(error));
+  }
+  if (!stats.isDirectory()) return createListDirError(resolved, 'NOT_DIRECTORY');
+
+  let dirEntries;
+  try {
+    dirEntries = await readdir(resolved, { withFileTypes: true });
+  } catch (error) {
+    return createListDirError(resolved, getListDirErrorCode(error));
+  }
+
+  const resolvedEntries = await Promise.all(
+    dirEntries.map((entry) => resolveListDirEntry(resolved, entry)),
+  );
+  const entries = resolvedEntries
+    .filter((entry): entry is ListDirEntry => entry !== null)
+    .sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+  const parent = path.dirname(resolved);
+
+  return {
+    entries,
+    home: os.homedir(),
+    parent: parent === resolved ? null : parent,
+    path: resolved,
+    pathStyle: getDevicePathStyle(),
+    roots: getPathRoots(resolved),
+    success: true,
+  };
+};
+
 /**
  * Check whether a path exists on this device and is a directory, plus its git
  * repo type. Used to validate a manually-entered working directory from a web /
  * remote client before binding it, and to render the right dir icon.
  */
 export const statPath = async (params: { path: string }): Promise<StatPathResult> => {
-  const resolved = expandTilde(params.path) ?? params.path;
+  const resolved = resolveDevicePath(params.path);
   try {
     const stats = await stat(resolved);
     if (!stats.isDirectory()) return { exists: true, isDirectory: false, path: resolved };
@@ -269,46 +377,4 @@ export const statPath = async (params: { path: string }): Promise<StatPathResult
   } catch {
     return { exists: false, isDirectory: false, path: resolved };
   }
-};
-
-const resolveListDirPath = (raw?: string): string => {
-  const trimmed = raw?.trim();
-  if (!trimmed) return os.homedir();
-  return expandTilde(trimmed) ?? trimmed;
-};
-
-const resolveParentDir = (dir: string): string | null => {
-  const parent = path.dirname(dir);
-  return parent === dir ? null : parent;
-};
-
-const resolveExistingDir = async (dir: string): Promise<string> => {
-  try {
-    const stats = await stat(dir);
-    if (stats.isDirectory()) return dir;
-  } catch {
-    // Missing / unreadable path falls back to home so the picker still opens.
-  }
-  return os.homedir();
-};
-
-/**
- * List immediate child directories of a path on this device. Used by the remote
- * working-directory picker — files stay out so the caller cannot browse
- * arbitrary file contents through this RPC. Empty / omitted / missing path
- * starts at the device home.
- */
-export const listDir = async (params: { path?: string } = {}): Promise<ListDirResult> => {
-  const resolved = await resolveExistingDir(resolveListDirPath(params.path));
-  const entries = await readdir(resolved, { withFileTypes: true });
-  const dirs = entries
-    .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
-    .map((entry) => ({ name: entry.name, path: path.join(resolved, entry.name) }))
-    .sort((a, b) => a.name.localeCompare(b.name));
-
-  return {
-    dirs,
-    parent: resolveParentDir(resolved),
-    path: resolved,
-  };
 };

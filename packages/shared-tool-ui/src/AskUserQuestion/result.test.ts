@@ -6,21 +6,30 @@ describe('resolveAskUserAnswers', () => {
   it('prefers the structured answers persisted in plugin state', () => {
     expect(
       resolveAskUserAnswers(
-        { askUserAnswers: { Scope: ['Chat', 'Settings'] } },
+        {
+          askUserAnswers: {
+            Scope: ['Chat', 'Settings'],
+            __supplement__: 'Keep the existing behavior.',
+          },
+        },
         'User submitted: {"Scope":"Legacy"}',
       ),
-    ).toEqual({ Scope: ['Chat', 'Settings'] });
+    ).toEqual({
+      Scope: ['Chat', 'Settings'],
+      __supplement__: 'Keep the existing behavior.',
+    });
   });
 
   it('recovers answers from legacy builtin tool result content', () => {
     expect(
       resolveAskUserAnswers(
         undefined,
-        'User submitted: {"Which direction?":"Visual polish","Surfaces":["Chat","Settings"]}',
+        'User submitted: {"Which direction?":"Visual polish","Surfaces":["Chat","Settings"],"__supplement__":"Keep the existing behavior."}',
       ),
     ).toEqual({
       'Which direction?': 'Visual polish',
       'Surfaces': ['Chat', 'Settings'],
+      '__supplement__': 'Keep the existing behavior.',
     });
   });
 

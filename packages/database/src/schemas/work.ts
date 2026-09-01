@@ -10,7 +10,7 @@ import { isNotNull, isNull } from 'drizzle-orm';
 import { index, integer, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 import { idGenerator } from '../utils/idGenerator';
-import { amountNumeric, createdAt, updatedAt } from './_helpers';
+import { amountNumeric, createdAt, softDeleteColumns, updatedAt } from './_helpers';
 import { agents } from './agent';
 import { messages } from './message';
 import { threads, topics } from './topic';
@@ -99,6 +99,8 @@ export const works = pgTable(
      */
     visibility: text('visibility').$type<WorkVisibility>().notNull(),
 
+    /** Recycle bin — see `schemas/trash.ts`. */
+    ...softDeleteColumns(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

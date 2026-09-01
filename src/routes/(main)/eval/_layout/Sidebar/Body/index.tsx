@@ -12,6 +12,7 @@ import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useEvalStore } from '@/store/eval';
 
 import BenchmarkList from './BenchmarkList';
+import DatasetList from './DatasetList';
 import ExperimentList from './ExperimentList';
 
 const useActiveKey = () => {
@@ -23,6 +24,9 @@ const useActiveKey = () => {
 
   const experimentMatch = pathname.match(/\/eval\/experiments\/([^/]+)/);
   if (experimentMatch) return `experiment-${experimentMatch[1]}`;
+
+  const datasetMatch = pathname.match(/\/eval\/datasets\/([^/]+)/);
+  if (datasetMatch) return `dataset-${datasetMatch[1]}`;
 
   return 'dashboard';
 };
@@ -53,9 +57,10 @@ const Body = memo(() => {
           />
         </WorkspaceLink>
       </Flexbox>
-      <Accordion defaultExpandedKeys={['benchmarks', 'experiments']} gap={8}>
+      <Accordion defaultExpandedKeys={['benchmarks', 'datasets', 'experiments']} gap={8}>
         <ExperimentList activeKey={activeKey} itemKey="experiments" />
         <BenchmarkList activeKey={activeKey} itemKey="benchmarks" />
+        <DatasetList activeKey={activeKey} itemKey="datasets" />
       </Accordion>
     </Flexbox>
   );

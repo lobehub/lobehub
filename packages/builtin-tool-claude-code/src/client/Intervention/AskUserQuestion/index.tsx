@@ -32,7 +32,7 @@ import { useChatStore } from '@/store/chat';
  */
 const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestionArgs>>((props) => {
   const { t } = useTranslation('tool');
-  const { actionsPortalTarget, args, messageId, onInteractionAction } = props;
+  const { actionsPortalTarget, args, disabled, messageId, onInteractionAction } = props;
 
   // Persisted draft — read from the tool message's pluginState so the form
   // stays where the user left it across unmount / HMR / refresh.
@@ -49,6 +49,7 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
   const form = useAskUserForm({
     args,
     countdownMs: DEFAULT_COUNTDOWN_MS,
+    disabled,
     onInteractionAction,
     persistedDraft,
     writeDraft,
@@ -63,6 +64,8 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     recommendedTag: t('claudeCode.askUserQuestion.recommendedTag'),
     skip: t('claudeCode.askUserQuestion.skip'),
     submit: t('claudeCode.askUserQuestion.submit'),
+    supplementEnter: t('claudeCode.askUserQuestion.supplement.enter'),
+    supplementPlaceholder: t('claudeCode.askUserQuestion.supplement.placeholder'),
     timeExpired: t('claudeCode.askUserQuestion.timeExpired'),
     timeRemaining: (time: string) => t('claudeCode.askUserQuestion.timeRemaining', { time }),
   };

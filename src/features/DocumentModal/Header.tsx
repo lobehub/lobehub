@@ -1,7 +1,14 @@
 'use client';
 
-import { ActionIcon, Avatar, copyToClipboard, Flexbox, Skeleton, Text } from '@lobehub/ui';
-import { DropdownMenu, toast, useModalContext } from '@lobehub/ui/base-ui';
+import { copyToClipboard, Flexbox, Skeleton } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Avatar,
+  DropdownMenu,
+  Text,
+  toast,
+  useModalContext,
+} from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { MoreHorizontal, XIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';

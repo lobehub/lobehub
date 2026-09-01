@@ -46,31 +46,59 @@ packages/agent-tracing/
 
 ## Remote Traces (Production / Staging)
 
-Server deployments also upload completed snapshots to object storage (zstd-compressed; the key is stored in `agent_operations.trace_s3_key`). `agent-tracing inspect <operationId>` transparently downloads, decompresses, and caches them — no manual S3 access needed.
+Server deployments also upload completed snapshots to object storage (zstd-compressed; the key is stored in `agent_operations.trace_s3_key`).
 
-1. **Find the operation id** from a business id (users usually hand you a topic id):
+**Preferred: `lh trace op`.** The server resolves the key and signs the object for the caller's own scope, so a LobeHub login is the only requirement — no `TRACING_BASE_URL`, no bucket domain, and no SQL to turn a topic id into an operation id:
 
-   ```sql
-   SELECT id, trace_s3_key FROM agent_operations WHERE topic_id = 'tpc_xxx';
-   ```
+```bash
+lh trace op list --topic tpc_xxx # operations of a topic, newest first, with a TRACE column
+lh trace op inspect op_xxx_agt_xxx_tpc_xxx_xxxx
+lh trace op inspect op_xxx_agt_xxx_tpc_xxx_xxxx -T # tool injection (enabledToolIds, manifests)
+```
 
-   `trace_s3_key IS NULL` means no snapshot was recorded; a non-null key can still 404 in storage (retention/TTL).
+`TRACE = —` in `list` means no snapshot was recorded for that run (it predates trace upload, or upload was off). A recorded snapshot can still 404 in storage after its retention window.
 
-2. **Configure the base URL** — the bucket's public domain plus the `/agent-traces` prefix — either way:
+Backend: the `agentTrace` lambda router (`getSnapshotUrl` / `listOperations`). Note it is `blocked` for restricted API keys, so these commands need a real session, not a scoped key.
 
-   - env var: `TRACING_BASE_URL=https://<bucket-public-domain>/agent-traces`
-   - file: `.agent-tracing/.env` in the repo root containing the same `TRACING_BASE_URL=...` line
+**Fallback: the standalone `agent-tracing` CLI.** It has no LobeHub session, so it builds the object URL itself and needs the bucket's public domain configured:
 
-   The deployment-specific value is private to each deployment and intentionally not recorded in this repo.
+- env var: `TRACING_BASE_URL=https://<bucket-public-domain>/agent-traces`
+- or `.agent-tracing/.env` in the repo root with the same `TRACING_BASE_URL=...` line
 
-3. **Inspect by operation id** — auto-detected by the `op_..._agt_..._tpc_...` shape; the snapshot is cached to `.agent-tracing/_remote/<opId>.json` and every `inspect` flag works the same as for local traces:
+The deployment-specific value is private to each deployment and intentionally not recorded in this repo. Find the operation id by hand first:
 
-   ```bash
-   agent-tracing inspect op_xxx_agt_xxx_tpc_xxx_xxxx    # step tree of a production run
-   agent-tracing inspect op_xxx_agt_xxx_tpc_xxx_xxxx -T # tool injection (enabledToolIds, manifests)
-   ```
+```sql
+SELECT id, trace_s3_key FROM agent_operations WHERE topic_id = 'tpc_xxx';
+```
 
-Implementation: `packages/agent-tracing/src/store/remote-store.ts` (URL is built from the operation id as `{base}/{agentId}/{topicId}/{opId}.json.zst`).
+Either way the snapshot is cached to `.agent-tracing/_remote/<opId>.json`, and every `inspect` flag works the same as for local traces.
+
+Implementation: `packages/agent-tracing/src/store/loadSnapshot.ts` (resolution order: local store → `_remote/` cache → injected `resolveDownloadUrl` → `TRACING_BASE_URL`) and `store/remote-store.ts` (URL built as `{base}/{agentId}/{topicId}/{opId}.json.zst`). Reading a compressed snapshot needs Node >= 22.15.
+
+## Goal Trajectories
+
+A goal is one complete _goal_ execution the way an operation is one complete agent execution, so it gets the same trace format one level up: `GoalTrajectory : AdvanceSnapshot` mirrors `ExecutionSnapshot : StepSnapshot`. There is no table of advances, exactly as there is no `agent_steps` table — `goal_traces` holds one rollup row per goal plus the object key, and the detail lives in the object.
+
+The leaves join back down: an advance records the `operationId`s it put in flight (on `tick.effects[].operationId`), so `lh trace op inspect <opId>` continues from where the goal trace stops.
+
+```bash
+agent-tracing goal               # list local goal trajectories
+agent-tracing goal goal_xxx      # the run: triggers, outcomes, graph, gates, ops
+agent-tracing goal goal_xxx -a 3 # one advance in full, with the frontier it ranked
+agent-tracing goal goal_xxx -j   # raw JSON
+```
+
+What each tick records is the **decision input**, not just the result: the graph it read (as a delta against the previous tick), the budget it evaluated, the responsible task's state, and every eligible work node **including the ones it passed over**. Without the losers a trace cannot answer "why not that node".
+
+**Storage** follows the operation switch, so a deployment that keeps one keeps the other:
+
+- Completed: `goal-traces/{goalId}.json.zst`
+- In progress: `goal-traces/_partial/{goalId}.json.zst` (an unfinished long-horizon goal is the normal thing to inspect)
+- Dev: `.goal-tracing/{goalId}.json`
+
+**Replay.** `replayGoalAgainstCurrentCoordinator(trajectory)` re-runs the real `decideNextMove` over the recorded inputs and reports `{advanceSeq, tickIndex, field, recorded, replayed}` wherever the current coordinator would now choose differently. This reproduces the coordinator's _decisions_ exactly; it says nothing about whether the dispatched work would have gone the same way.
+
+Implementation: `packages/agent-tracing/src/goal/`, recorded through `apps/server/src/services/goal/advanceGoal.ts` (the single funnel every advance passes through) via the `onDecision` side channel on `GoalService.tick`.
 
 ## CLI Commands
 
@@ -138,7 +166,62 @@ agent-tracing ctx-map
 agent-tracing ctx-map <operationId|traceId|path.json>
 agent-tracing ctx-map --html            # standalone report under .agent-tracing/_reports/
 agent-tracing ctx-map --html out.html
+
+# Re-issue a recorded LLM call against other models (see "replay" below)
+agent-tracing replay <operationId|traceId|path.json>
+agent-tracing replay <target> -s 4 -m openai/gpt-5,anthropic/claude-sonnet-5
+agent-tracing replay <target> --all-steps
 ```
+
+## replay — Re-issue a Frozen Call
+
+A snapshot already freezes everything one LLM call saw: `steps[].contextEngine.output` is the
+exact message array sent to the model, `context.payload.tools` the toolset it could reach.
+`replay` sends that frozen payload back out with only the model swapped, so a difference in
+output is attributable to the model rather than to context assembly. If every model fails the
+same payload, the context is at fault; if some pass, it is model selection.
+
+Available from both CLIs — `agent-tracing replay` (reads `LOBEHUB_JWT`) and `lh trace op replay`
+(uses the `lh login` session). Both need credentials because the call goes out through the
+LobeHub chat route.
+
+```bash
+# One call: defaults to the last call_llm step and the model the op ran on
+lh trace op replay <operationId>
+lh trace op replay <operationId> -s 4 -m openai/gpt-5,anthropic/claude-sonnet-5
+lh trace op replay <operationId> --judge "answers with a concrete file path"
+
+# Every call of the operation
+lh trace op replay <operationId> --all-steps
+lh trace op replay <operationId> --all-steps --concurrency 8
+```
+
+`--all-steps` answers the question the whole feature exists for: **take a run that succeeded, put
+another model on it, and see whether that model also gets the job done.** It ends in a PASS / FAIL
+verdict from an llm-rubric judge comparing the replayed outcome against the recorded one; pass
+`--judge "<criteria>"` to define success yourself instead of using the default rubric.
+
+The judge scores the **outcome, not the route**. A model that solved the same problem by calling
+different tools has passed. The per-call tool comparison (`toolSignature`) is reported underneath
+as supporting evidence — where the run took another path — and never decides pass / fail. A final
+call that never reached the model is a FAIL, not a missing verdict.
+
+Each call is replayed independently, against the payload the harness actually built for it, so a
+different answer at call 2 cannot contaminate call 4, a call that fails to reach the provider
+costs only itself, and the calls go out concurrently (4 at a time by default).
+
+Chaining the nodes — feeding each replayed output into the next — was built and then removed. A
+trace cannot regenerate tool output, only hand back what was recorded, so the moment the model
+deviates there is no ground truth left; the run then measures nothing while still looking like it
+succeeded. Independent replay is the design, not a fallback.
+
+Known limitation: **sampling parameters are not recorded.** The recorder stores the runtime step
+context under `context.payload`, not the provider request body, so temperature, `top_p`,
+`max_tokens`, penalties and reasoning config are absent from every trace written so far. Replays
+use the server's current defaults for those. Model-to-model comparisons stay valid (every target
+gets the same request); comparisons against the recorded output do not, for an operation that ran
+with non-default settings. `--temperature` / `--max-tokens` override explicitly. The CLI prints a
+`note` line whenever a replay is running without recorded parameters.
 
 ## ctx-map — Context Window Composition
 

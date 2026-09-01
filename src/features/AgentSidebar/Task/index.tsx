@@ -1,6 +1,7 @@
 'use client';
 
-import { Accordion, AccordionItem, ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { Accordion, AccordionItem, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { ArrowRight } from 'lucide-react';
 import { memo, type MouseEvent, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -35,7 +36,7 @@ const TaskList = memo<TaskListProps>(({ itemKey }) => {
   const { data, isLoading } = useClientDataSWR<{ data: TaskGroupItem[]; success: boolean }>(
     enabled ? taskKeys.sidebarGroups(agentId) : null,
     async ([, id]: [string, string]) =>
-      taskService.groupList({ assigneeAgentId: id, groups: SIDEBAR_GROUPS, hasGoal: false }),
+      taskService.groupList({ assigneeAgentId: id, groups: SIDEBAR_GROUPS }),
     {
       fallbackData: { data: [], success: true },
       revalidateOnFocus: false,

@@ -1,8 +1,8 @@
 'use client';
 
 import type { TaskStatus, WorkSummaryItem } from '@lobechat/types';
-import { Block, Center, Empty, Flexbox, Icon, Skeleton, Tag, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Block, Center, Empty, Flexbox, Icon, Skeleton } from '@lobehub/ui';
+import { Button, Tag, Text } from '@lobehub/ui/base-ui';
 import { Progress } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
@@ -107,8 +107,6 @@ const styles = createStaticStyles(({ css }) => ({
 
 const TERMINAL_STATUSES = new Set<TaskStatus | string>(['canceled', 'completed']);
 const ATTENTION_STATUSES = new Set<TaskStatus | string>(['failed', 'paused']);
-const isGoalTask = (task: NonNullable<ProjectDetail['tasks']>[number]) => Boolean(task.goal);
-
 interface ProjectDashboardProps {
   detail: ProjectDetail;
   projectId: string;
@@ -156,10 +154,10 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
       }),
   );
 
-  const tasks = (detail.tasks ?? []).filter((task) => !isGoalTask(task));
+  const tasks = detail.tasks ?? [];
   const activeTasks = tasks.filter((task) => !TERMINAL_STATUSES.has(task.status)).slice(0, 5);
   const attentionTasks = tasks.filter((task) => ATTENTION_STATUSES.has(task.status)).slice(0, 3);
-  const completedGoals = goals.filter((goal) => goal.status === 'completed').length;
+  const completedGoals = goals.filter(({ goal }) => goal.status === 'achieved').length;
   const progress = goals.length ? Math.round((completedGoals / goals.length) * 100) : 0;
   const works = workSWR.data?.items ?? [];
   const goalPreview = useMemo(() => goals.slice(0, 3), [goals]);
@@ -202,16 +200,16 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
               </Flexbox>
               <Progress percent={progress} showInfo={false} />
               <div className={styles.goalGrid}>
-                {goalPreview.map((goal) => (
+                {goalPreview.map(({ goal }) => (
                   <Flexbox className={styles.goal} gap={5} key={goal.id}>
                     <Flexbox horizontal align={'center'} gap={6}>
                       <Icon
-                        color={goal.status === 'completed' ? cssVar.colorSuccess : undefined}
-                        icon={goal.status === 'completed' ? CheckCircle2Icon : CircleDotIcon}
+                        color={goal.status === 'achieved' ? cssVar.colorSuccess : undefined}
+                        icon={goal.status === 'achieved' ? CheckCircle2Icon : CircleDotIcon}
                         size={15}
                       />
                       <Text ellipsis weight={500}>
-                        {goal.name || goal.instruction}
+                        {goal.title}
                       </Text>
                     </Flexbox>
                     <Text fontSize={12} type={'secondary'}>

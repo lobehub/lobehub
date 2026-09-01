@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDown, ChevronRight, PencilIcon, PlusIcon, TargetIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';

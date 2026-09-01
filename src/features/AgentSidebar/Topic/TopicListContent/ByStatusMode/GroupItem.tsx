@@ -1,4 +1,5 @@
-import { AccordionItem, Center, Flexbox, Icon, Text } from '@lobehub/ui';
+import { AccordionItem, Center, Flexbox, Icon } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 

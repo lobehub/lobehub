@@ -2,15 +2,11 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { App } from '@/core/App';
 
 import LocalDatabaseService from '../LocalDatabaseSrv';
-
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({ info: vi.fn() }),
-}));
 
 describe('LocalDatabaseService', () => {
   let storagePath: string;

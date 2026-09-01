@@ -90,9 +90,9 @@ export interface AcceptanceVisualRender {
 }
 
 /**
- * Acceptance policy/config snapshot. The source may be a task's `config.verify`,
- * a topic-level override, or a document acceptance rule, so it lives with the
- * generic aggregate rather than only in task types.
+ * Acceptance policy/config snapshot. This is the authoritative policy for the
+ * subject's verification lifecycle; legacy task `config.verify` values are
+ * migrated here on first read.
  */
 /**
  * One user-authored acceptance criterion in a subject's standing checklist
@@ -305,6 +305,7 @@ export interface VerifyCheckDecisionDetail {
 export type VerifyRunStatus =
   | 'unverified'
   | 'planned'
+  | 'collecting_evidence'
   | 'verifying'
   | 'passed'
   | 'failed'
@@ -353,7 +354,8 @@ export type VerifyEvidenceType =
   'screenshot' | 'gif' | 'video' | 'audio' | 'text' | 'markdown' | 'dom_snapshot' | 'transcript';
 
 /** Who / what captured an evidence artifact (provenance). */
-export type VerifyEvidenceCapturedBy = 'agent-browser' | 'cdp' | 'cli' | 'program' | 'llm_judge';
+export type VerifyEvidenceCapturedBy =
+  'agent' | 'agent-browser' | 'cdp' | 'cli' | 'program' | 'llm_judge';
 
 /**
  * Provenance of a user's acceptance decision on a verify round
@@ -505,6 +507,8 @@ export interface VerifyInteractionCostOperators {
 export interface VerifyInteractionCostPhase {
   actionCount?: number;
   activeSeconds?: number;
+  /** Wall-clock the agent actually spent here — not the user-equivalent price. */
+  actualAgentSeconds?: number;
   checkItemId?: string;
   id: string;
   label?: string;
@@ -796,10 +800,8 @@ export interface RequiredEvidenceSpec {
  * provenance only — no verdict logic. Verifying an evidence is itself a new
  * check (related through `verify_check_results`), so this table stays flat.
  *
- * The payload lives in exactly one of two places: `content` for small inline
- * text (dom snapshot / console log / transcript), or `fileId` for a stored
- * artifact (screenshot / gif / video, or large text). The `files` table already
- * owns mime / size / hash / url, so none of that metadata is duplicated here.
+ * The payload lives in exactly one of three places: `content` for small inline
+ * text, `documentId` for a LobeHub document, or `fileId` for a stored artifact.
  */
 export interface VerifyEvidence {
   capturedAt?: Date | null;
@@ -812,6 +814,8 @@ export interface VerifyEvidence {
   createdAt: Date;
   /** Human-readable caption, e.g. "首页首屏完整渲染". */
   description?: string | null;
+  /** LobeHub document evidence — FK to `documents`. */
+  documentId?: string | null;
   /** Stored artifact — FK to `files`, which owns mime / size / hash / url. */
   fileId?: string | null;
   id: string;

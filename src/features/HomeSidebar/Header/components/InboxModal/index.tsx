@@ -1,7 +1,8 @@
 'use client';
 
-import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import {
+  ActionIcon,
   Button,
   createModal,
   DropdownMenu,
@@ -9,12 +10,14 @@ import {
   ModalHeader,
   ModalTitle,
   Tabs,
+  Text,
   toast,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import type { LucideIcon } from 'lucide-react';
 import {
   ArchiveIcon,
+  AtSignIcon,
   BellIcon,
   BellRingIcon,
   BotIcon,
@@ -122,6 +125,7 @@ const PERSONAL_INBOX_CATEGORIES: readonly string[] = [
 ];
 const WORKSPACE_INBOX_CATEGORIES: readonly string[] = [
   'pending',
+  'mention',
   'agent',
   'generation',
   'schedule',
@@ -132,6 +136,7 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
   agent: BotIcon,
   billing: CreditCardIcon,
   generation: SparklesIcon,
+  mention: AtSignIcon,
   pending: ListTodoIcon,
   schedule: CalendarClockIcon,
   system: BellRingIcon,

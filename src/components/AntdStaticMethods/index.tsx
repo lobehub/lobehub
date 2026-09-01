@@ -1,11 +1,10 @@
 // Entry component
 import { App } from 'antd';
 import { type ModalStaticFunctions } from 'antd/es/modal/confirm';
-import { type NotificationInstance } from 'antd/es/notification/interface';
 import { memo } from 'react';
 
 // eslint-disable-next-line import-x/no-mutable-exports
-let notification: NotificationInstance;
+let notification: ReturnType<typeof App.useApp>['notification'];
 // eslint-disable-next-line import-x/no-mutable-exports
 let modal: Omit<ModalStaticFunctions, 'warn'>;
 
