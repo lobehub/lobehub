@@ -86,7 +86,7 @@ export const UpdateAgentPromptInspector = memo<
       <span
         className={cx(
           styles.label,
-          cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText),
+          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
         )}
       >
         {t(labelKey)}

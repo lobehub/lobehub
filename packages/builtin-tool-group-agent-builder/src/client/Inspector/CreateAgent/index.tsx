@@ -56,7 +56,7 @@ export const CreateAgentInspector = memo<
       <span
         className={cx(
           styles.title,
-          cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText),
+          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
         )}
       >
         {t('builtins.lobe-group-agent-builder.apiName.createAgent')}:

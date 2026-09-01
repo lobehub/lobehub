@@ -51,7 +51,7 @@ const ErrorInspector = memo<BuiltinInspectorProps<CodexErrorArgs>>(
         <span
           className={cx(
             styles.message,
-            cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText),
+            (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
           )}
         >
           {message || fallback}

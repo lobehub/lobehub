@@ -78,7 +78,7 @@ export const AskUserQuestionInspector = memo<BuiltinInspectorProps<AskUserQuesti
         <span
           className={cx(
             styles.label,
-            cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText),
+            (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
           )}
         >
           {label}

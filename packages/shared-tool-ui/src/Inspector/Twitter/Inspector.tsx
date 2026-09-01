@@ -161,7 +161,7 @@ const TwitterInspectorImpl = memo<BuiltinInspectorProps<Record<string, unknown>>
         <span
           className={cx(
             styles.productPrefix,
-            cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText),
+            (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
           )}
         >
           X (Twitter)

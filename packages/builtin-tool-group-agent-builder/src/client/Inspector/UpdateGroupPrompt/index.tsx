@@ -68,7 +68,7 @@ export const UpdateGroupPromptInspector = memo<
       <span
         className={cx(
           styles.label,
-          cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText),
+          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
         )}
       >
         {t('builtins.lobe-group-agent-builder.apiName.updateGroupPrompt')}

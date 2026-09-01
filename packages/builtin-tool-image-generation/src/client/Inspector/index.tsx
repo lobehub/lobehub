@@ -105,7 +105,7 @@ const ImageGenerationInspector = memo<BuiltinInspectorProps<ImageGenerationInspe
         <span
           className={cx(
             styles.label,
-            cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText),
+            (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
           )}
         >
           {label}
