@@ -48,6 +48,20 @@ type Executor = Pick<LobeChatDatabase, 'execute'> | Transaction;
  * anchor column, so the child always follows whatever set of parent messages
  * the caller's condition selects.
  */
+/**
+ * True when the row does NOT reach a group through its thread — the thread is
+ * absent, carries no group_id, and is not hosted on a group topic. Shared by
+ * every agent-transfer rewrite that must leave group history where it is: a
+ * row anchored to a stationary group's thread belongs to the group's scope
+ * even when its own group_id is null.
+ */
+const notGroupThreadAnchored = () => sql`NOT EXISTS (
+  SELECT 1 FROM ${threads}
+  WHERE ${threads.id} = ${messages.threadId}
+    AND (${threads.groupId} IS NOT NULL
+      OR EXISTS (SELECT 1 FROM ${topics} WHERE ${topics.id} = ${threads.topicId} AND ${topics.groupId} IS NOT NULL))
+)`;
+
 const MESSAGE_CHILD_ANCHORS = [
   { anchor: messagePlugins.id, table: messagePlugins },
   { anchor: messageTranslates.id, table: messageTranslates },
@@ -77,12 +91,13 @@ export const rewriteMessageScopeForTopics = async (
   target: AgentTransferTargetScope,
   options: {
     /**
-     * Skip rows that carry a `group_id`. An AGENT transfer must set this: a
-     * legal row can pair a group_id with a topic_id owned by the moved agent,
-     * and while the group-history preservation step repoints its agent_id at
-     * the tombstone, it belongs to the GROUP's scope and must not follow the
-     * topic into the transfer target. A GROUP transfer keeps such rows — the
-     * group is the thing moving.
+     * Skip rows that carry a `group_id` OR reach a stationary group through
+     * their thread. An AGENT transfer must set this: a legal row can pair a
+     * group anchor with a topic_id owned by the moved agent, and while the
+     * group-history preservation step repoints its agent_id at the tombstone,
+     * it belongs to the GROUP's scope and must not follow the topic into the
+     * transfer target. A GROUP transfer keeps such rows — the group is the
+     * thing moving.
      */
     excludeGroupRows?: boolean;
   } = {},
@@ -91,7 +106,7 @@ export const rewriteMessageScopeForTopics = async (
 
   const inTopicsAlone = inArray(messages.topicId, topicIds);
   const inTopics = options.excludeGroupRows
-    ? and(inTopicsAlone, isNull(messages.groupId))!
+    ? and(inTopicsAlone, isNull(messages.groupId), notGroupThreadAnchored())!
     : inTopicsAlone;
 
   await executor.execute(sql`
@@ -133,12 +148,6 @@ export const rewriteResidualMessageScope = async (
   // both shapes. Without this, an agent transfer whose group-history remap is
   // still pending (deferred to a remap-only job) would drag the group's
   // topicless residue into the target scope.
-  const notGroupThreadAnchored = sql`NOT EXISTS (
-    SELECT 1 FROM ${threads}
-    WHERE ${threads.id} = ${messages.threadId}
-      AND (${threads.groupId} IS NOT NULL
-        OR EXISTS (SELECT 1 FROM ${topics} WHERE ${topics.id} = ${threads.topicId} AND ${topics.groupId} IS NOT NULL))
-  )`;
   const scopeArms: SQL[] = [];
   if (linkage.sessionIds.length > 0)
     scopeArms.push(inArray(messages.sessionId, linkage.sessionIds));
@@ -149,7 +158,7 @@ export const rewriteResidualMessageScope = async (
       and(
         scopeArms.length === 1 ? scopeArms[0] : or(...scopeArms),
         isNull(messages.groupId),
-        notGroupThreadAnchored,
+        notGroupThreadAnchored(),
       )!,
     );
   if (linkage.groupIds && linkage.groupIds.length > 0)

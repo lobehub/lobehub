@@ -1959,14 +1959,26 @@ describe('AgentModel.transferAgents group history preservation', () => {
     // (moving) topic. Step 7's topic rewrite must leave it in the group's
     // scope even though the topic itself transfers.
     await serverDB.insert(topics).values({ agentId: agent.id, id: 'gh-own-topic', userId });
-    await serverDB.insert(messages).values({
-      agentId: agent.id,
-      groupId: 'gh-group',
-      id: 'gh-group-msg-mixed',
-      role: 'assistant',
-      topicId: 'gh-own-topic',
-      userId,
-    });
+    await serverDB.insert(messages).values([
+      {
+        agentId: agent.id,
+        groupId: 'gh-group',
+        id: 'gh-group-msg-mixed',
+        role: 'assistant',
+        topicId: 'gh-own-topic',
+        userId,
+      },
+      // Same mismatch through the THREAD anchor: no group_id of its own, a
+      // moving (agent-owned) topic, but a stationary group's thread.
+      {
+        agentId: agent.id,
+        id: 'gh-group-msg-thread-mixed',
+        role: 'assistant',
+        threadId: 'gh-group-thr-grp',
+        topicId: 'gh-own-topic',
+        userId,
+      },
+    ]);
 
     await model.transferAgent(agent.id, wsId2, targetUserId);
 
@@ -2041,9 +2053,10 @@ describe('AgentModel.transferAgents group history preservation', () => {
           'gh-group-msg-topic-only',
           'gh-group-msg-thread-only',
           'gh-group-msg-mixed',
+          'gh-group-msg-thread-mixed',
         ]),
       );
-    expect(groupMessages).toHaveLength(6);
+    expect(groupMessages).toHaveLength(7);
     for (const message of groupMessages) {
       // Regression: the residual rewrite used to re-scope topicless group
       // messages to the target.
@@ -2082,11 +2095,14 @@ describe('AgentModel.transferAgents group history preservation', () => {
           ]),
         ),
     ).resolves.toHaveLength(5);
-    // The mixed row is gone — but through its TOPIC's lifecycle, not the
+    // The mixed rows are gone — but through their TOPIC's lifecycle, not the
     // agent_id cascade this fix blocks: deleting the agent deletes its own
     // topics, and a message hosted on someone's topic lives and dies with it.
     await expect(
-      serverDB.select().from(messages).where(eq(messages.id, 'gh-group-msg-mixed')),
+      serverDB
+        .select()
+        .from(messages)
+        .where(inArray(messages.id, ['gh-group-msg-mixed', 'gh-group-msg-thread-mixed'])),
     ).resolves.toHaveLength(0);
   });
 
