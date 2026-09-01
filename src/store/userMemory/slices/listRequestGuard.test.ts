@@ -1,14 +1,11 @@
-import useSWR from 'swr';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { useUserMemoryStore } from '@/store/userMemory';
 import { initialState } from '@/store/userMemory/initialState';
 
-vi.mock('swr', () => ({ default: vi.fn(() => ({})) }));
-
 interface GuardCase {
-  fetchCurrent: () => unknown;
-  fetchPageTwo: () => unknown;
+  accept: (request: { page: number; pageSize: number; q?: string }) => void;
+  fail: (error: Error, request: { page: number; pageSize: number; q?: string }) => void;
   name: string;
   readList: () => unknown[];
   readSearchError: () => unknown;
@@ -20,9 +17,12 @@ interface GuardCase {
 
 const cases: GuardCase[] = [
   {
-    fetchCurrent: () =>
-      useUserMemoryStore.getState().useFetchActivities({ page: 1, pageSize: 12, q: 'late night' }),
-    fetchPageTwo: () => useUserMemoryStore.getState().useFetchActivities({ page: 2, pageSize: 12 }),
+    accept: (request) =>
+      useUserMemoryStore
+        .getState()
+        .internal_acceptActivitiesList({ items: [], total: 22 }, request),
+    fail: (error, request) =>
+      useUserMemoryStore.getState().internal_failActivitiesList(error, request),
     name: 'activities',
     readList: () => useUserMemoryStore.getState().activities,
     readSearchError: () => useUserMemoryStore.getState().activitiesSearchError,
@@ -38,9 +38,10 @@ const cases: GuardCase[] = [
       useUserMemoryStore.setState({ activities: [{ id: 'existing' } as never], activitiesPage: 2 }),
   },
   {
-    fetchCurrent: () =>
-      useUserMemoryStore.getState().useFetchContexts({ page: 1, pageSize: 12, q: 'late night' }),
-    fetchPageTwo: () => useUserMemoryStore.getState().useFetchContexts({ page: 2, pageSize: 12 }),
+    accept: (request) =>
+      useUserMemoryStore.getState().internal_acceptContextsList({ items: [], total: 22 }, request),
+    fail: (error, request) =>
+      useUserMemoryStore.getState().internal_failContextsList(error, request),
     name: 'contexts',
     readList: () => useUserMemoryStore.getState().contexts,
     readSearchError: () => useUserMemoryStore.getState().contextsSearchError,
@@ -56,10 +57,12 @@ const cases: GuardCase[] = [
       useUserMemoryStore.setState({ contexts: [{ id: 'existing' } as never], contextsPage: 2 }),
   },
   {
-    fetchCurrent: () =>
-      useUserMemoryStore.getState().useFetchExperiences({ page: 1, pageSize: 12, q: 'late night' }),
-    fetchPageTwo: () =>
-      useUserMemoryStore.getState().useFetchExperiences({ page: 2, pageSize: 12 }),
+    accept: (request) =>
+      useUserMemoryStore
+        .getState()
+        .internal_acceptExperiencesList({ items: [], total: 22 }, request),
+    fail: (error, request) =>
+      useUserMemoryStore.getState().internal_failExperiencesList(error, request),
     name: 'experiences',
     readList: () => useUserMemoryStore.getState().experiences,
     readSearchError: () => useUserMemoryStore.getState().experiencesSearchError,
@@ -78,10 +81,12 @@ const cases: GuardCase[] = [
       }),
   },
   {
-    fetchCurrent: () =>
-      useUserMemoryStore.getState().useFetchPreferences({ page: 1, pageSize: 12, q: 'late night' }),
-    fetchPageTwo: () =>
-      useUserMemoryStore.getState().useFetchPreferences({ page: 2, pageSize: 12 }),
+    accept: (request) =>
+      useUserMemoryStore
+        .getState()
+        .internal_acceptPreferencesList({ items: [], total: 22 }, request),
+    fail: (error, request) =>
+      useUserMemoryStore.getState().internal_failPreferencesList(error, request),
     name: 'preferences',
     readList: () => useUserMemoryStore.getState().preferences,
     readSearchError: () => useUserMemoryStore.getState().preferencesSearchError,
@@ -102,21 +107,14 @@ const cases: GuardCase[] = [
 ];
 
 beforeEach(() => {
-  vi.clearAllMocks();
   useUserMemoryStore.setState(initialState, false);
 });
 
 describe('memory list request guards', () => {
   it.each(cases)('ignores a late $name response after a search reset', (testCase) => {
     testCase.seedPageTwo();
-    testCase.fetchPageTwo();
-
     testCase.resetWithSearch();
-    const onSuccess = vi.mocked(useSWR).mock.calls[0][2]?.onSuccess as (data: {
-      items: unknown[];
-      total: number;
-    }) => void;
-    onSuccess({ items: [], total: 22 });
+    testCase.accept({ page: 2, pageSize: 12 });
 
     expect(testCase.readList()).toEqual([]);
     expect(testCase.readSearchLoading()).toBe(true);
@@ -124,11 +122,8 @@ describe('memory list request guards', () => {
 
   it.each(cases)('keeps $name loading when an obsolete request fails', (testCase) => {
     testCase.seedPageTwo();
-    testCase.fetchPageTwo();
-
     testCase.resetWithSearch();
-    const onError = vi.mocked(useSWR).mock.calls[0][2]?.onError as (error: Error) => void;
-    onError(new Error('request failed'));
+    testCase.fail(new Error('request failed'), { page: 2, pageSize: 12 });
 
     expect(testCase.readSearchError()).toBeUndefined();
     expect(testCase.readSearchLoading()).toBe(true);
@@ -136,11 +131,8 @@ describe('memory list request guards', () => {
 
   it.each(cases)('preserves the current $name search error after loading settles', (testCase) => {
     testCase.resetWithSearch();
-    testCase.fetchCurrent();
-
-    const onError = vi.mocked(useSWR).mock.calls[0][2]?.onError as (error: Error) => void;
     const error = new Error('request failed');
-    onError(error);
+    testCase.fail(error, { page: 1, pageSize: 12, q: 'late night' });
 
     expect(testCase.readSearchError()).toBe(error);
     expect(testCase.readSearchLoading()).toBe(false);
@@ -148,10 +140,7 @@ describe('memory list request guards', () => {
 
   it.each(cases)('preserves settled $name content when a background refresh fails', (testCase) => {
     testCase.seedSettledSearch();
-    testCase.fetchCurrent();
-
-    const onError = vi.mocked(useSWR).mock.calls[0][2]?.onError as (error: Error) => void;
-    onError(new Error('request failed'));
+    testCase.fail(new Error('request failed'), { page: 1, pageSize: 12, q: 'late night' });
 
     expect(testCase.readList()).toHaveLength(1);
     expect(testCase.readSearchError()).toBeUndefined();

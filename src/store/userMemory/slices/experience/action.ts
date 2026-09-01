@@ -1,6 +1,7 @@
 import { type ExperienceListResult } from '@lobechat/types';
 import { uniqBy } from 'es-toolkit/compat';
 import { produce } from 'immer';
+import { useEffect } from 'react';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
@@ -21,6 +22,8 @@ export interface ExperienceQueryParams {
   q?: string;
   sort?: 'capturedAt' | 'scoreConfidence';
 }
+
+type ExperienceListRequest = ExperienceQueryParams & { page: number };
 
 type Setter = StoreSetter<UserMemoryStore>;
 export const createExperienceSlice = (set: Setter, get: () => UserMemoryStore, _api?: unknown) =>
@@ -58,6 +61,76 @@ export class ExperienceActionImpl {
     }
   };
 
+  internal_acceptExperiencesList = (
+    data: ExperienceListResult,
+    request: ExperienceListRequest,
+  ): void => {
+    const state = this.#get();
+    if (
+      !isMemoryListRequestCurrent(
+        {
+          page: state.experiencesPage,
+          q: state.experiencesQuery,
+          sort: state.experiencesSort,
+        },
+        { page: request.page, q: request.q, sort: request.sort },
+      )
+    )
+      return;
+
+    this.#set(
+      produce((draft) => {
+        draft.experiencesSearchError = undefined;
+        draft.experiencesSearchLoading = false;
+        draft.experiencesTotal = data.total;
+
+        if (!draft.experiencesInit) {
+          draft.experiencesInit = true;
+        }
+
+        if (request.page === 1) {
+          draft.experiences = uniqBy(data.items, 'id');
+        } else {
+          draft.experiences = uniqBy([...draft.experiences, ...data.items], 'id');
+        }
+
+        draft.experiencesHasMore = data.items.length >= (request.pageSize || 20);
+      }),
+      false,
+      n('internal_acceptExperiencesList'),
+    );
+  };
+
+  internal_failExperiencesList = (error: unknown, request: ExperienceListRequest): void => {
+    const state = this.#get();
+    if (
+      !isMemoryListRequestCurrent(
+        {
+          page: state.experiencesPage,
+          q: state.experiencesQuery,
+          sort: state.experiencesSort,
+        },
+        { page: request.page, q: request.q, sort: request.sort },
+      )
+    )
+      return;
+
+    const shouldSurfaceError = shouldSurfaceMemoryListError({
+      initialized: state.experiencesInit,
+      page: request.page,
+      resetting: state.experiencesSearchLoading,
+    });
+
+    this.#set(
+      produce((draft) => {
+        if (shouldSurfaceError) draft.experiencesSearchError = error;
+        draft.experiencesSearchLoading = false;
+      }),
+      false,
+      n('internal_failExperiencesList'),
+    );
+  };
+
   resetExperiencesList = (params?: Omit<ExperienceQueryParams, 'page' | 'pageSize'>): void => {
     this.#set(
       produce((draft) => {
@@ -73,10 +146,13 @@ export class ExperienceActionImpl {
     );
   };
 
+  /**
+   * Hydrate the store from SWR's rendered state because deduped cache hits do not invoke SWR's
+   * request lifecycle callbacks.
+   */
   useFetchExperiences = (params: ExperienceQueryParams): SWRResponse<ExperienceListResult> => {
     const page = params.page ?? 1;
-
-    return useSWR(
+    const response = useSWR(
       userMemoryKeys.experiences(params),
       async () => {
         // Use the new dedicated queryExperiences API
@@ -88,75 +164,21 @@ export class ExperienceActionImpl {
         });
       },
       {
-        onError: (error: unknown) => {
-          const state = this.#get();
-          if (
-            !isMemoryListRequestCurrent(
-              {
-                page: state.experiencesPage,
-                q: state.experiencesQuery,
-                sort: state.experiencesSort,
-              },
-              { page, q: params.q, sort: params.sort },
-            )
-          )
-            return;
-
-          const shouldSurfaceError = shouldSurfaceMemoryListError({
-            initialized: state.experiencesInit,
-            page,
-            resetting: state.experiencesSearchLoading,
-          });
-
-          this.#set(
-            produce((draft) => {
-              if (shouldSurfaceError) draft.experiencesSearchError = error;
-              draft.experiencesSearchLoading = false;
-            }),
-            false,
-            n('useFetchExperiences/onError'),
-          );
-        },
-        onSuccess: (data: ExperienceListResult) => {
-          const state = this.#get();
-          if (
-            !isMemoryListRequestCurrent(
-              {
-                page: state.experiencesPage,
-                q: state.experiencesQuery,
-                sort: state.experiencesSort,
-              },
-              { page, q: params.q, sort: params.sort },
-            )
-          )
-            return;
-
-          this.#set(
-            produce((draft) => {
-              draft.experiencesSearchError = undefined;
-              draft.experiencesSearchLoading = false;
-              draft.experiencesTotal = data.total;
-
-              if (!draft.experiencesInit) {
-                draft.experiencesInit = true;
-              }
-
-              // Backend now returns flat structure directly, no transformation needed
-              if (page === 1) {
-                draft.experiences = uniqBy(data.items, 'id');
-              } else {
-                draft.experiences = uniqBy([...draft.experiences, ...data.items], 'id');
-              }
-
-              draft.experiencesHasMore = data.items.length >= (params.pageSize || 20);
-            }),
-            false,
-            n('useFetchExperiences/onSuccess'),
-          );
-        },
         revalidateOnFocus: false,
       },
     );
+
+    useEffect(() => {
+      if (response.data !== undefined)
+        this.internal_acceptExperiencesList(response.data, { ...params, page });
+    }, [page, params.pageSize, params.q, params.sort, response.data]);
+
+    useEffect(() => {
+      if (response.error !== undefined)
+        this.internal_failExperiencesList(response.error, { ...params, page });
+    }, [page, params.pageSize, params.q, params.sort, response.error]);
+
+    return response;
   };
 }
 
