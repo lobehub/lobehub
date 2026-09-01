@@ -67,6 +67,20 @@ describe('updateTodos type inference', () => {
 });
 
 describe('updateTodos invalid-operation reporting', () => {
+  it('rejects an update that carries neither newText nor status', async () => {
+    const runtime = createRuntime();
+
+    const result = await runtime.updateTodos(
+      { operations: [{ index: 0, type: 'update' }] },
+      context,
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('No operations applied.');
+    expect(result.content).toContain('provide "newText" and/or "status"');
+    expect(result.state).toBeUndefined();
+  });
+
   it('fails with the reason when every operation is invalid', async () => {
     const runtime = createRuntime();
 

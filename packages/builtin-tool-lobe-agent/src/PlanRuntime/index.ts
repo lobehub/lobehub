@@ -203,6 +203,14 @@ export class PlanExecutionRuntime {
           break;
         }
         case 'update': {
+          // An update that carries neither field would "apply" without changing
+          // anything — the same silent success this whole branch exists to kill.
+          if (op.newText === undefined && op.status === undefined) {
+            skipped.push(
+              `${label} ("update"): provide "newText" and/or "status" (use "remove"/"complete" to drop or finish an item)`,
+            );
+            break;
+          }
           const index = resolveIndex();
           if (index !== undefined) {
             const updatedItem = { ...updatedTodos[index] };
