@@ -59,4 +59,23 @@ describe('useScrollActiveTopicIntoView', () => {
 
     expect(calls).toHaveLength(1);
   });
+
+  it('does not reveal the same active topic again when unrelated list state changes', () => {
+    const container = document.createElement('div');
+    const row = document.createElement('div');
+    row.dataset.topicId = 'topic-2';
+    container.append(row);
+
+    const { result, rerender } = renderHook(
+      ({ ready }) => useScrollActiveTopicIntoView('topic-2', ready),
+      { initialProps: { ready: '' } },
+    );
+    act(() => {
+      (result.current as MutableRefObject<HTMLDivElement | null>).current = container;
+    });
+    rerender({ ready: 'topic-2' });
+    rerender({ ready: 'topic-2:unrelated-group' });
+
+    expect(calls).toHaveLength(1);
+  });
 });
