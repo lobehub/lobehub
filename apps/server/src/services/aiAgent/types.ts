@@ -9,11 +9,11 @@ import type {
   WorkspaceInitResult,
 } from '@lobechat/types';
 
-import type { AgentConfigWithId } from '@/server/services/agent';
-
 import type { EvalContext } from '@/server/modules/Mecha/ContextEngineering/types';
+import type { AgentConfigWithId } from '@/server/services/agent';
 import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import type { EvalRuntimeContext } from '@/server/services/agentRuntime/types';
+
 import type { DeviceAccessReason } from './deviceAccessPolicy';
 
 /**
