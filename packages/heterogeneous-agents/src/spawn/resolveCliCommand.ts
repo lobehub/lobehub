@@ -192,24 +192,41 @@ const getLoginShellPath = async (): Promise<string | undefined> => {
  * nothing, because that is a real answer rather than a missed one.
  */
 let cachedShellPath: { value: string | undefined } | undefined;
+/**
+ * Bumped on every invalidation. A probe that started before a Rescan carries
+ * the older generation and is refused the cache when it lands — without this,
+ * a ten-second probe in flight would write the pre-Rescan PATH back moments
+ * after the user asked for a fresh one, which is precisely the edit they were
+ * trying to make visible.
+ */
+let shellPathGeneration = 0;
 
 const getCurrentLoginShellPath = async (): Promise<string | undefined> => {
   if (cachedShellPath) return cachedShellPath.value;
 
-  shellPathPromise ??= getLoginShellPath()
-    .then((value) => {
-      cachedShellPath = { value };
-      return value;
-    })
-    .finally(() => {
-      shellPathPromise = undefined;
-    });
+  if (!shellPathPromise) {
+    const generation = shellPathGeneration;
+    shellPathPromise = getLoginShellPath()
+      .then((value) => {
+        if (generation === shellPathGeneration) cachedShellPath = { value };
+        return value;
+      })
+      .finally(() => {
+        if (generation === shellPathGeneration) shellPathPromise = undefined;
+      });
+  }
   return shellPathPromise;
 };
 
-/** Drop the cached login-shell PATH so the next probe re-reads it. */
+/**
+ * Drop the cached login-shell PATH so the next probe re-reads it, and disown
+ * any probe already running so its result cannot satisfy or repopulate the
+ * fresh scan.
+ */
 export const invalidateLoginShellPathCache = (): void => {
   cachedShellPath = undefined;
+  shellPathGeneration += 1;
+  shellPathPromise = undefined;
 };
 
 // Machine-wide then per-user PATH, the two halves Windows concatenates into a

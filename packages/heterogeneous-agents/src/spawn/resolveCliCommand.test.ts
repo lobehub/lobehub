@@ -92,7 +92,11 @@ const rejectUnqueuedExecFile = () => {
 const importModule = () => import('./resolveCliCommand');
 
 describe('resolveCliCommand', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    // The login-shell PATH is cached for the life of the module now, which in a
+    // real app means "for the life of the process". A suite shares one module,
+    // so without this a later case reads the PATH an earlier one queued.
+    (await importModule()).invalidateLoginShellPathCache();
     execFileMock.mockReset();
     execMock.mockReset();
     accessMock.mockReset();
@@ -728,19 +732,28 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
       }
     });
 
-    it('re-reads the login-shell PATH on a later scan', async () => {
+    it("sees an installer's PATH edit once the cache is invalidated", async () => {
+      // The scan used to re-read the login shell every time, which is what made
+      // this work — and put a second-long, timeout-prone probe on the critical
+      // path of every spawn. The freshness is now explicit: Rescan invalidates,
+      // and the next scan reads the shell again.
       const originalPath = process.env.PATH;
       const originalShell = process.env.SHELL;
       process.env.PATH = '/usr/bin:/bin';
       process.env.SHELL = '/bin/zsh';
 
       try {
-        const { detectValidatedCommand } = await importModule();
+        const { detectValidatedCommand, invalidateLoginShellPathCache } = await importModule();
+        invalidateLoginShellPathCache();
         const options = { validateKeywords: ['new-agent'] };
 
         callExecFileError(new Error('not found')); // which new-agent
         callExecFile('/usr/bin:/bin'); // login shell before installation
         expect((await detectValidatedCommand('new-agent', options)).available).toBe(false);
+
+        // Without this the pre-installation PATH stays cached, which is the
+        // whole point of the cache — the user pressing Rescan is what clears it.
+        invalidateLoginShellPathCache();
 
         callExecFileError(new Error('not found')); // inherited PATH is still stale
         callExecFile('/Users/x/.local/bin:/usr/bin:/bin'); // shell PATH after installation
@@ -1433,5 +1446,57 @@ describe('login-shell PATH probe', () => {
 
     expect(status.available).toBe(false);
     expect(module.isLoginShellTimeoutStatus(status)).toBe(false);
+  });
+});
+
+describe('login-shell PATH invalidation races', () => {
+  beforeEach(async () => {
+    (await importModule()).invalidateLoginShellPathCache();
+    execFileMock.mockReset();
+    execMock.mockReset();
+    rejectUnqueuedExecFile();
+    vi.mocked(os.platform).mockReturnValue('darwin');
+    process.env.SHELL = '/bin/zsh';
+  });
+
+  it('refuses the cache to a probe that started before an invalidation', async () => {
+    // A Rescan during the (now ten-second) probe would otherwise have the older
+    // probe write the pre-Rescan PATH back moments later — hiding the very edit
+    // the user pressed Rescan to see.
+    const module = await importModule();
+
+    let releaseShell: (() => void) | undefined;
+    // `which` misses, then the shell probe is held open.
+    callExecFileError(new Error('command not found'));
+    execFileMock.mockImplementationOnce(((file: string, args: any, opts: any, cb: any) => {
+      const callback = typeof opts === 'function' ? opts : cb;
+      releaseShell = () => callback(noErr, { stderr: '', stdout: '/stale/bin:/usr/bin' });
+      return {} as any;
+    }) as any);
+
+    const inFlight = module.detectHeterogeneousCliCommand('kimi-code', 'kimi');
+    // Let the detector reach the held shell probe before the Rescan lands.
+    await vi.waitFor(() => expect(releaseShell).toBeTypeOf('function'));
+
+    module.invalidateLoginShellPathCache();
+
+    callExecFileError(new Error('still not found'));
+    releaseShell!();
+    await inFlight;
+
+    // The disowned probe must not have populated the cache, so the next lookup
+    // goes back to the shell.
+    execFileMock.mockReset();
+    rejectUnqueuedExecFile();
+    callExecFileError(new Error('command not found'));
+    callExecFile('/fresh/bin:/usr/bin');
+    callExecFileError(new Error('still not found'));
+    await module.detectHeterogeneousCliCommand('kimi-code', 'kimi');
+
+    expect(
+      execFileMock.mock.calls.filter(
+        ([file, args]) => file === '/bin/zsh' && Array.isArray(args) && args[0] === '-ilc',
+      ),
+    ).toHaveLength(1);
   });
 });

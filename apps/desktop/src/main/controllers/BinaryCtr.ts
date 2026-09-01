@@ -9,7 +9,7 @@ import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { resolveRemotePlatformCommand } from '@lobechat/heterogeneous-agents/scanHost';
 
 import type { BinaryCategory, BinaryStatus } from '@/core/infrastructure/BinaryManager';
-import { detectHeterogeneousCliCommand } from '@/modules/binaries';
+import { detectHeterogeneousCliCommand, invalidateLoginShellPathCache } from '@/modules/binaries';
 import { createLogger } from '@/utils/logger';
 
 import { ControllerModule, IpcMethod } from './index';
@@ -48,6 +48,12 @@ export default class BinaryCtr extends ControllerModule {
     if (isRemoteHeterogeneousType(params.agentType)) {
       return resolveRemotePlatformCommand(params.agentType);
     }
+
+    // This is the Connect Agent Rescan path, and it bypasses `BinaryManager`
+    // entirely — a user pressing Rescan after installing a CLI has to see the
+    // PATH that installer wrote, not the one cached at first scan.
+    invalidateLoginShellPathCache();
+
     return detectHeterogeneousCliCommand(params.agentType, params.command);
   }
 
