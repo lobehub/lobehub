@@ -13,6 +13,9 @@ const log = debug('lobe-server:creds-runtime');
 
 const shellQuote = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`;
 
+/** POSIX shell identifier — the only names `export NAME=...` can safely take. */
+const VALID_ENV_NAME_PATTERN = /^[A-Z_]\w*$/i;
+
 /**
  * Write injected env-style credentials into the sandbox at `~/.creds/env`,
  * matching the exact contract `packages/builtin-tool-creds/src/systemRole.ts`
@@ -25,24 +28,56 @@ const shellQuote = (value: string): string => `'${value.replaceAll("'", "'\\''")
  *
  * Appends rather than overwrites, since a topic can call `injectCredsToSandbox`
  * more than once across a session and earlier values should survive.
+ *
+ * Two layers of shell-safety, not one:
+ * 1. Each written line is `export NAME=<single-quoted value>` — the quoting
+ *    happens INSIDE the file content, so when the documented consumer later
+ *    runs `source ~/.creds/env`, a value containing `$(...)`, backticks,
+ *    `;`, or a newline is loaded as an inert literal, not executed. `export`
+ *    (not a bare assignment) is required too — a bare `NAME=value` is a
+ *    shell variable, invisible to any child process the sourcing shell
+ *    spawns (a Python/Node subprocess, another binary, etc.), which is a
+ *    silent-failure shape indistinguishable from "injection didn't happen".
+ * 2. Each fully-built line is itself passed through `shellQuote` as a single
+ *    `printf '%s\n' <line>` argument, so the runCommand call that WRITES the
+ *    file can't be broken out of either — the value is opaque to the outer
+ *    shell that's doing the writing.
+ * Credential keys that aren't valid shell identifiers (seen in practice:
+ * hyphenated keys like `TEST-WORKSPACE-CREDS-KV`) can't be made into a safe
+ * `export NAME=...` at all — writing them raw could inject shell syntax
+ * through the name position, which quoting the value alone can't stop. Skip
+ * and report them rather than attempt it.
  */
 export async function writeEnvCredsToSandbox(
   sandboxService: SandboxService,
   env: Record<string, string>,
-): Promise<{ error?: string }> {
+): Promise<{ error?: string; skippedInvalidNames?: string[] }> {
   const entries = Object.entries(env);
   if (entries.length === 0) return {};
 
-  const envLines = entries
-    .map(([key, value]) => `printf '%s=%s\\n' ${shellQuote(key)} ${shellQuote(value)}`)
+  const valid = entries.filter(([key]) => VALID_ENV_NAME_PATTERN.test(key));
+  const skippedInvalidNames = entries
+    .filter(([key]) => !VALID_ENV_NAME_PATTERN.test(key))
+    .map(([key]) => key);
+
+  if (valid.length === 0) return { skippedInvalidNames };
+
+  const printfCalls = valid
+    .map(([key, value]) => {
+      const exportLine = `export ${key}=${shellQuote(value)}`;
+      return `printf '%s\\n' ${shellQuote(exportLine)}`;
+    })
     .join(' && \\\n');
-  const command = `mkdir -p ~/.creds && \\\n(${envLines}) >> ~/.creds/env`;
+  const command = `mkdir -p ~/.creds && \\\n(${printfCalls}) >> ~/.creds/env`;
 
   const result = await sandboxService.callTool('runCommand', { command });
   if (!result.success) {
-    return { error: result.error?.message || 'Failed to write credentials into the sandbox' };
+    return {
+      error: result.error?.message || 'Failed to write credentials into the sandbox',
+      skippedInvalidNames,
+    };
   }
-  return {};
+  return { skippedInvalidNames };
 }
 
 /**
@@ -174,7 +209,17 @@ class ServerCredsService implements ICredsService {
       if (!this.getSandboxService) {
         log('injectCreds: sandbox write skipped, no sandbox service available for this context');
       } else {
-        const { error } = await writeEnvCredsToSandbox(this.getSandboxService(), envToWrite);
+        const { error, skippedInvalidNames } = await writeEnvCredsToSandbox(
+          this.getSandboxService(),
+          envToWrite,
+        );
+        if (skippedInvalidNames?.length) {
+          log(
+            'injectCreds: skipped %d credential(s) whose key is not a valid shell env var name: %O',
+            skippedInvalidNames.length,
+            skippedInvalidNames,
+          );
+        }
         if (error) {
           log('injectCreds: failed to write credentials into sandbox: %s', error);
           throw new Error(
