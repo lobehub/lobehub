@@ -140,9 +140,13 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const open = (metric: GoalMetricKind) => () => openGoalMetric(goalId, metric);
 
   const paused = goal.status === 'paused';
-  // A closed goal cannot move, so pace control would be a dead button.
+  // Pace control exists only while the coordinator loop is actually moving (or
+  // explicitly paused). A goal in review awaits the human, and a closed goal
+  // cannot move — pausing either would be a dead or misleading button.
   const canPause =
-    canEdit && nodes.length > 0 && !['achieved', 'canceled', 'failed'].includes(goal.status);
+    canEdit &&
+    nodes.length > 0 &&
+    ['paused', 'planning', 'running', 'verifying'].includes(goal.status);
 
   const durationText = goal.startedAt
     ? formatSpan((goal.completedAt ?? new Date()).getTime() - goal.startedAt.getTime())
