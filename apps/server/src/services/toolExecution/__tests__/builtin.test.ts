@@ -6,7 +6,9 @@ import type { ToolExecutionContext } from '../types';
 
 const mocks = vi.hoisted(() => ({
   apiHandler: vi.fn(),
+  checkCommand: vi.fn().mockResolvedValue({ allowed: true }),
   executeLobehubSkill: vi.fn(),
+  logCommandExecution: vi.fn().mockResolvedValue(undefined),
 }));
 const mockApiHandler = mocks.apiHandler;
 
@@ -22,6 +24,15 @@ vi.mock('@/server/services/market', () => ({
   MarketService: vi.fn().mockImplementation(() => ({
     executeLobehubSkill: mocks.executeLobehubSkill,
   })),
+}));
+// Governance is mocked here purely to isolate BuiltinToolsExecutor's wiring
+// (does it call checkCommand/logCommandExecution with the right shape, does a
+// denial short-circuit, does a logging failure stay non-fatal) — policyGate's
+// own matching/fail-open behavior has its own unit tests in
+// `services/governance/__tests__/policyGate.test.ts`.
+vi.mock('@/server/services/governance', () => ({
+  checkCommand: mocks.checkCommand,
+  logCommandExecution: mocks.logCommandExecution,
 }));
 
 // The runtime mock above only exposes `createDocument`, but the manifest is the
@@ -425,5 +436,121 @@ describe('BuiltinToolsExecutor manifest-driven Work registration', () => {
       targets: [{ taskIdentifier: 'T-1' }],
       type: 'task',
     });
+  });
+});
+
+describe('BuiltinToolsExecutor command governance hook', () => {
+  const executor = new BuiltinToolsExecutor({} as any, 'user-1');
+
+  const commandPayload: ChatToolPayload = {
+    apiName: 'runCommand',
+    arguments: '{"command":"rm -rf /","description":"danger"}',
+    id: 'tool-call-cmd',
+    identifier: 'lobe-local-system',
+    type: 'default' as any,
+  };
+
+  beforeEach(() => {
+    mocks.checkCommand.mockReset().mockResolvedValue({ allowed: true });
+    mocks.logCommandExecution.mockReset().mockResolvedValue(undefined);
+  });
+
+  it('never touches governance for a non-command-shaped tool call', async () => {
+    mockApiHandler.mockReset().mockResolvedValueOnce({ content: 'ok', success: true });
+
+    await executor.execute(buildPayload('{}'), context);
+
+    expect(mocks.checkCommand).not.toHaveBeenCalled();
+    expect(mocks.logCommandExecution).not.toHaveBeenCalled();
+  });
+
+  it('checks the command, dispatches to the runtime, and logs a success outcome when allowed', async () => {
+    const { getServerRuntime } = await import('../serverRuntimes');
+    const runCommandMock = vi.fn().mockResolvedValue({ content: 'done', success: true });
+    vi.mocked(getServerRuntime).mockResolvedValueOnce({ runCommand: runCommandMock } as any);
+
+    const result = await executor.execute(commandPayload, {
+      ...context,
+      activeDeviceId: 'device-1',
+    });
+
+    expect(mocks.checkCommand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiName: 'runCommand',
+        commandText: 'rm -rf /',
+        deviceId: 'device-1',
+        executionTarget: 'device',
+        toolIdentifier: 'lobe-local-system',
+        userId: 'user-1',
+      }),
+      expect.anything(),
+    );
+    expect(runCommandMock).toHaveBeenCalled();
+    expect(result.success).toBe(true);
+    expect(mocks.logCommandExecution).toHaveBeenCalledWith(
+      expect.objectContaining({ commandText: 'rm -rf /' }),
+      expect.objectContaining({ blocked: false, success: true }),
+      expect.anything(),
+    );
+  });
+
+  it('tags a cloud-sandbox runCommand call with executionTarget "sandbox"', async () => {
+    const { getServerRuntime } = await import('../serverRuntimes');
+    const runCommandMock = vi.fn().mockResolvedValue({ content: 'done', success: true });
+    vi.mocked(getServerRuntime).mockResolvedValueOnce({ runCommand: runCommandMock } as any);
+
+    await executor.execute({ ...commandPayload, identifier: 'lobe-cloud-sandbox' }, context);
+
+    expect(mocks.checkCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ executionTarget: 'sandbox' }),
+      expect.anything(),
+    );
+  });
+
+  it('returns a structured COMMAND_BLOCKED error and never calls the runtime when denied', async () => {
+    mocks.checkCommand.mockReset().mockResolvedValueOnce({ allowed: false, ruleId: 'rule-1' });
+    const { getServerRuntime } = await import('../serverRuntimes');
+    const runCommandMock = vi.fn();
+    vi.mocked(getServerRuntime).mockResolvedValueOnce({ runCommand: runCommandMock } as any);
+
+    const result = await executor.execute(commandPayload, context);
+
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe('COMMAND_BLOCKED');
+    expect(runCommandMock).not.toHaveBeenCalled();
+    expect(mocks.logCommandExecution).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ blocked: true, matchedRuleId: 'rule-1' }),
+      expect.anything(),
+    );
+  });
+
+  it('still returns the real tool result when logCommandExecution rejects', async () => {
+    mocks.logCommandExecution.mockReset().mockRejectedValue(new Error('audit db down'));
+    const { getServerRuntime } = await import('../serverRuntimes');
+    const runCommandMock = vi.fn().mockResolvedValue({ content: 'done', success: true });
+    vi.mocked(getServerRuntime).mockResolvedValueOnce({ runCommand: runCommandMock } as any);
+
+    const result = await executor.execute(commandPayload, context);
+
+    // The audit-log rejection must be swallowed — the real tool outcome wins.
+    expect(result.success).toBe(true);
+    expect(result.content).toBe('done');
+  });
+
+  it('logs a failure outcome (not a masked result) when the runtime call throws', async () => {
+    const { getServerRuntime } = await import('../serverRuntimes');
+    const runCommandMock = vi.fn().mockRejectedValue(new Error('spawn failed'));
+    vi.mocked(getServerRuntime).mockResolvedValueOnce({ runCommand: runCommandMock } as any);
+
+    const result = await executor.execute(commandPayload, context);
+
+    expect(result.success).toBe(false);
+    expect(result.content).toBe('spawn failed');
+    expect(mocks.logCommandExecution).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ blocked: false, errorMessage: 'spawn failed', success: false }),
+      expect.anything(),
+    );
   });
 });

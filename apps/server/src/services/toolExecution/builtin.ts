@@ -1,3 +1,6 @@
+import { CloudSandboxApiName, CloudSandboxIdentifier } from '@lobechat/builtin-tool-cloud-sandbox';
+import { LocalSystemApiName, LocalSystemIdentifier } from '@lobechat/builtin-tool-local-system';
+import { RemoteDeviceIdentifier } from '@lobechat/builtin-tool-remote-device';
 import { builtinTools } from '@lobechat/builtin-tools';
 import { type LobeChatDatabase } from '@lobechat/database';
 import {
@@ -10,6 +13,12 @@ import debug from 'debug';
 
 import { UserModel } from '@/database/models/user';
 import { ComposioService } from '@/server/services/composio';
+import {
+  checkCommand,
+  type CommandExecutionTarget,
+  type CommandGovernanceContext,
+  logCommandExecution,
+} from '@/server/services/governance';
 import { MarketService } from '@/server/services/market';
 
 import { getServerRuntime, hasServerRuntime } from './serverRuntimes';
@@ -17,6 +26,66 @@ import { type IToolExecutor, type ToolExecutionContext, type ToolExecutionResult
 import { resolveBuiltinToolWorkIntent } from './workRegistration';
 
 const log = debug('lobe-server:builtin-tools-executor');
+
+/**
+ * Builtin tool identifiers that can execute a shell command, and therefore
+ * are the ones command governance gates. `RemoteDeviceIdentifier` never runs
+ * a command itself (it only exposes `activateDevice` / `listOnlineDevices` —
+ * see `serverRuntimes/remoteDevice.ts`); it is listed here so a future
+ * direct-execution API added to that identifier is covered without another
+ * chokepoint change.
+ */
+const COMMAND_EXECUTION_IDENTIFIERS = new Set<string>([
+  LocalSystemIdentifier,
+  RemoteDeviceIdentifier,
+  CloudSandboxIdentifier,
+]);
+
+/** API names, across the identifiers above, that actually spawn a shell command. */
+const COMMAND_EXECUTION_API_NAMES = new Set<string>([
+  LocalSystemApiName.runCommand,
+  CloudSandboxApiName.runCommand,
+]);
+
+/**
+ * Resolve the {@link CommandGovernanceContext} for one tool call, or
+ * `undefined` when it isn't a governable command execution — keeps the blast
+ * radius of a governance bug limited to the APIs that actually spawn a shell,
+ * not every builtin tool call.
+ *
+ * `LocalSystemIdentifier` is the single runtime that proxies BOTH the user's
+ * own local desktop AND another device connected via `lh connect` — both
+ * route through the device gateway keyed by `context.activeDeviceId` (see
+ * `serverRuntimes/localSystem.ts`). `ToolExecutionContext` currently carries
+ * no signal that tells the two apart, so every governed call through this
+ * identifier is tagged `device`; a rule scoped to `local` cannot match yet.
+ * This is a known gap to flag for product/API review, not an oversight.
+ */
+const buildCommandGovernanceContext = (
+  identifier: string,
+  apiName: string,
+  args: Record<string, any>,
+  context: ToolExecutionContext,
+  userId: string,
+): CommandGovernanceContext | undefined => {
+  if (!COMMAND_EXECUTION_IDENTIFIERS.has(identifier) || !COMMAND_EXECUTION_API_NAMES.has(apiName)) {
+    return undefined;
+  }
+
+  const executionTarget: CommandExecutionTarget =
+    identifier === CloudSandboxIdentifier ? 'sandbox' : 'device';
+
+  const commandText = typeof args?.command === 'string' ? args.command : JSON.stringify(args ?? {});
+
+  return {
+    apiName,
+    commandText,
+    deviceId: context.activeDeviceId,
+    executionTarget,
+    toolIdentifier: identifier,
+    userId,
+  };
+};
 
 /**
  * Declared API names for a builtin tool, read from its manifest — the
@@ -212,6 +281,56 @@ export class BuiltinToolsExecutor implements IToolExecutor {
       };
     }
 
+    // Command governance: gate command-shaped calls only (see
+    // `buildCommandGovernanceContext`). `checkCommand` itself no-ops to
+    // `{ allowed: true }` with zero DB access when the feature is disabled
+    // (`COMMAND_GOVERNANCE_ENABLED`), so this is a no-op in the default
+    // configuration.
+    const commandGovernance = buildCommandGovernanceContext(
+      identifier,
+      apiName,
+      args,
+      context,
+      this.userId,
+    );
+
+    if (commandGovernance) {
+      const decision = await checkCommand(commandGovernance, this.db);
+
+      if (!decision.allowed) {
+        log(
+          'Blocked command for %s:%s (rule %s): %s',
+          identifier,
+          apiName,
+          decision.ruleId,
+          commandGovernance.commandText,
+        );
+
+        // logCommandExecution never throws by design (it fails open and only
+        // debug-logs internally) — wrapped anyway so a future change to that
+        // contract can never turn an audit-log bug into a masked tool result.
+        try {
+          await logCommandExecution(
+            commandGovernance,
+            { blocked: true, matchedRuleId: decision.ruleId },
+            this.db,
+          );
+        } catch (auditError) {
+          log('Failed to record blocked-command audit log: %O', auditError);
+        }
+
+        const message =
+          'This command was blocked by a command governance rule set by your administrator.';
+        return {
+          content: message,
+          error: { code: 'COMMAND_BLOCKED', message },
+          success: false,
+        };
+      }
+    }
+
+    const commandGovernanceStartedAt = commandGovernance ? Date.now() : undefined;
+
     try {
       // Install a sink for runtimes whose Work registration is a side-effect
       // decoupled from the returned result (the agentDocuments runtime emits its
@@ -222,6 +341,22 @@ export class BuiltinToolsExecutor implements IToolExecutor {
       };
 
       const result = await runtime[apiName](args, context);
+
+      if (commandGovernance) {
+        try {
+          await logCommandExecution(
+            commandGovernance,
+            {
+              blocked: false,
+              durationMs: Date.now() - commandGovernanceStartedAt!,
+              success: result.success,
+            },
+            this.db,
+          );
+        } catch (auditError) {
+          log('Failed to record command execution audit log: %O', auditError);
+        }
+      }
 
       // Manifest-driven Work registration: resolve the intent from the API's
       // declarative `work` config + result/args and hand it to the agent
@@ -251,6 +386,23 @@ export class BuiltinToolsExecutor implements IToolExecutor {
     } catch (e) {
       const error = e as Error;
       console.error('Error executing builtin tool %s:%s: %O', identifier, apiName, error);
+
+      if (commandGovernance) {
+        try {
+          await logCommandExecution(
+            commandGovernance,
+            {
+              blocked: false,
+              durationMs: Date.now() - commandGovernanceStartedAt!,
+              errorMessage: error.message,
+              success: false,
+            },
+            this.db,
+          );
+        } catch (auditError) {
+          log('Failed to record command execution audit log: %O', auditError);
+        }
+      }
 
       return { content: error.message, error, success: false };
     }

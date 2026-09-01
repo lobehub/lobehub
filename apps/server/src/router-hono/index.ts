@@ -21,5 +21,7 @@ app.all('/api/agent', (c) => fetchWith(c, () => import('./agent')));
 app.all('/api/agent/*', (c) => fetchWith(c, () => import('./agent')));
 app.all('/api/workflows', (c) => fetchWith(c, () => import('./workflows')));
 app.all('/api/workflows/*', (c) => fetchWith(c, () => import('./workflows')));
+app.all('/api/governance', (c) => fetchWith(c, () => import('./governance')));
+app.all('/api/governance/*', (c) => fetchWith(c, () => import('./governance')));
 
 export default app;
