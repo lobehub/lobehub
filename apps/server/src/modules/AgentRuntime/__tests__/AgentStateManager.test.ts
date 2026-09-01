@@ -16,6 +16,7 @@ const { redisMock, pipelineMock } = vi.hoisted(() => {
   const redisMock = {
     del: vi.fn(),
     eval: vi.fn(),
+    exists: vi.fn(),
     expire: vi.fn(),
     get: vi.fn(),
     hgetall: vi.fn(),
@@ -224,6 +225,37 @@ describe('AgentStateManager', () => {
         1,
         'agent_runtime_operation_lock:op-lock',
         'owner-1',
+      );
+    });
+  });
+
+  describe('interrupt sentinel', () => {
+    it('markInterrupted writes a small sentinel key with the state TTL', async () => {
+      await stateManager.markInterrupted('op-int');
+
+      expect(redisMock.setex).toHaveBeenCalledWith('agent_runtime_interrupt:op-int', 2 * 3600, '1');
+    });
+
+    it('isInterrupted checks key existence instead of loading the state blob', async () => {
+      redisMock.exists.mockResolvedValueOnce(1);
+      expect(await stateManager.isInterrupted('op-int')).toBe(true);
+
+      redisMock.exists.mockResolvedValueOnce(0);
+      expect(await stateManager.isInterrupted('op-int')).toBe(false);
+
+      expect(redisMock.exists).toHaveBeenCalledWith('agent_runtime_interrupt:op-int');
+      expect(redisMock.get).not.toHaveBeenCalled();
+    });
+
+    it('deleteAgentOperation removes the sentinel with the other keys', async () => {
+      await stateManager.deleteAgentOperation('op-del');
+
+      expect(redisMock.del).toHaveBeenCalledWith(
+        'agent_runtime_state:op-del',
+        'agent_runtime_steps:op-del',
+        'agent_runtime_meta:op-del',
+        'agent_runtime_events:op-del',
+        'agent_runtime_interrupt:op-del',
       );
     });
   });

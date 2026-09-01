@@ -1042,11 +1042,10 @@ describe('AgentRuntimeService', () => {
       const mockRuntime = { step: vi.fn().mockResolvedValue(mockStepResult) };
       vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
 
-      // First call returns running state (for executeStep's initial load),
-      // second call returns interrupted state (checked after runtime.step completes)
-      mockCoordinator.loadAgentState
-        .mockResolvedValueOnce(mockState) // initial load
-        .mockResolvedValueOnce({ ...mockState, status: 'interrupted' }); // post-step check
+      // Initial load returns running state; the post-step interrupt check
+      // reads the sentinel instead of the state blob
+      mockCoordinator.loadAgentState.mockResolvedValueOnce(mockState);
+      mockCoordinator.isInterrupted.mockResolvedValueOnce(true);
 
       const result = await service.executeStep(mockParams);
 
@@ -1113,9 +1112,8 @@ describe('AgentRuntimeService', () => {
         step: vi.fn().mockResolvedValueOnce(parkedResult).mockResolvedValueOnce(resolvedResult),
       };
       vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
-      mockCoordinator.loadAgentState
-        .mockResolvedValueOnce(mockState)
-        .mockResolvedValueOnce({ ...mockState, status: 'interrupted' });
+      mockCoordinator.loadAgentState.mockResolvedValueOnce(mockState);
+      mockCoordinator.isInterrupted.mockResolvedValueOnce(true);
 
       const mixedBatchContext = {
         ...mockParams.context!,
@@ -1885,6 +1883,7 @@ describe('AgentRuntimeService', () => {
           lastModified: expect.any(String),
         }),
       );
+      expect(mockCoordinator.markInterrupted).toHaveBeenCalledWith('op-1');
     });
 
     it('should interrupt a waiting_for_human operation', async () => {
@@ -1910,6 +1909,7 @@ describe('AgentRuntimeService', () => {
 
       expect(result).toBe(false);
       expect(mockCoordinator.saveAgentState).not.toHaveBeenCalled();
+      expect(mockCoordinator.markInterrupted).not.toHaveBeenCalled();
     });
 
     it('should return false when operation already done', async () => {

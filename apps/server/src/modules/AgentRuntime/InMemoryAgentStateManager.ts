@@ -16,6 +16,7 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
   private metadata: Map<string, AgentOperationMetadata> = new Map();
   private events: Map<string, any[][]> = new Map();
   private stepLocks: Map<string, { expiresAt: number; ownerId: string }> = new Map();
+  private interrupted: Set<string> = new Set();
 
   private executionLockKey(operationId: string): string {
     return `agent_runtime_operation_lock:${operationId}`;
@@ -152,11 +153,20 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
     log('[%s] Created operation metadata', operationId);
   }
 
+  async markInterrupted(operationId: string): Promise<void> {
+    this.interrupted.add(operationId);
+  }
+
+  async isInterrupted(operationId: string): Promise<boolean> {
+    return this.interrupted.has(operationId);
+  }
+
   async deleteAgentOperation(operationId: string): Promise<void> {
     this.states.delete(operationId);
     this.steps.delete(operationId);
     this.metadata.delete(operationId);
     this.events.delete(operationId);
+    this.interrupted.delete(operationId);
     log('Deleted operation %s', operationId);
   }
 

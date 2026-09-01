@@ -310,6 +310,23 @@ describe('InMemoryAgentStateManager', () => {
   // ------------------------------------------------------------------ //
   // deleteAgentOperation
   // ------------------------------------------------------------------ //
+  describe('interrupt sentinel', () => {
+    it('should report false before markInterrupted and true after', async () => {
+      expect(await manager.isInterrupted('op-int')).toBe(false);
+
+      await manager.markInterrupted('op-int');
+
+      expect(await manager.isInterrupted('op-int')).toBe(true);
+    });
+
+    it('should clear the sentinel when the operation is deleted', async () => {
+      await manager.markInterrupted('op-int');
+      await manager.deleteAgentOperation('op-int');
+
+      expect(await manager.isInterrupted('op-int')).toBe(false);
+    });
+  });
+
   describe('deleteAgentOperation', () => {
     it('should remove all data for an operation', async () => {
       await manager.createOperationMetadata('op-del', { userId: 'u1' });

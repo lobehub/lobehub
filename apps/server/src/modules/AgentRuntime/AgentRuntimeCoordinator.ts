@@ -248,6 +248,21 @@ export class AgentRuntimeCoordinator {
   }
 
   /**
+   * Set the interrupt sentinel so pollers can observe the stop request
+   * without loading the full state blob.
+   */
+  async markInterrupted(operationId: string): Promise<void> {
+    return this.stateManager.markInterrupted(operationId);
+  }
+
+  /**
+   * Check the interrupt sentinel.
+   */
+  async isInterrupted(operationId: string): Promise<boolean> {
+    return this.stateManager.isInterrupted(operationId);
+  }
+
+  /**
    * Get operation metadata
    */
   async getOperationMetadata(operationId: string): Promise<AgentOperationMetadata | null> {
