@@ -12,10 +12,12 @@ import { memo } from 'react';
  * filling a node with its status color.
  */
 export const KIND_COLOR: Record<GoalNodeKind, { line: string; soft: string }> = {
-  decision: { line: cssVar.orange6, soft: cssVar.orange1 },
-  finding: { line: cssVar.green6, soft: cssVar.green1 },
-  problem: { line: cssVar.purple6, soft: cssVar.purple1 },
-  task: { line: cssVar.blue6, soft: cssVar.blue1 },
+  // x2/x7 rather than x1/x6: on a light canvas the x1 tint is close to white,
+  // and the kind glyph — the card's identity mark — washed out with it.
+  decision: { line: cssVar.orange7, soft: cssVar.orange2 },
+  finding: { line: cssVar.green7, soft: cssVar.green2 },
+  problem: { line: cssVar.purple7, soft: cssVar.purple2 },
+  task: { line: cssVar.blue7, soft: cssVar.blue2 },
 };
 
 export const KIND_ICON: Record<GoalNodeKind, LucideIcon> = {

@@ -36,7 +36,7 @@ const styles = createStaticStyles(({ css }) => ({
   card: css`
     box-sizing: border-box;
     width: 100%;
-    border: 1px solid ${cssVar.colorBorder};
+    border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 
     background: ${cssVar.colorBgContainer};
@@ -169,7 +169,7 @@ const styles = createStaticStyles(({ css }) => ({
     overflow: hidden;
 
     font-size: 11px;
-    color: ${cssVar.colorTextSecondary};
+    color: ${cssVar.colorTextTertiary};
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
@@ -177,7 +177,6 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 13px;
     font-weight: 500;
     line-height: 1.35;
-    color: ${cssVar.colorText};
   `,
 }));
 
@@ -232,9 +231,7 @@ const useStateChip = (data: GraphNodeData): StateChip | null => {
   // so "not dispatched" no longer hides in the metric strip.
   if (node.kind === 'task')
     return {
-      // The global backlog visual is quaternary — on a light canvas the card's
-      // only status line would all but disappear, so lift it one step here.
-      color: cssVar.colorTextTertiary,
+      color: TASK_STATUS_VISUALS.backlog.color,
       icon: TASK_STATUS_VISUALS.backlog.icon,
       text: node.taskId
         ? t(`goalProcess.nodeStatus.${node.status}` as const)
