@@ -22,14 +22,10 @@ export const FinishOnboardingInspector = memo<
   const succeeded = !!result && !result.error;
 
   return (
-    <div
-      style={{ gap: 6 }}
-      className={cx(
-        inspectorTextStyles.root,
-        (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-      )}
-    >
-      <span>{t('builtins.lobe-web-onboarding.apiName.finishOnboarding')}</span>
+    <div className={inspectorTextStyles.root} style={{ gap: 6 }}>
+      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+        {t('builtins.lobe-web-onboarding.apiName.finishOnboarding')}
+      </span>
       {succeeded && <Icon className={styles.done} icon={CheckCircle2} size={14} />}
     </div>
   );

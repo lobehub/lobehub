@@ -44,15 +44,18 @@ const ErrorInspector = memo<BuiltinInspectorProps<CodexErrorArgs>>(
 
     return (
       <div
+        className={cx(inspectorTextStyles.root, styles.root)}
         data-testid="codex-error-inspector"
-        className={cx(
-          inspectorTextStyles.root,
-          styles.root,
-          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-        )}
       >
         <Icon className={styles.icon} icon={AlertTriangle} size={14} />
-        <span className={styles.message}>{message || fallback}</span>
+        <span
+          className={cx(
+            styles.message,
+            (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
+          )}
+        >
+          {message || fallback}
+        </span>
       </div>
     );
   },

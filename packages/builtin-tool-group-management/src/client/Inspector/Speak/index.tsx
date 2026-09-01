@@ -45,8 +45,10 @@ export const SpeakInspector = memo<BuiltinInspectorProps<SpeakParams>>(
 
     if (isArgumentsStreaming && !agent) {
       return (
-        <div className={cx(styles.root, shinyTextStyles.shinyText)}>
-          <span>{t('builtins.lobe-group-management.apiName.speak')}</span>
+        <div className={styles.root}>
+          <span className={shinyTextStyles.shinyText}>
+            {t('builtins.lobe-group-management.apiName.speak')}
+          </span>
         </div>
       );
     }
@@ -54,13 +56,8 @@ export const SpeakInspector = memo<BuiltinInspectorProps<SpeakParams>>(
     const agentName = agent?.title || agentId;
 
     return (
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={cx(styles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}
-        gap={8}
-      >
-        <span className={styles.title}>
+      <Flexbox horizontal align={'center'} className={styles.root} gap={8}>
+        <span className={cx(styles.title, isArgumentsStreaming && shinyTextStyles.shinyText)}>
           {t('builtins.lobe-group-management.inspector.speak.title')}
         </span>
         {agent && (

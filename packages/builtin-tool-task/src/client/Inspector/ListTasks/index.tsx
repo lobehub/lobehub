@@ -26,15 +26,19 @@ export const ListTasksInspector = memo<BuiltinInspectorProps<ListTasksParams, Li
 
     if (isArgumentsStreaming && !filterText) {
       return (
-        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-          <span>{t('builtins.lobe-task.apiName.listTasks')}</span>
+        <div className={inspectorTextStyles.root}>
+          <span className={shinyTextStyles.shinyText}>
+            {t('builtins.lobe-task.apiName.listTasks')}
+          </span>
         </div>
       );
     }
 
     return (
-      <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-task.apiName.listTasks')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={cx(isLoading && shinyTextStyles.shinyText)}>
+          {t('builtins.lobe-task.apiName.listTasks')}
+        </span>
         {filterText && (
           <Text as={'span'} color={cssVar.colorTextTertiary} fontSize={12}>
             {' · '}
