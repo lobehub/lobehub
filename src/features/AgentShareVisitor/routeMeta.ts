@@ -4,7 +4,7 @@ import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layou
 import { routeMeta } from '@/spa/router/routeMeta';
 
 /**
- * Agent-share visitor surface (`/share/agent/:slugOrId`). The shared agent's
+ * Agent-share visitor surface (`/agent/:slugOrId`). The shared agent's
  * name only becomes known after `getSharedAgent` resolves, so the tab title
  * stays on the generic share label rather than flashing a placeholder name.
  */

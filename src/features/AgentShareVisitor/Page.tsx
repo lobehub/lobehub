@@ -22,14 +22,18 @@ import VisitorConversation from './VisitorConversation';
 const SIDEBAR_WIDTH = 260;
 
 /**
- * Visitor landing page of an agent share (`/share/agent/:slugOrId`): topic list
- * on the left (a drawer on mobile), the shared agent's conversation on the
- * right. Deliberately a trimmed shell — no agent switcher, task list, working
- * sidebar, terminal, or model picker.
+ * Visitor landing page of an agent share (`/agent/:slugOrId`): topic list on
+ * the left (a drawer on mobile), the shared agent's conversation on the right.
+ * Deliberately a trimmed shell — no agent switcher, task list, working sidebar,
+ * terminal, or model picker.
+ *
+ * The share surface shares its route with the creator's own agent page, so the
+ * param is the agent route's `aid`; `AgentRouteSwitch` decides which of the two
+ * a given value belongs to.
  */
 const AgentShareVisitorPage = memo(() => {
   const { t } = useTranslation('agent');
-  const { slugOrId } = useParams<{ slugOrId: string }>();
+  const { aid: slugOrId } = useParams<{ aid: string }>();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -42,7 +46,7 @@ const AgentShareVisitorPage = memo(() => {
     const state = resolveShareAccessState(error);
 
     if (state === 'signIn') {
-      const signInUrl = `/signin?callbackUrl=${encodeURIComponent(`/share/agent/${slugOrId ?? ''}`)}`;
+      const signInUrl = `/signin?callbackUrl=${encodeURIComponent(`/agent/${slugOrId ?? ''}`)}`;
 
       return (
         <Center gap={16} height={'100%'} padding={24}>

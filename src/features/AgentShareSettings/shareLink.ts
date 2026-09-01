@@ -43,4 +43,4 @@ export const buildAgentShareUrl = ({
   origin: string;
   shareId: string;
   slug?: string;
-}): string => `${origin}/share/agent/${slug || shareId}`;
+}): string => `${origin}/agent/${slug || shareId}`;

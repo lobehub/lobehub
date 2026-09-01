@@ -38,7 +38,7 @@ export interface AgentShareConfig {
    */
   showModelInfo?: boolean;
   /**
-   * Custom URL slug for this share's public link (e.g. `/share/agent/my-cool-bot`).
+   * Custom URL slug for this share's public link (e.g. `/agent/my-cool-bot`).
    * Uniqueness is enforced at the APPLICATION level
    * (`AgentShareModel.updateSlug`), not by a DB constraint/index — acceptable
    * at the current low slug-write volume. Add a unique index if writes ever

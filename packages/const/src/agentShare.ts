@@ -42,10 +42,20 @@ export const SHARE_VISITOR_PROMPT_MAX_LENGTH = 20_000;
 export const AGENT_SHARE_SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/;
 
 /**
- * Slugs that collide with existing (or foreseeable) static routes under the
- * agent-share surface (e.g. `/share/agent/<slug>`, `/share/agent/new`), or
- * are otherwise reserved words that would confuse a share URL. Checked by
- * `AgentShareModel.updateSlug` before a custom slug is written.
+ * Slugs a share may not claim. Two groups:
+ *
+ * 1. words that collide with existing (or foreseeable) static routes under the
+ *    agent surface (e.g. `/agent/<slug>`, `/agent/new`), or that would
+ *    otherwise confuse a share URL;
+ * 2. every builtin agent slug — a share lives at `/agent/<slug>`, the same
+ *    route the creator's own agents use, and an own agent always wins the
+ *    lookup, so a share taking a builtin slug would be permanently unreachable.
+ *
+ * The builtin slugs are duplicated here rather than imported: `@lobechat/const`
+ * sits *below* `@lobechat/builtin-agents` in the dependency graph. The copy is
+ * kept honest by a test that diffs it against `BUILTIN_AGENT_SLUGS`.
+ *
+ * Checked by `AgentShareModel.updateSlug` before a custom slug is written.
  */
 export const RESERVED_AGENT_SHARE_SLUGS: string[] = [
   'admin',
@@ -56,4 +66,19 @@ export const RESERVED_AGENT_SHARE_SLUGS: string[] = [
   'profile',
   'settings',
   'share',
+  // Builtin agent slugs — mirror of `BUILTIN_AGENT_SLUGS`.
+  'agent-builder',
+  'group-agent-builder',
+  'group-supervisor',
+  'inbox',
+  'nightly-review',
+  'onboarding-understanding',
+  'onboarding-task-recommender',
+  'page-agent',
+  'self-feedback-intent',
+  'self-reflection',
+  'skill-management',
+  'task-agent',
+  'verify-agent',
+  'web-onboarding',
 ];

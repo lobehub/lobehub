@@ -1,3 +1,4 @@
+import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { describe, expect, it } from 'vitest';
 
 import { buildAgentShareUrl, normalizeAgentShareSlug, validateAgentShareSlug } from './shareLink';
@@ -37,6 +38,14 @@ describe('validateAgentShareSlug', () => {
     expect(validateAgentShareSlug('settings')).toBe('reserved');
     expect(validateAgentShareSlug('share')).toBe('reserved');
   });
+
+  // Shares live at `/agent/<slug>`, where the creator's own agents always win
+  // the lookup, so a share on a builtin slug would be unreachable forever.
+  it('rejects every builtin agent slug', () => {
+    for (const slug of Object.values(BUILTIN_AGENT_SLUGS)) {
+      expect([slug, validateAgentShareSlug(slug)]).toEqual([slug, 'reserved']);
+    }
+  });
 });
 
 describe('buildAgentShareUrl', () => {
@@ -44,16 +53,16 @@ describe('buildAgentShareUrl', () => {
 
   it('prefers the custom slug', () => {
     expect(buildAgentShareUrl({ origin, shareId: 'share-id', slug: 'my-bot' })).toBe(
-      'https://app.lobehub.com/share/agent/my-bot',
+      'https://app.lobehub.com/agent/my-bot',
     );
   });
 
   it('falls back to the share id', () => {
     expect(buildAgentShareUrl({ origin, shareId: 'share-id' })).toBe(
-      'https://app.lobehub.com/share/agent/share-id',
+      'https://app.lobehub.com/agent/share-id',
     );
     expect(buildAgentShareUrl({ origin, shareId: 'share-id', slug: '' })).toBe(
-      'https://app.lobehub.com/share/agent/share-id',
+      'https://app.lobehub.com/agent/share-id',
     );
   });
 });

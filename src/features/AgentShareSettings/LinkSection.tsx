@@ -162,7 +162,7 @@ const LinkSection = memo<LinkSectionProps>(({ onDisable, onEnable, onUpdateSlug,
               <Input
                 disabled={savingSlug}
                 placeholder={t('share.settings.link.slugPlaceholder')}
-                prefix={`${appOrigin}/share/agent/`}
+                prefix={`${appOrigin}/agent/`}
                 status={slugError ? 'error' : undefined}
                 style={{ flex: 1 }}
                 value={slugDraft}
