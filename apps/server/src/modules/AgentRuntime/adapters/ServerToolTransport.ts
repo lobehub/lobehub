@@ -214,6 +214,11 @@ export class ServerToolTransport implements ToolTransport {
               deviceCapable: context.state.metadata?.executionPlan
                 ? isDeviceCapablePlan(context.state.metadata.executionPlan)
                 : undefined,
+              // The resolved plan's target (`local`/`device`/`auto`) — the only
+              // signal that survives to tell a `local` run apart from a `device`
+              // run once both reach `localSystemRuntime` (see the field's doc
+              // comment on `ToolExecutionContext`).
+              deviceExecutionTarget: context.state.metadata?.executionPlan?.target,
               documentId: context.state.metadata?.documentId,
               editingAgentId: context.state.metadata?.editingAgentId,
               editingGroupId: context.state.metadata?.editingGroupId,

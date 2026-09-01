@@ -494,6 +494,40 @@ describe('BuiltinToolsExecutor command governance hook', () => {
     );
   });
 
+  it('tags a local-system runCommand call with executionTarget "local" when the plan resolved to local', async () => {
+    const { getServerRuntime } = await import('../serverRuntimes');
+    const runCommandMock = vi.fn().mockResolvedValue({ content: 'done', success: true });
+    vi.mocked(getServerRuntime).mockResolvedValueOnce({ runCommand: runCommandMock } as any);
+
+    await executor.execute(commandPayload, {
+      ...context,
+      activeDeviceId: 'device-1',
+      deviceExecutionTarget: 'local',
+    });
+
+    expect(mocks.checkCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ executionTarget: 'local' }),
+      expect.anything(),
+    );
+  });
+
+  it('falls back to executionTarget "device" when deviceExecutionTarget is "auto" or absent', async () => {
+    const { getServerRuntime } = await import('../serverRuntimes');
+    const runCommandMock = vi.fn().mockResolvedValue({ content: 'done', success: true });
+    vi.mocked(getServerRuntime).mockResolvedValue({ runCommand: runCommandMock } as any);
+
+    await executor.execute(commandPayload, {
+      ...context,
+      activeDeviceId: 'device-1',
+      deviceExecutionTarget: 'auto',
+    });
+
+    expect(mocks.checkCommand).toHaveBeenLastCalledWith(
+      expect.objectContaining({ executionTarget: 'device' }),
+      expect.anything(),
+    );
+  });
+
   it('tags a cloud-sandbox runCommand call with executionTarget "sandbox"', async () => {
     const { getServerRuntime } = await import('../serverRuntimes');
     const runCommandMock = vi.fn().mockResolvedValue({ content: 'done', success: true });

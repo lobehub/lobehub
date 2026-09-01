@@ -48,18 +48,29 @@ const COMMAND_EXECUTION_API_NAMES = new Set<string>([
 ]);
 
 /**
+ * `LocalSystemIdentifier` is the single runtime that proxies BOTH the user's
+ * own local desktop AND another device connected via `lh connect` — both
+ * route through the device gateway keyed by `context.activeDeviceId` (see
+ * `serverRuntimes/localSystem.ts`), so `activeDeviceId` alone can't tell them
+ * apart. `context.deviceExecutionTarget` (the run's resolved
+ * `ExecutionPlan.target`, forwarded from `ServerToolTransport`) is the signal
+ * that can: `'local'` maps to the governance `local` scope, everything else
+ * (`'device'`, `'auto'`, or missing on a legacy/resumed run without a plan)
+ * falls back to `device` — the same behavior as before this field existed.
+ */
+const resolveCommandExecutionTarget = (
+  identifier: string,
+  context: ToolExecutionContext,
+): CommandExecutionTarget => {
+  if (identifier === CloudSandboxIdentifier) return 'sandbox';
+  return context.deviceExecutionTarget === 'local' ? 'local' : 'device';
+};
+
+/**
  * Resolve the {@link CommandGovernanceContext} for one tool call, or
  * `undefined` when it isn't a governable command execution — keeps the blast
  * radius of a governance bug limited to the APIs that actually spawn a shell,
  * not every builtin tool call.
- *
- * `LocalSystemIdentifier` is the single runtime that proxies BOTH the user's
- * own local desktop AND another device connected via `lh connect` — both
- * route through the device gateway keyed by `context.activeDeviceId` (see
- * `serverRuntimes/localSystem.ts`). `ToolExecutionContext` currently carries
- * no signal that tells the two apart, so every governed call through this
- * identifier is tagged `device`; a rule scoped to `local` cannot match yet.
- * This is a known gap to flag for product/API review, not an oversight.
  */
 const buildCommandGovernanceContext = (
   identifier: string,
@@ -72,8 +83,7 @@ const buildCommandGovernanceContext = (
     return undefined;
   }
 
-  const executionTarget: CommandExecutionTarget =
-    identifier === CloudSandboxIdentifier ? 'sandbox' : 'device';
+  const executionTarget = resolveCommandExecutionTarget(identifier, context);
 
   const commandText = typeof args?.command === 'string' ? args.command : JSON.stringify(args ?? {});
 

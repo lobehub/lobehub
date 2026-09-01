@@ -19,10 +19,11 @@ export type CommandGovernancePatternType = (typeof commandGovernancePatternTypes
 
 /**
  * Which execution surface a rule applies to. `all` matches every target;
- * `local` is reserved for a future chokepoint that can tell a user's own
- * paired desktop apart from another `lh connect`-linked device — today both
- * route through the same device-proxy tool and are tagged `device` (see the
- * `resolveCommandExecutionTarget` comment in `builtin.ts`).
+ * `local` (the user's own paired desktop) is distinguished from `device`
+ * (another `lh connect`-linked device) via `context.deviceExecutionTarget`,
+ * the run's resolved `ExecutionPlan.target` — see `resolveCommandExecutionTarget`
+ * in `builtin.ts`. Falls back to `device` when that signal is absent (a
+ * legacy/resumed run with no execution plan).
  */
 export const commandGovernanceScopes = ['all', 'local', 'device', 'sandbox'] as const;
 export type CommandGovernanceScope = (typeof commandGovernanceScopes)[number];

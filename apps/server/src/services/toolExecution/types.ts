@@ -3,6 +3,7 @@ import { type LobeChatDatabase } from '@lobechat/database';
 import {
   type ChatToolPayload,
   type ClientSecretPayload,
+  type DeviceExecutionTarget,
   type ExecSubAgentParams,
   type StepActivatedSkill,
   type StepContextTodoItem,
@@ -193,6 +194,17 @@ export interface ToolExecutionContext {
    * gates then fall back to `activeDeviceId`).
    */
   deviceCapable?: boolean;
+  /**
+   * The run's resolved `ExecutionPlan.target` (`local` / `device` / `auto`),
+   * forwarded from `context.state.metadata.executionPlan` in
+   * `ServerToolTransport`. `local` and `device` both dispatch through
+   * `localSystemRuntime` → `deviceGateway` (see that runtime's comments) and
+   * are otherwise indistinguishable from `activeDeviceId` alone — this field
+   * is the only signal that survives to tell them apart, e.g. for command
+   * governance rules scoped to `local` specifically. Absent on runs with no
+   * execution plan (legacy/resumed operations).
+   */
+  deviceExecutionTarget?: DeviceExecutionTarget;
   /** Current page document ID for page-scoped conversations */
   documentId?: string | null;
   /**
