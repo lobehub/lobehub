@@ -34,6 +34,8 @@ import {
   sql,
 } from 'drizzle-orm';
 
+import { clampToolIdentifier } from '@/utils/clampToolIdentifier';
+
 import type { FtsSearchCandidateSource } from '../repositories/ftsSearch';
 import type { TopicItem } from '../schemas';
 import {
@@ -1540,8 +1542,10 @@ export class TopicModel {
 
           await tx.insert(messagePlugins).values({
             ...plugin,
+            apiName: clampToolIdentifier(plugin.apiName),
             clientId: null,
             id: newId,
+            identifier: clampToolIdentifier(plugin.identifier),
             toolCallId: newToolCallId,
           });
         }

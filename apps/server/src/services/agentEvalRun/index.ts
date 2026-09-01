@@ -17,6 +17,7 @@ import type {
   ToolIntervention,
 } from '@lobechat/types';
 import { getActivePluginIds, RequestTrigger } from '@lobechat/types';
+import { clampToolIdentifier } from '@lobechat/utils/clampToolIdentifier';
 import debug from 'debug';
 import { eq, inArray, sql } from 'drizzle-orm';
 
@@ -396,11 +397,11 @@ export class AgentEvalRunService {
 
           return [
             {
-              apiName: message.plugin?.apiName ?? null,
+              apiName: clampToolIdentifier(message.plugin?.apiName) ?? null,
               arguments: message.plugin?.arguments ?? null,
               error: message.pluginError ?? null,
               id,
-              identifier: message.plugin?.identifier ?? null,
+              identifier: clampToolIdentifier(message.plugin?.identifier) ?? null,
               intervention: message.pluginIntervention as ToolIntervention | undefined,
               state: message.pluginState ?? null,
               toolCallId: message.tool_call_id ?? null,
