@@ -2575,7 +2575,13 @@ export class AgentModel {
       const targetScope = { userId: targetUserId, workspaceId: targetWorkspaceId };
       let transferJobId: string | null = null;
       if (affectedMessages <= getAgentTransferSyncMessageThreshold()) {
-        await rewriteMessageScopeForTopics(trx, movedTopicIds, targetScope);
+        // `excludeGroupRows`: a row pairing a group_id with a moved (agent-
+        // owned) topic was already repointed at its group's tombstone in step
+        // 5c and belongs to the group's scope — the topic rewrite must not
+        // drag it into the target.
+        await rewriteMessageScopeForTopics(trx, movedTopicIds, targetScope, {
+          excludeGroupRows: true,
+        });
         await rewriteResidualMessageScope(trx, { agentIds, sessionIds }, targetScope);
       } else {
         transferJobId = await AgentTransferJobModel.createJob(trx, {

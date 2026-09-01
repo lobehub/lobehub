@@ -12,6 +12,8 @@ import {
   agents as agentsTable,
   chatGroups,
   chatGroupsAgents,
+  messages,
+  topics,
   users,
   workspaces,
 } from '../../schemas';
@@ -1055,6 +1057,74 @@ describe('ChatGroupModel', () => {
   });
 
   describe('delete', () => {
+    it('reclaims orphaned history tombstones but keeps ones surviving rows still need', async () => {
+      await serverDB.insert(chatGroups).values({ id: 'tomb-group', title: 'T', userId });
+      // Rosterless virtual history agents (the tombstone shape).
+      const [orphan] = await serverDB
+        .insert(agentsTable)
+        .values({ title: 'Orphan Tombstone', userId, virtual: true })
+        .returning();
+      const [speaker] = await serverDB
+        .insert(agentsTable)
+        .values({ title: 'Residue Speaker', userId, virtual: true })
+        .returning();
+      const [mentioned] = await serverDB
+        .insert(agentsTable)
+        .values({ title: 'Residue Mention', userId, virtual: true })
+        .returning();
+      await serverDB
+        .insert(topics)
+        .values({ agentId: orphan.id, groupId: 'tomb-group', id: 'tomb-topic', userId });
+      await serverDB.insert(messages).values([
+        // Cascades with its topic → the orphan loses its last reference.
+        {
+          agentId: orphan.id,
+          groupId: 'tomb-group',
+          id: 'tomb-msg-topic',
+          role: 'assistant',
+          topicId: 'tomb-topic',
+          userId,
+        },
+        // Topicless residue SURVIVES the delete (group_id goes SET NULL) —
+        // its speaker must keep resolving.
+        {
+          agentId: speaker.id,
+          groupId: 'tomb-group',
+          id: 'tomb-msg-residual',
+          role: 'assistant',
+          userId,
+        },
+        // Topicless residue that only MENTIONS its agent via the FK-less
+        // target_id — must survive too.
+        {
+          groupId: 'tomb-group',
+          id: 'tomb-msg-mention',
+          role: 'user',
+          targetId: mentioned.id,
+          userId,
+        },
+      ]);
+
+      await chatGroupModel.delete('tomb-group');
+
+      const survivors = await serverDB
+        .select({ id: agentsTable.id })
+        .from(agentsTable)
+        .where(inArray(agentsTable.id, [orphan.id, speaker.id, mentioned.id]));
+      const survivorIds = survivors.map((row) => row.id);
+      expect(survivorIds).not.toContain(orphan.id);
+      expect(survivorIds).toContain(speaker.id);
+      expect(survivorIds).toContain(mentioned.id);
+
+      // The surviving residue rows themselves are intact.
+      await expect(
+        serverDB
+          .select()
+          .from(messages)
+          .where(inArray(messages.id, ['tomb-msg-residual', 'tomb-msg-mention'])),
+      ).resolves.toHaveLength(2);
+    });
+
     it('should delete chat group', async () => {
       // Create test group
       await serverDB.insert(chatGroups).values({

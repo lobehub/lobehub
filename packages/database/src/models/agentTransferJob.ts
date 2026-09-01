@@ -74,10 +74,24 @@ export const rewriteMessageScopeForTopics = async (
   executor: Executor,
   topicIds: string[],
   target: AgentTransferTargetScope,
+  options: {
+    /**
+     * Skip rows that carry a `group_id`. An AGENT transfer must set this: a
+     * legal row can pair a group_id with a topic_id owned by the moved agent,
+     * and while the group-history preservation step repoints its agent_id at
+     * the tombstone, it belongs to the GROUP's scope and must not follow the
+     * topic into the transfer target. A GROUP transfer keeps such rows — the
+     * group is the thing moving.
+     */
+    excludeGroupRows?: boolean;
+  } = {},
 ): Promise<void> => {
   if (topicIds.length === 0) return;
 
-  const inTopics = inArray(messages.topicId, topicIds);
+  const inTopicsAlone = inArray(messages.topicId, topicIds);
+  const inTopics = options.excludeGroupRows
+    ? and(inTopicsAlone, isNull(messages.groupId))!
+    : inTopicsAlone;
 
   await executor.execute(sql`
     UPDATE ${messages}
@@ -781,7 +795,14 @@ export class AgentTransferJobModel {
         return { done: true };
       }
 
-      if (!remapOnly) await rewriteMessageScopeForTopics(trx, [next.topicId], target);
+      // An agent-transfer job (no groupIds) must leave group-anchored rows in
+      // their group's scope — mirror of the synchronous branch. A group
+      // transfer's job moves them on purpose.
+      if (!remapOnly) {
+        await rewriteMessageScopeForTopics(trx, [next.topicId], target, {
+          excludeGroupRows: job.groupIds.length === 0,
+        });
+      }
       if (agentIdRemap) await remapMessageAgentIdsForTopics(trx, [next.topicId], agentIdRemap);
       await trx
         .delete(agentHistoryJobTopics)

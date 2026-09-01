@@ -777,6 +777,147 @@ export class ChatGroupModel {
   };
 
   /**
+   * Agents referenced by the given groups' content (topics / threads /
+   * messages, including the FK-less `messages.target_id`) that are NOT on any
+   * of the groups' rosters — the shape of the history tombstones
+   * `AgentModel.preserveGroupHistoryForTransfer` parks in a group's scope.
+   *
+   * Every probe rides a group_id / topic_id index; topic-anchored rows join
+   * through `topics` instead of expanding a topic list into bind parameters
+   * (a long-lived group can hold more topics than the parameter limit
+   * allows). Shared by the ownership handover (re-homes them) and the group
+   * deletes (reclaims the ones the cascade orphans).
+   */
+  private findRosterlessHistoryAgentIds = async (
+    executor: LobeChatDatabase,
+    groupIds: string[],
+  ): Promise<string[]> => {
+    if (groupIds.length === 0) return [];
+
+    const historyRefRows = [
+      ...(await executor
+        .selectDistinct({ agentId: topics.agentId })
+        .from(topics)
+        .where(inArray(topics.groupId, groupIds))),
+      ...(await executor
+        .selectDistinct({ agentId: threads.agentId })
+        .from(threads)
+        .where(inArray(threads.groupId, groupIds))),
+      ...(await executor
+        .selectDistinct({ agentId: messages.agentId })
+        .from(messages)
+        .where(inArray(messages.groupId, groupIds))),
+      ...(await executor
+        .selectDistinct({ agentId: messages.targetId })
+        .from(messages)
+        .where(inArray(messages.groupId, groupIds))),
+      ...(await executor
+        .selectDistinct({ agentId: threads.agentId })
+        .from(threads)
+        .innerJoin(topics, eq(threads.topicId, topics.id))
+        .where(inArray(topics.groupId, groupIds))),
+      ...(await executor
+        .selectDistinct({ agentId: messages.agentId })
+        .from(messages)
+        .innerJoin(topics, eq(messages.topicId, topics.id))
+        .where(inArray(topics.groupId, groupIds))),
+      ...(await executor
+        .selectDistinct({ agentId: messages.targetId })
+        .from(messages)
+        .innerJoin(topics, eq(messages.topicId, topics.id))
+        .where(inArray(topics.groupId, groupIds))),
+    ];
+    const rosterRows = await executor
+      .selectDistinct({ agentId: chatGroupsAgents.agentId })
+      .from(chatGroupsAgents)
+      .where(inArray(chatGroupsAgents.chatGroupId, groupIds));
+    const rosterIdSet = new Set(rosterRows.map((row) => row.agentId));
+
+    return [...new Set(historyRefRows.map((row) => row.agentId))].filter(
+      (id): id is string => Boolean(id) && !rosterIdSet.has(id!),
+    );
+  };
+
+  /**
+   * After a group delete, reclaim the history tombstones the cascade
+   * orphaned. Runs on the pre-delete candidate set and deletes only rows that
+   * are now referenced by NOTHING: still virtual and non-builtin, on no
+   * roster, in no project, and with zero surviving topic / thread / message
+   * `agent_id` references (all indexed probes). A topicless residue row keeps
+   * its message after the group delete (`messages.group_id` goes SET NULL),
+   * so its speaker's tombstone naturally survives these checks; the FK-less
+   * `messages.target_id` has no index, so the CALLER pre-computes which
+   * candidates surviving residue rows still mention and withholds them.
+   */
+  private deleteOrphanedHistoryTombstones = async (
+    executor: LobeChatDatabase,
+    candidateIds: string[],
+  ): Promise<void> => {
+    if (candidateIds.length === 0) return;
+
+    await executor
+      .delete(agents)
+      .where(
+        and(
+          inArray(agents.id, candidateIds),
+          eq(agents.virtual, true),
+          or(isNull(agents.slug), notInArray(agents.slug, RESERVED_BUILTIN_AGENT_SLUGS)),
+          notExists(
+            executor
+              .select({ id: chatGroupsAgents.agentId })
+              .from(chatGroupsAgents)
+              .where(eq(chatGroupsAgents.agentId, agents.id)),
+          ),
+          notExists(
+            executor
+              .select({ id: projectAgents.agentId })
+              .from(projectAgents)
+              .where(eq(projectAgents.agentId, agents.id)),
+          ),
+          notExists(
+            executor.select({ id: topics.id }).from(topics).where(eq(topics.agentId, agents.id)),
+          ),
+          notExists(
+            executor.select({ id: threads.id }).from(threads).where(eq(threads.agentId, agents.id)),
+          ),
+          notExists(
+            executor
+              .select({ id: messages.id })
+              .from(messages)
+              .where(eq(messages.agentId, agents.id)),
+          ),
+        ),
+      );
+  };
+
+  /**
+   * Tombstone candidates still mentioned (via the FK-less `target_id`) by
+   * topicless residue rows — the one message shape that SURVIVES a group
+   * delete (`group_id` goes SET NULL while topic'd rows cascade with their
+   * topics). Computed BEFORE the delete so the group anchor's index is still
+   * usable; `target_id` itself has no index.
+   */
+  private findTargetMentionedSurvivorIds = async (
+    executor: LobeChatDatabase,
+    groupIds: string[],
+    candidateIds: string[],
+  ): Promise<Set<string>> => {
+    if (groupIds.length === 0 || candidateIds.length === 0) return new Set();
+
+    const rows = await executor
+      .selectDistinct({ targetId: messages.targetId })
+      .from(messages)
+      .where(
+        and(
+          inArray(messages.groupId, groupIds),
+          isNull(messages.topicId),
+          inArray(messages.targetId, candidateIds),
+        ),
+      );
+    return new Set(rows.map((row) => row.targetId).filter((id): id is string => Boolean(id)));
+  };
+
+  /**
    * Builtin agents (Inbox, the agent builders, …) are provisioned per user and
    * are `virtual` like a group's own members, so `owned` on a malformed
    * junction row would be enough to take one down with a group. Their reserved
@@ -814,8 +955,16 @@ export class ChatGroupModel {
   async delete(id: string): Promise<{ deletedOwnedAgentIds: string[]; group: ChatGroupItem }> {
     return this.db.transaction(async (trx) => {
       // Collect BEFORE the delete: the junction rows cascade away with the
-      // group, taking the only record of which agents were group-owned.
+      // group, taking the only record of which agents were group-owned — and
+      // the group anchor is the only indexed way to find its rosterless
+      // history tombstones.
       const ownedAgentIds = await this.findOwnedMemberAgentIds(trx, [id]);
+      const tombstoneCandidateIds = await this.findRosterlessHistoryAgentIds(trx, [id]);
+      const mentionedSurvivorIds = await this.findTargetMentionedSurvivorIds(
+        trx,
+        [id],
+        tombstoneCandidateIds,
+      );
 
       const [result] = await trx
         .delete(chatGroups)
@@ -829,6 +978,10 @@ export class ChatGroupModel {
       // Same transaction as the group delete: a cleanup that can be interrupted
       // between the two statements is a leak with extra steps.
       const deletedOwnedAgentIds = await this.deleteOwnedMemberAgents(trx, ownedAgentIds);
+      await this.deleteOrphanedHistoryTombstones(
+        trx,
+        tombstoneCandidateIds.filter((agentId) => !mentionedSurvivorIds.has(agentId)),
+      );
 
       return { deletedOwnedAgentIds, group: result };
     });
@@ -841,14 +994,22 @@ export class ChatGroupModel {
         .from(chatGroups)
         .where(this.ownership());
 
-      const ownedAgentIds = await this.findOwnedMemberAgentIds(
+      const ids = groupIds.map((group) => group.id);
+      const ownedAgentIds = await this.findOwnedMemberAgentIds(trx, ids);
+      const tombstoneCandidateIds = await this.findRosterlessHistoryAgentIds(trx, ids);
+      const mentionedSurvivorIds = await this.findTargetMentionedSurvivorIds(
         trx,
-        groupIds.map((group) => group.id),
+        ids,
+        tombstoneCandidateIds,
       );
 
       await trx.delete(chatGroups).where(this.ownership());
 
       await this.deleteOwnedMemberAgents(trx, ownedAgentIds);
+      await this.deleteOrphanedHistoryTombstones(
+        trx,
+        tombstoneCandidateIds.filter((agentId) => !mentionedSurvivorIds.has(agentId)),
+      );
     });
   }
 
@@ -976,48 +1137,8 @@ export class ChatGroupModel {
     // member-derived re-homing below cannot see them. Left behind, deleting
     // the previous owner would cascade through `agents.user_id` and erase the
     // very history they preserve. Discover them from the group's content
-    // references (every probe rides a group_id / topic_id index) and hand
-    // them over with the group.
-    // Topic-anchored rows join through `topics` (group_id index) instead of
-    // expanding the group's topic list into bind parameters — a long-lived
-    // group can hold more topics than the parameter limit allows.
-    const historyRefRows = [
-      ...(await trx
-        .selectDistinct({ agentId: topics.agentId })
-        .from(topics)
-        .where(eq(topics.groupId, groupId))),
-      ...(await trx
-        .selectDistinct({ agentId: threads.agentId })
-        .from(threads)
-        .where(eq(threads.groupId, groupId))),
-      ...(await trx
-        .selectDistinct({ agentId: messages.agentId })
-        .from(messages)
-        .where(eq(messages.groupId, groupId))),
-      ...(await trx
-        .selectDistinct({ agentId: messages.targetId })
-        .from(messages)
-        .where(eq(messages.groupId, groupId))),
-      ...(await trx
-        .selectDistinct({ agentId: threads.agentId })
-        .from(threads)
-        .innerJoin(topics, eq(threads.topicId, topics.id))
-        .where(eq(topics.groupId, groupId))),
-      ...(await trx
-        .selectDistinct({ agentId: messages.agentId })
-        .from(messages)
-        .innerJoin(topics, eq(messages.topicId, topics.id))
-        .where(eq(topics.groupId, groupId))),
-      ...(await trx
-        .selectDistinct({ agentId: messages.targetId })
-        .from(messages)
-        .innerJoin(topics, eq(messages.topicId, topics.id))
-        .where(eq(topics.groupId, groupId))),
-    ];
-    const rosterIdSet = new Set(agentIds);
-    const historyAgentIds = [...new Set(historyRefRows.map((row) => row.agentId))].filter(
-      (id): id is string => Boolean(id) && !rosterIdSet.has(id!),
-    );
+    // references and hand them over with the group.
+    const historyAgentIds = await this.findRosterlessHistoryAgentIds(trx, [groupId]);
     if (historyAgentIds.length > 0) {
       // Only tombstones re-home: virtual, owned by the outgoing owner, and
       // serving nothing but history — not a builtin (reserved slug), not on

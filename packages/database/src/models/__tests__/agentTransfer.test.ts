@@ -1945,8 +1945,25 @@ describe('AgentModel.transferAgents group history preservation', () => {
       title: 'History Agent',
     });
     await seedGroupHistory('gh-group', agent.id);
+    // A legal mixed row: group-anchored, but its topic is the AGENT's own
+    // (moving) topic. Step 7's topic rewrite must leave it in the group's
+    // scope even though the topic itself transfers.
+    await serverDB.insert(topics).values({ agentId: agent.id, id: 'gh-own-topic', userId });
+    await serverDB.insert(messages).values({
+      agentId: agent.id,
+      groupId: 'gh-group',
+      id: 'gh-group-msg-mixed',
+      role: 'assistant',
+      topicId: 'gh-own-topic',
+      userId,
+    });
 
     await model.transferAgent(agent.id, wsId2, targetUserId);
+
+    // The agent's own topic moved with it; the group-anchored row it hosted
+    // did not.
+    const [ownTopic] = await serverDB.select().from(topics).where(eq(topics.id, 'gh-own-topic'));
+    expect(ownTopic).toMatchObject({ userId: targetUserId, workspaceId: wsId2 });
 
     // The agent itself moved and left the roster.
     const moved = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
@@ -2012,9 +2029,10 @@ describe('AgentModel.transferAgents group history preservation', () => {
           'gh-group-msg-residual',
           'gh-group-msg-target',
           'gh-group-msg-topic-only',
+          'gh-group-msg-mixed',
         ]),
       );
-    expect(groupMessages).toHaveLength(4);
+    expect(groupMessages).toHaveLength(5);
     for (const message of groupMessages) {
       // Regression: the residual rewrite used to re-scope topicless group
       // messages to the target.
@@ -2052,6 +2070,12 @@ describe('AgentModel.transferAgents group history preservation', () => {
           ]),
         ),
     ).resolves.toHaveLength(4);
+    // The mixed row is gone — but through its TOPIC's lifecycle, not the
+    // agent_id cascade this fix blocks: deleting the agent deletes its own
+    // topics, and a message hosted on someone's topic lives and dies with it.
+    await expect(
+      serverDB.select().from(messages).where(eq(messages.id, 'gh-group-msg-mixed')),
+    ).resolves.toHaveLength(0);
   });
 
   it('creates no clone when the agent leaves groups without history', async () => {
@@ -2107,9 +2131,11 @@ describe('AgentModel.transferAgents group history preservation', () => {
     const agent = await model.create({ title: 'Chatty Member' });
     await seedGroupHistory('big-group', agent.id); // 4 message references > threshold 2
     // A group-anchored row whose topic_id is NOT one of the group's own
-    // topics (nothing enforces the pair): the per-topic drain can never
-    // reach it, only the group-anchored finalization remap can.
-    await serverDB.insert(topics).values({ id: 'foreign-topic', userId });
+    // topics (nothing enforces the pair): the remap job's per-topic drain can
+    // never reach it, only the group-anchored finalization remap can. The
+    // topic is the AGENT's own, so the deferred MAIN job also drains it —
+    // its topic rewrite must skip this group-anchored row.
+    await serverDB.insert(topics).values({ agentId: agent.id, id: 'foreign-topic', userId });
     await serverDB.insert(messages).values({
       agentId: agent.id,
       groupId: 'big-group',
@@ -2184,11 +2210,26 @@ describe('AgentModel.transferAgents group history preservation', () => {
       else expect(message.agentId).toBe(clone.id);
     }
 
-    // With the remap drained the delete goes through — and takes no history.
+    // With the remap drained the delete goes through — and takes no history
+    // via agent_id. (The foreign-topic row does disappear, but through its
+    // TOPIC's lifecycle: the topic belongs to the deleted agent and cascades
+    // with it, taking its hosted messages along — pre-existing semantics,
+    // not the group-history cascade this fix blocks.)
     await targetModel.delete(agent.id);
     await expect(
-      serverDB.select().from(messages).where(inArray(messages.id, messageIds)),
-    ).resolves.toHaveLength(5);
+      serverDB
+        .select()
+        .from(messages)
+        .where(
+          inArray(
+            messages.id,
+            messageIds.filter((id) => id !== 'big-group-msg-foreign-topic'),
+          ),
+        ),
+    ).resolves.toHaveLength(4);
+    await expect(
+      serverDB.select().from(messages).where(eq(messages.id, 'big-group-msg-foreign-topic')),
+    ).resolves.toHaveLength(0);
   });
 
   it('records the transfer target as a protected scope on a deferred remap job', async () => {
