@@ -197,7 +197,7 @@
     "@azure-rest/ai-inference": "1.0.0-beta.5",
     "@azure/core-auth": "^1.11.0",
     "@better-auth/expo": "1.6.15",
-    "@better-auth/passkey": "1.6.15",
+    "@better-auth/passkey": "1.6.30",
     "@cfworker/json-schema": "^4.1.1",
     "@chat-adapter/discord": "^4.37.0",
     "@chat-adapter/slack": "^4.37.0",
