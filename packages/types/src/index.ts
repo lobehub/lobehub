@@ -18,6 +18,7 @@ export * from './device';
 export * from './discover';
 export * from './document';
 export * from './documentComment';
+export * from './documentLike';
 export * from './entityId';
 export * from './eval';
 export * from './expertise';
