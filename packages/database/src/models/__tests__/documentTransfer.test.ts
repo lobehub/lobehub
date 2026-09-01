@@ -14,7 +14,7 @@ import {
   workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { DocumentModel } from '../document';
+import { DOCUMENT_TRANSFER_FOREIGN_ROWS, DocumentModel } from '../document';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -261,6 +261,33 @@ describe('DocumentModel.transferTo', () => {
     expect(
       await serverDB.select().from(documentLikes).where(eq(documentLikes.documentId, page.id)),
     ).toHaveLength(0);
+  });
+
+  it('rechecks foreign rows inside the transfer transaction when forbidden', async () => {
+    const ws1 = new DocumentModel(serverDB, userId, wsId1);
+    const page = await createPage(ws1, 'Guarded page', 'guarded-page');
+
+    // A clean own-content subtree transfers fine under the guard.
+    await ws1.transferTo(page.id, wsId2, userId, undefined, { forbidForeignRows: true });
+
+    // A teammate's like blocks a guarded transfer even without any preflight.
+    const ws2 = new DocumentModel(serverDB, userId, wsId2);
+    await serverDB.insert(documentLikes).values({
+      documentId: page.id,
+      userId: otherUserId,
+      workspaceId: wsId2,
+    });
+    await expect(
+      ws2.transferTo(page.id, wsId1, userId, undefined, { forbidForeignRows: true }),
+    ).rejects.toThrow(DOCUMENT_TRANSFER_FOREIGN_ROWS);
+
+    // The owner override (no flag) still moves the tree, likes included.
+    await ws2.transferTo(page.id, wsId1, userId);
+    const moved = await serverDB
+      .select({ workspaceId: documentLikes.workspaceId })
+      .from(documentLikes)
+      .where(eq(documentLikes.documentId, page.id));
+    expect(moved).toEqual([{ workspaceId: wsId1 }]);
   });
 
   it('transfers from workspace back to personal', async () => {

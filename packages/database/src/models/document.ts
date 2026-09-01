@@ -27,6 +27,9 @@ export interface QueryDocumentParams {
   sourceTypes?: string[];
 }
 
+export const DOCUMENT_TRANSFER_FOREIGN_ROWS =
+  'Document subtree contains content created by other users';
+
 export class DocumentModel {
   private userId: string;
   private db: LobeChatDatabase;
@@ -403,12 +406,25 @@ export class DocumentModel {
    */
   subtreeHasForeignRows = async (documentId: string): Promise<boolean> => {
     const subtree = await this.collectSubtree(documentId, this.db);
+    return this.hasForeignRows(subtree, this.db);
+  };
+
+  /**
+   * Shared predicate behind {@link subtreeHasForeignRows} and the in-transaction
+   * recheck of {@link transferTo}: the router's preflight alone is a TOCTOU —
+   * a teammate's comment/like committed between the preflight and the transfer
+   * transaction would otherwise be rehomed or deleted past the owner-only guard.
+   */
+  private hasForeignRows = async (
+    subtree: { id: string; userId: string }[],
+    runner: LobeChatDatabase,
+  ): Promise<boolean> => {
     if (subtree.some((doc) => doc.userId !== this.userId)) return true;
 
     const ids = subtree.map((doc) => doc.id);
     if (ids.length === 0) return false;
 
-    const [foreignComment] = await this.db
+    const [foreignComment] = await runner
       .select({ id: documentComments.id })
       .from(documentComments)
       .where(
@@ -420,14 +436,14 @@ export class DocumentModel {
       .limit(1);
     if (foreignComment) return true;
 
-    const [foreignLike] = await this.db
+    const [foreignLike] = await runner
       .select({ id: documentLikes.id })
       .from(documentLikes)
       .where(and(inArray(documentLikes.documentId, ids), ne(documentLikes.userId, this.userId)))
       .limit(1);
     if (foreignLike) return true;
 
-    const [foreignFile] = await this.db
+    const [foreignFile] = await runner
       .select({ id: files.id })
       .from(files)
       .where(and(inArray(files.parentId, ids), ne(files.userId, this.userId)))
@@ -440,6 +456,14 @@ export class DocumentModel {
     targetWorkspaceId: string | null,
     targetUserId: string,
     targetVisibility?: 'private' | 'public',
+    options?: {
+      /**
+       * Re-assert inside the transaction that the subtree carries no rows
+       * created by someone else (non-owner transfers). Throws
+       * {@link DOCUMENT_TRANSFER_FOREIGN_ROWS} when violated.
+       */
+      forbidForeignRows?: boolean;
+    },
   ): Promise<{ documentIds: string[] }> => {
     return this.db.transaction(async (trx) => {
       const scopedTrx = new DocumentModel(trx as LobeChatDatabase, this.userId, this.workspaceId);
@@ -447,6 +471,23 @@ export class DocumentModel {
       if (subtree.length === 0) throw new Error('Document not found');
 
       const ids = subtree.map((d) => d.id);
+
+      // Lock every subtree document row first: concurrent comment/like writers
+      // take FOR UPDATE on the document row before stamping a workspace, so
+      // they either commit before this point (and are seen by the recheck
+      // below) or block until this transfer commits and then re-validate.
+      await (trx as LobeChatDatabase)
+        .select({ id: documents.id })
+        .from(documents)
+        .where(inArray(documents.id, ids))
+        .for('update');
+
+      if (
+        options?.forbidForeignRows &&
+        (await scopedTrx.hasForeignRows(subtree, trx as LobeChatDatabase))
+      ) {
+        throw new Error(DOCUMENT_TRANSFER_FOREIGN_ROWS);
+      }
       const ownershipUpdate = { userId: targetUserId, workspaceId: targetWorkspaceId };
       // Visibility only applies when landing in a workspace — personal scope
       // treats every row as implicitly private. Transfer still moves the
