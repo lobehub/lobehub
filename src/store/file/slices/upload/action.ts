@@ -1,5 +1,5 @@
 import { LOBE_CHAT_CLOUD } from '@lobechat/business-const';
-import { inferImageMimeTypeFromBytes } from '@lobechat/utils';
+import { inferImageMimeTypeFromBytes, isAudioOnlyIsoBmff } from '@lobechat/utils';
 import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 import { sha256 } from 'js-sha256';
@@ -215,6 +215,16 @@ export class FileUploadActionImpl {
       // byte-sniffing may report an empty or `video/*` mime. Trust the extension to keep these
       // classified (and rendered) as audio.
       if (extensionAudioMime && !fileType.startsWith('audio/')) fileType = extensionAudioMime;
+
+      // The extension cannot settle a `.mp4`: it is genuinely ambiguous, and a
+      // WhatsApp voice note uses it. Read the container instead — an ISO-BMFF
+      // file with no video track is audio whatever its name says. Filing one as
+      // video routes a long recording into the inline `video_url` path, where
+      // the provider rejects it on its video size limit, instead of into the
+      // media-analysis path that has no such ceiling.
+      if (fileType.startsWith('video/') && isAudioOnlyIsoBmff(fileArrayBuffer)) {
+        fileType = 'audio/mp4';
+      }
 
       const durationMs = fileType.startsWith('audio/')
         ? await (audioDurationPromise ?? getAudioDuration(normalizedFile).catch(() => undefined))
