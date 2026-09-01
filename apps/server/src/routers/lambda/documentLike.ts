@@ -13,7 +13,7 @@ import {
   DocumentLikeModel,
 } from '@/database/models/documentLike';
 import { RbacModel } from '@/database/models/rbac';
-import { workspaceMembers } from '@/database/schemas';
+import { documentLikes, workspaceMembers } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
@@ -139,7 +139,16 @@ const runActivityBestEffort = (
   label: string,
   params: DocumentLikeActivityParams,
   run: (params: DocumentLikeActivityParams) => Promise<void>,
-  options?: {
+  options: {
+    /**
+     * after() callbacks carry no cross-request ordering, so a rapid
+     * like→unlike (or unlike→like) can execute this callback after the
+     * opposite mutation already landed. Each callback therefore re-reads the
+     * ground truth — whether the actor's like row currently exists — and only
+     * acts when it matches this expectation, so the last mutation's outcome
+     * always wins regardless of callback ordering.
+     */
+    expectLikeRow: boolean;
     /**
      * Withdrawing a notification is cleanup, not disclosure — it should reach
      * a removed author's inbox too, so revoke skips the access recheck.
@@ -150,7 +159,19 @@ const runActivityBestEffort = (
   if (params.recipientUserId === params.actorUserId) return;
   after(async () => {
     try {
-      if (!options?.skipRecipientAccessCheck && !(await canRecipientViewDocument(ctx, params))) {
+      const [likeRow] = await ctx.serverDB
+        .select({ id: documentLikes.id })
+        .from(documentLikes)
+        .where(
+          and(
+            eq(documentLikes.documentId, params.documentId),
+            eq(documentLikes.userId, params.actorUserId),
+          ),
+        )
+        .limit(1);
+      if (Boolean(likeRow) !== options.expectLikeRow) return;
+
+      if (!options.skipRecipientAccessCheck && !(await canRecipientViewDocument(ctx, params))) {
         return;
       }
       await run(params);
@@ -176,6 +197,7 @@ export const documentLikeRouter = router({
             workspaceId: ctx.workspaceId,
           },
           notifyDocumentLiked,
+          { expectLikeRow: true },
         );
         publishLikesChanged(ctx, input.documentId);
       }
@@ -209,7 +231,7 @@ export const documentLikeRouter = router({
             workspaceId: ctx.workspaceId,
           },
           revokeDocumentLikeNotification,
-          { skipRecipientAccessCheck: true },
+          { expectLikeRow: false, skipRecipientAccessCheck: true },
         );
         publishLikesChanged(ctx, input.documentId);
       }

@@ -133,9 +133,9 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
   const drain = useCallback(async () => {
     if (inFlightRef.current) return;
     inFlightRef.current = true;
+    let sent: boolean | undefined;
     try {
       let summary: DocumentLikeSummary | undefined;
-      let sent: boolean | undefined;
       while (targetRef.current !== null && targetRef.current !== sent) {
         sent = targetRef.current;
         summary = sent
@@ -156,14 +156,17 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
       if (summary) await mutate(summary, { revalidate: false });
     } catch (toggleError) {
       console.error('Failed to toggle document like', toggleError);
-      analytics?.track({
-        name: 'document_like_toggle',
-        properties: {
-          action: targetRef.current ? 'like' : 'unlike',
-          outcome: 'failure',
-          spm: 'page_editor.likes.toggle',
-        },
-      });
+      // Attribute the failure to the request that actually failed (`sent`),
+      // not the latest queued intent, which may already point the other way.
+      if (sent !== undefined)
+        analytics?.track({
+          name: 'document_like_toggle',
+          properties: {
+            action: sent ? 'like' : 'unlike',
+            outcome: 'failure',
+            spm: 'page_editor.likes.toggle',
+          },
+        });
       targetRef.current = null;
       toast.error(t('pageEditor.likes.failed'));
       // Recover the truth from the server rather than guessing a rollback
