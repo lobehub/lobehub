@@ -14,6 +14,7 @@ import GoalSkeleton from '@/components/Skeleton/Goal';
 import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
 import MemorySkeleton from '@/components/Skeleton/Memory';
 import ProfileSkeleton, { GroupProfileRouteSkeleton } from '@/components/Skeleton/Profile';
+import ResourceHomeSkeleton from '@/components/Skeleton/ResourceHome';
 import RouteSegmentSkeleton from '@/components/Skeleton/RouteSegment';
 import SettingsPageSkeleton from '@/components/Skeleton/Settings/Page';
 import TasksSkeleton from '@/components/Skeleton/Tasks';
@@ -382,6 +383,7 @@ describe('desktop router shared definition', () => {
       ['/settings/profile', SettingsPageSkeleton],
       ['/apps', AppsSkeleton],
       ['/memory', MemorySkeleton],
+      ['/resource', ResourceHomeSkeleton],
     ] as const) {
       const matches = matchRoutes(getRoutes(pathname), pathname);
       expect(

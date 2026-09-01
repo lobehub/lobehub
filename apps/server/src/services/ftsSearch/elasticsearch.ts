@@ -1,6 +1,7 @@
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 
+import { trace } from '@lobechat/observability-otel/api';
 import { z } from 'zod';
 
 import type {
@@ -10,8 +11,14 @@ import type {
 } from '@/database/repositories/ftsSearch';
 import { parseElasticsearchUrl } from '@/database/repositories/ftsSearch/elasticsearch/url';
 
-import type { ElasticsearchFtsSearchRequestResult } from './observability';
+import type {
+  ElasticsearchFtsSearchErrorCode,
+  ElasticsearchFtsSearchRequestResult,
+  ElasticsearchFtsSearchTraceContext,
+} from './observability';
 import { recordElasticsearchFtsSearchRequest } from './observability';
+
+const MAX_ERROR_RESPONSE_BYTES = 16_384;
 
 const searchResponseSchema = z.object({
   hits: z.object({
@@ -118,11 +125,18 @@ export interface ElasticsearchFtsSearchSyncIndexIdentity {
 }
 
 export class ElasticsearchFtsSearchRequestError extends Error {
+  readonly errorCode: ElasticsearchFtsSearchErrorCode;
   readonly status?: number;
 
-  constructor(message: string, status?: number, cause?: unknown) {
+  constructor(
+    message: string,
+    status?: number,
+    cause?: unknown,
+    errorCode: ElasticsearchFtsSearchErrorCode = 'unknown_http_error',
+  ) {
     super(message, { cause });
     this.name = 'ElasticsearchFtsSearchRequestError';
+    this.errorCode = errorCode;
     this.status = status;
   }
 }
@@ -137,6 +151,85 @@ const readContentLength = (response: Response): number | undefined => {
   if (!header) return;
   const value = Number(header);
   return Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+};
+
+const readBoundedResponseText = async (response: Response): Promise<string> => {
+  if (!response.body) return '';
+
+  const reader = response.body.getReader();
+  const chunks: Buffer[] = [];
+  let completed = false;
+  let totalBytes = 0;
+
+  try {
+    while (totalBytes < MAX_ERROR_RESPONSE_BYTES) {
+      const result = await reader.read();
+      if (result.done) {
+        completed = true;
+        break;
+      }
+
+      const remainingBytes = MAX_ERROR_RESPONSE_BYTES - totalBytes;
+      const chunk = Buffer.from(result.value.subarray(0, remainingBytes));
+      chunks.push(chunk);
+      totalBytes += chunk.byteLength;
+    }
+  } finally {
+    if (!completed) {
+      try {
+        await reader.cancel();
+      } catch {
+        // The classification fallback still uses the HTTP status when the stream cannot cancel.
+      }
+    }
+  }
+
+  return Buffer.concat(chunks, totalBytes).toString('utf8');
+};
+
+/** Extracts only bounded Elasticsearch error type identifiers, never free-form reasons. */
+const readElasticsearchErrorTypes = (responseText: string): Set<string> => {
+  const errorTypes = new Set<string>();
+
+  for (const match of responseText.matchAll(/"type"\s*:\s*"(\w+)"/gi)) {
+    if (match[1]) errorTypes.add(match[1].toLowerCase());
+  }
+
+  return errorTypes;
+};
+
+const classifyHttpError = (
+  status: number,
+  responseText: string,
+): ElasticsearchFtsSearchErrorCode => {
+  const errorTypes = readElasticsearchErrorTypes(responseText);
+  if (errorTypes.has('too_many_clauses') || errorTypes.has('too_many_nested_clauses')) {
+    return 'too_many_clauses';
+  }
+  if (status === 401) return 'authentication';
+  if (status === 403) return 'authorization';
+  if (status === 404 || errorTypes.has('index_not_found_exception')) return 'index_not_found';
+  if (status === 413) return 'request_too_large';
+  if (status === 429) return 'rate_limited';
+  if (status >= 500) return 'server_error';
+  if (status === 400) return 'invalid_query';
+
+  return 'unknown_http_error';
+};
+
+const getTraceDetails = (): {
+  span: ReturnType<typeof trace.getActiveSpan>;
+  traceContext: ElasticsearchFtsSearchTraceContext;
+  traceId: string;
+} => {
+  const span = trace.getActiveSpan();
+  if (!span) return { span, traceContext: 'missing', traceId: 'none' };
+
+  return {
+    span,
+    traceContext: span.isRecording() ? 'recording' : 'non_recording',
+    traceId: span.spanContext().traceId || 'none',
+  };
 };
 
 /** HTTP transport that never logs credentials, request text, or Elasticsearch payloads. */
@@ -396,10 +489,19 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
     let contentLength: number | undefined;
     let decodedBytes: number | undefined;
     let recorded = false;
+    const { span, traceContext, traceId } = getTraceDetails();
+    span?.setAttributes({
+      'fts.search.elasticsearch.executed_query_characters': input.executedQueryChars,
+      'fts.search.elasticsearch.original_query_characters': input.originalQueryChars,
+      'fts.search.elasticsearch.query_field_count': input.queryFieldCount,
+      'fts.search.elasticsearch.query_truncated': input.truncated,
+      'fts.search.elasticsearch.trace_context': traceContext,
+    });
     const record = (
       result: ElasticsearchFtsSearchRequestResult,
       hits?: number,
       serverTookMs?: number,
+      errorCode: ElasticsearchFtsSearchErrorCode = 'none',
     ) => {
       recorded = true;
       recordElasticsearchFtsSearchRequest({
@@ -407,11 +509,35 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
         decodedBytes,
         durationMs: Date.now() - startedAt,
         entity: input.entity,
+        errorCode,
+        executedQueryChars: input.executedQueryChars,
         hits,
+        originalQueryChars: input.originalQueryChars,
         pagination: input.pagination,
+        queryFieldCount: input.queryFieldCount,
         requestBytes,
         result,
         serverTookMs,
+        traceContext,
+        truncated: input.truncated,
+      });
+    };
+    const logFailure = (errorCode: ElasticsearchFtsSearchErrorCode, status?: number) => {
+      span?.setAttributes({
+        'fts.search.elasticsearch.error_code': errorCode,
+        ...(status === undefined ? {} : { 'fts.search.elasticsearch.http_status_code': status }),
+      });
+      console.error('[fts-search] Elasticsearch request failed', {
+        entity: input.entity,
+        errorCode,
+        executedQueryChars: input.executedQueryChars,
+        originalQueryChars: input.originalQueryChars,
+        queryFieldCount: input.queryFieldCount,
+        requestBytes,
+        status: status ?? 0,
+        traceContext,
+        traceId,
+        truncated: input.truncated,
       });
     };
 
@@ -428,10 +554,20 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
       contentLength = readContentLength(response);
 
       if (!response.ok) {
-        record('http_error');
+        let responseText = '';
+        try {
+          responseText = await readBoundedResponseText(response);
+        } catch {
+          // HTTP status still provides a safe, bounded classification fallback.
+        }
+        const errorCode = classifyHttpError(response.status, responseText);
+        record('http_error', undefined, undefined, errorCode);
+        logFailure(errorCode, response.status);
         throw new ElasticsearchFtsSearchRequestError(
-          `Elasticsearch search request failed (${response.status})`,
+          `Elasticsearch search request failed (${response.status}, ${errorCode})`,
           response.status,
+          undefined,
+          errorCode,
         );
       }
 
@@ -441,28 +577,39 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
         decodedBytes = Buffer.byteLength(responseText);
         payload = JSON.parse(responseText);
       } catch (error) {
-        record(error instanceof SyntaxError ? 'parse_error' : classifyRequestError(error));
+        const result = error instanceof SyntaxError ? 'parse_error' : classifyRequestError(error);
+        const errorCode = result === 'timeout' ? 'timeout' : 'response_parse_error';
+        record(result, undefined, undefined, errorCode);
+        logFailure(errorCode, response.status);
         throw new ElasticsearchFtsSearchRequestError(
           'Elasticsearch search response is not valid JSON',
           response.status,
           error,
+          errorCode,
         );
       }
 
       const parsed = searchResponseSchema.safeParse(payload);
       if (!parsed.success) {
-        record('parse_error');
+        record('parse_error', undefined, undefined, 'response_parse_error');
+        logFailure('response_parse_error', response.status);
         throw new ElasticsearchFtsSearchRequestError(
           'Elasticsearch search response has an invalid shape',
           response.status,
           parsed.error,
+          'response_parse_error',
         );
       }
 
       record('success', parsed.data.hits.hits.length, parsed.data.took);
       return parsed.data;
     } catch (error) {
-      if (!recorded) record(classifyRequestError(error));
+      if (!recorded) {
+        const result = classifyRequestError(error);
+        const errorCode = result === 'timeout' ? 'timeout' : 'transport_error';
+        record(result, undefined, undefined, errorCode);
+        logFailure(errorCode);
+      }
       throw error;
     }
   }

@@ -12,6 +12,7 @@ import {
   MemoryStick,
   RotateCw,
   Route,
+  Ruler,
   ScanEye,
   Terminal,
 } from 'lucide-react';
@@ -103,6 +104,15 @@ export const registerBuiltinDevDockItems = () => {
           slot: 'right',
           type: 'readout',
         },
+    {
+      getChecked: () => useDevDockStore.getState().mesurer,
+      icon: Ruler,
+      id: 'mesurer',
+      label: 'Mesurer',
+      onToggle: (checked) => useDevDockStore.getState().setMesurer(checked),
+      subscribe: subscribeDevDock,
+      type: 'toggle',
+    },
     {
       getChecked: () => useDevDockStore.getState().reactScan,
       icon: ScanEye,

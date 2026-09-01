@@ -51,9 +51,12 @@ export const goalRuntime: ServerRuntimeRegistration = {
             // passed as `maxRounds`, which counts runs across every Work in the
             // graph and would strand later tasks that have not run at all.
             maxTotalCost: args.maxTotalCost ?? undefined,
+            // No seed work: the coordinator plans the decomposition on first
+            // advance, so a complex ask becomes several explorable directions
+            // instead of one task that mirrors the whole request.
+            problemDescription: args.instruction,
             requirement: buildGoalRequirement(args.name, drafts, args.instruction),
             title: args.name,
-            work: [{ description: args.instruction, title: args.name }],
           });
           // The TRPC `goal.create` route queues this; calling the service
           // directly does not. Without it the "the server will pick it up"

@@ -20,13 +20,14 @@ import { setDesktopUserAgentHeader } from '@/utils/user-agent';
 
 import BrowserControlCtr from './BrowserControlCtr';
 import HeterogeneousAgentCtr from './HeterogeneousAgentCtr';
-import { ControllerModule, IpcMethod } from './index';
+import { ControllerModule, createProtocolHandler, IpcMethod } from './index';
 import LocalFileCtr from './LocalFileCtr';
 import McpCtr from './McpCtr';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 import ShellCommandCtr from './ShellCommandCtr';
 
 const logger = createLogger('controllers:GatewayConnectionCtr');
+const deviceProtocolHandler = createProtocolHandler('device');
 
 type AvailableRemotePlatformRuntime = Extract<RemotePlatformCommandRuntime, { available: true }>;
 
@@ -132,6 +133,10 @@ export default class GatewayConnectionCtr extends ControllerModule {
   private readonly hermesSessionMap = new Map<string, string>();
 
   private localSystemRuntime: LocalSystemExecutionRuntime | null = null;
+  private resolveGatewayReady: (() => void) | undefined;
+  private readonly gatewayReady = new Promise<void>((resolve) => {
+    this.resolveGatewayReady = resolve;
+  });
 
   // ─── Service Accessor ───
 
@@ -205,6 +210,8 @@ export default class GatewayConnectionCtr extends ControllerModule {
       this.checkWorkspaceDeviceRegistered(workspaceId, deviceId),
     );
 
+    this.resolveGatewayReady?.();
+
     // Auto-connect if already logged in
     this.tryAutoConnect();
   }
@@ -235,6 +242,24 @@ export default class GatewayConnectionCtr extends ControllerModule {
     platform: string;
   }> {
     return this.service.getDeviceInfo();
+  }
+
+  /**
+   * Let the web app wake this desktop and restore its gateway connection from
+   * an offline device row. The device id guard matters when the user has more
+   * than one registered computer: opening the deep link on a different machine
+   * must not silently connect that machine instead.
+   */
+  @deviceProtocolHandler('reconnect')
+  async reconnectFromProtocol({ deviceId }: { deviceId?: string }): Promise<boolean> {
+    if (!deviceId) return false;
+
+    await this.gatewayReady;
+    if (!(await this.service.matchesDeviceId(deviceId))) return false;
+
+    this.app.storeManager.set('gatewayEnabled', true);
+    const result = await this.service.connect();
+    return result.success;
   }
 
   // ─── Auto Connect ───

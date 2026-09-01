@@ -1,5 +1,7 @@
 import type * as ChildProcessModule from 'node:child_process';
+import type * as CryptoModule from 'node:crypto';
 
+import { deriveDeviceId, deriveScopedFallbackId } from '@lobechat/device-identity';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
@@ -179,7 +181,8 @@ vi.mock('@/const/env', () => ({
   isDev: false,
 }));
 
-vi.mock('node:crypto', () => ({
+vi.mock('node:crypto', async (importOriginal) => ({
+  ...(await importOriginal<typeof CryptoModule>()),
   randomUUID: vi.fn(() => 'mock-device-uuid'),
 }));
 
@@ -391,6 +394,66 @@ describe('GatewayConnectionCtr', () => {
       mockStoreSet.mockClear();
 
       await ctr.connect();
+      expect(mockStoreSet).toHaveBeenCalledWith('gatewayEnabled', true);
+    });
+
+    it('should reconnect the matching device from a protocol link', async () => {
+      vi.mocked(mockRemoteServerConfigCtr.isRemoteServerConfigured).mockResolvedValueOnce(false);
+      ctr.afterFirstFrame();
+      await vi.advanceTimersByTimeAsync(0);
+      mockStoreSet.mockClear();
+
+      const { deviceId } = await ctr.getDeviceInfo();
+      const result = await ctr.reconnectFromProtocol({ deviceId });
+
+      expect(result).toBe(true);
+      expect(mockStoreSet).toHaveBeenCalledWith('gatewayEnabled', true);
+    });
+
+    it('should wait for gateway initialization on a cold-start protocol reconnect', async () => {
+      vi.mocked(mockRemoteServerConfigCtr.isRemoteServerConfigured).mockResolvedValueOnce(false);
+
+      const reconnect = ctr.reconnectFromProtocol({ deviceId: 'mock-device-uuid' });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(mockStoreSet).not.toHaveBeenCalledWith('gatewayEnabled', true);
+
+      ctr.afterFirstFrame();
+      await expect(reconnect).resolves.toBe(true);
+      expect(mockStoreSet).toHaveBeenCalledWith('gatewayEnabled', true);
+    });
+
+    it('should reject a protocol reconnect intended for another device', async () => {
+      vi.mocked(mockRemoteServerConfigCtr.isRemoteServerConfigured).mockResolvedValueOnce(false);
+      ctr.afterFirstFrame();
+      await vi.advanceTimersByTimeAsync(0);
+      mockStoreSet.mockClear();
+
+      const result = await ctr.reconnectFromProtocol({ deviceId: 'another-device' });
+
+      expect(result).toBe(false);
+      expect(mockStoreSet).not.toHaveBeenCalled();
+    });
+
+    it('should reconnect a persisted workspace identity for this machine', async () => {
+      const workspaceId = 'workspace-1';
+      const fallbackId = 'mock-device-uuid';
+      mockStoreGet.mockImplementation((key: string) => {
+        if (key === 'gatewayEnabled') return true;
+        if (key === 'gatewayDeviceId') return fallbackId;
+        if (key === 'gatewayWorkspaceEnrollments') return [workspaceId];
+        return undefined;
+      });
+      vi.mocked(mockRemoteServerConfigCtr.isRemoteServerConfigured).mockResolvedValueOnce(false);
+      ctr.afterFirstFrame();
+      await vi.advanceTimersByTimeAsync(0);
+      mockStoreSet.mockClear();
+
+      const workspaceDevice = deriveDeviceId(`workspace:${workspaceId}`, {
+        fallbackId: deriveScopedFallbackId(fallbackId, `workspace:${workspaceId}`),
+      });
+      const result = await ctr.reconnectFromProtocol({ deviceId: workspaceDevice.deviceId });
+
+      expect(result).toBe(true);
       expect(mockStoreSet).toHaveBeenCalledWith('gatewayEnabled', true);
     });
 

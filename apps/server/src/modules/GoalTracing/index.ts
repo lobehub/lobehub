@@ -1,1 +1,1 @@
-export { buildGoalTraceKey, S3GoalTraceStore } from './S3GoalTraceStore';
+export { buildGoalTraceKey, buildGoalTracePartialKey, S3GoalTraceStore } from './S3GoalTraceStore';

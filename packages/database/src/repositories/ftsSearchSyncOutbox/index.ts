@@ -45,6 +45,10 @@ export interface FtsSearchSyncOutboxStats extends FtsSearchSyncOutboxEntityStats
 /** Approximately one day of durable retries when the exponential delay is capped at one hour. */
 export const FTS_SEARCH_SYNC_MAX_ATTEMPTS = 36;
 
+const ACKNOWLEDGEMENT_DEADLOCK_MAX_ATTEMPTS = 3;
+const ACKNOWLEDGEMENT_DEADLOCK_RETRY_BASE_DELAY_MS = 10;
+const POSTGRES_DEADLOCK_DETECTED = '40P01';
+
 const FTS_SEARCH_SYNC_CAPTURE_SOURCE_TABLE_IDENTIFIERS = sql.join(
   [...new Set(FTS_SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.map(({ table }) => table))].map(
     (table) => sql`${sql.identifier('public')}.${sql.identifier(table)}`,
@@ -241,6 +245,26 @@ const toWork = (row: FtsSearchSyncRow): FtsSearchSyncWork => ({
 const errorMessage = (error: unknown) =>
   (error instanceof Error ? error.message : String(error)).slice(0, 2000);
 
+const postgresErrorCode = (error: unknown): string | undefined => {
+  let current = error;
+
+  for (let depth = 0; depth < 5 && current && typeof current === 'object'; depth++) {
+    const code = (current as Record<string, unknown>).code;
+    if (typeof code === 'string') return code;
+
+    current = (current as { cause?: unknown }).cause;
+  }
+};
+
+const waitForAcknowledgementDeadlockRetry = async (attempt: number): Promise<void> => {
+  const jitter = Math.floor(Math.random() * ACKNOWLEDGEMENT_DEADLOCK_RETRY_BASE_DELAY_MS);
+  const delay = ACKNOWLEDGEMENT_DEADLOCK_RETRY_BASE_DELAY_MS * attempt + jitter;
+
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, delay);
+  });
+};
+
 const revisionNumber = (value: number | string | undefined, operation: string, minimum = 0) => {
   const revision = Number(value);
   if (!Number.isSafeInteger(revision) || revision < minimum) {
@@ -385,7 +409,7 @@ export class FtsSearchSyncOutboxRepository {
       ),
       sql`, `,
     );
-    const result = await this.db.execute(sql`
+    const statement = sql`
       WITH acknowledged(entity, document_id, revision, lease_token) AS (
         VALUES ${values}
       )
@@ -397,9 +421,38 @@ export class FtsSearchSyncOutboxRepository {
         AND EXTRACT(EPOCH FROM outbox.locked_until) = acknowledged.lease_token
       RETURNING outbox.entity, outbox.document_id, outbox.revision,
                 EXTRACT(EPOCH FROM outbox.locked_until)::text AS lease_token
-    `);
+    `;
 
-    return rowsOf<FtsSearchSyncRow>(result).map(toWork);
+    let attempt = 1;
+    while (true) {
+      try {
+        const result = await this.db.execute(statement);
+        return rowsOf<FtsSearchSyncRow>(result).map(toWork);
+      } catch (error) {
+        if (
+          postgresErrorCode(error) !== POSTGRES_DEADLOCK_DETECTED ||
+          attempt === ACKNOWLEDGEMENT_DEADLOCK_MAX_ATTEMPTS
+        ) {
+          throw error;
+        }
+
+        /**
+         * `acknowledgeMany` is one autocommit statement, so PostgreSQL has already rolled the
+         * deadlocked transaction back. The revision and lease-token fences make retrying the exact
+         * DELETE safe even when a newer capture committed while this worker was waiting.
+         */
+        console.warn(
+          '[fts-search-sync] Retrying outbox acknowledgement after PostgreSQL deadlock',
+          {
+            attempt,
+            maxAttempts: ACKNOWLEDGEMENT_DEADLOCK_MAX_ATTEMPTS,
+            workCount: works.length,
+          },
+        );
+        await waitForAcknowledgementDeadlockRetry(attempt);
+        attempt += 1;
+      }
+    }
   }
 
   /** Keeps PostgreSQL's microsecond precision in the token instead of truncating through JS Date. */

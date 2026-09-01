@@ -9,6 +9,7 @@ import { buildSchemaSample, humanize, single, type ToolsetFixtureModule } from '
 import claudeCode from './claude-code';
 import codex from './codex';
 import github from './github';
+import kimiCode from './kimi-code';
 import linear from './linear';
 import lobeActivator from './lobe-activator';
 import lobeAgent from './lobe-agent';
@@ -84,6 +85,7 @@ const toolsetModules: ToolsetFixtureModule[] = [
   claudeCode,
   codex,
   github,
+  kimiCode,
   linear,
   lobeActivator,
   lobeAgent,

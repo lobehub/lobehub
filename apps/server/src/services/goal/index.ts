@@ -14,6 +14,7 @@ import type {
   TaskTopicHandoff,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import { sql } from 'drizzle-orm';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalModel } from '@/database/models/goal';
@@ -29,14 +30,19 @@ import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRunt
 import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
 import { AcceptanceService } from '../verify/acceptanceService';
+import { GoalCriteriaGeneratorService } from './criteriaGenerator';
 import {
   decideNextMove,
+  frontierNeedsBudget,
   GOAL_ACCEPTANCE_TASK_TITLE,
   type GoalMove,
-  needsBudget,
   selectFrontier,
 } from './decideNextMove';
-import { resolveOperationLeaseTimeout, resolveTaskMaxSteps } from './recoveryPolicy';
+import {
+  resolveMaxConcurrentTasks,
+  resolveOperationLeaseTimeout,
+  resolveTaskMaxSteps,
+} from './recoveryPolicy';
 import { TaskRecoveryCoordinator } from './taskRecoveryCoordinator';
 import {
   type GoalTickOptions,
@@ -47,6 +53,8 @@ import {
 
 const TASK_NODE_CLAIM_TTL_MS = 5 * 60 * 1000;
 const TASK_DESCRIPTION_MAX_LENGTH = 255;
+/** Advisory-lock namespace for goal dispatch. `0x676f_6469` is ASCII `godi`. */
+const GOAL_DISPATCH_LOCK_NAMESPACE = 0x67_6f_64_69;
 
 export interface CreateGoalWorkInput {
   description?: string;
@@ -64,10 +72,19 @@ export interface CreateGoalGraphInput {
   createdByAgentId?: string;
   maxRounds?: number;
   maxTotalCost?: number;
+  /**
+   * The user's ask in their own words, shown on the seeded problem node. The
+   * full `requirement` (with its acceptance boilerplate) stays on the goal row
+   * — copying it onto the node made every drill-down read like a contract.
+   */
+  problemDescription?: string;
   projectId?: string;
   requirement?: string;
   title: string;
-  /** Seed Work nodes, in dependency-free order. A plain string is title-only. */
+  /**
+   * Seed Work nodes, in dependency-free order. A plain string is title-only.
+   * When omitted, the coordinator plans the decomposition on first advance.
+   */
   work?: Array<CreateGoalWorkInput | string>;
 }
 
@@ -160,7 +177,7 @@ export class GoalService {
     try {
       const problem = await authorGraph.createNode(goal.id, {
         createdByAgentId: input.createdByAgentId,
-        description: input.requirement,
+        description: input.problemDescription ?? input.requirement,
         kind: 'problem',
         status: 'active',
         title: input.title,
@@ -361,18 +378,42 @@ export class GoalService {
     const at = Date.now();
     const graph = await this.requireGraph(goalId);
     const frontier = selectFrontier(graph);
-    const chosen = frontier.chosen;
 
-    const frontierTask = chosen?.taskId
-      ? ((await this.taskModel.findById(chosen.taskId)) ?? null)
-      : undefined;
-    // Only the branch that could start a run reads the budget, so a goal that is
-    // merely waiting on running Work does not pay for the query on every sweep.
-    const budget = needsBudget(frontierTask)
+    // Every candidate's task, not just the head's: the scheduler has to know
+    // which of them are in flight before it can decide what else to start.
+    const candidateTaskIds = frontier.eligible.flatMap(({ node }) =>
+      node.taskId ? [node.taskId] : [],
+    );
+    const tasksById = new Map(
+      (candidateTaskIds.length > 0 ? await this.taskModel.findByIds(candidateTaskIds) : []).map(
+        (task) => [task.id, task],
+      ),
+    );
+
+    // Asked of every unblocked candidate, not just the head: the scheduler
+    // walks past a running head to start an independent task, so a head that
+    // needs no budget must not decide that nothing does. A goal with nothing
+    // startable still skips the query.
+    const budget = frontierNeedsBudget(frontier, tasksById)
       ? toBudgetState(graph.goal, await this.evaluateBudget(graph.goal, graph))
       : undefined;
 
-    const move = decideNextMove({ budget, frontier, frontierTask, graph });
+    const concurrency = resolveMaxConcurrentTasks(graph.goal);
+    const move = decideNextMove({
+      budget,
+      concurrency,
+      frontier,
+      graph,
+      tasksById,
+    });
+    // The scheduler may pick past the head of the frontier, so every arm below
+    // acts on the node the move chose, which is not necessarily the
+    // highest-ranked candidate.
+    const acting = move.chosenNodeId
+      ? graph.nodes.find((node) => node.id === move.chosenNodeId)
+      : undefined;
+    const actingTask = acting?.taskId ? (tasksById.get(acting.taskId) ?? null) : undefined;
+
     const effects: GoalAdvanceEffect[] = [];
 
     const observe = (result: GoalTickResult): GoalTickResult => {
@@ -383,7 +424,11 @@ export class GoalService {
         candidates: move.candidates,
         chosenNodeId: move.chosenNodeId,
         effects,
-        frontierTask: frontierTask ? toFrontierTaskState(frontierTask) : undefined,
+        candidateTasks: frontier.eligible.flatMap(({ node }) => {
+          const task = node.taskId ? tasksById.get(node.taskId) : undefined;
+          return task ? [toFrontierTaskState(task, node.id)] : [];
+        }),
+        concurrency,
         graphState: toTraceGraphState(graph),
         message: result.message,
         outcome: result.outcome,
@@ -413,6 +458,10 @@ export class GoalService {
         return observe(await this.settleTerminalAcceptance(graph, move, effects));
       }
 
+      case 'plan_decomposition': {
+        return observe(await this.planDecomposition(graph, effects));
+      }
+
       case 'no_frontier': {
         // Say so on the row instead of leaving a goal that reads as `running`
         // while it cannot run — and, just as importantly, take it out of the
@@ -425,48 +474,48 @@ export class GoalService {
       }
 
       case 'create_task': {
-        return observe(await this.createResponsibleTask(graph, chosen!, effects));
+        return observe(await this.createResponsibleTask(graph, acting!, effects));
       }
 
       case 'missing_task': {
         await this.coordinatorGraph.updateNodeStatus(
           goalId,
-          chosen!.id,
+          acting!.id,
           'waiting',
           'Responsible task is missing',
         );
-        effects.push({ nodeId: chosen!.id, type: 'node_status', detail: 'waiting' });
+        effects.push({ nodeId: acting!.id, type: 'node_status', detail: 'waiting' });
         return observe({
           goalId,
           message: move.message,
-          nodeId: chosen!.id,
+          nodeId: acting!.id,
           outcome: move.outcome,
         });
       }
 
       default: {
         // Everything from here on has a live responsible task.
-        const task = frontierTask!;
-        await this.ensureTaskWorkVersion(graph.goal.id, chosen!.id, task.id);
+        const task = actingTask!;
+        await this.ensureTaskWorkVersion(graph.goal.id, acting!.id, task.id);
 
         switch (move.branch) {
           case 'consume_completed': {
-            return observe(await this.consumeCompletedTask(graph, chosen!.id, task.id, effects));
+            return observe(await this.consumeCompletedTask(graph, acting!.id, task.id, effects));
           }
 
           case 'recover_lease': {
             return observe(
-              await this.resumeAbandonedTaskRecovery(graph, chosen!.id, task, effects),
+              await this.resumeAbandonedTaskRecovery(graph, acting!.id, task, effects),
             );
           }
 
           case 'recover_verification': {
-            return observe(await this.recoverAfterVerification(graph, chosen!.id, task, effects));
+            return observe(await this.recoverAfterVerification(graph, acting!.id, task, effects));
           }
 
           case 'failure_decision': {
             return observe(
-              await this.openFailureDecision(graph, chosen!.id, task.id, move.message, effects),
+              await this.openFailureDecision(graph, acting!.id, task.id, move.message, effects),
             );
           }
 
@@ -474,7 +523,7 @@ export class GoalService {
             return observe({
               goalId,
               message: move.message,
-              nodeId: chosen!.id,
+              nodeId: acting!.id,
               outcome: move.outcome,
               taskId: task.id,
             });
@@ -482,13 +531,13 @@ export class GoalService {
 
           case 'task_running': {
             if (task.status === 'running') {
-              const recovered = await this.recoverAbandonedTask(graph, chosen!.id, task, effects);
+              const recovered = await this.recoverAbandonedTask(graph, acting!.id, task, effects);
               if (recovered) return observe(recovered);
             }
             return observe({
               goalId,
               message: move.message,
-              nodeId: chosen!.id,
+              nodeId: acting!.id,
               outcome: move.outcome,
               taskId: task.id,
             });
@@ -500,14 +549,14 @@ export class GoalService {
             return observe({
               goalId,
               message: move.message,
-              nodeId: chosen!.id,
+              nodeId: acting!.id,
               outcome: move.outcome,
               taskId: task.id,
             });
           }
 
           default: {
-            return observe(await this.dispatchWork(graph, chosen!.id, task, effects));
+            return observe(await this.dispatchWork(graph, acting!.id, task, effects));
           }
         }
       }
@@ -740,10 +789,42 @@ export class GoalService {
     // overlapping advances would both dispatch this Work and pay for it twice.
     // Claim the task first: the transition is a single conditional UPDATE, so
     // exactly one advance can win it.
-    const claimed = await this.taskModel.updateStatusIfCurrent(task.id, task.status, 'running', {
-      error: null,
-      startedAt: new Date(),
+    //
+    // Counting free slots is a *separate* race the per-task claim cannot cover:
+    // two advances reading the same `inFlight` below the cap would each claim a
+    // different task and both succeed, taking the goal past
+    // `maxConcurrentTasks`. So the count and the claim happen together, under a
+    // per-goal advisory lock — the planner's cap check is a fast path, this is
+    // the enforcement.
+    const claimed = await this.db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(${GOAL_DISPATCH_LOCK_NAMESPACE}, hashtext(${goalId}))`,
+      );
+
+      const inFlight = await new GoalGraphModel(
+        tx,
+        this.userId,
+        this.workspaceId,
+      ).countRunningTasks(goalId);
+      if (inFlight >= resolveMaxConcurrentTasks(graph.goal)) return 'at-capacity' as const;
+
+      return new TaskModel(tx, this.userId, this.workspaceId).updateStatusIfCurrent(
+        task.id,
+        task.status,
+        'running',
+        { error: null, startedAt: new Date() },
+      );
     });
+
+    if (claimed === 'at-capacity') {
+      return {
+        goalId,
+        message: `Concurrency limit reached before ${task.identifier} could start`,
+        nodeId,
+        outcome: 'waiting_external',
+        taskId: task.id,
+      };
+    }
     if (!claimed) {
       return {
         goalId,
@@ -930,6 +1011,51 @@ export class GoalService {
       .filter(Boolean)
       .join('\n\n');
 
+  /**
+   * Turn a goal with no work into an explorable structure: the LLM plans the
+   * core question plus 1–5 independent directions, each carrying only its own
+   * deliverable requirements. A planning failure degrades to one work seeded
+   * from the raw requirement — the goal must never stall on its planner.
+   */
+  private planDecomposition = async (graph: GoalGraphSnapshot, effects: GoalAdvanceEffect[]) => {
+    const goalId = graph.goal.id;
+    const problem = graph.nodes.find((node) => node.kind === 'problem');
+    const requirement = graph.goal.requirement ?? problem?.description ?? graph.goal.title;
+
+    const generator = new GoalCriteriaGeneratorService(this.db, this.userId, this.workspaceId);
+    const plan = await generator.decompose({ requirement }).catch(() => undefined);
+
+    const works = plan?.works ?? [
+      { instruction: problem?.description ?? requirement, title: graph.goal.title },
+    ];
+
+    if (plan && problem) {
+      // The node's description becomes the planner's own words for the core
+      // question — not the acceptance boilerplate the goal row keeps.
+      await this.coordinatorGraph.updateNodeDescription(goalId, problem.id, plan.problemStatement);
+    }
+
+    for (const work of works) {
+      const node = await this.coordinatorGraph.createNode(goalId, {
+        description: work.instruction,
+        kind: 'task',
+        title: work.title,
+      });
+      if (!node) continue;
+      if (problem)
+        await this.coordinatorGraph.createEdge(goalId, problem.id, node.id, 'decomposes');
+      effects.push({ nodeId: node.id, type: 'created_node', detail: work.title });
+    }
+
+    return {
+      goalId,
+      message: plan
+        ? `Planned ${works.length} exploration direction${works.length > 1 ? 's' : ''}`
+        : 'Planner unavailable; seeded a single work from the requirement',
+      outcome: 'advanced' as const,
+    };
+  };
+
   private buildTaskAcceptanceRequirement = (
     graph: GoalGraphSnapshot,
     title: string,
@@ -947,12 +1073,14 @@ export class GoalService {
         .join('\n\n');
     }
 
+    // The full goal requirement (with its numbered acceptance list) is NOT
+    // injected here: it belongs to the terminal acceptance task above, and
+    // pasting it into every Work made each task's acceptance read as the whole
+    // contract. A Work is judged on its own outcome only.
     return [
       `Verify only this Work: ${title}.`,
       description ? `Required Work outcome: ${description}` : undefined,
-      graph.goal.requirement
-        ? `Use this overall Goal requirement only to interpret requirements relevant to the current Work: ${graph.goal.requirement}`
-        : undefined,
+      `This Work is one direction of the Goal "${graph.goal.title}"; the full Goal contract is verified separately at the end.`,
       'Pass only when the current Work deliverable is complete and supported by concrete evidence. Ignore sibling and downstream Work deliverables; they are verified by their own Tasks.',
     ]
       .filter(Boolean)

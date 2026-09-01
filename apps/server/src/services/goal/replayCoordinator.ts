@@ -11,6 +11,9 @@ import type { GoalGraphSnapshot, TaskItem } from '@lobechat/types';
 
 import { decideNextMove, selectFrontier } from './decideNextMove';
 
+/** Matches `resolveMaxConcurrentTasks`'s default, for traces that predate it. */
+const DEFAULT_REPLAY_CONCURRENCY = 3;
+
 /**
  * Lift a recorded graph back into the shape the coordinator reads.
  *
@@ -37,10 +40,14 @@ export const fromTraceGraphState = (state: GoalGraphState): GoalGraphSnapshot =>
     workVersions: [],
   }) as unknown as GoalGraphSnapshot;
 
-const toTask = (input: GoalDecisionInput): TaskItem | undefined | null => {
-  if (input.frontierTask === undefined) return undefined;
-  return { ...input.frontierTask, updatedAt: new Date(input.frontierTask.updatedAt) } as TaskItem;
-};
+/** Rebuild the task map the scheduler reads from the recorded candidate states. */
+const toTasksById = (input: GoalDecisionInput): Map<string, TaskItem> =>
+  new Map(
+    (input.candidateTasks ?? []).map((task) => [
+      task.id,
+      { ...task, updatedAt: new Date(task.updatedAt) } as TaskItem,
+    ]),
+  );
 
 /**
  * The live coordinator, as a decider a recorded trajectory can be replayed
@@ -54,9 +61,11 @@ export const coordinatorDecider: GoalDecider = (input): GoalDecision => {
   const frontier = selectFrontier(graph);
   const move = decideNextMove({
     budget: input.budget,
+    // A trajectory recorded before the cap existed replays at its default.
+    concurrency: input.concurrency ?? DEFAULT_REPLAY_CONCURRENCY,
     frontier,
-    frontierTask: toTask(input),
     graph,
+    tasksById: toTasksById(input),
   });
 
   return { branch: move.branch, candidates: move.candidates, chosenNodeId: move.chosenNodeId };

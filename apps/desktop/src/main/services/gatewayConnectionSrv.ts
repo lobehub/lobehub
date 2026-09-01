@@ -304,6 +304,31 @@ export default class GatewayConnectionService extends ServiceModule {
     };
   }
 
+  /**
+   * Whether a registry device id belongs to this physical desktop.
+   *
+   * A machine can be reachable through both its personal identity and one
+   * derived identity per persisted workspace enrollment. Reconnect deep links
+   * must accept all of those identities without waking a different machine.
+   */
+  async matchesDeviceId(deviceId: string): Promise<boolean> {
+    if (this.getDeviceId() === deviceId) return true;
+
+    const token = await this.tokenProvider?.();
+    const userId = token ? this.extractUserIdFromToken(token) : undefined;
+    if (userId) {
+      const identity = await this.resolveDeviceIdentity(userId);
+      if (identity.deviceId === deviceId) return true;
+    }
+
+    for (const workspaceId of this.getPersistedWorkspaceEnrollments()) {
+      const identity = await this.resolveWorkspaceDeviceIdentity(workspaceId);
+      if (identity.deviceId === deviceId) return true;
+    }
+
+    return false;
+  }
+
   // ─── Connection Logic ───
 
   async connect(): Promise<{ error?: string; success: boolean }> {

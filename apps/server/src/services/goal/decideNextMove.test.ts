@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   decideNextMove,
+  frontierNeedsBudget,
   GOAL_ACCEPTANCE_TASK_TITLE,
   LEASE_EXPIRED_ERROR,
   needsBudget,
@@ -36,12 +37,30 @@ const graph = (overrides: Partial<GoalGraphSnapshot> = {}): GoalGraphSnapshot =>
 const task = (overrides: Partial<TaskItem> = {}): TaskItem =>
   ({ error: null, id: 'task_1', identifier: 'T-1', status: 'backlog', ...overrides }) as TaskItem;
 
+/**
+ * `frontierTask` is the old single-node shape these tests were written
+ * against; it is expressed as the one-entry task map the scheduler now takes,
+ * so the existing cases keep reading as "this node, this task".
+ */
 const decide = (
   snapshot: GoalGraphSnapshot,
-  extra: Parameters<typeof decideNextMove>[0] extends infer T
-    ? Partial<Omit<T & object, 'graph' | 'frontier'>>
-    : never = {},
-) => decideNextMove({ frontier: selectFrontier(snapshot), graph: snapshot, ...extra });
+  extra: {
+    budget?: Parameters<typeof decideNextMove>[0]['budget'];
+    concurrency?: number;
+    frontierTask?: TaskItem | null;
+    tasks?: TaskItem[];
+  } = {},
+) => {
+  const { budget, concurrency = 3, frontierTask, tasks } = extra;
+  const listed = tasks ?? (frontierTask ? [frontierTask] : []);
+  return decideNextMove({
+    budget,
+    concurrency,
+    frontier: selectFrontier(snapshot),
+    graph: snapshot,
+    tasksById: new Map(listed.map((item) => [item.id, item])),
+  });
+};
 
 describe('selectFrontier', () => {
   it('ranks by priority, then by creation order', () => {
@@ -202,8 +221,13 @@ describe('decideNextMove', () => {
   });
 
   describe('with no ready work', () => {
-    it('reports an empty graph and a fully blocked one differently', () => {
-      expect(decide(graph()).message).toContain('add a work node');
+    it('plans the decomposition for an empty graph, parks a fully blocked one', () => {
+      // A goal with no work has not been planned yet — that is the planner's
+      // cue, not a dead end.
+      expect(decide(graph())).toMatchObject({
+        branch: 'plan_decomposition',
+        outcome: 'advanced',
+      });
 
       const blocked = graph({
         edges: [
@@ -267,5 +291,128 @@ describe('needsBudget', () => {
     expect(needsBudget(task({ status: 'running' }))).toBe(false);
     expect(needsBudget(task({ status: 'completed' }))).toBe(false);
     expect(needsBudget(null)).toBe(false);
+  });
+});
+
+describe('decideNextMove concurrency', () => {
+  const independent = (count: number) =>
+    graph({
+      nodes: Array.from({ length: count }, (_, index) =>
+        node(`n${index}`, { createdAt: new Date(1000 + index) }),
+      ),
+    });
+
+  it('moves past a running task to start an independent one', () => {
+    // The whole point: four fixes that share no code should not queue behind
+    // each other. The old frontier stopped at its head, saw it running, and
+    // ended the advance.
+    const snapshot = graph({
+      nodes: [node('a', { taskId: 'task_1' }), node('b'), node('c')],
+    });
+
+    expect(decide(snapshot, { tasks: [task({ id: 'task_1', status: 'running' })] })).toMatchObject({
+      branch: 'create_task',
+      chosenNodeId: 'b',
+    });
+  });
+
+  it('stops once the concurrency limit is reached', () => {
+    const snapshot = graph({
+      nodes: [node('a', { taskId: 'task_1' }), node('b', { taskId: 'task_2' }), node('c')],
+    });
+
+    const move = decide(snapshot, {
+      concurrency: 2,
+      tasks: [task({ id: 'task_1', status: 'running' }), task({ id: 'task_2', status: 'running' })],
+    });
+
+    expect(move).toMatchObject({ branch: 'task_running', outcome: 'waiting_external' });
+    expect(move.message).toContain('concurrency limit of 2');
+  });
+
+  it('fills the remaining slots rather than only the first', () => {
+    // Dispatching reports `advanced`, so the advance loop keeps going and the
+    // next tick picks the next idle node.
+    const move = decide(independent(4), {
+      concurrency: 3,
+      tasks: [task({ id: 'task_1', status: 'running' })],
+    });
+
+    expect(move.outcome).toBe('advanced');
+  });
+
+  it('does not let a paused task block independent work', () => {
+    const snapshot = graph({ nodes: [node('a', { taskId: 'task_1' }), node('b')] });
+
+    expect(decide(snapshot, { tasks: [task({ id: 'task_1', status: 'paused' })] })).toMatchObject({
+      branch: 'create_task',
+      chosenNodeId: 'b',
+    });
+  });
+
+  it('reports the human wait only when every ready task is parked', () => {
+    const snapshot = graph({ nodes: [node('a', { taskId: 'task_1' })] });
+
+    expect(decide(snapshot, { tasks: [task({ id: 'task_1', status: 'paused' })] })).toMatchObject({
+      branch: 'task_paused',
+      outcome: 'waiting_human',
+    });
+  });
+
+  it('still respects dependencies when running in parallel', () => {
+    const snapshot = graph({
+      edges: [
+        { id: 'e1', kind: 'depends_on', sourceNodeId: 'b', targetNodeId: 'a' },
+      ] as GoalGraphSnapshot['edges'],
+      nodes: [node('a', { taskId: 'task_1' }), node('b')],
+    });
+
+    // `a` is running and `b` depends on it, so there is nothing else to start.
+    expect(decide(snapshot, { tasks: [task({ id: 'task_1', status: 'running' })] })).toMatchObject({
+      branch: 'task_running',
+      outcome: 'waiting_external',
+    });
+  });
+});
+
+describe('frontierNeedsBudget', () => {
+  const withTasks = (snapshot: GoalGraphSnapshot, tasks: TaskItem[]) =>
+    frontierNeedsBudget(selectFrontier(snapshot), new Map(tasks.map((item) => [item.id, item])));
+
+  it('is true when a later candidate can start even though the head cannot', () => {
+    // The hole parallelism opened: the head is running and needs no budget, so
+    // asking only the head would skip the budget read entirely — and
+    // `budget_exhausted` can only fire on a budget that was read.
+    const snapshot = graph({ nodes: [node('a', { taskId: 'task_1' }), node('b')] });
+
+    expect(withTasks(snapshot, [task({ id: 'task_1', status: 'running' })])).toBe(true);
+  });
+
+  it('is false when nothing unblocked could start paid work', () => {
+    const snapshot = graph({ nodes: [node('a', { taskId: 'task_1' })] });
+
+    expect(withTasks(snapshot, [task({ id: 'task_1', status: 'running' })])).toBe(false);
+    expect(withTasks(snapshot, [task({ id: 'task_1', status: 'completed' })])).toBe(false);
+  });
+
+  it('is true for a retryable failure, which spends money too', () => {
+    const snapshot = graph({ nodes: [node('a', { taskId: 'task_1' })] });
+
+    expect(
+      withTasks(snapshot, [
+        task({ error: VERIFICATION_FAILED_ERROR, id: 'task_1', status: 'paused' }),
+      ]),
+    ).toBe(true);
+  });
+
+  it('ignores blocked candidates', () => {
+    const snapshot = graph({
+      edges: [
+        { id: 'e1', kind: 'depends_on', sourceNodeId: 'b', targetNodeId: 'a' },
+      ] as GoalGraphSnapshot['edges'],
+      nodes: [node('a', { taskId: 'task_1' }), node('b')],
+    });
+
+    expect(withTasks(snapshot, [task({ id: 'task_1', status: 'running' })])).toBe(false);
   });
 });
