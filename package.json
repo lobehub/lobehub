@@ -542,7 +542,7 @@
     "drizzle-dbml-generator": "^0.10.0",
     "drizzle-kit": "^0.31.10",
     "esbuild": "^0.28.2",
-    "eslint": "10.0.2",
+    "eslint": "10.0.3",
     "eslint-plugin-mdx": "^3.8.1",
     "fake-indexeddb": "^6.2.5",
     "fs-extra": "^11.4.0",
