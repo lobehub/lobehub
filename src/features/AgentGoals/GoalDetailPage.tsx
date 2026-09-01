@@ -3,14 +3,13 @@
 import { Flexbox } from '@lobehub/ui';
 import { Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { PlayIcon } from 'lucide-react';
+import { PauseIcon, PlayIcon } from 'lucide-react';
 import { memo, type ReactNode, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NotFound from '@/components/404';
 import AsyncError from '@/components/AsyncError';
 import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
-import StopLoadingIcon from '@/components/StopLoading';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import { PortalContent } from '@/features/Portal/router';
@@ -188,30 +187,12 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                 <Metric
                   label={t('goalProcess.metrics.status')}
                   value={
-                    // Running is the task-shaped control: one button that both
-                    // shows the goal is moving (spinner-to-stop icon) and pauses
-                    // it — no separate status spinner plus pause row.
-                    canPause ? (
-                      <Button
-                        icon={paused ? PlayIcon : StopLoadingIcon}
-                        size={'small'}
-                        title={paused ? t('goalProcess.paused') : undefined}
-                        type={paused ? 'primary' : 'default'}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void (paused ? resumeGoal(goal.id) : pauseGoal(goal.id));
-                        }}
-                      >
-                        {paused ? t('goalProcess.resume') : t('goalProcess.pause')}
-                      </Button>
-                    ) : (
-                      <>
-                        <GoalStatusGlyph size={16} status={goal.status} />
-                        <Text fontSize={16} weight={600}>
-                          {t(goalStatusKey(goal.status))}
-                        </Text>
-                      </>
-                    )
+                    <>
+                      <GoalStatusGlyph size={16} status={goal.status} />
+                      <Text fontSize={16} weight={600}>
+                        {t(goalStatusKey(goal.status))}
+                      </Text>
+                    </>
                   }
                   onClick={open('lifecycle')}
                 />
@@ -257,6 +238,25 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                   onClick={open('liveness')}
                 />
               </Flexbox>
+              {/* Pause/resume above the requirement document — its reviewed
+                  home. The status glyph keeps the "running" animation; this
+                  button is only the control. */}
+              {canPause && (
+                <Flexbox horizontal align={'center'} gap={10} paddingBlock={'8px 0'}>
+                  <Button
+                    icon={paused ? PlayIcon : PauseIcon}
+                    type={paused ? 'primary' : 'default'}
+                    onClick={() => void (paused ? resumeGoal(goal.id) : pauseGoal(goal.id))}
+                  >
+                    {paused ? t('goalProcess.resume') : t('goalProcess.pause')}
+                  </Button>
+                  {paused && (
+                    <Text fontSize={12} type={'secondary'}>
+                      {t('goalProcess.paused')}
+                    </Text>
+                  )}
+                </Flexbox>
+              )}
               {goal.requirement && (
                 <GoalRequirement goalId={goal.id} requirement={goal.requirement} />
               )}
