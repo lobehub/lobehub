@@ -311,7 +311,7 @@ export class AgentOperationModel {
           this.ownership(),
           sql`${agentOperations.metadata}->>'serverDefaultHeterogeneous' = 'true'`,
           sql`${agentOperations.metadata}->>'agentType' = ${invocation.agentType}`,
-          sql`${agentOperations.metadata}->'serverDefaultRelayInvocation' is null`,
+          sql`NOT COALESCE(jsonb_exists(${agentOperations.metadata}, 'serverDefaultRelayInvocation'), false)`,
         ),
       )
       .returning({ metadata: agentOperations.metadata });
