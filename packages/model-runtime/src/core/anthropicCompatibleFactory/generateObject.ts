@@ -71,7 +71,12 @@ export const buildAnthropicGenerateObjectRequest = async (
   let finalTools;
   let tool_choice: Anthropic.ToolChoiceAuto | Anthropic.ToolChoiceAny | Anthropic.ToolChoiceTool;
   let schemaToolName: string | undefined;
-  const forcedToolChoiceRejected = rejectsForcedToolChoice(config?.requestModel ?? model);
+  // Check both the logical model id and the mapped request model: a router may map
+  // `claude-fable-5-1` to an opaque deployment / inference-profile id that
+  // `rejectsForcedToolChoice` cannot parse, and forced tool_choice would still 400.
+  const forcedToolChoiceRejected = [model, config?.requestModel].some(
+    (id): id is string => !!id && rejectsForcedToolChoice(id),
+  );
   if (tools) {
     finalTools = buildAnthropicTools(tools);
     tool_choice = forcedToolChoiceRejected ? { type: 'auto' } : { type: 'any' };

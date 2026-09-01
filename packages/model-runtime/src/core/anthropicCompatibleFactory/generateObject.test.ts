@@ -141,6 +141,28 @@ describe('Anthropic generateObject', () => {
     expect(requestParams.tool_choice).toEqual({ type: 'auto' });
   });
 
+  it('should still use auto tool_choice when the request model is an opaque mapped id', async () => {
+    const { requestParams } = await buildAnthropicGenerateObjectRequest(
+      {
+        messages: [{ content: 'Generate', role: 'user' as const }],
+        model: 'claude-fable-5-1',
+        schema: {
+          name: 'result',
+          schema: {
+            additionalProperties: false,
+            properties: { title: { type: 'string' } },
+            required: ['title'],
+            type: 'object' as const,
+          },
+        },
+      } as any,
+      { requestModel: 'custom-deployment-id' },
+    );
+
+    expect(requestParams.tool_choice).toEqual({ type: 'auto' });
+    expect((requestParams.tools?.[0] as any).strict).toBe(true);
+  });
+
   describe('use struct output schema', () => {
     it('should return structured data on successful API call', async () => {
       const mockClient = {
