@@ -95,6 +95,8 @@ export default {
   'document_comment_activity_title': 'New comment on your document',
   'document_comment_mentioned': '{{actorLabel}} mentioned you in a comment on "{{documentTitle}}".',
   'document_comment_mentioned_title': 'You were mentioned in a document comment',
+  'document_liked': '{{actorLabel}} liked your document "{{documentTitle}}".',
+  'document_liked_title': 'Someone liked your document',
   'subscription_payment_failed':
     'Your subscription renewal payment failed. Please update your payment method to keep your subscription active.',
   'subscription_payment_failed_action': 'Update payment method',

@@ -1,8 +1,7 @@
 'use client';
 
-import { Center, Empty, Flexbox, Skeleton } from '@lobehub/ui';
+import { Center, Flexbox, Skeleton } from '@lobehub/ui';
 import { Button, Text } from '@lobehub/ui/base-ui';
-import { MessageCircle } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -161,11 +160,7 @@ const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
         <AsyncError error={threads.error} variant={'block'} onRetry={() => void threads.reload()} />
       ) : threads.isLoadingInitial ? (
         <SurfaceSkeleton header={false} variant={'list'} />
-      ) : threads.items.length === 0 ? (
-        <Center className={styles.empty}>
-          <Empty description={t('pageEditor.comments.empty')} icon={MessageCircle} />
-        </Center>
-      ) : (
+      ) : threads.items.length === 0 ? null : (
         <Flexbox className={styles.threadList}>
           {threads.items.map(({ replyCount, root }) => (
             <Thread

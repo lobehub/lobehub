@@ -104,9 +104,6 @@ export const styles = createStaticStyles(({ css }) => ({
       box-shadow: 0 0 0 2px ${cssVar.colorPrimaryBg};
     }
   `,
-  empty: css`
-    min-height: 120px;
-  `,
   header: css`
     min-height: 32px;
   `,

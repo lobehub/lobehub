@@ -7,6 +7,9 @@ describe('shouldIgnoreResourceEvent', () => {
     expect(
       shouldIgnoreResourceEvent({ actorId: 'user-1', type: 'document.commentsChanged' }, 'user-1'),
     ).toBe(false);
+    expect(
+      shouldIgnoreResourceEvent({ actorId: 'user-1', type: 'document.likesChanged' }, 'user-1'),
+    ).toBe(false);
   });
 
   it('continues to suppress other same-user resource echoes', () => {
