@@ -984,4 +984,69 @@ describe('FlatListBuilder', () => {
       expect(block.callbacks[0].content).toBe('等 list 完。');
     });
   });
+
+  describe('threads', () => {
+    const base = { createdAt: 1, role: 'assistant', updatedAt: 1 } as const;
+
+    // A background run (memory signal, sub-agent) lives in its own thread. Whether its head
+    // hangs off nothing or off the main-chain step that spawned it, the transcript must not
+    // walk into it — otherwise the run renders as a stray bubble mid-conversation.
+    const mainChain: Message[] = [
+      { ...base, content: 'Question', id: 'user-1', role: 'user' },
+      { ...base, content: 'Answer', createdAt: 2, id: 'asst-1', parentId: 'user-1' },
+    ];
+
+    it('should exclude a thread whose head is a root', () => {
+      const messages: Message[] = [
+        ...mainChain,
+        { ...base, content: 'Background run', createdAt: 3, id: 'thr-1', threadId: 'thd-1' },
+      ];
+
+      expect(
+        createBuilder(messages)
+          .flatten(messages)
+          .map((m) => m.id),
+      ).toEqual(['user-1', 'asst-1']);
+    });
+
+    it('should exclude a thread whose head hangs off the main chain', () => {
+      const messages: Message[] = [
+        ...mainChain,
+        {
+          ...base,
+          content: 'Background run',
+          createdAt: 3,
+          id: 'thr-1',
+          parentId: 'asst-1',
+          threadId: 'thd-1',
+        },
+      ];
+
+      expect(
+        createBuilder(messages)
+          .flatten(messages)
+          .map((m) => m.id),
+      ).toEqual(['user-1', 'asst-1']);
+    });
+
+    it('should still render a thread when it is all the caller passed', () => {
+      const messages: Message[] = [
+        { ...base, content: 'Background run', id: 'thr-1', threadId: 'thd-1' },
+        {
+          ...base,
+          content: 'More',
+          createdAt: 2,
+          id: 'thr-2',
+          parentId: 'thr-1',
+          threadId: 'thd-1',
+        },
+      ];
+
+      expect(
+        createBuilder(messages)
+          .flatten(messages)
+          .map((m) => m.id),
+      ).toEqual(['thr-1', 'thr-2']);
+    });
+  });
 });
