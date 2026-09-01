@@ -47,10 +47,14 @@ const TreeSkeletonItem = memo<TreeSkeletonItemProps>(({ opacity = 1 }) => {
 
 TreeSkeletonItem.displayName = 'TreeSkeletonItem';
 
-const TreeSkeleton = () => {
-  const count = 6;
+interface TreeSkeletonProps {
+  /** Number of placeholder rows; defaults to a full sidebar's worth. */
+  count?: number;
+}
+
+const TreeSkeleton = ({ count = 6 }: TreeSkeletonProps) => {
   // Calculate opacity gradient from 100% to 20%
-  const getOpacity = (index: number) => 1 - (index / (count - 1)) * 0.8;
+  const getOpacity = (index: number) => (count > 1 ? 1 - (index / (count - 1)) * 0.8 : 1);
 
   return (
     <Flexbox gap={2}>

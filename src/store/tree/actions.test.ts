@@ -4,14 +4,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { toTreeItem, TreeActionImpl } from './actions';
 import type { TreeState } from './types';
 
-const { mockGetKnowledgeItems, mockRefreshFileList, mockResourceMove, mockStoreMove } = vi.hoisted(
-  () => ({
-    mockGetKnowledgeItems: vi.fn(),
-    mockRefreshFileList: vi.fn(),
-    mockResourceMove: vi.fn(),
-    mockStoreMove: vi.fn(),
-  }),
-);
+const {
+  mockGetKnowledgeItems,
+  mockRefreshFileList,
+  mockResourceMove,
+  mockStoreMove,
+  mockSwrMutate,
+} = vi.hoisted(() => ({
+  mockGetKnowledgeItems: vi.fn(),
+  mockRefreshFileList: vi.fn(),
+  mockResourceMove: vi.fn(),
+  mockStoreMove: vi.fn(),
+  mockSwrMutate: vi.fn(),
+}));
+
+vi.mock('swr', () => ({ mutate: mockSwrMutate }));
 
 vi.mock('@/services/file', () => ({
   fileService: {
@@ -162,6 +169,27 @@ describe('TreeActionImpl folder key resolution', () => {
 
     expect(state.children['']).toEqual([folder]);
     expect(state.children['docs_unloaded']).toEqual([doc]);
+  });
+
+  it('revalidate also refreshes the hierarchy-scoped search caches', async () => {
+    const state = createState();
+    const actions = new TreeActionImpl(
+      createSetter(() => state),
+      () => state,
+    );
+    mockSwrMutate.mockClear();
+    mockGetKnowledgeItems.mockResolvedValue({ items: [] });
+
+    await actions.revalidate('folder-a');
+
+    expect(mockSwrMutate).toHaveBeenCalledTimes(1);
+    const [matcher, , options] = mockSwrMutate.mock.calls[0];
+    expect(options).toEqual({ revalidate: true });
+    // Only the sidebar search entries match — not the explorer's own search.
+    expect(matcher(['resource:search', { q: 'a', scope: 'hierarchy' }, 'ws-1'])).toBe(true);
+    expect(matcher(['resource:search', { q: 'a' }, 'ws-1'])).toBe(false);
+    expect(matcher(['resource:list', { q: 'a', scope: 'hierarchy' }, 'ws-1'])).toBe(false);
+    expect(matcher('resource:search')).toBe(false);
   });
 
   it('revalidate stores the refetched children under the folder id when addressed by slug', async () => {

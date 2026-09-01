@@ -5,9 +5,9 @@ import { Text } from '@lobehub/ui/base-ui';
 import { useDebounce } from 'ahooks';
 import { cssVar } from 'antd-style';
 import { SearchXIcon } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { VList } from 'virtua';
+import { VList, type VListHandle } from 'virtua';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncBoundary from '@/components/AsyncBoundary';
@@ -22,7 +22,8 @@ import { HierarchyNode } from './HierarchyNode';
 import { resolveHierarchySelectedKey } from './selection';
 import TreeSkeleton from './TreeSkeleton';
 
-const SEARCH_LIMIT = 50;
+/** Rows fetched per step; the list grows by this much each time the end is reached. */
+const SEARCH_PAGE_SIZE = 50;
 const noop = () => {};
 
 interface SearchResultsProps {
@@ -46,29 +47,55 @@ const SearchResults = memo<SearchResultsProps>(({ libraryId, query }) => {
   // user sees; only the network request lags behind the keystrokes.
   const debouncedQuery = useDebounce(query.trim(), { wait: 300 });
 
-  const { data, error, isLoading, mutate } = useClientDataSWR(
+  // Incremental loading: the requested window grows from the start each time
+  // the user scrolls to the end, so the whole result set stays one SWR entry
+  // (one key to revalidate after a rename/move/delete) and the tree-store
+  // revalidation can find it by the `hierarchy` scope. A new query starts over.
+  const [limit, setLimit] = useState(SEARCH_PAGE_SIZE);
+  useEffect(() => {
+    setLimit(SEARCH_PAGE_SIZE);
+  }, [debouncedQuery, libraryId]);
+
+  const { data, error, isLoading, isValidating, mutate } = useClientDataSWR(
     debouncedQuery
       ? resourceKeys.search(
-          { libraryId, q: debouncedQuery, scope: 'hierarchy' },
+          { libraryId, limit, q: debouncedQuery, scope: 'hierarchy' },
           activeWorkspaceId ?? null,
         )
       : null,
-    async ([, params]: [string, { libraryId: string; q: string }]) => {
+    async ([, params]: [string, { libraryId: string; limit: number; q: string }]) => {
       const response = await resourceService.queryResources({
         libraryId: params.libraryId,
-        limit: SEARCH_LIMIT,
+        limit: params.limit,
         offset: 0,
         q: params.q,
         showFilesInKnowledgeBase: false,
       });
-      return response.items;
+      return { hasMore: response.hasMore, items: response.items };
     },
+    // Growing the window must not flash the skeleton over rows already shown.
+    { keepPreviousData: true },
   );
 
   const rows = useMemo(
-    () => data?.map((row) => ({ item: toTreeItem(row), parentKey: row.parentId ?? '' })) ?? [],
+    () =>
+      data?.items.map((row) => ({ item: toTreeItem(row), parentKey: row.parentId ?? '' })) ?? [],
     [data],
   );
+  const hasMore = data?.hasMore ?? false;
+  // `data` may still be the previous window while the larger one is in flight.
+  const isLoadingMore = isValidating && rows.length > 0 && rows.length < limit;
+
+  const listRef = useRef<VListHandle>(null);
+  const handleScroll = useCallback(() => {
+    if (!hasMore || isValidating) return;
+    const list = listRef.current;
+    if (!list) return;
+    // Within roughly one viewport of the bottom: fetch the next window early
+    // enough that the user rarely hits the end of the list.
+    const remaining = list.scrollSize - (list.scrollOffset + list.viewportSize);
+    if (remaining <= list.viewportSize) setLimit((current) => current + SEARCH_PAGE_SIZE);
+  }, [hasMore, isValidating]);
 
   // Bridge the debounce gap: the query is already non-empty but the fetch for
   // it has not been issued yet, so treat it as loading instead of "no results".
@@ -90,14 +117,16 @@ const SearchResults = memo<SearchResultsProps>(({ libraryId, query }) => {
       error={error}
       errorVariant={'block'}
       isEmpty={rows.length === 0}
-      isLoading={isLoading || isWaitingForDebounce}
+      isLoading={(isLoading && !data) || isWaitingForDebounce}
       loading={<TreeSkeleton />}
       onRetry={() => mutate()}
     >
       <Flexbox paddingInline={4} style={{ height: '100%' }}>
         <VList
           bufferSize={typeof window !== 'undefined' ? window.innerHeight : 0}
+          ref={listRef}
           style={{ height: '100%' }}
+          onScroll={handleScroll}
         >
           {rows.map(({ item, parentKey }) => (
             <div key={item.id} style={{ paddingBottom: 2 }}>
@@ -112,6 +141,11 @@ const SearchResults = memo<SearchResultsProps>(({ libraryId, query }) => {
               />
             </div>
           ))}
+          {isLoadingMore && (
+            <div key={'__loading_more__'} style={{ paddingBottom: 2 }}>
+              <TreeSkeleton count={3} />
+            </div>
+          )}
         </VList>
       </Flexbox>
     </AsyncBoundary>
