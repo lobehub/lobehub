@@ -29,7 +29,7 @@
     "ws": "^8.21.0"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.3.16",
+    "@electric-sql/pglite": "^0.5.8",
     "@lobechat/heterogeneous-agents": "workspace:*",
     "dotenv": "^17.4.2",
     "fake-indexeddb": "^6.2.5"
