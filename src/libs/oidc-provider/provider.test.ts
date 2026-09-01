@@ -174,6 +174,16 @@ describe('OIDC Provider - Market Client Integration', () => {
         'https://app.lobehub.com',
       );
       expect(resolveAppOrigin(new Headers())).toBe('https://app.lobehub.com');
+      expect(resolveAppOrigin(new Headers({ host: 'not a host' }))).toBe('https://app.lobehub.com');
+    });
+
+    it('should normalize host casing and ignore an empty forwarded host', async () => {
+      const { resolveAppOrigin } = await importWithAppUrl('https://app.lobehub.com');
+
+      expect(resolveAppOrigin(new Headers({ host: 'LobeHub.com' }))).toBe('https://lobehub.com');
+      expect(resolveAppOrigin(new Headers({ 'host': 'lobehub.com', 'x-forwarded-host': '' }))).toBe(
+        'https://lobehub.com',
+      );
     });
 
     it('should only allow the configured origin for self-hosted deployments', async () => {

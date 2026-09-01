@@ -10,7 +10,7 @@ const desktopAppOrigins = cloudAppOrigins.includes(new URL(appUrl).origin)
   : [appUrl];
 const marketBaseUrl = new URL(appEnv.MARKET_BASE_URL ?? 'https://market.lobehub.com').origin;
 
-export const allowedAppOrigins = desktopAppOrigins.map((origin) => new URL(origin).origin);
+const allowedAppOrigins = desktopAppOrigins.map((origin) => new URL(origin).origin);
 
 /**
  * The apex migration serves the same deployment on two origins, so a redirect must stay on the
@@ -18,13 +18,17 @@ export const allowedAppOrigins = desktopAppOrigins.map((origin) => new URL(origi
  */
 export const resolveAppOrigin = (headers: Headers): string => {
   const fallback = new URL(appUrl).origin;
-  const host = (headers.get('x-forwarded-host') ?? headers.get('host'))?.split(',')[0].trim();
+  const host = (headers.get('x-forwarded-host') || headers.get('host'))?.split(',')[0].trim();
   if (!host) return fallback;
 
-  const protocol = headers.get('x-forwarded-proto')?.split(',')[0].trim() ?? 'https';
-  const origin = `${protocol}://${host}`;
+  const protocol = headers.get('x-forwarded-proto')?.split(',')[0].trim() || 'https';
 
-  return allowedAppOrigins.includes(origin) ? origin : fallback;
+  try {
+    const origin = new URL(`${protocol}://${host}`).origin;
+    return allowedAppOrigins.includes(origin) ? origin : fallback;
+  } catch {
+    return fallback;
+  }
 };
 
 /**
