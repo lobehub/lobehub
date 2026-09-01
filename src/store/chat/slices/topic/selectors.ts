@@ -231,7 +231,25 @@ const displayTopicsForSidebar =
     // Favorites first, then sorted by the chosen timestamp, then page-sliced
     const favTopics = visibleTopics.filter((t) => t.favorite);
     const rest = visibleTopics.filter((t) => !t.favorite);
-    return [...sortTopics(favTopics, sortBy), ...sortTopics(rest, sortBy)].slice(0, pageSize);
+    const pagedTopics = [...sortTopics(favTopics, sortBy), ...sortTopics(rest, sortBy)].slice(
+      0,
+      pageSize,
+    );
+    const activeTopic = currentActiveTopic(s);
+
+    // A search result or direct URL can open a topic outside the sidebar's
+    // first page (or an archived topic excluded by the completed filter). Keep
+    // the configured page intact and append that one active row so selection
+    // never disappears merely because the route target was filtered out.
+    if (
+      activeTopic &&
+      activeTopic.trigger !== 'cron' &&
+      !pagedTopics.some((topic) => topic.id === activeTopic.id)
+    ) {
+      return [...pagedTopics, activeTopic];
+    }
+
+    return pagedTopics;
   };
 
 const getGroupFn = (
