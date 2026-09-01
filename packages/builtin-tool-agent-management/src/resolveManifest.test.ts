@@ -50,9 +50,24 @@ describe('systemPromptWithoutCallAgent', () => {
       /<subagent_context>[\S\s]*?<\/subagent_context>/,
       '',
     );
-    expect(withoutNote).not.toContain('callAgent');
-    expect(withoutNote).not.toContain('execution_guide');
-    expect(withoutNote).not.toContain('Calling Agents');
+    // Not just the API name — natural-language dispatch instructions
+    // ("call the agent", "test with sample tasks") must go too, since testing
+    // or calling an agent is exactly what a sub-agent cannot do.
+    for (const phrase of [
+      'callAgent',
+      'Call agent',
+      'Call the agent',
+      'call it',
+      'Calling Agents',
+      'When calling agents',
+      'Before calling an agent',
+      'Test the agent',
+      'Test with sample',
+      'Test and Iterate',
+      'execution_guide',
+    ]) {
+      expect(withoutNote).not.toContain(phrase);
+    }
   });
 
   it('keeps the non-dispatch guidance intact', () => {

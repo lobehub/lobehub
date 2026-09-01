@@ -12,8 +12,15 @@
  */
 
 interface WorkflowPattern {
+  /** Pattern only makes sense when the model can dispatch/run agents. */
   requiresCallAgent?: boolean;
   steps: string[];
+  /**
+   * Replacement steps for the no-callAgent variant. Needed when only part of
+   * the pattern depends on dispatching (e.g. a final "call/test the agent"
+   * step) — the rest of the workflow is still valid for a sub-agent.
+   */
+  stepsWithoutCallAgent?: string[];
   title: string;
 }
 
@@ -24,9 +31,15 @@ const workflowPatterns: WorkflowPattern[] = [
       'Create agent with complete configuration (title, systemRole, model, provider, plugins)',
       'Test the agent with sample tasks',
     ],
+    stepsWithoutCallAgent: [
+      'Review available models and plugins from injected context',
+      'Create agent with complete configuration (title, systemRole, model, provider, plugins)',
+    ],
     title: 'Create with Full Configuration',
   },
   {
+    // Create → test → refine is a dispatch loop end to end; drop it entirely.
+    requiresCallAgent: true,
     steps: [
       'Create agent with basic configuration (title, systemRole, model, provider)',
       'Test with sample tasks',
@@ -57,6 +70,10 @@ const workflowPatterns: WorkflowPattern[] = [
       "Use getAgentDetail to inspect an agent's current configuration",
       'Decide whether to call it, update it, or duplicate it based on the details',
     ],
+    stepsWithoutCallAgent: [
+      "Use getAgentDetail to inspect an agent's current configuration",
+      'Decide whether to update it or duplicate it based on the details',
+    ],
     title: 'Inspect and Decide',
   },
   {
@@ -73,6 +90,10 @@ const workflowPatterns: WorkflowPattern[] = [
       'Use installPlugin to add necessary tools/integrations',
       'Call the agent with instructions that leverage the installed plugins',
     ],
+    stepsWithoutCallAgent: [
+      'Create or select an agent',
+      'Use installPlugin to add necessary tools/integrations',
+    ],
     title: 'Equip with Plugins',
   },
 ];
@@ -80,13 +101,51 @@ const workflowPatterns: WorkflowPattern[] = [
 const buildWorkflowPatterns = (includeCallAgent: boolean) =>
   workflowPatterns
     .filter((pattern) => includeCallAgent || !pattern.requiresCallAgent)
-    .map(
-      (pattern, index) =>
-        `### Pattern ${index + 1}: ${pattern.title}\n${pattern.steps
-          .map((step, stepIndex) => `${stepIndex + 1}. ${step}`)
-          .join('\n')}`,
-    )
+    .map((pattern, index) => {
+      const steps =
+        includeCallAgent || !pattern.stepsWithoutCallAgent
+          ? pattern.steps
+          : pattern.stepsWithoutCallAgent;
+      return `### Pattern ${index + 1}: ${pattern.title}\n${steps
+        .map((step, stepIndex) => `${stepIndex + 1}. ${step}`)
+        .join('\n')}`;
+    })
     .join('\n\n');
+
+const bestPractices: { requiresCallAgent?: boolean; text: string }[] = [
+  {
+    text: '**Use Context Information**: Always refer to the injected context for accurate model IDs, provider IDs, and plugin IDs',
+  },
+  {
+    text: '**Specify Model AND Provider**: When setting a model, always specify both `model` and `provider` together',
+  },
+  {
+    text: '**Start with Essential Config**: Begin with title, systemRole, model, and provider. Add plugins and other settings as needed',
+  },
+  {
+    requiresCallAgent: true,
+    text: '**Clear Instructions**: When calling agents, be specific about expected outcomes and deliverables',
+  },
+  {
+    text: '**Right Tool for the Job**: Match agent capabilities (model, plugins) to task requirements',
+  },
+  {
+    text: '**Meaningful Metadata**: Use descriptive titles, tags, and descriptions for easy discovery',
+  },
+  {
+    requiresCallAgent: true,
+    text: '**Test and Iterate**: Test agents with sample tasks and refine configuration based on actual usage',
+  },
+  {
+    text: "**Plugin Selection**: Only enable plugins that are relevant to the agent's purpose to avoid unnecessary overhead",
+  },
+];
+
+const buildBestPractices = (includeCallAgent: boolean) =>
+  bestPractices
+    .filter((practice) => includeCallAgent || !practice.requiresCallAgent)
+    .map((practice, index) => `${index + 1}. ${practice.text}`)
+    .join('\n');
 
 const executionGuideSection = `
 
@@ -385,13 +444,7 @@ Do NOT render a card when calling \`getAgentDetail\`, \`updateAgent\`, \`updateP
 <best_practices>
 ## Best Practices
 
-1. **Use Context Information**: Always refer to the injected context for accurate model IDs, provider IDs, and plugin IDs
-2. **Specify Model AND Provider**: When setting a model, always specify both \`model\` and \`provider\` together
-3. **Start with Essential Config**: Begin with title, systemRole, model, and provider. Add plugins and other settings as needed
-${includeCallAgent ? '4. **Clear Instructions**: When calling agents, be specific about expected outcomes and deliverables\n5' : '4'}. **Right Tool for the Job**: Match agent capabilities (model, plugins) to task requirements
-${includeCallAgent ? '6' : '5'}. **Meaningful Metadata**: Use descriptive titles, tags, and descriptions for easy discovery
-${includeCallAgent ? '7' : '6'}. **Test and Iterate**: Test agents with sample tasks and refine configuration based on actual usage
-${includeCallAgent ? '8' : '7'}. **Plugin Selection**: Only enable plugins that are relevant to the agent's purpose to avoid unnecessary overhead
+${buildBestPractices(includeCallAgent)}
 </best_practices>`;
 
 export const systemPrompt = buildSystemPrompt({ includeCallAgent: true });
