@@ -156,10 +156,8 @@ describe('check reject modal presentation', () => {
     const text = checkRejectModalShell(0);
     const media = checkRejectModalShell(1);
 
-    expect(text.styles.popup?.height).toBeUndefined();
-    expect(text.styles.popup?.maxWidth).toBeUndefined();
-    expect(media.styles.popup?.height).toBeUndefined();
-    expect(media.styles.popup?.maxWidth).toBeUndefined();
+    expect(Object.hasOwn(text.styles, 'popup')).toBe(false);
+    expect(Object.hasOwn(media.styles, 'popup')).toBe(false);
     expect(text.width).toBe(TEXT_REJECT_MODAL_WIDTH);
     expect(media.width).toBe(CHECK_REJECT_MODAL_SIZE.width);
     expect(media.classNames.popup).not.toBe(text.classNames.popup);
@@ -167,10 +165,10 @@ describe('check reject modal presentation', () => {
 
   it('does not restyle header or content inset, so title and body share the modal padding', () => {
     const shell = checkRejectModalShell(0);
-    expect(shell.styles.header).toBeUndefined();
-    expect(shell.styles.content?.padding).toBeUndefined();
-    expect(shell.styles.content?.paddingInline).toBeUndefined();
-    expect(shell.styles.content?.paddingBlock).toBeUndefined();
+    expect(Object.hasOwn(shell.styles, 'header')).toBe(false);
+    expect(Object.hasOwn(shell.styles.content, 'padding')).toBe(false);
+    expect(Object.hasOwn(shell.styles.content, 'paddingInline')).toBe(false);
+    expect(Object.hasOwn(shell.styles.content, 'paddingBlock')).toBe(false);
   });
 
   it('shows the acceptance item description below its title', () => {
