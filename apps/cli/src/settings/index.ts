@@ -23,6 +23,11 @@ const CONNECTION_ID_FILE = path.join(SETTINGS_DIR, 'connection-id');
 // `enrollWorkspace` RPC. Persisted so a daemon/process restart can re-open the
 // workspace share connections without the user re-sharing from the web UI.
 const WORKSPACE_ENROLLMENTS_FILE = path.join(SETTINGS_DIR, 'workspace-enrollments.json');
+// The workspace scope every command runs under, set by `lh workspace use`. Kept
+// out of settings.json for the same reason as connection-id: that file is
+// unlinked whenever all URLs are default, which would silently drop the scope.
+const ACTIVE_WORKSPACE_FILE = path.join(SETTINGS_DIR, 'active-workspace');
+const WORKSPACE_ID_PATTERN = /^[\w-]{1,64}$/;
 
 export function normalizeUrl(url: string | undefined): string | undefined {
   return url ? url.replace(/\/$/, '') : undefined;
@@ -131,6 +136,39 @@ export function removeWorkspaceEnrollment(workspaceId: string): void {
   const current = loadWorkspaceEnrollments();
   if (!current.includes(workspaceId)) return;
   saveWorkspaceEnrollments(current.filter((id) => id !== workspaceId));
+}
+
+/**
+ * The workspace scope persisted by `lh workspace use`. Lower priority than the
+ * `LOBEHUB_WORKSPACE_ID` env var, so a one-off invocation can still override the
+ * machine-wide default without rewriting it.
+ */
+export function loadActiveWorkspaceId(): string | undefined {
+  try {
+    const stored = fs.readFileSync(ACTIVE_WORKSPACE_FILE, 'utf8').trim();
+    // A garbage value would be sent as `X-Workspace-Id` on every request and
+    // fail each one with an opaque server error, so anything that isn't
+    // id-shaped is treated as a corrupt file and ignored.
+    return WORKSPACE_ID_PATTERN.test(stored) ? stored : undefined;
+  } catch {
+    // not yet created or unreadable — personal scope
+    return undefined;
+  }
+}
+
+/** Persist the active workspace scope; pass `null` to fall back to personal. */
+export function saveActiveWorkspaceId(workspaceId: string | null): void {
+  if (!workspaceId) {
+    try {
+      fs.unlinkSync(ACTIVE_WORKSPACE_FILE);
+    } catch (error) {
+      log.debug('No active workspace file to remove', error);
+    }
+    return;
+  }
+
+  fs.mkdirSync(SETTINGS_DIR, { mode: 0o700, recursive: true });
+  fs.writeFileSync(ACTIVE_WORKSPACE_FILE, workspaceId, { mode: 0o600 });
 }
 
 export function loadSettings(): StoredSettings | null {

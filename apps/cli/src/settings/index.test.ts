@@ -4,17 +4,22 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { resolveCliDirName } from '../constants/identity';
 import { log } from '../utils/logger';
 import {
+  loadActiveWorkspaceId,
   loadOrCreateConnectionId,
   loadSettings,
   normalizeUrl,
   resolveServerUrl,
+  saveActiveWorkspaceId,
   saveSettings,
 } from './index';
 
 const tmpDir = path.join(os.tmpdir(), 'lobehub-cli-test-settings');
-const settingsDir = path.join(tmpDir, '.lobehub');
+// The shared test setup redirects the CLI home via `LOBEHUB_CLI_HOME`, so the
+// directory under the stubbed homedir is not the default `.lobehub`.
+const settingsDir = path.join(tmpDir, resolveCliDirName());
 const settingsFile = path.join(settingsDir, 'settings.json');
 const originalServer = process.env.LOBEHUB_SERVER;
 
@@ -90,6 +95,26 @@ describe('settings', () => {
     fs.unlinkSync(settingsFile);
 
     expect(resolveServerUrl()).toBe('https://app.lobehub.com');
+  });
+
+  it('should persist the active workspace and clear it back to personal', () => {
+    saveActiveWorkspaceId('ws_abc123');
+
+    expect(loadActiveWorkspaceId()).toBe('ws_abc123');
+    // Kept out of settings.json, which is unlinked whenever all URLs default.
+    expect(fs.existsSync(path.join(settingsDir, 'active-workspace'))).toBe(true);
+
+    saveActiveWorkspaceId(null);
+
+    expect(loadActiveWorkspaceId()).toBeUndefined();
+    expect(fs.existsSync(path.join(settingsDir, 'active-workspace'))).toBe(false);
+  });
+
+  it('should ignore a corrupt active-workspace file instead of scoping to garbage', () => {
+    fs.mkdirSync(settingsDir, { recursive: true });
+    fs.writeFileSync(path.join(settingsDir, 'active-workspace'), 'not an id\n{"a":1}');
+
+    expect(loadActiveWorkspaceId()).toBeUndefined();
   });
 
   it('should create a connectionId once and reuse it across calls', () => {

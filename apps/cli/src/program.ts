@@ -38,6 +38,7 @@ import { registerUpdateCommand } from './commands/update';
 import { registerUserCommand } from './commands/user';
 import { registerVerifyCommand } from './commands/verify';
 import { registerAcceptanceCommands } from './commands/verifyAcceptance';
+import { registerWorkspaceCommand } from './commands/workspace';
 import { CLI_DISPLAY_NAME, CLI_PRIMARY_BIN, CLI_PRODUCT_NAME } from './constants/identity';
 import { cliVersion } from './pkg';
 import { executeToolCall } from './tools';
@@ -102,6 +103,7 @@ export function createProgram() {
   registerProviderCommand(program);
   registerProjectCommand(program);
   registerPluginCommand(program);
+  registerWorkspaceCommand(program);
   registerUserCommand(program);
   registerVerifyCommand(program);
   // First-class review-loop entry: `lh acceptance list|view|feedback|accept|reject`.

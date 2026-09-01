@@ -13,6 +13,7 @@ vi.mock('../auth/refresh', () => ({
 }));
 
 vi.mock('../settings', () => ({
+  loadActiveWorkspaceId: () => undefined,
   resolveServerUrl: () => 'https://app.lobehub.com',
 }));
 
