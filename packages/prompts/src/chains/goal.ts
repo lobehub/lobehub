@@ -65,7 +65,7 @@ export const GOAL_CRITERIA_DRAFT_JSON_SCHEMA = {
 };
 
 /** Bump when the goal decomposition planning prompt meaningfully changes. */
-export const GOAL_DECOMPOSE_PROMPT_VERSION = 'v1';
+export const GOAL_DECOMPOSE_PROMPT_VERSION = 'v2';
 
 export const GOAL_DECOMPOSE_JSON_SCHEMA = {
   name: 'goal_decomposition',
@@ -77,10 +77,11 @@ export const GOAL_DECOMPOSE_JSON_SCHEMA = {
         items: {
           additionalProperties: false,
           properties: {
+            dependsOn: { items: { minimum: 0, type: 'integer' }, type: 'array' },
             instruction: { minLength: 1, type: 'string' },
             title: { maxLength: 80, minLength: 1, type: 'string' },
           },
-          required: ['title', 'instruction'],
+          required: ['title', 'instruction', 'dependsOn'],
           type: 'object',
         },
         maxItems: 5,
@@ -119,6 +120,7 @@ export const chainGoalDecompose = ({
         '- Each work.instruction is a complete, self-contained brief for an autonomous agent working on that direction only: what to do, the concrete deliverable, and how that deliverable will be judged. Include only the requirements relevant to this direction — never paste the full goal acceptance list into every work.',
         '- Preserve every concrete URL, scope, constraint, and numeric threshold from the goal in whichever work it belongs to.',
         '- Order works so that earlier ones produce what later ones consume.',
+        '- For each work, set dependsOn to the 0-based indices of the earlier works whose outputs it consumes; use [] for a work that can start immediately. A pipeline-shaped goal (gather → analyze → synthesize) must express those edges — do not mark every work independent — but never invent a dependency the work does not actually need.',
         '- Write all fields in the language used by the goal.',
       ].join('\n'),
       role: 'system',

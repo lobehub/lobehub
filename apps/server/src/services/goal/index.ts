@@ -30,7 +30,7 @@ import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRunt
 import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
 import { AcceptanceService } from '../verify/acceptanceService';
-import { GoalCriteriaGeneratorService } from './criteriaGenerator';
+import { GoalCriteriaGeneratorService, type GoalDecompositionDraft } from './criteriaGenerator';
 import {
   decideNextMove,
   frontierNeedsBudget,
@@ -1083,7 +1083,7 @@ export class GoalService {
     const generator = new GoalCriteriaGeneratorService(this.db, this.userId, this.workspaceId);
     const plan = await generator.decompose({ requirement }).catch(() => undefined);
 
-    const works = plan?.works ?? [
+    const works: GoalDecompositionDraft['works'] = plan?.works ?? [
       { instruction: problem?.description ?? requirement, title: graph.goal.title },
     ];
 
@@ -1093,16 +1093,32 @@ export class GoalService {
       await this.coordinatorGraph.updateNodeDescription(goalId, problem.id, plan.problemStatement);
     }
 
+    const createdIds: (string | undefined)[] = [];
     for (const work of works) {
       const node = await this.coordinatorGraph.createNode(goalId, {
         description: work.instruction,
         kind: 'task',
         title: work.title,
       });
+      createdIds.push(node?.id);
       if (!node) continue;
       if (problem)
         await this.coordinatorGraph.createEdge(goalId, problem.id, node.id, 'decomposes');
       effects.push({ nodeId: node.id, type: 'created_node', detail: work.title });
+    }
+
+    // The planner's `dependsOn` indices become `depends_on` edges, drawn
+    // dependent → prerequisite the way `decideNextMove` reads a blocker. Only
+    // earlier indices are honoured, so a hallucinated forward or self reference
+    // can never form a cycle that deadlocks the frontier.
+    for (const [index, work] of works.entries()) {
+      const nodeId = createdIds[index];
+      if (!nodeId) continue;
+      for (const dep of new Set(work.dependsOn ?? [])) {
+        const prerequisiteId = dep < index ? createdIds[dep] : undefined;
+        if (!prerequisiteId) continue;
+        await this.coordinatorGraph.createEdge(goalId, nodeId, prerequisiteId, 'depends_on');
+      }
     }
 
     return {

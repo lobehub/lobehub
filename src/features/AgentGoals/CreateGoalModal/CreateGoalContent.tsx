@@ -449,13 +449,11 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
         requirement: buildGoalRequirement(title, reviewedCriteria, budget.requirement),
         title,
       });
-      // `goal.create` already queued an advance; this runs the same driver so
-      // the goal is visibly moving by the time the modal closes even where the
-      // queue is unavailable. It must be `advance`, not a single tick: whichever
-      // driver claims the Work has to carry it past binding the task into
-      // actually starting it, and the loser stops at `waiting_external`.
-      await goalService.advance(graph.goal.id);
-
+      // `goal.create` already queued the first advance server-side. Awaiting a
+      // second one here held the modal open through the whole decomposition
+      // (and raced the queued run into double-planning); instead hand the user
+      // the goal page immediately — it polls while the goal is `planning` and
+      // grows the exploration graph in place.
       close();
       onCreated?.({ agentId: graph.goal.agentId ?? undefined, goalId: graph.goal.id });
     } catch (error) {

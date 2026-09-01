@@ -1826,6 +1826,9 @@ export default {
     'Every task is either waiting on a dependency or already finished.',
   'goalProcess.frontier.achievedTitle': 'Nothing left to advance — this goal is achieved',
   'goalProcess.frontier.achievedDescription': 'The findings are in the map below.',
+  'goalProcess.planning.title': 'Planning the exploration',
+  'goalProcess.planning.description':
+    'The coordinator is breaking the goal into executable tasks — they will appear here shortly.',
   'goalProcess.tag.needsDecision': 'Needs your decision',
   'goalProcess.tag.lost': 'Lost',
   'goalProcess.tag.done': 'Done',
@@ -1920,6 +1923,7 @@ export default {
   'goalProcess.metrics.findings': 'Findings',
   'goalProcess.requirement': 'What counts as done',
   'goalProcess.node.answered': 'Answered by a finding',
+  'goalProcess.node.generating': 'Generating…',
   'goalProcess.node.unassigned': 'Not dispatched',
   'goalProcess.node.decidedByYou': 'You decided',
   'goalProcess.node.decidedByAgent': 'Agent decided',

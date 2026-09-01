@@ -84,6 +84,11 @@ const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
   if (!graph || graph.nodes.length === 0) return null;
 
   const paused = graph.goal.status === 'paused';
+  // Freshly created: the coordinator is still decomposing the problem into
+  // tasks. The surfaces below promise the incoming structure instead of
+  // reading as an empty goal — the graph poll fills them in as nodes land.
+  const planning =
+    graph.goal.status === 'planning' && !graph.nodes.some((view) => view.node.kind === 'task');
   // A closed goal cannot move: the coordinator returns immediately for these,
   // and a Work added here would sit `proposed` forever. Stop offering actions
   // that cannot land. The goal otherwise advances entirely on its own — the
@@ -111,10 +116,16 @@ const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
           )}
         </Flexbox>
 
-        <Frontier actions={actions} canEdit={canAct} graph={graph} onSelect={select} />
+        <Frontier
+          actions={actions}
+          canEdit={canAct}
+          graph={graph}
+          planning={planning}
+          onSelect={select}
+        />
       </Flexbox>
 
-      <Graph graph={graph} selectedId={selectedId} onSelect={select} />
+      <Graph graph={graph} planning={planning} selectedId={selectedId} onSelect={select} />
 
       <Accordion defaultExpandedKeys={['findings', 'activity']} gap={0}>
         <AccordionItem

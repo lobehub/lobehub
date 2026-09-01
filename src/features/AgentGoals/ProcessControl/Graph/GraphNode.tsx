@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
+import { shinyTextStyles } from '@/styles';
 
 import type { GoalNodeView } from '../goalGraphViewModel';
 import { KIND_COLOR, KIND_ICON } from '../shared';
@@ -35,7 +36,7 @@ const styles = createStaticStyles(({ css }) => ({
   card: css`
     box-sizing: border-box;
     width: 100%;
-    border: 1px solid ${cssVar.colorBorderSecondary};
+    border: 1px solid ${cssVar.colorBorder};
     border-radius: ${cssVar.borderRadiusLG};
 
     background: ${cssVar.colorBgContainer};
@@ -71,6 +72,30 @@ const styles = createStaticStyles(({ css }) => ({
   gate: css`
     border-color: ${cssVar.colorWarningBorder};
     background: ${cssVar.colorWarningBg};
+  `,
+  ghost: css`
+    border-style: dashed;
+  `,
+  ghostBar: css`
+    height: 8px;
+    border-radius: 4px;
+    background: ${cssVar.colorFillSecondary};
+    animation: goal-ghost-pulse 1.6s ease-in-out infinite;
+
+    @keyframes goal-ghost-pulse {
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.4;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+    }
   `,
   glyph: css`
     display: flex;
@@ -144,7 +169,7 @@ const styles = createStaticStyles(({ css }) => ({
     overflow: hidden;
 
     font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
+    color: ${cssVar.colorTextSecondary};
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
@@ -152,6 +177,7 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 13px;
     font-weight: 500;
     line-height: 1.35;
+    color: ${cssVar.colorText};
   `,
 }));
 
@@ -206,7 +232,9 @@ const useStateChip = (data: GraphNodeData): StateChip | null => {
   // so "not dispatched" no longer hides in the metric strip.
   if (node.kind === 'task')
     return {
-      color: TASK_STATUS_VISUALS.backlog.color,
+      // The global backlog visual is quaternary — on a light canvas the card's
+      // only status line would all but disappear, so lift it one step here.
+      color: cssVar.colorTextTertiary,
       icon: TASK_STATUS_VISUALS.backlog.icon,
       text: node.taskId
         ? t(`goalProcess.nodeStatus.${node.status}` as const)
@@ -326,5 +354,43 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
 });
 
 GraphNodeView.displayName = 'GoalGraphNodeView';
+
+/**
+ * A placeholder card shown while the coordinator is still decomposing the goal:
+ * same silhouette as a task node, dashed and pulsing, so the map promises the
+ * structure that is about to arrive instead of sitting empty.
+ */
+export const GhostNodeView = memo(() => {
+  const { t } = useTranslation('chat');
+  return (
+    <div style={{ position: 'relative' }}>
+      <Handle
+        className={styles.handle}
+        isConnectable={false}
+        position={Position.Top}
+        type={'target'}
+      />
+      <div className={cx(styles.card, styles.ghost)}>
+        <div className={styles.head}>
+          <div
+            className={styles.glyph}
+            style={{ background: KIND_COLOR.task.soft, color: KIND_COLOR.task.line }}
+          >
+            <Icon icon={KIND_ICON.task} size={16} />
+          </div>
+          <Flexbox gap={7} style={{ flex: 1, minWidth: 0, paddingBlockStart: 1 }}>
+            <span className={cx(styles.title, shinyTextStyles.shinyText)}>
+              {t('goalProcess.node.generating')}
+            </span>
+            <span className={styles.ghostBar} style={{ width: '84%' }} />
+            <span className={styles.ghostBar} style={{ width: '56%' }} />
+          </Flexbox>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+GhostNodeView.displayName = 'GoalGraphGhostNodeView';
 
 export default GraphNodeView;

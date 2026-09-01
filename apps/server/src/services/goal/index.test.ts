@@ -220,8 +220,10 @@ describe('GoalService', () => {
     vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
       problemStatement: '核心问题的一句话陈述',
       works: [
-        { instruction: '收集原始材料', title: '方向A:收集' },
-        { instruction: '分析并综合结论', title: '方向B:分析' },
+        { dependsOn: [], instruction: '收集原始材料', title: '方向A:收集' },
+        { dependsOn: [0], instruction: '分析并综合结论', title: '方向B:分析' },
+        // Self and forward references are planner hallucinations — dropped.
+        { dependsOn: [1, 2, 9], instruction: '汇编最终报告', title: '方向C:汇编' },
       ],
     });
     const service = new GoalService(serverDB, userId);
@@ -241,9 +243,24 @@ describe('GoalService', () => {
     expect(after.nodes.filter((n) => n.kind === 'task').map((n) => n.title)).toEqual([
       '方向A:收集',
       '方向B:分析',
+      '方向C:汇编',
     ]);
     expect(after.nodes.find((n) => n.kind === 'problem')?.description).toBe('核心问题的一句话陈述');
-    expect(after.edges.filter((e) => e.kind === 'decomposes')).toHaveLength(2);
+    expect(after.edges.filter((e) => e.kind === 'decomposes')).toHaveLength(3);
+
+    // The planner's dependsOn indices become depends_on edges, dependent →
+    // prerequisite; the self and forward references were dropped.
+    const byTitle = new Map(after.nodes.map((n) => [n.title, n.id]));
+    const deps = after.edges
+      .filter((e) => e.kind === 'depends_on')
+      .map((e) => [e.sourceNodeId, e.targetNodeId]);
+    expect(deps).toHaveLength(2);
+    expect(deps).toEqual(
+      expect.arrayContaining([
+        [byTitle.get('方向B:分析'), byTitle.get('方向A:收集')],
+        [byTitle.get('方向C:汇编'), byTitle.get('方向B:分析')],
+      ]),
+    );
   });
 
   it('falls back to a single work when the planner fails, instead of stalling', async () => {

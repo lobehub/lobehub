@@ -111,6 +111,8 @@ interface FrontierProps {
   canEdit: boolean;
   graph: GoalGraphView;
   onSelect: (nodeId: string) => void;
+  /** The coordinator is still decomposing — the empty list is a promise, not a lull. */
+  planning?: boolean;
 }
 
 /** Server option ids are stable; their labels are English strings from the coordinator. */
@@ -449,7 +451,7 @@ const AddTaskRow = memo<{ onAdd: (title: string) => Promise<void> }>(({ onAdd })
 
 AddTaskRow.displayName = 'GoalAddTaskRow';
 
-const Frontier = memo<FrontierProps>(({ actions, canEdit, graph, onSelect }) => {
+const Frontier = memo<FrontierProps>(({ actions, canEdit, graph, onSelect, planning }) => {
   const { t } = useTranslation('chat');
   const [showBlocked, setShowBlocked] = useState(false);
 
@@ -479,20 +481,31 @@ const Frontier = memo<FrontierProps>(({ actions, canEdit, graph, onSelect }) => 
 
       <div className={styles.list}>
         <Block gap={0} padding={2} variant={'borderless'}>
-          {graph.frontier.length === 0 && (
-            <Flexbox gap={2} padding={12}>
-              <Text weight={500}>
-                {achieved
-                  ? t('goalProcess.frontier.achievedTitle')
-                  : t('goalProcess.frontier.emptyTitle')}
-              </Text>
-              <Text fontSize={12} type={'secondary'}>
-                {achieved
-                  ? t('goalProcess.frontier.achievedDescription')
-                  : t('goalProcess.frontier.emptyDescription')}
-              </Text>
-            </Flexbox>
-          )}
+          {graph.frontier.length === 0 &&
+            (planning ? (
+              <Flexbox horizontal align={'center'} gap={10} padding={12}>
+                <RunningGlyph size={16} />
+                <Flexbox gap={2}>
+                  <Text weight={500}>{t('goalProcess.planning.title')}</Text>
+                  <Text fontSize={12} type={'secondary'}>
+                    {t('goalProcess.planning.description')}
+                  </Text>
+                </Flexbox>
+              </Flexbox>
+            ) : (
+              <Flexbox gap={2} padding={12}>
+                <Text weight={500}>
+                  {achieved
+                    ? t('goalProcess.frontier.achievedTitle')
+                    : t('goalProcess.frontier.emptyTitle')}
+                </Text>
+                <Text fontSize={12} type={'secondary'}>
+                  {achieved
+                    ? t('goalProcess.frontier.achievedDescription')
+                    : t('goalProcess.frontier.emptyDescription')}
+                </Text>
+              </Flexbox>
+            ))}
           {graph.frontier.map((item, index) => (
             <Fragment key={item.key}>
               {index > 0 && <Divider dashed style={{ margin: 0 }} />}
