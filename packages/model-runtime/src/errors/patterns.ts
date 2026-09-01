@@ -1101,6 +1101,11 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('Request body too large for') },
   {
     code: AgentRuntimeErrorType.InvalidRequestFormat,
+    match: sub('the size of the input video'),
+    note: 'Ark measures a fetched video_url against its own ceiling and rejects it before inference; see lobehub/lobehub#13881',
+  },
+  {
+    code: AgentRuntimeErrorType.InvalidRequestFormat,
     match: sub('error getting file type: failed to download file'),
   },
   {
