@@ -238,13 +238,13 @@ To get it: open Slack in the browser; the URL contains the team ID (`https://app
 
 Two independent policies gate inbound traffic. Both default to **Open**.
 
-### Allowed User IDs (global)
+### Allowed User IDs
 
-A populated **Allowed User IDs** field is a global gate — DMs *and* channel `@mentions` are restricted to listed Slack member IDs. Empty means "no user-level filter". Open a user's profile → click `⋮` → **Copy member ID** (starts with `U`).
+**Allowed User IDs** is the approved-user list used by DM **Allowlist** and **Pairing** policies. **Open** ignores it, and channel `@mentions` are controlled independently by **Group Policy**. Open a user's profile → click `⋮` → **Copy member ID** (starts with `U`).
 
 ### DM Policy
 
-- **Open (default)** — Any workspace member can DM the bot (subject to the global allowlist when set).
+- **Open (default)** — Any workspace member can DM the bot. **Allowed User IDs** is ignored.
 - **Allowlist** — DMs require the sender to be in **Allowed User IDs**. Differs from `Open` only when the list is empty: `Allowlist` then fails closed (no DMs).
 - **Pairing** — Same gate as `Allowlist`, but a non-listed sender receives a one-time pairing code instead of a flat rejection. Approve via `/approve <code>` and the applicant is auto-appended to **Allowed User IDs**. Requires **Your Platform User ID** to be set (the runtime checks the `/approve` sender against it) and a configured Redis backend.
 - **Disabled** — The bot ignores all DMs and only replies to channel `@mentions`.
@@ -268,7 +268,7 @@ See the [Channels overview](/docs/usage/channels/overview#direct-message-policy)
 | **Signing Secret**      | Yes              | Used to verify requests from Slack                                                                     |
 | **App-Level Token**     | Socket Mode only | App-level token (`xapp-...`) for WebSocket connection                                                  |
 | **Connection Mode**     | No               | `websocket` or `webhook` (default: `webhook`)                                                          |
-| **Allowed User IDs**    | No               | Comma- or whitespace-separated Slack member IDs. Global gate — applies to DMs and channel @mentions    |
+| **Allowed User IDs**    | No               | Slack member IDs used by DM Allowlist and Pairing policies                                             |
 | **DM Policy**           | No               | `open` (default), `allowlist`, `pairing`, or `disabled` — who is allowed to DM the bot                 |
 | **Group Policy**        | No               | `open` (default), `allowlist`, or `disabled` — where the bot responds to @mentions                     |
 | **Allowed Channel IDs** | No               | Comma- or whitespace-separated Slack channel IDs (start with `C`). Used when Group Policy is Allowlist |

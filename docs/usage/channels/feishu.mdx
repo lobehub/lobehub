@@ -212,13 +212,13 @@ To get it: DM the bot once and inspect the inbound event payload — the `open_i
 
 Two independent policies gate inbound traffic. Both default to **Open**.
 
-### Allowed User IDs (global)
+### Allowed User IDs
 
-A populated **Allowed User IDs** field is a global gate — DMs *and* group `@mentions` are restricted to listed Feishu `open_id` values. Empty means "no user-level filter". Read the `open_id` from the event payload, or copy the **User ID** displayed in the Feishu Developer Portal.
+**Allowed User IDs** is the approved-user list used by DM **Allowlist** and **Pairing** policies. **Open** ignores it, and group `@mentions` are controlled independently by **Group Policy**. Read the `open_id` from the event payload, or copy the **User ID** displayed in the Feishu Developer Portal.
 
 ### DM Policy
 
-- **Open (default)** — Any tenant member can DM the bot (subject to the global allowlist when set).
+- **Open (default)** — Any tenant member can DM the bot. **Allowed User IDs** is ignored.
 - **Allowlist** — DMs require the sender to be in **Allowed User IDs**. Differs from `Open` only when the list is empty: `Allowlist` then fails closed (no DMs).
 - **Pairing** — Same gate as `Allowlist`, but a non-listed sender receives a one-time pairing code instead of a flat rejection. Approve via `/approve <code>` and the applicant is auto-appended to **Allowed User IDs**. Requires **Your Platform User ID** to be set (the runtime checks the `/approve` sender against it) and a configured Redis backend.
 - **Disabled** — The bot ignores all DMs and only responds to chat-group `@mentions`.
@@ -235,18 +235,18 @@ See the [Channels overview](/docs/usage/channels/overview#direct-message-policy)
 
 ## Configuration Reference
 
-| Field                      | Required | Description                                                                                              |
-| -------------------------- | -------- | -------------------------------------------------------------------------------------------------------- |
-| **App ID**                 | Yes      | Your Feishu app's App ID (`cli_xxx`)                                                                     |
-| **App Secret**             | Yes      | Your Feishu app's App Secret                                                                             |
-| **Connection Mode**        | No       | `websocket` (default) or `webhook`. Choose based on whether your app can accept a public webhook URL     |
-| **Verification Token**     | No       | Verifies webhook event source (recommended)                                                              |
-| **Encrypt Key**            | No       | Decrypts encrypted event payloads (Webhook mode only)                                                    |
-| **Event Subscription URL** | —        | Auto-generated after saving in Webhook mode; paste into Feishu Developer Portal                          |
-| **Allowed User IDs**       | No       | Comma- or whitespace-separated Feishu `open_id` values. Global gate — applies to DMs and group @mentions |
-| **DM Policy**              | No       | `open` (default), `allowlist`, `pairing`, or `disabled` — who is allowed to DM the bot                   |
-| **Group Policy**           | No       | `open` (default), `allowlist`, or `disabled` — where the bot responds to @mentions                       |
-| **Allowed Channel IDs**    | No       | Comma- or whitespace-separated Feishu `chat_id` values. Used when Group Policy is Allowlist              |
+| Field                      | Required | Description                                                                                          |
+| -------------------------- | -------- | ---------------------------------------------------------------------------------------------------- |
+| **App ID**                 | Yes      | Your Feishu app's App ID (`cli_xxx`)                                                                 |
+| **App Secret**             | Yes      | Your Feishu app's App Secret                                                                         |
+| **Connection Mode**        | No       | `websocket` (default) or `webhook`. Choose based on whether your app can accept a public webhook URL |
+| **Verification Token**     | No       | Verifies webhook event source (recommended)                                                          |
+| **Encrypt Key**            | No       | Decrypts encrypted event payloads (Webhook mode only)                                                |
+| **Event Subscription URL** | —        | Auto-generated after saving in Webhook mode; paste into Feishu Developer Portal                      |
+| **Allowed User IDs**       | No       | Feishu `open_id` values used by DM Allowlist and Pairing policies                                    |
+| **DM Policy**              | No       | `open` (default), `allowlist`, `pairing`, or `disabled` — who is allowed to DM the bot               |
+| **Group Policy**           | No       | `open` (default), `allowlist`, or `disabled` — where the bot responds to @mentions                   |
+| **Allowed Channel IDs**    | No       | Comma- or whitespace-separated Feishu `chat_id` values. Used when Group Policy is Allowlist          |
 
 ## Troubleshooting
 

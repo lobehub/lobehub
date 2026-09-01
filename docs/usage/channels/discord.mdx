@@ -149,17 +149,15 @@ To get it: with **Developer Mode** on, right-click the server name in your serve
 
 LobeHub gates inbound traffic with three layered settings, all under **Advanced Settings** and all defaulting to permissive.
 
-### Allowed User IDs (global)
+### Allowed User IDs
 
-A *global* user-level gate. When populated, **only** the listed users can interact with the bot — DM, group @mention, threads, all of it — regardless of DM Policy / Group Policy mode. Empty means "no user-level filter; let per-scope policies decide". Right-click a user → **Copy User ID** (Developer Mode must be enabled in **Settings → Advanced**) to grab an ID.
-
-DMs from non-allowlisted users get a "you aren't authorized" notice. Group @mentions from non-allowlisted users get the same kind of notice posted **inside the auto-created reply thread** Discord makes for the @-mention — the parent channel stays quiet.
+The approved-user list used when **DM Policy** is **Allowlist** or **Pairing**. **Open** ignores this list, and group @mentions are controlled independently by **Group Policy**. Right-click a user → **Copy User ID** (Developer Mode must be enabled in **Settings → Advanced**) to grab an ID.
 
 ### DM Policy
 
 Controls 1:1 direct messages.
 
-- **Open (default)** — Anyone who shares a server with the bot can DM it (subject to the global allowlist when set).
+- **Open (default)** — Anyone who shares a server with the bot can DM it. **Allowed User IDs** is ignored.
 - **Allowlist** — DMs require the sender to be in **Allowed User IDs**. Differs from `Open` only when the list is empty: `Allowlist` fails closed (no DMs), `Open` still lets anyone DM.
 - **Pairing** — Same gate as `Allowlist`, but a non-listed sender receives a one-time pairing code instead of a flat rejection. Approve via `/approve <code>` and the applicant is auto-appended to **Allowed User IDs**. Requires **Your Platform User ID** to be set (the runtime checks the `/approve` sender against it) and a configured Redis backend.
 - **Disabled** — The bot ignores all DMs. Senders get a one-line notice pointing them at @mentioning the bot in a shared channel instead.
@@ -180,15 +178,15 @@ See the [Channels overview](/docs/usage/channels/overview#direct-message-policy)
 
 ## Configuration Reference
 
-| Field                   | Required | Description                                                                                       |
-| ----------------------- | -------- | ------------------------------------------------------------------------------------------------- |
-| **Application ID**      | Yes      | Your Discord application's ID                                                                     |
-| **Bot Token**           | Yes      | Authentication token for your Discord bot                                                         |
-| **Public Key**          | Yes      | Used to verify interaction requests from Discord                                                  |
-| **Allowed User IDs**    | No       | Comma- or whitespace-separated Discord user IDs. Global gate — applies to DMs and group @mentions |
-| **DM Policy**           | No       | `open` (default), `allowlist`, `pairing`, or `disabled` — who is allowed to DM the bot            |
-| **Group Policy**        | No       | `open` (default), `allowlist`, or `disabled` — where the bot responds to @mentions                |
-| **Allowed Channel IDs** | No       | Comma- or whitespace-separated Discord channel IDs. Used when Group Policy is Allowlist           |
+| Field                   | Required | Description                                                                             |
+| ----------------------- | -------- | --------------------------------------------------------------------------------------- |
+| **Application ID**      | Yes      | Your Discord application's ID                                                           |
+| **Bot Token**           | Yes      | Authentication token for your Discord bot                                               |
+| **Public Key**          | Yes      | Used to verify interaction requests from Discord                                        |
+| **Allowed User IDs**    | No       | Discord user IDs used by DM Allowlist and Pairing policies                              |
+| **DM Policy**           | No       | `open` (default), `allowlist`, `pairing`, or `disabled` — who is allowed to DM the bot  |
+| **Group Policy**        | No       | `open` (default), `allowlist`, or `disabled` — where the bot responds to @mentions      |
+| **Allowed Channel IDs** | No       | Comma- or whitespace-separated Discord channel IDs. Used when Group Policy is Allowlist |
 
 ## Troubleshooting
 

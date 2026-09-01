@@ -70,7 +70,7 @@ const botSettingsSchema = {
   properties: {
     allowFrom: {
       description:
-        'Global user-ID allowlist. When non-empty, ONLY listed users may interact with the bot anywhere — DMs, group @mentions, threads — regardless of dmPolicy/groupPolicy. Empty array means "no user-level filter". Pass the FULL desired list (this field is overwrite-replace, not append): to add or remove a single user, first call getBotDetail to read settings.allowFrom, mutate locally, then write back the entire array.',
+        'User-ID allowlist shared by DM and Telegram Guest allowlist/pairing policies. Open policies ignore it; allowlist fails closed when it is empty. Pass the FULL desired list (this field is overwrite-replace, not append): to add or remove a single user, first call getBotDetail to read settings.allowFrom, mutate locally, then write back the entire array.',
       items: {
         additionalProperties: false,
         properties: {

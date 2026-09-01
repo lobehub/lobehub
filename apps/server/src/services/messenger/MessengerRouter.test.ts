@@ -220,11 +220,14 @@ const mockTelegramBinder = {
   createClient: () => ({
     createAdapter: () => ({}),
     // Telegram thread ids are `telegram:<chatId>[:<messageThreadId>]`.
-    extractChatId: (id: string) => id.split(':')[1] ?? id,
+    extractChatId: (id: string) =>
+      id.startsWith('telegram:guest:') ? (id.split(':')[2] ?? id) : (id.split(':')[1] ?? id),
   }),
   handleUnlinkedMessage: vi.fn(),
+  isOneShotMessage: vi.fn().mockReturnValue(false),
   notifyLinkSuccess: vi.fn(),
   registerWebhook: vi.fn(),
+  replyToMessage: vi.fn(),
   sendAgentPicker: vi.fn(),
   sendDmText: vi.fn(),
 };
@@ -325,6 +328,9 @@ beforeEach(() => {
   mockSlackBinder.sendAgentPicker.mockReset();
   mockSlackBinder.sendDmText.mockReset();
   mockTelegramBinder.handleUnlinkedMessage.mockReset();
+  mockTelegramBinder.isOneShotMessage.mockReset();
+  mockTelegramBinder.isOneShotMessage.mockReturnValue(false);
+  mockTelegramBinder.replyToMessage.mockReset();
   mockTelegramBinder.sendAgentPicker.mockReset();
   mockTelegramBinder.sendDmText.mockReset();
   mockWechatBinder.handleUnlinkedMessage.mockReset();
@@ -457,13 +463,17 @@ describe('MessengerRouter.getWebhookHandler', () => {
       event: { type: 'message' },
       type: 'event_callback',
     });
-    const res = await router.getWebhookHandler('slack')(buildSlackRequest(body));
+    const options = { waitUntil: vi.fn() };
+    const res = await router.getWebhookHandler('slack')(buildSlackRequest(body), options);
     expect(res.status).toBe(200);
     expect(mockWebhookHandler).toHaveBeenCalledTimes(1);
     // Reconstructed request preserves the body (raw bytes are still readable).
-    const calls = mockWebhookHandler.mock.calls as unknown as Request[][];
+    const calls = mockWebhookHandler.mock.calls as unknown as Array<
+      [Request, typeof options]
+    >;
     const passedReq = calls[0][0];
     expect(await passedReq.text()).toBe(body);
+    expect(calls[0][1]).toBe(options);
   });
 
   it('skips signature verification for telegram (no headers required)', async () => {
@@ -728,6 +738,44 @@ describe('MessengerRouter channel @mention', () => {
       'D_DM',
       expect.stringContaining('/agents'),
     );
+  });
+
+  it('answers linked Telegram Guest recovery prompts through the one-shot reply', async () => {
+    await loadTelegramBot();
+    mockFindLink.mockResolvedValue({
+      activeAgentId: null,
+      id: 'link_1',
+      platformUserId: '123',
+      tenantId: '',
+      userId: 'user_alice',
+      workspaceId: null,
+    });
+    mockTelegramBinder.isOneShotMessage.mockReturnValue(true);
+
+    const handler = mockChatBot.onNewMention.mock.calls[0][0] as (
+      thread: any,
+      msg: any,
+    ) => Promise<void>;
+    const message = fakeMessage({
+      author: { isBot: false, userId: '123', userName: 'alice' },
+      isMention: true,
+      raw: { guest_query_id: 'gq-linked' },
+    });
+    await handler(
+      {
+        id: 'telegram:guest:-100123:bot:999:message:55',
+        isDM: false,
+        post: vi.fn(),
+      },
+      message,
+    );
+
+    expect(mockTelegramBinder.replyToMessage).toHaveBeenCalledWith(
+      message,
+      expect.stringContaining('No active agent'),
+    );
+    expect(mockTelegramBinder.sendDmText).not.toHaveBeenCalled();
+    expect(mockTelegramBinder.sendAgentPicker).not.toHaveBeenCalled();
   });
 
   it('scopes the active-agent check to the linked workspace', async () => {
@@ -1809,6 +1857,50 @@ describe('MessengerRouter /agents private vs workspace grouping', () => {
       { id: 'agt_shared', isActive: true, title: 'Shared' },
       { id: 'agt_private', isActive: false, title: 'Mine (private)' },
     ]);
+  });
+
+  it('renders a text list instead of an unusable picker for Telegram Guest Mode', async () => {
+    const fetchSpy = vi
+      .spyOn(MessengerRouter.prototype as any, 'fetchUserAgents')
+      .mockResolvedValue([
+        { id: 'agt_a', isPrivate: false, title: 'Agent A' },
+        { id: 'agt_b', isPrivate: false, title: 'Agent B' },
+      ]);
+    try {
+      await loadTelegramBot();
+      mockFindLink.mockResolvedValue({
+        activeAgentId: 'agt_a',
+        id: 'link_1',
+        platformUserId: '123',
+        tenantId: '',
+        userId: 'user_alice',
+        workspaceId: null,
+      });
+      mockTelegramBinder.isOneShotMessage.mockReturnValue(true);
+
+      const handler = mockChatBot.onNewMention.mock.calls[0][0] as (
+        thread: any,
+        msg: any,
+      ) => Promise<void>;
+      const message = fakeMessage({
+        author: { isBot: false, userId: '123', userName: 'alice' },
+        isMention: true,
+        raw: { guest_query_id: 'gq-agents' },
+        text: '/agents',
+      });
+      await handler(
+        { id: 'telegram:guest:-100123:bot:999:message:55', isDM: false, post: vi.fn() },
+        message,
+      );
+
+      expect(mockTelegramBinder.sendAgentPicker).not.toHaveBeenCalled();
+      expect(mockTelegramBinder.replyToMessage).toHaveBeenCalledWith(
+        message,
+        expect.stringContaining('1. Agent A'),
+      );
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
   it('partitions workspace agents ahead of private ones in fetchUserAgents', async () => {

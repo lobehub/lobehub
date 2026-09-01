@@ -147,19 +147,15 @@ export function normalizeBotReplyLocale(
  * every saved channel.
  *
  * Allowlists are split by what they hold:
- * - `allowFrom` (top level, unprefixed) — **user IDs**. A *global* identity
- *   gate: when populated, **only** these users can interact with the bot
- *   anywhere — DMs, group @mentions, threads — regardless of `dmPolicy` /
- *   `groupPolicy` mode. Empty means "no user-level filter". Setting
- *   `dmPolicy='allowlist'` is an explicit "DMs require this list" signal
- *   that fails closed when the list is empty; otherwise the global gate
- *   already does the work.
+ * - `allowFrom` (top level, unprefixed) — **user IDs** shared by the DM and
+ *   Telegram Guest `allowlist` / `pairing` policies. Open policies do not
+ *   consult it. Empty allowlists fail closed only when the selected policy
+ *   is `allowlist`; pairing uses the same list as its approved-user set.
  * - `groupAllowFrom` — **channel / group / thread IDs**. Owned by
  *   `groupPolicy` because the value type is unrelated to user IDs.
  *
- * The naming rule: a name without a scope prefix advertises that the value
- * crosses scopes (`allowFrom` is consulted by every gate); a prefixed name
- * advertises the field is the property of one specific scope.
+ * The naming rule: a name without a scope prefix is shared by more than one
+ * user-scoped policy; a prefixed name belongs to one specific scope.
  */
 export type DmPolicy = 'open' | 'allowlist' | 'pairing' | 'disabled';
 
@@ -173,6 +169,12 @@ export interface DmSettings {
   policy: DmPolicy;
 }
 
+export type GuestPolicy = 'open' | 'allowlist' | 'pairing' | 'disabled';
+
+export interface GuestSettings {
+  policy: GuestPolicy;
+}
+
 export type GroupPolicy = 'open' | 'allowlist' | 'disabled';
 
 export interface GroupSettings {
@@ -182,14 +184,19 @@ export interface GroupSettings {
 }
 
 const DM_POLICIES: ReadonlySet<DmPolicy> = new Set(['open', 'allowlist', 'pairing', 'disabled']);
+const GUEST_POLICIES: ReadonlySet<GuestPolicy> = new Set([
+  'open',
+  'allowlist',
+  'pairing',
+  'disabled',
+]);
 const GROUP_POLICIES: ReadonlySet<GroupPolicy> = new Set(['open', 'allowlist', 'disabled']);
 
 /**
  * DM Policy: gate inbound 1:1 messages.
  *
- * - `open` (default): accept DMs from anyone (subject to the global
- *   `allowFrom` gate when that is populated)
- * - `allowlist`: DMs require the sender to be in the global `allowFrom`
+ * - `open` (default): accept DMs from anyone
+ * - `allowlist`: DMs require the sender to be in the shared `allowFrom`
  *   list. Distinct from `open` only when `allowFrom` is empty: `allowlist`
  *   then **fails closed** (no DMs), while `open` still lets anyone DM.
  * - `pairing`: same gate as `allowlist`, but a non-listed sender receives a
@@ -225,14 +232,42 @@ export function makeDmPolicyField(defaults: { policy: DmPolicy }): FieldSchema {
 }
 
 /**
- * Global user-ID allowlist. Always visible — when populated, the runtime
- * applies it to **all** inbound traffic (DM and group), independently of
- * `dmPolicy` and `groupPolicy` mode. Empty means "no user-level filter".
+ * Telegram Guest Policy: gate one-shot Guest Mode summons independently
+ * from DMs and groups the bot has joined.
  *
- * Tying visibility to `dmPolicy='allowlist'` was tried earlier and rejected
- * because it forced operators who only wanted to scope group @mentions to
- * also flip DM mode, which is misleading. Always-visible matches the
- * field's actual semantics.
+ * Guest Mode is a user-scoped surface, so `allowlist` and `pairing` reuse
+ * the shared `allowFrom` user IDs rather than the channel-ID based
+ * `groupAllowFrom` list.
+ */
+export function makeGuestPolicyField(defaults: { policy: GuestPolicy }): FieldSchema {
+  return {
+    key: 'guestPolicy',
+    default: defaults.policy,
+    description: 'channel.guestPolicyHint',
+    enum: ['open', 'allowlist', 'pairing', 'disabled'],
+    enumDescriptions: [
+      'channel.guestPolicyOpenHint',
+      'channel.guestPolicyAllowlistHint',
+      'channel.guestPolicyPairingHint',
+      'channel.guestPolicyDisabledHint',
+    ],
+    enumLabels: [
+      'channel.guestPolicyOpen',
+      'channel.guestPolicyAllowlist',
+      'channel.guestPolicyPairing',
+      'channel.guestPolicyDisabled',
+    ],
+    label: 'channel.guestPolicy',
+    type: 'string',
+  };
+}
+
+/**
+ * User-ID allowlist shared by DM and Telegram Guest `allowlist` / `pairing`
+ * policies. Open policies ignore it. Empty means no approved users.
+ *
+ * The field stays visible because Telegram Guest and DM policies share it,
+ * and pairing approvals append to it at runtime.
  *
  * Stored as `Array<{ id, name? }>` so the operator can label each entry
  * (e.g. `name: 'Product colleague Ada'`) and recognise IDs months later. The runtime
@@ -607,8 +642,20 @@ export function extractDmSettings(
   return { policy };
 }
 
+/** Read `settings.guestPolicy`. Missing or malformed input defaults to
+ *  `open` so existing Telegram channels keep their previous behaviour. */
+export function extractGuestSettings(
+  settings: Record<string, unknown> | null | undefined,
+): GuestSettings {
+  const rawPolicy = settings?.guestPolicy as string | undefined;
+  const policy: GuestPolicy = GUEST_POLICIES.has(rawPolicy as GuestPolicy)
+    ? (rawPolicy as GuestPolicy)
+    : 'open';
+  return { policy };
+}
+
 /**
- * Read the global user-ID allowlist from `settings.allowFrom`.
+ * Read the shared user-ID allowlist from `settings.allowFrom`.
  *
  * When `allowFrom` is non-empty and `settings.userId` (the operator's own
  * platform ID, used by AI tools to push notifications back to them) is
@@ -642,25 +689,6 @@ export function extractGroupSettings(
 }
 
 /**
- * Global user-level gate. The router applies this **before** every per-scope
- * policy check, so a populated `allowFrom` restricts who can interact with
- * the bot anywhere — DMs, group @mentions, threads.
- *
- * - Empty `allowFrom` → no filter, anyone passes.
- * - Populated `allowFrom` → sender's user ID must be in the list. A missing
- *   `authorUserId` fails closed.
- */
-export function shouldAllowSender(params: {
-  authorUserId: string | undefined;
-  userAllowlist: UserAllowlist;
-}): boolean {
-  const { authorUserId, userAllowlist } = params;
-  if (userAllowlist.ids.length === 0) return true;
-  if (!authorUserId) return false;
-  return userAllowlist.ids.includes(authorUserId);
-}
-
-/**
  * Three-state outcome of the DM gate. `pair` is distinct from `reject`
  * because the router branches on it (issue a pairing code instead of
  * dropping the sender). Existing pass / fail call-sites can keep treating
@@ -669,16 +697,14 @@ export function shouldAllowSender(params: {
  */
 export type DmDecision = 'allow' | 'pair' | 'reject';
 
+export type GuestDecision = 'allow' | 'pair' | 'reject';
+
 /**
  * Gate inbound DM handling. Non-DM threads pass through unconditionally —
  * those are governed by `shouldHandleGroup` instead.
  *
- * Callers are expected to apply {@link shouldAllowSender} first, so this
- * function only encodes the per-scope semantics:
- *
  * - `policy='disabled'` → `'reject'` for everyone.
- * - `policy='open'` → `'allow'` (the global `allowFrom` filter, when
- *   populated, is enforced earlier by the caller).
+ * - `policy='open'` → `'allow'`, regardless of `allowFrom`.
  * - `policy='allowlist'` → `'allow'` for senders in `userAllowlist`,
  *   `'reject'` otherwise. Fails closed when the list is empty (this is
  *   the only behavioural difference from `open`).
@@ -717,6 +743,34 @@ export function shouldHandleDm(params: {
 }
 
 /**
+ * Gate Telegram Guest Mode handling. Non-Guest threads pass through
+ * unconditionally and continue to the normal DM / group gates.
+ *
+ * `allowlist` and `pairing` use the shared user allowlist because Guest
+ * access belongs to the summoning user, not to a chat the bot joined.
+ * Pairing reuses the existing approval lifecycle and owner override.
+ */
+export function shouldHandleGuest(params: {
+  authorUserId: string | undefined;
+  guestSettings: GuestSettings;
+  isGuest: boolean;
+  operatorUserId?: string;
+  userAllowlist: UserAllowlist;
+}): GuestDecision {
+  const { authorUserId, guestSettings, isGuest, operatorUserId, userAllowlist } = params;
+  if (!isGuest) return 'allow';
+  if (guestSettings.policy === 'disabled') return 'reject';
+  if (guestSettings.policy === 'open') return 'allow';
+  if (!authorUserId) return 'reject';
+  if (guestSettings.policy === 'pairing' && operatorUserId && authorUserId === operatorUserId) {
+    return 'allow';
+  }
+  const inList = userAllowlist.ids.length > 0 && userAllowlist.ids.includes(authorUserId);
+  if (inList) return 'allow';
+  return guestSettings.policy === 'pairing' ? 'pair' : 'reject';
+}
+
+/**
  * Gate inbound group/channel handling. DM threads pass through
  * unconditionally — those are governed by `shouldHandleDm` instead.
  *
@@ -751,12 +805,11 @@ export function shouldHandleGroup(params: {
  * Validate cross-platform access-policy settings at save time.
  *
  * Catches misconfigurations that would silently break runtime gating
- * before they hit the DB. Today this only enforces one rule:
+ * before they hit the DB. Today this enforces one invariant:
  *
- * - `dmPolicy='pairing'` requires `settings.userId` (the owner's platform
- *   user ID). Without it nobody can issue `/approve`, so inbound pairing
- *   requests would land in a permanent limbo — surface the missing field
- *   at save time so operators don't paint themselves into the corner.
+ * - Any pairing policy requires `settings.userId` (the owner's platform user
+ *   ID). Without it nobody can issue `/approve`, so inbound pairing requests
+ *   would land in a permanent limbo.
  *
  * Per-platform rules (e.g. Telegram bot tokens, Discord intents) belong
  * in `ClientFactory.validateSettings`; this function only encodes shared
@@ -767,13 +820,14 @@ export function validateAccessSettings(
 ): ValidationResult {
   const errors: Array<{ field: string; message: string }> = [];
   const dmSettings = extractDmSettings(settings);
-  if (dmSettings.policy === 'pairing') {
+  const guestSettings = extractGuestSettings(settings);
+  if (dmSettings.policy === 'pairing' || guestSettings.policy === 'pairing') {
     const operatorId = (settings?.userId as string | undefined)?.trim();
     if (!operatorId) {
       errors.push({
         field: 'userId',
         message:
-          "Pairing policy requires the owner's Platform User ID. Fill in 'Your Platform User ID' or pick a different DM Policy.",
+          "Pairing policies require the owner's Platform User ID. Fill in 'Your Platform User ID' or pick a different access policy.",
       });
     }
   }

@@ -104,7 +104,7 @@ Typical asks → action:
 - "let anyone DM again" → \`updateBot({ settings: { dmPolicy: 'open' } })\`
 - "stop accepting DMs for now" → \`updateBot({ settings: { dmPolicy: 'disabled' } })\`
 
-**allowFrom** — global user-ID allowlist, format \`[{ id, name? }]\`. When non-empty, applies to **every** inbound surface (DM, group, threads), regardless of dmPolicy/groupPolicy. The runtime only matches \`id\`; \`name\` is an operator-facing label so the human can recognise the entry months later — always include a name when you have one (display name, handle, etc.).
+**allowFrom** — user-ID allowlist shared by DM and Telegram Guest \`allowlist\` / \`pairing\` policies, format \`[{ id, name? }]\`. \`open\` ignores it; \`allowlist\` fails closed when it is empty. The runtime only matches \`id\`; \`name\` is an operator-facing label so the human can recognise the entry months later — always include a name when you have one (display name, handle, etc.).
 
 **groupPolicy** + **groupAllowFrom** — same shape but for group/channel/thread traffic. \`groupAllowFrom\` items are channel/group/thread IDs (e.g. Discord channel IDs from "Copy Channel ID"), not user IDs.
 

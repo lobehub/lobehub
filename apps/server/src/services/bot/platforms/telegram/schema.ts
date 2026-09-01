@@ -5,6 +5,7 @@ import {
   displayToolCallsField,
   makeDmPolicyField,
   makeGroupPolicyFields,
+  makeGuestPolicyField,
   makeUserIdField,
   watchKeywordsField,
 } from '../const';
@@ -83,6 +84,7 @@ export const schema: FieldSchema[] = [
       },
       displayToolCallsField,
       makeDmPolicyField({ policy: 'open' }),
+      makeGuestPolicyField({ policy: 'open' }),
       ...makeGroupPolicyFields({ policy: 'open' }),
       allowFromField,
       watchKeywordsField,

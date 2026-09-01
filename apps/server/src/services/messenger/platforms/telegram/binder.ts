@@ -1,10 +1,17 @@
+import type { Message } from 'chat';
 import debug from 'debug';
 
 import { getMessengerTelegramConfig } from '@/config/messenger';
 import { appEnv } from '@/envs/app';
 import type { PlatformClient } from '@/server/services/bot/platforms';
+import { getBotReplyLocale, normalizeBotReplyLocale } from '@/server/services/bot/platforms/const';
 import { TelegramApi } from '@/server/services/bot/platforms/telegram/api';
 import { TelegramClientFactory } from '@/server/services/bot/platforms/telegram/client';
+import {
+  getTelegramGuestAuthorLanguageCode,
+  getTelegramGuestQueryId,
+} from '@/server/services/bot/platforms/telegram/threadId';
+import { renderGuestCopy } from '@/server/services/bot/replyTemplate';
 
 import { issueLinkToken } from '../../linkTokenStore';
 import type {
@@ -93,6 +100,39 @@ export class MessengerTelegramBinder implements MessengerPlatformBinder {
     const config = await getMessengerTelegramConfig();
     if (!config) return;
 
+    const guestQueryId = getTelegramGuestQueryId(ctx.message);
+    const api = new TelegramApi(config.botToken);
+    if (guestQueryId) {
+      // Guest summons can come from any Telegram locale; render the link
+      // prompts in the summoning user's language when Telegram reports one,
+      // falling back to the platform default.
+      const lng =
+        normalizeBotReplyLocale(getTelegramGuestAuthorLanguageCode(ctx.message)) ??
+        getBotReplyLocale('telegram');
+      const botUsername = config.botUsername?.replace(/^@/, '').trim();
+      const text = renderGuestCopy(
+        botUsername ? 'guestLinkPromptChat' : 'guestLinkPromptDm',
+        lng,
+      );
+      const replyMarkup = botUsername
+        ? {
+            inline_keyboard: [
+              [
+                {
+                  text: renderGuestCopy('guestLinkButton', lng),
+                  url: `https://t.me/${encodeURIComponent(botUsername)}?start=link`,
+                },
+              ],
+            ],
+          }
+        : undefined;
+      await api.answerGuestArticle(guestQueryId, text, {
+        replyMarkup,
+        title: renderGuestCopy('guestLinkTitle', lng),
+      });
+      return;
+    }
+
     // The verify-im button takes the user back into LobeHub for the auth /
     // session-bound binding flow, so it must use APP_URL — same as every other
     // app-side redirect — not the webhook tunnel URL. (Tunnel URLs are only
@@ -103,6 +143,11 @@ export class MessengerTelegramBinder implements MessengerPlatformBinder {
       return;
     }
 
+    const postUnlinked = (text: string, button?: { text: string; url: string }) =>
+      button
+        ? api.sendMessageWithUrlButton(ctx.chatId, text, button)
+        : api.sendMessage(ctx.chatId, text);
+
     let randomId: string;
     try {
       randomId = await issueLinkToken({
@@ -112,11 +157,7 @@ export class MessengerTelegramBinder implements MessengerPlatformBinder {
       });
     } catch (error) {
       log('handleUnlinkedMessage: failed to issue link token: %O', error);
-      const api = new TelegramApi(config.botToken);
-      await api.sendMessage(
-        ctx.chatId,
-        'LobeHub is temporarily unavailable. Please try again in a moment.',
-      );
+      await postUnlinked('LobeHub is temporarily unavailable. Please try again in a moment.');
       return;
     }
 
@@ -126,22 +167,32 @@ export class MessengerTelegramBinder implements MessengerPlatformBinder {
       randomId,
     });
 
-    const api = new TelegramApi(config.botToken);
-
     if (isLocalhostUrl(verifyUrl)) {
       log('handleUnlinkedMessage: APP_URL is localhost, falling back to plain text link');
       const text = `Welcome to LobeHub! 🤖\n\nTo continue, link your Telegram account to LobeHub. The link expires in 30 minutes:\n\n${verifyUrl}\n\nAfter linking, send /agents anytime to list your agents and tap one to switch the active agent.`;
-      await api.sendMessage(ctx.chatId, text);
+      await postUnlinked(text);
       return;
     }
 
     const text =
       'Welcome to LobeHub! 🤖\n\nTo continue, link your Telegram account to LobeHub.\n\nTap the button below — the link expires in 30 minutes.\n\nAfter linking, send /agents anytime to list your agents and tap one to switch the active agent.';
 
-    await api.sendMessageWithUrlButton(ctx.chatId, text, {
+    await postUnlinked(text, {
       text: '🔗 Link Account',
       url: verifyUrl,
     });
+  }
+
+  isOneShotMessage(message: Message): boolean {
+    return Boolean(getTelegramGuestQueryId(message));
+  }
+
+  async replyToMessage(message: Message, text: string): Promise<void> {
+    const guestQueryId = getTelegramGuestQueryId(message);
+    if (!guestQueryId) return;
+    const config = await getMessengerTelegramConfig();
+    if (!config) return;
+    await new TelegramApi(config.botToken).answerGuestArticle(guestQueryId, escapeHtml(text));
   }
 
   async notifyLinkSuccess(params: {

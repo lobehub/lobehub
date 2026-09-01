@@ -28,6 +28,7 @@ import {
   RECEIVED_REACTION_EMOJI,
   THINKING_REACTION_EMOJI,
 } from './platforms';
+import { resolveUnsupportedMessageApis } from './platforms/messageCapabilities';
 import { clearReactionState, saveReactionState } from './reactionState';
 import { buildRecentChannelHistory } from './recentChannelHistory';
 import {
@@ -745,10 +746,12 @@ export class AgentBridgeService {
     // Platforms whose runtime rejects `readMessages` (e.g. WeChat) can't fetch
     // history on demand. We flag that so the prompt stops telling the model to
     // call `readMessages`, and instead pre-inject recent same-channel history
-    // below (see `buildRecentChannelHistory`).
-    const canReadHistory = !platformDef?.unsupportedMessageApis?.includes(
-      MessageApiName.readMessages,
-    );
+    // below (see `buildRecentChannelHistory`). Guest Telegram summons use the
+    // guest overlay (no channel tools, including history).
+    const canReadHistory = !resolveUnsupportedMessageApis(
+      opts.botContext?.platform,
+      opts.botContext?.platformThreadId,
+    )?.includes(MessageApiName.readMessages);
     const botPlatformContext: BotPlatformContext | undefined = platformDef
       ? {
           canReadHistory,

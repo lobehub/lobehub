@@ -74,6 +74,9 @@ const mockOnNewMention = vi.hoisted(() => vi.fn());
 const mockOnSubscribedMessage = vi.hoisted(() => vi.fn());
 const mockOnNewMessage = vi.hoisted(() => vi.fn());
 const mockOnSlashCommand = vi.hoisted(() => vi.fn());
+const mockWebhookHandler = vi.hoisted(() =>
+  vi.fn().mockResolvedValue(new Response('OK', { status: 200 })),
+);
 // Default state mocks for the participant tracking. Tests that
 // care about the multi-human transition reassign `mockGetList` to seed the
 // pre-existing participant list.
@@ -94,7 +97,7 @@ vi.mock('chat', () => ({
     onNewMessage: mockOnNewMessage,
     onSlashCommand: mockOnSlashCommand,
     onSubscribedMessage: mockOnSubscribedMessage,
-    webhooks: {},
+    webhooks: { telegram: mockWebhookHandler },
   })),
   ConsoleLogger: vi.fn(),
 }));
@@ -253,6 +256,17 @@ vi.mock('../platforms', () => ({
         : 'open';
     return { policy };
   },
+  extractGuestSettings: (settings: Record<string, unknown> | null | undefined) => {
+    const rawPolicy = settings?.guestPolicy as string | undefined;
+    const policy =
+      rawPolicy === 'allowlist' ||
+      rawPolicy === 'open' ||
+      rawPolicy === 'disabled' ||
+      rawPolicy === 'pairing'
+        ? rawPolicy
+        : 'open';
+    return { policy };
+  },
   normalizeAllowFromEntries: (raw: unknown): Array<{ id: string; name?: string }> => {
     if (typeof raw === 'string') {
       return raw
@@ -373,14 +387,6 @@ vi.mock('../platforms', () => ({
     getPlatform: mockGetPlatform,
   },
   resolveBotProviderConfig: mockResolveBotProviderConfig,
-  shouldAllowSender: (params: {
-    authorUserId: string | undefined;
-    userAllowlist: { ids: string[] };
-  }) => {
-    if (params.userAllowlist.ids.length === 0) return true;
-    if (!params.authorUserId) return false;
-    return params.userAllowlist.ids.includes(params.authorUserId);
-  },
   shouldHandleDm: (params: {
     authorUserId: string | undefined;
     dmSettings: { policy: 'allowlist' | 'disabled' | 'open' | 'pairing' };
@@ -403,6 +409,29 @@ vi.mock('../platforms', () => ({
       params.userAllowlist.ids.length > 0 && params.userAllowlist.ids.includes(params.authorUserId);
     if (inList) return 'allow';
     return params.dmSettings.policy === 'pairing' ? 'pair' : 'reject';
+  },
+  shouldHandleGuest: (params: {
+    authorUserId: string | undefined;
+    guestSettings: { policy: 'allowlist' | 'disabled' | 'open' | 'pairing' };
+    isGuest: boolean;
+    operatorUserId?: string;
+    userAllowlist: { ids: string[] };
+  }): 'allow' | 'pair' | 'reject' => {
+    if (!params.isGuest) return 'allow';
+    if (params.guestSettings.policy === 'disabled') return 'reject';
+    if (params.guestSettings.policy === 'open') return 'allow';
+    if (!params.authorUserId) return 'reject';
+    if (
+      params.guestSettings.policy === 'pairing' &&
+      params.operatorUserId &&
+      params.authorUserId === params.operatorUserId
+    ) {
+      return 'allow';
+    }
+    const inList =
+      params.userAllowlist.ids.length > 0 && params.userAllowlist.ids.includes(params.authorUserId);
+    if (inList) return 'allow';
+    return params.guestSettings.policy === 'pairing' ? 'pair' : 'reject';
   },
   shouldHandleGroup: (params: {
     candidateChannelIds: ReadonlyArray<string | undefined>;
@@ -483,6 +512,19 @@ describe('BotMessageRouter', () => {
       const handler = router.getWebhookHandler('telegram', 'app-123');
 
       expect(typeof handler).toBe('function');
+    });
+
+    it('forwards webhook lifecycle options to Chat SDK', async () => {
+      mockFindEnabledByPlatform.mockResolvedValue([makeProvider({ applicationId: 'tg-bot-123' })]);
+      const options = { waitUntil: vi.fn() };
+      const router = new BotMessageRouter();
+
+      await router.getWebhookHandler('telegram', 'tg-bot-123')(
+        new Request('https://example.com/webhook', { body: '{}', method: 'POST' }),
+        options,
+      );
+
+      expect(mockWebhookHandler).toHaveBeenCalledWith(expect.any(Request), options);
     });
   });
 
@@ -1226,6 +1268,30 @@ describe('BotMessageRouter', () => {
       expect(mockHandleMention).toHaveBeenCalledTimes(1);
     });
 
+    it.each(['telegram', 'discord', 'slack', 'qq', 'feishu', 'lark'])(
+      'keeps open DMs open on %s when allowFrom is populated',
+      async (platform) => {
+        const handler = await loadDmCatchAllHandler(
+          { allowFrom: [{ id: 'approved-user' }], dmPolicy: 'open' },
+          platform,
+        );
+        if (!handler) throw new Error('expected catch-all to be registered');
+        const thread = {
+          id: `${platform}:dm-1`,
+          isDM: true,
+          post: vi.fn().mockResolvedValue(undefined),
+        };
+
+        await handler(thread, {
+          author: { isBot: false, userId: 'external-user', userName: 'external' },
+          text: 'hello',
+        });
+
+        expect(mockHandleMention).toHaveBeenCalledTimes(1);
+        expect(thread.post).not.toHaveBeenCalled();
+      },
+    );
+
     it('posts a one-time WeChat paid-feature notice and continues handling the DM', async () => {
       mockGetBotFeatureAccessState.mockResolvedValue({
         allowed: true,
@@ -1375,11 +1441,8 @@ describe('BotMessageRouter', () => {
     });
 
     it('lets pairing-mode strangers reach the DM gate (does NOT short-circuit on allowFrom)', async () => {
-      // Regression: previously, the global `allowFrom` gate ran first and
-      // rejected anyone not on the list — including strangers DMing a
-      // pairing bot, who never reached the pairing flow. With pairing,
-      // `allowFrom` is the *post-approval* list (managed by `/approve`),
-      // so the global gate must skip on DM threads under pairing.
+      // Regression: pairing applicants must reach the pairing branch rather
+      // than being treated as flat allowlist rejections.
       const handler = await loadDmCatchAllHandler({
         // allowFrom only contains the operator — Lin is a stranger here.
         allowFrom: [{ id: 'owner-id', name: 'me' }],
@@ -1792,12 +1855,12 @@ describe('BotMessageRouter', () => {
      * group-policy assertions can drive each entry point with the same
      * fixture.
      */
-    async function loadHandlers(settings: Record<string, unknown>) {
+    async function loadHandlers(settings: Record<string, unknown>, platform = 'telegram') {
       mockFindEnabledByPlatform.mockResolvedValue([
         makeProvider({ applicationId: 'app-1', settings }),
       ]);
       const router = new BotMessageRouter();
-      const webhookHandler = router.getWebhookHandler('telegram', 'app-1');
+      const webhookHandler = router.getWebhookHandler(platform, 'app-1');
       const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
       await webhookHandler(req);
 
@@ -1848,6 +1911,137 @@ describe('BotMessageRouter', () => {
       expect(mockHandleMention).not.toHaveBeenCalled();
       expect(thread.post).toHaveBeenCalledTimes(1);
       expect(thread.post.mock.calls[0][0]).toContain("doesn't respond in groups or channels");
+    });
+
+    it('allows open Telegram Guest Mode summons even when group policy is disabled', async () => {
+      const { mention } = await loadHandlers({ groupPolicy: 'disabled' });
+      const thread = {
+        channelId: '-100123',
+        id: 'telegram:guest:-100123',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+        setState: vi.fn().mockResolvedValue(undefined),
+      };
+
+      await mention(thread, makeMentionMessage());
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+      expect(thread.post).not.toHaveBeenCalled();
+    });
+
+    it('allows open Telegram Guest Mode summons that are not on the group allowlist', async () => {
+      const { mention } = await loadHandlers({
+        groupAllowFrom: 'channel-1',
+        groupPolicy: 'allowlist',
+      });
+      const thread = {
+        channelId: '-100999',
+        id: 'telegram:guest:-100999',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+        setState: vi.fn().mockResolvedValue(undefined),
+      };
+
+      await mention(thread, makeMentionMessage());
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps open Telegram Guest Mode open when allowFrom is populated', async () => {
+      const { mention } = await loadHandlers({
+        allowFrom: [{ id: 'approved-user' }],
+        guestPolicy: 'open',
+      });
+      const thread = {
+        channelId: '-100999',
+        id: 'telegram:guest:-100999',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+        setState: vi.fn().mockResolvedValue(undefined),
+      };
+
+      await mention(thread, makeMentionMessage());
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+      expect(thread.post).not.toHaveBeenCalled();
+    });
+
+    it('blocks Telegram Guest Mode independently when Guest Policy is disabled', async () => {
+      const { mention } = await loadHandlers({
+        groupPolicy: 'open',
+        guestPolicy: 'disabled',
+      });
+      const thread = {
+        channelId: '-100123',
+        id: 'telegram:guest:-100123',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+        setState: vi.fn().mockResolvedValue(undefined),
+      };
+
+      await mention(thread, makeMentionMessage());
+
+      expect(mockHandleMention).not.toHaveBeenCalled();
+      expect(thread.post.mock.calls[0][0]).toContain('Guest Mode is disabled');
+    });
+
+    it('fails closed when Guest Policy is allowlist and Allowed Users is empty', async () => {
+      const { mention } = await loadHandlers({ guestPolicy: 'allowlist' });
+      const thread = {
+        channelId: '-100123',
+        id: 'telegram:guest:-100123',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+        setState: vi.fn().mockResolvedValue(undefined),
+      };
+
+      await mention(thread, makeMentionMessage());
+
+      expect(mockHandleMention).not.toHaveBeenCalled();
+      expect(thread.post.mock.calls[0][0]).toContain("aren't authorized to use this bot");
+    });
+
+    it('allows listed users under Guest Policy allowlist', async () => {
+      const { mention } = await loadHandlers({
+        allowFrom: [{ id: 'alice-id' }],
+        guestPolicy: 'allowlist',
+      });
+      const thread = {
+        channelId: '-100123',
+        id: 'telegram:guest:-100123',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+        setState: vi.fn().mockResolvedValue(undefined),
+      };
+
+      await mention(thread, makeMentionMessage());
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+      expect(thread.post).not.toHaveBeenCalled();
+    });
+
+    it('issues a pairing code to unknown Guest Mode users', async () => {
+      mockCreateOrGetPairingRequest.mockResolvedValueOnce({
+        code: 'PAIR123',
+        status: 'created',
+      });
+      const { mention } = await loadHandlers({
+        guestPolicy: 'pairing',
+        userId: 'owner-id',
+      });
+      const thread = {
+        channelId: '-100123',
+        id: 'telegram:guest:-100123',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+        setState: vi.fn().mockResolvedValue(undefined),
+      };
+
+      await mention(thread, makeMentionMessage());
+
+      expect(mockHandleMention).not.toHaveBeenCalled();
+      expect(thread.post.mock.calls[0][0]).toContain('PAIR123');
+      expect(thread.post.mock.calls[0][0]).toContain('Guest Mode');
     });
 
     it('allows @-mentions in channels listed in groupAllowFrom', async () => {
@@ -1998,11 +2192,11 @@ describe('BotMessageRouter', () => {
       text: '@bot hello',
     };
 
-    it('pulls an allowFrom-rejected sender into the reply thread before posting the notice', async () => {
+    it('pulls a group-policy-rejected sender into the reply thread before posting the notice', async () => {
       const mention = await loadMention({
-        allowFrom: 'alice-id',
         dmPolicy: 'open',
-        groupPolicy: 'open',
+        groupAllowFrom: 'some-other-channel',
+        groupPolicy: 'allowlist',
       });
       const thread = groupThread();
 
@@ -2013,7 +2207,6 @@ describe('BotMessageRouter', () => {
         'lin-id',
       );
       expect(thread.post).toHaveBeenCalledTimes(1);
-      expect(thread.post.mock.calls[0][0]).toContain("aren't authorized");
       // Membership must be granted before the notice lands so the post
       // generates a notification for the sender.
       expect(mockEnsureThreadMember.mock.invocationCallOrder[0]).toBeLessThan(
@@ -2041,7 +2234,7 @@ describe('BotMessageRouter', () => {
     it('does not touch thread membership for DM rejections', async () => {
       const mention = await loadMention({
         allowFrom: 'alice-id',
-        dmPolicy: 'open',
+        dmPolicy: 'allowlist',
         groupPolicy: 'open',
       });
       const thread = {
@@ -2059,34 +2252,25 @@ describe('BotMessageRouter', () => {
     it('still posts the rejection notice when ensureThreadMember fails', async () => {
       mockEnsureThreadMember.mockRejectedValueOnce(new Error('missing permission'));
       const mention = await loadMention({
-        allowFrom: 'alice-id',
         dmPolicy: 'open',
-        groupPolicy: 'open',
+        groupAllowFrom: 'some-other-channel',
+        groupPolicy: 'allowlist',
       });
       const thread = groupThread();
 
       await mention(thread, strangerMessage);
 
       expect(thread.post).toHaveBeenCalledTimes(1);
-      expect(thread.post.mock.calls[0][0]).toContain("aren't authorized");
     });
   });
 
-  describe('global allowFrom (user-level identity gate)', () => {
-    /**
-     * Real-world bug report: DM Policy=Allowlist, allowFrom=[me], Group
-     * Policy=Open. A non-allowlisted user @-mentioned the bot in a server
-     * channel and the bot still tried to process — because the old
-     * implementation only consumed allowFrom under `dmPolicy='allowlist'`
-     * and isDM=true. Lock in: a populated allowFrom blocks every inbound
-     * surface — DMs and group @mentions alike.
-     */
-    async function loadHandlers(settings: Record<string, unknown>) {
+  describe('allowFrom policy scoping', () => {
+    async function loadHandlers(settings: Record<string, unknown>, platform = 'telegram') {
       mockFindEnabledByPlatform.mockResolvedValue([
         makeProvider({ applicationId: 'app-1', settings }),
       ]);
       const router = new BotMessageRouter();
-      const webhookHandler = router.getWebhookHandler('telegram', 'app-1');
+      const webhookHandler = router.getWebhookHandler(platform, 'app-1');
       const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
       await webhookHandler(req);
 
@@ -2099,7 +2283,7 @@ describe('BotMessageRouter', () => {
       };
     }
 
-    it('blocks a non-allowlisted sender in a group and posts the generic notice in-thread', async () => {
+    it('does not restrict group messages when Group Policy is open', async () => {
       const { mention } = await loadHandlers({
         allowFrom: 'alice-id',
         dmPolicy: 'open',
@@ -2119,22 +2303,39 @@ describe('BotMessageRouter', () => {
 
       await mention(thread, message);
 
-      // Bot must not handle the message...
-      expect(mockHandleMention).not.toHaveBeenCalled();
-      // ...but must notify the sender in-thread with the generic
-      // "interact with this bot" copy. On Discord the post lands in the
-      // auto-created reply thread, so it does not pollute the parent
-      // channel; on other platforms it lands in the same group/thread
-      // the @mention came from, mirroring notifyGroupRejected.
-      expect(thread.post).toHaveBeenCalledTimes(1);
-      expect(thread.post.mock.calls[0][0]).toContain("aren't authorized");
-      expect(thread.post.mock.calls[0][0]).toContain('interact with this bot');
-      // The generic copy intentionally avoids "direct messages" — the
-      // sender did not try to DM, they @-mentioned in a group.
-      expect(thread.post.mock.calls[0][0]).not.toContain('direct messages');
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+      expect(thread.post).not.toHaveBeenCalled();
     });
 
-    it('blocks a non-allowlisted sender in a DM (with notification)', async () => {
+    it.each(['telegram', 'discord', 'slack', 'qq', 'feishu', 'lark'])(
+      'keeps open groups open on %s when groupAllowFrom is populated',
+      async (platform) => {
+        const { mention } = await loadHandlers(
+          {
+            groupAllowFrom: [{ id: 'approved-channel' }],
+            groupPolicy: 'open',
+          },
+          platform,
+        );
+        const thread = {
+          channelId: 'external-channel',
+          id: `${platform}:external-channel`,
+          isDM: false,
+          post: vi.fn().mockResolvedValue(undefined),
+        };
+
+        await mention(thread, {
+          author: { isBot: false, userId: 'external-user', userName: 'external' },
+          isMention: true,
+          text: '@bot hello',
+        });
+
+        expect(mockHandleMention).toHaveBeenCalledTimes(1);
+        expect(thread.post).not.toHaveBeenCalled();
+      },
+    );
+
+    it('does not restrict DMs when DM Policy is open', async () => {
       const { mention } = await loadHandlers({
         allowFrom: 'alice-id',
         dmPolicy: 'open',
@@ -2153,9 +2354,8 @@ describe('BotMessageRouter', () => {
 
       await mention(thread, message);
 
-      expect(mockHandleMention).not.toHaveBeenCalled();
-      expect(thread.post).toHaveBeenCalledTimes(1);
-      expect(thread.post.mock.calls[0][0]).toContain("aren't authorized");
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+      expect(thread.post).not.toHaveBeenCalled();
     });
 
     it('lets allowlisted senders through in a group', async () => {
@@ -2181,7 +2381,7 @@ describe('BotMessageRouter', () => {
       expect(mockHandleMention).toHaveBeenCalledTimes(1);
     });
 
-    it('blocks subscribed-thread non-allowlisted senders in groups with the generic notice', async () => {
+    it('does not restrict subscribed group threads when Group Policy is open', async () => {
       const { subscribed } = await loadHandlers({
         allowFrom: 'alice-id',
         dmPolicy: 'open',
@@ -2201,9 +2401,8 @@ describe('BotMessageRouter', () => {
         text: '@bot hi',
       });
 
-      expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
-      expect(thread.post).toHaveBeenCalledTimes(1);
-      expect(thread.post.mock.calls[0][0]).toContain('interact with this bot');
+      expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
+      expect(thread.post).not.toHaveBeenCalled();
     });
 
     it('with empty allowFrom acts as no-op, all senders allowed', async () => {
@@ -2257,9 +2456,8 @@ describe('BotMessageRouter', () => {
     });
 
     it('does not flip the bot to private mode when only userId is set (allowFrom empty)', async () => {
-      // The reverse safety check: a long-standing operator who only ever
-      // configured `userId` for AI push must not suddenly find their bot
-      // restricted to themselves once allowFrom-as-global-gate ships.
+      // A long-standing operator who only configured `userId` for AI push
+      // must not find an open bot restricted to themselves.
       const { mention } = await loadHandlers({
         dmPolicy: 'open',
         groupPolicy: 'open',
@@ -2283,10 +2481,10 @@ describe('BotMessageRouter', () => {
     });
   });
 
-  describe('command access gates (P1: /commands must respect allowFrom + DM/group policy)', () => {
+  describe('command access gates (P1: /commands must respect DM/group policy)', () => {
     /**
      * Real-world risk: command dispatch (`/new`, `/stop`) historically ran
-     * BEFORE the allowFrom / DM-policy / group-policy checks. A blocked
+     * BEFORE the DM-policy / group-policy checks. A blocked
      * sender could still side-effect — `/stop` cancelling an active run,
      * `/new` resetting thread state — even though normal messages were
      * rejected. Lock in: every command-dispatch path applies the same
@@ -2332,9 +2530,12 @@ describe('BotMessageRouter', () => {
       };
     }
 
-    it('blocks a native /stop slash command from a non-allowlisted sender', async () => {
-      const { slashStop } = await loadAllHandlers({ allowFrom: 'alice-id' });
-      const channel = makeChannel();
+    it('blocks a native /stop slash command from a non-allowlisted DM sender', async () => {
+      const { slashStop } = await loadAllHandlers({
+        allowFrom: 'alice-id',
+        dmPolicy: 'allowlist',
+      });
+      const channel = makeChannel({ isDM: true });
       const event = {
         channel,
         text: '',
@@ -2389,12 +2590,15 @@ describe('BotMessageRouter', () => {
       expect(channel.setState).not.toHaveBeenCalled();
     });
 
-    it('blocks a text-based /new (Telegram regex path) from a non-allowlisted sender', async () => {
-      const { cmdRegexHandler } = await loadAllHandlers({ allowFrom: 'alice-id' });
+    it('blocks a text-based /new (Telegram regex path) from a non-allowlisted DM sender', async () => {
+      const { cmdRegexHandler } = await loadAllHandlers({
+        allowFrom: 'alice-id',
+        dmPolicy: 'allowlist',
+      });
       const thread = {
         channelId: 'channel-1',
         id: 'telegram:channel-1',
-        isDM: false,
+        isDM: true,
         post: vi.fn().mockResolvedValue(undefined),
         setState: vi.fn().mockResolvedValue(undefined),
       };
@@ -2411,14 +2615,15 @@ describe('BotMessageRouter', () => {
       expect(thread.setState).not.toHaveBeenCalled();
     });
 
-    it('blocks /stop typed in onNewMention as a command from a non-allowlisted sender', async () => {
-      // Older code dispatched commands BEFORE the allowFrom check; this
-      // test catches a regression where /stop in an @-mention slips through.
-      const { mention } = await loadAllHandlers({ allowFrom: 'alice-id' });
+    it('blocks /stop typed in onNewMention from a non-allowlisted DM sender', async () => {
+      const { mention } = await loadAllHandlers({
+        allowFrom: 'alice-id',
+        dmPolicy: 'allowlist',
+      });
       const thread = {
         channelId: 'channel-1',
         id: 'telegram:channel-1',
-        isDM: false,
+        isDM: true,
         post: vi.fn().mockResolvedValue(undefined),
         setState: vi.fn().mockResolvedValue(undefined),
       };
@@ -2436,12 +2641,15 @@ describe('BotMessageRouter', () => {
       expect(mockHandleMention).not.toHaveBeenCalled();
     });
 
-    it('blocks /new typed in onSubscribedMessage from a non-allowlisted sender', async () => {
-      const { subscribed } = await loadAllHandlers({ allowFrom: 'alice-id' });
+    it('blocks /new typed in onSubscribedMessage from a non-allowlisted DM sender', async () => {
+      const { subscribed } = await loadAllHandlers({
+        allowFrom: 'alice-id',
+        dmPolicy: 'allowlist',
+      });
       const thread = {
         channelId: 'channel-1',
         id: 'telegram:channel-1',
-        isDM: false,
+        isDM: true,
         post: vi.fn().mockResolvedValue(undefined),
         setState: vi.fn().mockResolvedValue(undefined),
       };
@@ -2459,11 +2667,14 @@ describe('BotMessageRouter', () => {
     });
 
     it('still allows /commands from an allowlisted sender (gate does not break the happy path)', async () => {
-      const { cmdRegexHandler } = await loadAllHandlers({ allowFrom: 'alice-id' });
+      const { cmdRegexHandler } = await loadAllHandlers({
+        allowFrom: 'alice-id',
+        dmPolicy: 'allowlist',
+      });
       const thread = {
         channelId: 'channel-1',
         id: 'telegram:channel-1',
-        isDM: false,
+        isDM: true,
         post: vi.fn().mockResolvedValue(undefined),
         setState: vi.fn().mockResolvedValue(undefined),
       };
@@ -2774,6 +2985,25 @@ describe('BotMessageRouter', () => {
       );
 
       expect(event.channel.post).toHaveBeenCalledTimes(1);
+      expect(event.channel.post.mock.calls[0][0]).toMatch(/Approved Lin/i);
+    });
+
+    it('allows /approve when pairing is enabled only for Guest Mode', async () => {
+      mockPeekPairingRequest.mockResolvedValue(PAIRING_ENTRY);
+      mockProviderFindById.mockResolvedValue({
+        settings: { allowFrom: [{ id: 'owner-id' }] },
+      });
+      mockProviderUpdate.mockResolvedValue(undefined);
+
+      const slashApprove = await loadApproveHandler({
+        dmPolicy: 'open',
+        guestPolicy: 'pairing',
+      });
+      const event = makeApproveEvent();
+      await slashApprove(event);
+
+      expect(mockProviderUpdate).toHaveBeenCalledTimes(1);
+      expect(mockDeletePairingRequest).toHaveBeenCalledTimes(1);
       expect(event.channel.post.mock.calls[0][0]).toMatch(/Approved Lin/i);
     });
 

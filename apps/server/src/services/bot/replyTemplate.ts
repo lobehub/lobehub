@@ -1,6 +1,11 @@
 import type { StepPresentationData } from '../agentRuntime/types';
 import { getExtremeAck } from './ackPhrases';
-import { type BotReplyLocale, formatDuration } from './platforms';
+// Import from the leaf modules (`const` / `utils`) instead of the
+// `./platforms` barrel: the barrel instantiates every platform definition
+// (and its ClientFactory) at import time, and platform leaf files such as the
+// Telegram Guest outbound path import this template for localized copy.
+import { type BotReplyLocale } from './platforms/const';
+import { formatDuration } from './platforms/utils';
 
 // Use raw Unicode emoji instead of Chat SDK emoji placeholders,
 // because bot-callback webhooks send via DiscordPlatformClient directly
@@ -114,7 +119,7 @@ function formatCompletedTools(
     .join('\n');
 }
 
-export { formatDuration, formatTokens } from './platforms';
+export { formatDuration, formatTokens } from './platforms/utils';
 
 function renderProgressHeader(
   params: { elapsedMs?: number; totalToolCalls?: number },
@@ -261,15 +266,27 @@ type SystemStrings = {
   errorWithId: (operationId: string) => string;
   groupRejectedAllowlist: string;
   groupRejectedDisabled: string;
+  /**
+   * Telegram Guest Mode strings. Unlike the rest of this dictionary these
+   * carry Telegram HTML (not Markdown), because the Guest outbound pipeline
+   * (`guestOutbound` / `answerGuestQuery`) renders Telegram HTML directly.
+   * Locale comes from the summoning user's `language_code`, not the
+   * platform default.
+   */
+  guestAttachmentOverflow: string;
+  guestLinkButton: string;
+  guestLinkPromptChat: string;
+  guestLinkPromptDm: string;
+  guestLinkTitle: string;
+  guestMediaUnavailable: string;
+  guestPairingCapacityExceeded: string;
+  guestPairingCode: (code: string) => string;
+  guestPairingUnavailable: string;
+  guestRejectedAllowlist: string;
+  guestRejectedDisabled: string;
+  guestTextTruncated: (limit: number) => string;
   inlineError: (message: string) => string;
   processing: string;
-  /**
-   * Generic "user is not on the allowlist" copy used when the global
-   * `allowFrom` gate rejects an inbound non-DM event. Delivered via
-   * ephemeral (Slack) or as an out-of-band DM (Discord/Telegram fallback),
-   * so the wording avoids "direct messages" — the sender did not try to DM.
-   */
-  senderRejected: string;
   stoppedDefault: string;
   toolsCallingHeader: (count: number, time: string) => string;
 };
@@ -358,10 +375,27 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       "This bot isn't enabled in this channel. Please contact the bot's owner if you need access.",
     groupRejectedDisabled:
       "This bot doesn't respond in groups or channels. Please reach out via direct message instead.",
+    guestAttachmentOverflow:
+      '<i>Additional attachments could not be listed in this Guest Mode reply.</i>',
+    guestLinkButton: 'Open Bot',
+    guestLinkPromptChat: 'Continue in a private chat with this bot to link your LobeHub account.',
+    guestLinkPromptDm:
+      'Open a private chat with this bot and send /start to link your LobeHub account.',
+    guestLinkTitle: 'Link LobeHub',
+    guestMediaUnavailable: 'This attachment can’t be delivered in Telegram Guest Mode.',
+    guestPairingCapacityExceeded:
+      'This bot is handling too many Guest Mode access requests right now. Please try again in a few minutes.',
+    guestPairingCode: (code) =>
+      `To use this bot in Guest Mode, send this pairing code to the bot's owner: \`${code}\`. They run \`/approve ${code}\` to grant you access. The code expires in 1 hour.`,
+    guestPairingUnavailable:
+      'Guest Mode pairing is temporarily unavailable on this bot. Please try again later.',
+    guestRejectedAllowlist:
+      "Sorry, you aren't authorized to use this bot in Guest Mode. Please contact the bot's owner if you need access.",
+    guestRejectedDisabled: 'Guest Mode is disabled for this bot.',
+    guestTextTruncated: (limit) =>
+      `Response truncated because Telegram Guest Mode supports one ${limit}-character reply.`,
     inlineError: (message) => `**Error**: ${message}`,
     processing: 'Processing...',
-    senderRejected:
-      "Sorry, you aren't authorized to interact with this bot. Please contact the bot's owner if you need access.",
     stoppedDefault: 'Execution stopped.',
     toolsCallingHeader: (count, time) => `> total **${count}** tools calling ${time}\n\n`,
   },
@@ -441,9 +475,23 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
     errorWithId: (operationId) => `**Agent 执行失败**\nOperation ID: \`${operationId}\``,
     groupRejectedAllowlist: '该机器人未在此频道启用。如需访问请联系机器人管理员。',
     groupRejectedDisabled: '该机器人不在群组或频道中响应。请通过私信联系。',
+    guestAttachmentOverflow: '<i>更多附件无法在这条访客模式回复中列出。</i>',
+    guestLinkButton: '打开机器人',
+    guestLinkPromptChat: '请在私聊中继续，以完成 LobeHub 账户关联。',
+    guestLinkPromptDm: '请私聊该机器人并发送 /start，以完成 LobeHub 账户关联。',
+    guestLinkTitle: '关联 LobeHub',
+    guestMediaUnavailable: '该附件无法通过 Telegram 访客模式送达。',
+    guestPairingCapacityExceeded: '该机器人当前待处理的访客模式访问请求过多，请稍后再试。',
+    guestPairingCode: (code) =>
+      `若要通过访客模式使用该机器人，请把以下配对码发给机器人管理员：\`${code}\`，他们将通过 \`/approve ${code}\` 命令为你授权。配对码 1 小时后失效。`,
+    guestPairingUnavailable: '访客模式配对功能暂时不可用，请稍后再试。',
+    guestRejectedAllowlist:
+      '抱歉，您没有通过访客模式使用该机器人的权限。如需访问请联系机器人管理员。',
+    guestRejectedDisabled: '该机器人已禁用访客模式。',
+    guestTextTruncated: (limit) =>
+      `回复已被截断：Telegram 访客模式仅支持一条 ${limit} 字符的回复。`,
     inlineError: (message) => `**错误**：${message}`,
     processing: '处理中…',
-    senderRejected: '抱歉，您没有与该机器人交互的权限。如需访问请联系机器人管理员。',
     stoppedDefault: '执行已停止。',
     toolsCallingHeader: (count, time) => `> 共 **${count}** 次工具调用 ${time}\n\n`,
   },
@@ -641,6 +689,31 @@ export function renderCommandReply(key: CommandReplyKey, lng?: BotReplyLocale): 
   return getSystemStrings(lng)[key];
 }
 
+export type GuestCopyKey =
+  | 'guestAttachmentOverflow'
+  | 'guestLinkButton'
+  | 'guestLinkPromptChat'
+  | 'guestLinkPromptDm'
+  | 'guestLinkTitle'
+  | 'guestMediaUnavailable';
+
+/**
+ * Render a Telegram Guest Mode system string (link prompts, truncation and
+ * attachment notices). Unlike command replies the locale is not the platform
+ * default: a Guest summon can come from any Telegram user, so callers pass
+ * the summoning user's normalized `language_code` when known and fall back
+ * to the platform default otherwise. The values carry Telegram HTML, not
+ * Markdown - the Guest outbound pipeline renders Telegram HTML directly.
+ */
+export function renderGuestCopy(key: GuestCopyKey, lng?: BotReplyLocale): string {
+  return getSystemStrings(lng)[key];
+}
+
+/** Truncation notice for the Guest Mode single-reply budget (text 4096 / caption 1024). */
+export function renderGuestTruncated(limit: number, lng?: BotReplyLocale): string {
+  return getSystemStrings(lng).guestTextTruncated(limit);
+}
+
 /**
  * Render the `/mode` status reply (no-arg invocation). `mode` is the explicit
  * per-conversation override when one was set via `/mode agent|chat`; undefined
@@ -694,6 +767,17 @@ export function renderDmPairing(
   return strings.dmPairingUnavailable;
 }
 
+export function renderGuestPairing(
+  variant: 'capacity-exceeded' | 'code' | 'unavailable',
+  lng?: BotReplyLocale,
+  params?: { code?: string },
+): string {
+  const strings = getSystemStrings(lng);
+  if (variant === 'code' && params?.code) return strings.guestPairingCode(params.code);
+  if (variant === 'capacity-exceeded') return strings.guestPairingCapacityExceeded;
+  return strings.guestPairingUnavailable;
+}
+
 /**
  * Render the system message shown to a sender whose DM was blocked by the
  * channel's DM Policy. We split disabled vs allowlist so the user can act on
@@ -717,15 +801,12 @@ export function renderGroupRejected(
   return reason === 'disabled' ? strings.groupRejectedDisabled : strings.groupRejectedAllowlist;
 }
 
-/**
- * Render the system message shown when the **global `allowFrom`** gate
- * rejected the sender of a non-DM event (group / channel / thread). The
- * notice is delivered out-of-band — ephemerally on Slack, via DM fallback
- * on Discord/Telegram — so the copy intentionally avoids "direct messages"
- * (the sender did not try to DM, they @-mentioned in a group).
- */
-export function renderSenderRejected(lng?: BotReplyLocale): string {
-  return getSystemStrings(lng).senderRejected;
+export function renderGuestRejected(
+  reason: 'disabled' | 'allowlist',
+  lng?: BotReplyLocale,
+): string {
+  const strings = getSystemStrings(lng);
+  return reason === 'disabled' ? strings.guestRejectedDisabled : strings.guestRejectedAllowlist;
 }
 
 // ==================== Dispatcher ====================

@@ -1,4 +1,3 @@
-import { createTelegramAdapter } from '@chat-adapter/telegram';
 import type { Message } from 'chat';
 import debug from 'debug';
 
@@ -22,9 +21,12 @@ import {
 } from '../types';
 import { formatUsageStats } from '../utils';
 import { TELEGRAM_API_BASE, TelegramApi } from './api';
+import { createLobeTelegramAdapter } from './guestAdapter';
+import { deliverGuestCreate, deliverGuestEdit } from './guestOutbound';
 import { extractBotId, setTelegramWebhook } from './helpers';
 import { markdownToTelegramHTML } from './markdownToHTML';
 import { sendTelegramAttachments } from './sendAttachments';
+import { isGuestTelegramThreadId, parseTelegramThreadId } from './threadId';
 
 const log = debug('bot-platform:telegram:bot');
 
@@ -36,7 +38,7 @@ const log = debug('bot-platform:telegram:bot');
 const TELEGRAM_MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
 
 function extractChatId(platformThreadId: string): string {
-  return platformThreadId.split(':')[1];
+  return parseTelegramThreadId(platformThreadId).chatId;
 }
 
 function parseTelegramMessageId(compositeId: string): number {
@@ -83,6 +85,49 @@ const defaultNameForType = (type: string | undefined): string => {
       return 'file.bin';
     }
   }
+};
+
+interface TelegramMediaHint {
+  mimeType?: string;
+  name?: string;
+  size?: number;
+  type?: string;
+}
+
+/**
+ * Recover photo/video/audio/document hints from a raw Telegram Message
+ * payload. Used for `reply_to_message`, which Chat SDK does not copy onto
+ * `message.attachments`.
+ */
+const mediaHintsFromTelegramPayload = (
+  raw: Record<string, any> | undefined,
+): TelegramMediaHint[] => {
+  if (!raw) return [];
+  const hints: TelegramMediaHint[] = [];
+
+  if (Array.isArray(raw.photo) && raw.photo.length > 0) {
+    const largest = raw.photo.at(-1) as { file_size?: number } | undefined;
+    hints.push({ size: largest?.file_size, type: 'image' });
+  }
+
+  const pushFile = (
+    payload: { file_name?: string; file_size?: number; mime_type?: string } | undefined,
+    type: string,
+  ) => {
+    if (!payload) return;
+    hints.push({
+      mimeType: payload.mime_type,
+      name: payload.file_name,
+      size: payload.file_size,
+      type,
+    });
+  };
+
+  pushFile(raw.video ?? raw.video_note, 'video');
+  pushFile(raw.audio ?? raw.voice, 'audio');
+  pushFile(raw.document, 'file');
+
+  return hints;
 };
 
 class TelegramWebhookClient implements PlatformClient {
@@ -164,15 +209,46 @@ class TelegramWebhookClient implements PlatformClient {
 
   createAdapter(): Record<string, any> {
     return {
-      telegram: createTelegramAdapter({
-        botToken: this.config.credentials.botToken,
-        secretToken: this.config.credentials.secretToken || undefined,
-      }),
+      telegram: createLobeTelegramAdapter(
+        {
+          botToken: this.config.credentials.botToken,
+          secretToken: this.config.credentials.secretToken || undefined,
+        },
+        this.applicationId,
+      ),
     };
   }
 
   getMessenger(platformThreadId: string): PlatformMessenger {
     const telegram = new TelegramApi(this.config.credentials.botToken);
+    if (isGuestTelegramThreadId(platformThreadId)) {
+      return {
+        addReaction: async () => {},
+        createMessage: async (content) => {
+          await deliverGuestCreate(telegram, this.applicationId, platformThreadId, content);
+        },
+        editMessage: async (messageId, content) => {
+          await deliverGuestEdit(
+            telegram,
+            this.applicationId,
+            platformThreadId,
+            messageId,
+            content,
+          );
+        },
+        // No `triggerTyping` here, on purpose. AgentBridgeService treats a
+        // present `triggerTyping` as "platform can show typing" and, when the
+        // message gateway is enabled, skips the initial placeholder post.
+        // Guest summons are one-shot `guest_query_id`s that must be answered
+        // quickly - deferring the first `createMessage` to agent completion
+        // risks blowing Telegram's guest-query response window. Leaving
+        // `triggerTyping` undefined forces the bridge to post the placeholder
+        // immediately, which consumes the query via `answerGuestQuery`.
+        removeReaction: async () => {},
+        replaceReaction: async () => {},
+      };
+    }
+
     const chatId = extractChatId(platformThreadId);
     return {
       addReaction: (messageId, emoji) =>
@@ -263,35 +339,43 @@ class TelegramWebhookClient implements PlatformClient {
    * Bot API does not return `mime_type` / `file_name` for `photo` payloads,
    * so we must provide them.
    *
+   * Quoted media lives on `raw.reply_to_message` (Guest Mode summons and
+   * ordinary replies). Chat SDK only lists attachments on the triggering
+   * message, so we recover photo/video/audio/document from that nested
+   * payload the same way Discord recovers `referenced_message.attachments`.
+   *
    * Per-attachment errors are swallowed and logged so a single failed
    * download doesn't drop the rest of the message's attachments.
    */
   async extractFiles(message: Message): Promise<ExtractFilesResult | undefined> {
-    const attachments = (message as any).attachments as
-      | Array<{
-          mimeType?: string;
-          name?: string;
-          size?: number;
-          type?: string;
-        }>
-      | undefined;
-    if (!attachments?.length) return undefined;
-
+    const directAttachments = (message as any).attachments as TelegramMediaHint[] | undefined;
     const raw = (message as any).raw as Record<string, any> | undefined;
-    log('extractFiles: msgId=%s, attachments=%d', (message as any).id, attachments.length);
+    const replyRaw = raw?.reply_to_message as Record<string, any> | undefined;
+    const referenced = mediaHintsFromTelegramPayload(replyRaw);
+
+    log(
+      'extractFiles: msgId=%s, direct=%d, referenced=%d',
+      (message as any).id,
+      directAttachments?.length ?? 0,
+      referenced.length,
+    );
+
+    if (!directAttachments?.length && referenced.length === 0) return undefined;
 
     const telegram = new TelegramApi(this.config.credentials.botToken);
     const results: AttachmentSource[] = [];
     const warnings: string[] = [];
 
-    for (const att of attachments) {
-      const fileId = TelegramWebhookClient.resolveTelegramFileId(raw, att.type);
+    const download = async (
+      att: TelegramMediaHint,
+      sourceRaw: Record<string, any> | undefined,
+    ): Promise<void> => {
+      const fileId = TelegramWebhookClient.resolveTelegramFileId(sourceRaw, att.type);
       if (!fileId) {
         log('extractFiles: no file_id for type=%s in raw payload (skipping)', att.type);
-        continue;
+        return;
       }
 
-      // Check file size before attempting download (Telegram Bot API limit)
       if (att.size && att.size > TELEGRAM_MAX_FILE_SIZE) {
         const fileName = att.name ?? defaultNameForType(att.type);
         const sizeMB = (att.size / (1024 * 1024)).toFixed(1);
@@ -304,7 +388,7 @@ class TelegramWebhookClient implements PlatformClient {
         warnings.push(
           `File "${fileName}" (${sizeMB} MB) exceeds Telegram's 20 MB download limit and could not be processed.`,
         );
-        continue;
+        return;
       }
 
       try {
@@ -324,6 +408,13 @@ class TelegramWebhookClient implements PlatformClient {
       } catch (error) {
         log('extractFiles: downloadFile failed for type=%s fileId=%s: %O', att.type, fileId, error);
       }
+    };
+
+    for (const att of directAttachments ?? []) {
+      await download(att, raw);
+    }
+    for (const att of referenced) {
+      await download(att, replyRaw);
     }
 
     if (results.length === 0 && warnings.length === 0) return undefined;
@@ -349,7 +440,7 @@ class TelegramWebhookClient implements PlatformClient {
         return undefined;
       }
       case 'video': {
-        return raw.video?.file_id;
+        return raw.video?.file_id ?? raw.video_note?.file_id;
       }
       case 'audio': {
         return raw.audio?.file_id ?? raw.voice?.file_id;
@@ -374,6 +465,10 @@ class TelegramWebhookClient implements PlatformClient {
 
   parseMessageId(compositeId: string): number {
     return parseTelegramMessageId(compositeId);
+  }
+
+  shouldSubscribe(threadId: string): boolean {
+    return !isGuestTelegramThreadId(threadId);
   }
 }
 
