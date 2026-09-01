@@ -103,17 +103,15 @@ describe('MultipleProvidersModelItem', () => {
     const { ModelItemRender } = await vi.importActual<typeof ModelSelectModule>(
       '@/components/ModelSelect',
     );
+    const modelCardProps = {
+      id: 'deepseek-v3',
+      knowledgeCutoff: '2025-01',
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+    };
 
-    const { container } = render(
-      // @ts-expect-error - callers spread whole model cards, extra fields included
-      <ModelItemRender
-        reasoning
-        search
-        structuredOutput
-        id="deepseek-v3"
-        knowledgeCutoff="2025-01"
-      />,
-    );
+    const { container } = render(<ModelItemRender {...modelCardProps} />);
 
     for (const attr of ['reasoning', 'search', 'structuredoutput', 'knowledgecutoff']) {
       expect(container.querySelector(`[${attr}]`)).toBeNull();

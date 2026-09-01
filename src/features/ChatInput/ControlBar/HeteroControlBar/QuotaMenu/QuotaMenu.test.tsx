@@ -245,6 +245,9 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
     />
   ),
   confirmModal: confirmModalMock,
+  Skeleton: ({ height }: { height?: number }) => (
+    <div data-height={height} data-testid="skeleton" />
+  ),
   toast: {
     error: toastErrorMock,
     success: toastSuccessMock,

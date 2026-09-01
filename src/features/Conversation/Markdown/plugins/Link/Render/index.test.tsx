@@ -7,19 +7,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Render from './index';
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  ActionIcon: ({ icon: _icon, onClick, title, ...rest }: any) => (
-    <button {...rest} aria-label={title} type="button" onClick={onClick} />
-  ),
+const mockConst = vi.hoisted(() => ({
+  isDesktop: false,
 }));
-
-let mockIsDesktop = false;
 
 vi.mock('@lobechat/const', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   get isDesktop() {
-    return mockIsDesktop;
+    return mockConst.isDesktop;
   },
+}));
+
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
+  ActionIcon: ({ icon: _icon, onClick, title, ...rest }: any) => (
+    <button {...rest} aria-label={title} type="button" onClick={onClick} />
+  ),
 }));
 
 // `enableMessageLinkIcon` is read via useUserStore(selector). We drive the
@@ -93,7 +96,7 @@ const renderLink = (properties: Record<string, unknown>) =>
 
 afterEach(() => {
   mockShowIcon = true;
-  mockIsDesktop = false;
+  mockConst.isDesktop = false;
   vi.restoreAllMocks();
 });
 
@@ -267,7 +270,7 @@ describe('Link Render — internal entities', () => {
   });
 
   it('takes over modifier-clicks on desktop, which has no new tab to open', () => {
-    mockIsDesktop = true;
+    mockConst.isDesktop = true;
 
     const { getByRole } = renderLink({
       linkHref: '/task/T-198',
@@ -320,7 +323,7 @@ describe('Link Render — open an external link in the side browser', () => {
     });
 
   it('offers the side-browser action on desktop', () => {
-    mockIsDesktop = true;
+    mockConst.isDesktop = true;
 
     const { container } = renderExternal();
     const action = container.querySelector('[data-side-browser]')!;
@@ -334,7 +337,7 @@ describe('Link Render — open an external link in the side browser', () => {
   });
 
   it('keeps the action OUTSIDE the anchor, or the preload would swallow its click', () => {
-    mockIsDesktop = true;
+    mockConst.isDesktop = true;
 
     const { container } = renderExternal();
 
@@ -345,7 +348,7 @@ describe('Link Render — open an external link in the side browser', () => {
   });
 
   it('leaves the anchor itself untouched, so a plain click still opens the system browser', () => {
-    mockIsDesktop = true;
+    mockConst.isDesktop = true;
 
     const { container } = renderExternal();
     const anchor = container.querySelector('a')!;
@@ -358,13 +361,13 @@ describe('Link Render — open an external link in the side browser', () => {
   });
 
   it('hides the action on web', () => {
-    mockIsDesktop = false;
+    mockConst.isDesktop = false;
     const web = renderExternal();
     expect(web.container.querySelector('[data-side-browser]')).toBeNull();
   });
 
   it('hides the action for non-web links (mailto) and for portal-bound internal links', () => {
-    mockIsDesktop = true;
+    mockConst.isDesktop = true;
 
     const email = renderLink({
       linkHref: 'mailto:a@b.com',

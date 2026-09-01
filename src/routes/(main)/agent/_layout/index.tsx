@@ -1,9 +1,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { type FC } from 'react';
 import { Outlet } from 'react-router';
-import { SWRConfig } from 'swr';
 
-import SuspenseRouteBoundary from '@/components/SuspenseRouteBoundary';
 import { isDesktop } from '@/const/version';
 import { AgentNotFoundGuard } from '@/features/AgentNotFound';
 import AgentSidebar from '@/features/AgentSidebar';
@@ -22,11 +20,7 @@ const Layout: FC = () => {
         {/* Keep the sidebar interactive when the routed agent is gone (deleted
             or made private) — only the content area collapses to the 404 card. */}
         <AgentNotFoundGuard>
-          <SWRConfig value={{ suspense: true }}>
-            <SuspenseRouteBoundary>
-              <Outlet />
-            </SuspenseRouteBoundary>
-          </SWRConfig>
+          <Outlet />
         </AgentNotFoundGuard>
       </Flexbox>
       <RegisterHotkeys />
