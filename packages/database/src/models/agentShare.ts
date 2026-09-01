@@ -317,8 +317,10 @@ export class AgentShareModel {
    * good.
    *
    * NOT the "turn sharing off" path — that is `updateVisibility(agentId,
-   * 'private')`, which keeps the link resumable. This exists for a genuine,
-   * irreversible teardown of a share instance.
+   * 'private')`, which keeps the link resumable. No product flow calls this
+   * today; it stays as the model-level primitive for a genuine, irreversible
+   * teardown (and lets tests build the "share row replaced" scenario that
+   * `isRunStillAuthorized` guards against).
    */
   deleteByAgentId = async (agentId: string): Promise<AgentShareItem | null> =>
     this.withOwnedPersonalAgentLock(agentId, async (tx) => {
