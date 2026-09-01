@@ -1,17 +1,17 @@
 import { useEffect, useRef } from 'react';
 
-/** Keeps a route-selected topic visible when it is injected outside the normal sidebar page. */
+/**
+ * Reveals each route-selected topic once after its row becomes available.
+ *
+ * The list readiness signal may also change for unrelated accordion or ordering updates. Tracking
+ * only successful reveals prevents those updates from pulling the sidebar back to the active row.
+ */
 export const useScrollActiveTopicIntoView = (activeTopicId?: string | null, ready?: unknown) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const trackedTopicIdRef = useRef<string | null | undefined>(undefined);
-  const hasRevealedTrackedTopicRef = useRef(false);
+  const revealedTopicIdRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
-    if (trackedTopicIdRef.current !== activeTopicId) {
-      trackedTopicIdRef.current = activeTopicId;
-      hasRevealedTrackedTopicRef.current = false;
-    }
-    if (!activeTopicId || hasRevealedTrackedTopicRef.current) return;
+    if (!activeTopicId || revealedTopicIdRef.current === activeTopicId) return;
 
     const activeRow = containerRef.current?.querySelector<HTMLElement>(
       `[data-topic-id="${CSS.escape(activeTopicId)}"]`,
@@ -19,7 +19,7 @@ export const useScrollActiveTopicIntoView = (activeTopicId?: string | null, read
     if (!activeRow) return;
 
     activeRow.scrollIntoView({ block: 'nearest' });
-    hasRevealedTrackedTopicRef.current = true;
+    revealedTopicIdRef.current = activeTopicId;
   }, [activeTopicId, ready]);
 
   return containerRef;
