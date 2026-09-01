@@ -1,7 +1,7 @@
 import type { GitWorkingTreePatch } from '@lobechat/electron-client-ipc';
 import { describe, expect, it } from 'vitest';
 
-import { buildReviewTreeNodes, itemKey } from '../reviewTreeNodes';
+import { buildReviewTreeNodes, getDefaultExpandedKeys, itemKey } from '../reviewTreeNodes';
 
 const makePatch = (filePath: string): GitWorkingTreePatch => ({
   additions: 1,
@@ -53,5 +53,22 @@ describe('buildReviewTreeNodes', () => {
   it('skips empty groups', () => {
     const nodes = buildReviewTreeNodes([group('/repo', 'repo', [])], true);
     expect(nodes).toHaveLength(0);
+  });
+});
+
+describe('getDefaultExpandedKeys', () => {
+  it('bounds the initial Shiki-backed diffs across repo groups', () => {
+    const groups = [
+      group('/repo', 'repo', ['1.ts', '2.ts', '3.ts', '4.ts']),
+      group('/repo/sub', 'sub', ['5.ts', '6.ts', '7.ts', '8.ts']),
+    ];
+
+    expect(getDefaultExpandedKeys(groups)).toEqual([
+      itemKey('/repo', makePatch('1.ts')),
+      itemKey('/repo', makePatch('2.ts')),
+      itemKey('/repo', makePatch('3.ts')),
+      itemKey('/repo', makePatch('4.ts')),
+      itemKey('/repo/sub', makePatch('5.ts')),
+    ]);
   });
 });

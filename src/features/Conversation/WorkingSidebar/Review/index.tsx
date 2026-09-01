@@ -32,7 +32,7 @@ import type { ComposerTarget } from '../../types';
 import FileRow from './FileRow';
 import FileTreeNav from './FileTreeNav';
 import GroupHeader from './GroupHeader';
-import { itemKey } from './reviewTreeNodes';
+import { getDefaultExpandedKeys, itemKey } from './reviewTreeNodes';
 import {
   invalidateGitReviewCaches,
   type ReviewMode,
@@ -69,11 +69,6 @@ interface ReviewProps {
   showTree: boolean;
   workingDirectory: string;
 }
-
-// Empirically: ~100KB of patch ≈ 50 small-diff files OR ~2 big refactors;
-// either way keeps Shiki tokenization under ~250ms on first paint.
-const DEFAULT_EXPAND_BYTE_BUDGET = 100 * 1024;
-const DEFAULT_EXPAND_MAX_COUNT = 50;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   caret: css`
@@ -355,14 +350,8 @@ const Review = memo<ReviewProps>(
       });
     };
 
-    // Default-expand by patch-size budget: take entries (across all groups in
-    // order) until cumulative patch bytes exceed DEFAULT_EXPAND_BYTE_BUDGET,
-    // capped at DEFAULT_EXPAND_MAX_COUNT. Every PatchDiff mounts a Shiki
-    // tokenizer synchronously, so expanding too much at once locks the renderer;
-    // size-based budget keeps small-diff cases generous while clamping repos
-    // with a few large refactors. Re-syncing on signature change auto-expands
-    // new entries within the cap; panels the user manually closed earlier stay
-    // closed because their key is already absent.
+    // A PatchDiff materialises a large Shiki-backed DOM tree. Keep the initial
+    // expansion to a viewport-sized batch; users can still open any other file.
     const signature = useMemo(
       () => allEntries.map(({ group, patch }) => itemKey(group.absolutePath, patch)).join('|'),
       [allEntries],
@@ -371,16 +360,7 @@ const Review = memo<ReviewProps>(
     const [activeKeys, setActiveKeys] = useState<string[]>([]);
     if (signature !== seenSignature) {
       setSeenSignature(signature);
-      const initialKeys: string[] = [];
-      let budget = DEFAULT_EXPAND_BYTE_BUDGET;
-      for (const { group, patch } of allEntries) {
-        if (initialKeys.length >= DEFAULT_EXPAND_MAX_COUNT) break;
-        const cost = patch.patch?.length ?? 0;
-        if (initialKeys.length > 0 && cost > budget) break;
-        initialKeys.push(itemKey(group.absolutePath, patch));
-        budget -= cost;
-      }
-      setActiveKeys(initialKeys);
+      setActiveKeys(getDefaultExpandedKeys(groups));
     }
 
     // The file whose diff the tree-nav last scrolled to — highlighted in the rail.
