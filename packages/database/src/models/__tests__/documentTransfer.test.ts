@@ -185,6 +185,25 @@ describe('DocumentModel.transferTo', () => {
     expect(await ws1.subtreeHasForeignRows(page.id)).toBe(true);
   });
 
+  it("treats another member's like as a foreign transfer row, but not the caller's own", async () => {
+    const ws1 = new DocumentModel(serverDB, userId, wsId1);
+    const page = await createPage(ws1, 'Liked by teammate', 'foreign-like');
+
+    await serverDB.insert(documentLikes).values({
+      documentId: page.id,
+      userId,
+      workspaceId: wsId1,
+    });
+    expect(await ws1.subtreeHasForeignRows(page.id)).toBe(false);
+
+    await serverDB.insert(documentLikes).values({
+      documentId: page.id,
+      userId: otherUserId,
+      workspaceId: wsId1,
+    });
+    expect(await ws1.subtreeHasForeignRows(page.id)).toBe(true);
+  });
+
   it('resolves slug conflicts by suffixing', async () => {
     const ws1 = new DocumentModel(serverDB, userId, wsId1);
     await createPage(ws1, 'Existing', 'shared-slug');

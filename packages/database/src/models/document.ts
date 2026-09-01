@@ -395,8 +395,8 @@ export class DocumentModel {
    * resource manager view stays consistent.
    */
   /**
-   * Whether the subtree (documents + anchored files + comments) contains rows
-   * created by someone else. Transfers rehome every cascaded row, so non-owner
+   * Whether the subtree (documents + anchored files + comments + likes)
+   * contains rows created by someone else. Transfers rehome every cascaded row, so non-owner
    * members must not move a folder that carries teammates' content. Comments
    * with a deleted author count as foreign because they do not belong to the
    * caller and may otherwise be moved or deleted by a personal-scope transfer.
@@ -419,6 +419,13 @@ export class DocumentModel {
       )
       .limit(1);
     if (foreignComment) return true;
+
+    const [foreignLike] = await this.db
+      .select({ id: documentLikes.id })
+      .from(documentLikes)
+      .where(and(inArray(documentLikes.documentId, ids), ne(documentLikes.userId, this.userId)))
+      .limit(1);
+    if (foreignLike) return true;
 
     const [foreignFile] = await this.db
       .select({ id: files.id })
