@@ -290,6 +290,14 @@ export class VerifyService {
   setAcceptanceProject = (id: string, projectId: string | null) =>
     lambdaClient.acceptance.setProject.mutate({ id, projectId });
 
+  /**
+   * Batch twin of `setAcceptanceProject` for the list's multi-selection. Rows
+   * the caller cannot write come back in `failedIds` instead of failing the
+   * whole sweep.
+   */
+  setAcceptanceProjectBatch = (ids: string[], projectId: string | null) =>
+    lambdaClient.acceptance.setProjectBatch.mutate({ ids, projectId });
+
   /** Owner override of the acceptance's decision state from the list. */
   updateAcceptanceStatus = (id: string, status: AcceptanceStatusOverride) =>
     lambdaClient.acceptance.updateStatus.mutate({ id, status });

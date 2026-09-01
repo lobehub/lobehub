@@ -63,6 +63,7 @@ import {
 import AcceptanceRow from './AcceptanceRow';
 import {
   acceptanceBatchTargets,
+  acceptanceProjectTargets,
   acceptanceSelectAllState,
   chunkAcceptanceBatch,
   nextAcceptanceSelectAll,
@@ -87,7 +88,10 @@ const ACCEPTANCE_GROUP_MODE_STORAGE_KEY = 'lobehub-acceptance-group-mode';
 /** Pull the next page before the sentinel is actually on screen. */
 const LOAD_MORE_ROOT_MARGIN = '240px';
 type BatchSuccessKey =
-  'acceptance.workspace.batch.deleteSuccess' | 'acceptance.workspace.batch.statusSuccess';
+  | 'acceptance.workspace.batch.deleteSuccess'
+  | 'acceptance.workspace.batch.projectRemoveSuccess'
+  | 'acceptance.workspace.batch.projectSuccess'
+  | 'acceptance.workspace.batch.statusSuccess';
 const EMPTY_FILTER_KEYS = {
   active: 'acceptance.workspace.filters.empty.active',
   completed: 'acceptance.workspace.filters.empty.completed',
@@ -466,6 +470,60 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
       }
     };
 
+    /**
+     * File the visible selection under one project (`null` takes it out of
+     * any). Rows already where they are headed count as "unchanged" in the
+     * report, same as a status sweep — so moving a mixed pick states honestly
+     * how many actually moved.
+     */
+    const sweepProject = async (projectId: string | null) => {
+      const targets = acceptanceProjectTargets(items, selectedVisible, projectId);
+      const attempted = selectedVisible.length;
+      const successKey: BatchSuccessKey = projectId
+        ? 'acceptance.workspace.batch.projectSuccess'
+        : 'acceptance.workspace.batch.projectRemoveSuccess';
+      // Every selected row is already in place: nothing to send, but silence
+      // would read as a broken button — report the unchanged sweep instead.
+      if (targets.length === 0) {
+        reportBatch(0, attempted, successKey);
+        return;
+      }
+
+      setBatchPending(true);
+      try {
+        const chunks = chunkAcceptanceBatch(targets);
+        const settled = await Promise.allSettled(
+          chunks.map((chunk) => verifyService.setAcceptanceProjectBatch(chunk, projectId)),
+        );
+
+        let updated = 0;
+        const failedIds: string[] = [];
+        settled.forEach((part, index) => {
+          if (part.status === 'fulfilled') {
+            updated += part.value.updated;
+            failedIds.push(...part.value.failedIds);
+            return;
+          }
+          // A chunk that never reached the server: every id in it is unchanged.
+          console.error('[acceptance:batchProject]', part.reason);
+          failedIds.push(...chunks[index]);
+        });
+
+        const failedSet = new Set(failedIds);
+        await settleBatch(
+          selectedVisible,
+          targets.filter((id) => !failedSet.has(id)),
+          selectedVisible.filter((id) => !targets.includes(id) || failedSet.has(id)),
+        );
+        reportBatch(updated, attempted, successKey);
+      } catch (cause) {
+        console.error('[acceptance:batchProject]', cause);
+        toast.error(t('acceptance.workspace.batch.error'));
+      } finally {
+        setBatchPending(false);
+      }
+    };
+
     const deleteSelected = () => {
       const targets = selectedVisible;
       if (targets.length === 0) return;
@@ -805,11 +863,13 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
           {selecting && (
             <AcceptanceBatchBar
               acceptCount={acceptanceBatchTargets(items, selectedVisible, 'accept').length}
+              canRemoveProject={acceptanceProjectTargets(items, selectedVisible, null).length > 0}
               closeCount={acceptanceBatchTargets(items, selectedVisible, 'close').length}
               pending={batchPending || selectedVisible.length === 0}
               onAccept={() => void sweepStatus('accept', 'accepted')}
               onClose={() => void sweepStatus('close', 'closed')}
               onDelete={deleteSelected}
+              onMoveToProject={(projectId) => void sweepProject(projectId)}
             />
           )}
         </DraggablePanelContainer>

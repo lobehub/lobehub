@@ -1021,6 +1021,49 @@ export const acceptanceRouter = router({
     }),
 
   /**
+   * The multi-select twin of `setProject`: file a whole selection under one
+   * project (or take it out of any) in one action.
+   *
+   * The target project is validated ONCE, up front — a missing project fails
+   * the sweep wholesale, because every row was headed to the same place. Row
+   * resolution keeps the batch contract: a row the caller cannot write is
+   * COLLECTED into `failedIds`, not thrown, so it never voids the rest.
+   */
+  setProjectBatch: acceptanceWriteProcedure
+    .input(
+      z.object({
+        ids: z.array(z.string()).min(1).max(ACCEPTANCE_BATCH_LIMIT),
+        projectId: z.string().nullable(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (input.projectId) {
+        const project = await new ProjectModel(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId ?? undefined,
+        ).findById(input.projectId);
+        if (!project) throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
+      }
+
+      const failedIds: string[] = [];
+      let updated = 0;
+
+      for (const id of new Set(input.ids)) {
+        try {
+          const { acceptance, service } = await resolveAcceptanceForWrite(ctx, id);
+          await service.acceptanceModel.update(acceptance.id, { projectId: input.projectId });
+          updated += 1;
+        } catch (error) {
+          console.error('[acceptance] batch project update failed for %s', id, error);
+          failedIds.push(id);
+        }
+      }
+
+      return { failedIds, updated };
+    }),
+
+  /**
    * Manually move the acceptance's user-facing lifecycle state from the list —
    * an owner override (mark accepted / closed / rejected, or reopen for another look).
    */

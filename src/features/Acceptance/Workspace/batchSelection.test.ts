@@ -5,6 +5,7 @@ import type { AcceptanceListItem } from '@/services/verify';
 import {
   ACCEPTANCE_BATCH_CHUNK,
   acceptanceBatchTargets,
+  acceptanceProjectTargets,
   acceptanceSelectAllState,
   chunkAcceptanceBatch,
   nextAcceptanceSelectAll,
@@ -12,8 +13,14 @@ import {
   visibleAcceptanceSelection,
 } from './batchSelection';
 
-const item = (id: string, status: string) =>
-  ({ id, status, subject: { title: id }, subjectId: id }) as unknown as AcceptanceListItem;
+const item = (id: string, status: string, projectId?: string) =>
+  ({
+    id,
+    project: projectId ? { id: projectId, name: projectId } : undefined,
+    status,
+    subject: { title: id },
+    subjectId: id,
+  }) as unknown as AcceptanceListItem;
 
 describe('toggleAcceptanceSelection', () => {
   it('adds an unselected row and removes a selected one', () => {
@@ -76,6 +83,29 @@ describe('acceptanceBatchTargets', () => {
 
   it('ignores rows outside the selection', () => {
     expect(acceptanceBatchTargets(items, ['accepted'], 'close')).toEqual(['accepted']);
+  });
+});
+
+describe('acceptanceProjectTargets', () => {
+  const items = [
+    item('loose', 'delivered'),
+    item('in-p1', 'delivered', 'p1'),
+    item('in-p2', 'accepted', 'p2'),
+  ];
+  const selected = items.map((entry) => entry.id);
+
+  it('moves every selected row not already in the target project', () => {
+    // 'in-p1' is already where the sweep is headed; counting it would report a
+    // move that never happened.
+    expect(acceptanceProjectTargets(items, selected, 'p1')).toEqual(['loose', 'in-p2']);
+  });
+
+  it('removes only rows that actually have a project', () => {
+    expect(acceptanceProjectTargets(items, selected, null)).toEqual(['in-p1', 'in-p2']);
+  });
+
+  it('ignores rows outside the selection', () => {
+    expect(acceptanceProjectTargets(items, ['loose'], 'p1')).toEqual(['loose']);
   });
 });
 
