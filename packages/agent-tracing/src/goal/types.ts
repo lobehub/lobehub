@@ -27,6 +27,8 @@ export type GoalTickBranch =
   | 'pending_decision'
   /** No work node is eligible: none exists, or all remaining ones are blocked. */
   | 'no_frontier'
+  /** The graph has no work yet — decompose the goal into explorable directions first. */
+  | 'plan_decomposition'
   /** Every work node finished; the goal-level acceptance contract is next. */
   | 'terminal_acceptance'
   /** The chosen work has no responsible task yet. */
@@ -136,11 +138,13 @@ export interface GoalBudgetState {
   totalCost: number;
 }
 
-/** The responsible task's state at decision time; drives every post-dispatch branch. */
+/** A candidate's responsible task at decision time; drives every post-dispatch branch. */
 export interface GoalFrontierTaskState {
   error?: string | null;
   id: string;
   identifier?: string;
+  /** The task node this task belongs to, so a reader can line the two up. */
+  nodeId?: string;
   status: string;
   updatedAt: number;
 }
@@ -170,9 +174,23 @@ export interface GoalTickSnapshot {
    */
   budget?: GoalBudgetState;
   candidates: FrontierCandidate[];
+  /**
+   * The responsible task of every candidate that had one. The scheduler reads
+   * all of them — it has to know which are in flight before it can decide what
+   * else to start — so recording only the chosen one would leave a replay
+   * unable to reproduce the decision.
+   */
+  candidateTasks?: GoalFrontierTaskState[];
   chosenNodeId?: string;
+  /** Concurrency cap in force for this tick. */
+  concurrency?: number;
   /** What this tick changed. Attributed per tick so an advance's writes stay ordered. */
   effects: GoalAdvanceEffect[];
+  /**
+   * @deprecated Superseded by `candidateTasks`, which carries every candidate
+   * rather than only the chosen one. Still read when replaying trajectories
+   * recorded before the scheduler could look past the head of the frontier.
+   */
   frontierTask?: GoalFrontierTaskState;
   /**
    * Graph change since the previously recorded tick, observed on entry to this

@@ -201,7 +201,10 @@ describe('advanceGoal trajectory recording', () => {
         finalStatus: null,
         goalId: 'goal-1',
         ticksTotal: 1,
-        traceS3Key: 'goal-traces/goal-1.json.zst',
+        // The partial, because that is the object that exists while the goal
+        // runs. Pointing at the finalized key here made `hasTrace` a lie and
+        // had the server sign a URL that 404s until the goal was over.
+        traceS3Key: 'goal-traces/_partial/goal-1.json.zst',
         // The column name, not the rollup's. Pinned so the mapping in
         // `writeObservationRow` cannot drift silently.
         workOperations: 1,
@@ -222,6 +225,13 @@ describe('advanceGoal trajectory recording', () => {
 
     expect(state.saved).toMatchObject({ completionReason: 'achieved', totalAdvances: 1 });
     expect(state.partial).toBeUndefined();
+    // And the row follows the object: the partial is gone, so the key moves.
+    expect(mocks.upsert).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        finalStatus: 'achieved',
+        traceS3Key: 'goal-traces/goal-1.json.zst',
+      }),
+    );
   });
 
   it('leaves the trajectory open for a goal that is merely parked', async () => {

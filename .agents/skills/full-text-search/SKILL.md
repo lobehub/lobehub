@@ -66,6 +66,11 @@ applicable item:
 Schema fields, mappings, builders, and fixed fixtures must agree exactly. A field that is not in the
 document schema must not appear in the mapping or query field list.
 
+Elasticsearch `multi_match` query length is bounded by a shared leaf-clause budget divided by the
+selected query-field count. Adding a field reduces that entity's safe query length, and changing a
+query analyzer to emit multiple terms per Unicode code point requires revisiting the budget and its
+field-count regression tests.
+
 ## Capture, Reindex, and Sync
 
 - Regular database migrations own durable schema: the revision sequence, Outbox table and indexes,

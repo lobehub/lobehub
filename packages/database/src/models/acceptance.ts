@@ -1,5 +1,5 @@
 import type { AcceptanceStatus, AcceptanceSubjectType } from '@lobechat/types';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, lt, or, sql } from 'drizzle-orm';
 
 import type { AcceptanceItem, NewAcceptance } from '../schemas/verify';
 import { acceptances } from '../schemas/verify';
@@ -9,6 +9,26 @@ import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 /** Statuses a user's decision produced — sticky until explicitly re-opened. */
 const TERMINAL_ACCEPTANCE_STATUSES = new Set<AcceptanceStatus>(['accepted', 'closed', 'rejected']);
+
+/**
+ * Opaque list cursor = `${createdAt ISO}__${id}`. Both parts are metacharacter-
+ * free (ISO timestamp + uuid), so a plain `__` delimiter round-trips safely.
+ * Mirrors `VerifyRunModel.queryPage`, whose page the reports panel reads.
+ */
+const encodeCursor = (createdAt: Date, id: string): string => `${createdAt.toISOString()}__${id}`;
+
+const decodeCursor = (cursor?: string): { createdAt: Date; id: string } | null => {
+  if (!cursor) return null;
+  const idx = cursor.lastIndexOf('__');
+  if (idx <= 0) return null;
+  const createdAt = new Date(cursor.slice(0, idx));
+  const id = cursor.slice(idx + 2);
+  // The id half is compared against a uuid column, so a malformed one would be
+  // parsed by Postgres and raise 22P02 — a client's bad cursor turning into a
+  // 500. An unreadable cursor is simply the start of the feed.
+  if (Number.isNaN(createdAt.getTime()) || !isUuid(id)) return null;
+  return { createdAt, id };
+};
 
 /**
  * Owns the business-level acceptance aggregate (`acceptances`): one row per
@@ -203,6 +223,56 @@ export class AcceptanceModel {
           ? and(this.ownership(), inArray(acceptances.status, statuses))
           : this.ownership(),
     });
+  };
+
+  /**
+   * Keyset page of the same feed, newest first — what the list panel scrolls.
+   *
+   * Takes the same `statuses` split as {@link query} so both entry points speak
+   * one vocabulary: a page of "in progress" is thirty in-progress rows, not
+   * thirty rows of which some happen to be in progress.
+   */
+  queryPage = async ({
+    cursor,
+    limit = 30,
+    statuses,
+  }: { cursor?: string; limit?: number; statuses?: AcceptanceStatus[] } = {}): Promise<{
+    items: AcceptanceItem[];
+    nextCursor: string | null;
+  }> => {
+    const conditions = [this.ownership()];
+    if (statuses && statuses.length > 0) conditions.push(inArray(acceptances.status, statuses));
+
+    // Millisecond-truncated createdAt — the precision the cursor round-trips
+    // at. Comparing the raw timestamptz (microseconds) against a cursor read
+    // back as a JS Date would let a row satisfy its own bound and repeat.
+    const createdAtMs = sql`date_trunc('milliseconds', ${acceptances.createdAt})`;
+
+    const decoded = decodeCursor(cursor);
+    if (decoded) {
+      // (createdAt, id) < (cursor.createdAt, cursor.id) in descending order.
+      conditions.push(
+        or(
+          lt(createdAtMs, decoded.createdAt),
+          and(eq(createdAtMs, decoded.createdAt), lt(acceptances.id, decoded.id)),
+        )!,
+      );
+    }
+
+    const rows = await this.db.query.acceptances.findMany({
+      limit: limit + 1,
+      orderBy: [desc(createdAtMs), desc(acceptances.id)],
+      where: and(...conditions),
+    });
+
+    const hasMore = rows.length > limit;
+    const items = hasMore ? rows.slice(0, limit) : rows;
+    const last = items.at(-1);
+
+    return {
+      items,
+      nextCursor: hasMore && last ? encodeCursor(last.createdAt, last.id) : null,
+    };
   };
 
   update = async (

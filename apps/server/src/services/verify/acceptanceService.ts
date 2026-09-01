@@ -400,6 +400,16 @@ export interface AcceptanceSubjectSummary {
   type: AcceptanceSubjectType;
 }
 
+/** The list filter as a status set — one definition for the flat and paged reads. */
+export type AcceptanceListFilter = 'active' | 'all' | 'completed';
+
+const statusesForFilter = (filter: AcceptanceListFilter): AcceptanceStatus[] | undefined => {
+  if (filter === 'active')
+    return ['pending', 'planned', 'verifying', 'repairing', 'delivered', 'rejected', 'errored'];
+  if (filter === 'completed') return ['accepted', 'closed'];
+  return undefined;
+};
+
 export class AcceptanceService {
   private readonly db: LobeChatDatabase;
   private readonly userId: string;
@@ -411,9 +421,27 @@ export class AcceptanceService {
   private readonly evidenceModel: VerifyEvidenceModel;
   private readonly reportModel: VerifyReportModel;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  /**
+   * Who is CREDITED for the writes this service performs.
+   *
+   * Normally the same person the service is scoped to. They diverge for an
+   * elevated write — a workspace owner acting on a teammate's delivery — where
+   * the scope has to be the row's owner for the ownership predicate to resolve
+   * it at all, while `decidedBy` must still name the human who decided. An
+   * audit trail that credits a teammate's verdict to the author is worse than
+   * one nobody can sign.
+   */
+  private readonly actorUserId: string;
+
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    options?: { actorUserId?: string },
+  ) {
     this.db = db;
     this.userId = userId;
+    this.actorUserId = options?.actorUserId ?? userId;
     this.workspaceId = workspaceId;
     this.acceptanceModel = new AcceptanceModel(db, userId, workspaceId);
     this.runModel = new VerifyRunModel(db, userId, workspaceId);
@@ -832,7 +860,7 @@ export class AcceptanceService {
     const currentRoundIndex = runs.at(-1)?.roundIndex ?? 0;
     const detail: VerifyCheckDecisionDetail = {
       decidedAt: new Date().toISOString(),
-      decidedBy: this.userId,
+      decidedBy: this.actorUserId,
       roundIndex: currentRoundIndex,
       ...(input.comment ? { comment: input.comment } : {}),
       ...(input.annotations?.length ? { annotations: input.annotations } : {}),
@@ -925,7 +953,7 @@ export class AcceptanceService {
 
     const detail: VerifyRunDecisionDetail = {
       decidedAt: new Date().toISOString(),
-      decidedBy: this.userId,
+      decidedBy: this.actorUserId,
       ...(comment ? { comment } : {}),
     };
     await this.runModel.setDecision(current.id, decision, detail);
@@ -1120,12 +1148,7 @@ export class AcceptanceService {
     } = {},
   ) => {
     const { filter = 'all', limit = 50, q } = options;
-    const statuses: AcceptanceStatus[] | undefined =
-      filter === 'active'
-        ? ['pending', 'planned', 'verifying', 'repairing', 'delivered', 'rejected', 'errored']
-        : filter === 'completed'
-          ? ['accepted', 'closed']
-          : undefined;
+    const statuses = statusesForFilter(filter);
     const normalizedQuery = q?.trim().toLocaleLowerCase();
 
     // A title search must span the complete owned set. Subject titles live in
@@ -1160,6 +1183,44 @@ export class AcceptanceService {
       project: projects.get(row.id) ?? null,
       subject,
     }));
+  };
+
+  /**
+   * The paged twin of {@link listWithSubjects} — one scroll page of the list
+   * panel, newest first.
+   *
+   * Takes the same `filter` vocabulary, applied in the QUERY: a page of
+   * "in progress" is thirty in-progress rows, not thirty rows of which some
+   * happen to be in progress. Search deliberately has no paged form — a title
+   * search must span the whole owned set, which is what `listWithSubjects`
+   * already does; the panel asks that one when a query is active.
+   */
+  listPageWithSubjects = async (options: {
+    cursor?: string;
+    filter?: AcceptanceListFilter;
+    limit?: number;
+  }) => {
+    const { items, nextCursor } = await this.acceptanceModel.queryPage({
+      cursor: options.cursor,
+      limit: options.limit,
+      statuses: statusesForFilter(options.filter ?? 'all'),
+    });
+
+    const subjects = await this.resolveSubjects(items);
+    const [checkCounts, projects] = await Promise.all([
+      this.latestCheckCounts(items.map((row) => row.id)),
+      this.resolveProjects(items),
+    ]);
+
+    return {
+      items: items.map((row) => ({
+        ...row,
+        checkCount: checkCounts.get(row.id) ?? null,
+        project: projects.get(row.id) ?? null,
+        subject: subjects.get(row.id)!,
+      })),
+      nextCursor,
+    };
   };
 
   /**

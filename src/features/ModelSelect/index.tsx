@@ -28,6 +28,17 @@ const STALE_EXTRA_CLASSNAME = 'lobe-model-select-stale-extra';
 const STALE_TAG_CLASSNAME = 'lobe-model-select-stale-tag';
 
 /**
+ * Marks the stale-model option row so the popup can hide the Select's built-in
+ * selected-item check on it — the row already sits under the "Current selection"
+ * group and (for notEnabled) renders an enable Switch, so the extra check reads
+ * as contradictory and steals the row's right edge.
+ */
+const STALE_OPTION_CLASSNAME = 'lobe-model-select-stale-option';
+
+/** Stable hook on every option's ItemIndicator so CSS can target it. */
+const ITEM_INDICATOR_CLASSNAME = 'lobe-model-select-item-indicator';
+
+/**
  * Sentinel option value for the redirected-model remedy row ("update to
  * successor"). Intercepted in onChange so selecting it triggers the remedy
  * instead of a value change.
@@ -46,6 +57,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
      * descendant selector, so a plain display: none never applies. */
     .${STALE_TAG_CLASSNAME} {
       display: none !important;
+    }
+
+    .${STALE_OPTION_CLASSNAME} .${ITEM_INDICATOR_CLASSNAME} {
+      display: none;
     }
   `,
   select: css`
@@ -260,9 +275,10 @@ const ModelSelect = memo<ModelSelectProps>(
 
       const currentOption = {
         __stale: true,
+        className: STALE_OPTION_CLASSNAME,
         disabled: true,
         label: (
-          <Flexbox gap={4}>
+          <Flexbox gap={4} style={{ width: '100%' }}>
             <Flexbox horizontal align={'center'} gap={8}>
               <ModelIcon model={value.model} size={20} />
               <Text ellipsis style={{ fontSize: 14 }}>
@@ -354,6 +370,7 @@ const ModelSelect = memo<ModelSelectProps>(
         <Select
           allowClear={allowClear}
           className={styles.select}
+          classNames={{ itemIndicator: ITEM_INDICATOR_CLASSNAME }}
           defaultValue={value ? `${value.provider}/${value.model}` : null}
           disabled={disabled}
           labelRender={labelRender}

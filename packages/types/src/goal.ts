@@ -32,6 +32,13 @@ export interface GoalRecoveryPolicy {
 }
 
 export interface GoalConfig {
+  /**
+   * How many of a goal's Tasks may be in flight at once. Independent Tasks are
+   * the common case — four bug fixes that share no code have no reason to run
+   * one after another — but an uncapped fan-out would spend the whole budget
+   * before the first result came back. Null/undefined uses the default.
+   */
+  maxConcurrentTasks?: number | null;
   recovery?: GoalRecoveryPolicy;
 }
 

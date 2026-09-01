@@ -85,6 +85,117 @@ afterEach(async () => {
 });
 
 describe('ElasticsearchFtsSearchBackend', () => {
+  it('backs up to a word boundary when the clause budget cuts a Latin word', async () => {
+    const client = createClient([]);
+    const backend = new ElasticsearchFtsSearchBackend(db, { client, indexNamespace });
+    const completeWords = 'word '.repeat(19);
+    const query = `${completeWords}fragment`;
+
+    await backend.search({
+      entity: 'memoryExperiences',
+      filters: {},
+      mode: 'candidates',
+      pagination: { limit: 3 },
+      query: { text: query },
+      scope: { userId },
+    });
+
+    expect(client.search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          query: {
+            bool: expect.objectContaining({
+              must: [
+                {
+                  multi_match: expect.objectContaining({
+                    query: completeWords.trimEnd(),
+                  }),
+                },
+              ],
+            }),
+          },
+        }),
+        executedQueryChars: completeWords.trimEnd().length,
+        originalQueryChars: Array.from(query).length,
+        queryFieldCount: 8,
+        truncated: true,
+      }),
+    );
+  });
+
+  it('bounds long Unicode queries before building an eight-field multi-match request', async () => {
+    const client = createClient([]);
+    const backend = new ElasticsearchFtsSearchBackend(db, { client, indexNamespace });
+    const query = `${'界'.repeat(95)}😀${'文'.repeat(7000)}`;
+
+    await backend.search({
+      entity: 'memoryExperiences',
+      filters: {},
+      mode: 'candidates',
+      pagination: { limit: 3 },
+      query: { text: query },
+      scope: { userId },
+    });
+
+    expect(client.search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          query: {
+            bool: expect.objectContaining({
+              must: [
+                {
+                  multi_match: expect.objectContaining({
+                    query: `${'界'.repeat(95)}😀`,
+                  }),
+                },
+              ],
+            }),
+          },
+        }),
+        executedQueryChars: 96,
+        originalQueryChars: 7096,
+        queryFieldCount: 8,
+        truncated: true,
+      }),
+    );
+  });
+
+  it('scales the query-character budget with the selected field count', async () => {
+    const client = createClient([]);
+    const backend = new ElasticsearchFtsSearchBackend(db, { client, indexNamespace });
+
+    await backend.search({
+      entity: 'userMemories',
+      filters: {},
+      mode: 'candidates',
+      pagination: { limit: 3 },
+      query: { fields: ['title', 'summary', 'details'], text: '界'.repeat(300) },
+      scope: { userId },
+    });
+
+    expect(client.search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          query: {
+            bool: expect.objectContaining({
+              must: [
+                {
+                  multi_match: expect.objectContaining({
+                    query: '界'.repeat(256),
+                  }),
+                },
+              ],
+            }),
+          },
+        }),
+        executedQueryChars: 256,
+        originalQueryChars: 300,
+        queryFieldCount: 3,
+        truncated: true,
+      }),
+    );
+  });
+
   it('searches and reauthorizes unified user-memory candidates in PostgreSQL', async () => {
     await db.insert(userMemories).values([
       {
@@ -257,8 +368,12 @@ describe('ElasticsearchFtsSearchBackend', () => {
         track_total_hits: true,
       },
       entity: 'memoryContexts',
+      executedQueryChars: 13,
       index: 'lobehub-dev-memory-contexts',
+      originalQueryChars: 13,
       pagination: 'bounded',
+      queryFieldCount: 4,
+      truncated: false,
     });
   });
 
@@ -679,8 +794,12 @@ describe('ElasticsearchFtsSearchBackend', () => {
         sort: [{ _score: 'desc' }, { id: 'asc' }],
       },
       entity: 'agents',
+      executedQueryChars: 13,
       index: 'lobehub-dev-agents',
+      originalQueryChars: 13,
       pagination: 'bounded',
+      queryFieldCount: 5,
+      truncated: false,
     });
 
     const publicCaller = await backend.search(

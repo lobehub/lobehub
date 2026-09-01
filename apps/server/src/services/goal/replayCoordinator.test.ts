@@ -154,7 +154,8 @@ describe('replayGoalAgainstCurrentCoordinator', () => {
                 { blockedBy: ['a'], nodeId: 'b', priority: 0, status: 'proposed', title: 'b' },
               ],
               chosenNodeId: 'a',
-              frontierTask: { id: 'task_1', status: 'backlog', updatedAt: 0 },
+              candidateTasks: [{ id: 'task_1', nodeId: 'a', status: 'backlog', updatedAt: 0 }],
+              concurrency: 3,
               outcome: 'no_progress',
             }),
           ],
@@ -167,5 +168,40 @@ describe('replayGoalAgainstCurrentCoordinator', () => {
     };
 
     expect(replayGoalAgainstCurrentCoordinator(exhausted).divergences).toEqual([]);
+  });
+});
+
+describe('replaying trajectories recorded before the scheduler', () => {
+  it('reads the legacy single-task field instead of seeing no tasks at all', () => {
+    // Older ticks carry `frontierTask`, not `candidateTasks`. Dropping it would
+    // replay every one of them as `missing_task` and report divergences that
+    // never happened.
+    const legacy: GoalTrajectory = {
+      ...trajectory,
+      advances: [
+        {
+          ...trajectory.advances[0],
+          ticks: [
+            {
+              ...trajectory.advances[0].ticks[0],
+              branch: 'dispatch_task',
+              candidateTasks: undefined,
+              frontierTask: { id: 'task_1', status: 'backlog', updatedAt: 0 },
+            },
+          ],
+        },
+      ],
+      graphBaseline: {
+        ...trajectory.graphBaseline,
+        nodes: [
+          { ...trajectory.graphBaseline.nodes[0], taskId: 'task_1' },
+          trajectory.graphBaseline.nodes[1],
+        ],
+      },
+    };
+
+    const result = replayGoalAgainstCurrentCoordinator(legacy);
+
+    expect(result.divergences.filter((item) => item.replayed === 'missing_task')).toEqual([]);
   });
 });
