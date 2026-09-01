@@ -48,7 +48,6 @@ export default {
   'cardBindingPromoBanner.label': 'Add your first payment method and get 1M credits free',
   'homePromoBanner.cta': 'Try now',
   'homePromoBanner.dismiss': 'Dismiss',
-  'homePromoBanner.glm53FlashReveal': 'Ox Alpha unmasked: GLM-5.3-Flash',
   'homePromoBanner.label': '{{model}} is now available',
   'dashboard.chat.empty': 'No recent conversations',
   'dashboard.chat.recents': 'Recent topics',
