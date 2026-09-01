@@ -65,8 +65,10 @@ export const computeVideoCost = (
         return completionTokens;
       }
       case 'second': {
+        // Zero is not a usable duration: no video card sells zero-second
+        // output, so pricing 0 as a success would report a real video as free.
         const isValidSeconds = (value: unknown): value is number =>
-          typeof value === 'number' && Number.isFinite(value) && value >= 0;
+          typeof value === 'number' && Number.isFinite(value) && value > 0;
         const seconds = isValidSeconds(videoSeconds)
           ? videoSeconds
           : isValidSeconds(params.duration)

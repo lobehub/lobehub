@@ -332,6 +332,18 @@ describe('computeVideoCost', () => {
       expect(computeVideoCost(pricing, 0, {}, Number.POSITIVE_INFINITY)).toBeUndefined();
     });
 
+    it('should treat a zero duration as unusable rather than free', () => {
+      const pricing: Pricing = {
+        units: [{ name: 'videoGeneration', rate: 0.1, strategy: 'fixed', unit: 'second' }],
+      };
+
+      // A zero videoSeconds falls back to the requested duration...
+      expect(computeVideoCost(pricing, 0, { duration: 8 }, 0)?.totalCost).toBeCloseTo(0.8, 10);
+      // ...and a zero fallback yields no cost instead of a $0 "success".
+      expect(computeVideoCost(pricing, 0, { duration: 0 })).toBeUndefined();
+      expect(computeVideoCost(pricing, 0, {}, 0)).toBeUndefined();
+    });
+
     it('should return undefined for second-unit pricing without any duration', () => {
       const pricing: Pricing = {
         units: [{ name: 'videoGeneration', rate: 0.4, strategy: 'fixed', unit: 'second' }],
