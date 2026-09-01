@@ -92,10 +92,11 @@ const FolderAddButton = memo<FolderAddButtonProps>(({ folderId }) => {
       // Unique "Untitled N" among the siblings already loaded for this folder.
       const siblings = useTreeStore.getState().children[folderId] ?? [];
       const existingNames = new Set(siblings.filter((i) => i.isFolder).map((i) => i.name));
-      let uniqueName = 'Untitled';
+      const baseName = t('pageList.untitled');
+      let uniqueName = baseName;
       let counter = 1;
       while (existingNames.has(uniqueName)) {
-        uniqueName = `Untitled ${counter}`;
+        uniqueName = `${baseName} ${counter}`;
         counter++;
       }
 

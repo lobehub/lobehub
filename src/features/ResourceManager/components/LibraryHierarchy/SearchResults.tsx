@@ -56,7 +56,7 @@ const SearchResults = memo<SearchResultsProps>(({ libraryId, query }) => {
     setLimit(SEARCH_PAGE_SIZE);
   }, [debouncedQuery, libraryId]);
 
-  const { data, error, isLoading, isValidating, mutate } = useClientDataSWR(
+  const { data, error, isValidating, mutate } = useClientDataSWR(
     debouncedQuery
       ? resourceKeys.search(
           { libraryId, limit, q: debouncedQuery, scope: 'hierarchy' },
@@ -71,19 +71,28 @@ const SearchResults = memo<SearchResultsProps>(({ libraryId, query }) => {
         q: params.q,
         showFilesInKnowledgeBase: false,
       });
-      return { hasMore: response.hasMore, items: response.items };
+      // Echo the scope so retained data from a previous key can be told apart.
+      return {
+        hasMore: response.hasMore,
+        items: response.items,
+        libraryId: params.libraryId,
+        q: params.q,
+      };
     },
     // Growing the window must not flash the skeleton over rows already shown.
+    // The trade-off is that a *new* query also keeps the old rows around, so
+    // only data that echoes the current query/library counts as current below.
     { keepPreviousData: true },
   );
 
+  const current = data?.q === debouncedQuery && data.libraryId === libraryId ? data : undefined;
   const rows = useMemo(
     () =>
-      data?.items.map((row) => ({ item: toTreeItem(row), parentKey: row.parentId ?? '' })) ?? [],
-    [data],
+      current?.items.map((row) => ({ item: toTreeItem(row), parentKey: row.parentId ?? '' })) ?? [],
+    [current],
   );
-  const hasMore = data?.hasMore ?? false;
-  // `data` may still be the previous window while the larger one is in flight.
+  const hasMore = current?.hasMore ?? false;
+  // `current` may still be the previous window while the larger one is in flight.
   const isLoadingMore = isValidating && rows.length > 0 && rows.length < limit;
 
   const listRef = useRef<VListHandle>(null);
@@ -112,12 +121,14 @@ const SearchResults = memo<SearchResultsProps>(({ libraryId, query }) => {
 
   return (
     <AsyncBoundary
-      data={data}
+      data={current}
       empty={emptyState}
       error={error}
       errorVariant={'block'}
       isEmpty={rows.length === 0}
-      isLoading={(isLoading && !data) || isWaitingForDebounce}
+      // No current-key data yet (initial load or a query change) counts as loading
+      // unless the request already failed, so the error state can show.
+      isLoading={(!current && !error) || isWaitingForDebounce}
       loading={<TreeSkeleton />}
       onRetry={() => mutate()}
     >

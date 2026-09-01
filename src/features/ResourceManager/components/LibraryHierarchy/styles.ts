@@ -22,7 +22,9 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
       transition: opacity 0.15s;
     }
 
+    /* Hover, keyboard focus on the action itself, or an open menu keep it visible. */
     &:hover .hierarchy-node-actions,
+    .hierarchy-node-actions:focus-within,
     .hierarchy-node-actions[data-open='true'] {
       opacity: 1;
     }
