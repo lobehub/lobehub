@@ -1,14 +1,15 @@
 'use client';
 
-import { Accordion, AccordionItem, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Button, Tag, Text, toast } from '@lobehub/ui/base-ui';
+import { Accordion, AccordionItem, Flexbox, Icon } from '@lobehub/ui';
+import { Button, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { Pause, Play, StepForward } from 'lucide-react';
+import { Pause, Play } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
 import { goalService } from '@/services/goal';
+import { useChatStore } from '@/store/chat';
 import { goalSelectors, useGoalStore } from '@/store/goal';
 
 import Activity from './Activity';
@@ -39,48 +40,43 @@ const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
   const { t } = useTranslation('chat');
   const { allowed: canEdit } = usePermission('create_content');
   const [selectedId, setSelectedId] = useState<string>();
-  const [advancing, setAdvancing] = useState(false);
 
   const useFetchGoalGraph = useGoalStore((s) => s.useFetchGoalGraph);
   const decideGoal = useGoalStore((s) => s.decideGoal);
   const pauseGoal = useGoalStore((s) => s.pauseGoal);
   const resumeGoal = useGoalStore((s) => s.resumeGoal);
-  const advanceGoalNow = useGoalStore((s) => s.advanceGoal);
   const refreshGoalGraph = useGoalStore((s) => s.refreshGoalGraph);
+  const openTaskDetail = useChatStore((s) => s.openTaskDetail);
+  const openGoalNode = useChatStore((s) => s.openGoalNode);
   useFetchGoalGraph(goalId);
   const snapshot = useGoalStore(goalSelectors.goalGraph(goalId));
 
   const graph = useMemo(() => (snapshot ? buildGoalGraphView(snapshot) : undefined), [snapshot]);
 
-  // One press hands the goal to the server's coordinator, which runs it as far
-  // as it can go in one call and then keeps going on its own as each Work Task
-  // settles. A single coordinator step is an implementation unit — a press that
-  // only ticked once usually looked like it did nothing, because the very next
-  // step is what dispatches the task.
-  const advance = useCallback(async () => {
-    if (advancing) return;
-    setAdvancing(true);
-    try {
-      const result = await advanceGoalNow(goalId);
-      toast.info(result.message);
-    } catch (error) {
-      toast.error((error as Error).message);
-    } finally {
-      setAdvancing(false);
-    }
-  }, [advancing, advanceGoalNow, goalId]);
-
   const actions: FrontierActions = useMemo(
     () => ({
       addTask: async (title: string) => {
-        await goalService.addNode({ id: goalId, kind: 'work', title });
+        await goalService.addNode({ id: goalId, kind: 'task', title });
         await refreshGoalGraph(goalId);
       },
-      advance: () => void advance(),
       decide: (decisionId, optionId, resolution) =>
         void decideGoal(goalId, { decisionId, optionId, resolution }),
     }),
-    [advance, decideGoal, goalId, refreshGoalGraph],
+    [decideGoal, goalId, refreshGoalGraph],
+  );
+
+  // Every click funnels here: keep the map highlight (spatial continuity) and
+  // open the drill-down — a dispatched Work goes straight to its Task detail,
+  // everything else opens the node view. This is the chain the page was
+  // missing: node → task → topic conversation.
+  const select = useCallback(
+    (nodeId: string) => {
+      setSelectedId(nodeId);
+      const taskId = graph?.byId[nodeId]?.node.taskId;
+      if (taskId) openTaskDetail(taskId);
+      else openGoalNode(goalId, nodeId);
+    },
+    [goalId, graph, openGoalNode, openTaskDetail],
   );
 
   // Task-carried goals share the `goals` table but never grow a graph. Nothing
@@ -89,8 +85,9 @@ const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
 
   const paused = graph.goal.status === 'paused';
   // A closed goal cannot move: the coordinator returns immediately for these,
-  // so Advance would report nothing happened and a Work added here would sit
-  // `proposed` forever. Stop offering actions that cannot land.
+  // and a Work added here would sit `proposed` forever. Stop offering actions
+  // that cannot land. The goal otherwise advances entirely on its own — the
+  // only legitimate human control over its pace is pause/resume.
   const closed = ['achieved', 'canceled', 'failed'].includes(graph.goal.status);
   const canAct = canEdit && !closed;
 
@@ -99,26 +96,13 @@ const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
       <Flexbox gap={12}>
         <Flexbox horizontal align={'center'} gap={8}>
           {canAct && (
-            <>
-              <Tooltip title={t('goalProcess.advance.tooltip')}>
-                <Button
-                  icon={<Icon icon={StepForward} />}
-                  loading={advancing}
-                  size={'small'}
-                  type={'primary'}
-                  onClick={advance}
-                >
-                  {advancing ? t('goalProcess.advance.running') : t('goalProcess.advance.label')}
-                </Button>
-              </Tooltip>
-              <Button
-                icon={<Icon icon={paused ? Play : Pause} />}
-                size={'small'}
-                onClick={() => void (paused ? resumeGoal(goalId) : pauseGoal(goalId))}
-              >
-                {paused ? t('goalProcess.resume') : t('goalProcess.pause')}
-              </Button>
-            </>
+            <Button
+              icon={<Icon icon={paused ? Play : Pause} />}
+              size={'small'}
+              onClick={() => void (paused ? resumeGoal(goalId) : pauseGoal(goalId))}
+            >
+              {paused ? t('goalProcess.resume') : t('goalProcess.pause')}
+            </Button>
           )}
           {paused && (
             <Text fontSize={12} type={'secondary'}>
@@ -127,10 +111,10 @@ const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
           )}
         </Flexbox>
 
-        <Frontier actions={actions} canEdit={canAct} graph={graph} onSelect={setSelectedId} />
+        <Frontier actions={actions} canEdit={canAct} graph={graph} onSelect={select} />
       </Flexbox>
 
-      <Graph graph={graph} selectedId={selectedId} onSelect={setSelectedId} />
+      <Graph graph={graph} selectedId={selectedId} onSelect={select} />
 
       <Accordion defaultExpandedKeys={['findings', 'activity']} gap={0}>
         <AccordionItem
@@ -147,7 +131,7 @@ const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
           }
         >
           <Flexbox className={styles.section}>
-            <Findings graph={graph} onSelect={setSelectedId} />
+            <Findings graph={graph} onSelect={select} />
           </Flexbox>
         </AccordionItem>
         <AccordionItem
@@ -163,7 +147,7 @@ const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
           }
         >
           <Flexbox className={styles.section}>
-            <Activity graph={graph} onSelect={setSelectedId} />
+            <Activity graph={graph} onSelect={select} />
           </Flexbox>
         </AccordionItem>
       </Accordion>

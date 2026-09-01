@@ -177,7 +177,7 @@ export const driveTaskFromVerify = async (
         taskOperation.taskId,
       );
       if (goal) {
-        await scheduleGoalAdvance({ goalId: goal.id, userId, workspaceId });
+        await scheduleGoalAdvance({ goalId: goal.id, trigger: 'settle', userId, workspaceId });
         log('verify-settle → queued goal advance for %s', goal.id);
       }
     } catch (error) {

@@ -80,8 +80,9 @@ discover or author plan  →  pick the surface  →  capture evidence  →  publ
 
 The skill package is portable, but execution capabilities are surface-specific:
 `agent-browser` serves Web/Electron, while native macOS and iOS Simulator require
-a local macOS display and their platform tools. No repository-specific scripts
-or fixed report directory are required.
+a local macOS display and their platform tools. No repository-specific scripts are
+required; rounds land under `.acceptances/`, which the CLI keeps out of git for
+you (see [report.md](./references/report.md#directory-layout)).
 
 ## Two entry points — an operation id is NOT required
 

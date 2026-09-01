@@ -22,6 +22,7 @@ export * from './documentHistory';
 export * from './documentShare';
 export * from './expertise';
 export * from './file';
+export * from './ftsSearchSyncOutbox';
 export * from './generation';
 export * from './goal';
 export * from './goalGraph';

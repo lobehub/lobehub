@@ -16,8 +16,8 @@ interface MockOperation {
 }
 
 const mocks = vi.hoisted(() => ({
-  copyToClipboard: vi.fn(),
   isDevMode: true,
+  copyToClipboard: vi.fn(),
   messageOperationMap: {} as Record<string, string>,
   messageSuccess: vi.fn(),
   operations: {} as Record<string, MockOperation>,
@@ -45,6 +45,16 @@ vi.mock('@/store/chat', () => ({
     }),
 }));
 
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (state: unknown) => unknown) => selector({}),
+}));
+
+vi.mock('@/store/user/selectors', () => ({
+  userGeneralSettingsSelectors: {
+    config: () => ({ isDevMode: mocks.isDevMode }),
+  },
+}));
+
 vi.mock('@/store/chat/selectors', () => ({
   operationSelectors: {
     // Test double for the parent-chain walk: climbs `parentOperationId` until
@@ -57,16 +67,6 @@ vi.mock('@/store/chat/selectors', () => ({
         }
         return op;
       },
-  },
-}));
-
-vi.mock('@/store/user', () => ({
-  useUserStore: (selector: (state: unknown) => unknown) => selector({}),
-}));
-
-vi.mock('@/store/user/selectors', () => ({
-  userGeneralSettingsSelectors: {
-    config: () => ({ isDevMode: mocks.isDevMode }),
   },
 }));
 

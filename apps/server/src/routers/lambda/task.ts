@@ -146,7 +146,7 @@ const groupListSchema = z
     assigneeAgentId: z.string().optional(),
     automated: z.boolean().optional(),
     excludeStatuses: z.array(z.enum(TASK_STATUSES)).max(10).optional(),
-    groupBy: z.enum(['assignee', 'priority']).optional(),
+    groupBy: z.enum(['agent', 'assignee', 'member', 'priority']).optional(),
     groups: z
       .array(
         z.object({
@@ -1179,14 +1179,6 @@ export const taskRouter = router({
         resolved.visibility,
         data.assigneeUserId,
         resolved.createdByUserId,
-      );
-
-      // Automation and a human assignee are mutually exclusive. Judge the
-      // POST-update effective pair so both directions are caught: assigning a
-      // member to an automated task, and scheduling a member-assigned task.
-      ctx.taskService.assertAutomationAssigneeCompat(
-        data.automationMode !== undefined ? data.automationMode : resolved.automationMode,
-        data.assigneeUserId !== undefined ? data.assigneeUserId : resolved.assigneeUserId,
       );
 
       const resolvedParentTaskId =

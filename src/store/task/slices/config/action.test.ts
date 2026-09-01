@@ -149,7 +149,7 @@ describe('TaskConfigSliceAction', () => {
       });
     });
 
-    it('should clear a member assignee in the same request when enabling automation', async () => {
+    it('should preserve the responsible assignee when enabling automation', async () => {
       vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
 
       useTaskStore.setState({
@@ -164,13 +164,8 @@ describe('TaskConfigSliceAction', () => {
 
       await useTaskStore.getState().setAutomationMode('T-1', 'heartbeat');
 
-      // Server rejects automation + human assignee; the clear must ride the
-      // same update or the optimistic toggle silently bounces back.
-      expect(taskService.update).toHaveBeenCalledWith('T-1', {
-        assigneeUserId: null,
-        automationMode: 'heartbeat',
-      });
-      expect(useTaskStore.getState().taskDetailMap['T-1'].userId).toBeNull();
+      expect(taskService.update).toHaveBeenCalledWith('T-1', { automationMode: 'heartbeat' });
+      expect(useTaskStore.getState().taskDetailMap['T-1'].userId).toBe('user_member_1');
     });
 
     it('should not touch the assignee when disabling automation', async () => {

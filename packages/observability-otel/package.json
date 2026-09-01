@@ -11,6 +11,7 @@
     "./modules/agent-signal": "./src/modules/agent-signal/index.ts",
     "./modules/memory-user-memory": "./src/modules/memory-user-memory/index.ts",
     "./modules/onboarding-understanding": "./src/modules/onboarding-understanding/index.ts",
+    "./modules/fts-search-reindex": "./src/modules/fts-search-reindex/index.ts",
     "./modules/upstash-workflow": "./src/modules/upstash-workflow/index.ts"
   },
   "dependencies": {

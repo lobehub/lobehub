@@ -93,6 +93,14 @@ export const cursorBinary: BinarySpec = {
   priority: 3,
 };
 
+/** Factory Droid CLI @see https://docs.factory.ai/cli/getting-started/quickstart */
+export const droidBinary: BinarySpec = {
+  description: 'Factory Droid - Factory agentic coding CLI',
+  detect: () => detectHeterogeneousCliCommand('droid', 'droid'),
+  name: 'droid',
+  priority: 3,
+};
+
 /** xAI Grok Build CLI @see https://docs.x.ai/build/overview */
 export const grokBuildBinary: BinarySpec = {
   description: 'Grok Build - xAI agentic coding CLI',
@@ -204,6 +212,7 @@ export const heterogeneousCliAgentBinaries = {
   'codebuddy': codeBuddyBinary,
   'codex': codexBinary,
   'cursor': cursorBinary,
+  'droid': droidBinary,
   'grok-build': grokBuildBinary,
   'kimi-code': kimiCliBinary,
   'opencode': opencodeBinary,

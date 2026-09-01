@@ -95,6 +95,11 @@ export const SERVER_DEFAULT_HETEROGENEOUS_AGENT_CONFIG = {
     modelPolicy: 'tool-capable',
     tokenHeader: 'bearer',
   },
+  'trae': {
+    ingress: 'openai-responses',
+    modelPolicy: 'tool-capable',
+    tokenHeader: 'bearer',
+  },
 } as const satisfies Partial<
   Record<LocalHeterogeneousAgentType, ServerDefaultHeterogeneousAgentConfig>
 >;

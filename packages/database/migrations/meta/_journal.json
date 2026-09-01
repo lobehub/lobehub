@@ -1071,6 +1071,20 @@
       "when": 1788016606062,
       "tag": "0152_trash_goal_traces_eval_dataset",
       "breakpoints": true
+    },
+    {
+      "idx": 153,
+      "version": "7",
+      "when": 1788108760793,
+      "tag": "0153_fts_search_sync_outbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 154,
+      "version": "7",
+      "when": 1788141397076,
+      "tag": "0154_goal_node_task_kind",
+      "breakpoints": true
     }
   ],
   "version": "6"

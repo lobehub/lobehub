@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon, Markdown } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
@@ -101,10 +101,12 @@ const FindingRow = memo<{ onSelect: (nodeId: string) => void; view: GoalNodeView
                 </Text>
               </Flexbox>
             ))}
+            {/* The description is the producing run's handoff — actual Markdown
+                (tables, code blocks), not plain text. Render it as such. */}
             {view.node.description && (
-              <Text fontSize={13} style={{ whiteSpace: 'pre-wrap' }}>
+              <Markdown fontSize={13} variant={'chat'}>
                 {view.node.description}
-              </Text>
+              </Markdown>
             )}
             {view.producedBy && (
               <Flexbox
@@ -114,7 +116,7 @@ const FindingRow = memo<{ onSelect: (nodeId: string) => void; view: GoalNodeView
                 style={{ cursor: 'pointer' }}
                 onClick={() => onSelect(view.producedBy!.id)}
               >
-                <KindDot kind={'work'} />
+                <KindDot kind={'task'} />
                 <Text fontSize={12} type={'secondary'}>
                   {t('goalProcess.findings.from', { title: view.producedBy.title })}
                 </Text>

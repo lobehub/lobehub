@@ -1,4 +1,9 @@
-import type { GoalGraphDecision, GoalGraphSnapshot, GoalTickResult } from '@lobechat/types';
+import type {
+  GoalGraphDecision,
+  GoalGraphSnapshot,
+  GoalNodeKind,
+  GoalTickResult,
+} from '@lobechat/types';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
@@ -7,7 +12,15 @@ import { outputJson, printTable, truncate } from '../utils/format';
 import { log } from '../utils/logger';
 import { resolveAppUrlBuilder } from './task/url';
 
-const nodeIcon = { decision: '◆', finding: '●', problem: '◇', work: '▣' } as const;
+// Typed rather than inferred: an `as const` map is indexable by a widened
+// `any` node kind, which is how a renamed kind silently printed `undefined`
+// here after the type checker had signed off everywhere else.
+const nodeIcon: Record<GoalNodeKind, string> = {
+  decision: '◆',
+  finding: '●',
+  problem: '◇',
+  task: '▣',
+};
 const terminalOutcomes = new Set(['achieved', 'waiting_human', 'no_progress', 'failed']);
 
 interface GoalRunTickResult extends GoalTickResult {
@@ -69,12 +82,21 @@ export function registerGoalCommand(program: Command) {
     .command('create <title>')
     .description('Create a standalone goal and seed its graph')
     .option('-r, --requirement <text>', 'Acceptance requirement')
-    .option('-w, --work <title...>', 'Initial work node titles')
+    .option(
+      '-i, --instruction <text>',
+      "The ask in the user's own words, shown on the problem node",
+    )
+    .option('-w, --work <title...>', 'Initial work node titles (omit to let the planner decompose)')
     .option('--agent <id>', 'Responsible agent ID')
     .option('--project <id>', 'Project ID')
     .option('--max-rounds <n>', 'Maximum goal rounds')
     .option('--max-cost <usd>', 'Maximum total cost in USD')
     .option('--max-attempts-per-work <n>', 'Attempts per Work before opening a decision gate')
+    .option(
+      '--max-concurrent-tasks <n>',
+      "How many of this goal's tasks may run at once (default 3)",
+    )
+
     .option('--max-steps-per-run <n>', 'Optional agent step cap per Work run (for example 500)')
     .option(
       '--operation-lease-timeout-ms <n>',
@@ -87,11 +109,17 @@ export function registerGoalCommand(program: Command) {
       const result = await client.goal.create.mutate({
         agentId: options.agent,
         config:
-          options.maxAttemptsPerWork || options.maxStepsPerRun || options.operationLeaseTimeoutMs
+          options.maxAttemptsPerTask ||
+          options.maxStepsPerRun ||
+          options.operationLeaseTimeoutMs ||
+          options.maxConcurrentTasks
             ? {
+                maxConcurrentTasks: options.maxConcurrentTasks
+                  ? Number.parseInt(options.maxConcurrentTasks, 10)
+                  : undefined,
                 recovery: {
-                  maxAttemptsPerWork: options.maxAttemptsPerWork
-                    ? Number.parseInt(options.maxAttemptsPerWork, 10)
+                  maxAttemptsPerTask: options.maxAttemptsPerTask
+                    ? Number.parseInt(options.maxAttemptsPerTask, 10)
                     : undefined,
                   maxStepsPerRun: options.maxStepsPerRun
                     ? Number.parseInt(options.maxStepsPerRun, 10)
@@ -104,12 +132,16 @@ export function registerGoalCommand(program: Command) {
             : undefined,
         maxRounds: options.maxRounds ? Number.parseInt(options.maxRounds, 10) : undefined,
         maxTotalCost: options.maxCost ? Number.parseFloat(options.maxCost) : undefined,
+        problemDescription: options.instruction,
         projectId: options.project,
         requirement: options.requirement,
         title,
         work: options.work,
       });
-      const url = buildUrl(`/goal/${encodeURIComponent(result.data.id)}`);
+      // `goal.create` returns the whole graph snapshot, so the id is on its
+      // goal — `result.data.id` is undefined, and the CLI cannot resolve the
+      // router's types to catch that, which is how it reached a printed URL.
+      const url = buildUrl(`/goal/${encodeURIComponent(result.data.goal.id)}`);
       if (options.json !== undefined) return outputJson({ ...result.data, url }, options.json);
       printGraph(result.data);
       console.log(`${pc.bold('goal')}: ${url}`);
@@ -289,7 +321,7 @@ export function registerGoalCommand(program: Command) {
     .action(
       async (
         id: string,
-        kind: 'decision' | 'finding' | 'problem' | 'work',
+        kind: 'decision' | 'finding' | 'problem' | 'task',
         title: string,
         options,
       ) => {

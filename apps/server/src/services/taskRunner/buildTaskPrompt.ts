@@ -13,7 +13,7 @@ import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 import { extractFileIdsFromEditorData } from '@/server/services/file/extractFileIdsFromEditorData';
 import { resolveAttachmentMetadata } from '@/server/services/file/resolveAttachments';
-import { resolveWorkAttemptBudget } from '@/server/services/goal/recoveryPolicy';
+import { resolveTaskAttemptBudget } from '@/server/services/goal/recoveryPolicy';
 import { resolveTaskAcceptance } from '@/server/services/verify/taskAcceptance';
 
 /** Cap on unresolved checks carried into the next round's prompt. */
@@ -34,7 +34,7 @@ const resolveGoalLoopContext = async (
   const goal = await new GoalModel(db, userId, workspaceId).findByWorkTask(task.id);
   if (!goal || !task.totalTopics) return undefined;
 
-  const budget = resolveWorkAttemptBudget(goal);
+  const budget = resolveTaskAttemptBudget(goal);
   const context: TaskRunPromptGoalLoop = {
     maxRounds: Number.isFinite(budget) ? budget : null,
     round: (task.totalTopics || 0) + 1,

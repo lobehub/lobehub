@@ -35,7 +35,7 @@ describe('GoalGraphModel', () => {
       title: 'Can the published specification reproduce the system?',
     });
     const work = await graphModel.createNode(goal.id, {
-      kind: 'work',
+      kind: 'task',
       title: 'Implement the minimal training loop',
     });
 
@@ -58,7 +58,7 @@ describe('GoalGraphModel', () => {
       type: 'system',
     });
 
-    const byUser = await graphModel.createNode(goal.id, { kind: 'work', title: 'Asked for' });
+    const byUser = await graphModel.createNode(goal.id, { kind: 'task', title: 'Asked for' });
     const bySystem = await coordinator.createNode(goal.id, { kind: 'finding', title: 'Concluded' });
     await serverDB.insert(agents).values({ id: 'agt_author', slug: 'agt-author', userId });
     const byAgent = await coordinator.createNode(goal.id, {
@@ -87,7 +87,7 @@ describe('GoalGraphModel', () => {
       subjectType: 'standalone',
       title: 'Concurrent synthesis',
     });
-    const input = { kind: 'work' as const, title: 'Complete full Goal acceptance' };
+    const input = { kind: 'task' as const, title: 'Complete full Goal acceptance' };
 
     const results = await Promise.all([
       graphModel.createNodeOnce(goal.id, input),
@@ -158,14 +158,14 @@ describe('GoalGraphModel', () => {
 
   it('allows only one task binding for a work node', async () => {
     const goal = await goalModel.create({ subjectType: 'standalone', title: 'Task binding race' });
-    const node = await graphModel.createNode(goal.id, { kind: 'work', title: 'Run once' });
+    const node = await graphModel.createNode(goal.id, { kind: 'task', title: 'Run once' });
     const taskModel = new TaskModel(serverDB, userId);
     const [firstTask, secondTask] = await Promise.all([
       taskModel.create({ instruction: 'First candidate' }),
       taskModel.create({ instruction: 'Second candidate' }),
     ]);
 
-    expect(await graphModel.claimWorkNode(goal.id, node!.id, new Date(0))).toBeDefined();
+    expect(await graphModel.claimTaskNode(goal.id, node!.id, new Date(0))).toBeDefined();
     const bindings = await Promise.all([
       graphModel.bindTask(goal.id, node!.id, firstTask.id),
       graphModel.bindTask(goal.id, node!.id, secondTask.id),
@@ -177,24 +177,35 @@ describe('GoalGraphModel', () => {
     expect(graph?.events.filter((event) => event.entityType === 'task')).toHaveLength(1);
   });
 
+  it('refuses to bind a task to a node that is not a task node', async () => {
+    // This used to be a CHECK constraint. It lives in `bindTask`'s WHERE now,
+    // so the rule needs a test on the write path or nothing enforces it.
+    const goal = await goalModel.create({ subjectType: 'standalone', title: 'Wrong kind' });
+    const finding = await graphModel.createNode(goal.id, { kind: 'finding', title: 'A finding' });
+    const task = await new TaskModel(serverDB, userId).create({ instruction: 'Should not bind' });
+
+    expect(await graphModel.bindTask(goal.id, finding!.id, task.id)).toBeUndefined();
+    expect((await graphModel.getGraph(goal.id))?.nodes[0].taskId).toBeNull();
+  });
+
   it('allows an abandoned work claim to be recovered after its lease expires', async () => {
     const goal = await goalModel.create({ subjectType: 'standalone', title: 'Recover claim' });
-    const node = await graphModel.createNode(goal.id, { kind: 'work', title: 'Recoverable work' });
+    const node = await graphModel.createNode(goal.id, { kind: 'task', title: 'Recoverable work' });
 
-    expect(await graphModel.claimWorkNode(goal.id, node!.id, new Date(0))).toBeDefined();
-    expect(await graphModel.claimWorkNode(goal.id, node!.id, new Date(0))).toBeUndefined();
+    expect(await graphModel.claimTaskNode(goal.id, node!.id, new Date(0))).toBeDefined();
+    expect(await graphModel.claimTaskNode(goal.id, node!.id, new Date(0))).toBeUndefined();
 
     await serverDB
       .update(goalNodes)
       .set({ updatedAt: new Date('2020-01-01') })
       .where(eq(goalNodes.id, node!.id));
 
-    expect(await graphModel.claimWorkNode(goal.id, node!.id, new Date('2021-01-01'))).toBeDefined();
+    expect(await graphModel.claimTaskNode(goal.id, node!.id, new Date('2021-01-01'))).toBeDefined();
   });
 
   it('pins an immutable Work version to an owned graph node', async () => {
     const goal = await goalModel.create({ subjectType: 'standalone', title: 'Evidence goal' });
-    const node = await graphModel.createNode(goal.id, { kind: 'work', title: 'Produce evidence' });
+    const node = await graphModel.createNode(goal.id, { kind: 'task', title: 'Produce evidence' });
     const task = await new TaskModel(serverDB, userId).create({ instruction: 'Produce evidence' });
     const work = await new WorkModel(serverDB, userId).registerTask({
       changeType: 'created',
@@ -218,7 +229,7 @@ describe('GoalGraphModel', () => {
     const otherGoalModel = new GoalModel(serverDB, otherUserId);
     const otherGraphModel = new GoalGraphModel(serverDB, otherUserId);
     const goal = await otherGoalModel.create({ subjectType: 'standalone', title: 'Private graph' });
-    const node = await otherGraphModel.createNode(goal.id, { kind: 'work', title: 'Private work' });
+    const node = await otherGraphModel.createNode(goal.id, { kind: 'task', title: 'Private work' });
 
     expect(await graphModel.getGraph(goal.id)).toBeUndefined();
     expect(await graphModel.updateNodeStatus(goal.id, node!.id, 'resolved')).toBeUndefined();

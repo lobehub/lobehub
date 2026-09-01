@@ -436,16 +436,18 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
       const graph = await goalService.create({
         agentId,
         config: {
-          recovery: { maxAttemptsPerWork: resolveGoalAttemptBudget(plan.maxIterations) },
+          recovery: { maxAttemptsPerTask: resolveGoalAttemptBudget(plan.maxIterations) },
         },
         // `maxIterations` is the per-Work attempt budget above; it is not the
         // graph-wide round cap, which counts runs across every Work and would
         // strand the fourth task of a goal whose limit is three attempts.
         maxTotalCost: budget.maxTotalCost ?? undefined,
+        // No seed work: the coordinator plans the decomposition on first
+        // advance, turning a complex ask into several explorable directions.
+        problemDescription: instruction,
         projectId,
         requirement: buildGoalRequirement(title, reviewedCriteria, budget.requirement),
         title,
-        work: [{ description: instruction, title }],
       });
       // `goal.create` already queued an advance; this runs the same driver so
       // the goal is visibly moving by the time the modal closes even where the

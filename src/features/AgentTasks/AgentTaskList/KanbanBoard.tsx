@@ -136,9 +136,11 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, options, projectId, route
       const patch = getKanbanTaskPatch(groupBy, column);
       if (!patch) return;
       const assigneeUpdate =
-        groupBy === 'assignee' ? getKanbanAssigneeUpdate(task, patch) : undefined;
+        groupBy === 'assignee' || groupBy === 'member'
+          ? getKanbanAssigneeUpdate(task, patch)
+          : undefined;
       if (groupBy === 'status' && task.status === patch.status) return;
-      if (groupBy === 'assignee' && !assigneeUpdate) return;
+      if ((groupBy === 'assignee' || groupBy === 'member') && !assigneeUpdate) return;
       if (groupBy === 'priority' && (task.priority ?? 0) === (patch.priority ?? 0)) return;
 
       const prevGroups = useTaskStore.getState().taskGroups;
@@ -148,7 +150,7 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, options, projectId, route
       try {
         if (groupBy === 'status' && column.targetStatus) {
           await updateTaskStatus(task.identifier, column.targetStatus);
-        } else if (groupBy === 'assignee' && assigneeUpdate) {
+        } else if ((groupBy === 'assignee' || groupBy === 'member') && assigneeUpdate) {
           await updateTask(task.identifier, assigneeUpdate);
         } else if (groupBy === 'priority') {
           await updateTask(task.identifier, { priority: patch.priority ?? 0 });

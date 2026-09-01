@@ -125,6 +125,17 @@ describe('composioRouter.getConnection', () => {
 });
 
 describe('composioRouter.createConnection dual-write', () => {
+  /** @example GitHub cannot create a legacy Composio account after moving to Market OAuth. */
+  it('rejects apps removed from the Composio catalog before remote side effects', async () => {
+    await expect(
+      caller().createConnection({ appSlug: 'GITHUB', identifier: 'github', label: 'GitHub' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+    expect(mocks.authConfigsList).not.toHaveBeenCalled();
+    expect(mocks.connectedAccountsLink).not.toHaveBeenCalled();
+    expect(mocks.connectorCreate).not.toHaveBeenCalled();
+  });
+
   it('mirrors a pending connection into user_connectors + tools', async () => {
     mocks.getServerComposioAuthConfigId.mockReturnValue('ac_env');
     mocks.connectedAccountsLink.mockResolvedValue({ id: 'ca-1', redirectUrl: 'https://auth' });

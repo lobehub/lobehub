@@ -169,6 +169,7 @@ describe('getServerDefaultHeterogeneousModels', () => {
       'grok-build': [{ model: 'claude-sonnet-4-6' }],
       'kimi-code': [{ model: 'claude-sonnet-4-6' }],
       'pi': [{ model: 'claude-sonnet-4-6' }],
+      'trae': [{ model: 'claude-sonnet-4-6' }],
     });
   });
 
@@ -208,6 +209,7 @@ describe('getServerDefaultHeterogeneousModels', () => {
       'grok-build': [{ model: 'claude-sonnet-4-6' }],
       'kimi-code': [{ model: 'claude-sonnet-4-6' }],
       'pi': [{ model: 'claude-sonnet-4-6' }],
+      'trae': [{ model: 'claude-sonnet-4-6' }],
     });
   });
 
@@ -272,6 +274,13 @@ describe('getServerDefaultHeterogeneousModels', () => {
         { model: 'glm-5.2' },
       ],
       'pi': [
+        { model: 'kimi-k2.6' },
+        { model: 'deepseek-v4-flash' },
+        { model: 'deepseek-v4-pro' },
+        { model: 'glm-5.2' },
+        { model: 'gemini-3.1-pro-preview' },
+      ],
+      'trae': [
         { model: 'kimi-k2.6' },
         { model: 'deepseek-v4-flash' },
         { model: 'deepseek-v4-pro' },
@@ -379,6 +388,7 @@ describe('getServerDefaultHeterogeneousModels', () => {
       'grok-build': [{ model: 'kimi-k3' }],
       'kimi-code': [{ model: 'kimi-k3' }],
       'pi': [{ model: 'kimi-k3' }],
+      'trae': [{ model: 'kimi-k3' }],
     });
   });
 
@@ -401,6 +411,7 @@ describe('getServerDefaultHeterogeneousModels', () => {
       'grok-build': [{ model: 'claude-sonnet-4-6' }],
       'kimi-code': [{ model: 'claude-sonnet-4-6' }],
       'pi': [{ model: 'claude-sonnet-4-6' }],
+      'trae': [{ model: 'claude-sonnet-4-6' }],
     });
   });
 });
@@ -512,6 +523,9 @@ describe('resolveServerDefaultHeterogeneousModel', () => {
     });
     await expect(
       resolveServerDefaultHeterogeneousModel('grok-build', 'kimi-k2.6'),
+    ).resolves.toMatchObject({ model: 'kimi-k2.6', provider: 'lobehub' });
+    await expect(
+      resolveServerDefaultHeterogeneousModel('trae', 'kimi-k2.6'),
     ).resolves.toMatchObject({ model: 'kimi-k2.6', provider: 'lobehub' });
 
     await expect(resolveServerDefaultHeterogeneousModel('codex', 'kimi-k2.6')).rejects.toThrow(

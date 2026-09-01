@@ -115,6 +115,34 @@ describe('heterogeneous provider binding protocol resolver', () => {
     expect(kimiGoogle.error?.code).toBe('protocolMismatch');
   });
 
+  it('routes TRAE only to Responses providers', () => {
+    const chatOnly = resolveHeterogeneousProviderBinding({
+      agentType: 'trae',
+      apiConfig: { model: 'model-test', providerId: 'custom-openai' },
+      providerEnabled: true,
+      runtimeConfig: runtime('openai', {
+        keyVaults: { apiKey: 'test-key', baseURL: 'https://example.com/v1' },
+        settings: { sdkType: 'openai', supportResponsesApi: true },
+      }),
+    });
+    expect(chatOnly.error?.code).toBe('protocolMismatch');
+
+    const responses = resolveHeterogeneousProviderBinding({
+      agentType: 'trae',
+      apiConfig: { model: 'model-test', providerId: 'custom-openai' },
+      providerEnabled: true,
+      runtimeConfig: runtime('openai', {
+        config: { enableResponseApi: true },
+        keyVaults: { apiKey: 'test-key', baseURL: 'https://example.com/v1/' },
+        settings: { sdkType: 'openai', supportResponsesApi: true },
+      }),
+    });
+    expect(responses.resolution).toMatchObject({
+      endpoint: 'https://example.com/v1',
+      protocol: 'openai-responses',
+    });
+  });
+
   it.each([
     {
       endpoint: 'https://chat.example.com/v1',

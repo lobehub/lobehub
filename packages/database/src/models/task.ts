@@ -2,6 +2,7 @@ import type {
   CheckpointConfig,
   NewTask,
   TaskItem,
+  TaskSubtaskProgress,
   TaskVerifyConfig,
   WorkspaceData,
   WorkspaceDocNode,
@@ -122,6 +123,12 @@ interface TaskRunStats extends Record<string, unknown> {
   root_id: string;
   total_run_cost: number;
   total_run_duration: number;
+}
+
+interface TaskSubtaskProgressRow extends Record<string, unknown> {
+  completed: number;
+  root_id: string;
+  total: number;
 }
 
 export class TaskModel {
@@ -568,7 +575,7 @@ export class TaskModel {
   async groupList(
     options: TaskListFilterOptions & {
       excludeStatuses?: string[];
-      groupBy?: 'assignee' | 'priority';
+      groupBy?: 'agent' | 'assignee' | 'member' | 'priority';
       groups?: Array<{
         key: string;
         limit?: number;
@@ -659,10 +666,10 @@ export class TaskModel {
         tasksByAssignee.set(groupKey, groupTasks);
       }
 
-      // Keep an empty Unassigned column as a stable drop target even when every
-      // current task already has an owner. Other assignees are data-derived;
-      // showing every agent as an empty column would make large workspaces
-      // unusable without a separate "show empty columns" control.
+      // `assignee` is the released hybrid grouping contract: agents take
+      // precedence, member-only tasks get their own user group, and only tasks
+      // with neither assignee are unassigned. New clients use `agent` for the
+      // agent-only board instead of changing this existing API in place.
       if (!assigneeAgentId && !assigneeCounts.has('assignee:unassigned')) {
         assigneeCounts.set('assignee:unassigned', 0);
       }
@@ -686,6 +693,81 @@ export class TaskModel {
           : isUnassigned
             ? [and(isNull(tasks.assigneeAgentId), isNull(tasks.assigneeUserId))!]
             : [eq(tasks.assigneeAgentId, groupAssigneeAgentId!)];
+
+        return {
+          assigneeAgentId: groupAssigneeAgentId,
+          assigneeUserId: groupAssigneeUserId,
+          conditions,
+          key,
+          limit,
+          offset: 0,
+          prefetchedTasks: tasksByAssignee.get(key) ?? [],
+          total,
+        };
+      });
+    } else if (groupBy === 'agent' || groupBy === 'member') {
+      const limit = 50;
+      const groupColumn = groupBy === 'agent' ? tasks.assigneeAgentId : tasks.assigneeUserId;
+      const groupPrefix = groupBy === 'agent' ? 'assignee:' : 'member:';
+      const unassignedKey = `${groupPrefix}unassigned`;
+      const assigneeGroupKey = sql<string>`case
+        when ${groupColumn} is not null then ${groupPrefix} || ${groupColumn}
+        else ${unassignedKey}
+      end`;
+      const rankedTasks = this.db
+        .select({
+          ...getTableColumns(tasks),
+          assigneeGroupKey: assigneeGroupKey.as('assignee_group_key'),
+          groupRank:
+            sql<number>`row_number() over (partition by ${assigneeGroupKey} order by ${tasks.createdAt} desc)`.as(
+              'group_rank',
+            ),
+        })
+        .from(tasks)
+        .where(and(...baseConditions))
+        .as('ranked_assignee_tasks');
+      const [countResult, rankedTaskRows] = await Promise.all([
+        this.db
+          .select({
+            assigneeId: groupColumn,
+            count: sql<number>`count(*)`,
+          })
+          .from(tasks)
+          .where(and(...baseConditions))
+          .groupBy(groupColumn),
+        this.db
+          .select()
+          .from(rankedTasks)
+          .where(sql`${rankedTasks.groupRank} <= ${limit}`)
+          .orderBy(rankedTasks.assigneeGroupKey, rankedTasks.groupRank),
+      ]);
+      const assigneeCounts = new Map(
+        countResult.map((row) => [
+          row.assigneeId ? `${groupPrefix}${row.assigneeId}` : unassignedKey,
+          Number(row.count),
+        ]),
+      );
+      const tasksByAssignee = new Map<string, TaskItem[]>();
+      for (const row of rankedTaskRows) {
+        const { assigneeGroupKey: groupKey, groupRank: _groupRank, ...task } = row;
+        const groupTasks = tasksByAssignee.get(groupKey) ?? [];
+        groupTasks.push(task);
+        tasksByAssignee.set(groupKey, groupTasks);
+      }
+
+      // Keep an empty Unassigned column as a stable drop target. Agent-scoped
+      // boards omit the Agent-unassigned column because their base filter
+      // guarantees one assignee, while Member grouping remains independent.
+      if ((groupBy === 'member' || !assigneeAgentId) && !assigneeCounts.has(unassignedKey)) {
+        assigneeCounts.set(unassignedKey, 0);
+      }
+
+      groupQueries = [...assigneeCounts.entries()].map(([key, total]) => {
+        const isUnassigned = key === unassignedKey;
+        const assigneeId = isUnassigned ? null : key.slice(groupPrefix.length);
+        const groupAssigneeAgentId = groupBy === 'agent' ? assigneeId : undefined;
+        const groupAssigneeUserId = groupBy === 'member' ? assigneeId : undefined;
+        const conditions = [isUnassigned ? isNull(groupColumn) : eq(groupColumn, assigneeId!)];
 
         return {
           assigneeAgentId: groupAssigneeAgentId,
@@ -823,7 +905,10 @@ export class TaskModel {
     const taskIds = Array.from(
       new Set(results.flatMap((group) => group.tasks.map(({ id }) => id))),
     );
-    const runStats = await this.runStatsByTaskIds(taskIds);
+    const [runStats, subtaskProgressByTaskId] = await Promise.all([
+      this.runStatsByTaskIds(taskIds),
+      this.subtaskProgressByTaskIds(taskIds),
+    ]);
     const runStatsByTaskId = new Map(
       runStats.map((stats) => [
         stats.root_id,
@@ -838,6 +923,7 @@ export class TaskModel {
       ...group,
       tasks: group.tasks.map((task) => ({
         ...task,
+        subtaskProgress: subtaskProgressByTaskId.get(task.id),
         totalRunCost: runStatsByTaskId.get(task.id)?.totalRunCost ?? 0,
         totalRunDuration: runStatsByTaskId.get(task.id)?.totalRunDuration ?? 0,
       })),
@@ -875,6 +961,40 @@ export class TaskModel {
     return result.rows;
   }
 
+  private async subtaskProgressByTaskIds(
+    taskIds: string[],
+  ): Promise<Map<string, TaskSubtaskProgress>> {
+    if (taskIds.length === 0) return new Map();
+
+    const result = await this.db.execute<TaskSubtaskProgressRow>(sql`
+      WITH RECURSIVE task_tree AS (
+        SELECT ${tasks.id} AS root_id, ${tasks.id} AS task_id, ${tasks.status} AS status
+        FROM ${tasks}
+        WHERE ${inArray(tasks.id, taskIds)} AND ${this.ownership()}
+        UNION ALL
+        SELECT task_tree.root_id, child.id, child.status
+        FROM ${tasks} child
+        JOIN task_tree ON child.parent_task_id = task_tree.task_id
+        WHERE ${this.ownershipSql('child')}
+      )
+      SELECT
+        task_tree.root_id,
+        count(*) filter (
+          where task_tree.task_id <> task_tree.root_id and task_tree.status = 'completed'
+        ) AS completed,
+        count(*) filter (where task_tree.task_id <> task_tree.root_id) AS total
+      FROM task_tree
+      GROUP BY task_tree.root_id
+    `);
+
+    return new Map(
+      result.rows.map((progress) => [
+        progress.root_id,
+        { completed: Number(progress.completed), total: Number(progress.total) },
+      ]),
+    );
+  }
+
   async list(options: TaskListOptions = {}): Promise<{ tasks: TaskItem[]; total: number }> {
     const { statuses, priorities, limit = 50, offset = 0, orderBy = 'createdAt' } = options;
 
@@ -898,8 +1018,17 @@ export class TaskModel {
       .limit(limit)
       .offset(offset);
     const [countResult, taskList] = await Promise.all([countQuery, taskListQuery]);
+    const subtaskProgressByTaskId = await this.subtaskProgressByTaskIds(
+      taskList.map(({ id }) => id),
+    );
 
-    return { tasks: taskList, total: Number(countResult[0].count) };
+    return {
+      tasks: taskList.map((task) => ({
+        ...task,
+        subtaskProgress: subtaskProgressByTaskId.get(task.id),
+      })),
+      total: Number(countResult[0].count),
+    };
   }
 
   /**

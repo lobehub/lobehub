@@ -62,6 +62,17 @@ export interface ToolCallResponseMessage {
   result: {
     content: string;
     error?: string;
+    /**
+     * Wall time the tool actually took ON THE DEVICE, by the device's own
+     * clock. The server can only observe the whole dispatch round trip
+     * (publish → gateway → device → callback → redis), so without this number
+     * there is no way to tell a slow tool from slow transport — which is the
+     * entire question when deciding whether to move the agent loop local.
+     *
+     * Optional: an older device, or a gateway that does not forward the field,
+     * simply leaves it absent.
+     */
+    executionTimeMs?: number;
     state?: unknown;
     success: boolean;
   };

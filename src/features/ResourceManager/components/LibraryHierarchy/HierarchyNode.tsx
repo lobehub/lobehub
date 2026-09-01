@@ -25,6 +25,7 @@ import { useTreeStore } from '@/store/tree';
 
 import { useFileItemClick } from '../Explorer/hooks/useFileItemClick';
 import { useFileItemDropdown } from '../Explorer/ItemDropdown/useFileItemDropdown';
+import { isHierarchyNodeActive } from './selection';
 import { styles } from './styles';
 
 interface HierarchyNodeProps {
@@ -49,7 +50,7 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
     const [renamingValue, setRenamingValue] = useState(item.name);
     const inputRef = useRef<any>(null);
 
-    const { itemKey, isPage, emoji } = useMemo(() => {
+    const { isPage, emoji } = useMemo(() => {
       const lowerFileType = item.fileType?.toLowerCase();
       const lowerName = item.name?.toLowerCase();
       const isPDF = lowerFileType === 'pdf' || lowerName?.endsWith('.pdf');
@@ -69,9 +70,8 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
       return {
         emoji: pageMatch ? item.metadata?.emoji : null,
         isPage: pageMatch,
-        itemKey: item.slug || item.id,
       };
-    }, [item.slug, item.id, item.fileType, item.sourceType, item.name, item.metadata?.emoji]);
+    }, [item.fileType, item.sourceType, item.name, item.metadata?.emoji]);
 
     const handleRenameStart = useCallback(() => {
       setIsRenaming(true);
@@ -200,7 +200,7 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
     );
 
     if (item.isFolder) {
-      const isActive = selectedKey === itemKey;
+      const isActive = isHierarchyNodeActive(item, selectedKey);
 
       const handleToggle = () => {
         onToggle(item.id);
@@ -304,7 +304,7 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
     }
 
     // Render as file
-    const isActive = selectedKey === itemKey;
+    const isActive = isHierarchyNodeActive(item, selectedKey);
     return (
       <Flexbox gap={2}>
         <Block

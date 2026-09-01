@@ -71,6 +71,12 @@ describe('TaskService', () => {
       expect(lambdaClient.task.list.query).toHaveBeenCalledWith(params);
     });
 
+    it('uses the agent-only API contract for the Agent board', async () => {
+      await taskService.groupList({ groupBy: 'assignee' });
+
+      expect(lambdaClient.task.groupList.query).toHaveBeenCalledWith({ groupBy: 'agent' });
+    });
+
     it('getSubtasks should call task.getSubtasks.query', async () => {
       await taskService.getSubtasks('T-1');
       expect(lambdaClient.task.getSubtasks.query).toHaveBeenCalledWith({ id: 'T-1' });

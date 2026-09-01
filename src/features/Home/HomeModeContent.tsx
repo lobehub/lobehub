@@ -1,5 +1,5 @@
 import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
-import type { TaskStatus } from '@lobechat/types';
+import type { RecentItem, TaskStatus } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
 import type { FlexboxProps } from '@lobehub/ui';
 import { Flexbox, Icon, Skeleton } from '@lobehub/ui';
@@ -26,7 +26,6 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useClientDataSWR } from '@/libs/swr';
 import { recentKeys } from '@/libs/swr/keys';
 import { useCacheScope } from '@/libs/swr/useCacheScope';
-import { type RecentItem } from '@/server/routers/lambda/recent';
 import { recentService } from '@/services/recent';
 import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';

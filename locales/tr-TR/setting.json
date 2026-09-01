@@ -1555,8 +1555,6 @@
   "tools.composio.servers.dropbox.readme": "Dropbox ile entegre olarak dosyalarınıza erişin ve yönetin. Dosya yükleyin, indirin, paylaşın, klasörleri yönetin, dosya sürümlerini kontrol edin ve bulut depolamanızı yapay zeka ile organize edin.",
   "tools.composio.servers.figma.description": "Figma, web ve mobil uygulamalar için iş birliğine dayalı bir arayüz tasarım aracıdır.",
   "tools.composio.servers.figma.readme": "Figma'ya bağlanarak tasarım dosyalarınıza erişin ve projelerde iş birliği yapın. Tasarımları görüntüleyin, varlıkları dışa aktarın, bileşenleri inceleyin ve tasarım iş akışınızı doğal konuşmalarla yönetin.",
-  "tools.composio.servers.github.description": "Gelişmiş GitHub MCP Sunucusu",
-  "tools.composio.servers.github.readme": "GitHub'a bağlanarak depoları, sorunları, çekme isteklerini ve kodları yönetin. Kod arayın, değişiklikleri inceleyin, dallar oluşturun ve yazılım geliştirme projelerinde yapay zeka ile iş birliği yapın.",
   "tools.composio.servers.gmail.description": "Gmail, Google tarafından sunulan ücretsiz bir e-posta hizmetidir.",
   "tools.composio.servers.gmail.readme": "Gmail’in gücünü doğrudan yapay zeka asistanınıza taşıyın. E-postaları okuyun, yazın ve gönderin, gelen kutunuzu arayın, etiketleri yönetin ve iletişiminizi doğal konuşmalarla düzenleyin.",
   "tools.composio.servers.google-calendar.description": "Google Takvim, zaman yönetimi ve planlama hizmetidir.",

@@ -15,14 +15,14 @@ export const KIND_COLOR: Record<GoalNodeKind, { line: string; soft: string }> = 
   decision: { line: cssVar.orange6, soft: cssVar.orange1 },
   finding: { line: cssVar.green6, soft: cssVar.green1 },
   problem: { line: cssVar.purple6, soft: cssVar.purple1 },
-  work: { line: cssVar.blue6, soft: cssVar.blue1 },
+  task: { line: cssVar.blue6, soft: cssVar.blue1 },
 };
 
 export const KIND_ICON: Record<GoalNodeKind, LucideIcon> = {
   decision: GitBranch,
   finding: Lightbulb,
   problem: CircleHelp,
-  work: ListChecks,
+  task: ListChecks,
 };
 
 const styles = createStaticStyles(({ css }) => ({

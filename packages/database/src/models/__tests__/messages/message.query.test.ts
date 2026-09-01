@@ -1756,6 +1756,84 @@ describe('MessageModel Query Tests', () => {
     });
   });
 
+  describe('queryByKeyword with external candidates', () => {
+    it('hydrates current-scope messages in the legacy recency order', async () => {
+      await serverDB.insert(messages).values([
+        {
+          content: 'Own older message',
+          createdAt: new Date('2026-08-20T00:00:00.000Z'),
+          id: 'candidate-message-old',
+          role: 'user',
+          userId,
+        },
+        {
+          content: 'Own recent message',
+          createdAt: new Date('2026-08-25T00:00:00.000Z'),
+          id: 'candidate-message-recent',
+          role: 'assistant',
+          userId,
+        },
+        {
+          content: 'Other user message',
+          id: 'candidate-message-other',
+          role: 'user',
+          userId: otherUserId,
+        },
+      ]);
+      const ftsSearchCandidates = vi.fn().mockResolvedValue({
+        candidates: [
+          { id: 'candidate-message-other', score: 12 },
+          { id: 'candidate-message-deleted', score: 10 },
+          { id: 'candidate-message-old', score: 8 },
+          { id: 'candidate-message-recent', score: 6 },
+        ],
+        total: 4,
+      });
+      const model = new MessageModel(serverDB, userId, undefined, {
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates,
+      });
+
+      const result = await model.queryByKeyword('candidate');
+
+      expect(result.map(({ id }) => id)).toEqual([
+        'candidate-message-recent',
+        'candidate-message-old',
+      ]);
+      expect(ftsSearchCandidates).toHaveBeenCalledWith({
+        entity: 'messages',
+        filters: {},
+        pagination: {},
+        query: { fields: ['content'], text: 'candidate' },
+      });
+    });
+
+    it('hydrates candidate sets larger than the PostgreSQL bind-parameter limit', async () => {
+      await serverDB.insert(messages).values({
+        content: 'Matching message',
+        id: 'candidate-message-match',
+        role: 'user',
+        userId,
+      });
+      const candidates = Array.from({ length: 65_536 }, (_, index) => ({
+        id: `candidate-stale-${index}`,
+        score: 1,
+      }));
+      candidates.push({ id: 'candidate-message-match', score: 2 });
+      const model = new MessageModel(serverDB, userId, undefined, {
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates: vi.fn().mockResolvedValue({
+          candidates,
+          total: candidates.length,
+        }),
+      });
+
+      const result = await model.queryByKeyword('candidate');
+
+      expect(result.map(({ id }) => id)).toEqual(['candidate-message-match']);
+    });
+  });
+
   describe('query with files edge cases', () => {
     it('should handle files with empty fileType', async () => {
       await serverDB.transaction(async (trx) => {

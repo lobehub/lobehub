@@ -1,6 +1,13 @@
 import type { GoalItem } from '@lobechat/types';
 
 const DEFAULT_MAX_ATTEMPTS_PER_WORK = 3;
+/**
+ * Conservative on purpose: enough to stop independent Tasks queueing behind one
+ * another, low enough that a goal cannot empty its budget in one fan-out before
+ * anyone sees a result.
+ */
+const DEFAULT_MAX_CONCURRENT_TASKS = 3;
+const MAX_CONCURRENT_TASKS_CEILING = 10;
 const DEFAULT_OPERATION_LEASE_TIMEOUT_MS = 5 * 60 * 1000;
 // Agent runtime refreshes the durable operation lease every third 30-second
 // step-lock heartbeat. Keep the timeout above two durable heartbeat intervals
@@ -8,13 +15,20 @@ const DEFAULT_OPERATION_LEASE_TIMEOUT_MS = 5 * 60 * 1000;
 export const MIN_OPERATION_LEASE_TIMEOUT_MS = 3 * 60 * 1000;
 
 /** How many attempts one Work gets before the coordinator opens a decision gate. */
-export const resolveWorkAttemptBudget = (goal: GoalItem): number => {
-  const configured = goal.config?.recovery?.maxAttemptsPerWork;
+export const resolveTaskAttemptBudget = (goal: GoalItem): number => {
+  const configured = goal.config?.recovery?.maxAttemptsPerTask;
   if (typeof configured === 'number') return Math.max(1, configured);
   return DEFAULT_MAX_ATTEMPTS_PER_WORK;
 };
 
-export const resolveWorkMaxSteps = (goal: GoalItem): number | undefined => {
+/** How many of this goal's Tasks may run at once. */
+export const resolveMaxConcurrentTasks = (goal: GoalItem): number => {
+  const configured = goal.config?.maxConcurrentTasks;
+  if (typeof configured !== 'number') return DEFAULT_MAX_CONCURRENT_TASKS;
+  return Math.min(MAX_CONCURRENT_TASKS_CEILING, Math.max(1, configured));
+};
+
+export const resolveTaskMaxSteps = (goal: GoalItem): number | undefined => {
   const configured = goal.config?.recovery?.maxStepsPerRun;
   return typeof configured === 'number' && configured > 0 ? configured : undefined;
 };

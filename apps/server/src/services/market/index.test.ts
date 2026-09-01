@@ -194,6 +194,57 @@ describe('MarketService', () => {
     });
   });
 
+  describe('proxyOAuthRequest', () => {
+    /** @example A trusted server request reaches the provider proxy without exposing OAuth tokens. */
+    it('forwards provider path, parameters, body, and trusted identity to Market', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ data: { viewer: { login: 'octocat' } } }), {
+          headers: { 'Content-Type': 'application/json' },
+          status: 200,
+        }),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+      vi.mocked(generateTrustedClientToken).mockReturnValue('trusted-user-token');
+
+      try {
+        const service = new MarketService({ userInfo: { userId: 'user-1' } });
+        await expect(
+          service.proxyOAuthRequest({
+            body: { query: 'query { viewer { login } }' },
+            endpoint: '/graphql',
+            method: 'POST',
+            parameters: [
+              { in: 'header', name: 'Accept', value: 'application/vnd.github+json' },
+              { in: 'header', name: 'x-lobe-trust-token', value: 'untrusted-override' },
+              { in: 'query', name: 'preview', value: 1 },
+            ],
+            provider: 'github',
+          }),
+        ).resolves.toEqual({
+          data: { data: { viewer: { login: 'octocat' } } },
+          status: 200,
+        });
+
+        const [url, init] = fetchMock.mock.calls[0];
+        expect(String(url)).toBe(
+          'https://market.lobehub.com/api/v1/proxy/github/graphql?preview=1',
+        );
+        expect(init).toEqual({
+          body: JSON.stringify({ query: 'query { viewer { login } }' }),
+          headers: {
+            'Accept': 'application/vnd.github+json',
+            'Accept-Encoding': 'identity',
+            'Content-Type': 'application/json',
+            'x-lobe-trust-token': 'trusted-user-token',
+          },
+          method: 'POST',
+        });
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+  });
+
   describe('submitFeedback', () => {
     it('should pass params to market SDK without screenshot', async () => {
       const service = new MarketService();

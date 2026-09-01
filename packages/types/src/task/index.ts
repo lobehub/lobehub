@@ -230,6 +230,11 @@ export interface TaskParticipant {
   type: 'user' | 'agent';
 }
 
+export interface TaskSubtaskProgress {
+  completed: number;
+  total: number;
+}
+
 export interface TaskItem {
   accessedAt: Date;
   assigneeAgentId: string | null;
@@ -262,6 +267,8 @@ export interface TaskItem {
   sortOrder: number | null;
   startedAt: Date | null;
   status: string;
+  /** Lightweight recursive descendant progress attached by task list reads. */
+  subtaskProgress?: TaskSubtaskProgress;
   totalRunCost?: number | null;
   totalRunDuration?: number | null;
   totalTopics: number | null;
@@ -331,8 +338,7 @@ export interface TaskDetailSubtaskRunningTopic {
 
 export interface TaskDetailSubtask {
   assignee?: TaskDetailSubtaskAssignee | null;
-  /** Human assignee (workspace member). Coexists with `assignee` (agent) in the
-   *  schema, but the UI writes them mutually exclusively. */
+  /** Human assignee (workspace member). Coexists with `assignee` (agent). */
   assigneeUserId?: string | null;
   automationMode?: TaskAutomationMode | null;
   blockedBy?: string;

@@ -103,12 +103,13 @@ export const prepareHostedProviderBinding = async (params: {
     throw new Error(`${params.agentType} does not implement LobeHub Provider binding.`);
   }
 
-  // Pi and Grok persist a custom model definition in the reusable profile.
+  // Pi, Grok, and TRAE persist a custom model definition in the reusable profile.
   // Include the selected upstream model so concurrent sessions cannot
   // overwrite one another's model catalog or strand a resumable session
   // without its model. Other drivers retain their v1 identity and resume keys.
   const identityVersion = params.agentType === 'pi' ? 'v2' : 'v1';
-  const modelScopedProfile = params.agentType === 'pi' || params.agentType === 'grok-build';
+  const modelScopedProfile =
+    params.agentType === 'pi' || params.agentType === 'grok-build' || params.agentType === 'trae';
   const identity = [
     identityVersion,
     params.agentType,

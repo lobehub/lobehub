@@ -55,6 +55,8 @@ import {
   buildCodexAppServerThreadParams,
   buildCursorAcpArgs,
   buildCursorAcpPrompt,
+  buildDroidAcpArgs,
+  buildDroidAcpPrompt,
   buildGrokAcpArgs,
   buildGrokAcpPrompt,
   buildTraeAcpArgs,
@@ -64,11 +66,13 @@ import {
   CodexThreadSession,
   createFileStoreImageUploader,
   CursorAcpSession,
+  DroidAcpSession,
   ensureClaudeCodeResumeTranscript,
   getCodexAppServerUnsupportedArgs,
   GrokAcpSession,
   isCodexAppServerCompatibilityError,
   isCursorAcpSessionNotFoundError,
+  isDroidAcpSessionNotFoundError,
   readCodexSessionModel,
   resolveCliSpawnPlan,
   resolveCodexInitialModel,
@@ -357,6 +361,7 @@ interface AgentSession {
   command: string;
   cursorAcpSession?: CursorAcpSession;
   cwd?: string;
+  droidAcpSession?: DroidAcpSession;
   env?: Record<string, string>;
   grokAcpSession?: GrokAcpSession;
   hostedProviderBinding?: HostedProviderBinding;
@@ -403,6 +408,22 @@ interface CliTraceSession {
   writeQueue: Promise<void>;
 }
 
+/** Result of cancelling a device-gateway CLI wrapper. */
+export interface LhHeteroExecCancellationResult {
+  /** Whether the wrapper emitted its exit/error terminal signal before the bounded wait elapsed. */
+  exited: boolean;
+  /** Operating-system process id when Node assigned one before cancellation. */
+  pid?: number;
+  /** Initial signal requested by the server cancellation call. */
+  signal: NodeJS.Signals;
+}
+
+interface LhHeteroExecTask {
+  cancellation?: Promise<LhHeteroExecCancellationResult>;
+  exit: Promise<void>;
+  process: ChildProcess;
+}
+
 /**
  * External Agent Controller — manages external agent CLI processes via Electron IPC.
  *
@@ -445,6 +466,8 @@ export default class HeterogeneousAgentCtr {
   }
 
   private sessions = new Map<string, AgentSession>();
+  /** Device-gateway CLI wrappers keyed by their server operation id. */
+  private lhHeteroExecTasks = new Map<string, LhHeteroExecTask>();
   /**
    * Per-operation AskUserQuestion bridge state. Keyed by `operationId` so the
    * `submitIntervention` IPC can route an answer to the right pending MCP
@@ -589,6 +612,34 @@ export default class HeterogeneousAgentCtr {
     }
   }
 
+  private getDroidResumeError(
+    error: unknown,
+    session: AgentSession,
+  ): HeterogeneousAgentSessionError | undefined {
+    if (
+      session.agentType !== 'droid' ||
+      !session.resumeSessionId ||
+      !isDroidAcpSessionNotFoundError(error)
+    ) {
+      return;
+    }
+
+    return {
+      agentType: 'droid',
+      code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+      command: session.command,
+      details: {
+        code: error.rpcError.code,
+        data: error.rpcError.data,
+      },
+      message:
+        'The saved Factory Droid session could not be found, so a new conversation will start.',
+      resumeSessionId: session.resumeSessionId,
+      stderr: error.message,
+      workingDirectory: session.cwd,
+    };
+  }
+
   private getGrokResumeError(
     error: unknown,
     session: AgentSession,
@@ -672,6 +723,7 @@ export default class HeterogeneousAgentCtr {
 
     const resumeError =
       this.getCodexResumeError(error, session) ??
+      this.getDroidResumeError(error, session) ??
       this.getGrokResumeError(error, session) ??
       this.getCursorResumeError(error, session);
     if (resumeError) return resumeError;
@@ -753,6 +805,20 @@ export default class HeterogeneousAgentCtr {
           code: 'cli_version_unsupported',
           command,
           message: `Kimi Code 0.6.0 or newer is required to use a LobeHub provider. Installed version: ${status.version}.`,
+          workingDirectory,
+        };
+      }
+      if (
+        session.agentType === 'trae' &&
+        session.hostedProviderBinding &&
+        status?.version &&
+        semver.lt(status.version, '0.201.2')
+      ) {
+        return {
+          agentType: session.agentType,
+          code: 'cli_version_unsupported',
+          command,
+          message: `TRAE CLI 0.201.2 or newer is required to use a LobeHub provider. Installed version: ${status.version}.`,
           workingDirectory,
         };
       }
@@ -1037,15 +1103,16 @@ export default class HeterogeneousAgentCtr {
   private setupAcpInterventionForOp(
     operationId: string,
     sessionId: string,
+    provider: 'cursor' | 'droid',
   ): {
     bridge: AskUserBridge;
     cleanup: () => Promise<void>;
   } {
-    // Cursor reuses the Claude Code AskUserQuestion renderer, but provider is
-    // explicit so consumers never mistake renderer compatibility for origin.
+    // Cursor keeps its legacy Claude Code renderer identifier. Droid has a
+    // first-class identifier, while provider remains explicit for both.
     const bridge = new AskUserBridge(operationId, {
-      identifier: 'claude-code',
-      provider: 'cursor',
+      identifier: provider === 'cursor' ? 'claude-code' : provider,
+      provider,
     });
     const pumpDone = (async () => {
       for await (const event of bridge.events()) {
@@ -1307,7 +1374,7 @@ export default class HeterogeneousAgentCtr {
         params.providerBinding?.kind === 'server-default'
           ? params.providerBinding.apiConfig
           : undefined,
-      model: params.initialModel,
+      model: agentType === 'trae' && hostedProviderBinding ? undefined : params.initialModel,
       sessionId,
       resumeSessionId,
       useClaudeCodeSdk: params.useClaudeCodeSdk,
@@ -1464,6 +1531,10 @@ export default class HeterogeneousAgentCtr {
 
     if (session.agentType === 'cursor') {
       return this.sendPromptWithCursorAcp(params, session);
+    }
+
+    if (session.agentType === 'droid') {
+      return this.sendPromptWithDroidAcp(params, session);
     }
 
     if (session.agentType === 'trae') {
@@ -2069,7 +2140,11 @@ export default class HeterogeneousAgentCtr {
     }
 
     const stderrChunks: string[] = [];
-    const intervention = this.setupAcpInterventionForOp(params.operationId, session.sessionId);
+    const intervention = this.setupAcpInterventionForOp(
+      params.operationId,
+      session.sessionId,
+      'cursor',
+    );
     const cursorAcpSession = new CursorAcpSession({
       args: session.args,
       askUserBridge: intervention.bridge,
@@ -2135,6 +2210,113 @@ export default class HeterogeneousAgentCtr {
     } finally {
       await intervention.cleanup();
       if (session.cursorAcpSession === cursorAcpSession) session.cursorAcpSession = undefined;
+    }
+  }
+
+  private async sendPromptWithDroidAcp(
+    params: SendPromptParams,
+    session: AgentSession,
+  ): Promise<void> {
+    const cwd = this.resolveSessionWorkingDirectory(session);
+    const spawnEnv = this.buildSessionSpawnEnv(session);
+    const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
+    const promptInput = buildHeterogeneousPrompt({
+      imageList: params.imageList,
+      prompt: params.prompt,
+      systemContext: params.systemContext,
+    });
+    const prompt = await buildDroidAcpPrompt(promptInput, { cacheDir: this.fileCacheDir });
+    const tracePayload = `${JSON.stringify(prompt)}\n`;
+    const traceSession = await this.createCliTraceSession({
+      cliArgs: buildDroidAcpArgs(session.args),
+      cwd,
+      imageList: params.imageList ?? [],
+      session,
+      stdinPayload: tracePayload,
+    });
+    void this.writeCliTraceFile(traceSession, 'stdin.txt', tracePayload);
+
+    if (session.cancelledByUs) {
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return;
+    }
+
+    const stderrChunks: string[] = [];
+    const intervention = this.setupAcpInterventionForOp(
+      params.operationId,
+      session.sessionId,
+      'droid',
+    );
+    const droidAcpSession = new DroidAcpSession({
+      args: session.args,
+      askUserBridge: intervention.bridge,
+      clientVersion: electronApp.getVersion(),
+      commandPath,
+      cwd,
+      env: spawnEnv,
+      initialModel: session.model,
+      onEvents: async (events) => {
+        for (const event of events) {
+          this.broadcast('heteroAgentEvent', { event, sessionId: session.sessionId });
+        }
+      },
+      onModel: (model) => {
+        session.model = model;
+        session.modelSource = 'droid-acp';
+      },
+      onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
+      onRuntimeStatus: (status) => this.broadcast('heteroAgentRuntimeStatus', status),
+      onSessionId: (agentSessionId) => {
+        session.agentSessionId = agentSessionId;
+      },
+      onStderr: (data) => {
+        stderrChunks.push(data);
+        return this.appendCliTraceFile(traceSession, 'stderr.log', data);
+      },
+      operationId: params.operationId,
+      prompt,
+      resumeSessionId: session.agentSessionId,
+      sessionId: session.sessionId,
+    });
+    session.droidAcpSession = droidAcpSession;
+
+    try {
+      await droidAcpSession.run();
+      void this.writeCliTraceJson(traceSession, 'exit.json', {
+        finishedAt: new Date().toISOString(),
+        transport: 'droid-acp',
+      });
+      await this.flushCliTrace(traceSession);
+      this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+    } catch (error) {
+      void this.writeCliTraceJson(traceSession, 'process-error.json', {
+        message: this.getErrorMessage(error),
+        transport: 'droid-acp',
+      });
+      await this.flushCliTrace(traceSession);
+      if (session.cancelledByUs) {
+        this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+        return;
+      }
+      const stderr = stderrChunks.join('').trim();
+      const errorForClassification = isDroidAcpSessionNotFoundError(error)
+        ? error
+        : stderr
+          ? new Error([this.getErrorMessage(error), stderr].filter(Boolean).join('\n'), {
+              cause: error,
+            })
+          : error;
+      const sessionError = this.getSessionErrorPayload(errorForClassification, session);
+      this.broadcast('heteroAgentSessionError', {
+        error: sessionError,
+        sessionId: session.sessionId,
+      });
+      throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
+        cause: error,
+      });
+    } finally {
+      await intervention.cleanup();
+      if (session.droidAcpSession === droidAcpSession) session.droidAcpSession = undefined;
     }
   }
 
@@ -2233,6 +2415,7 @@ export default class HeterogeneousAgentCtr {
         cause: error,
       });
     } finally {
+      await session.hostedProviderBinding?.cleanup();
       if (session.traeAcpSession === traeAcpSession) session.traeAcpSession = undefined;
     }
   }
@@ -2656,11 +2839,65 @@ export default class HeterogeneousAgentCtr {
   }
 
   /**
-   * Cancel an ongoing session: SIGINT the CC tree, escalate to SIGKILL after
-   * 2s if the CLI hasn't exited (some tool calls swallow SIGINT). The
-   * `exit` handler on the spawned proc broadcasts completion and clears
-   * `session.process`, so the escalation is a no-op when the graceful path
-   * already landed.
+   * Waits for a spawned CLI process to release its OS process handle.
+   *
+   * Use when:
+   * - A cancellation caller must not start another writer until this child exits.
+   * - A graceful signal needs a bounded wait before escalation.
+   *
+   * Expects:
+   * - `proc` is a child owned by the current heterogeneous-agent session.
+   * - `timeoutMs` bounds only this wait and does not signal the process itself.
+   *
+   * Returns:
+   * - `true` after an observed exit, otherwise `false` after the timeout.
+   */
+  private waitForProcessExit(proc: ChildProcess, timeoutMs: number): Promise<boolean> {
+    if (proc.exitCode !== null && proc.exitCode !== undefined) return Promise.resolve(true);
+    if (proc.signalCode !== null && proc.signalCode !== undefined) return Promise.resolve(true);
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (exited: boolean) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        proc.off('exit', onExit);
+        resolve(exited);
+      };
+      const onExit = () => finish(true);
+      const timer = setTimeout(() => finish(false), timeoutMs);
+
+      proc.once('exit', onExit);
+    });
+  }
+
+  /**
+   * Cancels an ongoing heterogeneous-agent session and waits for its native
+   * writer to stop before returning.
+   *
+   * Call stack:
+   *
+   * QueueTray.handleSendNow
+   *   -> cancelOperation
+   *     -> renderer onOperationCancel hook
+   *       -> {@link HeterogeneousAgentCtr.cancelSession}
+   *         -> {@link HeterogeneousAgentCtr.killProcessTree}
+   *         -> {@link HeterogeneousAgentCtr.waitForProcessExit}
+   *
+   * Use when:
+   * - The user stops an active local heterogeneous-agent run.
+   * - “Send now” must safely resume the same native Codex thread.
+   *
+   * Expects:
+   * - `params.sessionId` identifies a session owned by this controller.
+   *
+   * Returns:
+   * - Only after the transport accepted interruption and, for CLI processes,
+   *   the process exit was observed.
+   *
+   * Throws:
+   * - When a CLI process remains active after the bounded SIGKILL escalation.
    */
   async cancelSession(params: CancelSessionParams): Promise<void> {
     const session = this.sessions.get(params.sessionId);
@@ -2673,6 +2910,10 @@ export default class HeterogeneousAgentCtr {
     }
     if (session.cursorAcpSession) {
       session.cursorAcpSession.interrupt();
+      return;
+    }
+    if (session.droidAcpSession) {
+      session.droidAcpSession.interrupt();
       return;
     }
     if (session.appServerSession) {
@@ -2700,14 +2941,18 @@ export default class HeterogeneousAgentCtr {
       return;
     }
     const proc = session.process;
+    const gracefulExit = this.waitForProcessExit(proc, 2000);
     this.killProcessTree(proc, 'SIGINT');
 
-    setTimeout(() => {
-      if (session.process === proc && !proc.killed) {
-        logger.warn('Session did not exit after SIGINT, escalating to SIGKILL:', params.sessionId);
-        this.killProcessTree(proc, 'SIGKILL');
-      }
-    }, 2000);
+    if (await gracefulExit) return;
+    if (session.process !== proc) return;
+
+    logger.warn('Session did not exit after SIGINT, escalating to SIGKILL:', params.sessionId);
+    const forcedExit = this.waitForProcessExit(proc, 2000);
+    this.killProcessTree(proc, 'SIGKILL');
+    if (!(await forcedExit)) {
+      throw new Error(`Session ${params.sessionId} did not exit after SIGKILL`);
+    }
   }
 
   /**
@@ -2725,6 +2970,11 @@ export default class HeterogeneousAgentCtr {
     if (session.cursorAcpSession) {
       session.cancelledByUs = true;
       session.cursorAcpSession.close();
+    }
+
+    if (session.droidAcpSession) {
+      session.cancelledByUs = true;
+      session.droidAcpSession.close();
     }
 
     if (session.appServerSession) {
@@ -2824,6 +3074,10 @@ export default class HeterogeneousAgentCtr {
         if (session.cursorAcpSession) {
           session.cancelledByUs = true;
           session.cursorAcpSession.close();
+        }
+        if (session.droidAcpSession) {
+          session.cancelledByUs = true;
+          session.droidAcpSession.close();
         }
         if (session.appServerSession) {
           session.cancelledByUs = true;
@@ -2991,8 +3245,27 @@ export default class HeterogeneousAgentCtr {
       stdio: ['pipe', 'inherit', 'inherit'],
     });
 
+    // Keep the wrapper reachable by the gateway cancellation tool. The wrapper
+    // owns the inner agent handle and forwards SIGINT/SIGTERM into the native
+    // CLI process group, so signalling this process is the only reliable way
+    // to release a Codex thread writer before a replacement turn starts.
+    const exit = new Promise<void>((resolve) => {
+      child.once('exit', () => resolve());
+      child.once('error', () => resolve());
+    });
+    this.lhHeteroExecTasks.set(operationId, { exit, process: child });
+
     child.on('exit', (code, signal) => {
       logger.info('spawnLhHeteroExec: exited — op=%s code=%s signal=%s', operationId, code, signal);
+      if (this.lhHeteroExecTasks.get(operationId)?.process === child) {
+        this.lhHeteroExecTasks.delete(operationId);
+      }
+    });
+
+    child.on('error', () => {
+      if (this.lhHeteroExecTasks.get(operationId)?.process === child) {
+        this.lhHeteroExecTasks.delete(operationId);
+      }
     });
 
     return new Promise((resolve) => {
@@ -3033,5 +3306,66 @@ export default class HeterogeneousAgentCtr {
         settle({ reason: err.message, status: 'rejected' });
       });
     });
+  }
+
+  /**
+   * Cancels a device-gateway `lh hetero exec` wrapper and waits for its native
+   * writer to exit.
+   *
+   * Use when:
+   * - A server operation is interrupted from another client.
+   * - A replacement turn must not resume the same native thread concurrently.
+   *
+   * Expects:
+   * - `operationId` is the id supplied to {@link spawnLhHeteroExec}.
+   *
+   * Returns:
+   * - Process details when a live wrapper was found; otherwise `undefined`.
+   */
+  async cancelLhHeteroExec(params: {
+    operationId: string;
+    signal?: NodeJS.Signals;
+  }): Promise<LhHeteroExecCancellationResult | undefined> {
+    const { operationId, signal = 'SIGINT' } = params;
+    const task = this.lhHeteroExecTasks.get(operationId);
+    if (!task) return;
+    if (task.cancellation) return task.cancellation;
+
+    task.cancellation = (async () => {
+      const waitForExit = async (timeoutMs: number): Promise<boolean> => {
+        // Bound cancellation so an unresponsive wrapper cannot hold the gateway
+        // request forever. The timeout only gates waiting; the second signal below
+        // escalates the inner agent through the wrapper's repeated-SIGINT handler.
+        let timer: NodeJS.Timeout | undefined;
+        const timedOut = new Promise<false>((resolve) => {
+          timer = setTimeout(() => resolve(false), timeoutMs);
+        });
+        const exited = await Promise.race([task.exit.then(() => true as const), timedOut]);
+        if (timer) clearTimeout(timer);
+        return exited;
+      };
+
+      task.process.kill(signal);
+      let exited = await waitForExit(2000);
+
+      if (!exited) {
+        // `lh hetero exec` treats a repeated SIGINT as an explicit SIGKILL of the
+        // inner native process group. Give that path a short drain window so its
+        // heteroFinish callback can settle before the replacement starts.
+        task.process.kill(signal === 'SIGINT' ? 'SIGINT' : 'SIGKILL');
+        exited = await waitForExit(2000);
+      }
+
+      if (!exited) {
+        // Last resort: terminate the wrapper itself. This is intentionally after
+        // the cooperative path because a direct SIGKILL cannot run its finish hook.
+        task.process.kill('SIGKILL');
+        exited = await waitForExit(1000);
+      }
+
+      return { exited, pid: task.process.pid, signal };
+    })();
+
+    return task.cancellation;
   }
 }

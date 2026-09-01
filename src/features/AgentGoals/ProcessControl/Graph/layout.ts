@@ -9,8 +9,8 @@ import type { GoalGraphEdge, GoalGraphNode } from '@lobechat/types';
  * dependency for a layout that fits in a screen of code.
  */
 
-export const NODE_WIDTH = { decision: 250, finding: 240, problem: 230, work: 260 } as const;
-export const NODE_HEIGHT = { decision: 76, finding: 76, problem: 76, work: 112 } as const;
+export const NODE_WIDTH = { decision: 250, finding: 240, problem: 230, task: 260 } as const;
+export const NODE_HEIGHT = { decision: 76, finding: 76, problem: 76, task: 112 } as const;
 
 const RANK_GAP = 56;
 const COLUMN_GAP = 32;

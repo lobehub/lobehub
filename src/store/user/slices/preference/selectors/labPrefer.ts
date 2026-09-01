@@ -19,6 +19,7 @@ export const labPreferSelectors = {
   enableCodexAppServer: (s: UserState): boolean => s.preference.lab?.enableCodexAppServer ?? false,
   enableDesktopSplitView: (s: UserState): boolean =>
     s.preference.lab?.enableDesktopSplitView ?? false,
+  enableEvalCapture: (s: UserState): boolean => s.preference.lab?.enableEvalCapture ?? false,
   enableHeteroSessionImport: (s: UserState): boolean =>
     s.preference.lab?.enableHeteroSessionImport ?? false,
   enableImessage: (s: UserState): boolean => s.preference.lab?.enableImessage ?? false,

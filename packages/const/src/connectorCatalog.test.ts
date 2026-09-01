@@ -29,14 +29,9 @@ describe('connectorCatalog', () => {
     }
   });
 
-  /**
-   * @example Explicit onboarding flows can still request the raw Composio GitHub definition.
-   */
-  it('preserves source-qualified Composio capability lookup', () => {
-    expect(getComposioAppByIdentifier('github')).toMatchObject({
-      appSlug: 'GITHUB',
-      identifier: 'github',
-    });
+  /** @example GitHub cannot resolve to a legacy Composio authorization path. */
+  it('excludes GitHub from the raw Composio capability lookup', () => {
+    expect(getComposioAppByIdentifier('github')).toBeUndefined();
   });
 
   /**

@@ -24,7 +24,7 @@ export type GoalSubjectType = 'task' | 'topic' | 'standalone';
 /** Automatic recovery policy for Goal Graph Work. */
 export interface GoalRecoveryPolicy {
   /** Maximum execution attempts for one Work before escalating to a decision gate. */
-  maxAttemptsPerWork?: number;
+  maxAttemptsPerTask?: number;
   /** Per-operation agent step limit. Null/undefined leaves the runtime uncapped. */
   maxStepsPerRun?: number | null;
   /** Time without a durable runtime lease refresh before a running Work is reclaimed. */
@@ -32,6 +32,13 @@ export interface GoalRecoveryPolicy {
 }
 
 export interface GoalConfig {
+  /**
+   * How many of a goal's Tasks may be in flight at once. Independent Tasks are
+   * the common case — four bug fixes that share no code have no reason to run
+   * one after another — but an uncapped fan-out would spend the whole budget
+   * before the first result came back. Null/undefined uses the default.
+   */
+  maxConcurrentTasks?: number | null;
   recovery?: GoalRecoveryPolicy;
 }
 
@@ -68,7 +75,7 @@ export interface GoalItem {
 // ============================================
 
 /** Coarse-grained semantic role of a node in a Goal Graph. */
-export type GoalNodeKind = 'problem' | 'work' | 'finding' | 'decision';
+export type GoalNodeKind = 'problem' | 'task' | 'finding' | 'decision';
 
 /** Semantic lifecycle of a node; independent from the execution status of its Task. */
 export type GoalNodeStatus =

@@ -198,11 +198,14 @@ publishes green with its evidence silently degraded.
 
 What is specific to this repository:
 
-- **Reports live in `.records/reports/<subject-key>/<timestamp>-<slug>/`**
-  (gitignored), grouped by acceptance subject; the subject directory holds an
-  `acceptance.json` marker and one subdirectory per immutable round. Scaffold with
+- **Reports live outside the repo**, under
+  `${TMPDIR:-/tmp}/lobe-acceptance/reports/<subject-key>/<timestamp>-<slug>/`
+  (override with `ACCEPTANCE_REPORT_ROOT`), grouped by acceptance subject; the
+  subject directory holds an `acceptance.json` marker and one subdirectory per
+  immutable round. Scaffold with
   `report-init.sh --subject topic:tpc_xxx <slug> "<title>"`, which also pre-fills
-  `result.json.subject`.
+  `result.json.subject`. Reports are per-run scratch — the published round is the
+  durable copy — so they never touch the working tree.
 
 - **Reusable per-check inputs** live in `.records/fixtures/<subject-key>/<check-id>/`
   (`check.json` + `seed/`). Execution outputs stay in the round's `assets/` and are
@@ -255,8 +258,9 @@ in a source file corrupts the next run and the next agent's mental model.
   returns nothing. When you injected into a file that already had uncommitted
   changes, `git checkout --` is the WRONG revert — it wipes the branch's edits too;
   snapshot the file first and restore from the snapshot.
-- **Keep the report and its evidence.** `.records/reports/**` is the deliverable and
-  is gitignored; the published round points at it.
+- **Keep the report and its evidence** until the round is published. It lives in
+  the temp report root, never in the working tree; the published round is the
+  durable copy.
 - **Check `git status` before calling the tree clean.** Some dev servers write
   managed files on start.
 

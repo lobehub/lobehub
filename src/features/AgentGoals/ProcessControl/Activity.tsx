@@ -221,7 +221,7 @@ const Activity = memo<{ graph: GoalGraphView; onSelect: (nodeId: string) => void
     const rows = graph.nodes
       .filter(
         (view) =>
-          (view.node.kind === 'work' &&
+          (view.node.kind === 'task' &&
             (view.attempts.length > 0 || view.node.status !== 'proposed')) ||
           (view.node.kind === 'decision' && view.node.status !== 'proposed'),
       )

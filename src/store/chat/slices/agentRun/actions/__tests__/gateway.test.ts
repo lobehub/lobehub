@@ -1106,7 +1106,18 @@ describe('GatewayActionImpl', () => {
       expect(completeOperation).toHaveBeenCalledWith('parent-send-msg-op');
     });
 
-    it('registers a cancel handler that calls aiAgentService.interruptTask with the server operationId', async () => {
+    /**
+     * @example Send now receives the server's physical device cancellation result.
+     */
+    it('registers a cancel handler that propagates unconfirmed device shutdown', async () => {
+      // ROOT CAUSE:
+      //
+      // The gateway hook awaited interruptTask but discarded its result. A local
+      // Codex process could report `deviceCancellationConfirmed: false` while the
+      // hook resolved, allowing QueueTray to remove the message and send again.
+      //
+      // Before: interruptTask(...).catch(log) always resolved the cancel hook.
+      // After: an explicit false confirmation rejects the cancel hook.
       const onOperationCancel = vi.fn();
       const startOperation = vi.fn(() => ({ operationId: 'gw-op-local' }));
 
@@ -1171,6 +1182,15 @@ describe('GatewayActionImpl', () => {
         operationId: 'server-op-xyz',
         topicId: 'topic-1',
       });
+
+      interruptTaskSpy.mockResolvedValueOnce({
+        deviceCancellationConfirmed: false,
+        operationId: 'server-op-xyz',
+        success: true,
+      });
+      await expect(handler()).rejects.toThrow(
+        'Gateway operation server-op-xyz cancellation unconfirmed',
+      );
     });
 
     // Regression: after an error run the gateway session completes

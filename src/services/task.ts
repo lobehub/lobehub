@@ -27,7 +27,7 @@ class TaskService {
     assigneeAgentId?: string;
     automated?: boolean;
     excludeStatuses?: TaskStatus[];
-    groupBy?: 'assignee' | 'priority';
+    groupBy?: 'assignee' | 'member' | 'priority';
     groups?: Array<{
       key: string;
       limit?: number;
@@ -37,7 +37,13 @@ class TaskService {
     parentTaskId?: string | null;
     projectId?: string;
     visibility?: 'private' | 'public';
-  }) => lambdaClient.task.groupList.query(params);
+  }) =>
+    lambdaClient.task.groupList.query({
+      ...params,
+      // Keep `assignee`'s released hybrid API semantics for older clients.
+      // This UI's Agent board deliberately opts into the agent-only contract.
+      groupBy: params.groupBy === 'assignee' ? 'agent' : params.groupBy,
+    });
 
   getSubtasks = async (id: string) => lambdaClient.task.getSubtasks.query({ id });
 

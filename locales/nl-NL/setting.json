@@ -1555,8 +1555,6 @@
   "tools.composio.servers.dropbox.readme": "Integreer met Dropbox om toegang te krijgen tot en beheer te voeren over je bestanden. Upload, download en deel bestanden, beheer mappen, versies en organiseer je cloudopslag via conversatie-AI.",
   "tools.composio.servers.figma.description": "Figma is een collaboratieve tool voor interfaceontwerp voor web- en mobiele applicaties.",
   "tools.composio.servers.figma.readme": "Verbind met Figma om ontwerpbestanden te openen en samen te werken aan projecten. Bekijk ontwerpen, exporteer assets, blader door componenten en beheer je designworkflow via natuurlijke gesprekken.",
-  "tools.composio.servers.github.description": "Verbeterde GitHub MCP-server",
-  "tools.composio.servers.github.readme": "Verbind met GitHub om repositories, issues, pull requests en code te beheren. Doorzoek code, beoordeel wijzigingen, maak branches aan en werk samen aan softwareprojecten via conversatie-AI.",
   "tools.composio.servers.gmail.description": "Gmail is een gratis e-maildienst van Google.",
   "tools.composio.servers.gmail.readme": "Haal de kracht van Gmail direct naar je AI-assistent. Lees, schrijf en verstuur e-mails, doorzoek je inbox, beheer labels en organiseer je communicatie—allemaal via natuurlijke gesprekken.",
   "tools.composio.servers.google-calendar.description": "Google Agenda is een dienst voor tijdbeheer en planning.",

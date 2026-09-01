@@ -220,6 +220,8 @@ export const UserLabSchema = z.object({
    * enable the task delivery-acceptance (verify) config UI on the task detail
    */
   enableTaskVerify: z.boolean().optional(),
+  /** Capture a conversation turn as an eval test case (developer-facing). */
+  enableEvalCapture: z.boolean().optional(),
   /**
    * enable the per-topic acceptance tray above the composer (author a topic's
    * delivery checklist inline)

@@ -49,8 +49,9 @@ const group = (
   }) as TaskGroupItem;
 
 describe('kanbanBoardModel', () => {
-  it('uses assignee and priority as board dimensions and falls back from no grouping', () => {
+  it('uses assignee, member and priority as board dimensions and falls back from no grouping', () => {
     expect(normalizeKanbanGroupBy('assignee')).toBe('assignee');
+    expect(normalizeKanbanGroupBy('member')).toBe('member');
     expect(normalizeKanbanGroupBy('priority')).toBe('priority');
     expect(normalizeKanbanGroupBy('none')).toBe('status');
   });
@@ -66,13 +67,12 @@ describe('kanbanBoardModel', () => {
     const groups = [
       group('assignee:agent-1', [task('1', 'agent-1')], 'agent-1'),
       group('assignee:unassigned', [task('2', null)], null),
-      group('assignee:user:user-1', [task('3', null, 'user-1')], undefined, 'user-1'),
     ];
 
     const columns = buildKanbanColumns(groups, 'assignee');
 
     expect(columns.map((column) => column.key).sort()).toEqual(
-      ['assignee:unassigned', 'assignee:agent-1', 'assignee:user:user-1'].sort(),
+      ['assignee:unassigned', 'assignee:agent-1'].sort(),
     );
     expect(
       columns.find((column) => column.key === 'assignee:unassigned')?.groupMeta?.assigneeId,
@@ -80,13 +80,26 @@ describe('kanbanBoardModel', () => {
     expect(columns.find((column) => column.key === 'assignee:agent-1')?.groupMeta?.assigneeId).toBe(
       'agent-1',
     );
+  });
+
+  it('builds member columns independently from agent assignees', () => {
+    const groups = [
+      group('member:user-1', [task('1', 'agent-1', 'user-1')], undefined, 'user-1'),
+      group('member:unassigned', [task('2', 'agent-1', null)], undefined, null),
+    ];
+
+    const columns = buildKanbanColumns(groups, 'member');
+
+    expect(columns.map((column) => column.key).sort()).toEqual(
+      ['member:unassigned', 'member:user-1'].sort(),
+    );
     expect(
-      columns.find((column) => column.key === 'assignee:user:user-1')?.groupMeta?.assigneeUserId,
+      columns.find((column) => column.key === 'member:user-1')?.groupMeta?.assigneeUserId,
     ).toBe('user-1');
   });
 
   it('patches the task assignee when moving between assignee columns', () => {
-    const assignedTask = task('1', 'agent-1');
+    const assignedTask = task('1', 'agent-1', 'user-1');
     const groups = [
       group('assignee:agent-1', [assignedTask], 'agent-1'),
       group('assignee:unassigned', [], null),
@@ -102,60 +115,69 @@ describe('kanbanBoardModel', () => {
     const unassigned = next.find((item) => item.key === 'assignee:unassigned');
     expect(unassigned?.total).toBe(1);
     expect(unassigned?.tasks[0].assigneeAgentId).toBeNull();
-    expect(unassigned?.tasks[0].assigneeUserId).toBeNull();
+    expect(unassigned?.tasks[0].assigneeUserId).toBe('user-1');
   });
 
-  it('persists both assignee fields when moving between agent and member columns', () => {
+  it('patches only the member when moving between member columns', () => {
+    const assignedTask = task('1', 'agent-1', 'user-1');
+    const groups = [
+      group('member:user-1', [assignedTask], undefined, 'user-1'),
+      group('member:unassigned', [], undefined, null),
+    ];
+    const targetColumn = buildKanbanColumns(groups, 'member').find(
+      (column) => column.key === 'member:unassigned',
+    )!;
+    const patch = getKanbanTaskPatch('member', targetColumn)!;
+
+    expect(patch).toEqual({ assigneeUserId: null });
+    const next = moveTaskBetweenKanbanGroups(groups, assignedTask, targetColumn.key, patch);
+    const moved = next.find((item) => item.key === 'member:unassigned')?.tasks[0];
+    expect(moved?.assigneeAgentId).toBe('agent-1');
+    expect(moved?.assigneeUserId).toBeNull();
+  });
+
+  it('persists only the assignment dimension that changed', () => {
     expect(
-      getKanbanAssigneeUpdate(task('1', null, 'user-1'), {
-        assigneeAgentId: 'agent-1',
-        assigneeUserId: null,
-      }),
-    ).toEqual({ assigneeAgentId: 'agent-1', assigneeUserId: null });
+      getKanbanAssigneeUpdate(task('1', null, 'user-1'), { assigneeAgentId: 'agent-1' }),
+    ).toEqual({ assigneeAgentId: 'agent-1' });
+    expect(getKanbanAssigneeUpdate(task('2', 'agent-1'), { assigneeUserId: 'user-1' })).toEqual({
+      assigneeUserId: 'user-1',
+    });
     expect(
-      getKanbanAssigneeUpdate(task('2', 'agent-1'), {
-        assigneeAgentId: null,
-        assigneeUserId: 'user-1',
-      }),
-    ).toEqual({ assigneeAgentId: null, assigneeUserId: 'user-1' });
-    expect(
-      getKanbanAssigneeUpdate(task('3', null, 'user-1'), {
-        assigneeAgentId: null,
-        assigneeUserId: 'user-1',
-      }),
+      getKanbanAssigneeUpdate(task('3', null, 'user-1'), { assigneeUserId: 'user-1' }),
     ).toBeUndefined();
   });
 
-  it('rejects member-column drops for automated tasks', () => {
+  it('allows automated tasks to move between member columns', () => {
     const columns = buildKanbanColumns(
       [
-        group('assignee:agent-1', [], 'agent-1'),
-        group('assignee:user:user-1', [], undefined, 'user-1'),
+        group('member:unassigned', [], undefined, null),
+        group('member:user-1', [], undefined, 'user-1'),
       ],
-      'assignee',
+      'member',
     );
-    const agentColumn = columns.find((column) => column.key === 'assignee:agent-1')!;
-    const memberColumn = columns.find((column) => column.key === 'assignee:user:user-1')!;
+    const unassignedColumn = columns.find((column) => column.key === 'member:unassigned')!;
+    const memberColumn = columns.find((column) => column.key === 'member:user-1')!;
     const automatedTask = task('automated', null, null, { automationMode: 'schedule' });
 
-    expect(canDropTaskIntoKanbanColumn(automatedTask, 'assignee', memberColumn)).toBe(false);
-    expect(canDropTaskIntoKanbanColumn(automatedTask, 'assignee', agentColumn)).toBe(true);
+    expect(canDropTaskIntoKanbanColumn(automatedTask, 'member', memberColumn)).toBe(true);
+    expect(canDropTaskIntoKanbanColumn(automatedTask, 'member', unassignedColumn)).toBe(true);
   });
 
   it('only allows private tasks to be dropped into their creator member column', () => {
     const columns = buildKanbanColumns(
       [
-        group('assignee:user:creator-1', [], undefined, 'creator-1'),
-        group('assignee:user:user-2', [], undefined, 'user-2'),
+        group('member:creator-1', [], undefined, 'creator-1'),
+        group('member:user-2', [], undefined, 'user-2'),
       ],
-      'assignee',
+      'member',
     );
-    const creatorColumn = columns.find((column) => column.key === 'assignee:user:creator-1')!;
-    const otherMemberColumn = columns.find((column) => column.key === 'assignee:user:user-2')!;
+    const creatorColumn = columns.find((column) => column.key === 'member:creator-1')!;
+    const otherMemberColumn = columns.find((column) => column.key === 'member:user-2')!;
     const privateTask = task('private', null, null, { visibility: 'private' });
 
-    expect(canDropTaskIntoKanbanColumn(privateTask, 'assignee', creatorColumn)).toBe(true);
-    expect(canDropTaskIntoKanbanColumn(privateTask, 'assignee', otherMemberColumn)).toBe(false);
+    expect(canDropTaskIntoKanbanColumn(privateTask, 'member', creatorColumn)).toBe(true);
+    expect(canDropTaskIntoKanbanColumn(privateTask, 'member', otherMemberColumn)).toBe(false);
   });
 
   it('preserves paginated group totals during an optimistic move', () => {

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import * as Schema from '../../../schemas';
@@ -655,6 +655,56 @@ describe('HomeRepository', () => {
         expect(result).toHaveLength(1);
         expect(result[0].id).toBe('priority-search');
         expect(result[0].pinned).toBe(false); // agents.pinned should take priority
+      });
+    });
+  });
+
+  describe('searchAgents with external candidates', () => {
+    it('hydrates only current-scope non-virtual agents and chat groups', async () => {
+      await clientDB.insert(Schema.agents).values([
+        { id: 'candidate-agent-own', title: 'Own agent', userId },
+        { id: 'candidate-agent-virtual', title: 'Virtual agent', userId, virtual: true },
+        { id: 'candidate-agent-other', title: 'Other agent', userId: otherUserId },
+      ]);
+      await clientDB.insert(Schema.chatGroups).values([
+        { id: 'candidate-group-own', title: 'Own group', userId },
+        { id: 'candidate-group-other', title: 'Other group', userId: otherUserId },
+      ]);
+      const ftsSearchCandidates = vi.fn().mockImplementation(({ entity }) =>
+        Promise.resolve({
+          candidates:
+            entity === 'agents'
+              ? [
+                  { id: 'candidate-agent-other', score: 12 },
+                  { id: 'candidate-agent-virtual', score: 10 },
+                  { id: 'candidate-agent-deleted', score: 8 },
+                  { id: 'candidate-agent-own', score: 6 },
+                ]
+              : [
+                  { id: 'candidate-group-other', score: 12 },
+                  { id: 'candidate-group-deleted', score: 10 },
+                  { id: 'candidate-group-own', score: 8 },
+                ],
+          total: 4,
+        }),
+      );
+      const repo = new HomeRepository(clientDB, userId, undefined, {
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates,
+      });
+
+      const result = await repo.searchAgents('candidate');
+
+      expect(result.map(({ id }) => id).sort()).toEqual([
+        'candidate-agent-own',
+        'candidate-group-own',
+      ]);
+      expect(ftsSearchCandidates).toHaveBeenCalledTimes(2);
+      expect(ftsSearchCandidates).toHaveBeenCalledWith({
+        entity: 'agents',
+        filters: { excludeVirtual: true },
+        pagination: {},
+        query: { fields: ['title', 'description'], text: 'candidate' },
       });
     });
   });

@@ -2,10 +2,20 @@
 
 import type { ProjectFileIndexEntry } from '@lobechat/electron-client-ipc';
 import { Center, copyToClipboard, Empty, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
-import { ActionIcon, Input, toast } from '@lobehub/ui/base-ui';
+import { ActionIcon, Button, DropdownMenu, Input, toast } from '@lobehub/ui/base-ui';
 import type { GitStatusEntry } from '@pierre/trees';
 import { createStaticStyles } from 'antd-style';
-import { FileIcon, SearchIcon, XIcon } from 'lucide-react';
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  FileIcon,
+  FolderTreeIcon,
+  FoldVerticalIcon,
+  GitCompareArrowsIcon,
+  ListFilterIcon,
+  SearchIcon,
+  XIcon,
+} from 'lucide-react';
 import type { DragEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -27,6 +37,7 @@ import { projectFileService } from '@/services/projectFile';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 
+import { filterProjectFileEntries, mergeMissingDeletedEntries } from './fileFilter';
 import { isExcludedProjectFileEntry } from './fileVisibility';
 import { buildGitStatusEntries, useGitWorkingTreeFiles } from './useGitWorkingTreeFiles';
 import { useProjectFiles } from './useProjectFiles';
@@ -60,9 +71,17 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     min-height: 0;
   `,
   subheader: css`
+    display: flex;
     flex-shrink: 0;
+    gap: 4px;
+    align-items: center;
+
     padding-block: 6px 8px;
     padding-inline: 12px;
+  `,
+  search: css`
+    flex: 1;
+    min-width: 0;
   `,
 }));
 
@@ -84,6 +103,15 @@ const FILE_TREE_UNSAFE_CSS = [
 ].join('\n');
 const FILE_SEARCH_DEBOUNCE_MS = 180;
 const PROJECT_FILE_TREE_SEARCH_LIMIT = 200;
+// Relative file paths cannot contain NUL, so this synthetic id cannot collide with an indexed entry.
+const PROJECT_ROOT_NODE_ID = '\0project-root';
+
+type FileViewMode = 'project' | 'changes';
+
+const getProjectRootName = (root: string) => {
+  const normalizedRoot = root.replace(/[\\/]+$/, '');
+  return normalizedRoot.split(/[\\/]/).pop() || root;
+};
 
 const getParentRelativePath = (relativePath: string): string | null => {
   const cleaned = stripTrailingSlash(relativePath);
@@ -94,28 +122,40 @@ const getParentRelativePath = (relativePath: string): string | null => {
 
 const buildTreeNodes = (
   entries: ProjectFileIndexEntry[],
+  rootName: string,
 ): ExplorerTreeNode<ProjectFileIndexEntry>[] => {
   // The index gives every file plus the chain of containing directories, each
   // with a unique relativePath (directories end with "/"). Use that string as
   // the stable node id and derive parentId from the path itself.
   const ids = new Set(entries.map((entry) => entry.relativePath));
-  return entries.map((entry) => {
-    const parentRel = getParentRelativePath(entry.relativePath);
-    const parentId = parentRel && ids.has(parentRel) ? parentRel : null;
-    return {
-      data: entry,
-      id: entry.relativePath,
-      isFolder: entry.isDirectory,
-      name: entry.name,
-      parentId,
-    };
-  });
+  return [
+    {
+      id: PROJECT_ROOT_NODE_ID,
+      isFolder: true,
+      name: rootName,
+      parentId: null,
+    },
+    ...entries.map((entry) => {
+      const parentRel = getParentRelativePath(entry.relativePath);
+      const parentId = parentRel && ids.has(parentRel) ? parentRel : PROJECT_ROOT_NODE_ID;
+      return {
+        data: entry,
+        id: entry.relativePath,
+        isFolder: entry.isDirectory,
+        name: entry.name,
+        parentId,
+      };
+    }),
+  ];
 };
 
 const buildIgnoredGitStatusEntries = (entries: ProjectFileIndexEntry[]): GitStatusEntry[] =>
   entries
     .filter((entry) => entry.gitIgnored)
     .map((entry) => ({ path: entry.relativePath, status: 'ignored' }));
+
+const prefixGitStatusPaths = (entries: GitStatusEntry[], rootName: string): GitStatusEntry[] =>
+  entries.map((entry) => ({ ...entry, path: `${rootName}/${entry.path}` }));
 
 const getAncestorIds = (filePath: string): string[] => {
   const segments = filePath.split('/');
@@ -127,14 +167,20 @@ const getAncestorIds = (filePath: string): string[] => {
 };
 
 interface FilesSearchBarProps {
+  onClose: () => void;
   onDebouncedChange: (query: string) => void;
 }
 
 // Keystrokes stay local to this component: only the debounced query reaches
 // the tree host, so typing never re-renders the ExplorerTree subtree.
-const FilesSearchBar = memo<FilesSearchBarProps>(({ onDebouncedChange }) => {
+const FilesSearchBar = memo<FilesSearchBarProps>(({ onClose, onDebouncedChange }) => {
   const { t } = useTranslation('chat');
   const [searchQuery, setSearchQuery] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => onDebouncedChange(searchQuery), FILE_SEARCH_DEBOUNCE_MS);
@@ -145,16 +191,28 @@ const FilesSearchBar = memo<FilesSearchBarProps>(({ onDebouncedChange }) => {
     <Input
       placeholder={t('workingPanel.files.searchPlaceholder')}
       prefix={<Icon icon={SearchIcon} size={13} />}
+      ref={inputRef}
       size={'small'}
       style={{ width: '100%' }}
       value={searchQuery}
       suffix={
-        searchQuery ? (
-          <ActionIcon icon={XIcon} size={12} onClick={() => setSearchQuery('')} />
-        ) : undefined
+        <ActionIcon
+          icon={XIcon}
+          size={12}
+          onClick={() => {
+            if (searchQuery) setSearchQuery('');
+            else onClose();
+          }}
+        />
       }
       onChange={(e) => setSearchQuery(e.target.value)}
-      onKeyDown={stopPropagation}
+      onKeyDown={(event) => {
+        stopPropagation(event);
+        if (event.key !== 'Escape') return;
+        setSearchQuery('');
+        onDebouncedChange('');
+        onClose();
+      }}
     />
   );
 });
@@ -170,39 +228,72 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
     workingDirectory,
     data?.source === 'git',
   );
+  const projectSource = data?.source;
   const projectRoot = data?.root ?? workingDirectory;
 
   const entries = useMemo(() => data?.entries ?? [], [data]);
+  const [viewMode, setViewMode] = useState<FileViewMode>('project');
+  const [hideIgnored, setHideIgnored] = useState(false);
+  const [searchExpanded, setSearchExpanded] = useState(false);
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [searchEntries, setSearchEntries] = useState<ProjectFileIndexEntry[] | undefined>();
   const [isSearching, setIsSearching] = useState(false);
+  const projectRootName = getProjectRootName(projectRoot);
   const normalizedDebouncedQuery = debouncedQuery.trim();
   const isFiltering = normalizedDebouncedQuery.length > 0;
-  const displayEntries = useMemo(
-    () =>
-      (isFiltering ? (searchEntries ?? []) : entries).filter(
-        (entry) => !isExcludedProjectFileEntry(entry),
-      ),
-    [entries, isFiltering, searchEntries],
-  );
-  const nodes = useMemo(() => buildTreeNodes(displayEntries), [displayEntries]);
+  const changedOnly = viewMode === 'changes';
+  const hasDisplayFilter = isFiltering || changedOnly || hideIgnored;
   const workingTreeGitStatus = useMemo(() => buildGitStatusEntries(gitFiles), [gitFiles]);
-  const gitStatus = useMemo(
-    () => [...buildIgnoredGitStatusEntries(displayEntries), ...workingTreeGitStatus],
-    [displayEntries, workingTreeGitStatus],
-  );
   const dirtyFilePaths = useMemo(
     () => new Set(workingTreeGitStatus.map((entry) => entry.path)),
     [workingTreeGitStatus],
+  );
+  const displayEntries = useMemo(() => {
+    const indexedEntries = isFiltering ? (searchEntries ?? []) : entries;
+    const entriesWithDeleted = mergeMissingDeletedEntries(
+      indexedEntries,
+      isFiltering ? [] : (gitFiles?.deleted ?? []),
+      projectRoot,
+    );
+    const visibleEntries = entriesWithDeleted.filter((entry) => !isExcludedProjectFileEntry(entry));
+
+    return filterProjectFileEntries(visibleEntries, dirtyFilePaths, {
+      changedOnly,
+      hideIgnored,
+    });
+  }, [
+    changedOnly,
+    dirtyFilePaths,
+    entries,
+    gitFiles?.deleted,
+    hideIgnored,
+    isFiltering,
+    projectRoot,
+    searchEntries,
+  ]);
+  const nodes = useMemo(
+    () => buildTreeNodes(displayEntries, projectRootName),
+    [displayEntries, projectRootName],
+  );
+  const gitStatus = useMemo(
+    () =>
+      prefixGitStatusPaths(
+        [...buildIgnoredGitStatusEntries(displayEntries), ...workingTreeGitStatus],
+        projectRootName,
+      ),
+    [displayEntries, projectRootName, workingTreeGitStatus],
   );
   // Pre-expand top-level directories so the user sees something useful on first
   // paint without having to click through every folder.
   const defaultExpandedIds = useMemo(
     () =>
       nodes
-        .filter((node) => node.isFolder && (isFiltering || node.parentId == null))
+        .filter(
+          (node) =>
+            node.id === PROJECT_ROOT_NODE_ID || (node.isFolder && (isFiltering || changedOnly)),
+        )
         .map((node) => node.id),
-    [isFiltering, nodes],
+    [changedOnly, isFiltering, nodes],
   );
   const treeStyleVars = useMemo(
     () => getExplorerTreeStyleVars({ reserveChevronSlot: nodes.some((node) => node.isFolder) }),
@@ -210,6 +301,14 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   );
 
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    setViewMode('project');
+  }, [deviceId, workingDirectory]);
+
+  useEffect(() => {
+    if (projectSource && projectSource !== 'git') setViewMode('project');
+  }, [projectSource]);
 
   useEffect(() => {
     if (!normalizedDebouncedQuery) {
@@ -224,7 +323,9 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
 
     void projectFileService
       .searchProjectFiles({
+        changedOnly,
         deviceId,
+        excludeIgnored: hideIgnored,
         limit: PROJECT_FILE_TREE_SEARCH_LIMIT,
         query: normalizedDebouncedQuery,
         scope: workingDirectory,
@@ -245,7 +346,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
     return () => {
       cancelled = true;
     };
-  }, [deviceId, normalizedDebouncedQuery, workingDirectory]);
+  }, [changedOnly, deviceId, hideIgnored, normalizedDebouncedQuery, workingDirectory]);
 
   // Skip resyncs when defaultExpandedIds is structurally unchanged so the user's expansions survive re-renders.
   const prevDefaultRef = useRef<string[]>([]);
@@ -258,6 +359,45 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   }, [defaultExpandedIds]);
 
   const treeRef = useRef<ExplorerTreeHandle>(null);
+
+  const handleCollapseAll = useCallback(() => {
+    treeRef.current?.setExpanded([]);
+    setExpandedIds([]);
+  }, []);
+
+  const viewItems = useMemo(
+    () => [
+      {
+        extra: viewMode === 'project' ? <CheckIcon size={14} /> : undefined,
+        icon: <FolderTreeIcon size={14} />,
+        key: 'project',
+        label: t('workingPanel.files.views.project'),
+        onClick: () => setViewMode('project'),
+      },
+      {
+        disabled: data?.source !== 'git',
+        extra: viewMode === 'changes' ? <CheckIcon size={14} /> : undefined,
+        icon: <GitCompareArrowsIcon size={14} />,
+        key: 'changes',
+        label: t('workingPanel.files.views.changes'),
+        onClick: () => setViewMode('changes'),
+      },
+    ],
+    [data?.source, t, viewMode],
+  );
+
+  const filterItems = useMemo(
+    () => [
+      {
+        checked: hideIgnored,
+        key: 'hide-ignored',
+        label: t('workingPanel.files.filters.hideIgnored'),
+        onCheckedChange: setHideIgnored,
+        type: 'checkbox' as const,
+      },
+    ],
+    [hideIgnored, t],
+  );
 
   useEffect(() => {
     if (!isFiltering) return;
@@ -274,7 +414,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
     const nodeIds = new Set(nodes.map((n) => n.id));
     if (!nodeIds.has(path)) return;
 
-    const ancestors = getAncestorIds(path);
+    const ancestors = [PROJECT_ROOT_NODE_ID, ...getAncestorIds(path)];
     const nextExpanded = Array.from(new Set([...expandedIds, ...ancestors]));
     treeRef.current?.setExpanded(nextExpanded);
     treeRef.current?.select(path);
@@ -403,7 +543,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
     [canOfferFile, dirtyFilePaths, isRemote, openNode, openWorkingSidebar, publishFile, t],
   );
 
-  const isEmpty = nodes.length === 0;
+  const isEmpty = displayEntries.length === 0;
 
   if (!data && isLoading) {
     return (
@@ -416,7 +556,57 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   return (
     <Flexbox height={'100%'} style={{ overflow: 'hidden' }} width={'100%'}>
       <div className={styles.subheader}>
-        <FilesSearchBar onDebouncedChange={setDebouncedQuery} />
+        {searchExpanded ? (
+          <div className={styles.search}>
+            <FilesSearchBar
+              onClose={() => setSearchExpanded(false)}
+              onDebouncedChange={setDebouncedQuery}
+            />
+          </div>
+        ) : (
+          <>
+            <DropdownMenu items={viewItems} placement={'bottomLeft'}>
+              <Button
+                icon={viewMode === 'project' ? FolderTreeIcon : GitCompareArrowsIcon}
+                size={'small'}
+                style={{ maxWidth: 'calc(100% - 84px)' }}
+                title={t('workingPanel.files.views.title')}
+                type={'text'}
+              >
+                {t(
+                  viewMode === 'project'
+                    ? 'workingPanel.files.views.project'
+                    : 'workingPanel.files.views.changes',
+                )}
+                <ChevronDownIcon size={12} />
+              </Button>
+            </DropdownMenu>
+            <div style={{ flex: 1 }} />
+          </>
+        )}
+        {!searchExpanded && (
+          <ActionIcon
+            icon={SearchIcon}
+            size={'small'}
+            title={t('workingPanel.files.search')}
+            onClick={() => setSearchExpanded(true)}
+          />
+        )}
+        <DropdownMenu items={filterItems} placement={'bottomRight'}>
+          <ActionIcon
+            active={hideIgnored}
+            icon={ListFilterIcon}
+            size={'small'}
+            title={t('workingPanel.files.filters.title')}
+          />
+        </DropdownMenu>
+        <ActionIcon
+          disabled={nodes.length === 0}
+          icon={FoldVerticalIcon}
+          size={'small'}
+          title={t('workingPanel.files.collapseAll')}
+          onClick={handleCollapseAll}
+        />
       </div>
       {isEmpty && isFiltering && isSearching ? (
         <Center flex={1}>
@@ -427,7 +617,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
           <Empty
             icon={FileIcon}
             description={t(
-              isFiltering ? 'workingPanel.files.noSearchResults' : 'workingPanel.files.empty',
+              hasDisplayFilter ? 'workingPanel.files.noSearchResults' : 'workingPanel.files.empty',
             )}
           />
         </Center>

@@ -160,6 +160,10 @@ describe('builtin tool registry', () => {
     expect(
       getBuiltinRender(ClaudeCodeToolIdentifier, UserInteractionApiName.askUserQuestion),
     ).toBeDefined();
+    expect(getBuiltinInspector('droid', UserInteractionApiName.askUserQuestion)).toBeDefined();
+    expect(getBuiltinRender('droid', UserInteractionApiName.askUserQuestion)).toBeDefined();
+    expect(getBuiltinIntervention('droid', UserInteractionApiName.askUserQuestion)).toBeDefined();
+    expect(getBuiltinRender('droid', 'Read')).toBeUndefined();
     expect(getBuiltinIntervention('qoder', UserInteractionApiName.askUserQuestion)).toBeDefined();
   });
 

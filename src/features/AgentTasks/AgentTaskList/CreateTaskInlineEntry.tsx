@@ -1,15 +1,18 @@
 'use client';
 
+import { canWorkspaceRoleBeTaskAssignee } from '@lobechat/const/rbac';
 import { useEditor } from '@lobehub/editor/react';
-import { Block, Flexbox, Icon } from '@lobehub/ui';
+import { Block, Flexbox } from '@lobehub/ui';
 import { ActionIcon, Button, Text, toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { $getRoot } from 'lexical';
-import { ChevronUp, Paperclip, UserCircle2 } from 'lucide-react';
+import { ChevronUp, Paperclip } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { useFetchWorkspaceMembers } from '@/business/client/hooks/useFetchWorkspaceMembers';
+import { useWorkspaceMembers } from '@/business/client/hooks/useWorkspaceMembers';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import {
   getAttachmentFileIdsFromEditor,
@@ -21,13 +24,14 @@ import { useTaskStore } from '@/store/task';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
-import type { TaskAssigneePayload } from '../features/AssigneeAgentSelector';
 import AssigneeAgentSelector from '../features/AssigneeAgentSelector';
 import AssigneeAvatar from '../features/AssigneeAvatar';
+import AssigneeMemberSelector from '../features/AssigneeMemberSelector';
 import AssigneeUserAvatar from '../features/AssigneeUserAvatar';
 import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskVisibilityChipLabel from '../features/TaskVisibilityChipLabel';
 import TaskVisibilityTag from '../features/TaskVisibilityTag';
+import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 import { useAgentVisibility } from '../shared/useAgentVisibility';
 import { useUserDisplayMeta } from '../shared/useUserDisplayMeta';
@@ -81,6 +85,17 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
   const activeWorkspaceId = useActiveWorkspaceId();
+  const { isLoading: isMembersLoading } = useFetchWorkspaceMembers();
+  const workspaceMembers = useWorkspaceMembers();
+  const assignableMemberIds = useMemo(
+    () =>
+      new Set(
+        workspaceMembers
+          .filter((member) => canWorkspaceRoleBeTaskAssignee(member.role))
+          .map((member) => member.userId),
+      ),
+    [workspaceMembers],
+  );
   const [priority, setPriority] = useState(0);
   const [assigneeAgentId, setAssigneeAgentId] = useState<string | undefined>(agentId);
   const [assigneeUserId, setAssigneeUserId] = useState<string | undefined>();
@@ -90,43 +105,49 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   // In personal mode the chip is hidden and the value is never sent.
   const [visibility, setVisibility] = useState<'private' | 'public'>(defaultVisibility);
 
-  // A private agent can only run a private task. Coerce + lock the
-  // visibility chip when the selected agent is private.
   const assigneeVisibility = useAgentVisibility(assigneeAgentId);
   const isPrivateAgent = assigneeVisibility === 'private';
-  useEffect(() => {
-    if (isPrivateAgent && visibility === 'public') setVisibility('private');
-  }, [isPrivateAgent, visibility]);
-
-  // The mirror constraint: a task assigned to another member must stay
-  // visible to the workspace — a private task is creator-only, so the
-  // assignee could never see it. Selecting a member flips visibility to
-  // workspace and locks the chip.
   const selfUserId = useUserStore(userProfileSelectors.userId);
   const isOtherMemberAssignee = Boolean(assigneeUserId) && assigneeUserId !== selfUserId;
+
+  // Resolve the two visibility constraints in one place so an old draft or an
+  // externally privatized agent cannot make separate effects toggle forever.
+  // A private agent is the stronger constraint, so drop an incompatible member.
   useEffect(() => {
+    if (isPrivateAgent) {
+      if (isOtherMemberAssignee) setAssigneeUserId(undefined);
+      if (visibility === 'public') setVisibility('private');
+      return;
+    }
+
     if (isOtherMemberAssignee && visibility === 'private') setVisibility('public');
-  }, [isOtherMemberAssignee, visibility]);
+  }, [isOtherMemberAssignee, isPrivateAgent, visibility]);
 
   const editor = useEditor();
 
   // Persist the in-progress draft per scope so a reload / accidental close
   // doesn't eat a long prompt. Skipped for the transient subtask composer.
   const draftStorageKey = useMemo(
-    () => (parentTaskId ? null : `lobehub:task-create-draft:${projectId ?? agentId ?? 'all'}`),
-    [agentId, parentTaskId, projectId],
+    () =>
+      parentTaskId
+        ? null
+        : `lobehub:task-create-draft:${activeWorkspaceId ?? 'personal'}:${projectId ?? agentId ?? 'all'}`,
+    [activeWorkspaceId, agentId, parentTaskId, projectId],
   );
   // Tracks which scope key the editor is currently hydrated for. The component
-  // is reused across /agent/A/tasks -> /agent/B/tasks -> /tasks without
-  // unmounting, so a boolean would strand the new scope on the old draft.
-  const draftRestoredKeyRef = useRef<string | null>(null);
+  // is reused across workspace and task-scope route switches without unmounting.
+  // State (instead of a ref) keeps the persistence effect from writing the old
+  // scope's member into the new key during the same effect flush as the reset.
+  const [draftHydratedKey, setDraftHydratedKey] = useState<string | null>(null);
 
   const assigneeMeta = useAgentDisplayMeta(assigneeAgentId);
-  const memberMeta = useUserDisplayMeta(assigneeAgentId ? undefined : assigneeUserId);
+  const memberMeta = useUserDisplayMeta(assigneeUserId);
 
-  const handleAssigneeChange = useCallback((assignee: TaskAssigneePayload) => {
-    setAssigneeAgentId(assignee.assigneeAgentId ?? undefined);
-    setAssigneeUserId(assignee.assigneeUserId ?? undefined);
+  const handleAgentChange = useCallback((nextAgentId: string | null) => {
+    setAssigneeAgentId(nextAgentId ?? undefined);
+  }, []);
+  const handleMemberChange = useCallback((nextUserId: string | null) => {
+    setAssigneeUserId(nextUserId ?? undefined);
   }, []);
 
   // When the assignee is locked to a scoped agent, keep it in sync with the
@@ -154,8 +175,12 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   // the new key's draft. The editor's onContentChange syncs `instruction`.
   useEffect(() => {
     if (!draftStorageKey || !editor) return;
-    if (draftRestoredKeyRef.current === draftStorageKey) return;
-    draftRestoredKeyRef.current = draftStorageKey;
+    // Workspace drafts depend on the member directory. Wait for its first
+    // response so a removed or downgraded member is never restored into a
+    // composer state that the create API will reject.
+    if (activeWorkspaceId && isMembersLoading) return;
+    if (draftHydratedKey === draftStorageKey) return;
+    setDraftHydratedKey(draftStorageKey);
 
     // Reset to baseline for the new scope before hydrating.
     editor.cleanDocument?.();
@@ -182,20 +207,34 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       if (draft.markdown) editor.setDocument?.('markdown', draft.markdown);
       if (typeof draft.priority === 'number') setPriority(draft.priority);
       if (!lockAssignee && draft.assigneeAgentId) setAssigneeAgentId(draft.assigneeAgentId);
-      if (!lockAssignee && !draft.assigneeAgentId && draft.assigneeUserId)
+      if (
+        draft.assigneeUserId &&
+        (!activeWorkspaceId || assignableMemberIds.has(draft.assigneeUserId))
+      ) {
         setAssigneeUserId(draft.assigneeUserId);
+      }
       if (draft.visibility) setVisibility(draft.visibility);
     } catch {
       /* ignore a malformed draft */
     }
-  }, [agentId, defaultVisibility, draftStorageKey, editor, lockAssignee]);
+  }, [
+    activeWorkspaceId,
+    agentId,
+    assignableMemberIds,
+    defaultVisibility,
+    draftHydratedKey,
+    draftStorageKey,
+    editor,
+    isMembersLoading,
+    lockAssignee,
+  ]);
 
   // Back the draft to storage on every change. Gated behind the restore pass so
   // the initial render can't clobber a just-read draft. Write-only on non-empty:
   // the key is cleared only on a successful submit (below), never here — so a
   // `setDocument`-timing gap right after restore can't wipe a valid draft.
   useEffect(() => {
-    if (!draftStorageKey || draftRestoredKeyRef.current !== draftStorageKey || !editor) return;
+    if (!draftStorageKey || draftHydratedKey !== draftStorageKey || !editor) return;
     const markdown = String(editor.getDocument?.('markdown') ?? '').trim();
     if (!markdown) return;
     try {
@@ -203,7 +242,9 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
         draftStorageKey,
         JSON.stringify({
           assigneeAgentId: lockAssignee ? undefined : assigneeAgentId,
-          assigneeUserId: lockAssignee ? undefined : assigneeUserId,
+          // `lockAssignee` locks only the scoped Agent. The responsible
+          // member remains an independent draft field and must survive reloads.
+          assigneeUserId,
           markdown,
           priority,
           visibility,
@@ -215,6 +256,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   }, [
     assigneeAgentId,
     assigneeUserId,
+    draftHydratedKey,
     draftStorageKey,
     editor,
     instruction,
@@ -407,12 +449,62 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
             </Block>
           </TaskPriorityTag>
 
-          {(() => {
-            const assigneeChip = (
+          {activeWorkspaceId && (
+            <AssigneeMemberSelector
+              currentUserId={assigneeUserId}
+              taskVisibility={visibility}
+              onChange={handleMemberChange}
+            >
               <Block
+                clickable
                 horizontal
                 align="center"
-                clickable={!lockAssignee}
+                gap={6}
+                height={24}
+                paddingBlock={3}
+                paddingInline={8}
+                variant={'borderless'}
+              >
+                {assigneeUserId ? (
+                  <>
+                    <AssigneeUserAvatar size={18} userId={assigneeUserId} />
+                    <Text fontSize={12}>{memberMeta?.title}</Text>
+                  </>
+                ) : (
+                  <>
+                    <UnassignedAssigneeIcon kind={'human'} size={14} />
+                    <Text color={cssVar.colorTextDescription} fontSize={12}>
+                      {t('createTask.member')}
+                    </Text>
+                  </>
+                )}
+              </Block>
+            </AssigneeMemberSelector>
+          )}
+
+          {lockAssignee ? (
+            <Block
+              horizontal
+              align="center"
+              gap={6}
+              height={24}
+              paddingBlock={3}
+              paddingInline={8}
+              variant={'borderless'}
+            >
+              <AssigneeAvatar agentId={assigneeAgentId} size={18} />
+              <Text fontSize={12}>{assigneeMeta?.title}</Text>
+            </Block>
+          ) : (
+            <AssigneeAgentSelector
+              currentAgentId={assigneeAgentId}
+              taskVisibility={isOtherMemberAssignee ? 'public' : undefined}
+              onChange={handleAgentChange}
+            >
+              <Block
+                clickable
+                horizontal
+                align="center"
                 gap={6}
                 height={24}
                 paddingBlock={3}
@@ -424,34 +516,17 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
                     <AssigneeAvatar agentId={assigneeAgentId} size={18} />
                     <Text fontSize={12}>{assigneeMeta?.title}</Text>
                   </>
-                ) : assigneeUserId ? (
-                  <>
-                    <AssigneeUserAvatar size={18} userId={assigneeUserId} />
-                    <Text fontSize={12}>{memberMeta?.title}</Text>
-                  </>
                 ) : (
                   <>
-                    <Icon color={cssVar.colorTextDescription} icon={UserCircle2} size={14} />
+                    <UnassignedAssigneeIcon kind={'agent'} size={14} />
                     <Text color={cssVar.colorTextDescription} fontSize={12}>
                       {t('createTask.assignee')}
                     </Text>
                   </>
                 )}
               </Block>
-            );
-
-            return lockAssignee ? (
-              assigneeChip
-            ) : (
-              <AssigneeAgentSelector
-                currentAgentId={assigneeAgentId}
-                currentUserId={assigneeUserId}
-                onChange={handleAssigneeChange}
-              >
-                {assigneeChip}
-              </AssigneeAgentSelector>
-            );
-          })()}
+            </AssigneeAgentSelector>
+          )}
 
           <ActionIcon
             icon={Paperclip}

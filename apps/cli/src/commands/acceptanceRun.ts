@@ -8,6 +8,7 @@ import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
 import { resolveServerUrl } from '../settings';
+import { ensureAcceptanceDirIgnored, ensureAcceptanceDirIgnoredFor } from '../utils/acceptanceDir';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
 import type { LinkResult } from '../utils/skillWiring';
@@ -111,9 +112,14 @@ async function installAction(options: InstallOptions): Promise<void> {
   }
 
   const link = linkHarnessSkills(baseDir, bundle.identifier);
+  // The skill is committed; its OUTPUT is not. Seed the artifact directory's own
+  // self-ignoring file now, so the first run's screenshots never land as
+  // untracked noise in a repo that has never heard of us.
+  const ignored = ensureAcceptanceDirIgnored(baseDir);
 
   const result = {
     dir: skillDir,
+    ignored,
     link,
     removed,
     skill: bundle.identifier,
@@ -522,6 +528,10 @@ interface IngestReportOptions {
 
 async function ingestReportAction(reportDir: string, options: IngestReportOptions): Promise<void> {
   const dir = path.resolve(reportDir);
+  // The guarantee has to hold however the round got here — a project that never
+  // ran `acceptance install`, or an agent that wrote the round by hand, still
+  // must not leave evidence binaries untracked in someone's repo.
+  ensureAcceptanceDirIgnoredFor(dir);
   const resultPath = path.join(dir, 'result.json');
   if (!existsSync(resultPath)) {
     log.error(`result.json not found in ${dir}`);

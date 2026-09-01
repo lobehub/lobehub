@@ -12,6 +12,7 @@ export {
   type ContextSegment,
   type SegmentKind,
 } from './analysis/contextMap';
+export * from './goal';
 export { InspectError, type InspectOptions, inspectSnapshot } from './inspect/inspectSnapshot';
 export { appendStepToPartial, finalizeSnapshot } from './recorder';
 export * from './replay';

@@ -791,7 +791,7 @@ describe('AgentManagerRuntime', () => {
       // ROOT CAUSE:
       //
       // Official connector installation used to check the Composio catalog first.
-      // Because GitHub exists in both catalogs, the agent builder opened Composio
+      // Because GitHub existed in both catalogs, the agent builder opened Composio
       // even though the generic connector catalog assigns GitHub to LobeHub.
       //
       // We fixed this by resolving the shared catalog owner before dispatching

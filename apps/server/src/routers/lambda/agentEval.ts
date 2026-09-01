@@ -349,7 +349,9 @@ export const agentEvalRouter = router({
   createDataset: agentEvalProcedureWrite
     .input(
       z.object({
-        benchmarkId: z.string(),
+        // Optional: a dataset accumulated from captured cases belongs to no
+        // published benchmark.
+        benchmarkId: z.string().optional(),
         identifier: z.string(),
         name: z.string(),
         description: z.string().optional(),

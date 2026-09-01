@@ -2,12 +2,53 @@ import {
   AmbiguousSnapshotIdError,
   type ExecutionSnapshot,
   loadSnapshot,
+  type LoadSnapshotOptions,
   MissingTracingBaseUrlError,
 } from '@lobechat/agent-tracing';
 import { TRPCClientError } from '@trpc/client';
 
 import { getTrpcClient } from '../../../api/client';
 import { log } from '../../../utils/logger';
+import { localTraceStoreOptions } from '../../../utils/traceStore';
+
+/** Store locations `lh trace op` reads, in the order a tie is broken. */
+export interface LocalSnapshotStores {
+  /** `~/.lobehub/traces` — where locally executed agent runs record. */
+  cliHome?: LoadSnapshotOptions;
+  /** `.agent-tracing` under the cwd — where a dev-mode server writes. */
+  cwd?: LoadSnapshotOptions;
+}
+
+/**
+ * Load a snapshot from either local store.
+ *
+ * Two stores exist because two producers write them, and for the default
+ * target (`latest`) they have to be COMPARED rather than tried in order: each
+ * store answers `latest` with its own newest entry, so probing one first would
+ * inspect a stale run whenever the other store holds something newer — while
+ * `lh trace op list`, which merges and sorts both, correctly shows the newer
+ * one first. An explicit id needs no comparison: at most one store has it.
+ */
+export const loadLocalSnapshot = async (
+  target?: string,
+  stores: LocalSnapshotStores = {},
+): Promise<ExecutionSnapshot | undefined> => {
+  const cliHome = stores.cliHome ?? localTraceStoreOptions();
+  const cwd = stores.cwd ?? {};
+
+  const isLatest = !target || target === 'latest';
+  if (!isLatest) return (await loadSnapshot(target, cliHome)) ?? (await loadSnapshot(target, cwd));
+
+  const [fromCliHome, fromCwd] = await Promise.all([
+    loadSnapshot(target, cliHome),
+    loadSnapshot(target, cwd),
+  ]);
+
+  if (!fromCliHome) return fromCwd;
+  if (!fromCwd) return fromCliHome;
+
+  return fromCwd.startedAt > fromCliHome.startedAt ? fromCwd : fromCliHome;
+};
 
 /**
  * Resolve the snapshot a `lh trace op` subcommand was pointed at, or exit with
@@ -44,6 +85,13 @@ export const resolveSnapshotOrExit = async (target?: string): Promise<ExecutionS
   };
 
   try {
+    // Locally executed runs (`lh hetero exec`) record to the CLI home, so probe
+    // it before anything that can reach the network — otherwise inspecting a
+    // run this machine just performed would round-trip to the server for a
+    // snapshot that is already sitting on disk.
+    const localRun = await loadLocalSnapshot(target);
+    if (localRun) return localRun;
+
     const snapshot = await loadSnapshot(target, { allowDownload: true, resolveDownloadUrl });
     if (snapshot) return snapshot;
     log.error(

@@ -1,4 +1,8 @@
-import { FileSnapshotStore, renderSummaryTable } from '@lobechat/agent-tracing';
+import {
+  FileSnapshotStore,
+  renderSummaryTable,
+  type SnapshotSummary,
+} from '@lobechat/agent-tracing';
 import type { Command } from 'commander';
 import { InvalidArgumentError } from 'commander';
 import pc from 'picocolors';
@@ -6,6 +10,7 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../../../api/client';
 import { printTable, timeAgo } from '../../../utils/format';
 import { log } from '../../../utils/logger';
+import { createLocalTraceStore } from '../../../utils/traceStore';
 
 const DEFAULT_LIMIT = 10;
 
@@ -58,6 +63,13 @@ const listByTopic = async (topicId: string, limit: number, json?: boolean) => {
   );
 };
 
+const dedupeByTraceId = (summaries: SnapshotSummary[]): SnapshotSummary[] => {
+  const seen = new Map<string, SnapshotSummary>();
+  for (const summary of summaries)
+    if (!seen.has(summary.traceId)) seen.set(summary.traceId, summary);
+  return [...seen.values()];
+};
+
 export function registerOpListCommand(parent: Command) {
   parent
     .command('list')
@@ -78,7 +90,18 @@ export function registerOpListCommand(parent: Command) {
         return;
       }
 
-      const summaries = await new FileSnapshotStore().list({ limit });
+      // Two local stores, because two different producers write them: a
+      // dev-mode server drops snapshots in `./.agent-tracing`, while locally
+      // executed agent runs record to the CLI home. Listing only one of them
+      // silently hides half the traces on a developer's machine.
+      const [cwdSnapshots, cliHomeSnapshots] = await Promise.all([
+        new FileSnapshotStore().list({ limit }),
+        createLocalTraceStore().list({ limit }),
+      ]);
+
+      const summaries = dedupeByTraceId([...cwdSnapshots, ...cliHomeSnapshots])
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .slice(0, limit);
 
       console.log(opts.json ? JSON.stringify(summaries, null, 2) : renderSummaryTable(summaries));
     });

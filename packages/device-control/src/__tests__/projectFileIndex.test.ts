@@ -145,6 +145,65 @@ describe('defaultSearchProjectFiles', () => {
     ]);
   });
 
+  it('applies eligible-path and ignore filters before truncating search results', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'dc-search-filtered-'));
+    cleanup.push(dir);
+    execFileSync('git', ['-c', 'init.defaultBranch=main', 'init'], { cwd: dir });
+    await writeFile(path.join(dir, '.gitignore'), '*.local\n');
+    await Promise.all(
+      Array.from({ length: 201 }, (_, index) =>
+        writeFile(path.join(dir, `target-${index.toString().padStart(3, '0')}.ts`), 'target\n'),
+      ),
+    );
+    await writeFile(path.join(dir, 'target-secret.local'), 'ignored\n');
+    execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: dir });
+    execFileSync('git', ['config', 'user.name', 'Test'], { cwd: dir });
+    execFileSync('git', ['add', '.'], { cwd: dir });
+    execFileSync('git', ['commit', '-m', 'init'], { cwd: dir });
+    await writeFile(path.join(dir, 'target-200.ts'), 'changed\n');
+
+    const result = await defaultSearchProjectFiles({
+      changedOnly: true,
+      excludeIgnored: true,
+      limit: 1,
+      query: 'target',
+      scope: dir,
+    });
+
+    expect(result.entries.map((entry) => entry.relativePath)).toEqual(['target-200.ts']);
+  });
+
+  it('fuzzy-ranks missing eligible paths with indexed files before applying the limit', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'dc-search-deleted-'));
+    cleanup.push(dir);
+    execFileSync('git', ['-c', 'init.defaultBranch=main', 'init'], { cwd: dir });
+    await writeFile(path.join(dir, 'button-helper.ts'), 'button\n');
+    await writeFile(path.join(dir, 'Button.tsx'), 'button\n');
+    await writeFile(path.join(dir, 'ButtonStory.tsx'), 'button\n');
+    execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: dir });
+    execFileSync('git', ['config', 'user.name', 'Test'], { cwd: dir });
+    execFileSync('git', ['add', '.'], { cwd: dir });
+    execFileSync('git', ['commit', '-m', 'init'], { cwd: dir });
+    await Promise.all([
+      rm(path.join(dir, 'Button.tsx')),
+      rm(path.join(dir, 'ButtonStory.tsx')),
+      writeFile(path.join(dir, 'button-helper.ts'), 'changed\n'),
+    ]);
+
+    const result = await defaultSearchProjectFiles({
+      changedOnly: true,
+      limit: 2,
+      query: 'btn',
+      scope: dir,
+    });
+
+    const relativePaths = result.entries
+      .filter((entry) => !entry.isDirectory)
+      .map((entry) => entry.relativePath);
+    expect(relativePaths).toHaveLength(2);
+    expect(relativePaths).toContain('Button.tsx');
+  });
+
   it('searches hidden project directories in non-git scopes', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'dc-search-hidden-'));
     cleanup.push(dir);

@@ -59,6 +59,7 @@ import { merge } from '@/utils/merge';
 import { sanitizeNullBytes } from '@/utils/sanitizeNullBytes';
 import { today } from '@/utils/time';
 
+import type { FtsSearchCandidateSource } from '../repositories/ftsSearch';
 import {
   agentsToSessions,
   chunks,
@@ -82,6 +83,7 @@ import { sanitizeBm25Query } from '../utils/bm25';
 import { notCopiedTranscript } from '../utils/copiedTranscript';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
+import { inJsonStringArray } from '../utils/inJsonStringArray';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { recomputeTopicUsage } from './topicUsage';
 import { WorkModel } from './work';
@@ -449,12 +451,19 @@ const computeTopicMessageStats = (counts: number[]): TopicMessageStats => {
 export class MessageModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private ftsSearchCandidateSource?: FtsSearchCandidateSource;
   private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    ftsSearchCandidateSource?: FtsSearchCandidateSource,
+  ) {
     this.userId = userId;
     this.db = db;
     this.workspaceId = workspaceId;
+    this.ftsSearchCandidateSource = ftsSearchCandidateSource;
   }
 
   private ownership = () =>
@@ -2055,10 +2064,26 @@ export class MessageModel {
     if (!keyword.trim()) return [];
 
     const bm25Query = sanitizeBm25Query(keyword);
+    const candidateResult = this.ftsSearchCandidateSource?.ftsSearchCandidateEnabled
+      ? await this.ftsSearchCandidateSource.ftsSearchCandidates({
+          entity: 'messages',
+          filters: {},
+          pagination: {},
+          query: { fields: ['content'], text: keyword },
+        })
+      : undefined;
+    const candidateIds = candidateResult?.candidates.map(({ id }) => id);
     const result = await this.db
       .select()
       .from(messages)
-      .where(and(this.ownership(), sql`${messages.content} @@@ ${bm25Query}`))
+      .where(
+        and(
+          this.ownership(),
+          candidateIds
+            ? inJsonStringArray(messages.id, candidateIds)
+            : sql`${messages.content} @@@ ${bm25Query}`,
+        ),
+      )
       .orderBy(desc(messages.createdAt));
 
     return result as DBMessageItem[];

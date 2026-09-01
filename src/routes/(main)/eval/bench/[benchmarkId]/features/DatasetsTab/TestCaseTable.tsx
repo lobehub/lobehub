@@ -3,7 +3,7 @@ import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
 import { Pagination, Table } from 'antd';
 import { type ColumnsType } from 'antd/es/table';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { Ellipsis, FileUp, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { Ellipsis, ExternalLink, FileUp, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -127,6 +127,8 @@ interface TestCaseTableProps {
   onDiffFilterChange: (filter: 'all' | 'easy' | 'medium' | 'hard') => void;
   onEdit?: (testCase: any) => void;
   onImport?: () => void;
+  /** Navigate to the case definition page. */
+  onOpen?: (testCase: any) => void;
   onPageChange: (page: number, pageSize: number) => void;
   onPreview?: (testCase: any) => void;
   onSearchChange: (value: string) => void;
@@ -151,6 +153,7 @@ const TestCaseTable = memo<TestCaseTableProps>(
     onPageChange,
     onPreview,
     onEdit,
+    onOpen,
     onDelete,
     onAddCase,
     onImport,
@@ -266,6 +269,17 @@ const TestCaseTable = memo<TestCaseTableProps>(
               <DropdownMenu
                 trigger={['click']}
                 items={[
+                  ...(onOpen
+                    ? [
+                        {
+                          icon: <ExternalLink size={14} />,
+                          key: 'open',
+                          label: t('testCaseDetail.open'),
+                          onClick: () => onOpen(record),
+                        },
+                        { type: 'divider' as const },
+                      ]
+                    : []),
                   {
                     icon: <Pencil size={14} />,
                     key: 'edit',
@@ -291,7 +305,7 @@ const TestCaseTable = memo<TestCaseTableProps>(
       }
 
       return base;
-    }, [pagination, readOnly, onEdit, onDelete, t, datasetEvalMode]);
+    }, [pagination, readOnly, onEdit, onOpen, onDelete, t, datasetEvalMode]);
 
     return (
       <>

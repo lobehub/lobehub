@@ -10,6 +10,11 @@ export interface ToolResultPayload {
     message: string;
     type?: string;
   };
+  /**
+   * Wall time the tool took on the device, by the device's own clock. Absent
+   * when the device or the gateway is too old to report it.
+   */
+  executionTimeMs?: number;
   state?: Record<string, any>;
   success: boolean;
   toolCallId: string;

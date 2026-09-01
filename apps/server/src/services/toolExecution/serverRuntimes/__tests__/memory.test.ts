@@ -1,16 +1,22 @@
 import type { LobeChatDatabase } from '@lobechat/database';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ToolExecutionContext } from '../../types';
 
 const mocks = vi.hoisted(() => ({
+  createFtsSearchRepo: vi.fn(async () => ({ ftsSearchCandidateEnabled: false })),
   embeddings: vi.fn(),
   initModelRuntimeFromDB: vi.fn(),
   initModelRuntimeWithUserPayload: vi.fn(),
+  normalizeUserMemorySearchQueries: vi.fn((queries?: string[]) => queries ?? []),
+  recordUserMemoryLexicalSearchDecision: vi.fn(),
   searchMemory: vi.fn(),
+  shouldRunUserMemoryLexicalSearch: vi.fn(),
 }));
 
 vi.mock('@/database/models/userMemory', () => ({
+  normalizeUserMemorySearchQueries: mocks.normalizeUserMemorySearchQueries,
+  shouldRunUserMemoryLexicalSearch: mocks.shouldRunUserMemoryLexicalSearch,
   UserMemoryModel: vi.fn().mockImplementation(() => ({
     searchMemory: mocks.searchMemory,
   })),
@@ -40,6 +46,14 @@ vi.mock('@/server/services/agentSignal/store/adapters/redis/policyStateStore', (
   redisPolicyStateStore: {},
 }));
 
+vi.mock('@/server/services/ftsSearch', () => ({
+  createFtsSearchRepo: mocks.createFtsSearchRepo,
+}));
+
+vi.mock('@/server/services/ftsSearch/observability', () => ({
+  recordUserMemoryLexicalSearchDecision: mocks.recordUserMemoryLexicalSearchDecision,
+}));
+
 const { memoryRuntime } = await import('../memory');
 
 const createContext = (): ToolExecutionContext => ({
@@ -63,6 +77,10 @@ const createContext = (): ToolExecutionContext => ({
 });
 
 describe('memoryRuntime', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('uses server-owned embedding runtime for memory search', async () => {
     mocks.embeddings.mockResolvedValueOnce([[0.1, 0.2, 0.3]]);
     mocks.initModelRuntimeWithUserPayload.mockReturnValueOnce({
@@ -100,5 +118,31 @@ describe('memoryRuntime', () => {
       expect.objectContaining({ queries: ['renewal timeline'] }),
       [[0.1, 0.2, 0.3]],
     );
+  });
+
+  it('records the lexical decision on the default Gateway memory path', async () => {
+    const longQuery = 'context '.repeat(40).trimEnd();
+    const embedding = [0.1, 0.2, 0.3];
+    mocks.embeddings.mockResolvedValueOnce([embedding]);
+    mocks.initModelRuntimeWithUserPayload.mockReturnValueOnce({ embeddings: mocks.embeddings });
+    mocks.searchMemory.mockResolvedValueOnce({
+      activities: [],
+      contexts: [],
+      experiences: [],
+      identities: [],
+      preferences: [],
+    });
+    mocks.shouldRunUserMemoryLexicalSearch.mockReturnValueOnce(false);
+
+    const runtime = await memoryRuntime.factory(createContext());
+
+    await runtime.searchUserMemory({ queries: [longQuery] });
+
+    expect(mocks.shouldRunUserMemoryLexicalSearch).toHaveBeenCalledWith([longQuery], [embedding]);
+    expect(mocks.recordUserMemoryLexicalSearchDecision).toHaveBeenCalledWith({
+      decision: 'skipped_long_context',
+      queryCharacters: Array.from(longQuery).length,
+      source: 'tool',
+    });
   });
 });

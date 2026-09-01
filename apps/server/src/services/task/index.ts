@@ -126,7 +126,6 @@ export class TaskService {
    */
   async createTask(input: CreateTaskInput): Promise<TaskItem> {
     await this.assertAssigneeAgentBelongsToUser(input.assigneeAgentId);
-    this.assertAutomationAssigneeCompat(input.automationMode, input.assigneeUserId);
 
     const taskInput = input;
     const createData: CreateTaskInput & { config?: Record<string, unknown> } = {
@@ -266,26 +265,6 @@ export class TaskService {
       code: 'BAD_REQUEST',
       message:
         'A private task can only be assigned to its creator. Unassign the member or keep the task visible to the workspace.',
-    });
-  }
-
-  /**
-   * Enforces the invariant: an automated task (heartbeat / schedule) cannot
-   * be assigned to a human. Automation ticks always execute through an agent
-   * (falling back to the inbox agent), so a member assignee would be pure
-   * decoration that the next tick contradicts. Throws `BAD_REQUEST` on
-   * violation. Callers pass the POST-update effective values.
-   */
-  assertAutomationAssigneeCompat(
-    automationMode: 'heartbeat' | 'schedule' | null | undefined,
-    assigneeUserId: string | null | undefined,
-  ): void {
-    if (!automationMode) return;
-    if (!assigneeUserId) return;
-    throw new TRPCError({
-      code: 'BAD_REQUEST',
-      message:
-        'An automated task cannot be assigned to a member. Remove the schedule first, or assign an agent.',
     });
   }
 

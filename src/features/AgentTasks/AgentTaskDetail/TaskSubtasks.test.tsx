@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import TaskSubtasks from './TaskSubtasks';
 
 const mocks = vi.hoisted(() => ({
+  activeWorkspaceId: 'workspace-1' as string | undefined,
   buildContextMenuItems: vi.fn(() => []),
   installKeyboardHandlers: vi.fn(),
   navigate: vi.fn(),
@@ -36,6 +37,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/libs/contextMenu', () => ({
   showContextMenu: mocks.showContextMenu,
+}));
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  useActiveWorkspaceId: () => mocks.activeWorkspaceId,
 }));
 
 vi.mock('antd', async (importOriginal) => ({
@@ -109,6 +114,10 @@ vi.mock('../features/AssigneeAgentSelector', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
+vi.mock('../features/AssigneeMemberSelector', () => ({
+  default: ({ children }: { children: ReactNode }) => <>{children}</>,
+}));
+
 vi.mock('../features/AssigneeAvatar', () => ({
   default: () => <span>assignee</span>,
 }));
@@ -160,6 +169,7 @@ vi.mock('./TopicStatusIcon', () => ({
 
 describe('TaskSubtasks', () => {
   beforeEach(() => {
+    mocks.activeWorkspaceId = 'workspace-1';
     mocks.buildContextMenuItems.mockClear();
     mocks.installKeyboardHandlers.mockClear();
     mocks.navigate.mockClear();
@@ -213,6 +223,38 @@ describe('TaskSubtasks', () => {
     });
     expect(mocks.buildContextMenuItems).toHaveBeenCalledWith(expectedTarget);
     expect(mocks.installKeyboardHandlers).toHaveBeenCalledWith(expectedTarget);
+  });
+
+  it('shows the responsible assignee on an automated subtask', () => {
+    mocks.taskState.taskDetailMap['T-parent'].subtasks = [
+      {
+        assigneeUserId: 'member-1',
+        automationMode: 'schedule',
+        identifier: 'T-child',
+        name: 'Scheduled child task',
+        status: 'scheduled',
+      },
+    ];
+
+    render(<TaskSubtasks />);
+
+    expect(screen.getByText('member assignee')).toBeInTheDocument();
+  });
+
+  it('keeps an existing responsible assignee visible in personal mode', () => {
+    mocks.activeWorkspaceId = undefined;
+    mocks.taskState.taskDetailMap['T-parent'].subtasks = [
+      {
+        assigneeUserId: 'member-1',
+        identifier: 'T-child',
+        name: 'Child task',
+        status: 'backlog',
+      },
+    ];
+
+    render(<TaskSubtasks />);
+
+    expect(screen.getByText('member assignee')).toBeInTheDocument();
   });
 
   it('falls back to the global task route when the selected subtask has no assignee', () => {

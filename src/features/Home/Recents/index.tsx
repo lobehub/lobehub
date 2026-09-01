@@ -17,12 +17,13 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { openCustomizeSidebarModal } from '@/features/HomeSidebar/Body/CustomizeSidebarModal';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
-import { useInitRecents } from '@/hooks/useInitRecents';
+import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { reorderSidebarItems } from '@/store/global/selectors/systemStatus';
 import { useHomeStore } from '@/store/home';
 import { homeRecentSelectors } from '@/store/home/selectors';
+import { createRecentQueryKey } from '@/store/home/slices/recent/initialState';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
@@ -34,15 +35,14 @@ interface RecentsProps {
 
 const Recents = memo<RecentsProps>(({ itemKey }) => {
   const { t } = useTranslation('common');
-  const recents = useHomeStore(homeRecentSelectors.recents);
-  const isInit = useHomeStore(homeRecentSelectors.isRecentsInit);
+  const scope = useCacheScope();
   const isLogin = useUserStore(authSelectors.isLogin);
-  // Keep `error` / `mutate` so a failed recents fetch surfaces a Retry state
-  // instead of a permanent skeleton.
-  const { error, isRevalidating, mutate } = useInitRecents();
-
   const activeWorkspaceId = useActiveWorkspaceId();
   const recentPageSize = useGlobalStore(systemStatusSelectors.recentPageSize);
+  const queryKey = createRecentQueryKey(recentPageSize + 1);
+  const query = useHomeStore(homeRecentSelectors.query(scope, queryKey));
+  const syncStatus = useHomeStore(homeRecentSelectors.syncStatus(scope, queryKey));
+  const refreshRecents = useHomeStore((s) => s.refreshRecents);
   const sidebarItems = useGlobalStore(systemStatusSelectors.sidebarItems(activeWorkspaceId));
   const hiddenSections = useGlobalStore(
     systemStatusSelectors.hiddenSidebarSections(activeWorkspaceId),
@@ -117,19 +117,10 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
         onClick: () => openCustomizeSidebarModal(),
       },
     ] as MenuProps['items'];
-  }, [
-    recentPageSize,
-    updateSystemStatus,
-    t,
-    isFirst,
-    isLast,
-    moveSection,
-    hideSection,
-    visibleItems.length,
-  ]);
+  }, [recentPageSize, updateSystemStatus, t, isFirst, isLast, moveSection, hideSection]);
 
   if (!isLogin) return null;
-  if (isInit && (!recents || recents.length === 0)) return null;
+  if (query && query.items.length === 0) return null;
 
   return (
     <AccordionItem
@@ -149,12 +140,16 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
           <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
             {t('recents')}
           </Text>
-          {isRevalidating && <NeuralNetworkLoading size={14} />}
+          {syncStatus?.isValidating && query && <NeuralNetworkLoading size={14} />}
         </Flexbox>
       }
     >
       <Suspense fallback={<SkeletonList rows={3} />}>
-        <RecentsList error={error} onRetry={() => mutate()} />
+        <RecentsList
+          error={syncStatus?.error}
+          scope={scope}
+          onRetry={() => void refreshRecents(scope)}
+        />
       </Suspense>
     </AccordionItem>
   );

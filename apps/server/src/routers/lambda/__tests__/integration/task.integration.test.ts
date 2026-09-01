@@ -1108,6 +1108,35 @@ describe('Task Router Integration', () => {
   });
 
   describe('human assignee (assigneeUserId)', () => {
+    it('should persist agent and member assignments independently', async () => {
+      const created = await caller.create({
+        assigneeAgentId: testAgentId,
+        assigneeUserId: userId,
+        instruction: 'Dual-assigned task',
+      });
+
+      expect(created.data.assigneeAgentId).toBe(testAgentId);
+      expect(created.data.assigneeUserId).toBe(userId);
+
+      const memberCleared = await caller.update({
+        assigneeUserId: null,
+        id: created.data.id,
+      });
+      expect(memberCleared.data.assigneeAgentId).toBe(testAgentId);
+      expect(memberCleared.data.assigneeUserId).toBeNull();
+
+      const memberRestored = await caller.update({
+        assigneeUserId: userId,
+        id: created.data.id,
+      });
+      const agentCleared = await caller.update({
+        assigneeAgentId: null,
+        id: memberRestored.data.id,
+      });
+      expect(agentCleared.data.assigneeAgentId).toBeNull();
+      expect(agentCleared.data.assigneeUserId).toBe(userId);
+    });
+
     it('should allow assigning to self in personal mode', async () => {
       const created = await caller.create({
         assigneeUserId: userId,
@@ -1320,52 +1349,42 @@ describe('Task Router Integration', () => {
       expect(demoted.data.visibility).toBe('private');
     });
 
-    it('should keep automation and a human assignee mutually exclusive', async () => {
-      // Creating an automated task with a human assignee is rejected.
-      await expect(
-        caller.create({
-          assigneeUserId: userId,
-          automationMode: 'schedule',
-          instruction: 'Automated cross-assign',
-          schedulePattern: '0 9 * * *',
-        }),
-      ).rejects.toThrow('An automated task cannot be assigned to a member');
+    it('should preserve the responsible assignee independently of automation', async () => {
+      const createdScheduled = await caller.create({
+        assigneeUserId: userId,
+        automationMode: 'schedule',
+        instruction: 'Automated assigned task',
+        schedulePattern: '0 9 * * *',
+      });
+      expect(createdScheduled.data.assigneeUserId).toBe(userId);
+      expect(createdScheduled.data.automationMode).toBe('schedule');
 
-      // Assigning a member to an existing automated task is rejected.
       const automated = await caller.create({
         automationMode: 'schedule',
         instruction: 'Automated task',
         schedulePattern: '0 9 * * *',
       });
-      await expect(
-        caller.update({ assigneeUserId: userId, id: automated.data.id }),
-      ).rejects.toThrow('An automated task cannot be assigned to a member');
+      const assignedAutomated = await caller.update({
+        assigneeUserId: userId,
+        id: automated.data.id,
+      });
+      expect(assignedAutomated.data.assigneeUserId).toBe(userId);
+      expect(assignedAutomated.data.automationMode).toBe('schedule');
 
-      // Scheduling a member-assigned task is rejected until unassigned.
       const humanTask = await caller.create({
         assigneeUserId: userId,
         instruction: 'Human task',
       });
-      await expect(
-        caller.update({
-          automationMode: 'schedule',
-          id: humanTask.data.id,
-          schedulePattern: '0 9 * * *',
-        }),
-      ).rejects.toThrow('An automated task cannot be assigned to a member');
-
-      // Clearing the human assignee in the same update makes scheduling legal.
       const scheduled = await caller.update({
-        assigneeUserId: null,
         automationMode: 'schedule',
         id: humanTask.data.id,
         schedulePattern: '0 9 * * *',
       });
       expect(scheduled.data.automationMode).toBe('schedule');
-      expect(scheduled.data.assigneeUserId).toBeNull();
+      expect(scheduled.data.assigneeUserId).toBe(userId);
     });
 
-    it('should not persist the inbox fallback agent when running a human-assigned task', async () => {
+    it('should keep inbox fallback ephemeral without clearing an explicit inbox assignment', async () => {
       // Seed the builtin inbox agent so the runner's fallback path can resolve it.
       const inboxAgentId = await createTestAgent(serverDB, userId, 'inbox');
 
@@ -1379,19 +1398,19 @@ describe('Task Router Integration', () => {
       expect(afterHumanRun.data.assigneeUserId).toBe(userId);
       expect(afterHumanRun.data.assigneeAgentId).toBeNull();
 
-      // Released clients did not understand assigneeUserId and persisted the
-      // inbox fallback immediately before starting the run. The server must
-      // recognize and remove that legacy fallback without losing the member.
-      const legacyClientTask = await caller.create({
+      // Inbox is also a valid explicit agent assignment. Once a member and an
+      // agent can be selected independently, the persisted pair must survive
+      // execution because it is indistinguishable from any historical fallback.
+      const dualAssignedTask = await caller.create({
         assigneeUserId: userId,
-        instruction: 'Legacy-client human-assigned task',
+        instruction: 'Inbox-and-member-assigned task',
       });
-      await caller.update({ assigneeAgentId: inboxAgentId, id: legacyClientTask.data.id });
-      await caller.run({ id: legacyClientTask.data.id });
+      await caller.update({ assigneeAgentId: inboxAgentId, id: dualAssignedTask.data.id });
+      await caller.run({ id: dualAssignedTask.data.id });
 
-      const afterLegacyClientRun = await caller.find({ id: legacyClientTask.data.id });
-      expect(afterLegacyClientRun.data.assigneeUserId).toBe(userId);
-      expect(afterLegacyClientRun.data.assigneeAgentId).toBeNull();
+      const afterDualAssignedRun = await caller.find({ id: dualAssignedTask.data.id });
+      expect(afterDualAssignedRun.data.assigneeUserId).toBe(userId);
+      expect(afterDualAssignedRun.data.assigneeAgentId).toBe(inboxAgentId);
 
       // Control: a fully unassigned task still gets the fallback persisted.
       const unassignedTask = await caller.create({ instruction: 'Unassigned task' });

@@ -1555,8 +1555,6 @@
   "tools.composio.servers.dropbox.readme": "集成 Dropbox 以访问和管理您的文件。上传、下载、共享文件，管理文件夹，处理文件版本，并通过对话式 AI 组织您的云存储。",
   "tools.composio.servers.figma.description": "Figma 是一款用于网页和移动应用界面的协作设计工具。",
   "tools.composio.servers.figma.readme": "连接 Figma 以访问设计文件并协作项目。查看设计、导出资源、浏览组件，并通过自然对话管理设计流程。",
-  "tools.composio.servers.github.description": "增强版 GitHub MCP 服务器",
-  "tools.composio.servers.github.readme": "连接 GitHub 以管理代码库、问题、拉取请求和代码。搜索代码、审查更改、创建分支，并通过对话式 AI 协作开发项目。",
   "tools.composio.servers.gmail.description": "Gmail 是 Google 提供的免费电子邮件服务",
   "tools.composio.servers.gmail.readme": "将 Gmail 的强大功能直接引入您的 AI 助手。阅读、撰写和发送邮件，搜索收件箱，管理标签，并通过自然对话组织您的通信。",
   "tools.composio.servers.google-calendar.description": "Google 日历是一项时间管理和日程安排服务",

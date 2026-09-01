@@ -304,6 +304,31 @@ export default class GatewayConnectionService extends ServiceModule {
     };
   }
 
+  /**
+   * Whether a registry device id belongs to this physical desktop.
+   *
+   * A machine can be reachable through both its personal identity and one
+   * derived identity per persisted workspace enrollment. Reconnect deep links
+   * must accept all of those identities without waking a different machine.
+   */
+  async matchesDeviceId(deviceId: string): Promise<boolean> {
+    if (this.getDeviceId() === deviceId) return true;
+
+    const token = await this.tokenProvider?.();
+    const userId = token ? this.extractUserIdFromToken(token) : undefined;
+    if (userId) {
+      const identity = await this.resolveDeviceIdentity(userId);
+      if (identity.deviceId === deviceId) return true;
+    }
+
+    for (const workspaceId of this.getPersistedWorkspaceEnrollments()) {
+      const identity = await this.resolveWorkspaceDeviceIdentity(workspaceId);
+      if (identity.deviceId === deviceId) return true;
+    }
+
+    return false;
+  }
+
   // ─── Connection Logic ───
 
   async connect(): Promise<{ error?: string; success: boolean }> {
@@ -762,6 +787,13 @@ export default class GatewayConnectionService extends ServiceModule {
       `Received tool call: apiName=${apiName}, requestId=${requestId}, type=${type ?? 'tool'}`,
     );
 
+    // Timed on THIS machine's clock, around both routes. The server can only
+    // observe the whole dispatch round trip, so without this number a slow tool
+    // and slow transport are indistinguishable — and desktop is where most
+    // device tool calls actually happen, so leaving it out here would bias the
+    // measurement toward the `lh connect` subset.
+    const startedAt = performance.now();
+
     try {
       let result: ToolCallResult;
 
@@ -793,6 +825,7 @@ export default class GatewayConnectionService extends ServiceModule {
       // when present so payloads stay minimal.
       const wireResult: ToolCallResponseMessage['result'] = {
         content: result.content,
+        executionTimeMs: Math.round(performance.now() - startedAt),
         success: result.success,
       };
       const wireError = serializeWireError(result.error);
@@ -809,6 +842,9 @@ export default class GatewayConnectionService extends ServiceModule {
         result: {
           content: errorMsg,
           error: errorMsg,
+          // A failure is timed too: a tool that took 30s to fail is as
+          // interesting as one that took 30s to succeed.
+          executionTimeMs: Math.round(performance.now() - startedAt),
           success: false,
         },
       });

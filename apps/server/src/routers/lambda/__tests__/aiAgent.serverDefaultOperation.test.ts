@@ -33,6 +33,7 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
     'grok-build',
     'kimi-code',
     'pi',
+    'trae',
   ],
 }));
 
@@ -69,6 +70,7 @@ describe('server-default heterogeneous operation control', () => {
       'grok-build': [{ model: 'kimi-k2.6' }],
       'kimi-code': [{ model: 'kimi-k2.6' }],
       'pi': [{ model: 'kimi-k2.6' }],
+      'trae': [{ model: 'kimi-k2.6' }],
     });
     resolveModel.mockResolvedValue({ model: 'gpt-5.4', provider: 'lobehub' });
     initRuntime.mockResolvedValue({});

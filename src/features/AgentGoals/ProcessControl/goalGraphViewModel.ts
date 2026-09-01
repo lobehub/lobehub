@@ -235,10 +235,10 @@ export const buildGoalGraphView = (
       gateSubjectId: gateSubject.get(node.id),
       humanTouches: nodeDecisions.filter((d) => d.status === 'resolved' && !!d.resolvedByUserId),
       isStale:
-        node.kind === 'work' && node.status === 'active' && now - node.updatedAt.getTime() > lease,
+        node.kind === 'task' && node.status === 'active' && now - node.updatedAt.getTime() > lease,
       node,
       producedBy: producedByFinding.get(node.id),
-      seq: node.kind === 'work' ? ++seq : undefined,
+      seq: node.kind === 'task' ? ++seq : undefined,
       startedAt: isRunningAttempt ? open.startedAt : undefined,
     };
   });
@@ -254,7 +254,7 @@ export const buildGoalGraphView = (
       frontier.push({ key: node.id, kind: 'gate', rank: 0, view });
       continue;
     }
-    if (node.kind !== 'work') continue;
+    if (node.kind !== 'task') continue;
     if (node.status === 'active') {
       frontier.push({
         key: node.id,
@@ -270,7 +270,7 @@ export const buildGoalGraphView = (
   }
 
   const done = views
-    .filter((view) => view.node.kind === 'work' && TERMINAL_NODE_STATUSES.has(view.node.status))
+    .filter((view) => view.node.kind === 'task' && TERMINAL_NODE_STATUSES.has(view.node.status))
     .sort((a, b) => resolvedTime(b.node) - resolvedTime(a.node))
     .slice(0, RECENT_DONE)
     .map((view) => ({ key: `done:${view.node.id}`, kind: 'done' as const, rank: -1, view }));

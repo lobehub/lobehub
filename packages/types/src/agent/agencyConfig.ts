@@ -56,7 +56,7 @@ export interface ListHeterogeneousAgentModelsParams {
   command?: string;
   cwd?: string;
   env?: Record<string, string>;
-  type: 'codebuddy' | 'cursor' | 'grok-build' | 'opencode' | 'pi' | 'qoder' | 'trae';
+  type: 'codebuddy' | 'cursor' | 'droid' | 'grok-build' | 'opencode' | 'pi' | 'qoder' | 'trae';
 }
 
 export interface HeterogeneousAgentModelCatalogSuccess {
@@ -153,7 +153,7 @@ export type HeterogeneousApiConfig =
  * Two families of hetero agents are supported:
  *
  * - **Local CLI** (`amp` | `claude-code` | `codebuddy` | `codex` |
- *   `cursor` | `grok-build` | `kimi-code` | `opencode` | `pi` | `qoder` | `trae`):
+ *   `cursor` | `droid` | `grok-build` | `kimi-code` | `opencode` | `pi` | `qoder` | `trae`):
  *   spawned as a child process on the desktop or a connected device; uses
  *   `command`, `args`, `env`, `systemContext`.
  *
@@ -470,6 +470,7 @@ export const buildHeteroSpawnArgs = (
     provider.type !== 'codebuddy' &&
     provider.type !== 'codex' &&
     provider.type !== 'cursor' &&
+    provider.type !== 'droid' &&
     provider.type !== 'grok-build' &&
     provider.type !== 'kimi-code' &&
     provider.type !== 'opencode' &&
@@ -605,6 +606,7 @@ export const buildHeteroExecArgs = (
     provider.type !== 'codebuddy' &&
     provider.type !== 'codex' &&
     provider.type !== 'cursor' &&
+    provider.type !== 'droid' &&
     provider.type !== 'grok-build' &&
     provider.type !== 'kimi-code' &&
     provider.type !== 'opencode' &&
@@ -734,7 +736,7 @@ export const buildHeteroExecArgs = (
     }
   }
 
-  if (provider.type === 'trae') {
+  if (provider.type === 'droid' || provider.type === 'trae') {
     const model = provider.model?.trim();
     if (model && model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION) {
       selectorArgs.push('--model', model);

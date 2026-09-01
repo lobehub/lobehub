@@ -282,6 +282,36 @@ describe('hetero exec command', () => {
     );
   });
 
+  it('runs Factory Droid with ACP model selection and safe native provider arguments', async () => {
+    mockResolveHeteroSpawnCommand.mockResolvedValue({ command: 'droid' });
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'droid',
+      '--prompt',
+      'do thing',
+      '--model',
+      'gpt-5.4',
+      '--agent-arg=--tag',
+      '--agent-arg=lobe',
+    ]);
+
+    expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith('droid', undefined);
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'droid',
+        askUserBridge: undefined,
+        command: 'droid',
+        extraArgs: ['--tag', 'lobe'],
+        initialModel: 'gpt-5.4',
+        prompt: 'do thing',
+      }),
+    );
+  });
+
   it('uses the provided --operation-id verbatim', async () => {
     mockSpawnAgent.mockReturnValue(createFakeHandle());
 
@@ -1173,6 +1203,8 @@ describe('hetero exec command', () => {
           'cc-stale',
           '--operation-id',
           'op-fallback',
+          '--topic',
+          'topic-fallback',
         ]);
       } finally {
         await rm(dir, { force: true, recursive: true });
@@ -1185,6 +1217,13 @@ describe('hetero exec command', () => {
       });
       expect(mockSpawnAgent.mock.calls[1][0]).toMatchObject({ prompt: fallbackPrompt });
       expect(mockSpawnAgent.mock.calls[1][0].resumeSessionId).toBeUndefined();
+      expect(mockHeteroFinishMutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operationId: 'op-fallback',
+          resumeSessionInvalidated: true,
+          topicId: 'topic-fallback',
+        }),
+      );
     });
 
     it('does not consume the recovery prompt when native resume succeeds', async () => {
