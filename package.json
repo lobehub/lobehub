@@ -322,7 +322,7 @@
     "@opentelemetry/sdk-metrics": "^2.10.0",
     "@opentelemetry/winston-transport": "^0.28.0",
     "@pierre/trees": "1.0.0-beta.3",
-    "@react-pdf/renderer": "4.3.2",
+    "@react-pdf/renderer": "4.3.3",
     "@react-three/drei": "^10.7.8",
     "@react-three/fiber": "^9.7.0",
     "@saintno/comfyui-sdk": "^0.2.53",
