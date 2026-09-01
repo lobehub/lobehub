@@ -1,6 +1,6 @@
 import Store from 'electron-store';
 
-import { STORE_DEFAULTS, STORE_NAME } from '@/const/store';
+import { getStoreDefaults, STORE_NAME } from '@/const/store';
 import type { ElectronMainStore, StoreKey } from '@/types/store';
 import { makeSureDirExist } from '@/utils/file-system';
 import { createLogger } from '@/utils/logger';
@@ -25,7 +25,7 @@ export class StoreManager {
     logger.debug('Initializing StoreManager');
     this.app = app;
     this.store = new Store<ElectronMainStore>({
-      defaults: STORE_DEFAULTS,
+      defaults: getStoreDefaults(),
       name: STORE_NAME,
     });
     runStoreMigrations(this.store);

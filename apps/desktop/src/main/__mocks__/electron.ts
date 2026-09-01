@@ -3,10 +3,14 @@
  *
  * Provides a fully-formed `app` (paths + readiness) plus light stubs for the
  * other commonly-imported namespaces. The point is that modules which touch
- * electron at import time — notably `@/const/dir`'s eager `app.getAppPath()` /
- * `app.getPath('userData')` — can be imported from ANY test without each suite
- * re-stubbing these basics. This keeps production code free to use plain
- * value-style path constants instead of lazy getter functions.
+ * electron at import time — notably `@/const/dir`'s eager `app.getAppPath()` —
+ * can be imported from ANY test without each suite re-stubbing these basics.
+ *
+ * It does NOT license value-style constants for anything derived from
+ * `getPath('userData')`: `pre-app-init.ts` rewrites that path after the bundle
+ * has begun evaluating, so those have to stay lazy (see `@/const/dir`). A
+ * constant would read the mock here happily and the wrong directory in
+ * production.
  *
  * Test files that need specific behavior still declare their own
  * `vi.mock('electron', …)`, which takes precedence per-file over this default.

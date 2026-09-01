@@ -4,7 +4,7 @@
 import { DEFAULT_ELECTRON_DESKTOP_SHORTCUTS } from '@lobechat/const/desktopGlobalShortcuts';
 import type { NetworkProxySettings } from '@lobechat/electron-client-ipc';
 
-import { appStorageDir } from '@/const/dir';
+import { getAppStorageDir } from '@/const/dir';
 import { getDesktopEnv } from '@/env';
 import { UPDATE_CHANNEL } from '@/modules/updater/configs';
 import type { ElectronMainStore } from '@/types/store';
@@ -24,9 +24,15 @@ export const defaultProxySettings: NetworkProxySettings = {
 };
 
 /**
- * Storage default values
+ * Storage default values.
+ *
+ * A function rather than a constant because `storagePath` is derived from the
+ * userData directory, which `pre-app-init.ts` rewrites for a branded build. Read
+ * at module evaluation it resolved before that rewrite and defaulted every fresh
+ * install's local files into `lobehub-desktop-dev`. `StoreManager` calls this
+ * from its constructor, long after the app has been named.
  */
-export const STORE_DEFAULTS: ElectronMainStore = {
+export const getStoreDefaults = (): ElectronMainStore => ({
   appTrayVisible: true,
   dataSyncConfig: { storageMode: 'cloud' },
   encryptedTokens: {},
@@ -51,8 +57,8 @@ export const STORE_DEFAULTS: ElectronMainStore = {
   networkProxy: defaultProxySettings,
   pendingRestoreRoute: '',
   shortcuts: DEFAULT_ELECTRON_DESKTOP_SHORTCUTS,
-  storagePath: appStorageDir,
+  storagePath: getAppStorageDir(),
   themeMode: 'system',
   updateChannel: UPDATE_CHANNEL,
   windowsShellMode: 'auto',
-};
+});

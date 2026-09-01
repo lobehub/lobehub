@@ -54,10 +54,10 @@ vi.mock('@/modules/updater/configs', () => ({
 
 // Mock store constants
 vi.mock('@/const/store', () => ({
-  STORE_DEFAULTS: {
+  getStoreDefaults: () => ({
     locale: 'auto',
     storagePath: '/default/storage/path',
-  },
+  }),
   STORE_NAME: 'test-config',
 }));
 

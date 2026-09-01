@@ -4,7 +4,7 @@ import process from 'node:process';
 import type { ElectronAppState, ThemeMode } from '@lobechat/electron-client-ipc';
 import { app, dialog, nativeTheme, shell } from 'electron';
 
-import { legacyLocalDbDir } from '@/const/dir';
+import { getLegacyLocalDbDir } from '@/const/dir';
 import { createLogger } from '@/utils/logger';
 import {
   getAccessibilityStatus,
@@ -296,8 +296,9 @@ export default class SystemController extends ControllerModule {
   @IpcMethod()
   async hasLegacyLocalDb(): Promise<boolean> {
     try {
-      await access(legacyLocalDbDir);
-      const entries = await readdir(legacyLocalDbDir);
+      const legacyDir = getLegacyLocalDbDir();
+      await access(legacyDir);
+      const entries = await readdir(legacyDir);
       return entries.length > 0;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
