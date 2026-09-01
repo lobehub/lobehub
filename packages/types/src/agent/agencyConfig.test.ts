@@ -66,6 +66,10 @@ describe('server-default heterogeneous model request', () => {
     };
 
     expect(isServerDefaultHeterogeneousRelayInvocation(invocation)).toBe(true);
+    expect(isServerDefaultHeterogeneousRelayInvocation(null)).toBe(false);
+    expect(isServerDefaultHeterogeneousRelayInvocation({ ...invocation, ingress: undefined })).toBe(
+      false,
+    );
     expect(
       isServerDefaultHeterogeneousRelayInvocation({ ...invocation, operationId: undefined }),
     ).toBe(false);
