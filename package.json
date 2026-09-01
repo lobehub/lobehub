@@ -321,7 +321,7 @@
     "@opentelemetry/resources": "^2.10.0",
     "@opentelemetry/sdk-metrics": "^2.10.0",
     "@opentelemetry/winston-transport": "^0.28.0",
-    "@pierre/trees": "1.0.0-beta.3",
+    "@pierre/trees": "1.0.0-beta.6",
     "@react-pdf/renderer": "4.3.2",
     "@react-three/drei": "^10.7.8",
     "@react-three/fiber": "^9.7.0",
