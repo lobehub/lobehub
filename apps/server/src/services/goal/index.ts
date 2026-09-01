@@ -264,8 +264,40 @@ export class GoalService {
     return this.goalModel.delete(goalId);
   };
 
+  /**
+   * Move the goal's lifecycle status and leave an event behind.
+   *
+   * The row update alone made status changes untraceable: `entityType='goal'`
+   * events existed in the schema but nothing wrote them, so a goal's
+   * planning → running → paused → achieved path could not be reconstructed
+   * from its timeline. Transitions the coordinator makes are filed under the
+   * coordinator actor; a person's pause/resume keeps the user attribution the
+   * model defaults to — the split that separates what the coordinator decided
+   * from what the user asked for relies on.
+   *
+   * A same-status write is a no-op — re-stamping `running` on every tick that
+   * touches a running goal would flood the timeline the way the unbounded
+   * event read flooded the payload.
+   */
+  private transitionStatus = async (
+    goal: GoalItem,
+    to: GoalStatus,
+    reason?: string,
+    actor: 'coordinator' | 'user' = 'coordinator',
+  ): Promise<GoalItem | undefined> => {
+    if (goal.status === to) return goal;
+    const updated = await this.goalModel.updateStatus(goal.id, to);
+    if (!updated) return undefined;
+    const model = actor === 'coordinator' ? this.coordinatorGraph : this.graphModel;
+    await model
+      .recordGoalStatus(goal.id, goal.status, to, reason)
+      .catch((error) => console.error('[GoalService] failed to record goal status:', error));
+    return updated;
+  };
+
   pause = async (goalId: string) => {
-    const goal = await this.goalModel.updateStatus(goalId, 'paused');
+    const graph = await this.requireGraph(goalId);
+    const goal = await this.transitionStatus(graph.goal, 'paused', 'paused by user', 'user');
     if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
     return goal;
   };
@@ -281,8 +313,11 @@ export class GoalService {
     const taskIds = graph.nodes.flatMap((node) => (node.taskId ? [node.taskId] : []));
     const runs = await this.taskTopicModel.findWithHandoffByTaskIds(taskIds, 10_000);
     const totalCost = runs.reduce((sum, run) => sum + Number(run.totalCost ?? 0), 0);
+    const deadline = goal.config?.schedule?.deadline ?? null;
     return {
       costLimitReached: goal.maxTotalCost !== null && totalCost >= Number(goal.maxTotalCost),
+      deadline,
+      deadlinePassed: deadline !== null && Date.now() >= new Date(deadline).getTime(),
       roundLimitReached: goal.maxRounds !== null && runs.length >= goal.maxRounds,
       runs,
       totalCost,
@@ -291,12 +326,27 @@ export class GoalService {
 
   setBudget = async (
     goalId: string,
-    budget: { maxRounds?: number | null; maxTotalCost?: number | null },
+    budget: {
+      deadline?: string | null;
+      maxRounds?: number | null;
+      maxTotalCost?: number | null;
+    },
   ) => {
     const before = await this.requireGraph(goalId);
     const wasBinding = await this.evaluateBudget(before.goal, before);
 
-    const goal = await this.goalModel.update(goalId, budget);
+    // Deadline joins the two execution budgets on the goal row's config; null
+    // clears it. The merge keeps an untouched recovery/schedule block intact.
+    const config = { ...before.goal.config };
+    if (budget.deadline !== undefined || config.schedule) {
+      config.schedule = { ...config.schedule, deadline: budget.deadline ?? null };
+    }
+
+    const goal = await this.goalModel.update(goalId, {
+      config,
+      maxRounds: budget.maxRounds,
+      maxTotalCost: budget.maxTotalCost,
+    });
     if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
 
     // Raising a budget is how a user un-sticks a goal the coordinator parked on
@@ -305,11 +355,14 @@ export class GoalService {
     // Resume as a second gesture. Only a goal the budget actually stopped is
     // reopened: if the old budget was not binding, this pause was somebody's
     // deliberate one and is left alone.
-    const stoppedByBudget = wasBinding.costLimitReached || wasBinding.roundLimitReached;
+    const stoppedByBudget =
+      wasBinding.costLimitReached || wasBinding.roundLimitReached || wasBinding.deadlinePassed;
     if (goal.status !== 'paused' || !stoppedByBudget) return goal;
 
     const nowBinding = await this.evaluateBudget(goal, before);
-    if (nowBinding.costLimitReached || nowBinding.roundLimitReached) return goal;
+    if (nowBinding.costLimitReached || nowBinding.roundLimitReached || nowBinding.deadlinePassed) {
+      return goal;
+    }
 
     return (await this.resume(goalId)) ?? goal;
   };
@@ -319,7 +372,8 @@ export class GoalService {
     const status = graph.decisions.some((decision) => decision.status === 'pending')
       ? 'review'
       : 'running';
-    return this.goalModel.updateStatus(goalId, status);
+    const goal = await this.transitionStatus(graph.goal, status, 'resumed by user', 'user');
+    return goal ?? graph.goal;
   };
 
   decide = async (goalId: string, decisionId: string, optionId: string, resolution?: string) => {
@@ -358,7 +412,11 @@ export class GoalService {
     const terminalAcceptanceFailed =
       source?.title === GOAL_ACCEPTANCE_TASK_TITLE &&
       (optionId === 'retire' || optionId === 'fail');
-    await this.goalModel.updateStatus(goalId, terminalAcceptanceFailed ? 'failed' : 'running');
+    await this.transitionStatus(
+      graph.goal,
+      terminalAcceptanceFailed ? 'failed' : 'running',
+      `decision "${decision.question}" resolved: ${optionId}`,
+    );
     return resolved;
   };
 
@@ -444,7 +502,7 @@ export class GoalService {
       }
 
       case 'pending_decision': {
-        await this.goalModel.updateStatus(goalId, 'review');
+        await this.transitionStatus(graph.goal, 'review', 'a decision gate is open');
         effects.push({ type: 'goal_status', detail: 'review' });
         return observe({
           goalId,
@@ -468,7 +526,7 @@ export class GoalService {
         // sweep's window. A `running` goal that always reports `no_progress` is
         // picked by every scan forever, and enough of them starve every other
         // stalled goal out of the newest-first limit.
-        await this.goalModel.updateStatus(goalId, 'paused');
+        await this.transitionStatus(graph.goal, 'paused', 'no eligible work to advance');
         effects.push({ type: 'goal_status', detail: 'paused' });
         return observe({ goalId, message: move.message, outcome: move.outcome });
       }
@@ -544,7 +602,7 @@ export class GoalService {
           }
 
           case 'budget_exhausted': {
-            await this.goalModel.updateStatus(goalId, 'paused');
+            await this.transitionStatus(graph.goal, 'paused', move.message);
             effects.push({ type: 'goal_status', detail: 'paused' });
             return observe({
               goalId,
@@ -575,7 +633,7 @@ export class GoalService {
     const goalId = graph.goal.id;
 
     if (move.outcome === 'achieved') {
-      await this.goalModel.updateStatus(goalId, 'achieved');
+      await this.transitionStatus(graph.goal, 'achieved', 'Goal-level acceptance passed');
       effects.push({ type: 'goal_status', detail: 'achieved' });
       return { goalId, message: move.message, outcome: 'achieved' };
     }
@@ -706,7 +764,7 @@ export class GoalService {
         'produced',
       );
     }
-    await this.goalModel.updateStatus(goalId, 'running');
+    await this.transitionStatus(graph.goal, 'running', `dispatched ${task.identifier}`);
     return {
       goalId,
       message: `Created responsible task ${task.identifier}`,
@@ -743,7 +801,7 @@ export class GoalService {
         'active',
         'Automatically started the next Work attempt after verification feedback',
       );
-      await this.goalModel.updateStatus(goalId, 'running');
+      await this.transitionStatus(graph.goal, 'running', 'automatic recovery started a run');
       // Only when this advance is the one that spawned the run. Reporting it
       // for a retry another advance owns would put a run in this trajectory
       // that it did not start, and attribute its cost here.
@@ -962,7 +1020,7 @@ export class GoalService {
         'active',
         'Recovered an abandoned Work operation and started the next attempt',
       );
-      await this.goalModel.updateStatus(graph.goal.id, 'running');
+      await this.transitionStatus(graph.goal, 'running', 'reclaimed an abandoned Work');
       if (recovery.outcome === 'started') {
         effects.push({
           detail: 'abandoned operation retry',
@@ -1196,7 +1254,7 @@ export class GoalService {
       }
     }
     await this.coordinatorGraph.updateNodeStatus(graph.goal.id, nodeId, 'waiting', reason);
-    await this.goalModel.updateStatus(graph.goal.id, 'review');
+    await this.transitionStatus(graph.goal, 'review', reason);
     return {
       goalId: graph.goal.id,
       message: 'Task failed; a human decision gate was opened',
