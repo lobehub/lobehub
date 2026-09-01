@@ -57,7 +57,7 @@ const createAttempt = (
   blobStore?: BlobStore,
   attemptOverrides?: {
     clientIp?: string;
-    shareAttribution?: { agentId: string; shareId: string; visitorUserId: string };
+    agentShareVisitorIds?: { agentId: string; shareId: string; visitorUserId: string };
     userAgent?: string;
   },
 ) => {
@@ -213,7 +213,7 @@ describe('ServerCallLlmAttempt', () => {
       },
       undefined,
       {
-        shareAttribution: {
+        agentShareVisitorIds: {
           agentId: 'agt_shared',
           shareId: 'share-1',
           visitorUserId: 'visitor-1',

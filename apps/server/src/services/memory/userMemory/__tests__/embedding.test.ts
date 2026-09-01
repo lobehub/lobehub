@@ -113,7 +113,7 @@ describe('embedUserMemoryTexts', () => {
       model: 'text-embedding-3-large',
       runtime,
       source: 'test:share',
-      spendAttribution: {
+      spendOrigin: {
         agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
         trigger: 'agent_share',
       },

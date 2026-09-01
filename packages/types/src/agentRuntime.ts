@@ -35,6 +35,84 @@ export enum RequestTrigger {
 }
 
 /**
+ * Everything one shared-agent visitor run carries: WHO the run belongs to
+ * (`agentId` / `shareId` / `visitorUserId`), WHAT the visitor is allowed to
+ * reach (`allowReadMemory` / `enabledToolIds` / `knowledgeBaseIds`), and HOW
+ * much of the run is shown back to them (`showErrorDetails` / `showModelInfo`).
+ *
+ * Single source of truth for the runtime-side share marker: it is stamped once
+ * at operation creation onto `state.metadata.agentShareVisitor` and read back
+ * by every later step, so no step has to re-read the share row.
+ *
+ * SECURITY: never derived from request headers or any other client input — its
+ * fields decide both permission and billing, so a client could otherwise forge
+ * another user's run. It is always built server-side from the already-resolved
+ * share gate.
+ *
+ * Never hand this object to a billing point as a whole — the permission fields
+ * have no place in spend metadata. Project it with
+ * {@link toAgentShareVisitorIds} instead.
+ */
+export interface AgentShareVisitorContext {
+  /** The shared agent (`agents.id`) this run executes. */
+  agentId: string;
+  /**
+   * Mirrors `shareConfig.allowReadMemory` so the memory tool's dispatch-time
+   * gate (`isShareBlockedDataToolCall`) can be re-applied at
+   * `BuiltinToolsExecutor.execute`, the actual unbypassable chokepoint.
+   */
+  allowReadMemory?: boolean;
+  /**
+   * Mirrors `shareConfig.enabledToolIds` so tool runtimes that resolve their
+   * target outside `toolManifestMap` (e.g. `activateSkill`,
+   * `lobe-topic-reference`) can apply the same allowlist the assembled tool set
+   * already enforces.
+   */
+  enabledToolIds?: string[];
+  /**
+   * The agent's OWN persisted knowledge-base assignment, never derived from
+   * visitor input, so `isShareBlockedDataToolCall` can id-scope
+   * `viewKnowledgeBase`'s `id` argument. Always empty today (a share grants no
+   * knowledge-base access).
+   */
+  knowledgeBaseIds?: string[];
+  /**
+   * The `agentShares.id` this run was authorized against — the revocation
+   * token re-checked at every step boundary (see
+   * `AgentShareModel.isRunStillAuthorized`).
+   */
+  shareId: string;
+  /** `AgentShareConfig.showErrorDetails` — gates visitor-facing error redaction. */
+  showErrorDetails?: boolean;
+  /** `AgentShareConfig.showModelInfo` — gates visitor-facing model/provider/usage redaction. */
+  showModelInfo?: boolean;
+  /** The visitor's user id, under which the run's spend is attributed. */
+  visitorUserId: string;
+}
+
+/**
+ * The billing-safe projection of {@link AgentShareVisitorContext}: only the ids
+ * needed to attribute a charge, with every permission / redaction field
+ * dropped. This is the ONLY shape allowed to reach spend metadata.
+ */
+export type AgentShareVisitorIds = Pick<
+  AgentShareVisitorContext,
+  'agentId' | 'shareId' | 'visitorUserId'
+>;
+
+/**
+ * Project a runtime share marker down to its billing-safe ids. The single
+ * allowed way to move an {@link AgentShareVisitorContext} into a
+ * {@link SpendOrigin} — never spread the context itself, which also carries
+ * permissions that have no place in billing metadata.
+ */
+export const toAgentShareVisitorIds = (ctx: AgentShareVisitorContext): AgentShareVisitorIds => ({
+  agentId: ctx.agentId,
+  shareId: ctx.shareId,
+  visitorUserId: ctx.visitorUserId,
+});
+
+/**
  * Origin attribution carried alongside a request so a billing point that runs
  * outside the originating request (async task, webhook, settle-time charge) can
  * stamp the same origin the synchronous LLM path stamps.
@@ -43,13 +121,13 @@ export enum RequestTrigger {
  * never the originating runtime object, which also carries permissions that
  * have no place in billing metadata.
  */
-export interface SpendAttribution {
-  /** Present only for a shared-agent visitor run. */
-  agentShare?: {
-    agentId: string;
-    shareId: string;
-    visitorUserId: string;
-  };
+export interface SpendOrigin {
+  /**
+   * Present only for a shared-agent visitor run. The JSON key `agentShare` is
+   * persisted into spend-log / budget-reservation metadata and queried by
+   * `SpendLogModel` — do NOT rename it.
+   */
+  agentShare?: AgentShareVisitorIds;
   /** Request source, see {@link RequestTrigger}. */
   trigger?: string;
 }

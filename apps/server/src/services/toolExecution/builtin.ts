@@ -127,8 +127,8 @@ export class BuiltinToolsExecutor implements IToolExecutor {
     // identifiers pass through (governed by the share's `enabledToolIds` at
     // assembly). Fail closed: block, never throw open.
     if (
-      context.agentShare &&
-      isShareBlockedBuiltinDispatch(context.agentShare, identifier, apiName, args)
+      context.agentShareVisitor &&
+      isShareBlockedBuiltinDispatch(context.agentShareVisitor, identifier, apiName, args)
     ) {
       log('Share gate blocked builtin dispatch: %s:%s', identifier, apiName);
       return {

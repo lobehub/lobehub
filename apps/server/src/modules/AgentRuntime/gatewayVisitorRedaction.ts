@@ -12,7 +12,7 @@ import { stripFinalStateInEventData } from './StreamEventManager';
 /**
  * Per-operation redaction policy for a shared-agent visitor run, derived from
  * the share's `AgentShareConfig` (`showModelInfo` / `showErrorDetails`) and
- * carried on `state.metadata.agentShare`.
+ * carried on `state.metadata.agentShareVisitor`.
  *
  * `null` is the explicit "not a share run — push verbatim" marker, so a
  * missing/undefined value can stay reserved for "not resolved yet".
@@ -31,8 +31,8 @@ export const FULL_STRIP_REDACTION: GatewayVisitorRedaction = {};
 /**
  * Whether `publishAgentRuntimeInit` is initializing a shared-agent visitor run.
  * The op EXECUTES as the creator, but `streamOwnerUserId` (set only for
- * agentShare runs — see `AgentRuntimeService.createOperation`) registers the
- * Gateway WS channel under the *visitor's* id, so the visitor is the one
+ * share-visitor runs — see `AgentRuntimeService.createOperation`) registers
+ * the Gateway WS channel under the *visitor's* id, so the visitor is the one
  * receiving this push over the wire.
  */
 export const isShareVisitorInit = (initialState: any): boolean =>
@@ -43,20 +43,20 @@ export const isShareVisitorInit = (initialState: any): boolean =>
  *
  * Two shapes reach here, deliberately handled by one function so the fast path
  * never disagrees with itself:
- *  - a runtime `AgentState`, whose `metadata.agentShare` is stamped once at
+ *  - a runtime `AgentState`, whose `metadata.agentShareVisitor` is stamped once at
  *    operation creation (`AgentRuntimeService.createOperation`) and rides the
  *    state through to the terminal event (`publishAgentRuntimeEnd`);
  *  - an `AgentOperationMetadata` record, which is what
  *    `AgentRuntimeCoordinator.createAgentOperation` passes to
  *    `publishAgentRuntimeInit` — it carries the flattened
- *    `streamOwnerUserId` + `agentShareRedaction` pair instead.
+ *    `streamOwnerUserId` + `visitorRedaction` pair instead.
  *
  * Returns `null` for a normal (non-share) run. Fails closed to
  * {@link FULL_STRIP_REDACTION} when a run is identifiable as a share run but
  * its policy is unreadable.
  */
 export const resolveRedactionFromState = (state: any): GatewayVisitorRedaction => {
-  const share = state?.metadata?.agentShare as
+  const share = state?.metadata?.agentShareVisitor as
     { showErrorDetails?: boolean; showModelInfo?: boolean; visitorUserId?: string } | undefined;
 
   if (share?.visitorUserId) {
@@ -65,7 +65,7 @@ export const resolveRedactionFromState = (state: any): GatewayVisitorRedaction =
 
   if (!isShareVisitorInit(state)) return null;
 
-  return (state.agentShareRedaction as GatewayVisitorRedaction) ?? FULL_STRIP_REDACTION;
+  return (state.visitorRedaction as GatewayVisitorRedaction) ?? FULL_STRIP_REDACTION;
 };
 
 /**

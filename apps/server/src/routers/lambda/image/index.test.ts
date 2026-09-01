@@ -470,42 +470,40 @@ describe('imageRouter', () => {
       mockChargeBeforeGenerate.mockResolvedValue({
         prechargeItems: [{ reservationKey: 'k-1' }, { reservationKey: 'k-2' }],
       });
-      const spendAttribution = {
+      const spendOrigin = {
         agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
         trigger: 'agent_share',
       };
 
-      const caller = imageRouter.createCaller(createMockCtx({ spendAttribution }));
+      const caller = imageRouter.createCaller(createMockCtx({ spendOrigin }));
       await caller.createImage(createDefaultInput());
 
       expect(mockChargeBeforeGenerate).toHaveBeenCalledWith(
-        expect.objectContaining({ spendAttribution }),
+        expect.objectContaining({ spendOrigin }),
       );
       expect(mockInsertValues[2]).toEqual(
         expect.objectContaining({
-          metadata: { precharge: { reservationKey: 'k-1' }, spendAttribution },
+          metadata: { precharge: { reservationKey: 'k-1' }, spendOrigin },
         }),
       );
       expect(mockInsertValues[3]).toEqual(
         expect.objectContaining({
-          metadata: { precharge: { reservationKey: 'k-2' }, spendAttribution },
+          metadata: { precharge: { reservationKey: 'k-2' }, spendOrigin },
         }),
       );
     });
 
     it('stores spend attribution on the asyncTask even without a precharge handle', async () => {
       mockChargeBeforeGenerate.mockResolvedValue({ prechargeItems: undefined });
-      const spendAttribution = {
+      const spendOrigin = {
         agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
         trigger: 'agent_share',
       };
 
-      const caller = imageRouter.createCaller(createMockCtx({ spendAttribution }));
+      const caller = imageRouter.createCaller(createMockCtx({ spendOrigin }));
       await caller.createImage(createDefaultInput());
 
-      expect(mockInsertValues[2]).toEqual(
-        expect.objectContaining({ metadata: { spendAttribution } }),
-      );
+      expect(mockInsertValues[2]).toEqual(expect.objectContaining({ metadata: { spendOrigin } }));
     });
 
     it('leaves asyncTask metadata unset when there are no prechargeItems', async () => {

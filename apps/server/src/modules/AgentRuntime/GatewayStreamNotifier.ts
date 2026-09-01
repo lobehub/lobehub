@@ -69,7 +69,7 @@ export class GatewayStreamNotifier implements IStreamEventManager {
    * only signal `pushEvent` has for scrubbing `uiMessages` on those events.
    * Mirrors `mirrorTargets`'s two population paths:
    *  - fast path: set at `publishAgentRuntimeInit` / `publishAgentRuntimeEnd`
-   *    from the state's `metadata.agentShare`, so the share's real
+   *    from the state's `metadata.agentShareVisitor`, so the share's real
    *    `showModelInfo` / `showErrorDetails` config is honored.
    *  - queue path: lazily resolved from persisted op metadata via
    *    `resolvePersistedShareVisitor`, which can only tell share-or-not — it
@@ -94,7 +94,7 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     private resolveMirrorTarget?: (operationId: string) => Promise<string | undefined>,
     /**
      * Resolves an op's persisted share-visitor redaction policy (from
-     * `streamOwnerUserId` + `agentShareRedaction` on op metadata); `null` for a
+     * `streamOwnerUserId` + `visitorRedaction` on op metadata); `null` for a
      * normal run. Lets a queue worker — which never ran the op's init — still
      * scrub events for that op. Omitted ⇒ in-process map only (safe: init
      * always precedes events for the op it created).
@@ -171,7 +171,7 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     const isShareInit = isShareVisitorInit(initialState);
     if (initRedaction || isShareInit) {
       // Fail closed: `streamOwnerUserId` alone (without a readable
-      // `metadata.agentShare`) still means a visitor is on the other end.
+      // `metadata.agentShareVisitor`) still means a visitor is on the other end.
       this.shareVisitorOps.set(operationId, initRedaction ?? FULL_STRIP_REDACTION);
     }
     this.shareVisitorResolved.add(operationId);

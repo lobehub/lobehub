@@ -809,7 +809,7 @@ export class AgentRuntimeService {
       initialContext,
       agentConfig,
       agentGroup,
-      agentShare,
+      agentShareVisitor,
       modelRuntimeConfig,
       userId,
       autoStart = true,
@@ -951,7 +951,7 @@ export class AgentRuntimeService {
           activeDeviceScope,
           agentConfig,
           agentGroup,
-          agentShare,
+          agentShareVisitor,
           botContext,
           botPlatformContext,
           deviceAccessPolicy,
@@ -1005,17 +1005,17 @@ export class AgentRuntimeService {
         // Persisted so a queue worker that never ran this op's init still
         // applies the owner-configured visitor redaction policy instead of the
         // fail-closed full strip. See `gatewayVisitorRedaction.ts`.
-        agentShareRedaction: agentShare
+        visitorRedaction: agentShareVisitor
           ? {
-              showErrorDetails: agentShare.showErrorDetails,
-              showModelInfo: agentShare.showModelInfo,
+              showErrorDetails: agentShareVisitor.showErrorDetails,
+              showModelInfo: agentShareVisitor.showModelInfo,
             }
           : undefined,
         mirrorToOperationId,
         modelRuntimeConfig,
         // Share-visitor runs execute as the creator (`userId`) but stream only
         // to the visitor — the gateway registers the WS channel under this id.
-        streamOwnerUserId: agentShare?.visitorUserId,
+        streamOwnerUserId: agentShareVisitor?.visitorUserId,
         userId,
         workspaceId: this.workspaceId,
       });
@@ -1616,7 +1616,7 @@ export class AgentRuntimeService {
         // why one query covers every revocation path (visibility flip — which
         // is what turning sharing off does — share delete, agent delete).
         if (this.delegate.verifyShareRunStillAuthorized) {
-          const shareMarker = agentState.metadata?.agentShare as
+          const shareMarker = agentState.metadata?.agentShareVisitor as
             { agentId?: string; shareId?: string } | undefined;
           if (shareMarker?.agentId && shareMarker.shareId) {
             let stillAuthorized = false;
@@ -3677,7 +3677,7 @@ export class AgentRuntimeService {
       // an early hint would end the visible loading seconds before that card
       // can exist. Deferring to the terminal `visible_output_end` lets loading
       // cover the export and the card land with `agent_runtime_end`.
-      agentShare: metadata?.agentShare,
+      agentShareVisitor: metadata?.agentShareVisitor,
       allowEarlyFinalAnswerVisibleOutputEnd:
         agent instanceof GeneralChatAgent && !stateHasEntityFileEdits(agentState),
       botContext: metadata?.botContext,

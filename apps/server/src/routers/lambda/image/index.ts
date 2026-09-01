@@ -198,7 +198,7 @@ export const imageRouter = router({
         imageNum,
         model,
         provider,
-        spendAttribution: ctx.spendAttribution,
+        spendOrigin: ctx.spendOrigin,
         userId,
         workspaceId: wsId,
       });
@@ -273,7 +273,7 @@ export const imageRouter = router({
               // unpriced models) still charge at completion.
               const taskMetadata = {
                 ...(prechargeItem === undefined ? {} : { precharge: prechargeItem }),
-                ...(ctx.spendAttribution ? { spendAttribution: ctx.spendAttribution } : {}),
+                ...(ctx.spendOrigin ? { spendOrigin: ctx.spendOrigin } : {}),
               };
               const [createdAsyncTask] = await tx
                 .insert(asyncTasks)
@@ -375,7 +375,7 @@ export const imageRouter = router({
                 await chargeAfterGenerate({
                   isError: true,
                   metadata: {
-                    ...ctx.spendAttribution,
+                    ...ctx.spendOrigin,
                     asyncTaskId,
                     generationBatchId: createdBatch.id,
                     modelId: model,

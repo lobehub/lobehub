@@ -1,5 +1,5 @@
 import { type Context as OtContext } from '@lobechat/observability-otel/api';
-import { type ClientSecretPayload, type SpendAttribution } from '@lobechat/types';
+import { type ClientSecretPayload, type SpendOrigin } from '@lobechat/types';
 import type { ClientMetadata } from '@lobechat/utils/server';
 import { parseClientMetadata } from '@lobechat/utils/server';
 import { parse } from 'cookie';
@@ -109,7 +109,7 @@ export interface AuthContext {
    * `createCaller` (see the tool-execution server runtimes), where the values
    * come from the already-authorized run context.
    */
-  spendAttribution?: SpendAttribution;
+  spendOrigin?: SpendOrigin;
   traceContext?: OtContext;
   userAgent?: string;
   userId?: string | null;
@@ -127,8 +127,8 @@ export const createContextInner = async (params?: {
   marketAccessToken?: string;
   oidcAuth?: OIDCAuth | null;
   oidcClientId?: string;
-  /** See {@link AuthContext.spendAttribution} — server-side callers only. */
-  spendAttribution?: SpendAttribution;
+  /** See {@link AuthContext.spendOrigin} — server-side callers only. */
+  spendOrigin?: SpendOrigin;
   traceContext?: OtContext;
   userAgent?: string;
   userId?: string | null;
@@ -145,7 +145,7 @@ export const createContextInner = async (params?: {
     oidcAuth: params?.oidcAuth,
     oidcClientId: params?.oidcClientId,
     resHeaders: responseHeaders,
-    spendAttribution: params?.spendAttribution,
+    spendOrigin: params?.spendOrigin,
     traceContext: params?.traceContext,
     userAgent: params?.userAgent,
     userId: params?.userId,

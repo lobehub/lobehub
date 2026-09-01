@@ -71,7 +71,7 @@ type SignalEvent = { [key: string]: unknown; type: string };
 
 /**
  * Whether a lifecycle event's `metadata` belongs to an Agent Share visitor
- * run. `metadata.agentShare.visitorUserId` is stamped once at operation
+ * run. `metadata.agentShareVisitor.visitorUserId` is stamped once at operation
  * creation (`AgentRuntimeService.createOperation`'s `initialState.metadata`)
  * and rides the state through to the terminal event — mirrors
  * `GatewayStreamNotifier`'s share-visitor check, the sibling chokepoint that
@@ -84,7 +84,7 @@ type SignalEvent = { [key: string]: unknown; type: string };
  * hand-rolling their own.
  */
 export const isAgentShareRun = (metadata: Record<string, unknown> | undefined | null): boolean =>
-  Boolean((metadata?.agentShare as { visitorUserId?: string } | undefined)?.visitorUserId);
+  Boolean((metadata?.agentShareVisitor as { visitorUserId?: string } | undefined)?.visitorUserId);
 
 /**
  * Normalized terminal-completion input for {@link CompletionLifecycle.completeOperation}.

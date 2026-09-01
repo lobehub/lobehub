@@ -139,7 +139,7 @@ describe('imageRouter.createImage — model mapping failure reconciles billing',
     asyncTaskModelMock.findById.mockResolvedValue({
       metadata: {
         precharge: { reservationKey: 'brk-1' },
-        spendAttribution: {
+        spendOrigin: {
           agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
           trigger: 'agent_share',
         },

@@ -8,6 +8,7 @@ import type {
   ToolSource,
 } from '@lobechat/context-engine';
 import type {
+  AgentShareVisitorContext,
   ChatTopicBotContext,
   EvalToolForwardingConfig,
   ExpertiseContextSnapshot,
@@ -358,38 +359,13 @@ export interface OperationCreationParams {
    */
   agentGroup?: AgentGroupConfig;
   /**
-   * Shared-agent visitor marker. Persisted to `state.metadata.agentShare` so
-   * every later step can re-derive the share's restrictions without re-reading
-   * the share, and so `AgentRuntimeService.executeStep` can re-prove the run's
-   * authorization at each step boundary.
-   *
-   * `enabledToolIds` mirrors `shareConfig.enabledToolIds` so tool runtimes that
-   * resolve their target outside `toolManifestMap` (e.g. `activateSkill`) can
-   * enforce the same allowlist.
-   *
-   * `allowReadMemory` mirrors `shareConfig.allowReadMemory` so the memory
-   * tool's dispatch-time gate (`isShareBlockedDataToolCall` in `shareGate.ts`)
-   * can be re-applied at `BuiltinToolsExecutor.execute`, the actual
-   * unbypassable chokepoint.
-   *
-   * `knowledgeBaseIds` is the agent's OWN persisted knowledge-base assignment,
-   * never derived from visitor input. Always empty today, since
-   * `applyShareGateToAgentConfig` clears `agentConfig.knowledgeBases` for every
-   * share run.
-   *
-   * `shareId` is the `agentShares.id` this run was authorized against, and IS
-   * the revocation token — see `AgentShareGate.shareId`'s JSDoc.
+   * Shared-agent visitor marker. Persisted to
+   * `state.metadata.agentShareVisitor` so every later step can re-derive the
+   * share's restrictions without re-reading the share, and so
+   * `AgentRuntimeService.executeStep` can re-prove the run's authorization at
+   * each step boundary.
    */
-  agentShare?: {
-    agentId: string;
-    allowReadMemory?: boolean;
-    enabledToolIds?: string[];
-    knowledgeBaseIds?: string[];
-    shareId: string;
-    showErrorDetails?: boolean;
-    showModelInfo?: boolean;
-    visitorUserId: string;
-  };
+  agentShareVisitor?: AgentShareVisitorContext;
   appContext: {
     agentId?: string;
     /**

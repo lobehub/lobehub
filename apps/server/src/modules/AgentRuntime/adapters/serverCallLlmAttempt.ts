@@ -15,6 +15,7 @@ import {
   ModelRefusalError,
 } from '@lobechat/model-runtime';
 import type {
+  AgentShareVisitorIds,
   ChatImageItem,
   ChatToolPayload,
   GroundingSearch,
@@ -38,6 +39,13 @@ import {
 import type { ServerCallLlmTooling } from './serverCallLlmTooling';
 
 interface CreateServerCallLlmAttemptInput {
+  /**
+   * Shared-agent attribution for a visitor run. The call is billed to the
+   * share's CREATOR, so without this the spend row is indistinguishable from
+   * the creator's own usage. Only ids — never the share's tool/memory grants;
+   * the caller projects with `toAgentShareVisitorIds`.
+   */
+  agentShareVisitorIds?: AgentShareVisitorIds;
   attempt: number;
   blobStore?: BlobStore;
   chatPayload: ChatStreamPayload;
@@ -53,12 +61,6 @@ interface CreateServerCallLlmAttemptInput {
   operationLogId: string;
   provider: string;
   resolved: ServerCallLlmTooling['resolved'];
-  /**
-   * Shared-agent attribution for a visitor run. The call is billed to the
-   * share's CREATOR, so without this the spend row is indistinguishable from
-   * the creator's own usage. Only ids — never the share's tool/memory grants.
-   */
-  shareAttribution?: { agentId: string; shareId: string; visitorUserId: string };
   topicId?: string;
   trigger?: unknown;
   /** User agent of the originating request, forwarded into the LLM-call metadata for auditing and spend attribution. */
@@ -158,6 +160,7 @@ export class ServerCallLlmAttempt {
   private usage?: ModelUsage;
 
   constructor({
+    agentShareVisitorIds,
     attempt,
     blobStore,
     chatPayload,
@@ -172,7 +175,6 @@ export class ServerCallLlmAttempt {
     operationLogId,
     provider,
     resolved,
-    shareAttribution,
     topicId,
     trigger,
     userAgent,
@@ -189,7 +191,7 @@ export class ServerCallLlmAttempt {
     this.provider = provider;
     this.resolved = resolved;
     this.runtimeMetadata = {
-      agentShare: shareAttribution,
+      agentShare: agentShareVisitorIds,
       clientIp,
       operationId: ctx.operationId,
       topicId,

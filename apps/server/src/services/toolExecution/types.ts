@@ -1,6 +1,7 @@
 import { type LobeToolManifest } from '@lobechat/context-engine';
 import { type LobeChatDatabase } from '@lobechat/database';
 import {
+  type AgentShareVisitorContext,
   type ChatToolPayload,
   type ClientSecretPayload,
   type ExecSubAgentParams,
@@ -157,7 +158,7 @@ export interface ToolExecutionContext {
   agentMember?: ServerAgentMemberRunner;
   /**
    * Shared-agent visitor marker, forwarded from
-   * `RuntimeExecutorContext.agentShare` (see
+   * `RuntimeExecutorContext.agentShareVisitor` (see
    * `modules/AgentRuntime/context.ts`). Present ONLY for a share-visitor run.
    * `BuiltinToolsExecutor.execute` re-checks every builtin dispatch against
    * `isShareBlockedBuiltinDispatch` with these permissions — the unbypassable
@@ -168,21 +169,13 @@ export interface ToolExecutionContext {
    * internally delegates to `isShareBlockedDataToolCall` for the per-API
    * data-tool rules.
    *
-   * `agentId` / `shareId` / `visitorUserId` are the run's spend-attribution ids
-   * — tool runtimes that trigger their own billed work (e.g. image generation)
-   * project them into a `spendAttribution` payload so the resulting spend log
-   * is attributed to the shared agent, exactly like the LLM path. Only those
-   * three ids may be projected; never forward this object as a whole, since the
-   * permission fields above have no place in billing metadata.
+   * Tool runtimes that trigger their own billed work (e.g. image generation)
+   * project it with `toAgentShareVisitorIds` into a `spendOrigin` payload so
+   * the resulting spend log is attributed to the shared agent, exactly like the
+   * LLM path. Only those ids may be projected; never forward this object as a
+   * whole, since its permission fields have no place in billing metadata.
    */
-  agentShare?: {
-    agentId: string;
-    allowReadMemory?: boolean;
-    enabledToolIds?: string[];
-    knowledgeBaseIds?: string[];
-    shareId: string;
-    visitorUserId: string;
-  };
+  agentShareVisitor?: AgentShareVisitorContext;
   /**
    * Visibility of the agent executing this tool call. Resolved once per tool
    * call in the runtime executor. Tool runtimes that persist agent side-effects

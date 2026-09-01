@@ -137,7 +137,7 @@ export const startOperation = async (
       activeDeviceScope: discovery.activeDeviceScope,
       agentConfig,
       agentGroup: discovery.operationAgentGroup,
-      agentShare: shareGate
+      agentShareVisitor: shareGate
         ? {
             agentId: shareGate.agentId,
             // Mirrors `shareConfig.allowReadMemory` so `BuiltinToolsExecutor`

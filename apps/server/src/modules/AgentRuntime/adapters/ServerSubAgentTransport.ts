@@ -27,8 +27,8 @@ export class ServerSubAgentTransport implements SubAgentTransport {
   constructor(private readonly ctx: RuntimeExecutorContext) {}
 
   async execSubAgent(params: ExecSubAgentParams): Promise<ExecSubAgentResult> {
-    // Agent share (defensive layer): a share-visitor run's `ctx.agentShare` is
-    // set from `state.metadata.agentShare` (see AgentRuntimeService).
+    // Agent share (defensive layer): a share-visitor run's `ctx.agentShareVisitor` is
+    // set from `state.metadata.agentShareVisitor` (see AgentRuntimeService).
     // `callSubAgent`/`callAgent` children built via `execAgentThreadRun` don't
     // thread the parent's `shareGate` through — they'd otherwise execute with
     // the CREATOR's full, unrestricted tool/file/memory surface. The
@@ -36,14 +36,14 @@ export class ServerSubAgentTransport implements SubAgentTransport {
     // already keeps `callSubAgent` out of the model's tool list for a share
     // run; this is the fail-closed backstop in case that surface is ever
     // reached some other way (e.g. a stale/replayed tool call).
-    if (this.ctx.agentShare) return shareGateBlockedResult;
+    if (this.ctx.agentShareVisitor) return shareGateBlockedResult;
     if (!this.ctx.execSubAgent) return fallbackResult('Sub-agent dispatch is not available.');
 
     return this.ctx.execSubAgent(params);
   }
 
   async execVirtualSubAgent(params: ExecVirtualSubAgentParams): Promise<ExecSubAgentResult> {
-    if (this.ctx.agentShare) return shareGateBlockedResult;
+    if (this.ctx.agentShareVisitor) return shareGateBlockedResult;
     if (!this.ctx.execVirtualSubAgent) {
       return fallbackResult('Virtual sub-agent dispatch is not available.');
     }

@@ -95,7 +95,7 @@ export const createStreamEventManager = (): IStreamEventManager => {
       async (operationId) => {
         const meta = await stateManager.getOperationMetadata(operationId);
         if (!meta?.streamOwnerUserId) return null;
-        return meta.agentShareRedaction ?? FULL_STRIP_REDACTION;
+        return meta.visitorRedaction ?? FULL_STRIP_REDACTION;
       },
     );
   }

@@ -36,7 +36,7 @@ export interface IAgentStateManager {
     operationId: string,
     data: {
       agentConfig?: any;
-      agentShareRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
+      visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
       mirrorToOperationId?: string;
       modelRuntimeConfig?: any;
       /**

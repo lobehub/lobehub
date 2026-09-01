@@ -216,7 +216,7 @@ export const buildServerVirtualSubAgentRunner = (
   // here does not thread the parent's shareGate, so it would execute with the
   // creator's full unrestricted tool surface. Same fail-closed stance as
   // `ServerSubAgentTransport` and the `isShareBlockedBuiltinDispatch` gate.
-  if (ctx.agentShare) return undefined;
+  if (ctx.agentShareVisitor) return undefined;
   const execVirtualSubAgent = ctx.execVirtualSubAgent;
   if (!execVirtualSubAgent) return undefined;
 
@@ -345,7 +345,7 @@ export const buildServerAgentMemberRunner = (
 ): ServerAgentMemberRunner | undefined => {
   // Same share-visitor fail-close as `buildServerVirtualSubAgentRunner`:
   // member runs would not inherit the parent's shareGate.
-  if (ctx.agentShare) return undefined;
+  if (ctx.agentShareVisitor) return undefined;
   const execGroupMember = ctx.execGroupMember;
   if (!execGroupMember) return undefined;
 

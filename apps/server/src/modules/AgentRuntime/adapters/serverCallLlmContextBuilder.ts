@@ -117,7 +117,7 @@ export const buildServerCallLlmContext = async ({
   if (!alreadyHasTopicRefs && ctx.serverDB && ctx.userId) {
     const topicModel = new TopicModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
     const messageModel = new MessageModelClass(ctx.serverDB, ctx.userId, ctx.workspaceId);
-    const agentShare = ctx.agentShare;
+    const agentShareVisitor = ctx.agentShareVisitor;
     // Topic references are limited to the visitor's own topics in shared runs.
     // `TopicModel`'s built-in ownership scoping is not sufficient here — the
     // rows are owned by the CREATOR, so every one of the creator's private
@@ -135,8 +135,11 @@ export const buildServerCallLlmContext = async ({
     const isTopicVisibleToRun = (
       topic: { agentId?: string | null; senderId?: string | null } | null | undefined,
     ): boolean => {
-      if (!agentShare) return true;
-      return topic?.senderId === agentShare.visitorUserId && topic?.agentId === agentShare.agentId;
+      if (!agentShareVisitor) return true;
+      return (
+        topic?.senderId === agentShareVisitor.visitorUserId &&
+        topic?.agentId === agentShareVisitor.agentId
+      );
     };
     topicReferences = await resolveTopicReferences(
       messagesForContext as Array<{ content: string | unknown }>,
@@ -169,7 +172,7 @@ export const buildServerCallLlmContext = async ({
   // `knowledgeBases`, but this source is fetched independently of agentConfig,
   // so it needs its own gate. Fail closed unconditionally: the share config has
   // no setting that could grant file access.
-  const agentDocumentsAllowedForShare = !ctx.agentShare;
+  const agentDocumentsAllowedForShare = !ctx.agentShareVisitor;
   let agentDocuments: AgentContextDocument[] | undefined;
   const agentId = state.metadata?.agentId;
   if (agentId && ctx.serverDB && ctx.userId && agentDocumentsAllowedForShare) {
@@ -210,8 +213,8 @@ export const buildServerCallLlmContext = async ({
   // user info — personal profile data with no share permission that could ever
   // grant it, so a share visitor run never builds it. Two paths reach here: the
   // builtin `web-onboarding` agent, and any shared agent whose enabled tools
-  // include `lobe-web-onboarding`. Gating on `ctx.agentShare` closes both.
-  const onboardingContextAllowedForShare = !ctx.agentShare;
+  // include `lobe-web-onboarding`. Gating on `ctx.agentShareVisitor` closes both.
+  const onboardingContextAllowedForShare = !ctx.agentShareVisitor;
 
   if (
     isOnboardingAgent &&

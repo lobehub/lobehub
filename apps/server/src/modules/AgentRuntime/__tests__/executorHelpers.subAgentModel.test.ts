@@ -84,10 +84,10 @@ describe('buildServerVirtualSubAgentRunner sub-agent model resolution', () => {
 
 // Fail-close regression for share-visitor runs: the child run spawned by
 // either runner does not inherit the parent's shareGate, so for a run with
-// `ctx.agentShare` set, no runner may be built at all.
+// `ctx.agentShareVisitor` set, no runner may be built at all.
 describe('runner builders fail closed for share-visitor runs', () => {
   const shareCtx = {
-    agentShare: {
+    agentShareVisitor: {
       agentId: 'agent-1',
       shareId: 'share-1',
       visitorUserId: 'visitor-1',
@@ -104,7 +104,7 @@ describe('runner builders fail closed for share-visitor runs', () => {
     operationId: 'parent-op',
   } as unknown as AgentState;
 
-  it('buildServerVirtualSubAgentRunner returns undefined when agentShare is set', () => {
+  it('buildServerVirtualSubAgentRunner returns undefined when agentShareVisitor is set', () => {
     expect(
       buildServerVirtualSubAgentRunner(
         shareCtx,
@@ -115,7 +115,7 @@ describe('runner builders fail closed for share-visitor runs', () => {
     ).toBeUndefined();
   });
 
-  it('buildServerAgentMemberRunner returns undefined when agentShare is set', () => {
+  it('buildServerAgentMemberRunner returns undefined when agentShareVisitor is set', () => {
     expect(
       buildServerAgentMemberRunner(
         shareCtx,

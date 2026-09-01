@@ -1,6 +1,6 @@
 import { DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS } from '@lobechat/const';
 import type { ModelRuntime } from '@lobechat/model-runtime';
-import { RequestTrigger, type SpendAttribution } from '@lobechat/types';
+import { RequestTrigger, type SpendOrigin } from '@lobechat/types';
 
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { trimBasedOnBatchProbe } from '@/utils/chunkers';
@@ -45,7 +45,7 @@ export interface EmbedUserMemoryTextsParams {
    * disappearing into the creator's plain memory usage; its `trigger`
    * overrides the default {@link RequestTrigger.Memory}.
    */
-  spendAttribution?: SpendAttribution;
+  spendOrigin?: SpendOrigin;
   /**
    * User id passed to runtime billing/tracing metadata.
    */
@@ -117,8 +117,8 @@ export const embedUserMemoryTexts = async (
     },
     {
       metadata: {
-        ...params.spendAttribution,
-        trigger: params.spendAttribution?.trigger ?? RequestTrigger.Memory,
+        ...params.spendOrigin,
+        trigger: params.spendOrigin?.trigger ?? RequestTrigger.Memory,
       },
       user: params.userId,
     },

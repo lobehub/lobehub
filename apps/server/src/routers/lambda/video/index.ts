@@ -225,7 +225,7 @@ export const videoRouter = router({
               // The completion charge runs in a webhook/polling context that no
               // longer sees this request; carry the origin so the spend stays
               // attributed to it.
-              ...(ctx.spendAttribution ? { spendAttribution: ctx.spendAttribution } : {}),
+              ...(ctx.spendOrigin ? { spendOrigin: ctx.spendOrigin } : {}),
               webhookToken,
             },
             status: AsyncTaskStatus.Pending,
