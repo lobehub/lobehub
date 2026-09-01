@@ -2015,6 +2015,9 @@ describe('AgentModel.transferAgents group history preservation', () => {
     expect(clone.systemRole).toBeNull();
     expect(clone.plugins).toBeNull();
     expect(clone.agencyConfig).toBeNull();
+    // And no slug: the schema default would otherwise mint one and make this
+    // internal row addressable through slug lookups.
+    expect(clone.slug).toBeNull();
     expect(clone.slug).not.toBe(moved?.slug);
     await expect(
       serverDB.select().from(chatGroupsAgents).where(eq(chatGroupsAgents.agentId, clone.id)),

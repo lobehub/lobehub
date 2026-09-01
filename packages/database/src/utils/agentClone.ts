@@ -62,6 +62,9 @@ export const buildAgentTombstoneValues = (
   avatar: source?.avatar,
   backgroundColor: source?.backgroundColor,
   name: source?.name,
+  // Explicit null, or the schema's `$defaultFn` mints a random slug and this
+  // display-only internal row becomes addressable through slug lookups.
+  slug: null,
   title: source?.title || fallbackTitle,
   userId: target.userId,
   virtual: true,
