@@ -15,12 +15,6 @@ import { resolveEnableTargetProviderId, resolveStaleModelState } from './resolve
 const prefixCls = 'ant';
 
 /**
- * Marks the popup-only part (explanatory hint) of the stale-model option so the
- * trigger can hide it, mirroring how ability tags are hidden via TAG_CLASSNAME.
- */
-const STALE_EXTRA_CLASSNAME = 'lobe-model-select-stale-extra';
-
-/**
  * Marks the stale-status Tag so the popup can hide it — inside the open list the
  * status is conveyed by the enable toggle (notEnabled) or the remedy row
  * (redirected), while the closed trigger keeps showing the Tag.
@@ -65,13 +59,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   select: css`
     /* The base-ui Select applies className to the trigger root while the popup is
-     * portaled away, so scoping directly under this class hides the popup-only bits
-     * (ability tags / stale hint) from the closed trigger without touching the list. */
+     * portaled away, so scoping directly under this class hides the popup-only
+     * ability tags from the closed trigger without touching the list. */
     .${TAG_CLASSNAME} {
-      display: none;
-    }
-
-    .${STALE_EXTRA_CLASSNAME} {
       display: none;
     }
   `,
@@ -273,63 +263,70 @@ const ModelSelect = memo<ModelSelectProps>(
       const { meta, status } = staleState;
       const successorName = staleState.successor?.displayName || staleState.successorId;
 
+      // The trigger renders the selected option's `label`, so the enable Switch and
+      // the hint stay out of it: a <button> inside the trigger <button> is invalid
+      // HTML. They live on `popupLabel`, which only `optionRender` reads.
+      const renderStaleLabel = (withPopupExtras: boolean) => (
+        <Flexbox gap={4} style={{ width: '100%' }}>
+          <Flexbox horizontal align={'center'} gap={8}>
+            <ModelIcon model={value.model} size={20} />
+            <Text ellipsis style={{ fontSize: 14 }}>
+              {meta?.displayName || value.model}
+            </Text>
+            <Tooltip title={t(`ModelSelect.staleModel.${status}.tooltip`, { successorName })}>
+              <Tag
+                className={STALE_TAG_CLASSNAME}
+                color={status === 'removed' ? 'warning' : undefined}
+                size={'small'}
+                style={{ cursor: 'default', flex: 'none' }}
+              >
+                {t(`ModelSelect.staleModel.${status}.tag`)}
+              </Tag>
+            </Tooltip>
+            {withPopupExtras && status === 'notEnabled' && (
+              <>
+                <span style={{ flex: 1 }} />
+                {/* The wrapper re-enables pointer events (the disabled option row
+                 * suppresses them) and stops propagation so toggling never counts
+                 * as selecting the row. */}
+                <span
+                  style={{ flex: 'none', pointerEvents: 'auto' }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                  }}
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                  }}
+                >
+                  <Switch
+                    aria-label={t('ModelSelect.staleModel.notEnabled.action')}
+                    checked={false}
+                    loading={enabling}
+                    size={'small'}
+                    onChange={() => {
+                      void handleEnable();
+                    }}
+                  />
+                </span>
+              </>
+            )}
+          </Flexbox>
+          {withPopupExtras && (
+            <span className={styles.staleHint}>
+              {t(`ModelSelect.staleModel.${status}.hint`, { successorName })}
+            </span>
+          )}
+        </Flexbox>
+      );
+
       const currentOption = {
         __stale: true,
         className: STALE_OPTION_CLASSNAME,
         disabled: true,
-        label: (
-          <Flexbox gap={4} style={{ width: '100%' }}>
-            <Flexbox horizontal align={'center'} gap={8}>
-              <ModelIcon model={value.model} size={20} />
-              <Text ellipsis style={{ fontSize: 14 }}>
-                {meta?.displayName || value.model}
-              </Text>
-              <Tooltip title={t(`ModelSelect.staleModel.${status}.tooltip`, { successorName })}>
-                <Tag
-                  className={STALE_TAG_CLASSNAME}
-                  color={status === 'removed' ? 'warning' : undefined}
-                  size={'small'}
-                  style={{ cursor: 'default', flex: 'none' }}
-                >
-                  {t(`ModelSelect.staleModel.${status}.tag`)}
-                </Tag>
-              </Tooltip>
-              {status === 'notEnabled' && (
-                <>
-                  <span className={STALE_EXTRA_CLASSNAME} style={{ flex: 1 }} />
-                  {/* The wrapper re-enables pointer events (the disabled option row
-                   * suppresses them) and stops propagation so toggling never counts
-                   * as selecting the row. */}
-                  <span
-                    className={STALE_EXTRA_CLASSNAME}
-                    style={{ flex: 'none', pointerEvents: 'auto' }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                    }}
-                    onMouseDown={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                    }}
-                  >
-                    <Switch
-                      aria-label={t('ModelSelect.staleModel.notEnabled.action')}
-                      checked={false}
-                      loading={enabling}
-                      size={'small'}
-                      onChange={() => {
-                        void handleEnable();
-                      }}
-                    />
-                  </span>
-                </>
-              )}
-            </Flexbox>
-            <span className={`${STALE_EXTRA_CLASSNAME} ${styles.staleHint}`}>
-              {t(`ModelSelect.staleModel.${status}.hint`, { successorName })}
-            </span>
-          </Flexbox>
-        ),
+        label: renderStaleLabel(false),
+        popupLabel: renderStaleLabel(true),
         value: `${value.provider}/${value.model}`,
       };
 
@@ -383,7 +380,8 @@ const ModelSelect = memo<ModelSelectProps>(
           value={value ? `${value.provider}/${value.model}` : null}
           variant={variant}
           optionRender={(option) => {
-            if ((option as unknown as { __stale?: boolean }).__stale) return option.label;
+            const stale = option as unknown as { __stale?: boolean; popupLabel?: ReactNode };
+            if (stale.__stale) return stale.popupLabel ?? option.label;
 
             return (
               <ModelItemRender

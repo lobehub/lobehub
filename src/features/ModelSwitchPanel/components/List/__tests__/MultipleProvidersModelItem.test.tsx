@@ -99,6 +99,27 @@ describe('MultipleProvidersModelItem', () => {
     expect(screen.getByTestId('tooltip-ModelSelect.featureTag.audio')).toBeInTheDocument();
   });
 
+  it('keeps spread model card fields off the DOM', async () => {
+    const { ModelItemRender } = await vi.importActual<typeof ModelSelectModule>(
+      '@/components/ModelSelect',
+    );
+
+    const { container } = render(
+      // @ts-expect-error - callers spread whole model cards, extra fields included
+      <ModelItemRender
+        reasoning
+        search
+        structuredOutput
+        id="deepseek-v3"
+        knowledgeCutoff="2025-01"
+      />,
+    );
+
+    for (const attr of ['reasoning', 'search', 'structuredoutput', 'knowledgecutoff']) {
+      expect(container.querySelector(`[${attr}]`)).toBeNull();
+    }
+  });
+
   it('renders model detail panel even when info tags are hidden', () => {
     render(
       <MultipleProvidersModelItem
