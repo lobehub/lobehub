@@ -463,6 +463,51 @@ describe('imageRouter', () => {
       );
     });
 
+    it('forwards the caller spend attribution to the charge and every asyncTask', async () => {
+      // A share visitor's image generation bills the agent CREATOR, so the
+      // origin must reach both the reserve-time charge and the async settle —
+      // otherwise the spend escapes the per-agent monthly cap.
+      mockChargeBeforeGenerate.mockResolvedValue({
+        prechargeItems: [{ reservationKey: 'k-1' }, { reservationKey: 'k-2' }],
+      });
+      const spendAttribution = {
+        agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+        trigger: 'agent_share',
+      };
+
+      const caller = imageRouter.createCaller(createMockCtx({ spendAttribution }));
+      await caller.createImage(createDefaultInput());
+
+      expect(mockChargeBeforeGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({ spendAttribution }),
+      );
+      expect(mockInsertValues[2]).toEqual(
+        expect.objectContaining({
+          metadata: { precharge: { reservationKey: 'k-1' }, spendAttribution },
+        }),
+      );
+      expect(mockInsertValues[3]).toEqual(
+        expect.objectContaining({
+          metadata: { precharge: { reservationKey: 'k-2' }, spendAttribution },
+        }),
+      );
+    });
+
+    it('stores spend attribution on the asyncTask even without a precharge handle', async () => {
+      mockChargeBeforeGenerate.mockResolvedValue({ prechargeItems: undefined });
+      const spendAttribution = {
+        agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+        trigger: 'agent_share',
+      };
+
+      const caller = imageRouter.createCaller(createMockCtx({ spendAttribution }));
+      await caller.createImage(createDefaultInput());
+
+      expect(mockInsertValues[2]).toEqual(
+        expect.objectContaining({ metadata: { spendAttribution } }),
+      );
+    });
+
     it('leaves asyncTask metadata unset when there are no prechargeItems', async () => {
       mockChargeBeforeGenerate.mockResolvedValue({ prechargeItems: undefined });
 

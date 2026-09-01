@@ -167,11 +167,21 @@ export interface ToolExecutionContext {
    * owner's `enabledToolIds` picker, and humanIntervention policy, and it
    * internally delegates to `isShareBlockedDataToolCall` for the per-API
    * data-tool rules.
+   *
+   * `agentId` / `shareId` / `visitorUserId` are the run's spend-attribution ids
+   * — tool runtimes that trigger their own billed work (e.g. image generation)
+   * project them into a `spendAttribution` payload so the resulting spend log
+   * is attributed to the shared agent, exactly like the LLM path. Only those
+   * three ids may be projected; never forward this object as a whole, since the
+   * permission fields above have no place in billing metadata.
    */
   agentShare?: {
+    agentId: string;
     allowReadMemory?: boolean;
     enabledToolIds?: string[];
     knowledgeBaseIds?: string[];
+    shareId: string;
+    visitorUserId: string;
   };
   /**
    * Visibility of the agent executing this tool call. Resolved once per tool

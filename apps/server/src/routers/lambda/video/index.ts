@@ -222,6 +222,10 @@ export const videoRouter = router({
           .values({
             metadata: {
               ...(prechargeResult ? { precharge: prechargeResult } : {}),
+              // The completion charge runs in a webhook/polling context that no
+              // longer sees this request; carry the origin so the spend stays
+              // attributed to it.
+              ...(ctx.spendAttribution ? { spendAttribution: ctx.spendAttribution } : {}),
               webhookToken,
             },
             status: AsyncTaskStatus.Pending,

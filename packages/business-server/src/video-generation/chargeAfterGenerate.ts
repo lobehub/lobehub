@@ -1,9 +1,11 @@
+import { type SpendAttribution } from '@lobechat/types';
+
 interface ChargeParams {
   computePriceParams?: { generateAudio?: boolean; resolution?: string };
   isError?: boolean;
   /** Total time from task submission to webhook callback (ms) */
   latency?: number;
-  metadata: {
+  metadata: SpendAttribution & {
     asyncTaskId: string;
     generationBatchId: string;
     modelId: string;

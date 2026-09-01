@@ -56,6 +56,36 @@ describe('imageGenerationRuntime', () => {
     expect(callerMocks.image).toHaveBeenCalledWith(callerContext);
   });
 
+  it('projects share attribution onto the image caller so visitor spend stays attributed', () => {
+    imageGenerationRuntime.factory({
+      agentShare: {
+        agentId: 'agent-1',
+        allowReadMemory: true,
+        enabledToolIds: ['lobe-image-generation'],
+        shareId: 'share-1',
+        visitorUserId: 'visitor-1',
+      },
+      toolManifestMap: {},
+      userId: 'creator-1',
+    });
+
+    const [callerContext] = callerMocks.image.mock.calls.at(-1)!;
+    expect(callerContext.spendAttribution).toEqual({
+      agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+      trigger: 'agent_share',
+    });
+    // Permission fields of the runtime object must never leak into billing metadata.
+    expect(callerContext.spendAttribution.agentShare).not.toHaveProperty('allowReadMemory');
+    expect(callerContext.spendAttribution.agentShare).not.toHaveProperty('enabledToolIds');
+  });
+
+  it('omits spend attribution for a non-share run', () => {
+    imageGenerationRuntime.factory({ toolManifestMap: {}, userId: 'user-1' });
+
+    const [callerContext] = callerMocks.image.mock.calls.at(-1)!;
+    expect(callerContext.spendAttribution).toBeUndefined();
+  });
+
   it('preserves public agent visibility for generated image topics', async () => {
     const createTopic = vi.fn().mockResolvedValue('topic-1');
     callerMocks.generationTopic.mockReturnValue({ createTopic });

@@ -34,6 +34,26 @@ export enum RequestTrigger {
   Video = 'video',
 }
 
+/**
+ * Origin attribution carried alongside a request so a billing point that runs
+ * outside the originating request (async task, webhook, settle-time charge) can
+ * stamp the same origin the synchronous LLM path stamps.
+ *
+ * Always a plain projection: only the ids needed for attribution travel here,
+ * never the originating runtime object, which also carries permissions that
+ * have no place in billing metadata.
+ */
+export interface SpendAttribution {
+  /** Present only for a shared-agent visitor run. */
+  agentShare?: {
+    agentId: string;
+    shareId: string;
+    visitorUserId: string;
+  };
+  /** Request source, see {@link RequestTrigger}. */
+  trigger?: string;
+}
+
 // ******* Runtime Biz Error ******* //
 export const AgentRuntimeErrorType = {
   AgentRuntimeError: 'AgentRuntimeError', // Agent Runtime module runtime error

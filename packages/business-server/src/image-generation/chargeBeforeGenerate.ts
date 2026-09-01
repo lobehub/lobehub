@@ -1,3 +1,5 @@
+import { type SpendAttribution } from '@lobechat/types';
+
 import { type NewGeneration, type NewGenerationBatch } from '@/database/schemas';
 import { type CreateImageServicePayload } from '@/server/routers/lambda/image';
 
@@ -9,6 +11,11 @@ interface ChargeParams {
   imageNum: number;
   model: string;
   provider: string;
+  /**
+   * Origin of the request, so an implementation that defers the charge to a
+   * later async step can persist it and still attribute the final spend.
+   */
+  spendAttribution?: SpendAttribution;
   userId: string;
   workspaceId?: string;
 }

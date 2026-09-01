@@ -9,6 +9,7 @@ import {
   AsyncTaskErrorType,
   AsyncTaskStatus,
   RequestTrigger,
+  type SpendAttribution,
 } from '@lobechat/types';
 import debug from 'debug';
 import { z } from 'zod';
@@ -47,6 +48,11 @@ const createVideoInputSchema = z.object({
   model: z.string(),
   prechargeResult: z.any().optional(),
   provider: z.string(),
+  /**
+   * Origin of the submitting request, forwarded so the completion charge keeps
+   * the spend attributed after the async hand-off.
+   */
+  spendAttribution: z.custom<SpendAttribution>().optional(),
   workspaceId: z.string().optional(),
 });
 
@@ -134,6 +140,7 @@ export const videoRouter = router({
       model,
       prechargeResult,
       provider,
+      spendAttribution,
       workspaceId,
     } = input;
     const asyncTaskModel = new AsyncTaskModel(ctx.serverDB, ctx.userId, workspaceId);
@@ -223,6 +230,7 @@ export const videoRouter = router({
               },
               latency: duration,
               metadata: {
+                ...spendAttribution,
                 asyncTaskId,
                 generationBatchId,
                 topicId: generationTopicId,
@@ -300,6 +308,7 @@ export const videoRouter = router({
           await chargeAfterGenerate({
             isError: true,
             metadata: {
+              ...spendAttribution,
               asyncTaskId,
               generationBatchId,
               topicId: generationTopicId,

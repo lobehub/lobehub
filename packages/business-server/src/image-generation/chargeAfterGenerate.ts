@@ -1,10 +1,11 @@
 import { type ModelPricingContext } from '@lobechat/model-runtime';
+import { type SpendAttribution } from '@lobechat/types';
 
 import { type ModelPerformance, type ModelUsage } from '@/types/index';
 
 interface ChargeParams {
   isError?: boolean;
-  metadata: {
+  metadata: SpendAttribution & {
     asyncTaskId: string;
     generationBatchId: string;
     modelId: string;

@@ -1,3 +1,5 @@
+import type { SpendAttribution } from './agentRuntime';
+
 export enum AsyncTaskType {
   Chunking = 'chunk',
   Embedding = 'embedding',
@@ -199,5 +201,10 @@ export interface HourlyUserMemoryExtractionMetadata {
 
 export interface VideoGenerationTaskMetadata {
   precharge?: Record<string, unknown>;
+  /**
+   * Origin of the submitting request, carried across the async boundary so the
+   * completion charge (webhook / polling) can keep the spend attributed.
+   */
+  spendAttribution?: SpendAttribution;
   webhookToken?: string;
 }
