@@ -1,7 +1,8 @@
-import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
+import { x, xSync } from 'tinyexec';
 
 import { CLI_CONFIG_DIR_NAME } from '../constants/identity';
 
@@ -93,10 +94,11 @@ export function isDaemonProcess(pid: number): boolean {
   try {
     // `-ww` disables column truncation so the trailing `--daemon-child` flag is
     // never cut off; stderr is silenced so a dead PID just yields an empty match.
-    const command = execFileSync('ps', ['-ww', '-p', String(pid), '-o', 'command='], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
+    const { stdout } = xSync('ps', ['-ww', '-p', String(pid), '-o', 'command='], {
+      nodeOptions: { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+      nodePath: false,
+    });
+    const command = stdout.trim();
     return command.includes('--daemon-child') && command.includes('connect');
   } catch {
     return false;
@@ -194,13 +196,22 @@ export function spawnDaemon(args: string[]): Promise<number> {
   const logStartOffset = fs.fstatSync(logFd).size;
 
   // Re-run the same entry with --daemon-child (internal flag)
-  const child = spawn(process.execPath, [...process.execArgv, ...args, '--daemon-child'], {
-    detached: true,
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', LOBEHUB_DAEMON: '1' },
-    stdio: ['ignore', logFd, logFd, 'ipc'],
+  const daemon = x(process.execPath, [...process.execArgv, ...args, '--daemon-child'], {
+    nodeOptions: {
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', LOBEHUB_DAEMON: '1' },
+      stdio: ['ignore', logFd, logFd, 'ipc'],
+    },
+    nodePath: false,
+    persist: true,
   });
+  const child = daemon.process;
 
-  const pid = child.pid!;
+  if (!child || !daemon.pid) {
+    fs.closeSync(logFd);
+    throw new Error('Daemon process could not start.');
+  }
+
+  const pid = daemon.pid;
 
   writePid(pid);
   fs.closeSync(logFd);
@@ -212,7 +223,9 @@ export function spawnDaemon(args: string[]): Promise<number> {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
-      child.removeAllListeners();
+      child.off('error', onError);
+      child.off('exit', onExit);
+      child.off('message', onMessage);
       if (child.connected) child.disconnect();
       child.unref();
 
@@ -227,16 +240,12 @@ export function spawnDaemon(args: string[]): Promise<number> {
     };
 
     const timeout = setTimeout(() => {
-      try {
-        child.kill('SIGTERM');
-      } catch {
-        // Child may have exited while the timeout fired
-      }
+      daemon.kill('SIGTERM');
       finish(new Error('Daemon startup timed out. See the daemon log for details.'));
     }, STARTUP_TIMEOUT_MS);
 
-    child.once('error', (error) => finish(error));
-    child.once('exit', (code, signal) => {
+    const onError = (error: Error) => finish(error);
+    const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
       const startupError = readStartupError(logStartOffset);
       finish(
         new Error(
@@ -244,14 +253,18 @@ export function spawnDaemon(args: string[]): Promise<number> {
             `Daemon exited before startup completed (${signal ? `signal ${signal}` : `code ${code ?? 1}`}).`,
         ),
       );
-    });
-    child.on('message', (message: DaemonStartupMessage) => {
+    };
+    const onMessage = (message: DaemonStartupMessage) => {
       if (message?.type === 'startup-ready') {
         finish();
       } else if (message?.type === 'startup-error') {
         finish(new Error(message.message));
       }
-    });
+    };
+
+    child.once('error', onError);
+    child.once('exit', onExit);
+    child.on('message', onMessage);
   });
 }
 

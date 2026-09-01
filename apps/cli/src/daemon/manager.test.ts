@@ -1,9 +1,9 @@
-import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+import { xSync } from 'tinyexec';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -36,11 +36,11 @@ vi.mock('node:os', async (importOriginal) => {
   };
 });
 
-// Mock only `execFileSync` (used by isDaemonProcess to read a process command
-// line); keep the real `spawn` so nothing else changes.
-vi.mock('node:child_process', async (importOriginal) => {
+// Mock only `xSync` (used by isDaemonProcess to read a process command line);
+// keep the real async executor so daemon integration tests still spawn children.
+vi.mock('tinyexec', async (importOriginal) => {
   const actual = await importOriginal<Record<string, any>>();
-  return { ...actual, execFileSync: vi.fn() };
+  return { ...actual, xSync: vi.fn() };
 });
 
 // A command line that matches the daemon signature (`connect … --daemon-child`).
@@ -51,7 +51,7 @@ describe('daemon manager', () => {
     await mkdir(mockDir, { recursive: true });
     // Default: any inspected PID looks like our daemon. Tests that need a
     // reused / unrelated PID override this per-case.
-    vi.mocked(execFileSync).mockReturnValue(DAEMON_COMMAND as any);
+    vi.mocked(xSync).mockReturnValue({ stdout: DAEMON_COMMAND } as any);
   });
 
   afterEach(() => {
@@ -96,9 +96,9 @@ describe('daemon manager', () => {
 
   describe('isDaemonProcess', () => {
     it('should return true when the command line matches the daemon signature', () => {
-      vi.mocked(execFileSync).mockReturnValue(DAEMON_COMMAND as any);
+      vi.mocked(xSync).mockReturnValue({ stdout: DAEMON_COMMAND } as any);
       expect(isDaemonProcess(12345)).toBe(true);
-      expect(execFileSync).toHaveBeenCalledWith(
+      expect(xSync).toHaveBeenCalledWith(
         'ps',
         ['-ww', '-p', '12345', '-o', 'command='],
         expect.any(Object),
@@ -106,18 +106,18 @@ describe('daemon manager', () => {
     });
 
     it('should return false for an unrelated process command line', () => {
-      vi.mocked(execFileSync).mockReturnValue('/usr/bin/vim notes.txt' as any);
+      vi.mocked(xSync).mockReturnValue({ stdout: '/usr/bin/vim notes.txt' } as any);
       expect(isDaemonProcess(12345)).toBe(false);
     });
 
     it('should return false when the signature is only partially present', () => {
       // `connect` without the internal `--daemon-child` flag is not our daemon.
-      vi.mocked(execFileSync).mockReturnValue('/usr/bin/node /path/cli connect' as any);
+      vi.mocked(xSync).mockReturnValue({ stdout: '/usr/bin/node /path/cli connect' } as any);
       expect(isDaemonProcess(12345)).toBe(false);
     });
 
     it('should return false when ps is unavailable / throws', () => {
-      vi.mocked(execFileSync).mockImplementation(() => {
+      vi.mocked(xSync).mockImplementation(() => {
         throw new Error('ps: command not found');
       });
       expect(isDaemonProcess(12345)).toBe(false);
@@ -165,7 +165,7 @@ describe('daemon manager', () => {
         pid: process.pid,
         startedAt: new Date().toISOString(),
       });
-      vi.mocked(execFileSync).mockReturnValue('/usr/bin/some-other-process' as any);
+      vi.mocked(xSync).mockReturnValue({ stdout: '/usr/bin/some-other-process' } as any);
 
       expect(getRunningDaemonPid()).toBeNull();
       expect(readPid()).toBeNull();
@@ -297,7 +297,7 @@ describe('daemon manager', () => {
     it('should NOT SIGTERM a live PID that is not our daemon', () => {
       // Stale daemon.pid whose PID was reused by an unrelated, living process.
       writePid(process.pid);
-      vi.mocked(execFileSync).mockReturnValue('/usr/bin/some-other-process' as any);
+      vi.mocked(xSync).mockReturnValue({ stdout: '/usr/bin/some-other-process' } as any);
 
       const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
 

@@ -4,42 +4,9 @@ import type { DeviceIdentity } from '@lobechat/device-identity';
 import { deriveDeviceId, deriveScopedFallbackId } from '@lobechat/device-identity';
 
 import { createLambdaClient } from '../api/client';
+import { isTransientNetworkError } from '../utils/error';
 
 const WORKSPACE_TOKEN_RETRY_DELAYS_MS = [250, 1000, 2500];
-const TRANSIENT_NETWORK_ERROR_CODES = new Set([
-  'EAI_AGAIN',
-  'ConnectionRefused',
-  'ECONNREFUSED',
-  'ECONNRESET',
-  'ENETDOWN',
-  'ENETUNREACH',
-  'ENOTFOUND',
-  'ETIMEDOUT',
-  'UND_ERR_CONNECT_TIMEOUT',
-  'UND_ERR_HEADERS_TIMEOUT',
-  'UND_ERR_SOCKET',
-]);
-
-function isTransientNetworkError(error: unknown): boolean {
-  const seen = new Set<unknown>();
-  let current = error;
-
-  while (current && !seen.has(current)) {
-    seen.add(current);
-    if (current instanceof Error && /^(?:fetch failed|failed to fetch)$/i.test(current.message)) {
-      return true;
-    }
-    if (typeof current !== 'object') return false;
-
-    const candidate = current as { cause?: unknown; code?: unknown };
-    if (typeof candidate.code === 'string' && TRANSIENT_NETWORK_ERROR_CODES.has(candidate.code)) {
-      return true;
-    }
-    current = candidate.cause;
-  }
-
-  return false;
-}
 
 async function withWorkspaceTokenRetry<T>(operation: () => Promise<T>): Promise<T> {
   for (let attempt = 0; ; attempt += 1) {
