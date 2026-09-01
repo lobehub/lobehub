@@ -593,6 +593,58 @@ describe.sequential('FtsSearchSyncOutboxRepository', () => {
     await expect(repository.stats()).resolves.toMatchObject({ pending: 0, ready: 0 });
   });
 
+  it('retries an acknowledgement after PostgreSQL aborts it with a deadlock', async () => {
+    const work = {
+      documentId: 'deadlocked-agent',
+      entity: 'agents' as const,
+      leaseToken: '123.456',
+      revision: 7,
+    };
+    const deadlock = Object.assign(new Error('deadlock detected'), { code: '40P01' });
+    const execute = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Failed query', { cause: deadlock }))
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            document_id: work.documentId,
+            entity: work.entity,
+            lease_token: work.leaseToken,
+            revision: work.revision,
+          },
+        ],
+      });
+    const database = {
+      execute,
+      transaction: vi.fn(),
+    } as unknown as ConstructorParameters<typeof FtsSearchSyncOutboxRepository>[0];
+    const deadlockRepository = new FtsSearchSyncOutboxRepository(database);
+
+    await expect(deadlockRepository.acknowledgeMany([work])).resolves.toEqual([work]);
+    expect(execute).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry acknowledgement failures that are not PostgreSQL deadlocks', async () => {
+    const execute = vi.fn().mockRejectedValue(new Error('connection unavailable'));
+    const database = {
+      execute,
+      transaction: vi.fn(),
+    } as unknown as ConstructorParameters<typeof FtsSearchSyncOutboxRepository>[0];
+    const failingRepository = new FtsSearchSyncOutboxRepository(database);
+
+    await expect(
+      failingRepository.acknowledgeMany([
+        {
+          documentId: 'failed-agent',
+          entity: 'agents',
+          leaseToken: '456.789',
+          revision: 8,
+        },
+      ]),
+    ).rejects.toThrow('connection unavailable');
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
   it('keeps concurrent claims disjoint and marks permanent failures dead', async () => {
     await db.insert(agents).values([
       { id: 'claim-agent-a', title: 'a', userId: USER_ID },
