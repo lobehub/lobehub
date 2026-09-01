@@ -1934,6 +1934,15 @@ describe('AgentModel.transferAgents group history preservation', () => {
         topicId: `${groupId}-topic-plain`,
         userId,
       },
+      // Thread-anchored row (API-imported / legacy shape): threadId only —
+      // no topicId, no groupId. Reaches the group solely through the thread.
+      {
+        agentId,
+        id: `${groupId}-msg-thread-only`,
+        role: 'assistant',
+        threadId: `${groupId}-thr-grp`,
+        userId,
+      },
     ]);
   };
 
@@ -2030,10 +2039,11 @@ describe('AgentModel.transferAgents group history preservation', () => {
           'gh-group-msg-residual',
           'gh-group-msg-target',
           'gh-group-msg-topic-only',
+          'gh-group-msg-thread-only',
           'gh-group-msg-mixed',
         ]),
       );
-    expect(groupMessages).toHaveLength(5);
+    expect(groupMessages).toHaveLength(6);
     for (const message of groupMessages) {
       // Regression: the residual rewrite used to re-scope topicless group
       // messages to the target.
@@ -2068,9 +2078,10 @@ describe('AgentModel.transferAgents group history preservation', () => {
             'gh-group-msg-residual',
             'gh-group-msg-target',
             'gh-group-msg-topic-only',
+            'gh-group-msg-thread-only',
           ]),
         ),
-    ).resolves.toHaveLength(4);
+    ).resolves.toHaveLength(5);
     // The mixed row is gone — but through its TOPIC's lifecycle, not the
     // agent_id cascade this fix blocks: deleting the agent deletes its own
     // topics, and a message hosted on someone's topic lives and dies with it.
@@ -2186,13 +2197,14 @@ describe('AgentModel.transferAgents group history preservation', () => {
       'big-group-msg-residual',
       'big-group-msg-target',
       'big-group-msg-topic-only',
+      'big-group-msg-thread-only',
       'big-group-msg-foreign-topic',
     ];
     const pendingRows = await serverDB
       .select()
       .from(messages)
       .where(inArray(messages.id, messageIds));
-    expect(pendingRows).toHaveLength(5);
+    expect(pendingRows).toHaveLength(6);
     for (const message of pendingRows) {
       expect(message.userId).toBe(userId);
       expect(message.workspaceId).toBeNull();
@@ -2226,7 +2238,7 @@ describe('AgentModel.transferAgents group history preservation', () => {
       .select()
       .from(messages)
       .where(inArray(messages.id, messageIds));
-    expect(drainedRows).toHaveLength(5);
+    expect(drainedRows).toHaveLength(6);
     for (const message of drainedRows) {
       expect(message.userId).toBe(userId);
       expect(message.workspaceId).toBeNull();
@@ -2250,7 +2262,7 @@ describe('AgentModel.transferAgents group history preservation', () => {
             messageIds.filter((id) => id !== 'big-group-msg-foreign-topic'),
           ),
         ),
-    ).resolves.toHaveLength(4);
+    ).resolves.toHaveLength(5);
     await expect(
       serverDB.select().from(messages).where(eq(messages.id, 'big-group-msg-foreign-topic')),
     ).resolves.toHaveLength(0);

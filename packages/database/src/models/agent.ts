@@ -95,6 +95,7 @@ import {
   AgentTransferJobModel,
   getAgentTransferSyncMessageThreshold,
   remapMessageAgentIdsForGroups,
+  remapMessageAgentIdsForGroupThreads,
   remapMessageAgentIdsForGroupTopics,
   rewriteMessageScopeForTopics,
   rewriteResidualMessageScope,
@@ -2091,6 +2092,20 @@ export class AgentModel {
         .from(messages)
         .innerJoin(topics, eq(messages.topicId, topics.id))
         .where(and(inArray(messages.agentId, agentIds), isNotNull(topics.groupId)))),
+      // Rows that reach the group only through a THREAD (API-imported /
+      // legacy shapes: threadId set, topicId and groupId both null) — either
+      // a group-anchored thread, or a thread hosted on a group topic.
+      ...(await trx
+        .selectDistinct({ agentId: messages.agentId, groupId: threads.groupId })
+        .from(messages)
+        .innerJoin(threads, eq(messages.threadId, threads.id))
+        .where(and(inArray(messages.agentId, agentIds), isNotNull(threads.groupId)))),
+      ...(await trx
+        .selectDistinct({ agentId: messages.agentId, groupId: topics.groupId })
+        .from(messages)
+        .innerJoin(threads, eq(messages.threadId, threads.id))
+        .innerJoin(topics, eq(threads.topicId, topics.id))
+        .where(and(inArray(messages.agentId, agentIds), isNotNull(topics.groupId)))),
     ];
 
     // `messages.target_id` (no FK) rides the same pairs — it cannot cascade
@@ -2129,6 +2144,14 @@ export class AgentModel {
         .innerJoin(topics, eq(messages.topicId, topics.id))
         .where(
           and(inArray(topics.groupId, candidateGroupIds), inArray(messages.targetId, agentIds)),
+        )),
+      // Thread-anchored mentions, same fencing via threads.group_id.
+      ...(await trx
+        .selectDistinct({ agentId: messages.targetId, groupId: threads.groupId })
+        .from(messages)
+        .innerJoin(threads, eq(messages.threadId, threads.id))
+        .where(
+          and(inArray(threads.groupId, candidateGroupIds), inArray(messages.targetId, agentIds)),
         )),
     );
 
@@ -2213,9 +2236,22 @@ export class AgentModel {
       // recorded as a remap-only backfill job (drained topic-by-topic, scope
       // untouched); until it drains, the guards on the covered agents block
       // re-transfers and deletes, so the cascade hazard cannot fire early.
+      const groupThreadSubquery = trx
+        .select({ id: threads.id })
+        .from(threads)
+        .where(
+          or(
+            eq(threads.groupId, group.id),
+            inArray(
+              threads.topicId,
+              trx.select({ id: topics.id }).from(topics).where(eq(topics.groupId, group.id)),
+            ),
+          ),
+        );
       const remapAnchor = or(
         eq(messages.groupId, group.id),
         inArray(messages.topicId, groupTopicSubquery),
+        inArray(messages.threadId, groupThreadSubquery),
       );
       const [{ affectedGroupMessages }] = await trx
         .select({ affectedGroupMessages: count() })
@@ -2242,6 +2278,7 @@ export class AgentModel {
         // is idempotent.
         await remapMessageAgentIdsForGroups(trx, [group.id], remapPairs);
         await remapMessageAgentIdsForGroupTopics(trx, [group.id], remapPairs);
+        await remapMessageAgentIdsForGroupThreads(trx, [group.id], remapPairs);
       } else {
         // The topic list is only materialized on this rare path — it feeds
         // the job's drain queue, and `createJob` chunks the inserts.

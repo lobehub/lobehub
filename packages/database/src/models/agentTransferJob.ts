@@ -14,6 +14,7 @@ import {
   messagesFiles,
   messageTranslates,
   messageTTS,
+  threads,
   topics,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
@@ -126,11 +127,18 @@ export const rewriteResidualMessageScope = async (
   linkage: { agentIds: string[]; groupIds?: string[]; sessionIds: string[] },
   target: AgentTransferTargetScope,
 ): Promise<void> => {
-  // A row that carries a group_id belongs to that group's scope and moves
-  // only when its group is the thing being transferred — the session / agent
-  // arms therefore exclude group rows. Without this, an agent transfer whose
-  // group-history remap is still pending (deferred to a remap-only job) would
-  // drag the group's topicless residue into the target scope.
+  // A row that carries a group_id — or reaches a group only through its
+  // thread — belongs to that group's scope and moves only when its group is
+  // the thing being transferred: the session / agent arms therefore exclude
+  // both shapes. Without this, an agent transfer whose group-history remap is
+  // still pending (deferred to a remap-only job) would drag the group's
+  // topicless residue into the target scope.
+  const notGroupThreadAnchored = sql`NOT EXISTS (
+    SELECT 1 FROM ${threads}
+    WHERE ${threads.id} = ${messages.threadId}
+      AND (${threads.groupId} IS NOT NULL
+        OR EXISTS (SELECT 1 FROM ${topics} WHERE ${topics.id} = ${threads.topicId} AND ${topics.groupId} IS NOT NULL))
+  )`;
   const scopeArms: SQL[] = [];
   if (linkage.sessionIds.length > 0)
     scopeArms.push(inArray(messages.sessionId, linkage.sessionIds));
@@ -138,7 +146,11 @@ export const rewriteResidualMessageScope = async (
   const arms: SQL[] = [];
   if (scopeArms.length > 0)
     arms.push(
-      and(scopeArms.length === 1 ? scopeArms[0] : or(...scopeArms), isNull(messages.groupId))!,
+      and(
+        scopeArms.length === 1 ? scopeArms[0] : or(...scopeArms),
+        isNull(messages.groupId),
+        notGroupThreadAnchored,
+      )!,
     );
   if (linkage.groupIds && linkage.groupIds.length > 0)
     arms.push(inArray(messages.groupId, linkage.groupIds));
@@ -276,6 +288,30 @@ export const remapMessageAgentIdsForGroupTopics = async (
   await remapMessageAgentIds(
     executor,
     sql`${messages.topicId} IN (SELECT ${topics.id} FROM ${topics} WHERE ${inArray(topics.groupId, groupIds)}) AND (${messages.groupId} IS NULL OR ${inArray(messages.groupId, groupIds)})`,
+    pairs,
+  );
+};
+
+/**
+ * {@link remapMessageAgentIds} over rows anchored to the given groups only
+ * through a THREAD (API-imported / legacy shapes: threadId set, topicId and
+ * groupId both null) — a group-anchored thread, or one hosted on a group
+ * topic. The direct-group precedence guard matches the topic variant.
+ */
+export const remapMessageAgentIdsForGroupThreads = async (
+  executor: Executor,
+  groupIds: string[],
+  pairs: AgentIdRemapPair[],
+): Promise<void> => {
+  if (groupIds.length === 0) return;
+
+  await remapMessageAgentIds(
+    executor,
+    sql`${messages.threadId} IN (
+      SELECT ${threads.id} FROM ${threads}
+      WHERE ${inArray(threads.groupId, groupIds)}
+         OR ${threads.topicId} IN (SELECT ${topics.id} FROM ${topics} WHERE ${inArray(topics.groupId, groupIds)})
+    ) AND (${messages.groupId} IS NULL OR ${inArray(messages.groupId, groupIds)})`,
     pairs,
   );
 };
@@ -797,6 +833,9 @@ export class AgentTransferJobModel {
             // such rows via the same group-anchored remap; by finalization
             // the bulk is already remapped, so this touches only leftovers.
             await remapMessageAgentIdsForGroups(trx, job.groupIds, agentIdRemap);
+            // Thread-anchored rows (threadId only) sit outside the per-topic
+            // queue too — same finalization sweep as the synchronous branch.
+            await remapMessageAgentIdsForGroupThreads(trx, job.groupIds, agentIdRemap);
           } else {
             await remapResidualMessageAgentIds(trx, job.groupIds, agentIdRemap);
           }
