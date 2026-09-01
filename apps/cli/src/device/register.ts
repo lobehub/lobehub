@@ -5,6 +5,54 @@ import { deriveDeviceId, deriveScopedFallbackId } from '@lobechat/device-identit
 
 import { createLambdaClient } from '../api/client';
 
+const WORKSPACE_TOKEN_RETRY_DELAYS_MS = [250, 1000, 2500];
+const TRANSIENT_NETWORK_ERROR_CODES = new Set([
+  'EAI_AGAIN',
+  'ConnectionRefused',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ENETDOWN',
+  'ENETUNREACH',
+  'ENOTFOUND',
+  'ETIMEDOUT',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_HEADERS_TIMEOUT',
+  'UND_ERR_SOCKET',
+]);
+
+function isTransientNetworkError(error: unknown): boolean {
+  const seen = new Set<unknown>();
+  let current = error;
+
+  while (current && !seen.has(current)) {
+    seen.add(current);
+    if (current instanceof Error && /^(?:fetch failed|failed to fetch)$/i.test(current.message)) {
+      return true;
+    }
+    if (typeof current !== 'object') return false;
+
+    const candidate = current as { cause?: unknown; code?: unknown };
+    if (typeof candidate.code === 'string' && TRANSIENT_NETWORK_ERROR_CODES.has(candidate.code)) {
+      return true;
+    }
+    current = candidate.cause;
+  }
+
+  return false;
+}
+
+async function withWorkspaceTokenRetry<T>(operation: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      const delay = WORKSPACE_TOKEN_RETRY_DELAYS_MS[attempt];
+      if (delay === undefined || !isTransientNetworkError(error)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+}
+
 /**
  * Resolve a stable device identity. An explicit `--device-id` wins (lets a user
  * pin a VM to a fixed identity); otherwise derive from the machine id so the
@@ -73,7 +121,7 @@ export async function mintWorkspaceConnectToken(
   workspaceId: string,
 ): Promise<{ token: string; workspaceId: string }> {
   const trpc = createLambdaClient(auth, workspaceId);
-  return trpc.device.mintWorkspaceConnectToken.mutate();
+  return withWorkspaceTokenRetry(() => trpc.device.mintWorkspaceConnectToken.mutate());
 }
 
 /**

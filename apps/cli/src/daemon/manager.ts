@@ -6,6 +6,9 @@ import path from 'node:path';
 import { CLI_CONFIG_DIR_NAME } from '../constants/identity';
 
 const MAX_LOG_SIZE = 5 * 1024 * 1024; // 5MB
+const STARTUP_TIMEOUT_MS = 30_000;
+
+type DaemonStartupMessage = { message: string; type: 'startup-error' } | { type: 'startup-ready' };
 
 function getLobehubDir() {
   return path.join(os.homedir(), CLI_CONFIG_DIR_NAME);
@@ -181,28 +184,110 @@ export function appendLog(line: string): void {
 // --- Daemon spawn ---
 
 /**
- * Spawn the current script as a detached daemon process.
- * The parent writes the PID file and returns immediately.
+ * Spawn the current script as a detached daemon process and wait until the
+ * child completes its startup preflight.
  */
-export function spawnDaemon(args: string[]): number {
+export function spawnDaemon(args: string[]): Promise<number> {
   ensureDir();
 
   const logFd = fs.openSync(getLogFilePath(), 'a');
+  const logStartOffset = fs.fstatSync(logFd).size;
 
   // Re-run the same entry with --daemon-child (internal flag)
   const child = spawn(process.execPath, [...process.execArgv, ...args, '--daemon-child'], {
     detached: true,
     env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', LOBEHUB_DAEMON: '1' },
-    stdio: ['ignore', logFd, logFd],
+    stdio: ['ignore', logFd, logFd, 'ipc'],
   });
 
-  child.unref();
   const pid = child.pid!;
 
   writePid(pid);
   fs.closeSync(logFd);
 
-  return pid;
+  return new Promise((resolve, reject) => {
+    let settled = false;
+
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      child.removeAllListeners();
+      if (child.connected) child.disconnect();
+      child.unref();
+
+      if (error) {
+        removePid();
+        removeStatus();
+        reject(error);
+        return;
+      }
+
+      resolve(pid);
+    };
+
+    const timeout = setTimeout(() => {
+      try {
+        child.kill('SIGTERM');
+      } catch {
+        // Child may have exited while the timeout fired
+      }
+      finish(new Error('Daemon startup timed out. See the daemon log for details.'));
+    }, STARTUP_TIMEOUT_MS);
+
+    child.once('error', (error) => finish(error));
+    child.once('exit', (code, signal) => {
+      const startupError = readStartupError(logStartOffset);
+      finish(
+        new Error(
+          startupError ||
+            `Daemon exited before startup completed (${signal ? `signal ${signal}` : `code ${code ?? 1}`}).`,
+        ),
+      );
+    });
+    child.on('message', (message: DaemonStartupMessage) => {
+      if (message?.type === 'startup-ready') {
+        finish();
+      } else if (message?.type === 'startup-error') {
+        finish(new Error(message.message));
+      }
+    });
+  });
+}
+
+function readStartupError(startOffset: number): string | undefined {
+  try {
+    const content = fs.readFileSync(getLogFilePath(), 'utf8').slice(startOffset).trim();
+    const lastError = content
+      .split('\n')
+      .toReversed()
+      .find((line) => line.includes('[ERROR]'))
+      ?.trim();
+    return lastError?.replace(/^(?:\[[^\]]+\]|\d{2}:\d{2}:\d{2})\s+\[ERROR\]\s+/, '');
+  } catch {
+    return undefined;
+  }
+}
+
+function sendStartupMessage(message: DaemonStartupMessage): Promise<void> {
+  if (process.env.LOBEHUB_DAEMON !== '1' || !process.send || !process.connected) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => {
+    process.send!(message, () => {
+      if (process.connected) process.disconnect();
+      resolve();
+    });
+  });
+}
+
+export function reportDaemonStartupError(message: string): Promise<void> {
+  return sendStartupMessage({ message, type: 'startup-error' });
+}
+
+export function reportDaemonStartupReady(): Promise<void> {
+  return sendStartupMessage({ type: 'startup-ready' });
 }
 
 /**
