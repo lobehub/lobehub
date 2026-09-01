@@ -106,7 +106,7 @@
     "type-fest": "^5.7.0"
   },
   "devDependencies": {
-    "tsdown": "^0.21.10",
+    "tsdown": "^0.22.14",
     "typescript": "^6.0.3"
   },
   "peerDependencies": {
