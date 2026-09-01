@@ -6,23 +6,29 @@ import { SWRConfig } from 'swr';
 
 import AsyncError, { type AsyncErrorVariant } from '@/components/AsyncError';
 
+import {
+  resetOnLocationChange,
+  type RouteBoundaryState,
+  routeResetKey,
+} from './resetOnLocationChange';
 import { useRouteRetry } from './useRouteRetry';
 
 interface BoundaryProps {
   children: ReactNode;
   onReset: () => void;
+  resetKey: string;
   variant: AsyncErrorVariant;
 }
 
-interface BoundaryState {
-  error?: Error;
-}
+class Boundary extends Component<BoundaryProps, RouteBoundaryState> {
+  state: RouteBoundaryState = { resetKey: this.props.resetKey };
 
-class Boundary extends Component<BoundaryProps, BoundaryState> {
-  state: BoundaryState = {};
-
-  static getDerivedStateFromError(error: Error): BoundaryState {
+  static getDerivedStateFromError(error: Error) {
     return { error };
+  }
+
+  static getDerivedStateFromProps(props: BoundaryProps, state: RouteBoundaryState) {
+    return resetOnLocationChange(props.resetKey, state);
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
@@ -56,8 +62,8 @@ class Boundary extends Component<BoundaryProps, BoundaryState> {
  * a *persistent* area layout that outlives the route under it:
  *
  * - Its error state survives navigation, so a failure on one route keeps
- *   covering the healthy sibling the user moves to. Keying on the pathname
- *   remounts it per route.
+ *   covering the healthy sibling the user moves to. `resetKey` clears it as the
+ *   location changes.
  * - Reset has to clear the SWR entry that threw, but the error carries no key,
  *   so the naive fix is to invalidate the whole cache — which refetches every
  *   mounted consumer in the app for one route's Retry. `onError` records the
@@ -71,11 +77,11 @@ const SuspenseRouteBoundary = ({
   variant?: AsyncErrorVariant;
 }) => {
   const { onError, onReset } = useRouteRetry();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
 
   return (
     <SWRConfig value={{ onError }}>
-      <Boundary key={pathname} variant={variant} onReset={onReset}>
+      <Boundary resetKey={routeResetKey(pathname, search)} variant={variant} onReset={onReset}>
         {children}
       </Boundary>
     </SWRConfig>

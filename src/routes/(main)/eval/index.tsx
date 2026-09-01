@@ -6,6 +6,7 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { Database, FlaskConical, Plus } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { SWRConfig } from 'swr';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
@@ -88,18 +89,19 @@ const SkeletonGrid = memo(() => (
   </div>
 ));
 
-const EvalOverview = memo(() => {
+const EvalOverviewContent = memo(() => {
   const { t } = useTranslation('eval');
   const benchmarkList = useEvalStore((s) => s.benchmarkList);
   const useFetchBenchmarks = useEvalStore((s) => s.useFetchBenchmarks);
   const useFetchAllDatasets = useEvalStore((s) => s.useFetchAllDatasets);
-  const { data, error, mutate } = useFetchBenchmarks();
+  const { data, isLoading, error, mutate } = useFetchBenchmarks();
   const { data: allDatasets } = useFetchAllDatasets();
 
   const experimentList = useEvalStore((s) => s.experimentList);
   const useFetchExperiments = useEvalStore((s) => s.useFetchExperiments);
   const {
     data: experimentData,
+    isLoading: isLoadingExperiments,
     error: experimentError,
     mutate: mutateExperiments,
   } = useFetchExperiments();
@@ -173,6 +175,8 @@ const EvalOverview = memo(() => {
           error={experimentError}
           errorVariant={'block'}
           isEmpty={experimentList.length === 0}
+          isLoading={isLoadingExperiments}
+          loading={<SkeletonGrid />}
           onRetry={() => mutateExperiments()}
         >
           <div className={styles.grid}>
@@ -195,6 +199,8 @@ const EvalOverview = memo(() => {
           error={error}
           errorVariant={'block'}
           isEmpty={benchmarkList.length === 0}
+          isLoading={isLoading}
+          loading={<SkeletonGrid />}
           onRetry={() => mutate()}
         >
           <div className={styles.grid}>
@@ -262,5 +268,18 @@ const EvalOverview = memo(() => {
     </Flexbox>
   );
 });
+
+/**
+ * The overview holds three independently gated sections — experiments,
+ * benchmarks and datasets — each with its own `AsyncBoundary` and Retry. Under
+ * route-wide `suspense` the first failing fetch throws past all of them and
+ * replaces the healthy sections with a page-wide error, so the overview opts
+ * out. The opt-out has to sit *above* the hooks it covers, hence the wrapper.
+ */
+const EvalOverview = memo(() => (
+  <SWRConfig value={{ suspense: false }}>
+    <EvalOverviewContent />
+  </SWRConfig>
+));
 
 export default EvalOverview;
