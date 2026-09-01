@@ -219,7 +219,7 @@
     "@henrygd/queue": "^1.2.0",
     "@huggingface/inference": "^4.13.25",
     "@icons-pack/react-simple-icons": "^13.13.0",
-    "@khmyznikov/pwa-install": "0.3.9",
+    "@khmyznikov/pwa-install": "0.6.4",
     "@larksuiteoapi/node-sdk": "^1.73.0",
     "@lexical/utils": "^0.42.0",
     "@lobechat/agent-gateway-client": "workspace:*",
