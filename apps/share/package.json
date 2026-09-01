@@ -15,10 +15,10 @@
   },
   "devDependencies": {
     "@ant-design/cssinjs": "^2.1.2",
-    "@cloudflare/vite-plugin": "^1.52.1",
-    "@react-router/dev": "^8.3.0",
-    "isbot": "^5.1.32",
+    "@cloudflare/vite-plugin": "^1.54.2",
+    "@react-router/dev": "^8.3.1",
+    "isbot": "^5.2.2",
     "vite-tsconfig-paths": "^6.1.1",
-    "wrangler": "^4.123.0"
+    "wrangler": "^4.127.1"
   }
 }

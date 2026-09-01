@@ -15,7 +15,7 @@
     "@lobechat/utils": "workspace:*",
     "i18next": "^25.10.10",
     "i18next-browser-languagedetector": "^8.2.1",
-    "i18next-resources-to-backend": "^1.2.1",
+    "i18next-resources-to-backend": "^1.2.3",
     "model-bank": "workspace:*",
     "react-i18next": "^16.6.6",
     "rtl-detect": "^1.1.2"

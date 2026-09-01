@@ -24,19 +24,19 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.73.0",
-    "@aws-sdk/client-bedrock-runtime": "^3.1076.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.1123.0",
     "@azure-rest/ai-inference": "1.0.0-beta.5",
-    "@azure/core-auth": "^1.10.1",
+    "@azure/core-auth": "^1.11.0",
     "@fal-ai/client": "^1.10.1",
     "@google/genai": "^1.52.0",
-    "@huggingface/inference": "^4.13.21",
+    "@huggingface/inference": "^4.13.28",
     "@lobechat/business-model-bank": "workspace:*",
     "@lobechat/business-model-runtime": "workspace:*",
     "@lobechat/const": "workspace:*",
     "@lobechat/ssrf-safe-fetch": "workspace:*",
     "@lobechat/utils": "workspace:*",
     "async-retry": "^1.3.3",
-    "dayjs": "^1.11.21",
+    "dayjs": "^1.11.23",
     "debug": "^4.4.3",
     "immer": "^10.2.0",
     "langfuse": "^3.38.20",
@@ -44,16 +44,16 @@
     "model-bank": "workspace:*",
     "nanoid": "^5.1.16",
     "ollama": "^0.6.3",
-    "openai": "^6.45.0",
+    "openai": "^6.49.0",
     "replicate": "^1.4.0",
-    "tokenx": "^1.3.0",
-    "type-fest": "^5.7.0",
+    "tokenx": "^1.6.0",
+    "type-fest": "^5.9.0",
     "url-join": "^5.0.0"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"
   },
   "peerDependencies": {
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
   }
 }

@@ -103,13 +103,13 @@
   },
   "dependencies": {
     "@lobechat/business-const": "workspace:*",
-    "type-fest": "^5.7.0"
+    "type-fest": "^5.9.0"
   },
   "devDependencies": {
     "tsdown": "^0.21.10",
     "typescript": "^6.0.3"
   },
   "peerDependencies": {
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
   }
 }

@@ -21,7 +21,7 @@
     "@lobechat/model-runtime": "workspace:*",
     "@lobechat/prompts": "workspace:*",
     "@lobechat/types": "workspace:*",
-    "dayjs": "^1.11.21",
+    "dayjs": "^1.11.23",
     "dotenv": "^17.4.2",
     "ora": "^9.4.1",
     "unist-builder": "^4.0.0",
@@ -31,10 +31,10 @@
   "devDependencies": {
     "@types/json-schema": "^7.0.15",
     "@types/xast": "^2.0.4",
-    "picospinner": "^3.0.0",
-    "tsx": "^4.22.4"
+    "picospinner": "^3.1.2",
+    "tsx": "^4.23.13"
   },
   "peerDependencies": {
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
   }
 }

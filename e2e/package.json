@@ -16,16 +16,16 @@
     "test:unit": "vitest run --config vitest.config.mts --silent='passed-only'"
   },
   "dependencies": {
-    "@cucumber/cucumber": "^12.2.0",
-    "@playwright/test": "^1.57.0",
+    "@cucumber/cucumber": "^12.9.0",
+    "@playwright/test": "^1.62.1",
     "bcryptjs": "^3.0.3",
-    "pg": "^8.16.0",
-    "playwright": "^1.57.0"
+    "pg": "^8.23.0",
+    "playwright": "^1.62.1"
   },
   "devDependencies": {
-    "@types/node": "^24.10.1",
+    "@types/node": "^24.13.3",
     "cross-env": "^10.1.0",
-    "tsx": "^4.20.6",
+    "tsx": "^4.23.13",
     "typescript": "^5.9.3"
   }
 }

@@ -14,7 +14,7 @@
     "sf-symbols-typescript": "^2.2.0"
   },
   "devDependencies": {
-    "electron": "^43.2.0"
+    "electron": "^43.5.0"
   },
   "peerDependencies": {
     "react": "*"

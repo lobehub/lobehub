@@ -15,8 +15,8 @@
     "@lobechat/utils": "workspace:*",
     "@t3-oss/env-nextjs": "^0.13.11",
     "debug": "^4.4.3",
-    "lucide-react": "^1.22.0",
-    "zod": "^4.4.3"
+    "lucide-react": "^1.38.0",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "vite-tsconfig-paths": "^6.1.1"

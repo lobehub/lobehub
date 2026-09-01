@@ -11,11 +11,11 @@
   "dependencies": {
     "@lobechat/utils": "workspace:*",
     "ajv": "^8.20.0",
-    "p-map": "^7.0.5"
+    "p-map": "^7.0.7"
   },
   "devDependencies": {
     "@lobechat/context-engine": "workspace:*",
     "@lobechat/types": "workspace:*",
-    "openai": "^6.45.0"
+    "openai": "^6.49.0"
   }
 }

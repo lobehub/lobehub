@@ -20,7 +20,7 @@
   },
   "main": "./src/index.ts",
   "dependencies": {
-    "@icons-pack/react-simple-icons": "^13.13.0",
+    "@icons-pack/react-simple-icons": "^13.15.1",
     "@lobechat/builtin-tool-acceptance-evidence": "workspace:*",
     "@lobechat/builtin-tool-activator": "workspace:*",
     "@lobechat/builtin-tool-agent-builder": "workspace:*",
@@ -55,14 +55,14 @@
     "@lobechat/builtin-tool-web-browsing": "workspace:*",
     "@lobechat/builtin-tool-web-onboarding": "workspace:*",
     "@lobechat/const": "workspace:*",
-    "@lobehub/icons": "^5.11.0"
+    "@lobehub/icons": "^5.16.0"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*",
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
   },
   "peerDependencies": {
-    "@lobehub/ui": "^5",
+    "@lobehub/ui": "^5.37.0",
     "antd-style": "*",
     "lucide-react": "*",
     "react": "*",

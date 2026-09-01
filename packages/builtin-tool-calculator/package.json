@@ -12,15 +12,15 @@
   "main": "./src/index.ts",
   "dependencies": {
     "@lobechat/prompts": "workspace:*",
-    "@thi.ng/base-n": "^2.7.71",
+    "@thi.ng/base-n": "^2.7.73",
     "mathjs": "^15.2.0",
-    "nerdamer-prime": "^1.4.0"
+    "nerdamer-prime": "^1.5.0"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"
   },
   "peerDependencies": {
-    "@lobehub/ui": "^5",
+    "@lobehub/ui": "^5.37.0",
     "antd-style": "*",
     "lucide-react": "*",
     "react": "*",

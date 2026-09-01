@@ -23,6 +23,6 @@
     "model-bank": "workspace:*"
   },
   "devDependencies": {
-    "vitest": "^3.2.6"
+    "vitest": "^3.2.7"
   }
 }

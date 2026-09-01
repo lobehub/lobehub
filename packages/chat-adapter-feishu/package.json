@@ -19,7 +19,7 @@
     "chat": "^4.39.0"
   },
   "devDependencies": {
-    "@types/node": "^24.13.2",
+    "@types/node": "^24.13.3",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3"
   }

@@ -12,8 +12,8 @@
     "@lobechat/napi-loader": "workspace:*"
   },
   "devDependencies": {
-    "node-addon-api": "^8.5.0",
-    "node-gyp": "^11.4.2"
+    "node-addon-api": "^8.9.2",
+    "node-gyp": "^11.5.0"
   },
   "lobechat": {
     "nativeAddonPlatforms": [
