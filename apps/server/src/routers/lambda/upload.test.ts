@@ -69,4 +69,21 @@ describe('uploadRouter', () => {
     expect(mockCreatePreSignedUrl).toHaveBeenCalledWith('files/ok.bin');
     expect(mockCreateMultipartUpload).toHaveBeenCalledWith('files/ok-large.bin', undefined);
   });
+
+  it('keeps upload size optional for released clients', async () => {
+    await expect(
+      caller.createS3PreSignedUrl({
+        pathname: 'files/legacy.bin',
+      }),
+    ).resolves.toBe('https://example.com/upload');
+
+    await expect(
+      caller.createS3MultipartUpload({
+        pathname: 'files/legacy-large.bin',
+      }),
+    ).resolves.toEqual({ uploadId: 'upload-id' });
+
+    expect(mockCreatePreSignedUrl).toHaveBeenCalledWith('files/legacy.bin');
+    expect(mockCreateMultipartUpload).toHaveBeenCalledWith('files/legacy-large.bin', undefined);
+  });
 });

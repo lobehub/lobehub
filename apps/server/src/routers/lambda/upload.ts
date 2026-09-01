@@ -19,7 +19,8 @@ const uploadSizeSchema = z
   .number()
   .int()
   .min(0)
-  .max(MAX_UPLOAD_FILE_SIZE, UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE);
+  .max(MAX_UPLOAD_FILE_SIZE, UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE)
+  .optional();
 
 export const uploadRouter = router({
   abortS3MultipartUpload: authedProcedure
