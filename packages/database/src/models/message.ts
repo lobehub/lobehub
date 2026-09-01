@@ -2476,6 +2476,13 @@ export class MessageModel {
     return result[0];
   };
 
+  /**
+   * Full creator-facing message dump (`getAllMessages` / CLI export), so
+   * agent-share visitor messages must be excluded like every other
+   * creator-facing listing. The exclusion rides on
+   * {@link MessageModel.analyticsConditions}, which already ANDs
+   * `notShareVisitorMessage()` — see `../utils/shareVisitor`.
+   */
   queryAll = async (params?: MessageAnalyticsFilters & { current?: number; pageSize?: number }) => {
     const { current = 0, pageSize = 100, ...filters } = params ?? {};
     const offset = current * pageSize;
@@ -2499,11 +2506,17 @@ export class MessageModel {
     })[];
   };
 
+  // Plain select builder instead of `db.query...findMany`: the relational
+  // query API re-qualifies raw SQL fragments to the outer table alias, which
+  // breaks the `topics`-referencing NOT EXISTS inside `notShareVisitorMessage`.
   queryBySessionId = async (sessionId?: string | null) => {
-    const result = await this.db.query.messages.findMany({
-      orderBy: [asc(messages.createdAt)],
-      where: and(this.ownership(), this.matchSession(sessionId)),
-    });
+    const result = await this.db
+      .select()
+      .from(messages)
+      // Visitor messages have no sessionId, so the null-session (inbox) branch
+      // would otherwise sweep them in.
+      .where(and(this.ownership(), this.matchSession(sessionId), notShareVisitorMessage()))
+      .orderBy(asc(messages.createdAt));
 
     return result as DBMessageItem[];
   };

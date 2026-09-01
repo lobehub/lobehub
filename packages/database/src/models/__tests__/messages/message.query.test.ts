@@ -1603,6 +1603,32 @@ describe('MessageModel Query Tests', () => {
       expect(withoutAgent?.agentName).toBeNull();
       expect(withoutAgent?.agentTitle).toBeNull();
     });
+
+    it('excludes messages inside an agent-share visitor topic', async () => {
+      // Visitor topics keep the creator's userId, so a bare ownership filter
+      // would dump visitor conversations into the creator's full export.
+      await serverDB.insert(topics).values({
+        id: 'topic-visitor-query-all',
+        userId,
+        senderId: 'visitor-user-x',
+        title: 'visitor topic',
+      });
+      await serverDB.insert(messages).values([
+        {
+          id: 'visitor-msg',
+          userId,
+          role: 'user',
+          content: 'visitor message',
+          topicId: 'topic-visitor-query-all',
+        },
+        { id: 'creator-msg', userId, role: 'user', content: 'creator message' },
+      ]);
+
+      const result = await messageModel.queryAll();
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('creator-msg');
+    });
   });
 
   describe('findById', () => {
@@ -1708,6 +1734,32 @@ describe('MessageModel Query Tests', () => {
       expect(result).toHaveLength(2);
       expect(result[0].id).toBe('inbox-msg-1');
       expect(result[1].id).toBe('inbox-msg-2');
+    });
+
+    it('excludes agent-share visitor messages from the null-session branch', async () => {
+      // Visitor messages carry no sessionId, so without the visitor predicate
+      // the inbox (null-session) branch would sweep them in.
+      await serverDB.insert(topics).values({
+        id: 'topic-visitor-session',
+        userId,
+        senderId: 'visitor-user-x',
+        title: 'visitor topic',
+      });
+      await serverDB.insert(messages).values([
+        {
+          id: 'visitor-inbox-msg',
+          userId,
+          role: 'user',
+          content: 'visitor message',
+          topicId: 'topic-visitor-session',
+        },
+        { id: 'creator-inbox-msg', userId, role: 'user', content: 'creator message' },
+      ]);
+
+      const result = await messageModel.queryBySessionId(null);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('creator-inbox-msg');
     });
 
     it('should query inbox messages when sessionId is undefined', async () => {
