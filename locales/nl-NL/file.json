@@ -52,6 +52,8 @@
   "library.backToResources": "Terug naar bronnen",
   "library.hierarchy.empty.desc": "Voeg bestanden toe of maak een map aan om te beginnen",
   "library.hierarchy.empty.title": "Hier is nog niets",
+  "library.hierarchy.search.noResults": "Geen overeenkomende bestanden of pagina's",
+  "library.hierarchy.search.placeholder": "Zoeken",
   "library.import.action": "Importeren naar werkruimte…",
   "library.import.failed": "Kan kennisbank niet importeren.",
   "library.import.success": "Kennisbank geïmporteerd naar {{name}}.",

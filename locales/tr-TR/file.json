@@ -52,6 +52,8 @@
   "library.backToResources": "Kaynaklara Geri Dön",
   "library.hierarchy.empty.desc": "Başlamak için dosya ekleyin veya bir klasör oluşturun",
   "library.hierarchy.empty.title": "Henüz burada bir şey yok",
+  "library.hierarchy.search.noResults": "Eşleşen dosya veya sayfa bulunamadı",
+  "library.hierarchy.search.placeholder": "Ara",
   "library.import.action": "Çalışma alanına aktar…",
   "library.import.failed": "Bilgi tabanı aktarılamadı.",
   "library.import.success": "Bilgi tabanı {{name}} çalışma alanına aktarıldı.",

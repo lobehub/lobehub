@@ -52,6 +52,8 @@
   "library.backToResources": "リソースに戻る",
   "library.hierarchy.empty.desc": "ファイルを追加するか、フォルダーを作成して始めましょう",
   "library.hierarchy.empty.title": "まだ何もありません",
+  "library.hierarchy.search.noResults": "一致するファイルやページが見つかりません",
+  "library.hierarchy.search.placeholder": "検索",
   "library.import.action": "ワークスペースにインポート…",
   "library.import.failed": "ナレッジベースのインポートに失敗しました。",
   "library.import.success": "ナレッジベースが{{name}}にインポートされました。",

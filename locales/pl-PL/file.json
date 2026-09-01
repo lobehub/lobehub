@@ -52,6 +52,8 @@
   "library.backToResources": "Powrót do zasobów",
   "library.hierarchy.empty.desc": "Dodaj pliki lub utwórz folder, aby rozpocząć",
   "library.hierarchy.empty.title": "Jeszcze nic tutaj nie ma",
+  "library.hierarchy.search.noResults": "Brak pasujących plików lub stron",
+  "library.hierarchy.search.placeholder": "Szukaj",
   "library.import.action": "Importuj do przestrzeni roboczej…",
   "library.import.failed": "Nie udało się zaimportować bazy wiedzy.",
   "library.import.success": "Baza wiedzy zaimportowana do {{name}}.",

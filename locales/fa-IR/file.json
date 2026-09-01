@@ -52,6 +52,8 @@
   "library.backToResources": "بازگشت به منابع",
   "library.hierarchy.empty.desc": "برای شروع فایل‌ها را اضافه کنید یا یک پوشه ایجاد کنید",
   "library.hierarchy.empty.title": "هنوز چیزی اینجا نیست",
+  "library.hierarchy.search.noResults": "هیچ فایل یا صفحه‌ای مطابق یافت نشد",
+  "library.hierarchy.search.placeholder": "جستجو",
   "library.import.action": "وارد کردن به فضای کاری...",
   "library.import.failed": "وارد کردن پایگاه دانش ناموفق بود.",
   "library.import.success": "پایگاه دانش به {{name}} وارد شد.",

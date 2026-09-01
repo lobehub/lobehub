@@ -52,6 +52,8 @@
   "library.backToResources": "Обратно към ресурсите",
   "library.hierarchy.empty.desc": "Добавете файлове или създайте папка, за да започнете",
   "library.hierarchy.empty.title": "Все още няма нищо тук",
+  "library.hierarchy.search.noResults": "Няма съвпадащи файлове или страници",
+  "library.hierarchy.search.placeholder": "Търсене",
   "library.import.action": "Импортиране в работно пространство…",
   "library.import.failed": "Неуспешно импортиране на база знания.",
   "library.import.success": "Базата знания е импортирана в {{name}}.",

@@ -52,6 +52,8 @@
   "library.backToResources": "العودة إلى الموارد",
   "library.hierarchy.empty.desc": "أضف ملفات أو أنشئ مجلدًا للبدء",
   "library.hierarchy.empty.title": "لا يوجد شيء هنا بعد",
+  "library.hierarchy.search.noResults": "لا توجد ملفات أو صفحات مطابقة",
+  "library.hierarchy.search.placeholder": "بحث",
   "library.import.action": "استيراد إلى مساحة العمل...",
   "library.import.failed": "فشل في استيراد قاعدة المعرفة.",
   "library.import.success": "تم استيراد قاعدة المعرفة إلى {{name}}.",

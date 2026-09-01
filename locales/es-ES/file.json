@@ -52,6 +52,8 @@
   "library.backToResources": "Volver a Recursos",
   "library.hierarchy.empty.desc": "Agrega archivos o crea una carpeta para comenzar",
   "library.hierarchy.empty.title": "Aún no hay nada aquí",
+  "library.hierarchy.search.noResults": "No hay archivos ni páginas coincidentes",
+  "library.hierarchy.search.placeholder": "Buscar",
   "library.import.action": "Importar al espacio de trabajo…",
   "library.import.failed": "Error al importar la base de conocimientos.",
   "library.import.success": "Base de conocimientos importada a {{name}}.",

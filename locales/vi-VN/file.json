@@ -52,6 +52,8 @@
   "library.backToResources": "Quay lại Tài nguyên",
   "library.hierarchy.empty.desc": "Thêm tệp hoặc tạo thư mục để bắt đầu",
   "library.hierarchy.empty.title": "Chưa có gì ở đây",
+  "library.hierarchy.search.noResults": "Không có tệp hoặc trang phù hợp",
+  "library.hierarchy.search.placeholder": "Tìm kiếm",
   "library.import.action": "Nhập vào không gian làm việc…",
   "library.import.failed": "Không thể nhập cơ sở tri thức.",
   "library.import.success": "Cơ sở tri thức đã được nhập vào {{name}}.",

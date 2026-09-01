@@ -52,6 +52,8 @@
   "library.backToResources": "返回資源",
   "library.hierarchy.empty.desc": "新增檔案或建立資料夾以開始使用",
   "library.hierarchy.empty.title": "這裡還沒有任何內容",
+  "library.hierarchy.search.noResults": "沒有符合的檔案或頁面",
+  "library.hierarchy.search.placeholder": "搜尋",
   "library.import.action": "匯入至工作區…",
   "library.import.failed": "匯入知識庫失敗。",
   "library.import.success": "知識庫已匯入至 {{name}}。",

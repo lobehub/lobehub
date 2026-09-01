@@ -52,6 +52,8 @@
   "library.backToResources": "Zurück zu Ressourcen",
   "library.hierarchy.empty.desc": "Fügen Sie Dateien hinzu oder erstellen Sie einen Ordner, um loszulegen",
   "library.hierarchy.empty.title": "Hier ist noch nichts",
+  "library.hierarchy.search.noResults": "Keine passenden Dateien oder Seiten gefunden",
+  "library.hierarchy.search.placeholder": "Suchen",
   "library.import.action": "In den Arbeitsbereich importieren…",
   "library.import.failed": "Import der Wissensdatenbank fehlgeschlagen.",
   "library.import.success": "Wissensdatenbank in {{name}} importiert.",
