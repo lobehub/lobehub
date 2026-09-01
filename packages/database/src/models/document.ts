@@ -5,6 +5,7 @@ import {
   DOCUMENT_FOLDER_TYPE,
   documentCommentMentions,
   documentComments,
+  documentLikes,
   documents,
   files,
   knowledgeBaseFiles,
@@ -489,12 +490,22 @@ export class DocumentModel {
                 .where(inArray(documentComments.documentId, ids)),
             ),
           );
+
+        await (trx as LobeChatDatabase)
+          .update(documentLikes)
+          .set({ workspaceId: targetWorkspaceId })
+          .where(inArray(documentLikes.documentId, ids));
       } else {
         // Comments are Workspace assets and cannot follow a document into personal scope.
         // Mention rows are removed by the comment FK cascade.
         await (trx as LobeChatDatabase)
           .delete(documentComments)
           .where(inArray(documentComments.documentId, ids));
+
+        // Likes are Workspace reactions too; a personal document has no like surface.
+        await (trx as LobeChatDatabase)
+          .delete(documentLikes)
+          .where(inArray(documentLikes.documentId, ids));
       }
 
       // Move files anchored to these documents; their visibility mirrors the

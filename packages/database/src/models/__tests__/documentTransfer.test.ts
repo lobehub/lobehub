@@ -7,6 +7,7 @@ import {
   DOCUMENT_FOLDER_TYPE,
   documentCommentMentions,
   documentComments,
+  documentLikes,
   documents,
   files,
   users,
@@ -217,6 +218,30 @@ describe('DocumentModel.transferTo', () => {
     const [file] = await serverDB.select().from(files).where(eq(files.id, 'file-x'));
     expect(file.workspaceId).toBe(wsId1);
     expect(file.userId).toBe(userId);
+  });
+
+  it('rehomes likes with a cross-workspace transfer and drops them on personal transfer', async () => {
+    const ws1 = new DocumentModel(serverDB, userId, wsId1);
+    const page = await createPage(ws1, 'Liked page', 'liked-page');
+    await serverDB.insert(documentLikes).values([
+      { documentId: page.id, userId, workspaceId: wsId1 },
+      { documentId: page.id, userId: otherUserId, workspaceId: wsId1 },
+    ]);
+
+    await ws1.transferTo(page.id, wsId2, userId);
+
+    const moved = await serverDB
+      .select({ userId: documentLikes.userId, workspaceId: documentLikes.workspaceId })
+      .from(documentLikes)
+      .where(eq(documentLikes.documentId, page.id));
+    expect(moved).toHaveLength(2);
+    for (const like of moved) expect(like.workspaceId).toBe(wsId2);
+
+    await new DocumentModel(serverDB, userId, wsId2).transferTo(page.id, null, userId);
+
+    expect(
+      await serverDB.select().from(documentLikes).where(eq(documentLikes.documentId, page.id)),
+    ).toHaveLength(0);
   });
 
   it('transfers from workspace back to personal', async () => {
