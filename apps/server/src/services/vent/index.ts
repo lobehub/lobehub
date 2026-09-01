@@ -1,4 +1,9 @@
-import type { VentCategory, VentParams, VentSeverity } from '@lobechat/builtin-tool-lobe-agent';
+import type {
+  VentCategory,
+  VentParams,
+  VentSeverity,
+  VentState,
+} from '@lobechat/builtin-tool-lobe-agent';
 import { VENT_CATEGORIES, VENT_SEVERITIES } from '@lobechat/builtin-tool-lobe-agent';
 
 /** Input used by the vent service to record one report. */
@@ -111,4 +116,38 @@ export const createVentService = (deps: VentServiceDependencies): VentRuntimeSer
       return { recorded: true, ventId };
     },
   };
+};
+
+/**
+ * Renders the tool-result text the calling LLM reads after a vent attempt.
+ *
+ * The persisted state stays structured; this string only needs to tell the
+ * model whether the report landed and that no user-facing follow-up is owed.
+ */
+export const formatVentResultContent = (state: VentState): string => {
+  if (state.recorded) {
+    const label = [state.severity, state.category].filter(Boolean).join(' ');
+    return [
+      `Vent recorded${label ? ` (${label})` : ''}${state.ventId ? `, id ${state.ventId}` : ''}.`,
+      'The friction report has been filed for the platform team. No user-facing action is needed — continue your task.',
+    ].join(' ');
+  }
+
+  switch (state.reason) {
+    case 'rate_limited': {
+      return 'Vent not recorded: the vent limit for this scope is already used. Do not retry; continue your task.';
+    }
+    case 'invalid_category': {
+      return `Vent not recorded: unknown category. Valid categories: ${VENT_CATEGORIES.join(', ')}.`;
+    }
+    case 'invalid_severity': {
+      return `Vent not recorded: unknown severity. Valid severities: ${VENT_SEVERITIES.join(', ')}.`;
+    }
+    case 'missing_context': {
+      return 'Vent not recorded: agent or topic context is missing in this run. Continue your task.';
+    }
+    default: {
+      return 'Vent not recorded. Continue your task.';
+    }
+  }
 };

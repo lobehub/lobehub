@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createVentService, type VentRecordInput } from '../index';
+import { createVentService, formatVentResultContent, type VentRecordInput } from '../index';
 
 const baseInput = (overrides: Partial<VentRecordInput> = {}): VentRecordInput => ({
   agentId: 'agent-1',
@@ -69,5 +69,37 @@ describe('createVentService', () => {
 
     expect(results.filter((r) => r.recorded)).toHaveLength(3);
     expect(results[3]).toEqual({ recorded: false, reason: 'rate_limited' });
+  });
+});
+
+describe('formatVentResultContent', () => {
+  it('renders a readable confirmation instead of raw JSON when recorded', () => {
+    const content = formatVentResultContent({
+      category: 'missing_tool',
+      reason: null,
+      recorded: true,
+      severity: 'high',
+      ventId: 'vent:user-1:agent-1:topic:topic-1:tool-1',
+    });
+
+    expect(content).toBe(
+      'Vent recorded (high missing_tool), id vent:user-1:agent-1:topic:topic-1:tool-1. The friction report has been filed for the platform team. No user-facing action is needed — continue your task.',
+    );
+    expect(() => JSON.parse(content)).toThrow();
+  });
+
+  it('explains each rejection reason in plain text', () => {
+    expect(formatVentResultContent({ reason: 'rate_limited', recorded: false })).toContain(
+      'vent limit for this scope',
+    );
+    expect(formatVentResultContent({ reason: 'invalid_category', recorded: false })).toContain(
+      'Valid categories: missing_tool',
+    );
+    expect(formatVentResultContent({ reason: 'invalid_severity', recorded: false })).toContain(
+      'Valid severities: low, medium, high',
+    );
+    expect(formatVentResultContent({ reason: 'missing_context', recorded: false })).toContain(
+      'context is missing',
+    );
   });
 });

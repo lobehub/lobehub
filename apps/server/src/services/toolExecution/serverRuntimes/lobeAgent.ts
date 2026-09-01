@@ -31,7 +31,7 @@ import { MessageModel } from '@/database/models/message';
 import { toolsEnv } from '@/envs/tools';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { FileService } from '@/server/services/file';
-import { createVentService } from '@/server/services/vent';
+import { createVentService, formatVentResultContent } from '@/server/services/vent';
 
 import type { ToolExecutionContext } from '../types';
 import { normalizeMultimodalImageItems } from './lobeAgentImage';
@@ -272,7 +272,7 @@ class LobeAgentExecutionRuntime {
   ): Promise<BuiltinServerRuntimeOutput> => {
     if (!this.agentId || !this.userId || !this.topicId) {
       const state: VentState = { recorded: false, reason: 'missing_context' };
-      return { content: JSON.stringify(state), state, success: false };
+      return { content: formatVentResultContent(state), state, success: false };
     }
 
     try {
@@ -293,7 +293,7 @@ class LobeAgentExecutionRuntime {
         ventId: result.ventId ?? null,
       };
 
-      return { content: JSON.stringify(state), state, success: true };
+      return { content: formatVentResultContent(state), state, success: true };
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Unknown vent error';
       const state: VentState = {
