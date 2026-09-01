@@ -243,8 +243,9 @@ const useStateChip = (data: GraphNodeData): StateChip | null => {
 const RunningClock = memo<{ startedAt?: Date }>(({ startedAt }) => {
   const elapsed = useElapsed(startedAt);
   if (!elapsed) return null;
-  // Sits right behind the state chip in the status row — no auto margin.
-  return <span style={{ fontSize: 11 }}>{elapsed}</span>;
+  // Sits right behind the state chip in the status row — no auto margin. The
+  // clock is ambient context, so it reads in a light tint, not body color.
+  return <span style={{ color: cssVar.colorTextTertiary, fontSize: 11 }}>{elapsed}</span>;
 });
 
 RunningClock.displayName = 'GoalGraphRunningClock';
@@ -298,6 +299,15 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
                 <span className={styles.human}>@</span>
               </Tooltip>
             )}
+            {/* Top-right corner: this Work carries its own verifier. Icon only —
+                the word added nothing the hover hint doesn't say better. */}
+            {isTask && node.taskId && (
+              <Tooltip title={t('goalProcess.node.verifierTooltip')}>
+                <span style={{ display: 'inline-flex', marginInlineStart: 'auto' }}>
+                  <Icon color={cssVar.colorTextTertiary} icon={ShieldCheck} size={13} />
+                </span>
+              </Tooltip>
+            )}
           </div>
         )}
         <div className={styles.head}>
@@ -311,16 +321,6 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
         </div>
         {isTask && (
           <div className={styles.metrics}>
-            {/* "Not dispatched" moved to the status row with every other
-                state; an unassigned task simply has no verifier metric yet. */}
-            {node.taskId && (
-              <Tooltip title={t('goalProcess.node.verifierTooltip')}>
-                <span className={styles.metric}>
-                  <Icon icon={ShieldCheck} size={13} />
-                  {t('goalProcess.node.verifier')}
-                </span>
-              </Tooltip>
-            )}
             <Tooltip title={t('goalProcess.node.attemptsTooltip', { count: attempts })}>
               <span className={styles.metric}>
                 <Icon icon={Repeat2} size={13} />

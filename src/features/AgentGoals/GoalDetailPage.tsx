@@ -8,7 +8,6 @@ import { useTranslation } from 'react-i18next';
 
 import NotFound from '@/components/404';
 import AsyncError from '@/components/AsyncError';
-import CollapsibleContent from '@/components/CollapsibleContent';
 import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
@@ -24,6 +23,7 @@ import { goalSelectors, useGoalStore } from '@/store/goal';
 
 import GoalDetailActions from './GoalDetailActions';
 import { formatSpan, goalStatusKey } from './goalPresentation';
+import GoalRequirement from './GoalRequirement';
 import GoalStatusGlyph from './GoalStatusGlyph';
 import ProcessControl from './ProcessControl';
 
@@ -233,18 +233,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                 />
               </Flexbox>
               {goal.requirement && (
-                <Flexbox gap={4} paddingBlock={'8px 0'}>
-                  <Text fontSize={12} type={'secondary'} weight={500}>
-                    {t('goalProcess.requirement')}
-                  </Text>
-                  {/* Generated acceptance criteria run long — clamp like the task
-                      instruction does, with the shared show-more affordance. */}
-                  <CollapsibleContent maxHeight={160}>
-                    <Text fontSize={14} style={{ lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>
-                      {goal.requirement}
-                    </Text>
-                  </CollapsibleContent>
-                </Flexbox>
+                <GoalRequirement goalId={goal.id} requirement={goal.requirement} />
               )}
             </Flexbox>
 

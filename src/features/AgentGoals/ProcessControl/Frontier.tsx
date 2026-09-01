@@ -10,6 +10,7 @@ import { Fragment, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
+import { openAddGoalTaskModal } from '@/features/AgentGoals/AddTaskModal';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
 import { useActivityTime } from '@/hooks/useActivityTime';
 
@@ -102,7 +103,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 export interface FrontierActions {
-  addTask: (title: string) => Promise<void>;
+  addTask: (title: string, description?: string) => Promise<void>;
   decide: (decisionId: string, optionId: string, resolution?: string) => void;
 }
 
@@ -392,64 +393,22 @@ const FrontierRow = memo<{
 
 FrontierRow.displayName = 'GoalFrontierRow';
 
-const AddTaskRow = memo<{ onAdd: (title: string) => Promise<void> }>(({ onAdd }) => {
+/** Opening a modal keeps the frontier header quiet — the brief gets a real form. */
+const AddTaskButton = memo<{ onAdd: FrontierActions['addTask'] }>(({ onAdd }) => {
   const { t } = useTranslation('chat');
-  const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  const submit = async () => {
-    if (!title.trim() || busy) return;
-    setBusy(true);
-    try {
-      await onAdd(title.trim());
-      setTitle('');
-      setOpen(false);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  if (!open)
-    return (
-      <Button
-        icon={<Icon icon={Plus} />}
-        size={'small'}
-        type={'text'}
-        onClick={() => setOpen(true)}
-      >
-        {t('goalProcess.frontier.add')}
-      </Button>
-    );
-
   return (
-    <Flexbox horizontal align={'center'} gap={8}>
-      <TextArea
-        autoFocus
-        autoSize={{ maxRows: 2, minRows: 1 }}
-        placeholder={t('goalProcess.frontier.add')}
-        style={{ width: 260 }}
-        value={title}
-        onChange={(event) => setTitle(event.target.value)}
-        onPressEnter={(event) => {
-          event.preventDefault();
-          void submit();
-        }}
-      />
-      <Button
-        disabled={!title.trim()}
-        loading={busy}
-        size={'small'}
-        type={'primary'}
-        onClick={submit}
-      >
-        {t('goalProcess.frontier.add')}
-      </Button>
-    </Flexbox>
+    <Button
+      icon={<Icon icon={Plus} />}
+      size={'small'}
+      type={'text'}
+      onClick={() => openAddGoalTaskModal({ onAdd })}
+    >
+      {t('goalProcess.frontier.add')}
+    </Button>
   );
 });
 
-AddTaskRow.displayName = 'GoalAddTaskRow';
+AddTaskButton.displayName = 'GoalAddTaskButton';
 
 const Frontier = memo<FrontierProps>(({ actions, canEdit, graph, onSelect, planning }) => {
   const { t } = useTranslation('chat');
@@ -476,7 +435,7 @@ const Frontier = memo<FrontierProps>(({ actions, canEdit, graph, onSelect, plann
             </Text>
           )}
         </Flexbox>
-        {canEdit && <AddTaskRow onAdd={actions.addTask} />}
+        {canEdit && <AddTaskButton onAdd={actions.addTask} />}
       </Flexbox>
 
       <div className={styles.list}>

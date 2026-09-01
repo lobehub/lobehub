@@ -1826,6 +1826,12 @@ export default {
     'Every task is either waiting on a dependency or already finished.',
   'goalProcess.frontier.achievedTitle': 'Nothing left to advance — this goal is achieved',
   'goalProcess.frontier.achievedDescription': 'The findings are in the map below.',
+  'goalProcess.addTask.titleLabel': 'Task title',
+  'goalProcess.addTask.titlePlaceholder': 'What should this task deliver?',
+  'goalProcess.addTask.descriptionLabel': 'Instruction (optional)',
+  'goalProcess.addTask.descriptionPlaceholder':
+    'Deliverable, constraints, and how the result will be judged',
+  'goalProcess.requirementPlaceholder': 'Describe what counts as done…',
   'goalProcess.planning.title': 'Planning the exploration',
   'goalProcess.planning.description':
     'The coordinator is breaking the goal into executable tasks — they will appear here shortly.',
@@ -1928,7 +1934,6 @@ export default {
   'goalProcess.node.decidedByYou': 'You decided',
   'goalProcess.node.decidedByAgent': 'Agent decided',
   'goalProcess.node.attemptsTooltip': '{{count}} attempts so far',
-  'goalProcess.node.verifier': 'verifier',
   'goalProcess.node.verifierTooltip':
     'This task has its own acceptance contract — a verifier judges the delivery.',
   'goalProcess.node.artifactsTooltip':

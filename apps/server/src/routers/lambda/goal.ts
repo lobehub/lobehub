@@ -305,4 +305,14 @@ export const goalRouter = router({
       mapGoalError(error, 'tick');
     }
   }),
+
+  updateRequirement: goalWriteProcedure
+    .input(idInput.extend({ requirement: z.string().min(1) }))
+    .mutation(async ({ ctx, input: { id, requirement } }) => {
+      try {
+        return { data: await ctx.goalService.updateRequirement(id, requirement), success: true };
+      } catch (error) {
+        mapGoalError(error, 'updateRequirement');
+      }
+    }),
 });

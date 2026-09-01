@@ -354,12 +354,15 @@ const Canvas = memo<GraphProps & { className: string; interactive: boolean; view
           nodesConnectable={false}
           nodesDraggable={false}
           panOnDrag={interactive}
-          panOnScroll={false}
+          // Fullscreen reads like Figma on a trackpad: two-finger scroll pans
+          // and pinch (ctrl+wheel) zooms. Wheel-to-zoom is off — on a mouse,
+          // zooming stays on pinch/double-click and the +/- controls.
+          panOnScroll={interactive}
           preventScrolling={interactive}
           proOptions={{ hideAttribution: true }}
           zoomOnDoubleClick={interactive}
           zoomOnPinch={interactive}
-          zoomOnScroll={interactive}
+          zoomOnScroll={false}
           onNodeClick={(_, node) => {
             if (node.type !== 'goalGhost') onSelect(node.id);
           }}

@@ -184,6 +184,17 @@ describe('GoalService', () => {
     expect(raised?.status).not.toBe('paused');
   });
 
+  it('edits the standing requirement in place', async () => {
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ requirement: '初版验收', title: 'Editable', work: ['A'] });
+
+    const updated = await service.updateRequirement(graph.goal.id, '改过的验收标准');
+
+    expect(updated.requirement).toBe('改过的验收标准');
+    expect((await service.graph(graph.goal.id)).goal.requirement).toBe('改过的验收标准');
+    await expect(service.updateRequirement('goal_missing', 'x')).rejects.toThrow();
+  });
+
   it('leaves a deliberately paused goal paused when its budget changes', async () => {
     // Nothing distinguishes a user pause from a budget pause on the row, so the
     // reopen is limited to goals whose budget was actually binding.

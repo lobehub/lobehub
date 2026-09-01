@@ -324,6 +324,17 @@ export class GoalService {
     };
   };
 
+  /**
+   * Edit the goal's standing acceptance requirement in place. The next
+   * coordinator move and every later dispatched Work read the updated text;
+   * already-running Work keeps the contract it was dispatched with.
+   */
+  updateRequirement = async (goalId: string, requirement: string) => {
+    const goal = await this.goalModel.update(goalId, { requirement });
+    if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    return goal;
+  };
+
   setBudget = async (
     goalId: string,
     budget: {
