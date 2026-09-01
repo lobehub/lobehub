@@ -1,3 +1,4 @@
+import { invalidateLoginShellPathCache } from '@lobechat/heterogeneous-agents/resolveCliCommand';
 import { exec, execFile, type ExecFileOptions, spawn } from 'node:child_process';
 import { createWriteStream } from 'node:fs';
 import { chmod, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
@@ -314,6 +315,12 @@ export class BinaryManager {
    * @param force Force detection, bypass cache
    */
   async detectAll(force = false): Promise<Map<string, BinaryStatus>> {
+    // A forced sweep is the Rescan button: the user just installed something,
+    // so the login-shell PATH cached for this process may predate the edit.
+    // Dropped once here rather than per binary, so one sweep pays for one
+    // shell probe instead of one per spec.
+    if (force) invalidateLoginShellPathCache();
+
     const results = new Map<string, BinaryStatus>();
 
     await Promise.all(
@@ -335,6 +342,8 @@ export class BinaryManager {
     category: BinaryCategory,
     force = false,
   ): Promise<Map<string, BinaryStatus>> {
+    if (force) invalidateLoginShellPathCache();
+
     const names = this.categoryMap.get(category);
     if (!names) {
       return new Map();

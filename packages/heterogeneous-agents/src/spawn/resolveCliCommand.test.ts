@@ -1339,3 +1339,99 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
     expect(path.sep).toBeTruthy();
   });
 });
+
+describe('login-shell PATH probe', () => {
+  beforeEach(() => {
+    execFileMock.mockReset();
+    execMock.mockReset();
+    rejectUnqueuedExecFile();
+    vi.mocked(os.platform).mockReturnValue('darwin');
+    process.env.SHELL = '/bin/zsh';
+  });
+
+  /** `which` misses, then the login shell answers. */
+  const queueMissThenShell = (shellPath: string) => {
+    callExecFileError(new Error('command not found'));
+    callExecFile(shellPath);
+  };
+
+  it('resolves the login-shell PATH once and reuses it for later probes', async () => {
+    // It used to be discarded the moment it settled, so every spawn re-paid a
+    // second-long subprocess on the critical path.
+    const module = await importModule();
+    module.invalidateLoginShellPathCache();
+
+    queueMissThenShell('/opt/tools/bin:/usr/bin');
+    callExecFileError(new Error('still not found'));
+    await module.detectHeterogeneousCliCommand('kimi-code', 'kimi');
+
+    const shellCallsAfterFirst = execFileMock.mock.calls.filter(
+      ([file, args]) => file === '/bin/zsh' && Array.isArray(args) && args[0] === '-ilc',
+    ).length;
+    expect(shellCallsAfterFirst).toBe(1);
+
+    execFileMock.mockReset();
+    rejectUnqueuedExecFile();
+    callExecFileError(new Error('command not found'));
+    callExecFileError(new Error('still not found'));
+    await module.detectHeterogeneousCliCommand('kimi-code', 'kimi');
+
+    expect(
+      execFileMock.mock.calls.filter(
+        ([file, args]) => file === '/bin/zsh' && Array.isArray(args) && args[0] === '-ilc',
+      ),
+    ).toHaveLength(0);
+  });
+
+  it('re-reads the PATH after an explicit invalidation', async () => {
+    // Rescan has to see a PATH an installer edited while the app was running.
+    const module = await importModule();
+    module.invalidateLoginShellPathCache();
+
+    queueMissThenShell('/opt/tools/bin:/usr/bin');
+    callExecFileError(new Error('still not found'));
+    await module.detectHeterogeneousCliCommand('kimi-code', 'kimi');
+
+    module.invalidateLoginShellPathCache();
+    execFileMock.mockReset();
+    rejectUnqueuedExecFile();
+    queueMissThenShell('/opt/tools/bin:/new/place:/usr/bin');
+    callExecFileError(new Error('still not found'));
+    await module.detectHeterogeneousCliCommand('kimi-code', 'kimi');
+
+    expect(
+      execFileMock.mock.calls.filter(
+        ([file, args]) => file === '/bin/zsh' && Array.isArray(args) && args[0] === '-ilc',
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('reports a timed-out probe as its own failure, not as a missing CLI', async () => {
+    // The bug this replaces: a busy machine blew the probe's budget and the
+    // user was told to install a CLI that was present and had just run.
+    const module = await importModule();
+    module.invalidateLoginShellPathCache();
+
+    callExecFileError(new Error('command not found'));
+    const timedOut = Object.assign(new Error('spawn timed out'), { killed: true });
+    callExecFileError(timedOut);
+
+    const status = await module.detectHeterogeneousCliCommand('kimi-code', 'kimi');
+
+    expect(status.available).toBe(false);
+    expect(module.isLoginShellTimeoutStatus(status)).toBe(true);
+  });
+
+  it('still reads as a plain miss when the shell simply has nothing', async () => {
+    const module = await importModule();
+    module.invalidateLoginShellPathCache();
+
+    callExecFileError(new Error('command not found'));
+    callExecFileError(new Error('shell exploded'));
+
+    const status = await module.detectHeterogeneousCliCommand('kimi-code', 'kimi');
+
+    expect(status.available).toBe(false);
+    expect(module.isLoginShellTimeoutStatus(status)).toBe(false);
+  });
+});
