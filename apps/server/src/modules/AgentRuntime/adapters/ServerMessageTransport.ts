@@ -117,6 +117,12 @@ export class ServerMessageTransport implements MessageTransport {
     options?: QueryMessagesOptions,
   ): Promise<UIChatMessage[]> {
     const messages = await this.messageModel.query(params, {
+      // Executors only ever read the operation's own, already-authorized topic.
+      // An agent-share visitor run executes under the CREATOR's identity, so
+      // without this opt-in `query()`'s creator-facing agent-share exclusion
+      // would blank the visitor's conversation mid-run (see `tool.ts`, which
+      // re-reads `state.messages` from the DB after every tool call).
+      allowShareVisitor: true,
       postProcessUrl: options?.resolveAssetUrls ? this.options.postProcessUrl : undefined,
     });
 

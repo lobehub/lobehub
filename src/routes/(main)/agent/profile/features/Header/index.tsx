@@ -250,7 +250,7 @@ const Header = memo(() => {
     [],
   );
 
-  const shareSupported = useAgentShareSupported(activeAgentId);
+  const { supported: shareSupported } = useAgentShareSupported(activeAgentId);
   const canShareAgent = shareSupported && canConfigure;
 
   // Share settings are a sibling tab of the profile group, not a popup — the

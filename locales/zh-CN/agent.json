@@ -306,6 +306,7 @@
   "share.settings.link.disableConfirmOk": "关闭分享",
   "share.settings.link.disableConfirmTitle": "要关闭分享吗？",
   "share.settings.link.offHint": "分享已关闭。开启后会生成一条可以分发的链接；再次关闭只是暂停访问，重新开启时链接保持不变。",
+  "share.settings.link.publishDisabled": "分享功能暂未对你的账号开放。已经分享出去的链接仍然可以关闭。",
   "share.settings.link.slugError.invalid": "只能使用小写字母、数字和连字符，且不能以连字符开头或结尾。",
   "share.settings.link.slugError.reserved": "这是保留词，请换一个。",
   "share.settings.link.slugError.taken": "这个自定义链接已被占用。",

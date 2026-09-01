@@ -131,6 +131,41 @@ describe('TopicModel', () => {
       const found = await topicModel.findById('topic-foreign');
       expect(found).toBeUndefined();
     });
+
+    it('still returns an agent-share visitor topic (the share runtime needs it)', async () => {
+      await serverDB.insert(topics).values({
+        id: 'topic-visitor-find',
+        senderId: 'visitor-user-x',
+        title: 'visitor topic',
+        userId,
+      });
+
+      const found = await topicModel.findById('topic-visitor-find');
+      expect(found?.id).toBe('topic-visitor-find');
+    });
+  });
+
+  describe('findOwnTopicById', () => {
+    it('returns the creator’s own topic', async () => {
+      const topic = await topicModel.create({ title: 'own' });
+
+      const found = await topicModel.findOwnTopicById(topic.id);
+      expect(found?.id).toBe(topic.id);
+    });
+
+    it('excludes an agent-share visitor topic', async () => {
+      // Visitor topics carry the creator's userId, so ownership alone would let
+      // the creator read a visitor conversation from a raw topic id.
+      await serverDB.insert(topics).values({
+        id: 'topic-visitor-find-own',
+        senderId: 'visitor-user-x',
+        title: 'visitor topic',
+        userId,
+      });
+
+      const found = await topicModel.findOwnTopicById('topic-visitor-find-own');
+      expect(found).toBeUndefined();
+    });
   });
 
   describe('query', () => {

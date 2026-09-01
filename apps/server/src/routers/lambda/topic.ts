@@ -174,7 +174,10 @@ const assertCanManageTopicShare = async (
 ) => {
   if (!ctx.workspaceId) return;
 
-  const topic = await ctx.topicModel.findById(topicId);
+  // `findOwnTopicById`: an agent-share visitor topic is stored under the
+  // creator's userId, and publishing a public link for one would expose the
+  // visitor's conversation. It is never a shareable topic — fail closed.
+  const topic = await ctx.topicModel.findOwnTopicById(topicId);
   if (!topic) {
     throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic not found' });
   }
@@ -239,7 +242,7 @@ export const topicRouter = router({
   getTopicDetail: topicProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ input, ctx }) => {
-      const topic = await ctx.topicModel.findById(input.id);
+      const topic = await ctx.topicModel.findOwnTopicById(input.id);
       if (!topic) return null;
       return topic;
     }),
@@ -254,7 +257,7 @@ export const topicRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const topic = await ctx.topicModel.findById(input.topicId);
+      const topic = await ctx.topicModel.findOwnTopicById(input.topicId);
 
       if (!topic) {
         throw new TRPCError({
@@ -279,7 +282,7 @@ export const topicRouter = router({
   getTopicContext: topicProcedure
     .input(z.object({ topicId: z.string() }))
     .query(async ({ input, ctx }) => {
-      const topic = await ctx.topicModel.findById(input.topicId);
+      const topic = await ctx.topicModel.findOwnTopicById(input.topicId);
 
       if (!topic) {
         return { content: `Topic not found: ${input.topicId}`, success: false };

@@ -15,6 +15,7 @@ import type {
 } from '../schemas/agentOperations';
 import { agentOperations } from '../schemas/agentOperations';
 import type { LobeChatDatabase } from '../type';
+import { notShareVisitorTopicRef } from '../utils/shareVisitor';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
 /**
@@ -419,6 +420,11 @@ export class AgentOperationModel {
    * topic id (what a user actually has on hand) into the operation ids their
    * traces are keyed by. `traceS3Key` rides along so callers can tell "no
    * snapshot was recorded" apart from "snapshot exists but the fetch failed".
+   *
+   * Creator-facing only (the trace panel). Agent-share visitor runs execute
+   * under the CREATOR's identity, so their operation rows pass `ownership()`;
+   * without the visitor guard a creator could read a visitor conversation's
+   * full trajectory snapshot from a raw topic id.
    */
   async listByTopic(topicId: string, limit = 20) {
     return this.db
@@ -438,7 +444,13 @@ export class AgentOperationModel {
         trigger: agentOperations.trigger,
       })
       .from(agentOperations)
-      .where(and(eq(agentOperations.topicId, topicId), this.ownership()))
+      .where(
+        and(
+          eq(agentOperations.topicId, topicId),
+          this.ownership(),
+          notShareVisitorTopicRef(agentOperations.topicId),
+        ),
+      )
       .orderBy(sql`${agentOperations.createdAt} desc`)
       .limit(limit);
   }

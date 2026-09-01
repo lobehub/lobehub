@@ -570,7 +570,23 @@ describe('AgentOperationModel', () => {
         { id: 'tpc-a', userId },
         { id: 'tpc-b', userId },
         { id: 'tpc-foreign', userId: otherUserId },
+        // Agent-share visitor topic: creator's userId + a visitor senderId.
+        { id: 'tpc-visitor', senderId: 'visitor-user-x', userId },
       ]);
+    });
+
+    it('excludes operations recorded inside an agent-share visitor topic', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+
+      // Visitor runs execute under the creator's identity, so their operation
+      // rows pass the ownership filter — the trace panel must still not expose
+      // a visitor conversation's trajectory.
+      await serverDB
+        .insert(agentOperations)
+        .values([{ id: 'op-visitor', status: 'done', topicId: 'tpc-visitor', userId }]);
+
+      const rows = await model.listByTopic('tpc-visitor');
+      expect(rows).toEqual([]);
     });
 
     it('returns the topic operations newest first, owner-scoped', async () => {

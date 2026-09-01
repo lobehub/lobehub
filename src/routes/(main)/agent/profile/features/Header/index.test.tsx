@@ -291,12 +291,14 @@ describe('Agent profile Header', () => {
       expect(screen.getByTestId('share-entry-icon')).toBeInTheDocument();
     });
 
-    it('hides the share entry when the account may not publish shares', () => {
+    // The flag only gates *publishing* — an owner rolled back out of the
+    // allowlist still needs the entry to reach (and revoke) a live share.
+    it('keeps the share entry when the account may not publish new shares', () => {
       mocks.serverConfigState.featureFlags.enableAgentShare = false;
 
       render(<Header />);
 
-      expect(screen.queryByTestId('share-entry-icon')).toBeNull();
+      expect(screen.getByTestId('share-entry-icon')).toBeInTheDocument();
     });
 
     it('keeps the share entry while the capability is still unresolved', () => {
@@ -305,6 +307,14 @@ describe('Agent profile Header', () => {
       render(<Header />);
 
       expect(screen.getByTestId('share-entry-icon')).toBeInTheDocument();
+    });
+
+    it('hides the share entry for a workspace agent', () => {
+      mocks.hasActiveWorkspace = true;
+
+      render(<Header />);
+
+      expect(screen.queryByTestId('share-entry-icon')).toBeNull();
     });
 
     // Share settings are a sibling tab of the profile group now, so the entry

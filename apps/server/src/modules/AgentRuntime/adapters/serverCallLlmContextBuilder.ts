@@ -154,7 +154,10 @@ export const buildServerCallLlmContext = async ({
             groupId: topic?.groupId ?? undefined,
             topicId,
           },
-          { postProcessUrl: buildPostProcessUrl(ctx) },
+          // `isTopicVisibleToRun` above already proved this referenced topic is
+          // the SAME visitor's own conversation with the SAME agent, so the
+          // creator-facing agent-share exclusion must not apply here.
+          { allowShareVisitor: true, postProcessUrl: buildPostProcessUrl(ctx) },
         );
       },
     );

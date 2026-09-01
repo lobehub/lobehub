@@ -419,6 +419,20 @@ export const messageRouter = router({
         throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Authentication required' });
       }
 
+      // Align with every other topic-scoped procedure in this router: a raw
+      // `topicId` from the client must still pass the conversation
+      // General-access guard before its messages are read.
+      if (queryParams.topicId) {
+        await assertCanUseTopicTargets(
+          guardCtx({
+            serverDB: ctx.serverDB,
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId,
+          }),
+          [queryParams.topicId],
+        );
+      }
+
       const wsId = ctx.workspaceId ?? undefined;
       const messageModel = new MessageModel(ctx.serverDB, ctx.userId, wsId);
       const fileService = new FileService(ctx.serverDB, ctx.userId, wsId);

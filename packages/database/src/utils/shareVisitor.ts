@@ -1,4 +1,4 @@
-import { isNull, sql } from 'drizzle-orm';
+import { type AnyColumn, isNull, sql } from 'drizzle-orm';
 
 import { messages, topics } from '../schemas';
 
@@ -19,5 +19,14 @@ export const notShareVisitorTopic = () => isNull(topics.senderId);
  * through the parent topic, so this correlates a NOT EXISTS against `topics`
  * to keep callers join-free. Messages without a topic are trivially kept.
  */
-export const notShareVisitorMessage = () =>
-  sql`NOT EXISTS (SELECT 1 FROM ${topics} WHERE ${topics.id} = ${messages.topicId} AND ${topics.senderId} IS NOT NULL)`;
+export const notShareVisitorMessage = () => notShareVisitorTopicRef(messages.topicId);
+
+/**
+ * Generic form of {@link notShareVisitorMessage} for any table that references
+ * a topic by id (messages, agent operations, …). Correlates a NOT EXISTS
+ * against `topics` so the caller needs no join; rows with a NULL topic
+ * reference are trivially kept.
+ */
+export function notShareVisitorTopicRef(topicIdColumn: AnyColumn) {
+  return sql`NOT EXISTS (SELECT 1 FROM ${topics} WHERE ${topics.id} = ${topicIdColumn} AND ${topics.senderId} IS NOT NULL)`;
+}

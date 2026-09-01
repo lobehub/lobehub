@@ -1508,6 +1508,90 @@ describe('MessageModel Query Tests', () => {
     });
   });
 
+  describe('agent-share visitor isolation', () => {
+    const visitorUserId = 'message-query-visitor';
+    const visitorTopicId = 'topic-visitor-direct-read';
+
+    beforeEach(async () => {
+      // A visitor topic is stored under the CREATOR's userId; only `senderId`
+      // marks it as belonging to a share visitor.
+      await serverDB.insert(topics).values([
+        { id: visitorTopicId, senderId: visitorUserId, title: 'visitor topic', userId },
+        { id: 'topic-creator-own', title: 'creator topic', userId },
+      ]);
+      await serverDB.insert(messages).values([
+        {
+          content: 'visitor secret',
+          id: 'visitor-direct-msg',
+          role: 'user',
+          topicId: visitorTopicId,
+          userId,
+        },
+        {
+          content: 'creator message',
+          id: 'creator-direct-msg',
+          role: 'user',
+          topicId: 'topic-creator-own',
+          userId,
+        },
+      ]);
+    });
+
+    it('hides visitor messages when the creator reads the visitor topic by id', async () => {
+      const result = await messageModel.query({ topicId: visitorTopicId });
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('still returns the creator’s own topic messages', async () => {
+      const result = await messageModel.query({ topicId: 'topic-creator-own' });
+
+      expect(result.map((item) => item.id)).toEqual(['creator-direct-msg']);
+    });
+
+    it('keeps serving the visitor through queryForVisitor', async () => {
+      const result = await messageModel.queryForVisitor({ topicId: visitorTopicId });
+
+      expect(result.map((item) => item.id)).toEqual(['visitor-direct-msg']);
+    });
+
+    it('honours an explicit allowShareVisitor opt-in (agent runtime path)', async () => {
+      const result = await messageModel.query(
+        { topicId: visitorTopicId },
+        { allowShareVisitor: true },
+      );
+
+      expect(result.map((item) => item.id)).toEqual(['visitor-direct-msg']);
+    });
+
+    it('excludes visitor messages from queryTopicTranscript', async () => {
+      const visitorTranscript = await messageModel.queryTopicTranscript({
+        limit: 50,
+        offset: 0,
+        topicId: visitorTopicId,
+      });
+
+      expect(visitorTranscript.items).toHaveLength(0);
+      expect(visitorTranscript.total).toBe(0);
+
+      const ownTranscript = await messageModel.queryTopicTranscript({
+        limit: 50,
+        offset: 0,
+        topicId: 'topic-creator-own',
+      });
+
+      expect(ownTranscript.items.map((item) => item.id)).toEqual(['creator-direct-msg']);
+    });
+
+    it('keeps countByTopic working for the visitor turn cap', async () => {
+      // The per-topic turn cap depends on counting visitor messages — it must
+      // NOT inherit the creator-facing exclusion.
+      const count = await messageModel.countByTopic({ role: 'user', topicId: visitorTopicId });
+
+      expect(count).toBe(1);
+    });
+  });
+
   describe('queryAll', () => {
     it('should return all messages belonging to the user in descending order', async () => {
       // Create test data

@@ -3446,7 +3446,10 @@ export class AgentRuntimeService {
         threadId: state.metadata?.threadId,
         topicId: state.metadata?.topicId,
       },
-      { postProcessUrl },
+      // The run's own topic is already resolved and authorized; an agent-share
+      // visitor run executes under the CREATOR's identity, so it must opt out
+      // of `query()`'s creator-facing agent-share exclusion.
+      { allowShareVisitor: true, postProcessUrl },
     );
   }
 
@@ -3501,7 +3504,7 @@ export class AgentRuntimeService {
   private async resolveLastAssistantContentFromThread(
     threadId: string,
   ): Promise<string | undefined> {
-    const messages = await this.messageModel.query({ threadId });
+    const messages = await this.messageModel.query({ threadId }, { allowShareVisitor: true });
     const lastAssistant = findLastAssistantMessage(normalizeCompletionMessages(messages));
     return extractTextFromMessage(lastAssistant) || undefined;
   }
@@ -3715,14 +3718,17 @@ export class AgentRuntimeService {
    */
   private async computeDeviceContext(state: any) {
     try {
-      const dbMessages = await this.messageModel.query({
-        agentId: state.metadata?.agentId,
-        // Group runs need groupId or the query returns no group messages
-        // (standard branch filters `groupId IS NULL`), losing the device context.
-        groupId: state.metadata?.groupId,
-        threadId: state.metadata?.threadId,
-        topicId: state.metadata?.topicId,
-      });
+      const dbMessages = await this.messageModel.query(
+        {
+          agentId: state.metadata?.agentId,
+          // Group runs need groupId or the query returns no group messages
+          // (standard branch filters `groupId IS NULL`), losing the device context.
+          groupId: state.metadata?.groupId,
+          threadId: state.metadata?.threadId,
+          topicId: state.metadata?.topicId,
+        },
+        { allowShareVisitor: true },
+      );
 
       return findInMessages(
         dbMessages,

@@ -701,9 +701,28 @@ export class TopicModel {
     return { items: cleanItems, total: totalResult[0].count };
   };
 
+  /**
+   * Raw ownership-scoped lookup. Agent-share visitor topics carry the CREATOR's
+   * `userId`, so this DOES return them — required by the share runtime, which
+   * resolves a visitor topic through the creator-scoped model and then verifies
+   * `senderId` itself (`findVisitorTopicOrThrow`). Creator-facing read entry
+   * points must use {@link TopicModel.findOwnTopicById} instead.
+   */
   findById = async (id: string) => {
     return this.db.query.topics.findFirst({
       where: and(eq(topics.id, id), this.ownership()),
+    });
+  };
+
+  /**
+   * Creator-facing twin of {@link TopicModel.findById}: excludes agent-share
+   * visitor topics, so a creator handed a raw visitor `topicId` gets nothing
+   * back instead of reading a conversation `allowCreatorViewSessions=false`
+   * is meant to hide.
+   */
+  findOwnTopicById = async (id: string) => {
+    return this.db.query.topics.findFirst({
+      where: and(eq(topics.id, id), this.ownership(), notShareVisitorTopic()),
     });
   };
 

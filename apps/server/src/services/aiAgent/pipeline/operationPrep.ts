@@ -73,6 +73,11 @@ export const createHistoryMessagesLoader = (
   const postProcessUrl = (path: string | null, file: { id?: string | null }) =>
     fileService.getFileAccessUrl({ id: file.id, url: path });
   let historyMessagesCache: any[] | undefined;
+  // The run's own topic was resolved and authorized upstream (a share visitor
+  // run reaches here through `findVisitorTopicOrThrow`), and it executes under
+  // the CREATOR's identity — so these reads must opt out of `query()`'s
+  // creator-facing agent-share exclusion or the agent loses its history.
+  const historyQueryOptions = { allowShareVisitor: true, postProcessUrl };
 
   return async () => {
     if (historyMessagesCache) return historyMessagesCache;
@@ -84,7 +89,7 @@ export const createHistoryMessagesLoader = (
           threadId: appContext?.threadId,
           topicId: appContext?.topicId ?? undefined,
         },
-        { postProcessUrl },
+        historyQueryOptions,
       );
       const idSet = new Set(existingMessageIds);
       historyMessagesCache = messages.filter((msg) => idSet.has(msg.id));
@@ -99,7 +104,7 @@ export const createHistoryMessagesLoader = (
           threadId: appContext?.threadId,
           topicId: appContext?.topicId,
         },
-        { postProcessUrl },
+        historyQueryOptions,
       );
       historyMessagesCache = messages.filter((msg) => !selfMessageIds.has(msg.id));
     } else {

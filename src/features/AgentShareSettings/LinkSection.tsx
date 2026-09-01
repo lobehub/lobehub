@@ -1,6 +1,6 @@
 'use client';
 
-import { copyToClipboard, Flexbox, Input } from '@lobehub/ui';
+import { copyToClipboard, Flexbox, Input, Tooltip } from '@lobehub/ui';
 import { Button, confirmModal, Switch, Text, toast } from '@lobehub/ui/base-ui';
 import { CopyIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
@@ -16,6 +16,7 @@ import {
   validateAgentShareSlug,
 } from './shareLink';
 import type { AgentShareInfo } from './useAgentShare';
+import { resolveLinkToggleState } from './useAgentShareSupported';
 
 const SLUG_ERROR_KEY = {
   invalid: 'share.settings.link.slugError.invalid',
@@ -28,6 +29,8 @@ interface LinkSectionProps {
   onDisable: () => Promise<void>;
   onEnable: () => Promise<void>;
   onUpdateSlug: (slug: string | null) => Promise<void>;
+  /** Whether a new share may be published — see `useAgentShareSupported`. */
+  publishable: boolean;
   share: AgentShareInfo | undefined;
 }
 
@@ -38,12 +41,21 @@ interface LinkSectionProps {
  * slug, so visitors are locked out while it is off and turning it back on
  * republishes the very same url — see `AgentShareModel.updateVisibility`.
  */
-const LinkSection = memo<LinkSectionProps>(({ onDisable, onEnable, onUpdateSlug, share }) => {
+const LinkSection = memo<LinkSectionProps>((props) => {
+  const { onDisable, onEnable, onUpdateSlug, publishable, share } = props;
   const { t } = useTranslation('agent');
   const appOrigin = useAppOrigin();
 
   const isShared = share?.visibility === 'link';
   const savedSlug = share?.shareConfig?.slug ?? '';
+  const {
+    canPublish,
+    disabled: toggleDisabled,
+    offHintKey,
+  } = resolveLinkToggleState({
+    isShared,
+    publishable,
+  });
 
   const [toggling, setToggling] = useState(false);
   const [slugDraft, setSlugDraft] = useState(savedSlug);
@@ -74,6 +86,10 @@ const LinkSection = memo<LinkSectionProps>(({ onDisable, onEnable, onUpdateSlug,
 
   const handleToggle = useCallback(
     async (checked: boolean) => {
+      // Publishing is gated (rollout flag / plan); turning an existing share
+      // OFF must always stay available, so only the `on` direction is blocked.
+      if (checked && !canPublish) return;
+
       const apply = async () => {
         setToggling(true);
         try {
@@ -98,7 +114,7 @@ const LinkSection = memo<LinkSectionProps>(({ onDisable, onEnable, onUpdateSlug,
         title: t('share.settings.link.disableConfirmTitle'),
       });
     },
-    [onDisable, onEnable, t],
+    [canPublish, onDisable, onEnable, t],
   );
 
   const handleSaveSlug = useCallback(async () => {
@@ -140,8 +156,20 @@ const LinkSection = memo<LinkSectionProps>(({ onDisable, onEnable, onUpdateSlug,
   return (
     <Section
       desc={t('share.settings.link.desc')}
-      extra={<Switch checked={isShared} loading={toggling} onChange={handleToggle} />}
       title={t('share.settings.link.title')}
+      extra={
+        <Tooltip title={toggleDisabled ? t('share.settings.link.publishDisabled') : undefined}>
+          {/* A disabled control fires no pointer events, so the wrapper carries the hover. */}
+          <Flexbox>
+            <Switch
+              checked={isShared}
+              disabled={toggleDisabled}
+              loading={toggling}
+              onChange={handleToggle}
+            />
+          </Flexbox>
+        </Tooltip>
+      }
     >
       {isShared ? (
         <Flexbox gap={12}>
@@ -186,7 +214,7 @@ const LinkSection = memo<LinkSectionProps>(({ onDisable, onEnable, onUpdateSlug,
         </Flexbox>
       ) : (
         <Text fontSize={12} type={'secondary'}>
-          {t('share.settings.link.offHint')}
+          {t(offHintKey)}
         </Text>
       )}
     </Section>

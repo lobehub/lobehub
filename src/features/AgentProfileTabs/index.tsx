@@ -67,7 +67,7 @@ const AgentProfileTabs = memo<AgentProfileTabsProps>(({ active, agentId }) => {
 
   const canConfigure = !!isAgentEditable && isAccessResolved && canEditContent && canEditResource;
   const channelsSupported = supportsMessageChannels(heterogeneousProviderType);
-  const shareSupported = useAgentShareSupported(agentId);
+  const { supported: shareSupported } = useAgentShareSupported(agentId);
 
   const options = useMemo(
     () =>

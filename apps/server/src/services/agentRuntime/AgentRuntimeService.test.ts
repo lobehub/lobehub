@@ -2505,7 +2505,10 @@ describe('AgentRuntimeService', () => {
         threadId: 'thread-1',
       });
 
-      expect((service as any).messageModel.query).toHaveBeenCalledWith({ threadId: 'thread-1' });
+      expect((service as any).messageModel.query).toHaveBeenCalledWith(
+        { threadId: 'thread-1' },
+        { allowShareVisitor: true },
+      );
       expect(updateToolMessage).toHaveBeenCalledWith(
         'grp-tool-1',
         expect.objectContaining({ content: 'hello from the CLI' }),
@@ -2717,7 +2720,10 @@ describe('AgentRuntimeService', () => {
 
       await service.completeSubAgentBridge(bridgeParams);
 
-      expect((service as any).messageModel.query).toHaveBeenCalledWith({ threadId: 'thread-1' });
+      expect((service as any).messageModel.query).toHaveBeenCalledWith(
+        { threadId: 'thread-1' },
+        { allowShareVisitor: true },
+      );
       expect(updateToolMessage).toHaveBeenCalledWith(
         'tool-msg-1',
         expect.objectContaining({ content: 'hello from the CLI' }),

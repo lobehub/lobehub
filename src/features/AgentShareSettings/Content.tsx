@@ -13,6 +13,7 @@ import PermissionsSection from './PermissionsSection';
 import ToolsSection from './ToolsSection';
 import UsageSection from './UsageSection';
 import { type AgentShareConfigPatch, useAgentShare } from './useAgentShare';
+import { useAgentShareSupported } from './useAgentShareSupported';
 
 interface AgentShareSettingsContentProps {
   agentId: string;
@@ -27,6 +28,7 @@ const AgentShareSettingsContent = memo<AgentShareSettingsContentProps>(({ agentI
   const { t } = useTranslation('agent');
   const { disable, enable, error, isLoading, mutate, share, updateConfig, updateSlug } =
     useAgentShare(agentId);
+  const { publishable } = useAgentShareSupported(agentId);
 
   const handleConfigChange = useCallback(
     async (patch: AgentShareConfigPatch) => {
@@ -55,6 +57,7 @@ const AgentShareSettingsContent = memo<AgentShareSettingsContentProps>(({ agentI
       ) : (
         <>
           <LinkSection
+            publishable={publishable}
             share={share}
             onDisable={disable}
             onEnable={enable}

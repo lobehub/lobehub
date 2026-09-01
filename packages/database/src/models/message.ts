@@ -926,6 +926,15 @@ export class MessageModel {
       threadId,
     }: QueryMessageParams = {},
     options: {
+      /**
+       * Opt IN to agent-share visitor messages. Visitor conversations persist
+       * under the CREATOR's `userId` (only `topics.senderId` marks them), so
+       * `this.ownership()` alone lets a creator read a visitor's full transcript
+       * by passing its `topicId` — bypassing `allowCreatorViewSessions=false`.
+       * Defaults to false so every creator-facing caller fails closed; only the
+       * share-scoped read path ({@link MessageModel.queryForVisitor}) sets it.
+       */
+      allowShareVisitor?: boolean;
       postProcessUrl?: (
         path: string | null,
         file: { fileType: string; id?: string | null },
@@ -934,6 +943,7 @@ export class MessageModel {
     } = {},
   ) => {
     const queryStartedAt = Date.now();
+    const shareVisitorCondition = options.allowShareVisitor ? undefined : notShareVisitorMessage();
     const timing = options.timing;
     logTiming(timing, 'db.message.query:start', {
       current,
@@ -977,7 +987,7 @@ export class MessageModel {
         skipWorks,
         timing,
         topicId: topicId ?? undefined,
-        where: threadScopeCondition ? and(threadScopeCondition, threadCondition) : threadCondition,
+        where: and(threadScopeCondition, threadCondition, shareVisitorCondition),
       });
       logTiming(timing, 'db.message.query:done', {
         messageCount: messageItems.length,
@@ -994,6 +1004,7 @@ export class MessageModel {
         eq(messages.groupId, groupId),
         this.matchTopic(topicId),
         this.matchThread(threadId),
+        shareVisitorCondition,
       );
 
       const messageItems = await this.queryWithWhere({
@@ -1025,6 +1036,7 @@ export class MessageModel {
       conversationCondition,
       this.matchGroup(groupId),
       this.matchThread(threadId),
+      shareVisitorCondition,
     );
 
     const messageItems = await this.queryWithWhere({
@@ -1066,7 +1078,9 @@ export class MessageModel {
       timing?: ModelTimingContext;
     } = {},
   ): Promise<UIChatMessage[]> => {
-    const messageItems = await this.query(params, options);
+    // The only caller allowed past `query()`'s visitor guard: the topic was
+    // already resolved and authorized as this visitor's own share topic.
+    const messageItems = await this.query(params, { ...options, allowShareVisitor: true });
     return messageItems.map((message) => toVisitorMessage(message, options.redaction));
   };
 
@@ -1111,7 +1125,10 @@ export class MessageModel {
     offset: number;
     topicId: string;
   }): Promise<TopicTranscriptResult> => {
-    const where = and(this.ownership(), eq(messages.topicId, topicId));
+    // Creator-facing only (CLI / topic transcript router): agent-share visitor
+    // messages live under the creator's `userId`, so ownership alone would hand
+    // the creator a visitor's full transcript from a raw topic id.
+    const where = and(this.ownership(), eq(messages.topicId, topicId), notShareVisitorMessage());
 
     const [items, totalResult] = await Promise.all([
       this.db
@@ -3665,6 +3682,10 @@ export class MessageModel {
           eq(messages.topicId, params.topicId),
           this.ownership(),
           this.pluginsOwnership(),
+          // A desktop-local hetero run never happens inside an agent-share
+          // visitor topic, so excluding them costs nothing and stops a creator
+          // from surfacing a visitor's tool calls as their own Work cards.
+          notShareVisitorMessage(),
         ),
       );
 
