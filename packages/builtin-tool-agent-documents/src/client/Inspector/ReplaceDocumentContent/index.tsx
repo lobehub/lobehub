@@ -21,21 +21,19 @@ export const ReplaceDocumentContentInspector = memo<
 
   if (isArgumentsStreaming && !id) {
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-agent-documents.apiName.replaceDocumentContent')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-agent-documents.apiName.replaceDocumentContent')}
+        </span>
       </div>
     );
   }
 
   return (
-    <div
-      style={{ flexWrap: 'wrap', gap: 4 }}
-      className={cx(
-        inspectorTextStyles.root,
-        (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-      )}
-    >
-      <span>{t('builtins.lobe-agent-documents.apiName.replaceDocumentContent')}</span>
+    <div className={inspectorTextStyles.root} style={{ flexWrap: 'wrap', gap: 4 }}>
+      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+        {t('builtins.lobe-agent-documents.apiName.replaceDocumentContent')}
+      </span>
       {id && <span className={styles.idChip}>{formatDocumentId(id)}</span>}
       {typeof content === 'string' && content.length > 0 && (
         <>

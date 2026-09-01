@@ -5,8 +5,8 @@ import type { AcceptanceListItem } from '@/services/verify';
 import {
   ACCEPTANCE_BATCH_CHUNK,
   acceptanceBatchTargets,
-  chunkAcceptanceBatch,
   acceptanceSelectAllState,
+  chunkAcceptanceBatch,
   nextAcceptanceSelectAll,
   toggleAcceptanceSelection,
   visibleAcceptanceSelection,

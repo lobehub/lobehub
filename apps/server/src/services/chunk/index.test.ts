@@ -155,6 +155,29 @@ describe('ChunkService', () => {
       expect(mockCreateAsyncCaller).not.toHaveBeenCalled();
     });
 
+    it('should create an error task for files larger than the in-memory parser limit', async () => {
+      mockFileModelFindById.mockResolvedValue({
+        id: 'large-file',
+        size: 64 * 1024 * 1024 + 1,
+      });
+
+      await expect(service.asyncParseFileToChunks('large-file')).resolves.toBe('task-1');
+
+      expect(mockAsyncTaskModelCreate).toHaveBeenCalledWith({
+        status: AsyncTaskStatus.Error,
+        type: AsyncTaskType.Chunking,
+      });
+      expect(mockFileModelUpdate).toHaveBeenCalledWith('large-file', { chunkTaskId: 'task-1' });
+      expect(mockAsyncTaskModelUpdate).toHaveBeenCalledWith('task-1', {
+        error: new AsyncTaskError(
+          AsyncTaskErrorType.FileTooLargeToParse,
+          'Files larger than 67108864 bytes cannot be parsed in memory',
+        ),
+        status: AsyncTaskStatus.Error,
+      });
+      expect(mockCreateAsyncCaller).not.toHaveBeenCalled();
+    });
+
     it('should skip creating a new task when skipExist is true and task already exists', async () => {
       mockFileModelFindById.mockResolvedValue({ chunkTaskId: 'existing-task', id: 'file-1' });
 

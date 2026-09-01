@@ -239,14 +239,10 @@ export const EditTaskInspector = memo<BuiltinInspectorProps<EditTaskParams, Edit
     }
 
     return (
-      <div
-        style={{ flexWrap: 'wrap', gap: 6 }}
-        className={cx(
-          inspectorTextStyles.root,
-          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-        )}
-      >
-        <span>{t('builtins.lobe-task.apiName.editTask')}</span>
+      <div className={inspectorTextStyles.root} style={{ flexWrap: 'wrap', gap: 6 }}>
+        <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+          {t('builtins.lobe-task.apiName.editTask')}
+        </span>
         {identifier && <span className={styles.identifierChip}>{identifier}</span>}
         {segments.map((segment, index) => (
           <span className={styles.group} key={segment.key}>

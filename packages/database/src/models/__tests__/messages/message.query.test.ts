@@ -1543,6 +1543,66 @@ describe('MessageModel Query Tests', () => {
       expect(result[0].id).toBe('2');
       expect(result[1].id).toBe('1');
     });
+
+    it('should filter by role and date range on the server side', async () => {
+      await serverDB.insert(messages).values([
+        {
+          id: 'q-user-old',
+          userId,
+          role: 'user',
+          content: 'old user message',
+          createdAt: new Date('2023-01-01'),
+        },
+        {
+          id: 'q-user-new',
+          userId,
+          role: 'user',
+          content: 'recent user message',
+          createdAt: new Date('2023-02-01'),
+        },
+        {
+          id: 'q-assistant-new',
+          userId,
+          role: 'assistant',
+          content: 'recent assistant message',
+          createdAt: new Date('2023-02-01'),
+        },
+      ]);
+
+      const byRole = await messageModel.queryAll({ role: 'user' });
+      expect(byRole.map((m) => m.id)).toEqual(['q-user-new', 'q-user-old']);
+
+      const byRoleAndDate = await messageModel.queryAll({
+        role: 'user',
+        startDate: '2023-01-15',
+      });
+      expect(byRoleAndDate.map((m) => m.id)).toEqual(['q-user-new']);
+    });
+
+    it('should include agent name/title for messages bound to an agent', async () => {
+      await serverDB
+        .insert(agents)
+        .values([{ id: 'q-agent', name: 'Lobe', title: 'Diary Agent', userId }]);
+      await serverDB.insert(messages).values([
+        {
+          agentId: 'q-agent',
+          content: 'assistant reply',
+          id: 'q-with-agent',
+          role: 'assistant',
+          userId,
+        },
+        { content: 'user question', id: 'q-without-agent', role: 'user', userId },
+      ]);
+
+      const result = await messageModel.queryAll();
+      const withAgent = result.find((m) => m.id === 'q-with-agent');
+      const withoutAgent = result.find((m) => m.id === 'q-without-agent');
+
+      expect(withAgent?.agentName).toBe('Lobe');
+      expect(withAgent?.agentTitle).toBe('Diary Agent');
+      expect(withoutAgent?.agentName).toBeNull();
+      expect(withoutAgent?.agentTitle).toBeNull();
+    });
   });
 
   describe('findById', () => {

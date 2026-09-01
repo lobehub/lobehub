@@ -70,7 +70,14 @@ export interface GoalPlanDraft {
 const decompositionSchema = z.object({
   problemStatement: z.string().min(1),
   works: z
-    .array(z.object({ instruction: z.string().min(1), title: z.string().min(1).max(80) }))
+    .array(
+      z.object({
+        /** 0-based indices of earlier works this one consumes; drives `depends_on` edges. */
+        dependsOn: z.array(z.number().int().nonnegative()).optional(),
+        instruction: z.string().min(1),
+        title: z.string().min(1).max(80),
+      }),
+    )
     .min(1)
     .max(5),
 });

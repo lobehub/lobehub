@@ -27,8 +27,10 @@ export const AddPreferenceMemoryInspector = memo<
   // Initial streaming state
   if (isArgumentsStreaming && !title) {
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-user-memory.apiName.addPreferenceMemory')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-user-memory.apiName.addPreferenceMemory')}
+        </span>
       </div>
     );
   }
@@ -36,13 +38,10 @@ export const AddPreferenceMemoryInspector = memo<
   const isSuccess = pluginState?.memoryId;
 
   return (
-    <div
-      className={cx(
-        inspectorTextStyles.root,
-        (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-      )}
-    >
-      <span>{t('builtins.lobe-user-memory.apiName.addPreferenceMemory')}</span>
+    <div className={inspectorTextStyles.root}>
+      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+        {t('builtins.lobe-user-memory.apiName.addPreferenceMemory')}
+      </span>
       {title && (
         <>
           :<span className={highlightTextStyles.primary}>{title}</span>

@@ -18,8 +18,8 @@ import DecisionBar from './DecisionBar';
 import FeedbackDrawer, { type FeedbackListEntry } from './FeedbackDrawer';
 import { openAcceptModal, openGroupFeedbackModal, openRejectModal } from './modals';
 import { useAcceptanceBundle } from './useAcceptanceBundle';
-import { canReviewAcceptance } from './visibility';
 import { formatAcceptanceCountsText, LIVE_ACCEPTANCE_STATUSES } from './verdict';
+import { canReviewAcceptance } from './visibility';
 
 const AcceptanceDecision = () => {
   const { t } = useTranslation('verify');

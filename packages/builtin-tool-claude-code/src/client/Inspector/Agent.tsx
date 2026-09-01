@@ -190,8 +190,8 @@ export const AgentInspector = memo<BuiltinInspectorProps<AgentArgs>>(
       ) : null;
 
     return (
-      <div className={cx(inspectorTextStyles.root, isShiny && shinyTextStyles.shinyText)}>
-        <span className={styles.label}>Agent:</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={cx(styles.label, isShiny && shinyTextStyles.shinyText)}>Agent:</span>
         <Icon className={styles.icon} size={14} />
         <span className={styles.label}>{labelText}</span>
         {description && (

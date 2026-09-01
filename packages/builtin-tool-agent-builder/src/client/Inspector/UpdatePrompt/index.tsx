@@ -39,8 +39,10 @@ export const UpdatePromptInspector = memo<
   // Initial streaming state
   if (isArgumentsStreaming && !prompt) {
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-agent-builder.apiName.updatePrompt')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-agent-builder.apiName.updatePrompt')}
+        </span>
       </div>
     );
   }
@@ -50,13 +52,10 @@ export const UpdatePromptInspector = memo<
   const isSuccess = pluginState?.success;
 
   return (
-    <div
-      className={cx(
-        inspectorTextStyles.root,
-        (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-      )}
-    >
-      <span>{t('builtins.lobe-agent-builder.apiName.updatePrompt')}</span>
+    <div className={inspectorTextStyles.root}>
+      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+        {t('builtins.lobe-agent-builder.apiName.updatePrompt')}
+      </span>
       {/* Show length diff when completed */}
       {!isLoading && !isArgumentsStreaming && lengthDiff !== null && (
         <Text

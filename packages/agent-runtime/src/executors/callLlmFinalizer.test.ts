@@ -7,6 +7,7 @@ import type {
   MessageTransport,
   StreamSink,
 } from '../transport';
+import { TOOL_CALL_REPEAT_LIMIT } from '../utils/toolCallRepeatGuard';
 import {
   finalizeCallLlmTurn,
   persistInterruptedCallLlmResult,
@@ -61,13 +62,14 @@ const createOutput = (overrides: Partial<LLMAttemptOutput> = {}): LLMAttemptOutp
 });
 
 describe('callLlmFinalizer', () => {
-  it('blocks the fifth consecutive identical tool call before it can execute', async () => {
+  it('blocks the limit-th consecutive identical tool call before it can execute', async () => {
     const messages = createMessageTransport();
     const stream = createStreamSink();
     const state = AgentRuntime.createInitialState({ operationId: 'operation-1' });
     state.toolCallRepeatGuard = {
       counts: {
-        '["credentials","inject","{\\"keys\\":[\\"github\\"],\\"scope\\":\\"repo\\"}"]': 4,
+        '["credentials","inject","{\\"keys\\":[\\"github\\"],\\"scope\\":\\"repo\\"}"]':
+          TOOL_CALL_REPEAT_LIMIT - 1,
       },
     };
     const output = createOutput({
@@ -108,7 +110,7 @@ describe('callLlmFinalizer', () => {
       payload: {
         hasToolsCalling: false,
         result: {
-          content: 'Stopped after the same tool call was requested 5 consecutive times.',
+          content: `Stopped after the same tool call was requested ${TOOL_CALL_REPEAT_LIMIT} consecutive times.`,
           tool_calls: [],
         },
         toolsCalling: [],
@@ -124,7 +126,7 @@ describe('callLlmFinalizer', () => {
     expect(messages.update).toHaveBeenCalledWith(
       'assistant-5',
       expect.objectContaining({
-        content: 'Stopped after the same tool call was requested 5 consecutive times.',
+        content: `Stopped after the same tool call was requested ${TOOL_CALL_REPEAT_LIMIT} consecutive times.`,
         tools: undefined,
       }),
     );
@@ -136,11 +138,11 @@ describe('callLlmFinalizer', () => {
     );
   });
 
-  it('preserves user cancellation when an aborted stream emits the fifth repeated tool call', async () => {
+  it('preserves user cancellation when an aborted stream emits the limit-th repeated tool call', async () => {
     const state = AgentRuntime.createInitialState({ operationId: 'operation-1' });
     state.toolCallRepeatGuard = {
       counts: {
-        '["credentials","inject","{\\"keys\\":[\\"github\\"]}"]': 4,
+        '["credentials","inject","{\\"keys\\":[\\"github\\"]}"]': TOOL_CALL_REPEAT_LIMIT - 1,
       },
     };
     const toolCalling = {

@@ -1826,6 +1826,18 @@ export default {
     'Every task is either waiting on a dependency or already finished.',
   'goalProcess.frontier.achievedTitle': 'Nothing left to advance — this goal is achieved',
   'goalProcess.frontier.achievedDescription': 'The findings are in the map below.',
+  'goalProcess.addTask.failed': 'Failed to add the task — please try again',
+  'goalProcess.addTask.titleLabel': 'Task title',
+  'goalProcess.addTask.titlePlaceholder': 'What should this task deliver?',
+  'goalProcess.addTask.descriptionLabel': 'Instruction (optional)',
+  'goalProcess.addTask.descriptionPlaceholder':
+    'Deliverable, constraints, and how the result will be judged',
+  'goalProcess.requirementPlaceholder': 'Describe what counts as done…',
+  'goalProcess.requirementSaveFailed':
+    'Failed to save the requirement — it will retry on your next edit',
+  'goalProcess.planning.title': 'Planning the exploration',
+  'goalProcess.planning.description':
+    'The coordinator is breaking the goal into executable tasks — they will appear here shortly.',
   'goalProcess.tag.needsDecision': 'Needs your decision',
   'goalProcess.tag.lost': 'Lost',
   'goalProcess.tag.done': 'Done',
@@ -1918,13 +1930,12 @@ export default {
   'goalProcess.nodeStatus.waiting': 'Waiting',
   'goalProcess.metrics.tasks': 'Tasks',
   'goalProcess.metrics.findings': 'Findings',
-  'goalProcess.requirement': 'What counts as done',
   'goalProcess.node.answered': 'Answered by a finding',
+  'goalProcess.node.generating': 'Generating…',
   'goalProcess.node.unassigned': 'Not dispatched',
   'goalProcess.node.decidedByYou': 'You decided',
   'goalProcess.node.decidedByAgent': 'Agent decided',
   'goalProcess.node.attemptsTooltip': '{{count}} attempts so far',
-  'goalProcess.node.verifier': 'verifier',
   'goalProcess.node.verifierTooltip':
     'This task has its own acceptance contract — a verifier judges the delivery.',
   'goalProcess.node.artifactsTooltip':

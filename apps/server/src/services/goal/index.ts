@@ -30,7 +30,7 @@ import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRunt
 import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
 import { AcceptanceService } from '../verify/acceptanceService';
-import { GoalCriteriaGeneratorService } from './criteriaGenerator';
+import { GoalCriteriaGeneratorService, type GoalDecompositionDraft } from './criteriaGenerator';
 import {
   decideNextMove,
   frontierNeedsBudget,
@@ -322,6 +322,17 @@ export class GoalService {
       runs,
       totalCost,
     };
+  };
+
+  /**
+   * Edit the goal's standing acceptance requirement in place. The next
+   * coordinator move and every later dispatched Work read the updated text;
+   * already-running Work keeps the contract it was dispatched with.
+   */
+  updateRequirement = async (goalId: string, requirement: string) => {
+    const goal = await this.goalModel.update(goalId, { requirement });
+    if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    return goal;
   };
 
   setBudget = async (
@@ -1080,10 +1091,43 @@ export class GoalService {
     const problem = graph.nodes.find((node) => node.kind === 'problem');
     const requirement = graph.goal.requirement ?? problem?.description ?? graph.goal.title;
 
+    // Two advances can reach this branch together — the queued kickoff and the
+    // client's fire-and-forget fallback both see zero Works. The conditional
+    // `planning → running` write is the claim: the loser stops before even
+    // calling the planner, so nothing double-plans and nothing double-pays.
+    // `waiting_external` ends its advance loop — the winner carries the goal.
+    if (graph.goal.status === 'planning') {
+      const claimed = await this.goalModel.claimPlanning(goalId);
+      if (!claimed) {
+        return {
+          goalId,
+          message: 'Another advance is already planning this goal',
+          outcome: 'waiting_external' as const,
+        };
+      }
+      await this.coordinatorGraph
+        .recordGoalStatus(goalId, 'planning', 'running', 'decomposition claimed')
+        .catch((error) => console.error('[GoalService] failed to record goal status:', error));
+    }
+
     const generator = new GoalCriteriaGeneratorService(this.db, this.userId, this.workspaceId);
     const plan = await generator.decompose({ requirement }).catch(() => undefined);
 
-    const works = plan?.works ?? [
+    // Rare shape: a goal already past `planning` whose Works were all removed.
+    // There is no status edge to claim on that path, so shrink the duplicate
+    // window to the instant before the inserts with a re-read instead.
+    if (graph.goal.status !== 'planning') {
+      const fresh = await this.graphModel.getGraph(goalId);
+      if (fresh?.nodes.some((node) => node.kind === 'task')) {
+        return {
+          goalId,
+          message: 'Decomposition already planned by a concurrent advance',
+          outcome: 'advanced' as const,
+        };
+      }
+    }
+
+    const works: GoalDecompositionDraft['works'] = plan?.works ?? [
       { instruction: problem?.description ?? requirement, title: graph.goal.title },
     ];
 
@@ -1093,16 +1137,32 @@ export class GoalService {
       await this.coordinatorGraph.updateNodeDescription(goalId, problem.id, plan.problemStatement);
     }
 
+    const createdIds: (string | undefined)[] = [];
     for (const work of works) {
       const node = await this.coordinatorGraph.createNode(goalId, {
         description: work.instruction,
         kind: 'task',
         title: work.title,
       });
+      createdIds.push(node?.id);
       if (!node) continue;
       if (problem)
         await this.coordinatorGraph.createEdge(goalId, problem.id, node.id, 'decomposes');
       effects.push({ nodeId: node.id, type: 'created_node', detail: work.title });
+    }
+
+    // The planner's `dependsOn` indices become `depends_on` edges, drawn
+    // dependent → prerequisite the way `decideNextMove` reads a blocker. Only
+    // earlier indices are honoured, so a hallucinated forward or self reference
+    // can never form a cycle that deadlocks the frontier.
+    for (const [index, work] of works.entries()) {
+      const nodeId = createdIds[index];
+      if (!nodeId) continue;
+      for (const dep of new Set(work.dependsOn ?? [])) {
+        const prerequisiteId = dep < index ? createdIds[dep] : undefined;
+        if (!prerequisiteId) continue;
+        await this.coordinatorGraph.createEdge(goalId, nodeId, prerequisiteId, 'depends_on');
+      }
     }
 
     return {

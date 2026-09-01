@@ -9,7 +9,7 @@ import { FileModel } from '@/database/models/file';
 import { ChunkService } from '@/server/services/chunk';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
-import { AsyncTaskStatus } from '@/types/asyncTask';
+import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@/types/asyncTask';
 
 import { fileRouter } from '../file';
 
@@ -94,6 +94,29 @@ describe('fileRouter.parseFileToChunks — NoSuchKey + internal:// branches', ()
         }),
       }),
     );
+  });
+
+  it('rejects oversized files before reading them into memory', async () => {
+    fileModelMock.findById.mockResolvedValue({
+      id: 'large-file',
+      name: 'large.pdf',
+      size: 64 * 1024 * 1024 + 1,
+      url: 'https://example.com/large.pdf',
+    });
+
+    const caller = fileRouter.createCaller(mockCtx);
+
+    await expect(
+      caller.parseFileToChunks({ fileId: 'large-file', taskId: 'task-large' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(fileServiceMock.getFileByteArray).not.toHaveBeenCalled();
+    expect(asyncTaskModelMock.update).toHaveBeenCalledWith('task-large', {
+      error: new AsyncTaskError(
+        AsyncTaskErrorType.FileTooLargeToParse,
+        'Files larger than 67108864 bytes cannot be parsed in memory',
+      ),
+      status: AsyncTaskStatus.Error,
+    });
   });
 
   it('skips storage fetch and returns gracefully when url is internal://', async () => {
