@@ -24,7 +24,7 @@
     "test:coverage": "vitest --coverage --silent='passed-only'"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "0.3.204",
+    "@anthropic-ai/claude-agent-sdk": "0.3.252",
     "@anthropic-ai/sdk": "^0.93.0",
     "@lobechat/agent-gateway-client": "workspace:*",
     "@lobechat/types": "workspace:*",
