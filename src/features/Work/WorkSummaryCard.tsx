@@ -100,7 +100,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   title: css`
     min-width: 0;
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 500;
   `,
 }));
@@ -229,7 +229,7 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
         <Flexbox align={'center'} className={styles.icon} justify={'center'}>
           <Icon size={18} />
         </Flexbox>
-        <Flexbox flex={1} gap={6} style={{ minWidth: 0 }}>
+        <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
           <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
             <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
               <Text ellipsis className={styles.title}>
@@ -258,7 +258,7 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
             )}
           </Flexbox>
           {description && (
-            <Text ellipsis className={styles.description} fontSize={13}>
+            <Text ellipsis className={styles.description} fontSize={12}>
               {description}
             </Text>
           )}

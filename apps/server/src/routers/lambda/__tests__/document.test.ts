@@ -23,7 +23,9 @@ vi.mock('@/business/server/lambda-routers/file', () => ({
   businessFileTransferStorageCheck: mocks.businessFileTransferStorageCheck,
 }));
 vi.mock('@/database/models/chunk', () => ({ ChunkModel: vi.fn(() => ({})) }));
-vi.mock('@/database/models/document', () => ({
+vi.mock('@/database/models/document', async (importOriginal) => ({
+  DOCUMENT_TRANSFER_FOREIGN_ROWS: ((await importOriginal()) as Record<string, string>)
+    .DOCUMENT_TRANSFER_FOREIGN_ROWS,
   DocumentModel: vi.fn(() => ({
     countFileUsageInSubtree: mocks.countFileUsageInSubtree,
     findById: mocks.findById,
@@ -56,6 +58,7 @@ vi.mock('@/server/services/workspacePermission', () => ({
   hasWorkspaceScopedPermission: vi.fn(),
 }));
 
+const { DOCUMENT_TRANSFER_FOREIGN_ROWS } = await import('@/database/models/document');
 const { documentRouter } = await import('../document');
 
 describe('documentRouter transferDocument', () => {
@@ -79,7 +82,9 @@ describe('documentRouter transferDocument', () => {
   });
 
   it('blocks a non-owner from transferring a tree containing foreign rows', async () => {
-    mocks.subtreeHasForeignRows.mockResolvedValueOnce(true);
+    // The guard now runs INSIDE the transfer transaction (after row locks), so
+    // the model rejects rather than a router preflight short-circuiting.
+    mocks.transferTo.mockRejectedValueOnce(new Error(DOCUMENT_TRANSFER_FOREIGN_ROWS));
     const caller = documentRouter.createCaller({
       serverDB: {},
       userId: 'member-1',
@@ -94,9 +99,9 @@ describe('documentRouter transferDocument', () => {
       code: 'FORBIDDEN',
     });
 
-    expect(mocks.subtreeHasForeignRows).toHaveBeenCalledWith('doc-1');
-    expect(mocks.countFileUsageInSubtree).not.toHaveBeenCalled();
-    expect(mocks.transferTo).not.toHaveBeenCalled();
+    expect(mocks.transferTo).toHaveBeenCalledWith('doc-1', null, 'member-1', undefined, {
+      forbidForeignRows: true,
+    });
   });
 
   it('checks edit access on both the source and destination parents before moving a document', async () => {

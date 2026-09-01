@@ -18,6 +18,7 @@ import DecisionBar from './DecisionBar';
 import FeedbackDrawer, { type FeedbackListEntry } from './FeedbackDrawer';
 import { openAcceptModal, openGroupFeedbackModal, openRejectModal } from './modals';
 import { useAcceptanceBundle } from './useAcceptanceBundle';
+import { canReviewAcceptance } from './visibility';
 import { formatAcceptanceCountsText, LIVE_ACCEPTANCE_STATUSES } from './verdict';
 
 const AcceptanceDecision = () => {
@@ -27,7 +28,7 @@ const AcceptanceDecision = () => {
   const { data, mutate } = useAcceptanceBundle(acceptanceId);
   const [pending, setPending] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
-  if (!data?.isOwner || data.acceptance.status === 'closed') return null;
+  if (!data || !canReviewAcceptance(data) || data.acceptance.status === 'closed') return null;
 
   const { acceptance, checks, rounds } = data;
   const currentRound = rounds.at(-1);

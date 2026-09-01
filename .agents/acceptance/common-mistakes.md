@@ -687,6 +687,41 @@ with unrelated identifiers — a component name like `SkillRow` also matches a C
 
 ---
 
+**Same failure, fourth shape — the dep optimizer is wedged, and only Vite needs
+restarting.** The SPA sits on the HTML loading shell (`rootChildren: 0`, `innerText`
+empty) with a clean console and `vite connected` — no error anywhere. Crawling the
+module graph from the entry is what names it: every direct import returns 200 while
+`node_modules/.vite/deps/*` answers **504**, so `import()` of the entry fails with the
+generic `Failed to fetch dynamically imported module`, which reads like a broken route
+tree in the branch under test. Recovery is `rm -rf node_modules/.vite/deps` plus a real
+Vite process restart — and Vite is its OWN process here (`bash -c source /tmp/dev-env.sh
+&& bun run dev:spa`), independent of the `next dev` tree, so a shared worktree's Next
+server does not have to be touched. Reuse the same env file the running pair was
+started from rather than re-deriving it.
+
+### L-S17 — Diagnosing the feature when the dev DB lost its seeded user row
+
+**Wrong approach:** see the product's own list endpoint return `{ items: [] }` and its
+write endpoints fail, and start debugging the query, the scope filter, or the change
+under test.
+
+**Why it fails:** the dev server resolves `ctx.userId` for the seeded account without
+needing a `sessions` row, so a database that lost its `users` row still reads as
+authenticated: `setup-auth.sh status --surface web` reports green, every read returns
+an empty result, and every write dies inside Postgres on the `user_id` foreign key.
+The tRPC error surfaces as a giant `Failed query: insert into "acceptances" …` whose
+FK cause is only visible in the params tail, so it reads as a schema or payload
+problem rather than a missing row. The managed acceptance Postgres is shared and
+long-lived, so a `clean-db` from any worktree leaves every later run in this state.
+
+**Correct approach:** when reads are empty AND writes fail, check the row before the
+code — `select id from users` in the DB the server actually uses. Resolve that DB from
+the env file the running server was launched with, never from `test-env.sh` defaults;
+a dev server started by another session can point somewhere else entirely. Re-seed with
+`init-dev-env.sh seed-user`, then prove the fix with a real product write (an `ensure`
+round-trip), and re-run `setup-auth.sh web-seed` because the SPA's client-side auth
+gate still redirects to `/signin` after the row is recreated.
+
 ### L-S8 — Reading a first-boot renderer crash as a defect of the change under test
 
 **Wrong approach:** treat the Electron dev instance's first renderer boot as

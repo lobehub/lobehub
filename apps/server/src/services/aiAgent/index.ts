@@ -79,7 +79,6 @@ import {
   ThreadType,
 } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
-import { isRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import type { ModelAbilities } from 'model-bank';
@@ -87,7 +86,6 @@ import type { ModelAbilities } from 'model-bank';
 import {
   deriveAgentInterventionContinuationMessageId,
   deriveAgentInterventionContinuationOperationId,
-  deriveAgentInterventionQueueDeduplicationId,
   matchesAgentInterventionContinuationProvenance,
 } from '@/business/server/agent-run/agentInterventionIdentity';
 import { AgentModel } from '@/database/models/agent';
@@ -152,9 +150,6 @@ import type {
   ExecGroupMemberParams,
   ExecGroupMemberResult,
   GroupActionMemberBridgeParams,
-  GroupActionMemberMode,
-  GroupActionOnComplete,
-  StepLifecycleCallbacks,
 } from '@/server/services/agentRuntime/types';
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import {
@@ -193,12 +188,8 @@ import {
   isDeviceToolIdentifier,
   REMOTE_DEVICE_TOOL_IDENTIFIERS,
 } from './deviceToolRegistry';
-import { createGraphAwareAgentFactory, STOPPED_TOOL_CONTENT } from './helpers/agentFactory';
-import {
-  buildBotConversationGroupContext,
-  buildGroupAgentContext,
-  formatErrorForMetadata,
-} from './helpers/groupContext';
+import { createGraphAwareAgentFactory } from './helpers/agentFactory';
+import { buildBotConversationGroupContext, buildGroupAgentContext } from './helpers/groupContext';
 import {
   getHeterogeneousAgentTitle,
   humanizeHeteroDispatchError,
@@ -210,7 +201,13 @@ import {
   getMediaAvailabilityFromMessages,
   isMultimodalUnderstandingConfigured,
 } from './helpers/mediaAvailability';
+import {
+  createGroupActionMemberBridgeHook,
+  createSubAgentBridgeHook,
+  createThreadHooks,
+} from './hooks/threadRunHooks';
 import { ingestAttachment } from './ingestAttachment';
+import { InterventionController } from './intervention/InterventionController';
 import { pruneRegeneratedBranch } from './pruneRegeneratedBranch';
 import { resolveDeviceWorkingDirectoryConfig } from './resolveDeviceWorkingDirectory';
 import { resolveServerSearchDecision } from './searchDecision';
@@ -243,6 +240,7 @@ export class AiAgentService {
   private readonly threadModel: ThreadModel;
   private readonly topicModel: TopicModel;
   private readonly agentRuntimeService: AgentRuntimeService;
+  private readonly interventionController: InterventionController;
   private _marketService?: MarketService;
   private readonly composioService: ComposioService;
 
@@ -309,6 +307,16 @@ export class AiAgentService {
       });
     }
     this.composioService = new ComposioService({ db, userId, workspaceId: wsId });
+    this.interventionController = new InterventionController({
+      agentOperationModel: this.agentOperationModel,
+      agentRuntimeService: this.agentRuntimeService,
+      db: this.db,
+      messageModel: this.messageModel,
+      resolveDeviceWorkspaceId: (deviceId) => this.resolveDeviceWorkspaceId(deviceId),
+      threadModel: this.threadModel,
+      topicModel: this.topicModel,
+      userId: this.userId,
+    });
   }
 
   private async getMarketService(): Promise<MarketService> {
@@ -5208,7 +5216,7 @@ export class AiAgentService {
         },
         {
           bridgeHookFactory: (threadId) =>
-            this.createGroupActionMemberBridgeHook({
+            createGroupActionMemberBridgeHook(this.agentRuntimeService, {
               anchorMessageId: params.anchorMessageId,
               expectedMembers: params.expectedMembers,
               groupToolMessageId: params.groupToolMessageId,
@@ -5343,7 +5351,7 @@ export class AiAgentService {
       disableTools,
       ephemeralUserMessage: speakerInstruction,
       hooks: [
-        this.createGroupActionMemberBridgeHook({
+        createGroupActionMemberBridgeHook(this.agentRuntimeService, {
           anchorMessageId,
           expectedMembers,
           groupToolMessageId,
@@ -5460,7 +5468,10 @@ export class AiAgentService {
     });
 
     // 3. Create hooks for updating Thread metadata and source message
-    const threadHooks = this.createThreadHooks(
+    const threadHooks = createThreadHooks(
+      this.agentRuntimeService,
+      this.threadModel,
+      this.messageModel,
       thread.id,
       startedAt,
       parentMessageId,
@@ -5476,7 +5487,12 @@ export class AiAgentService {
             ...threadHooks,
             options.bridgeHookFactory
               ? options.bridgeHookFactory(thread.id)
-              : this.createSubAgentBridgeHook(parentOperationId, parentMessageId, thread.id),
+              : createSubAgentBridgeHook(
+                  this.agentRuntimeService,
+                  parentOperationId,
+                  parentMessageId,
+                  thread.id,
+                ),
           ]
         : threadHooks;
 
@@ -5594,416 +5610,8 @@ export class AiAgentService {
   }
 
   /**
-   * Create step lifecycle callbacks for updating Thread metadata
-   * These callbacks accumulate metrics during execution and update Thread on completion
-   *
-   * @param threadId - The Thread ID to update
-   * @param startedAt - The start time ISO string
-   * @param sourceMessageId - The source message ID from Thread to update with summary
-   */
-  private createThreadMetadataCallbacks(
-    threadId: string,
-    startedAt: string,
-    sourceMessageId: string,
-    logScope: 'execSubAgent' | 'execVirtualSubAgent' = 'execSubAgent',
-  ): StepLifecycleCallbacks {
-    // Accumulator for tracking metrics across steps
-    let accumulatedToolCalls = 0;
-
-    return {
-      onAfterStep: async ({ state, stepResult }) => {
-        // Count tool calls from this step
-        const toolCallsInStep = stepResult?.events?.filter(
-          (e: { type: string }) => e.type === 'tool_call',
-        )?.length;
-        if (toolCallsInStep) {
-          accumulatedToolCalls += toolCallsInStep;
-        }
-
-        // Update Thread metadata with current progress
-        try {
-          await this.threadModel.update(threadId, {
-            metadata: {
-              operationId: state.operationId,
-              startedAt,
-              totalMessages: state.messages?.length ?? 0,
-              totalTokens: this.calculateTotalTokens(state.usage),
-              totalToolCalls: accumulatedToolCalls,
-            },
-          });
-          log('%s: updated thread %s metadata after step %d', logScope, threadId, state.stepCount);
-        } catch (error) {
-          log('%s: failed to update thread metadata: %O', logScope, error);
-        }
-      },
-
-      onComplete: async ({ finalState, reason }) => {
-        const completedAt = new Date().toISOString();
-        const duration = Date.now() - new Date(startedAt).getTime();
-
-        // Determine thread status based on completion reason
-        let status: ThreadStatus;
-        switch (reason) {
-          case 'done': {
-            status = ThreadStatus.Completed;
-            break;
-          }
-          case 'error': {
-            status = ThreadStatus.Failed;
-            break;
-          }
-          case 'interrupted': {
-            status = ThreadStatus.Cancel;
-            break;
-          }
-          case 'waiting_for_human': {
-            status = ThreadStatus.InReview;
-            break;
-          }
-          default: {
-            status = ThreadStatus.Completed;
-          }
-        }
-
-        // Log error when the isolated run fails
-        if (reason === 'error' && finalState.error) {
-          console.error('%s: run failed for thread %s:', logScope, threadId, finalState.error);
-        }
-
-        try {
-          // Extract summary from last assistant message and update source message content
-          const lastAssistantMessage = finalState.messages
-            ?.slice()
-            .reverse()
-            .find((m: { role: string }) => m.role === 'assistant');
-
-          if (lastAssistantMessage?.content) {
-            await this.messageModel.update(sourceMessageId, {
-              content: lastAssistantMessage.content,
-            });
-            log('%s: updated source message %s with summary', logScope, sourceMessageId);
-          }
-
-          // Format error for proper serialization (Error objects don't serialize with JSON.stringify)
-          const formattedError = formatErrorForMetadata(finalState.error);
-
-          // Update Thread metadata
-          await this.threadModel.update(threadId, {
-            metadata: {
-              completedAt,
-              duration,
-              error: formattedError,
-              operationId: finalState.operationId,
-              startedAt,
-              totalCost: finalState.cost?.total,
-              totalMessages: finalState.messages?.length ?? 0,
-              totalTokens: this.calculateTotalTokens(finalState.usage),
-              totalToolCalls: accumulatedToolCalls,
-            },
-            status,
-          });
-
-          log(
-            '%s: thread %s completed with status %s, reason: %s',
-            logScope,
-            threadId,
-            status,
-            reason,
-          );
-        } catch (error) {
-          console.error('%s: failed to update thread on completion: %O', logScope, error);
-        }
-      },
-    };
-  }
-
-  /**
-   * Create hooks for tracking Thread metadata updates during SubAgent execution.
-   * Replaces the legacy createThreadMetadataCallbacks with the hooks system.
-   */
-  private createThreadHooks(
-    threadId: string,
-    startedAt: string,
-    sourceMessageId: string,
-    logScope: 'execSubAgent' | 'execVirtualSubAgent',
-  ): AgentHook[] {
-    let accumulatedToolCalls = 0;
-
-    return [
-      {
-        handler: async (event) => {
-          const state = event.finalState;
-          if (!state) return;
-
-          // Count tool calls from step result
-          const stepToolCalls = state.session?.toolCalls || 0;
-          if (stepToolCalls > accumulatedToolCalls) {
-            accumulatedToolCalls = stepToolCalls;
-          }
-
-          try {
-            await this.threadModel.update(threadId, {
-              metadata: {
-                operationId: event.operationId,
-                startedAt,
-                totalMessages: state.messages?.length ?? 0,
-                totalTokens: this.calculateTotalTokens(state.usage),
-                totalToolCalls: accumulatedToolCalls,
-              },
-            });
-          } catch (error) {
-            log('%s: thread hook afterStep failed to update metadata: %O', logScope, error);
-          }
-        },
-        id: 'thread-metadata-update',
-        type: 'afterStep' as const,
-      },
-      {
-        handler: async (event) => {
-          const finalState = event.finalState;
-          if (!finalState) return;
-
-          const completedAt = new Date().toISOString();
-          const duration = Date.now() - new Date(startedAt).getTime();
-
-          // Map completion reason to ThreadStatus
-          let status: ThreadStatus;
-          switch (event.reason) {
-            case 'done': {
-              status = ThreadStatus.Completed;
-              break;
-            }
-            case 'error': {
-              status = ThreadStatus.Failed;
-              break;
-            }
-            case 'interrupted': {
-              status = ThreadStatus.Cancel;
-              break;
-            }
-            case 'waiting_for_human': {
-              status = ThreadStatus.InReview;
-              break;
-            }
-            default: {
-              status = ThreadStatus.Completed;
-            }
-          }
-
-          if (event.reason === 'error' && finalState.error) {
-            console.error(
-              '%s: thread hook onComplete run failed for thread %s:',
-              logScope,
-              threadId,
-              finalState.error,
-            );
-          }
-
-          try {
-            // Update source message with summary
-            const lastAssistantMessage = finalState.messages
-              ?.slice()
-              .reverse()
-              .find((m: { role: string }) => m.role === 'assistant');
-
-            if (lastAssistantMessage?.content) {
-              await this.messageModel.update(sourceMessageId, {
-                content: lastAssistantMessage.content,
-              });
-            }
-
-            const formattedError = formatErrorForMetadata(finalState.error);
-
-            await this.threadModel.update(threadId, {
-              metadata: {
-                completedAt,
-                duration,
-                error: formattedError,
-                operationId: finalState.operationId,
-                startedAt,
-                totalCost: finalState.cost?.total,
-                totalMessages: finalState.messages?.length ?? 0,
-                totalTokens: this.calculateTotalTokens(finalState.usage),
-                totalToolCalls: accumulatedToolCalls,
-              },
-              status,
-            });
-
-            log(
-              '%s: thread hook onComplete thread %s status=%s reason=%s',
-              logScope,
-              threadId,
-              status,
-              event.reason,
-            );
-          } catch (error) {
-            console.error('%s: thread hook onComplete failed to update: %O', logScope, error);
-          }
-        },
-        id: 'thread-completion',
-        type: 'onComplete' as const,
-      },
-    ];
-  }
-
-  /**
-   * Completion bridge for the server `callSubAgent` deferred-tool path.
-   *
-   * Fires on the sub-op's completion (success or failure) and delegates to
-   * `AgentRuntimeService.completeSubAgentBridge`: backfill the parent's
-   * placeholder tool message, then barrier-check + CAS-resume the parked
-   * parent op.
-   *
-   * Transport adapts to the runtime mode like every other lifecycle hook:
-   *   - local mode: the `handler` runs in-process with the child's finalState.
-   *   - queue mode: in-memory handlers don't survive cross-process steps, so
-   *     the serialized `webhook` config is delivered via QStash to
-   *     `/api/agent/webhooks/subagent-callback`, which re-enters the same
-   *     bridge method. `delivery: 'qstash'` is required — a plain fetch would
-   *     be rejected by the endpoint's QStash signature auth.
-   */
-  private createSubAgentBridgeHook(
-    parentOperationId: string,
-    toolMessageId: string,
-    threadId: string,
-  ): AgentHook {
-    return {
-      handler: async (event) => {
-        try {
-          await this.agentRuntimeService.completeSubAgentBridge({
-            finalState: event.finalState,
-            operationId: event.operationId,
-            parentOperationId,
-            reason: event.reason ?? 'done',
-            threadId,
-            toolMessageId,
-          });
-        } catch (error) {
-          console.error(
-            'Sub-agent bridge: failed to complete bridge for parent %s: %O',
-            parentOperationId,
-            error,
-          );
-        }
-      },
-      id: 'sub-agent-bridge',
-      type: 'onComplete' as const,
-      webhook: {
-        body: { parentOperationId, threadId, toolMessageId },
-        delivery: 'qstash' as const,
-        // Keep the payload lean: the endpoint reloads the child's final state
-        // from the coordinator, so everything beyond these ids is dead weight.
-        // The default (all event fields) would ship the child's entire final
-        // answer (`lastAssistantContent`) — and any tool-produced attachments
-        // the shared lifecycle event extractor inlines — through QStash.
-        eventFields: ['operationId', 'reason', 'status'],
-        // The endpoint sits behind QStash signature auth, so the unsigned
-        // fetch fallback could never authenticate — it would only mask a
-        // publish failure as a silently-dropped 401, stranding the parent.
-        fallback: 'none' as const,
-        url: '/api/agent/webhooks/subagent-callback',
-      },
-    };
-  }
-
-  /**
-   * Completion bridge for the group orchestration "call agent member" path.
-   *
-   * Fires on a member op's completion and delegates to
-   * `AgentRuntimeService.completeGroupActionMember`: backfill the member anchor,
-   * enforce the K=N member barrier, then resume/finish the parked supervisor.
-   * Transport mirrors {@link createSubAgentBridgeHook} — in-process in local
-   * mode, QStash → `/api/agent/webhooks/group-member-callback` in queue mode.
-   */
-  private createGroupActionMemberBridgeHook(params: {
-    anchorMessageId: string;
-    expectedMembers: number;
-    groupToolMessageId: string;
-    mode: GroupActionMemberMode;
-    onComplete: GroupActionOnComplete;
-    parentOperationId: string;
-    threadId?: string;
-  }): AgentHook {
-    const {
-      anchorMessageId,
-      expectedMembers,
-      groupToolMessageId,
-      mode,
-      onComplete,
-      parentOperationId,
-      threadId,
-    } = params;
-    return {
-      handler: async (event) => {
-        try {
-          await this.agentRuntimeService.completeGroupActionMember({
-            anchorMessageId,
-            expectedMembers,
-            finalState: event.finalState,
-            groupToolMessageId,
-            mode,
-            onComplete,
-            operationId: event.operationId,
-            parentOperationId,
-            reason: event.reason ?? 'done',
-            threadId,
-          });
-        } catch (error) {
-          console.error(
-            'Group-member bridge: failed to complete bridge for parent %s: %O',
-            parentOperationId,
-            error,
-          );
-        }
-      },
-      id: 'group-member-bridge',
-      type: 'onComplete' as const,
-      webhook: {
-        body: {
-          anchorMessageId,
-          expectedMembers,
-          groupToolMessageId,
-          mode,
-          onComplete,
-          parentOperationId,
-          threadId,
-        },
-        delivery: 'qstash' as const,
-        eventFields: ['operationId', 'reason', 'status'],
-        fallback: 'none' as const,
-        url: '/api/agent/webhooks/group-member-callback',
-      },
-    };
-  }
-
-  /**
-   * Calculate total tokens from AgentState usage object
-   * AgentState.usage is of type Usage from @lobechat/agent-runtime
-   */
-  private calculateTotalTokens(usage?: AgentState['usage']): number | undefined {
-    if (!usage) return undefined;
-    return usage.llm?.tokens?.total;
-  }
-
-  /**
    * Interrupts a running task and coordinates any device-hosted process shutdown.
-   *
-   * Call stack:
-   *
-   * execAgent (replacement path)
-   *   -> {@link AiAgentService.interruptTask}
-   *     -> deviceGateway.executeToolCall(cancelHeteroTask)
-   *       -> HeterogeneousAgentCtr.cancelLhHeteroExec
-   *
-   * Use when:
-   * - A user stops an agent runtime by thread or operation id.
-   * - A replacement run must wait for a device-hosted native writer to exit.
-   *
-   * Expects:
-   * - At least one of `threadId` or `operationId` resolves to an owned operation.
-   *
-   * Returns:
-   * - Runtime cancellation status and, for local device agents, whether process exit was confirmed.
+   * Delegates to {@link InterventionController}.
    */
   async interruptTask(params: {
     operationId?: string;
@@ -6015,342 +5623,42 @@ export class AiAgentService {
     success: boolean;
     threadId?: string;
   }> {
-    const { threadId, operationId, topicId } = params;
-
-    log('interruptTask: threadId=%s, operationId=%s', threadId, operationId);
-
-    // 1. Get operationId and thread
-    let resolvedOperationId = operationId;
-    let thread;
-    let deviceCancellationConfirmed: boolean | undefined;
-
-    if (threadId) {
-      thread = await this.threadModel.findById(threadId);
-      if (!thread) {
-        throw new Error('Thread not found');
-      }
-      resolvedOperationId = resolvedOperationId || thread.metadata?.operationId;
-    }
-
-    if (!resolvedOperationId) {
-      throw new Error('Operation ID not found');
-    }
-
-    // Not every cancellation entry point knows the topic (reconnect, task,
-    // bot/messenger stop). Recover it from the owner-scoped operation row so
-    // device cancellation is symmetric across every caller.
-    let resolvedTopicId = topicId;
-    if (!resolvedTopicId) {
-      const operation = await this.agentOperationModel.findById(resolvedOperationId);
-      resolvedTopicId = operation?.topicId ?? undefined;
-    }
-
-    // 2. Cancel a device-hosted hetero process if applicable.
-    // Check topic.metadata.runningOperation for device + heteroType info seeded by execAgent.
-    // This runs regardless of whether interruptOperation succeeds — the remote process
-    // is independent of the local operation registry.
-    if (resolvedTopicId) {
-      const topic = await this.topicModel.findById(resolvedTopicId);
-      const runningOp = (topic?.metadata as any)?.runningOperation as
-        | {
-            deviceId?: string;
-            deviceUserId?: string;
-            deviceWorkspaceId?: string;
-            heteroType?: string;
-            operationId?: string;
-            childOperations?: Array<{
-              deviceId?: string;
-              deviceUserId?: string;
-              deviceWorkspaceId?: string;
-              heteroType?: string;
-              operationId?: string;
-            }>;
-          }
-        | undefined;
-      const targetOperation =
-        runningOp?.operationId === resolvedOperationId
-          ? runningOp
-          : runningOp?.childOperations?.find((child) => child.operationId === resolvedOperationId);
-
-      if (
-        targetOperation?.deviceId &&
-        targetOperation.heteroType &&
-        (isRemoteHeterogeneousType(targetOperation.heteroType) ||
-          isLocalHeterogeneousType(targetOperation.heteroType))
-      ) {
-        const taskId = targetOperation.operationId ?? resolvedOperationId;
-        log(
-          'interruptTask: cancelling device hetero process heteroType=%s deviceId=%s taskId=%s',
-          targetOperation.heteroType,
-          targetOperation.deviceId,
-          taskId,
-        );
-        const cancelWorkspaceId =
-          targetOperation.deviceWorkspaceId ??
-          (await this.resolveDeviceWorkspaceId(targetOperation.deviceId));
-        const cancelResult = await deviceGateway.executeToolCall(
-          {
-            deviceId: targetOperation.deviceId,
-            userId: targetOperation.deviceUserId ?? this.userId,
-            workspaceId: cancelWorkspaceId,
-          },
-          {
-            apiName: 'cancelHeteroTask',
-            arguments: JSON.stringify({ signal: 'SIGINT', taskId }),
-            identifier: 'cancelHeteroTask',
-          },
-          // The device first gives the wrapper/native CLI 2s to stop
-          // cooperatively, then escalates and drains its terminal callback.
-          10_000,
-        );
-
-        if (isLocalHeterogeneousType(targetOperation.heteroType)) {
-          deviceCancellationConfirmed =
-            cancelResult.success &&
-            isRecord(cancelResult.state) &&
-            cancelResult.state.exited === true;
-        }
-
-        if (!cancelResult.success || deviceCancellationConfirmed === false) {
-          log(
-            'interruptTask: device cancellation unconfirmed taskId=%s success=%s state=%O error=%s',
-            taskId,
-            cancelResult.success,
-            cancelResult.state,
-            cancelResult.error,
-          );
-        }
-      }
-    }
-
-    // 3. Interrupt the runtime operation first. Only mark the thread cancelled
-    // after the runtime acknowledges the interrupt to avoid unlocking a live task.
-    const interrupted = await this.agentRuntimeService.interruptOperation(resolvedOperationId);
-    log(
-      'interruptTask: interruptOperation=%s for operationId=%s',
-      interrupted,
-      resolvedOperationId,
-    );
-
-    if (!interrupted) {
-      const alreadyCancelled = thread?.status === ThreadStatus.Cancel;
-
-      return {
-        deviceCancellationConfirmed,
-        operationId: resolvedOperationId,
-        success: alreadyCancelled,
-        threadId: thread?.id,
-      };
-    }
-
-    // 4. Update Thread status to cancel
-    if (thread) {
-      await this.threadModel.update(thread.id, {
-        metadata: {
-          ...thread.metadata,
-          completedAt: new Date().toISOString(),
-        },
-        status: ThreadStatus.Cancel,
-      });
-    }
-
-    return {
-      deviceCancellationConfirmed,
-      operationId: resolvedOperationId,
-      success: true,
-      threadId: thread?.id,
-    };
+    return this.interventionController.interruptTask(params);
   }
 
-  /**
-   * Stop a run that is parked waiting for tool approval: settle the pending
-   * tool rows and terminate the operation, WITHOUT executing anything and
-   * without continuing the model.
-   *
-   * This is the "from this step on, don't go any further" action. It is not the
-   * same as rejecting a tool — a rejection resumes the model so it can respond
-   * to the refusal, whereas stopping ends the turn outright.
-   *
-   * Why it can't reuse the ordinary cancel path: when the runtime parks it
-   * emits a stream-terminal `waiting_for_human`, so the client marks its own
-   * operation `completed` and prunes it ~30s later. The pending tool rows retain
-   * the authoritative operation and sealed-batch identity; callers must send
-   * that exact correlation and this service verifies it against both the
-   * operation record and every batch member before claiming anything.
-   *
-   * The tool rows are settled IN PLACE (the approval pause already created one
-   * row per pending call). Inserting fresh aborted rows would duplicate every
-   * tool in the turn and leave the originals `pending`, which is exactly what
-   * keeps the approval cards on screen after a stop.
-   */
-  async stopPendingApproval(params: {
+  /** Settle a parked approval batch and terminate its operation. */
+  stopPendingApproval(params: {
     approvalResolutionRequestId?: string;
     batchId: string;
     operationId: string;
     toolMessageIds: string[];
     topicId: string;
-  }): Promise<{
-    operationId: string;
-    settledToolMessageIds: string[];
-    success: boolean;
-  }> {
-    const { approvalResolutionRequestId, batchId, operationId, toolMessageIds, topicId } = params;
-
-    const operation = await this.agentOperationModel.findById(operationId);
-    if (
-      !operation ||
-      operation.topicId !== topicId ||
-      (operation.status !== 'waiting_for_human' && operation.status !== 'interrupted')
-    ) {
-      throw new Error('stopPendingApproval: operation is not the parked owner of this topic');
-    }
-
-    // Validate identity and complete sealed-batch membership before the atomic
-    // claim. The caller cannot stop a hand-picked subset or a stale batch from
-    // another parked operation.
-    const targets: { alreadyClaimed: boolean; id: string }[] = [];
-    for (const toolMessageId of toolMessageIds) {
-      const message = await this.messageModel.findById(toolMessageId);
-      if (!message)
-        throw new Error(`stopPendingApproval: tool message not found: ${toolMessageId}`);
-      if (message.role !== 'tool') {
-        throw new Error(
-          `stopPendingApproval.toolMessageIds must point at role='tool' messages, got role='${message.role}'`,
-        );
-      }
-      if (message.topicId !== topicId) {
-        throw new Error('stopPendingApproval: topicId does not match the target tool message');
-      }
-      const plugin = await this.messageModel.findMessagePlugin(toolMessageId);
-      const intervention = plugin?.intervention;
-      if (
-        !intervention ||
-        intervention.operationId !== operationId ||
-        intervention.batchId !== batchId
-      ) {
-        throw new Error('stopPendingApproval: target is not in the requested batch');
-      }
-      const alreadyClaimed =
-        intervention.status === 'aborted' &&
-        Boolean(approvalResolutionRequestId) &&
-        intervention.resolutionRequestId === approvalResolutionRequestId;
-      if (intervention.status !== 'pending' && !alreadyClaimed) {
-        throw new HumanApprovalAlreadyResolvedError(toolMessageId);
-      }
-      targets.push({ alreadyClaimed, id: toolMessageId });
-    }
-
-    const fullBatchIds = (await this.messageModel.listMessagePluginsByTopic(topicId))
-      .filter(
-        (plugin) =>
-          plugin.intervention?.operationId === operationId &&
-          plugin.intervention?.batchId === batchId,
-      )
-      .map(({ id }) => id)
-      .sort();
-    const requestedIds = targets.map(({ id }) => id).sort();
-    if (
-      fullBatchIds.length !== requestedIds.length ||
-      fullBatchIds.some((id, index) => id !== requestedIds[index])
-    ) {
-      throw new Error('stopPendingApproval: targets must cover the complete sealed batch');
-    }
-
-    const alreadyClaimedCount = targets.filter(({ alreadyClaimed }) => alreadyClaimed).length;
-    if (alreadyClaimedCount !== 0 && alreadyClaimedCount !== targets.length) {
-      throw new Error('stopPendingApproval: batch has a partial resolution claim');
-    }
-    if (operation.status === 'interrupted' && alreadyClaimedCount !== targets.length) {
-      throw new Error('stopPendingApproval: interrupted operation has unsettled batch members');
-    }
-
-    if (alreadyClaimedCount === 0) {
-      await this.messageModel.resolveHumanApproval(
-        targets.map((target) => ({
-          content: STOPPED_TOOL_CONTENT,
-          id: target.id,
-          intervention: {
-            ...(approvalResolutionRequestId && {
-              resolutionRequestId: approvalResolutionRequestId,
-            }),
-            status: 'aborted',
-          },
-        })),
-      );
-    }
-
-    if (operation.status !== 'interrupted') {
-      await this.agentRuntimeService.interruptOperation(operationId);
-      await this.agentOperationModel.recordCompletion(operationId, {
-        completedAt: new Date(),
-        completionReason: 'interrupted',
-        status: 'interrupted',
-      });
-    }
-
-    log(
-      'stopPendingApproval: settled %d tool message(s), retired operation %s',
-      targets.length,
-      operationId,
-    );
-
-    return {
-      operationId,
-      settledToolMessageIds: targets.map((t) => t.id),
-      success: true,
-    };
+  }): Promise<{ operationId: string; settledToolMessageIds: string[]; success: boolean }> {
+    return this.interventionController.stopPendingApproval(params);
   }
 
-  /**
-   * Retire the operation segment that parked on an approval after its
-   * replacement continuation has been scheduled. The Redis state is stopped
-   * first; the durable row then converges waiting_for_human -> done. Repeating
-   * this call is safe, including after Cloud supersession won the race.
-   */
-  async retirePendingApprovalOperation(operationId: string): Promise<void> {
-    await this.agentRuntimeService.interruptOperation(operationId);
-
-    const operation = await this.agentOperationModel.findById(operationId);
-    if (!operation) {
-      throw new Error(`retirePendingApprovalOperation: operation not found: ${operationId}`);
-    }
-    if (operation.status === 'done' || operation.status === 'interrupted') return;
-    if (operation.status !== 'waiting_for_human') {
-      throw new Error(
-        `retirePendingApprovalOperation: expected waiting_for_human, got ${operation.status}`,
-      );
-    }
-
-    const completed = await this.agentOperationModel.recordCompletion(operationId, {
-      completedAt: new Date(),
-      completionReason: 'done',
-      status: 'done',
-    });
-    if (!completed) {
-      const latest = await this.agentOperationModel.findById(operationId);
-      if (latest?.status !== 'done' && latest?.status !== 'interrupted') {
-        throw new Error(`retirePendingApprovalOperation: failed to settle ${operationId}`);
-      }
-    }
+  /** Retire the operation segment parked on an approval. */
+  retirePendingApprovalOperation(operationId: string): Promise<void> {
+    return this.interventionController.retirePendingApprovalOperation(operationId);
   }
 
   /** Owner-scoped runtime state used by the v2 router's crash-safe retry probe. */
-  async loadInterventionContinuationState(operationId: string): Promise<AgentState | null> {
-    return this.agentRuntimeService.loadInterventionContinuationState(operationId);
+  loadInterventionContinuationState(operationId: string): Promise<AgentState | null> {
+    return this.interventionController.loadInterventionContinuationState(operationId);
   }
 
   /** Requeue an idle deterministic continuation without rebuilding its assistant turn. */
-  async ensureInterventionContinuationStarted(
+  ensureInterventionContinuationStarted(
     operationId: string,
   ): Promise<'already_started' | 'missing' | 'scheduled'> {
-    return this.agentRuntimeService.ensureInterventionContinuationStarted(operationId);
+    return this.interventionController.ensureInterventionContinuationStarted(operationId);
   }
 
   /**
    * Repair the topic reconnect marker and release the exact start reservation
-   * after a durable queue ACK. A foreign newer running operation fails closed.
+   * after a durable queue ACK. Delegates to {@link InterventionController}.
    */
-  async repairInterventionContinuationTopicAnchor(params: {
+  repairInterventionContinuationTopicAnchor(params: {
     assistantMessageId: string;
     continuationOperationId: string;
     resolutionRequestId: string;
@@ -6360,79 +5668,6 @@ export class AiAgentService {
     threadId?: string | null;
     topicId: string;
   }): Promise<void> {
-    const operation = await this.agentOperationModel.findById(params.continuationOperationId);
-    const expectedProvenance = {
-      resolutionRequestId: params.resolutionRequestId,
-      sourceOperationId: params.sourceOperationId,
-      sourceToolMessageIds: [...params.sourceToolMessageIds].sort(),
-    };
-    const assistant = await this.messageModel.findById(params.assistantMessageId);
-    const dispatchMarker = operation?.metadata?.agentInterventionDispatch as
-      | {
-          deduplicationId?: unknown;
-          resolutionRequestId?: unknown;
-          state?: unknown;
-        }
-      | undefined;
-    const expectedDeduplicationId = deriveAgentInterventionQueueDeduplicationId(
-      params.continuationOperationId,
-      0,
-    );
-    if (
-      !operation ||
-      operation.topicId !== params.topicId ||
-      !matchesAgentInterventionContinuationProvenance(
-        operation.metadata?.agentInterventionContinuation,
-        expectedProvenance,
-      ) ||
-      dispatchMarker?.state !== 'scheduled' ||
-      dispatchMarker.resolutionRequestId !== params.resolutionRequestId ||
-      dispatchMarker.deduplicationId !== expectedDeduplicationId ||
-      assistant?.role !== 'assistant' ||
-      assistant.topicId !== params.topicId
-    ) {
-      throw new Error('Intervention continuation topic repair provenance conflict');
-    }
-
-    // Thread continuations use the deterministic topic reservation only as a
-    // short single-initializer fence. They never own the topic's main
-    // runningOperation anchor, so ACK recovery must release exactly their
-    // reservation without promoting the thread into the main conversation
-    // spine. A foreign reservation is intentionally left untouched.
-    if (params.threadId) {
-      const released = await this.topicModel.releaseTaskCallbackReservation(
-        params.topicId,
-        params.continuationOperationId,
-      );
-      if (released === 'foreign') {
-        throw new Error('Intervention continuation topic repair found a foreign reservation');
-      }
-      return;
-    }
-
-    const state = await this.agentRuntimeService.loadInterventionContinuationState(
-      params.continuationOperationId,
-    );
-    const runtimeTerminal =
-      state?.status === 'done' || state?.status === 'error' || state?.status === 'interrupted';
-    const durableTerminal =
-      operation.status === 'done' ||
-      operation.status === 'error' ||
-      operation.status === 'interrupted' ||
-      operation.status === 'abandoned';
-    const result = await this.topicModel.repairAgentInterventionContinuation({
-      active: !runtimeTerminal && !durableTerminal,
-      assistantMessageId: params.assistantMessageId,
-      continuationOperationId: params.continuationOperationId,
-      reservationId: params.continuationOperationId,
-      scope: params.scope,
-      sourceOperationId: params.sourceOperationId,
-      startedAt: operation.startedAt?.toISOString() ?? new Date().toISOString(),
-      threadId: params.threadId,
-      topicId: params.topicId,
-    });
-    if (result === 'conflict') {
-      throw new Error('Intervention continuation topic repair found a foreign running operation');
-    }
+    return this.interventionController.repairInterventionContinuationTopicAnchor(params);
   }
 }

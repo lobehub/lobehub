@@ -64,13 +64,13 @@ describe('getFilePathDisplayInfo', () => {
 });
 
 describe('SINGLE_EDITED_FILE_ICON_SIZE', () => {
-  it('keeps the single-file icon container compact', () => {
+  it('matches the height of the two-line title block beside it', () => {
     expect(SINGLE_EDITED_FILE_ICON_SIZE).toBe(40);
   });
 });
 
 describe('AGGREGATE_EDITED_FILE_ICON_SIZE', () => {
-  it('keeps the multi-file summary as compact as the single-file card', () => {
+  it('matches the single-file card so stacked cards share one icon scale', () => {
     expect(AGGREGATE_EDITED_FILE_ICON_SIZE).toBe(40);
   });
 });
@@ -86,7 +86,7 @@ describe('SingleEditedFileCard', () => {
     expect(summary).toHaveTextContent('+7');
     expect(summary).toHaveTextContent('-2');
     expect(summary).not.toContainElement(action);
-    expect(action).toHaveAttribute('data-view-changes');
+    expect(action.closest('[data-view-changes]')).not.toBeNull();
     expect(action).toHaveAttribute('aria-expanded', 'false');
 
     fireEvent.click(action);

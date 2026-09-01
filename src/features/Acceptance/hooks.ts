@@ -6,10 +6,15 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { useClientDataSWR } from '@/libs/swr';
 import { verifyKeys } from '@/libs/swr/keys';
 import { documentService } from '@/services/document';
-import type { VerifyReportSummaryPage } from '@/services/verify';
+import type {
+  AcceptanceListFilter,
+  AcceptanceListPage,
+  VerifyReportSummaryPage,
+} from '@/services/verify';
 import { verifyService } from '@/services/verify';
 
 const VERIFY_REPORT_PAGE_SIZE = 30;
+const ACCEPTANCE_PAGE_SIZE = 30;
 const VERIFY_REPORT_SWR_CONFIG = {
   revalidateIfStale: false,
   revalidateOnFocus: false,
@@ -111,6 +116,73 @@ export const useAcceptanceList = (
       ...(options?.revalidateOnMount ? { revalidateOnMount: true } : {}),
     },
   );
+
+/**
+ * The panel's scroll feed: keyset pages, newest first, with the in-progress /
+ * completed split applied server-side (see `acceptance.listPage`).
+ *
+ * A `null` filter disables the feed entirely — that is how the panel hands off
+ * to the flat search read. Changing the filter starts a fresh key series, so the
+ * loaded depth collapses back to one page rather than cascading a refetch of as
+ * many pages as the previous view had open.
+ */
+export const useAcceptanceListInfinite = (filter: AcceptanceListFilter | null) => {
+  const workspaceId = useActiveWorkspaceId();
+
+  const getKey = useCallback(
+    (_index: number, previous: AcceptanceListPage | null) => {
+      if (previous && previous.nextCursor === null) return null;
+      if (!filter) return null;
+      return verifyKeys.acceptancePage(
+        workspaceId ?? undefined,
+        filter,
+        previous?.nextCursor ?? undefined,
+      );
+    },
+    [filter, workspaceId],
+  );
+
+  const { data, error, isLoading, mutate, setSize, size } = useSWRInfinite(
+    getKey,
+    ([, , , cursor]: readonly [string, string, string, string]) =>
+      verifyService.listAcceptancePage({
+        cursor: cursor || undefined,
+        filter: filter ?? undefined,
+        limit: ACCEPTANCE_PAGE_SIZE,
+      }),
+    { ...VERIFY_REPORT_SWR_CONFIG, revalidateFirstPage: false },
+  );
+
+  useEffect(() => {
+    setSize(1);
+  }, [filter, workspaceId, setSize]);
+
+  const loadMore = useCallback(() => {
+    void setSize((s) => s + 1);
+  }, [setSize]);
+
+  // SWR leaves a failed/pending page's slot `undefined`, so guard the holes.
+  const items = data?.flatMap((page) => page?.items ?? []) ?? [];
+  const lastLoadedPage = data?.findLast(Boolean);
+  const reachedEnd = lastLoadedPage ? lastLoadedPage.nextCursor === null : false;
+  const hasLoadedPages = data !== undefined;
+
+  const isLoadingInitial = !error && isLoading && !hasLoadedPages;
+  const isLoadingMore =
+    !error && hasLoadedPages && size > 0 && typeof data[size - 1] === 'undefined';
+
+  return {
+    error,
+    // Pause the sentinel while an error is showing so it cannot hot-loop the
+    // failed page; the panel offers a manual retry instead.
+    hasMore: !reachedEnd && !error,
+    isLoadingInitial,
+    isLoadingMore,
+    items,
+    loadMore,
+    mutate,
+  };
+};
 
 /**
  * Acceptance status for a known subject set — one read for a whole list.

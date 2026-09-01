@@ -131,6 +131,13 @@ export interface FrontierCandidate {
 /** Budget as the coordinator read it, not as it looks now. */
 export interface GoalBudgetState {
   costLimitReached: boolean;
+  /**
+   * The goal's calendar-time budget (config.schedule.deadline), evaluated at
+   * decision time. Time-based stopping is derived, not stored — a replay of a
+   * recorded trajectory must see the same verdict the live run saw, so it
+   * travels with the budget rather than being recomputed from the wall clock.
+   */
+  deadlinePassed?: boolean;
   maxRounds?: number | null;
   maxTotalCost?: number | null;
   roundLimitReached: boolean;

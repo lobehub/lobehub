@@ -281,6 +281,71 @@ describe('GoalService', () => {
     ).not.toContainEqual(expect.objectContaining({ id: graph.goal.id }));
   });
 
+  it('leaves goal-level status transitions on the event trail', async () => {
+    // The coordinator parks and reopens goals constantly, but only node
+    // transitions used to be recorded — `entity_type='goal'` events existed in
+    // the schema with no writer, so the lifecycle timeline was unreconstructable.
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'Lifecycle trail', work: ['A', 'B'] });
+    const [a, b] = graph.nodes.filter((n) => n.kind === 'task');
+    const graphModel = new GoalGraphModel(serverDB, userId);
+    await graphModel.createEdge(graph.goal.id, a.id, b.id, 'depends_on');
+    await graphModel.createEdge(graph.goal.id, b.id, a.id, 'depends_on');
+
+    await service.tick(graph.goal.id); // deadlock → no_frontier → paused
+    await service.resume(graph.goal.id); // paused → running
+
+    const lifecycle = (await service.graph(graph.goal.id)).events.filter(
+      (event) => event.entityType === 'goal',
+    );
+
+    // Same-millisecond events read back in either order; assert on content.
+    expect(lifecycle).toHaveLength(2);
+    expect(lifecycle).toContainEqual(
+      expect.objectContaining({
+        actorType: 'system',
+        eventType: 'updated',
+        reason: 'no eligible work to advance',
+      }),
+    );
+    expect(lifecycle).toContainEqual(
+      expect.objectContaining({ eventType: 'activated', reason: 'resumed by user' }),
+    );
+  });
+
+  it('reopens a goal its deadline stopped when the deadline moves out', async () => {
+    // A calendar deadline is the long-horizon budget unit; extending it has to
+    // unstick the goal exactly like raising a round budget does. Two ticks:
+    // creating the responsible task costs nothing, the deadline gates the run.
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({
+      config: { schedule: { deadline: new Date(Date.now() - 1000).toISOString() } },
+      title: 'Overdue',
+      work: ['Too late to start'],
+    });
+
+    await service.tick(graph.goal.id); // creates the responsible task
+    const stopped = await service.tick(graph.goal.id);
+    expect(stopped.message).toContain('Deadline passed');
+    expect((await service.graph(graph.goal.id)).goal.status).toBe('paused');
+
+    const extended = await service.setBudget(graph.goal.id, {
+      deadline: new Date(Date.now() + 3_600_000).toISOString(),
+    });
+
+    expect(extended?.status).not.toBe('paused');
+    expect(extended?.config?.schedule?.deadline).toBeTruthy();
+  });
+
+  it('dispatches work when the goal has no deadline', async () => {
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'No deadline', work: ['Just work'] });
+
+    const result = await service.tick(graph.goal.id);
+
+    expect(result.outcome).toBe('advanced');
+  });
+
   it('files a goal the agent created under that agent, not its owner', async () => {
     // `/goal` is an agent making the call. `agentId` alone cannot say so — the
     // creation modal sets it too, and there the author is the person.

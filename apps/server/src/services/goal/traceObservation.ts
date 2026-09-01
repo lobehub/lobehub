@@ -87,6 +87,9 @@ export const toFrontierTaskState = (task: TaskItem, nodeId?: string): GoalFronti
 
 export interface BudgetEvaluation {
   costLimitReached: boolean;
+  /** ISO deadline from the goal's schedule config; null = uncapped. */
+  deadline: string | null;
+  deadlinePassed: boolean;
   roundLimitReached: boolean;
   runs: { length: number };
   totalCost: number;
@@ -94,6 +97,7 @@ export interface BudgetEvaluation {
 
 export const toBudgetState = (goal: GoalItem, budget: BudgetEvaluation): GoalBudgetState => ({
   costLimitReached: budget.costLimitReached,
+  deadlinePassed: budget.deadlinePassed,
   maxRounds: goal.maxRounds,
   maxTotalCost: goal.maxTotalCost === null ? null : Number(goal.maxTotalCost),
   roundLimitReached: budget.roundLimitReached,

@@ -14,12 +14,14 @@ import { useAcceptanceScope } from './AcceptanceScope';
 import AcceptanceStatusPill from './AcceptanceStatusPill';
 import { getAcceptanceStatusActions } from './statusActions';
 import { useAcceptanceBundle } from './useAcceptanceBundle';
+import { canReviewAcceptance } from './visibility';
 
 const AcceptanceStatusControl = () => {
   const { t } = useTranslation('verify');
   const { acceptanceId } = useAcceptanceScope();
   const { data, mutate } = useAcceptanceBundle(acceptanceId);
-  if (!data?.isOwner) return <AcceptanceStatusPill status={data?.acceptance.status ?? 'pending'} />;
+  if (!data || !canReviewAcceptance(data))
+    return <AcceptanceStatusPill status={data?.acceptance.status ?? 'pending'} />;
 
   const changeStatus = async (status: 'accepted' | 'closed' | 'delivered') => {
     try {
