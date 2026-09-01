@@ -2,7 +2,13 @@ import type { ChatToolPayload } from '@lobechat/types';
 
 import type { AgentState } from '../types';
 
-export const TOOL_CALL_REPEAT_LIMIT = 5;
+/**
+ * Consecutive identical calls allowed before the turn is stopped. High enough
+ * that legitimate fixed-argument polling loops (e.g. an MCP job-status check
+ * repeated until the job finishes) don't get cut off, while a model stuck
+ * replaying the same call forever is still caught.
+ */
+export const TOOL_CALL_REPEAT_LIMIT = 20;
 
 const canonicalize = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(canonicalize);
