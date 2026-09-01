@@ -125,8 +125,8 @@ interface CommandContext {
    *  surface only the ID, not a friendly label. */
   authorUserName?: string;
   /** Read the conversation's persisted state (topicId / toolMode / …).
-   *  Wired to `thread.state` on text dispatch and `channel.state` on native
-   *  slash dispatch — the same store `setState` writes to on each path. */
+   *  Wired to `thread.state` on text dispatch and Telegram native slash
+   *  dispatch; other native-slash platforms retain their channel state. */
   getState: () => Promise<Record<string, any> | null>;
   post: (text: string) => Promise<any>;
   /**
@@ -1947,15 +1947,28 @@ export class BotMessageRouter {
       caller: string,
     ) => Promise<boolean>,
   ): void {
-    // --- Native slash commands (Slack, Discord) ---
+    // --- Native slash commands (Telegram, Slack, Discord) ---
     for (const cmd of commands) {
       bot.onSlashCommand(`/${cmd.name}`, async (event) => {
+        // Telegram's adapter encodes the exact conversation in the slash
+        // Channel id (`telegram:<chatId>[:<messageThreadId>]`), but Chat SDK
+        // keeps Channel and Thread state in different buckets. Normal messages
+        // use Thread state, so resolve the same Thread handle here or `/new`
+        // would clear `channel-state:*` while the next message continued from
+        // the unchanged `thread-state:*`. The synchronous lookup preserves DM,
+        // group, and forum-topic identity without opening a separate DM.
+        //
+        // Other adapters keep their existing channel-backed slash semantics;
+        // changing those requires platform-specific conversation mapping.
+        const commandStateTarget =
+          client.id === 'telegram' ? bot.thread(event.channel.id) : event.channel;
+
         // Native slash-command events expose a Channel (Postable, so it has
         // `id` / `isDM` / `post`) and the invoking user. Project both into
         // the gate-friendly thread/author shape.
         const threadLike = {
-          id: event.channel.id,
-          isDM: event.channel.isDM,
+          id: commandStateTarget.id,
+          isDM: commandStateTarget.isDM,
           post: (t: string) => event.channel.post(t),
         };
         const authorLike = {
@@ -1970,7 +1983,7 @@ export class BotMessageRouter {
           args: event.text,
           authorUserId: authorLike.userId,
           authorUserName: authorLike.userName,
-          getState: () => event.channel.state,
+          getState: () => commandStateTarget.state,
           post: (text) => event.channel.post(text),
           // Wire chat-sdk's `postEphemeral` so commands that want a private
           // reply (e.g. `/feedback`) can opt in. `fallbackToDM: true` so
@@ -1984,16 +1997,15 @@ export class BotMessageRouter {
             : undefined,
           // Native slash-command events don't carry a Chat SDK Message, so
           // there's no per-sender locale field to read; use the channel
-          // default. Telegram/Feishu/etc. dispatch via the text-based path
-          // below, which DOES have per-message locale.
+          // default. Text-dispatched commands below DO have per-message locale.
           replyLocale,
-          setState: (state, opts) => event.channel.setState(state, opts),
-          threadId: event.channel.id,
+          setState: (state, opts) => commandStateTarget.setState(state, opts),
+          threadId: commandStateTarget.id,
         });
       });
     }
 
-    // --- Text-based slash commands (Telegram, Feishu, etc.) ---
+    // --- Fallback text-based slash commands (Feishu and similar adapters) ---
     // Platforms that don't support native onSlashCommand send /commands as
     // regular text messages. This handler intercepts them in unsubscribed
     // threads (e.g. first command in a group chat or DM).
