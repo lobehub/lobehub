@@ -1,3 +1,4 @@
+import { MAX_UPLOAD_FILE_SIZE, UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE } from '@lobechat/const';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fileEnv } from '@/envs/file';
@@ -117,6 +118,22 @@ describe('UploadService', () => {
 
       expect(result.success).toBe(true);
       expect(result.data.path).toBe(customPath);
+    });
+
+    it('should reject files larger than the database size range before uploading', async () => {
+      const oversizedFile = new File(['test'], 'huge.bin', {
+        type: 'application/octet-stream',
+      });
+      Object.defineProperty(oversizedFile, 'size', {
+        configurable: true,
+        value: MAX_UPLOAD_FILE_SIZE + 1,
+      });
+
+      await expect(uploadService.uploadFileToS3(oversizedFile, {})).rejects.toThrow(
+        UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE,
+      );
+      expect(lambdaClient.upload.createS3PreSignedUrl.mutate).not.toHaveBeenCalled();
+      expect(lambdaClient.upload.createS3MultipartUpload.mutate).not.toHaveBeenCalled();
     });
 
     it('should use custom directory when provided', async () => {

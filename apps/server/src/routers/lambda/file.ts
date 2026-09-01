@@ -1,4 +1,9 @@
-import { CUSTOM_FOLDER_FILE_TYPE, DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
+import {
+  CUSTOM_FOLDER_FILE_TYPE,
+  DERIVED_DOCUMENT_SOURCE_TYPE,
+  MAX_UPLOAD_FILE_SIZE,
+  UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE,
+} from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -241,6 +246,13 @@ export const fileRouter = router({
           workspaceId: ctx.workspaceId,
         });
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'File size cannot be negative' });
+      }
+
+      if (actualSize > MAX_UPLOAD_FILE_SIZE) {
+        throw new TRPCError({
+          code: 'PAYLOAD_TOO_LARGE',
+          message: UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE,
+        });
       }
 
       const { id } = await ctx.serverDB.transaction(async (trx) => {

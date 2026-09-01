@@ -1,3 +1,4 @@
+import { MAX_UPLOAD_FILE_SIZE, UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE } from '@lobechat/const';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -13,6 +14,12 @@ const multipartPartSchema = z.object({
   etag: z.string().min(1),
   partNumber: z.number().int().min(1).max(10_000),
 });
+
+const uploadSizeSchema = z
+  .number()
+  .int()
+  .min(0)
+  .max(MAX_UPLOAD_FILE_SIZE, UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE);
 
 export const uploadRouter = router({
   abortS3MultipartUpload: authedProcedure
@@ -47,7 +54,13 @@ export const uploadRouter = router({
 
   createS3MultipartUpload: authedProcedure
     .use(withScopedPermission('file:upload'))
-    .input(z.object({ contentType: z.string().optional(), pathname: z.string().min(1) }))
+    .input(
+      z.object({
+        contentType: z.string().optional(),
+        pathname: z.string().min(1),
+        size: uploadSizeSchema,
+      }),
+    )
     .mutation(async ({ input }) => {
       const s3 = new FileS3();
       const uploadId = await s3.createMultipartUpload(input.pathname, input.contentType);
@@ -70,7 +83,7 @@ export const uploadRouter = router({
 
   createS3PreSignedUrl: authedProcedure
     .use(withScopedPermission('file:upload'))
-    .input(z.object({ pathname: z.string() }))
+    .input(z.object({ pathname: z.string(), size: uploadSizeSchema }))
     .mutation(async ({ input }) => {
       const s3 = new FileS3();
 

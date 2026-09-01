@@ -1,3 +1,4 @@
+import { MAX_UPLOAD_FILE_SIZE, UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE } from '@lobechat/const';
 import { parseDataUri } from '@lobechat/model-runtime/utils/uriParser';
 import { uuid } from '@lobechat/utils';
 import dayjs from 'dayjs';
@@ -84,6 +85,8 @@ class UploadService {
     file: File,
     { onProgress, directory, pathname, abortController }: UploadFileToS3Options,
   ): Promise<{ data: FileMetadata; success: boolean }> => {
+    if (file.size > MAX_UPLOAD_FILE_SIZE) throw new Error(UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE);
+
     // Server-side upload logic
 
     // if is server mode, upload to server s3,
@@ -183,6 +186,7 @@ class UploadService {
       } else {
         const preSignUrl = await lambdaClient.upload.createS3PreSignedUrl.mutate({
           pathname: uploadPathname,
+          size: file.size,
         });
 
         await this.putBlob(
@@ -272,6 +276,7 @@ class UploadService {
     const { uploadId } = await lambdaClient.upload.createS3MultipartUpload.mutate({
       contentType: file.type || undefined,
       pathname,
+      size: file.size,
     });
 
     try {
