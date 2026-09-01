@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 
+import { isMemoryListPending } from './isMemoryListPending';
+
 interface MemoryListBoundaryProps {
   children: ReactNode;
   data: unknown;
@@ -27,7 +29,12 @@ export const MemoryListBoundary = ({
   loading,
   onRetry,
 }: MemoryListBoundaryProps) => {
-  const pending = Boolean(isResetting) || isLoading || (!isInitialized && !error);
+  const pending = isMemoryListPending({
+    error,
+    initialized: isInitialized,
+    loading: isLoading,
+    resetting: isResetting,
+  });
 
   return (
     <AsyncBoundary
