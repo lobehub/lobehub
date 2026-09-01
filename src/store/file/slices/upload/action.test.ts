@@ -52,8 +52,9 @@ beforeAll(() => {
       return new ReadableStream<Uint8Array>({
         type: 'bytes',
         start(controller) {
-          controller.enqueue(new Uint8Array([1, 2, 3]));
-          controller.close();
+          const byteController = controller as ReadableByteStreamController;
+          byteController.enqueue(new Uint8Array([1, 2, 3]));
+          byteController.close();
         },
       });
     },

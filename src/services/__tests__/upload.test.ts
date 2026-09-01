@@ -57,8 +57,9 @@ describe('UploadService', () => {
         return new ReadableStream<Uint8Array>({
           type: 'bytes',
           start(controller) {
-            controller.enqueue(new Uint8Array([1, 2, 3]));
-            controller.close();
+            const byteController = controller as ReadableByteStreamController;
+            byteController.enqueue(new Uint8Array([1, 2, 3]));
+            byteController.close();
           },
         });
       },
@@ -472,9 +473,10 @@ describe('UploadService', () => {
         new ReadableStream<Uint8Array>({
           type: 'bytes',
           start(controller) {
-            controller.enqueue(new Uint8Array([1, 2]));
-            controller.enqueue(new Uint8Array([3, 4]));
-            controller.close();
+            const byteController = controller as ReadableByteStreamController;
+            byteController.enqueue(new Uint8Array([1, 2]));
+            byteController.enqueue(new Uint8Array([3, 4]));
+            byteController.close();
           },
         }),
     });
