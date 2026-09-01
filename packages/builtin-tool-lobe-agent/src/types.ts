@@ -158,8 +158,12 @@ export interface TodoUpdateOperation {
   status?: TodoStatus;
   /** For 'add': the text to add */
   text?: string;
-  /** Operation type */
-  type: TodoUpdateOperationType;
+  /**
+   * Operation type. Required by the manifest schema, but weak
+   * instruction-following models omit it in practice, so the runtime infers it
+   * from the other fields when the intent is unambiguous.
+   */
+  type?: TodoUpdateOperationType;
 }
 
 /**
