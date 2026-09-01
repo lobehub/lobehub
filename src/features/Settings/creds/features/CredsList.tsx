@@ -16,9 +16,10 @@ import ListSkeleton from '@/components/ListSkeleton';
 import { usePermission } from '@/hooks/usePermission';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 
+import { credsApiForRow, isActionableCredRow } from './credAccess';
 import CredItem from './CredItem';
 import { createEditCredModal } from './EditCredModal';
-import { type CredsApi, defaultCredsApi, useCredsApi } from './useCredsApi';
+import { defaultCredsApi, useCredsApi } from './useCredsApi';
 import { createViewCredModal } from './ViewCredModal';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -44,9 +45,10 @@ const styles = createStaticStyles(({ css }) => ({
 
 const CredsList: FC = () => {
   const { t } = useTranslation('setting');
-  const { isAuthenticated, isLoading: isAuthLoading, signIn } = useMarketAuth();
+  const { isAuthenticated, isLoading: isAuthLoading, session, signIn } = useMarketAuth();
   const { allowed: canManageCredentials } = usePermission('manage_provider_key');
   const credsApi = useCredsApi();
+  const myAccountId = session?.userInfo?.accountId;
 
   const { data, error, isLoading, refetch } = credsApi.query.list.useQuery(undefined, {
     enabled: isAuthenticated,
@@ -54,23 +56,16 @@ const CredsList: FC = () => {
 
   const credentials = data?.data ?? [];
 
-  // A row from an org-scoped list (`workspaceCreds.list`) can be the org's
-  // own credential (`ownerType: 'organization'`) OR a member's credential
-  // merely published/draft-linked into the org (`ownerType: 'user'`). The
-  // org-scoped write endpoints only accept the former — Market's
-  // `/organizations/:orgId/creds/:id` PATCH/DELETE resolve ownership by the
-  // *org's* account id, so they 404 on a member's own row even though the
-  // list happily shows it. A member's own row must be mutated through their
-  // personal `market.creds` endpoint instead (`ownerType` is absent — thus
-  // falsy — on the plain personal list, where `credsApi` already IS the
-  // personal binding, so this falls through to the same thing there).
-  const apiFor = (cred: Pick<UserCredSummary, 'ownerType'> | undefined): CredsApi =>
-    cred?.ownerType === 'user' ? defaultCredsApi : credsApi;
+  // See credAccess.ts for the ownership/routing rules this applies.
+  const isActionable = (cred: UserCredSummary) => isActionableCredRow(cred, myAccountId);
+  const apiFor = (cred: UserCredSummary) =>
+    credsApiForRow(cred, myAccountId, credsApi, defaultCredsApi);
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
       if (!canManageCredentials) return;
       const cred = credentials.find((c) => c.id === id);
+      if (!cred || !isActionable(cred)) return;
       await apiFor(cred).client.delete.mutate({ id });
     },
     onSuccess: () => {
@@ -79,6 +74,7 @@ const CredsList: FC = () => {
   });
 
   const handleEdit = (cred: UserCredSummary) => {
+    if (!isActionable(cred)) return;
     createEditCredModal({
       cred,
       credsApi: apiFor(cred),
@@ -87,6 +83,7 @@ const CredsList: FC = () => {
   };
 
   const handleView = (cred: UserCredSummary) => {
+    if (!isActionable(cred)) return;
     createViewCredModal({ cred, credsApi: apiFor(cred) });
   };
 
@@ -127,18 +124,23 @@ const CredsList: FC = () => {
         onRetry={() => refetch()}
       >
         <Flexbox gap={0}>
-          {credentials.map((cred) => (
-            <CredItem
-              cred={cred}
-              key={cred.id}
-              onDelete={(id) => deleteMutation.mutate(id)}
-              onView={handleView}
-              onEdit={(cred) => {
-                if (!canManageCredentials) return;
-                handleEdit(cred);
-              }}
-            />
-          ))}
+          {credentials.map((cred) => {
+            // Another member's shared row: no endpoint this UI can reach for
+            // it (see the isActionable doc comment above) — omit the action
+            // handlers entirely so CredItem renders the row with no "..."
+            // menu / view button, instead of a menu whose actions silently
+            // no-op.
+            const actionable = isActionable(cred);
+            return (
+              <CredItem
+                cred={cred}
+                key={cred.id}
+                onDelete={actionable ? (id) => deleteMutation.mutate(id) : undefined}
+                onEdit={actionable && canManageCredentials ? (cred) => handleEdit(cred) : undefined}
+                onView={actionable ? handleView : undefined}
+              />
+            );
+          })}
         </Flexbox>
       </AsyncBoundary>
     </div>
