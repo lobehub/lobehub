@@ -20,6 +20,7 @@ cat > "$TEST_TMP/fake-agent-browser.mjs" <<'JS'
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 const logFile = process.env.HETERO_SMOKE_STUB_LOG;
+const mode = process.env.HETERO_SMOKE_STUB_MODE;
 const stateFile = process.env.HETERO_SMOKE_STUB_STATE;
 const source = readFileSync(0, 'utf8');
 
@@ -57,6 +58,12 @@ if (source.includes('getServerDefaultHeterogeneousCapability')) {
 
 if (source.includes("state: 'missing'")) {
   const operationId = source.match(/\}\)\("([^"]+)"\)\s*$/)?.[1];
+  if (mode === 'lose-ownership') {
+    appendFileSync(logFile, `poll ${operationId} missing\n`);
+    emit({ state: 'missing' });
+    process.exit(0);
+  }
+
   const state = readState();
   const operation = state.operations[operationId];
   if (!operationId || !operation) {
@@ -226,6 +233,59 @@ for (const start of starts) {
   if (polls.length !== 2 || !polls[0].endsWith('running') || !polls[1].endsWith('done')) {
     throw new Error(`unexpected polling for ${operationId}: ${JSON.stringify(polls)}`);
   }
+}
+JS
+
+# If the renderer loses the launched cell state, the host no longer owns the
+# underlying session. The harness must stop before launching another live cell.
+rm -f "$HETERO_SMOKE_STUB_STATE"
+: > "$HETERO_SMOKE_STUB_LOG"
+export HETERO_SMOKE_STUB_MODE=lose-ownership
+set +e
+abort_output="$(
+  node "$HARNESS" run \
+    --browser "$TEST_TMP/fake-agent-browser.mjs" \
+    --confirm-live \
+    --report-dir "$TEST_TMP/abort-report" \
+    --timeout 1 \
+    --topic-id topic-smoke 2>&1
+)"
+abort_code=$?
+set -e
+unset HETERO_SMOKE_STUB_MODE
+
+[[ "$abort_code" -eq 1 ]] || fail "ownership loss exited $abort_code instead of 1: $abort_output"
+[[ "$abort_output" == *"ABORTED matrix: renderer lost the in-page cell state before completion"* ]] ||
+  fail "ownership loss did not abort the matrix: $abort_output"
+
+node - "$TEST_TMP/abort-report" "$HETERO_SMOKE_STUB_LOG" <<'JS'
+const fs = require('node:fs');
+const path = require('node:path');
+
+const reportDir = process.argv[2];
+const logFile = process.argv[3];
+const result = JSON.parse(fs.readFileSync(path.join(reportDir, 'result.json'), 'utf8'));
+if (result.summary.failed !== 1 || result.summary.passed !== 0 || result.summary.blocked !== 0) {
+  throw new Error(`unexpected abort summary: ${JSON.stringify(result.summary)}`);
+}
+if (!result.summary.conclusion.includes('2 pending')) {
+  throw new Error(`abort summary omitted pending cells: ${result.summary.conclusion}`);
+}
+if (result.cases.length !== 1 || !result.cases[0].observation.includes('Matrix aborted')) {
+  throw new Error(`abort result did not retain the failed cell: ${JSON.stringify(result.cases)}`);
+}
+const evidence = JSON.parse(
+  fs.readFileSync(path.join(reportDir, result.cases[0].evidence[0]), 'utf8'),
+);
+if (evidence.ownershipLost !== true) throw new Error('abort evidence did not mark ownership loss');
+
+const lines = fs.readFileSync(logFile, 'utf8').trim().split('\n');
+const starts = lines.filter((line) => line.startsWith('start '));
+if (starts.length !== 1 || !starts[0].includes('claude-code claude-smoke-a')) {
+  throw new Error(`matrix continued after ownership loss: ${JSON.stringify(lines)}`);
+}
+if (!lines.some((line) => line.startsWith('poll ') && line.endsWith(' missing'))) {
+  throw new Error(`missing ownership-loss poll: ${JSON.stringify(lines)}`);
 }
 JS
 

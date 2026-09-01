@@ -596,6 +596,7 @@ const executeCell = async (options, preflight, cell) => {
       markerObserved: false,
       observedModels: [],
       observedProviders: [],
+      ownershipLost: true,
       ok: false,
       operationId,
       responseText: '',
@@ -812,9 +813,11 @@ const runMatrix = async (options, preflight, matrix) => {
       model: cell.model,
       ...evidence,
     });
-    const observation = evidence.ok
-      ? `Completed in ${evidence.durationMs}ms and returned the unique marker through the official relay.`
-      : `Did not complete the marker round trip: ${errorMessage(evidence.error ?? evidence.terminal ?? 'marker missing')}`;
+    const observation = evidence.ownershipLost
+      ? `Matrix aborted after losing renderer ownership: ${errorMessage(evidence.error)}`
+      : evidence.ok
+        ? `Completed in ${evidence.durationMs}ms and returned the unique marker through the official relay.`
+        : `Did not complete the marker round trip: ${errorMessage(evidence.error ?? evidence.terminal ?? 'marker missing')}`;
     cases.push({
       ...common,
       case: {
@@ -833,6 +836,10 @@ const runMatrix = async (options, preflight, matrix) => {
       `${status.toUpperCase()}${evidence.durationMs ? ` (${evidence.durationMs}ms)` : ''}`,
     );
     writeReport({ cases, createdAt, dir, matrix, options, plan, preflight });
+    if (evidence.ownershipLost) {
+      console.error(`ABORTED matrix: ${errorMessage(evidence.error)}`);
+      break;
+    }
   }
 
   const failed = cases.filter((item) => item.status === 'fail').length;

@@ -3646,7 +3646,7 @@ describe('HeterogeneousAgentCtr', () => {
       expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
     });
 
-    it('launches a provider-bound TRAE session with a managed secret-free profile', async () => {
+    it('launches a provider-bound TRAE session with invocation-local config and existing auth', async () => {
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
         storeManager: { get: vi.fn() },
@@ -3670,33 +3670,42 @@ describe('HeterogeneousAgentCtr', () => {
       await ctr.sendPrompt({ operationId: 'op-trae-provider', prompt: 'hello', sessionId });
 
       const options = traeAcpSessionConstructMock.mock.calls.at(-1)?.[0];
-      expect(options.args).toEqual(['--permission-mode', 'auto', '--profile', 'lobehub']);
+      expect(options.args).toEqual([
+        '--permission-mode',
+        'auto',
+        '-c',
+        'model="gpt-test"',
+        '-c',
+        'model_provider="lobehub"',
+        '-c',
+        'model_providers.lobehub.name="LobeHub Provider"',
+        '-c',
+        'model_providers.lobehub.base_url="https://api.openai.com/v1"',
+        '-c',
+        'model_providers.lobehub.env_key="LOBEHUB_TRAE_API_KEY"',
+        '-c',
+        'model_providers.lobehub.wire_api="responses"',
+        '-c',
+        'model_providers.lobehub.requires_openai_auth=false',
+      ]);
       expect(options.initialModel).toBeUndefined();
       expect(options.env).toEqual(
         expect.objectContaining({
           LOBEHUB_TRAE_API_KEY: 'provider-secret',
-          TRAE_HOME: expect.stringContaining('/heteroAgent/bindings/trae/'),
+          TRAE_HOME: '/user/trae',
         }),
       );
       expect(options.env).not.toHaveProperty('OPENAI_API_KEY');
+      expect(options.args.join(' ')).not.toContain('provider-secret');
 
       const bindingsDir = path.join(appStoragePath, 'heteroAgent', 'bindings', 'trae');
       const [bindingDir] = await readdir(bindingsDir);
-      const profile = await readFile(
-        path.join(bindingsDir, bindingDir, 'lobehub.traecli.toml'),
-        'utf8',
-      );
-      expect(profile).toContain('model = "gpt-test"');
-      expect(profile).toContain('model_provider = "lobehub"');
-      expect(profile).toContain('base_url = "https://api.openai.com/v1"');
-      expect(profile).toContain('env_key = "LOBEHUB_TRAE_API_KEY"');
-      expect(profile).toContain('wire_api = "responses"');
-      expect(profile).not.toContain('provider-secret');
+      expect(await readdir(path.join(bindingsDir, bindingDir))).toEqual(['.lobehub-last-used']);
       expect(JSON.stringify(loggerInfoMock.mock.calls)).not.toContain('provider-secret');
       expect(await readdir(path.join(appStoragePath, 'heteroAgent', 'runs'))).toEqual([]);
     });
 
-    it('injects a server-default operation token into the TRAE Responses profile', async () => {
+    it('uses invocation-local TRAE config and existing auth for server-default runs', async () => {
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
         storeManager: { get: vi.fn() },
@@ -3704,6 +3713,11 @@ describe('HeterogeneousAgentCtr', () => {
       const { sessionId } = await ctr.startSession({
         agentType: 'trae',
         command: 'traecli',
+        env: {
+          LOBEHUB_TRAE_API_KEY: 'stale-host-key',
+          OPENAI_API_KEY: 'stale-openai-key',
+          TRAE_HOME: '/user/trae',
+        },
         providerBinding: {
           apiConfig: { model: 'gpt-5.4', source: 'server-default' },
           kind: 'server-default',
@@ -3725,23 +3739,35 @@ describe('HeterogeneousAgentCtr', () => {
         topicId: 'topic-1',
       });
       const options = traeAcpSessionConstructMock.mock.calls.at(-1)?.[0];
-      expect(options.args).toEqual(['--profile', 'lobehub']);
+      expect(options.args).toEqual([
+        '-c',
+        'model="lobehub/gpt-5.4"',
+        '-c',
+        'model_provider="lobehub"',
+        '-c',
+        'model_providers.lobehub.name="LobeHub Provider"',
+        '-c',
+        'model_providers.lobehub.base_url="https://app.example.com/api/v1/openai/v1"',
+        '-c',
+        'model_providers.lobehub.env_key="LOBEHUB_TRAE_API_KEY"',
+        '-c',
+        'model_providers.lobehub.wire_api="responses"',
+        '-c',
+        'model_providers.lobehub.requires_openai_auth=false',
+      ]);
       expect(options.env).toEqual(
         expect.objectContaining({
           LOBEHUB_TRAE_API_KEY: 'operation-token',
-          TRAE_HOME: expect.stringContaining('/heteroAgent/bindings/trae/'),
+          TRAE_HOME: '/user/trae',
         }),
       );
+      expect(options.env).not.toHaveProperty('OPENAI_API_KEY');
+      expect(options.args.join(' ')).not.toContain('operation-token');
 
       const bindingsDir = path.join(appStoragePath, 'heteroAgent', 'bindings', 'trae');
       const [bindingDir] = await readdir(bindingsDir);
-      const profile = await readFile(
-        path.join(bindingsDir, bindingDir, 'lobehub.traecli.toml'),
-        'utf8',
-      );
-      expect(profile).toContain('model = "lobehub/gpt-5.4"');
-      expect(profile).toContain('base_url = "https://app.example.com/api/v1/openai/v1"');
-      expect(profile).not.toContain('operation-token');
+      expect(await readdir(path.join(bindingsDir, bindingDir))).toEqual(['.lobehub-last-used']);
+      expect(JSON.stringify(loggerInfoMock.mock.calls)).not.toContain('operation-token');
       expect(settleServerDefaultOperationMock).toHaveBeenCalledWith(expect.any(Object), {
         cancelled: false,
         operationId: 'op-trae-server-default',
