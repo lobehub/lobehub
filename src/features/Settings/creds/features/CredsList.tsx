@@ -18,7 +18,7 @@ import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 
 import CredItem from './CredItem';
 import { createEditCredModal } from './EditCredModal';
-import { useCredsApi } from './useCredsApi';
+import { type CredsApi, defaultCredsApi, useCredsApi } from './useCredsApi';
 import { createViewCredModal } from './ViewCredModal';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -52,28 +52,42 @@ const CredsList: FC = () => {
     enabled: isAuthenticated,
   });
 
+  const credentials = data?.data ?? [];
+
+  // A row from an org-scoped list (`workspaceCreds.list`) can be the org's
+  // own credential (`ownerType: 'organization'`) OR a member's credential
+  // merely published/draft-linked into the org (`ownerType: 'user'`). The
+  // org-scoped write endpoints only accept the former — Market's
+  // `/organizations/:orgId/creds/:id` PATCH/DELETE resolve ownership by the
+  // *org's* account id, so they 404 on a member's own row even though the
+  // list happily shows it. A member's own row must be mutated through their
+  // personal `market.creds` endpoint instead (`ownerType` is absent — thus
+  // falsy — on the plain personal list, where `credsApi` already IS the
+  // personal binding, so this falls through to the same thing there).
+  const apiFor = (cred: Pick<UserCredSummary, 'ownerType'> | undefined): CredsApi =>
+    cred?.ownerType === 'user' ? defaultCredsApi : credsApi;
+
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
       if (!canManageCredentials) return;
-      await credsApi.client.delete.mutate({ id });
+      const cred = credentials.find((c) => c.id === id);
+      await apiFor(cred).client.delete.mutate({ id });
     },
     onSuccess: () => {
       refetch();
     },
   });
 
-  const credentials = data?.data ?? [];
-
   const handleEdit = (cred: UserCredSummary) => {
     createEditCredModal({
       cred,
-      credsApi,
+      credsApi: apiFor(cred),
       onSuccess: () => refetch(),
     });
   };
 
   const handleView = (cred: UserCredSummary) => {
-    createViewCredModal({ cred, credsApi });
+    createViewCredModal({ cred, credsApi: apiFor(cred) });
   };
 
   if (isAuthLoading) {
