@@ -415,10 +415,27 @@ describe('shareChatRouter', () => {
       // senderId)` unambiguously identifies the share conversation without a
       // share-instance column on `topics`.
       expect(TopicModelMock).toHaveBeenCalledWith(expect.anything(), OWNER);
-      expect(mockQueryBySender).toHaveBeenCalledWith({
-        agentId: share.agentId,
-        senderId: VISITOR,
+      expect(mockQueryBySender).toHaveBeenCalledWith(
+        { agentId: share.agentId, senderId: VISITOR },
+        { pageSize: share.shareConfig.maxTopicsPerVisitor },
+      );
+    });
+
+    it('follows a raised maxTopicsPerVisitor cap as the list page size', async () => {
+      // Same resolution the creation admission gate uses — a creator who
+      // raises the cap must get a larger visitor topic list, not one silently
+      // truncated at the package default.
+      mockAccessCheck.mockResolvedValue({
+        ...share,
+        shareConfig: { ...share.shareConfig, maxTopicsPerVisitor: 50 },
       });
+      const caller = await createCaller();
+      await caller.getTopics({ shareId: 'share-1' });
+
+      expect(mockQueryBySender).toHaveBeenCalledWith(
+        { agentId: share.agentId, senderId: VISITOR },
+        { pageSize: 50 },
+      );
     });
   });
 

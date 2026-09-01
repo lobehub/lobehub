@@ -8,15 +8,21 @@ import { useAgentShare } from './useAgentShare';
 
 const swr = vi.hoisted(() => {
   const listeners = new Set<() => void>();
-  const state = { data: undefined as any };
+  const state = { data: undefined as any, error: undefined as any };
 
   return {
     listeners,
     seed(data: any) {
       state.data = data;
+      state.error = undefined;
+    },
+    seedError(error: any) {
+      state.data = undefined;
+      state.error = error;
     },
     set(data: any) {
       state.data = data;
+      state.error = undefined;
       for (const listener of listeners) listener();
     },
     state,
@@ -43,6 +49,7 @@ vi.mock('swr', async () => {
 
       return {
         data: swr.state.data,
+        error: swr.state.error,
         isLoading: false,
         mutate: async (input?: any) => {
           if (input === undefined) return swr.state.data;
@@ -288,5 +295,17 @@ describe('useAgentShare · updateConfig', () => {
     });
 
     expect(service.updateShareConfig).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('useAgentShare · getShareStatus failure', () => {
+  it('exposes the fetch error instead of swallowing it', () => {
+    const fetchError = new Error('network down');
+    swr.seedError(fetchError);
+
+    const { result } = renderHook(() => useAgentShare('agent-1'));
+
+    expect(result.current.error).toBe(fetchError);
+    expect(result.current.share).toBeUndefined();
   });
 });

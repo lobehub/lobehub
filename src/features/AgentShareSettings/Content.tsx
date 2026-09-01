@@ -5,6 +5,8 @@ import { Alert, toast } from '@lobehub/ui/base-ui';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
+
 import LimitsSection from './LimitsSection';
 import LinkSection from './LinkSection';
 import PermissionsSection from './PermissionsSection';
@@ -23,7 +25,8 @@ interface AgentShareSettingsContentProps {
  */
 const AgentShareSettingsContent = memo<AgentShareSettingsContentProps>(({ agentId }) => {
   const { t } = useTranslation('agent');
-  const { disable, enable, isLoading, share, updateConfig, updateSlug } = useAgentShare(agentId);
+  const { disable, enable, error, isLoading, mutate, share, updateConfig, updateSlug } =
+    useAgentShare(agentId);
 
   const handleConfigChange = useCallback(
     async (patch: AgentShareConfigPatch) => {
@@ -45,7 +48,9 @@ const AgentShareSettingsContent = memo<AgentShareSettingsContentProps>(({ agentI
         title={t('share.settings.notice.title')}
         type={'warning'}
       />
-      {isLoading && !share ? (
+      {error && !share ? (
+        <AsyncError error={error} variant={'block'} onRetry={() => void mutate()} />
+      ) : isLoading && !share ? (
         <Skeleton active paragraph={{ rows: 6 }} />
       ) : (
         <>

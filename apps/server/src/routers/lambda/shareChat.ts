@@ -377,11 +377,22 @@ export const shareChatRouter = router({
     .query(async ({ input, ctx }) => {
       const share = await resolveLinkShareOrThrow(ctx.serverDB, input.shareId, ctx.userId);
 
+      // Same resolution the creation admission gate uses (see the
+      // `maxTopicsPerVisitor` read in `execAgent` above) — the list page size
+      // must track the share's LIVE cap, not the package default, or a raised
+      // cap silently truncates a visitor's own topic list below what they were
+      // actually allowed to create.
+      const maxTopicsPerVisitor =
+        share.shareConfig.maxTopicsPerVisitor ?? AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR;
+
       const topicModel = new TopicModel(ctx.serverDB, share.ownerId);
-      return topicModel.queryBySender({
-        agentId: share.agentId,
-        senderId: ctx.userId,
-      });
+      return topicModel.queryBySender(
+        {
+          agentId: share.agentId,
+          senderId: ctx.userId,
+        },
+        { pageSize: maxTopicsPerVisitor },
+      );
     }),
 
   /**

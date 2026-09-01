@@ -160,9 +160,13 @@ export interface ToolExecutionContext {
    * `RuntimeExecutorContext.agentShare` (see
    * `modules/AgentRuntime/context.ts`). Present ONLY for a share-visitor run.
    * `BuiltinToolsExecutor.execute` re-checks every builtin dispatch against
-   * `isShareBlockedDataToolCall` with these permissions — the unbypassable
+   * `isShareBlockedBuiltinDispatch` with these permissions — the unbypassable
    * counterpart of the assembly-time tool-set trim, which only shapes what the
-   * model is OFFERED, not what the executor will run.
+   * model is OFFERED, not what the executor will run. That gate is strictly
+   * wider than a plain data-tool check: master default-deny allowlist, the
+   * owner's `enabledToolIds` picker, and humanIntervention policy, and it
+   * internally delegates to `isShareBlockedDataToolCall` for the per-API
+   * data-tool rules.
    */
   agentShare?: {
     allowReadMemory?: boolean;

@@ -110,6 +110,10 @@ export const agentShareRouter = router({
       monthlySpend,
       monthlySpendLimit: share.shareConfig.monthlySpendLimit ?? null,
       topicCount: visitors.topicCount,
+      // Raw page-view count (`agentShares.userViewCount`): bumped on every
+      // non-owner page load, NOT deduplicated by visitor — a repeat visitor
+      // inflates this every reload. For unique visitors, use `visitorCount`
+      // below (distinct `topics.senderId` via `countShareVisitors`).
       userViewCount: share.userViewCount,
       visitorCount: visitors.visitorCount,
     };

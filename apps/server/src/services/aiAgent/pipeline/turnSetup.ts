@@ -438,11 +438,13 @@ export const setupTurn = async (
       model: heterogeneousTopicModelSnapshot?.model ?? (heteroSnapshotType ? undefined : model),
       provider: heterogeneousTopicModelSnapshot?.provider ?? heteroSnapshotType ?? provider,
       // Share-visitor runs: the topic row belongs to the creator
-      // (`deps.userId`), but stamping the visitor's id keeps it out of the
-      // creator's listings and lets shareChat scope reads per visitor. There
-      // is no share-instance column — a visitor topic is tied to its share
-      // purely through `(agentId, senderId)`, which is unambiguous because
-      // `agent_shares` is 1:1 per agent.
+      // (`deps.userId`), but stamping the visitor's id here is what
+      // `TopicModel`'s creator-facing reads (`query`, `count`, `queryTopics`,
+      // `queryRecent`, `rank`) filter out via `notShareVisitorTopic()`, and
+      // what lets shareChat scope reads per visitor (`queryBySender` /
+      // `countBySender`). There is no share-instance column — a visitor
+      // topic is tied to its share purely through `(agentId, senderId)`,
+      // which is unambiguous because `agent_shares` is 1:1 per agent.
       senderId: shareGate?.visitorUserId,
       title:
         title !== undefined

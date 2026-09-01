@@ -408,7 +408,7 @@ export default {
   'share.settings.link.slugPlaceholder': 'my-agent',
   'share.settings.link.slugSaved': 'Custom link updated',
   'share.settings.link.title': 'Share link',
-  'share.settings.link.viewCount': 'Visited by {{views}} people',
+  'share.settings.link.viewCount': '{{views}} views',
   'share.settings.notice.desc':
     'Visitors don’t just read this Agent — they run it. Every reply is generated on your account and charged to your balance, and the Agent acts with whatever access you grant below.',
   'share.settings.notice.title': 'Visitors run this Agent on your account',
@@ -445,6 +445,7 @@ export default {
     'This tool can never be used in a shared run — visitor runs are blocked from your knowledge base and Agent files.',
   'share.settings.tools.title': 'Tools visitors can use',
   'share.settings.updateError': 'Could not save the change. Please try again.',
+  'share.visitor.access.backHome': 'Back to home',
   'share.visitor.access.forbidden': "You don't have access to this shared agent.",
   'share.visitor.access.notFound': 'This share link is no longer available.',
   'share.visitor.access.signInCta': 'Sign in',

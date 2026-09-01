@@ -128,7 +128,7 @@ const LinkSection = memo<LinkSectionProps>(({ onDisable, onEnable, onUpdateSlug,
       toast.success(t('share.settings.link.slugSaved'));
     } catch (error: any) {
       setSlugError(
-        error?.data?.code === 'CONFLICT' || error?.message === 'SHARE_SLUG_TAKEN'
+        error?.data?.code === 'CONFLICT'
           ? t('share.settings.link.slugError.taken')
           : t('share.settings.updateError'),
       );

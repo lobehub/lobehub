@@ -33,6 +33,7 @@ export type AgentShareConfigPatch =
 export const useAgentShare = (agentId: string) => {
   const {
     data: share,
+    error,
     isLoading,
     mutate,
   } = useSWR(shareKeys.agentShareStatus(agentId), () => agentShareService.getShareStatus(agentId), {
@@ -195,5 +196,5 @@ export const useAgentShare = (agentId: string) => {
     [agentId, enqueue, mutate],
   );
 
-  return { disable, enable, isLoading, share, updateConfig, updateSlug };
+  return { disable, enable, error, isLoading, mutate, share, updateConfig, updateSlug };
 };

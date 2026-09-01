@@ -52,6 +52,7 @@ import { markCopiedMessageMetadata } from '../utils/copyMessagesInDatabase';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
 import { inJsonStringArray } from '../utils/inJsonStringArray';
+import { notShareVisitorTopic } from '../utils/shareVisitor';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { recomputeTopicUsage } from './topicUsage';
 
@@ -120,10 +121,14 @@ export interface VisitorTopicItem {
 }
 
 /**
- * Page size for {@link TopicModel.queryBySender}. Pinned to the share's own
- * default per-visitor topic cap so a visitor's full list always fits in one
- * page under the default configuration; a creator who raises the cap gets a
- * capped list rather than an unbounded read.
+ * Fallback page size for {@link TopicModel.queryBySender} when a caller
+ * doesn't pass one. Pinned to the package default per-visitor topic cap.
+ *
+ * Callers with a live share config (e.g. `shareChat.getTopics`) MUST pass the
+ * share's actual resolved `maxTopicsPerVisitor` as `pageSize` instead of
+ * relying on this default — a creator who raises the cap above the default
+ * would otherwise have a visitor's list silently truncated below what that
+ * visitor is actually allowed to create.
  */
 const VISITOR_TOPIC_PAGE_SIZE = AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR;
 
@@ -138,9 +143,14 @@ export interface CreateTopicParams {
   provider?: string | null;
   /**
    * Agent-share visitor topics carry the CREATOR's `userId` (billing/data
-   * attribution) plus the visitor's id here, so creator-facing listings can
-   * exclude them (`notShareVisitorTopic`) while the share surface scopes reads
-   * per visitor (`queryBySender` / `countBySender`).
+   * attribution) plus the visitor's id here, so creator-facing listings
+   * exclude them (`notShareVisitorTopic`, applied by `query`, `count`,
+   * `queryTopics`, `queryRecent` and `rank`) while the share surface scopes
+   * reads per visitor (`queryBySender` / `countBySender`).
+   *
+   * A future opt-in surface (`allowCreatorViewSessions`) may let a creator
+   * explicitly browse visitor sessions; that is not wired up yet — every
+   * creator-facing read today unconditionally excludes senderId rows.
    */
   senderId?: string | null;
   sessionId?: string | null;
@@ -348,6 +358,17 @@ export class TopicModel {
 
   private messageOwnership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages);
+
+  /**
+   * See `notShareVisitorTopic` in `../utils/shareVisitor` — shared with the
+   * repositories/models that query `topics` outside this class. Every
+   * creator-facing listing/count/aggregation over `topics` must AND this in,
+   * or a visitor's conversations silently show up in the creator's own topic
+   * sidebar and stats. The visitor-scoped counterparts ({@link queryBySender},
+   * {@link countBySender}) intentionally do the opposite — they match on
+   * `senderId`, not exclude it — and must never call this helper.
+   */
+  private notShareVisitor = () => notShareVisitorTopic();
   // **************** Query *************** //
 
   query = async ({
@@ -457,6 +478,7 @@ export class TopicModel {
     if (groupId) {
       const whereCondition = and(
         this.ownership(),
+        this.notShareVisitor(),
         eq(topics.groupId, groupId),
         includeTriggerCondition,
         excludeTriggerCondition,
@@ -536,6 +558,7 @@ export class TopicModel {
 
       const agentWhere = and(
         this.ownership(),
+        this.notShareVisitor(),
         agentCondition,
         editingTargetCondition,
         includeTriggerCondition,
@@ -607,6 +630,7 @@ export class TopicModel {
     // Fallback to containerId-based query (backward compatibility)
     const whereCondition = and(
       this.ownership(),
+      this.notShareVisitor(),
       this.matchContainer(containerId),
       includeTriggerCondition,
       excludeTriggerCondition,
@@ -751,6 +775,7 @@ export class TopicModel {
   } = {}): Promise<TopicListItem[]> => {
     const where = and(
       this.ownership(),
+      this.notShareVisitor(),
       statuses && statuses.length > 0
         ? inArray(topics.status, statuses as ChatTopicStatus[])
         : undefined,
@@ -910,6 +935,7 @@ export class TopicModel {
         .where(
           and(
             this.ownership(),
+            this.notShareVisitor(),
             scopeCondition,
             topicCandidateIds
               ? inJsonStringArray(topics.id, topicCandidateIds)
@@ -929,6 +955,7 @@ export class TopicModel {
               ? inJsonStringArray(messages.id, messageCandidateIds)
               : sql`${messages.content} @@@ ${bm25Query}`,
             this.ownership(),
+            this.notShareVisitor(),
             scopeCondition,
           ),
         )
@@ -984,6 +1011,7 @@ export class TopicModel {
       .where(
         genWhere([
           this.ownership(),
+          this.notShareVisitor(),
           agentCondition,
           params?.containerId ? this.matchContainer(params.containerId) : undefined,
           params?.range
@@ -1010,7 +1038,7 @@ export class TopicModel {
         title: topics.title,
       })
       .from(topics)
-      .where(and(this.ownership()))
+      .where(and(this.ownership(), this.notShareVisitor()))
       .leftJoin(messages, eq(topics.id, messages.topicId))
       .groupBy(topics.id)
       .orderBy(desc(sql`count`))
@@ -1051,6 +1079,7 @@ export class TopicModel {
       .where(
         and(
           this.ownership(),
+          this.notShareVisitor(),
           or(
             // Group topics: has groupId
             not(isNull(topics.groupId)),
@@ -2241,6 +2270,9 @@ export class TopicModel {
       orderBy: (fields, { asc }) => [asc(fields.createdAt), asc(fields.id)],
       where: and(
         this.ownership(),
+        // Share-visitor conversations are not the creator's own speech — never
+        // feed them into the creator's memory extraction.
+        this.notShareVisitor(),
         options.startDate ? gte(topics.createdAt, options.startDate) : undefined,
         options.endDate ? lte(topics.createdAt, options.endDate) : undefined,
         options.ignoreExtracted
@@ -2267,6 +2299,7 @@ export class TopicModel {
       .where(
         and(
           this.ownership(),
+          this.notShareVisitor(),
           options.startDate ? gte(topics.createdAt, options.startDate) : undefined,
           options.endDate ? lte(topics.createdAt, options.endDate) : undefined,
           options.ignoreExtracted

@@ -181,6 +181,34 @@ describe('TopicModel', () => {
       expect(items.map((t) => t.id)).toEqual(['t-g1']);
     });
 
+    it('excludes agent-share visitor topics from the agentId branch', async () => {
+      // Agent-share visitor topics keep the CREATOR's userId (so plain
+      // ownership matches them) but carry a non-null senderId. The creator's
+      // own topic sidebar (`query({ agentId })`) must never surface them —
+      // only the visitor-scoped `queryBySender` should.
+      await serverDB.insert(agents).values({ id: 'agent-share', userId });
+      await serverDB.insert(topics).values([
+        { agentId: 'agent-share', id: 't-creator', title: 'creator', userId },
+        {
+          agentId: 'agent-share',
+          id: 't-visitor',
+          senderId: 'visitor-user-x',
+          title: 'visitor',
+          userId,
+        },
+      ]);
+
+      const { items, total } = await topicModel.query({ agentId: 'agent-share' });
+      expect(items.map((t) => t.id)).toEqual(['t-creator']);
+      expect(total).toBe(1);
+
+      const visitorItems = await topicModel.queryBySender({
+        agentId: 'agent-share',
+        senderId: 'visitor-user-x',
+      });
+      expect(visitorItems.map((t) => t.id)).toEqual(['t-visitor']);
+    });
+
     describe('status filtering & ordering', () => {
       it('excludes topics whose status is in excludeStatuses but keeps null status', async () => {
         await serverDB.insert(agents).values({ id: 'agent-s', userId });
@@ -331,6 +359,22 @@ describe('TopicModel', () => {
 
       const result = await topicModel.queryTopics();
       expect(result.map((t) => t.id).sort()).toEqual(['t1', 't2']);
+    });
+
+    it('excludes agent-share visitor topics', async () => {
+      await serverDB.insert(topics).values([
+        { id: 'qt-creator', status: 'running', title: 'creator', userId },
+        {
+          id: 'qt-visitor',
+          senderId: 'visitor-user-x',
+          status: 'running',
+          title: 'visitor',
+          userId,
+        },
+      ]);
+
+      const result = await topicModel.queryTopics({ statuses: ['running'] });
+      expect(result.map((t) => t.id)).toEqual(['qt-creator']);
     });
 
     it('omits the last assistant message unless asked for it', async () => {
@@ -499,6 +543,15 @@ describe('TopicModel', () => {
 
       expect(await topicModel.count()).toBe(2);
       expect(await topicModel.count({ agentId: 'agent-c' })).toBe(1);
+    });
+
+    it('excludes agent-share visitor topics', async () => {
+      await serverDB.insert(topics).values([
+        { id: 'count-creator', title: 'creator', userId },
+        { id: 'count-visitor', senderId: 'visitor-user-x', title: 'visitor', userId },
+      ]);
+
+      expect(await topicModel.count()).toBe(1);
     });
   });
 

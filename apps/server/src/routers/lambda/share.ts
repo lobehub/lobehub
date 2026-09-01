@@ -48,9 +48,13 @@ export const shareRouter = router({
         isOwner,
         shareId: share.shareId,
         slug: share.shareConfig.slug ?? null,
-        // TODO(cloud budget gate): surface a `budgetExhausted` flag once the
-        // business-slot spend gate lands. This endpoint only carries the
-        // creator's configured `monthlySpendLimit`, not enforcement state.
+        // TODO(cloud budget gate): the spend gate itself is already enforced —
+        // `shareChat.execAgent` checks `checkAgentShareSpendAllowance` before
+        // dispatching a run. This READ-ONLY endpoint just doesn't yet expose
+        // whether the budget is currently exhausted; it only carries the
+        // creator's configured `monthlySpendLimit`. Surfacing a `budgetExhausted`
+        // flag here (so the visitor page can show the state before the visitor
+        // even sends a message) is a tracked followup, not a missing gate.
         visibility: share.visibility as SharedAgentData['visibility'],
       };
     }),

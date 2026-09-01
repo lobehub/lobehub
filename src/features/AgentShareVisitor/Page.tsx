@@ -1,18 +1,18 @@
 'use client';
 
+import { agentDisplayName } from '@lobechat/types';
 import { Center, Flexbox } from '@lobehub/ui';
 import { ActionIcon, Avatar, Button, Drawer, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { PanelLeftOpen } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
 import CircleLoading from '@/components/Loading/CircleLoading';
 import { useIsMobile } from '@/hooks/useIsMobile';
 
-import { sharedAgentDisplayName } from './displayName';
 import { resolveShareAccessState, SHARE_ACCESS_ERROR_KEYS } from './resolveShareAccessState';
 import { isShareInteractive } from './shareInteractivity';
 import TopicPanel from './TopicPanel';
@@ -30,6 +30,7 @@ const SIDEBAR_WIDTH = 260;
 const AgentShareVisitorPage = memo(() => {
   const { t } = useTranslation('agent');
   const { slugOrId } = useParams<{ slugOrId: string }>();
+  const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -69,7 +70,16 @@ const AgentShareVisitorPage = memo(() => {
           error={error}
           title={title}
           variant={'page'}
-          // A missing / forbidden share never becomes available by retrying.
+          // A missing / forbidden share never becomes available by retrying,
+          // so there is no `onRetry` for those states — the `action` button
+          // below is the visitor's only way out of the dead end.
+          action={
+            state === 'generic' ? undefined : (
+              <Button size={'small'} onClick={() => navigate('/')}>
+                {t('share.visitor.access.backHome')}
+              </Button>
+            )
+          }
           onRetry={state === 'generic' ? () => void mutate() : undefined}
         />
       </Center>
@@ -111,7 +121,7 @@ const AgentShareVisitorPage = memo(() => {
           />
           <Flexbox flex={1} style={{ overflow: 'hidden' }}>
             <Text ellipsis weight={500}>
-              {sharedAgentDisplayName(data.agentMeta)}
+              {agentDisplayName(data.agentMeta)}
             </Text>
             {data.agentMeta.description && (
               <Text ellipsis fontSize={12} type={'secondary'}>

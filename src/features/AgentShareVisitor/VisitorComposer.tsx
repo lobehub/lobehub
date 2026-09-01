@@ -2,7 +2,7 @@
 
 import { SHARE_VISITOR_PROMPT_MAX_LENGTH } from '@lobechat/const';
 import { Flexbox, TextArea } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
+import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { CircleStop, SendHorizonal } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
@@ -102,7 +102,7 @@ const VisitorComposer = memo<VisitorComposerProps>(
     return (
       <Flexbox gap={4} paddingBlock={8} paddingInline={12}>
         {displayedErrorKey && (
-          <span style={{ color: cssVar.colorError, fontSize: 12 }}>
+          <Text fontSize={12} type={'danger'}>
             {t(displayedErrorKey as any, {
               // i18next's generated interpolation types default `{{max}}` to
               // `string` (no `{{max, number}}` format specifier), so pass a
@@ -110,7 +110,7 @@ const VisitorComposer = memo<VisitorComposerProps>(
               // every other error key (i18next drops unused options).
               max: String(SHARE_VISITOR_PROMPT_MAX_LENGTH),
             })}
-          </span>
+          </Text>
         )}
         {!!stopError && (
           <AsyncError

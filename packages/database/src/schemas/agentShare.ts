@@ -76,7 +76,13 @@ export const agentShares = pgTable(
 
     shareConfig: jsonb('share_config').$type<AgentShareConfig>(),
 
-    /** Unique visitor count — incremented by the application layer on each new visitor session. */
+    /**
+     * Raw page-view count: incremented by `AgentShareModel.incrementUserViewCount`
+     * on every non-owner page load of the shared agent page, NOT deduplicated
+     * by visitor — a visitor who reloads or revisits bumps this every time.
+     * For a distinct-visitor count, see `TopicModel.countShareVisitors`
+     * (counts distinct `topics.senderId`), exposed as `visitorCount`.
+     */
     userViewCount: integer('user_view_count').default(0).notNull(),
 
     ...timestamps,

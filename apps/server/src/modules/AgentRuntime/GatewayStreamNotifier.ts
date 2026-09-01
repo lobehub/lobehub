@@ -463,8 +463,9 @@ export class GatewayStreamNotifier implements IStreamEventManager {
           this.shareVisitorOps.set(operationId, resolved);
           return resolved;
         })
-        .catch(() => {
+        .catch((error) => {
           this.shareVisitorResolving.delete(operationId);
+          log('[%s] Share visitor resolution failed, failing closed: %O', operationId, error);
           return FULL_STRIP_REDACTION;
         });
       this.shareVisitorResolving.set(operationId, pending);

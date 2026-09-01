@@ -65,6 +65,32 @@ describe('MessageModel Statistics Tests', () => {
       expect(result).toBe(2);
     });
 
+    it('excludes messages inside an agent-share visitor topic', async () => {
+      // Agent-share visitor topics keep the creator's userId, but a non-null
+      // topics.senderId marks the topic (and its messages) as visitor traffic
+      // that must not count toward the creator's own analytics.
+      await serverDB.insert(topics).values({
+        id: 'topic-visitor-count',
+        userId,
+        senderId: 'visitor-user-x',
+        title: 'visitor topic',
+      });
+      await serverDB.insert(messages).values([
+        {
+          id: 'visitor-msg-1',
+          userId,
+          role: 'user',
+          content: 'visitor message',
+          topicId: 'topic-visitor-count',
+        },
+        { id: 'creator-msg-1', userId, role: 'user', content: 'creator message' },
+      ]);
+
+      const result = await messageModel.count();
+
+      expect(result).toBe(1);
+    });
+
     describe('count with date filters', () => {
       beforeEach(async () => {
         // Create test data with messages on different dates
@@ -744,6 +770,37 @@ describe('MessageModel Statistics Tests', () => {
       expect(result[0]).toEqual({ id: 'gpt-3.5', count: 3 }); // most used
       expect(result[1]).toEqual({ id: 'claude', count: 1 });
       expect(result[2]).toEqual({ id: 'gpt-4', count: 1 });
+    });
+
+    it('excludes messages inside an agent-share visitor topic', async () => {
+      await serverDB.insert(topics).values({
+        id: 'topic-visitor-rank',
+        userId,
+        senderId: 'visitor-user-x',
+        title: 'visitor topic',
+      });
+      await serverDB.insert(messages).values([
+        {
+          id: 'visitor-rank-1',
+          userId,
+          role: 'assistant',
+          content: 'visitor message',
+          model: 'gpt-4',
+          topicId: 'topic-visitor-rank',
+        },
+        {
+          id: 'creator-rank-1',
+          userId,
+          role: 'assistant',
+          content: 'creator message',
+          model: 'gpt-3.5',
+        },
+      ]);
+
+      const result = await messageModel.rankModels();
+
+      // The visitor's gpt-4 usage must not surface; only the creator's gpt-3.5 does
+      expect(result).toEqual([{ id: 'gpt-3.5', count: 1 }]);
     });
   });
 
