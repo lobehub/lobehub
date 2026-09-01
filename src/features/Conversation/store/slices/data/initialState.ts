@@ -14,6 +14,12 @@ export interface DataState {
   displayMessages: UIChatMessage[];
 
   /**
+   * A round-cursor fetch for history older than the server's newest-first
+   * window is in flight (LOBE-13716). Drives the top-of-list loading hint.
+   */
+  isLoadingEarlierMessages: boolean;
+
+  /**
    * Whether messages have been initialized
    */
   messagesInit: boolean;
@@ -27,5 +33,6 @@ export interface DataState {
 export const dataInitialState: DataState = {
   dbMessages: [],
   displayMessages: [],
+  isLoadingEarlierMessages: false,
   messagesInit: false,
 };
