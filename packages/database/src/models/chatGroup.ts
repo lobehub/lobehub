@@ -826,6 +826,31 @@ export class ChatGroupModel {
         .from(messages)
         .innerJoin(topics, eq(messages.topicId, topics.id))
         .where(inArray(topics.groupId, groupIds))),
+      // Thread-anchored rows (threadId only — no topicId, no groupId), both
+      // through a group-anchored thread and through a thread hosted on a
+      // group topic.
+      ...(await executor
+        .selectDistinct({ agentId: messages.agentId })
+        .from(messages)
+        .innerJoin(threads, eq(messages.threadId, threads.id))
+        .where(inArray(threads.groupId, groupIds))),
+      ...(await executor
+        .selectDistinct({ agentId: messages.targetId })
+        .from(messages)
+        .innerJoin(threads, eq(messages.threadId, threads.id))
+        .where(inArray(threads.groupId, groupIds))),
+      ...(await executor
+        .selectDistinct({ agentId: messages.agentId })
+        .from(messages)
+        .innerJoin(threads, eq(messages.threadId, threads.id))
+        .innerJoin(topics, eq(threads.topicId, topics.id))
+        .where(inArray(topics.groupId, groupIds))),
+      ...(await executor
+        .selectDistinct({ agentId: messages.targetId })
+        .from(messages)
+        .innerJoin(threads, eq(messages.threadId, threads.id))
+        .innerJoin(topics, eq(threads.topicId, topics.id))
+        .where(inArray(topics.groupId, groupIds))),
     ];
     const rosterRows = await executor
       .selectDistinct({ agentId: chatGroupsAgents.agentId })

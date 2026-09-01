@@ -11,6 +11,8 @@ import {
   chatGroups,
   chatGroupsAgents,
   knowledgeBases,
+  messages,
+  threads,
   topics,
   users,
   workspaces,
@@ -139,6 +141,12 @@ describe('ChatGroupModel.transferGroupOwnership', () => {
         workspaceId: wsId,
       })
       .returning();
+    // A second tombstone referenced ONLY by a thread-anchored message
+    // (threadId set, topicId and groupId both null on the message).
+    const [threadTombstone] = await serverDB
+      .insert(agents)
+      .values({ title: 'Thread Referenced', userId: ownerId, virtual: true, workspaceId: wsId })
+      .returning();
     await serverDB.insert(topics).values([
       {
         agentId: tombstone.id,
@@ -155,11 +163,32 @@ describe('ChatGroupModel.transferGroupOwnership', () => {
         workspaceId: wsId,
       },
     ]);
+    await serverDB.insert(threads).values({
+      groupId: group.id,
+      id: 'hist-thread',
+      topicId: 'hist-topic',
+      type: 'continuation',
+      userId: teammateId,
+      workspaceId: wsId,
+    });
+    await serverDB.insert(messages).values({
+      agentId: threadTombstone.id,
+      id: 'hist-thread-msg',
+      role: 'assistant',
+      threadId: 'hist-thread',
+      userId: teammateId,
+      workspaceId: wsId,
+    });
 
     await handover({ fromUserId: ownerId, groupId: group.id, toUserId: recipientId });
 
     const [rehomed] = await serverDB.select().from(agents).where(eq(agents.id, tombstone.id));
     expect(rehomed.userId).toBe(recipientId);
+    const [threadRehomed] = await serverDB
+      .select()
+      .from(agents)
+      .where(eq(agents.id, threadTombstone.id));
+    expect(threadRehomed.userId).toBe(recipientId);
     const [slugged] = await serverDB.select().from(agents).where(eq(agents.id, builtinLike.id));
     expect(slugged.userId).toBe(ownerId);
 
@@ -174,6 +203,9 @@ describe('ChatGroupModel.transferGroupOwnership', () => {
     await serverDB.delete(users).where(eq(users.id, ownerId));
     await expect(
       serverDB.select().from(topics).where(eq(topics.id, 'hist-topic')),
+    ).resolves.toHaveLength(1);
+    await expect(
+      serverDB.select().from(messages).where(eq(messages.id, 'hist-thread-msg')),
     ).resolves.toHaveLength(1);
   });
 

@@ -2332,6 +2332,44 @@ describe('AgentModel.transferAgents group history preservation', () => {
     ).resolves.toBe(true);
   });
 
+  it('discovers a mention reachable only through a thread on a group topic', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Thread Mentioned' });
+    await serverDB.insert(chatGroups).values({ id: 'thr-mention-group', userId });
+    await serverDB
+      .insert(chatGroupsAgents)
+      .values({ agentId: agent.id, chatGroupId: 'thr-mention-group', userId });
+    await serverDB
+      .insert(topics)
+      .values({ groupId: 'thr-mention-group', id: 'thr-mention-topic', userId });
+    // The thread carries NO group_id of its own — it reaches the group only
+    // through its topic; the message reaches it only through the thread.
+    await serverDB.insert(threads).values({
+      id: 'thr-mention-thread',
+      topicId: 'thr-mention-topic',
+      type: 'continuation',
+      userId,
+    });
+    await serverDB.insert(messages).values({
+      id: 'thr-mention-msg',
+      role: 'user',
+      targetId: agent.id,
+      threadId: 'thr-mention-thread',
+      userId,
+    });
+
+    await model.transferAgent(agent.id, wsId2, targetUserId);
+
+    const [message] = await serverDB
+      .select()
+      .from(messages)
+      .where(eq(messages.id, 'thr-mention-msg'));
+    expect(message.targetId).not.toBe(agent.id);
+    expect(message.userId).toBe(userId);
+    const [clone] = await serverDB.select().from(agents).where(eq(agents.id, message.targetId!));
+    expect(clone).toMatchObject({ userId, virtual: true, workspaceId: null });
+  });
+
   it('discovers a mention that references the agent only via topic-anchored target_id', async () => {
     const model = new AgentModel(serverDB, userId);
     const agent = await model.create({ title: 'Mentioned Only' });

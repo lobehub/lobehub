@@ -2145,13 +2145,23 @@ export class AgentModel {
         .where(
           and(inArray(topics.groupId, candidateGroupIds), inArray(messages.targetId, agentIds)),
         )),
-      // Thread-anchored mentions, same fencing via threads.group_id.
+      // Thread-anchored mentions, same fencing via threads.group_id — and
+      // via the thread's group TOPIC for threads that carry no group_id of
+      // their own.
       ...(await trx
         .selectDistinct({ agentId: messages.targetId, groupId: threads.groupId })
         .from(messages)
         .innerJoin(threads, eq(messages.threadId, threads.id))
         .where(
           and(inArray(threads.groupId, candidateGroupIds), inArray(messages.targetId, agentIds)),
+        )),
+      ...(await trx
+        .selectDistinct({ agentId: messages.targetId, groupId: topics.groupId })
+        .from(messages)
+        .innerJoin(threads, eq(messages.threadId, threads.id))
+        .innerJoin(topics, eq(threads.topicId, topics.id))
+        .where(
+          and(inArray(topics.groupId, candidateGroupIds), inArray(messages.targetId, agentIds)),
         )),
     );
 
