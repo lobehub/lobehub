@@ -68,6 +68,24 @@ export class TreeActionImpl {
     return this.#engine;
   };
 
+  /**
+   * `children` is keyed by folder id, but the explorer addresses the current
+   * folder by whatever the URL carries — usually the folder slug (see
+   * `useFileStore.queryParams.parentId`). Writing under the slug leaves the
+   * sidebar (which walks by id) blind to the update, so map a slug back to the
+   * id of the already-loaded folder node. Unknown keys pass through unchanged.
+   */
+  #resolveFolderKey = (key: string): string => {
+    if (!key) return '';
+    const { children } = this.#get();
+    if (children[key]) return key;
+    for (const items of Object.values(children)) {
+      const match = items.find((item) => item.isFolder && (item.id === key || item.slug === key));
+      if (match) return match.id;
+    }
+    return key;
+  };
+
   init = (knowledgeBaseId: string) => {
     this.#set(
       {
@@ -159,7 +177,8 @@ export class TreeActionImpl {
     }
   };
 
-  revalidate = async (folderId: string) => {
+  revalidate = async (folderKey: string) => {
+    const folderId = this.#resolveFolderKey(folderKey);
     const { epoch, knowledgeBaseId, status } = this.#get();
     if (status[folderId] === 'loading') return;
 
@@ -199,7 +218,8 @@ export class TreeActionImpl {
     }
   };
 
-  reconcile = (folderId: string, items: TreeItem[]) => {
+  reconcile = (folderKey: string, items: TreeItem[]) => {
+    const folderId = this.#resolveFolderKey(folderKey);
     this.#set(
       {
         children: { ...this.#get().children, [folderId]: sortTreeItems(items) },

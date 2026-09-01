@@ -57,6 +57,8 @@ export default {
   'home.viewAll': 'View all',
   'library.hierarchy.empty.desc': 'Add files or create a folder to get started',
   'library.hierarchy.empty.title': 'Nothing here yet',
+  'library.hierarchy.search.noResults': 'No matching files or pages',
+  'library.hierarchy.search.placeholder': 'Search',
   'library.import.action': 'Import to workspace…',
   'library.import.failed': 'Failed to import library.',
   'library.import.success': 'Library imported to {{name}}.',

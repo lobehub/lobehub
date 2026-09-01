@@ -139,3 +139,48 @@ describe('resource manager store actions', () => {
     });
   });
 });
+
+describe('library sidebar search', () => {
+  beforeEach(() => {
+    useResourceManagerStore.setState(initialState);
+  });
+
+  it('should store the sidebar search query', () => {
+    useResourceManagerStore.getState().setLibrarySearchQuery('weekly');
+
+    expect(useResourceManagerStore.getState().librarySearchQuery).toBe('weekly');
+  });
+
+  it('should reset the sidebar search query when switching library', () => {
+    useResourceManagerStore.setState({ libraryId: 'kb-1', librarySearchQuery: 'weekly' });
+
+    useResourceManagerStore.getState().setLibraryId('kb-2');
+
+    expect(useResourceManagerStore.getState()).toMatchObject({
+      libraryId: 'kb-2',
+      librarySearchQuery: '',
+    });
+  });
+
+  it('should keep the sidebar search query when the same library is re-synced from the URL', () => {
+    useResourceManagerStore.setState({ libraryId: 'kb-1', librarySearchQuery: 'weekly' });
+
+    useResourceManagerStore.getState().setLibraryId('kb-1');
+
+    expect(useResourceManagerStore.getState().librarySearchQuery).toBe('weekly');
+  });
+});
+
+describe('pending tree rename', () => {
+  beforeEach(() => {
+    useResourceManagerStore.setState(initialState);
+  });
+
+  it('should set and clear the pending tree rename item id', () => {
+    useResourceManagerStore.getState().setPendingTreeRenameItemId('folder-1');
+    expect(useResourceManagerStore.getState().pendingTreeRenameItemId).toBe('folder-1');
+
+    useResourceManagerStore.getState().setPendingTreeRenameItemId(null);
+    expect(useResourceManagerStore.getState().pendingTreeRenameItemId).toBeNull();
+  });
+});

@@ -27,6 +27,7 @@ import { TransferErrorCode } from '@/types/transferError';
 import { isWorkspaceNonOwner } from './_helpers/assertWorkspaceRowManageable';
 import {
   assertContentsNotInRestrictedKnowledgeBase,
+  assertKnowledgeBaseBrowsable,
   getRestrictedKnowledgeBaseIds,
 } from './_helpers/knowledgeBaseAccess';
 import {
@@ -42,9 +43,18 @@ import {
  * parent must not be able to insert under it. Parents outside the current
  * workspace (personal docs, foreign ids) fall through; the model's ownership
  * WHERE keeps those unreachable anyway.
+ *
+ * Knowledge-base folders are the exception: they are navigation-only rows that
+ * do not pass visibility or ACL to children (see `DocumentService.createDocument`),
+ * while every document row defaults to the `view` access level — gating on the
+ * folder's own ACL would lock every non-creator member out of another member's
+ * folder inside a shared KB. The KB's browse permission (effective level `edit`,
+ * the same grade that lets a member manage the KB file list) is the authority
+ * for inserts there; a restricted KB (`use` level) still denies.
  */
 const assertCanCreateUnderParent = async (
   ctx: {
+    documentModel: DocumentModel;
     serverDB: Parameters<typeof getResourceMeta>[0];
     userId: string;
     workspaceId?: string | null;
@@ -54,6 +64,22 @@ const assertCanCreateUnderParent = async (
   if (!ctx.workspaceId || !parentId) return;
   const meta = await getResourceMeta(ctx.serverDB, 'document', parentId);
   if (!meta || meta.workspaceId !== ctx.workspaceId) return;
+
+  // Another member's private folder stays creator-only regardless of KB scope.
+  const isForeignPrivate = meta.visibility === 'private' && meta.userId !== ctx.userId;
+  if (!isForeignPrivate) {
+    // `findById` is ownership-scoped, but the foreign-private branch above is
+    // the only shape it would hide — everything else is public or the caller's.
+    const parentDoc = await ctx.documentModel.findById(parentId);
+    // Old folders carried the KB id only in metadata, newer rows set the column.
+    const knowledgeBaseId =
+      parentDoc?.knowledgeBaseId ?? (parentDoc?.metadata as any)?.knowledgeBaseId;
+    if (knowledgeBaseId && typeof knowledgeBaseId === 'string') {
+      await assertKnowledgeBaseBrowsable(ctx, knowledgeBaseId);
+      return;
+    }
+  }
+
   await assertCanEditResource({
     db: ctx.serverDB,
     resourceId: parentId,

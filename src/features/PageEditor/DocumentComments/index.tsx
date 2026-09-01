@@ -202,7 +202,11 @@ const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
         </Flexbox>
       )}
 
-      <Composer documentId={documentId} key={`root:${documentId}`} onSubmit={handleCreate} />
+      {/* While the thread list is still skeleton-loading the composer would
+          float against placeholder content — reveal it with the real list. */}
+      {!threads.isLoadingInitial && (
+        <Composer documentId={documentId} key={`root:${documentId}`} onSubmit={handleCreate} />
+      )}
     </Flexbox>
   );
 });

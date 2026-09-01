@@ -52,6 +52,8 @@
   "library.backToResources": "返回资源库",
   "library.hierarchy.empty.desc": "上传文件或新建文件夹开始整理",
   "library.hierarchy.empty.title": "这里还没有内容",
+  "library.hierarchy.search.noResults": "没有匹配的文件或页面",
+  "library.hierarchy.search.placeholder": "搜索",
   "library.import.action": "导入到工作区…",
   "library.import.failed": "导入知识库失败。",
   "library.import.success": "知识库已导入到{{name}}。",

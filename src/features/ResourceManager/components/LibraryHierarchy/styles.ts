@@ -16,5 +16,15 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   treeItem: css`
     cursor: pointer;
+
+    .hierarchy-node-actions {
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+
+    &:hover .hierarchy-node-actions,
+    .hierarchy-node-actions[data-open='true'] {
+      opacity: 1;
+    }
   `,
 }));
