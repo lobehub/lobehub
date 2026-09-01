@@ -1,3 +1,5 @@
+import { INLINE_VIDEO_SIZE_LIMIT } from '@lobechat/const/media';
+import { createMediaFileRef } from '@lobechat/const/mediaRef';
 import { filesPrompts } from '@lobechat/prompts';
 import type { ChatAudioItem, MessageContentPart } from '@lobechat/types';
 import { normalizeAudioDurationMs } from '@lobechat/utils/audio';
@@ -29,6 +31,30 @@ const log = debug('context-engine:processor:MessageContentProcessor');
  */
 export const VISION_DOWNGRADE_PLACEHOLDER =
   '[image omitted: native vision is not supported. Do not infer or describe the image. If the request depends on it, use an available visual-analysis tool before answering; otherwise state that the image cannot be inspected.]';
+
+const formatMebibytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
+
+/**
+ * Stands in for a video too large to inline. Names both sizes so the model can
+ * say why the video is not attached, and carries the media ref `filesPrompts`
+ * emits for the same attachment so the media-analysis tool resolves it to the
+ * same file.
+ */
+export const videoInlineLimitPlaceholder = ({
+  index,
+  limit,
+  messageId,
+  size,
+}: {
+  index: number;
+  limit: number;
+  messageId?: string;
+  size: number;
+}) => {
+  const ref = createMediaFileRef({ index, messageId, type: 'video' });
+
+  return `[video omitted: ${formatMebibytes(size)} exceeds the ${formatMebibytes(limit)} this provider accepts inline. Media ref: ${ref}. Do not infer or describe the video. Use an available media-analysis tool with this ref before answering.]`;
+};
 
 /**
  * Deserialize content string to message content parts
@@ -67,6 +93,12 @@ export interface MessageContentConfig {
   model: string;
   /** Provider name */
   provider: string;
+  /**
+   * Largest video, in bytes, that may be sent inline as a `video_url` part.
+   * Anything above it is downgraded to a media ref. Defaults to
+   * {@link INLINE_VIDEO_SIZE_LIMIT}.
+   */
+  videoInlineSizeLimit?: number;
 }
 
 export interface UserMessageContentPart {
@@ -230,6 +262,40 @@ export class MessageContentProcessor extends BaseProcessor {
       textContent = textContent ? `${textContent}\n\n${placeholders}` : placeholders;
     }
 
+    // An inlined video is a URL the provider fetches for itself, and it measures
+    // what it fetched against its own ceiling before running any inference.
+    // Sending one that is over that ceiling does not just fail this turn: the
+    // attachment stays in the conversation history, so every later turn carries
+    // it and fails identically, whatever the user sends next. The topic is dead
+    // from the moment the file enters it.
+    //
+    // Hand the oversized ones to the media-analysis tool instead — the same
+    // escape hatch an image takes when the model has no native vision. That path
+    // fetches the file on its own terms and is not bound by the inline limit.
+    const inlineVideoLimit = this.config.videoInlineSizeLimit ?? INLINE_VIDEO_SIZE_LIMIT;
+    const videoList: any[] = hasVideos ? message.videoList : [];
+    const oversizedVideoIndexes = new Set<number>(
+      canUseVideo
+        ? videoList.flatMap((video, index) =>
+            typeof video?.size === 'number' && video.size > inlineVideoLimit ? [index] : [],
+          )
+        : [],
+    );
+
+    if (oversizedVideoIndexes.size > 0) {
+      const placeholders = [...oversizedVideoIndexes]
+        .map((index) =>
+          videoInlineLimitPlaceholder({
+            index,
+            limit: inlineVideoLimit,
+            messageId: message.id,
+            size: videoList[index].size,
+          }),
+        )
+        .join('\n');
+      textContent = textContent ? `${textContent}\n\n${placeholders}` : placeholders;
+    }
+
     // Add file context (if file context is enabled and has files, images, videos or audios)
     if ((hasFiles || hasImages || hasVideos || hasAudios) && this.config.fileContext?.enabled) {
       const filesContext = filesPrompts({
@@ -270,8 +336,9 @@ export class MessageContentProcessor extends BaseProcessor {
     }
 
     // Process video content
-    if (hasVideos && canUseVideo) {
-      const videoContentParts = await this.processVideoList(message.videoList || []);
+    const inlineVideoList = videoList.filter((_, index) => !oversizedVideoIndexes.has(index));
+    if (canUseVideo && inlineVideoList.length > 0) {
+      const videoContentParts = await this.processVideoList(inlineVideoList);
       contentParts.push(...videoContentParts);
     }
 
@@ -285,7 +352,7 @@ export class MessageContentProcessor extends BaseProcessor {
     const hasFileContext =
       (hasFiles || hasImages || hasVideos || hasAudios) && this.config.fileContext?.enabled;
     const hasVisionContent = (hasImages || arrayImageUrlCount > 0) && canUseVision;
-    const hasVideoContent = hasVideos && canUseVideo;
+    const hasVideoContent = canUseVideo && inlineVideoList.length > 0;
     const hasAudioContent = hasAudios && canUseAudio;
 
     // If only text content and no file context added and no vision/video/audio content, return plain text

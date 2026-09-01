@@ -9,6 +9,7 @@
     "./desktopGlobalShortcuts": "./src/desktopGlobalShortcuts.ts",
     "./goal": "./src/goal.ts",
     "./hotkeys": "./src/hotkeys.ts",
+    "./media": "./src/media.ts",
     "./mediaRef": "./src/mediaRef.ts",
     "./plugin": "./src/plugin.ts",
     "./rbac": "./src/rbac.ts",

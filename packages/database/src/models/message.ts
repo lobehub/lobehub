@@ -955,7 +955,12 @@ export class MessageModel {
               videoList: videoList
                 .filter((relation) => relation.messageId === item.id)
 
-                .map<ChatVideoItem>(({ id, url, name }) => ({ alt: name!, id, url })),
+                .map<ChatVideoItem>(({ id, url, name, size }) => ({
+                  alt: name!,
+                  id,
+                  size: size ?? undefined,
+                  url,
+                })),
               // Work summaries for this message's root operation, resolved
               // server-side (attached only to the round's anchor message).
               works: worksByMessageId[item.id as string],
@@ -1620,7 +1625,12 @@ export class MessageModel {
           usage: item.usage ?? (item.metadata as { usage?: ModelUsage } | null)?.usage,
           videoList: videoList
             .filter((relation) => relation.messageId === item.id)
-            .map<ChatVideoItem>(({ id, url, name }) => ({ alt: name!, id, url })),
+            .map<ChatVideoItem>(({ id, url, name, size }) => ({
+              alt: name!,
+              id,
+              size: size ?? undefined,
+              url,
+            })),
           audioList: audioList
             .filter((relation) => relation.messageId === item.id)
             .map<ChatAudioItem>(materializeChatAudioItem),

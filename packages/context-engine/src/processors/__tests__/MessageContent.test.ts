@@ -1,3 +1,5 @@
+import { INLINE_VIDEO_SIZE_LIMIT } from '@lobechat/const/media';
+import { createMediaFileRef } from '@lobechat/const/mediaRef';
 import type { ChatAudioItem, ChatImageItem, ChatVideoItem, UIChatMessage } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -816,6 +818,155 @@ describe('MessageContentProcessor', () => {
       expect(content[1].video_url.url).toBe('http://example.com/video.mp4');
       expect(content[2].type).toBe('video_url');
       expect(content[2].video_url.url).toBe('http://example.com/video2.mp4');
+    });
+
+    // A provider fetches an inlined video_url and measures it against its own
+    // ceiling before inference. Because the attachment stays in history, one
+    // oversized video otherwise fails every later turn in the topic as well.
+    it('should downgrade an oversized video to a media ref instead of inlining it', async () => {
+      mockIsCanUseVideo.mockReturnValue(true);
+
+      const processor = new MessageContentProcessor({
+        model: 'doubao-seed-2-0',
+        provider: 'volcengine',
+        isCanUseVideo: mockIsCanUseVideo,
+        fileContext: { enabled: false },
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          id: 'test',
+          role: 'user',
+          content: 'Summarise this',
+          videoList: [
+            {
+              url: 'http://example.com/recording.mp4',
+              alt: 'recording',
+              id: 'big',
+              size: INLINE_VIDEO_SIZE_LIMIT + 1,
+            },
+            {
+              url: 'http://example.com/clip.mp4',
+              alt: 'clip',
+              id: 'small',
+              size: 1024,
+            },
+          ] as ChatVideoItem[],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ];
+
+      const result = await processor.process(createContext(messages));
+      const content = result.messages[0].content as any[];
+
+      // Only the video under the limit is inlined.
+      const videoParts = content.filter((part) => part.type === 'video_url');
+      expect(videoParts).toHaveLength(1);
+      expect(videoParts[0].video_url.url).toBe('http://example.com/clip.mp4');
+
+      // The oversized one is still reachable, through the ref filesPrompts uses.
+      const ref = createMediaFileRef({ index: 0, messageId: 'test', type: 'video' });
+      expect(content[0].type).toBe('text');
+      expect(content[0].text).toContain('Summarise this');
+      expect(content[0].text).toContain(`Media ref: ${ref}`);
+      expect(content[0].text).not.toContain('http://example.com/recording.mp4');
+    });
+
+    it('should send plain text when every video is oversized', async () => {
+      mockIsCanUseVideo.mockReturnValue(true);
+
+      const processor = new MessageContentProcessor({
+        model: 'doubao-seed-2-0',
+        provider: 'volcengine',
+        isCanUseVideo: mockIsCanUseVideo,
+        fileContext: { enabled: false },
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          id: 'test',
+          role: 'user',
+          content: 'Summarise this',
+          videoList: [
+            {
+              url: 'http://example.com/recording.mp4',
+              alt: 'recording',
+              id: 'big',
+              size: 66_861_350,
+            },
+          ] as ChatVideoItem[],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ];
+
+      const result = await processor.process(createContext(messages));
+      const content = result.messages[0].content;
+
+      expect(typeof content).toBe('string');
+      expect(content).toContain('63.8 MiB');
+      expect(content).toContain('50.0 MiB');
+    });
+
+    it('should honour a configured videoInlineSizeLimit', async () => {
+      mockIsCanUseVideo.mockReturnValue(true);
+
+      const processor = new MessageContentProcessor({
+        model: 'gpt-4-vision',
+        provider: 'openai',
+        isCanUseVideo: mockIsCanUseVideo,
+        fileContext: { enabled: false },
+        videoInlineSizeLimit: 512,
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          id: 'test',
+          role: 'user',
+          content: 'Hello',
+          videoList: [
+            { url: 'http://example.com/video.mp4', alt: 'v', id: 'v', size: 1024 },
+          ] as ChatVideoItem[],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      expect(result.messages[0].content).not.toContainEqual(
+        expect.objectContaining({ type: 'video_url' }),
+      );
+    });
+
+    it('should inline a video whose size is unknown', async () => {
+      mockIsCanUseVideo.mockReturnValue(true);
+
+      const processor = new MessageContentProcessor({
+        model: 'gpt-4-vision',
+        provider: 'openai',
+        isCanUseVideo: mockIsCanUseVideo,
+        fileContext: { enabled: false },
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          id: 'test',
+          role: 'user',
+          content: 'Hello',
+          videoList: [
+            { url: 'http://example.com/video.mp4', alt: 'v', id: 'v' },
+          ] as ChatVideoItem[],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ];
+
+      const result = await processor.process(createContext(messages));
+      const content = result.messages[0].content as any[];
+
+      expect(content.filter((part) => part.type === 'video_url')).toHaveLength(1);
     });
 
     it('should handle video disabled scenario correctly', async () => {
