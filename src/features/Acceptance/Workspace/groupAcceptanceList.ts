@@ -16,14 +16,14 @@ export const normalizeAcceptanceGroupMode = (value: unknown): AcceptanceGroupMod
 export interface AcceptanceListGroup {
   items: AcceptanceListItem[];
   key: string;
+  /** i18n key under `verify:acceptance.workspace.groups.*` for a fixed bucket. */
+  labelKey: string | null;
   /**
    * Header text that comes from the data itself (a project's name). Fixed
    * buckets carry a `labelKey` instead, so the panel never has to translate a
    * user's project name or hardcode a bucket's wording.
    */
   name: string | null;
-  /** i18n key under `verify:acceptance.workspace.groups.*` for a fixed bucket. */
-  labelKey: string | null;
   projectName: string | null;
 }
 
