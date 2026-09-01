@@ -44,6 +44,7 @@ import {
 import type { LobeChatDatabase } from '../../type';
 import { AgentModel } from '../agent';
 import { AGENT_TRANSFER_IN_PROGRESS, AgentTransferJobModel } from '../agentTransferJob';
+import { ChatGroupModel } from '../chatGroup';
 import { ExpertiseModel } from '../expertise';
 import {
   TOPIC_COMMENT_TOPIC_NOT_FOUND,
@@ -2100,6 +2101,17 @@ describe('AgentModel.transferAgents group history preservation', () => {
     const agent = await model.create({ title: 'Busy Member' });
     await seedGroupHistory('multi-a', agent.id);
     await seedGroupHistory('multi-b', agent.id);
+    // A schema-valid mismatched anchor: group_id names multi-b while the
+    // topic belongs to multi-a. The DIRECT group anchor must win — the row's
+    // history belongs to multi-b regardless of which group remaps first.
+    await serverDB.insert(messages).values({
+      agentId: agent.id,
+      groupId: 'multi-b',
+      id: 'cross-anchor-msg',
+      role: 'assistant',
+      topicId: 'multi-a-topic-plain',
+      userId,
+    });
 
     await model.transferAgent(agent.id, wsId2, targetUserId);
 
@@ -2123,6 +2135,13 @@ describe('AgentModel.transferAgents group history preservation', () => {
       cloneIdByGroup.set(groupId, message.agentId!);
     }
     expect(cloneIdByGroup.get('multi-a')).not.toBe(cloneIdByGroup.get('multi-b'));
+
+    // The mismatched-anchor row followed its group_id, not its topic.
+    const [crossAnchor] = await serverDB
+      .select()
+      .from(messages)
+      .where(eq(messages.id, 'cross-anchor-msg'));
+    expect(crossAnchor.agentId).toBe(cloneIdByGroup.get('multi-b'));
   });
 
   it('defers a large group-history remap to a remap-only job and keeps scope untouched', async () => {
@@ -2191,6 +2210,11 @@ describe('AgentModel.transferAgents group history preservation', () => {
     ]);
     const targetModel = new AgentModel(serverDB, targetUserId, wsId2);
     await expect(targetModel.delete(agent.id)).rejects.toThrow(AGENT_TRANSFER_IN_PROGRESS);
+
+    // Deleting the GROUP mid-drain is blocked too: the drain addresses the
+    // residue by group id, which the delete would SET-NULL away.
+    const groupModel = new ChatGroupModel(serverDB, userId);
+    await expect(groupModel.delete('big-group')).rejects.toThrow(AGENT_TRANSFER_IN_PROGRESS);
 
     // Drain every pending job (the low threshold defers the main scope
     // rewrite too); the remap lands, the scope does not move.

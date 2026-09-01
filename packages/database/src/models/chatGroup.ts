@@ -954,6 +954,15 @@ export class ChatGroupModel {
    */
   async delete(id: string): Promise<{ deletedOwnedAgentIds: string[]; group: ChatGroupItem }> {
     return this.db.transaction(async (trx) => {
+      // A pending backfill (a deferred group-history remap included) still
+      // addresses this group's rows by group id; deleting the group now would
+      // cascade the job's queue rows and SET-NULL `messages.group_id`, so the
+      // drain could never find — let alone rescue — the residue, and it would
+      // later cascade away with the moved agent. Delete only once drained.
+      if (await AgentTransferJobModel.hasPendingJobForGroups(trx, [id])) {
+        throw new Error(AGENT_TRANSFER_IN_PROGRESS);
+      }
+
       // Collect BEFORE the delete: the junction rows cascade away with the
       // group, taking the only record of which agents were group-owned — and
       // the group anchor is the only indexed way to find its rosterless
@@ -995,6 +1004,12 @@ export class ChatGroupModel {
         .where(this.ownership());
 
       const ids = groupIds.map((group) => group.id);
+      // Same pending-backfill guard as the single delete: a deferred remap
+      // addresses rows by group id and cannot rescue them once the delete
+      // SET-NULLs `messages.group_id`.
+      if (await AgentTransferJobModel.hasPendingJobForGroups(trx, ids)) {
+        throw new Error(AGENT_TRANSFER_IN_PROGRESS);
+      }
       const ownedAgentIds = await this.findOwnedMemberAgentIds(trx, ids);
       const tombstoneCandidateIds = await this.findRosterlessHistoryAgentIds(trx, ids);
       const mentionedSurvivorIds = await this.findTargetMentionedSurvivorIds(

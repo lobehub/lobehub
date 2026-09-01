@@ -217,10 +217,26 @@ export const remapMessageAgentIdsForTopics = async (
   executor: Executor,
   topicIds: string[],
   pairs: AgentIdRemapPair[],
+  options: {
+    /**
+     * Skip rows whose `group_id` names a group OUTSIDE this list (rows with a
+     * NULL group_id always remap). A schema-valid row can pair group H with a
+     * topic of group G; its history belongs to H (the direct anchor wins), so
+     * G's topic-anchored remap must not claim it first — the remaps are not
+     * idempotent across different clones.
+     */
+    restrictToGroupIdsOrNull?: string[];
+  } = {},
 ): Promise<void> => {
   if (topicIds.length === 0) return;
 
-  await remapMessageAgentIds(executor, inArray(messages.topicId, topicIds), pairs);
+  const base = inArray(messages.topicId, topicIds);
+  const restrict = options.restrictToGroupIdsOrNull;
+  const condition = restrict
+    ? and(base, or(isNull(messages.groupId), inArray(messages.groupId, restrict)))!
+    : base;
+
+  await remapMessageAgentIds(executor, condition, pairs);
 };
 
 /**
@@ -254,9 +270,12 @@ export const remapMessageAgentIdsForGroupTopics = async (
 ): Promise<void> => {
   if (groupIds.length === 0) return;
 
+  // The group-id guard mirrors `restrictToGroupIdsOrNull` on the topic
+  // variant: a row anchored to a DIFFERENT group via its own group_id belongs
+  // to that group's remap, not this topic-derived one.
   await remapMessageAgentIds(
     executor,
-    sql`${messages.topicId} IN (SELECT ${topics.id} FROM ${topics} WHERE ${inArray(topics.groupId, groupIds)})`,
+    sql`${messages.topicId} IN (SELECT ${topics.id} FROM ${topics} WHERE ${inArray(topics.groupId, groupIds)}) AND (${messages.groupId} IS NULL OR ${inArray(messages.groupId, groupIds)})`,
     pairs,
   );
 };
@@ -803,7 +822,16 @@ export class AgentTransferJobModel {
           excludeGroupRows: job.groupIds.length === 0,
         });
       }
-      if (agentIdRemap) await remapMessageAgentIdsForTopics(trx, [next.topicId], agentIdRemap);
+      if (agentIdRemap) {
+        // A remap-only drain restricts to its own groups' rows — a row whose
+        // group_id names another group belongs to THAT group's remap.
+        await remapMessageAgentIdsForTopics(
+          trx,
+          [next.topicId],
+          agentIdRemap,
+          remapOnly ? { restrictToGroupIdsOrNull: job.groupIds } : {},
+        );
+      }
       await trx
         .delete(agentHistoryJobTopics)
         .where(
