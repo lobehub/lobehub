@@ -5,7 +5,7 @@ import { type FC } from 'react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useResetMemoryList } from '@/features/Memory';
+import { MemoryListBoundary, useResetMemoryList } from '@/features/Memory';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
@@ -35,6 +35,7 @@ const ActivitiesArea = memo(() => {
   const activitiesPage = useUserMemoryStore((s) => s.activitiesPage);
   const activitiesInit = useUserMemoryStore((s) => s.activitiesInit);
   const activitiesTotal = useUserMemoryStore((s) => s.activitiesTotal);
+  const activitiesSearchError = useUserMemoryStore((s) => s.activitiesSearchError);
   const activitiesSearchLoading = useUserMemoryStore((s) => s.activitiesSearchLoading);
   const useFetchActivities = useUserMemoryStore((s) => s.useFetchActivities);
   const resetActivitiesList = useUserMemoryStore((s) => s.resetActivitiesList);
@@ -53,7 +54,7 @@ const ActivitiesArea = memo(() => {
     viewMode,
   });
 
-  const { isLoading } = useFetchActivities({
+  const { data, isLoading, mutate } = useFetchActivities({
     page: activitiesPage,
     pageSize: 12,
     q: searchValue || undefined,
@@ -73,8 +74,6 @@ const ActivitiesArea = memo(() => {
     },
     [setSortValueRaw],
   );
-
-  const showLoading = activitiesSearchLoading || !activitiesInit;
 
   return (
     <Flexbox flex={1} height={'100%'}>
@@ -105,11 +104,17 @@ const ActivitiesArea = memo(() => {
             onSearch={handleSearch}
             onSortChange={viewMode === 'grid' ? handleSortChange : undefined}
           />
-          {showLoading ? (
-            <Loading viewMode={viewMode} />
-          ) : (
+          <MemoryListBoundary
+            data={data}
+            error={activitiesSearchError}
+            isInitialized={activitiesInit}
+            isLoading={isLoading}
+            isResetting={activitiesSearchLoading}
+            loading={<Loading viewMode={viewMode} />}
+            onRetry={() => void mutate()}
+          >
             <List isLoading={isLoading} searchValue={searchValue} viewMode={viewMode} />
-          )}
+          </MemoryListBoundary>
         </WideScreenContainer>
       </Flexbox>
     </Flexbox>

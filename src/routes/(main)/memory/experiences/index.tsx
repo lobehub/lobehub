@@ -5,7 +5,7 @@ import { type FC } from 'react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useResetMemoryList } from '@/features/Memory';
+import { MemoryListBoundary, useResetMemoryList } from '@/features/Memory';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
@@ -35,6 +35,7 @@ const ExperiencesArea = memo(() => {
   const experiencesPage = useUserMemoryStore((s) => s.experiencesPage);
   const experiencesInit = useUserMemoryStore((s) => s.experiencesInit);
   const experiencesTotal = useUserMemoryStore((s) => s.experiencesTotal);
+  const experiencesSearchError = useUserMemoryStore((s) => s.experiencesSearchError);
   const experiencesSearchLoading = useUserMemoryStore((s) => s.experiencesSearchLoading);
   const useFetchExperiences = useUserMemoryStore((s) => s.useFetchExperiences);
   const resetExperiencesList = useUserMemoryStore((s) => s.resetExperiencesList);
@@ -55,7 +56,7 @@ const ExperiencesArea = memo(() => {
   });
 
   // Call SWR hook to fetch data
-  const { isLoading } = useFetchExperiences({
+  const { data, isLoading, mutate } = useFetchExperiences({
     page: experiencesPage,
     pageSize: 12,
     q: searchValue || undefined,
@@ -76,9 +77,6 @@ const ExperiencesArea = memo(() => {
     },
     [setSortValueRaw],
   );
-
-  // Show loading: during search/reset or initial load
-  const showLoading = experiencesSearchLoading || !experiencesInit;
 
   return (
     <Flexbox flex={1} height={'100%'}>
@@ -109,11 +107,17 @@ const ExperiencesArea = memo(() => {
             onSearch={handleSearch}
             onSortChange={viewMode === 'grid' ? handleSortChange : undefined}
           />
-          {showLoading ? (
-            <Loading viewMode={viewMode} />
-          ) : (
+          <MemoryListBoundary
+            data={data}
+            error={experiencesSearchError}
+            isInitialized={experiencesInit}
+            isLoading={isLoading}
+            isResetting={experiencesSearchLoading}
+            loading={<Loading viewMode={viewMode} />}
+            onRetry={() => void mutate()}
+          >
             <List isLoading={isLoading} searchValue={searchValue} viewMode={viewMode} />
-          )}
+          </MemoryListBoundary>
         </WideScreenContainer>
       </Flexbox>
     </Flexbox>

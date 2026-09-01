@@ -6,6 +6,7 @@ export interface ContextSliceState {
   contextsInit: boolean;
   contextsPage: number;
   contextsQuery?: string;
+  contextsSearchError?: unknown;
   contextsSearchLoading?: boolean;
   contextsSort?: 'capturedAt' | 'scoreImpact' | 'scoreUrgency';
   contextsTotal: number;
@@ -17,6 +18,8 @@ export const contextInitialState: ContextSliceState = {
   contextsInit: false,
   contextsPage: 1,
   contextsQuery: undefined,
+  contextsSearchError: undefined,
+  contextsSearchLoading: undefined,
   contextsSort: undefined,
   contextsTotal: 0,
 };

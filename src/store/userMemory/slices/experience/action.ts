@@ -11,6 +11,7 @@ import { setNamespace } from '@/utils/storeDebug';
 
 import { type UserMemoryStore } from '../../store';
 import { isMemoryListRequestCurrent } from '../utils/isMemoryListRequestCurrent';
+import { shouldSurfaceMemoryListError } from '../utils/shouldSurfaceMemoryListError';
 
 const n = setNamespace('userMemory/experience');
 
@@ -63,6 +64,7 @@ export class ExperienceActionImpl {
         draft.experiences = [];
         draft.experiencesPage = 1;
         draft.experiencesQuery = params?.q;
+        draft.experiencesSearchError = undefined;
         draft.experiencesSearchLoading = true;
         draft.experiencesSort = params?.sort;
       }),
@@ -86,7 +88,7 @@ export class ExperienceActionImpl {
         });
       },
       {
-        onError: () => {
+        onError: (error: unknown) => {
           const state = this.#get();
           if (
             !isMemoryListRequestCurrent(
@@ -100,8 +102,15 @@ export class ExperienceActionImpl {
           )
             return;
 
+          const shouldSurfaceError = shouldSurfaceMemoryListError({
+            initialized: state.experiencesInit,
+            page,
+            resetting: state.experiencesSearchLoading,
+          });
+
           this.#set(
             produce((draft) => {
+              if (shouldSurfaceError) draft.experiencesSearchError = error;
               draft.experiencesSearchLoading = false;
             }),
             false,
@@ -124,6 +133,7 @@ export class ExperienceActionImpl {
 
           this.#set(
             produce((draft) => {
+              draft.experiencesSearchError = undefined;
               draft.experiencesSearchLoading = false;
               draft.experiencesTotal = data.total;
 

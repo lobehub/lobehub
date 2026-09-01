@@ -12,6 +12,7 @@ import { setNamespace } from '@/utils/storeDebug';
 
 import { type UserMemoryStore } from '../../store';
 import { isMemoryListRequestCurrent } from '../utils/isMemoryListRequestCurrent';
+import { shouldSurfaceMemoryListError } from '../utils/shouldSurfaceMemoryListError';
 
 const n = setNamespace('userMemory/preference');
 
@@ -64,6 +65,7 @@ export class PreferenceActionImpl {
         draft.preferences = [];
         draft.preferencesPage = 1;
         draft.preferencesQuery = params?.q;
+        draft.preferencesSearchError = undefined;
         draft.preferencesSearchLoading = true;
         draft.preferencesSort = params?.sort;
       }),
@@ -89,7 +91,7 @@ export class PreferenceActionImpl {
         return result;
       },
       {
-        onError: () => {
+        onError: (error: unknown) => {
           const state = this.#get();
           if (
             !isMemoryListRequestCurrent(
@@ -103,8 +105,15 @@ export class PreferenceActionImpl {
           )
             return;
 
+          const shouldSurfaceError = shouldSurfaceMemoryListError({
+            initialized: state.preferencesInit,
+            page,
+            resetting: state.preferencesSearchLoading,
+          });
+
           this.#set(
             produce((draft) => {
+              if (shouldSurfaceError) draft.preferencesSearchError = error;
               draft.preferencesSearchLoading = false;
             }),
             false,
@@ -127,6 +136,7 @@ export class PreferenceActionImpl {
 
           this.#set(
             produce((draft) => {
+              draft.preferencesSearchError = undefined;
               draft.preferencesSearchLoading = false;
               draft.preferencesTotal = data.total;
 

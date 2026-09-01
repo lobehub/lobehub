@@ -12,6 +12,7 @@ import { setNamespace } from '@/utils/storeDebug';
 
 import { type UserMemoryStore } from '../../store';
 import { isMemoryListRequestCurrent } from '../utils/isMemoryListRequestCurrent';
+import { shouldSurfaceMemoryListError } from '../utils/shouldSurfaceMemoryListError';
 
 const n = setNamespace('userMemory/context');
 
@@ -61,6 +62,7 @@ export class ContextActionImpl {
         draft.contexts = [];
         draft.contextsPage = 1;
         draft.contextsQuery = params?.q;
+        draft.contextsSearchError = undefined;
         draft.contextsSearchLoading = true;
         draft.contextsSort = params?.sort;
       }),
@@ -86,7 +88,7 @@ export class ContextActionImpl {
         return result;
       },
       {
-        onError: () => {
+        onError: (error: unknown) => {
           const state = this.#get();
           if (
             !isMemoryListRequestCurrent(
@@ -96,8 +98,15 @@ export class ContextActionImpl {
           )
             return;
 
+          const shouldSurfaceError = shouldSurfaceMemoryListError({
+            initialized: state.contextsInit,
+            page,
+            resetting: state.contextsSearchLoading,
+          });
+
           this.#set(
             produce((draft) => {
+              if (shouldSurfaceError) draft.contextsSearchError = error;
               draft.contextsSearchLoading = false;
             }),
             false,
@@ -116,6 +125,7 @@ export class ContextActionImpl {
 
           this.#set(
             produce((draft) => {
+              draft.contextsSearchError = undefined;
               draft.contextsSearchLoading = false;
               draft.contextsInit = true;
               draft.contextsTotal = data.total;

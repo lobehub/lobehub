@@ -5,7 +5,7 @@ import { type FC } from 'react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useResetMemoryList } from '@/features/Memory';
+import { MemoryListBoundary, useResetMemoryList } from '@/features/Memory';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
@@ -35,6 +35,7 @@ const PreferencesArea = memo(() => {
   const preferencesPage = useUserMemoryStore((s) => s.preferencesPage);
   const preferencesInit = useUserMemoryStore((s) => s.preferencesInit);
   const preferencesTotal = useUserMemoryStore((s) => s.preferencesTotal);
+  const preferencesSearchError = useUserMemoryStore((s) => s.preferencesSearchError);
   const preferencesSearchLoading = useUserMemoryStore((s) => s.preferencesSearchLoading);
   const useFetchPreferences = useUserMemoryStore((s) => s.useFetchPreferences);
   const resetPreferencesList = useUserMemoryStore((s) => s.resetPreferencesList);
@@ -55,7 +56,7 @@ const PreferencesArea = memo(() => {
   });
 
   // Call SWR hook to fetch data
-  const { isLoading } = useFetchPreferences({
+  const { data, isLoading, mutate } = useFetchPreferences({
     page: preferencesPage,
     pageSize: 12,
     q: searchValue || undefined,
@@ -76,9 +77,6 @@ const PreferencesArea = memo(() => {
     },
     [setSortValueRaw],
   );
-
-  // Show loading: during search/reset or initial load
-  const showLoading = preferencesSearchLoading || !preferencesInit;
 
   return (
     <Flexbox flex={1} height={'100%'}>
@@ -109,11 +107,17 @@ const PreferencesArea = memo(() => {
             onSearch={handleSearch}
             onSortChange={viewMode === 'grid' ? handleSortChange : undefined}
           />
-          {showLoading ? (
-            <Loading viewMode={viewMode} />
-          ) : (
+          <MemoryListBoundary
+            data={data}
+            error={preferencesSearchError}
+            isInitialized={preferencesInit}
+            isLoading={isLoading}
+            isResetting={preferencesSearchLoading}
+            loading={<Loading viewMode={viewMode} />}
+            onRetry={() => void mutate()}
+          >
             <List isLoading={isLoading} searchValue={searchValue} viewMode={viewMode} />
-          )}
+          </MemoryListBoundary>
         </WideScreenContainer>
       </Flexbox>
     </Flexbox>

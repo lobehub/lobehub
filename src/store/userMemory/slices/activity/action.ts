@@ -11,6 +11,7 @@ import { setNamespace } from '@/utils/storeDebug';
 
 import { type UserMemoryStore } from '../../store';
 import { isMemoryListRequestCurrent } from '../utils/isMemoryListRequestCurrent';
+import { shouldSurfaceMemoryListError } from '../utils/shouldSurfaceMemoryListError';
 
 const n = setNamespace('userMemory/activity');
 
@@ -64,6 +65,7 @@ export class ActivityActionImpl {
         draft.activities = [];
         draft.activitiesPage = 1;
         draft.activitiesQuery = params?.q;
+        draft.activitiesSearchError = undefined;
         draft.activitiesSearchLoading = true;
         draft.activitiesSort = params?.sort;
       }),
@@ -88,7 +90,7 @@ export class ActivityActionImpl {
         });
       },
       {
-        onError: () => {
+        onError: (error: unknown) => {
           const state = this.#get();
           if (
             !isMemoryListRequestCurrent(
@@ -102,8 +104,15 @@ export class ActivityActionImpl {
           )
             return;
 
+          const shouldSurfaceError = shouldSurfaceMemoryListError({
+            initialized: state.activitiesInit,
+            page,
+            resetting: state.activitiesSearchLoading,
+          });
+
           this.#set(
             produce((draft) => {
+              if (shouldSurfaceError) draft.activitiesSearchError = error;
               draft.activitiesSearchLoading = false;
             }),
             false,
@@ -126,6 +135,7 @@ export class ActivityActionImpl {
 
           this.#set(
             produce((draft) => {
+              draft.activitiesSearchError = undefined;
               draft.activitiesSearchLoading = false;
               draft.activitiesTotal = data.total;
 
