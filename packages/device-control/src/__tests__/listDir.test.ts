@@ -22,7 +22,7 @@ afterAll(async () => {
 });
 
 describe('listDir', () => {
-  it('returns hidden entries, files, and directory symlinks with directories first', async () => {
+  it('returns hidden directories and directory symlinks without exposing files', async () => {
     const targetDir = path.join(root, 'z-directory');
     await Promise.all([
       mkdir(path.join(root, '.hidden-directory')),
@@ -49,7 +49,6 @@ describe('listDir', () => {
       'directory',
       'directory',
       'directory',
-      'file',
     ]);
     expect(result.entries.find((entry) => entry.name === '.hidden-directory')).toMatchObject({
       hidden: true,
@@ -59,7 +58,34 @@ describe('listDir', () => {
       isSymlink: true,
       type: 'directory',
     });
+    expect(result.entries.some((entry) => entry.name === 'a-file.txt')).toBe(false);
     expect(result.entries.some((entry) => entry.name === 'broken-link')).toBe(false);
+  });
+
+  it('caps and sorts directory results for large listings', async () => {
+    const largeDirectory = path.join(root, 'large-directory');
+    await mkdir(largeDirectory);
+    await Promise.all(
+      Array.from({ length: 110 }, (_, index) =>
+        mkdir(path.join(largeDirectory, `directory-${index.toString().padStart(3, '0')}`)),
+      ),
+    );
+    await Promise.all(
+      Array.from({ length: 10 }, (_, index) =>
+        writeFile(path.join(largeDirectory, `file-${index}.txt`), 'file'),
+      ),
+    );
+
+    const result = await listDir({ path: largeDirectory });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+
+    expect(result.entries).toHaveLength(100);
+    expect(result.entries.every((entry) => entry.type === 'directory')).toBe(true);
+    expect(result.entries.map((entry) => entry.name)).toEqual(
+      result.entries.map((entry) => entry.name).sort((a, b) => a.localeCompare(b)),
+    );
   });
 
   it('starts at the device home for a blank path', async () => {

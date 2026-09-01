@@ -1,5 +1,5 @@
 import type { Dirent } from 'node:fs';
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { opendir, readdir, readFile, stat } from 'node:fs/promises';
 import * as os from 'node:os';
 import path from 'node:path';
 
@@ -26,6 +26,10 @@ import type {
 
 // Cap recursion to guard against pathological directory trees.
 const MAX_SKILL_FILE_COUNT = 1000;
+// The folder picker supports direct path entry, so bound discovery work instead
+// of enumerating arbitrarily large directories across the device gateway.
+const MAX_LIST_DIR_ENTRIES = 100;
+const MAX_LIST_DIR_SCANNED_ENTRIES = 1000;
 
 const SKILL_SOURCES = [
   '.agents/skills',
@@ -292,7 +296,10 @@ const createListDirError = (path: string, code: ListDirErrorCode): ListDirResult
   success: false,
 });
 
-const resolveListDirEntry = async (parent: string, entry: Dirent): Promise<ListDirEntry | null> => {
+const resolveListDirDirectory = async (
+  parent: string,
+  entry: Dirent,
+): Promise<ListDirEntry | null> => {
   const entryPath = path.join(parent, entry.name);
   const base = {
     hidden: entry.name.startsWith('.'),
@@ -302,13 +309,11 @@ const resolveListDirEntry = async (parent: string, entry: Dirent): Promise<ListD
   };
 
   if (entry.isDirectory()) return { ...base, type: 'directory' };
-  if (entry.isFile()) return { ...base, type: 'file' };
   if (!entry.isSymbolicLink()) return null;
 
   try {
     const target = await stat(entryPath);
     if (target.isDirectory()) return { ...base, type: 'directory' };
-    if (target.isFile()) return { ...base, type: 'file' };
   } catch {
     // Broken or inaccessible symlinks are not navigable and reveal no useful
     // folder-picker target, so leave them out of the listing.
@@ -319,8 +324,9 @@ const resolveListDirEntry = async (parent: string, entry: Dirent): Promise<ListD
 /**
  * List one device-local directory for the remote folder picker. The device owns
  * all path expansion and classification so a POSIX web server never has to
- * parse a Windows path (or vice versa). Files stay classified in the transport
- * result while the folder picker filters them before rendering.
+ * parse a Windows path (or vice versa). Only directories are returned because
+ * files are not valid picker targets. Both the scan and result are capped so a
+ * large directory cannot create unbounded device work or gateway payloads.
  */
 export const listDir = async (params: { path?: string } = {}): Promise<ListDirResult> => {
   const resolved = resolveDevicePath(params.path);
@@ -333,22 +339,30 @@ export const listDir = async (params: { path?: string } = {}): Promise<ListDirRe
   }
   if (!stats.isDirectory()) return createListDirError(resolved, 'NOT_DIRECTORY');
 
-  let dirEntries;
+  let directory;
   try {
-    dirEntries = await readdir(resolved, { withFileTypes: true });
+    directory = await opendir(resolved);
   } catch (error) {
     return createListDirError(resolved, getListDirErrorCode(error));
   }
 
-  const resolvedEntries = await Promise.all(
-    dirEntries.map((entry) => resolveListDirEntry(resolved, entry)),
-  );
-  const entries = resolvedEntries
-    .filter((entry): entry is ListDirEntry => entry !== null)
-    .sort((a, b) => {
-      if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
-      return a.name.localeCompare(b.name);
-    });
+  const entries: ListDirEntry[] = [];
+  let scannedEntries = 0;
+  try {
+    for await (const entry of directory) {
+      if (scannedEntries >= MAX_LIST_DIR_SCANNED_ENTRIES) break;
+      scannedEntries += 1;
+
+      const resolvedEntry = await resolveListDirDirectory(resolved, entry);
+      if (resolvedEntry) entries.push(resolvedEntry);
+      if (entries.length > MAX_LIST_DIR_ENTRIES) break;
+    }
+  } catch (error) {
+    return createListDirError(resolved, getListDirErrorCode(error));
+  }
+
+  entries.sort((a, b) => a.name.localeCompare(b.name));
+  if (entries.length > MAX_LIST_DIR_ENTRIES) entries.length = MAX_LIST_DIR_ENTRIES;
   const parent = path.dirname(resolved);
 
   return {
