@@ -584,16 +584,22 @@ export class AgentRuntimeService {
       return false;
     }
 
+    // Sentinel FIRST: the poller and the step-boundary check read only the
+    // sentinel, so it must become visible no later than the interrupted
+    // state — otherwise a boundary check landing between the two writes
+    // reads false and the following saveStepResult clobbers the
+    // interruption. Writing it first also keeps failure atomic: if the
+    // sentinel write throws, the state below is never marked either, so the
+    // two never diverge. A sentinel that lands without the state save
+    // (crash between the writes) only stops the op earlier than the record
+    // shows — the step-boundary check then persists the interrupted state.
+    await this.coordinator.markInterrupted(operationId);
+
     await this.coordinator.saveAgentState(operationId, {
       ...state,
       lastModified: new Date().toISOString(),
       status: 'interrupted',
     });
-
-    // Sentinel second: the state blob stays authoritative, and a sentinel
-    // write failure only degrades the mid-step abort to the step-boundary
-    // checks, which read the full state.
-    await this.coordinator.markInterrupted(operationId);
 
     log('[%s] Operation interrupted', operationId);
     return true;
