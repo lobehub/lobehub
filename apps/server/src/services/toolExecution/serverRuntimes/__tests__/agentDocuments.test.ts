@@ -341,6 +341,29 @@ describe('AgentDocumentsExecutionRuntime.createDocument', () => {
     });
   });
 
+  it('forwards parentId when creating a document in a folder', async () => {
+    const stub = makeStub();
+    stub.createDocument.mockResolvedValue({
+      documentId: 'documents-row-id',
+      filename: 'daily-brief',
+      id: 'agent-doc-assoc-id',
+      title: 'Daily Brief',
+    });
+
+    const runtime = new AgentDocumentsExecutionRuntime(stub);
+    await runtime.createDocument(
+      { content: 'body', parentId: 'folder-doc-id', title: 'Daily Brief' },
+      { agentId: 'agent-1' },
+    );
+
+    expect(stub.createDocument).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      content: 'body',
+      parentId: 'folder-doc-id',
+      title: 'Daily Brief',
+    });
+  });
+
   it('includes a document URL when a URL builder is configured', async () => {
     const stub = makeStub();
     stub.createDocument.mockResolvedValue({
