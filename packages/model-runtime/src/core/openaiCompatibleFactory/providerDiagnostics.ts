@@ -206,7 +206,11 @@ export const recordOpenAIChatCompletionChunk = (
     type: chunk.object || 'chat.completion.chunk',
   };
 
-  for (const choice of chunk.choices) {
+  // OpenAI-compatible upstreams routinely omit `choices` or send `null` on
+  // keep-alive / usage-only / error frames, even though the SDK type says
+  // otherwise. This is diagnostics — it must never be the thing that fails the
+  // request. (`tool_calls` below is already guarded the same way.)
+  for (const choice of Array.isArray(chunk.choices) ? chunk.choices : []) {
     const delta = choice.delta as typeof choice.delta & {
       reasoning?: string;
       reasoning_content?: string;
@@ -387,7 +391,7 @@ export const recordOpenAIChatCompletionResponse = async (
   const event: Omit<ProviderResponseEventDiagnostics, 'index'> = {
     type: completion.object,
   };
-  for (const choice of completion.choices) {
+  for (const choice of Array.isArray(completion.choices) ? completion.choices : []) {
     const message = choice.message as typeof choice.message & {
       reasoning?: string;
       reasoning_content?: string;
