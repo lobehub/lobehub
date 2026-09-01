@@ -1018,10 +1018,10 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                     </Suspense>
                   </Flexbox>
                 )}
-                {reviewAvailable && (
-                  <Flexbox className={activeTab === 'review' ? styles.pane : styles.paneHidden}>
+                {reviewAvailable && showRightPanel && fits && activeTab === 'review' && (
+                  <Flexbox className={styles.pane}>
                     <Review
-                      active={activeTab === 'review'}
+                      active
                       composerTarget={composerTarget}
                       deviceId={remoteDeviceId}
                       showTree={showReviewTree}
