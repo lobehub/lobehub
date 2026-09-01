@@ -133,6 +133,7 @@ export const searchRouter = router({
           createFtsSearchRepo({
             db: ctx.serverDB,
             userId: ctx.userId,
+            usage: 'unified_search',
             workspaceId: ctx.workspaceId ?? undefined,
           }),
         ]);

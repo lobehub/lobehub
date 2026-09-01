@@ -14,6 +14,7 @@ import { ftsSearchEnv } from '@/envs/ftsSearch';
 import { ElasticsearchFtsSearchHttpClient } from './elasticsearch';
 import {
   createElasticsearchFtsSearchObserver,
+  type FtsSearchUsage,
   withFtsSearchBackendObservability,
 } from './observability';
 
@@ -21,6 +22,7 @@ export interface CreateFtsSearchRepoInput {
   callerAgentVisibility?: 'private' | 'public' | null;
   db: LobeChatDatabase;
   options?: FtsSearchRepoOptions;
+  usage: FtsSearchUsage;
   userId: string;
   workspaceId?: string;
 }
@@ -37,12 +39,14 @@ interface FtsSearchBackendFactoryContext {
   db: CreateFtsSearchRepoInput['db'];
   provider: FtsSearchProvider;
   scope: FtsSearchBackendScope;
+  usage: FtsSearchUsage;
 }
 
 interface FtsSearchBackendFactoryDependencies {
   createBackend?: (context: FtsSearchBackendFactoryContext) => FtsSearchBackend | undefined;
   createElasticsearchClient?: (
     config: ElasticsearchFtsSearchConfig,
+    usage: FtsSearchUsage,
   ) => ElasticsearchFtsSearchClient;
   createPgSearchBackend?: (context: FtsSearchBackendFactoryContext) => FtsSearchBackend;
   loadElasticsearchConfig?: () => ElasticsearchFtsSearchConfig | undefined;
@@ -79,7 +83,7 @@ export const loadElasticsearchFtsSearchConfig = (): ElasticsearchFtsSearchConfig
 };
 
 const createFtsSearchBackendForProvider = (
-  { db, provider, scope }: FtsSearchBackendFactoryContext,
+  { db, provider, scope, usage }: FtsSearchBackendFactoryContext,
   dependencies: FtsSearchBackendFactoryDependencies,
 ): FtsSearchBackend | undefined => {
   if (provider === FTS_SEARCH_PROVIDERS.pgSearch) {
@@ -87,7 +91,7 @@ const createFtsSearchBackendForProvider = (
       dependencies.createPgSearchBackend ??
       ((context: FtsSearchBackendFactoryContext) =>
         new PgSearchFtsSearchBackend(context.db, context.scope));
-    return createPgSearchBackend({ db, provider, scope });
+    return createPgSearchBackend({ db, provider, scope, usage });
   }
 
   const config = (dependencies.loadElasticsearchConfig ?? loadElasticsearchFtsSearchConfig)();
@@ -95,12 +99,12 @@ const createFtsSearchBackendForProvider = (
 
   const client = (
     dependencies.createElasticsearchClient ??
-    ((input) => new ElasticsearchFtsSearchHttpClient(input))
-  )(config);
+    ((input, inputUsage) => new ElasticsearchFtsSearchHttpClient({ ...input, usage: inputUsage }))
+  )(config, usage);
   return new ElasticsearchFtsSearchBackend(db, {
     client,
     indexNamespace: config.indexNamespace,
-    observer: createElasticsearchFtsSearchObserver(),
+    observer: createElasticsearchFtsSearchObserver(usage),
   });
 };
 
@@ -127,6 +131,7 @@ export const createFtsSearchRepo = async (
     db: input.db,
     provider,
     scope,
+    usage: input.usage,
   };
   const backend = dependencies.createBackend
     ? dependencies.createBackend(context)
@@ -134,7 +139,7 @@ export const createFtsSearchRepo = async (
 
   if (!backend) throw new FtsSearchBackendUnavailableError(provider);
 
-  const observedBackend = withFtsSearchBackendObservability(backend, () => provider);
+  const observedBackend = withFtsSearchBackendObservability(backend, () => provider, input.usage);
 
   return new FtsSearchRepo(input.db, input.userId, input.workspaceId, input.callerAgentVisibility, {
     ...input.options,

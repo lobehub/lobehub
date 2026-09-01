@@ -888,6 +888,7 @@ export const memoryRuntime: ServerRuntimeRegistration = {
     const ftsSearchRepo = await createFtsSearchRepo({
       db: context.serverDB,
       userId: context.userId,
+      usage: 'memory_tool',
     });
     const memoryModel = new UserMemoryModel(context.serverDB, context.userId, ftsSearchRepo);
 
