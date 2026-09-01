@@ -1,17 +1,17 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { Pause, Play } from 'lucide-react';
+import { PlayIcon } from 'lucide-react';
 import { memo, type ReactNode, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NotFound from '@/components/404';
 import AsyncError from '@/components/AsyncError';
 import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
+import StopLoadingIcon from '@/components/StopLoading';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
-import RunningGlyph from '@/features/Home/components/RunningGlyph';
 import NavHeader from '@/features/NavHeader';
 import { PortalContent } from '@/features/Portal/router';
 import RightPanel from '@/features/RightPanel';
@@ -81,16 +81,15 @@ const Metric = memo<{
 
 Metric.displayName = 'GoalHeaderMetric';
 
-/** Relative "last activity" readout; isolated so its refresh never re-renders the page. */
-const LivenessValue = memo<{ active: boolean; latest?: Date }>(({ active, latest }) => {
+/** Relative "last activity" readout; isolated so its refresh never re-renders the page.
+ *  Plain text on purpose: the status control already carries the "running"
+ *  animation, and a second spinner here said the same thing twice. */
+const LivenessValue = memo<{ latest?: Date }>(({ latest }) => {
   const { text } = useActivityTime(latest);
   return (
-    <>
-      {active && <RunningGlyph size={14} />}
-      <Text fontSize={16} weight={600}>
-        {text || '—'}
-      </Text>
-    </>
+    <Text fontSize={16} weight={600}>
+      {text || '—'}
+    </Text>
   );
 });
 
@@ -120,14 +119,12 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   useEffect(() => () => clearPortalStack(), [clearPortalStack, goalId]);
 
   const liveness = useMemo(() => {
-    if (!snapshot) return { active: false, latest: undefined };
+    if (!snapshot) return { latest: undefined };
     let latest: Date | undefined;
-    let active = false;
     for (const node of snapshot.nodes) {
       if (!latest || node.updatedAt > latest) latest = node.updatedAt;
-      if (node.kind === 'task' && node.status === 'active') active = true;
     }
-    return { active, latest };
+    return { latest };
   }, [snapshot]);
 
   if (error && !snapshot) return <AsyncError error={error} variant={'page'} onRetry={mutate} />;
@@ -191,12 +188,30 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                 <Metric
                   label={t('goalProcess.metrics.status')}
                   value={
-                    <>
-                      <GoalStatusGlyph size={16} status={goal.status} />
-                      <Text fontSize={16} weight={600}>
-                        {t(goalStatusKey(goal.status))}
-                      </Text>
-                    </>
+                    // Running is the task-shaped control: one button that both
+                    // shows the goal is moving (spinner-to-stop icon) and pauses
+                    // it — no separate status spinner plus pause row.
+                    canPause ? (
+                      <Button
+                        icon={paused ? PlayIcon : StopLoadingIcon}
+                        size={'small'}
+                        title={paused ? t('goalProcess.paused') : undefined}
+                        type={paused ? 'primary' : 'default'}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void (paused ? resumeGoal(goal.id) : pauseGoal(goal.id));
+                        }}
+                      >
+                        {paused ? t('goalProcess.resume') : t('goalProcess.pause')}
+                      </Button>
+                    ) : (
+                      <>
+                        <GoalStatusGlyph size={16} status={goal.status} />
+                        <Text fontSize={16} weight={600}>
+                          {t(goalStatusKey(goal.status))}
+                        </Text>
+                      </>
+                    )
                   }
                   onClick={open('lifecycle')}
                 />
@@ -238,28 +253,10 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                 />
                 <Metric
                   label={t('goalProcess.metrics.liveness')}
-                  value={<LivenessValue active={liveness.active} latest={liveness.latest} />}
+                  value={<LivenessValue latest={liveness.latest} />}
                   onClick={open('liveness')}
                 />
               </Flexbox>
-              {/* Pause/resume sits above the requirement document (review: it
-                  was a small button buried below it) — the one control over the
-                  goal's pace, at full button size. */}
-              {canPause && (
-                <Flexbox horizontal align={'center'} gap={10} paddingBlock={'8px 0'}>
-                  <Button
-                    icon={<Icon icon={paused ? Play : Pause} />}
-                    onClick={() => void (paused ? resumeGoal(goal.id) : pauseGoal(goal.id))}
-                  >
-                    {paused ? t('goalProcess.resume') : t('goalProcess.pause')}
-                  </Button>
-                  {paused && (
-                    <Text fontSize={12} type={'secondary'}>
-                      {t('goalProcess.paused')}
-                    </Text>
-                  )}
-                </Flexbox>
-              )}
               {goal.requirement && (
                 <GoalRequirement goalId={goal.id} requirement={goal.requirement} />
               )}
