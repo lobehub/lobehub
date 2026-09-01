@@ -136,6 +136,59 @@ describe('callLlmFinalizer', () => {
     );
   });
 
+  it('preserves user cancellation when an aborted stream emits the fifth repeated tool call', async () => {
+    const state = AgentRuntime.createInitialState({ operationId: 'operation-1' });
+    state.toolCallRepeatGuard = {
+      counts: {
+        '["credentials","inject","{\\"keys\\":[\\"github\\"]}"]': 4,
+      },
+    };
+    const toolCalling = {
+      apiName: 'inject',
+      arguments: '{"keys":["github"]}',
+      id: 'call-5',
+      identifier: 'credentials',
+      type: 'default' as const,
+    };
+
+    const result = await finalizeCallLlmTurn({
+      assistantMessageId: 'assistant-5',
+      events: [],
+      host: createHost(),
+      model: 'glm',
+      output: createOutput({
+        content: '',
+        finishReason: 'abort',
+        toolCalls: [
+          {
+            function: { arguments: toolCalling.arguments, name: toolCalling.apiName },
+            id: toolCalling.id,
+            type: 'function',
+          },
+        ],
+        toolsCalling: [toolCalling],
+      }),
+      provider: 'lobehub',
+      shouldReplayAssistantReasoning: false,
+      state,
+    });
+
+    expect(result.nextContext).toMatchObject({
+      payload: {
+        hasToolsCalling: true,
+        reason: 'user_cancelled',
+        toolsCalling: [toolCalling],
+      },
+      phase: 'human_abort',
+    });
+    expect(result.events).toContainEqual(
+      expect.objectContaining({
+        result: expect.objectContaining({ finishReason: 'abort' }),
+        type: 'llm_result',
+      }),
+    );
+  });
+
   it('persists, builds replay-safe state and usage, and preserves finalization order', async () => {
     const messages = createMessageTransport();
     const stream = createStreamSink();

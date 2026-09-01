@@ -280,15 +280,16 @@ export const finalizeCallLlmTurn = async ({
     state.toolCallRepeatGuard,
     output.toolsCalling,
   );
-  const finalizedOutput = hasRepeatedToolCall(toolCallRepeatGuard)
-    ? {
-        ...output,
-        content: `Stopped after the same tool call was requested ${TOOL_CALL_REPEAT_LIMIT} consecutive times.`,
-        finishReason: 'tool_call_repeat_limit',
-        toolCalls: [],
-        toolsCalling: [],
-      }
-    : output;
+  const finalizedOutput =
+    output.finishReason !== 'abort' && hasRepeatedToolCall(toolCallRepeatGuard)
+      ? {
+          ...output,
+          content: `Stopped after the same tool call was requested ${TOOL_CALL_REPEAT_LIMIT} consecutive times.`,
+          finishReason: 'tool_call_repeat_limit',
+          toolCalls: [],
+          toolsCalling: [],
+        }
+      : output;
 
   events.push({
     result: {
