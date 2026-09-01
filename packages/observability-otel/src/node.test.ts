@@ -1,3 +1,6 @@
+import type { Context, ContextManager, TextMapPropagator } from '@opentelemetry/api';
+import { ROOT_CONTEXT } from '@opentelemetry/api';
+import { AlwaysOnSampler, NoopSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { describe, expect, it, vi } from 'vitest';
 
 import { attributesCommon, register, shutdownSafely } from './node';
@@ -13,6 +16,39 @@ vi.mock('@opentelemetry/sdk-node', () => ({
     return { start: mocks.start };
   }),
 }));
+
+class PassthroughContextManager implements ContextManager {
+  active(): Context {
+    return ROOT_CONTEXT;
+  }
+
+  bind<T>(_context: Context, target: T): T {
+    return target;
+  }
+
+  disable(): this {
+    return this;
+  }
+
+  enable(): this {
+    return this;
+  }
+
+  with<A extends unknown[], F extends (...args: A) => ReturnType<F>>(
+    _context: Context,
+    fn: F,
+    thisArg?: ThisParameterType<F>,
+    ...args: A
+  ): ReturnType<F> {
+    return fn.call(thisArg, ...args);
+  }
+}
+
+const passthroughPropagator: TextMapPropagator = {
+  extract: (context) => context,
+  fields: () => [],
+  inject: () => {},
+};
 
 describe('Node observability resource attributes', () => {
   it('uses one stable UUID for the service instance during the process lifetime', () => {
@@ -56,17 +92,17 @@ describe('Node observability resource attributes', () => {
   });
 
   it('registers Sentry and OTLP processors on one tracer provider', () => {
-    const contextManager = { name: 'sentry-context-manager' };
-    const sampler = { name: 'sentry-sampler' };
-    const sentrySpanProcessor = { name: 'sentry-span-processor' };
-    const textMapPropagator = { name: 'sentry-propagator' };
+    const contextManager = new PassthroughContextManager();
+    const sampler = new AlwaysOnSampler();
+    const sentrySpanProcessor = new NoopSpanProcessor();
+    const textMapPropagator = passthroughPropagator;
 
     register({
       contextManager,
       sampler,
       spanProcessors: [sentrySpanProcessor],
       textMapPropagator,
-    } as Parameters<typeof register>[0]);
+    });
 
     expect(mocks.nodeSdkOptions).toMatchObject({
       contextManager,

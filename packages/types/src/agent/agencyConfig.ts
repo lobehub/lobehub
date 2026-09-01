@@ -108,6 +108,31 @@ export const isServerDefaultHeterogeneousModel = (
   operationModel: string,
 ): boolean => requestModel === formatServerDefaultHeterogeneousModel(operationModel);
 
+export interface ServerDefaultHeterogeneousRelayInvocation {
+  acceptedAt: string;
+  agentType: string;
+  ingress: 'anthropic-messages' | 'openai-responses';
+  model: string;
+  operationId: string;
+  provider: string;
+}
+
+/** Durable proof written only after the official relay accepts a model invocation. */
+export const isServerDefaultHeterogeneousRelayInvocation = (
+  value: unknown,
+): value is ServerDefaultHeterogeneousRelayInvocation => {
+  if (!value || typeof value !== 'object') return false;
+  const invocation = value as Partial<ServerDefaultHeterogeneousRelayInvocation>;
+  return (
+    typeof invocation.acceptedAt === 'string' &&
+    typeof invocation.agentType === 'string' &&
+    ['anthropic-messages', 'openai-responses'].includes(invocation.ingress ?? '') &&
+    typeof invocation.model === 'string' &&
+    typeof invocation.operationId === 'string' &&
+    typeof invocation.provider === 'string'
+  );
+};
+
 /**
  * Map a CLI-reported server-default model back to the catalog id.
  *

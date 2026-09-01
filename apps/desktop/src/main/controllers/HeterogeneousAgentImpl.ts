@@ -117,6 +117,7 @@ import {
   beginServerDefaultOperation,
   getProviderBindingRuntime,
   getServerDefaultEndpoint,
+  type ServerDefaultOperationSettlement,
   settleServerDefaultOperation,
 } from '@/modules/heterogeneousAgent/providerBindingPort';
 import type {
@@ -1396,7 +1397,7 @@ export default class HeterogeneousAgentCtr {
    * the shared `AgentStreamPipeline` (JSONL → adapter → toStreamEvent) and
    * broadcasts the resulting `AgentStreamEvent`s on `heteroAgentEvent`.
    */
-  async sendPrompt(params: SendPromptParams): Promise<void> {
+  async sendPrompt(params: SendPromptParams): Promise<ServerDefaultOperationSettlement | void> {
     const session = this.sessions.get(params.sessionId);
     if (session) session.cancelledByUs = false;
     const serverDefaultApiConfig = session?.serverDefaultApiConfig;
@@ -1414,6 +1415,7 @@ export default class HeterogeneousAgentCtr {
       topicId: params.topicId,
     });
     let result: 'done' | 'error' = 'error';
+    let settlement: ServerDefaultOperationSettlement | void;
     try {
       if (session.cancelledByUs) {
         await this.completeCancelledSessionBeforeLaunch(session);
@@ -1425,12 +1427,13 @@ export default class HeterogeneousAgentCtr {
       if (!session.cancelledByUs) result = 'done';
     } finally {
       session.serverOperationToken = undefined;
-      await settleServerDefaultOperation(this.remoteServerAuth, {
+      settlement = await settleServerDefaultOperation(this.remoteServerAuth, {
         cancelled: session.cancelledByUs,
         operationId: params.operationId,
         result,
       }).catch((error) => logger.warn('Failed to settle server-default operation:', error));
     }
+    return settlement;
   }
 
   private async sendPromptImpl(params: SendPromptParams): Promise<void> {

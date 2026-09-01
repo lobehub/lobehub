@@ -2106,6 +2106,18 @@ describe('HeterogeneousAgentCtr', () => {
     it('identifies Codex when beginning a server-default operation', async () => {
       const { proc } = createFakeProc();
       nextFakeProc = proc;
+      const relayInvocation = {
+        acceptedAt: '2026-09-01T00:00:00.000Z',
+        agentType: 'codex',
+        ingress: 'openai-responses',
+        model: 'gpt-5.4',
+        operationId: 'op-server-default',
+        provider: 'lobehub',
+      };
+      settleServerDefaultOperationMock.mockResolvedValueOnce({
+        relayInvocation,
+        success: true,
+      });
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
         storeManager: { get: vi.fn() },
@@ -2119,7 +2131,7 @@ describe('HeterogeneousAgentCtr', () => {
         },
       });
 
-      await ctr.sendPrompt({
+      const settlement = await ctr.sendPrompt({
         agentId: 'agent-1',
         operationId: 'op-server-default',
         prompt: 'hello',
@@ -2141,6 +2153,7 @@ describe('HeterogeneousAgentCtr', () => {
         operationId: 'op-server-default',
         result: 'done',
       });
+      expect(settlement).toEqual({ relayInvocation, success: true });
     });
 
     it('injects a Kimi operation token into its Anthropic credential env', async () => {

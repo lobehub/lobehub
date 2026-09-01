@@ -96,10 +96,11 @@ if (!source.includes("kind: 'server-default'")) {
 
 const value = (key) => source.match(new RegExp(`"${key}":"([^"]+)"`))?.[1];
 const agentType = value('agentType');
+const ingress = value('ingress');
 const marker = value('marker');
 const model = value('model');
 const operationId = value('operationId');
-if (!agentType || !marker || !model || !operationId) {
+if (!agentType || !ingress || !marker || !model || !operationId) {
   console.error('could not parse cell input');
   process.exit(5);
 }
@@ -113,28 +114,80 @@ if (
 
 const state = readState();
 state.count += 1;
-const ok = state.count === 1;
+const sessionId = `session-${state.count}`;
+const listeners = new Map();
+const ipc = {
+  emit(channel, payload) {
+    for (const listener of listeners.get(channel) || []) listener({}, payload);
+  },
+  on(channel, listener) {
+    listeners.set(channel, [...(listeners.get(channel) || []), listener]);
+  },
+  removeListener(channel, listener) {
+    listeners.set(channel, (listeners.get(channel) || []).filter((item) => item !== listener));
+  },
+};
+globalThis.window = {
+  electron: { ipcRenderer: ipc },
+  electronAPI: {
+    invoke: async (channel) => {
+      if (channel === 'heterogeneousAgent.startSession') return { sessionId };
+      if (channel === 'heterogeneousAgent.sendPrompt') {
+        queueMicrotask(() => {
+          ipc.emit('heteroAgentEvent', {
+            event: {
+              data: { chunkType: 'text', content: marker, model, provider: 'lobehub' },
+              type: 'stream_chunk',
+            },
+            sessionId,
+          });
+          ipc.emit('heteroAgentSessionComplete', { sessionId });
+        });
+        return {
+          relayInvocation:
+            state.count === 2
+              ? {
+                  acceptedAt: '2026-09-01T00:00:00.000Z',
+                  agentType,
+                  ingress,
+                  model,
+                  operationId,
+                  provider: 'lobehub',
+                }
+              : null,
+          success: true,
+        };
+      }
+      if (
+        channel === 'heterogeneousAgent.cancelSession' ||
+        channel === 'heterogeneousAgent.stopSession'
+      ) {
+        return undefined;
+      }
+      throw new Error(`unexpected fake IPC invocation: ${channel}`);
+    },
+  },
+};
+
+const started = eval(source);
+let record;
+for (let attempt = 0; attempt < 100; attempt += 1) {
+  record = globalThis.window.__LOBE_HETERO_OFFICIAL_SMOKE_RUNS?.[operationId];
+  if (record?.state === 'done') break;
+  await new Promise((resolve) => setTimeout(resolve, 1));
+}
+if (record?.state !== 'done') {
+  console.error('generated cell script did not finish');
+  process.exit(9);
+}
+
 state.operations[operationId] = {
   polls: 0,
-  result: {
-    completed: true,
-    durationMs: ok ? 125 : 250,
-    error: null,
-    events: [],
-    marker,
-    markerObserved: ok,
-    observedModels: [model],
-    observedProviders: ['lobehub'],
-    ok,
-    operationId,
-    responseText: ok ? marker : 'unexpected response',
-    sessionId: `session-${state.count}`,
-    terminal: { kind: 'complete' },
-  },
+  result: record.result,
 };
 writeState(state);
 appendFileSync(logFile, `start ${agentType} ${model} ${operationId}\n`);
-emit({ state: 'started' });
+process.stdout.write(`${started}\n`);
 JS
 chmod +x "$TEST_TMP/fake-agent-browser.mjs"
 
@@ -212,6 +265,26 @@ for (const item of result.cases) {
 const blocked = result.cases.find((item) => item.status === 'blocked');
 if (!blocked.observation.includes('no installer or updater')) {
   throw new Error('blocked observation does not preserve the no-install/update safety contract');
+}
+const failed = result.cases.find((item) => item.status === 'fail');
+const failedEvidence = JSON.parse(
+  fs.readFileSync(path.join(reportDir, failed.evidence[0]), 'utf8'),
+);
+if (!failedEvidence.markerObserved || failedEvidence.observedModels.length !== 1) {
+  throw new Error('missing-relay case did not exercise the marker/display-metadata false positive');
+}
+if (failedEvidence.relayVerified || failedEvidence.relayInvocation !== null) {
+  throw new Error('missing durable relay attestation incorrectly passed verification');
+}
+if (!failed.observation.includes('without authoritative proof')) {
+  throw new Error(`missing-relay failure was not explained: ${failed.observation}`);
+}
+const passed = result.cases.find((item) => item.status === 'pass');
+const passedEvidence = JSON.parse(
+  fs.readFileSync(path.join(reportDir, passed.evidence[0]), 'utf8'),
+);
+if (!passedEvidence.relayVerified || passedEvidence.relayInvocation?.provider !== 'lobehub') {
+  throw new Error('matching durable relay attestation did not pass verification');
 }
 JS
 

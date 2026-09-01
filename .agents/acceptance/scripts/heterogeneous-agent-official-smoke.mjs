@@ -19,12 +19,16 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 const AGENTS = {
-  'claude-code': { command: 'claude', title: 'Claude Code' },
-  'codex': { command: 'codex', title: 'Codex' },
-  'grok-build': { command: 'grok', title: 'Grok Build' },
-  'kimi-code': { command: 'kimi', title: 'Kimi Code' },
-  'pi': { command: 'pi', title: 'Pi' },
-  'trae': { command: 'traecli', title: 'TRAE' },
+  'claude-code': {
+    command: 'claude',
+    ingress: 'anthropic-messages',
+    title: 'Claude Code',
+  },
+  'codex': { command: 'codex', ingress: 'openai-responses', title: 'Codex' },
+  'grok-build': { command: 'grok', ingress: 'openai-responses', title: 'Grok Build' },
+  'kimi-code': { command: 'kimi', ingress: 'anthropic-messages', title: 'Kimi Code' },
+  'pi': { command: 'pi', ingress: 'openai-responses', title: 'Pi' },
+  'trae': { command: 'traecli', ingress: 'openai-responses', title: 'TRAE' },
 };
 
 const AGENT_TYPES = Object.keys(AGENTS);
@@ -388,6 +392,7 @@ const buildCaseStartScript = (input) => `
     const textChunks = [];
     let caughtError = null;
     let sessionId = null;
+    let settlement = null;
     let terminal = null;
     let timer = null;
     let sendPromise = null;
@@ -449,7 +454,7 @@ const buildCaseStartScript = (input) => `
         sessionId,
         topicId: input.topicId,
       });
-      await Promise.race([
+      settlement = await Promise.race([
         sendPromise,
         new Promise((_, reject) => {
           timer = setTimeout(() => reject(new Error('Timed out after ' + input.timeoutMs + 'ms')), input.timeoutMs);
@@ -477,7 +482,18 @@ const buildCaseStartScript = (input) => `
     const responseText = textChunks.join('');
     const markerObserved = responseText.includes(input.marker);
     const completed = terminal && terminal.kind === 'complete';
-    const ok = !caughtError && completed && markerObserved;
+    const relayInvocation = settlement && settlement.relayInvocation || null;
+    const relayVerified = Boolean(
+      settlement && settlement.success === true &&
+      relayInvocation &&
+      typeof relayInvocation.acceptedAt === 'string' && relayInvocation.acceptedAt &&
+      relayInvocation.agentType === input.agentType &&
+      relayInvocation.ingress === input.ingress &&
+      relayInvocation.model === input.model &&
+      relayInvocation.operationId === input.operationId &&
+      relayInvocation.provider === 'lobehub'
+    );
+    const ok = !caughtError && completed && markerObserved && relayVerified;
     const observedModels = [...new Set(events.map((event) => event.model).filter(Boolean))];
     const observedProviders = [...new Set(events.map((event) => event.provider).filter(Boolean))];
     record.result = {
@@ -491,6 +507,8 @@ const buildCaseStartScript = (input) => `
       observedProviders,
       ok,
       operationId: input.operationId,
+      relayInvocation,
+      relayVerified,
       responseText,
       sessionId,
       terminal,
@@ -508,6 +526,8 @@ const buildCaseStartScript = (input) => `
       observedProviders: [],
       ok: false,
       operationId: input.operationId,
+      relayInvocation: null,
+      relayVerified: false,
       responseText: '',
       sessionId: null,
       terminal: null,
@@ -542,6 +562,7 @@ const executeCell = async (options, preflight, cell) => {
       cell.agentType === 'claude-code'
         ? { DISABLE_AUTOUPDATER: '1', DISABLE_UPDATES: '1' }
         : undefined,
+    ingress: AGENTS[cell.agentType].ingress,
     marker,
     model: cell.model,
     operationId,
@@ -599,6 +620,8 @@ const executeCell = async (options, preflight, cell) => {
       ownershipLost: true,
       ok: false,
       operationId,
+      relayInvocation: null,
+      relayVerified: false,
       responseText: '',
       sessionId: null,
       terminal: null,
@@ -817,7 +840,9 @@ const runMatrix = async (options, preflight, matrix) => {
       ? `Matrix aborted after losing renderer ownership: ${errorMessage(evidence.error)}`
       : evidence.ok
         ? `Completed in ${evidence.durationMs}ms and returned the unique marker through the official relay.`
-        : `Did not complete the marker round trip: ${errorMessage(evidence.error ?? evidence.terminal ?? 'marker missing')}`;
+        : !evidence.relayVerified
+          ? 'The CLI completed without authoritative proof that the selected model traversed the official relay.'
+          : `Did not complete the marker round trip: ${errorMessage(evidence.error ?? evidence.terminal ?? 'marker missing')}`;
     cases.push({
       ...common,
       case: {
