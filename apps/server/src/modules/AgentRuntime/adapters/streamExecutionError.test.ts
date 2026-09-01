@@ -30,6 +30,19 @@ describe('createStreamExecutionError', () => {
     expect(formatted.type).toBe(AgentRuntimeErrorType.ProviderContentPolicyViolation);
   });
 
+  it('keeps the payload body flat so renderers still find provider and context', () => {
+    // The conversation error renderer branches on `body.provider === 'google'`
+    // and reads `body.context.finishReason`; nesting the payload one level down
+    // would silently drop the Google policy view.
+    const formatted = formatErrorForState(createStreamExecutionError(policyBlock));
+
+    expect(formatted.body).toMatchObject({
+      context: { finishReason: 'SAFETY' },
+      provider: 'google',
+    });
+    expect((formatted.body as { body?: unknown }).body).toBeUndefined();
+  });
+
   it('still prefers a top-level message when the payload is flat', () => {
     const error = createStreamExecutionError({ message: 'terminated' });
 

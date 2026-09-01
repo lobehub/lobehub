@@ -105,7 +105,15 @@ export const createStreamExecutionError = (errorData: unknown) => {
     // Surface the classification under the key the error formatter reads, so a
     // typed stream rejection keeps its code instead of collapsing into a 500.
     const errorType = pickString(errorRecord.errorType) ?? pickString(errorRecord.type);
-    if (errorType && KNOWN_ERROR_CODES.has(errorType)) Object.assign(error, { errorType });
+    if (errorType && KNOWN_ERROR_CODES.has(errorType)) {
+      // Hand the payload's `body` over as `_responseBody` in the same step.
+      // `formatErrorForState` builds the display body from
+      // `_responseBody ?? error ?? <the thrown value>`; without this it would
+      // fall through to the Error itself and emit `body: { body: {…}, type,
+      // errorType }`, pushing `provider` / `context` one level below the
+      // `ChatMessageError.body` contract that the renderers read.
+      Object.assign(error, { errorType, ...(body ? { _responseBody: body } : {}) });
+    }
   }
 
   return error;
