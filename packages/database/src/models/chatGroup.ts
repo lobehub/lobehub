@@ -892,10 +892,11 @@ export class ChatGroupModel {
 
   /**
    * Tombstone candidates still mentioned (via the FK-less `target_id`) by
-   * topicless residue rows — the one message shape that SURVIVES a group
-   * delete (`group_id` goes SET NULL while topic'd rows cascade with their
-   * topics). Computed BEFORE the delete so the group anchor's index is still
-   * usable; `target_id` itself has no index.
+   * message rows that SURVIVE the group delete: topicless residue
+   * (`group_id` goes SET NULL) and rows whose topic lives OUTSIDE the
+   * deleted groups (a schema-valid mismatched anchor — such a topic does not
+   * cascade, so neither does its message). Computed BEFORE the delete so the
+   * group anchor's index is still usable; `target_id` itself has no index.
    */
   private findTargetMentionedSurvivorIds = async (
     executor: LobeChatDatabase,
@@ -910,8 +911,16 @@ export class ChatGroupModel {
       .where(
         and(
           inArray(messages.groupId, groupIds),
-          isNull(messages.topicId),
           inArray(messages.targetId, candidateIds),
+          or(
+            isNull(messages.topicId),
+            notExists(
+              executor
+                .select({ id: topics.id })
+                .from(topics)
+                .where(and(eq(topics.id, messages.topicId), inArray(topics.groupId, groupIds))),
+            ),
+          ),
         ),
       );
     return new Set(rows.map((row) => row.targetId).filter((id): id is string => Boolean(id)));

@@ -78,6 +78,27 @@ describe('startAgentTransferJob scheduling', () => {
     expect(started).toEqual(['j1', 'j2', 'j3', 'queued']);
   });
 
+  it('promotes a queued job to the front when a user prioritizes it', async () => {
+    const { startAgentTransferJob } = await loadRunner();
+
+    for (const id of ['j1', 'j2', 'j3', 'q1', 'q2']) startAgentTransferJob(db, id);
+    expect(started).toEqual(['j1', 'j2', 'j3']);
+
+    // A user opened a topic of q2 — it must jump ahead of q1, and the
+    // duplicate suppression must still hold (one drain, not two).
+    startAgentTransferJob(db, 'q2', { promote: true });
+
+    await settle('j1', 'ok');
+    expect(started).toEqual(['j1', 'j2', 'j3', 'q2']);
+
+    await settle('j2', 'ok');
+    expect(started).toEqual(['j1', 'j2', 'j3', 'q2', 'q1']);
+
+    await settle('j3', 'ok');
+    await settle('q1', 'ok');
+    await settle('q2', 'ok');
+  });
+
   it('releases a failing drain’s slot immediately and requeues it after the delay', async () => {
     const { startAgentTransferJob } = await loadRunner();
 

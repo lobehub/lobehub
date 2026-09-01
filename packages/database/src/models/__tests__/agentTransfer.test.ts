@@ -2256,6 +2256,33 @@ describe('AgentModel.transferAgents group history preservation', () => {
     ).resolves.toHaveLength(0);
   });
 
+  it('spends one shared sync budget across all groups instead of per group', async () => {
+    process.env.AGENT_TRANSFER_SYNC_MESSAGE_THRESHOLD = '5';
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Spread Member' });
+    await seedGroupHistory('budget-a', agent.id); // 4 message references each
+    await seedGroupHistory('budget-b', agent.id);
+
+    await model.transferAgents([agent.id], wsId2, targetUserId);
+
+    // 4 + 4 > 5: only one group fits the SHARED budget, the other defers —
+    // per-group budgeting would have run both inline (~8 rewrites > 5).
+    const jobs = await serverDB.query.agentHistoryJobs.findMany();
+    expect(jobs.filter((job) => job.payload?.remapOnly)).toHaveLength(1);
+
+    const [aMessage] = await serverDB
+      .select()
+      .from(messages)
+      .where(eq(messages.id, 'budget-a-msg-topic'));
+    const [bMessage] = await serverDB
+      .select()
+      .from(messages)
+      .where(eq(messages.id, 'budget-b-msg-topic'));
+    // Exactly one group was remapped inline; the deferred one still points
+    // at the moved agent until its job drains.
+    expect([aMessage, bMessage].filter((row) => row.agentId !== agent.id)).toHaveLength(1);
+  });
+
   it('records the transfer target as a protected scope on a deferred remap job', async () => {
     process.env.AGENT_TRANSFER_SYNC_MESSAGE_THRESHOLD = '2';
     const model = new AgentModel(serverDB, userId);

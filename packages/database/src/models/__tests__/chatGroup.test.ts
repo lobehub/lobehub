@@ -1072,9 +1072,15 @@ describe('ChatGroupModel', () => {
         .insert(agentsTable)
         .values({ title: 'Residue Mention', userId, virtual: true })
         .returning();
-      await serverDB
-        .insert(topics)
-        .values({ agentId: orphan.id, groupId: 'tomb-group', id: 'tomb-topic', userId });
+      const [mismatchMentioned] = await serverDB
+        .insert(agentsTable)
+        .values({ title: 'Mismatch Mention', userId, virtual: true })
+        .returning();
+      await serverDB.insert(topics).values([
+        { agentId: orphan.id, groupId: 'tomb-group', id: 'tomb-topic', userId },
+        // A topic OUTSIDE the deleted group — it does not cascade.
+        { id: 'tomb-outside-topic', userId },
+      ]);
       await serverDB.insert(messages).values([
         // Cascades with its topic → the orphan loses its last reference.
         {
@@ -1103,6 +1109,17 @@ describe('ChatGroupModel', () => {
           targetId: mentioned.id,
           userId,
         },
+        // Mismatched anchor: group-anchored, but hosted on a topic OUTSIDE
+        // the group. The topic does not cascade, so this mention survives —
+        // its tombstone must survive with it.
+        {
+          groupId: 'tomb-group',
+          id: 'tomb-msg-mismatch-mention',
+          role: 'user',
+          targetId: mismatchMentioned.id,
+          topicId: 'tomb-outside-topic',
+          userId,
+        },
       ]);
 
       await chatGroupModel.delete('tomb-group');
@@ -1110,19 +1127,28 @@ describe('ChatGroupModel', () => {
       const survivors = await serverDB
         .select({ id: agentsTable.id })
         .from(agentsTable)
-        .where(inArray(agentsTable.id, [orphan.id, speaker.id, mentioned.id]));
+        .where(
+          inArray(agentsTable.id, [orphan.id, speaker.id, mentioned.id, mismatchMentioned.id]),
+        );
       const survivorIds = survivors.map((row) => row.id);
       expect(survivorIds).not.toContain(orphan.id);
       expect(survivorIds).toContain(speaker.id);
       expect(survivorIds).toContain(mentioned.id);
+      expect(survivorIds).toContain(mismatchMentioned.id);
 
       // The surviving residue rows themselves are intact.
       await expect(
         serverDB
           .select()
           .from(messages)
-          .where(inArray(messages.id, ['tomb-msg-residual', 'tomb-msg-mention'])),
-      ).resolves.toHaveLength(2);
+          .where(
+            inArray(messages.id, [
+              'tomb-msg-residual',
+              'tomb-msg-mention',
+              'tomb-msg-mismatch-mention',
+            ]),
+          ),
+      ).resolves.toHaveLength(3);
     });
 
     it('should delete chat group', async () => {

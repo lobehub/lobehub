@@ -2150,6 +2150,7 @@ export class AgentModel {
       .where(inArray(chatGroups.id, [...agentIdsByGroup.keys()]));
 
     const remapJobIds: string[] = [];
+    let remainingSyncBudget = getAgentTransferSyncMessageThreshold();
     for (const group of groupRows) {
       const cloneSourceIds = [...agentIdsByGroup.get(group.id)!];
       // Display-only field set on purpose: the tombstone exists to render
@@ -2229,7 +2230,12 @@ export class AgentModel {
           ),
         );
 
-      if (affectedGroupMessages <= getAgentTransferSyncMessageThreshold()) {
+      if (affectedGroupMessages <= remainingSyncBudget) {
+        // The budget is shared across ALL groups in this transfer — an agent
+        // in twenty groups of 999 messages each must not rewrite ~20k rows
+        // in this foreground transaction just because each group alone sits
+        // under the threshold.
+        remainingSyncBudget -= affectedGroupMessages;
         // Both anchors on purpose: `group_id` covers topicless residue and
         // rows whose topic is gone; the topic anchor covers rows that carry
         // only a topicId into a group topic. Overlap is harmless — the remap

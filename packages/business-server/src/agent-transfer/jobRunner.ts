@@ -75,10 +75,29 @@ const pumpDrains = (): void => {
   }
 };
 
-export const startAgentTransferJob = (db: LobeChatDatabase, jobId: string): void => {
-  if (running.has(jobId)) return;
+export const startAgentTransferJob = (
+  db: LobeChatDatabase,
+  jobId: string,
+  options: {
+    /**
+     * Jump the FIFO: a user is waiting on this job (topic prioritization),
+     * so a queued instance moves to the front instead of sitting behind a
+     * boot-recovery backlog of full migrations. An actively draining job is
+     * left alone; duplicate suppression holds either way.
+     */
+    promote?: boolean;
+  } = {},
+): void => {
+  if (running.has(jobId)) {
+    if (options.promote) {
+      const queuedIndex = waiting.findIndex((entry) => entry.jobId === jobId);
+      if (queuedIndex > 0) waiting.unshift(...waiting.splice(queuedIndex, 1));
+    }
+    return;
+  }
   running.add(jobId);
-  waiting.push({ db, jobId });
+  if (options.promote) waiting.unshift({ db, jobId });
+  else waiting.push({ db, jobId });
   pumpDrains();
 };
 
@@ -90,7 +109,7 @@ export const prioritizeAgentTransferTopic = async (
   if (!flagged) return false;
 
   const pending = await AgentTransferJobModel.findPendingJobForTopic(db, topicId);
-  if (pending) startAgentTransferJob(db, pending.jobId);
+  if (pending) startAgentTransferJob(db, pending.jobId, { promote: true });
   return true;
 };
 
