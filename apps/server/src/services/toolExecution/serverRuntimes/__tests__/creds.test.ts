@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MarketService } from '@/server/services/market';
+import { type SandboxService } from '@/server/services/sandbox';
 
 import { type ToolExecutionContext } from '../../types';
-import { credsRuntime } from '../creds';
+import { credsRuntime, writeEnvCredsToSandbox } from '../creds';
 
 const { getMember } = vi.hoisted(() => ({
   getMember: vi.fn(),
@@ -83,5 +84,66 @@ describe('credsRuntime', () => {
     await expect(credsRuntime.factory({ toolManifestMap: {} })).rejects.toThrow(
       'userId is required for Creds execution',
     );
+  });
+});
+
+describe('writeEnvCredsToSandbox', () => {
+  const buildSandboxService = (callTool = vi.fn()): SandboxService =>
+    ({ callTool }) as unknown as SandboxService;
+
+  it('is a no-op and never calls the sandbox when there is nothing to write', async () => {
+    const callTool = vi.fn();
+    const result = await writeEnvCredsToSandbox(buildSandboxService(callTool), {});
+
+    expect(callTool).not.toHaveBeenCalled();
+    expect(result).toEqual({});
+  });
+
+  it('writes each entry into ~/.creds/env via a single runCommand call', async () => {
+    const callTool = vi.fn().mockResolvedValue({ result: null, success: true });
+
+    const result = await writeEnvCredsToSandbox(buildSandboxService(callTool), {
+      DC_CLI_TOKEN: 'secret-token',
+      DC_BASE_URL: 'https://dc.lobe.li',
+    });
+
+    expect(result).toEqual({});
+    expect(callTool).toHaveBeenCalledTimes(1);
+    const [toolName, params] = callTool.mock.calls[0];
+    expect(toolName).toBe('runCommand');
+    expect(params.command).toContain('mkdir -p ~/.creds');
+    expect(params.command).toContain('>> ~/.creds/env');
+    expect(params.command).toContain("printf '%s=%s\\n' 'DC_CLI_TOKEN' 'secret-token'");
+    expect(params.command).toContain("printf '%s=%s\\n' 'DC_BASE_URL' 'https://dc.lobe.li'");
+  });
+
+  it('single-quotes a value that itself contains a single quote, without breaking the command', async () => {
+    const callTool = vi.fn().mockResolvedValue({ result: null, success: true });
+
+    await writeEnvCredsToSandbox(buildSandboxService(callTool), { TOKEN: "it's-a-secret" });
+
+    const command = callTool.mock.calls[0][1].command as string;
+    // Standard POSIX single-quote escaping: close, escaped quote, reopen.
+    expect(command).toContain("'it'\\''s-a-secret'");
+  });
+
+  it('surfaces a descriptive error when the sandbox write fails', async () => {
+    const callTool = vi.fn().mockResolvedValue({
+      error: { message: 'sandbox unreachable' },
+      result: null,
+      success: false,
+    });
+
+    const result = await writeEnvCredsToSandbox(buildSandboxService(callTool), { KEY: 'value' });
+
+    expect(result).toEqual({ error: 'sandbox unreachable' });
+  });
+
+  it('falls back to a generic error message when the sandbox failure carries none', async () => {
+    const callTool = vi.fn().mockResolvedValue({ result: null, success: false });
+
+    const result = await writeEnvCredsToSandbox(buildSandboxService(callTool), { KEY: 'value' });
+
+    expect(result.error).toBe('Failed to write credentials into the sandbox');
   });
 });
