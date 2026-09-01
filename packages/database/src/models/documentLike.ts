@@ -43,13 +43,26 @@ export class DocumentLikeModel {
     return this.workspaceId;
   };
 
-  private findDocument = async (documentId: string) => {
+  /**
+   * Validate the document inside the caller's transaction while holding a row
+   * lock, so every like operation serializes against a concurrent scope
+   * transfer (whose UPDATE holds this row lock until commit): writes take
+   * `for update`, reads take `for share`, and a stale-scope caller fails after
+   * the transfer lands instead of acting on rehomed rows. Mirrors
+   * DocumentCommentModel.create.
+   */
+  private lockDocument = async (
+    tx: LobeChatDatabase,
+    documentId: string,
+    mode: 'share' | 'update',
+  ) => {
     const workspaceId = this.requireWorkspaceId();
-    const [document] = await this.db
+    const [document] = await tx
       .select({ id: documents.id, userId: documents.userId, workspaceId: documents.workspaceId })
       .from(documents)
       .where(eq(documents.id, documentId))
-      .limit(1);
+      .limit(1)
+      .for(mode);
 
     if (!document || document.workspaceId !== workspaceId) {
       throw new Error(DOCUMENT_LIKE_DOCUMENT_NOT_FOUND);
@@ -58,79 +71,73 @@ export class DocumentLikeModel {
   };
 
   async like(documentId: string): Promise<LikeDocumentResult> {
-    const workspaceId = this.requireWorkspaceId();
-
     return this.db.transaction(async (tx) => {
-      // Lock the document row so a like serializes against a concurrent scope
-      // transfer (whose UPDATE holds this row lock until commit): the stamped
-      // workspaceId is re-validated after the transfer lands, and a stale-scope
-      // like fails instead of surviving in the source workspace. Mirrors
-      // DocumentCommentModel.create.
-      const [locked] = await tx
-        .select({ id: documents.id, userId: documents.userId, workspaceId: documents.workspaceId })
-        .from(documents)
-        .where(eq(documents.id, documentId))
-        .limit(1)
-        .for('update');
-      if (!locked || locked.workspaceId !== workspaceId) {
-        throw new Error(DOCUMENT_LIKE_DOCUMENT_NOT_FOUND);
-      }
+      const document = await this.lockDocument(tx as LobeChatDatabase, documentId, 'update');
 
       const [inserted] = await tx
         .insert(documentLikes)
-        .values({ documentId, userId: this.userId, workspaceId })
+        .values({ documentId, userId: this.userId, workspaceId: document.workspaceId })
         .onConflictDoNothing({ target: [documentLikes.documentId, documentLikes.userId] })
         .returning({ id: documentLikes.id });
 
-      return { created: Boolean(inserted), documentAuthorUserId: locked.userId };
+      return { created: Boolean(inserted), documentAuthorUserId: document.userId };
     });
   }
 
   async unlike(documentId: string): Promise<UnlikeDocumentResult> {
-    const document = await this.findDocument(documentId);
+    return this.db.transaction(async (tx) => {
+      const document = await this.lockDocument(tx as LobeChatDatabase, documentId, 'update');
 
-    const removed = await this.db
-      .delete(documentLikes)
-      .where(and(eq(documentLikes.documentId, documentId), eq(documentLikes.userId, this.userId)))
-      .returning({ id: documentLikes.id });
+      const removed = await tx
+        .delete(documentLikes)
+        .where(and(eq(documentLikes.documentId, documentId), eq(documentLikes.userId, this.userId)))
+        .returning({ id: documentLikes.id });
 
-    return { documentAuthorUserId: document.userId, removed: removed.length > 0 };
+      return { documentAuthorUserId: document.userId, removed: removed.length > 0 };
+    });
   }
 
   async summary(documentId: string): Promise<DocumentLikeSummary> {
-    await this.findDocument(documentId);
+    return this.db.transaction(async (tx) => {
+      // A share lock keeps the workspace validation true for the duration of
+      // the reads: a concurrent transfer's UPDATE waits for this transaction.
+      await this.lockDocument(tx as LobeChatDatabase, documentId, 'share');
 
-    const [[totals], likers] = await Promise.all([
-      this.db
-        .select({ total: count() })
-        .from(documentLikes)
-        .where(eq(documentLikes.documentId, documentId)),
-      this.db
-        .select({
-          avatar: users.avatar,
-          fullName: users.fullName,
-          id: users.id,
-          username: users.username,
-        })
-        .from(documentLikes)
-        .innerJoin(users, eq(users.id, documentLikes.userId))
-        .where(eq(documentLikes.documentId, documentId))
-        .orderBy(desc(documentLikes.createdAt), desc(documentLikes.id))
-        .limit(DOCUMENT_LIKE_SUMMARY_LIKERS_LIMIT),
-    ]);
+      const [[totals], likers] = await Promise.all([
+        tx
+          .select({ total: count() })
+          .from(documentLikes)
+          .where(eq(documentLikes.documentId, documentId)),
+        tx
+          .select({
+            avatar: users.avatar,
+            fullName: users.fullName,
+            id: users.id,
+            username: users.username,
+          })
+          .from(documentLikes)
+          .innerJoin(users, eq(users.id, documentLikes.userId))
+          .where(eq(documentLikes.documentId, documentId))
+          .orderBy(desc(documentLikes.createdAt), desc(documentLikes.id))
+          .limit(DOCUMENT_LIKE_SUMMARY_LIKERS_LIMIT),
+      ]);
 
-    const liked = likers.some((liker) => liker.id === this.userId)
-      ? true
-      : (
-          await this.db
-            .select({ id: documentLikes.id })
-            .from(documentLikes)
-            .where(
-              and(eq(documentLikes.documentId, documentId), eq(documentLikes.userId, this.userId)),
-            )
-            .limit(1)
-        ).length > 0;
+      const liked = likers.some((liker) => liker.id === this.userId)
+        ? true
+        : (
+            await tx
+              .select({ id: documentLikes.id })
+              .from(documentLikes)
+              .where(
+                and(
+                  eq(documentLikes.documentId, documentId),
+                  eq(documentLikes.userId, this.userId),
+                ),
+              )
+              .limit(1)
+          ).length > 0;
 
-    return { liked, likers, total: totals?.total ?? 0 };
+      return { liked, likers, total: totals?.total ?? 0 };
+    });
   }
 }
