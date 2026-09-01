@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-import { type ViewMode } from './ViewModeSwitcher';
+export type ViewMode = 'grid' | 'timeline';
 
 interface UseResetMemoryListOptions<Sort extends string> {
   query: string;

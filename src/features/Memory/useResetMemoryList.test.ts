@@ -1,7 +1,7 @@
 import { renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { useResetMemoryList } from './useResetMemoryList';
+import { useResetMemoryList, type ViewMode } from './useResetMemoryList';
 
 describe('useResetMemoryList', () => {
   it('resets a timeline search when the backend uses its default sort', () => {
@@ -21,15 +21,16 @@ describe('useResetMemoryList', () => {
 
   it('does not reset when a view change keeps the effective sort unchanged', () => {
     const resetList = vi.fn();
+    const initialProps: { viewMode: ViewMode } = { viewMode: 'timeline' };
     const { rerender } = renderHook(
-      ({ viewMode }) =>
+      ({ viewMode }: { viewMode: ViewMode }) =>
         useResetMemoryList({
           query: 'late night',
           resetList,
           sort: undefined,
           viewMode,
         }),
-      { initialProps: { viewMode: 'timeline' as const } },
+      { initialProps },
     );
 
     rerender({ viewMode: 'grid' });
@@ -39,15 +40,16 @@ describe('useResetMemoryList', () => {
 
   it('resets when a view change activates an explicit grid sort', () => {
     const resetList = vi.fn();
+    const initialProps: { viewMode: ViewMode } = { viewMode: 'timeline' };
     const { rerender } = renderHook(
-      ({ viewMode }: { viewMode: 'grid' | 'timeline' }) =>
+      ({ viewMode }: { viewMode: ViewMode }) =>
         useResetMemoryList({
           query: 'late night',
           resetList,
           sort: 'scorePriority',
           viewMode,
         }),
-      { initialProps: { viewMode: 'timeline' as const } },
+      { initialProps },
     );
 
     rerender({ viewMode: 'grid' });

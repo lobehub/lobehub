@@ -86,6 +86,24 @@ export class ContextActionImpl {
         return result;
       },
       {
+        onError: () => {
+          const state = this.#get();
+          if (
+            !isMemoryListRequestCurrent(
+              { page: state.contextsPage, q: state.contextsQuery, sort: state.contextsSort },
+              { page, q: params.q, sort: params.sort },
+            )
+          )
+            return;
+
+          this.#set(
+            produce((draft) => {
+              draft.contextsSearchLoading = false;
+            }),
+            false,
+            n('useFetchContexts/onError'),
+          );
+        },
         onSuccess: (data: any) => {
           const state = this.#get();
           if (

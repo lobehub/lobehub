@@ -7,6 +7,7 @@ import { initialState } from '@/store/userMemory/initialState';
 vi.mock('swr', () => ({ default: vi.fn(() => ({})) }));
 
 interface GuardCase {
+  fetchCurrent: () => unknown;
   fetchPageTwo: () => unknown;
   name: string;
   readList: () => unknown[];
@@ -17,6 +18,8 @@ interface GuardCase {
 
 const cases: GuardCase[] = [
   {
+    fetchCurrent: () =>
+      useUserMemoryStore.getState().useFetchActivities({ page: 1, pageSize: 12, q: 'late night' }),
     fetchPageTwo: () => useUserMemoryStore.getState().useFetchActivities({ page: 2, pageSize: 12 }),
     name: 'activities',
     readList: () => useUserMemoryStore.getState().activities,
@@ -26,6 +29,8 @@ const cases: GuardCase[] = [
       useUserMemoryStore.setState({ activities: [{ id: 'existing' } as never], activitiesPage: 2 }),
   },
   {
+    fetchCurrent: () =>
+      useUserMemoryStore.getState().useFetchContexts({ page: 1, pageSize: 12, q: 'late night' }),
     fetchPageTwo: () => useUserMemoryStore.getState().useFetchContexts({ page: 2, pageSize: 12 }),
     name: 'contexts',
     readList: () => useUserMemoryStore.getState().contexts,
@@ -35,6 +40,8 @@ const cases: GuardCase[] = [
       useUserMemoryStore.setState({ contexts: [{ id: 'existing' } as never], contextsPage: 2 }),
   },
   {
+    fetchCurrent: () =>
+      useUserMemoryStore.getState().useFetchExperiences({ page: 1, pageSize: 12, q: 'late night' }),
     fetchPageTwo: () =>
       useUserMemoryStore.getState().useFetchExperiences({ page: 2, pageSize: 12 }),
     name: 'experiences',
@@ -45,6 +52,21 @@ const cases: GuardCase[] = [
       useUserMemoryStore.setState({
         experiences: [{ id: 'existing' } as never],
         experiencesPage: 2,
+      }),
+  },
+  {
+    fetchCurrent: () =>
+      useUserMemoryStore.getState().useFetchPreferences({ page: 1, pageSize: 12, q: 'late night' }),
+    fetchPageTwo: () =>
+      useUserMemoryStore.getState().useFetchPreferences({ page: 2, pageSize: 12 }),
+    name: 'preferences',
+    readList: () => useUserMemoryStore.getState().preferences,
+    readSearchLoading: () => useUserMemoryStore.getState().preferencesSearchLoading,
+    resetWithSearch: () => useUserMemoryStore.getState().resetPreferencesList({ q: 'late night' }),
+    seedPageTwo: () =>
+      useUserMemoryStore.setState({
+        preferences: [{ id: 'existing' } as never],
+        preferencesPage: 2,
       }),
   },
 ];
@@ -68,5 +90,26 @@ describe('memory list request guards', () => {
 
     expect(testCase.readList()).toEqual([]);
     expect(testCase.readSearchLoading()).toBe(true);
+  });
+
+  it.each(cases)('keeps $name loading when an obsolete request fails', (testCase) => {
+    testCase.seedPageTwo();
+    testCase.fetchPageTwo();
+
+    testCase.resetWithSearch();
+    const onError = vi.mocked(useSWR).mock.calls[0][2]?.onError as (error: Error) => void;
+    onError(new Error('request failed'));
+
+    expect(testCase.readSearchLoading()).toBe(true);
+  });
+
+  it.each(cases)('clears $name loading when the current request fails', (testCase) => {
+    testCase.resetWithSearch();
+    testCase.fetchCurrent();
+
+    const onError = vi.mocked(useSWR).mock.calls[0][2]?.onError as (error: Error) => void;
+    onError(new Error('request failed'));
+
+    expect(testCase.readSearchLoading()).toBe(false);
   });
 });

@@ -89,6 +89,28 @@ export class PreferenceActionImpl {
         return result;
       },
       {
+        onError: () => {
+          const state = this.#get();
+          if (
+            !isMemoryListRequestCurrent(
+              {
+                page: state.preferencesPage,
+                q: state.preferencesQuery,
+                sort: state.preferencesSort,
+              },
+              { page, q: params.q, sort: params.sort },
+            )
+          )
+            return;
+
+          this.#set(
+            produce((draft) => {
+              draft.preferencesSearchLoading = false;
+            }),
+            false,
+            n('useFetchPreferences/onError'),
+          );
+        },
         onSuccess: (data: any) => {
           const state = this.#get();
           if (

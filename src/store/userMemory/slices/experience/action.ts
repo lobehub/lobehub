@@ -86,6 +86,28 @@ export class ExperienceActionImpl {
         });
       },
       {
+        onError: () => {
+          const state = this.#get();
+          if (
+            !isMemoryListRequestCurrent(
+              {
+                page: state.experiencesPage,
+                q: state.experiencesQuery,
+                sort: state.experiencesSort,
+              },
+              { page, q: params.q, sort: params.sort },
+            )
+          )
+            return;
+
+          this.#set(
+            produce((draft) => {
+              draft.experiencesSearchLoading = false;
+            }),
+            false,
+            n('useFetchExperiences/onError'),
+          );
+        },
         onSuccess: (data: ExperienceListResult) => {
           const state = this.#get();
           if (

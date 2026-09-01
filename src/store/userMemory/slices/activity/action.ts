@@ -88,6 +88,28 @@ export class ActivityActionImpl {
         });
       },
       {
+        onError: () => {
+          const state = this.#get();
+          if (
+            !isMemoryListRequestCurrent(
+              {
+                page: state.activitiesPage,
+                q: state.activitiesQuery,
+                sort: state.activitiesSort,
+              },
+              { page, q: params.q, sort: params.sort },
+            )
+          )
+            return;
+
+          this.#set(
+            produce((draft) => {
+              draft.activitiesSearchLoading = false;
+            }),
+            false,
+            n('useFetchActivities/onError'),
+          );
+        },
         onSuccess: (data: ActivityListResult) => {
           const state = this.#get();
           if (
