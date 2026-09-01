@@ -69,7 +69,7 @@
   },
   "pnpm": {
     "overrides": {
-      "@types/react": "19.2.13",
+      "@types/react": "19.2.18",
       "antd": "6.3.5"
     }
   }
