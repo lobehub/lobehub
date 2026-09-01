@@ -137,7 +137,7 @@
     ],
     "overrides": {
       "node-gyp": "^12.4.0",
-      "react": "19.2.7",
+      "react": "19.2.8",
       "react-dom": "19.2.7",
       "vitest": "3.2.6"
     }
