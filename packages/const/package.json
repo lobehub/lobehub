@@ -18,14 +18,14 @@
   "main": "./src/index.ts",
   "dependencies": {
     "@lobechat/business-const": "workspace:*",
-    "query-string": "^9.4.1",
+    "query-string": "^9.5.0",
     "url-join": "^5.0.0"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"
   },
   "peerDependencies": {
-    "@icons-pack/react-simple-icons": "^13.8.0",
-    "@lobehub/ui": "^5"
+    "@icons-pack/react-simple-icons": "^13.15.1",
+    "@lobehub/ui": "^5.37.0"
   }
 }

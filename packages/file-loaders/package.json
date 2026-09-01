@@ -28,7 +28,7 @@
     "@xmldom/xmldom": "^0.9.10",
     "concat-stream": "^2.0.0",
     "debug": "^4.4.3",
-    "mammoth": "^1.12.0",
+    "mammoth": "^1.12.2",
     "officeparser": "5.1.1",
     "pdfjs-dist": "5.4.530",
     "word-extractor": "^1.0.4",

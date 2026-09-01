@@ -15,17 +15,17 @@
     "@lobechat/const": "workspace:*",
     "@lobechat/markdown-patch": "workspace:*",
     "@lobechat/prompts": "workspace:*",
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"
   },
   "peerDependencies": {
-    "@lobehub/ui": "^5",
-    "antd": "^6",
+    "@lobehub/ui": "^5.37.0",
+    "antd": "^6.6.2",
     "antd-style": "*",
     "react": "*",
     "react-i18next": "*",
-    "swr": "^2"
+    "swr": "^2.5.1"
   }
 }

@@ -22,7 +22,7 @@
     "@trpc/server": "^11.18.0",
     "cookie": "^1.1.1",
     "debug": "^4.4.3",
-    "jose": "^6.2.3",
+    "jose": "^6.2.10",
     "model-bank": "workspace:*",
     "superjson": "^2.2.6"
   },
@@ -30,6 +30,6 @@
     "vite-tsconfig-paths": "^6.1.1"
   },
   "peerDependencies": {
-    "next": "^16.3.0"
+    "next": "^16.3.4"
   }
 }

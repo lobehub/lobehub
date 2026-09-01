@@ -28,7 +28,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "ws": "^8.21.0"
+    "ws": "^8.21.3"
   },
   "devDependencies": {
     "@lobechat/agent-gateway-client": "workspace:*",
@@ -44,15 +44,15 @@
     "@lobechat/types": "workspace:*",
     "@lobechat/utils": "workspace:*",
     "@trpc/client": "^11.18.0",
-    "@types/node": "^24.13.2",
-    "@types/semver": "^7.7.1",
+    "@types/node": "^24.13.3",
+    "@types/semver": "^7.8.0",
     "@types/ws": "^8.18.1",
     "commander": "^13.1.0",
-    "dayjs": "^1.11.21",
+    "dayjs": "^1.11.23",
     "debug": "^4.4.3",
     "diff": "^8.0.4",
     "fast-glob": "^3.3.3",
-    "ignore": "^7.0.5",
+    "ignore": "^7.0.8",
     "picocolors": "^1.1.1",
     "semver": "^7.8.5",
     "superjson": "^2.2.6",

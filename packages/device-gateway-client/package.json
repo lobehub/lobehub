@@ -11,7 +11,7 @@
     "test:coverage": "bunx vitest run --coverage"
   },
   "dependencies": {
-    "ws": "^8.21.0"
+    "ws": "^8.21.3"
   },
   "devDependencies": {
     "@types/ws": "^8.18.1",

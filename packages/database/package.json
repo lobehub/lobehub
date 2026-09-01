@@ -25,8 +25,8 @@
     "random-words": "^2.0.1",
     "remove-markdown": "^0.6.4",
     "ts-md5": "^2.0.1",
-    "type-fest": "^5.7.0",
-    "ws": "^8.21.0"
+    "type-fest": "^5.9.0",
+    "ws": "^8.21.3"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.3.16",
@@ -40,6 +40,6 @@
     "drizzle-zod": "^0.8.3",
     "nanoid": "*",
     "pg": "*",
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
   }
 }
