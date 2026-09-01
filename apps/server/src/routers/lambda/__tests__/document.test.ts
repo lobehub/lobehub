@@ -2,6 +2,7 @@
 import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { DOCUMENT_FOLDER_TYPE } from '@/database/schemas';
 import { TransferErrorCode } from '@/types/transferError';
 
 const mocks = vi.hoisted(() => ({
@@ -193,6 +194,7 @@ describe('documentRouter createDocument under a knowledge-base folder', () => {
       workspaceId: 'ws-1',
       workspaceRole: 'member',
     } as any);
+  const kbFolder = { fileType: DOCUMENT_FOLDER_TYPE, knowledgeBaseId: 'kb-1', metadata: null };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -209,7 +211,7 @@ describe('documentRouter createDocument under a knowledge-base folder', () => {
   });
 
   it('authorizes through the KB instead of the folder ACL for a KB-scoped parent', async () => {
-    mocks.findById.mockResolvedValue({ id: 'folder-1', knowledgeBaseId: 'kb-1', metadata: null });
+    mocks.findById.mockResolvedValue({ id: 'folder-1', ...kbFolder });
 
     await caller().createDocument({ parentId: 'folder-1', title: 'Doc' });
 
@@ -229,6 +231,7 @@ describe('documentRouter createDocument under a knowledge-base folder', () => {
 
   it('reads the KB id from metadata for legacy folders without the column', async () => {
     mocks.findById.mockResolvedValue({
+      fileType: DOCUMENT_FOLDER_TYPE,
       id: 'folder-1',
       knowledgeBaseId: null,
       metadata: { knowledgeBaseId: 'kb-1' },
@@ -243,7 +246,7 @@ describe('documentRouter createDocument under a knowledge-base folder', () => {
   });
 
   it('still denies when the KB itself is not browsable (restricted KB)', async () => {
-    mocks.findById.mockResolvedValue({ id: 'folder-1', knowledgeBaseId: 'kb-1', metadata: null });
+    mocks.findById.mockResolvedValue({ id: 'folder-1', ...kbFolder });
     mocks.assertCanPerformResourceAction.mockRejectedValueOnce(
       new TRPCError({ code: 'FORBIDDEN' }),
     );
@@ -255,7 +258,12 @@ describe('documentRouter createDocument under a knowledge-base folder', () => {
   });
 
   it('keeps the folder document ACL check for a non-KB workspace parent', async () => {
-    mocks.findById.mockResolvedValue({ id: 'folder-1', knowledgeBaseId: null, metadata: null });
+    mocks.findById.mockResolvedValue({
+      fileType: DOCUMENT_FOLDER_TYPE,
+      id: 'folder-1',
+      knowledgeBaseId: null,
+      metadata: null,
+    });
 
     await caller().createDocument({ parentId: 'folder-1', title: 'Doc' });
 
@@ -264,13 +272,34 @@ describe('documentRouter createDocument under a knowledge-base folder', () => {
     );
   });
 
+  it("keeps the document ACL for another member's KB page used as the parent", async () => {
+    // Pages inside a KB carry the same knowledgeBaseId as folders; only real
+    // folders may take the KB route, otherwise a view-only page's ACL is skipped.
+    mocks.findById.mockResolvedValue({
+      fileType: 'custom/document',
+      id: 'page-1',
+      knowledgeBaseId: 'kb-1',
+      metadata: null,
+    });
+    mocks.assertCanEditResource.mockRejectedValueOnce(new TRPCError({ code: 'FORBIDDEN' }));
+
+    await expect(
+      caller().createDocument({ parentId: 'page-1', title: 'Doc' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(mocks.assertCanEditResource).toHaveBeenCalledWith(
+      expect.objectContaining({ resourceId: 'page-1', resourceType: 'document' }),
+    );
+    expect(mocks.assertCanPerformResourceAction).not.toHaveBeenCalled();
+    expect(mocks.createDocument).not.toHaveBeenCalled();
+  });
+
   it("keeps another member's private KB folder creator-only", async () => {
     mocks.getResourceMeta.mockResolvedValue({
       userId: 'creator-1',
       visibility: 'private',
       workspaceId: 'ws-1',
     });
-    mocks.findById.mockResolvedValue({ id: 'folder-1', knowledgeBaseId: 'kb-1', metadata: null });
+    mocks.findById.mockResolvedValue({ id: 'folder-1', ...kbFolder });
     mocks.assertCanEditResource.mockRejectedValueOnce(new TRPCError({ code: 'FORBIDDEN' }));
 
     await expect(
@@ -291,7 +320,7 @@ describe('documentRouter createDocument under a knowledge-base folder', () => {
             visibility: 'public',
             workspaceId: 'ws-1',
           }
-        : { id, knowledgeBaseId: 'kb-1', metadata: null },
+        : { id, ...kbFolder },
     );
 
     await caller().updateDocument({ id: 'doc-1', parentId: 'kb-folder' });

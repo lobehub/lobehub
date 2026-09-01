@@ -10,7 +10,7 @@ import { DOCUMENT_TRANSFER_FOREIGN_ROWS, DocumentModel } from '@/database/models
 import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
-import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
+import { DEFAULT_RESOURCE_ACCESS_LEVELS, DOCUMENT_FOLDER_TYPE } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DocumentService } from '@/server/services/document';
@@ -51,6 +51,11 @@ import {
  * folder inside a shared KB. The KB's browse permission (effective level `edit`,
  * the same grade that lets a member manage the KB file list) is the authority
  * for inserts there; a restricted KB (`use` level) still denies.
+ *
+ * Only rows whose file type is the folder type take that path: pages inside a
+ * KB carry the same `knowledgeBaseId`, and `parentId` accepts any document row,
+ * so without the type gate a member could nest under another member's
+ * view-only page while skipping its ACL.
  */
 const assertCanCreateUnderParent = async (
   ctx: {
@@ -71,12 +76,14 @@ const assertCanCreateUnderParent = async (
     // `findById` is ownership-scoped, but the foreign-private branch above is
     // the only shape it would hide — everything else is public or the caller's.
     const parentDoc = await ctx.documentModel.findById(parentId);
-    // Old folders carried the KB id only in metadata, newer rows set the column.
-    const knowledgeBaseId =
-      parentDoc?.knowledgeBaseId ?? (parentDoc?.metadata as any)?.knowledgeBaseId;
-    if (knowledgeBaseId && typeof knowledgeBaseId === 'string') {
-      await assertKnowledgeBaseBrowsable(ctx, knowledgeBaseId);
-      return;
+    if (parentDoc?.fileType === DOCUMENT_FOLDER_TYPE) {
+      // Old folders carried the KB id only in metadata, newer rows set the column.
+      const knowledgeBaseId =
+        parentDoc.knowledgeBaseId ?? (parentDoc.metadata as any)?.knowledgeBaseId;
+      if (knowledgeBaseId && typeof knowledgeBaseId === 'string') {
+        await assertKnowledgeBaseBrowsable(ctx, knowledgeBaseId);
+        return;
+      }
     }
   }
 

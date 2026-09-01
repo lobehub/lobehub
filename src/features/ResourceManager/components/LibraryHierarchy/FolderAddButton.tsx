@@ -116,19 +116,23 @@ const FolderAddButton = memo<FolderAddButtonProps>(({ folderId }) => {
     }
   }, [createResourceAndSync, folderId, libraryId, revealChildren, setPendingTreeRenameItemId, t]);
 
+  // Reveal from the upload completion callback rather than after awaiting
+  // `handleFolderUpload`: with a `.gitignore` in the selection the upload is
+  // deferred behind a confirm dialog and the promise resolves before anything
+  // has been created.
   const { handleFolderUpload } = useUploadFolder({
     currentFolderId: folderId,
     libraryId,
+    onUploaded: revealChildren,
     t,
     uploadFolderWithStructure,
   });
-  const handleFolderUploadWithReveal = useCallback(
-    async (event: ChangeEvent<HTMLInputElement>) => {
+  const handleFolderUploadWithClose = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
       setMenuOpen(false);
-      await handleFolderUpload(event);
-      revealChildren();
+      return handleFolderUpload(event);
     },
-    [handleFolderUpload, revealChildren],
+    [handleFolderUpload],
   );
 
   const { handleNotionImport, handleOpenNotionGuide, notionInputRef } = useNotionImport({
@@ -241,7 +245,7 @@ const FolderAddButton = memo<FolderAddButtonProps>(({ folderId }) => {
             type="file"
             // @ts-expect-error - webkitdirectory is not in the React types
             webkitdirectory=""
-            onChange={handleFolderUploadWithReveal}
+            onChange={handleFolderUploadWithClose}
           />
           <input
             accept=".zip"
