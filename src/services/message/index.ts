@@ -216,6 +216,30 @@ export class MessageService {
     >;
   };
 
+  /**
+   * Load one round-aligned page of history strictly OLDER than `before` (the
+   * oldest already-loaded mainline message). Intentionally outside the
+   * `runMessageListQuery` client-cache policy: older pages are additive and
+   * merged by the earlier-history layer in `services/message/cache`.
+   */
+  getEarlierMessages = async (
+    params: MessageReadQueryContext,
+    before: { createdAt: Date; id: string },
+  ): Promise<UIChatMessage[]> => {
+    // Agent-share pages read through `shareChat.getMessages`, which has no
+    // round cursor. An empty page marks the history exhausted, so the shared
+    // view keeps its current window instead of hitting the authed endpoint.
+    if (params.agentShareId) return [];
+
+    const data = await lambdaClient.message.getMessages.query({
+      ...params,
+      before,
+      includeFileWorks: true,
+    });
+
+    return data as unknown as UIChatMessage[];
+  };
+
   diagnoseTopic = async (params: { agentId?: string | null; topicId: string }) => {
     return lambdaClient.message.diagnoseTopic.query(params);
   };
