@@ -15,50 +15,44 @@ export function registerMessageCommand(program: Command) {
     .description('List messages')
     .option('--topic-id <id>', 'Filter by topic ID')
     .option('--agent-id <id>', 'Filter by agent ID')
+    .option('--role <role>', 'Filter by role (user, assistant, tool, system)')
+    .option('--start <date>', 'Only messages created at/after this date (ISO or YYYY-MM-DD)')
+    .option('--end <date>', 'Only messages created at/before this date (ISO or YYYY-MM-DD)')
     .option('-L, --limit <n>', 'Page size', '30')
     .option('-P, --page <n>', 'Page number', '1')
-    .option('--user', 'Only show user messages')
+    .option('--user', 'Shorthand for --role user')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
     .action(
       async (options: {
         agentId?: string;
+        end?: string;
         json?: string | boolean;
         limit?: string;
         page?: string;
+        role?: string;
+        start?: string;
         topicId?: string;
         user?: boolean;
       }) => {
         const client = await getTrpcClient();
 
-        const hasFilter = options.topicId || options.agentId;
         const pageSize = options.limit ? Number.parseInt(options.limit, 10) : undefined;
         const current = options.page
           ? Math.max(Number.parseInt(options.page, 10) - 1, 0)
           : undefined;
 
-        let items: any[];
+        const input: Record<string, any> = {};
+        if (options.topicId) input.topicId = options.topicId;
+        if (options.agentId) input.agentId = options.agentId;
+        if (options.user) input.role = 'user';
+        if (options.role) input.role = options.role;
+        if (options.start) input.startDate = options.start;
+        if (options.end) input.endDate = options.end;
+        if (pageSize) input.pageSize = pageSize;
+        if (current) input.current = current;
 
-        if (hasFilter) {
-          const input: Record<string, any> = {};
-          if (options.topicId) input.topicId = options.topicId;
-          if (options.agentId) input.agentId = options.agentId;
-          if (pageSize) input.pageSize = pageSize;
-          if (current) input.current = current;
-
-          const result = await client.message.getMessages.query(input as any);
-          items = Array.isArray(result) ? result : ((result as any).items ?? []);
-        } else {
-          const input: Record<string, any> = {};
-          if (pageSize) input.pageSize = pageSize;
-          if (current) input.current = current;
-
-          const result = await client.message.listAll.query(input as any);
-          items = Array.isArray(result) ? result : [];
-        }
-
-        if (options.user) {
-          items = items.filter((m: any) => m.role === 'user');
-        }
+        const result = await client.message.listAll.query(input as any);
+        const items: any[] = Array.isArray(result) ? result : [];
 
         if (options.json !== undefined) {
           const fields = typeof options.json === 'string' ? options.json : undefined;
@@ -75,10 +69,11 @@ export function registerMessageCommand(program: Command) {
           m.id || '',
           m.role || '',
           truncate(m.content || '', 60),
+          m.threadId ? `${m.topicId || ''} › ${m.threadId}` : m.topicId || '',
           m.createdAt ? timeAgo(m.createdAt) : '',
         ]);
 
-        printTable(rows, ['ID', 'ROLE', 'CONTENT', 'CREATED']);
+        printTable(rows, ['ID', 'ROLE', 'CONTENT', 'TOPIC/THREAD', 'CREATED']);
       },
     );
 
