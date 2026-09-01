@@ -30,18 +30,13 @@ const mocks = vi.hoisted(() => ({
   openConversation: vi.fn(),
   postMessage: vi.fn(),
   sendSlackAttachments: vi.fn(),
-  sendTelegramAttachments: vi.fn(),
-  sendTelegramMessage: vi.fn(),
+  sendTelegramRichMessage: vi.fn(),
 }));
 
 vi.mock('@/server/services/bot/platforms/telegram/api', () => ({
   TelegramApi: class {
-    sendMessage = mocks.sendTelegramMessage;
+    sendRichMessage = mocks.sendTelegramRichMessage;
   },
-}));
-
-vi.mock('@/server/services/bot/platforms/telegram/sendAttachments', () => ({
-  sendTelegramAttachments: mocks.sendTelegramAttachments,
 }));
 
 vi.mock('@/server/services/bot/platforms/discord/api', () => ({
@@ -99,7 +94,11 @@ describe('sendOutboundDirectMessage', () => {
       platformUserId: '12345',
     });
 
-    expect(mocks.sendTelegramMessage).toHaveBeenCalledWith('12345', 'hello');
+    expect(mocks.sendTelegramRichMessage).toHaveBeenCalledWith({
+      chatId: '12345',
+      richMessage: { markdown: 'hello' },
+      uploads: [],
+    });
   });
 
   it('opens a Discord DM channel before posting', async () => {
@@ -137,7 +136,7 @@ describe('sendOutboundDirectMessage', () => {
   });
 
   it('propagates platform failures so the caller can map them to `unavailable`', async () => {
-    mocks.sendTelegramMessage.mockRejectedValueOnce(new Error('bot blocked by user'));
+    mocks.sendTelegramRichMessage.mockRejectedValueOnce(new Error('bot blocked by user'));
 
     await expect(
       sendOutboundDirectMessage({
@@ -159,9 +158,7 @@ describe('sendOutboundDirectMessage', () => {
   });
 
   describe('attachments', () => {
-    it('delivers Telegram attachments with the text as caption, no extra message', async () => {
-      mocks.sendTelegramAttachments.mockResolvedValueOnce(1);
-
+    it('delivers Telegram attachments in the same Rich Message', async () => {
       await sendOutboundDirectMessage({
         attachments: [fileAttachment],
         content: 'see attached',
@@ -169,38 +166,33 @@ describe('sendOutboundDirectMessage', () => {
         platformUserId: '12345',
       });
 
-      expect(mocks.sendTelegramAttachments).toHaveBeenCalledWith(
-        expect.anything(),
-        '12345',
-        [fileAttachment],
-        'see attached',
-      );
-      expect(mocks.sendTelegramMessage).not.toHaveBeenCalled();
-    });
-
-    it('falls back to a plain Telegram message when every attachment fails', async () => {
-      mocks.sendTelegramAttachments.mockResolvedValueOnce(0);
-
-      await sendOutboundDirectMessage({
-        attachments: [fileAttachment],
-        content: 'see attached',
-        credentials: creds('telegram'),
-        platformUserId: '12345',
+      expect(mocks.sendTelegramRichMessage).toHaveBeenCalledWith({
+        chatId: '12345',
+        richMessage: {
+          markdown: 'see attached\n\n![](tg://document?id=media_0 "report.pdf")',
+          media: [
+            {
+              id: 'media_0',
+              media: { media: 'https://cdn.example.com/report.pdf', type: 'document' },
+            },
+          ],
+        },
+        uploads: [],
       });
-
-      expect(mocks.sendTelegramMessage).toHaveBeenCalledWith('12345', 'see attached');
     });
 
-    it('throws when Telegram attachments fail and there is no text leg', async () => {
-      mocks.sendTelegramAttachments.mockResolvedValueOnce(0);
+    it('propagates Telegram Rich Message attachment failures', async () => {
+      mocks.sendTelegramRichMessage.mockRejectedValueOnce(new Error('invalid rich media'));
 
       await expect(
         sendOutboundDirectMessage({
           attachments: [fileAttachment],
+          content: 'see attached',
           credentials: creds('telegram'),
           platformUserId: '12345',
         }),
-      ).rejects.toThrow('Telegram attachments failed');
+      ).rejects.toThrow('invalid rich media');
+      expect(mocks.sendTelegramRichMessage).toHaveBeenCalledTimes(1);
     });
 
     it('sends Discord attachments in batches, text on the first batch only', async () => {
@@ -270,13 +262,17 @@ describe('sendOutboundDirectMessage', () => {
         platformUserId: '12345',
       });
 
-      // No attachment survives the budget pass, so the sender is never called.
-      expect(mocks.sendTelegramAttachments).not.toHaveBeenCalled();
-      expect(mocks.sendTelegramMessage).toHaveBeenNthCalledWith(1, '12345', 'see attached');
-      expect(mocks.sendTelegramMessage).toHaveBeenNthCalledWith(
+      expect(mocks.sendTelegramRichMessage).toHaveBeenNthCalledWith(1, {
+        chatId: '12345',
+        richMessage: { markdown: 'see attached' },
+        uploads: [],
+      });
+      expect(mocks.sendTelegramRichMessage).toHaveBeenNthCalledWith(
         2,
-        '12345',
-        expect.stringContaining('https://example.com/f/big.mp4'),
+        expect.objectContaining({
+          chatId: '12345',
+          richMessage: { markdown: expect.stringContaining('https://example.com/f/big.mp4') },
+        }),
       );
     });
 
@@ -287,10 +283,12 @@ describe('sendOutboundDirectMessage', () => {
         platformUserId: '12345',
       });
 
-      expect(mocks.sendTelegramMessage).toHaveBeenCalledTimes(1);
-      expect(mocks.sendTelegramMessage).toHaveBeenCalledWith(
-        '12345',
-        expect.stringContaining('big.mp4'),
+      expect(mocks.sendTelegramRichMessage).toHaveBeenCalledTimes(1);
+      expect(mocks.sendTelegramRichMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          chatId: '12345',
+          richMessage: { markdown: expect.stringContaining('big.mp4') },
+        }),
       );
     });
 

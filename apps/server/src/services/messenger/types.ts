@@ -122,6 +122,9 @@ export interface MessengerPlatformBinder {
   /** Called when an inbound message arrives from a sender that hasn't bound any account yet. */
   handleUnlinkedMessage: (ctx: UnlinkedMessageContext) => Promise<void>;
 
+  /** Whether this inbound message accepts exactly one platform-specific reply. */
+  isOneShotMessage?: (message: Message) => boolean;
+
   /**
    * Best-effort confirmation back to the IM thread once verify-im writes the
    * link row. `activeAgentName` is included when the verify-im flow set an
@@ -171,6 +174,9 @@ export interface MessengerPlatformBinder {
     user: SlashCommandEvent['user'],
     text: string,
   ) => Promise<void>;
+
+  /** Reply through the one-shot mechanism identified by `isOneShotMessage`. */
+  replyToMessage?: (message: Message, text: string) => Promise<void>;
 
   /**
    * Send an interactive agent picker so the user can switch the active agent

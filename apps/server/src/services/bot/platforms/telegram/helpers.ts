@@ -11,6 +11,22 @@ export function extractBotId(botToken: string): string {
 }
 
 /**
+ * Update types this platform actually handles. Guest Mode summons arrive as
+ * `guest_message` and are dropped unless listed — Telegram keeps the previous
+ * `allowed_updates` when the field is omitted.
+ */
+export const TELEGRAM_ALLOWED_UPDATES = [
+  'message',
+  'edited_message',
+  'channel_post',
+  'edited_channel_post',
+  'callback_query',
+  'message_reaction',
+  'guest_message',
+  'stopped_message_generation',
+] as const;
+
+/**
  * Call Telegram setWebhook API. Idempotent — safe to call on every startup.
  */
 export async function setTelegramWebhook(
@@ -19,17 +35,7 @@ export async function setTelegramWebhook(
   secretToken?: string,
 ): Promise<void> {
   const params: Record<string, unknown> = {
-    // Explicitly request all update types we need, including group messages.
-    // Without this, Telegram keeps whatever `allowed_updates` was set previously,
-    // which may silently exclude group messages.
-    allowed_updates: [
-      'message',
-      'edited_message',
-      'channel_post',
-      'edited_channel_post',
-      'callback_query',
-      'message_reaction',
-    ],
+    allowed_updates: [...TELEGRAM_ALLOWED_UPDATES],
     url,
   };
   if (secretToken) {

@@ -74,15 +74,15 @@ Telegram API 的错误有两层：
 
 常见错误码：
 
-| error_code | 典型 description                                     | 说明                               |
-| ---------- | ---------------------------------------------------- | ---------------------------------- |
-| `400`      | `Bad Request: message text is empty`                 | 参数错误。                         |
-| `400`      | `Bad Request: message is not modified`               | 编辑消息时新内容与旧内容完全相同。 |
-| `400`      | `Bad Request: message to delete not found`           | 要删除的消息不存在或已被删除。     |
-| `400`      | `Bad Request: message can't be deleted for everyone` | 消息超过 48 小时删除限制。         |
-| `403`      | `Forbidden: bot was blocked by the user`             | 用户已屏蔽 Bot。                   |
-| `403`      | `Forbidden: bot is not a member of the supergroup`   | Bot 不在群组中。                   |
-| `429`      | `Too Many Requests: retry after X`                   | 速率限制，需等待 X 秒后重试。      |
+| error\_code | 典型 description                                     | 说明                               |
+| ----------- | ---------------------------------------------------- | ---------------------------------- |
+| `400`       | `Bad Request: message text is empty`                 | 参数错误。                         |
+| `400`       | `Bad Request: message is not modified`               | 编辑消息时新内容与旧内容完全相同。 |
+| `400`       | `Bad Request: message to delete not found`           | 要删除的消息不存在或已被删除。     |
+| `400`       | `Bad Request: message can't be deleted for everyone` | 消息超过 48 小时删除限制。         |
+| `403`       | `Forbidden: bot was blocked by the user`             | 用户已屏蔽 Bot。                   |
+| `403`       | `Forbidden: bot is not a member of the supergroup`   | Bot 不在群组中。                   |
+| `429`       | `Too Many Requests: retry after X`                   | 速率限制，需等待 X 秒后重试。      |
 
 **工程建议**
 
@@ -176,7 +176,7 @@ Telegram 单条消息的文本长度上限为 **4096 字符**（实体解析后�
 - 本仓库 `TelegramApi` 实现使用 `truncateText` 方法：超过 4096 字符取前 4093 字符 + `...`。
 - 如果需要发送更长内容，应分片为多条消息发送。
 
-### 3.3 parse_mode 说明
+### 3.3 parse\_mode 说明
 
 | 值           | 说明                                                        |
 | ------------ | ----------------------------------------------------------- |
@@ -188,7 +188,7 @@ Telegram 单条消息的文本长度上限为 **4096 字符**（实体解析后�
 
 - 推荐使用 `HTML` 模式，因为它对特殊字符的转义规则更直观。
 - `MarkdownV2` 需要对 `_`, `*`, `[`, `]`, `(`, `)`, `~`, `` ` ``, `>`, `#`, `+`, `-`, `=`, `|`, `{`, `}`, `.`, `!` 进行转义。
-- 本仓库统一使用 `HTML` 模式，并提供 `markdownToHTML` 转换工具。
+- 本仓库仅对账号绑定、配对提示等运营消息使用 HTML；Agent 内容统一使用 Rich Message Markdown。
 
 ## 4. editMessageText — 编辑消息文本
 
@@ -912,7 +912,7 @@ curl 'https://api.telegram.org/bot123456789:ABCdefGHIjklMNOpqrsTUVwxyz/sendMessa
 
 - 本仓库 `TelegramApi.sendMessageToTopic` 封装了此调用，自动传入 `message_thread_id`。
 - **重要：`parse_mode` 必须与普通 `sendMessage` 一样传入**（如 `parse_mode: 'HTML'`）。此参数在话题模式下容易遗漏，曾在 code review 中发现原实现缺失了 `parse_mode: 'HTML'`，导致话题消息中 HTML 标签被原样显示而非渲染为富文本。
-- 如果群组开启了论坛模式但未指定 `message_thread_id`，消息将发送到 "General" 话题（thread_id 通常为 1）。
+- 如果群组开启了论坛模式但未指定 `message_thread_id`，消息将发送到 "General" 话题（thread\_id 通常为 1）。
 - `message_thread_id` 也可用于 `sendChatAction` 等其他方法，指定动作所在的话题。
 
 ## 13. sendPoll — 发送投票
@@ -1153,22 +1153,24 @@ Telegram Bot API 有以下速率限制：
 
 ### 16.2 本仓库 TelegramApi 方法映射表
 
-| TelegramApi 方法        | Telegram API 方法    | 关键参数                                                  |
-| ----------------------- | -------------------- | --------------------------------------------------------- |
-| `sendMessage`           | `sendMessage`        | `chat_id`, `text`, `parse_mode=HTML`                      |
-| `editMessageText`       | `editMessageText`    | `chat_id`, `message_id`, `text`, `parse_mode=HTML`        |
-| `deleteMessage`         | `deleteMessage`      | `chat_id`, `message_id`                                   |
-| `sendChatAction`        | `sendChatAction`     | `chat_id`, `action=typing`                                |
-| `setMessageReaction`    | `setMessageReaction` | `chat_id`, `message_id`, `reaction=[{type,emoji}]`        |
-| `removeMessageReaction` | `setMessageReaction` | `chat_id`, `message_id`, `reaction=[]`                    |
-| `pinChatMessage`        | `pinChatMessage`     | `chat_id`, `message_id`, `disable_notification=true`      |
-| `unpinChatMessage`      | `unpinChatMessage`   | `chat_id`, `message_id`                                   |
-| `getChat`               | `getChat`            | `chat_id`                                                 |
-| `getChatMember`         | `getChatMember`      | `chat_id`, `user_id`                                      |
-| `createForumTopic`      | `createForumTopic`   | `chat_id`, `name` (max 128 chars)                         |
-| `sendMessageToTopic`    | `sendMessage`        | `chat_id`, `message_thread_id`, `text`, `parse_mode=HTML` |
-| `sendPoll`              | `sendPoll`           | `chat_id`, `question`, `options`                          |
-| `setMyCommands`         | `setMyCommands`      | `commands`                                                |
+| TelegramApi 方法        | Telegram API 方法      | 关键参数                                                  |
+| ----------------------- | ---------------------- | --------------------------------------------------------- |
+| `sendMessage`           | `sendMessage`          | `chat_id`, `text`, `parse_mode=HTML`                      |
+| `sendRichMessage`       | `sendRichMessage`      | `chat_id`, `rich_message`, optional multipart media       |
+| `sendRichMessageDraft`  | `sendRichMessageDraft` | `chat_id`, `draft_id`, `rich_message`, `can_stop`         |
+| `editRichMessageText`   | `editMessageText`      | `chat_id`, `message_id`, `rich_message`                   |
+| `deleteMessage`         | `deleteMessage`        | `chat_id`, `message_id`                                   |
+| `sendChatAction`        | `sendChatAction`       | `chat_id`, `action=typing`                                |
+| `setMessageReaction`    | `setMessageReaction`   | `chat_id`, `message_id`, `reaction=[{type,emoji}]`        |
+| `removeMessageReaction` | `setMessageReaction`   | `chat_id`, `message_id`, `reaction=[]`                    |
+| `pinChatMessage`        | `pinChatMessage`       | `chat_id`, `message_id`, `disable_notification=true`      |
+| `unpinChatMessage`      | `unpinChatMessage`     | `chat_id`, `message_id`                                   |
+| `getChat`               | `getChat`              | `chat_id`                                                 |
+| `getChatMember`         | `getChatMember`        | `chat_id`, `user_id`                                      |
+| `createForumTopic`      | `createForumTopic`     | `chat_id`, `name` (max 128 chars)                         |
+| `sendMessageToTopic`    | `sendMessage`          | `chat_id`, `message_thread_id`, `text`, `parse_mode=HTML` |
+| `sendPoll`              | `sendPoll`             | `chat_id`, `question`, `options`                          |
+| `setMyCommands`         | `setMyCommands`        | `commands`                                                |
 
 ### 16.3 与微信 iLink 协议的关键差异
 
@@ -1180,7 +1182,7 @@ Telegram Bot API 有以下速率限制：
 | 消息编辑     | 原生支持 `editMessageText`。               | 无原生编辑能力；需新发消息替代。       |
 | 消息删除     | 原生支持 `deleteMessage`，有 48 小时限制。 | 无原生删除能力。                       |
 | Reaction     | 原生支持 `setMessageReaction`。            | 不支持。                               |
-| 消息格式     | HTML / MarkdownV2。                        | 纯文本 + 媒体 item_list 结构。         |
+| 消息格式     | HTML / MarkdownV2。                        | 纯文本 + 媒体 item\_list 结构。        |
 | 文本长度上限 | 4096 字符。                                | 约 2000 字符（社区经验值）。           |
 | 论坛 / 话题  | 原生支持 Forum Topics。                    | 不支持。                               |
 | 投票         | 原生支持 `sendPoll`。                      | 不支持。                               |
@@ -1194,7 +1196,7 @@ Telegram Bot API 有以下速率限制：
 
 通过 `getMe` 接口验证 Bot Token 有效性：
 
-- **Bot 用户名**：@JianXu_Lobehub_Test_Bot
+- **Bot 用户名**：@JianXu\_Lobehub\_Test\_Bot
 - **Bot ID**：8654315085
 - **验证结果**：Token 有效，Bot 身份确认。
 
@@ -1214,7 +1216,7 @@ Conflict: can't use getUpdates method while webhook is active
 
 | API 方法             | 验证状态   | 备注                                                                  |
 | -------------------- | ---------- | --------------------------------------------------------------------- |
-| `sendMessage`        | 通过       | 参数、parse_mode、截断逻辑均符合规范。                                |
+| `sendMessage`        | 通过       | 参数、parse\_mode、截断逻辑均符合规范。                               |
 | `editMessageText`    | 通过       | 包含 "message is not modified" 静默处理。                             |
 | `deleteMessage`      | 通过       | 参数正确。                                                            |
 | `setMessageReaction` | 通过       | 添加 / 移除 Reaction 两种模式均正确。                                 |
@@ -1228,3 +1230,63 @@ Conflict: can't use getUpdates method while webhook is active
 1. **`sendMessageToTopic` 缺少 `parse_mode`**（见第 12 节）：向论坛话题发送消息时未传入 `parse_mode: 'HTML'`，导致 HTML 标签被原样显示。修复：在 `sendMessageToTopic` 调用中补充 `parse_mode: 'HTML'` 参数。
 
 2. **`createThread` 返回的 threadId 格式不兼容**（见第 11.3 节）：`createThread` 原实现仅返回 Telegram API 的 `message_thread_id`（如 `"42"`），而 `replyToThread` 期望接收 `"chatId:topicId"` 格式。修复：`createThread` 改为返回 `"${chatId}:${message_thread_id}"` 复合格式。
+
+## 18. Bot API 10.2 Rich Messages 与 Streaming Replies
+
+### 18.1 Rich Message
+
+最终 Agent 回复、Message Tool 和主动推送均使用 `sendRichMessage`。
+`rich_message.markdown` 保留原始 Markdown，
+因此标题、GFM 表格、任务列表和公式不再降级为 Telegram HTML。单条 Rich Markdown
+上限为 32,768 个 Unicode 字符，截断时必须闭合未完成的 Markdown 结构。
+
+附件通过 `rich_message.media` 注册稳定 ID，并在 Markdown 中使用独立媒体块引用：
+
+```markdown
+![](tg://photo?id=media_0 'chart.png')
+![](tg://video?id=media_1 'demo.mp4')
+![](tg://audio?id=media_2 'sample.mp3')
+![](tg://document?id=media_3 'report.pdf')
+```
+
+URL 媒体直接写入对应 `InputMedia.media`。二进制媒体使用 multipart
+`attach://file_N` 上传。视频设置 `supports_streaming: true`。
+
+Rich Message 是 Agent 内容的必需能力。若 Telegram 返回方法不可用、格式错误或媒体错误，
+调用端直接报告失败，不再改用 HTML `sendMessage` 或逐附件发送，以免维护两套不同的消息语义。
+普通 `sendMessage` 仅保留给账号绑定、配对提示和其他不属于 Agent 回复的运营消息。
+
+### 18.2 原生 Draft Streaming
+
+私聊（包括私聊 topic）开始执行时使用 `sendRichMessageDraft` 创建 `Thinking…` Draft：
+
+- `draft_id` 为同一执行期间稳定的非零整数。
+- `can_stop=true`，允许 Telegram 客户端展示 Stop 操作。
+- `afterStep` 只更新同一个 Draft，不创建持久消息。
+- Draft 是临时预览，约 30 秒无更新后会消失。
+- Draft 不上传附件；媒体仅在最终持久消息中发送。
+- 完成、错误或中断后必须调用 `sendRichMessage` 发送最终消息。
+
+群组、频道和 Guest Mode 不使用 Draft API，继续沿用 typing 或普通占位消息。
+
+### 18.3 Stop generation
+
+Webhook `allowed_updates` 必须包含 `stopped_message_generation`。收到更新后按以下组合
+严格查找 Draft session：
+
+1. Bot application scope。
+2. `chat.id`。
+3. 可选 `message_thread_id`。
+4. `draft_id`。
+
+Session 已记录 `operationId` 时调用 `AiAgentService.interruptTask`。若 Stop 早于
+`execAgent` 返回，则先持久化 `stopRequested=true`；写入 `operationId` 后立即中断，
+覆盖 webhook 与 queue callback 跨进程的启动竞态。Session TTL 与 Agent 的 30 分钟
+执行上限一致。
+
+### 18.4 Guest Mode
+
+所有 Guest Agent 回复使用 `InputRichMessageContent`，后续 inline edit 使用
+`editMessageText.rich_message`。URL 图片、视频、音频和文档直接注册为 Rich media。
+Guest Query 不能上传本地二进制附件，此类附件不再降级为 article、caption 或下载提示。
+普通 Guest article 仅保留给账号绑定等非 Agent 流程。

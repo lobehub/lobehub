@@ -15,7 +15,7 @@ import {
 import { SlackApi } from '@/server/services/bot/platforms/slack/api';
 import { sendSlackAttachments } from '@/server/services/bot/platforms/slack/sendAttachments';
 import { TelegramApi } from '@/server/services/bot/platforms/telegram/api';
-import { sendTelegramAttachments } from '@/server/services/bot/platforms/telegram/sendAttachments';
+import { prepareTelegramRichMessage } from '@/server/services/bot/platforms/telegram/richMessage';
 import type { BotMessageAttachment } from '@/server/services/bot/platforms/types';
 
 import type { InstallationCredentials } from './installations/types';
@@ -102,18 +102,23 @@ export const sendOutboundDirectMessage = async (params: {
     case 'telegram': {
       // A Telegram private chat id *is* the user id, so no DM to open.
       const api = new TelegramApi(botToken);
-      let textDelivered = false;
-      if (files) {
-        // The first attachment carries the text as its caption; if every
-        // attachment fails, fall back to a plain message so the text leg
-        // still lands.
-        const delivered = await sendTelegramAttachments(api, platformUserId, files, text);
-        textDelivered = delivered > 0;
-        if (delivered === 0 && !text && !linkMessages.length)
-          throw new Error('All Telegram attachments failed to send');
+      if (text || files) {
+        const prepared = await prepareTelegramRichMessage(text ?? '', files);
+        if (!prepared.richMessage.markdown.trim()) {
+          throw new Error('Telegram rich message is empty');
+        }
+        await api.sendRichMessage({
+          chatId: platformUserId,
+          richMessage: prepared.richMessage,
+          uploads: prepared.uploads,
+        });
       }
-      if (text && !textDelivered) await api.sendMessage(platformUserId, text);
-      for (const message of linkMessages) await api.sendMessage(platformUserId, message);
+      for (const message of linkMessages) {
+        await api.sendRichMessage({
+          chatId: platformUserId,
+          richMessage: { markdown: message },
+        });
+      }
       return;
     }
     case 'discord': {

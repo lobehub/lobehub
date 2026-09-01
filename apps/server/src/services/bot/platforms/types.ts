@@ -155,6 +155,11 @@ export interface BotMessageAttachment {
  */
 export type MessengerContent = string | { attachments?: BotMessageAttachment[]; content?: string };
 
+export interface MessengerDraftContext {
+  userId: string;
+  workspaceId?: string;
+}
+
 /**
  * Helper for messenger implementations that don't (yet) support attachments:
  * coerces `MessengerContent` to its text payload.
@@ -173,6 +178,8 @@ export interface PlatformMessenger {
    * can omit this). Callers must no-op on platforms that don't implement it.
    */
   addReaction?: (messageId: string, emoji: string) => Promise<void>;
+  clearDraft?: (draftId: string) => Promise<void>;
+  createDraft?: (content: string, context: MessengerDraftContext) => Promise<string>;
   createMessage: (content: MessengerContent) => Promise<void>;
   editMessage: (messageId: string, content: MessengerContent) => Promise<void>;
   removeReaction: (messageId: string, emoji: string) => Promise<void>;
@@ -195,7 +202,9 @@ export interface PlatformMessenger {
     prevEmoji: string | null,
     nextEmoji: string | null,
   ) => Promise<void>;
+  setDraftOperation?: (draftId: string, operationId: string) => Promise<boolean>;
   triggerTyping?: () => Promise<void>;
+  updateDraft?: (draftId: string, content: string) => Promise<void>;
   updateThreadName?: (name: string) => Promise<void>;
 }
 

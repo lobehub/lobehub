@@ -1,6 +1,7 @@
 import { createIoRedisState } from '@chat-adapter/state-ioredis';
 import { DEFAULT_BOT_DEBOUNCE_MS } from '@lobechat/const';
-import { Chat, ConsoleLogger, type Message, type MessageContext } from 'chat';
+import type { Message, MessageContext, WebhookOptions } from 'chat';
+import { Chat, ConsoleLogger } from 'chat';
 import debug from 'debug';
 
 import { getBotFeatureAccessState } from '@/business/server/bot/featureAccess';
@@ -33,11 +34,14 @@ import {
   type DmSettings,
   extractDmSettings,
   extractGroupSettings,
+  extractGuestSettings,
   extractUserAllowlist,
   extractWatchKeywordEntries,
   findMatchingWatchKeywordEntries,
   getBotReplyLocale,
   type GroupSettings,
+  type GuestDecision,
+  type GuestSettings,
   messageMatchesWatchKeyword,
   normalizeAllowFromEntries,
   normalizeBotReplyLocale,
@@ -48,9 +52,11 @@ import {
   shouldAllowSender,
   shouldHandleDm,
   shouldHandleGroup,
+  shouldHandleGuest,
   type UserAllowlist,
   type WatchKeywordEntry,
 } from './platforms';
+import { isGuestTelegramThreadId } from './platforms/telegram/threadId';
 import {
   renderApproveSuccess,
   renderCommandReply,
@@ -59,6 +65,8 @@ import {
   renderError,
   renderFeedbackSubmitted,
   renderGroupRejected,
+  renderGuestPairing,
+  renderGuestRejected,
   renderInlineError,
   renderModeStatus,
   renderSenderRejected,
@@ -203,8 +211,11 @@ export class BotMessageRouter {
    * Get the webhook handler for a given platform + appId.
    * Returns a function compatible with Next.js Route Handler: `(req: Request) => Promise<Response>`
    */
-  getWebhookHandler(platform: string, appId?: string): (req: Request) => Promise<Response> {
-    return async (req: Request) => {
+  getWebhookHandler(
+    platform: string,
+    appId?: string,
+  ): (req: Request, options?: WebhookOptions) => Promise<Response> {
+    return async (req: Request, options?: WebhookOptions) => {
       const entry = platformRegistry.getPlatform(platform);
       if (!entry) {
         return new Response('No bot configured for this platform', { status: 404 });
@@ -214,7 +225,7 @@ export class BotMessageRouter {
         return new Response(`Missing appId for ${platform} webhook`, { status: 400 });
       }
 
-      return this.handleWebhook(req, platform, appId);
+      return this.handleWebhook(req, platform, appId, options);
     };
   }
 
@@ -235,7 +246,12 @@ export class BotMessageRouter {
   // Webhook handling
   // ------------------------------------------------------------------
 
-  private async handleWebhook(req: Request, platform: string, appId: string): Promise<Response> {
+  private async handleWebhook(
+    req: Request,
+    platform: string,
+    appId: string,
+    options?: WebhookOptions,
+  ): Promise<Response> {
     log('handleWebhook: platform=%s, appId=%s', platform, appId);
 
     const bot = await this.getOrCreateBot(platform, appId);
@@ -244,7 +260,7 @@ export class BotMessageRouter {
     }
 
     if (bot.chatBot.webhooks && platform in bot.chatBot.webhooks) {
-      return (bot.chatBot.webhooks as any)[platform](req);
+      return (bot.chatBot.webhooks as any)[platform](req, options);
     }
 
     return new Response(`No bot configured for ${platform}`, { status: 404 });
@@ -341,12 +357,12 @@ export class BotMessageRouter {
     const client = entry.clientFactory.createClient(providerConfig, runtimeContext);
     const adapters = client.createAdapter();
 
-    // dmSettings + operatorUserId are needed by `/approve` (to enforce the
-    // owner-only gate and to know whether pairing is even enabled), and by
-    // the DM pairing branch in registerHandlers. Extract once, share with
-    // both — registerHandlers re-derives from `settings` to keep its own
-    // closure-internal contract self-contained.
+    // Access settings + operatorUserId are needed by `/approve` (to enforce
+    // the owner-only gate and to know whether pairing is enabled), and by
+    // registerHandlers. Extract once, share with commands; registerHandlers
+    // re-derives from `settings` to keep its closure self-contained.
     const dmSettings: DmSettings = extractDmSettings(settings);
+    const guestSettings: GuestSettings = extractGuestSettings(settings);
     const operatorUserId =
       typeof settings.userId === 'string'
         ? (settings.userId as string).trim() || undefined
@@ -357,6 +373,7 @@ export class BotMessageRouter {
       applicationId,
       client,
       dmSettings,
+      guestSettings,
       operatorUserId,
       platform,
       providerId: provider.id,
@@ -555,6 +572,7 @@ export class BotMessageRouter {
     const charLimit = (info.settings?.charLimit as number) || undefined;
     const displayToolCalls = info.settings?.displayToolCalls === true;
     const dmSettings: DmSettings = extractDmSettings(info.settings);
+    const guestSettings: GuestSettings = extractGuestSettings(info.settings);
     const groupSettings: GroupSettings = extractGroupSettings(info.settings);
     const userAllowlist: UserAllowlist = extractUserAllowlist(info.settings);
     /**
@@ -660,6 +678,18 @@ export class BotMessageRouter {
         userAllowlist,
       });
 
+    const passesGuestPolicy = (
+      thread: { id: string },
+      message: { author?: { userId?: string } },
+    ): GuestDecision =>
+      shouldHandleGuest({
+        authorUserId: message.author?.userId,
+        guestSettings,
+        isGuest: platform === 'telegram' && isGuestTelegramThreadId(thread.id),
+        operatorUserId,
+        userAllowlist,
+      });
+
     /**
      * Gate inbound events on group policy. DM threads pass through — they
      * are governed by `passesDmPolicy` instead. Non-DM threads are blocked
@@ -679,8 +709,11 @@ export class BotMessageRouter {
      * not the parent operators pasted. `extraGroupAllowlistChannels`
      * surfaces the parent so either ID lets the message through.
      */
-    const passesGroupPolicy = (thread: { id: string; isDM?: boolean }): boolean =>
-      shouldHandleGroup({
+    const passesGroupPolicy = (thread: { id: string; isDM?: boolean }): boolean => {
+      // Guest Mode has its own user-scoped policy. It remains separate from
+      // Group Policy because the bot has not joined the source chat.
+      if (platform === 'telegram' && isGuestTelegramThreadId(thread.id)) return true;
+      return shouldHandleGroup({
         candidateChannelIds: [
           client.extractChatId(thread.id),
           ...(client.extraGroupAllowlistChannels?.(thread.id) ?? []),
@@ -688,6 +721,7 @@ export class BotMessageRouter {
         groupSettings,
         isDM: thread.isDM === true,
       });
+    };
 
     /**
      * Handle a sender that the global `allowFrom` rejected. Posts the
@@ -730,7 +764,7 @@ export class BotMessageRouter {
       replyLocale: BotReplyLocale,
     ): Promise<void> => {
       // 'open' and 'pairing' should never reach here ('pairing' has its own
-      // flow via triggerDmPairing), but guard anyway so we never post the
+      // flow via triggerPairing), but guard anyway so we never post the
       // wrong copy if shouldHandleDm grows another false branch.
       if (dmSettings.policy !== 'allowlist' && dmSettings.policy !== 'disabled') return;
       try {
@@ -757,28 +791,42 @@ export class BotMessageRouter {
       }
     };
 
+    const notifyGuestRejected = async (
+      thread: { post: (text: string) => Promise<unknown> },
+      replyLocale: BotReplyLocale,
+    ): Promise<void> => {
+      if (guestSettings.policy !== 'allowlist' && guestSettings.policy !== 'disabled') return;
+      try {
+        await thread.post(renderGuestRejected(guestSettings.policy, replyLocale));
+      } catch (error) {
+        log('notifyGuestRejected: failed to post rejection notice: %O', error);
+      }
+    };
+
     /**
-     * Pairing branch of the DM gate: stranger DMed a bot in `pairing` mode.
-     * Issue (or recycle, when the same applicant DMed within the TTL) a
-     * one-time code, persist a pending entry to Redis so `/approve <code>`
-     * can later append the applicant to `allowFrom`, and post the code in
-     * the applicant's DM thread.
+     * Pairing branch shared by DM and Telegram Guest policies. Issue (or
+     * recycle, when the same applicant retries within the TTL) a one-time
+     * code, persist a pending entry to Redis so `/approve <code>` can later
+     * append the applicant to `allowFrom`, and post the code on the original
+     * request surface.
      *
      * Best-effort: if Redis is unwired (`'redis-unavailable'`) or the
      * per-bot pending cap is hit (`'capacity-exceeded'`), surface a useful
      * status string to the applicant rather than silently dropping them —
      * silent drops look broken and operators waste time debugging.
      */
-    const triggerDmPairing = async (
+    const triggerPairing = async (
       thread: { id: string; post: (text: string) => Promise<unknown> },
       author: { userId?: string; userName?: string },
       replyLocale: BotReplyLocale,
+      scope: 'dm' | 'guest',
     ): Promise<void> => {
       if (!author.userId) {
         log(
-          'triggerDmPairing: missing author userId, cannot pair (agent=%s, platform=%s)',
+          'triggerPairing: missing author userId, cannot pair (agent=%s, platform=%s, scope=%s)',
           agentId,
           platform,
+          scope,
         );
         return;
       }
@@ -795,16 +843,25 @@ export class BotMessageRouter {
       });
       let text: string;
       if (result.status === 'created' || result.status === 'reused') {
-        text = renderDmPairing('code', replyLocale, { code: result.code });
+        text =
+          scope === 'guest'
+            ? renderGuestPairing('code', replyLocale, { code: result.code })
+            : renderDmPairing('code', replyLocale, { code: result.code });
       } else if (result.status === 'capacity-exceeded') {
-        text = renderDmPairing('capacity-exceeded', replyLocale);
+        text =
+          scope === 'guest'
+            ? renderGuestPairing('capacity-exceeded', replyLocale)
+            : renderDmPairing('capacity-exceeded', replyLocale);
       } else {
-        text = renderDmPairing('unavailable', replyLocale);
+        text =
+          scope === 'guest'
+            ? renderGuestPairing('unavailable', replyLocale)
+            : renderDmPairing('unavailable', replyLocale);
       }
       try {
         await thread.post(text);
       } catch (error) {
-        log('triggerDmPairing: failed to post pairing notice: %O', error);
+        log('triggerPairing: failed to post pairing notice: %O', error);
       }
     };
 
@@ -959,18 +1016,13 @@ export class BotMessageRouter {
       if (operatorUserId && author.userId === operatorUserId) {
         return finishFeatureAccess();
       }
-      // Pairing redefines what `allowFrom` means: it's the *post-approval*
-      // list (managed by `/approve`), not a hard identity gate. A stranger
-      // DMing a pairing bot must reach the DM gate's `'pair'` branch so we
-      // can issue them a code — but the global allowFrom gate would
-      // otherwise short-circuit them out at step 1 (since they're not yet
-      // approved). Skip the global gate for DM threads under pairing so
-      // the DM gate alone governs user filtering. Other policies are
-      // unaffected: `open` keeps allowFrom as an extra lockdown layer,
-      // `allowlist` resolves to the same list either way, `disabled`
-      // rejects regardless.
+      // Pairing redefines what `allowFrom` means: it's the post-approval
+      // list. Pairing applicants must reach their scope gate so it can issue
+      // a code instead of being short-circuited by the global allowlist.
+      const isGuest = platform === 'telegram' && isGuestTelegramThreadId(thread.id);
       const isPairingDm = thread.isDM === true && dmSettings.policy === 'pairing';
-      if (!isPairingDm && !passesGlobalAllowlist({ author })) {
+      const isPairingGuest = isGuest && guestSettings.policy === 'pairing';
+      if (!isPairingDm && !isPairingGuest && !passesGlobalAllowlist({ author })) {
         log(
           '%s: sender blocked by allowFrom, agent=%s, platform=%s, thread=%s, author=%s',
           caller,
@@ -981,6 +1033,26 @@ export class BotMessageRouter {
         );
         await ensureRejectionVisible();
         await handleSenderRejected(thread, replyLocale);
+        return false;
+      }
+      const guestDecision = passesGuestPolicy(thread, { author });
+      if (guestDecision !== 'allow') {
+        log(
+          '%s: Guest gate=%s, agent=%s, platform=%s, thread=%s, author=%s, policy=%s',
+          caller,
+          guestDecision,
+          agentId,
+          platform,
+          thread.id,
+          author.userName ?? author.userId,
+          guestSettings.policy,
+        );
+        await ensureRejectionVisible();
+        if (guestDecision === 'pair') {
+          await triggerPairing(thread, author, replyLocale, 'guest');
+        } else {
+          await notifyGuestRejected(thread, replyLocale);
+        }
         return false;
       }
       if (!passesGroupPolicy(thread)) {
@@ -1011,7 +1083,7 @@ export class BotMessageRouter {
         dmSettings.policy,
       );
       if (dmDecision === 'pair') {
-        await triggerDmPairing(thread, author, replyLocale);
+        await triggerPairing(thread, author, replyLocale, 'dm');
       } else {
         await notifyDmRejected(thread, replyLocale);
       }
@@ -1579,7 +1651,7 @@ export class BotMessageRouter {
    * and handler. To add a new command, just append to this array.
    *
    * Handlers close over `info` so they can reach services and the bot's
-   * own configuration (DM policy, owner identity, applicationId) without
+   * own configuration (access policies, owner identity, applicationId) without
    * needing every command entry threaded through CommandContext.
    */
   private buildCommands(
@@ -1592,6 +1664,7 @@ export class BotMessageRouter {
        *  the applicant's notification has to land in the applicant's DM. */
       client: PlatformClient;
       dmSettings: DmSettings;
+      guestSettings: GuestSettings;
       operatorUserId?: string;
       platform: string;
       /** DB row id of the agent_bot_providers row for this bot — used by
@@ -1606,6 +1679,7 @@ export class BotMessageRouter {
       applicationId,
       client,
       dmSettings,
+      guestSettings,
       operatorUserId,
       platform,
       providerId,
@@ -1748,7 +1822,7 @@ export class BotMessageRouter {
             ctx.authorUserName ?? ctx.authorUserId,
           );
 
-          if (dmSettings.policy !== 'pairing') {
+          if (dmSettings.policy !== 'pairing' && guestSettings.policy !== 'pairing') {
             await ctx.post(renderCommandReply('cmdApproveDisabled', ctx.replyLocale));
             return;
           }
@@ -1842,8 +1916,9 @@ export class BotMessageRouter {
             redis,
           });
 
-          // Notify the applicant in their own DM thread, in the locale
-          // they originally DMed in (owner's locale may differ).
+          // Notify the applicant on the surface where they requested access,
+          // in their original locale. Telegram Guest Mode can update its
+          // one-shot inline response through the Guest messenger.
           try {
             const messenger = client.getMessenger(entry.threadId);
             await messenger.createMessage(

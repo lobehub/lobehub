@@ -76,6 +76,7 @@ export interface BotCallbackBody {
   attachments?: BotMessageAttachment[];
   content?: string;
   cost?: number;
+  draftId?: string;
   duration?: number;
   elapsedMs?: number;
   /**
@@ -171,8 +172,11 @@ export class BotCallbackService {
     const replyLocale = getBotReplyLocale(platform);
 
     if (type === 'step') {
-      if (canEdit && progressMessageId && settings.displayToolCalls === true) {
-        await this.handleStep(body, messenger, progressMessageId, client, replyLocale);
+      if (
+        settings.displayToolCalls === true &&
+        ((body.draftId && messenger.updateDraft) || (canEdit && progressMessageId))
+      ) {
+        await this.handleStep(body, messenger, progressMessageId ?? '', client, replyLocale);
       }
       // Swap the user-message reaction to match the current step type (tool
       // call vs. LLM reasoning). Runs regardless of `displayToolCalls` because
@@ -188,18 +192,22 @@ export class BotCallbackService {
       // Stop typing on the gateway
       this.stopGatewayTyping(connectionId, platformThreadId);
 
-      await this.handleCompletion(
-        body,
-        messenger,
-        progressMessageId ?? '',
-        client,
-        replyLocale,
-        charLimit,
-        canEdit,
-        options?.strictDelivery,
-        options?.deliveredChunkCount,
-        options?.onChunkDelivered,
-      );
+      try {
+        await this.handleCompletion(
+          body,
+          messenger,
+          progressMessageId ?? '',
+          client,
+          replyLocale,
+          charLimit,
+          canEdit,
+          options?.strictDelivery,
+          options?.deliveredChunkCount,
+          options?.onChunkDelivered,
+        );
+      } finally {
+        if (body.draftId) await messenger.clearDraft?.(body.draftId);
+      }
       await this.clearStepReaction(body, client, platform);
       // Clear the active thread tracker so the thread can accept new messages.
       // In queue mode, the bridge handler's finally block skips this cleanup
@@ -400,7 +408,11 @@ export class BotCallbackService {
       body.stepType === 'call_llm' && !body.toolsCalling?.length && body.content;
 
     try {
-      await messenger.editMessage(progressMessageId, progressText);
+      if (body.draftId && messenger.updateDraft) {
+        await messenger.updateDraft(body.draftId, progressText);
+      } else {
+        await messenger.editMessage(progressMessageId, progressText);
+      }
       if (!isLlmFinalResponse) {
         await messenger.triggerTyping?.();
       }
