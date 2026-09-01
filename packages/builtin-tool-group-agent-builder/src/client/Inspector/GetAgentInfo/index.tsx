@@ -7,7 +7,7 @@ import { createStaticStyles, cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { shinyTextStyles } from '@/styles';
+import { shinyGroupStyles, shinyTextStyles } from '@/styles';
 
 import type { GetAgentInfoParams } from '../../../types';
 
@@ -51,7 +51,12 @@ export const GetAgentInfoInspector = memo<
   }
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.root} gap={8}>
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={cx(styles.root, shinyGroupStyles.shinyGroup)}
+      gap={8}
+    >
       <span
         className={cx(
           styles.title,
@@ -61,7 +66,9 @@ export const GetAgentInfoInspector = memo<
         {t('builtins.lobe-group-agent-builder.apiName.getAgentInfo')}:
       </span>
       {avatar && <Avatar avatar={avatar} shape={'square'} size={20} title={title || undefined} />}
-      <span>{title || agentId}</span>
+      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+        {title || agentId}
+      </span>
     </Flexbox>
   );
 });

@@ -18,6 +18,12 @@ export const oneLineEllipsis = lineEllipsis(1);
  */
 export const inspectorTextStyles = createStaticStyles(({ css, cssVar }) => ({
   root: css`
+    /* Coordinate space for the shiny sweep: every shimmering span in the row
+     * resolves its overlay against this box, so they read as one wave. */
+    --shiny-origin: static;
+
+    position: relative;
+
     overflow: hidden;
     display: flex;
     align-items: center;
@@ -58,3 +64,15 @@ export const highlightTextStyles = createStaticStyles(({ css, cssVar }) => {
     warning: highlightBase(cssVar.colorWarningBg),
   };
 });
+
+/**
+ * Sweep coordinate space for a row that shimmers several separate spans.
+ * Mirrors lobe-ui's textGroupStyles.shinyGroup until the version bump lands.
+ */
+export const shinyGroupStyles = createStaticStyles(({ css }) => ({
+  shinyGroup: css`
+    --shiny-origin: static;
+
+    position: relative;
+  `,
+}));

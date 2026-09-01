@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
-import { highlightTextStyles, shinyTextStyles } from '@/styles';
+import { highlightTextStyles, shinyGroupStyles, shinyTextStyles } from '@/styles';
 
 import type { ExecuteTaskParams } from '../../../types';
 
@@ -55,7 +55,12 @@ export const ExecuteAgentTaskInspector = memo<BuiltinInspectorProps<ExecuteTaskP
         );
       if (agent) {
         return (
-          <Flexbox horizontal align={'center'} className={styles.root} gap={8}>
+          <Flexbox
+            horizontal
+            align={'center'}
+            className={cx(styles.root, shinyGroupStyles.shinyGroup)}
+            gap={8}
+          >
             <span className={cx(styles.title, isArgumentsStreaming && shinyTextStyles.shinyText)}>
               {t('builtins.lobe-group-management.inspector.executeAgentTask.assignTo')}
             </span>
@@ -68,7 +73,9 @@ export const ExecuteAgentTaskInspector = memo<BuiltinInspectorProps<ExecuteTaskP
                   size={24}
                   title={agent.title || undefined}
                 />
-                <span>{agent?.title}</span>
+                <span className={cx(isArgumentsStreaming && shinyTextStyles.shinyText)}>
+                  {agent?.title}
+                </span>
               </>
             )}
             {taskTitle && (
