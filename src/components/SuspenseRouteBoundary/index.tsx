@@ -1,9 +1,12 @@
 'use client';
 
 import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { useSWRConfig } from 'swr';
+import { useLocation } from 'react-router';
+import { SWRConfig } from 'swr';
 
 import AsyncError, { type AsyncErrorVariant } from '@/components/AsyncError';
+
+import { useRouteRetry } from './useRouteRetry';
 
 interface BoundaryProps {
   children: ReactNode;
@@ -47,8 +50,18 @@ class Boundary extends Component<BoundaryProps, BoundaryState> {
  * gate `AsyncBoundary` used to run at the call site has to move above the
  * suspending component. Without it one failed request takes the whole route to
  * the router's error page and the user loses the Retry that used to sit inside
- * the surface. Reset revalidates every key so the retry re-runs the fetch that
- * threw instead of replaying its cached rejection.
+ * the surface.
+ *
+ * Two things the class boundary alone gets wrong, both because it is mounted in
+ * a *persistent* area layout that outlives the route under it:
+ *
+ * - Its error state survives navigation, so a failure on one route keeps
+ *   covering the healthy sibling the user moves to. Keying on the pathname
+ *   remounts it per route.
+ * - Reset has to clear the SWR entry that threw, but the error carries no key,
+ *   so the naive fix is to invalidate the whole cache — which refetches every
+ *   mounted consumer in the app for one route's Retry. `onError` records the
+ *   keys that actually failed and reset revalidates only those.
  */
 const SuspenseRouteBoundary = ({
   children,
@@ -57,12 +70,15 @@ const SuspenseRouteBoundary = ({
   children: ReactNode;
   variant?: AsyncErrorVariant;
 }) => {
-  const { mutate } = useSWRConfig();
+  const { onError, onReset } = useRouteRetry();
+  const { pathname } = useLocation();
 
   return (
-    <Boundary variant={variant} onReset={() => mutate(() => true, undefined, { revalidate: true })}>
-      {children}
-    </Boundary>
+    <SWRConfig value={{ onError }}>
+      <Boundary key={pathname} variant={variant} onReset={onReset}>
+        {children}
+      </Boundary>
+    </SWRConfig>
   );
 };
 

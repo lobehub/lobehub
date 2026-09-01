@@ -49,10 +49,9 @@ const SearchResult = memo<SearchResultProps>(
           <Empty description={t('search.emptyResult')} icon={SearchIcon}>
             {!editing && (
               <Button
-                color={'default'}
                 icon={<Icon icon={Edit2Icon} />}
                 size={'small'}
-                variant={'filled'}
+                type={'fill'}
                 onClick={() => {
                   setEditing(true);
                 }}

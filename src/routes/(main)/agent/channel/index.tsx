@@ -137,6 +137,7 @@ const ChannelContent = memo(() => {
           data={hasData ? platforms : undefined}
           error={error}
           errorVariant={'block'}
+          isLoading={isLoading}
           loading={<SurfaceSkeleton header={false} variant={'grid'} />}
           onRetry={() => {
             mutatePlatforms();
