@@ -1,1 +1,1 @@
-export { openAddWorkingDirModal } from './AddWorkingDirModal';
+export { openRemoteFolderPickerModal } from './RemoteFolderPickerModal';

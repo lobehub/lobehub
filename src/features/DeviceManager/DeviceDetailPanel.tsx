@@ -11,9 +11,8 @@ import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import DirIcon from '@/features/ChatInput/ControlBar/DirIcon';
-import { openAddWorkingDirModal } from '@/features/WorkingDirectory';
+import { openRemoteFolderPickerModal } from '@/features/WorkingDirectory';
 import { createWorkspaceLambdaClient, lambdaQuery } from '@/libs/trpc/client';
-import { deviceService } from '@/services/device';
 import { electronSystemService } from '@/services/electron/system';
 import { nextWorkingDirs } from '@/store/device';
 
@@ -148,36 +147,38 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
     }
   };
 
-  const addRecent = (entry: { path: string; repoType?: 'git' | 'github' }) => {
-    update.mutate({
+  const addRecent = async (entry: { path: string; repoType?: 'git' | 'github' }) => {
+    await update.mutateAsync({
       deviceId: device.deviceId,
       workingDirs: nextWorkingDirs(entry, device.workingDirs),
     });
   };
 
   const handleAddRecent = async () => {
-    // This machine: browse natively. A remote / non-current device isn't
-    // browsable from here, so fall back to manual absolute-path entry (the same
-    // modal the chat control bar uses), statting the path on the target device.
+    // This machine uses the native dialog; every other device exposes a remote
+    // folder browser over the same authenticated device-control channel.
     if (canBrowse) {
       const result = await electronSystemService.selectFolder({
         title: t('devices.detail.addDir'),
       });
-      if (result?.path) addRecent({ path: result.path, repoType: result.repoType });
+      if (result?.path) {
+        update.mutate({
+          deviceId: device.deviceId,
+          workingDirs: nextWorkingDirs(
+            { path: result.path, repoType: result.repoType },
+            device.workingDirs,
+          ),
+        });
+      }
       return;
     }
 
-    openAddWorkingDirModal({
-      onSubmit: async (path) => {
-        const result = await deviceService.statPath(device.deviceId, path);
-        if (result) {
-          if (!result.exists) return t('device:workingDirectory.pathNotExist');
-          if (!result.isDirectory) return t('device:workingDirectory.pathNotDirectory');
-        }
-        addRecent({ path, repoType: result?.repoType });
-        return undefined;
-      },
-      placeholder: device.defaultCwd || undefined,
+    openRemoteFolderPickerModal({
+      deviceId: device.deviceId,
+      deviceName: device.friendlyName || device.hostname || device.deviceId,
+      initialPath: device.defaultCwd || undefined,
+      onSelect: addRecent,
+      scope: device.scope,
     });
   };
 

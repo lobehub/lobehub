@@ -1,3 +1,5 @@
+import type { DeviceScope } from '@lobechat/types';
+
 import { lambdaClient } from '@/libs/trpc/client';
 
 type DeviceClient = typeof lambdaClient.device;
@@ -17,18 +19,18 @@ class DeviceService {
     return lambdaClient.device.updateDevice.mutate(input);
   }
 
-  /** List one directory on a device for remote filesystem clients. */
-  listDir(deviceId: string, path?: string) {
-    return lambdaClient.device.listDir.query({ deviceId, path });
+  /** List one directory on a device for the remote folder picker. */
+  listDir(deviceId: string, scope: DeviceScope, path?: string) {
+    return lambdaClient.device.listDir.query({ deviceId, path, scope });
   }
 
   /**
    * Check whether a path exists on a device and is a directory (via the device's
-   * `statPath` RPC). Returns `null` when the device is unreachable — callers
-   * treat "can't verify" as non-blocking.
+   * `statPath` RPC). Returns `null` when the device is unreachable; callers must
+   * not persist a path they could not verify.
    */
-  statPath(deviceId: string, path: string) {
-    return lambdaClient.device.statPath.query({ deviceId, path });
+  statPath(deviceId: string, scope: DeviceScope, path: string) {
+    return lambdaClient.device.statPath.query({ deviceId, path, scope });
   }
 
   /** Probe whether an agent platform (openclaw / hermes) is available on a device. */
