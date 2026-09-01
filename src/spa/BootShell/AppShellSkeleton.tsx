@@ -2,6 +2,7 @@
 
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { Flexbox } from '@lobehub/ui';
+import { LobeHub } from '@lobehub/ui/brand';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
@@ -23,7 +24,21 @@ const CSS_VAR_CLASS = 'lobe-vars';
 
 export const APP_SHELL_FALLBACK_ID = 'app-shell-fallback';
 
-const styles = createStaticStyles(({ css }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  contentBrand: css`
+    pointer-events: none;
+
+    position: absolute;
+    inset: 0;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    color: ${cssVar.colorTextQuaternary};
+
+    opacity: 0.48;
+  `,
   dragRegion: css`
     pointer-events: auto;
     flex-shrink: 0;
@@ -79,7 +94,11 @@ const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
             height={'100%'}
             style={getInnerCssVariables({ isDark })}
             width={'100%'}
-          />
+          >
+            <div className={styles.contentBrand}>
+              <LobeHub size={56} type={'mono'} />
+            </div>
+          </Flexbox>
         </Flexbox>
       </Flexbox>
     </div>
