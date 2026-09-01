@@ -1,6 +1,8 @@
 'use client';
 
+import { Icon } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
+import { LoaderCircle } from 'lucide-react';
 import type { KeyboardEvent, PointerEvent, ReactElement, ReactNode } from 'react';
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { VListHandle } from 'virtua';
@@ -36,6 +38,10 @@ const DebugInspector = lazy(() => import('./AutoScroll/DebugInspector'));
 const CONVERSATION_FOOTER_ID = '__conversation_footer__';
 const CONVERSATION_HEADER_ID = '__conversation_header__';
 const USER_SCROLL_INTENT_TTL_MS = 500;
+// User-scrolled distance from the very top (px) under which one round-aligned
+// page of pre-window history is fetched (LOBE-13716). The action self-guards
+// against duplicate loads, so firing per scroll event is safe.
+const EARLIER_HISTORY_TRIGGER_PX = 200;
 const SCROLL_KEYS = new Set(['ArrowDown', 'ArrowUp', 'End', 'Home', 'PageDown', 'PageUp', ' ']);
 
 interface VirtualizedListProps {
@@ -109,6 +115,8 @@ const VirtualizedList = memo<VirtualizedListProps>(
     const isSelectionMode = useConversationStore(messageStateSelectors.isSelectionMode);
 
     // Store actions
+    const loadEarlierMessages = useConversationStore((s) => s.loadEarlierMessages);
+    const isLoadingEarlierMessages = useConversationStore((s) => s.isLoadingEarlierMessages);
     const registerVirtuaScrollMethods = useConversationStore((s) => s.registerVirtuaScrollMethods);
     const setScrollState = useConversationStore((s) => s.setScrollState);
     const resetVisibleItems = useConversationStore((s) => s.resetVisibleItems);
@@ -173,6 +181,12 @@ const VirtualizedList = memo<VirtualizedListProps>(
         const hasUserScrollIntent =
           Date.now() - lastUserScrollIntentAtRef.current <= USER_SCROLL_INTENT_TTL_MS;
         onScrollOffset(ref.scrollOffset, hasUserScrollIntent);
+
+        // Near the top under a real user scroll (programmatic mount/restore
+        // scrolls carry no intent): fetch one page of pre-window history.
+        if (hasUserScrollIntent && ref.scrollOffset < EARLIER_HISTORY_TRIGGER_PX) {
+          void loadEarlierMessages();
+        }
       }
 
       // Check if at bottom
@@ -192,7 +206,15 @@ const VirtualizedList = memo<VirtualizedListProps>(
       scrollEndTimerRef.current = setTimeout(() => {
         setScrollState({ isScrolling: false });
       }, 150);
-    }, [activeIndex, checkAtBottom, onScrollOffset, recordScroll, setActiveIndex, setScrollState]);
+    }, [
+      activeIndex,
+      checkAtBottom,
+      loadEarlierMessages,
+      onScrollOffset,
+      recordScroll,
+      setActiveIndex,
+      setScrollState,
+    ]);
 
     const handleScrollEnd = useCallback(() => {
       setScrollState({ isScrolling: false });
@@ -290,6 +312,22 @@ const VirtualizedList = memo<VirtualizedListProps>(
       [footerSlot, headerSlot, listData],
     );
 
+    // Prepend detection for virtua: when pre-window history loads, the former
+    // first message moves down the list. Passing `shift` for exactly that
+    // render keeps the viewport anchored on the rows the user was reading
+    // instead of snapping to the (new) top. Removals and topic switches drop
+    // the previous first id from the list entirely and stay unshifted.
+    const firstMessageId = listData[0] as string | undefined;
+    const prevFirstMessageIdRef = useRef(firstMessageId);
+    const prevFirstMessageId = prevFirstMessageIdRef.current;
+    const shift =
+      prevFirstMessageId !== undefined &&
+      firstMessageId !== prevFirstMessageId &&
+      listData.includes(prevFirstMessageId);
+    useEffect(() => {
+      prevFirstMessageIdRef.current = firstMessageId;
+    });
+
     const keepMountedIndicesWithSlots = useMemo(
       () => (headerSlot ? keepMountedIndices.map((index) => index + 1) : keepMountedIndices),
       [headerSlot, keepMountedIndices],
@@ -315,6 +353,23 @@ const VirtualizedList = memo<VirtualizedListProps>(
       >
         {/* Pinned to the list viewport top; only renders while multi-selecting */}
         <MessageForwardSelectToHere />
+        {/* Pre-window history page in flight (LOBE-13716) */}
+        {isLoadingEarlierMessages && (
+          <div
+            style={{
+              display: 'flex',
+              insetInlineStart: 0,
+              justifyContent: 'center',
+              pointerEvents: 'none',
+              position: 'absolute',
+              top: 8,
+              width: '100%',
+              zIndex: 10,
+            }}
+          >
+            <Icon spin icon={LoaderCircle} />
+          </div>
+        )}
         {/* Debug Inspector - placed outside VList so it won't be recycled by the virtual list */}
         {devDockMounted && (
           <Suspense fallback={null}>
@@ -326,6 +381,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
           data={dataWithSlots}
           keepMounted={keepMountedIndicesWithSlots}
           ref={virtuaRef}
+          shift={shift}
           style={{ height: '100%', overflowAnchor: 'none', paddingBottom }}
           onScroll={handleScroll}
           onScrollEnd={handleScrollEnd}

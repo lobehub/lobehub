@@ -7,7 +7,9 @@ import { type StateCreator } from 'zustand/vanilla';
 import { useClientDataSWRWithSync } from '@/libs/swr';
 import { messageService } from '@/services/message';
 import {
+  getEarlierHistoryStatus,
   getMessageListFetchPolicy,
+  loadEarlierMessagePage,
   messageListKey,
   runMessageListQuery,
 } from '@/services/message/cache';
@@ -74,6 +76,14 @@ export interface DataAction {
    * This method updates the frontend state without persisting to database
    */
   internal_dispatchMessage: (payload: MessageDispatch) => void;
+
+  /**
+   * Load one round-aligned page of history older than the server's
+   * newest-first window (LOBE-13716) and prepend it to the transcript.
+   * Self-guarding: no-ops while a page is in flight, once the beginning has
+   * been reached, or when the conversation has no server-backed messages yet.
+   */
+  loadEarlierMessages: () => Promise<void>;
 
   /**
    * Replace all messages with new data
@@ -186,6 +196,43 @@ export const dataSlice: StateCreator<
 
     // Sync changes to external store (ChatStore)
     get().onMessagesChange?.(newDbMessages, get().context);
+  },
+
+  loadEarlierMessages: async () => {
+    const context = get().context;
+    if (!context.agentId || !context.topicId) return;
+    const status = getEarlierHistoryStatus(context);
+    if (status.loading || status.exhausted) return;
+
+    set({ isLoadingEarlierMessages: true }, false, 'loadEarlierMessages/start');
+    try {
+      const merged = await loadEarlierMessagePage(context, get().dbMessages, (before) =>
+        messageService.getEarlierMessages(
+          {
+            agentId: context.agentId,
+            groupId: context.groupId,
+            threadId: context.threadId,
+            topicId: context.topicId,
+            topicShareId: context.topicShareId,
+          },
+          before,
+        ),
+      );
+      // `undefined` → nothing to prepend (no cursor, already loading, or the
+      // beginning was reached — the exhausted flag lives in the cache layer).
+      if (!merged) return;
+      // The user may have switched conversations while the page was in flight.
+      if (!isSameConversationContext(context, get().context)) return;
+
+      log(
+        '[loadEarlierMessages] prepended | contextKey=%s | mergedCount=%d',
+        messageMapKey(context),
+        merged.length,
+      );
+      get().replaceMessages(merged, { expectedContext: context });
+    } finally {
+      set({ isLoadingEarlierMessages: false }, false, 'loadEarlierMessages/end');
+    }
   },
 
   replaceMessages: (messages, options) => {

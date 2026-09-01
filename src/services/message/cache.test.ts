@@ -5,9 +5,11 @@ import { MESSAGE_CACHE_VERSION } from '@/libs/swr/keys';
 
 import {
   clearMessageListClientCacheState,
+  getEarlierHistoryStatus,
   getMessageListFetchPolicy,
   invalidateMessageListClientState,
   isMessageListServerVerified,
+  loadEarlierMessagePage,
   MESSAGE_LIST_VERIFICATION_INTERVAL,
   messageListKey,
   runMessageListQuery,
@@ -243,5 +245,104 @@ describe('message list client cache', () => {
 
     expect(isMessageListServerVerified({ agentId: 'agent-1', topicId: 'topic-0' })).toBe(false);
     expect(isMessageListServerVerified({ agentId: 'agent-1', topicId: 'topic-500' })).toBe(true);
+  });
+});
+
+describe('earlier history (round-cursor pages, LOBE-13716)', () => {
+  const message = (id: string, createdAt: number, role = 'assistant') =>
+    ({ content: id, createdAt, id, role, updatedAt: createdAt }) as unknown as UIChatMessage;
+
+  const ids = (list: UIChatMessage[] | undefined) => list?.map((item) => item.id);
+
+  it('fetches a page older than the oldest mainline row and returns the merged transcript', async () => {
+    const window = [message('u2', 10, 'user'), message('a2', 11)];
+    const fetcher = vi.fn().mockResolvedValue([message('u1', 1, 'user'), message('a1', 2)]);
+
+    const merged = await loadEarlierMessagePage(context, window, fetcher);
+
+    expect(fetcher).toHaveBeenCalledWith({ createdAt: new Date(10), id: 'u2' });
+    expect(ids(merged)).toEqual(['u1', 'a1', 'u2', 'a2']);
+  });
+
+  it('never uses a synthetic group node as the round cursor', async () => {
+    const window = [message('group-1', 5, 'compressedGroup'), message('u2', 10, 'user')];
+    const fetcher = vi.fn().mockResolvedValue([message('u1', 1, 'user')]);
+
+    await loadEarlierMessagePage(context, window, fetcher);
+
+    expect(fetcher).toHaveBeenCalledWith({ createdAt: new Date(10), id: 'u2' });
+  });
+
+  it('re-attaches loaded history to later revalidations of the same identity', async () => {
+    const window = [message('u2', 10, 'user'), message('a2', 11)];
+    await loadEarlierMessagePage(context, window, async () => [message('u1', 1, 'user')]);
+
+    const revalidated = await runMessageListQuery(context, async () => window);
+
+    expect(ids(revalidated)).toEqual(['u1', 'u2', 'a2']);
+  });
+
+  it('drops cached pages when the fresh window slid past the join point', async () => {
+    const window = [message('u2', 10, 'user'), message('a2', 11)];
+    await loadEarlierMessagePage(context, window, async () => [message('u1', 1, 'user')]);
+
+    // The window moved forward: u2 (the join point) fell out of it. Merging
+    // would leave an invisible gap, so the transcript collapses to the window.
+    const slidWindow = [message('u3', 20, 'user'), message('a3', 21)];
+    const revalidated = await runMessageListQuery(context, async () => slidWindow);
+
+    expect(revalidated).toBe(slidWindow);
+  });
+
+  it('deduplicates rows the fresh window already contains', async () => {
+    const window = [message('u2', 10, 'user'), message('a2', 11)];
+    await loadEarlierMessagePage(context, window, async () => [
+      message('u1', 1, 'user'),
+      message('a1', 2),
+    ]);
+
+    // A later window that reaches further back overlaps the cached page.
+    const extendedWindow = [message('a1', 2), message('u2', 10, 'user'), message('a2', 11)];
+    const revalidated = await runMessageListQuery(context, async () => extendedWindow);
+
+    expect(ids(revalidated)).toEqual(['u1', 'a1', 'u2', 'a2']);
+  });
+
+  it('marks the identity exhausted only on an empty page and stops fetching', async () => {
+    const window = [message('u1', 10, 'user')];
+    const fetcher = vi.fn().mockResolvedValue([]);
+
+    const merged = await loadEarlierMessagePage(context, window, fetcher);
+
+    expect(merged).toBeUndefined();
+    expect(getEarlierHistoryStatus(context).exhausted).toBe(true);
+
+    await loadEarlierMessagePage(context, window, fetcher);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a second load while one page is in flight', async () => {
+    const window = [message('u2', 10, 'user')];
+    const firstPage = deferred<UIChatMessage[]>();
+    const fetcher = vi.fn().mockReturnValue(firstPage.promise);
+
+    const first = loadEarlierMessagePage(context, window, fetcher);
+    const second = await loadEarlierMessagePage(context, window, fetcher);
+
+    expect(second).toBeUndefined();
+    expect(fetcher).toHaveBeenCalledTimes(1);
+
+    firstPage.resolve([message('u1', 1, 'user')]);
+    expect(ids(await first)).toEqual(['u1', 'u2']);
+  });
+
+  it('clears cached history on invalidation so stale rows cannot resurrect', async () => {
+    const window = [message('u2', 10, 'user')];
+    await loadEarlierMessagePage(context, window, async () => [message('u1', 1, 'user')]);
+
+    invalidateMessageListClientState(() => true);
+
+    const revalidated = await runMessageListQuery(context, async () => window);
+    expect(revalidated).toBe(window);
   });
 });
