@@ -163,6 +163,25 @@ describe('Anthropic generateObject', () => {
     expect((requestParams.tools?.[0] as any).strict).toBe(true);
   });
 
+  it('should respect an explicit strict: false opt-out on Fable 5.1', async () => {
+    const { requestParams } = await buildAnthropicGenerateObjectRequest({
+      messages: [{ content: 'Generate', role: 'user' as const }],
+      model: 'claude-fable-5-1',
+      schema: {
+        name: 'verdict',
+        schema: {
+          properties: { claim: { type: 'string' }, suggestion: { type: 'string' } },
+          required: ['claim'],
+          type: 'object' as const,
+        },
+        strict: false,
+      },
+    } as any);
+
+    expect(requestParams.tool_choice).toEqual({ type: 'auto' });
+    expect((requestParams.tools?.[0] as any).strict).toBe(false);
+  });
+
   describe('use struct output schema', () => {
     it('should return structured data on successful API call', async () => {
       const mockClient = {

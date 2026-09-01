@@ -87,8 +87,12 @@ export const buildAnthropicGenerateObjectRequest = async (
         schema.description || 'Generate structured output according to the provided schema',
       input_schema: schema.schema as Anthropic.Tool.InputSchema,
       name: schema.name || 'structured_output',
+      // Without forced tool_choice, `strict: true` is what keeps the arguments
+      // schema-valid. Respect an explicit `strict: false` opt-out though: strict
+      // mode requires every declared property to be required, and schemas with
+      // optional fields would otherwise fail validation with a 400.
       ...(forcedToolChoiceRejected
-        ? { strict: true }
+        ? { strict: schema.strict !== false }
         : config?.schemaToolStrict && schema.strict !== undefined
           ? { strict: schema.strict }
           : {}),
