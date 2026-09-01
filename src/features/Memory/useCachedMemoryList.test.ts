@@ -45,8 +45,10 @@ describe('cached memory list hydration', () => {
   });
 
   it('restores a cached search after switching away and back within the deduping interval', async () => {
-    vi.spyOn(userMemoryService, 'queryActivities').mockImplementation(async ({ q }) => ({
-      items: [{ id: q }] as never,
+    vi.spyOn(userMemoryService, 'queryActivities').mockImplementation(async (params) => ({
+      items: [{ id: params?.q } as never],
+      page: params?.page ?? 1,
+      pageSize: params?.pageSize ?? 12,
       total: 1,
     }));
 

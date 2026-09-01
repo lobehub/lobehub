@@ -20,7 +20,10 @@ const cases: GuardCase[] = [
     accept: (request) =>
       useUserMemoryStore
         .getState()
-        .internal_acceptActivitiesList({ items: [], total: 22 }, request),
+        .internal_acceptActivitiesList(
+          { items: [], page: request.page, pageSize: request.pageSize, total: 22 },
+          request,
+        ),
     fail: (error, request) =>
       useUserMemoryStore.getState().internal_failActivitiesList(error, request),
     name: 'activities',
@@ -60,7 +63,10 @@ const cases: GuardCase[] = [
     accept: (request) =>
       useUserMemoryStore
         .getState()
-        .internal_acceptExperiencesList({ items: [], total: 22 }, request),
+        .internal_acceptExperiencesList(
+          { items: [], page: request.page, pageSize: request.pageSize, total: 22 },
+          request,
+        ),
     fail: (error, request) =>
       useUserMemoryStore.getState().internal_failExperiencesList(error, request),
     name: 'experiences',
