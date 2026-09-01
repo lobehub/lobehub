@@ -17,6 +17,11 @@ class DeviceService {
     return lambdaClient.device.updateDevice.mutate(input);
   }
 
+  /** List one directory on a device for remote filesystem clients. */
+  listDir(deviceId: string, path?: string) {
+    return lambdaClient.device.listDir.query({ deviceId, path });
+  }
+
   /**
    * Check whether a path exists on a device and is a directory (via the device's
    * `statPath` RPC). Returns `null` when the device is unreachable — callers
