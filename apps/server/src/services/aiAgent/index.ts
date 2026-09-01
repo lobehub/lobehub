@@ -1086,38 +1086,6 @@ export class AiAgentService {
     const operationId =
       continuationOperationId ?? `op_${timestamp}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
 
-    if (params.topicStartOwnerOperationId) {
-      const attached = await this.topicModel.appendRunningOperationChild(
-        topicId,
-        params.topicStartOwnerOperationId,
-        {
-          assistantMessageId: turn.assistantMessageId,
-          operationId,
-          orchestrationRole: appContext?.orchestrationRole,
-          scope: appContext?.scope ?? undefined,
-          threadId: appContext?.threadId ?? undefined,
-        },
-      );
-      if (!attached) {
-        const errorMessage = 'Group supervisor finished before this member could start.';
-        await updateAbortedAssistantMessage(errorMessage);
-        return {
-          agentId: resolvedAgentId,
-          assistantMessageId: turn.assistantMessageId,
-          autoStarted: false,
-          createdAt: new Date().toISOString(),
-          error: errorMessage,
-          message: errorMessage,
-          operationId,
-          status: 'error',
-          success: false,
-          timestamp: new Date().toISOString(),
-          topicId,
-          userMessageId: turn.userMessageId ?? parentMessageId ?? '',
-        };
-      }
-    }
-
     // Stages 9.4–18 — device system info, agent-management context, persona
     // memory, history + message assembly, the base initial runtime context,
     // workspace init, the OperationSkillSet, and the expertise snapshot
@@ -1175,6 +1143,45 @@ export class AiAgentService {
       prep.allMessages.length,
       Object.keys(discovery.toolManifestMap).length,
     );
+
+    // Claim the child slot on the supervisor's runningOperation marker LAST,
+    // immediately before startup. The marker vanishes when the supervisor is
+    // cancelled or settled, so every awaited preparation step above widens the
+    // claim→start race window — an orphaned child would start against a
+    // marker that no longer lists it. Claiming here keeps the window minimal;
+    // a failed claim only wastes the preparation reads (its lone write — the
+    // topic cwd pin — is additive and idempotent).
+    if (params.topicStartOwnerOperationId) {
+      const attached = await this.topicModel.appendRunningOperationChild(
+        topicId,
+        params.topicStartOwnerOperationId,
+        {
+          assistantMessageId: turn.assistantMessageId,
+          operationId,
+          orchestrationRole: appContext?.orchestrationRole,
+          scope: appContext?.scope ?? undefined,
+          threadId: appContext?.threadId ?? undefined,
+        },
+      );
+      if (!attached) {
+        const errorMessage = 'Group supervisor finished before this member could start.';
+        await updateAbortedAssistantMessage(errorMessage);
+        return {
+          agentId: resolvedAgentId,
+          assistantMessageId: turn.assistantMessageId,
+          autoStarted: false,
+          createdAt: new Date().toISOString(),
+          error: errorMessage,
+          message: errorMessage,
+          operationId,
+          status: 'error',
+          success: false,
+          timestamp: new Date().toISOString(),
+          topicId,
+          userMessageId: turn.userMessageId ?? parentMessageId ?? '',
+        };
+      }
+    }
 
     // 19. Create the operation via AgentRuntimeService, persist the reconnect
     // marker, and mint the gateway token (see `pipeline/startOperation`).
