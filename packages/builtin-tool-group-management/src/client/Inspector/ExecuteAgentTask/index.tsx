@@ -47,19 +47,16 @@ export const ExecuteAgentTaskInspector = memo<BuiltinInspectorProps<ExecuteTaskP
     if (isArgumentsStreaming) {
       if (!agent && !taskTitle)
         return (
-          <div className={cx(styles.root, shinyTextStyles.shinyText)}>
-            <span>{t('builtins.lobe-group-management.apiName.executeAgentTask')}</span>
+          <div className={styles.root}>
+            <span className={shinyTextStyles.shinyText}>
+              {t('builtins.lobe-group-management.apiName.executeAgentTask')}
+            </span>
           </div>
         );
       if (agent) {
         return (
-          <Flexbox
-            horizontal
-            align={'center'}
-            className={cx(styles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}
-            gap={8}
-          >
-            <span className={styles.title}>
+          <Flexbox horizontal align={'center'} className={styles.root} gap={8}>
+            <span className={cx(styles.title, isArgumentsStreaming && shinyTextStyles.shinyText)}>
               {t('builtins.lobe-group-management.inspector.executeAgentTask.assignTo')}
             </span>
             {agent && (
@@ -90,13 +87,8 @@ export const ExecuteAgentTaskInspector = memo<BuiltinInspectorProps<ExecuteTaskP
     const agentName = agent?.title || agentId;
 
     return (
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={cx(styles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}
-        gap={8}
-      >
-        <span className={styles.title}>
+      <Flexbox horizontal align={'center'} className={styles.root} gap={8}>
+        <span className={cx(styles.title, isArgumentsStreaming && shinyTextStyles.shinyText)}>
           {t('builtins.lobe-group-management.inspector.executeAgentTask.assignTo')}
         </span>
         {agent && (

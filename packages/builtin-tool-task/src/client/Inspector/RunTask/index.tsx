@@ -60,15 +60,11 @@ export const RunTaskInspector = memo<BuiltinInspectorProps<RunTaskParams, RunTas
     const prompt = params.prompt;
 
     return (
-      <div
-        style={{ flexWrap: 'wrap', gap: 4 }}
-        className={cx(
-          inspectorTextStyles.root,
-          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-        )}
-      >
+      <div className={inspectorTextStyles.root} style={{ flexWrap: 'wrap', gap: 4 }}>
         <Icon icon={Play} size={12} style={{ color: cssVar.colorWarning }} />
-        <span>{t('builtins.lobe-task.apiName.runTask')}</span>
+        <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+          {t('builtins.lobe-task.apiName.runTask')}
+        </span>
         {identifier && (
           <span className={styles.identifierChip} style={{ marginInlineStart: 4 }}>
             {identifier}

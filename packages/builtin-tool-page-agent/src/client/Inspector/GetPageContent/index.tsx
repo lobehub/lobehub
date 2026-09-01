@@ -17,13 +17,10 @@ export const GetPageContentInspector = memo<BuiltinInspectorProps>(({ isArgument
   const { t } = useTranslation('plugin');
 
   return (
-    <div
-      className={cx(
-        oneLineEllipsis,
-        isArgumentsStreaming ? shinyTextStyles.shinyText : styles.done,
-      )}
-    >
-      <span>{t('builtins.lobe-page-agent.apiName.getPageContent')}</span>
+    <div className={oneLineEllipsis}>
+      <span className={cx(isArgumentsStreaming ? shinyTextStyles.shinyText : styles.done)}>
+        {t('builtins.lobe-page-agent.apiName.getPageContent')}
+      </span>
     </div>
   );
 });

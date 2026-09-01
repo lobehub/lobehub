@@ -31,17 +31,17 @@ export const CrawlMultiPagesInspector = memo<BuiltinInspectorProps<CrawlMultiPag
 
     if (isArgumentsStreaming && !displayText) {
       return (
-        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-          <span>{t('builtins.lobe-web-browsing.apiName.crawlMultiPages')}</span>
+        <div className={inspectorTextStyles.root}>
+          <span className={shinyTextStyles.shinyText}>
+            {t('builtins.lobe-web-browsing.apiName.crawlMultiPages')}
+          </span>
         </div>
       );
     }
 
     return (
-      <div
-        className={cx(inspectorTextStyles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}
-      >
-        <span>
+      <div className={inspectorTextStyles.root}>
+        <span className={cx(isArgumentsStreaming && shinyTextStyles.shinyText)}>
           {t('builtins.lobe-web-browsing.apiName.crawlMultiPages')}:{'\u00A0'}
         </span>
         {displayText && <span className={highlightTextStyles.gold}>{displayText}</span>}

@@ -3,7 +3,7 @@
 import { type BuiltinInspectorProps } from '@lobechat/types';
 import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { Avatar } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { AlertTriangle } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -69,8 +69,10 @@ export const ActivateToolsInspector = memo<
   // Streaming / Loading: show identifiers from arguments
   if (isArgumentsStreaming || isLoading) {
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-activator.apiName.activateTools')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-activator.apiName.activateTools')}
+        </span>
         {identifiers && identifiers.length > 0 && (
           <span className={styles.tools}>
             {identifiers.map((id) => (
