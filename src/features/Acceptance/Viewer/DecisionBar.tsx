@@ -129,6 +129,9 @@ ProgressRing.displayName = 'AcceptanceProgressRing';
 interface DecisionBarProps {
   /** Checks the user has signed off, of `totalCount` reviewable ones. */
   acceptedCount: number;
+  /** Rendered inside the conversation portal — the composer beside the bar
+      receives the repair draft, so the copy handoff stays standalone-only. */
+  embedded?: boolean;
   /** Active (not-yet-consumed) feedback recorded this round. */
   feedbackCount: number;
   /** Checks removed from the acceptance scope by the reviewer. */
@@ -143,10 +146,16 @@ interface DecisionBarProps {
   onOpenFeedback: () => void;
   /** Open the aggregate reject dialog (comment required). */
   onRejectComment: () => void;
+  /** Start the repair round: embedded, drafts the prompt into the composer
+      beside the bar; standalone, dispatches it to the origin conversation. */
+  onRerun: () => void;
   pending: boolean;
   /** A live round that is a dispatched repair — coloured as an in-progress task
       (warning), not a neutral verify, to match the system's task-process cue. */
   repairing?: boolean;
+  /** The origin conversation is known — the rerun dispatch has a target. */
+  rerunAvailable: boolean;
+  rerunPending: boolean;
   state: BarState;
   /** The state line, prepared by the page (status + counts wording). */
   statusText: string;
@@ -158,13 +167,16 @@ interface DecisionBarProps {
  * The floating decision strip (P-12): review progress, the feedback
  * clearing-list opener, and the closing actions. What the actions are follows
  * the review state — feedback queued for the next round turns the bar into a
- * repair handoff (copy the review prompt);
+ * repair handoff (打回重跑: embedded drafts the prompt into the composer
+ * beside the bar, standalone dispatches to the origin conversation, with copy
+ * as the standalone-only manual fallback);
  * a clean review offers reject-with-comment and accept, with accept gaining
  * primary weight only once every check is signed off.
  */
 const DecisionBar = memo<DecisionBarProps>(
   ({
     acceptedCount,
+    embedded,
     feedbackCount,
     ignoredCount,
     needsFixCount,
@@ -173,8 +185,11 @@ const DecisionBar = memo<DecisionBarProps>(
     onCopyReview,
     onOpenFeedback,
     onRejectComment,
+    onRerun,
     pending,
     repairing,
+    rerunAvailable,
+    rerunPending,
     state,
     statusText,
     subText,
@@ -275,14 +290,11 @@ const DecisionBar = memo<DecisionBarProps>(
 
         <div style={{ flex: 1, minWidth: 8 }} />
 
-        {/* Copy is the universal repair handoff across standalone and embedded views. */}
-        {state === 'live' && hasFeedback && (
-          <Button
-            disabled={pending}
-            style={{ flex: 'none' }}
-            type={'primary'}
-            onClick={onCopyReview}
-          >
+        {/* A dispatched send-back (repairing) keeps the copy entry alive —
+            the reviewer may still hand the prompt to another agent. Embedded,
+            the composer beside it already receives the draft. */}
+        {state === 'live' && hasFeedback && !embedded && (
+          <Button disabled={pending} style={{ flex: 'none' }} type={'fill'} onClick={onCopyReview}>
             {t('acceptance.bar.copyReview')}
           </Button>
         )}
@@ -292,6 +304,16 @@ const DecisionBar = memo<DecisionBarProps>(
             // Feedback is queued — the delivery isn't being accepted now; the
             // bar's job is getting the repair round started.
             <>
+              {!embedded && (
+                <Button
+                  disabled={pending}
+                  style={{ flex: 'none' }}
+                  type={'fill'}
+                  onClick={onCopyReview}
+                >
+                  {t('acceptance.bar.copyReview')}
+                </Button>
+              )}
               {/* Last words before the repair leaves — a global note the next
                   round reads, for what the queued per-check feedback missed. */}
               <Button
@@ -303,14 +325,17 @@ const DecisionBar = memo<DecisionBarProps>(
               >
                 {t('acceptance.bar.addComment')}
               </Button>
-              <Button
-                disabled={pending}
-                style={{ flex: 'none' }}
-                type={'primary'}
-                onClick={onCopyReview}
-              >
-                {t('acceptance.bar.copyReview')}
-              </Button>
+              {rerunAvailable && (
+                <Button
+                  disabled={pending}
+                  loading={rerunPending}
+                  style={{ flex: 'none' }}
+                  type={'primary'}
+                  onClick={onRerun}
+                >
+                  {t('acceptance.bar.rerun')}
+                </Button>
+              )}
             </>
           ) : (
             // Clean review — accept carries primary weight only once every

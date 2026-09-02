@@ -21,16 +21,21 @@ import { useAcceptanceBundle } from './useAcceptanceBundle';
 import { formatAcceptanceCountsText, LIVE_ACCEPTANCE_STATUSES } from './verdict';
 import { canReviewAcceptance } from './visibility';
 
-const AcceptanceDecision = () => {
+interface AcceptanceDecisionProps {
+  onDraftToComposer?: (text: string) => boolean;
+}
+
+const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
   const { t } = useTranslation('verify');
   const hydrated = useIsHydrated();
-  const { acceptanceId } = useAcceptanceScope();
+  const { acceptanceId, embedded } = useAcceptanceScope();
   const { data, mutate } = useAcceptanceBundle(acceptanceId);
   const [pending, setPending] = useState(false);
+  const [rerunPending, setRerunPending] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   if (!data || !canReviewAcceptance(data) || data.acceptance.status === 'closed') return null;
 
-  const { acceptance, checks, rounds } = data;
+  const { acceptance, checks, origin, rounds } = data;
   const currentRound = rounds.at(-1);
   const acceptedCount = checks.filter((check) => checkFilterState(check) === 'accepted').length;
   const needsFixCount = checks.filter((check) => checkFilterState(check) === 'needsFix').length;
@@ -148,11 +153,14 @@ const AcceptanceDecision = () => {
     <>
       <DecisionBar
         acceptedCount={acceptedCount}
+        embedded={embedded}
         feedbackCount={feedbackEntries.filter((entry) => !entry.stale).length}
         ignoredCount={ignoredCount}
         needsFixCount={needsFixCount}
         pending={pending}
         repairing={acceptance.status === 'repairing'}
+        rerunAvailable={embedded || Boolean(origin?.topic)}
+        rerunPending={rerunPending}
         state={barState}
         statusText={barTexts.statusText}
         subText={barTexts.subText}
@@ -195,6 +203,41 @@ const AcceptanceDecision = () => {
               runAction(() => verifyService.rejectDelivery(acceptance.id, comment)),
           })
         }
+        onRerun={async () => {
+          if (embedded) {
+            // The origin conversation's composer sits right beside the portal —
+            // draft the repair prompt into it so the user reviews and sends it.
+            if (onDraftToComposer?.(repairPrompt)) {
+              toast.success({
+                placement: 'bottom',
+                style: { marginBlockEnd: 88 },
+                title: t('acceptance.bar.rerunDrafted'),
+              });
+            }
+            return;
+          }
+          if (!origin?.topic) return;
+          setRerunPending(true);
+          try {
+            await verifyService.dispatchAcceptanceRepair({
+              agentId: origin.agent?.id,
+              content: repairPrompt,
+              topicId: origin.topic.id,
+            });
+            await verifyService.markAcceptanceRepairing(acceptance.id);
+            await mutate();
+            void globalMutate(isAcceptanceListKey);
+            toast.success({
+              placement: 'bottom',
+              style: { marginBlockEnd: 88 },
+              title: t('acceptance.bar.rerunSent'),
+            });
+          } catch (cause) {
+            toast.error(cause instanceof Error ? cause.message : t('acceptance.actionError'));
+          } finally {
+            setRerunPending(false);
+          }
+        }}
       />
       <Flexbox style={{ height: 8 }} />
       <FeedbackDrawer
