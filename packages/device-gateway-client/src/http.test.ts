@@ -59,12 +59,13 @@ describe('GatewayHttpClient', () => {
       );
     });
 
-    it('should return defaults on non-ok response', async () => {
+    it('surfaces a non-ok response instead of reporting nothing online', async () => {
+      // Previously returned `{ deviceCount: 0, online: false }`, which is
+      // indistinguishable from a genuinely empty pool — the caller could not
+      // tell "no devices" from "the gateway never answered".
       mockFetch({ ok: false, status: 500 });
 
-      const result = await client.queryDeviceStatus('user-1');
-
-      expect(result).toEqual({ deviceCount: 0, online: false });
+      await expect(client.queryDeviceStatus('user-1')).rejects.toThrow('responded 500');
     });
 
     it('should handle missing fields in response', async () => {
@@ -94,12 +95,23 @@ describe('GatewayHttpClient', () => {
       expect(result).toEqual(devices);
     });
 
-    it('should return empty array on non-ok response', async () => {
-      mockFetch({ ok: false });
+    it('surfaces a non-ok response instead of reporting an empty pool', async () => {
+      // The empty array used to be returned for a 5xx too, so a gateway blip
+      // became an authoritative "every device is offline" for the run that
+      // asked — which is what silently rerouted device-bound work elsewhere.
+      mockFetch({ ok: false, status: 503 });
 
-      const result = await client.queryDeviceList('user-1');
+      await expect(client.queryDeviceList('user-1')).rejects.toThrow('responded 503');
+    });
 
-      expect(result).toEqual([]);
+    it('bounds the read with a timeout', async () => {
+      mockFetch({ json: vi.fn().mockResolvedValue({ devices: [] }), ok: true });
+
+      await client.queryDeviceList('user-1');
+
+      // `post` applies no deadline unless asked, so an unanswered read would
+      // otherwise hang for as long as the socket stays open.
+      expect(vi.mocked(fetch).mock.calls[0][1]).toMatchObject({ signal: expect.anything() });
     });
 
     it('should return empty array when devices is not an array', async () => {
