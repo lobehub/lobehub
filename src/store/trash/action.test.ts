@@ -73,6 +73,7 @@ describe('TrashAction', () => {
       const filter = filterCall![0] as (key: unknown) => boolean;
       expect(filter(['file:list', 'x', {}])).toBe(true);
       expect(filter(['document:list', true])).toBe(true);
+      expect(filter(['agent:document:list', 'agent-1'])).toBe(true);
       expect(filter(['topic:list', 'x', {}])).toBe(false);
       expect(filter(['agent:list', true])).toBe(false);
       expect(filter(['trash:list', 'all'])).toBe(false);

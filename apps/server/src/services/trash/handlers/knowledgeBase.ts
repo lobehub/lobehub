@@ -32,7 +32,7 @@ export const knowledgeBaseHandler: TrashHandler = {
     const knowledgeBaseModel = new KnowledgeBaseModel(ctx.db, ctx.userId, ctx.workspaceId);
     const exclusiveFileIds = await knowledgeBaseModel.findExclusiveFileIds(root.resourceId);
     if (exclusiveFileIds.length > 0) {
-      await purgeFiles(ctx, exclusiveFileIds);
+      await purgeFiles(ctx, exclusiveFileIds, { root });
     }
     await knowledgeBaseModel.purge([root.resourceId]);
     if (ctx.workspaceId) {

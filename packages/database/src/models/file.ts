@@ -33,6 +33,7 @@ import {
   knowledgeBaseFiles,
   messages,
   messagesFiles,
+  resourcePermissions,
   topics,
   users,
 } from '../schemas';
@@ -61,11 +62,11 @@ export interface SandboxInitFileItem {
 
 interface DeleteManyOptions {
   /**
-   * Runs after the model has identified globally unreferenced objects, but
-   * before any database rows are removed. Throwing keeps every row intact so
-   * an external-storage failure can be retried safely.
+   * Persists database-backed cleanup state in the same transaction as the
+   * hard delete. External side effects must run only after `deleteMany`
+   * resolves, which guarantees the transaction has committed.
    */
-  beforeDeleteGlobalFiles?: (files: FileItem[]) => Promise<void>;
+  beforeCommitGlobalFileDelete?: (trx: Transaction, files: FileItem[]) => Promise<void>;
   /** Only hard-delete rows that are still in the recycle bin. */
   onlyTrashed?: boolean;
   restrictToCreator?: boolean;
@@ -95,6 +96,29 @@ export class FileModel {
       },
       files,
     );
+
+  private deleteMirrorDocuments = async (
+    tx: Transaction,
+    where: ReturnType<typeof and>,
+  ): Promise<void> => {
+    const deletedDocuments = await tx
+      .delete(documents)
+      .where(where)
+      .returning({ id: documents.id });
+
+    if (!this.workspaceId || deletedDocuments.length === 0) return;
+
+    await tx.delete(resourcePermissions).where(
+      and(
+        eq(resourcePermissions.workspaceId, this.workspaceId),
+        eq(resourcePermissions.resourceType, 'document'),
+        inArray(
+          resourcePermissions.resourceId,
+          deletedDocuments.map(({ id }) => id),
+        ),
+      ),
+    );
+  };
 
   softDelete = async (ids: string[], options: SoftDeleteOptions): Promise<FileItem[]> => {
     if (ids.length === 0) return [];
@@ -262,15 +286,14 @@ export class FileModel {
       // 2. Delete mirror documents whose source is this file. Without this,
       // documents.fileId would be set null by FK and leave orphan rows behind
       // (still indexed by BM25, still occupying KB slots).
-      await tx
-        .delete(documents)
-        .where(
-          and(
-            eq(documents.fileId, id),
-            buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents),
-            eq(documents.sourceType, 'file'),
-          ),
-        );
+      await this.deleteMirrorDocuments(
+        tx,
+        and(
+          eq(documents.fileId, id),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents),
+          eq(documents.sourceType, 'file'),
+        ),
+      );
 
       // 3. Delete the chunk/embedding asyncTasks tied to this file. files.chunkTaskId
       // and embeddingTaskId are `set null` on the asyncTasks side, so without this
@@ -385,9 +408,8 @@ export class FileModel {
       const hashList = fileList.map((file) => file.fileHash!).filter(Boolean);
 
       // Determine which backing objects become unreferenced before deleting
-      // any rows. Trash purge uses the callback to remove those objects first;
-      // a transient storage failure then leaves the URL and all DB relations
-      // available for the next retry.
+      // any rows. Trash purge uses the callback only to persist durable retry
+      // state; external storage deletion starts after this transaction commits.
       let globallyUnreferencedFiles: FileItem[] = [];
       if (removeGlobalFile && hashList.length > 0) {
         const remainingFiles = await trx
@@ -399,9 +421,8 @@ export class FileModel {
         globallyUnreferencedFiles = fileList.filter(
           (file) => file.fileHash && hashesToDelete.has(file.fileHash),
         );
-        if (globallyUnreferencedFiles.length > 0) {
-          await options?.beforeDeleteGlobalFiles?.(globallyUnreferencedFiles);
-        }
+        if (globallyUnreferencedFiles.length > 0)
+          await options?.beforeCommitGlobalFileDelete?.(trx, globallyUnreferencedFiles);
       }
 
       // 2. Delete related chunks
@@ -409,7 +430,8 @@ export class FileModel {
 
       // 3. Delete mirror documents (sourceType='file') so they don't linger as
       // orphans with fileId set to null after the file row is removed.
-      await trx.delete(documents).where(
+      await this.deleteMirrorDocuments(
+        trx,
         and(
           inArray(documents.fileId, targetIds),
           buildWorkspaceWhere(

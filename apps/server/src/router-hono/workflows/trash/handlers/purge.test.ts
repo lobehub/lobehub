@@ -28,19 +28,25 @@ describe('trash purge workflow handler', () => {
   it('processes one bounded batch and queues the next batch', async () => {
     vi.mocked(TrashService.sweepExpired).mockResolvedValue({
       failed: 1,
+      nextCursor: { expiresAt: '2026-09-01T00:00:00.000Z', id: 'root-25' },
       pruned: 0,
       purged: 24,
       scanned: 25,
     });
 
     await expect(purge(context())).resolves.toMatchObject({ continued: true, success: true });
-    expect(TrashService.sweepExpired).toHaveBeenCalledWith({}, { limit: 25 });
-    expect(triggerTrashPurge).toHaveBeenCalledWith({ limit: 25, remainingBatches: 7 });
+    expect(TrashService.sweepExpired).toHaveBeenCalledWith({}, { cursor: undefined, limit: 25 });
+    expect(triggerTrashPurge).toHaveBeenCalledWith({
+      cursor: { expiresAt: '2026-09-01T00:00:00.000Z', id: 'root-25' },
+      limit: 25,
+      remainingBatches: 7,
+    });
   });
 
   it('stops the chain when a partial batch drains the queue', async () => {
     vi.mocked(TrashService.sweepExpired).mockResolvedValue({
       failed: 1,
+      nextCursor: { expiresAt: '2026-09-01T00:00:00.000Z', id: 'root-3' },
       pruned: 0,
       purged: 2,
       scanned: 3,
@@ -50,7 +56,39 @@ describe('trash purge workflow handler', () => {
       continued: false,
       success: true,
     });
-    expect(TrashService.sweepExpired).toHaveBeenCalledWith({}, { limit: 50 });
+    expect(TrashService.sweepExpired).toHaveBeenCalledWith({}, { cursor: undefined, limit: 50 });
     expect(triggerTrashPurge).not.toHaveBeenCalled();
+  });
+
+  it('preserves the cursor in a delayed continuation when the burst budget rolls over', async () => {
+    const nextCursor = { expiresAt: '2026-09-01T00:00:00.000Z', id: 'root-50' };
+    vi.mocked(TrashService.sweepExpired).mockResolvedValue({
+      failed: 50,
+      nextCursor,
+      pruned: 0,
+      purged: 0,
+      scanned: 50,
+    });
+
+    await expect(
+      purge(
+        context({
+          cursor: { expiresAt: '2026-08-31T00:00:00.000Z', id: 'root-0' },
+          limit: 50,
+          remainingBatches: 1,
+        }),
+      ),
+    ).resolves.toMatchObject({ continued: true, success: true });
+    expect(TrashService.sweepExpired).toHaveBeenCalledWith(
+      {},
+      {
+        cursor: { expiresAt: '2026-08-31T00:00:00.000Z', id: 'root-0' },
+        limit: 50,
+      },
+    );
+    expect(triggerTrashPurge).toHaveBeenCalledWith(
+      { cursor: nextCursor, limit: 50, remainingBatches: 8 },
+      { delay: 60 },
+    );
   });
 });

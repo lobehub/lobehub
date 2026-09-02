@@ -46,6 +46,11 @@ export interface TrashRegisterParams {
   root: TrashRegisterEntry;
 }
 
+export interface TrashExpiredCursor {
+  expiresAt: Date;
+  id: string;
+}
+
 /**
  * Source tables for the "does the resource still exist" checks. Purge relies
  * on FK cascades for children, so a root's registry row can be orphaned only
@@ -462,22 +467,58 @@ export class TrashModel {
    */
   static listExpiredRoots = async (
     db: LobeChatDatabase,
-    params: { limit: number; now?: Date },
+    params: { cursor?: TrashExpiredCursor; limit: number; now?: Date },
   ): Promise<TrashItemRow[]> => {
     const now = params.now ?? new Date();
     return db
       .select()
       .from(trashItems)
-      .where(and(isNull(trashItems.rootId), lte(trashItems.expiresAt, now)))
+      .where(
+        and(
+          isNull(trashItems.rootId),
+          lte(trashItems.expiresAt, now),
+          params.cursor
+            ? or(
+                gt(trashItems.expiresAt, params.cursor.expiresAt),
+                and(
+                  eq(trashItems.expiresAt, params.cursor.expiresAt),
+                  gt(trashItems.id, params.cursor.id),
+                ),
+              )
+            : undefined,
+        ),
+      )
       .orderBy(asc(trashItems.expiresAt), asc(trashItems.id))
       .limit(params.limit);
+  };
+
+  static markStorageCleanupPending = async (
+    trx: Transaction,
+    rootId: string,
+    storageFiles: { fileHash: string; url: string }[],
+  ): Promise<void> => {
+    if (storageFiles.length === 0) return;
+
+    const storageCleanup: NonNullable<TrashItemMeta['storageCleanup']> = {
+      files: storageFiles,
+      pending: true,
+    };
+    const updated = await trx
+      .update(trashItems)
+      .set({
+        meta: sql<TrashItemMeta>`jsonb_set(COALESCE(${trashItems.meta}, '{}'::jsonb), '{storageCleanup}', ${JSON.stringify(storageCleanup)}::jsonb, true)`,
+      })
+      .where(and(eq(trashItems.id, rootId), isNull(trashItems.rootId)))
+      .returning({ id: trashItems.id });
+    if (updated.length === 0) throw new Error(`Trash root not found: ${rootId}`);
   };
 
   /**
    * Drop root registry rows whose resource no longer exists (hard-deleted
    * through a non-trash path — a user purge, an FK cascade from a parent that
    * was itself purged, …) or is no longer stamped (restored through a
-   * non-trash path). Returns how many were pruned.
+   * non-trash path). Roots carrying pending storage cleanup remain as the
+   * durable retry record. Returns how many were pruned.
    */
   static pruneOrphans = async (db: LobeChatDatabase): Promise<number> => {
     let pruned = 0;
@@ -491,6 +532,7 @@ export class TrashModel {
           and(
             eq(trashItems.resourceType, resourceType),
             isNull(trashItems.rootId),
+            sql`COALESCE(${trashItems.meta}->'storageCleanup'->>'pending', 'false') <> 'true'`,
             sql`NOT EXISTS (SELECT 1 FROM ${source.table} WHERE ${source.id} = ${trashItems.resourceId} AND ${source.isDeleted} = true)`,
           ),
         )

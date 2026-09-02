@@ -292,8 +292,10 @@ describe('useFileStore:chat', () => {
   });
 
   describe('removeChatUploadFile', () => {
-    it('deletes the underlying file for a normal uploaded item', async () => {
-      const removeFile = vi.spyOn(fileService, 'removeFile').mockResolvedValue(undefined);
+    it('deletes an unreferenced transient upload for a normal uploaded item', async () => {
+      const removeFile = vi
+        .spyOn(fileService, 'removeUnreferencedFile')
+        .mockResolvedValue(undefined);
       const { result } = renderHook(() => useStore());
 
       act(() => {
@@ -309,7 +311,9 @@ describe('useFileStore:chat', () => {
     });
 
     it('skips file deletion for a restored item (skipRemoveFile)', async () => {
-      const removeFile = vi.spyOn(fileService, 'removeFile').mockResolvedValue(undefined);
+      const removeFile = vi
+        .spyOn(fileService, 'removeUnreferencedFile')
+        .mockResolvedValue(undefined);
       const { result } = renderHook(() => useStore());
 
       act(() => {

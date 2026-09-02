@@ -337,6 +337,29 @@ describe('TrashModel', () => {
       expect(due.map((r) => r.resourceId)).toEqual(['file_older', 'file_expired']);
     });
 
+    it('listExpiredRoots advances by expiresAt and id when timestamps are equal', async () => {
+      const deletedAt = at('2026-07-01T00:00:00Z');
+      const now = at('2026-09-15T00:00:00Z');
+      await Promise.all(
+        ['file_equal_a', 'file_equal_b', 'file_equal_c'].map((resourceId) =>
+          model.register({
+            deletedAt,
+            root: { resourceId, resourceType: 'file' },
+          }),
+        ),
+      );
+
+      const all = await TrashModel.listExpiredRoots(serverDB, { limit: 10, now });
+      const first = all[0];
+      const rest = await TrashModel.listExpiredRoots(serverDB, {
+        cursor: { expiresAt: first.expiresAt, id: first.id },
+        limit: 10,
+        now,
+      });
+
+      expect(rest.map(({ id }) => id)).toEqual(all.slice(1).map(({ id }) => id));
+    });
+
     it('pruneOrphans drops registry rows whose resource is gone or no longer stamped', async () => {
       const deletedAt = at('2026-08-01T00:00:00Z');
       await serverDB.insert(files).values([
@@ -371,11 +394,27 @@ describe('TrashModel', () => {
         deletedAt,
         root: { resourceId: 'file_gone', resourceType: 'file' },
       });
+      await model.register({
+        deletedAt,
+        root: {
+          meta: {
+            storageCleanup: {
+              files: [{ fileHash: 'pending-hash', url: 'files/pending.txt' }],
+              pending: true,
+            },
+          },
+          resourceId: 'file_pending_cleanup',
+          resourceType: 'file',
+        },
+      });
 
       const pruned = await TrashModel.pruneOrphans(serverDB);
       expect(pruned).toBe(2);
       const left = await serverDB.select().from(trashItems).where(eq(trashItems.userId, userId));
-      expect(left.map((r) => r.resourceId)).toEqual(['file_stamped']);
+      expect(left.map((r) => r.resourceId).sort()).toEqual([
+        'file_pending_cleanup',
+        'file_stamped',
+      ]);
     });
   });
 });

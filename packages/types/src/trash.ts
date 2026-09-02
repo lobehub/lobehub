@@ -33,6 +33,15 @@ export interface TrashItemMeta {
   /** Original folder parent, retained for audit and restore context. */
   parentId?: string | null;
   size?: number | null;
+  /**
+   * Durable hand-off for backing objects that must be removed after the
+   * database purge commits. Kept on the root registry row so a failed storage
+   * request can be retried after the source file rows are already gone.
+   */
+  storageCleanup?: {
+    files: { fileHash: string; url: string }[];
+    pending: true;
+  };
   /** Visibility snapshot used to keep private resources out of teammates' bins. */
   visibility?: 'private' | 'public' | null;
 }

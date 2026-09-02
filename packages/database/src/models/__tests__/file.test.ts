@@ -17,6 +17,7 @@ import {
   knowledgeBases,
   messages,
   messagesFiles,
+  resourcePermissions,
   sessions,
   topics,
   users,
@@ -229,6 +230,54 @@ describe('FileModel', () => {
         where: eq(documents.userId, userId),
       });
       expect(remainingDocs).toHaveLength(0);
+    });
+
+    it('removes ACL rows for a mirror document deleted with a workspace file', async () => {
+      const workspaceId = 'file-delete-acl-workspace';
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Delete ACL',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      const workspaceFileModel = new FileModel(serverDB, userId, workspaceId);
+      const file = await workspaceFileModel.create({
+        fileType: 'application/pdf',
+        name: 'delete-acl.pdf',
+        size: 100,
+        url: 'https://example.com/delete-acl.pdf',
+        visibility: 'public',
+      });
+      const [document] = await serverDB
+        .insert(documents)
+        .values({
+          fileId: file.id,
+          fileType: 'application/pdf',
+          source: 'delete-acl.pdf',
+          sourceType: 'file',
+          totalCharCount: 0,
+          totalLineCount: 0,
+          userId,
+          visibility: 'public',
+          workspaceId,
+        })
+        .returning();
+      await serverDB.insert(resourcePermissions).values({
+        accessLevel: 'edit',
+        createdBy: userId,
+        resourceId: document.id,
+        resourceType: 'document',
+        workspaceId,
+      });
+
+      await workspaceFileModel.delete(file.id);
+
+      expect(
+        await serverDB
+          .select()
+          .from(resourcePermissions)
+          .where(eq(resourcePermissions.resourceId, document.id)),
+      ).toEqual([]);
     });
 
     it('should NOT delete non-mirror documents, only null out their fileId', async () => {
@@ -524,7 +573,7 @@ describe('FileModel', () => {
       expect(exclusiveGlobalFile).toBeUndefined();
     });
 
-    it('keeps database rows intact when deleting an unreferenced storage object fails', async () => {
+    it('keeps database rows intact when persisting cleanup state fails', async () => {
       await fileModel.createGlobalFile({
         creator: userId,
         fileType: 'text/plain',
@@ -539,13 +588,15 @@ describe('FileModel', () => {
         size: 100,
         url: 'https://example.com/retryable.txt',
       });
-      const deleteStorage = vi.fn().mockRejectedValue(new Error('storage unavailable'));
+      const persistCleanup = vi.fn().mockRejectedValue(new Error('registry unavailable'));
 
       await expect(
-        fileModel.deleteMany([file.id], true, { beforeDeleteGlobalFiles: deleteStorage }),
-      ).rejects.toThrow('storage unavailable');
+        fileModel.deleteMany([file.id], true, {
+          beforeCommitGlobalFileDelete: persistCleanup,
+        }),
+      ).rejects.toThrow('registry unavailable');
 
-      expect(deleteStorage).toHaveBeenCalledWith([
+      expect(persistCleanup).toHaveBeenCalledWith(expect.anything(), [
         expect.objectContaining({ id: file.id, url: 'https://example.com/retryable.txt' }),
       ]);
       expect(await serverDB.query.files.findFirst({ where: eq(files.id, file.id) })).toBeDefined();
@@ -632,6 +683,54 @@ describe('FileModel', () => {
       });
       expect(remainingDocs).toHaveLength(0);
       expect(remainingTasks).toHaveLength(0);
+    });
+
+    it('removes ACL rows for mirror documents deleted with a workspace file batch', async () => {
+      const workspaceId = 'file-batch-acl-workspace';
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Batch ACL',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      const workspaceFileModel = new FileModel(serverDB, userId, workspaceId);
+      const file = await workspaceFileModel.create({
+        fileType: 'application/pdf',
+        name: 'batch-acl.pdf',
+        size: 100,
+        url: 'https://example.com/batch-acl.pdf',
+        visibility: 'public',
+      });
+      const [document] = await serverDB
+        .insert(documents)
+        .values({
+          fileId: file.id,
+          fileType: 'application/pdf',
+          source: 'batch-acl.pdf',
+          sourceType: 'file',
+          totalCharCount: 0,
+          totalLineCount: 0,
+          userId,
+          visibility: 'public',
+          workspaceId,
+        })
+        .returning();
+      await serverDB.insert(resourcePermissions).values({
+        accessLevel: 'edit',
+        createdBy: userId,
+        resourceId: document.id,
+        resourceType: 'document',
+        workspaceId,
+      });
+
+      await workspaceFileModel.deleteMany([file.id]);
+
+      expect(
+        await serverDB
+          .select()
+          .from(resourcePermissions)
+          .where(eq(resourcePermissions.resourceId, document.id)),
+      ).toEqual([]);
     });
   });
 

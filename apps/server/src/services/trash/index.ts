@@ -66,12 +66,19 @@ export interface TrashEmptyOutcome {
 export interface TrashSweepOutcome {
   /** Roots that threw during purge — left in place for the next tick. */
   failed: number;
+  /** Last attempted root, used to advance past failures in the next batch. */
+  nextCursor: TrashSweepCursor | null;
   /** Registry rows dropped because their resource was already gone. */
   pruned: number;
   /** Roots hard-deleted this tick. */
   purged: number;
   /** Roots attempted by this bounded sweep invocation. */
   scanned: number;
+}
+
+export interface TrashSweepCursor {
+  expiresAt: string;
+  id: string;
 }
 
 /**
@@ -445,14 +452,30 @@ export class TrashService {
    */
   static sweepExpired = async (
     db: LobeChatDatabase,
-    options?: { limit?: number; now?: Date },
+    options?: { cursor?: TrashSweepCursor; limit?: number; now?: Date },
   ): Promise<TrashSweepOutcome> => {
-    const outcome: TrashSweepOutcome = { failed: 0, pruned: 0, purged: 0, scanned: 0 };
+    const cursorDate = options?.cursor ? new Date(options.cursor.expiresAt) : undefined;
+    const cursor =
+      options?.cursor && cursorDate && !Number.isNaN(cursorDate.getTime())
+        ? { expiresAt: cursorDate, id: options.cursor.id }
+        : undefined;
+    const outcome: TrashSweepOutcome = {
+      failed: 0,
+      nextCursor: null,
+      pruned: 0,
+      purged: 0,
+      scanned: 0,
+    };
     const roots = await TrashModel.listExpiredRoots(db, {
+      cursor,
       limit: options?.limit ?? TRASH_PURGE_BATCH_SIZE,
       now: options?.now,
     });
     outcome.scanned = roots.length;
+    const lastRoot = roots.at(-1);
+    outcome.nextCursor = lastRoot
+      ? { expiresAt: lastRoot.expiresAt.toISOString(), id: lastRoot.id }
+      : null;
 
     for (const root of roots) {
       const service = new TrashService(db, root.userId, root.workspaceId ?? undefined);

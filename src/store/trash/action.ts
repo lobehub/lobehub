@@ -23,6 +23,7 @@ const getTrashService = async () => (await import('@/services/trash')).trashServ
 
 /** SWR key roots whose lists can regain rows after a restore. */
 const RESTORE_AFFECTED_KEY_PREFIXES = [
+  'agent:document',
   'document:',
   'file:',
   'home:',

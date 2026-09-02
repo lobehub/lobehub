@@ -22,7 +22,7 @@ export class TTSFileActionImpl {
   }
 
   removeTTSFile = async (id: string): Promise<void> => {
-    await fileService.removeFile(id);
+    await fileService.removeUnreferencedFile(id);
   };
 
   uploadTTSByArrayBuffers = async (

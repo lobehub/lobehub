@@ -31,26 +31,22 @@ beforeEach(() => {
 
 describe('TTSFileAction', () => {
   // Test for removeTTSFile
-  it('removeTTSFile should call fileService.removeFile', async () => {
+  it('removeTTSFile should remove only an unreferenced transient file', async () => {
     const fileId = 'tts-file-id';
 
-    // Mock the fileService.removeFile to resolve
-    vi.spyOn(fileService, 'removeFile').mockResolvedValue(undefined);
+    vi.spyOn(fileService, 'removeUnreferencedFile').mockResolvedValue(undefined);
 
     await act(async () => {
       await useStore.getState().removeTTSFile(fileId);
     });
 
-    expect(fileService.removeFile).toHaveBeenCalledWith(fileId);
+    expect(fileService.removeUnreferencedFile).toHaveBeenCalledWith(fileId);
   });
 
   // Test for uploadTTSByArrayBuffers
   it('uploadTTSByArrayBuffers should create a file and call uploadTTSFile', async () => {
     const messageId = 'message-id';
     const arrayBuffers = [new ArrayBuffer(10)];
-    const fileType = 'audio/mp3';
-    const fileName = `${messageId}.mp3`;
-
     // Spy on uploadTTSFile to simulate a successful upload
     const uploadTTSFileSpy = vi
       .spyOn(useStore.getState(), 'uploadWithProgress')

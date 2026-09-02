@@ -12,6 +12,7 @@ import {
   files,
   knowledgeBaseFiles,
   knowledgeBases,
+  resourcePermissions,
   trashItems,
   users,
   workspaceAuditLogs,
@@ -405,6 +406,60 @@ describe('TrashService', () => {
       expect(await serverDB.select().from(files).where(eq(files.id, fileId))).toHaveLength(0);
     });
 
+    it('removes mirror-document ACL rows when purging a workspace knowledge base', async () => {
+      const workspaceId = 'trash-kb-mirror-acl-workspace';
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'KB mirror ACL',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      const workspaceKnowledgeBaseModel = new KnowledgeBaseModel(serverDB, userId, workspaceId);
+      const workspaceFileModel = new FileModel(serverDB, userId, workspaceId);
+      const workspaceService = new TrashService(serverDB, userId, workspaceId);
+      const knowledgeBase = await workspaceKnowledgeBaseModel.create({ name: 'Shared library' });
+      const file = await workspaceFileModel.create({
+        fileType: 'application/pdf',
+        knowledgeBaseId: knowledgeBase.id,
+        name: 'source.pdf',
+        size: 9,
+        url: 'files/source.pdf',
+        visibility: 'public',
+      });
+      const [mirror] = await serverDB
+        .insert(documents)
+        .values({
+          fileId: file.id,
+          fileType: 'application/pdf',
+          knowledgeBaseId: knowledgeBase.id,
+          source: 'source.pdf',
+          sourceType: 'file',
+          totalCharCount: 0,
+          totalLineCount: 0,
+          userId,
+          visibility: 'public',
+          workspaceId,
+        })
+        .returning();
+      await serverDB.insert(resourcePermissions).values({
+        accessLevel: 'edit',
+        createdBy: userId,
+        resourceId: mirror.id,
+        resourceType: 'document',
+        workspaceId,
+      });
+
+      const [root] = await workspaceService.trashKnowledgeBases([knowledgeBase.id]);
+      await workspaceService.purge([root.id]);
+
+      expect(
+        await serverDB
+          .select()
+          .from(resourcePermissions)
+          .where(eq(resourcePermissions.resourceId, mirror.id)),
+      ).toEqual([]);
+    });
+
     it('refuses to restore a child document while its parent folder is still trashed', async () => {
       const folder = await documentModel.create({
         fileType: 'custom/folder',
@@ -552,7 +607,7 @@ describe('TrashService', () => {
       ).toEqual([]);
     });
 
-    it('keeps a trashed file and its registry entry when storage deletion fails', async () => {
+    it('retries storage cleanup from the registry after the database purge commits', async () => {
       await fileModel.createGlobalFile({
         creator: userId,
         fileType: 'text/plain',
@@ -575,10 +630,16 @@ describe('TrashService', () => {
         purged: 0,
         purgedIds: [],
       });
-      expect(await serverDB.select().from(files).where(eq(files.id, fileId))).toHaveLength(1);
-      expect(
-        await serverDB.select().from(trashItems).where(eq(trashItems.id, root.id)),
-      ).toHaveLength(1);
+      expect(await serverDB.select().from(files).where(eq(files.id, fileId))).toHaveLength(0);
+      const [retryRoot] = await serverDB
+        .select()
+        .from(trashItems)
+        .where(eq(trashItems.id, root.id));
+      expect(retryRoot.meta?.storageCleanup).toEqual({
+        files: [{ fileHash: 'trash-retryable-hash', url: 'files/retryable.txt' }],
+        pending: true,
+      });
+      expect(await TrashModel.pruneOrphans(serverDB)).toBe(0);
 
       expect(await service.purge([root.id])).toEqual({
         failed: [],
@@ -587,6 +648,35 @@ describe('TrashService', () => {
       });
       expect(await serverDB.select().from(files).where(eq(files.id, fileId))).toHaveLength(0);
       expect(fileServiceMocks.deleteFiles).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not start storage cleanup when the database purge rejects', async () => {
+      await fileModel.createGlobalFile({
+        creator: userId,
+        fileType: 'text/plain',
+        hashId: 'db-failure-hash',
+        size: 3,
+        url: 'files/db-failure.txt',
+      });
+      const file = await fileModel.create({
+        fileHash: 'db-failure-hash',
+        fileType: 'text/plain',
+        name: 'db-failure.txt',
+        size: 3,
+        url: 'files/db-failure.txt',
+      });
+      const [root] = await service.trashFiles([file.id]);
+      vi.spyOn(TrashModel, 'markStorageCleanupPending').mockRejectedValueOnce(
+        new Error('transaction commit failed'),
+      );
+
+      expect(await service.purge([root.id])).toEqual({
+        failed: [{ code: 'purgeFailed', id: root.id }],
+        purged: 0,
+        purgedIds: [],
+      });
+      expect(fileServiceMocks.deleteFiles).not.toHaveBeenCalled();
+      expect(await serverDB.select().from(files).where(eq(files.id, file.id))).toHaveLength(1);
     });
   });
 
@@ -633,11 +723,66 @@ describe('TrashService', () => {
       });
 
       const outcome = await TrashService.sweepExpired(serverDB);
-      expect(outcome).toEqual({ failed: 0, pruned: 1, purged: 2, scanned: 2 });
+      expect(outcome).toEqual({
+        failed: 0,
+        nextCursor: expect.objectContaining({ id: expect.any(String) }),
+        pruned: 1,
+        purged: 2,
+        scanned: 2,
+      });
       expect(await serverDB.select().from(files).where(eq(files.id, mine.id))).toHaveLength(0);
       expect(await serverDB.select().from(files).where(eq(files.id, theirs.id))).toHaveLength(0);
       expect(await serverDB.select().from(files).where(eq(files.id, fresh.id))).toHaveLength(1);
       expect((await service.list()).items.map((i) => i.resourceId)).toEqual([fresh.id]);
+    });
+
+    it('advances beyond a fully failing batch so later expired roots are still purged', async () => {
+      const roots: { id: string }[] = [];
+      for (const index of [0, 1]) {
+        const hash = `failing-hash-${index}`;
+        await fileModel.createGlobalFile({
+          creator: userId,
+          fileType: 'text/plain',
+          hashId: hash,
+          size: 1,
+          url: `files/failing-${index}.txt`,
+        });
+        const file = await fileModel.create({
+          fileHash: hash,
+          fileType: 'text/plain',
+          name: `failing-${index}.txt`,
+          size: 1,
+          url: `files/failing-${index}.txt`,
+        });
+        roots.push((await service.trashFiles([file.id]))[0]);
+      }
+      const laterFile = await fileModel.create({
+        fileType: 'text/plain',
+        name: 'later.txt',
+        size: 1,
+        url: 'files/later.txt',
+      });
+      const [laterRoot] = await service.trashFiles([laterFile.id]);
+      const now = new Date();
+      for (const [index, root] of [...roots, laterRoot].entries()) {
+        await serverDB
+          .update(trashItems)
+          .set({ expiresAt: new Date(now.getTime() - (3 - index) * 1000) })
+          .where(eq(trashItems.id, root.id));
+      }
+      fileServiceMocks.deleteFiles.mockRejectedValue(new Error('storage unavailable'));
+
+      const first = await TrashService.sweepExpired(serverDB, { limit: 2, now });
+      expect(first).toMatchObject({ failed: 2, purged: 0, scanned: 2 });
+      expect(first.nextCursor).not.toBeNull();
+
+      const second = await TrashService.sweepExpired(serverDB, {
+        cursor: first.nextCursor!,
+        limit: 2,
+        now,
+      });
+      expect(second).toMatchObject({ failed: 0, purged: 1, scanned: 1 });
+      expect(await serverDB.select().from(files).where(eq(files.id, laterFile.id))).toEqual([]);
     });
 
     it('emptyTrash atomically queues everything in scope for the bounded sweep', async () => {
@@ -662,6 +807,7 @@ describe('TrashService', () => {
 
       expect(await TrashService.sweepExpired(serverDB)).toEqual({
         failed: 0,
+        nextCursor: expect.objectContaining({ id: expect.any(String) }),
         pruned: 0,
         purged: 2,
         scanned: 2,
