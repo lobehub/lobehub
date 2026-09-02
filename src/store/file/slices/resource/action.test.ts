@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { initialState } from '@/store/file/initialState';
 import { useFileStore } from '@/store/file/store';
-import type { ResourceItem } from '@/types/resource';
+import type { CreateDocumentParams, ResourceItem } from '@/types/resource';
 
 const { mockCreateResource, mockMoveResource } = vi.hoisted(() => ({
   mockCreateResource: vi.fn(),
@@ -143,12 +143,12 @@ describe('resource actions', () => {
 });
 
 describe('createResourceAndSync list placement', () => {
-  const createParams = (parentId: string | null | undefined) => ({
+  const createParams = (parentId: string | null | undefined): CreateDocumentParams => ({
     content: '',
     fileType: 'custom/document',
     knowledgeBaseId: 'kb-1',
     parentId: parentId ?? undefined,
-    sourceType: 'document' as const,
+    sourceType: 'document',
     title: 'Untitled',
   });
 
