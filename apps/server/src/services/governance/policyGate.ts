@@ -13,6 +13,25 @@ import type {
 const log = debug('lobe-server:governance:policy-gate');
 
 /**
+ * The tool-result message shown to the model when `checkCommand` denies a
+ * command. Every chokepoint that surfaces a `COMMAND_BLOCKED` result
+ * (`toolExecution/builtin.ts`, `sandbox/service.ts`) must use this exact
+ * string rather than writing its own — a model that sees a bare "this was
+ * blocked" has been observed retrying the same command, or a slightly
+ * reworded one, believing a different phrasing might get through. The
+ * message is deliberately explicit about stopping rather than trusting the
+ * model to infer it: it is not a transient failure to work around, it is a
+ * standing policy decision that will deny the same command (and any
+ * equivalent) again.
+ */
+export const COMMAND_BLOCKED_MESSAGE =
+  'This command was blocked by an administrator-configured command governance rule for this ' +
+  'user. This is a policy decision, not a transient error — retrying the same command, a ' +
+  'reworded version of it, or an alternative command that achieves the same effect will be ' +
+  'blocked again. Do not attempt this action again in any form. Stop this line of action now ' +
+  "and tell the user the command was blocked by their administrator's policy.";
+
+/**
  * Master switch. Every governance code path (the `builtin.ts` chokepoint AND
  * the `/api/governance/check` + `/api/governance/log` HTTP handlers) must
  * call this FIRST and short-circuit on `false` — the product requirement is

@@ -10,7 +10,8 @@ vi.mock('../rulesRepository', () => ({
   listEnabledRulesForTarget: mocks.listEnabledRulesForTarget,
 }));
 
-const { checkCommand, isGovernanceEnabled } = await import('../policyGate');
+const { checkCommand, COMMAND_BLOCKED_MESSAGE, isGovernanceEnabled } =
+  await import('../policyGate');
 
 const baseCtx = {
   apiName: 'runCommand',
@@ -140,6 +141,21 @@ describe('policyGate', () => {
       expect(consoleErrorSpy).toHaveBeenCalled();
 
       consoleErrorSpy.mockRestore();
+    });
+  });
+
+  describe('COMMAND_BLOCKED_MESSAGE', () => {
+    // Both chokepoints (`toolExecution/builtin.ts`, `sandbox/service.ts`) surface
+    // this exact string as the tool result when a command is denied. A model
+    // that sees only "this was blocked" has been observed retrying the same
+    // command, or a reworded one — the message must explicitly rule that out
+    // rather than leave it to the model to infer.
+    it('explicitly tells the model to stop and never retry', () => {
+      const message = COMMAND_BLOCKED_MESSAGE.toLowerCase();
+
+      expect(message).toContain('do not attempt this action again');
+      expect(message).toContain('blocked again');
+      expect(message).toContain('stop this line of action');
     });
   });
 });

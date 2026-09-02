@@ -10,6 +10,7 @@ import { sha256 } from 'js-sha256';
 import { FileModel } from '@/database/models/file';
 import {
   checkCommand,
+  COMMAND_BLOCKED_MESSAGE,
   type CommandGovernanceContext,
   logCommandExecution,
 } from '@/server/services/governance';
@@ -98,8 +99,7 @@ export class SandboxMiddlewareService implements SandboxService {
 
       return {
         error: {
-          message:
-            'This command was blocked by a command governance rule set by your administrator.',
+          message: COMMAND_BLOCKED_MESSAGE,
           name: 'COMMAND_BLOCKED',
         },
         result: null,

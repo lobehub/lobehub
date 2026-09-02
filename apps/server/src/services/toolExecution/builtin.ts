@@ -15,6 +15,7 @@ import { UserModel } from '@/database/models/user';
 import { ComposioService } from '@/server/services/composio';
 import {
   checkCommand,
+  COMMAND_BLOCKED_MESSAGE,
   type CommandExecutionTarget,
   type CommandGovernanceContext,
   logCommandExecution,
@@ -329,11 +330,9 @@ export class BuiltinToolsExecutor implements IToolExecutor {
           log('Failed to record blocked-command audit log: %O', auditError);
         }
 
-        const message =
-          'This command was blocked by a command governance rule set by your administrator.';
         return {
-          content: message,
-          error: { code: 'COMMAND_BLOCKED', message },
+          content: COMMAND_BLOCKED_MESSAGE,
+          error: { code: 'COMMAND_BLOCKED', message: COMMAND_BLOCKED_MESSAGE },
           success: false,
         };
       }

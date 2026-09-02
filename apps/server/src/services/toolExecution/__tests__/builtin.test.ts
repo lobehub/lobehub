@@ -32,6 +32,8 @@ vi.mock('@/server/services/market', () => ({
 // `services/governance/__tests__/policyGate.test.ts`.
 vi.mock('@/server/services/governance', () => ({
   checkCommand: mocks.checkCommand,
+  COMMAND_BLOCKED_MESSAGE:
+    'This command was blocked by an administrator-configured command governance rule for this user. Do not attempt this action again in any form.',
   logCommandExecution: mocks.logCommandExecution,
 }));
 
