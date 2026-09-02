@@ -1,4 +1,5 @@
 // @vitest-environment node
+import type * as BusinessConst from '@lobechat/business-const';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as MessageModelModule from '@/database/models/message';
@@ -6,6 +7,42 @@ import { createContextInner } from '@/libs/trpc/lambda/context';
 
 vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: vi.fn(() => ({})),
+}));
+
+// Pin the cloud-only capability open so the visitor procedures under test are
+// reachable: ENABLE_BUSINESS_FEATURES is false in OSS builds, and the
+// shareChatProcedure middleware (`_helpers/agentShareFeatureGate.ts`) would
+// otherwise reject everything with FORBIDDEN before reaching any of the
+// behavior these tests exercise. The "gate itself" is covered separately by
+// `_helpers/__tests__/agentShareFeatureGate.test.ts` and the dedicated
+// "visitor capability" describe block below.
+const mocks = vi.hoisted(() => ({
+  businessConst: { ENABLE_BUSINESS_FEATURES: true },
+}));
+vi.mock('@lobechat/business-const', async () => {
+  const actual = await vi.importActual<typeof BusinessConst>('@lobechat/business-const');
+  return {
+    ...actual,
+    // `packages/utils/src/apiKey.ts` reads this dynamically (`import * as
+    // businessConst`), pulled in transitively via the unmocked
+    // `createContextInner` -> `ApiKeyModel` chain below. `actual` here
+    // resolves to the cloud override, which omits this key entirely (see
+    // that file's own doc comment), so vitest's mock-export validation has
+    // no own property to find unless it is listed explicitly.
+    API_KEY_PREFIX: (actual as Record<string, unknown>).API_KEY_PREFIX,
+    // A getter (not a static spread) so per-test mutation of
+    // `mocks.businessConst.ENABLE_BUSINESS_FEATURES` is observed by every
+    // subsequent read, including inside the already-imported gate helper.
+    get ENABLE_BUSINESS_FEATURES() {
+      return mocks.businessConst.ENABLE_BUSINESS_FEATURES;
+    },
+  };
+});
+
+const mockGetFeatureFlagsState = vi.fn();
+vi.mock('@/server/featureFlags', () => ({
+  getServerFeatureFlagsStateFromRuntimeConfig: (...args: unknown[]) =>
+    mockGetFeatureFlagsState(...args),
 }));
 
 const mockAccessCheck = vi.fn();
@@ -103,6 +140,8 @@ const createCaller = async () =>
 describe('shareChatRouter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.businessConst.ENABLE_BUSINESS_FEATURES = true;
+    mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShareVisitor: true });
     mockAccessCheck.mockResolvedValue(share);
     mockFindById.mockResolvedValue(visitorTopic);
     mockCountBySender.mockResolvedValue(0);
@@ -502,6 +541,40 @@ describe('shareChatRouter', () => {
 
     await expect(caller.getTopics({ shareId: 'share-1' })).rejects.toMatchObject({
       code: 'UNAUTHORIZED',
+    });
+  });
+
+  describe('visitor capability', () => {
+    it('rejects on a deployment without business features, before any share lookup', async () => {
+      mocks.businessConst.ENABLE_BUSINESS_FEATURES = false;
+      const caller = await createCaller();
+
+      await expect(caller.getTopics({ shareId: 'share-1' })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+      expect(mockAccessCheck).not.toHaveBeenCalled();
+    });
+
+    it('rejects every procedure when the visitor flag is off for this visitor', async () => {
+      mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShareVisitor: false });
+      const caller = await createCaller();
+
+      await expect(caller.getTopics({ shareId: 'share-1' })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+      await expect(
+        caller.getMessages({ shareId: 'share-1', topicId: 'tpc_visitor' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(caller.execAgent({ prompt: 'hi', shareId: 'share-1' })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+      await expect(
+        caller.interruptTask({ operationId: 'op-1', shareId: 'share-1', topicId: 'tpc_visitor' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(
+        caller.refreshGatewayToken({ shareId: 'share-1', topicId: 'tpc_visitor' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(mockAccessCheck).not.toHaveBeenCalled();
     });
   });
 });

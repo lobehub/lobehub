@@ -6,7 +6,8 @@ import { AgentShareModel } from '@/database/models/agentShare';
 import { TopicModel } from '@/database/models/topic';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
+
+import { assertAgentShareCreationEnabled } from './_helpers/agentShareFeatureGate';
 
 const agentIdInput = z.object({ agentId: z.string().trim().min(1) }).strict();
 
@@ -39,31 +40,6 @@ const agentShareProcedure = authedProcedure.use(serverDatabase).use(async (opts)
   });
 });
 
-/**
- * Whether this user may PUBLISH an agent as a shared link.
- *
- * Deliberately scoped to the creator side only: reading, managing and turning
- * OFF an existing share stay available, and visitors of an already-published
- * link are never affected. A deployment can therefore narrow who may create
- * new shares without breaking links that are already in the wild.
- *
- * Enforced on the server rather than only in the UI — the client-side feature
- * flag state can be overridden locally (see the dev flag override panel), so
- * it is a presentation hint, not an authorization decision.
- */
-const assertAgentSharePublishable = async (userId: string) => {
-  const { enableAgentShare } = await getServerFeatureFlagsStateFromRuntimeConfig(userId);
-
-  // `undefined` means the flag is not configured at all — keep the capability
-  // available, matching the schema default.
-  if (enableAgentShare === false) {
-    throw new TRPCError({
-      code: 'FORBIDDEN',
-      message: 'Agent sharing is not available for this account',
-    });
-  }
-};
-
 /** `updateConfig` / `updateVisibility` / `updateSlug` all return `null` when the share (or its owning agent) does not resolve for this caller. */
 const requireShare = <T>(share: T | null): T => {
   if (!share) {
@@ -90,7 +66,7 @@ export const agentShareRouter = router({
   enableShare: agentShareProcedure
     .input(agentIdInput.extend({ visibility: z.enum(['private', 'link']).optional() }).strict())
     .mutation(async ({ input, ctx }) => {
-      await assertAgentSharePublishable(ctx.userId);
+      await assertAgentShareCreationEnabled(ctx.userId);
 
       return ctx.agentShareModel.create(input.agentId, input.visibility);
     }),
@@ -175,7 +151,7 @@ export const agentShareRouter = router({
     .mutation(async ({ input, ctx }) => {
       // Flipping to `link` publishes the share, so it is the same capability
       // as `enableShare`; going back to `private` unpublishes and stays open.
-      if (input.visibility === 'link') await assertAgentSharePublishable(ctx.userId);
+      if (input.visibility === 'link') await assertAgentShareCreationEnabled(ctx.userId);
 
       return requireShare(
         await ctx.agentShareModel.updateVisibility(input.agentId, input.visibility),

@@ -1,3 +1,4 @@
+import type * as BusinessConst from '@lobechat/business-const';
 import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -28,6 +29,39 @@ vi.mock('@/database/server', () => ({
   getServerDB: vi.fn(),
 }));
 
+// The availability gate (cloud-only const + visitor grayscale flag) has its
+// own suite (`_helpers/__tests__/agentShareFeatureGate.test.ts`) plus a
+// dedicated "visitor capability" block below; elsewhere it is pinned open so
+// the read-path behavior under test is reachable.
+const mocks = vi.hoisted(() => ({
+  businessConst: { ENABLE_BUSINESS_FEATURES: true },
+}));
+vi.mock('@lobechat/business-const', async () => {
+  const actual = await vi.importActual<typeof BusinessConst>('@lobechat/business-const');
+  return {
+    ...actual,
+    // `packages/utils/src/apiKey.ts` reads this dynamically (`import * as
+    // businessConst`), pulled in transitively via the unmocked
+    // `createContextInner` -> `ApiKeyModel` chain below. `actual` here
+    // resolves to the cloud override, which omits this key entirely (see
+    // that file's own doc comment), so vitest's mock-export validation has
+    // no own property to find unless it is listed explicitly.
+    API_KEY_PREFIX: (actual as Record<string, unknown>).API_KEY_PREFIX,
+    // A getter (not a static spread) so per-test mutation of
+    // `mocks.businessConst.ENABLE_BUSINESS_FEATURES` is observed by every
+    // subsequent read, including inside the already-imported gate helper.
+    get ENABLE_BUSINESS_FEATURES() {
+      return mocks.businessConst.ENABLE_BUSINESS_FEATURES;
+    },
+  };
+});
+
+const mockGetFeatureFlagsState = vi.fn();
+vi.mock('@/server/featureFlags', () => ({
+  getServerFeatureFlagsStateFromRuntimeConfig: (...args: unknown[]) =>
+    mockGetFeatureFlagsState(...args),
+}));
+
 const { shareRouter } = await import('../share');
 
 describe('shareRouter', () => {
@@ -48,6 +82,8 @@ describe('shareRouter', () => {
 
     beforeEach(() => {
       vi.clearAllMocks();
+      mocks.businessConst.ENABLE_BUSINESS_FEATURES = true;
+      mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShareVisitor: true });
       vi.mocked(AgentShareModel.findBySlugOrId).mockResolvedValue(agentShare as any);
       vi.mocked(AgentShareModel.assertShareAccess).mockReturnValue(undefined);
       vi.mocked(AgentShareModel.incrementUserViewCount).mockResolvedValue(undefined);
@@ -150,6 +186,42 @@ describe('shareRouter', () => {
         code,
       });
       expect(AgentShareModel.incrementUserViewCount).not.toHaveBeenCalled();
+    });
+
+    describe('visitor capability', () => {
+      it('rejects on a deployment without business features, even for the owner', async () => {
+        mocks.businessConst.ENABLE_BUSINESS_FEATURES = false;
+        const caller = shareRouter.createCaller(await createContextInner({ userId: 'owner-user' }));
+
+        await expect(caller.getSharedAgent({ slugOrId: 'shared-agent' })).rejects.toMatchObject({
+          code: 'FORBIDDEN',
+        });
+        expect(AgentShareModel.findBySlugOrId).not.toHaveBeenCalled();
+      });
+
+      it('rejects a non-owner visitor when the visitor flag is off', async () => {
+        mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShareVisitor: false });
+        const caller = shareRouter.createCaller(
+          await createContextInner({ userId: 'visitor-user' }),
+        );
+
+        await expect(caller.getSharedAgent({ slugOrId: 'shared-agent' })).rejects.toMatchObject({
+          code: 'FORBIDDEN',
+        });
+        expect(mockGetFeatureFlagsState).toHaveBeenCalledWith('visitor-user');
+        expect(AgentShareModel.incrementUserViewCount).not.toHaveBeenCalled();
+      });
+
+      it('still lets the owner preview their own share when the visitor flag is off', async () => {
+        mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShareVisitor: false });
+        const caller = shareRouter.createCaller(await createContextInner({ userId: 'owner-user' }));
+
+        await expect(caller.getSharedAgent({ slugOrId: 'shared-agent' })).resolves.toMatchObject({
+          isOwner: true,
+        });
+        // The owner path never consults the visitor flag at all.
+        expect(mockGetFeatureFlagsState).not.toHaveBeenCalled();
+      });
     });
   });
 

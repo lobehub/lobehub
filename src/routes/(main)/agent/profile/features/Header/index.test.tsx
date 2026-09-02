@@ -38,6 +38,11 @@ const mocks = vi.hoisted(() => ({
   hasActiveWorkspace: true,
   serverConfigState: {
     featureFlags: { enableAgentShare: undefined as boolean | undefined },
+    // Business features on by default in these tests — the Cloud-only
+    // structural half of the share gate is exercised by its own describe
+    // block below; everywhere else it stays open so the pre-existing
+    // rollout-flag behavior remains isolated to that one variable.
+    serverConfig: { enableBusinessFeatures: true },
   },
   navigate: vi.fn(),
   // The two independent halves of "may configure this agent": the workspace
@@ -237,6 +242,10 @@ vi.mock('@/store/serverConfig', () => ({
 
 vi.mock('@/store/serverConfig/selectors', () => ({
   featureFlagsSelectors: (state: typeof mocks.serverConfigState) => state.featureFlags,
+  serverConfigSelectors: {
+    enableBusinessFeatures: (state: typeof mocks.serverConfigState) =>
+      state.serverConfig.enableBusinessFeatures,
+  },
 }));
 
 vi.mock('../store', () => ({
@@ -277,6 +286,7 @@ describe('Agent profile Header', () => {
     mocks.resourceAccess.canManageResource = true;
     mocks.hasActiveWorkspace = true;
     mocks.serverConfigState.featureFlags.enableAgentShare = undefined;
+    mocks.serverConfigState.serverConfig.enableBusinessFeatures = true;
   });
 
   describe('share entry', () => {
@@ -307,6 +317,18 @@ describe('Agent profile Header', () => {
       render(<Header />);
 
       expect(screen.getByTestId('share-entry-icon')).toBeInTheDocument();
+    });
+
+    // Unlike the rollout flag above, `enableBusinessFeatures` is structural:
+    // an OSS deployment has no Agent Share surface at all, server-enforced by
+    // `ENABLE_BUSINESS_FEATURES` — there is no live share to revoke there, so
+    // hiding the entry entirely (not just disabling publish) is correct.
+    it('hides the share entry on a deployment without business features', () => {
+      mocks.serverConfigState.serverConfig.enableBusinessFeatures = false;
+
+      render(<Header />);
+
+      expect(screen.queryByTestId('share-entry-icon')).toBeNull();
     });
 
     it('hides the share entry for a workspace agent', () => {

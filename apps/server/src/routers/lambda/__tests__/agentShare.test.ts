@@ -1,4 +1,5 @@
 // @vitest-environment node
+import type * as BusinessConst from '@lobechat/business-const';
 import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -7,6 +8,33 @@ import { createContextInner } from '@/libs/trpc/lambda/context';
 vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: vi.fn(() => ({})),
 }));
+
+// `assertAgentShareCreationEnabled` (`_helpers/agentShareFeatureGate.ts`) runs
+// for real in this suite — only its own two dependencies are mocked
+// (`mockGetFeatureFlagsState` below, and this mutable business-const object)
+// — so the router tests exercise the actual gate, not a stand-in.
+const mocks = vi.hoisted(() => ({
+  businessConst: { ENABLE_BUSINESS_FEATURES: true },
+}));
+vi.mock('@lobechat/business-const', async () => {
+  const actual = await vi.importActual<typeof BusinessConst>('@lobechat/business-const');
+  return {
+    ...actual,
+    // `packages/utils/src/apiKey.ts` reads this dynamically (`import * as
+    // businessConst`), pulled in transitively via the unmocked
+    // `createContextInner` -> `ApiKeyModel` chain below. `actual` here
+    // resolves to the cloud override, which omits this key entirely (see
+    // that file's own doc comment), so vitest's mock-export validation has
+    // no own property to find unless it is listed explicitly.
+    API_KEY_PREFIX: (actual as Record<string, unknown>).API_KEY_PREFIX,
+    // A getter (not a static spread) so per-test mutation of
+    // `mocks.businessConst.ENABLE_BUSINESS_FEATURES` is observed by every
+    // subsequent read, including inside the already-imported gate helper.
+    get ENABLE_BUSINESS_FEATURES() {
+      return mocks.businessConst.ENABLE_BUSINESS_FEATURES;
+    },
+  };
+});
 
 const mockCreate = vi.fn();
 const mockGetByAgentId = vi.fn();
@@ -53,6 +81,7 @@ const share = {
 describe('agentShareRouter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.businessConst.ENABLE_BUSINESS_FEATURES = true;
     mockCreate.mockResolvedValue(share);
     mockGetByAgentId.mockResolvedValue(share);
     mockUpdateConfig.mockResolvedValue(share);
@@ -217,6 +246,19 @@ describe('agentShareRouter', () => {
   });
 
   describe('publish capability', () => {
+    it('rejects enabling a share on a deployment without business features, even when the flag is on', async () => {
+      mocks.businessConst.ENABLE_BUSINESS_FEATURES = false;
+      mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare: true });
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+      await expect(caller.enableShare({ agentId: 'agent-1' })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+      // The compile-time gate short-circuits before the flag is even read.
+      expect(mockGetFeatureFlagsState).not.toHaveBeenCalled();
+      expect(mockCreate).not.toHaveBeenCalled();
+    });
+
     it('rejects enabling a share when the capability is off for this user', async () => {
       mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare: false });
       const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
@@ -251,13 +293,16 @@ describe('agentShareRouter', () => {
       expect(mockUpdateVisibility).toHaveBeenCalledTimes(2);
     });
 
-    it('allows publishing when the capability is unconfigured', async () => {
+    // Fails closed: an unconfigured flag is treated the same as `false`, not
+    // as "open" — a deployment must explicitly opt a user in.
+    it('rejects publishing when the capability is unconfigured', async () => {
       mockGetFeatureFlagsState.mockResolvedValue({});
       const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
 
-      await caller.enableShare({ agentId: 'agent-1' });
-
-      expect(mockCreate).toHaveBeenCalledWith('agent-1', undefined);
+      await expect(caller.enableShare({ agentId: 'agent-1' })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+      expect(mockCreate).not.toHaveBeenCalled();
     });
   });
 

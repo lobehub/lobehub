@@ -22,6 +22,8 @@ import { AiAgentService } from '@/server/services/aiAgent';
 import type { AgentShareGate } from '@/server/services/aiAgent/shareGate';
 import { FileService } from '@/server/services/file';
 
+import { assertAgentShareVisitorEnabled } from './_helpers/agentShareFeatureGate';
+
 const log = debug('lobe-server:router:shareChat');
 
 /**
@@ -48,7 +50,16 @@ const log = debug('lobe-server:router:shareChat');
  * Agent sharing is personal-only (workspace agents cannot be shared), so no
  * workspaceId is ever threaded into the creator-scoped models/services.
  */
-const shareChatProcedure = authedProcedure.use(serverDatabase);
+const shareChatProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+  // Availability gate for the VISITOR side of Agent Share (see
+  // `_helpers/agentShareFeatureGate.ts`): `ENABLE_BUSINESS_FEATURES`
+  // (compile-time, false in OSS) AND the `enableAgentShareVisitor` grayscale
+  // flag, both evaluated for the VISITOR calling in — never the share owner,
+  // who reaches their own agent through `aiAgent.execAgent`, not this router.
+  await assertAgentShareVisitorEnabled(opts.ctx.userId);
+
+  return opts.next();
+});
 
 const ShareTopicScopeSchema = z.object({
   shareId: z.string(),

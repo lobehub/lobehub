@@ -4,7 +4,7 @@ import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorks
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useServerConfigStore } from '@/store/serverConfig';
-import { featureFlagsSelectors } from '@/store/serverConfig/selectors';
+import { featureFlagsSelectors, serverConfigSelectors } from '@/store/serverConfig/selectors';
 
 export interface AgentShareSupport {
   /**
@@ -27,22 +27,29 @@ export interface AgentShareSupport {
  * workspace agent (see `AgentShareModel`'s ownership check) — and a builtin row
  * (Inbox, the builders) is not the owner's to hand out.
  *
- * `supported` is intentionally structural only: `enableAgentShare` must NOT
- * gate it. The flag is a rollout gate on *publishing*, and the server keeps
- * disable / updateConfig / updateSlug / getShareStatus open when it is off — so
- * hiding the whole surface would strand an owner who was rolled back out of the
- * allowlist with a live share they can no longer revoke. Publishing is gated
- * through `publishable` instead, where `undefined` (flags unresolved) stays
- * permissive to match the schema default.
+ * `supported` additionally requires `enableBusinessFeatures`: a self-hosted
+ * (OSS) deployment has no Agent Share surface at all — it is structurally
+ * blocked server-side by `ENABLE_BUSINESS_FEATURES`
+ * (`_helpers/agentShareFeatureGate.ts`), so hiding the whole management
+ * surface there is not the same trade-off as gating on `enableAgentShare`
+ * below. `enableAgentShare` (the CLOUD grayscale rollout flag) deliberately
+ * does NOT narrow `supported`: the server keeps disable / updateConfig /
+ * updateSlug / getShareStatus open when that flag is off, so hiding the
+ * surface on it would strand an owner rolled back out of the allowlist with a
+ * live share they can no longer revoke. Publishing is gated through
+ * `publishable` instead, which fails closed on anything other than `true`
+ * (including `undefined` / unresolved), mirroring the server's
+ * `assertAgentShareCreationEnabled`.
  */
 export const useAgentShareSupported = (agentId?: string | null): AgentShareSupport => {
   const hasActiveWorkspace = useHasActiveWorkspace();
   const isBuiltinAgent = useAgentStore(builtinAgentSelectors.isBuiltinAgent(agentId ?? undefined));
   const enableAgentShare = useServerConfigStore(featureFlagsSelectors).enableAgentShare;
+  const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
 
-  const supported = !!agentId && !hasActiveWorkspace && !isBuiltinAgent;
+  const supported = !!agentId && !hasActiveWorkspace && !isBuiltinAgent && enableBusinessFeatures;
 
-  return { publishable: supported && enableAgentShare !== false, supported };
+  return { publishable: supported && enableAgentShare === true, supported };
 };
 
 /**

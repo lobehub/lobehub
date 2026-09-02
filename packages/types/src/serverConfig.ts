@@ -22,6 +22,8 @@ export type IFeatureFlagsState = {
   enableAgentSelfIteration: boolean | undefined;
   /** Creator-side capability: may this user publish an Agent as a shared link. */
   enableAgentShare: boolean | undefined;
+  /** Visitor-side capability: may this user open/chat on an already-live shared agent. */
+  enableAgentShareVisitor: boolean | undefined;
   enableAuthCaptcha: boolean | undefined;
   enableCheckUpdates: boolean | undefined;
   enableDevDock: boolean | undefined;

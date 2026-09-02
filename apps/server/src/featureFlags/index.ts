@@ -120,10 +120,43 @@ export const getServerFeatureFlagsFromRuntimeConfig = async (userId?: string) =>
 };
 
 /**
+ * Whitelist arrays may hold emails as well as user IDs (admins configure
+ * grayscale rollouts by email — see `evaluateFeatureFlag`). Resolve the
+ * user's email only when some flag actually carries an email entry, so the
+ * common all-boolean / all-userId path never touches the users table.
+ *
+ * Exported (rather than kept module-private) so it has its own focused unit
+ * tests instead of only being exercised indirectly through the full
+ * RuntimeConfigProvider chain in `getServerFeatureFlagsStateFromRuntimeConfig`.
+ */
+export const resolveEmailForEvaluation = async (
+  flags: IFeatureFlags,
+  userId?: string,
+): Promise<string | undefined> => {
+  if (!userId) return;
+
+  const hasEmailEntry = Object.values(flags).some(
+    (value) => Array.isArray(value) && value.some((entry) => entry.includes('@')),
+  );
+  if (!hasEmailEntry) return;
+
+  try {
+    const { UserModel } = await import('@/database/models/user');
+    const { getServerDB } = await import('@/database/server');
+    const user = await UserModel.findById(await getServerDB(), userId);
+    return user?.email ?? undefined;
+  } catch (error) {
+    debug('Failed to resolve user email for feature flag evaluation: %O', error);
+    return;
+  }
+};
+
+/**
  * Get server feature flags from RuntimeConfig and map them to state with user ID
  * @param userId - Optional user ID for user-specific feature flag evaluation
  */
 export const getServerFeatureFlagsStateFromRuntimeConfig = async (userId?: string) => {
   const flags = await getServerFeatureFlagsFromRuntimeConfig(userId);
-  return mapFeatureFlagsEnvToState(flags, userId);
+  const userEmail = await resolveEmailForEvaluation(flags, userId);
+  return mapFeatureFlagsEnvToState(flags, userId, userEmail);
 };
