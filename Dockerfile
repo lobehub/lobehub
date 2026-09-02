@@ -70,6 +70,9 @@ COPY apps/desktop/src/main/package.json ./apps/desktop/src/main/package.json
 COPY apps/share/package.json ./apps/share/package.json
 COPY apps/workbench/package.json ./apps/workbench/package.json
 
+# @neondatabase/serverless is required at load time by drizzle-orm/neon-serverless, which the
+# bundled Elasticsearch sync CLI imports through the shared server DB factory even when
+# DATABASE_DRIVER=node selects the pg driver; without it the sync container crash-loops.
 RUN set -e && \
     if [ "${USE_CN_MIRROR:-false}" = "true" ]; then \
         export SENTRYCLI_CDNURL="https://npmmirror.com/mirrors/sentry-cli"; \
@@ -84,7 +87,7 @@ RUN set -e && \
     mkdir -p /deps && \
     cd /deps && \
     echo '{"name":"deps","private":true}' > package.json && \
-    pnpm add pg drizzle-orm
+    pnpm add pg drizzle-orm @neondatabase/serverless
 
 COPY . .
 
@@ -127,6 +130,7 @@ COPY --from=builder /deps/node_modules/.pnpm /app/node_modules/.pnpm
 COPY --from=builder /deps/node_modules/pg /app/node_modules/pg
 COPY --from=builder /runtime-deps/ /app/node_modules/.pnpm/
 COPY --from=builder /deps/node_modules/drizzle-orm /app/node_modules/drizzle-orm
+COPY --from=builder /deps/node_modules/@neondatabase /app/node_modules/@neondatabase
 
 # Copy server launcher and shared scripts
 COPY --from=builder /app/scripts/serverLauncher/startServer.js /app/startServer.js

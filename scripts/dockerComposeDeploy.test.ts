@@ -133,6 +133,13 @@ describe('deploy docker-compose optional Elasticsearch', () => {
     expect(sync.environment).toContain('MIGRATION_DB=1');
     // Compose's default 10s grace period would SIGKILL a drain step in flight.
     expect(sync.stop_grace_period).toBe('2m');
+    // The sync bundle keeps drizzle-orm external, and drizzle-orm/neon-serverless requires
+    // @neondatabase/serverless at load time even though DATABASE_DRIVER=node never uses it, so the
+    // image must ship that package next to pg and drizzle-orm or the container crash-loops.
+    expect(dockerfile).toContain('pnpm add pg drizzle-orm @neondatabase/serverless');
+    expect(dockerfile).toContain(
+      'COPY --from=builder /deps/node_modules/@neondatabase /app/node_modules/@neondatabase',
+    );
   });
 
   it('never switches the search provider on behalf of the operator', () => {
