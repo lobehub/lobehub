@@ -59,15 +59,6 @@ export const buildAnthropicGenerateObjectRequest = async (
 
   log('converted %d messages to Anthropic format', anthropicMessages.length);
 
-  const systemPrompts = systemPromptText
-    ? [
-        {
-          text: systemPromptText,
-          type: 'text' as const,
-        },
-      ]
-    : undefined;
-
   let finalTools;
   let tool_choice: Anthropic.ToolChoiceAuto | Anthropic.ToolChoiceAny | Anthropic.ToolChoiceTool;
   let schemaToolName: string | undefined;
@@ -77,9 +68,19 @@ export const buildAnthropicGenerateObjectRequest = async (
   const forcedToolChoiceRejected = [model, config?.requestModel].some(
     (id): id is string => !!id && rejectsForcedToolChoice(id),
   );
+  // With `tool_choice: auto` nothing forces the model to call a tool, so the
+  // official migration guide asks callers to state the requirement in the prompt.
+  // Without it the model may answer in plain text and the parser silently returns
+  // `undefined` / `[]` to callers that expect structured output.
+  // https://platform.claude.com/docs/en/models/fable-5-1/whats-new-fable-5-1#forced-tool-use-is-not-supported
+  let toolUseInstruction: string | undefined;
   if (tools) {
     finalTools = buildAnthropicTools(tools);
     tool_choice = forcedToolChoiceRejected ? { type: 'auto' } : { type: 'any' };
+    if (forcedToolChoiceRejected) {
+      toolUseInstruction =
+        'You must respond by calling one of the provided tools. Do not reply with plain text.';
+    }
   } else if (schema) {
     // Convert OpenAI-style schema to Anthropic tool format
     const tool: Anthropic.ToolUnion = {
@@ -106,9 +107,22 @@ export const buildAnthropicGenerateObjectRequest = async (
       : config?.schemaToolChoice === 'any'
         ? { type: 'any' }
         : { name: tool.name, type: 'tool' };
+    if (forcedToolChoiceRejected) {
+      toolUseInstruction = `You must respond by calling the \`${tool.name}\` tool. Do not reply with plain text.`;
+    }
   } else {
     throw new Error('tools or schema is required');
   }
+
+  const systemPrompts =
+    systemPromptText || toolUseInstruction
+      ? [
+          {
+            text: [systemPromptText, toolUseInstruction].filter(Boolean).join('\n\n'),
+            type: 'text' as const,
+          },
+        ]
+      : undefined;
 
   return {
     requestParams: {
