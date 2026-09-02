@@ -1,8 +1,8 @@
 'use client';
 
 import { Center, Flexbox, Skeleton } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
-import { memo, useCallback } from 'react';
+import { Button, Text, toast } from '@lobehub/ui/base-ui';
+import { memo, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
@@ -12,6 +12,7 @@ import { documentCommentService } from '@/services/documentComment';
 
 import Composer from './Composer';
 import {
+  useDocumentCommentDetail,
   useDocumentCommentSummary,
   useDocumentCommentThreads,
   useOptimisticDocumentComment,
@@ -26,6 +27,7 @@ import {
 } from './optimistic';
 import { styles } from './styles';
 import Thread from './Thread';
+import { useDocumentCommentDeepLink } from './useDocumentCommentDeepLink';
 
 const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
   const { t } = useTranslation('file');
@@ -33,6 +35,7 @@ const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
   const summary = useDocumentCommentSummary(workspaceId ? documentId : undefined);
   const threads = useDocumentCommentThreads(workspaceId ? documentId : undefined);
   const createOptimistic = useOptimisticDocumentComment();
+  const { clearFocus, focus, focusRoot } = useDocumentCommentDeepLink(documentId);
   const reloadSummary = summary.mutate;
   const reloadThreads = threads.reload;
   const mutateThreads = threads.mutate;
@@ -127,6 +130,37 @@ const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
   );
   const isHeaderLoading = threads.isLoadingInitial || (summary.isLoading && !summary.data);
 
+  // Deep-link landing. Lists are oldest-first and a notification usually points at the
+  // newest comment, so the target root is fetched by id and pinned above the list until it
+  // shows up on a loaded page; NOT_FOUND (or a non-root id) means the thread is gone.
+  const focusRootCommentId = focus?.rootCommentId;
+  const hasFocusedThread =
+    Boolean(focusRootCommentId) && threads.items.some(({ root }) => root.id === focusRootCommentId);
+  const focusedRoot = useDocumentCommentDetail(hasFocusedThread ? undefined : focusRootCommentId);
+  const pinnedThread =
+    focus && !hasFocusedThread && focusedRoot.data && !focusedRoot.data.parentCommentId
+      ? { replyCount: focusedRoot.data.replyCount, root: focusedRoot.data }
+      : undefined;
+  const isFocusedRootMissing =
+    Boolean(focusRootCommentId) &&
+    (focusedRoot.isNotFound || Boolean(focusedRoot.data?.parentCommentId));
+  const handleFocusMissing = useCallback(() => {
+    toast.info(t('pageEditor.comments.deepLinkMissing'));
+    clearFocus();
+  }, [clearFocus, t]);
+  // The linked reply is gone but its thread is not: keep the thread and land on the root.
+  const handleReplyFocusMissing = useCallback(() => {
+    toast.info(t('pageEditor.comments.deepLinkMissing'));
+    focusRoot();
+  }, [focusRoot, t]);
+  useEffect(() => {
+    if (isFocusedRootMissing) handleFocusMissing();
+  }, [handleFocusMissing, isFocusedRootMissing]);
+  const mutateFocusedRoot = focusedRoot.mutate;
+  const refreshPinned = useCallback(async () => {
+    await Promise.all([mutateFocusedRoot(), refresh()]);
+  }, [mutateFocusedRoot, refresh]);
+
   if (!workspaceId) return null;
 
   return (
@@ -160,14 +194,30 @@ const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
         <AsyncError error={threads.error} variant={'block'} onRetry={() => void threads.reload()} />
       ) : threads.isLoadingInitial ? (
         <SurfaceSkeleton header={false} variant={'list'} />
-      ) : threads.items.length === 0 ? null : (
+      ) : threads.items.length === 0 && !pinnedThread ? null : (
         <Flexbox className={styles.threadList}>
+          {pinnedThread && (
+            <Thread
+              documentId={documentId}
+              focus={focus}
+              key={pinnedThread.root.id}
+              replyCount={pinnedThread.replyCount}
+              root={pinnedThread.root}
+              onFocusMissing={handleReplyFocusMissing}
+              onMutated={refreshPinned}
+              onReplyCountChange={updateReplyCount}
+              onRootUpdate={handleUpdate}
+              onSummaryChange={updateSummaryTotal}
+            />
+          )}
           {threads.items.map(({ replyCount, root }) => (
             <Thread
               documentId={documentId}
+              focus={focus?.rootCommentId === root.id ? focus : undefined}
               key={root.id}
               replyCount={replyCount}
               root={root}
+              onFocusMissing={handleReplyFocusMissing}
               onMutated={refresh}
               onReplyCountChange={updateReplyCount}
               onRootUpdate={handleUpdate}

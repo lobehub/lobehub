@@ -37,6 +37,8 @@
   "document_comment_activity": "{{actorLabel}} đã bình luận về tài liệu của bạn \"{{documentTitle}}\".",
   "document_comment_activity_replied": "{{actorLabel}} đã trả lời bình luận của bạn trong \"{{documentTitle}}\".",
   "document_comment_activity_replied_title": "Phản hồi mới cho bình luận của bạn",
+  "document_comment_activity_thread": "{{actorLabel}} đã trả lời trong một chuỗi bình luận mà bạn tham gia trong \"{{documentTitle}}\".",
+  "document_comment_activity_thread_title": "Phản hồi mới trong chuỗi bình luận của bạn",
   "document_comment_activity_title": "Bình luận mới về tài liệu của bạn",
   "document_comment_mentioned": "{{actorLabel}} đã nhắc đến bạn trong một bình luận về \"{{documentTitle}}\".",
   "document_comment_mentioned_title": "Bạn đã được nhắc đến trong một bình luận tài liệu",

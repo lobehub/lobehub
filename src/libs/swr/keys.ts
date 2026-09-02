@@ -174,6 +174,11 @@ export const topicCommentKeys = {
 
 // ---- document comment ---------------------------------------------------
 export const documentCommentKeys = {
+  detail: def('documentComment:detail', (workspaceId: string | null, commentId: string) => [
+    'documentComment:detail',
+    workspaceId ?? '',
+    commentId,
+  ]),
   replies: def(
     'documentComment:replies',
     (workspaceId: string | null, rootCommentId: string, cursor?: string) => [

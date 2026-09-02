@@ -1,7 +1,7 @@
 import type { DocumentCommentThread } from '@lobechat/types';
 import { Center, Flexbox } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
-import { Fragment, memo, useCallback, useState } from 'react';
+import { Fragment, memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
@@ -10,7 +10,11 @@ import { documentCommentService } from '@/services/documentComment';
 
 import CommentCard from './CommentCard';
 import Composer from './Composer';
-import { useDocumentCommentReplies, useOptimisticDocumentComment } from './hooks';
+import {
+  useDocumentCommentDetail,
+  useDocumentCommentReplies,
+  useOptimisticDocumentComment,
+} from './hooks';
 import type { DocumentCommentSubmitInput, DocumentCommentUpdateHandler } from './optimistic';
 import {
   appendOptimisticReply,
@@ -21,9 +25,14 @@ import {
 } from './optimistic';
 import { styles } from './styles';
 import { useAutoLoadReplies } from './useAutoLoadReplies';
+import type { DocumentCommentFocus } from './useDocumentCommentDeepLink';
 
 interface ThreadProps extends DocumentCommentThread {
   documentId: string;
+  /** Deep-link target inside this thread; forces replies to load and highlights the card. */
+  focus?: DocumentCommentFocus;
+  /** Called when the deep-linked reply no longer exists in this thread. */
+  onFocusMissing?: () => void;
   onMutated: () => void | Promise<void>;
   onReplyCountChange: (rootCommentId: string, delta: number) => void | Promise<unknown>;
   onRootUpdate: DocumentCommentUpdateHandler;
@@ -33,6 +42,8 @@ interface ThreadProps extends DocumentCommentThread {
 const Thread = memo<ThreadProps>(
   ({
     documentId,
+    focus,
+    onFocusMissing,
     onMutated,
     onReplyCountChange,
     onRootUpdate,
@@ -43,7 +54,11 @@ const Thread = memo<ThreadProps>(
     const { t } = useTranslation('file');
     const [replyTargetId, setReplyTargetId] = useState<string | null>(null);
     const { containerRef, shouldLoad } = useAutoLoadReplies(replyCount > 0);
-    const replies = useDocumentCommentReplies(root.id, shouldLoad || Boolean(replyTargetId));
+    const focusedReplyId = focus && focus.commentId !== root.id ? focus.commentId : undefined;
+    const replies = useDocumentCommentReplies(
+      root.id,
+      shouldLoad || Boolean(replyTargetId) || Boolean(focusedReplyId),
+    );
     const createOptimistic = useOptimisticDocumentComment();
     const mutateReplies = replies.mutate;
     const reloadReplies = replies.reload;
@@ -151,6 +166,24 @@ const Thread = memo<ThreadProps>(
       [mutateReplies, reloadReplies],
     );
 
+    // The linked reply is fetched by id and shown first until it appears on a loaded page
+    // (replies are oldest-first); NOT_FOUND, or a reply from another thread, means it is gone.
+    const hasFocusedReply =
+      Boolean(focusedReplyId) && replies.items.some((item) => item.id === focusedReplyId);
+    const focusedReply = useDocumentCommentDetail(hasFocusedReply ? undefined : focusedReplyId);
+    const visibleReplies = useMemo(() => {
+      const pinned = focusedReply.data;
+      if (!pinned || hasFocusedReply || pinned.parentCommentId !== root.id) return replies.items;
+      return [pinned, ...replies.items];
+    }, [focusedReply.data, hasFocusedReply, replies.items, root.id]);
+    const isFocusedReplyMissing =
+      Boolean(focusedReplyId) &&
+      (focusedReply.isNotFound ||
+        Boolean(focusedReply.data && focusedReply.data.parentCommentId !== root.id));
+    useEffect(() => {
+      if (isFocusedReplyMissing) onFocusMissing?.();
+    }, [isFocusedReplyMissing, onFocusMissing]);
+
     const toggleReplyTarget = useCallback((commentId: string) => {
       setReplyTargetId((current) => (current === commentId ? null : commentId));
     }, []);
@@ -159,13 +192,14 @@ const Thread = memo<ThreadProps>(
       <Flexbox className={styles.thread} ref={containerRef}>
         <CommentCard
           comment={root}
+          focusToken={focus && focus.commentId === root.id ? focus.token : undefined}
           replying={replyTargetId === root.id}
           onMutated={onMutated}
           onReply={() => toggleReplyTarget(root.id)}
           onUpdate={onRootUpdate}
         />
 
-        {(replyCount > 0 || replyTargetId) && (
+        {(replyCount > 0 || replyTargetId || focusedReplyId) && (
           <Flexbox className={styles.replyList}>
             {replyTargetId === root.id && (
               <Composer
@@ -185,10 +219,11 @@ const Thread = memo<ThreadProps>(
                 onRetry={() => void replies.reload()}
               />
             ) : (
-              replies.items.map((reply) => (
+              visibleReplies.map((reply) => (
                 <Fragment key={reply.id}>
                   <CommentCard
                     comment={reply}
+                    focusToken={focusedReplyId === reply.id ? focus?.token : undefined}
                     replying={replyTargetId === reply.id}
                     variant={'reply'}
                     onMutated={refreshThread}

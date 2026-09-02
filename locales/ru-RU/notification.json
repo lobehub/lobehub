@@ -37,6 +37,8 @@
   "document_comment_activity": "{{actorLabel}} оставил комментарий к вашему документу \"{{documentTitle}}\".",
   "document_comment_activity_replied": "{{actorLabel}} ответил на ваш комментарий в \"{{documentTitle}}\".",
   "document_comment_activity_replied_title": "Новый ответ на ваш комментарий",
+  "document_comment_activity_thread": "{{actorLabel}} ответил в ветке комментариев, в которой вы участвуете, в \"{{documentTitle}}\".",
+  "document_comment_activity_thread_title": "Новый ответ в вашей ветке комментариев",
   "document_comment_activity_title": "Новый комментарий к вашему документу",
   "document_comment_mentioned": "{{actorLabel}} упомянул вас в комментарии к \"{{documentTitle}}\".",
   "document_comment_mentioned_title": "Вы были упомянуты в комментарии к документу",

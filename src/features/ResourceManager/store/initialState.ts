@@ -19,7 +19,12 @@ export type SelectAllState = 'all' | 'loaded' | 'none';
  */
 export type ResourceListVisibilityFilter = 'private' | 'workspace';
 
-export const DEFAULT_WORKSPACE_LIST_VISIBILITY: ResourceListVisibilityFilter = 'private';
+/**
+ * Workspace mode opens on the team share, matching the task list's default:
+ * workspace resources are team work by default, and the private drawer stays
+ * one click away in the header scope dropdown.
+ */
+export const DEFAULT_WORKSPACE_LIST_VISIBILITY: ResourceListVisibilityFilter = 'workspace';
 
 export interface State {
   /**
