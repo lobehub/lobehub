@@ -488,6 +488,7 @@ FILES=(
     "$SUB_DIR/docker-compose.yml"
     "$SUB_DIR/searxng-settings.yml"
     "$SUB_DIR/bucket.config.json"
+    "$SUB_DIR/elasticsearch/Dockerfile"
 )
 ENV_EXAMPLES=(
     "$SUB_DIR/.env.zh-CN.example"
@@ -526,6 +527,9 @@ section_download_files(){
     download_file "$SOURCE_URL/${FILES[0]}" "docker-compose.yml"
     download_file "$SOURCE_URL/${FILES[1]}" "searxng-settings.yml"
     download_file "$SOURCE_URL/${FILES[2]}" "bucket.config.json"
+    # Build context of the optional Elasticsearch service (only built when its profile is enabled)
+    mkdir -p elasticsearch
+    download_file "$SOURCE_URL/${FILES[3]}" "elasticsearch/Dockerfile"
     # Download .env.example with the specified language
     if [ "$LANGUAGE" = "zh_CN" ]; then
         download_file "$SOURCE_URL/${ENV_EXAMPLES[0]}" ".env"

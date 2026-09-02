@@ -9,7 +9,7 @@ const compose = parse(readFileSync(path.join(deployDirectory, 'docker-compose.ym
   services: Record<
     string,
     {
-      build?: { dockerfile_inline?: string };
+      build?: { args?: Record<string, string>; context?: string };
       command?: string[];
       depends_on?: Record<string, { condition: string }>;
       entrypoint?: string[];
@@ -25,6 +25,10 @@ const compose = parse(readFileSync(path.join(deployDirectory, 'docker-compose.ym
   volumes: Record<string, unknown>;
 };
 const dockerfile = readFileSync(path.resolve(import.meta.dirname, '../Dockerfile'), 'utf8');
+const elasticsearchDockerfile = readFileSync(
+  path.join(deployDirectory, 'elasticsearch/Dockerfile'),
+  'utf8',
+);
 const setupScript = readFileSync(path.join(deployDirectory, '../setup.sh'), 'utf8');
 const envExamples = ['.env.example', '.env.zh-CN.example'].map((file) =>
   readFileSync(path.join(deployDirectory, file), 'utf8'),
@@ -66,14 +70,24 @@ describe('deploy docker-compose optional Elasticsearch', () => {
   });
 
   it('builds a pinned official single-node image with ICU, persistence, and a health check', () => {
-    const inlineDockerfile = elasticsearch.build?.dockerfile_inline ?? '';
-    const from = inlineDockerfile.match(
-      /^FROM docker\.elastic\.co\/elasticsearch\/elasticsearch:(\d+\.\d+\.\d+)$/m,
-    );
-    expect(from).not.toBeNull();
+    // A checked-in Dockerfile keeps the Compose file parseable by older Compose releases;
+    // `dockerfile_inline` would be rejected at parse time even with the profile disabled.
+    expect(elasticsearch.build).toEqual({
+      args: { ELASTICSEARCH_VERSION: expect.stringMatching(/^\d+\.\d+\.\d+$/) },
+      context: './elasticsearch',
+    });
+    const version = elasticsearch.build!.args!.ELASTICSEARCH_VERSION;
     // The local tag carries the same version so bumping it triggers a rebuild on `up`.
-    expect(elasticsearch.image).toBe(`lobehub-elasticsearch-icu:${from![1]}`);
-    expect(inlineDockerfile).toContain('RUN bin/elasticsearch-plugin install --batch analysis-icu');
+    expect(elasticsearch.image).toBe(`lobehub-elasticsearch-icu:${version}`);
+    expect(elasticsearchDockerfile).toContain(
+      'FROM docker.elastic.co/elasticsearch/elasticsearch:${ELASTICSEARCH_VERSION}',
+    );
+    expect(elasticsearchDockerfile).toContain(
+      'RUN bin/elasticsearch-plugin install --batch analysis-icu',
+    );
+    // The one-click installer must download the build context next to the Compose file.
+    expect(setupScript).toContain('"$SUB_DIR/elasticsearch/Dockerfile"');
+    expect(setupScript).toContain('"elasticsearch/Dockerfile"');
     // No runtime plugin install: the entrypoint of the official image stays untouched.
     expect(elasticsearch.command).toBeUndefined();
     expect(elasticsearch.entrypoint).toBeUndefined();

@@ -117,8 +117,9 @@ PostgreSQL 写入
 资源说明：节点默认使用 1 GB JVM 堆内存（`ES_JAVA_OPTS`）；堆内存不要超过分配给容器内存的一半，并为
 Elasticsearch 单独预留至少 2 GB 内存。Linux 宿主机必须设置 `vm.max_map_count=262144`。启用该 profile 后首次执行
 `docker compose up` 会基于固定版本的官方镜像构建一次镜像并安装 `analysis-icu`，构建时需要能访问
-`docker.elastic.co` 和 `artifacts.elastic.co`；之后重建容器不再需要外网。升级 Elasticsearch 时，同时修改
-`elasticsearch` 服务中 `image` 和 `FROM` 的版本号，再执行 `docker compose up -d --build`。
+`docker.elastic.co` 和 `artifacts.elastic.co`；之后重建容器不再需要外网。构建上下文是 Compose 文件旁边的
+`elasticsearch/Dockerfile`，`setup.sh` 会一并下载。升级 Elasticsearch 时，同时修改 `elasticsearch` 服务中
+`image` 和 `build.args` 的版本号，再执行 `docker compose up -d --build`。
 
 1. **启用节点。** 在 `.env` 中取消 Elasticsearch 配置块的注释，并继续让 `pg_search` 提供搜索：
 

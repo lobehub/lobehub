@@ -138,9 +138,10 @@ below half of the memory available to the container and plan for at least 2 GB o
 Elasticsearch alone. Linux hosts must set `vm.max_map_count=262144`. The first `docker compose up`
 with the profile enabled builds the image once from the pinned official image and installs
 `analysis-icu`, so that build needs outbound access to `docker.elastic.co` and
-`artifacts.elastic.co`; later container recreations work offline. To upgrade Elasticsearch, change
-the version in both `image` and `FROM` of the `elasticsearch` service and run
-`docker compose up -d --build`.
+`artifacts.elastic.co`; later container recreations work offline. The build context is the
+`elasticsearch/Dockerfile` next to the Compose file, which `setup.sh` downloads as well. To upgrade
+Elasticsearch, change the version in both `image` and `build.args` of the `elasticsearch` service
+and run `docker compose up -d --build`.
 
 1. **Enable the node.** In `.env`, uncomment the Elasticsearch block and keep `pg_search` serving
    requests:

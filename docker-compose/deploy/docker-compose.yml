@@ -144,18 +144,19 @@ services:
   # below half of the memory available to this container; plan for at least 2 GB
   # RAM for Elasticsearch alone. Linux hosts must set vm.max_map_count=262144.
   #
-  # The image is built locally from the pinned official image plus the required
-  # analysis-icu plugin. The build runs once, the first time the profile is
-  # enabled, and needs outbound access to docker.elastic.co / artifacts.elastic.co;
-  # afterwards container recreation works offline. To upgrade, change the version
-  # in both `image` and `FROM` below, then run `docker compose up -d --build`.
+  # The image is built locally from ./elasticsearch/Dockerfile: the pinned
+  # official image plus the required analysis-icu plugin. The build runs once,
+  # the first time the profile is enabled, and needs outbound access to
+  # docker.elastic.co / artifacts.elastic.co; afterwards container recreation
+  # works offline. To upgrade, change the version in both `image` and
+  # `build.args` below, then run `docker compose up -d --build`.
   # ---------------------------------------------------------------------------
   elasticsearch:
     image: lobehub-elasticsearch-icu:9.5.2
     build:
-      dockerfile_inline: |
-        FROM docker.elastic.co/elasticsearch/elasticsearch:9.5.2
-        RUN bin/elasticsearch-plugin install --batch analysis-icu
+      context: ./elasticsearch
+      args:
+        ELASTICSEARCH_VERSION: 9.5.2
     container_name: lobe-elasticsearch
     # Only this profile starts the bundled node. The reindex and sync services
     # below deliberately do not depend on it, so the same services also work
