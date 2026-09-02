@@ -523,25 +523,36 @@ export const parseFtsSearchPhysicalIndexVersion = (
  */
 export type FtsSearchIndexSchemaUpgradeStrategy = 'backfill' | 'copy';
 
+export interface FtsSearchIndexSchemaUpgrade {
+  strategy: FtsSearchIndexSchemaUpgradeStrategy;
+  /**
+   * Code version this strategy was validated against. A deployment may skip versions, so every
+   * older record must be re-declared for each bump; the tests fail until `to` matches the current
+   * version, which forces the author to re-check whether a direct copy is still possible.
+   */
+  to: number;
+}
+
 export interface FtsSearchIndexSchemaVersionRecord {
   /** Whether `_source` of this version stores every mapped field. */
   sourceComplete: boolean;
   summary: string;
-  /** Strategy used to upgrade from this version to the current one; `current` for the latest. */
-  upgrade: FtsSearchIndexSchemaUpgradeStrategy | 'current';
+  /** How indices of this version reach the current one; `current` for the latest version. */
+  upgrade: FtsSearchIndexSchemaUpgrade | 'current';
   version: number;
 }
 
 /**
- * Schema journal, one record per version in order. Append a record and set the previous entry's
- * `upgrade` whenever `FTS_SEARCH_INDEX_SCHEMA_VERSION` is bumped; the mapping tests enforce that
- * the journal stays contiguous and that `copy` is only declared from a `sourceComplete` version.
+ * Schema journal, one record per version in order. When `FTS_SEARCH_INDEX_SCHEMA_VERSION` is
+ * bumped, append a record and update `upgrade.to` on every older record; the mapping tests enforce
+ * contiguity, that each older record targets the current version, and that `copy` is only declared
+ * from a `sourceComplete` version.
  */
 export const FTS_SEARCH_INDEX_SCHEMA_HISTORY: readonly FtsSearchIndexSchemaVersionRecord[] = [
   {
     sourceComplete: true,
     summary: 'Initial mapping with every field stored in _source',
-    upgrade: 'copy',
+    upgrade: { strategy: 'copy', to: 2 },
     version: 1,
   },
   {

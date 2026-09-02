@@ -234,14 +234,25 @@ describe('search index mappings', () => {
 
     it('only declares a copy upgrade from a version whose _source is complete', () => {
       for (const record of FTS_SEARCH_INDEX_SCHEMA_HISTORY) {
-        if (record.upgrade === 'copy') expect(record.sourceComplete).toBe(true);
+        if (record.upgrade !== 'current' && record.upgrade.strategy === 'copy') {
+          expect(record.sourceComplete).toBe(true);
+        }
+      }
+    });
+
+    it('targets the current schema version from every non-current record', () => {
+      for (const record of FTS_SEARCH_INDEX_SCHEMA_HISTORY) {
+        if (record.upgrade !== 'current') {
+          expect(record.upgrade.to).toBe(FTS_SEARCH_INDEX_SCHEMA_VERSION);
+        }
       }
     });
   });
 
   describe('getFtsSearchIndexSchemaVersionRecord', () => {
     it('resolves version 1 to a copy upgrade', () => {
-      expect(getFtsSearchIndexSchemaVersionRecord(1)?.upgrade).toBe('copy');
+      const record = getFtsSearchIndexSchemaVersionRecord(1);
+      expect(record?.upgrade).toEqual({ strategy: 'copy', to: FTS_SEARCH_INDEX_SCHEMA_VERSION });
     });
 
     it('returns undefined for a version outside the journal', () => {

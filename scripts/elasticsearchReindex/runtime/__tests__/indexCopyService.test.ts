@@ -19,7 +19,9 @@ const createClient = (
   getTask: vi.fn().mockResolvedValue({
     completed: true,
     created: 0,
+    deleted: 0,
     failures: [],
+    noops: 0,
     total: 0,
     updated: 0,
     versionConflicts: 0,
@@ -38,23 +40,29 @@ describe('FtsSearchIndexCopyService', () => {
   it('copies each entity into the next schema version and reports counts', async () => {
     const pendingTaskIds = new Set<string>();
     const getTask = vi.fn(async (taskId: string) => {
+      const isAgents = taskId.includes('agents');
       if (!pendingTaskIds.has(taskId)) {
         pendingTaskIds.add(taskId);
         return {
           completed: false,
           created: 0,
+          deleted: 0,
           failures: [],
-          total: 10,
+          noops: 0,
+          total: isAgents ? 10 : 13,
           updated: 0,
           versionConflicts: 0,
         };
       }
       return {
         completed: true,
-        created: taskId.includes('agents') ? 3 : 7,
+        created: isAgents ? 3 : 7,
+        deleted: 0,
         failures: [],
-        total: 10,
-        updated: taskId.includes('agents') ? 2 : 4,
+        // Every source document must be accounted for: created + updated + versionConflicts + noops + deleted === total.
+        noops: isAgents ? 4 : 1,
+        total: isAgents ? 10 : 13,
+        updated: isAgents ? 2 : 4,
         versionConflicts: 1,
       };
     });
@@ -142,7 +150,9 @@ describe('FtsSearchIndexCopyService', () => {
       getTask: vi.fn().mockResolvedValue({
         completed: true,
         created: 0,
+        deleted: 0,
         failures: [{ reason: 'boom' }],
+        noops: 0,
         total: 1,
         updated: 0,
         versionConflicts: 0,
@@ -160,6 +170,81 @@ describe('FtsSearchIndexCopyService', () => {
     expect((error as FtsSearchIndexCopyError).cause).toEqual(
       expect.objectContaining({ message: expect.stringContaining('reported 1 failures') }),
     );
+  });
+
+  it('wraps a canceled reindex task in FtsSearchIndexCopyError', async () => {
+    const client = createClient({
+      getTask: vi.fn().mockResolvedValue({
+        canceled: 'by user request',
+        completed: true,
+        created: 0,
+        deleted: 0,
+        failures: [],
+        noops: 0,
+        total: 1,
+        updated: 0,
+        versionConflicts: 0,
+      }),
+    });
+    const service = new FtsSearchIndexCopyService(client, {
+      entities: ['agents'],
+      pollIntervalMs: 0,
+    });
+
+    const error = await service.run('test', 1, 2).catch((thrown) => thrown);
+
+    expect(error).toBeInstanceOf(FtsSearchIndexCopyError);
+    expect(error).toMatchObject({ entity: 'agents', name: 'FtsSearchIndexCopyError' });
+    expect((error as FtsSearchIndexCopyError).cause).toEqual(
+      expect.objectContaining({ message: expect.stringContaining('canceled') }),
+    );
+  });
+
+  it('wraps a reindex task whose reported counters do not add up to the total', async () => {
+    const client = createClient({
+      getTask: vi.fn().mockResolvedValue({
+        completed: true,
+        created: 5,
+        deleted: 0,
+        failures: [],
+        noops: 0,
+        total: 10,
+        updated: 0,
+        versionConflicts: 0,
+      }),
+    });
+    const service = new FtsSearchIndexCopyService(client, {
+      entities: ['agents'],
+      pollIntervalMs: 0,
+    });
+
+    const error = await service.run('test', 1, 2).catch((thrown) => thrown);
+
+    expect(error).toBeInstanceOf(FtsSearchIndexCopyError);
+    expect((error as FtsSearchIndexCopyError).cause).toEqual(
+      expect.objectContaining({ message: expect.stringContaining('processed 5 of 10') }),
+    );
+  });
+
+  it('counts version conflicts toward the total when the task completes', async () => {
+    const client = createClient({
+      getTask: vi.fn().mockResolvedValue({
+        completed: true,
+        created: 3,
+        deleted: 0,
+        failures: [],
+        noops: 0,
+        total: 10,
+        updated: 0,
+        versionConflicts: 7,
+      }),
+    });
+    const service = new FtsSearchIndexCopyService(client, {
+      entities: ['agents'],
+      pollIntervalMs: 0,
+    });
+
+    await expect(service.run('test', 1, 2)).resolves.toMatchObject({ aliasesSwitched: false });
   });
 
   it('calls assertAliasSwitchAllowed before switching aliases when requested', async () => {

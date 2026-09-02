@@ -81,9 +81,14 @@ export const planFtsSearchIndexSchemaUpgrade = (
       `Schema version ${state.version} has no upgrade entry in FTS_SEARCH_INDEX_SCHEMA_HISTORY`,
     );
   }
+  if (record.upgrade.to !== targetVersion) {
+    throw new Error(
+      `Schema version ${state.version} declares an upgrade to ${record.upgrade.to}, not ${targetVersion}; re-validate its strategy in FTS_SEARCH_INDEX_SCHEMA_HISTORY`,
+    );
+  }
   return {
     fromVersion: state.version,
-    strategy: record.upgrade,
+    strategy: record.upgrade.strategy,
     toVersion: targetVersion,
     type: 'upgrade',
   };

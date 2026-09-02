@@ -571,7 +571,9 @@ describe('FtsSearchReindexHttpClient', () => {
       await expect(client.getTask('node1:123')).resolves.toEqual({
         completed: false,
         created: 0,
+        deleted: 0,
         failures: [],
+        noops: 0,
         total: 0,
         updated: 0,
         versionConflicts: 0,
@@ -586,7 +588,17 @@ describe('FtsSearchReindexHttpClient', () => {
         response({
           completed: true,
           response: { failures: [{ id: 'doc-1' }] },
-          task: { status: { created: 5, total: 10, updated: 3, version_conflicts: 2 } },
+          task: {
+            status: {
+              canceled: 'by user request',
+              created: 5,
+              deleted: 1,
+              noops: 2,
+              total: 10,
+              updated: 3,
+              version_conflicts: 2,
+            },
+          },
         }),
       );
       vi.stubGlobal('fetch', fetchMock);
@@ -596,9 +608,12 @@ describe('FtsSearchReindexHttpClient', () => {
       });
 
       await expect(client.getTask('node1:123')).resolves.toEqual({
+        canceled: 'by user request',
         completed: true,
         created: 5,
+        deleted: 1,
         failures: [{ id: 'doc-1' }],
+        noops: 2,
         total: 10,
         updated: 3,
         versionConflicts: 2,

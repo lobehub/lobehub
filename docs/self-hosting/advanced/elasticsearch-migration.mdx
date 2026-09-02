@@ -362,11 +362,12 @@ progress.
 
 The tool tracks upgrade paths in a schema journal, `FTS_SEARCH_INDEX_SCHEMA_HISTORY` in
 `packages/database/src/repositories/ftsSearchDocument/mappings.ts`: one record per schema version,
-noting whether `sourceComplete` (that version's `_source` holds every mapped field) and which
-`upgrade` strategy — `copy`, `backfill`, or `current` for the latest version — carries a deployment
-served at that version forward. The mapping tests enforce that the journal stays contiguous and
-that `copy` is only declared from a `sourceComplete` version. Bumping
-`FTS_SEARCH_INDEX_SCHEMA_VERSION` and appending this record is the entire migration definition; see
+noting whether `sourceComplete` (that version's `_source` holds every mapped field) and an
+`upgrade` entry — `{ strategy: 'copy' | 'backfill', to: <code version> }`, or `current` for the
+latest version — that carries a deployment served at that version forward. The mapping tests
+enforce that the journal stays contiguous, that every older record targets the current code
+version, and that `copy` is only declared from a `sourceComplete` version. Bumping
+`FTS_SEARCH_INDEX_SCHEMA_VERSION` and updating these records is the entire migration definition; see
 [Adding a new schema version](#adding-a-new-schema-version).
 
 `--status` includes a `schema` block: `codeVersion` (the version built into this deployment),
@@ -467,11 +468,14 @@ via `_aliases`, then resume the sync consumer.
 ### Adding a new schema version
 
 When bumping `FTS_SEARCH_INDEX_SCHEMA_VERSION`, append a record for the new version to
-`FTS_SEARCH_INDEX_SCHEMA_HISTORY` and set the *previous* version's `upgrade` strategy: choose
-`copy` only if the previous version's `_source` already holds every field the new mapping needs,
-otherwise choose `backfill`. Then run the mapping tests, which enforce that the journal stays
-contiguous and that `copy` is only declared from a `sourceComplete` version. That journal entry is
-the whole migration file — there is nothing else to write.
+`FTS_SEARCH_INDEX_SCHEMA_HISTORY` and re-declare the `upgrade` of *every* older version with
+`to` set to the new version. Deployments can skip versions, so each older record must be checked
+against the new mapping, not only the previous one: choose `copy` only if that version's `_source`
+already holds every field the new mapping needs, otherwise choose `backfill`. Then run the mapping
+tests, which fail until every older record targets the current version and enforce that `copy` is
+only declared from a `sourceComplete` version. `--upgrade` refuses a served version whose record
+targets a different code version. Those journal entries are the whole migration file — there is
+nothing else to write.
 
 ## Remove pg\_search before the Neon deadline
 

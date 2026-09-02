@@ -123,4 +123,11 @@ describe('planFtsSearchIndexSchemaUpgrade', () => {
       planFtsSearchIndexSchemaUpgrade({ indices: {}, type: 'versioned', version: 0 }, 2),
     ).toThrow('no upgrade entry');
   });
+
+  it('throws when the served version targets an older build than the current target', () => {
+    // Version 1's journal record declares `upgrade.to: 2`, so targeting version 3 is stale.
+    expect(() =>
+      planFtsSearchIndexSchemaUpgrade({ indices: {}, type: 'versioned', version: 1 }, 3),
+    ).toThrow('re-validate');
+  });
 });

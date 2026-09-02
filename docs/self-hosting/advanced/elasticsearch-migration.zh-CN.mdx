@@ -241,7 +241,7 @@ ES_REINDEX_STATE_DIR=.elasticsearch-reindex bun run fts-search:reindex -- --appl
 
 ## 结构版本升级
 
-工具把升级路径记录在一份结构版本日志中：`packages/database/src/repositories/ftsSearchDocument/mappings.ts` 里的 `FTS_SEARCH_INDEX_SCHEMA_HISTORY`。每个结构版本对应一条记录，标注该版本的 `_source` 是否完整保存了全部映射字段（`sourceComplete`），以及把处于该版本的部署继续推进所使用的升级策略（`upgrade`：`copy`、`backfill`，或代表最新版本的 `current`）。映射测试会校验这份日志保持连续，且只有 `sourceComplete` 为真的版本才能声明 `copy` 策略。升级 `FTS_SEARCH_INDEX_SCHEMA_VERSION` 并追加这条记录，就是完整的迁移定义；详见下文的[新增结构版本](#新增结构版本)。
+工具把升级路径记录在一份结构版本日志中：`packages/database/src/repositories/ftsSearchDocument/mappings.ts` 里的 `FTS_SEARCH_INDEX_SCHEMA_HISTORY`。每个结构版本对应一条记录，标注该版本的 `_source` 是否完整保存了全部映射字段（`sourceComplete`），以及把处于该版本的部署推进到当前代码版本的升级项（`upgrade`：`{ strategy: 'copy' | 'backfill', to: <代码版本> }`，最新版本则为 `current`）。映射测试会校验这份日志保持连续、每条旧记录的 `to` 都指向当前代码版本，且只有 `sourceComplete` 为真的版本才能声明 `copy` 策略。升级 `FTS_SEARCH_INDEX_SCHEMA_VERSION` 并更新这些记录，就是完整的迁移定义；详见下文的[新增结构版本](#新增结构版本)。
 
 `--status` 会输出一个 `schema` 区块：`codeVersion`（当前部署内置的结构版本）、`servedVersion`（从稳定别名指向的物理索引解析出的版本）、`state`（`versioned` / `missing` / `mixed`），以及计划执行的 `upgrade`（`{ strategy, toVersion }`；served 版本已等于 `codeVersion` 时为 `null`）。读取这个区块需要和 `--apply` 相同的 Elasticsearch URL 和密钥环境变量。
 
@@ -305,7 +305,7 @@ ES_REINDEX_STATE_DIR=.elasticsearch-reindex bun run fts-search:reindex -- --appl
 
 ### 新增结构版本
 
-升级 `FTS_SEARCH_INDEX_SCHEMA_VERSION` 时，需要在 `FTS_SEARCH_INDEX_SCHEMA_HISTORY` 中为新版本追加一条记录，并设置*前一个*版本的 `upgrade` 策略：只有前一个版本的 `_source` 已经保存了新映射所需的全部字段时才能选择 `copy`，否则应选择 `backfill`。之后运行映射测试，它会校验这份日志保持连续，且只有 `sourceComplete` 为真的版本才能声明 `copy`。这条日志记录就是完整的迁移文件，不需要另外编写迁移代码。
+升级 `FTS_SEARCH_INDEX_SCHEMA_VERSION` 时，需要在 `FTS_SEARCH_INDEX_SCHEMA_HISTORY` 中为新版本追加一条记录，并把*每一个*旧版本的 `upgrade` 重新声明为指向新版本（`to` 设为新版本号）。部署可能跳过中间版本，所以每条旧记录都要对照新映射逐一确认，而不只是前一个版本：只有该版本的 `_source` 已经保存了新映射所需的全部字段时才能选择 `copy`，否则应选择 `backfill`。之后运行映射测试，它会在任何旧记录没有指向当前版本时失败，并校验只有 `sourceComplete` 为真的版本才能声明 `copy`。`--upgrade` 也会拒绝记录目标版本与代码版本不一致的部署。这些日志记录就是完整的迁移文件，不需要另外编写迁移代码。
 
 ## 在 Neon 截止日期前卸载 pg\_search
 

@@ -29,10 +29,14 @@ export interface FtsSearchIndexCopyElasticsearchClient {
 }
 
 export interface FtsSearchIndexCopyTaskStatus {
+  /** Cancellation reason when Elasticsearch stopped the task early. */
+  canceled?: string;
   completed: boolean;
   created: number;
+  deleted: number;
   /** Reindex item failures reported by Elasticsearch once the task completes. */
   failures: unknown[];
+  noops: number;
   total: number;
   updated: number;
   versionConflicts: number;
@@ -204,6 +208,21 @@ export class FtsSearchIndexCopyService {
     if (status.failures.length > 0) {
       throw new Error(
         `Elasticsearch reindex task ${taskId} reported ${status.failures.length} failures: ${JSON.stringify(status.failures.slice(0, 3))}`,
+      );
+    }
+    /**
+     * A canceled task completes without item failures but leaves the target partial. Every source
+     * document must be accounted for as created, updated, skipped by version, no-op, or deleted
+     * before the target is trusted for an alias switch.
+     */
+    if (status.canceled) {
+      throw new Error(`Elasticsearch reindex task ${taskId} was canceled: ${status.canceled}`);
+    }
+    const accounted =
+      status.created + status.updated + status.versionConflicts + status.noops + status.deleted;
+    if (accounted !== status.total) {
+      throw new Error(
+        `Elasticsearch reindex task ${taskId} processed ${accounted} of ${status.total} documents`,
       );
     }
 

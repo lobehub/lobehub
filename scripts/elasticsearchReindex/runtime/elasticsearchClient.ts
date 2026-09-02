@@ -81,7 +81,10 @@ const reindexTaskResponseSchema = z.object({
   task: z.object({
     status: z
       .object({
+        canceled: z.string().optional(),
         created: z.number().int().nonnegative().optional(),
+        deleted: z.number().int().nonnegative().optional(),
+        noops: z.number().int().nonnegative().optional(),
         total: z.number().int().nonnegative().optional(),
         updated: z.number().int().nonnegative().optional(),
         version_conflicts: z.number().int().nonnegative().optional(),
@@ -498,9 +501,12 @@ export class FtsSearchReindexHttpClient
     }
     const status = parsed.data.task.status;
     return {
+      canceled: status.canceled,
       completed: parsed.data.completed,
       created: status.created ?? 0,
+      deleted: status.deleted ?? 0,
       failures: parsed.data.response?.failures ?? [],
+      noops: status.noops ?? 0,
       total: status.total ?? 0,
       updated: status.updated ?? 0,
       versionConflicts: status.version_conflicts ?? 0,
