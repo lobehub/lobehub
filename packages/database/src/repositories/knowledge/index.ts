@@ -1,4 +1,9 @@
-import { CUSTOM_DOCUMENT_FILE_TYPE, CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
+import {
+  CUSTOM_DOCUMENT_FILE_TYPE,
+  CUSTOM_FOLDER_FILE_TYPE,
+  MARKDOWN_MIME_TYPES,
+  RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH,
+} from '@lobechat/const';
 import type { FileUploader, QueryFileListParams } from '@lobechat/types';
 import {
   AI_GENERATED_FILE_SOURCES,
@@ -40,6 +45,24 @@ import { buildWorkspaceWhere } from '../../utils/workspace';
 const f = alias(files, 'f');
 const d = alias(documents, 'd');
 
+const fileNeedsContentPreview = or(
+  eq(f.fileType, CUSTOM_DOCUMENT_FILE_TYPE),
+  eq(f.fileType, 'article'),
+  ilike(f.fileType, 'text/html%'),
+  inArray(f.fileType, MARKDOWN_MIME_TYPES),
+  ilike(f.name, '%.md'),
+  ilike(f.name, '%.markdown'),
+);
+
+const documentNeedsContentPreview = or(
+  eq(d.fileType, CUSTOM_DOCUMENT_FILE_TYPE),
+  eq(d.fileType, 'article'),
+  ilike(d.fileType, 'text/html%'),
+  inArray(d.fileType, MARKDOWN_MIME_TYPES),
+  ilike(d.filename, '%.md'),
+  ilike(d.filename, '%.markdown'),
+);
+
 /**
  * The two arms of the resource UNION.
  *
@@ -58,6 +81,7 @@ const d = alias(documents, 'd');
 const fileArmColumns = {
   chunkTaskId: f.chunkTaskId,
   content: d.content,
+  contentPreviewSource: sql<string | null>`NULL::text`.as('content_preview_source'),
   createdAt: f.createdAt,
   documentId: sql<string | null>`${d.id}`.as('document_id'),
   editorData: d.editorData,
@@ -81,9 +105,23 @@ const fileArmColumns = {
   visibility: f.visibility,
 };
 
+const fileArmSummaryColumns = (includeContentPreview: boolean) => ({
+  ...fileArmColumns,
+  content: sql<string | null>`NULL::text`.as('content'),
+  contentPreviewSource: includeContentPreview
+    ? sql<
+        string | null
+      >`CASE WHEN ${fileNeedsContentPreview} THEN LEFT(${d.content}, ${RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH}) ELSE NULL END`.as(
+        'content_preview_source',
+      )
+    : sql<string | null>`NULL::text`.as('content_preview_source'),
+  editorData: sql<Record<string, any> | null>`NULL::jsonb`.as('editor_data'),
+});
+
 const documentArmColumns = {
   chunkTaskId: sql<string | null>`NULL::uuid`.as('chunk_task_id'),
   content: d.content,
+  contentPreviewSource: sql<string | null>`NULL::text`.as('content_preview_source'),
   createdAt: d.createdAt,
   documentId: sql<string | null>`${d.id}`.as('document_id'),
   editorData: d.editorData,
@@ -106,10 +144,24 @@ const documentArmColumns = {
   visibility: d.visibility,
 };
 
+const documentArmSummaryColumns = (includeContentPreview: boolean) => ({
+  ...documentArmColumns,
+  content: sql<string | null>`NULL::text`.as('content'),
+  contentPreviewSource: includeContentPreview
+    ? sql<
+        string | null
+      >`CASE WHEN ${documentNeedsContentPreview} THEN LEFT(${d.content}, ${RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH}) ELSE NULL END`.as(
+        'content_preview_source',
+      )
+    : sql<string | null>`NULL::text`.as('content_preview_source'),
+  editorData: sql<Record<string, any> | null>`NULL::jsonb`.as('editor_data'),
+});
+
 /** One row as the UNION returns it, before it is shaped into a `KnowledgeItem`. */
 interface KnowledgeRow {
   chunkTaskId: string | null;
   content: string | null;
+  contentPreviewSource: string | null;
   createdAt: Date;
   documentId: string | null;
   editorData: Record<string, any> | null;
@@ -143,6 +195,8 @@ const SORTABLE_COLUMNS: Record<string, string> = {
 export interface KnowledgeItem {
   chunkTaskId?: string | null;
   content?: string | null;
+  /** Bounded raw source used only to generate a list preview on the server. */
+  contentPreviewSource?: string | null;
   createdAt: Date;
   documentId?: string | null;
   editorData?: Record<string, any> | null;
@@ -189,6 +243,13 @@ interface KnowledgeQueryParams extends QueryFileListParams {
    * dropped from cross-KB listings; never populated from client input.
    */
   excludeKnowledgeBaseIds?: string[];
+  /**
+   * Include full document bodies in the result. List and bulk-operation callers
+   * should disable this and load content through the document detail endpoint.
+   */
+  includeContent?: boolean;
+  /** Select a bounded content prefix for server-side preview generation. */
+  includeContentPreview?: boolean;
 }
 
 /**
@@ -212,6 +273,7 @@ const toJson = (value: unknown): Record<string, any> | null => {
 const toKnowledgeItem = (row: KnowledgeRow): KnowledgeItem => ({
   chunkTaskId: row.chunkTaskId,
   content: row.content,
+  ...(row.contentPreviewSource ? { contentPreviewSource: row.contentPreviewSource } : {}),
   createdAt: row.createdAt,
   documentId: row.documentId,
   editorData: row.editorData,
@@ -320,8 +382,11 @@ export class KnowledgeRepo {
     where: (SQL | undefined)[],
     knowledgeBaseId?: string,
     sourceFilter?: ResourceSourceFilter,
+    includeContent: boolean = true,
+    includeContentPreview: boolean = false,
   ) => {
-    let query = this.db.select(fileArmColumns).from(f).$dynamic();
+    const columns = includeContent ? fileArmColumns : fileArmSummaryColumns(includeContentPreview);
+    let query = this.db.select(columns).from(f).$dynamic();
 
     if (knowledgeBaseId) {
       query = query.innerJoin(
@@ -339,9 +404,15 @@ export class KnowledgeRepo {
       .where(and(this.fileScope(sourceFilter), ...where));
   };
 
-  private documentArm = (where: (SQL | undefined)[]) =>
+  private documentArm = (
+    where: (SQL | undefined)[],
+    includeContent: boolean = true,
+    includeContentPreview: boolean = false,
+  ) =>
     this.db
-      .select(documentArmColumns)
+      .select(
+        includeContent ? documentArmColumns : documentArmSummaryColumns(includeContentPreview),
+      )
       .from(d)
       .leftJoin(users, eq(users.id, d.userId))
       .where(and(this.documentScope(), ne(d.sourceType, 'file'), ...where));
@@ -356,6 +427,8 @@ export class KnowledgeRepo {
     sortType,
     sorter,
     excludeKnowledgeBaseIds,
+    includeContent = true,
+    includeContentPreview = false,
     knowledgeBaseId,
     showFilesInKnowledgeBase,
     parentId,
@@ -403,26 +476,32 @@ export class KnowledgeRepo {
       ],
       knowledgeBaseId,
       sourceFilter,
+      includeContent,
+      includeContentPreview,
     );
 
-    const documentArm = this.documentArm([
-      ...this.commonFilters(shared, {
-        names: [d.title, d.filename],
-        parentId: d.parentId,
-        userId: d.userId,
-        visibility: d.visibility,
-      }),
-      this.documentCategoryFilter(category),
-      this.documentSourceFilter(sourceFilter),
-      // Inside a knowledge base only standalone rows (folders and notes with no
-      // backing file) belong to the document arm — documents that do have a file
-      // already come back through the file arm.
-      knowledgeBaseId ? isNull(d.fileId) : undefined,
-      knowledgeBaseId ? eq(d.knowledgeBaseId, knowledgeBaseId) : undefined,
-      !knowledgeBaseId && excludeKnowledgeBaseIds?.length
-        ? or(isNull(d.knowledgeBaseId), notInArray(d.knowledgeBaseId, excludeKnowledgeBaseIds))
-        : undefined,
-    ]);
+    const documentArm = this.documentArm(
+      [
+        ...this.commonFilters(shared, {
+          names: [d.title, d.filename],
+          parentId: d.parentId,
+          userId: d.userId,
+          visibility: d.visibility,
+        }),
+        this.documentCategoryFilter(category),
+        this.documentSourceFilter(sourceFilter),
+        // Inside a knowledge base only standalone rows (folders and notes with no
+        // backing file) belong to the document arm — documents that do have a file
+        // already come back through the file arm.
+        knowledgeBaseId ? isNull(d.fileId) : undefined,
+        knowledgeBaseId ? eq(d.knowledgeBaseId, knowledgeBaseId) : undefined,
+        !knowledgeBaseId && excludeKnowledgeBaseIds?.length
+          ? or(isNull(d.knowledgeBaseId), notInArray(d.knowledgeBaseId, excludeKnowledgeBaseIds))
+          : undefined,
+      ],
+      includeContent,
+      includeContentPreview,
+    );
 
     const rows = await unionAll(fileArm, documentArm)
       .orderBy(this.orderBy(sortType, sorter))
@@ -446,20 +525,28 @@ export class KnowledgeRepo {
     kind?: RecentItemKind,
     visibility?: QueryFileListParams['visibility'],
   ): Promise<KnowledgeItem[]> {
-    const fileArm = this.fileArm([
-      this.notInAnyKnowledgeBase(),
-      this.visibilityFilter(visibility, f.visibility),
-      // Derived pages live in the documents table; their backing file row is not
-      // a file the user uploaded, so it never belongs to the file list.
-      kind === 'file' ? ne(f.fileType, CUSTOM_DOCUMENT_FILE_TYPE) : undefined,
-    ]);
+    const fileArm = this.fileArm(
+      [
+        this.notInAnyKnowledgeBase(),
+        this.visibilityFilter(visibility, f.visibility),
+        // Derived pages live in the documents table; their backing file row is not
+        // a file the user uploaded, so it never belongs to the file list.
+        kind === 'file' ? ne(f.fileType, CUSTOM_DOCUMENT_FILE_TYPE) : undefined,
+      ],
+      undefined,
+      undefined,
+      false,
+    );
 
-    const documentArm = this.documentArm([
-      isNull(d.knowledgeBaseId),
-      this.visibilityFilter(visibility, d.visibility),
-      // Folders are containers, not pages.
-      kind === 'page' ? ne(d.fileType, CUSTOM_FOLDER_FILE_TYPE) : undefined,
-    ]);
+    const documentArm = this.documentArm(
+      [
+        isNull(d.knowledgeBaseId),
+        this.visibilityFilter(visibility, d.visibility),
+        // Folders are containers, not pages.
+        kind === 'page' ? ne(d.fileType, CUSTOM_FOLDER_FILE_TYPE) : undefined,
+      ],
+      false,
+    );
 
     const recent =
       kind === 'file' ? fileArm : kind === 'page' ? documentArm : unionAll(fileArm, documentArm);

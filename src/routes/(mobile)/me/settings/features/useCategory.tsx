@@ -17,6 +17,7 @@ import {
   PaletteIcon,
   Sparkles,
   TagIcon,
+  Trash2,
   UserCircle,
 } from 'lucide-react';
 import { useMemo } from 'react';
@@ -135,6 +136,7 @@ export const useCategory = (): CategoryGroup[] => {
 
     const system: CategoryItem[] = [
       makeItem({ icon: Database, key: SettingsTabs.Storage, label: t('setting:tab.storage') }),
+      makeItem({ icon: Trash2, key: SettingsTabs.Trash, label: t('setting:tab.trash') }),
       isDevMode &&
         makeItem({ icon: KeyIcon, key: SettingsTabs.APIKey, label: t('auth:tab.apikey') }),
       makeItem({

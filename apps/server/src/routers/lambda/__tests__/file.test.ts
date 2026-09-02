@@ -249,9 +249,18 @@ vi.mock('@/server/services/document', () => ({
 }));
 
 const mockAssertCanPerformResourceAction = vi.hoisted(() => vi.fn());
+const mockTrashDocuments = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+const mockTrashFiles = vi.hoisted(() => vi.fn().mockResolvedValue([]));
 
 vi.mock('@/server/services/resourcePermission', () => ({
   assertCanPerformResourceAction: mockAssertCanPerformResourceAction,
+}));
+
+vi.mock('@/server/services/trash', () => ({
+  TrashService: vi.fn(() => ({
+    trashDocuments: mockTrashDocuments,
+    trashFiles: mockTrashFiles,
+  })),
 }));
 
 describe('fileRouter', () => {
@@ -807,7 +816,10 @@ describe('fileRouter', () => {
           sourceType: 'file' as const,
         },
         {
-          editorData: { content: 'test' },
+          contentPreviewSource: '# Document 1\n\nA concise **server** preview',
+          documentId: 'doc-1',
+          editorData: { content: 'large editor payload' },
+          fileType: 'custom/document',
           id: 'doc-1',
           name: 'Document 1',
           sourceType: 'document' as const,
@@ -821,7 +833,7 @@ describe('fileRouter', () => {
         .mockResolvedValueOnce([{ error: null, id: 'emb-1', status: AsyncTaskStatus.Success }]);
       mockFileServiceGetFullFileUrl.mockResolvedValue('https://example.com/test-url');
 
-      const result = await caller.getKnowledgeItems({});
+      const result = await caller.getKnowledgeItems({ includeContentPreview: true });
 
       expect(result.items).toHaveLength(2);
       expect(result.hasMore).toBe(false);
@@ -838,13 +850,38 @@ describe('fileRouter', () => {
         chunkCount: null,
         chunkingError: null,
         chunkingStatus: null,
-        editorData: { content: 'test' },
+        contentPreview: 'A concise server preview',
         embeddingError: null,
         embeddingStatus: null,
         finishEmbedding: false,
         id: 'doc-1',
         name: 'Document 1',
       });
+      expect(result.items[0]).not.toHaveProperty('chunkTaskId');
+      expect(result.items[0]).not.toHaveProperty('embeddingTaskId');
+      expect(result.items[1]).not.toHaveProperty('content');
+      expect(result.items[1]).not.toHaveProperty('contentPreviewSource');
+      expect(result.items[1]).not.toHaveProperty('documentId');
+      expect(result.items[1]).not.toHaveProperty('editorData');
+    });
+
+    it('does not select or return preview content unless the caller opts in', async () => {
+      mockKnowledgeRepoQuery.mockResolvedValue([
+        {
+          ...mockFile,
+          contentPreviewSource: 'must not leave the server',
+          id: 'file-1',
+          sourceType: 'file' as const,
+        },
+      ]);
+
+      const result = await caller.getKnowledgeItems({});
+
+      expect(mockKnowledgeRepoQuery).toHaveBeenCalledWith(
+        expect.objectContaining({ includeContent: false, includeContentPreview: false }),
+      );
+      expect(result.items[0]).not.toHaveProperty('contentPreview');
+      expect(result.items[0]).not.toHaveProperty('contentPreviewSource');
     });
   });
 
@@ -903,12 +940,13 @@ describe('fileRouter', () => {
   });
 
   describe('removeFile', () => {
-    it('should do nothing when file not found', async () => {
-      ctx.fileModel.delete.mockResolvedValue(null);
+    it('should explicitly fail when the file is not accessible', async () => {
+      mockFileModelFindById.mockResolvedValue(undefined);
 
-      await caller.removeFile({ id: 'invalid-id' });
-
-      expect(ctx.fileService.deleteFile).not.toHaveBeenCalled();
+      await expect(caller.removeFile({ id: 'invalid-id' })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+      expect(mockFileModelDelete).not.toHaveBeenCalled();
     });
   });
 
@@ -934,12 +972,14 @@ describe('fileRouter', () => {
   });
 
   describe('removeFiles', () => {
-    it('should do nothing when no files found', async () => {
-      ctx.fileModel.deleteMany.mockResolvedValue([]);
+    it('should explicitly fail instead of silently filtering inaccessible files', async () => {
+      mockFileModelFindByIds.mockResolvedValue([{ id: 'file-1' }]);
 
-      await caller.removeFiles({ ids: ['invalid-1', 'invalid-2'] });
+      await expect(caller.removeFiles({ ids: ['file-1', 'private-file'] })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
 
-      expect(ctx.fileService.deleteFiles).not.toHaveBeenCalled();
+      expect(mockFileModelDeleteMany).not.toHaveBeenCalled();
     });
   });
 
@@ -965,16 +1005,12 @@ describe('fileRouter', () => {
 
       const result = await caller.deleteKnowledgeItemsByQuery({});
 
-      expect(mockDocumentServiceDeleteDocuments).toHaveBeenCalledWith(['doc-1'], {
-        restrictToCreator: false,
-      });
-      expect(mockFileModelDeleteMany).toHaveBeenCalledWith(['file-2'], false, {
-        restrictToCreator: false,
-      });
+      expect(mockTrashDocuments).toHaveBeenCalledWith(['doc-1']);
+      expect(mockTrashFiles).toHaveBeenCalledWith(['file-2']);
       expect(result).toEqual({ count: 2 });
     });
 
-    it('should keep member query deletion caller-scoped and honor exclusions', async () => {
+    it('should let members delete the full visible query scope while honoring exclusions', async () => {
       ({ ctx, caller } = createCallerWithCtx({
         workspaceId: 'workspace-active',
         workspaceRole: 'member',
@@ -1002,14 +1038,14 @@ describe('fileRouter', () => {
       });
 
       expect(mockKnowledgeRepoQuery).toHaveBeenCalledWith({
-        creatorUserId: 'test-user',
+        excludeKnowledgeBaseIds: [],
+        includeContent: false,
+        includeContentPreview: false,
         limit: 501,
         offset: 0,
         showFilesInKnowledgeBase: false,
       });
-      expect(mockFileModelDeleteMany).toHaveBeenCalledWith(['file-delete'], false, {
-        restrictToCreator: true,
-      });
+      expect(mockTrashFiles).toHaveBeenCalledWith(['file-delete']);
       expect(result).toEqual({ count: 1 });
     });
 
@@ -1032,19 +1068,19 @@ describe('fileRouter', () => {
       await caller.deleteKnowledgeItemsByQuery({});
 
       expect(mockKnowledgeRepoQuery).toHaveBeenCalledWith({
-        creatorUserId: undefined,
+        excludeKnowledgeBaseIds: [],
+        includeContent: false,
+        includeContentPreview: false,
         limit: 501,
         offset: 0,
         showFilesInKnowledgeBase: false,
       });
-      expect(mockFileModelDeleteMany).toHaveBeenCalledWith(['member-file'], false, {
-        restrictToCreator: false,
-      });
+      expect(mockTrashFiles).toHaveBeenCalledWith(['member-file']);
     });
   });
 
   describe('resolveKnowledgeItemIds', () => {
-    it('resolves only caller-owned rows for members and the full scope for owners', async () => {
+    it('resolves the same visible scope for members and owners', async () => {
       mockKnowledgeRepoQuery.mockResolvedValue([]);
 
       ({ caller } = createCallerWithCtx({
@@ -1054,8 +1090,9 @@ describe('fileRouter', () => {
       await caller.resolveKnowledgeItemIds({});
 
       expect(mockKnowledgeRepoQuery).toHaveBeenLastCalledWith({
-        creatorUserId: 'test-user',
         excludeKnowledgeBaseIds: [],
+        includeContent: false,
+        includeContentPreview: false,
         limit: 501,
         offset: 0,
         showFilesInKnowledgeBase: false,
@@ -1068,8 +1105,9 @@ describe('fileRouter', () => {
       await caller.resolveKnowledgeItemIds({});
 
       expect(mockKnowledgeRepoQuery).toHaveBeenLastCalledWith({
-        creatorUserId: undefined,
         excludeKnowledgeBaseIds: [],
+        includeContent: false,
+        includeContentPreview: false,
         limit: 501,
         offset: 0,
         showFilesInKnowledgeBase: false,

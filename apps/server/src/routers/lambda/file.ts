@@ -23,10 +23,11 @@ import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { KnowledgeRepo } from '@/database/repositories/knowledge';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
+import { TrashService } from '@/server/services/trash';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
+import { createResourceContentPreview } from '@/server/utils/resourceContentPreview';
 import { AsyncTaskStatus, AsyncTaskType, type IAsyncTaskError } from '@/types/asyncTask';
 import type { FileListItem, KnowledgeItemStatus } from '@/types/files';
 import { QueryFileListSchema, toFileSource, UploadFileSchema } from '@/types/files';
@@ -46,6 +47,16 @@ const fileTransferEntityTypeSchema = z.enum(['document', 'file', 'folder']);
 const deleteKnowledgeItemsByQuerySchema = QueryFileListSchema.extend({
   excludedIds: z.array(z.string()).optional(),
 });
+
+const assertAllFilesAccessible = (requestedIds: string[], files: Array<{ id: string }>): void => {
+  const accessibleIds = new Set(files.map((file) => file.id));
+  if ([...new Set(requestedIds)].some((id) => !accessibleIds.has(id))) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'One or more files were not found or are not accessible',
+    });
+  }
+};
 
 const filterKnowledgeItems = <
   T extends {
@@ -153,11 +164,11 @@ const fileProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => 
       asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId, wsId),
       chunkModel: new ChunkModel(ctx.serverDB, ctx.userId, wsId),
       documentModel: new DocumentModel(ctx.serverDB, ctx.userId, wsId),
-      documentService: new DocumentService(ctx.serverDB, ctx.userId, wsId),
       fileModel: new FileModel(ctx.serverDB, ctx.userId, wsId),
       fileService: new FileService(ctx.serverDB, ctx.userId, wsId),
       knowledgeBaseModel: new KnowledgeBaseModel(ctx.serverDB, ctx.userId, wsId),
       knowledgeRepo: new KnowledgeRepo(ctx.serverDB, ctx.userId, wsId),
+      trashService: new TrashService(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
@@ -436,6 +447,7 @@ export const fileRouter = router({
     const knowledgeItems = await ctx.knowledgeRepo.query({
       ...input,
       excludeKnowledgeBaseIds,
+      includeContent: false,
       limit: limit + 1,
     });
 
@@ -457,23 +469,62 @@ export const fileRouter = router({
     // larger result sets (visible when switching from Private to Workspace).
     const resultItems = await Promise.all(
       filteredItems.map(async (item) => {
+        const contentPreview = input.includeContentPreview
+          ? createResourceContentPreview({
+              content: item.contentPreviewSource,
+              fileType: item.fileType,
+              title: item.name,
+            })
+          : undefined;
+
         if (item.sourceType === 'file') {
           const status = statusMap.get(item.id)!;
           return {
-            ...item,
-            editorData: null,
+            chunkCount: status.chunkCount,
+            chunkingError: status.chunkingError,
+            chunkingStatus: status.chunkingStatus,
+            ...(input.includeContentPreview ? { contentPreview } : {}),
+            createdAt: item.createdAt,
+            embeddingError: status.embeddingError,
+            embeddingStatus: status.embeddingStatus,
+            fileId: item.fileId,
+            fileType: item.fileType,
+            finishEmbedding: status.finishEmbedding,
+            id: item.id,
+            metadata: item.metadata,
+            name: item.name,
+            size: item.size,
+            slug: item.slug,
+            sourceType: item.sourceType,
+            updatedAt: item.updatedAt,
+            uploader: item.uploader,
             url: await ctx.fileService.getFileAccessUrl(item),
-            ...status,
+            userId: item.userId,
+            visibility: item.visibility,
           } as FileListItem;
         }
         return {
-          ...item,
           chunkCount: null,
           chunkingError: null,
           chunkingStatus: null,
+          ...(input.includeContentPreview ? { contentPreview } : {}),
+          createdAt: item.createdAt,
           embeddingError: null,
           embeddingStatus: null,
+          fileId: item.fileId,
+          fileType: item.fileType,
           finishEmbedding: false,
+          id: item.id,
+          metadata: item.metadata,
+          name: item.name,
+          size: item.size,
+          slug: item.slug,
+          sourceType: item.sourceType,
+          updatedAt: item.updatedAt,
+          uploader: item.uploader,
+          url: item.url ?? '',
+          userId: item.userId,
+          visibility: item.visibility,
         } as FileListItem;
       }),
     );
@@ -500,8 +551,9 @@ export const fileRouter = router({
       while (hasMore) {
         const knowledgeItems = await ctx.knowledgeRepo.query({
           ...input,
-          creatorUserId: isWorkspaceNonOwner(ctx) ? ctx.userId : undefined,
           excludeKnowledgeBaseIds,
+          includeContent: false,
+          includeContentPreview: false,
           limit: batchSize + 1,
           offset,
         });
@@ -523,11 +575,15 @@ export const fileRouter = router({
     .use(withScopedPermission('file:delete'))
     .input(deleteKnowledgeItemsByQuerySchema)
     .mutation(async ({ ctx, input }): Promise<{ count: number }> => {
-      // Members can sweep only rows they created. Workspace owners may clear
-      // the entire query scope, including rows uploaded by other members.
-      const restrictToCreator = isWorkspaceNonOwner(ctx);
       const { excludedIds = [], ...query } = input;
       const excludedIdSet = new Set(excludedIds);
+
+      if (query.knowledgeBaseId) {
+        await assertKnowledgeBaseBrowsable(ctx, query.knowledgeBaseId);
+      }
+      const excludeKnowledgeBaseIds = query.knowledgeBaseId
+        ? undefined
+        : await getRestrictedKnowledgeBaseIds(ctx);
 
       const fileIds: string[] = [];
       const documentIds: string[] = [];
@@ -538,7 +594,9 @@ export const fileRouter = router({
       while (hasMore) {
         const knowledgeItems = await ctx.knowledgeRepo.query({
           ...query,
-          creatorUserId: restrictToCreator ? ctx.userId : undefined,
+          excludeKnowledgeBaseIds,
+          includeContent: false,
+          includeContentPreview: false,
           limit: batchSize + 1,
           offset,
         });
@@ -568,35 +626,25 @@ export const fileRouter = router({
       }
 
       if (documentIds.length > 0) {
-        // Per-document delete guard, mirroring `document.deleteDocuments` — a
-        // query-driven sweep must not delete shared docs the member can't delete.
-        if (ctx.workspaceId) {
-          await Promise.all(
-            documentIds.map((id) =>
-              assertCanPerformResourceAction({
-                action: 'delete',
-                db: ctx.serverDB,
-                resourceId: id,
-                resourceType: 'document',
-                userId: ctx.userId,
-                workspaceId: ctx.workspaceId!,
-              }),
-            ),
-          );
+        if (
+          ctx.workspaceId &&
+          !(await hasWorkspaceScopedPermission({
+            action: 'DOCUMENT_DELETE',
+            db: ctx.serverDB,
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId,
+          }))
+        ) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'No permission to delete documents',
+          });
         }
-        await ctx.documentService.deleteDocuments(documentIds, { restrictToCreator });
+        await ctx.trashService.trashDocuments(documentIds);
       }
 
       if (fileIds.length > 0) {
-        const needToRemoveFileList = await ctx.fileModel.deleteMany(
-          fileIds,
-          serverDBEnv.REMOVE_GLOBAL_FILE,
-          { restrictToCreator },
-        );
-
-        if (needToRemoveFileList && needToRemoveFileList.length > 0) {
-          await ctx.fileService.deleteFiles(needToRemoveFileList.map((file) => file.url!));
-        }
+        await ctx.trashService.trashFiles(fileIds);
       }
 
       return { count: fileIds.length + documentIds.length };
@@ -688,15 +736,10 @@ export const fileRouter = router({
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const existing = await ctx.fileModel.findById(input.id);
-      if (!existing) return;
-      assertWorkspaceRowManageable(ctx, existing.userId, 'file');
+      if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
+      await assertFileNotInRestrictedKnowledgeBase(ctx, input.id);
 
-      const file = await ctx.fileModel.delete(input.id, serverDBEnv.REMOVE_GLOBAL_FILE);
-
-      if (!file) return;
-
-      // delete the file from S3 if it is not used by other files
-      await ctx.fileService.deleteFile(file.url!);
+      await ctx.trashService.trashFiles([input.id]);
     }),
 
   removeUnreferencedFile: fileProcedure
@@ -704,8 +747,8 @@ export const fileRouter = router({
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const existing = await ctx.fileModel.findById(input.id);
-      if (!existing) return;
-      assertWorkspaceRowManageable(ctx, existing.userId, 'file');
+      if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
+      await assertFileNotInRestrictedKnowledgeBase(ctx, input.id);
 
       const file = await ctx.fileModel.deleteUnreferenced(input.id, serverDBEnv.REMOVE_GLOBAL_FILE);
       if (!file) return;
@@ -724,8 +767,8 @@ export const fileRouter = router({
     .mutation(async ({ ctx, input }) => {
       const file = await ctx.fileModel.findById(input.id);
 
-      if (!file) return;
-      assertWorkspaceRowManageable(ctx, file.userId, 'file');
+      if (!file) throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
+      await assertFileNotInRestrictedKnowledgeBase(ctx, input.id);
 
       const taskId = input.type === 'embedding' ? file.embeddingTaskId : file.chunkTaskId;
 
@@ -739,19 +782,12 @@ export const fileRouter = router({
     .input(z.object({ ids: z.array(z.string()) }))
     .mutation(async ({ input, ctx }) => {
       const targets = await ctx.fileModel.findByIds(input.ids);
-      for (const target of targets) {
-        assertWorkspaceRowManageable(ctx, target.userId, 'file');
-      }
-
-      const needToRemoveFileList = await ctx.fileModel.deleteMany(
-        input.ids,
-        serverDBEnv.REMOVE_GLOBAL_FILE,
+      assertAllFilesAccessible(input.ids, targets);
+      await Promise.all(
+        targets.map((target) => assertFileNotInRestrictedKnowledgeBase(ctx, target.id)),
       );
 
-      if (!needToRemoveFileList || needToRemoveFileList.length === 0) return;
-
-      // remove from S3
-      await ctx.fileService.deleteFiles(needToRemoveFileList.map((file) => file.url!));
+      await ctx.trashService.trashFiles(input.ids);
     }),
 
   updateFile: fileProcedure
@@ -768,8 +804,8 @@ export const fileRouter = router({
       const { id, metadata, name, parentId } = input;
 
       const existing = await ctx.fileModel.findById(id);
-      if (!existing) return { success: true };
-      assertWorkspaceRowManageable(ctx, existing.userId, 'file');
+      if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
+      await assertFileNotInRestrictedKnowledgeBase(ctx, id);
 
       // Resolve parentId if it's a slug (otherwise use as-is)
       let resolvedParentId: string | null | undefined = parentId;

@@ -4,14 +4,14 @@ import { z } from 'zod';
 import { businessFileTransferStorageCheck } from '@/business/server/lambda-routers/file';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
-import { serverDBEnv } from '@/config/db';
+import { DocumentModel } from '@/database/models/document';
+import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { FileService } from '@/server/services/file';
-import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
+import { TrashService } from '@/server/services/trash';
 import {
   getWorkspaceScopedPermissionMatches,
   hasWorkspaceScopedPermission,
@@ -24,6 +24,7 @@ import {
   isWorkspaceNonOwner,
 } from './_helpers/assertWorkspaceRowManageable';
 import {
+  assertContentsNotInRestrictedKnowledgeBase,
   assertKnowledgeBaseBrowsable,
   filterRestrictedKnowledgeBases,
   getUseLevelKnowledgeBaseIds,
@@ -45,13 +46,44 @@ const updatableKnowledgeBaseFields = z.object({
   name: z.string().optional(),
 });
 
+const assertKnowledgeItemsAccessible = async (
+  ctx: {
+    documentModel: DocumentModel;
+    fileModel: FileModel;
+    serverDB: ConstructorParameters<typeof DocumentModel>[0];
+    userId: string;
+    workspaceId?: string | null;
+  },
+  ids: string[],
+): Promise<void> => {
+  const uniqueIds = [...new Set(ids)];
+  const documentIds = uniqueIds.filter((id) => id.startsWith('docs_'));
+  const fileIds = uniqueIds.filter((id) => !id.startsWith('docs_'));
+  const [documents, files] = await Promise.all([
+    ctx.documentModel.findByIds(documentIds),
+    ctx.fileModel.findByIds(fileIds),
+  ]);
+
+  if (documents.length + files.length !== uniqueIds.length) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'One or more resources were not found or are not accessible',
+    });
+  }
+
+  await assertContentsNotInRestrictedKnowledgeBase(ctx, uniqueIds);
+};
+
 const knowledgeBaseProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const wsId = ctx.workspaceId ?? undefined;
 
   return opts.next({
     ctx: {
+      documentModel: new DocumentModel(ctx.serverDB, ctx.userId, wsId),
+      fileModel: new FileModel(ctx.serverDB, ctx.userId, wsId),
       knowledgeBaseModel: new KnowledgeBaseModel(ctx.serverDB, ctx.userId, wsId),
+      trashService: new TrashService(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
@@ -61,10 +93,14 @@ export const knowledgeBaseRouter = router({
     .use(withScopedPermission('knowledge_base:update'))
     .input(z.object({ ids: z.array(z.string()), knowledgeBaseId: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      // KB file membership is not in the co-edit list — creator/owner only.
       const kb = await ctx.knowledgeBaseModel.findById(input.knowledgeBaseId);
       if (!kb) throw new TRPCError({ code: 'NOT_FOUND', message: 'Knowledge base not found' });
-      assertWorkspaceRowManageable(ctx, kb.userId, 'knowledge base');
+      await assertKnowledgeBaseBrowsable(ctx, input.knowledgeBaseId, {
+        userId: kb.userId,
+        visibility: kb.visibility ?? null,
+        workspaceId: kb.workspaceId ?? null,
+      });
+      await assertKnowledgeItemsAccessible(ctx, input.ids);
 
       try {
         return await ctx.knowledgeBaseModel.addFilesToKnowledgeBase(
@@ -278,33 +314,27 @@ export const knowledgeBaseRouter = router({
   removeAllKnowledgeBases: knowledgeBaseProcedure
     .use(withScopedPermission('knowledge_base:delete'))
     .mutation(async ({ ctx }) => {
-      // Workspace clear-all is caller-scoped for every role — owners included
-      // (per docs/usage/workspace-permissions: bulk actions only affect
-      // caller-created content).
-      const restrictToCreator = !!ctx.workspaceId;
-
-      const result = await ctx.knowledgeBaseModel.deleteAllWithFiles(
-        serverDBEnv.REMOVE_GLOBAL_FILE,
-        { restrictToCreator },
-      );
-
-      if (result.deletedFiles.length > 0) {
-        const fileService = new FileService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
-        const urls = result.deletedFiles.map((f) => f.url).filter(Boolean) as string[];
-        if (urls.length > 0) {
-          await fileService.deleteFiles(urls);
-        }
-      }
+      const knowledgeBases = await ctx.knowledgeBaseModel.query();
+      const ids = ctx.workspaceId
+        ? knowledgeBases
+            .filter((knowledgeBase) => knowledgeBase.userId === ctx.userId)
+            .map((kb) => kb.id)
+        : knowledgeBases.map((knowledgeBase) => knowledgeBase.id);
+      await ctx.trashService.trashKnowledgeBases(ids);
     }),
 
   removeFilesFromKnowledgeBase: knowledgeBaseProcedure
     .use(withScopedPermission('knowledge_base:update'))
     .input(z.object({ ids: z.array(z.string()), knowledgeBaseId: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      // KB file membership is not in the co-edit list — creator/owner only.
       const kb = await ctx.knowledgeBaseModel.findById(input.knowledgeBaseId);
       if (!kb) throw new TRPCError({ code: 'NOT_FOUND', message: 'Knowledge base not found' });
-      assertWorkspaceRowManageable(ctx, kb.userId, 'knowledge base');
+      await assertKnowledgeBaseBrowsable(ctx, input.knowledgeBaseId, {
+        userId: kb.userId,
+        visibility: kb.visibility ?? null,
+        workspaceId: kb.workspaceId ?? null,
+      });
+      await assertKnowledgeItemsAccessible(ctx, input.ids);
 
       return ctx.knowledgeBaseModel.removeFilesFromKnowledgeBase(input.knowledgeBaseId, input.ids);
     }),
@@ -314,22 +344,16 @@ export const knowledgeBaseRouter = router({
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const existing = await ctx.knowledgeBaseModel.findById(input.id);
-      if (!existing) return;
-      assertWorkspaceRowManageable(ctx, existing.userId, 'knowledge base');
-
-      const result = await ctx.knowledgeBaseModel.deleteWithFiles(
-        input.id,
-        serverDBEnv.REMOVE_GLOBAL_FILE,
-        { restrictToCreator: isWorkspaceNonOwner(ctx) },
-      );
-
-      if (result.deletedFiles.length > 0) {
-        const fileService = new FileService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
-        const urls = result.deletedFiles.map((f) => f.url).filter(Boolean) as string[];
-        if (urls.length > 0) {
-          await fileService.deleteFiles(urls);
-        }
+      if (!existing) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Knowledge base not found' });
       }
+      await assertKnowledgeBaseBrowsable(ctx, input.id, {
+        userId: existing.userId,
+        visibility: existing.visibility ?? null,
+        workspaceId: existing.workspaceId ?? null,
+      });
+
+      await ctx.trashService.trashKnowledgeBases([input.id]);
     }),
 
   transferKnowledgeBase: knowledgeBaseProcedure
@@ -432,23 +456,11 @@ export const knowledgeBaseRouter = router({
     .mutation(async ({ input, ctx }) => {
       const existing = await ctx.knowledgeBaseModel.findById(input.id);
       if (!existing) return;
-      if (ctx.workspaceId) {
-        await assertCanPerformResourceAction({
-          action: 'edit',
-          db: ctx.serverDB,
-          grantedPermissions: (ctx as { workspacePermissionCodes?: string[] })
-            .workspacePermissionCodes,
-          meta: {
-            userId: existing.userId,
-            visibility: existing.visibility ?? null,
-            workspaceId: existing.workspaceId ?? null,
-          },
-          resourceId: input.id,
-          resourceType: 'knowledgeBase',
-          userId: ctx.userId,
-          workspaceId: ctx.workspaceId,
-        });
-      }
+      await assertKnowledgeBaseBrowsable(ctx, input.id, {
+        userId: existing.userId,
+        visibility: existing.visibility ?? null,
+        workspaceId: existing.workspaceId ?? null,
+      });
 
       return ctx.knowledgeBaseModel.update(input.id, input.value);
     }),

@@ -12,6 +12,7 @@ import {
   works,
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { isTrashed, restoreStamp, type SoftDeleteOptions, trashStamp } from '../utils/softDelete';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export interface QueryDocumentParams {
@@ -57,10 +58,11 @@ export class DocumentModel {
     this.callerAgentVisibility = callerAgentVisibility;
   }
 
-  private ownership = () =>
+  private ownership = (includeTrashed?: boolean) =>
     buildWorkspaceWhere(
       {
         callerAgentVisibility: this.callerAgentVisibility,
+        includeTrashed,
         userId: this.userId,
         workspaceId: this.workspaceId,
       },
@@ -244,6 +246,71 @@ export class DocumentModel {
     });
   };
 
+  findTrashedByIds = async (ids: string[]): Promise<DocumentItem[]> => {
+    if (ids.length === 0) return [];
+    return this.db
+      .select()
+      .from(documents)
+      .where(and(this.ownership(true), inArray(documents.id, ids), isTrashed(documents.isDeleted)));
+  };
+
+  findByFileIds = async (fileIds: string[]): Promise<DocumentItem[]> => {
+    if (fileIds.length === 0) return [];
+    return this.db
+      .select()
+      .from(documents)
+      .where(and(this.ownership(), inArray(documents.fileId, fileIds)));
+  };
+
+  softDelete = async (ids: string[], options: SoftDeleteOptions): Promise<DocumentItem[]> => {
+    if (ids.length === 0) return [];
+    return this.db
+      .update(documents)
+      .set(trashStamp(options.deletedAt))
+      .where(
+        and(
+          this.ownership(),
+          inArray(documents.id, ids),
+          options.restrictToCreator ? eq(documents.userId, this.userId) : undefined,
+        ),
+      )
+      .returning();
+  };
+
+  softDeleteSubtree = async (
+    rootId: string,
+    options: SoftDeleteOptions,
+  ): Promise<DocumentItem[]> => {
+    const subtree = await this.collectSubtree(rootId);
+    if (subtree.length === 0) return [];
+    const ids = subtree
+      .filter((document) => !options.restrictToCreator || document.userId === this.userId)
+      .map((document) => document.id);
+    if (ids.length === 0) return [];
+    return this.db
+      .update(documents)
+      .set(trashStamp(options.deletedAt))
+      .where(and(this.ownership(), inArray(documents.id, ids)))
+      .returning();
+  };
+
+  restore = async (ids: string[]): Promise<DocumentItem[]> => {
+    if (ids.length === 0) return [];
+    return this.db
+      .update(documents)
+      .set(restoreStamp())
+      .where(and(this.ownership(true), inArray(documents.id, ids), isTrashed(documents.isDeleted)))
+      .returning();
+  };
+
+  purge = async (ids: string[]) => {
+    if (ids.length === 0) return [];
+    return this.db
+      .delete(documents)
+      .where(and(this.ownership(true), inArray(documents.id, ids), isTrashed(documents.isDeleted)))
+      .returning({ id: documents.id });
+  };
+
   findByFileId = async (fileId: string) => {
     return this.db.query.documents.findFirst({
       // A file can legitimately own more than one document: `parseDocument`
@@ -334,7 +401,7 @@ export class DocumentModel {
             eq(works.resourceId, rootId),
             buildWorkspaceWhere(
               { userId: this.userId, workspaceId: this.workspaceId },
-              { userId: works.userId, workspaceId: works.workspaceId },
+              { isDeleted: works.isDeleted, userId: works.userId, workspaceId: works.workspaceId },
             ),
           ),
         );
@@ -347,7 +414,7 @@ export class DocumentModel {
    * Collect a document and all its descendants (folders + leaves) via BFS.
    * Honors the current ownership scope.
    */
-  private collectSubtree = async (
+  collectSubtree = async (
     rootId: string,
     runner: LobeChatDatabase = this.db,
   ): Promise<DocumentItem[]> => {

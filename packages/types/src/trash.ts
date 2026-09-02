@@ -5,17 +5,15 @@
  * literal here plus a handler in the server `TrashService` — never a new
  * table.
  *
- * Phase 1 wires up the chat domain (agent / topic / message); the remaining
- * content kinds (chat groups, pages, files, knowledge bases, projects, tasks,
- * generation topics) follow once the pattern has proven itself — see
- * docs/development/soft-delete-recycle-bin-design.md.
+ * This recycle bin is intentionally limited to the Resource domain. Chat,
+ * agent, task, and other product domains keep their existing delete behavior.
  *
  * Only *root* kinds are user-visible in the recycle bin. Rows that were
- * trashed as part of a parent's cascade (e.g. a topic under a trashed agent)
- * are still registered as `trash_items` children so a restore / purge of the
- * root can find them, but the UI never lists them on their own.
+ * trashed as part of a Resource cascade (e.g. a document under a trashed
+ * folder) are still registered as `trash_items` children so a restore / purge
+ * of the root can find them, but the UI never lists them on their own.
  */
-export const TRASH_RESOURCE_TYPES = ['agent', 'topic', 'message'] as const;
+export const TRASH_RESOURCE_TYPES = ['file', 'document', 'knowledgeBase'] as const;
 export type TrashResourceType = (typeof TRASH_RESOURCE_TYPES)[number];
 
 /**
@@ -26,28 +24,17 @@ export type TrashResourceType = (typeof TRASH_RESOURCE_TYPES)[number];
  */
 export interface TrashItemMeta {
   avatar?: string | null;
-  backgroundColor?: string | null;
-  /** Number of cascaded children registered under this root (topics under an agent …) */
-  childCount?: number;
+  /** Original resource creator; differs from the delete actor in a shared workspace. */
+  creatorUserId?: string | null;
   /** e.g. mime type for files, `sourceType` for documents */
   kind?: string | null;
-  /**
-   * Message-only: original `parentId` and the child ids that were re-parented
-   * onto it at trash time, so a restore can splice the message back into its
-   * branch (see `MessageModel.softDeleteMessages`).
-   */
-  messageTree?: { childIds: string[]; parentId: string | null };
-  /** Human readable parent title (agent name for a topic, folder for a page …) */
-  parentTitle?: string | null;
-  /**
-   * Topic-only: the user asked for the topic's attachments to go with it.
-   * Files are not trash-aware yet, so they stay live while the topic sits in
-   * the bin and are removed (with their storage objects) when it is purged.
-   */
-  removeFiles?: boolean;
-  /** Message-only: role of the trashed message, drives the list glyph. */
-  role?: string | null;
+  /** Original knowledge base, when the resource is directly attached to one. */
+  knowledgeBaseId?: string | null;
+  /** Original folder parent, retained for audit and restore context. */
+  parentId?: string | null;
   size?: number | null;
+  /** Visibility snapshot used to keep private resources out of teammates' bins. */
+  visibility?: 'private' | 'public' | null;
 }
 
 export interface TrashItem {

@@ -39,7 +39,7 @@ const Body = memo(() => {
           WorkspaceSettingsGroupKey.General,
           WorkspaceSettingsGroupKey.Subscription,
           WorkspaceSettingsGroupKey.Agent,
-          WorkspaceSettingsGroupKey.Developer,
+          WorkspaceSettingsGroupKey.System,
           WorkspaceSettingsGroupKey.Admin,
         ]}
       >

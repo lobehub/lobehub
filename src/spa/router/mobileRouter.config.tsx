@@ -567,6 +567,13 @@ export const mobileRoutes: RouteObject[] = [
               },
               {
                 element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/trash'),
+                  'Mobile > Workspace > Settings > Trash',
+                ),
+                path: 'trash',
+              },
+              {
+                element: dynamicElement(
                   () => import('@/routes/(main)/[workspaceSlug]/settings/oauth-apps'),
                   'Mobile > Workspace > Settings > OAuth Apps',
                 ),

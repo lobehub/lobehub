@@ -17,6 +17,7 @@ import {
   ScrollText,
   Sparkles,
   TagIcon,
+  Trash2,
   Users,
 } from 'lucide-react';
 import { useMemo } from 'react';
@@ -30,9 +31,9 @@ import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 export enum WorkspaceSettingsGroupKey {
   Admin = 'admin',
   Agent = 'agent',
-  Developer = 'developer',
   General = 'general',
   Subscription = 'subscription',
+  System = 'system',
 }
 
 export interface WorkspaceSettingCategoryItem {
@@ -177,7 +178,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           key: WorkspaceSettingsGroupKey.Agent,
           title: t('workspaceSetting.group.agent'),
         },
-        (canCreateContent || enableOAuthApps) && {
+        {
           items: [
             canCreateContent && {
               icon: KeyIcon,
@@ -189,9 +190,14 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.OAuthApps,
               label: tAuth('tab.oauthApps'),
             },
+            {
+              icon: Trash2,
+              key: WorkspaceSettingsTabs.Trash,
+              label: t('tab.trash'),
+            },
           ].filter(Boolean) as WorkspaceSettingCategoryItem[],
-          key: WorkspaceSettingsGroupKey.Developer,
-          title: t('group.developer'),
+          key: WorkspaceSettingsGroupKey.System,
+          title: t('group.system'),
         },
         // The Admin group is available to Admin and Owner.
         canManageWorkspace && {

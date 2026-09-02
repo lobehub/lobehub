@@ -169,6 +169,15 @@ export default {
   'workspace_primary_ownership_transferred':
     'You are now the Owner of workspace "{{workspaceName}}". Billing responsibility and full Owner privileges have been transferred to you.',
   'workspace_primary_ownership_transferred_title': 'You are now the Owner of {{workspaceName}}',
+  'workspace_resource_changed_by_member':
+    '{{actorLabel}} changed your {{resourceLabel}} "{{resourceTitle}}".',
+  'workspace_resource_changed_by_member_title': 'Workspace resource changed',
+  'workspace_resource_deleted_by_member':
+    '{{actorLabel}} moved your {{resourceLabel}} "{{resourceTitle}}" to Trash.',
+  'workspace_resource_deleted_by_member_title': 'Workspace resource moved to Trash',
+  'workspace_resource_restored_by_member':
+    '{{actorLabel}} restored your {{resourceLabel}} "{{resourceTitle}}" from Trash.',
+  'workspace_resource_restored_by_member_title': 'Workspace resource restored',
   'workspace_subscription_expired':
     'The subscription for workspace "{{workspaceName}}" has ended. Renew within {{days}} days to restore full access before the workspace is downgraded.',
   'workspace_subscription_expired_title': 'Subscription ended for {{workspaceName}}',

@@ -4,17 +4,22 @@ import { knowledgeBaseRouter } from '@/server/routers/lambda/knowledgeBase';
 import { TransferErrorCode } from '@/types/transferError';
 
 const routerMocks = vi.hoisted(() => ({
-  assertCanPerformResourceAction: vi.fn(),
+  assertContentsNotInRestrictedKnowledgeBase: vi.fn(),
+  assertKnowledgeBaseBrowsable: vi.fn(),
   businessFileTransferStorageCheck: vi.fn(),
   hasWorkspaceScopedPermission: vi.fn(),
 }));
 
 const mockKnowledgeBaseModelCountFileUsage = vi.fn();
+const mockKnowledgeBaseModelAddFiles = vi.fn();
 const mockKnowledgeBaseModelCopyToWorkspace = vi.fn();
 const mockKnowledgeBaseModelFindById = vi.fn();
 const mockKnowledgeBaseModelTransferTo = vi.fn();
 const mockKnowledgeBaseModelHasForeignLinkedRows = vi.fn().mockResolvedValue(false);
 const mockKnowledgeBaseModelUpdate = vi.fn();
+const mockTrashKnowledgeBases = vi.fn();
+const mockDocumentModelFindByIds = vi.fn();
+const mockFileModelFindByIds = vi.fn();
 
 vi.mock('@/business/server/lambda-routers/file', () => ({
   businessFileTransferStorageCheck: routerMocks.businessFileTransferStorageCheck,
@@ -24,8 +29,24 @@ vi.mock('@/server/services/workspacePermission', () => ({
   hasWorkspaceScopedPermission: routerMocks.hasWorkspaceScopedPermission,
 }));
 
-vi.mock('@/server/services/resourcePermission', () => ({
-  assertCanPerformResourceAction: routerMocks.assertCanPerformResourceAction,
+vi.mock('@/server/routers/lambda/_helpers/knowledgeBaseAccess', () => ({
+  assertContentsNotInRestrictedKnowledgeBase:
+    routerMocks.assertContentsNotInRestrictedKnowledgeBase,
+  assertKnowledgeBaseBrowsable: routerMocks.assertKnowledgeBaseBrowsable,
+  filterRestrictedKnowledgeBases: vi.fn(async (_ctx, items) => items),
+  getUseLevelKnowledgeBaseIds: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock('@/database/models/document', () => ({
+  DocumentModel: vi.fn(() => ({ findByIds: mockDocumentModelFindByIds })),
+}));
+
+vi.mock('@/database/models/file', () => ({
+  FileModel: vi.fn(() => ({ findByIds: mockFileModelFindByIds })),
+}));
+
+vi.mock('@/server/services/trash', () => ({
+  TrashService: vi.fn(() => ({ trashKnowledgeBases: mockTrashKnowledgeBases })),
 }));
 
 const mockPermissionRemoveAll = vi.fn();
@@ -39,6 +60,7 @@ vi.mock('@/database/models/resourcePermission', () => ({
 
 vi.mock('@/database/models/knowledgeBase', () => ({
   KnowledgeBaseModel: vi.fn(() => ({
+    addFilesToKnowledgeBase: mockKnowledgeBaseModelAddFiles,
     copyToWorkspace: mockKnowledgeBaseModelCopyToWorkspace,
     countFileUsage: mockKnowledgeBaseModelCountFileUsage,
     findById: mockKnowledgeBaseModelFindById,
@@ -60,18 +82,24 @@ describe('knowledgeBaseRouter', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    routerMocks.assertCanPerformResourceAction.mockResolvedValue(undefined);
+    routerMocks.assertContentsNotInRestrictedKnowledgeBase.mockResolvedValue(undefined);
+    routerMocks.assertKnowledgeBaseBrowsable.mockResolvedValue(undefined);
     routerMocks.businessFileTransferStorageCheck.mockResolvedValue(undefined);
     routerMocks.hasWorkspaceScopedPermission.mockResolvedValue(true);
     mockKnowledgeBaseModelCopyToWorkspace.mockResolvedValue({ id: 'kb-copy' });
     mockKnowledgeBaseModelCountFileUsage.mockResolvedValue(4096);
-    mockKnowledgeBaseModelFindById.mockResolvedValue({ id: 'kb-1', userId: 'test-user' });
+    mockKnowledgeBaseModelFindById.mockResolvedValue({
+      id: 'kb-1',
+      userId: 'test-user',
+      visibility: 'public',
+      workspaceId: 'workspace-active',
+    });
     mockKnowledgeBaseModelTransferTo.mockResolvedValue({ id: 'kb-1' });
     mockKnowledgeBaseModelUpdate.mockResolvedValue({ id: 'kb-1' });
   });
 
   describe('updateKnowledgeBase', () => {
-    it("uses the resource edit policy for another member's shared library", async () => {
+    it("lets a member update another member's visible shared library", async () => {
       mockKnowledgeBaseModelFindById.mockResolvedValue({
         id: 'kb-1',
         userId: 'another-member',
@@ -81,12 +109,10 @@ describe('knowledgeBaseRouter', () => {
 
       await caller.updateKnowledgeBase({ id: 'kb-1', value: { name: 'Updated library' } });
 
-      expect(routerMocks.assertCanPerformResourceAction).toHaveBeenCalledWith(
-        expect.objectContaining({
-          action: 'edit',
-          resourceId: 'kb-1',
-          resourceType: 'knowledgeBase',
-        }),
+      expect(routerMocks.assertKnowledgeBaseBrowsable).toHaveBeenCalledWith(
+        expect.anything(),
+        'kb-1',
+        expect.objectContaining({ userId: 'another-member', visibility: 'public' }),
       );
       expect(mockKnowledgeBaseModelUpdate).toHaveBeenCalledWith('kb-1', {
         name: 'Updated library',
@@ -122,14 +148,40 @@ describe('knowledgeBaseRouter', () => {
       });
     });
 
-    it('does not update the library when resource edit access is denied', async () => {
-      routerMocks.assertCanPerformResourceAction.mockRejectedValue(new Error('denied'));
+    it('does not update a restricted library that the member cannot browse', async () => {
+      routerMocks.assertKnowledgeBaseBrowsable.mockRejectedValue(new Error('denied'));
 
       await expect(
         caller.updateKnowledgeBase({ id: 'kb-1', value: { name: 'Updated library' } }),
       ).rejects.toThrow('denied');
 
       expect(mockKnowledgeBaseModelUpdate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('addFilesToKnowledgeBase', () => {
+    it("lets a member add another creator's visible resource", async () => {
+      mockFileModelFindByIds.mockResolvedValue([{ id: 'file-1' }]);
+      mockDocumentModelFindByIds.mockResolvedValue([]);
+      mockKnowledgeBaseModelAddFiles.mockResolvedValue([{ fileId: 'file-1' }]);
+
+      await caller.addFilesToKnowledgeBase({ ids: ['file-1'], knowledgeBaseId: 'kb-1' });
+
+      expect(mockKnowledgeBaseModelAddFiles).toHaveBeenCalledWith('kb-1', ['file-1']);
+    });
+
+    it('fails the whole batch when any resource is inaccessible', async () => {
+      mockFileModelFindByIds.mockResolvedValue([{ id: 'file-1' }]);
+      mockDocumentModelFindByIds.mockResolvedValue([]);
+
+      await expect(
+        caller.addFilesToKnowledgeBase({
+          ids: ['file-1', 'private-file'],
+          knowledgeBaseId: 'kb-1',
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect(mockKnowledgeBaseModelAddFiles).not.toHaveBeenCalled();
     });
   });
 

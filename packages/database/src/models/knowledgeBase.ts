@@ -1,9 +1,15 @@
 import type { KnowledgeBaseItem } from '@lobechat/types';
 import { and, count, desc, eq, inArray, ne, or, sum } from 'drizzle-orm';
 
-import type { NewDocument, NewFile, NewKnowledgeBase } from '../schemas';
+import type {
+  KnowledgeBaseItem as KnowledgeBaseRecord,
+  NewDocument,
+  NewFile,
+  NewKnowledgeBase,
+} from '../schemas';
 import { documents, files, knowledgeBaseFiles, knowledgeBases } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { isTrashed, restoreStamp, type SoftDeleteOptions, trashStamp } from '../utils/softDelete';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { FileModel } from './file';
 
@@ -18,11 +24,80 @@ export class KnowledgeBaseModel {
     this.workspaceId = workspaceId;
   }
 
-  private ownership = (callerAgentVisibility?: 'private' | 'public' | null) =>
+  private ownership = (
+    callerAgentVisibility?: 'private' | 'public' | null,
+    includeTrashed?: boolean,
+  ) =>
     buildWorkspaceWhere(
-      { callerAgentVisibility, userId: this.userId, workspaceId: this.workspaceId },
+      {
+        callerAgentVisibility,
+        includeTrashed,
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      },
       knowledgeBases,
     );
+
+  softDelete = async (
+    ids: string[],
+    options: SoftDeleteOptions,
+  ): Promise<KnowledgeBaseRecord[]> => {
+    if (ids.length === 0) return [];
+    return this.db
+      .update(knowledgeBases)
+      .set(trashStamp(options.deletedAt))
+      .where(
+        and(
+          inArray(knowledgeBases.id, ids),
+          this.ownership(),
+          options.restrictToCreator ? eq(knowledgeBases.userId, this.userId) : undefined,
+        ),
+      )
+      .returning();
+  };
+
+  findTrashedByIds = async (ids: string[]): Promise<KnowledgeBaseRecord[]> => {
+    if (ids.length === 0) return [];
+    return this.db
+      .select()
+      .from(knowledgeBases)
+      .where(
+        and(
+          inArray(knowledgeBases.id, ids),
+          this.ownership(undefined, true),
+          isTrashed(knowledgeBases.isDeleted),
+        ),
+      );
+  };
+
+  restore = async (ids: string[]): Promise<KnowledgeBaseRecord[]> => {
+    if (ids.length === 0) return [];
+    return this.db
+      .update(knowledgeBases)
+      .set(restoreStamp())
+      .where(
+        and(
+          inArray(knowledgeBases.id, ids),
+          this.ownership(undefined, true),
+          isTrashed(knowledgeBases.isDeleted),
+        ),
+      )
+      .returning();
+  };
+
+  purge = async (ids: string[]) => {
+    if (ids.length === 0) return [];
+    return this.db
+      .delete(knowledgeBases)
+      .where(
+        and(
+          inArray(knowledgeBases.id, ids),
+          this.ownership(undefined, true),
+          isTrashed(knowledgeBases.isDeleted),
+        ),
+      )
+      .returning({ id: knowledgeBases.id });
+  };
 
   // create
 
@@ -345,6 +420,7 @@ export class KnowledgeBaseModel {
               inArray(files.id, linkedFileIds),
               eq(files.userId, this.userId),
               buildWorkspaceWhere(creatorScope, {
+                isDeleted: files.isDeleted,
                 userId: files.userId,
                 workspaceId: files.workspaceId,
               }),
@@ -365,6 +441,7 @@ export class KnowledgeBaseModel {
             documentLink,
             eq(documents.userId, this.userId),
             buildWorkspaceWhere(creatorScope, {
+              isDeleted: documents.isDeleted,
               userId: documents.userId,
               workspaceId: documents.workspaceId,
             }),

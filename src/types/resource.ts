@@ -26,6 +26,7 @@ export interface ResourceItem {
 
   // Document-specific (optional)
   content?: string | null;
+  contentPreview?: string | null;
   // Timestamps
   createdAt: Date;
 
@@ -73,6 +74,8 @@ export interface ResourceItem {
  */
 export interface ResourceQueryParams {
   category?: FilesTabs;
+  /** Request the server-generated text summary used by preview cards. */
+  includeContentPreview?: boolean;
   libraryId?: string;
   limit?: number;
   offset?: number;

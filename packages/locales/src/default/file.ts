@@ -66,7 +66,7 @@ export default {
     'Fork this library into a workspace. Files are shared by reference; the original stays in your personal space.',
   'library.privateEmpty': 'Create a private library',
   'library.list.confirmRemoveLibrary':
-    'You are about to delete this library. The files within it will not be deleted but moved to All Files. This action cannot be undone, so please proceed with caution.',
+    'Move this library to Trash? It and its linked contents can be restored for 30 days before permanent deletion.',
   'library.list.copyDescription':
     'You can copy to personal or workspaces that have permission to create a knowledge base.',
   'library.list.copyFailed': 'Failed to copy library',
@@ -143,10 +143,10 @@ export default {
   'pageEditor.likes.count_other': '{{count}} likes',
   'pageEditor.likes.more': '+{{count}} more',
   'pageEditor.deleteConfirm.content':
-    'This page will be deleted and cannot be recovered. Please proceed with caution.',
+    'Move this page to Trash? It can be restored for 30 days before permanent deletion.',
   'pageEditor.deleteConfirm.title': 'Delete Page',
   'pageEditor.deleteError': 'Failed to delete the page',
-  'pageEditor.deleteSuccess': 'Page deleted successfully',
+  'pageEditor.deleteSuccess': 'Page moved to Trash',
   'pageEditor.duplicateError': 'Failed to duplicate the page',
   'pageEditor.duplicateSuccess': 'Page duplicated successfully',
   'pageEditor.editedAt': 'Last edited on {{time}}',

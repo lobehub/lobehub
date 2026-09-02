@@ -38,6 +38,7 @@ import {
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { buildFileCategoryFilter } from '../utils/fileTypeCategory';
+import { isTrashed, restoreStamp, type SoftDeleteOptions, trashStamp } from '../utils/softDelete';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 /**
@@ -63,11 +64,63 @@ export class FileModel {
     this.workspaceId = workspaceId;
   }
 
-  private ownership = (callerAgentVisibility?: 'private' | 'public' | null) =>
+  private ownership = (
+    callerAgentVisibility?: 'private' | 'public' | null,
+    includeTrashed?: boolean,
+  ) =>
     buildWorkspaceWhere(
-      { callerAgentVisibility, userId: this.userId, workspaceId: this.workspaceId },
+      {
+        callerAgentVisibility,
+        includeTrashed,
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      },
       files,
     );
+
+  softDelete = async (ids: string[], options: SoftDeleteOptions): Promise<FileItem[]> => {
+    if (ids.length === 0) return [];
+    return this.db
+      .update(files)
+      .set(trashStamp(options.deletedAt))
+      .where(
+        and(
+          inArray(files.id, ids),
+          this.ownership(),
+          options.restrictToCreator ? eq(files.userId, this.userId) : undefined,
+        ),
+      )
+      .returning();
+  };
+
+  findTrashedByIds = async (ids: string[]): Promise<FileItem[]> => {
+    if (ids.length === 0) return [];
+    return this.db
+      .select()
+      .from(files)
+      .where(
+        and(inArray(files.id, ids), this.ownership(undefined, true), isTrashed(files.isDeleted)),
+      );
+  };
+
+  restore = async (ids: string[]): Promise<FileItem[]> => {
+    if (ids.length === 0) return [];
+    return this.db
+      .update(files)
+      .set(restoreStamp())
+      .where(
+        and(inArray(files.id, ids), this.ownership(undefined, true), isTrashed(files.isDeleted)),
+      )
+      .returning();
+  };
+
+  findByParentIds = async (parentIds: string[]): Promise<FileItem[]> => {
+    if (parentIds.length === 0) return [];
+    return this.db
+      .select()
+      .from(files)
+      .where(and(this.ownership(), inArray(files.parentId, parentIds)));
+  };
 
   /**
    * Get file by ID without userId filter (public access)
@@ -277,7 +330,7 @@ export class FileModel {
   deleteMany = async (
     ids: string[],
     removeGlobalFile: boolean = true,
-    options?: { restrictToCreator?: boolean },
+    options?: { includeTrashed?: boolean; restrictToCreator?: boolean },
   ) => {
     if (ids.length === 0) return [];
 
@@ -286,7 +339,7 @@ export class FileModel {
       const fileList = await trx.query.files.findMany({
         where: and(
           inArray(files.id, ids),
-          this.ownership(),
+          this.ownership(undefined, options?.includeTrashed),
           // Workspace bulk deletes from non-owner members only touch their own rows.
           options?.restrictToCreator ? eq(files.userId, this.userId) : undefined,
         ),
@@ -304,15 +357,20 @@ export class FileModel {
 
       // 3. Delete mirror documents (sourceType='file') so they don't linger as
       // orphans with fileId set to null after the file row is removed.
-      await trx
-        .delete(documents)
-        .where(
-          and(
-            inArray(documents.fileId, targetIds),
-            buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents),
-            eq(documents.sourceType, 'file'),
+      await trx.delete(documents).where(
+        and(
+          inArray(documents.fileId, targetIds),
+          buildWorkspaceWhere(
+            {
+              includeTrashed: options?.includeTrashed,
+              userId: this.userId,
+              workspaceId: this.workspaceId,
+            },
+            documents,
           ),
-        );
+          eq(documents.sourceType, 'file'),
+        ),
+      );
 
       // 4. Delete chunk/embedding asyncTasks attached to these files.
       const taskIds = fileList
@@ -323,7 +381,11 @@ export class FileModel {
       }
 
       // 5. Delete file records
-      await trx.delete(files).where(and(inArray(files.id, targetIds), this.ownership()));
+      await trx
+        .delete(files)
+        .where(
+          and(inArray(files.id, targetIds), this.ownership(undefined, options?.includeTrashed)),
+        );
 
       // If global files don't need to be deleted, no storage object should be removed.
       if (!removeGlobalFile || hashList.length === 0) return [];

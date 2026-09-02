@@ -27,6 +27,13 @@ export const MAX_FILE_PARSE_SIZE = 64 * 1024 * 1024;
 
 export const FILE_PARSE_SIZE_LIMIT_ERROR_MESSAGE = `Files larger than ${MAX_FILE_PARSE_SIZE} bytes cannot be parsed in memory`;
 
+/**
+ * Maximum document text read by a resource-list query when a caller explicitly
+ * requests a preview. The server turns this bounded source into the much
+ * smaller `contentPreview` returned to the client.
+ */
+export const RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH = 8 * 1024;
+
 export const WORKSPACE_FILE_TREE_EXCLUDED_NAMES = [
   ...SYSTEM_FILES_BLACKLIST,
 

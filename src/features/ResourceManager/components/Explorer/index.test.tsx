@@ -98,10 +98,21 @@ describe('ResourceExplorer', () => {
     expect(mocks.useFetchResources).toHaveBeenCalledWith(
       expect.objectContaining({
         category: FilesTabs.All,
+        includeContentPreview: false,
         libraryId: undefined,
         parentId: null,
         showFilesInKnowledgeBase: false,
       }),
+    );
+  });
+
+  it('requests a server-generated content preview only for masonry cards', () => {
+    mocks.resourceManagerState.viewMode = 'masonry';
+
+    render(<ResourceExplorer />);
+
+    expect(mocks.useFetchResources).toHaveBeenCalledWith(
+      expect.objectContaining({ includeContentPreview: true }),
     );
   });
 

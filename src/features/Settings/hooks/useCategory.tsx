@@ -26,6 +26,7 @@ import {
   Sparkles,
   TagIcon,
   TerminalSquare,
+  Trash2,
 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -223,6 +224,11 @@ export const useCategory = () => {
         icon: Database,
         key: SettingsTabs.Storage,
         label: t('tab.storage'),
+      },
+      {
+        icon: Trash2,
+        key: SettingsTabs.Trash,
+        label: t('tab.trash'),
       },
       !hideDocs && {
         icon: Info,

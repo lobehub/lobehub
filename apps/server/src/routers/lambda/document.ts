@@ -10,24 +10,23 @@ import { DOCUMENT_TRANSFER_FOREIGN_ROWS, DocumentModel } from '@/database/models
 import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
-import { DEFAULT_RESOURCE_ACCESS_LEVELS, DOCUMENT_FOLDER_TYPE } from '@/database/schemas';
+import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import {
-  assertCanEditResource,
   assertCanPerformResourceAction,
   buildResourcePermissionState,
   getResourceMeta,
 } from '@/server/services/resourcePermission';
+import { TrashService } from '@/server/services/trash';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { TransferErrorCode } from '@/types/transferError';
 
 import { isWorkspaceNonOwner } from './_helpers/assertWorkspaceRowManageable';
 import {
   assertContentsNotInRestrictedKnowledgeBase,
-  assertKnowledgeBaseBrowsable,
   getRestrictedKnowledgeBaseIds,
 } from './_helpers/knowledgeBaseAccess';
 import {
@@ -39,27 +38,13 @@ import {
 } from './_schema/documentHistory';
 
 /**
- * Creating a child modifies the parent's tree — viewers of a workspace-shared
- * parent must not be able to insert under it. Parents outside the current
- * workspace (personal docs, foreign ids) fall through; the model's ownership
- * WHERE keeps those unreachable anyway.
- *
- * Knowledge-base folders are the exception: they are navigation-only rows that
- * do not pass visibility or ACL to children (see `DocumentService.createDocument`),
- * while every document row defaults to the `view` access level — gating on the
- * folder's own ACL would lock every non-creator member out of another member's
- * folder inside a shared KB. The KB's browse permission (effective level `edit`,
- * the same grade that lets a member manage the KB file list) is the authority
- * for inserts there; a restricted KB (`use` level) still denies.
- *
- * Only rows whose file type is the folder type take that path: pages inside a
- * KB carry the same `knowledgeBaseId`, and `parentId` accepts any document row,
- * so without the type gate a member could nest under another member's
- * view-only page while skipping its ACL.
+ * Creating a child or moving a row requires the parent to be visible in the
+ * caller's workspace. Resource writes are role-gated at the procedure layer;
+ * creator ownership and General Access do not further narrow ordinary Member
+ * operations.
  */
 const assertCanCreateUnderParent = async (
   ctx: {
-    documentModel: DocumentModel;
     serverDB: Parameters<typeof getResourceMeta>[0];
     userId: string;
     workspaceId?: string | null;
@@ -68,32 +53,14 @@ const assertCanCreateUnderParent = async (
 ) => {
   if (!ctx.workspaceId || !parentId) return;
   const meta = await getResourceMeta(ctx.serverDB, 'document', parentId);
-  if (!meta || meta.workspaceId !== ctx.workspaceId) return;
-
-  // Another member's private folder stays creator-only regardless of KB scope.
-  const isForeignPrivate = meta.visibility === 'private' && meta.userId !== ctx.userId;
-  if (!isForeignPrivate) {
-    // `findById` is ownership-scoped, but the foreign-private branch above is
-    // the only shape it would hide — everything else is public or the caller's.
-    const parentDoc = await ctx.documentModel.findById(parentId);
-    if (parentDoc?.fileType === DOCUMENT_FOLDER_TYPE) {
-      // Old folders carried the KB id only in metadata, newer rows set the column.
-      const knowledgeBaseId =
-        parentDoc.knowledgeBaseId ?? (parentDoc.metadata as any)?.knowledgeBaseId;
-      if (knowledgeBaseId && typeof knowledgeBaseId === 'string') {
-        await assertKnowledgeBaseBrowsable(ctx, knowledgeBaseId);
-        return;
-      }
-    }
+  if (
+    !meta ||
+    meta.workspaceId !== ctx.workspaceId ||
+    (meta.visibility === 'private' && meta.userId !== ctx.userId)
+  ) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Parent document not found' });
   }
-
-  await assertCanEditResource({
-    db: ctx.serverDB,
-    resourceId: parentId,
-    resourceType: 'document',
-    userId: ctx.userId,
-    workspaceId: ctx.workspaceId,
-  });
+  await assertContentsNotInRestrictedKnowledgeBase(ctx, [parentId]);
 };
 
 const getFreeDocumentHistorySince = () => {
@@ -113,6 +80,7 @@ const documentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts)
       documentService: new DocumentService(ctx.serverDB, ctx.userId, wsId),
       fileModel: new FileModel(ctx.serverDB, ctx.userId, wsId),
       messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
+      trashService: new TrashService(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
@@ -239,56 +207,28 @@ export const documentRouter = router({
     .use(withScopedPermission('document:delete'))
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      if (ctx.workspaceId) {
-        await assertCanPerformResourceAction({
-          action: 'delete',
-          db: ctx.serverDB,
-          resourceId: input.id,
-          resourceType: 'document',
-          userId: ctx.userId,
-          workspaceId: ctx.workspaceId,
-        });
-      }
-      // Non-owner members may delete their own folder, but the recursive
-      // cascade must not take other members' descendants with it.
-      const result = await ctx.documentService.deleteDocument(input.id, {
-        restrictToCreator: isWorkspaceNonOwner(ctx),
-      });
-      if (ctx.workspaceId) {
-        await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).removeAll(
-          'document',
-          input.id,
-        );
-      }
-      return result;
+      const document = await ctx.documentModel.findById(input.id);
+      if (!document) throw new TRPCError({ code: 'NOT_FOUND', message: 'Document not found' });
+      await assertContentsNotInRestrictedKnowledgeBase(ctx, [input.id]);
+
+      return ctx.trashService.trashDocuments([input.id]);
     }),
 
   deleteDocuments: documentProcedure
     .use(withScopedPermission('document:delete'))
     .input(z.object({ ids: z.array(z.string()) }))
     .mutation(async ({ ctx, input }) => {
-      if (ctx.workspaceId) {
-        await Promise.all(
-          input.ids.map((id) =>
-            assertCanPerformResourceAction({
-              action: 'delete',
-              db: ctx.serverDB,
-              resourceId: id,
-              resourceType: 'document',
-              userId: ctx.userId,
-              workspaceId: ctx.workspaceId!,
-            }),
-          ),
-        );
+      const documents = await ctx.documentModel.findByIds(input.ids);
+      const accessibleIds = new Set(documents.map((document) => document.id));
+      if ([...new Set(input.ids)].some((id) => !accessibleIds.has(id))) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'One or more documents were not found or are not accessible',
+        });
       }
-      const result = await ctx.documentService.deleteDocuments(input.ids, {
-        restrictToCreator: isWorkspaceNonOwner(ctx),
-      });
-      if (ctx.workspaceId) {
-        const permissionModel = new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId);
-        await Promise.all(input.ids.map((id) => permissionModel.removeAll('document', id)));
-      }
-      return result;
+      await assertContentsNotInRestrictedKnowledgeBase(ctx, input.ids);
+
+      return ctx.trashService.trashDocuments(input.ids);
     }),
 
   getDocumentById: documentProcedure
@@ -349,15 +289,7 @@ export const documentRouter = router({
     .use(withScopedPermission('document:update'))
     .input(saveDocumentHistoryInputSchema)
     .mutation(async ({ ctx, input }) => {
-      // Same write guard as `updateDocument` — history saves rewrite the
-      // document's editorData, so a view-level member must not reach it.
-      await assertCanEditResource({
-        db: ctx.serverDB,
-        resourceId: input.documentId,
-        resourceType: 'document',
-        userId: ctx.userId,
-        workspaceId: ctx.workspaceId ?? undefined,
-      });
+      await assertContentsNotInRestrictedKnowledgeBase(ctx, [input.documentId]);
 
       const editorData = JSON.parse(input.editorData);
       return ctx.documentService.saveDocumentHistory(
@@ -401,6 +333,7 @@ export const documentRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      await assertContentsNotInRestrictedKnowledgeBase(ctx, [input.id]);
       const lobeDocument = await ctx.documentService.parseDocument(input.id);
 
       return lobeDocument;
@@ -415,6 +348,7 @@ export const documentRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      await assertContentsNotInRestrictedKnowledgeBase(ctx, [input.id]);
       const lobeDocument = await ctx.documentService.parseFile(input.id);
 
       return lobeDocument;
@@ -445,15 +379,7 @@ export const documentRouter = router({
     .use(withScopedPermission('document:update'))
     .input(z.object({ id: z.string(), ownerId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
-      // The lock grants exclusive write access — a view-level member must not
-      // be able to seize it and starve legitimate editors.
-      await assertCanEditResource({
-        db: ctx.serverDB,
-        resourceId: input.id,
-        resourceType: 'document',
-        userId: ctx.userId,
-        workspaceId: ctx.workspaceId ?? undefined,
-      });
+      await assertContentsNotInRestrictedKnowledgeBase(ctx, [input.id]);
 
       return input.ownerId
         ? ctx.documentService.acquireDocumentLockWithOwner(input.id, input.ownerId)
@@ -464,6 +390,7 @@ export const documentRouter = router({
     .use(withScopedPermission('document:update'))
     .input(z.object({ id: z.string(), ownerId: z.string().optional() }))
     .query(async ({ ctx, input }) => {
+      await assertContentsNotInRestrictedKnowledgeBase(ctx, [input.id]);
       return ctx.documentService.getDocumentLock(input.id, input.ownerId);
     }),
 
@@ -471,6 +398,7 @@ export const documentRouter = router({
     .use(withScopedPermission('document:update'))
     .input(z.object({ id: z.string(), ownerId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
+      await assertContentsNotInRestrictedKnowledgeBase(ctx, [input.id]);
       if (input.ownerId)
         await ctx.documentService.releaseDocumentLockWithOwner(input.id, input.ownerId);
       else await ctx.documentService.releaseDocumentLock(input.id);
@@ -480,15 +408,7 @@ export const documentRouter = router({
     .use(withScopedPermission('document:update'))
     .input(updateDocumentInputSchema)
     .mutation(async ({ ctx, input }) => {
-      // General-access write guard: a public document whose workspace level
-      // is `viewer` is read-only for everyone but the creator / owner.
-      await assertCanEditResource({
-        db: ctx.serverDB,
-        resourceId: input.id,
-        resourceType: 'document',
-        userId: ctx.userId,
-        workspaceId: ctx.workspaceId ?? undefined,
-      });
+      await assertContentsNotInRestrictedKnowledgeBase(ctx, [input.id]);
 
       // A move mutates both the source and destination trees as well as the
       // document. Only check when the parent really changes: several editor
