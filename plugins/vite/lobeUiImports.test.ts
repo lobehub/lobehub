@@ -14,6 +14,8 @@ const fixturePlugin: Plugin = {
       import { ConfigProvider, ErrorBoundary, Flexbox } from '@lobehub/ui';
       import { Button } from '@lobehub/ui/base-ui';
       export { ConfigProvider, ErrorBoundary, Flexbox, Button };
+      export * from '@lobehub/ui/brand';
+      export const loadToast = () => import('@lobehub/ui/base-ui');
     `;
   },
   resolveId(id) {
@@ -73,5 +75,7 @@ describe('lobeUiImports', () => {
     expect(code).not.toMatch(/from ["']react-error-boundary["']/);
     expect(code).not.toMatch(/from ["']@lobehub\/ui["']/);
     expect(code).not.toMatch(/from ["']@lobehub\/ui\/base-ui["']/);
+    expect(code).toContain('@lobehub/ui/es/brand/index');
+    expect(code).toContain('@lobehub/ui/es/base-ui/index');
   });
 });

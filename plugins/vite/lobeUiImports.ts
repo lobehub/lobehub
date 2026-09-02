@@ -73,9 +73,13 @@ const namedExportProxy = (maps: Record<string, Barrel>): Plugin => ({
     if (!id.startsWith(RESOLVED_NAMED_EXPORT_PREFIX)) return;
 
     const [barrel, member] = id.slice(RESOLVED_NAMED_EXPORT_PREFIX.length).split(':');
+    const barrelIndex = `@lobehub/ui/es/${barrel ? `${barrel}/` : ''}index`;
+    // transform-imports rewrites `import()`, `export *` and side-effect imports
+    // with an empty member, so there is no single export to forward.
+    if (!member) return `export * from '${barrelIndex}';`;
+
     const entry = maps[barrel]?.members[member];
-    if (!entry)
-      return `export { ${member} as default } from '@lobehub/ui/es/${barrel ? `${barrel}/` : ''}index';`;
+    if (!entry) return `export { ${member} as default } from '${barrelIndex}';`;
 
     // Bare specifiers such as react-error-boundary are dependencies of
     // @lobehub/ui, not of the app, so they only resolve from the barrel's own
