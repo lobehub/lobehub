@@ -139,26 +139,46 @@ export function removeWorkspaceEnrollment(workspaceId: string): void {
 }
 
 /**
- * The workspace scope persisted by `lh workspace use`. Lower priority than the
- * `LOBEHUB_WORKSPACE_ID` env var, so a one-off invocation can still override the
- * machine-wide default without rewriting it.
+ * The workspace scope persisted by `lh workspace use`, together with the server
+ * and account it was chosen under.
+ *
+ * The binding is the point: a bare workspace id survives `logout`, a login as a
+ * different account, and a `--server` switch, and would then attach an
+ * `X-Workspace-Id` the new identity has no membership in — which cloud's compat
+ * middleware silently downgrades to personal scope, so writes land on personal
+ * data while the CLI still claims to be in a workspace.
  */
-export function loadActiveWorkspaceId(): string | undefined {
+export interface ActiveWorkspaceRecord {
+  /** Opaque fingerprint of the credentials the scope was chosen under. */
+  identity: string;
+  serverUrl: string;
+  workspaceId: string;
+}
+
+export function loadActiveWorkspace(): ActiveWorkspaceRecord | undefined {
   try {
-    const stored = fs.readFileSync(ACTIVE_WORKSPACE_FILE, 'utf8').trim();
+    const parsed: unknown = JSON.parse(fs.readFileSync(ACTIVE_WORKSPACE_FILE, 'utf8'));
+    if (!parsed || typeof parsed !== 'object') return undefined;
+
+    const { identity, serverUrl, workspaceId } = parsed as Record<string, unknown>;
     // A garbage value would be sent as `X-Workspace-Id` on every request and
     // fail each one with an opaque server error, so anything that isn't
     // id-shaped is treated as a corrupt file and ignored.
-    return WORKSPACE_ID_PATTERN.test(stored) ? stored : undefined;
+    if (typeof workspaceId !== 'string' || !WORKSPACE_ID_PATTERN.test(workspaceId))
+      return undefined;
+    if (typeof identity !== 'string' || !identity) return undefined;
+    if (typeof serverUrl !== 'string' || !serverUrl) return undefined;
+
+    return { identity, serverUrl, workspaceId };
   } catch {
-    // not yet created or unreadable — personal scope
+    // not yet created, unreadable, or not JSON — personal scope
     return undefined;
   }
 }
 
 /** Persist the active workspace scope; pass `null` to fall back to personal. */
-export function saveActiveWorkspaceId(workspaceId: string | null): void {
-  if (!workspaceId) {
+export function saveActiveWorkspace(record: ActiveWorkspaceRecord | null): void {
+  if (!record) {
     try {
       fs.unlinkSync(ACTIVE_WORKSPACE_FILE);
     } catch (error) {
@@ -168,7 +188,7 @@ export function saveActiveWorkspaceId(workspaceId: string | null): void {
   }
 
   fs.mkdirSync(SETTINGS_DIR, { mode: 0o700, recursive: true });
-  fs.writeFileSync(ACTIVE_WORKSPACE_FILE, workspaceId, { mode: 0o600 });
+  fs.writeFileSync(ACTIVE_WORKSPACE_FILE, JSON.stringify(record, null, 2), { mode: 0o600 });
 }
 
 export function loadSettings(): StoredSettings | null {

@@ -1,12 +1,42 @@
-import { loadActiveWorkspaceId } from '../settings';
+import { resolveIdentityFingerprint } from '../auth/identity';
+import { loadActiveWorkspace, resolveServerUrl } from '../settings';
+import { log } from '../utils/logger';
 
 export const WORKSPACE_ID_HEADER = 'X-Workspace-Id';
 
-export type WorkspaceScopeSource = 'explicit' | 'env' | 'settings' | 'personal';
+export type WorkspaceScopeSource = 'explicit' | 'env' | 'settings' | 'stale' | 'personal';
 
 export interface WorkspaceScope {
   source: WorkspaceScopeSource;
   workspaceId?: string;
+}
+
+let warnedAboutStaleScope = false;
+
+/**
+ * A persisted scope only counts when the server and account it was chosen under
+ * still match. Cloud answers an `X-Workspace-Id` the caller has no membership in
+ * by quietly falling back to personal scope, so a scope left over from another
+ * account would route reads *and writes* to personal data while every status
+ * line still said "workspace".
+ */
+function resolvePersistedScope(): WorkspaceScope | undefined {
+  const stored = loadActiveWorkspace();
+  if (!stored) return undefined;
+
+  const identity = resolveIdentityFingerprint();
+  if (stored.serverUrl === resolveServerUrl() && identity && identity === stored.identity) {
+    return { source: 'settings', workspaceId: stored.workspaceId };
+  }
+
+  if (!warnedAboutStaleScope) {
+    warnedAboutStaleScope = true;
+    log.warn(
+      `Ignoring the saved workspace scope (${stored.workspaceId}): it was set under a different account or server. Run 'workspace use' again to re-select it.`,
+    );
+  }
+
+  return { source: 'stale' };
 }
 
 /**
@@ -15,7 +45,8 @@ export interface WorkspaceScope {
  * can tell "wrong workspace" from "not found".
  *
  * Precedence: explicit caller arg -> `LOBEHUB_WORKSPACE_ID` env ->
- * `lh workspace use` (persisted) -> personal mode.
+ * `lh workspace use` (persisted, and still bound to this account/server) ->
+ * personal mode.
  */
 export function resolveWorkspaceScope(explicit?: string): WorkspaceScope {
   if (explicit) return { source: 'explicit', workspaceId: explicit };
@@ -23,10 +54,7 @@ export function resolveWorkspaceScope(explicit?: string): WorkspaceScope {
   const fromEnv = process.env.LOBEHUB_WORKSPACE_ID;
   if (fromEnv && fromEnv.length > 0) return { source: 'env', workspaceId: fromEnv };
 
-  const fromSettings = loadActiveWorkspaceId();
-  if (fromSettings) return { source: 'settings', workspaceId: fromSettings };
-
-  return { source: 'personal' };
+  return resolvePersistedScope() ?? { source: 'personal' };
 }
 
 export function resolveWorkspaceId(explicit?: string): string | undefined {
@@ -39,4 +67,9 @@ export function withWorkspaceHeader(
 ): Record<string, string> {
   const resolvedWorkspaceId = resolveWorkspaceId(workspaceId);
   return resolvedWorkspaceId ? { ...headers, [WORKSPACE_ID_HEADER]: resolvedWorkspaceId } : headers;
+}
+
+/** Test seam: the stale-scope warning is emitted at most once per process. */
+export function __resetStaleScopeWarning(): void {
+  warnedAboutStaleScope = false;
 }

@@ -23,7 +23,10 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
 // Scope resolution falls through to the persisted `workspace use` value, which
 // must not leak the developer's own machine state into these assertions.
-vi.mock('../settings', () => ({ loadActiveWorkspaceId: () => undefined }));
+vi.mock('../settings', () => ({
+  loadActiveWorkspace: () => undefined,
+  resolveServerUrl: () => 'https://app.lobehub.com',
+}));
 describe('config command', () => {
   let consoleSpy: ReturnType<typeof vi.spyOn>;
   const originalWorkspaceId = process.env.LOBEHUB_WORKSPACE_ID;

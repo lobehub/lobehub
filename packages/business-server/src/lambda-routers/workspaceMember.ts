@@ -3,7 +3,7 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import {
-  wsAdminProcedure,
+  requireWorkspaceRole,
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { router } from '@/libs/trpc/lambda';
@@ -18,11 +18,16 @@ export interface WorkspaceMemberSummary extends WorkspaceMemberItem {
   } | null;
 }
 
+// Cloud gates these on the compat procedure plus a role check rather than on a
+// procedure that requires the header, so an unscoped call reads as empty rather
+// than as a bad request. Mirror that here.
+const wsCompatAdminProcedure = wsCompatProcedure.use(requireWorkspaceRole('admin'));
+
 // Cloud overrides this at the same path with the real workspaceMemberRouter.
 // Only the procedures consumed by submodule (open-source) UI and by the CLI are
 // declared here as typed no-op stubs so the contract type-checks.
 export const workspaceMemberRouter = router({
-  invite: wsAdminProcedure
+  invite: wsCompatAdminProcedure
     .input(
       z.object({
         email: z.string().email().optional(),
@@ -40,5 +45,5 @@ export const workspaceMemberRouter = router({
     .input(z.object({ includeDeleted: z.boolean().optional() }).optional())
     .query(async (): Promise<WorkspaceMemberSummary[]> => []),
 
-  listInvitations: wsAdminProcedure.query(async (): Promise<WorkspaceInvitationItem[]> => []),
+  listInvitations: wsCompatAdminProcedure.query(async (): Promise<WorkspaceInvitationItem[]> => []),
 });

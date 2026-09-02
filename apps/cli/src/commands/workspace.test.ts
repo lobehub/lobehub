@@ -4,36 +4,55 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { log } from '../utils/logger';
 import { registerWorkspaceCommand } from './workspace';
 
-const { mockClient, mockGetTrpcClient, mockLoadActiveWorkspaceId, mockSaveActiveWorkspaceId } =
-  vi.hoisted(() => ({
-    mockClient: {
-      workspace: {
-        create: { mutate: vi.fn() },
-        getById: { query: vi.fn() },
-        getMyStatistics: { query: vi.fn() },
-        getSettings: { query: vi.fn() },
-        getStatistics: { query: vi.fn() },
-        list: { query: vi.fn() },
-        update: { mutate: vi.fn() },
-      },
-      workspaceAuditLog: { list: { query: vi.fn() } },
-      workspaceMember: {
-        invite: { mutate: vi.fn() },
-        list: { query: vi.fn() },
-        listInvitations: { query: vi.fn() },
-      },
-      workspaceUsage: { getCurrentUsage: { query: vi.fn() } },
+const {
+  mockClient,
+  mockGetTrpcClient,
+  mockResolveIdentityFingerprint,
+  mockResolveWorkspaceScope,
+  mockSaveActiveWorkspace,
+} = vi.hoisted(() => ({
+  mockClient: {
+    workspace: {
+      create: { mutate: vi.fn() },
+      getById: { query: vi.fn() },
+      getMyStatistics: { query: vi.fn() },
+      getSettings: { query: vi.fn() },
+      getStatistics: { query: vi.fn() },
+      list: { query: vi.fn() },
+      update: { mutate: vi.fn() },
     },
-    mockGetTrpcClient: vi.fn(),
-    mockLoadActiveWorkspaceId: vi.fn<() => string | undefined>(),
-    mockSaveActiveWorkspaceId: vi.fn(),
-  }));
+    workspaceAuditLog: { list: { query: vi.fn() } },
+    workspaceMember: {
+      invite: { mutate: vi.fn() },
+      list: { query: vi.fn() },
+      listInvitations: { query: vi.fn() },
+    },
+    workspaceUsage: { getCurrentUsage: { query: vi.fn() } },
+  },
+  mockGetTrpcClient: vi.fn(),
+  mockResolveIdentityFingerprint: vi.fn<() => string | undefined>(),
+  mockResolveWorkspaceScope: vi.fn(),
+  mockSaveActiveWorkspace: vi.fn(),
+}));
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
-vi.mock('../settings', () => ({
-  loadActiveWorkspaceId: mockLoadActiveWorkspaceId,
-  saveActiveWorkspaceId: mockSaveActiveWorkspaceId,
+vi.mock('../api/workspace', () => ({ resolveWorkspaceScope: mockResolveWorkspaceScope }));
+vi.mock('../auth/identity', () => ({
+  resolveIdentityFingerprint: mockResolveIdentityFingerprint,
 }));
+vi.mock('../settings', () => ({
+  resolveServerUrl: () => 'https://app.lobehub.com',
+  saveActiveWorkspace: mockSaveActiveWorkspace,
+}));
+
+/** Stand in for the resolved scope every command reads. */
+const scopedTo = (workspaceId?: string) =>
+  mockResolveWorkspaceScope.mockImplementation((explicit?: string) => {
+    if (explicit) return { source: 'explicit', workspaceId: explicit };
+    if (process.env.LOBEHUB_WORKSPACE_ID)
+      return { source: 'env', workspaceId: process.env.LOBEHUB_WORKSPACE_ID };
+    return workspaceId ? { source: 'settings', workspaceId } : { source: 'personal' };
+  });
 
 const createProgram = () => {
   const program = new Command();
@@ -51,7 +70,8 @@ describe('workspace command', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.LOBEHUB_WORKSPACE_ID;
-    mockLoadActiveWorkspaceId.mockReturnValue(undefined);
+    scopedTo(undefined);
+    mockResolveIdentityFingerprint.mockReturnValue('user:u1');
     mockGetTrpcClient.mockResolvedValue(mockClient);
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(process, 'exit').mockImplementation((() => {
@@ -71,7 +91,7 @@ describe('workspace command', () => {
         { id: 'ws_1', name: 'Acme', plan: 'pro', role: 'owner', slug: 'acme' },
         { id: 'ws_2', name: 'Beta', role: 'member', slug: 'beta' },
       ]);
-      mockLoadActiveWorkspaceId.mockReturnValue('ws_2');
+      scopedTo('ws_2');
 
       await run('workspace', 'list');
 
@@ -84,7 +104,7 @@ describe('workspace command', () => {
     // The marker has to follow the same precedence every other command uses.
     it('marks the env-selected workspace over the persisted one', async () => {
       process.env.LOBEHUB_WORKSPACE_ID = 'ws_1';
-      mockLoadActiveWorkspaceId.mockReturnValue('ws_2');
+      scopedTo('ws_2');
       mockClient.workspace.list.query.mockResolvedValue([
         { id: 'ws_1', name: 'Acme', role: 'owner', slug: 'acme' },
         { id: 'ws_2', name: 'Beta', role: 'member', slug: 'beta' },
@@ -114,7 +134,11 @@ describe('workspace command', () => {
 
       await run('workspace', 'use', 'acme');
 
-      expect(mockSaveActiveWorkspaceId).toHaveBeenCalledWith('ws_1');
+      expect(mockSaveActiveWorkspace).toHaveBeenCalledWith({
+        identity: 'user:u1',
+        serverUrl: 'https://app.lobehub.com',
+        workspaceId: 'ws_1',
+      });
     });
 
     it('refuses a workspace the account does not belong to', async () => {
@@ -123,7 +147,7 @@ describe('workspace command', () => {
       ]);
 
       await expect(run('workspace', 'use', 'ws_missing')).rejects.toThrow('process.exit');
-      expect(mockSaveActiveWorkspaceId).not.toHaveBeenCalled();
+      expect(mockSaveActiveWorkspace).not.toHaveBeenCalled();
       expect(log.error).toHaveBeenCalledWith(expect.stringContaining('ws_missing'));
     });
 
@@ -140,10 +164,22 @@ describe('workspace command', () => {
       expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('LOBEHUB_WORKSPACE_ID'));
     });
 
+    // Without an identity the record cannot be bound, and an unbound scope is
+    // exactly what survives an account switch.
+    it('refuses to persist a scope when not logged in', async () => {
+      mockResolveIdentityFingerprint.mockReturnValue(undefined);
+      mockClient.workspace.list.query.mockResolvedValue([
+        { id: 'ws_1', name: 'Acme', role: 'owner', slug: 'acme' },
+      ]);
+
+      await expect(run('workspace', 'use', 'acme')).rejects.toThrow('process.exit');
+      expect(mockSaveActiveWorkspace).not.toHaveBeenCalled();
+    });
+
     it('clears the scope with --personal', async () => {
       await run('workspace', 'use', '--personal');
 
-      expect(mockSaveActiveWorkspaceId).toHaveBeenCalledWith(null);
+      expect(mockSaveActiveWorkspace).toHaveBeenCalledWith(null);
       expect(mockClient.workspace.list.query).not.toHaveBeenCalled();
       expect(log.warn).not.toHaveBeenCalled();
     });
@@ -155,7 +191,7 @@ describe('workspace command', () => {
 
       await run('workspace', 'use', '--personal');
 
-      expect(mockSaveActiveWorkspaceId).toHaveBeenCalledWith(null);
+      expect(mockSaveActiveWorkspace).toHaveBeenCalledWith(null);
       expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('ws_env'));
     });
   });
@@ -178,7 +214,7 @@ describe('workspace command', () => {
     });
 
     it('lists members of the active workspace', async () => {
-      mockLoadActiveWorkspaceId.mockReturnValue('ws_1');
+      scopedTo('ws_1');
       mockClient.workspaceMember.list.query.mockResolvedValue([
         {
           joinedAt: new Date().toISOString(),
@@ -214,7 +250,7 @@ describe('workspace command', () => {
     });
 
     it('exits when the workspace is gone', async () => {
-      mockLoadActiveWorkspaceId.mockReturnValue('ws_1');
+      scopedTo('ws_1');
       mockClient.workspace.getById.query.mockResolvedValue(null);
 
       await expect(run('workspace', 'view')).rejects.toThrow('process.exit');
@@ -234,20 +270,31 @@ describe('workspace command', () => {
         name: 'Acme',
         slug: 'acme',
       });
-      expect(mockSaveActiveWorkspaceId).toHaveBeenCalledWith('ws_new');
+      expect(mockSaveActiveWorkspace).toHaveBeenCalledWith(
+        expect.objectContaining({ identity: 'user:u1', workspaceId: 'ws_new' }),
+      );
+    });
+
+    it('warns that --use does not beat LOBEHUB_WORKSPACE_ID', async () => {
+      process.env.LOBEHUB_WORKSPACE_ID = 'ws_env';
+      mockClient.workspace.create.mutate.mockResolvedValue({ id: 'ws_new', name: 'Acme' });
+
+      await run('workspace', 'create', 'Acme', '--slug', 'acme', '--use');
+
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('ws_env'));
     });
   });
 
   describe('update', () => {
     it('rejects an update with no fields instead of sending an empty patch', async () => {
-      mockLoadActiveWorkspaceId.mockReturnValue('ws_1');
+      scopedTo('ws_1');
 
       await expect(run('workspace', 'update')).rejects.toThrow('process.exit');
       expect(mockClient.workspace.update.mutate).not.toHaveBeenCalled();
     });
 
     it('sends only the provided fields', async () => {
-      mockLoadActiveWorkspaceId.mockReturnValue('ws_1');
+      scopedTo('ws_1');
 
       await run('workspace', 'update', '--name', 'Acme Inc');
 
@@ -262,7 +309,7 @@ describe('workspace command', () => {
 
   describe('stats', () => {
     it('reads workspace-wide totals by default and own totals with --mine', async () => {
-      mockLoadActiveWorkspaceId.mockReturnValue('ws_1');
+      scopedTo('ws_1');
       mockClient.workspace.getStatistics.query.mockResolvedValue({
         agents: 3,
         messages: 10,
@@ -282,11 +329,28 @@ describe('workspace command', () => {
       await run('workspace', 'stats', '--mine');
       expect(mockClient.workspace.getMyStatistics.query).toHaveBeenCalled();
     });
+
+    // Workspace-wide totals are admin-only, so a plain member otherwise gets a
+    // bare FORBIDDEN for a question they are allowed to ask a different way.
+    it('points a non-admin at --mine instead of surfacing FORBIDDEN', async () => {
+      scopedTo('ws_1');
+      mockClient.workspace.getStatistics.query.mockRejectedValue({ data: { code: 'FORBIDDEN' } });
+
+      await expect(run('workspace', 'stats')).rejects.toThrow('process.exit');
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('--mine'));
+    });
+
+    it('lets an unrelated failure through instead of blaming permissions', async () => {
+      scopedTo('ws_1');
+      mockClient.workspace.getStatistics.query.mockRejectedValue(new Error('fetch failed'));
+
+      await expect(run('workspace', 'stats')).rejects.toThrow('fetch failed');
+    });
   });
 
   describe('invite', () => {
     it('rejects an unknown role before hitting the server', async () => {
-      mockLoadActiveWorkspaceId.mockReturnValue('ws_1');
+      scopedTo('ws_1');
 
       await expect(
         run('workspace', 'invite', 'a@example.com', '--role', 'superuser'),
@@ -295,7 +359,7 @@ describe('workspace command', () => {
     });
 
     it('invites with the default member role', async () => {
-      mockLoadActiveWorkspaceId.mockReturnValue('ws_1');
+      scopedTo('ws_1');
       mockClient.workspaceMember.invite.mutate.mockResolvedValue({ id: 'inv_1' });
 
       await run('workspace', 'invite', 'a@example.com');
@@ -307,9 +371,31 @@ describe('workspace command', () => {
     });
   });
 
+  describe('invitations', () => {
+    // `timeAgo` on a future timestamp renders "-604800s ago".
+    it('counts down to the expiry instead of rendering a negative age', async () => {
+      scopedTo('ws_1');
+      mockClient.workspaceMember.listInvitations.query.mockResolvedValue([
+        {
+          email: 'a@example.com',
+          expiresAt: new Date(Date.now() + 6 * 86_400_000 + 60_000).toISOString(),
+          id: 'inv_1',
+          role: 'member',
+          status: 'pending',
+        },
+      ]);
+
+      await run('workspace', 'invitations');
+
+      const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+      expect(output).toContain('in 6d');
+      expect(output).not.toContain('ago');
+    });
+  });
+
   describe('audit-log', () => {
     it('passes filters through and renders entries', async () => {
-      mockLoadActiveWorkspaceId.mockReturnValue('ws_1');
+      scopedTo('ws_1');
       mockClient.workspaceAuditLog.list.query.mockResolvedValue({
         items: [
           {
@@ -339,7 +425,7 @@ describe('workspace command', () => {
     });
 
     it('rejects a non-numeric limit', async () => {
-      mockLoadActiveWorkspaceId.mockReturnValue('ws_1');
+      scopedTo('ws_1');
 
       await expect(run('workspace', 'audit-log', '-L', 'many')).rejects.toThrow('process.exit');
       expect(mockClient.workspaceAuditLog.list.query).not.toHaveBeenCalled();
@@ -348,7 +434,7 @@ describe('workspace command', () => {
 
   describe('usage', () => {
     it('renders spend per type', async () => {
-      mockLoadActiveWorkspaceId.mockReturnValue('ws_1');
+      scopedTo('ws_1');
       mockClient.workspaceUsage.getCurrentUsage.query.mockResolvedValue({
         remainingBalance: 12.5,
         since: '2026-08-01T00:00:00.000Z',
@@ -375,7 +461,7 @@ describe('workspace command', () => {
     });
 
     it('names the active workspace and where the scope came from', async () => {
-      mockLoadActiveWorkspaceId.mockReturnValue('ws_1');
+      scopedTo('ws_1');
       mockClient.workspace.getById.query.mockResolvedValue({
         id: 'ws_1',
         name: 'Acme',
@@ -391,7 +477,7 @@ describe('workspace command', () => {
     });
 
     it('flags a scope id the server cannot resolve', async () => {
-      mockLoadActiveWorkspaceId.mockReturnValue('ws_typo');
+      scopedTo('ws_typo');
       mockClient.workspace.getById.query.mockResolvedValue(null);
 
       await run('workspace', 'current');
@@ -403,7 +489,7 @@ describe('workspace command', () => {
     // but the reason has to survive — a network or auth failure is actionable
     // and must not be reported as a membership problem.
     it('reports the real reason when the workspace is unreachable', async () => {
-      mockLoadActiveWorkspaceId.mockReturnValue('ws_1');
+      scopedTo('ws_1');
       mockClient.workspace.getById.query.mockRejectedValue(new Error('fetch failed'));
 
       await run('workspace', 'current');

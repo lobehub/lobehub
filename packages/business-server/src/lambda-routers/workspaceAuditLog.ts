@@ -1,12 +1,16 @@
 import type { WorkspaceAuditLogItem } from '@lobechat/database/schemas';
 import { z } from 'zod';
 
-import { wsAdminProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import {
+  requireWorkspaceRole,
+  wsCompatProcedure,
+} from '@/business/server/trpc-middlewares/workspaceAuth';
 import { router } from '@/libs/trpc/lambda';
 
 // Cloud overrides this at the same path with the real workspaceAuditLogRouter.
 export const workspaceAuditLogRouter = router({
-  list: wsAdminProcedure
+  list: wsCompatProcedure
+    .use(requireWorkspaceRole('admin'))
     .input(
       z
         .object({

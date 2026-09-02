@@ -3,9 +3,10 @@ import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
 import { resolveWorkspaceScope, type WorkspaceScope } from '../api/workspace';
+import { resolveIdentityFingerprint } from '../auth/identity';
 import { CLI_PRIMARY_BIN } from '../constants/identity';
-import { saveActiveWorkspaceId } from '../settings';
-import { formatCost, outputJson, printTable, timeAgo, truncate } from '../utils/format';
+import { type ActiveWorkspaceRecord, resolveServerUrl, saveActiveWorkspace } from '../settings';
+import { formatCost, outputJson, printTable, timeAgo, timeUntil, truncate } from '../utils/format';
 import { log } from '../utils/logger';
 
 interface WorkspaceRow {
@@ -23,12 +24,13 @@ const SCOPE_HINTS: Record<WorkspaceScope['source'], string> = {
   explicit: '--workspace',
   personal: 'personal (no workspace scope)',
   settings: `${CLI_PRIMARY_BIN} workspace use`,
+  stale: 'personal (saved scope ignored — set under another account or server)',
 };
 
 const describeScope = (scope: WorkspaceScope): string =>
   scope.workspaceId
     ? `workspace ${scope.workspaceId} ${pc.dim(`(from ${SCOPE_HINTS[scope.source]})`)}`
-    : pc.dim(SCOPE_HINTS.personal);
+    : pc.dim(SCOPE_HINTS[scope.source === 'stale' ? 'stale' : 'personal']);
 
 /**
  * Every workspace-scoped read goes through the workspace header, so a command
@@ -59,6 +61,27 @@ const warnIfEnvOverridesPersistedScope = (): void => {
   );
 };
 
+/**
+ * Bind the scope to the account and server it was chosen under, so it stops
+ * applying the moment either changes rather than silently targeting a tenant
+ * the current identity has no membership in.
+ */
+const persistScope = (workspaceId: string): void => {
+  const identity = resolveIdentityFingerprint();
+  if (!identity) {
+    log.error(`Not logged in. Run '${CLI_PRIMARY_BIN} login' first.`);
+    process.exit(1);
+  }
+
+  const record: ActiveWorkspaceRecord = { identity, serverUrl: resolveServerUrl(), workspaceId };
+  saveActiveWorkspace(record);
+};
+
+const isForbidden = (error: unknown): boolean =>
+  typeof error === 'object' &&
+  error !== null &&
+  (error as { data?: { code?: string } }).data?.code === 'FORBIDDEN';
+
 const listWorkspaces = async (): Promise<WorkspaceRow[]> => {
   const client = await getTrpcClient();
   return (await client.workspace.list.query()) as WorkspaceRow[];
@@ -76,6 +99,7 @@ const planLabel = (workspace: WorkspaceRow): string => {
 export function registerWorkspaceCommand(program: Command) {
   const workspace = program
     .command('workspace')
+    .alias('ws')
     .description('Manage workspaces and the workspace scope commands run under');
 
   // ── scope ─────────────────────────────────────────────
@@ -127,7 +151,7 @@ export function registerWorkspaceCommand(program: Command) {
     .option('--personal', 'Clear the workspace scope and go back to personal content')
     .action(async (idOrSlug: string | undefined, options: { personal?: boolean }) => {
       if (options.personal) {
-        saveActiveWorkspaceId(null);
+        saveActiveWorkspace(null);
         console.log(`Scope set to ${pc.bold('personal')}.`);
         warnIfEnvOverridesPersistedScope();
         return;
@@ -150,7 +174,7 @@ export function registerWorkspaceCommand(program: Command) {
         process.exit(1);
       }
 
-      saveActiveWorkspaceId(match.id);
+      persistScope(match.id);
       console.log(`Scope set to ${pc.bold(match.name)} ${pc.dim(match.id)}.`);
 
       warnIfEnvOverridesPersistedScope();
@@ -234,11 +258,14 @@ export function registerWorkspaceCommand(program: Command) {
           slug: options.slug,
         })) as WorkspaceRow;
 
-        if (options.use) saveActiveWorkspaceId(created.id);
+        if (options.use) persistScope(created.id);
 
         if (options.json !== undefined) return outputJson(created, options.json);
         console.log(`Created ${pc.bold(created.name)} ${pc.dim(created.id)}`);
-        if (options.use) console.log(`Scope set to ${pc.bold(created.name)}.`);
+        if (options.use) {
+          console.log(`Scope set to ${pc.bold(created.name)}.`);
+          warnIfEnvOverridesPersistedScope();
+        }
       },
     );
 
@@ -290,17 +317,25 @@ export function registerWorkspaceCommand(program: Command) {
 
   workspace
     .command('stats')
-    .description('Show workspace content statistics')
+    .description('Show workspace-wide content statistics (admin or higher)')
     .option('-w, --workspace <id>', 'Workspace to read (defaults to the active scope)')
-    .option('--mine', 'Only count content you created')
+    .option('--mine', 'Count only content you created — available to every member')
     .option('--json [fields]', 'Output JSON')
     .action(async (options: { json?: boolean | string; mine?: boolean; workspace?: string }) => {
       const scopeId = requireScope(options.workspace);
       const client = await getTrpcClient(scopeId);
       const input = { todayStartAt: new Date(new Date().setHours(0, 0, 0, 0)).toISOString() };
+      // Workspace-wide totals are Admin-or-higher; members and viewers hit a bare
+      // FORBIDDEN, so point them at the query that was built for them.
       const stats = options.mine
         ? await client.workspace.getMyStatistics.query(input)
-        : await client.workspace.getStatistics.query(input);
+        : await client.workspace.getStatistics.query(input).catch((error: unknown) => {
+            if (isForbidden(error)) {
+              log.error('Workspace-wide statistics need admin access — rerun with --mine.');
+              process.exit(1);
+            }
+            throw error;
+          });
 
       if (options.json !== undefined) return outputJson(stats, options.json);
       if (!stats) return console.log('No statistics available.');
@@ -422,7 +457,7 @@ export function registerWorkspaceCommand(program: Command) {
           i.email ?? pc.dim('(link only)'),
           i.role,
           i.status,
-          timeAgo(i.expiresAt),
+          timeUntil(i.expiresAt),
         ]),
         ['ID', 'EMAIL', 'ROLE', 'STATUS', 'EXPIRES'],
       );

@@ -1,19 +1,45 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { resolveWorkspaceId, resolveWorkspaceScope, withWorkspaceHeader } from './workspace';
+import { log } from '../utils/logger';
+import {
+  __resetStaleScopeWarning,
+  resolveWorkspaceId,
+  resolveWorkspaceScope,
+  withWorkspaceHeader,
+} from './workspace';
 
-const { mockLoadActiveWorkspaceId } = vi.hoisted(() => ({
-  mockLoadActiveWorkspaceId: vi.fn<() => string | undefined>(),
+const { mockLoadActiveWorkspace, mockResolveIdentityFingerprint, mockResolveServerUrl } =
+  vi.hoisted(() => ({
+    mockLoadActiveWorkspace: vi.fn<() => Record<string, string> | undefined>(),
+    mockResolveIdentityFingerprint: vi.fn<() => string | undefined>(),
+    mockResolveServerUrl: vi.fn<() => string>(),
+  }));
+
+vi.mock('../settings', () => ({
+  loadActiveWorkspace: mockLoadActiveWorkspace,
+  resolveServerUrl: mockResolveServerUrl,
+}));
+vi.mock('../auth/identity', () => ({
+  resolveIdentityFingerprint: mockResolveIdentityFingerprint,
 }));
 
-vi.mock('../settings', () => ({ loadActiveWorkspaceId: mockLoadActiveWorkspaceId }));
+const SERVER = 'https://app.lobehub.com';
+const stored = (overrides: Record<string, string> = {}) => ({
+  identity: 'user:u1',
+  serverUrl: SERVER,
+  workspaceId: 'ws_stored',
+  ...overrides,
+});
 
 describe('api/workspace scope resolution', () => {
   const originalWorkspaceId = process.env.LOBEHUB_WORKSPACE_ID;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockLoadActiveWorkspaceId.mockReturnValue(undefined);
+    __resetStaleScopeWarning();
+    mockLoadActiveWorkspace.mockReturnValue(undefined);
+    mockResolveIdentityFingerprint.mockReturnValue('user:u1');
+    mockResolveServerUrl.mockReturnValue(SERVER);
     delete process.env.LOBEHUB_WORKSPACE_ID;
   });
 
@@ -27,8 +53,8 @@ describe('api/workspace scope resolution', () => {
     expect(resolveWorkspaceId()).toBeUndefined();
   });
 
-  it('falls back to the workspace persisted by `workspace use`', () => {
-    mockLoadActiveWorkspaceId.mockReturnValue('ws_stored');
+  it('uses the workspace persisted by `workspace use`', () => {
+    mockLoadActiveWorkspace.mockReturnValue(stored());
 
     expect(resolveWorkspaceScope()).toEqual({ source: 'settings', workspaceId: 'ws_stored' });
   });
@@ -37,14 +63,14 @@ describe('api/workspace scope resolution', () => {
   // without rewriting it, so the env var wins over the persisted scope.
   it('prefers the env var over the persisted workspace', () => {
     process.env.LOBEHUB_WORKSPACE_ID = 'ws_env';
-    mockLoadActiveWorkspaceId.mockReturnValue('ws_stored');
+    mockLoadActiveWorkspace.mockReturnValue(stored());
 
     expect(resolveWorkspaceScope()).toEqual({ source: 'env', workspaceId: 'ws_env' });
   });
 
   it('prefers an explicit argument over everything else', () => {
     process.env.LOBEHUB_WORKSPACE_ID = 'ws_env';
-    mockLoadActiveWorkspaceId.mockReturnValue('ws_stored');
+    mockLoadActiveWorkspace.mockReturnValue(stored());
 
     expect(resolveWorkspaceScope('ws_explicit')).toEqual({
       source: 'explicit',
@@ -52,8 +78,39 @@ describe('api/workspace scope resolution', () => {
     });
   });
 
+  // Cloud answers a workspace header the caller has no membership in by falling
+  // back to personal scope, so a scope carried across an account or server
+  // switch would silently write personal data while claiming to be scoped.
+  describe('stale bindings', () => {
+    it.each([
+      ['the account changed', () => mockResolveIdentityFingerprint.mockReturnValue('user:u2')],
+      ['the account is gone', () => mockResolveIdentityFingerprint.mockReturnValue(undefined)],
+      [
+        'the server changed',
+        () => mockResolveServerUrl.mockReturnValue('https://self-hosted.example.com'),
+      ],
+    ])('drops the persisted scope when %s', (_label, arrange) => {
+      mockLoadActiveWorkspace.mockReturnValue(stored());
+      arrange();
+
+      expect(resolveWorkspaceScope()).toEqual({ source: 'stale' });
+      expect(withWorkspaceHeader({ 'Oidc-Auth': 'token' })).toEqual({ 'Oidc-Auth': 'token' });
+    });
+
+    it('says why the saved scope was ignored, once per process', () => {
+      mockLoadActiveWorkspace.mockReturnValue(stored());
+      mockResolveIdentityFingerprint.mockReturnValue('user:u2');
+
+      resolveWorkspaceScope();
+      resolveWorkspaceScope();
+
+      expect(log.warn).toHaveBeenCalledTimes(1);
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('ws_stored'));
+    });
+  });
+
   it('sends the persisted workspace as a header', () => {
-    mockLoadActiveWorkspaceId.mockReturnValue('ws_stored');
+    mockLoadActiveWorkspace.mockReturnValue(stored());
 
     expect(withWorkspaceHeader({ 'Oidc-Auth': 'token' })).toEqual({
       'Oidc-Auth': 'token',

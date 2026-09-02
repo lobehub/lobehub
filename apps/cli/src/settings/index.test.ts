@@ -7,12 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resolveCliDirName } from '../constants/identity';
 import { log } from '../utils/logger';
 import {
-  loadActiveWorkspaceId,
+  loadActiveWorkspace,
   loadOrCreateConnectionId,
   loadSettings,
   normalizeUrl,
   resolveServerUrl,
-  saveActiveWorkspaceId,
+  saveActiveWorkspace,
   saveSettings,
 } from './index';
 
@@ -98,15 +98,20 @@ describe('settings', () => {
   });
 
   it('should persist the active workspace and clear it back to personal', () => {
-    saveActiveWorkspaceId('ws_abc123');
+    const record = {
+      identity: 'user:u1',
+      serverUrl: 'https://app.lobehub.com',
+      workspaceId: 'ws_abc123',
+    };
+    saveActiveWorkspace(record);
 
-    expect(loadActiveWorkspaceId()).toBe('ws_abc123');
+    expect(loadActiveWorkspace()).toEqual(record);
     // Kept out of settings.json, which is unlinked whenever all URLs default.
     expect(fs.existsSync(path.join(settingsDir, 'active-workspace'))).toBe(true);
 
-    saveActiveWorkspaceId(null);
+    saveActiveWorkspace(null);
 
-    expect(loadActiveWorkspaceId()).toBeUndefined();
+    expect(loadActiveWorkspace()).toBeUndefined();
     expect(fs.existsSync(path.join(settingsDir, 'active-workspace'))).toBe(false);
   });
 
@@ -114,7 +119,20 @@ describe('settings', () => {
     fs.mkdirSync(settingsDir, { recursive: true });
     fs.writeFileSync(path.join(settingsDir, 'active-workspace'), 'not an id\n{"a":1}');
 
-    expect(loadActiveWorkspaceId()).toBeUndefined();
+    expect(loadActiveWorkspace()).toBeUndefined();
+  });
+
+  // A record without the account/server it was chosen under cannot be checked
+  // for staleness, so it must not be trusted.
+  it.each([
+    ['a missing identity', { serverUrl: 'https://app.lobehub.com', workspaceId: 'ws_1' }],
+    ['a missing serverUrl', { identity: 'user:u1', workspaceId: 'ws_1' }],
+    ['an id-shaped nothing', { identity: 'user:u1', serverUrl: 'https://x', workspaceId: 'a b' }],
+  ])('should reject an active-workspace record with %s', (_label, record) => {
+    fs.mkdirSync(settingsDir, { recursive: true });
+    fs.writeFileSync(path.join(settingsDir, 'active-workspace'), JSON.stringify(record));
+
+    expect(loadActiveWorkspace()).toBeUndefined();
   });
 
   it('should create a connectionId once and reuse it across calls', () => {

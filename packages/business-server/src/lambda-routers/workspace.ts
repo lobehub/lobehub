@@ -1,3 +1,8 @@
+import {
+  isWorkspaceSlugFormatValid,
+  WORKSPACE_SLUG_MAX,
+  WORKSPACE_SLUG_MIN,
+} from '@lobechat/business-const';
 import type { WorkspaceItem } from '@lobechat/database/schemas';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -5,6 +10,7 @@ import { z } from 'zod';
 import {
   wsAdminProcedure,
   wsCompatProcedure,
+  wsProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 
@@ -25,6 +31,14 @@ export interface WorkspaceStatistics {
   topics: number;
 }
 
+// Same shape cloud enforces, so a slug the CLI or UI gets past this stub is
+// only ever rejected for the reservations cloud adds on top.
+const workspaceSlugSchema = z
+  .string()
+  .min(WORKSPACE_SLUG_MIN)
+  .max(WORKSPACE_SLUG_MAX)
+  .refine(isWorkspaceSlugFormatValid, { message: 'invalid-slug' });
+
 const workspaceStatisticsInput = z
   .object({ todayStartAt: z.string().datetime().optional() })
   .optional();
@@ -39,10 +53,12 @@ const cloudOnly = (feature: string): never => {
 // Cloud overrides this at the same path with the real workspaceRouter backed by cloudDB.
 // Only the procedures consumed by submodule (open-source) UI and by the CLI are declared
 // here as typed no-op stubs so the contract type-checks; cloud supplies the real
-// implementations.
+// implementations. Keep the procedure builders and input schemas aligned with
+// `apps/server/src/routers/lambda/workspace.ts` in the cloud repo — the point of a stub
+// is to represent that contract, so a looser gate here is a real runtime difference.
 export const workspaceRouter = router({
   checkSlugAvailable: authedProcedure
-    .input(z.object({ slug: z.string() }))
+    .input(z.object({ slug: z.string().min(WORKSPACE_SLUG_MIN).max(WORKSPACE_SLUG_MAX) }))
     .query((): { available: boolean } => ({ available: false })),
 
   create: authedProcedure
@@ -51,7 +67,7 @@ export const workspaceRouter = router({
         avatar: z.string().optional(),
         description: z.string().max(1000).optional(),
         name: z.string().min(1).max(255),
-        slug: z.string(),
+        slug: workspaceSlugSchema,
       }),
     )
     .mutation(async (): Promise<WorkspaceItem> => cloudOnly('Workspace creation')),
@@ -65,15 +81,19 @@ export const workspaceRouter = router({
       });
     }),
 
+  // `wsCompatProcedure` here, unlike cloud's `wsProcedure`, because open-source
+  // callers (`buildAppUrl`) reach for it before they know whether a workspace
+  // is in scope.
   getById: wsCompatProcedure.query((): WorkspaceItem | null => null),
 
-  getMyStatistics: wsCompatProcedure
+  getMyStatistics: wsProcedure
     .input(workspaceStatisticsInput)
     .query((): WorkspaceStatistics | null => null),
 
-  getSettings: wsCompatProcedure.query((): Record<string, unknown> => ({})),
+  getSettings: wsProcedure.query((): Record<string, unknown> => ({})),
 
-  getStatistics: wsCompatProcedure
+  /** Workspace-wide totals across all members — Admin or higher, like cloud. */
+  getStatistics: wsAdminProcedure
     .input(workspaceStatisticsInput)
     .query((): WorkspaceStatistics | null => null),
 
@@ -85,7 +105,7 @@ export const workspaceRouter = router({
         avatar: z.string().optional(),
         description: z.string().max(1000).optional(),
         name: z.string().min(1).max(255).optional(),
-        slug: z.string().optional(),
+        slug: workspaceSlugSchema.optional(),
       }),
     )
     .mutation(async (): Promise<void> => cloudOnly('Workspace update')),

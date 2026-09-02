@@ -8,7 +8,7 @@ vi.mock('../auth/refresh', () => ({
 }));
 
 vi.mock('../settings', () => ({
-  loadActiveWorkspaceId: () => undefined,
+  loadActiveWorkspace: () => undefined,
   resolveServerUrl: mockResolveServerUrl,
 }));
 
