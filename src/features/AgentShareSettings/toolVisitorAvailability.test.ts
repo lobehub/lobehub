@@ -1,7 +1,7 @@
 import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
 import { KnowledgeBaseIdentifier } from '@lobechat/builtin-tool-knowledge-base';
 import { LobeAgentApiName, LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
-import { MemoryIdentifier } from '@lobechat/builtin-tool-memory';
+import { MemoryApiName, MemoryIdentifier } from '@lobechat/builtin-tool-memory';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -210,6 +210,26 @@ describe('getShareApiAvailability', () => {
       'available',
     );
     expect(getShareApiAvailability(LobeAgentIdentifier, LobeAgentApiName.updatePlan, 'never')).toBe(
+      'available',
+    );
+  });
+
+  // A share grant is read-only at most: the server gate strips every memory
+  // write API regardless of what the owner ticked, so the picker must not
+  // offer them (regression: owners granted only write APIs and saw no memory
+  // tool on the visitor side at all).
+  it('reports memory write APIs as writesOwnerData, keeps read APIs available', () => {
+    for (const apiName of [
+      MemoryApiName.addPreferenceMemory,
+      MemoryApiName.updateIdentityMemory,
+      MemoryApiName.removeIdentityMemory,
+    ]) {
+      expect(getShareApiAvailability(MemoryIdentifier, apiName)).toBe('writesOwnerData');
+    }
+    expect(getShareApiAvailability(MemoryIdentifier, MemoryApiName.searchUserMemory)).toBe(
+      'available',
+    );
+    expect(getShareApiAvailability(MemoryIdentifier, MemoryApiName.queryTaxonomyOptions)).toBe(
       'available',
     );
   });

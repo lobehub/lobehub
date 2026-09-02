@@ -45,8 +45,8 @@ const ToolsSection = memo<ToolsSectionProps>(({ agentId, onChange, shareConfig }
   const enabledIds = candidateToolIds.filter(
     (toolId) =>
       selectedToolIds.includes(toolId) &&
-      getShareToolAvailability(toolId, { allowReadMemory: shareConfig.allowReadMemory }) !==
-        'blocked',
+      getShareToolAvailability(toolId, { allowReadMemory: shareConfig.allowReadMemory }) ===
+        'available',
   );
   // Includes tools the gate always refuses: they still render below as
   // disabled chips (so the owner learns why a configured tool cannot be

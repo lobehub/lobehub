@@ -1,5 +1,5 @@
 import { LobeAgentApiName, LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
-import { MemoryIdentifier } from '@lobechat/builtin-tool-memory';
+import { MEMORY_WRITE_API_NAMES, MemoryIdentifier } from '@lobechat/builtin-tool-memory';
 import {
   AGENT_SHARE_NO_DATA_GRANT_BUILTIN_IDENTIFIERS,
   isAgentShareAllowedBuiltinIdentifier,
@@ -14,8 +14,10 @@ import type { AgentShareToolGrant, ExtendedHumanInterventionConfig } from '@lobe
  * - `available` — the owner can grant it and the server gate will honor it.
  * - `blocked` — the server refuses it for visitor runs no matter what is
  *   stored, so the owner must not be offered the toggle at all.
- * - `needsMemoryPermission` — grantable, but inert until the separate
- *   "allow reading my memory" permission is on.
+ * - `needsMemoryPermission` — the server gate would strip it until the
+ *   separate "allow reading my memory" permission is on, so the picker keeps
+ *   the row disabled (with that explanation) rather than accepting a grant
+ *   that cannot take effect yet.
  */
 export type ShareToolAvailability = 'available' | 'blocked' | 'needsMemoryPermission';
 
@@ -163,20 +165,26 @@ export const toggleShareToolApi = (
  * 2. `callSubAgent` on `lobe-agent` — sub-agent dispatch is unconditionally
  *    stripped for share visitors regardless of any grant.
  *
- * Deliberately NOT covered: `DATA_TOOL_ACCESS_RULES` write-API blocking (e.g.
- * memory's `addContextMemory`). Duplicating that server-only registry here
- * would drift the moment a new write API is added there without a matching
- * update here — a mis-selected write API is still safely stripped/blocked at
- * the server, just not pre-disabled in this picker. See `shareGate.ts`'s
- * `DATA_TOOL_ACCESS_RULES` for the authoritative list.
+ * 3. Memory write APIs — `DATA_TOOL_ACCESS_RULES` strips them from every
+ *    visitor run regardless of grant (a share grant is read-only at most).
+ *    Read from the same `MEMORY_WRITE_API_NAMES` the gate uses, so a new
+ *    write API cannot be added on one side without the other following.
+ *
+ * Returns `writesOwnerData` (rather than plain `blocked`) for that last case
+ * so the picker can explain *why* instead of showing a generic refusal.
  */
+export type ShareApiAvailability = 'available' | 'blocked' | 'writesOwnerData';
+
 export const getShareApiAvailability = (
   identifier: string,
   apiName: string,
   humanIntervention?: ExtendedHumanInterventionConfig,
-): 'available' | 'blocked' => {
+): ShareApiAvailability => {
   if (identifier === LobeAgentIdentifier && apiName === LobeAgentApiName.callSubAgent) {
     return 'blocked';
+  }
+  if (identifier === MemoryIdentifier && MEMORY_WRITE_API_NAMES.has(apiName as never)) {
+    return 'writesOwnerData';
   }
   if (humanIntervention !== undefined && humanIntervention !== 'never') return 'blocked';
 

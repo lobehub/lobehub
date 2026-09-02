@@ -331,6 +331,7 @@
   "share.settings.permissions.title": "权限",
   "share.settings.title": "分享助手",
   "share.settings.tools.apiNotAvailableToVisitors": "该操作无法在分享运行中使用：它要么需要你本人确认，要么本就不对访客开放。",
+  "share.settings.tools.apiWritesOwnerData": "访客不能写入你的记忆，该操作在分享运行中始终关闭。",
   "share.settings.tools.availableGroup": "未开放 · {{count}}",
   "share.settings.tools.desc": "只有在这里勾选的工具才能在访客运行中被调用。可能触达你设备或本地文件的工具永远不会出现在列表中。",
   "share.settings.tools.empty": "这个助手没有可以开放给访客的工具。",

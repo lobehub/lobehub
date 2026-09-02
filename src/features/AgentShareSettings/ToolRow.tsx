@@ -56,7 +56,10 @@ const ToolRow = memo<ToolRowProps>(({ agentId, toolId, selected, shareConfig, on
   const availability = getShareToolAvailability(toolId, {
     allowReadMemory: shareConfig.allowReadMemory,
   });
-  const blocked = availability === 'blocked';
+  // Anything short of `available` is disabled: the gate would strip the
+  // grant, so accepting the tick would only confirm a permission that never
+  // takes effect. The tooltip carries the reason.
+  const blocked = availability !== 'available';
 
   const grantableApiNames = apis
     .filter(
@@ -84,10 +87,10 @@ const ToolRow = memo<ToolRowProps>(({ agentId, toolId, selected, shareConfig, on
       <Flexbox horizontal align={'center'} gap={2}>
         <Tooltip
           title={
-            blocked
-              ? t('share.settings.tools.notAvailableToVisitors')
-              : availability === 'needsMemoryPermission'
-                ? t('share.settings.tools.needsMemoryPermission')
+            availability === 'needsMemoryPermission'
+              ? t('share.settings.tools.needsMemoryPermission')
+              : blocked
+                ? t('share.settings.tools.notAvailableToVisitors')
                 : undefined
           }
         >
@@ -119,13 +122,19 @@ const ToolRow = memo<ToolRowProps>(({ agentId, toolId, selected, shareConfig, on
               api.name,
               api.humanIntervention,
             );
-            const apiBlocked = apiAvailability === 'blocked';
+            const apiBlocked = apiAvailability !== 'available';
             const apiSelected = grant === 'all' || (grant instanceof Set && grant.has(api.name));
 
             return (
               <Tooltip
                 key={api.name}
-                title={apiBlocked ? t('share.settings.tools.apiNotAvailableToVisitors') : undefined}
+                title={
+                  apiAvailability === 'writesOwnerData'
+                    ? t('share.settings.tools.apiWritesOwnerData')
+                    : apiBlocked
+                      ? t('share.settings.tools.apiNotAvailableToVisitors')
+                      : undefined
+                }
               >
                 <Checkbox
                   checked={!apiBlocked && apiSelected}

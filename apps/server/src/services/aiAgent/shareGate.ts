@@ -12,7 +12,7 @@ import {
   LobeAgentIdentifier,
   systemPromptWithoutSubAgent,
 } from '@lobechat/builtin-tool-lobe-agent';
-import { MemoryApiName, MemoryIdentifier } from '@lobechat/builtin-tool-memory';
+import { MEMORY_WRITE_API_NAMES, MemoryIdentifier } from '@lobechat/builtin-tool-memory';
 import {
   AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS,
   builtinTools,
@@ -271,15 +271,9 @@ const DATA_TOOL_ACCESS_RULES: Record<string, DataToolAccessRule> = {
   },
   [MemoryIdentifier]: {
     grant: (permissions) => (permissions.allowReadMemory ? 'read' : 'none'),
-    writeApiNames: [
-      MemoryApiName.addActivityMemory,
-      MemoryApiName.addContextMemory,
-      MemoryApiName.addExperienceMemory,
-      MemoryApiName.addIdentityMemory,
-      MemoryApiName.addPreferenceMemory,
-      MemoryApiName.removeIdentityMemory,
-      MemoryApiName.updateIdentityMemory,
-    ],
+    // Shared with the share settings picker so the owner is never offered a
+    // write API the gate strips anyway.
+    writeApiNames: [...MEMORY_WRITE_API_NAMES],
   },
 };
 
