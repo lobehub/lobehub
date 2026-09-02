@@ -5,6 +5,13 @@ import { type IEditor } from '@lobehub/editor';
 import { moment } from '@lobehub/editor';
 import { useEditor } from '@lobehub/editor/react';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
+import {
+  $createParagraphNode,
+  $createTextNode,
+  $getRoot,
+  COLLABORATION_TAG,
+  SKIP_COLLAB_TAG,
+} from 'lexical';
 import { memo, useEffect, useRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -390,6 +397,50 @@ describe('InternalEditor', () => {
         { timeout: 2000 },
       );
     });
+
+    it.each([COLLABORATION_TAG, SKIP_COLLAB_TAG])(
+      'should not echo a %s update into autosave',
+      async (tag) => {
+        const onContentChange = vi.fn();
+        let editorInstance: IEditor | undefined;
+
+        render(
+          <MinimalTestWrapper
+            onContentChange={onContentChange}
+            onEditorReady={(e) => {
+              editorInstance = e;
+            }}
+          />,
+        );
+
+        await act(async () => {
+          await moment();
+        });
+
+        await waitFor(() => {
+          expect(editorInstance).toBeDefined();
+        });
+
+        await act(async () => {
+          editorInstance!.setDocument('text', 'Local baseline');
+          await moment();
+        });
+
+        onContentChange.mockClear();
+
+        await act(async () => {
+          editorInstance!.getLexicalEditor()!.update(
+            () => {
+              $getRoot().append($createParagraphNode().append($createTextNode('remote update')));
+            },
+            { tag },
+          );
+          await moment();
+        });
+
+        expect(onContentChange).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe('editor content methods', () => {

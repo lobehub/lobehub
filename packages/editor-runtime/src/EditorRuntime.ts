@@ -1,5 +1,5 @@
 import type { PageContentContext } from '@lobechat/prompts';
-import type { IEditor } from '@lobehub/editor';
+import { type IEditor, IYjsService } from '@lobehub/editor';
 import { LITEXML_APPLY_COMMAND, LITEXML_MODIFY_COMMAND } from '@lobehub/editor/litexml-commands';
 import debug from 'debug';
 
@@ -25,6 +25,10 @@ interface InspectableEditor {
   getLexicalEditor?: () => unknown | null;
   plugins?: unknown[];
   pluginsInstances?: unknown[];
+}
+
+interface CollaborationSnapshotService {
+  applyExternalEditorData?: (editorData: Record<string, unknown>) => boolean;
 }
 
 interface LiteXMLNodeMatch {
@@ -188,10 +192,49 @@ export class EditorRuntime {
   }
 
   /**
+   * Apply an editor-data snapshot through the Yjs binding when collaboration is
+   * active. The editor package owns the binding because only it can reconcile
+   * Lexical node keys with the shared Y.Doc. `undefined` means that no Yjs
+   * service is registered, so callers may use the legacy non-collaborative
+   * datasource path. A registered but incompatible service returns `false` and
+   * is never sent through that fallback.
+   */
+  private applyCollaborationSnapshot(editorData: Record<string, unknown>): boolean | undefined {
+    if (!this.editor) return undefined;
+
+    try {
+      const service = this.editor.requireService(
+        IYjsService,
+      ) as CollaborationSnapshotService | null;
+
+      if (!service) return undefined;
+      if (typeof service.applyExternalEditorData !== 'function') {
+        log('[EditorRuntime] collaboration snapshot unsupported by loaded editor package');
+        return false;
+      }
+
+      try {
+        return service.applyExternalEditorData(editorData);
+      } catch (error) {
+        // Do not fall back to setDocument after a collaboration-aware service has
+        // started. A fallback would re-import the full tree and recreate the
+        // duplication this boundary is intended to prevent.
+        log('[EditorRuntime] collaboration snapshot apply failed', error);
+        return false;
+      }
+    } catch (error) {
+      log('[EditorRuntime] collaboration snapshot service unavailable', error);
+      return undefined;
+    }
+  }
+
+  /**
    * Apply a snapshot produced by the server-side PageAgent execution runtime
-   * onto the currently mounted editor. Skips persistence side-effects: the
-   * server already wrote the row, so calling `afterMutateHandler` here would
-   * loop the save path back through `commitEditorMutation`.
+   * onto the currently mounted editor. Collaboration-aware editors apply the
+   * payload through their Yjs binding in one controlled transaction. The
+   * server already wrote the row, so this method never calls
+   * `afterMutateHandler` and cannot loop the save path back through
+   * `commitEditorMutation`.
    *
    * `editorData` is the Lexical `SerializedEditorState` (or `null`/`undefined`
    * when the server only changed metadata such as the title).
@@ -205,8 +248,14 @@ export class EditorRuntime {
 
     if (this.editor && snapshot.editorData) {
       try {
-        this.editor.setDocument('json', JSON.stringify(snapshot.editorData), { keepId: true });
-        applied = true;
+        const collaborationResult = this.applyCollaborationSnapshot(snapshot.editorData);
+
+        if (collaborationResult === undefined) {
+          this.editor.setDocument('json', JSON.stringify(snapshot.editorData), { keepId: true });
+          applied = true;
+        } else {
+          applied = collaborationResult;
+        }
       } catch (error) {
         log('[EditorRuntime] applyServerSnapshot:editorData failed', error);
       }

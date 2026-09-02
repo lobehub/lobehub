@@ -1,4 +1,6 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import { DEFAULT_PROVIDER } from '@lobechat/business-const';
+import { DEFAULT_MODEL } from '@lobechat/const';
 import { isChatGroupSessionId } from '@lobechat/types';
 import type { ReactNode } from 'react';
 import { memo, useEffect, useMemo, useRef } from 'react';
@@ -11,6 +13,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { useServerConfigStore } from '@/store/serverConfig';
 
 interface PageAgentProviderProps {
   children: ReactNode;
@@ -40,9 +43,40 @@ export const PageAgentProvider = memo<PageAgentProviderProps>(
       activeAgentId ? agentByIdSelectors.isAgentHeterogeneousById(activeAgentId)(s) : false,
     );
     const setActiveAgentId = useAgentStore((s) => s.setActiveAgentId);
+    const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
+    const pageAgentModel = useAgentStore((s) =>
+      pageAgentId ? agentByIdSelectors.getAgentModelById(pageAgentId)(s) : undefined,
+    );
+    const pageAgentProvider = useAgentStore((s) =>
+      pageAgentId ? agentByIdSelectors.getAgentModelProviderById(pageAgentId)(s) : undefined,
+    );
+    const serverPageCopilotModel = useServerConfigStore(
+      (s) => s.serverConfig.aiProvider[DEFAULT_PROVIDER]?.enabledModels?.[0],
+    );
     const syncedAgentIdRef = useRef<string | undefined>(undefined);
 
     useInitBuiltinAgent(BUILTIN_AGENT_SLUGS.pageAgent);
+
+    // A self-hosted deployment can publish an explicit server model list for
+    // the Page writing assistant's provider. Migrate the built-in legacy
+    // default to the first configured model, then leave any explicit user
+    // choice (for example Pro vs Flash) untouched. Credentials and base URL
+    // remain server-only.
+    useEffect(() => {
+      if (!pageAgentId || !serverPageCopilotModel) return;
+      if (pageAgentModel !== DEFAULT_MODEL || pageAgentProvider !== DEFAULT_PROVIDER) return;
+
+      void updateAgentConfigById(pageAgentId, {
+        model: serverPageCopilotModel,
+        provider: DEFAULT_PROVIDER,
+      });
+    }, [
+      pageAgentId,
+      pageAgentModel,
+      pageAgentProvider,
+      serverPageCopilotModel,
+      updateAgentConfigById,
+    ]);
 
     // Build conversation context for page agent.
     // Fall back to the page agent when the global active agent cannot drive a page

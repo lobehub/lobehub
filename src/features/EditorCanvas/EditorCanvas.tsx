@@ -15,7 +15,7 @@ import InternalEditor from './InternalEditor';
  * Plugin type for the editor
  * Allows any array of plugins that the Editor component accepts
  */
-type EditorPlugins = Parameters<typeof Editor>[0]['plugins'];
+type EditorPlugins = NonNullable<Parameters<typeof Editor>[0]['plugins']>;
 
 interface UnsavedChangesGuardOptions {
   /**
@@ -41,6 +41,13 @@ export interface EditorCanvasProps {
    * Only applies when documentId is provided.
    */
   autoSave?: boolean;
+
+  /**
+   * Whether a collaboration provider owns live document state after the
+   * initial server snapshot is loaded. When enabled, SWR revalidation must not
+   * re-apply autosave echoes to the bound editor.
+   */
+  collaborationEnabled?: boolean;
 
   /**
    * Reload an already-mounted editor when an authoritative external content
@@ -101,6 +108,11 @@ export interface EditorCanvasProps {
   mentionOption?: EditorProps['mentionOption'];
 
   /**
+   * Optional configured link plugin. Defaults to ReactLinkPlugin.
+   */
+  linkPlugin?: EditorPlugins[number];
+
+  /**
    * Content change handler
    */
   onContentChange?: () => void;
@@ -157,6 +169,11 @@ export interface EditorCanvasProps {
    * Unsaved changes guard for documentId mode.
    */
   unsavedChangesGuard?: UnsavedChangesGuardOptions;
+
+  /**
+   * Custom styles for the editor's outer layout wrapper.
+   */
+  wrapperStyle?: CSSProperties;
 }
 
 export interface EditorCanvasWithEditorProps extends EditorCanvasProps {

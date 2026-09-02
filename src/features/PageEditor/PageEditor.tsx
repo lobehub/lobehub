@@ -4,7 +4,7 @@ import { DEFAULT_BLOCK_ANCHOR_PADDING, EditorProvider } from '@lobehub/editor/re
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import type { CSSProperties, FC, ReactNode, UIEvent } from 'react';
-import { memo, useCallback, useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 
 import { CONVERSATION_MIN_WIDTH } from '@/const/layoutTokens';
 import type { ComposerTarget } from '@/features/Conversation/types';
@@ -25,6 +25,7 @@ import LockedAlert from './LockedAlert';
 import LockStatusBanner from './LockStatusBanner';
 import { PageAgentProvider } from './PageAgentProvider';
 import { PageEditorProvider } from './PageEditorProvider';
+import PageTableOfContents from './PageTableOfContents';
 import RightPanel from './RightPanel';
 import { usePageEditorStore } from './store';
 import TitleSection from './TitleSection';
@@ -63,13 +64,27 @@ const shouldRestoreEditorScroll = ({
   !isUserInteractingWithEditor;
 
 const styles = StyleSheet.create({
-  contentWrapper: {
-    containerType: 'inline-size',
+  bodyWrapper: {
     display: 'flex',
     flex: 1,
     minHeight: 0,
+    minWidth: 0,
+  },
+  contentWrapper: {
+    alignItems: 'start',
+    containerType: 'size',
+    display: 'grid',
+    flex: 1,
+    gridTemplateColumns: 'minmax(0, 1fr) auto',
+    minHeight: 0,
+    minWidth: 0,
     overflowY: 'auto',
     position: 'relative',
+  },
+  documentColumn: {
+    containerType: 'inline-size',
+    minWidth: 0,
+    width: '100%',
   },
   editorContainer: {
     minHeight: 0,
@@ -169,6 +184,30 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
   const lastEditorScrollTopRef = useRef(0);
   const editorPaneRef = useRef<HTMLDivElement>(null);
   const contentWrapperRef = useRef<HTMLDivElement>(null);
+
+  // The canvas stays mounted while the route swaps between pages. Reset both
+  // the DOM scroll position and the layout-restoration snapshot here so a
+  // long page cannot donate its bottom position to the next document.
+  useLayoutEffect(() => {
+    const node = contentWrapperRef.current;
+    lastEditorScrollTopRef.current = 0;
+
+    if (!node || typeof window === 'undefined') return;
+
+    if (restoreScrollFrameRef.current) {
+      window.cancelAnimationFrame(restoreScrollFrameRef.current);
+      restoreScrollFrameRef.current = undefined;
+    }
+
+    isRestoringScrollRef.current = true;
+    node.scrollTop = 0;
+
+    const frame = window.requestAnimationFrame(() => {
+      isRestoringScrollRef.current = false;
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [documentId]);
 
   const isUserInteractingWithEditor = useCallback(() => {
     if (isPointerInsideEditorPaneRef.current) return true;
@@ -289,36 +328,41 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
       }}
     >
       {!fullWidthHeader && headerSlot}
-      <Flexbox
-        horizontal
-        height={'100%'}
-        ref={contentWrapperRef}
-        style={styles.contentWrapper}
-        width={'100%'}
-        onScroll={handleEditorScroll}
-      >
-        <WideScreenContainer
-          wrapperStyle={{ cursor: editable ? 'text' : 'default' }}
-          onChange={notifyEditorLayoutChange}
-          onClick={() => {
-            if (!editable) return;
-
-            editor?.focus();
-          }}
+      <Flexbox horizontal style={styles.bodyWrapper} width={'100%'}>
+        <Flexbox
+          data-page-editor-scroll-container
+          height={'100%'}
+          ref={contentWrapperRef}
+          style={styles.contentWrapper}
+          width={'100%'}
+          onScroll={handleEditorScroll}
         >
-          <Flexbox className={overrideStyles.editorContent} flex={1} style={editorContentStyle}>
-            <TitleSection />
-            <PageMetaBar />
-            {/* Surfaces local heartbeat health (unstable/lost) for the holder.
-                Suppressed when LockedAlert is showing — see LockStatusBanner. */}
-            <LockStatusBanner />
-            {/* Prominent in-body notice when another member holds the lock; the
-                compact status badge lives in the Header (EditingIndicator). */}
-            <LockedAlert />
-            <EditorCanvas askCopilotTarget={askCopilotTarget} />
-            {documentId && <DocumentComments documentId={documentId} />}
-          </Flexbox>
-        </WideScreenContainer>
+          <div data-page-editor-document-column style={styles.documentColumn}>
+            <WideScreenContainer
+              wrapperStyle={{ cursor: editable ? 'text' : 'default' }}
+              onChange={notifyEditorLayoutChange}
+              onClick={() => {
+                if (!editable) return;
+
+                editor?.focus();
+              }}
+            >
+              <Flexbox className={overrideStyles.editorContent} flex={1} style={editorContentStyle}>
+                <TitleSection />
+                <PageMetaBar />
+                {/* Surfaces local heartbeat health (unstable/lost) for the holder.
+                    Suppressed when LockedAlert is showing — see LockStatusBanner. */}
+                <LockStatusBanner />
+                {/* Prominent in-body notice when another member holds the lock; the
+                    compact status badge lives in the Header (EditingIndicator). */}
+                <LockedAlert />
+                <EditorCanvas askCopilotTarget={askCopilotTarget} />
+                {documentId && <DocumentComments documentId={documentId} />}
+              </Flexbox>
+            </WideScreenContainer>
+          </div>
+          {editor && <PageTableOfContents editor={editor} scrollContainerRef={contentWrapperRef} />}
+        </Flexbox>
       </Flexbox>
       {documentId && <DiffAllToolbar documentId={documentId} editor={editor} />}
     </Flexbox>
@@ -379,6 +423,7 @@ export const PageEditor: FC<PageEditorProps> = ({
       <EditorProvider>
         <PageEditorProvider
           emoji={emoji}
+          key={pageId || '__new_page__'}
           knowledgeBaseId={knowledgeBaseId}
           metaReadOnly={metaReadOnly}
           pageId={pageId}

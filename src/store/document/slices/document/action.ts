@@ -4,6 +4,7 @@ import { EDITOR_DEBOUNCE_TIME, EDITOR_MAX_WAIT } from '@lobechat/const';
 import type { DocumentItem } from '@lobechat/database/schemas';
 import type { IEditor } from '@lobehub/editor';
 import { debounce } from 'es-toolkit/compat';
+import { useState } from 'react';
 import type { SWRResponse } from 'swr';
 
 import { useClientDataSWRWithSync } from '@/libs/swr';
@@ -58,6 +59,11 @@ export interface UseFetchDocumentOptions {
    * Topic ID for notebook documents.
    */
   topicId?: string | null;
+}
+
+export interface FetchDocumentResponse extends SWRResponse<DocumentItem | null> {
+  /** True only after this hook instance completed a network fetch for the current document. */
+  hasFreshData: boolean;
 }
 
 type Setter = StoreSetter<DocumentStore>;
@@ -207,11 +213,54 @@ export class DocumentActionImpl {
   useFetchDocument = (
     documentId: string | undefined,
     options: UseFetchDocumentOptions = {},
-  ): SWRResponse<DocumentItem | null> => {
+  ): FetchDocumentResponse => {
     const { autoSave = true, editor, sourceType = 'page', topicId } = options;
     const swrKey = documentId && editor ? documentSWRKeys.editor(documentId) : null;
+    const [bootstrapDocumentId, setBootstrapDocumentId] = useState<string>();
 
-    return useClientDataSWRWithSync<DocumentItem | null>(
+    const syncDocument = (document: DocumentItem | null) => {
+      // Both documentId and editor are guaranteed to be defined when this callback is called
+      if (!documentId || !editor) return;
+
+      // Check if this response is still for the current active document
+      // This prevents race conditions when quickly switching between documents
+      const currentActiveId = this.#get().activeDocumentId;
+
+      if (currentActiveId && currentActiveId !== documentId) {
+        // User has already switched to another document, discard this stale response
+        return;
+      }
+
+      if (document) {
+        // Initialize document with editor
+        this.#get().initDocumentWithEditor({
+          autoSave,
+          content: document.content,
+          contentFormat: isSkillMarkdownDocument(document) ? 'skillMarkdown' : 'markdown',
+          documentId,
+          editor,
+          editorData: document.editorData,
+
+          sourceType,
+          topicId: topicId ?? undefined,
+        });
+
+        // Mirror page metadata (title/emoji) into pageStore so PageExplorer
+        // selectors resolve correctly when the page is opened from a context
+        // that didn't pre-load the documents list (e.g. task workspace modal).
+        if (sourceType === 'page') {
+          usePageStore.getState().upsertDocument(document);
+        }
+      }
+
+      // SWR invokes onData for both persisted cache and network responses. The
+      // cache is safe to use only after its revalidation settles; exposing this
+      // explicit identity lets collaboration wait for that state instead of
+      // relying on onSuccess (which is skipped by deduped cache hits).
+      setBootstrapDocumentId(documentId);
+    };
+
+    const response = useClientDataSWRWithSync<DocumentItem | null>(
       swrKey,
       async () => {
         // documentId is guaranteed to be defined when swrKey is not null
@@ -225,42 +274,20 @@ export class DocumentActionImpl {
       },
       {
         focusThrottleInterval: 20_000,
-        onData: (document) => {
-          // Both documentId and editor are guaranteed to be defined when this callback is called
-          if (!document || !documentId || !editor) return;
-
-          // Check if this response is still for the current active document
-          // This prevents race conditions when quickly switching between documents
-          const currentActiveId = this.#get().activeDocumentId;
-
-          if (currentActiveId && currentActiveId !== documentId) {
-            // User has already switched to another document, discard this stale response
-            return;
-          }
-
-          // Initialize document with editor
-          this.#get().initDocumentWithEditor({
-            autoSave,
-            content: document.content,
-            contentFormat: isSkillMarkdownDocument(document) ? 'skillMarkdown' : 'markdown',
-            documentId,
-            editor,
-            editorData: document.editorData,
-
-            sourceType,
-            topicId: topicId ?? undefined,
-          });
-
-          // Mirror page metadata (title/emoji) into pageStore so PageExplorer
-          // selectors resolve correctly when the page is opened from a context
-          // that didn't pre-load the documents list (e.g. task workspace modal).
-          if (sourceType === 'page') {
-            usePageStore.getState().upsertDocument(document);
-          }
+        onData: syncDocument,
+        onSuccess: (document) => {
+          // Synchronize first. onData already marks cached and network snapshots
+          // as eligible once SWR's validation state settles.
+          syncDocument(document);
         },
         revalidateOnFocus: true,
       },
     );
+
+    return {
+      ...response,
+      hasFreshData: !!documentId && bootstrapDocumentId === documentId && !response.isValidating,
+    };
   };
 }
 

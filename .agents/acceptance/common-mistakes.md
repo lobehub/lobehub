@@ -394,7 +394,15 @@ and intermediate flex sizing can hide the intended inner scrollbars.
 
 **Correct approach:** bound the workspace, keep the frame overflow hidden, assign
 independent scroll regions to navigation and detail, and verify scroll ownership with
-DOM measurements as well as visual evidence.
+DOM measurements as well as visual evidence. For sticky navigation inside a shared
+reader scrollport, size the sticky wrapper against the scrollport viewport (not the
+full document), then verify its geometry and affordances both at the top and after a
+mid-document scroll; a sticky element taller than the scrollport will silently stop
+sticking and make collapsed menus appear to disappear. When the navigation reserves a
+grid/flex track, also make the detail track a shrinkable inline-size container and test
+intrinsic-width content such as tables and code blocks. Otherwise container-query units
+can still resolve against the combined reader width and render the detail underneath the
+navigation even though the tracks themselves look correct.
 
 ### L-D7 — Treating a route-driven Segmented's selected segment as a clickable affordance
 

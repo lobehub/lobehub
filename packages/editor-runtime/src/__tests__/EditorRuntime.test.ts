@@ -25,6 +25,38 @@ describe('EditorRuntime', () => {
     runtime.setTitleHandlers(mockTitleSetter, mockTitleGetter);
   });
 
+  describe('applyServerSnapshot', () => {
+    it('delegates editor data to the collaboration service instead of re-importing the tree', () => {
+      const applyExternalEditorData = vi.fn().mockReturnValue(true);
+      vi.spyOn(editor, 'requireService').mockReturnValue({ applyExternalEditorData } as any);
+      const setDocument = vi.spyOn(editor, 'setDocument');
+      const editorData = editor.getDocument('json') as unknown as Record<string, unknown>;
+
+      expect(runtime.applyServerSnapshot({ editorData })).toBe(true);
+      expect(applyExternalEditorData).toHaveBeenCalledWith(editorData);
+      expect(setDocument).not.toHaveBeenCalled();
+    });
+
+    it('does not report a mutation when the collaboration service already has the snapshot', () => {
+      const applyExternalEditorData = vi.fn().mockReturnValue(false);
+      vi.spyOn(editor, 'requireService').mockReturnValue({ applyExternalEditorData } as any);
+      const setDocument = vi.spyOn(editor, 'setDocument');
+      const editorData = editor.getDocument('json') as unknown as Record<string, unknown>;
+
+      expect(runtime.applyServerSnapshot({ editorData })).toBe(false);
+      expect(setDocument).not.toHaveBeenCalled();
+    });
+
+    it('does not fall back to setDocument when collaboration is registered but unsupported', () => {
+      vi.spyOn(editor, 'requireService').mockReturnValue({} as any);
+      const setDocument = vi.spyOn(editor, 'setDocument');
+      const editorData = editor.getDocument('json') as unknown as Record<string, unknown>;
+
+      expect(runtime.applyServerSnapshot({ editorData })).toBe(false);
+      expect(setDocument).not.toHaveBeenCalled();
+    });
+  });
+
   describe('initPage', () => {
     it('should initialize document from markdown and verify editor state', async () => {
       const inputMarkdown = 'Hello world\n\nThis is a paragraph.';

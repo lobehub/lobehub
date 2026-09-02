@@ -94,6 +94,18 @@ describe('InternalEditor readonly state', () => {
     });
   });
 
+  it('allows a host to expose decorator outlines outside the wrapper', () => {
+    const { container } = render(
+      <InternalEditor editor={editor} wrapperStyle={{ overflow: 'visible' }} />,
+    );
+
+    expect(container.firstElementChild).toHaveStyle({
+      maxWidth: '100%',
+      overflow: 'visible',
+      width: '100%',
+    });
+  });
+
   it('registers the floating toolbar when editable', () => {
     render(<InternalEditor editor={editor} />);
 

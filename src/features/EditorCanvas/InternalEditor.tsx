@@ -12,6 +12,7 @@ import {
 import { Editor, useEditorState } from '@lobehub/editor/react';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
+import { COLLABORATION_TAG, SKIP_COLLAB_TAG } from 'lexical';
 import type { CSSProperties, RefObject } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -42,12 +43,6 @@ const fileNodeStyles = createStaticStyles(({ css }) => ({
 /**
  * Base plugins for the editor (without image and toolbar, which need dynamic config)
  */
-const STATIC_PLUGINS = [
-  ReactLiteXmlPlugin,
-  ...createChatInputRichPlugins({ linkPlugin: ReactLinkPlugin }),
-  ReactTablePlugin,
-];
-
 const EDITOR_INIT_DATA_SOURCE_TYPES = ['json', 'markdown'] as const;
 const EDITOR_INIT_RETRY_LIMIT = 30;
 const EDITOR_INIT_RETRY_INTERVAL = 16;
@@ -105,6 +100,7 @@ const InternalEditor = memo<InternalEditorProps>(
     editor,
     extraPlugins,
     floatingToolbar = true,
+    linkPlugin = ReactLinkPlugin,
     getPopupContainer,
     mentionOption,
     onContentChange,
@@ -115,6 +111,7 @@ const InternalEditor = memo<InternalEditorProps>(
     slashItems,
     style,
     toolbarExtraItems,
+    wrapperStyle,
   }) => {
     const { t } = useTranslation('file');
     const editorState = useEditorState(editor);
@@ -134,7 +131,7 @@ const InternalEditor = memo<InternalEditorProps>(
     }, []);
 
     const finalPlaceholder = placeholder || t('pageEditor.editorPlaceholder');
-    const wrapperStyle = useMemo<CSSProperties>(
+    const mergedWrapperStyle = useMemo<CSSProperties>(
       () => ({
         cursor: disabled ? 'not-allowed' : undefined,
         maxWidth: '100%',
@@ -143,8 +140,9 @@ const InternalEditor = memo<InternalEditorProps>(
         overflow: 'hidden',
         pointerEvents: disabled ? 'none' : undefined,
         width: '100%',
+        ...wrapperStyle,
       }),
-      [disabled],
+      [disabled, wrapperStyle],
     );
 
     // Build plugins array
@@ -163,10 +161,16 @@ const InternalEditor = memo<InternalEditorProps>(
         theme: { file: fileNodeStyles.fileWrapper as unknown as string },
       });
 
+      const staticPlugins = [
+        ReactLiteXmlPlugin,
+        ...createChatInputRichPlugins({ linkPlugin }),
+        ReactTablePlugin,
+      ];
+
       // Build base plugins with optional extra plugins prepended
       const basePlugins = extraPlugins
-        ? [...extraPlugins, ...STATIC_PLUGINS, imagePlugin, filePlugin]
-        : [...STATIC_PLUGINS, imagePlugin, filePlugin];
+        ? [...extraPlugins, ...staticPlugins, imagePlugin, filePlugin]
+        : [...staticPlugins, imagePlugin, filePlugin];
 
       // Add toolbar only when the editor is actually editable — a locked /
       // read-only page must not surface the floating formatting toolbar on
@@ -199,6 +203,7 @@ const InternalEditor = memo<InternalEditorProps>(
       handleFileUpload,
       handleImageUpload,
       handlePickFile,
+      linkPlugin,
       toolbarExtraItems,
     ]);
 
@@ -281,23 +286,32 @@ const InternalEditor = memo<InternalEditorProps>(
       // Initialize snapshot before registering listener
       previousDocumentSnapshotRef.current = editor.getDocument('json');
 
-      const unregister = lexicalEditor.registerUpdateListener(({ dirtyElements, dirtyLeaves }) => {
-        // Skip selection-only / caret-movement updates — no content was mutated.
-        if (dirtyElements.size === 0 && dirtyLeaves.size === 0) return;
+      const unregister = lexicalEditor.registerUpdateListener(
+        ({ dirtyElements, dirtyLeaves, tags }) => {
+          // Skip selection-only / caret-movement updates — no content was mutated.
+          if (dirtyElements.size === 0 && dirtyLeaves.size === 0) return;
 
-        const currentDocumentSnapshot = editor.getDocument('json');
+          const currentDocumentSnapshot = editor.getDocument('json');
 
-        if (!isEqual(currentDocumentSnapshot, previousDocumentSnapshotRef.current)) {
-          previousDocumentSnapshotRef.current = currentDocumentSnapshot;
+          if (!isEqual(currentDocumentSnapshot, previousDocumentSnapshotRef.current)) {
+            previousDocumentSnapshotRef.current = currentDocumentSnapshot;
 
-          // During document hydration (e.g. route switch), we only advance snapshot
-          // and skip external change callback to avoid false dirty checks.
-          if (contentChangeLockRef?.current) return;
-          if (disabled) return;
+            // Yjs applies remote updates with COLLABORATION_TAG. External server
+            // snapshots use SKIP_COLLAB_TAG while they are reconciled into the
+            // shared document. Neither update is a local user edit and must not
+            // enter the autosave path, otherwise every client can echo the same
+            // full tree back into the room.
+            if (tags.has(COLLABORATION_TAG) || tags.has(SKIP_COLLAB_TAG)) return;
 
-          onContentChangeRef.current?.();
-        }
-      });
+            // During document hydration (e.g. route switch), we only advance snapshot
+            // and skip external change callback to avoid false dirty checks.
+            if (contentChangeLockRef?.current) return;
+            if (disabled) return;
+
+            onContentChangeRef.current?.();
+          }
+        },
+      );
 
       return () => {
         unregister();
@@ -306,7 +320,7 @@ const InternalEditor = memo<InternalEditorProps>(
 
     return (
       <div
-        style={wrapperStyle}
+        style={mergedWrapperStyle}
         onClick={(e) => {
           e.stopPropagation();
           e.preventDefault();

@@ -10,8 +10,11 @@ import { PageAgentProvider } from './PageAgentProvider';
 interface AgentState {
   activeAgentId?: string;
   heterogeneousAgentIds?: string[];
+  model?: string;
   pageAgentId: string;
+  provider?: string;
   setActiveAgentId: (agentId: string) => void;
+  updateAgentConfigById: (agentId: string, config: { model: string; provider: string }) => void;
   useInitBuiltinAgent: (slug: string) => void;
 }
 
@@ -52,12 +55,27 @@ vi.mock('@/store/agent', () => ({
 
 vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {
+    getAgentModelById: () => (state: AgentState) => state.model,
+    getAgentModelProviderById: () => (state: AgentState) => state.provider,
     isAgentHeterogeneousById: (agentId: string) => (state: AgentState) =>
       !!state.heterogeneousAgentIds?.includes(agentId),
   },
   builtinAgentSelectors: {
     pageAgentId: (state: AgentState) => state.pageAgentId,
   },
+}));
+
+vi.mock('@/store/serverConfig', () => ({
+  useServerConfigStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      serverConfig: {
+        aiProvider: {
+          deepseek: {
+            enabledModels: ['deepseek/deepseek-v4-flash', 'deepseek/deepseek-v4-pro'],
+          },
+        },
+      },
+    }),
 }));
 
 vi.mock('@/store/chat', () => ({
@@ -83,9 +101,15 @@ beforeEach(() => {
 
   agentState = {
     activeAgentId: 'page-agent',
+    model: 'deepseek-v4-flash',
     pageAgentId: 'page-agent',
+    provider: 'deepseek',
     setActiveAgentId: vi.fn((agentId: string) => {
       agentState.activeAgentId = agentId;
+    }),
+    updateAgentConfigById: vi.fn((_, config) => {
+      agentState.model = config.model;
+      agentState.provider = config.provider;
     }),
     useInitBuiltinAgent: vi.fn(),
   };
@@ -100,6 +124,36 @@ beforeEach(() => {
 });
 
 describe('PageAgentProvider', () => {
+  it('migrates the built-in page agent to the server-managed model', async () => {
+    render(
+      <PageAgentProvider>
+        <div>child</div>
+      </PageAgentProvider>,
+    );
+
+    await waitFor(() => {
+      expect(agentState.updateAgentConfigById).toHaveBeenCalledWith('page-agent', {
+        model: 'deepseek/deepseek-v4-flash',
+        provider: 'deepseek',
+      });
+    });
+  });
+
+  it('preserves an explicit page copilot model choice', async () => {
+    agentState.model = 'deepseek/deepseek-v4-pro';
+
+    render(
+      <PageAgentProvider>
+        <div>child</div>
+      </PageAgentProvider>,
+    );
+
+    await waitFor(() => {
+      expect(conversationProviderSpy).toHaveBeenCalled();
+    });
+    expect(agentState.updateAgentConfigById).not.toHaveBeenCalled();
+  });
+
   it('resets a stale page topic on initial scoped agent sync only', async () => {
     const { rerender } = render(
       <PageAgentProvider>
