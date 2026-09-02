@@ -55,13 +55,14 @@ Choose Elasticsearch when search needs independent capacity, when you want to se
 storage from transactional PostgreSQL, or when your PostgreSQL provider is ending `pg_search`
 support.
 
-Neon stopped offering `pg_search` to new projects on March 19, 2026. Its dedicated `pg_search` page
-says existing projects retain access and Neon will contact affected users, while its extension
-catalog labels existing installations for migration. Existing LobeHub deployments on Neon should
-verify their project status with Neon and use the
+Neon stopped offering `pg_search` to new projects on March 19, 2026. Neon has notified affected
+existing customers that the extension will be removed on September 21, 2026; queries, indexes, and
+applications that still depend on it will stop working after removal. Existing LobeHub deployments
+on Neon should complete the
 [pg\_search to Elasticsearch migration guide](/docs/self-hosting/advanced/elasticsearch-migration)
-to plan the move. Check Neon's [current pg\_search notice](https://neon.com/docs/extensions/pg_search)
-and [extension catalog](https://neon.com/docs/extensions/pg-extensions) before acting.
+before that deadline. Check Neon's
+[current pg\_search notice](https://neon.com/docs/extensions/pg_search) and
+[extension catalog](https://neon.com/docs/extensions/pg-extensions) before acting.
 
 The Elasticsearch backend requires:
 

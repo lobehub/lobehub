@@ -76,8 +76,7 @@ LobeHub 2.0 推荐使用 **PostgreSQL 17** 及以上版本。
 
 LobeHub 2.0 引入了 [pg\_search](https://github.com/paradedb/paradedb/tree/main/pg_search)
 扩展来提供全文搜索。当 2.0 发布时，Neon 会为新的 PostgreSQL 17 项目提供该扩展。此后 Neon 已停止为新项目提供
-`pg_search`。其专页说明已有项目仍可使用，并会由 Neon 联系受影响用户；扩展列表则把已有安装标记为需要迁移。现有
-Neon 部署应先核对项目状态，再参阅
+`pg_search`，并已通知受影响的现有客户：该扩展将在 2026 年 9 月 21 日移除。现有 Neon 部署应在截止日期前完成
 [从 pg\_search 迁移到 Elasticsearch](/zh/docs/self-hosting/advanced/elasticsearch-migration)。当前部署在选择搜索后端前，请先阅读
 [全文搜索](/zh/docs/self-hosting/advanced/full-text-search)。
 

@@ -18,8 +18,8 @@ Elasticsearch。3.x 迁移工具会把 PostgreSQL 中 14 类可搜索数据复�
 [全文搜索](/zh/docs/self-hosting/advanced/full-text-search)。
 
 <Callout type="warning">
-  Neon 已于 2026 年 3 月 19 日停止为新项目提供 `pg_search`。Neon 的 `pg_search` 专页说明已有项目仍可使用，
-  并会由 Neon 联系受影响用户；扩展列表则把已有安装标记为需要迁移。请先向 Neon 核对当前项目状态，再使用本文制定迁移计划。
+  Neon 已于 2026 年 3 月 19 日停止为新项目提供 `pg_search`，并已通知受影响的现有客户：该扩展将在
+  2026 年 9 月 21 日从 Neon 移除，此后依赖它的查询、索引和应用都会停止工作。请在截止日期前完成本文迁移。
   对全新数据库设置 `FTS_SEARCH_PROVIDER=elasticsearch` 并不会跳过 LobeHub 的历史 `pg_search` 迁移：
   `bun run db:migrate` 仍会尝试创建扩展和 BM25 索引，并在数据库服务不提供它们时失败。请结合 Neon 的
   [pg\_search 公告](https://neon.com/docs/extensions/pg_search)和

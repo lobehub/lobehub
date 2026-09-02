@@ -21,13 +21,13 @@ currently serves search with `FTS_SEARCH_PROVIDER=pg_search`. For backend select
 Elasticsearch data flow, read [Full-Text Search](/docs/self-hosting/advanced/full-text-search).
 
 <Callout type="warning">
-  Neon stopped offering `pg_search` to new projects on March 19, 2026. Its dedicated `pg_search`
-  page says existing projects retain access and Neon will contact affected users, while its
-  extension catalog labels existing installations for migration. Verify your project status with
-  Neon and use this guide to plan the move. Setting `FTS_SEARCH_PROVIDER=elasticsearch` on a fresh
-  database does not skip LobeHub's historical `pg_search` migrations: `bun run db:migrate` still
-  attempts to create the extension and BM25 indexes, and fails when the database service does not
-  provide them. See Neon's
+  Neon stopped offering `pg_search` to new projects on March 19, 2026. Neon has notified affected
+  existing customers that the extension will be removed on September 21, 2026; queries, indexes,
+  and applications that still depend on it will stop working after removal. Complete this
+  migration before that deadline. Setting `FTS_SEARCH_PROVIDER=elasticsearch` on a fresh database
+  does not skip LobeHub's historical `pg_search` migrations: `bun run db:migrate` still attempts to
+  create the extension and BM25 indexes, and fails when the database service does not provide them.
+  See Neon's
   [pg\_search notice](https://neon.com/docs/extensions/pg_search) and
   [extension catalog](https://neon.com/docs/extensions/pg-extensions) for the current service state.
 </Callout>
