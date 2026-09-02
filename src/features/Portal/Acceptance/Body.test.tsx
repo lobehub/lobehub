@@ -1,10 +1,12 @@
 import { render } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { draftToMainComposer, useComposerDraftBus } from '@/features/Conversation/composerDraftBus';
 
 import Body from './Body';
 
 const mocks = vi.hoisted(() => ({
-  acceptanceId: undefined as string | undefined,
+  captured: { onDraftToComposer: undefined as undefined | ((text: string) => boolean) },
 }));
 
 vi.mock('@/store/chat', () => ({
@@ -28,8 +30,11 @@ vi.mock('@/features/Conversation/store', () => ({
 }));
 
 vi.mock('@/features/Acceptance', () => ({
-  AcceptanceViewer: (props: { acceptanceId?: string }) => {
-    mocks.acceptanceId = props.acceptanceId;
+  AcceptanceViewer: (props: {
+    initialCheckId?: string;
+    onDraftToComposer?: (text: string) => boolean;
+  }) => {
+    mocks.captured.onDraftToComposer = props.onDraftToComposer;
     return null;
   },
   OriginConversationProvider: ({ children }: { children?: React.ReactNode }) => children,
@@ -37,9 +42,33 @@ vi.mock('@/features/Acceptance', () => ({
 
 vi.mock('@/features/Acceptance/Viewer/TopicPanel', () => ({ default: () => null }));
 
-describe('Portal Acceptance Body', () => {
+describe('Portal Acceptance Body — draftToComposer via the global bus', () => {
+  beforeEach(() => {
+    useComposerDraftBus.setState({ attached: false, draft: null });
+  });
+
   it('renders outside ConversationProvider without touching the context store', () => {
     expect(() => render(<Body />)).not.toThrow();
-    expect(mocks.acceptanceId).toBe('acc-1');
+    // The poster is the plain bus function — no context-store closure involved.
+    expect(mocks.captured.onDraftToComposer).toBe(draftToMainComposer);
+  });
+
+  it('posts the draft to the bus when a receiver is attached', () => {
+    useComposerDraftBus.setState({ attached: true });
+    render(<Body />);
+
+    const ok = mocks.captured.onDraftToComposer?.('please fix X');
+
+    expect(ok).toBe(true);
+    expect(useComposerDraftBus.getState().draft).toEqual({ text: 'please fix X' });
+  });
+
+  it('reports failure (so the caller skips its toast) when no composer is listening', () => {
+    render(<Body />);
+
+    const ok = mocks.captured.onDraftToComposer?.('please fix X');
+
+    expect(ok).toBe(false);
+    expect(useComposerDraftBus.getState().draft).toBeNull();
   });
 });

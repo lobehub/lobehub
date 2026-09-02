@@ -5,98 +5,22 @@ import debug from 'debug';
 import { UserModel } from '@/database/models/user';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import { MarketService } from '@/server/services/market';
-import { createSandboxService, type SandboxService } from '@/server/services/sandbox';
 
 import { type ServerRuntimeRegistration } from './types';
 
 const log = debug('lobe-server:creds-runtime');
 
-const shellQuote = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`;
-
-/** POSIX shell identifier — the only names `export NAME=...` can safely take. */
-const VALID_ENV_NAME_PATTERN = /^[A-Z_]\w*$/i;
-
-/**
- * Write injected env-style credentials into the sandbox at `~/.creds/env`,
- * matching the exact contract `packages/builtin-tool-creds/src/systemRole.ts`
- * documents to the model ("Environment-based credentials... Written to
- * `~/.creds/env` file"). Without this, `injectCreds` only fetched and
- * decrypted the values and returned them in the tool result — nothing ever
- * placed them in the sandbox, so the tool reported "injected successfully"
- * while `~/.creds/env` never existed and subsequent `runCommand` calls that
- * `source`d it found nothing.
- *
- * Appends rather than overwrites, since a topic can call `injectCredsToSandbox`
- * more than once across a session and earlier values should survive.
- *
- * Two layers of shell-safety, not one:
- * 1. Each written line is `export NAME=<single-quoted value>` — the quoting
- *    happens INSIDE the file content, so when the documented consumer later
- *    runs `source ~/.creds/env`, a value containing `$(...)`, backticks,
- *    `;`, or a newline is loaded as an inert literal, not executed. `export`
- *    (not a bare assignment) is required too — a bare `NAME=value` is a
- *    shell variable, invisible to any child process the sourcing shell
- *    spawns (a Python/Node subprocess, another binary, etc.), which is a
- *    silent-failure shape indistinguishable from "injection didn't happen".
- * 2. Each fully-built line is itself passed through `shellQuote` as a single
- *    `printf '%s\n' <line>` argument, so the runCommand call that WRITES the
- *    file can't be broken out of either — the value is opaque to the outer
- *    shell that's doing the writing.
- * Credential keys that aren't valid shell identifiers (seen in practice:
- * hyphenated keys like `TEST-WORKSPACE-CREDS-KV`) can't be made into a safe
- * `export NAME=...` at all — writing them raw could inject shell syntax
- * through the name position, which quoting the value alone can't stop. Skip
- * and report them rather than attempt it.
- */
-export async function writeEnvCredsToSandbox(
-  sandboxService: SandboxService,
-  env: Record<string, string>,
-): Promise<{ error?: string; skippedInvalidNames?: string[] }> {
-  const entries = Object.entries(env);
-  if (entries.length === 0) return {};
-
-  const valid = entries.filter(([key]) => VALID_ENV_NAME_PATTERN.test(key));
-  const skippedInvalidNames = entries
-    .filter(([key]) => !VALID_ENV_NAME_PATTERN.test(key))
-    .map(([key]) => key);
-
-  if (valid.length === 0) return { skippedInvalidNames };
-
-  const printfCalls = valid
-    .map(([key, value]) => {
-      const exportLine = `export ${key}=${shellQuote(value)}`;
-      return `printf '%s\\n' ${shellQuote(exportLine)}`;
-    })
-    .join(' && \\\n');
-  const command = `mkdir -p ~/.creds && \\\n(${printfCalls}) >> ~/.creds/env`;
-
-  const result = await sandboxService.callTool('runCommand', { command });
-  if (!result.success) {
-    return {
-      error: result.error?.message || 'Failed to write credentials into the sandbox',
-      skippedInvalidNames,
-    };
-  }
-  return { skippedInvalidNames };
-}
-
 /**
  * Server-side Creds Service implementation
  * Wraps MarketService.market.creds to provide ICredsService interface
  */
-class ServerCredsService implements ICredsService {
+export class ServerCredsService implements ICredsService {
   private marketService: MarketService;
   private workspaceId?: string;
-  private getSandboxService?: () => SandboxService;
 
-  constructor(
-    marketService: MarketService,
-    workspaceId?: string,
-    getSandboxService?: () => SandboxService,
-  ) {
+  constructor(marketService: MarketService, workspaceId?: string) {
     this.marketService = marketService;
     this.workspaceId = workspaceId;
-    this.getSandboxService = getSandboxService;
   }
 
   /**
@@ -187,7 +111,15 @@ class ServerCredsService implements ICredsService {
     log('injectCreds: keys=%O, topicId=%s', params.keys, params.topicId);
 
     // Market's generic inject endpoint resolves organization credentials from
-    // the workspaceId signed into this service's trusted-client token.
+    // the workspaceId signed into this service's trusted-client token, and —
+    // when `sandbox` is true (the default) — already writes the *real*
+    // (unmasked) values into the sandbox's ~/.creds/env server-side before
+    // responding. The `credentials.env` map in that response is masked for
+    // safe display to the model, so it must never be written into the
+    // sandbox again here: an earlier version of this method did exactly
+    // that, appending a masked `export` line after market's real one. Since
+    // re-sourcing ~/.creds/env applies `export`s in file order, the masked
+    // line silently shadowed the real credential for every later command.
     const result = await this.marketService.market.creds.inject({
       keys: params.keys,
       sandbox: params.sandbox,
@@ -196,39 +128,6 @@ class ServerCredsService implements ICredsService {
     });
 
     log('injectCreds success: notFound=%d', result.notFound?.length || 0);
-
-    // Fetching+decrypting the values is not the same as *injecting* them —
-    // `sandbox` defaults true (matches ICredsService.injectCreds' contract of
-    // "inject credentials into sandbox"), so unless the caller explicitly
-    // opted out, actually write them into the sandbox at the path the
-    // creds tool's own system prompt documents (~/.creds/env). Without this
-    // the call reports success while leaving the sandbox with nothing to
-    // read — the exact bug this fixes.
-    const envToWrite = (result as any)?.credentials?.env as Record<string, string> | undefined;
-    if (params.sandbox !== false && envToWrite && Object.keys(envToWrite).length > 0) {
-      if (!this.getSandboxService) {
-        log('injectCreds: sandbox write skipped, no sandbox service available for this context');
-      } else {
-        const { error, skippedInvalidNames } = await writeEnvCredsToSandbox(
-          this.getSandboxService(),
-          envToWrite,
-        );
-        if (skippedInvalidNames?.length) {
-          log(
-            'injectCreds: skipped %d credential(s) whose key is not a valid shell env var name: %O',
-            skippedInvalidNames.length,
-            skippedInvalidNames,
-          );
-        }
-        if (error) {
-          log('injectCreds: failed to write credentials into sandbox: %s', error);
-          throw new Error(
-            `Credentials were fetched but could not be written into the sandbox: ${error}`,
-          );
-        }
-        log('injectCreds: wrote %d env var(s) into ~/.creds/env', Object.keys(envToWrite).length);
-      }
-    }
 
     return result as any;
   }
@@ -310,35 +209,7 @@ export const credsRuntime: ServerRuntimeRegistration = {
       userInfo: { userId: context.userId, workspaceId: context.workspaceId },
     });
 
-    // Lazy + memoized: only actually constructed if injectCreds needs to
-    // write env vars into the sandbox. serverDB/topicId are the same
-    // preconditions cloudSandboxRuntime requires for its own sandbox
-    // service — when either is missing (e.g. a context without an active
-    // sandbox-capable topic) sandbox writing is simply skipped, matching
-    // the pre-existing "fetch only" behavior for that case.
-    let sandboxService: SandboxService | undefined;
-    const getSandboxService = (): SandboxService => {
-      if (!sandboxService) {
-        if (!context.serverDB || !context.topicId || !context.userId) {
-          throw new Error(
-            'serverDB, topicId, and userId are required to write creds into the sandbox',
-          );
-        }
-        sandboxService = createSandboxService({
-          marketService,
-          serverDB: context.serverDB,
-          topicId: context.topicId,
-          userId: context.userId,
-        });
-      }
-      return sandboxService;
-    };
-
-    const credsService = new ServerCredsService(
-      marketService,
-      context.workspaceId,
-      context.serverDB && context.topicId ? getSandboxService : undefined,
-    );
+    const credsService = new ServerCredsService(marketService, context.workspaceId);
 
     return new CredsExecutionRuntime(credsService, {
       topicId: context.topicId,

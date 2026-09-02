@@ -38,9 +38,13 @@ const styles = createStaticStyles(({ css }) => ({
 
 interface AcceptancePageProps {
   acceptanceId?: string;
+  onDraftToComposer?: (text: string) => boolean;
 }
 
-const AcceptancePage = ({ acceptanceId: explicitAcceptanceId }: AcceptancePageProps) => {
+const AcceptancePage = ({
+  acceptanceId: explicitAcceptanceId,
+  onDraftToComposer,
+}: AcceptancePageProps) => {
   const params = useParams<{ acceptanceId: string; checkId: string }>();
   const acceptanceId = explicitAcceptanceId ?? extractUuid(params.acceptanceId);
   const embedded = Boolean(explicitAcceptanceId);
@@ -79,7 +83,7 @@ const AcceptancePage = ({ acceptanceId: explicitAcceptanceId }: AcceptancePagePr
                     reportSlot={<AcceptanceViewReportLink />}
                   />
                   <AcceptanceCheckInventory toolbar={<AcceptanceCheckOwnerToolbar />} />
-                  <AcceptanceDecision />
+                  <AcceptanceDecision onDraftToComposer={onDraftToComposer} />
                 </>
               )}
             </Flexbox>

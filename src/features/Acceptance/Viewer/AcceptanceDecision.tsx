@@ -17,20 +17,29 @@ import { buildRepairPrompt } from './checkWork';
 import DecisionBar from './DecisionBar';
 import FeedbackDrawer, { type FeedbackListEntry } from './FeedbackDrawer';
 import { openAcceptModal, openGroupFeedbackModal, openRejectModal } from './modals';
+import { dispatchRepairRerun } from './repairRerun';
 import { useAcceptanceBundle } from './useAcceptanceBundle';
 import { formatAcceptanceCountsText, LIVE_ACCEPTANCE_STATUSES } from './verdict';
 import { canReviewAcceptance } from './visibility';
 
-const AcceptanceDecision = () => {
+interface AcceptanceDecisionProps {
+  onDraftToComposer?: (text: string) => boolean;
+}
+
+const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
   const { t } = useTranslation('verify');
   const hydrated = useIsHydrated();
-  const { acceptanceId } = useAcceptanceScope();
+  const { acceptanceId, embedded } = useAcceptanceScope();
   const { data, mutate } = useAcceptanceBundle(acceptanceId);
   const [pending, setPending] = useState(false);
+  const [rerunPending, setRerunPending] = useState(false);
+  // Latched once a standalone dispatch reaches the server: the repair run has
+  // started, so Fix must not offer a retry even if later bookkeeping failed.
+  const [rerunDispatched, setRerunDispatched] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   if (!data || !canReviewAcceptance(data) || data.acceptance.status === 'closed') return null;
 
-  const { acceptance, checks, rounds } = data;
+  const { acceptance, checks, origin, rounds } = data;
   const currentRound = rounds.at(-1);
   const acceptedCount = checks.filter((check) => checkFilterState(check) === 'accepted').length;
   const needsFixCount = checks.filter((check) => checkFilterState(check) === 'needsFix').length;
@@ -148,11 +157,14 @@ const AcceptanceDecision = () => {
     <>
       <DecisionBar
         acceptedCount={acceptedCount}
+        embedded={embedded}
         feedbackCount={feedbackEntries.filter((entry) => !entry.stale).length}
         ignoredCount={ignoredCount}
         needsFixCount={needsFixCount}
         pending={pending}
         repairing={acceptance.status === 'repairing'}
+        rerunAvailable={embedded || (Boolean(origin?.topic) && !rerunDispatched)}
+        rerunPending={rerunPending}
         state={barState}
         statusText={barTexts.statusText}
         subText={barTexts.subText}
@@ -195,6 +207,59 @@ const AcceptanceDecision = () => {
               runAction(() => verifyService.rejectDelivery(acceptance.id, comment)),
           })
         }
+        onRerun={async () => {
+          if (embedded) {
+            // The origin conversation's composer sits right beside the portal —
+            // draft the repair prompt into it so the user reviews and sends it.
+            // No receiver attached (composer still mounting, or the portal is
+            // hosted away from a conversation, e.g. the Home drawer): fall back
+            // to the clipboard so the click always hands the prompt over.
+            if (onDraftToComposer?.(repairPrompt)) {
+              toast.success({
+                placement: 'bottom',
+                style: { marginBlockEnd: 88 },
+                title: t('acceptance.bar.rerunDrafted'),
+              });
+            } else {
+              await copyToClipboard(repairPrompt);
+              toast.success({
+                placement: 'bottom',
+                style: { marginBlockEnd: 88 },
+                title: t('acceptance.bar.copied'),
+              });
+            }
+            return;
+          }
+          if (!origin?.topic) return;
+          setRerunPending(true);
+          try {
+            await dispatchRepairRerun({
+              dispatch: () =>
+                verifyService.dispatchAcceptanceRepair({
+                  agentId: origin.agent?.id,
+                  content: repairPrompt,
+                  topicId: origin.topic!.id,
+                }),
+              markRepairing: () => verifyService.markAcceptanceRepairing(acceptance.id),
+            });
+            // The run is live from here — even if the refresh below throws or
+            // the repairing stamp failed (dispatchRepairRerun swallows it; the
+            // aggregate converges once the repair round lands), the
+            // `rerunDispatched` latch keeps Fix from double-running the repair.
+            setRerunDispatched(true);
+            await mutate();
+            void globalMutate(isAcceptanceListKey);
+            toast.success({
+              placement: 'bottom',
+              style: { marginBlockEnd: 88 },
+              title: t('acceptance.bar.rerunSent'),
+            });
+          } catch (cause) {
+            toast.error(cause instanceof Error ? cause.message : t('acceptance.actionError'));
+          } finally {
+            setRerunPending(false);
+          }
+        }}
       />
       <Flexbox style={{ height: 8 }} />
       <FeedbackDrawer

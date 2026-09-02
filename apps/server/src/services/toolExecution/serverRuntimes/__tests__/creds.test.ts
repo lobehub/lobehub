@@ -1,10 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MarketService } from '@/server/services/market';
-import { type SandboxService } from '@/server/services/sandbox';
 
 import { type ToolExecutionContext } from '../../types';
-import { credsRuntime, writeEnvCredsToSandbox } from '../creds';
+import { credsRuntime, ServerCredsService } from '../creds';
 
 const { getMember } = vi.hoisted(() => ({
   getMember: vi.fn(),
@@ -87,135 +86,44 @@ describe('credsRuntime', () => {
   });
 });
 
-describe('writeEnvCredsToSandbox', () => {
-  const buildSandboxService = (callTool = vi.fn()): SandboxService =>
-    ({ callTool }) as unknown as SandboxService;
+describe('ServerCredsService.injectCreds', () => {
+  const buildMarketService = (inject = vi.fn()) =>
+    ({ market: { creds: { inject } } }) as unknown as MarketService;
 
-  /**
-   * Reverses `shellQuote`'s escaping (`'a'\''b'` -> `a'b`) so tests can
-   * round-trip a value through the two nested quoting layers instead of
-   * hand-deriving the exact escaped string — hand-derivation is exactly
-   * the kind of thing that's easy to get subtly wrong for values containing
-   * their own quotes, which is the case that actually matters here.
-   */
-  const posixUnquote = (quoted: string): string => {
-    if (!quoted.startsWith("'") || !quoted.endsWith("'")) {
-      throw new Error(`Not a single-quoted shell literal: ${quoted}`);
-    }
-    return quoted.slice(1, -1).replaceAll("'\\''", "'");
-  };
+  // Regression test: an earlier version of this method took the
+  // `credentials.env` map back from market's `/inject-creds` response and
+  // wrote it into the sandbox a second time. But that response is already
+  // masked for safe display (market itself writes the *real* values into
+  // ~/.creds/env server-side when `sandbox` is true) — so the second write
+  // appended a masked `export` line after market's real one, and since
+  // re-sourcing the file applies `export`s in file order, the masked line
+  // silently shadowed the real credential for every later command. The fix
+  // is to only forward market's response, never re-write it — this test
+  // locks that in by asserting `market.creds.inject` is the only call made
+  // and its result is returned untouched.
+  it("forwards market.creds.inject's result without writing it into the sandbox again", async () => {
+    const injectResult = {
+      credentials: { env: { DC_CLI_TOKEN: '8f******vZ' } },
+      notFound: [],
+      success: true,
+    };
+    const inject = vi.fn().mockResolvedValue(injectResult);
+    const service = new ServerCredsService(buildMarketService(inject), 'workspace-1');
 
-  /** Extracts the single printf argument from a one-entry writeEnvCredsToSandbox command. */
-  const extractWrittenLine = (command: string): string => {
-    const match = command.match(/printf '%s\\n' (.+)\) >> ~\/\.creds\/env$/);
-    if (!match) throw new Error(`Could not find printf argument in command: ${command}`);
-    return posixUnquote(match[1]);
-  };
-
-  /** Extracts and unquotes the value from an `export KEY=<quoted value>` line. */
-  const extractExportedValue = (exportLine: string, key: string): string => {
-    const prefix = `export ${key}=`;
-    if (!exportLine.startsWith(prefix)) {
-      throw new Error(`Expected an "${prefix}" line, got: ${exportLine}`);
-    }
-    return posixUnquote(exportLine.slice(prefix.length));
-  };
-
-  it('is a no-op and never calls the sandbox when there is nothing to write', async () => {
-    const callTool = vi.fn();
-    const result = await writeEnvCredsToSandbox(buildSandboxService(callTool), {});
-
-    expect(callTool).not.toHaveBeenCalled();
-    expect(result).toEqual({});
-  });
-
-  it('writes each entry into ~/.creds/env as an `export` assignment via a single runCommand call', async () => {
-    const callTool = vi.fn().mockResolvedValue({ result: null, success: true });
-
-    const result = await writeEnvCredsToSandbox(buildSandboxService(callTool), {
-      DC_CLI_TOKEN: 'secret-token',
-      DC_BASE_URL: 'https://dc.lobe.li',
+    const result = await service.injectCreds({
+      keys: ['dc-cli-token'],
+      sandbox: true,
+      topicId: 'topic-1',
+      userId: 'user-1',
     });
 
-    expect(result).toEqual({ skippedInvalidNames: [] });
-    expect(callTool).toHaveBeenCalledTimes(1);
-    const [toolName, params] = callTool.mock.calls[0];
-    expect(toolName).toBe('runCommand');
-    expect(params.command).toContain('mkdir -p ~/.creds');
-    expect(params.command).toContain('>> ~/.creds/env');
-    // `export`, not a bare assignment — a bare NAME=value is a shell
-    // variable invisible to any child process the sourcing shell spawns.
-    expect(params.command).toContain("printf '%s\\n' 'export DC_CLI_TOKEN='\\''secret-token'\\'''");
-    expect(params.command).toContain(
-      "printf '%s\\n' 'export DC_BASE_URL='\\''https://dc.lobe.li'\\'''",
-    );
-  });
-
-  it('round-trips a value containing shell metacharacters back to the exact original, proving `source` would load it as an inert literal', async () => {
-    const callTool = vi.fn().mockResolvedValue({ result: null, success: true });
-    const dangerousValue = '$(rm -rf ~); echo pwned `whoami` && exit 1 # trailing';
-
-    await writeEnvCredsToSandbox(buildSandboxService(callTool), { TOKEN: dangerousValue });
-
-    const command = callTool.mock.calls[0][1].command as string;
-    const exportLine = extractWrittenLine(command);
-    expect(exportLine.startsWith('export TOKEN=')).toBe(true);
-    expect(extractExportedValue(exportLine, 'TOKEN')).toBe(dangerousValue);
-  });
-
-  it('round-trips a value that itself contains a single quote, through both nested quoting layers', async () => {
-    const callTool = vi.fn().mockResolvedValue({ result: null, success: true });
-    const trickyValue = "it's a 'quoted' secret";
-
-    await writeEnvCredsToSandbox(buildSandboxService(callTool), { TOKEN: trickyValue });
-
-    const command = callTool.mock.calls[0][1].command as string;
-    const exportLine = extractWrittenLine(command);
-    expect(extractExportedValue(exportLine, 'TOKEN')).toBe(trickyValue);
-  });
-
-  it('skips a credential key that is not a valid shell identifier and reports it, without touching the sandbox for it', async () => {
-    const callTool = vi.fn().mockResolvedValue({ result: null, success: true });
-
-    const result = await writeEnvCredsToSandbox(buildSandboxService(callTool), {
-      'TEST-WORKSPACE-CREDS-KV': 'value-a',
-      'VALID_KEY': 'value-b',
+    expect(inject).toHaveBeenCalledTimes(1);
+    expect(inject).toHaveBeenCalledWith({
+      keys: ['dc-cli-token'],
+      sandbox: true,
+      topicId: 'topic-1',
+      userId: 'user-1',
     });
-
-    expect(result.skippedInvalidNames).toEqual(['TEST-WORKSPACE-CREDS-KV']);
-    const command = callTool.mock.calls[0][1].command as string;
-    expect(command).toContain('export VALID_KEY=');
-    expect(command).not.toContain('TEST-WORKSPACE-CREDS-KV');
-  });
-
-  it('never calls the sandbox when every key is an invalid shell identifier', async () => {
-    const callTool = vi.fn();
-
-    const result = await writeEnvCredsToSandbox(buildSandboxService(callTool), {
-      'bad key': 'value',
-    });
-
-    expect(callTool).not.toHaveBeenCalled();
-    expect(result).toEqual({ skippedInvalidNames: ['bad key'] });
-  });
-
-  it('surfaces a descriptive error when the sandbox write fails', async () => {
-    const callTool = vi.fn().mockResolvedValue({
-      error: { message: 'sandbox unreachable' },
-      result: null,
-      success: false,
-    });
-
-    const result = await writeEnvCredsToSandbox(buildSandboxService(callTool), { KEY: 'value' });
-
-    expect(result).toEqual({ error: 'sandbox unreachable', skippedInvalidNames: [] });
-  });
-
-  it('falls back to a generic error message when the sandbox failure carries none', async () => {
-    const callTool = vi.fn().mockResolvedValue({ result: null, success: false });
-
-    const result = await writeEnvCredsToSandbox(buildSandboxService(callTool), { KEY: 'value' });
-
-    expect(result.error).toBe('Failed to write credentials into the sandbox');
+    expect(result).toBe(injectResult);
   });
 });
