@@ -28,6 +28,7 @@ import migration from './migration';
 import modelProvider from './modelProvider';
 import modelRuntime from './modelRuntime';
 import models from './models';
+import note from './note';
 import notification from './notification';
 import oauth from './oauth';
 import onboarding from './onboarding';
@@ -83,6 +84,7 @@ const resources = {
   modelProvider,
   modelRuntime,
   models,
+  note,
   notification,
   oauth,
   onboarding,

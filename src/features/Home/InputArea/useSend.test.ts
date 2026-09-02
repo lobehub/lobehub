@@ -84,6 +84,11 @@ const homeDailyBriefState = vi.hoisted(() => ({
   pairs: [] as { hint: string; welcome: string }[],
 }));
 
+const createNoteMock = vi.hoisted(() => vi.fn());
+const initNotesMock = vi.hoisted(() => vi.fn());
+const updateNoteContentMock = vi.hoisted(() => vi.fn());
+const minimalLayoutMock = vi.hoisted(() => ({ value: false }));
+
 const activeWorkspaceSlugMock = vi.hoisted(() => ({
   value: null as string | null,
 }));
@@ -173,6 +178,20 @@ vi.mock('@/store/task', () => ({
   useTaskStore: (selector: (state: typeof taskState) => unknown) => selector(taskState),
 }));
 
+vi.mock('@/store/quickNote', () => ({
+  useQuickNoteStore: {
+    getState: () => ({
+      createNote: createNoteMock,
+      initNotes: initNotesMock,
+      updateNoteContent: updateNoteContentMock,
+    }),
+  },
+}));
+
+vi.mock('../CustomizeModal/useHomeCustomization', () => ({
+  useHomeMinimalLayout: () => minimalLayoutMock.value,
+}));
+
 describe('Home InputArea useSend', () => {
   beforeEach(() => {
     routerMock.push.mockReset();
@@ -197,6 +216,70 @@ describe('Home InputArea useSend', () => {
     delete agentState.agentMap.agt_custom;
     activeWorkspaceSlugMock.value = null;
     activeWorkspaceIdMock.value = null;
+    createNoteMock.mockReset();
+    initNotesMock.mockReset();
+    updateNoteContentMock.mockReset();
+    minimalLayoutMock.value = false;
+  });
+
+  it('creates a quick note and stays on Home when the layout is not minimal', async () => {
+    createNoteMock.mockResolvedValue('note-1');
+    const { result } = renderHook(() => useSend('note'));
+    const params: Parameters<SendButtonHandler>[0] = {
+      clearContent: vi.fn(),
+      editor: {} as Parameters<SendButtonHandler>[0]['editor'],
+      getEditorData: () => ({ type: 'doc' }),
+      getMarkdownContent: () => '随手记一条',
+    };
+
+    await act(async () => {
+      await result.current.send(params);
+    });
+
+    expect(initNotesMock).toHaveBeenCalledTimes(1);
+    expect(createNoteMock).toHaveBeenCalledTimes(1);
+    expect(updateNoteContentMock).toHaveBeenCalledWith('note-1', '随手记一条');
+    expect(sendMessageMock).not.toHaveBeenCalled();
+    expect(createTaskMock).not.toHaveBeenCalled();
+    expect(routerMock.push).not.toHaveBeenCalled();
+    expect(clearContentMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('routes to the note detail when created from the minimal layout', async () => {
+    minimalLayoutMock.value = true;
+    createNoteMock.mockResolvedValue('note-2');
+    const { result } = renderHook(() => useSend('note'));
+    const params: Parameters<SendButtonHandler>[0] = {
+      clearContent: vi.fn(),
+      editor: {} as Parameters<SendButtonHandler>[0]['editor'],
+      getEditorData: () => undefined,
+      getMarkdownContent: () => '随手记一条',
+    };
+
+    await act(async () => {
+      await result.current.send(params);
+    });
+
+    expect(routerMock.push).toHaveBeenCalledWith('/note/note-2');
+  });
+
+  it('does not discard attachments that Note mode cannot persist', async () => {
+    fileState.chatUploadFileList = [{ id: 'file-1' }] as any;
+    const { result } = renderHook(() => useSend('note'));
+    const params: Parameters<SendButtonHandler>[0] = {
+      clearContent: vi.fn(),
+      editor: {} as Parameters<SendButtonHandler>[0]['editor'],
+      getEditorData: () => ({ type: 'doc' }),
+      getMarkdownContent: () => '随手记一条',
+    };
+
+    await act(async () => {
+      await result.current.send(params);
+    });
+
+    expect(createNoteMock).not.toHaveBeenCalled();
+    expect(clearChatUploadFileListMock).not.toHaveBeenCalled();
+    expect(messageErrorMock).toHaveBeenCalledWith('dashboard.note.unsupportedContext');
   });
 
   it('creates and starts a private workspace task with the selected Agent', async () => {

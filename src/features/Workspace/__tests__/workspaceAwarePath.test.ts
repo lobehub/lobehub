@@ -23,6 +23,8 @@ describe('buildWorkspaceAwarePath', () => {
     expect(buildWorkspaceAwarePath('/group/group-1', 'acme')).toBe('/acme/group/group-1');
     expect(buildWorkspaceAwarePath('/project/project-1', 'acme')).toBe('/acme/project/project-1');
     expect(buildWorkspaceAwarePath('/projects', 'acme')).toBe('/acme/projects');
+    expect(buildWorkspaceAwarePath('/note', 'acme')).toBe('/acme/note');
+    expect(buildWorkspaceAwarePath('/note/note-1', 'acme')).toBe('/acme/note/note-1');
   });
 
   it('prefixes deep agent and evaluation paths used by cross-page navigation', () => {

@@ -19,9 +19,11 @@ import { useChatStore } from '@/store/chat';
 import { fileChatSelectors, useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
+import { useQuickNoteStore } from '@/store/quickNote';
 import { useTaskStore } from '@/store/task';
 
 import { useResolvedHomeAgentId } from '../AgentSelect/useResolvedHomeAgentId';
+import { useHomeMinimalLayout } from '../CustomizeModal/useHomeCustomization';
 import type { HomeMode } from '../types';
 import { taskNameFromMessage } from './taskName';
 
@@ -70,6 +72,7 @@ export const useSend = (mode: HomeMode = 'chat') => {
   const toggleTaskAgentPanel = useGlobalStore((s) => s.toggleTaskAgentPanel);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const pendingTaskRunRef = useRef<PendingTaskRun | null>(null);
+  const minimalLayout = useHomeMinimalLayout();
 
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const { agentId: selectedAgentId } = useResolvedHomeAgentId();
@@ -125,7 +128,7 @@ export const useSend = (mode: HomeMode = 'chat') => {
 
       if (!canCreateContent) return;
 
-      if ((mode === 'task' || !inputActiveMode) && !canUseResource) return;
+      if (mode !== 'note' && (mode === 'task' || !inputActiveMode) && !canUseResource) return;
 
       // Task persistence does not support attachments or context yet. Check
       // this before the empty-message guard so an attachment-only submission
@@ -135,12 +138,31 @@ export const useSend = (mode: HomeMode = 'chat') => {
         return;
       }
 
+      if (mode === 'note' && (fileList.length > 0 || contextList.length > 0)) {
+        toast.error(t('dashboard.note.unsupportedContext'));
+        return;
+      }
+
       // Require input content (except for default inbox which can have files/context)
       if (!message && fileList.length === 0 && contextList.length === 0) return;
 
       let submitted = false;
       try {
         const { contextSelections, pageSelections } = buildMessageContextSelections(contextList);
+
+        if (mode === 'note') {
+          if (!message) return;
+          setIsSubmitting(true);
+          const { createNote, initNotes, updateNoteContent } = useQuickNoteStore.getState();
+          // A note created before the mock store hydrates would be overwritten
+          // by the hydration snapshot, so settle initNotes first.
+          await initNotes();
+          const noteId = await createNote();
+          updateNoteContent(noteId, message);
+          submitted = true;
+          if (minimalLayout) router.push(`/note/${noteId}`);
+          return;
+        }
 
         // Task mode is a commitment, not a proposal: the row is written and the
         // run is launched here. Routing it through the agent would leave both
@@ -272,6 +294,7 @@ export const useSend = (mode: HomeMode = 'chat') => {
     [
       activeWorkspaceSlug,
       activeWorkspaceId,
+      minimalLayout,
       sendMessage,
       clearChatContextSelections,
       restoreChatContextSelections,

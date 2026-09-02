@@ -25,6 +25,8 @@ describe('resolveNavPanelKey', () => {
     ['/lobe-team/page/page-1', 'lobe-team', 'page'],
     ['/project/project-1', null, 'project'],
     ['/lobe-team/project/project-1/library/kb-1', 'lobe-team', 'project'],
+    ['/note', null, 'note'],
+    ['/lobe-team/note/note-1', 'lobe-team', 'note'],
     ['/lobe-team/image', 'lobe-team', 'image'],
     ['/lobe-team/video', 'lobe-team', 'video'],
   ])('maps %s to %s', (pathname, activeWorkspaceSlug, expected) => {

@@ -13,7 +13,7 @@ interface DetailPanelProps extends FlexboxProps {
 
 const DetailPanel = memo<DetailPanelProps>(({ children, style, header, ...rest }) => {
   return (
-    <RightPanel defaultWidth={480} maxWidth={640} minWidth={300}>
+    <RightPanel stableLayout defaultWidth={480} maxWidth={640} minWidth={300}>
       <NavHeader
         {...header}
         left={

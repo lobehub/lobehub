@@ -5,6 +5,7 @@ import {
   Image,
   LibraryBigIcon,
   ListTodoIcon,
+  NotebookPenIcon,
   Settings,
   ShapesIcon,
   Video,
@@ -88,6 +89,15 @@ export const NAVIGATION_ROUTES: NavigationRoute[] = [
     useDynamicTitle: true,
   },
   {
+    cmdkKey: 'cmdk.note',
+    electronKey: 'navigation.note',
+    icon: NotebookPenIcon,
+    id: 'note',
+    keywords: ['note', 'notes', 'memo', 'quick', 'jot', '随手记'],
+    path: '/note',
+    pathPrefix: '/note',
+  },
+  {
     cmdkKey: 'cmdk.memory',
     electronKey: 'navigation.memory',
     icon: BrainCircuit,
@@ -137,7 +147,7 @@ export const getRouteById = (id: string): NavigationRoute | undefined =>
  */
 export const getNavigableRoutes = (): NavigationRoute[] =>
   NAVIGATION_ROUTES.filter((r) =>
-    ['community', 'image', 'resource', 'page', 'memory'].includes(r.id),
+    ['community', 'image', 'resource', 'page', 'note', 'memory'].includes(r.id),
   ).map((r) =>
     r.id === 'image'
       ? {

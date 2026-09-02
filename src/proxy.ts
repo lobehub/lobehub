@@ -37,6 +37,8 @@ export const config = {
     '/profile(.*)',
     '/page',
     '/page(.*)',
+    '/note',
+    '/note(.*)',
     '/tasks',
     '/tasks(.*)',
     '/task',
