@@ -1,0 +1,149 @@
+---
+title: Full-Text Search
+description: Choose and operate the pg_search or Elasticsearch backend for LobeHub product search.
+tags:
+  - Full-Text Search
+  - Elasticsearch
+  - pg_search
+  - Self-hosting
+---
+
+# Full-Text Search
+
+LobeHub uses full-text search for product data such as agents, topics, messages, files, knowledge
+bases, chat groups, and memories. This is separate from the web-search tools that an agent can call.
+
+LobeHub supports two product-search backends:
+
+| Backend         | Best fit                                                                                                          | Additional operations                                                                                                                |
+| --------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `pg_search`     | A deployment that already runs PostgreSQL with the ParadeDB `pg_search` extension and wants the simplest topology | PostgreSQL maintains the BM25 indexes; no separate search-sync worker is required                                                    |
+| `elasticsearch` | A deployment that wants a dedicated, independently scalable search service or must leave `pg_search`              | Requires an Elasticsearch project, an initial backfill, PostgreSQL change capture, and a continuously scheduled incremental consumer |
+
+`FTS_SEARCH_PROVIDER` selects one backend for the whole deployment. The accepted values are
+`pg_search` and `elasticsearch`; the default is `pg_search`. LobeHub does not silently fall back to
+the other backend when the selected provider is unavailable.
+
+<Callout type="warning">
+  `FTS_SEARCH_PROVIDER=elasticsearch` does not make historical database migrations skip
+  `pg_search`. The current Elasticsearch migration workflow is intended for an existing LobeHub
+  database that has already applied the `pg_search` migrations. A fresh database on a service that
+  cannot install `pg_search` is not currently supported merely by selecting Elasticsearch:
+  `bun run db:migrate` still reaches migrations that create the extension and BM25 indexes, and
+  fails when the database service does not provide them.
+</Callout>
+
+## Choose a backend
+
+### Keep `pg_search`
+
+Keep the default provider when your PostgreSQL service supports `pg_search`, its BM25 indexes fit
+comfortably with the rest of the database workload, and you prefer not to operate a separate search
+service.
+
+For a self-managed database, the LobeHub Docker examples use the
+`paradedb/paradedb:latest-pg17` image and preload `pg_search`. Apply the normal LobeHub database
+migrations to install the extension and the LobeHub-managed BM25 indexes, then keep:
+
+```bash
+FTS_SEARCH_PROVIDER=pg_search
+```
+
+### Use Elasticsearch
+
+Choose Elasticsearch when search needs independent capacity, when you want to separate search
+storage from transactional PostgreSQL, or when your PostgreSQL provider is ending `pg_search`
+support.
+
+Neon stopped offering `pg_search` to new projects on March 19, 2026. Its dedicated `pg_search` page
+says existing projects retain access and Neon will contact affected users, while its extension
+catalog labels existing installations for migration. Existing LobeHub deployments on Neon should
+verify their project status with Neon and use the
+[pg\_search to Elasticsearch migration guide](/docs/self-hosting/advanced/elasticsearch-migration)
+to plan the move. Check Neon's [current pg\_search notice](https://neon.com/docs/extensions/pg_search)
+and [extension catalog](https://neon.com/docs/extensions/pg-extensions) before acting.
+
+The Elasticsearch backend requires:
+
+- an Elasticsearch project reachable from the LobeHub server over HTTPS;
+- the official ICU analysis plugin, which is bundled in Elastic Cloud Serverless and must be
+  installed on every node of a self-managed cluster;
+- `ES_URL`, `ES_API_KEY`, and a stable `ES_INDEX_NAMESPACE`;
+- a full backfill followed by continuous Outbox synchronization;
+- `FTS_SEARCH_PROVIDER=elasticsearch` only after the backfill and incremental queue are complete.
+
+See [Migrate from pg\_search to Elasticsearch](/docs/self-hosting/advanced/elasticsearch-migration)
+for the complete rehearsal, backfill, cutover, rollback, and optional cleanup procedure.
+
+## How Elasticsearch synchronization works
+
+PostgreSQL remains the source of truth. Enabling the Elasticsearch path installs change-capture
+triggers that coalesce source changes into a durable Outbox. The recurring consumer writes those
+changes to Elasticsearch. Search requests retrieve candidate identifiers from Elasticsearch, then
+LobeHub hydrates and authorizes the results against PostgreSQL before returning them.
+
+The operating sequence is therefore:
+
+```text
+PostgreSQL write
+  -> capture trigger
+  -> FTS Outbox
+  -> recurring fts-search:sync consumer
+  -> Elasticsearch index
+  -> candidate search
+  -> PostgreSQL permission check and hydration
+```
+
+The full reindex is only the initial snapshot. It does not replace the recurring consumer. Keep
+`fts-search:sync` scheduled for as long as Elasticsearch serves search traffic.
+
+## Configuration reference
+
+| Variable                  | Purpose                                                                                              |
+| ------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `FTS_SEARCH_PROVIDER`     | Deployment-wide provider: `pg_search` or `elasticsearch`                                             |
+| `ES_URL`                  | HTTPS endpoint of the Elasticsearch project                                                          |
+| `ES_API_KEY`              | Elasticsearch API key with index creation, bulk write, refresh, count, alias, and search permissions |
+| `ES_INDEX_NAMESPACE`      | Stable deployment-owned prefix for physical indexes and aliases                                      |
+| `FTS_SEARCH_SYNC_ENABLED` | Enables the incremental consumer; set to `true` only after the initial backfill is ready             |
+| `ES_REINDEX_STATE_DIR`    | Durable local checkpoint directory used by a backfill and every resume attempt                       |
+
+Do not reuse one namespace for unrelated LobeHub deployments. Do not change the namespace while a
+migration or incremental consumer is active.
+
+## Monitor Elasticsearch search
+
+LobeHub exports bounded OpenTelemetry metrics and traces without recording raw queries, user IDs,
+document IDs, or indexed text. The main metric families are:
+
+| Metric                                           | What it answers                                                        |
+| ------------------------------------------------ | ---------------------------------------------------------------------- |
+| `fts_search_backend_operations_total`            | Request volume and failures by provider, entity, operation, and result |
+| `fts_search_backend_operation_duration`          | End-to-end backend latency                                             |
+| `fts_search_backend_result_count`                | Requested, candidate, and PostgreSQL-hydrated result counts            |
+| `fts_search_elasticsearch_requests_total`        | Actual Elasticsearch request volume and result                         |
+| `fts_search_elasticsearch_request_duration`      | Elasticsearch request duration including response parsing              |
+| `fts_search_elasticsearch_request_size`          | Serialized request-body size                                           |
+| `fts_search_elasticsearch_response_decoded_size` | Decoded response-body size                                             |
+| `fts_search_elasticsearch_response_hits`         | Hits returned per Elasticsearch request                                |
+| `fts_search_elasticsearch_server_took`           | Processing time reported by Elasticsearch                              |
+
+Traces use spans named `fts.search.backend.<operation>`. Use request counts, bytes, hits, server
+time, and indexed storage together when investigating Elasticsearch cost; any single signal alone
+is insufficient. See [Grafana Observability](/docs/self-hosting/advanced/observability/grafana) for
+the self-hosted OpenTelemetry stack.
+
+## Operating rules
+
+- Back up PostgreSQL and rehearse on an isolated database copy and Elasticsearch target before a
+  production migration.
+- Keep the same durable checkpoint directory for every resume of one backfill. Never run two
+  workers against the same checkpoint and physical indexes.
+- Keep `pg_search` serving requests until every entity is complete, failures are zero, and the
+  incremental queue has caught up.
+- After cutover, retain the old BM25 indexes and extension for an agreed rollback window. Removing
+  them is a separate, optional, destructive phase.
+- Never use `DROP EXTENSION pg_search CASCADE`; review and remove known BM25 indexes first, and let a
+  non-cascading extension drop refuse unexpected dependencies.
+- Do not remove the Elasticsearch Outbox, capture triggers, or recurring consumer after removing
+  `pg_search`; they are required by the active Elasticsearch backend.
