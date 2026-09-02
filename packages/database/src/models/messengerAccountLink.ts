@@ -1,4 +1,4 @@
-import { and, eq, getTableColumns, inArray, type SQL } from 'drizzle-orm';
+import { and, eq, getTableColumns, inArray, isNull, type SQL } from 'drizzle-orm';
 
 import type { MessengerAccountLinkItem, NewMessengerAccountLink } from '../schemas';
 import { messengerAccountLinks } from '../schemas';
@@ -402,21 +402,32 @@ export class MessengerAccountLinkModel {
    * the multi-tenant router pass the resolved `team_id` / `enterprise_id`.
    */
   /**
-   * IM identities of a set of users, across every platform they linked. Powers
+   * IM identities of a set of users that are active under the given scope —
+   * `workspaceId` for a workspace, `null` for personal use. Powers
    * cross-platform person resolution (e.g. mapping a Discord `@handle` or
    * `<@platformUserId>` mention in a digest to the workspace member to assign a
-   * task to). Identity is user-level, so workspace scoping of the link row is
-   * deliberately ignored. Safe projection only — never exposes credentials.
+   * task to). The scope filter is deliberate: a member's identities linked for
+   * another workspace or for personal use are not this workspace's business
+   * and must never reach coworkers' model-visible output. Safe projection only
+   * — never exposes credentials.
    */
   static findByUserIds = async (
     db: LobeChatDatabase,
     userIds: string[],
+    scope: { workspaceId: string | null },
   ): Promise<SafeMessengerAccountLink[]> => {
     if (userIds.length === 0) return [];
     return db
       .select(safeLinkColumns)
       .from(messengerAccountLinks)
-      .where(inArray(messengerAccountLinks.userId, userIds));
+      .where(
+        and(
+          inArray(messengerAccountLinks.userId, userIds),
+          scope.workspaceId
+            ? eq(messengerAccountLinks.workspaceId, scope.workspaceId)
+            : isNull(messengerAccountLinks.workspaceId),
+        ),
+      );
   };
 
   static findByPlatformUser = async (

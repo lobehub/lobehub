@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import type { TaskListItem } from '@/store/task/slices/list/initialState';
+
 import {
   clampCollectionPage,
   getMyTaskViewOptions,
@@ -9,8 +11,11 @@ import {
   resolveMyTaskScope,
   resolveTaskCollection,
 } from './AgentTasksPage';
-import { DEFAULT_TASK_LIST_VIEW_OPTIONS } from './listViewOptions';
+import { compareTaskItems, DEFAULT_TASK_LIST_VIEW_OPTIONS } from './listViewOptions';
 import { shouldRenderTaskAgentPanelToggle } from './taskAgentPanelToggle';
+
+const taskUpdatedAt = (id: string, updatedAt: string): TaskListItem =>
+  ({ id, identifier: id, status: 'backlog', updatedAt: new Date(updatedAt) }) as TaskListItem;
 
 describe('AgentTasksPage', () => {
   describe('clampCollectionPage', () => {
@@ -38,9 +43,16 @@ describe('AgentTasksPage', () => {
         groupBy: 'automationMode',
         hideCompleted: false,
         orderBy: 'updatedAt',
-        orderDirection: 'desc',
+        orderDirection: 'asc',
         showSubTasks: true,
       });
+    });
+
+    it('renders a page newest-first, like the server paginates it', () => {
+      const options = getScheduledTaskViewOptions(DEFAULT_TASK_LIST_VIEW_OPTIONS);
+      const newer = taskUpdatedAt('a', '2026-02-01');
+      const older = taskUpdatedAt('b', '2026-01-01');
+      expect(compareTaskItems(newer, older, options)).toBeLessThan(0);
     });
   });
 
@@ -59,8 +71,15 @@ describe('AgentTasksPage', () => {
         groupBy: 'priority',
         hideCompleted: false,
         orderBy: 'updatedAt',
-        orderDirection: 'desc',
+        orderDirection: 'asc',
       });
+    });
+
+    it('renders a page newest-first, like the server paginates it', () => {
+      const options = getMyTaskViewOptions(DEFAULT_TASK_LIST_VIEW_OPTIONS);
+      const newer = taskUpdatedAt('a', '2026-02-01');
+      const older = taskUpdatedAt('b', '2026-01-01');
+      expect(compareTaskItems(newer, older, options)).toBeLessThan(0);
     });
   });
 

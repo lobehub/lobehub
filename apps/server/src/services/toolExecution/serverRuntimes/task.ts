@@ -1,10 +1,10 @@
 import type { ListWorkspaceMembersParams } from '@lobechat/builtin-tool-task';
 import {
   normalizeListTasksParams,
+  normalizeListWorkspaceMembersParams,
   selectAssignableMembers,
   TaskIdentifier,
 } from '@lobechat/builtin-tool-task';
-import { canWorkspaceRoleBeTaskAssignee } from '@lobechat/const/rbac';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { TaskAssignableMember, TaskCreatedItem } from '@lobechat/prompts';
 import {
@@ -533,22 +533,37 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
 
       try {
         const workspaceId = deps.workspaceId;
-        // Personal mode: the caller is the only human a task can be assigned to
-        // (TaskService.assertAssigneeUserAssignable enforces the same rule).
-        const memberRows = workspaceId
-          ? (await new WorkspaceMemberModel(db, userId).listMembers(workspaceId)).filter((m) =>
-              canWorkspaceRoleBeTaskAssignee(m.role),
-            )
-          : [{ role: null, userId }];
+        const { limit, query } = normalizeListWorkspaceMembersParams(args);
+        // Workspace mode: `query` and `limit` run in SQL, so a large workspace
+        // costs one page plus a count. Personal mode: the caller is the only
+        // human a task can be assigned to (TaskService.assertAssigneeUserAssignable
+        // enforces the same rule), and the same query contract applies.
+        const page = workspaceId
+          ? await new WorkspaceMemberModel(db, userId).searchAssignableMembers(workspaceId, {
+              limit,
+              query,
+            })
+          : (() => {
+              const self = selectAssignableMembers([{ id: userId, isSelf: true }], args);
+              return {
+                rows: self.members.map((m) => ({ role: null, userId: m.id })),
+                total: self.total,
+              };
+            })();
+        const memberRows = page.rows;
+        const total = page.total;
 
         const memberIds = memberRows.map((m) => m.userId);
         // Linked IM identities (Discord/Slack/Telegram…) make handle-based
         // requests ("assign this to @Neko") resolvable by exact platform id
-        // instead of name similarity.
+        // instead of name similarity. Scoped to this workspace: identities a
+        // member linked elsewhere are not exposed to coworkers here.
         const [profiles, emails, imLinks] = await Promise.all([
           UserModel.getDisplayInfoByIds(db, memberIds),
           UserModel.getEmailsByIds(db, memberIds),
-          MessengerAccountLinkModel.findByUserIds(db, memberIds),
+          MessengerAccountLinkModel.findByUserIds(db, memberIds, {
+            workspaceId: workspaceId ?? null,
+          }),
         ]);
         const profileMap = new Map(profiles.map((u) => [u.id, u]));
         const emailMap = new Map(emails.map((u) => [u.id, u.email]));
@@ -560,7 +575,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
           imMap.set(link.userId, [...(imMap.get(link.userId) ?? []), alias]);
         }
 
-        const directory: TaskAssignableMember[] = memberRows.map((m) => {
+        const members: TaskAssignableMember[] = memberRows.map((m) => {
           const profile = profileMap.get(m.userId);
           return {
             email: emailMap.get(m.userId),
@@ -572,10 +587,6 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
             username: profile?.username,
           };
         });
-        // Bounded, model-visible slice: `query` narrows by name / handle /
-        // email / IM identity and `limit` caps the page, so a large workspace
-        // never floods the context (the header tells the model how many matched).
-        const { members, query, total } = selectAssignableMembers(directory, args);
 
         return {
           content: formatWorkspaceMembers(members, { inWorkspace: !!workspaceId, query, total }),

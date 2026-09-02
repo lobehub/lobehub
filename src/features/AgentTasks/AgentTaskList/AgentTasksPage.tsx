@@ -110,14 +110,18 @@ export const resolveMyTaskScope = (searchParams: URLSearchParams): MyTaskScope =
 export const clampCollectionPage = (page: number, total: number): number =>
   Math.min(page, Math.max(1, Math.ceil(total / COLLECTION_PAGE_SIZE)));
 
+// `compareTaskItems` inverts `orderDirection` for the date columns (see
+// `effectiveOrderDirection`), so the token that renders a page newest-first —
+// matching the updatedAt DESC order the server paginates by — is 'asc'.
+const NEWEST_FIRST_DATE_ORDER = { orderBy: 'updatedAt', orderDirection: 'asc' } as const;
+
 export const getScheduledTaskViewOptions = (
   viewOptions: TaskListViewOptions,
 ): TaskListViewOptions => ({
   ...viewOptions,
+  ...NEWEST_FIRST_DATE_ORDER,
   groupBy: 'automationMode',
   hideCompleted: false,
-  orderBy: 'updatedAt',
-  orderDirection: 'desc',
 });
 
 /**
@@ -130,8 +134,7 @@ export const getScheduledTaskViewOptions = (
  */
 export const getMyTaskViewOptions = (viewOptions: TaskListViewOptions): TaskListViewOptions => ({
   ...viewOptions,
-  orderBy: 'updatedAt',
-  orderDirection: 'desc',
+  ...NEWEST_FIRST_DATE_ORDER,
 });
 
 const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
