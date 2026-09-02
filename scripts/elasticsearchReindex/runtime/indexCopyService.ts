@@ -86,6 +86,25 @@ export class FtsSearchIndexCopyError extends Error {
   }
 }
 
+/**
+ * Elasticsearch item failures embed a preview of the offending field value, which may be user
+ * content. Keep only bounded routing metadata so the message is safe for stderr and audit logs.
+ */
+const summarizeReindexFailures = (failures: unknown[]) =>
+  failures.slice(0, 3).map((failure) => {
+    const record =
+      typeof failure === 'object' && failure !== null ? (failure as Record<string, unknown>) : {};
+    const cause =
+      typeof record.cause === 'object' && record.cause !== null
+        ? (record.cause as Record<string, unknown>)
+        : {};
+    return {
+      index: typeof record.index === 'string' ? record.index : undefined,
+      status: typeof record.status === 'number' ? record.status : undefined,
+      type: typeof cause.type === 'string' ? cause.type : undefined,
+    };
+  });
+
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 const mapWithConcurrency = async <Item, Result>(
@@ -207,7 +226,7 @@ export class FtsSearchIndexCopyService {
     }
     if (status.failures.length > 0) {
       throw new Error(
-        `Elasticsearch reindex task ${taskId} reported ${status.failures.length} failures: ${JSON.stringify(status.failures.slice(0, 3))}`,
+        `Elasticsearch reindex task ${taskId} reported ${status.failures.length} failures: ${JSON.stringify(summarizeReindexFailures(status.failures))}`,
       );
     }
     /**

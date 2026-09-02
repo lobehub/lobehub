@@ -33,6 +33,7 @@ import {
 } from './options';
 import { runFtsSearchReindexCommand } from './preparation';
 import {
+  assertSyncConsumerPausedFor,
   detectFtsSearchIndexSchemaState,
   FtsSearchIndexCopyError,
   FtsSearchIndexCopyService,
@@ -330,19 +331,7 @@ const printStatus = async () => {
 let auditLogger: FtsSearchReindexFileLogger | undefined;
 const executionStartedAt = Date.now();
 
-/**
- * Active Outbox leases are the observable sign that the incremental sync consumer has not been
- * paused. Moving an alias under a running consumer could acknowledge a change into the old index
- * that the new one never receives, so the cutover refuses instead of guessing.
- */
-const assertSyncConsumerPaused = async () => {
-  const { inFlight } = await outbox.stats();
-  if (inFlight > 0) {
-    throw new Error(
-      `Outbox still has ${inFlight} in-flight claims; pause the incremental sync consumer first`,
-    );
-  }
-};
+const assertSyncConsumerPaused = async () => assertSyncConsumerPausedFor(await outbox.stats());
 
 const runIndexCopy = async (fromVersion: number, toVersion: number) => {
   const service = new FtsSearchIndexCopyService(createElasticsearchClient(), {

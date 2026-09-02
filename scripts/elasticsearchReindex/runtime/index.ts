@@ -4,3 +4,4 @@ export * from './elasticsearchClient';
 export * from './indexCopyService';
 export * from './reindexService';
 export * from './schemaUpgrade';
+export * from './syncConsumerGuard';

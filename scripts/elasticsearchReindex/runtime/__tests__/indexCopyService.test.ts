@@ -200,6 +200,42 @@ describe('FtsSearchIndexCopyService', () => {
     );
   });
 
+  it('keeps user content out of the reported failure message', async () => {
+    const client = createClient({
+      getTask: vi.fn().mockResolvedValue({
+        completed: true,
+        created: 0,
+        deleted: 0,
+        failures: [
+          {
+            cause: {
+              reason: "failed to parse field [content]. Preview of field's value: 'SECRET-NOTE'",
+              type: 'document_parsing_exception',
+            },
+            id: 'doc-1',
+            index: 'lobehub-messages-v2',
+            status: 400,
+          },
+        ],
+        noops: 0,
+        total: 1,
+        updated: 0,
+        versionConflicts: 0,
+      }),
+    });
+    const service = new FtsSearchIndexCopyService(client, {
+      entities: ['messages'],
+      pollIntervalMs: 0,
+    });
+
+    const error = await service.run('lobehub', 1, 2).catch((caught: unknown) => caught);
+    const message = (error as Error & { cause?: Error }).cause?.message ?? '';
+    expect(message).toContain('document_parsing_exception');
+    expect(message).toContain('400');
+    expect(message).not.toContain('SECRET-NOTE');
+    expect(message).not.toContain('doc-1');
+  });
+
   it('wraps a reindex task whose reported counters do not add up to the total', async () => {
     const client = createClient({
       getTask: vi.fn().mockResolvedValue({
