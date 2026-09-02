@@ -339,6 +339,54 @@ describe('FtsSearchReindexHttpClient', () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
+  describe('resolveAliasTarget', () => {
+    it('returns null when the alias does not exist yet (404)', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(response(undefined, 404));
+      vi.stubGlobal('fetch', fetchMock);
+      const client = new FtsSearchReindexHttpClient({
+        apiKey: 'secret-key',
+        url: 'https://search.example.com',
+      });
+
+      await expect(client.resolveAliasTarget('lobehub-agents')).resolves.toBeNull();
+    });
+
+    it('returns the physical index when the alias has exactly one target', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        response({
+          'lobehub-agents-v1': {
+            aliases: { 'lobehub-agents': { is_write_index: true } },
+          },
+        }),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+      const client = new FtsSearchReindexHttpClient({
+        apiKey: 'secret-key',
+        url: 'https://search.example.com',
+      });
+
+      await expect(client.resolveAliasTarget('lobehub-agents')).resolves.toBe('lobehub-agents-v1');
+    });
+
+    it('throws when the alias points to multiple indices', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        response({
+          'lobehub-agents-v1': { aliases: { 'lobehub-agents': {} } },
+          'lobehub-agents-v2': { aliases: { 'lobehub-agents': { is_write_index: true } } },
+        }),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+      const client = new FtsSearchReindexHttpClient({
+        apiKey: 'secret-key',
+        url: 'https://search.example.com',
+      });
+
+      await expect(client.resolveAliasTarget('lobehub-agents')).rejects.toThrow(
+        'points to multiple indices',
+      );
+    });
+  });
+
   describe('switchAliases', () => {
     const targets: FtsSearchReindexAliasTarget[] = [
       { alias: 'lobehub-agents', physicalIndex: 'lobehub-agents-v2' },

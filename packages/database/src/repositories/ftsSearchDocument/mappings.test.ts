@@ -3,10 +3,13 @@ import { describe, expect, it } from 'vitest';
 import {
   FTS_SEARCH_INDEX_ANALYSIS,
   FTS_SEARCH_INDEX_DEFINITIONS,
+  FTS_SEARCH_INDEX_SCHEMA_HISTORY,
   FTS_SEARCH_INDEX_SCHEMA_VERSION,
   getFtsSearchIndexAlias,
   getFtsSearchIndexMappings,
+  getFtsSearchIndexSchemaVersionRecord,
   getFtsSearchPhysicalIndexName,
+  parseFtsSearchPhysicalIndexVersion,
 } from './mappings';
 import {
   FTS_SEARCH_DOCUMENT_ENTITIES,
@@ -170,5 +173,79 @@ describe('search index mappings', () => {
         }
       },
     );
+  });
+
+  describe('parseFtsSearchPhysicalIndexVersion', () => {
+    it('reads the version suffix off a physical index name for the namespace and entity', () => {
+      expect(
+        parseFtsSearchPhysicalIndexVersion(
+          'lobehub-dev',
+          'knowledgeBases',
+          'lobehub-dev-knowledge-bases-v2',
+        ),
+      ).toBe(2);
+    });
+
+    it('returns null for a physical index name from a foreign namespace or entity', () => {
+      expect(
+        parseFtsSearchPhysicalIndexVersion(
+          'lobehub-dev',
+          'knowledgeBases',
+          'other-namespace-knowledge-bases-v2',
+        ),
+      ).toBeNull();
+      expect(
+        parseFtsSearchPhysicalIndexVersion(
+          'lobehub-dev',
+          'knowledgeBases',
+          'lobehub-dev-agents-v2',
+        ),
+      ).toBeNull();
+    });
+
+    it('returns null when the version suffix is not purely numeric', () => {
+      expect(
+        parseFtsSearchPhysicalIndexVersion(
+          'lobehub-dev',
+          'knowledgeBases',
+          'lobehub-dev-knowledge-bases-v2a',
+        ),
+      ).toBeNull();
+    });
+  });
+
+  describe('FTS_SEARCH_INDEX_SCHEMA_HISTORY', () => {
+    it('is contiguous starting from version 1 and ends at the current schema version', () => {
+      expect(FTS_SEARCH_INDEX_SCHEMA_HISTORY.map((record) => record.version)).toEqual(
+        Array.from({ length: FTS_SEARCH_INDEX_SCHEMA_HISTORY.length }, (_, index) => index + 1),
+      );
+      expect(FTS_SEARCH_INDEX_SCHEMA_HISTORY.at(-1)!.version).toBe(FTS_SEARCH_INDEX_SCHEMA_VERSION);
+    });
+
+    it('marks only the last entry as current', () => {
+      FTS_SEARCH_INDEX_SCHEMA_HISTORY.forEach((record, index) => {
+        if (index === FTS_SEARCH_INDEX_SCHEMA_HISTORY.length - 1) {
+          expect(record.upgrade).toBe('current');
+        } else {
+          expect(record.upgrade).not.toBe('current');
+        }
+      });
+    });
+
+    it('only declares a copy upgrade from a version whose _source is complete', () => {
+      for (const record of FTS_SEARCH_INDEX_SCHEMA_HISTORY) {
+        if (record.upgrade === 'copy') expect(record.sourceComplete).toBe(true);
+      }
+    });
+  });
+
+  describe('getFtsSearchIndexSchemaVersionRecord', () => {
+    it('resolves version 1 to a copy upgrade', () => {
+      expect(getFtsSearchIndexSchemaVersionRecord(1)?.upgrade).toBe('copy');
+    });
+
+    it('returns undefined for a version outside the journal', () => {
+      expect(getFtsSearchIndexSchemaVersionRecord(0)).toBeUndefined();
+    });
   });
 });

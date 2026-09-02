@@ -165,6 +165,51 @@ describe('FtsSearchReindexService', () => {
     ).toThrow('batch size for documents must be a positive integer');
   });
 
+  it('rejects an entity subset combined with switchAliases in the constructor', () => {
+    const { builder, client, repository } = createDependencies();
+
+    expect(
+      () =>
+        new FtsSearchReindexService(builder, repository, client, {
+          entities: ['messages'],
+          switchAliases: true,
+        }),
+    ).toThrow('Alias switching requires every search entity');
+  });
+
+  it('rejects switchAliases combined with aliasMode create', () => {
+    const { builder, client, repository } = createDependencies();
+
+    expect(
+      () =>
+        new FtsSearchReindexService(builder, repository, client, {
+          aliasMode: 'create',
+          switchAliases: true,
+        }),
+    ).toThrow("aliasMode 'switch' or 'defer', not 'create'");
+  });
+
+  it('defers the alias switch without touching aliases or marking ready', async () => {
+    const { builder, client, repository, state } = createDependencies();
+    const events: FtsSearchReindexProgressEvent[] = [];
+    const service = new FtsSearchReindexService(builder, repository, client, {
+      aliasMode: 'defer',
+      onProgress: (event) => {
+        events.push(event);
+      },
+    });
+
+    await expect(service.run('test', 1)).resolves.toMatchObject({
+      status: 'awaiting_alias_switch',
+    });
+
+    expect(state.progress.every(({ status }) => status === 'completed')).toBe(true);
+    expect(events).toContainEqual({ type: 'alias_switch_deferred' });
+    expect(client.ensureAlias).not.toHaveBeenCalled();
+    expect(client.switchAliases).not.toHaveBeenCalled();
+    expect(repository.markReadyForIncrementalSync).not.toHaveBeenCalled();
+  });
+
   it('indexes high-volume ID ranges concurrently but checkpoints them in order', async () => {
     const { builder, client, repository, state } = createDependencies();
     for (const progress of state.progress) progress.status = 'completed';

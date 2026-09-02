@@ -318,7 +318,7 @@ export class FtsSearchReindexHttpClient
        * protocol; this initial migration fails closed instead of pretending the cutover is safe.
        */
       throw new FtsSearchReindexRequestError(
-        `Elasticsearch alias ${alias} already points to a different index`,
+        `Elasticsearch alias ${alias} already points to a different index; pause the incremental sync consumer and rerun with --switch-aliases to cut over`,
       );
     }
     if (response.status !== 404) {
@@ -363,6 +363,18 @@ export class FtsSearchReindexHttpClient
     return Object.entries(parsed.data)
       .filter(([, value]) => Object.hasOwn(value.aliases, alias))
       .map(([index]) => index);
+  }
+
+  /** Physical index behind a stable alias, or `null` when the alias does not exist yet. */
+  async resolveAliasTarget(alias: string): Promise<string | null> {
+    const targets = await this.readAliasTargets(alias);
+    if (targets.length === 0) return null;
+    if (targets.length > 1) {
+      throw new FtsSearchReindexRequestError(
+        `Elasticsearch alias ${alias} points to multiple indices: ${targets.join(', ')}`,
+      );
+    }
+    return targets[0];
   }
 
   async switchAliases(targets: FtsSearchReindexAliasTarget[]): Promise<void> {

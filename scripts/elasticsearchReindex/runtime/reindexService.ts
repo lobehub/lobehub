@@ -57,6 +57,14 @@ export interface FtsSearchReindexIndexBody {
 
 export interface FtsSearchReindexServiceOptions {
   /**
+   * Alias handling once every entity completes:
+   * - `create`: initial migration; creates missing aliases and fails if one points elsewhere.
+   * - `switch`: atomic cutover after `assertAliasSwitchAllowed`.
+   * - `defer`: leave aliases alone and stop at `awaiting_alias_switch`, for a schema upgrade whose
+   *   backfill runs while the old version keeps serving.
+   */
+  aliasMode: 'create' | 'defer' | 'switch';
+  /**
    * Runs immediately before the alias switch rather than at command start: a backfill can take
    * hours, and a sync consumer that resumes in between would acknowledge Outbox rows into the old
    * index that the new one never sees.
@@ -85,6 +93,23 @@ export interface FtsSearchReindexServiceOptions {
 }
 
 export type FtsSearchRangeEntity = 'documents' | 'messages';
+
+/**
+ * A cutover that moves only some aliases would leave one namespace split across schema versions,
+ * so an entity subset is rejected up front instead of reporting a partial switch as success.
+ */
+export const assertAliasSwitchCoversAllEntities = (
+  switchAliases: boolean,
+  entities: readonly FtsSearchDocumentEntity[],
+) => {
+  if (!switchAliases) return;
+  const missing = FTS_SEARCH_DOCUMENT_ENTITIES.filter((entity) => !entities.includes(entity));
+  if (missing.length > 0) {
+    throw new Error(
+      `Alias switching requires every search entity; missing ${missing.join(', ')}. Drop --entity or omit --switch-aliases`,
+    );
+  }
+};
 
 export type FtsSearchReindexStateRepository = Pick<
   FtsSearchReindexFileRepository,
@@ -142,12 +167,14 @@ export type FtsSearchReindexProgressEvent =
       entity: FtsSearchDocumentEntity;
       type: 'reconciliation';
     }
+  | { type: 'alias_switch_deferred' }
   | { type: 'aliases_created' }
   | { type: 'run_paused' };
 
 export interface FtsSearchReindexResult {
   runId: string;
-  status: FtsSearchReindexRunState['run']['status'];
+  /** `awaiting_alias_switch` is only reported in `defer` alias mode; the checkpoint stays `backfilling`. */
+  status: FtsSearchReindexRunState['run']['status'] | 'awaiting_alias_switch';
 }
 
 export class FtsSearchReindexEntityError extends Error {
@@ -324,10 +351,17 @@ export class FtsSearchReindexService {
       onProgress: options.onProgress ?? (() => {}),
       retryBaseDelayMs: options.retryBaseDelayMs ?? DEFAULT_RETRY_BASE_DELAY_MS,
       switchAliases: options.switchAliases ?? false,
+      aliasMode: options.aliasMode ?? (options.switchAliases ? 'switch' : 'create'),
       validateIncrementalSyncSource: options.validateIncrementalSyncSource ?? (() => {}),
     };
     if (!Number.isInteger(this.options.batchSize) || this.options.batchSize < 1) {
       throw new Error('FTS reindex batch size must be a positive integer');
+    }
+    assertAliasSwitchCoversAllEntities(this.options.switchAliases, this.options.entities);
+    if (this.options.switchAliases && this.options.aliasMode === 'create') {
+      throw new Error(
+        "FTS reindex switchAliases requires aliasMode 'switch' or 'defer', not 'create'",
+      );
     }
     for (const [entity, size] of Object.entries(this.options.batchSizeByEntity)) {
       if (
@@ -969,8 +1003,13 @@ export class FtsSearchReindexService {
       return { runId: initialState.run.id, status: 'backfilling' };
     }
 
+    if (this.options.aliasMode === 'defer') {
+      await this.emitProgress({ type: 'alias_switch_deferred' });
+      return { runId: initialState.run.id, status: 'awaiting_alias_switch' };
+    }
+
     await this.options.validateIncrementalSyncSource();
-    if (this.options.switchAliases) {
+    if (this.options.aliasMode === 'switch') {
       await this.options.assertAliasSwitchAllowed();
       await this.client.switchAliases(
         currentState.progress.map((progress) => ({

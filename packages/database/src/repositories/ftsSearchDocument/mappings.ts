@@ -500,3 +500,57 @@ export const getFtsSearchPhysicalIndexName = (
   entity: FtsSearchDocumentEntity,
   version: number = FTS_SEARCH_INDEX_SCHEMA_VERSION,
 ) => `${getFtsSearchIndexAlias(namespace, entity)}-v${version}`;
+
+/** Reads the schema version back out of a physical index name; `null` when the name is foreign. */
+export const parseFtsSearchPhysicalIndexVersion = (
+  namespace: string,
+  entity: FtsSearchDocumentEntity,
+  physicalIndex: string,
+): number | null => {
+  const prefix = `${getFtsSearchIndexAlias(namespace, entity)}-v`;
+  if (!physicalIndex.startsWith(prefix)) return null;
+  const suffix = physicalIndex.slice(prefix.length);
+  return /^\d+$/.test(suffix) ? Number.parseInt(suffix, 10) : null;
+};
+
+/**
+ * How the reindex CLI moves indices of an older schema version to the current one.
+ *
+ * - `copy`: `_reindex` inside Elasticsearch from the old `_source`. Only valid when the old version
+ *   still stores every field the current mapping needs.
+ * - `backfill`: rebuild from PostgreSQL. Required once `_source` no longer carries the full
+ *   document, or when the current mapping needs data the old index never had.
+ */
+export type FtsSearchIndexSchemaUpgradeStrategy = 'backfill' | 'copy';
+
+export interface FtsSearchIndexSchemaVersionRecord {
+  /** Whether `_source` of this version stores every mapped field. */
+  sourceComplete: boolean;
+  summary: string;
+  /** Strategy used to upgrade from this version to the current one; `current` for the latest. */
+  upgrade: FtsSearchIndexSchemaUpgradeStrategy | 'current';
+  version: number;
+}
+
+/**
+ * Schema journal, one record per version in order. Append a record and set the previous entry's
+ * `upgrade` whenever `FTS_SEARCH_INDEX_SCHEMA_VERSION` is bumped; the mapping tests enforce that
+ * the journal stays contiguous and that `copy` is only declared from a `sourceComplete` version.
+ */
+export const FTS_SEARCH_INDEX_SCHEMA_HISTORY: readonly FtsSearchIndexSchemaVersionRecord[] = [
+  {
+    sourceComplete: true,
+    summary: 'Initial mapping with every field stored in _source',
+    upgrade: 'copy',
+    version: 1,
+  },
+  {
+    sourceComplete: false,
+    summary: 'Long text fields excluded from _source',
+    upgrade: 'current',
+    version: 2,
+  },
+];
+
+export const getFtsSearchIndexSchemaVersionRecord = (version: number) =>
+  FTS_SEARCH_INDEX_SCHEMA_HISTORY.find((record) => record.version === version);

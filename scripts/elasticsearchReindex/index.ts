@@ -33,6 +33,7 @@ import {
 } from './options';
 import { runFtsSearchReindexCommand } from './preparation';
 import {
+  detectFtsSearchIndexSchemaState,
   FtsSearchIndexCopyError,
   FtsSearchIndexCopyService,
   type FtsSearchReindexAuditValue,
@@ -41,6 +42,7 @@ import {
   FtsSearchReindexFileRepository,
   FtsSearchReindexHttpClient,
   FtsSearchReindexService,
+  planFtsSearchIndexSchemaUpgrade,
   summarizeFtsSearchReindexError,
 } from './runtime';
 
@@ -78,7 +80,7 @@ const freshRun = args.has('--fresh-run');
 const skipFailureArgument = process.argv.find((item) => item.startsWith('--skip-failure='));
 const status = args.has('--status');
 const switchAliases = args.has('--switch-aliases');
-const copyFromSchemaVersion = readPositiveIntegerArgument('--copy-from-schema-version');
+const upgrade = args.has('--upgrade');
 const yes = args.has('--yes');
 const batchSize = readPositiveIntegerArgument('--batch-size');
 const bulkConcurrency = readPositiveIntegerArgument('--bulk-concurrency');
@@ -95,7 +97,14 @@ const requestTimeoutMs = readPositiveIntegerArgument('--request-timeout-ms');
 const retryBaseDelayMs = readNonNegativeIntegerArgument('--retry-base-delay-ms');
 const telemetryEnvironment = resolveFtsSearchReindexTelemetryEnvironment(process.argv.slice(2));
 
-const knownArguments = new Set(['--apply', '--fresh-run', '--status', '--switch-aliases', '--yes']);
+const knownArguments = new Set([
+  '--apply',
+  '--fresh-run',
+  '--status',
+  '--switch-aliases',
+  '--upgrade',
+  '--yes',
+]);
 const unknownArgument = process.argv
   .slice(2)
   .find(
@@ -105,7 +114,6 @@ const unknownArgument = process.argv
       !item.startsWith('--batch-size=') &&
       !item.startsWith('--bulk-concurrency=') &&
       !item.startsWith('--bulk-max-bytes=') &&
-      !item.startsWith('--copy-from-schema-version=') &&
       !item.startsWith('--entity-batch-size=') &&
       !item.startsWith('--entity=') &&
       !item.startsWith('--entity-concurrency=') &&
@@ -122,23 +130,20 @@ const unknownArgument = process.argv
   );
 if (unknownArgument) throw new Error(`Unknown argument: ${unknownArgument}`);
 
-const copyIndices = copyFromSchemaVersion !== undefined;
-const mutationModes = [apply, copyIndices, Boolean(skipFailureArgument)].filter(Boolean).length;
+const mutationModes = [apply, upgrade, Boolean(skipFailureArgument)].filter(Boolean).length;
 if (mutationModes > 1 || (status && mutationModes > 0)) {
-  throw new Error(
-    'Choose exactly one of --status, --apply, --copy-from-schema-version, or --skip-failure',
-  );
+  throw new Error('Choose exactly one of --status, --apply, --upgrade, or --skip-failure');
 }
 if (mutationModes > 0 && !yes) {
   throw new Error('Mutating commands require --yes after reviewing their documented effects');
 }
 if (freshRun && !apply) throw new Error('--fresh-run can only be used with --apply');
-if (switchAliases && !apply && !copyIndices) {
-  throw new Error('--switch-aliases can only be used with --apply or --copy-from-schema-version');
+if (switchAliases && !apply && !upgrade) {
+  throw new Error('--switch-aliases can only be used with --apply or --upgrade');
 }
-if (copyIndices && copyFromSchemaVersion >= FTS_SEARCH_INDEX_SCHEMA_VERSION) {
+if (switchAliases && entities) {
   throw new Error(
-    `--copy-from-schema-version must be older than the current schema version ${FTS_SEARCH_INDEX_SCHEMA_VERSION}`,
+    '--switch-aliases moves every stable alias at once and cannot be combined with --entity',
   );
 }
 
@@ -171,11 +176,11 @@ const stateDirectory = path.resolve(configuredStateDirectory ?? '.elasticsearch-
 
 if (!databaseUrl) throw new Error('DATABASE_URL is required');
 if (!namespace) throw new Error('ES_INDEX_NAMESPACE is required');
-if ((apply || copyIndices) && !elasticsearchApiKey && !allowInsecureHttp) {
-  throw new Error(`${apiKeyEnvironmentName} is required with --apply`);
+if ((apply || upgrade) && !elasticsearchApiKey && !allowInsecureHttp) {
+  throw new Error(`${apiKeyEnvironmentName} is required with --apply and --upgrade`);
 }
-if ((apply || copyIndices) && !elasticsearchUrl) {
-  throw new Error(`${urlEnvironmentName} is required with --apply`);
+if ((apply || upgrade) && !elasticsearchUrl) {
+  throw new Error(`${urlEnvironmentName} is required with --apply and --upgrade`);
 }
 if ((apply || failureReference) && !configuredStateDirectory) {
   throw new Error('ES_REINDEX_STATE_DIR is required for reindex mutations and resume attempts');
@@ -232,15 +237,46 @@ const logErrorSummary = (message: string, error: unknown) => {
   console.error(message, summarizeFtsSearchReindexError(error));
 };
 
+const createElasticsearchClient = () =>
+  new FtsSearchReindexHttpClient({
+    allowInsecureHttp,
+    apiKey: elasticsearchApiKey,
+    requestTimeoutMs,
+    url: elasticsearchUrl!,
+  });
+
+/** Served schema version and the journal's next step, so `--status` doubles as a migration check. */
+const readSchemaStatus = async (): Promise<Record<string, FtsSearchReindexAuditValue> | null> => {
+  if (!elasticsearchUrl || (!elasticsearchApiKey && !allowInsecureHttp)) return null;
+  try {
+    const state = await detectFtsSearchIndexSchemaState(createElasticsearchClient(), namespace);
+    const plan = state.type === 'versioned' ? planFtsSearchIndexSchemaUpgrade(state) : null;
+    return {
+      codeVersion: FTS_SEARCH_INDEX_SCHEMA_VERSION,
+      servedVersion: state.type === 'versioned' ? state.version : null,
+      state: state.type,
+      upgrade:
+        plan?.type === 'upgrade' ? { strategy: plan.strategy, toVersion: plan.toVersion } : null,
+    };
+  } catch (error) {
+    return {
+      codeVersion: FTS_SEARCH_INDEX_SCHEMA_VERSION,
+      error: summarizeFtsSearchReindexError(error),
+    };
+  }
+};
+
 const readStatus = async () => {
   const state = await repository.getTargetRun(namespace, FTS_SEARCH_INDEX_SCHEMA_VERSION);
   const unresolvedFailures = state ? await repository.listUnresolvedFailures(state.run.id) : [];
   const outboxStats = await outbox.stats();
+  const schema = await readSchemaStatus();
   const entityStats: Record<string, FtsSearchReindexAuditValue> = Object.fromEntries(
     Object.entries(outboxStats.entities).map(([entity, stats]) => [entity, { ...stats }]),
   );
   return {
     namespace,
+    schema,
     outbox: {
       dead: outboxStats.dead,
       entities: entityStats,
@@ -308,39 +344,54 @@ const assertSyncConsumerPaused = async () => {
   }
 };
 
-const runIndexCopy = async () => {
-  const endpointHostname = new URL(elasticsearchUrl!).hostname;
-  assertFtsSearchReindexElasticsearchHostname(endpointHostname, expectedHostPrefix);
-  console.log(
-    JSON.stringify({
-      endpointEnvName: urlEnvironmentName,
-      endpointHostname,
-      expectedHostPrefix: expectedHostPrefix ?? null,
-      fromSchemaVersion: copyFromSchemaVersion,
-      switchAliases,
-      toSchemaVersion: FTS_SEARCH_INDEX_SCHEMA_VERSION,
-      type: 'index_copy_started',
-    }),
-  );
-  const client = new FtsSearchReindexHttpClient({
-    allowInsecureHttp,
-    apiKey: elasticsearchApiKey,
-    requestTimeoutMs,
-    url: elasticsearchUrl!,
-  });
-  const service = new FtsSearchIndexCopyService(client, {
+const runIndexCopy = async (fromVersion: number, toVersion: number) => {
+  const service = new FtsSearchIndexCopyService(createElasticsearchClient(), {
     assertAliasSwitchAllowed: assertSyncConsumerPaused,
     entities,
     entityConcurrency,
     onProgress: (event) => console.log(JSON.stringify(event)),
     switchAliases,
   });
-  const result = await service.run(
-    namespace,
-    copyFromSchemaVersion!,
-    FTS_SEARCH_INDEX_SCHEMA_VERSION,
-  );
+  const result = await service.run(namespace, fromVersion, toVersion);
   console.log(JSON.stringify({ ...result, type: 'index_copy_completed' }));
+};
+
+/**
+ * Reads the served version from the aliases and runs the journal's declared strategy, so an
+ * operator never picks versions or strategies by hand.
+ */
+const runUpgrade = async () => {
+  const endpointHostname = new URL(elasticsearchUrl!).hostname;
+  assertFtsSearchReindexElasticsearchHostname(endpointHostname, expectedHostPrefix);
+  const state = await detectFtsSearchIndexSchemaState(createElasticsearchClient(), namespace);
+  const plan = planFtsSearchIndexSchemaUpgrade(state);
+  console.log(
+    JSON.stringify({
+      endpointEnvName: urlEnvironmentName,
+      endpointHostname,
+      expectedHostPrefix: expectedHostPrefix ?? null,
+      plan,
+      switchAliases,
+      type: 'schema_upgrade_planned',
+    }),
+  );
+  if (plan.type === 'up_to_date') return;
+
+  if (plan.strategy === 'copy') {
+    await runIndexCopy(plan.fromVersion, plan.toVersion);
+    return;
+  }
+
+  /**
+   * Backfill upgrades reuse the checkpointed PostgreSQL run: a fresh checkpoint on the first
+   * invocation, resume afterwards. The alias switch is deferred to `--switch-aliases` exactly like
+   * the copy path, so the operator pauses the consumer only for the cutover.
+   */
+  if (!configuredStateDirectory) {
+    throw new Error('ES_REINDEX_STATE_DIR is required for a backfill upgrade');
+  }
+  const existing = await repository.getTargetRun(namespace, FTS_SEARCH_INDEX_SCHEMA_VERSION);
+  await runBackfill({ aliasMode: switchAliases ? 'switch' : 'defer', freshRun: !existing });
 };
 
 const run = async () => {
@@ -366,8 +417,8 @@ const run = async () => {
     return;
   }
 
-  if (copyIndices) {
-    await runIndexCopy();
+  if (upgrade) {
+    await runUpgrade();
     return;
   }
 
@@ -381,6 +432,16 @@ const run = async () => {
     return;
   }
 
+  await runBackfill({ aliasMode: switchAliases ? 'switch' : 'create', freshRun });
+};
+
+const runBackfill = async ({
+  aliasMode,
+  freshRun,
+}: {
+  aliasMode: 'create' | 'defer' | 'switch';
+  freshRun: boolean;
+}) => {
   if (Object.values(rangeConcurrencyByEntity).some((concurrency) => concurrency > 1)) {
     const collationResult = await pool.query<{ datcollate: string }>(
       'SELECT datcollate FROM pg_database WHERE datname = current_database()',
@@ -458,12 +519,7 @@ const run = async () => {
     }),
   );
 
-  const client = new FtsSearchReindexHttpClient({
-    allowInsecureHttp,
-    apiKey: elasticsearchApiKey,
-    requestTimeoutMs,
-    url: elasticsearchUrl!,
-  });
+  const client = createElasticsearchClient();
   const service = new FtsSearchReindexService(
     new FtsSearchDocumentBuilder(db),
     repository,
@@ -500,6 +556,7 @@ const run = async () => {
         console.log(JSON.stringify(event));
         await auditLogger!.append(event);
       },
+      aliasMode,
       assertAliasSwitchAllowed: assertSyncConsumerPaused,
       retryBaseDelayMs,
       switchAliases,

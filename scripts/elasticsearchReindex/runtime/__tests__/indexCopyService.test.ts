@@ -1,9 +1,12 @@
 // @vitest-environment node
+import { FTS_SEARCH_DOCUMENT_ENTITIES } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   FTS_SEARCH_INDEX_ANALYSIS,
+  getFtsSearchIndexAlias,
   getFtsSearchIndexMappings,
+  getFtsSearchPhysicalIndexName,
 } from '../../../../packages/database/src/repositories/ftsSearchDocument';
 import type { FtsSearchIndexCopyElasticsearchClient } from '../indexCopyService';
 import { FtsSearchIndexCopyError, FtsSearchIndexCopyService } from '../indexCopyService';
@@ -172,7 +175,6 @@ describe('FtsSearchIndexCopyService', () => {
     const events: unknown[] = [];
     const service = new FtsSearchIndexCopyService(client, {
       assertAliasSwitchAllowed,
-      entities: ['agents', 'messages'],
       onProgress: (event) => {
         events.push(event);
       },
@@ -183,10 +185,12 @@ describe('FtsSearchIndexCopyService', () => {
     const result = await service.run('test', 1, 2);
 
     expect(order).toEqual(['assert-alias-switch-allowed', 'switch-aliases']);
-    expect(client.switchAliases).toHaveBeenCalledWith([
-      { alias: 'test-agents', physicalIndex: 'test-agents-v2' },
-      { alias: 'test-messages', physicalIndex: 'test-messages-v2' },
-    ]);
+    expect(client.switchAliases).toHaveBeenCalledWith(
+      FTS_SEARCH_DOCUMENT_ENTITIES.map((entity) => ({
+        alias: getFtsSearchIndexAlias('test', entity),
+        physicalIndex: getFtsSearchPhysicalIndexName('test', entity, 2),
+      })),
+    );
     expect(result.aliasesSwitched).toBe(true);
     expect(events).toContainEqual({ type: 'aliases_switched' });
   });
@@ -198,7 +202,6 @@ describe('FtsSearchIndexCopyService', () => {
       .mockRejectedValue(new Error('sync consumer is still draining the outbox'));
     const service = new FtsSearchIndexCopyService(client, {
       assertAliasSwitchAllowed,
-      entities: ['agents'],
       pollIntervalMs: 0,
       switchAliases: true,
     });
@@ -235,5 +238,17 @@ describe('FtsSearchIndexCopyService', () => {
     await expect(service.run('test', 3, 2)).rejects.toThrow(
       'requires an older source schema version',
     );
+  });
+
+  it('rejects an entity subset combined with switchAliases in the constructor', () => {
+    const client = createClient();
+
+    expect(
+      () =>
+        new FtsSearchIndexCopyService(client, {
+          entities: ['agents'],
+          switchAliases: true,
+        }),
+    ).toThrow('Alias switching requires every search entity');
   });
 });

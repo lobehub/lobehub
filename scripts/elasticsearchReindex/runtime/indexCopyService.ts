@@ -12,6 +12,7 @@ import type {
   FtsSearchReindexIndexBody,
   FtsSearchReindexIndexOptions,
 } from './reindexService';
+import { assertAliasSwitchCoversAllEntities } from './reindexService';
 
 /** Subset of the reindex transport needed to copy one schema version into the next inside Elasticsearch. */
 export interface FtsSearchIndexCopyElasticsearchClient {
@@ -124,6 +125,7 @@ export class FtsSearchIndexCopyService {
       pollIntervalMs: options.pollIntervalMs ?? 5000,
       switchAliases: options.switchAliases ?? false,
     };
+    assertAliasSwitchCoversAllEntities(this.options.switchAliases, this.options.entities);
   }
 
   async run(
