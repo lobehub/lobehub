@@ -89,12 +89,18 @@ const Thread = memo<ThreadProps>(
         ),
       [mutateFocusedReply],
     );
+    // What the reply list renders: the pinned reply first while it is off-page.
+    const visibleReplies = useMemo(() => {
+      const pinned = focusedReply.data;
+      if (!pinned || hasFocusedReply || pinned.parentCommentId !== root.id) return replies.items;
+      return [pinned, ...replies.items];
+    }, [focusedReply.data, hasFocusedReply, replies.items, root.id]);
     const handleReplySubmit = useCallback(
       async ({ clientId, content, editorData }: DocumentCommentSubmitInput) => {
         const replyTarget =
           replyTargetId === root.id
             ? root
-            : replies.items.find((item) => item.id === replyTargetId);
+            : visibleReplies.find((item) => item.id === replyTargetId);
         if (!replyTarget) throw new Error('Document comment reply target is unavailable');
         if (isOptimisticDocumentComment(replyTarget)) {
           throw new Error('An optimistic document comment cannot be replied to');
@@ -155,9 +161,9 @@ const Thread = memo<ThreadProps>(
         onSummaryChange,
         refreshThread,
         reloadReplies,
-        replies.items,
         replyTargetId,
         root,
+        visibleReplies,
       ],
     );
     const handleReplyUpdate: DocumentCommentUpdateHandler = useCallback(
@@ -201,11 +207,6 @@ const Thread = memo<ThreadProps>(
 
     // NOT_FOUND, or a reply from another thread, means the linked reply is gone; any other
     // lookup failure is reported so the miss is never silent.
-    const visibleReplies = useMemo(() => {
-      const pinned = focusedReply.data;
-      if (!pinned || hasFocusedReply || pinned.parentCommentId !== root.id) return replies.items;
-      return [pinned, ...replies.items];
-    }, [focusedReply.data, hasFocusedReply, replies.items, root.id]);
     const isFocusedReplyMissing =
       Boolean(focusedReplyId) &&
       (focusedReply.isNotFound ||
