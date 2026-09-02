@@ -370,7 +370,7 @@ describe('useAgentShare · agent identity change', () => {
     }));
     await act(async () => {
       await result.current.updateConfig((current) => ({
-        maxTurnsPerTopic: current.maxTurnsPerTopic + 1,
+        maxTurnsPerTopic: (current.maxTurnsPerTopic ?? 0) + 1,
       }));
     });
     expect(service.updateShareConfig).toHaveBeenNthCalledWith(2, 'agent-B', {

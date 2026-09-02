@@ -475,6 +475,11 @@ describe('BuiltinToolsExecutor share-visitor gate', () => {
     type: 'default' as any,
   });
 
+  // AgentShareVisitorContext now requires these id fields for billing
+  // attribution and revocation checks; the gate tests below only vary the
+  // permission fields, so share the ids across fixtures.
+  const visitorIds = { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' };
+
   beforeEach(() => {
     mockApiHandler.mockReset();
     mockApiHandler.mockResolvedValue({ content: 'ok', success: true });
@@ -483,7 +488,7 @@ describe('BuiltinToolsExecutor share-visitor gate', () => {
   it('blocks a builtin identifier outside the share allowlist', async () => {
     const result = await executor.execute(buildPayload('{}'), {
       ...context,
-      agentShareVisitor: {},
+      agentShareVisitor: { ...visitorIds },
     });
 
     expect(result.success).toBe(false);
@@ -503,7 +508,7 @@ describe('BuiltinToolsExecutor share-visitor gate', () => {
     // owner's enabledToolIds picker — must still be blocked at dispatch.
     const result = await executor.execute(memoryPayload('searchUserMemory'), {
       ...context,
-      agentShareVisitor: { allowReadMemory: true },
+      agentShareVisitor: { ...visitorIds, allowReadMemory: true },
     });
 
     expect(result.error?.code).toBe('SHARE_GATE_BLOCKED');
@@ -516,7 +521,11 @@ describe('BuiltinToolsExecutor share-visitor gate', () => {
     // gate must re-read the unstripped manifest and block instead.
     const result = await executor.execute(memoryPayload('consentGated'), {
       ...context,
-      agentShareVisitor: { allowReadMemory: true, enabledToolIds: ['lobe-user-memory'] },
+      agentShareVisitor: {
+        ...visitorIds,
+        allowReadMemory: true,
+        enabledToolIds: ['lobe-user-memory'],
+      },
     });
 
     expect(result.error?.code).toBe('SHARE_GATE_BLOCKED');
@@ -532,7 +541,7 @@ describe('BuiltinToolsExecutor share-visitor gate', () => {
         identifier: 'lobe-consent-tool',
         type: 'default' as any,
       },
-      { ...context, agentShareVisitor: { enabledToolIds: ['lobe-consent-tool'] } },
+      { ...context, agentShareVisitor: { ...visitorIds, enabledToolIds: ['lobe-consent-tool'] } },
     );
 
     expect(result.error?.code).toBe('SHARE_GATE_BLOCKED');
@@ -542,7 +551,7 @@ describe('BuiltinToolsExecutor share-visitor gate', () => {
   it('blocks memory reads without allowReadMemory', async () => {
     const result = await executor.execute(memoryPayload('searchUserMemory'), {
       ...context,
-      agentShareVisitor: { enabledToolIds: ['lobe-user-memory'] },
+      agentShareVisitor: { ...visitorIds, enabledToolIds: ['lobe-user-memory'] },
     });
 
     expect(result.error?.code).toBe('SHARE_GATE_BLOCKED');
@@ -552,14 +561,22 @@ describe('BuiltinToolsExecutor share-visitor gate', () => {
   it('allows memory reads with allowReadMemory but still blocks memory writes', async () => {
     const read = await executor.execute(memoryPayload('searchUserMemory'), {
       ...context,
-      agentShareVisitor: { allowReadMemory: true, enabledToolIds: ['lobe-user-memory'] },
+      agentShareVisitor: {
+        ...visitorIds,
+        allowReadMemory: true,
+        enabledToolIds: ['lobe-user-memory'],
+      },
     });
     expect(read.error?.code).not.toBe('SHARE_GATE_BLOCKED');
     expect(mockApiHandler).toHaveBeenCalled();
 
     const write = await executor.execute(memoryPayload('addContextMemory'), {
       ...context,
-      agentShareVisitor: { allowReadMemory: true, enabledToolIds: ['lobe-user-memory'] },
+      agentShareVisitor: {
+        ...visitorIds,
+        allowReadMemory: true,
+        enabledToolIds: ['lobe-user-memory'],
+      },
     });
     expect(write.error?.code).toBe('SHARE_GATE_BLOCKED');
   });
