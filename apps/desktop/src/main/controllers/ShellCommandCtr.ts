@@ -27,6 +27,7 @@ import {
 
 import { binNames } from '@/modules/cliEmbedding/generateCliWrapper';
 import { callLambdaMutation } from '@/modules/heterogeneousAgent/fileStorePort';
+import type { ExecutionCommandMode } from '@/types/store';
 import { createLogger } from '@/utils/logger';
 
 import CliCtr from './CliCtr';
@@ -36,6 +37,34 @@ import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 const logger = createLogger('controllers:ShellCommandCtr');
 
 const processManager = new ShellProcessManager();
+
+const LAST_KNOWN_COMMAND_MODE_KEY = 'lastKnownExecutionCommandMode' as const;
+
+interface ResolvedExecutionPolicy {
+  commandMode: ExecutionCommandMode;
+  overlay: LocalSandboxPolicyOverlay | undefined;
+}
+
+/**
+ * Admin-configured-mode vs. what this run actually requested don't match —
+ * refuse rather than silently reinterpret the request. A silent switch (e.g.
+ * quietly fencing a run that asked for the host, or vice versa) risks a
+ * command that depends on the OTHER environment's semantics (a host write
+ * meant to persist outside the sandbox, or a sandboxed run's network
+ * allowlist) failing in a confusing way instead of a clear, actionable
+ * refusal. Told explicitly to the model — not just "denied" — because a model
+ * that only sees a bare failure has been observed retrying the same request
+ * rather than switching environments (see `COMMAND_BLOCKED_MESSAGE` in the
+ * CPC server's `governance/policyGate.ts` for the sibling problem on the
+ * command-governance side).
+ */
+const describeCommandModeMismatch = (required: 'host' | 'sandbox'): string =>
+  `This command was blocked: your administrator has restricted this account to ` +
+  `${required === 'sandbox' ? 'sandboxed (Local Sandbox)' : 'host (unsandboxed)'} execution only ` +
+  `on this device. This is an administrator-configured policy, not a platform limitation or ` +
+  `error — do not retry this command as-is. Switch this run's execution environment to ` +
+  `${required === 'sandbox' ? 'Local Sandbox' : 'direct host execution'} and retry. Tell the ` +
+  `user this restriction was set by their administrator.`;
 
 /**
  * Agent ids are opaque to this process, and they end up as a path segment —
@@ -166,63 +195,87 @@ export default class ShellCommandCtr extends ControllerModule {
     });
   }
 
-  /**
-   * Admin-configured Local Sandbox overlay for the signed-in user, memoized
-   * for the same reason as `sandboxCapability`: cheap to reuse, no reason to
-   * hit the network on every sandboxed command. Refreshed periodically rather
-   * than once per app run — unlike the capability probe, this can change any
-   * time an admin edits the policy.
-   *
-   * `undefined` on any failure (no controller, signed out, offline, no policy
-   * configured) is always safe here: this only NARROWS/EXTENDS an
-   * already-sandboxed run, never decides whether one is sandboxed at all, so
-   * falling back to "no overlay" is just today's plain Local Sandbox default —
-   * no disk cache or strict fallback needed, unlike the CLI's `commandMode`
-   * push-down (see `apps/cli/src/settings/executionPolicy.ts`), which gates
-   * whether a fence applies at all and fails to the strictest bound instead.
-   */
-  private overlayCache?: { at: number; overlay: LocalSandboxPolicyOverlay | undefined };
-
-  private async resolveExecutionPolicyOverlay(): Promise<LocalSandboxPolicyOverlay | undefined> {
+  private async resolveExecutionPolicy(): Promise<ResolvedExecutionPolicy> {
     const REFRESH_INTERVAL_MS = 10 * 60 * 1000;
-    if (this.overlayCache && Date.now() - this.overlayCache.at < REFRESH_INTERVAL_MS) {
-      return this.overlayCache.overlay;
+    if (
+      this.executionPolicyCache &&
+      Date.now() - this.executionPolicyCache.at < REFRESH_INTERVAL_MS
+    ) {
+      return this.executionPolicyCache.resolved;
     }
 
-    const overlay = await (async (): Promise<LocalSandboxPolicyOverlay | undefined> => {
-      try {
-        const remoteServerConfigCtr = this.app.getController(RemoteServerConfigCtr);
-        const accessToken = await remoteServerConfigCtr?.getAccessToken();
-        const serverUrl = await remoteServerConfigCtr?.getRemoteServerUrl();
-        if (!accessToken || !serverUrl) return undefined;
-
-        const policy = await callLambdaMutation<{
-          allowedNetworkDomains?: string[];
-          deniedReadRoots?: string[];
-          deniedWriteRoots?: string[];
-          envAllowlist?: string[];
-          readableRoots?: string[];
-          writableRoots?: string[];
-        } | null>({ accessToken, serverUrl }, 'executionPolicy.get', undefined);
-        if (!policy) return undefined;
-
-        return {
-          allowedNetworkDomains: policy.allowedNetworkDomains,
-          deniedReadRoots: policy.deniedReadRoots,
-          deniedWriteRoots: policy.deniedWriteRoots,
-          envAllowlist: policy.envAllowlist,
-          readableRoots: policy.readableRoots,
-          writableRoots: policy.writableRoots,
-        };
-      } catch (error) {
-        logger.debug('Execution-policy fetch failed, running without an overlay:', error);
-        return undefined;
-      }
-    })();
-
-    this.overlayCache = { at: Date.now(), overlay };
-    return overlay;
+    const resolved = await this.fetchExecutionPolicy();
+    this.executionPolicyCache = { at: Date.now(), resolved };
+    return resolved;
   }
+
+  /**
+   * Admin-configured execution policy for the signed-in user — both the
+   * `commandMode` override and the Local Sandbox overlay (extra writable
+   * roots, denied roots, a replacement network allowlist), fetched together
+   * since they come off the same server row.
+   *
+   * `commandMode` gates whether a run is fenced AT ALL (see the mismatch
+   * check in `handleRunCommand`), so a fetch failure falls back to the last
+   * mode a successful fetch observed — persisted across app restarts via
+   * `storeManager` — rather than just dropping the overlay. Unlike the CLI's
+   * `commandMode` push-down (`apps/cli/src/settings/executionPolicy.ts`),
+   * that fallback defaults to `'auto'` (see `getStoreDefaults`), not the
+   * strictest bound: command governance is off for most installs, and
+   * refusing every host command before a user's first successful fetch would
+   * be far more disruptive than the narrow window this closes for the admins
+   * who really have configured a forced mode.
+   */
+  private async fetchExecutionPolicy(): Promise<ResolvedExecutionPolicy> {
+    try {
+      const remoteServerConfigCtr = this.app.getController(RemoteServerConfigCtr);
+      const accessToken = await remoteServerConfigCtr?.getAccessToken();
+      const serverUrl = await remoteServerConfigCtr?.getRemoteServerUrl();
+      if (!accessToken || !serverUrl) throw new Error('no signed-in remote server');
+
+      const policy = await callLambdaMutation<{
+        allowedNetworkDomains?: string[];
+        commandMode?: ExecutionCommandMode;
+        deniedReadRoots?: string[];
+        deniedWriteRoots?: string[];
+        envAllowlist?: string[];
+        readableRoots?: string[];
+        writableRoots?: string[];
+      } | null>({ accessToken, serverUrl }, 'executionPolicy.get', undefined);
+
+      const commandMode = policy?.commandMode ?? 'auto';
+      this.app.storeManager.set(LAST_KNOWN_COMMAND_MODE_KEY, commandMode);
+
+      return {
+        commandMode,
+        overlay: policy
+          ? {
+              allowedNetworkDomains: policy.allowedNetworkDomains,
+              deniedReadRoots: policy.deniedReadRoots,
+              deniedWriteRoots: policy.deniedWriteRoots,
+              envAllowlist: policy.envAllowlist,
+              readableRoots: policy.readableRoots,
+              writableRoots: policy.writableRoots,
+            }
+          : undefined,
+      };
+    } catch (error) {
+      logger.debug(
+        'Execution-policy fetch failed, falling back to last known command mode:',
+        error,
+      );
+      const commandMode = this.app.storeManager.get(LAST_KNOWN_COMMAND_MODE_KEY, 'auto');
+      return { commandMode, overlay: undefined };
+    }
+  }
+
+  /**
+   * Memoized for the same reason as `sandboxCapability`: cheap to reuse, no
+   * reason to hit the network on every command. Refreshed periodically rather
+   * than once per app run — unlike the capability probe, this can change any
+   * time an admin edits the policy.
+   */
+  private executionPolicyCache?: { at: number; resolved: ResolvedExecutionPolicy };
 
   /**
    * Whether this host can run sandboxed commands at all. The renderer asks
@@ -342,6 +395,15 @@ export default class ShellCommandCtr extends ControllerModule {
       }
     }
 
+    const executionPolicy = await this.resolveExecutionPolicy();
+
+    if (executionPolicy.commandMode === 'sandbox' && !params.sandbox) {
+      return { error: describeCommandModeMismatch('sandbox'), success: false };
+    }
+    if (executionPolicy.commandMode === 'host' && params.sandbox) {
+      return { error: describeCommandModeMismatch('host'), success: false };
+    }
+
     if (!params.sandbox) return runCommand(params, { logger, processManager });
 
     // Sandboxed run. The policy is scoped to the run's working directory, so
@@ -379,7 +441,6 @@ export default class ShellCommandCtr extends ControllerModule {
     }
 
     const { createLocalSandboxPolicy } = await import('@lobechat/device-sandbox');
-    const overlay = await this.resolveExecutionPolicyOverlay();
 
     // `runCommand` converts sandbox failures (policy conflict, busy runtime,
     // a fence that cannot be established) into `{ success: false, error }`
@@ -391,7 +452,7 @@ export default class ShellCommandCtr extends ControllerModule {
       processManager,
       sandboxPolicy: createLocalSandboxPolicy(params.cwd, {
         allowNetwork: params.sandboxNetwork === true,
-        overlay,
+        overlay: executionPolicy.overlay,
       }),
     });
   }

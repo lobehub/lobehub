@@ -108,12 +108,27 @@ const mockRemoteServerConfigCtr = {
   getRemoteServerUrl: vi.fn(),
 };
 
+// Minimal working fake of StoreManager.get/set (a real Map behind it, not
+// just a spy) — the commandMode fallback path reads back what a prior
+// successful fetch wrote, so a stub that always returns the same canned
+// value would hide real bugs in that round trip.
+const mockStoreValues = new Map<string, unknown>();
+const mockStoreManager = {
+  get: vi.fn((key: string, defaultValue?: unknown) =>
+    mockStoreValues.has(key) ? mockStoreValues.get(key) : defaultValue,
+  ),
+  set: vi.fn((key: string, value: unknown) => {
+    mockStoreValues.set(key, value);
+  }),
+};
+
 const mockApp = {
   getController: vi.fn((c: unknown) => {
     if (c === CliCtr) return mockCliCtr;
     if (c === RemoteServerConfigCtr) return mockRemoteServerConfigCtr;
     return undefined;
   }),
+  storeManager: mockStoreManager,
 } as unknown as App;
 
 describe('ShellCommandCtr (thin wrapper)', () => {
@@ -146,6 +161,7 @@ describe('ShellCommandCtr (thin wrapper)', () => {
     mockRemoteServerConfigCtr.getAccessToken.mockReset();
     mockRemoteServerConfigCtr.getRemoteServerUrl.mockReset();
     mockCallLambdaMutation.mockReset();
+    mockStoreValues.clear();
 
     const childProcessModule = await import('node:child_process');
     mockSpawn = vi.mocked(childProcessModule.spawn);
@@ -432,6 +448,99 @@ describe('ShellCommandCtr (thin wrapper)', () => {
         expect.objectContaining({ policy: expect.objectContaining({ writableRoots: ['/repo'] }) }),
       );
       expect(result.success).not.toBe(false);
+    });
+
+    describe('admin-forced command mode', () => {
+      it('refuses a host request when the policy forces sandbox', async () => {
+        mockRemoteServerConfigCtr.getAccessToken.mockResolvedValue('token-123');
+        mockRemoteServerConfigCtr.getRemoteServerUrl.mockResolvedValue(
+          'https://server.example.com',
+        );
+        mockCallLambdaMutation.mockResolvedValue({ commandMode: 'sandbox' });
+
+        const result = await ctr.handleRunCommand({ command: 'echo test' });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('administrator');
+        expect(result.error).toContain('Local Sandbox');
+        expect(mockSpawn).not.toHaveBeenCalled();
+        expect(mockCreateSandboxLaunchPlan).not.toHaveBeenCalled();
+      });
+
+      it('refuses a sandbox request when the policy forces host', async () => {
+        mockRemoteServerConfigCtr.getAccessToken.mockResolvedValue('token-123');
+        mockRemoteServerConfigCtr.getRemoteServerUrl.mockResolvedValue(
+          'https://server.example.com',
+        );
+        mockCallLambdaMutation.mockResolvedValue({ commandMode: 'host' });
+
+        const result = await ctr.handleRunCommand({
+          command: 'echo test',
+          cwd: '/repo',
+          sandbox: true,
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('administrator');
+        expect(result.error).toContain('host');
+        expect(mockCreateSandboxLaunchPlan).not.toHaveBeenCalled();
+      });
+
+      it('runs normally when the requested mode already matches the forced mode', async () => {
+        mockRemoteServerConfigCtr.getAccessToken.mockResolvedValue('token-123');
+        mockRemoteServerConfigCtr.getRemoteServerUrl.mockResolvedValue(
+          'https://server.example.com',
+        );
+        mockCallLambdaMutation.mockResolvedValue({ commandMode: 'sandbox' });
+        finishSpawnedProcess();
+
+        const result = await ctr.handleRunCommand({
+          command: 'echo test',
+          cwd: '/repo',
+          sandbox: true,
+        });
+
+        expect(result.success).not.toBe(false);
+        expect(mockCreateSandboxLaunchPlan).toHaveBeenCalled();
+      });
+
+      it('runs a plain host command unaffected on a machine that has never fetched a policy', async () => {
+        // Default mock state: no signed-in remote server, empty store. Must
+        // default to unrestricted (`'auto'`), not the strictest bound — most
+        // installs never turn command governance on at all, and refusing every
+        // host command before the first successful fetch would be far more
+        // disruptive than the narrow gap this leaves for genuinely governed
+        // users (see the `'sandbox'`-cache fallback test below).
+        finishSpawnedProcess();
+
+        const result = await ctr.handleRunCommand({ command: 'echo test' });
+
+        expect(result.success).not.toBe(false);
+        expect(mockSpawn).toHaveBeenCalled();
+      });
+
+      it('falls back to a previously observed forced mode across restarts when a later fetch fails', async () => {
+        mockRemoteServerConfigCtr.getAccessToken.mockResolvedValue('token-123');
+        mockRemoteServerConfigCtr.getRemoteServerUrl.mockResolvedValue(
+          'https://server.example.com',
+        );
+        mockCallLambdaMutation.mockResolvedValueOnce({ commandMode: 'sandbox' });
+
+        // First controller instance (e.g. a prior app run) fetches successfully
+        // and persists the mode via storeManager.
+        const firstRun = new ShellCommandCtr(mockApp);
+        finishSpawnedProcess();
+        await firstRun.handleRunCommand({ command: 'echo test', cwd: '/repo', sandbox: true });
+
+        // A fresh instance (app restart) whose fetch now fails must fall back to
+        // the persisted mode, not silently to 'auto'.
+        mockCallLambdaMutation.mockRejectedValue(new Error('network down'));
+        const secondRun = new ShellCommandCtr(mockApp);
+        const result = await secondRun.handleRunCommand({ command: 'echo test' });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('administrator');
+      });
     });
 
     it('refuses a sandboxed run with no working directory to confine', async () => {

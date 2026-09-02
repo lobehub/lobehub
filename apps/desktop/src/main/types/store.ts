@@ -7,6 +7,12 @@ import type {
 } from '@lobechat/electron-client-ipc';
 import type { HeteroSessionDirPref } from '@lobechat/types';
 
+/**
+ * Admin-configured override for whether this user's shell commands run on the
+ * host or fenced by Local Sandbox — see `ShellCommandCtr.resolveExecutionPolicy`.
+ */
+export type ExecutionCommandMode = 'auto' | 'host' | 'sandbox';
+
 export interface ElectronMainStore {
   appTrayVisible: boolean;
   dataSyncConfig: DataSyncConfig;
@@ -51,6 +57,19 @@ export interface ElectronMainStore {
    * Written blind: a slug gone stale (membership revoked elsewhere) still
    * boots, and the renderer settles the real scope from there.
    */
+  /**
+   * The `commandMode` a successful `executionPolicy.get` fetch last observed,
+   * so a fetch failure (offline, signed out) on a user who genuinely IS
+   * governed can fail to that remembered value instead of silently reverting
+   * to unrestricted. Defaults to `'auto'` (no restriction) rather than the
+   * strictest bound: the vast majority of installs never turn on command
+   * governance at all, and defaulting every never-yet-successfully-fetched
+   * machine to forced-sandbox would refuse ordinary host commands for
+   * everyone before their first successful fetch — that failure mode is far
+   * more common and more disruptive than the narrow window this value closes
+   * for admins who really have configured a forced mode.
+   */
+  lastKnownExecutionCommandMode: ExecutionCommandMode;
   lastWorkspaceSlugByAccount: Record<string, string>;
   locale: string;
   localFileWorkspaceRoots: string[];
