@@ -110,31 +110,40 @@ export const resolveMyTaskScope = (searchParams: URLSearchParams): MyTaskScope =
 export const clampCollectionPage = (page: number, total: number): number =>
   Math.min(page, Math.max(1, Math.ceil(total / COLLECTION_PAGE_SIZE)));
 
-// `compareTaskItems` inverts `orderDirection` for the date columns (see
-// `effectiveOrderDirection`), so the token that renders a page newest-first —
-// matching the updatedAt DESC order the server paginates by — is 'asc'.
-const NEWEST_FIRST_DATE_ORDER = { orderBy: 'updatedAt', orderDirection: 'asc' } as const;
+/**
+ * View options every paginated (server-sliced) collection pins, because a
+ * client-side reorder or cut would only ever apply to the fetched page:
+ * - ordering follows the server's updatedAt DESC page order. `compareTaskItems`
+ *   inverts `orderDirection` for the date columns (see
+ *   `effectiveOrderDirection`), so the token that renders newest-first is 'asc';
+ * - every fetched row renders. With `showSubTasks: false` `TaskList` folds a
+ *   child away whenever its parent shares the page, which would leave the page
+ *   sparse while `total` still counts the hidden rows. Nesting (when enabled)
+ *   still tucks a child under a parent that is on the same page.
+ * Grouping stays client-side — it only arranges the rows of the current page.
+ */
+const PAGINATED_COLLECTION_VIEW = {
+  orderBy: 'updatedAt',
+  orderDirection: 'asc',
+  showSubTasks: true,
+} as const;
 
 export const getScheduledTaskViewOptions = (
   viewOptions: TaskListViewOptions,
 ): TaskListViewOptions => ({
   ...viewOptions,
-  ...NEWEST_FIRST_DATE_ORDER,
+  ...PAGINATED_COLLECTION_VIEW,
   groupBy: 'automationMode',
   hideCompleted: false,
 });
 
 /**
- * "My tasks" is a paginated server list, so anything that reorders or cuts the
- * result has to happen before `limit` / `offset`: ordering is pinned to the
- * server's updatedAt-desc page order (a client sort would only sort each page
- * on its own), and `hideCompleted` is sent as a status filter
- * (`getVisibleTaskStatuses`) rather than applied to the fetched page.
- * Grouping stays client-side — it only arranges the rows of the current page.
+ * "My tasks" additionally sends `hideCompleted` as a server status filter
+ * (`getVisibleTaskStatuses`) rather than applying it to the fetched page.
  */
 export const getMyTaskViewOptions = (viewOptions: TaskListViewOptions): TaskListViewOptions => ({
   ...viewOptions,
-  ...NEWEST_FIRST_DATE_ORDER,
+  ...PAGINATED_COLLECTION_VIEW,
 });
 
 const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {

@@ -11,7 +11,11 @@ import {
   resolveMyTaskScope,
   resolveTaskCollection,
 } from './AgentTasksPage';
-import { compareTaskItems, DEFAULT_TASK_LIST_VIEW_OPTIONS } from './listViewOptions';
+import {
+  collapseSubTasks,
+  compareTaskItems,
+  DEFAULT_TASK_LIST_VIEW_OPTIONS,
+} from './listViewOptions';
 import { shouldRenderTaskAgentPanelToggle } from './taskAgentPanelToggle';
 
 const taskUpdatedAt = (id: string, updatedAt: string): TaskListItem =>
@@ -30,13 +34,13 @@ describe('AgentTasksPage', () => {
   });
 
   describe('getScheduledTaskViewOptions', () => {
-    it('keeps client sorting aligned with the updatedAt-desc server pagination', () => {
+    it('keeps client sorting aligned with the updatedAt-desc server pagination and renders every fetched row', () => {
       expect(
         getScheduledTaskViewOptions({
           ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
           orderBy: 'title',
           orderDirection: 'asc',
-          showSubTasks: true,
+          showSubTasks: false,
         }),
       ).toEqual({
         ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
@@ -57,7 +61,7 @@ describe('AgentTasksPage', () => {
   });
 
   describe('getMyTaskViewOptions', () => {
-    it('pins ordering to the updatedAt-desc server page and keeps the rest of the view', () => {
+    it('pins ordering to the updatedAt-desc server page, renders every fetched row, keeps the rest', () => {
       expect(
         getMyTaskViewOptions({
           ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
@@ -65,6 +69,7 @@ describe('AgentTasksPage', () => {
           hideCompleted: false,
           orderBy: 'title',
           orderDirection: 'asc',
+          showSubTasks: false,
         }),
       ).toEqual({
         ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
@@ -72,7 +77,21 @@ describe('AgentTasksPage', () => {
         hideCompleted: false,
         orderBy: 'updatedAt',
         orderDirection: 'asc',
+        showSubTasks: true,
       });
+    });
+
+    it('never folds a fetched sub-task away, so a page is never sparser than the server sent it', () => {
+      const options = getMyTaskViewOptions({
+        ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
+        showSubTasks: false,
+      });
+      const parent = { ...taskUpdatedAt('p', '2026-02-01'), parentTaskId: null };
+      const child = { ...taskUpdatedAt('c', '2026-02-02'), parentTaskId: 'p' };
+      // `collapseSubTasks` is what `TaskList` applies when sub-tasks are hidden;
+      // pinning `showSubTasks` keeps it out of the paginated path.
+      expect(options.showSubTasks).toBe(true);
+      expect(collapseSubTasks([parent, child]).map((t) => t.id)).toEqual(['p']);
     });
 
     it('renders a page newest-first, like the server paginates it', () => {
