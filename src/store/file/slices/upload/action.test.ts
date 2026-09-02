@@ -1034,13 +1034,7 @@ describe('FileUploadAction', () => {
         vi.mocked(getImageDimensions).mockResolvedValue(undefined);
         vi.spyOn(fileService, 'checkFileHash').mockRejectedValue(new Error('Hash check failed'));
 
-        await expect(
-          act(async () => {
-            await uploadWithProgress({
-              file: mockFile,
-            });
-          }),
-        ).rejects.toThrow('Hash check failed');
+        await expect(uploadWithProgress({ file: mockFile })).rejects.toThrow('Hash check failed');
       });
 
       it('should handle uploadFileToS3 errors', async () => {
@@ -1053,13 +1047,7 @@ describe('FileUploadAction', () => {
         vi.spyOn(fileService, 'checkFileHash').mockResolvedValue(mockCheckResult);
         vi.spyOn(uploadService, 'uploadFileToS3').mockRejectedValue(new Error('Upload failed'));
 
-        await expect(
-          act(async () => {
-            await uploadWithProgress({
-              file: mockFile,
-            });
-          }),
-        ).rejects.toThrow('Upload failed');
+        await expect(uploadWithProgress({ file: mockFile })).rejects.toThrow('Upload failed');
       });
 
       it('should handle createFile errors', async () => {
@@ -1080,13 +1068,7 @@ describe('FileUploadAction', () => {
         vi.spyOn(uploadService, 'uploadFileToS3').mockResolvedValue(mockUploadResult);
         vi.spyOn(fileService, 'createFile').mockRejectedValue(new Error('DB creation failed'));
 
-        await expect(
-          act(async () => {
-            await uploadWithProgress({
-              file: mockFile,
-            });
-          }),
-        ).rejects.toThrow('DB creation failed');
+        await expect(uploadWithProgress({ file: mockFile })).rejects.toThrow('DB creation failed');
       });
     });
   });
