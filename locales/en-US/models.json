@@ -836,6 +836,7 @@
   "lobehub.gemini-3.5-flash.description": "Gemini's most intelligent model built for speed, combining frontier intelligence with superior search and grounding.",
   "lobehub.gemini-3.6-flash.description": "Gemini 3.6 Flash balances speed with intelligence for strong agentic, coding, and multimodal performance with improved token efficiency.",
   "lobehub.gemini-3.7-flash.description": "Gemini 3.7 Flash is Google's most capable Flash model, built for complex coding, agentic workflows, and reliable multi-step execution.",
+  "lobehub.gemini-3.8-flash.description": "Google's most intelligent Flash model, tuned for long-horizon coding and autonomous agents — faster first token and less verbose than 3.7 Flash at the same price.",
   "lobehub.glm-5.1.description": "Zai's latest flagship model, aligned with Claude Opus 4.6 on overall and coding capabilities. Excels at long-horizon tasks with autonomous work up to 8 hours, an ideal foundation for Autonomous Agents and long-horizon Coding Agents.",
   "lobehub.glm-5.2.description": "GLM-5.2 is the first open-source model to approach the performance of the latest-generation Claude Opus released in the same period.",
   "lobehub.glm-5.3-flash.description": "The first GLM-5 that can see — stronger than GLM-5.2, coding that approaches Opus 4.8, at about one-tenth the flagship price.",
