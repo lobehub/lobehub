@@ -12,7 +12,7 @@ import type {
 import debug from 'debug';
 
 import { notifyResourceTrashMutation } from '@/business/server/resource/notifyTrashMutation';
-import { TrashModel } from '@/database/models/trash';
+import { toPublicTrashItem, TrashModel } from '@/database/models/trash';
 import { WorkspaceAuditLogModel } from '@/database/models/workspaceAuditLog';
 import type { TrashItemRow } from '@/database/schemas';
 import type { LobeChatDatabase, Transaction } from '@/database/type';
@@ -428,19 +428,7 @@ export class TrashService {
     log('purged %s:%s (+%d children)', root.resourceType, root.resourceId, children.length);
   };
 
-  private toItem = (row: TrashItemRow): TrashItem => ({
-    deletedAt: row.deletedAt,
-    deletedByUserId: row.deletedByUserId,
-    expiresAt: row.expiresAt,
-    id: row.id,
-    meta: row.meta ?? null,
-    resourceId: row.resourceId,
-    resourceType: row.resourceType,
-    rootId: row.rootId,
-    title: row.title,
-    userId: row.userId,
-    workspaceId: row.workspaceId,
-  });
+  private toItem = (row: TrashItemRow): TrashItem => toPublicTrashItem(row);
 
   // ─────────────────────────── sweep (cron) ───────────────────────────
 

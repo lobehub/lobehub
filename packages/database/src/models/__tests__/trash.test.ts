@@ -394,19 +394,26 @@ describe('TrashModel', () => {
         deletedAt,
         root: { resourceId: 'file_gone', resourceType: 'file' },
       });
-      await model.register({
+      const pendingRoot = await model.register({
         deletedAt,
-        root: {
+        root: { resourceId: 'file_pending_cleanup', resourceType: 'file' },
+      });
+      await serverDB
+        .update(trashItems)
+        .set({
           meta: {
             storageCleanup: {
               files: [{ fileHash: 'pending-hash', url: 'files/pending.txt' }],
               pending: true,
             },
           },
-          resourceId: 'file_pending_cleanup',
-          resourceType: 'file',
-        },
-      });
+        })
+        .where(eq(trashItems.id, pendingRoot.id));
+
+      const publicPendingItem = (await model.list()).items.find(({ id }) => id === pendingRoot.id);
+      expect(publicPendingItem?.meta).toBeNull();
+      expect(JSON.stringify(publicPendingItem)).not.toContain('pending-hash');
+      expect(JSON.stringify(publicPendingItem)).not.toContain('files/pending.txt');
 
       const pruned = await TrashModel.pruneOrphans(serverDB);
       expect(pruned).toBe(2);

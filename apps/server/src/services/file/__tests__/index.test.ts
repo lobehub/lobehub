@@ -194,6 +194,14 @@ describe('FileService', () => {
     expect(result).toBe(expectedContent);
   });
 
+  it('should pass the preview byte bound to getFileContent', async () => {
+    vi.mocked(service['impl'].getFileContent).mockResolvedValue('# Preview');
+
+    await service.getFileContent('preview.md', 8192);
+
+    expect(service['impl'].getFileContent).toHaveBeenCalledWith('preview.md', 8192);
+  });
+
   it('should delegate getFileByteArray to implementation', async () => {
     const testKey = 'test-key';
     const expectedBytes = new Uint8Array([1, 2, 3]);

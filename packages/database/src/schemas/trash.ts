@@ -6,6 +6,14 @@ import { createdAt, timestamptz } from './_helpers';
 import { users } from './user';
 import { workspaces } from './workspace';
 
+export interface TrashItemRowMeta extends TrashItemMeta {
+  /** Internal retry hand-off; never expose through the public Trash DTO. */
+  storageCleanup?: {
+    files: { fileHash: string; url: string }[];
+    pending: true;
+  };
+}
+
 /**
  * Recycle-bin registry.
  *
@@ -42,7 +50,7 @@ export const trashItems = pgTable(
 
     /** Denormalised display title captured at trash time. */
     title: text('title'),
-    meta: jsonb('meta').$type<TrashItemMeta>(),
+    meta: jsonb('meta').$type<TrashItemRowMeta>(),
 
     /**
      * Cascade root. NULL for the row the user actually deleted; set for rows

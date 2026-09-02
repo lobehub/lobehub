@@ -1,7 +1,9 @@
 import {
   CUSTOM_FOLDER_FILE_TYPE,
   DERIVED_DOCUMENT_SOURCE_TYPE,
+  MARKDOWN_MIME_TYPES,
   MAX_UPLOAD_FILE_SIZE,
+  RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH,
   UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE,
 } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
@@ -47,6 +49,10 @@ const fileTransferEntityTypeSchema = z.enum(['document', 'file', 'folder']);
 const deleteKnowledgeItemsByQuerySchema = QueryFileListSchema.extend({
   excludedIds: z.array(z.string()).optional(),
 });
+const markdownPreviewTypes = new Set<string>(MARKDOWN_MIME_TYPES);
+
+const isMarkdownFile = (item: { fileType: string; name: string }) =>
+  markdownPreviewTypes.has(item.fileType) || /\.md(?:arkdown)?$/i.test(item.name);
 
 const assertAllFilesAccessible = (requestedIds: string[], files: Array<{ id: string }>): void => {
   const accessibleIds = new Set(files.map((file) => file.id));
@@ -474,9 +480,28 @@ export const fileRouter = router({
     // larger result sets (visible when switching from Private to Workspace).
     const resultItems = await Promise.all(
       filteredItems.map(async (item) => {
+        let contentPreviewSource = item.contentPreviewSource;
+        if (
+          includeContentPreview &&
+          item.sourceType === 'file' &&
+          !item.documentId &&
+          !contentPreviewSource &&
+          item.url &&
+          isMarkdownFile(item)
+        ) {
+          try {
+            contentPreviewSource = await ctx.fileService.getFileContent(
+              item.url,
+              RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH,
+            );
+          } catch {
+            // Preview failure must not fail the resource list. The derived
+            // document will become the normal source once parsing completes.
+          }
+        }
         const contentPreview = includeContentPreview
           ? createResourceContentPreview({
-              content: item.contentPreviewSource,
+              content: contentPreviewSource,
               fileType: item.fileType,
               title: item.name,
             })

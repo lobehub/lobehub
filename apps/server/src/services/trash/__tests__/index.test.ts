@@ -20,6 +20,7 @@ import {
 } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
+import { purgeFiles } from '../handlers/purgeFiles';
 import { TrashService } from '../index';
 
 const accessMocks = vi.hoisted(() => ({ restrictedKnowledgeBaseIds: [] as string[] }));
@@ -639,7 +640,32 @@ describe('TrashService', () => {
         files: [{ fileHash: 'trash-retryable-hash', url: 'files/retryable.txt' }],
         pending: true,
       });
+      const [publicRetryItem] = await service.findByIds([root.id]);
+      expect(publicRetryItem.meta).toMatchObject({
+        creatorUserId: userId,
+        kind: 'text/plain',
+      });
+      expect(JSON.stringify(publicRetryItem)).not.toContain('trash-retryable-hash');
+      expect(JSON.stringify(publicRetryItem)).not.toContain('files/retryable.txt');
       expect(await TrashModel.pruneOrphans(serverDB)).toBe(0);
+
+      // Simulate a concurrent invocation that entered with the stale root
+      // object from before the first transaction wrote storageCleanup.
+      fileServiceMocks.deleteFiles.mockRejectedValueOnce(new Error('storage still unavailable'));
+      await expect(
+        purgeFiles(
+          {
+            db: serverDB,
+            fileService: { deleteFiles: fileServiceMocks.deleteFiles } as never,
+            userId,
+          },
+          [fileId],
+          { onlyTrashed: true, root },
+        ),
+      ).rejects.toThrow('storage still unavailable');
+      expect(
+        await serverDB.select().from(trashItems).where(eq(trashItems.id, root.id)),
+      ).toHaveLength(1);
 
       expect(await service.purge([root.id])).toEqual({
         failed: [],
@@ -647,7 +673,36 @@ describe('TrashService', () => {
         purgedIds: [root.id],
       });
       expect(await serverDB.select().from(files).where(eq(files.id, fileId))).toHaveLength(0);
-      expect(fileServiceMocks.deleteFiles).toHaveBeenCalledTimes(2);
+      expect(fileServiceMocks.deleteFiles).toHaveBeenCalledTimes(3);
+    });
+
+    it('never exposes internal storage cleanup state in find or restore results', async () => {
+      const file = await fileModel.create({
+        fileType: 'text/plain',
+        name: 'restore-private-meta.txt',
+        size: 3,
+        url: 'files/restore-private-meta.txt',
+      });
+      const [root] = await service.trashFiles([file.id]);
+      await serverDB
+        .update(trashItems)
+        .set({
+          meta: {
+            storageCleanup: {
+              files: [{ fileHash: 'private-hash', url: 'files/private-storage-key.txt' }],
+              pending: true,
+            },
+          },
+        })
+        .where(eq(trashItems.id, root.id));
+
+      const [found] = await service.findByIds([root.id]);
+      expect(found.meta).toBeNull();
+
+      const outcome = await service.restore([root.id]);
+      expect(outcome.restored[0].meta).toBeNull();
+      expect(JSON.stringify({ found, outcome })).not.toContain('private-hash');
+      expect(JSON.stringify({ found, outcome })).not.toContain('private-storage-key');
     });
 
     it('does not start storage cleanup when the database purge rejects', async () => {

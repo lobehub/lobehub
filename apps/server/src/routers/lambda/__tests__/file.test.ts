@@ -58,6 +58,7 @@ function createCallerWithCtx(partialCtx: any = {}) {
 
   const fileService = {
     getFileAccessUrl: vi.fn(async (file: { id: string }) => buildMockFileAccessUrl(file)),
+    getFileContent: vi.fn(),
     getFullFileUrl: vi.fn().mockResolvedValue('full-url'),
     getFileMetadata: vi.fn().mockResolvedValue({ contentLength: 2048, contentType: 'text/plain' }),
     deleteFile: vi.fn().mockResolvedValue(undefined),
@@ -205,6 +206,7 @@ vi.mock('@/database/models/knowledgeBase', () => ({
 
 const mockFileServiceGetFullFileUrl = vi.fn();
 const mockFileServiceGetFileAccessUrl = vi.fn();
+const mockFileServiceGetFileContent = vi.fn();
 const mockFileServiceGetFileMetadata = vi.fn();
 const mockFileServiceDeleteFile = vi.fn();
 
@@ -213,6 +215,7 @@ vi.mock('@/server/services/file', () => ({
     deleteFile: mockFileServiceDeleteFile,
     deleteFiles: vi.fn(),
     getFileAccessUrl: mockFileServiceGetFileAccessUrl,
+    getFileContent: mockFileServiceGetFileContent,
     getFullFileUrl: mockFileServiceGetFullFileUrl,
     getFileMetadata: mockFileServiceGetFileMetadata,
   })),
@@ -300,6 +303,7 @@ describe('fileRouter', () => {
     mockFileServiceGetFileAccessUrl.mockImplementation(async (file: { id: string }) =>
       buildMockFileAccessUrl(file),
     );
+    mockFileServiceGetFileContent.mockResolvedValue('');
 
     // Use actual context with default mocks
     ({ ctx, caller } = createCallerWithCtx());
@@ -882,6 +886,54 @@ describe('fileRouter', () => {
       );
       expect(result.items[0]).not.toHaveProperty('contentPreview');
       expect(result.items[0]).not.toHaveProperty('contentPreviewSource');
+      expect(mockFileServiceGetFileContent).not.toHaveBeenCalled();
+    });
+
+    it('creates a server preview from a bounded storage prefix for unparsed Markdown', async () => {
+      mockKnowledgeRepoQuery.mockResolvedValue([
+        {
+          ...mockFile,
+          documentId: null,
+          fileType: 'text/markdown',
+          id: 'file-markdown',
+          name: 'notes.md',
+          sourceType: 'file' as const,
+          url: 'files/notes.md',
+        },
+      ]);
+      mockFileServiceGetFileContent.mockResolvedValue(
+        '# Notes\n\nThis preview came from object storage.',
+      );
+
+      const result = await caller.getKnowledgeItems({ includeContentPreview: true });
+
+      expect(mockFileServiceGetFileContent).toHaveBeenCalledWith('files/notes.md', 8192);
+      expect(result.items[0]).toMatchObject({
+        contentPreview: 'Notes This preview came from object storage.',
+        id: 'file-markdown',
+      });
+      expect(result.items[0]).not.toHaveProperty('content');
+      expect(result.items[0]).not.toHaveProperty('contentPreviewSource');
+    });
+
+    it('uses derived Markdown content without reading object storage again', async () => {
+      mockKnowledgeRepoQuery.mockResolvedValue([
+        {
+          ...mockFile,
+          contentPreviewSource: '# Parsed\n\nDerived content',
+          documentId: 'doc-markdown',
+          fileType: 'text/markdown',
+          id: 'doc-markdown',
+          name: 'parsed.md',
+          sourceType: 'file' as const,
+          url: 'files/parsed.md',
+        },
+      ]);
+
+      const result = await caller.getKnowledgeItems({ includeContentPreview: true });
+
+      expect(result.items[0]).toMatchObject({ contentPreview: 'Parsed Derived content' });
+      expect(mockFileServiceGetFileContent).not.toHaveBeenCalled();
     });
 
     it('preserves full content for legacy clients that omit the preview contract', async () => {

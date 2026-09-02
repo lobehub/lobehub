@@ -25,7 +25,7 @@ import {
   sql,
 } from 'drizzle-orm';
 
-import type { NewTrashItemRow, TrashItemRow } from '../schemas';
+import type { NewTrashItemRow, TrashItemRow, TrashItemRowMeta } from '../schemas';
 import { documents, files, knowledgeBaseFiles, knowledgeBases, trashItems } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
@@ -67,19 +67,22 @@ const ROOT_TABLES: Record<TrashResourceType, { id: any; isDeleted: any; table: a
   },
 };
 
-const toTrashItem = (row: TrashItemRow): TrashItem => ({
-  deletedAt: row.deletedAt,
-  deletedByUserId: row.deletedByUserId,
-  expiresAt: row.expiresAt,
-  id: row.id,
-  meta: row.meta ?? null,
-  resourceId: row.resourceId,
-  resourceType: row.resourceType,
-  rootId: row.rootId,
-  title: row.title,
-  userId: row.userId,
-  workspaceId: row.workspaceId,
-});
+export const toPublicTrashItem = (row: TrashItemRow): TrashItem => {
+  const { storageCleanup: _storageCleanup, ...publicMeta } = row.meta ?? {};
+  return {
+    deletedAt: row.deletedAt,
+    deletedByUserId: row.deletedByUserId,
+    expiresAt: row.expiresAt,
+    id: row.id,
+    meta: Object.keys(publicMeta).length > 0 ? publicMeta : null,
+    resourceId: row.resourceId,
+    resourceType: row.resourceType,
+    rootId: row.rootId,
+    title: row.title,
+    userId: row.userId,
+    workspaceId: row.workspaceId,
+  };
+};
 
 /**
  * Registry over trashed rows — see `schemas/trash.ts` for the contract.
@@ -336,7 +339,7 @@ export class TrashModel {
     const page = rows.slice(0, limit);
     const last = page.at(-1);
     return {
-      items: page.map((row) => toTrashItem(row)),
+      items: page.map((row) => toPublicTrashItem(row)),
       nextCursor: rows.length > limit && last ? encodeCursor(last) : null,
     };
   };
@@ -362,6 +365,13 @@ export class TrashModel {
   findById = async (id: string): Promise<TrashItemRow | undefined> => {
     return this.db.query.trashItems.findFirst({
       where: and(eq(trashItems.id, id), this.ownership(), this.active()),
+    });
+  };
+
+  /** Internal purge lookup that also sees roots queued by empty-trash. */
+  findByIdIncludingQueued = async (id: string): Promise<TrashItemRow | undefined> => {
+    return this.db.query.trashItems.findFirst({
+      where: and(eq(trashItems.id, id), this.ownership()),
     });
   };
 
@@ -499,14 +509,14 @@ export class TrashModel {
   ): Promise<void> => {
     if (storageFiles.length === 0) return;
 
-    const storageCleanup: NonNullable<TrashItemMeta['storageCleanup']> = {
+    const storageCleanup: NonNullable<TrashItemRowMeta['storageCleanup']> = {
       files: storageFiles,
       pending: true,
     };
     const updated = await trx
       .update(trashItems)
       .set({
-        meta: sql<TrashItemMeta>`jsonb_set(COALESCE(${trashItems.meta}, '{}'::jsonb), '{storageCleanup}', ${JSON.stringify(storageCleanup)}::jsonb, true)`,
+        meta: sql<TrashItemRowMeta>`jsonb_set(COALESCE(${trashItems.meta}, '{}'::jsonb), '{storageCleanup}', ${JSON.stringify(storageCleanup)}::jsonb, true)`,
       })
       .where(and(eq(trashItems.id, rootId), isNull(trashItems.rootId)))
       .returning({ id: trashItems.id });
