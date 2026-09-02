@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 
 import { defineConfig } from 'vite';
 
-import { honoServerDedupe, honoServerPlugins } from './viteNodeServer.config';
+import { honoServerAlias, honoServerDedupe, honoServerPlugins } from './viteNodeServer.config';
 
 const serverRoot = fileURLToPath(new URL('.', import.meta.url));
 const entry = (file: string) =>
@@ -29,6 +29,7 @@ export default defineConfig({
   },
   plugins: honoServerPlugins(),
   resolve: {
+    alias: honoServerAlias,
     dedupe: honoServerDedupe,
   },
   root: serverRoot,

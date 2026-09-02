@@ -1,4 +1,5 @@
 import debug from 'debug';
+import { after as nextAfter } from 'next/server';
 
 const log = debug('lobe-server:schedule-after-response');
 
@@ -14,20 +15,10 @@ const runWork = async (work: ScheduleAfterResponseWork) => {
 
 export const after = (work: ScheduleAfterResponseWork): void => {
   try {
-    const nextServer = require('next/server') as {
-      after?: (work: () => Promise<void>) => void;
-    };
-
-    if (typeof nextServer.after === 'function') {
-      try {
-        nextServer.after(() => runWork(work));
-        return;
-      } catch (error) {
-        log('next/server after() unavailable, falling back: %O', error);
-      }
-    }
-  } catch {
-    // next/server is not available in standalone Hono.
+    nextAfter(() => runWork(work));
+    return;
+  } catch (error) {
+    log('after() unavailable outside a request scope, running inline: %O', error);
   }
 
   void runWork(work);

@@ -1,7 +1,11 @@
 import type { Context } from 'hono';
 import { Hono } from 'hono';
 
+import { nextCompat } from './next-compat/context';
+
 const app = new Hono();
+
+app.use('*', nextCompat());
 
 const fetchWith = async (
   c: Context,
