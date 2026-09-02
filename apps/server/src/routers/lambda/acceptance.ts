@@ -8,7 +8,7 @@ import {
 } from '@lobechat/const/verify';
 import type { AcceptanceAttachment } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 
 import {
@@ -40,7 +40,7 @@ import {
 } from '@/server/services/verify';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
-import { canManageAcceptance } from './_helpers/acceptanceWriteScope';
+import { canManageAcceptance, filterManageableAcceptances } from './_helpers/acceptanceWriteScope';
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
 
 const subjectTypeSchema = z.enum(acceptanceSubjectTypes);
@@ -1025,9 +1025,11 @@ export const acceptanceRouter = router({
    * project (or take it out of any) in one action.
    *
    * The target project is validated ONCE, up front — a missing project fails
-   * the sweep wholesale, because every row was headed to the same place. Row
-   * resolution keeps the batch contract: a row the caller cannot write is
-   * COLLECTED into `failedIds`, not thrown, so it never voids the rest.
+   * the sweep wholesale, because every row was headed to the same place. Rows
+   * keep the batch contract — one the caller cannot write lands in `failedIds`
+   * instead of voiding the rest — but unlike the status sweep there is no
+   * per-row recomputation, so the whole move is three bounded queries (resolve,
+   * authorize, bulk update) rather than a round trip per row.
    */
   setProjectBatch: acceptanceWriteProcedure
     .input(
@@ -1046,21 +1048,35 @@ export const acceptanceRouter = router({
         if (!project) throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
       }
 
-      const failedIds: string[] = [];
-      let updated = 0;
+      const ids = [...new Set(input.ids)];
+      const resolvableIds = ids.filter((id) => isUuid(id));
+      const rows =
+        resolvableIds.length > 0
+          ? await ctx.serverDB.query.acceptances.findMany({
+              columns: { id: true, userId: true, workspaceId: true },
+              where: inArray(acceptances.id, resolvableIds),
+            })
+          : [];
+      const manageable = await filterManageableAcceptances(ctx, rows);
 
-      for (const id of new Set(input.ids)) {
-        try {
-          const { acceptance, service } = await resolveAcceptanceForWrite(ctx, id);
-          await service.acceptanceModel.update(acceptance.id, { projectId: input.projectId });
-          updated += 1;
-        } catch (error) {
-          console.error('[acceptance] batch project update failed for %s', id, error);
-          failedIds.push(id);
-        }
+      let updatedIds: string[] = [];
+      if (manageable.length > 0) {
+        updatedIds = (
+          await ctx.serverDB
+            .update(acceptances)
+            .set({ projectId: input.projectId })
+            .where(
+              inArray(
+                acceptances.id,
+                manageable.map((row) => row.id),
+              ),
+            )
+            .returning({ id: acceptances.id })
+        ).map((row) => row.id);
       }
 
-      return { failedIds, updated };
+      const updatedSet = new Set(updatedIds);
+      return { failedIds: ids.filter((id) => !updatedSet.has(id)), updated: updatedIds.length };
     }),
 
   /**

@@ -44,8 +44,8 @@ interface AcceptanceBatchBarProps {
  * always a button that will change something. The move action opens the same
  * project menu a single row offers; which rows a given project can actually
  * move is only known once a target is picked, so the button itself only waits
- * on the selection. Delete stays an icon: it is the destructive one and must
- * not read as a peer of the routine sweeps.
+ * on the selection. Move and delete stay icons: the bar lives in a panel that
+ * narrows to 260px, and a third labeled button would spill out of it.
  */
 const AcceptanceBatchBar = memo<AcceptanceBatchBarProps>(
   ({
@@ -90,9 +90,12 @@ const AcceptanceBatchBar = memo<AcceptanceBatchBarProps>(
           popupProps={{ style: { minWidth: 160 } }}
           onOpenChange={projectMenu.onOpenChange}
         >
-          <Button disabled={pending} icon={FolderInput} size={'small'} type={'fill'}>
-            {t('acceptance.workspace.batch.move')}
-          </Button>
+          <ActionIcon
+            disabled={pending}
+            icon={FolderInput}
+            size={'small'}
+            title={t('acceptance.workspace.batch.move')}
+          />
         </DropdownMenu>
         <Flexbox flex={1} />
         <ActionIcon
