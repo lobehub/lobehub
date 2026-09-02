@@ -168,6 +168,30 @@ describe('TopicModel', () => {
     });
   });
 
+  describe('findShareVisitorTopicIds', () => {
+    it('reports only the visitor ids of a mixed batch', async () => {
+      // Creator-facing update RPCs diff their targets against this finder, so
+      // it must name visitor rows and stay silent about the creator's own.
+      const own = await topicModel.create({ title: 'own' });
+      await serverDB.insert(topics).values({
+        id: 'topic-visitor-ids',
+        senderId: 'visitor-user-x',
+        title: 'visitor topic',
+        userId,
+      });
+
+      const visitorIds = await topicModel.findShareVisitorTopicIds([own.id, 'topic-visitor-ids']);
+
+      expect(visitorIds).toEqual(['topic-visitor-ids']);
+    });
+
+    it('ignores ids that match no row', async () => {
+      const visitorIds = await topicModel.findShareVisitorTopicIds(['topic-missing']);
+
+      expect(visitorIds).toEqual([]);
+    });
+  });
+
   describe('query', () => {
     it('orders favorites first then by recent activity', async () => {
       await serverDB.insert(agents).values({ id: 'agent-q', userId });

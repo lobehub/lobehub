@@ -1104,6 +1104,23 @@ describe('MessageModel Delete Tests', () => {
       expect(remaining.map((m) => m.id)).toEqual(['creator-msg']);
     });
 
+    it('findShareVisitorMessageIds should report only the visitor ids of a mixed batch', async () => {
+      // Creator-facing update RPCs diff their targets against this finder, so
+      // it must name visitor rows and stay silent about the creator's own.
+      const visitorIds = await messageModel.findShareVisitorMessageIds([
+        'creator-msg',
+        'visitor-msg',
+      ]);
+
+      expect(visitorIds).toEqual(['visitor-msg']);
+    });
+
+    it('findShareVisitorMessageIds should ignore ids that match no row', async () => {
+      const visitorIds = await messageModel.findShareVisitorMessageIds(['missing-msg']);
+
+      expect(visitorIds).toEqual([]);
+    });
+
     it('deleting the agent still cascades visitor messages away', async () => {
       await serverDB.delete(agents).where(eq(agents.id, 'share-agent'));
 

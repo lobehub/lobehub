@@ -53,6 +53,7 @@ import {
   resolveContext,
   resolveContextWithAgentId,
 } from './_helpers/resolveContext';
+import { assertCreatorTopicTargets } from './_helpers/shareVisitorTargetGuard';
 import { basicContextSchema } from './_schema/context';
 
 /** Ctx slice consumed by the conversation General-access guards. */
@@ -903,10 +904,17 @@ export const topicRouter = router({
     .use(withScopedPermission('topic:delete'))
     .input(z.object({ id: z.string(), removeFiles: z.boolean().optional() }))
     .mutation(async ({ input, ctx }) => {
-      const topic = await ctx.topicModel.findById(input.id);
+      // `findOwnTopicById` (not `findById`): an agent-share visitor topic is
+      // stored under the creator's `userId`, and `TopicModel.delete` refuses to
+      // remove it. Resolving through the visitor-excluding lookup keeps the
+      // file cleanup below from destroying a visitor conversation's attachments
+      // (DB rows + S3 objects) while the topic itself survives.
+      const topic = await ctx.topicModel.findOwnTopicById(input.id);
       if (topic) assertWorkspaceRowManageable(ctx, topic.userId, 'topic');
 
-      if (!input.removeFiles) return ctx.topicModel.delete(input.id);
+      // No creator-visible topic behind this id: run the (no-op) delete for the
+      // unchanged return shape, but never touch any files.
+      if (!input.removeFiles || !topic) return ctx.topicModel.delete(input.id);
 
       // Collect the topic's deletable attachments BEFORE deleting it — the lookup
       // joins messages, which are cascade-deleted along with the topic. Files
@@ -1018,6 +1026,7 @@ export const topicRouter = router({
       // Co-editing still requires `use`-level General access on the agent —
       // view-only members are read-only.
       await assertCanUseTopicTargets(guardCtx(ctx), [input.id]);
+      await assertCreatorTopicTargets(guardCtx(ctx), [input.id]);
       const { agentId, ...restValue } = input.value;
       if (agentId) await assertCanUseConversationTargets(guardCtx(ctx), [{ agentId }]);
 
@@ -1050,6 +1059,7 @@ export const topicRouter = router({
       // runningOperation on shared topics); only delete/transfer is gated.
       // Co-editing still requires `use`-level General access on the agent.
       await assertCanUseTopicTargets(guardCtx(ctx), [input.id]);
+      await assertCreatorTopicTargets(guardCtx(ctx), [input.id]);
 
       return ctx.topicModel.updateMetadata(input.id, input.metadata);
     }),

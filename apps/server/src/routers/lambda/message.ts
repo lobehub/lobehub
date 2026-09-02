@@ -30,6 +30,7 @@ import {
   assertCanUseTopicTargets,
 } from './_helpers/conversationResourceGuard';
 import { resolveAgentIdFromSession, resolveContext } from './_helpers/resolveContext';
+import { assertCreatorMessageTargets } from './_helpers/shareVisitorTargetGuard';
 import { basicContextSchema } from './_schema/context';
 
 const { logTiming, runTimedStage } = createTimingHelpers('lobe-server:chat:lobehub:timing');
@@ -574,6 +575,11 @@ export const messageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { id, value, agentId, ...options } = input;
       await assertCanUseMessageTargets(guardCtx(ctx), [id]);
+      // Agent-share visitor messages live under the creator's `userId`, so the
+      // ownership predicate alone would let a creator edit a visitor's turn —
+      // see `assertCreatorMessageTargets` for why the guard sits here and not
+      // in the model defaults (the runtime writes visitor turns through them).
+      await assertCreatorMessageTargets(guardCtx(ctx), [id]);
       const timingContext = { requestId: createTimingRequestId(), startedAt: Date.now() };
       logTiming(timingContext, 'lambda.message.update:start', {
         hasAgentId: !!agentId,
@@ -650,6 +656,7 @@ export const messageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { id, value, agentId, ...options } = input;
       await assertCanUseMessageTargets(guardCtx(ctx), [id]);
+      await assertCreatorMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -666,6 +673,7 @@ export const messageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { id, value, agentId, ...options } = input;
       await assertCanUseMessageTargets(guardCtx(ctx), [id]);
+      await assertCreatorMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -689,6 +697,7 @@ export const messageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { id, value, agentId, ...options } = input;
       await assertCanUseMessageTargets(guardCtx(ctx), [id]);
+      await assertCreatorMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -712,6 +721,7 @@ export const messageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { id, value, agentId, ...options } = input;
       await assertCanUseMessageTargets(guardCtx(ctx), [id]);
+      await assertCreatorMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -735,6 +745,7 @@ export const messageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { id, value, agentId, ...options } = input;
       await assertCanUseMessageTargets(guardCtx(ctx), [id]);
+      await assertCreatorMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -761,6 +772,7 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       await assertCanUseMessageTargets(guardCtx(ctx), [input.id]);
+      await assertCreatorMessageTargets(guardCtx(ctx), [input.id]);
       if (input.value === false) {
         return ctx.messageModel.deleteMessageTTS(input.id);
       }
@@ -820,6 +832,7 @@ export const messageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { id, value, agentId, ...options } = input;
       await assertCanUseMessageTargets(guardCtx(ctx), [id]);
+      await assertCreatorMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -845,6 +858,7 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       await assertCanUseMessageTargets(guardCtx(ctx), [input.id]);
+      await assertCreatorMessageTargets(guardCtx(ctx), [input.id]);
       if (input.value === false) {
         return ctx.messageModel.deleteMessageTranslate(input.id);
       }

@@ -2382,6 +2382,28 @@ export class MessageModel {
     });
   };
 
+  /**
+   * Ids among `ids` that resolve to an agent-share VISITOR message under this
+   * owner — the inverse of the `notShareVisitorMessage()` predicate every
+   * creator-facing read applies.
+   *
+   * Creator-facing write entry points use this to reject visitor targets
+   * (see `assertCreatorMessageTargets` in the server router helpers). Ids that
+   * match no row at all are NOT reported, so callers keep their existing no-op
+   * behaviour for stale/foreign ids and only fail on rows that really belong to
+   * a visitor's conversation.
+   */
+  findShareVisitorMessageIds = async (ids: string[]): Promise<string[]> => {
+    if (ids.length === 0) return [];
+
+    const rows = await this.db
+      .select({ id: messages.id })
+      .from(messages)
+      .where(and(inArray(messages.id, ids), this.ownership(), not(notShareVisitorMessage())));
+
+    return rows.map((row) => row.id);
+  };
+
   findByClientId = async (clientId: string) => {
     return this.db.query.messages.findFirst({
       where: and(eq(messages.clientId, clientId), this.ownership()),

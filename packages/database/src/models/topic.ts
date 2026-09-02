@@ -726,6 +726,27 @@ export class TopicModel {
     });
   };
 
+  /**
+   * Ids among `ids` that resolve to an agent-share VISITOR topic under this
+   * owner — the inverse of {@link notShareVisitorTopic}, the predicate every
+   * creator-facing read applies.
+   *
+   * Creator-facing write entry points use this to reject visitor targets
+   * (see `assertCreatorTopicTargets` in the server router helpers). Ids that
+   * match no row at all are NOT reported, so callers keep their existing no-op
+   * behaviour for stale/foreign ids.
+   */
+  findShareVisitorTopicIds = async (ids: string[]): Promise<string[]> => {
+    if (ids.length === 0) return [];
+
+    const rows = await this.db
+      .select({ id: topics.id })
+      .from(topics)
+      .where(and(inArray(topics.id, ids), this.ownership(), not(this.notShareVisitor())));
+
+    return rows.map((row) => row.id);
+  };
+
   findByIds = async (ids: string[]): Promise<TopicItem[]> => {
     if (ids.length === 0) return [];
     return this.db.query.topics.findMany({
