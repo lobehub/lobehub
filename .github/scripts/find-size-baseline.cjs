@@ -1,16 +1,26 @@
 /**
- * Find the most recent successful `canary` push run of a workflow that
- * contains a given size-baseline artifact, and return its run id (or '' when
- * none exists). Used with actions/download-artifact's `run-id` input:
+ * Find the most recent successful `canary` push run whose commit is an ancestor
+ * of the code being measured and contains a given size-baseline artifact. Return
+ * its run id (or '' when none exists). Used with actions/download-artifact's
+ * `run-id` input:
  *
  *   const finder = require('<workspace>/.github/scripts/find-size-baseline.js');
- *   return await finder({ github, context, workflowId: 'e2e.yml', artifactName: 'bundle-size-baseline-web' });
+ *   return await finder({ github, context, workflowId: 'e2e.yml', artifactName: 'bundle-size-baseline-web', targetSha: context.sha });
  *
  * The returned string becomes the step's `result` output (empty string = no
  * baseline yet, callers should skip the download step and let the gate degrade
  * to a warning).
  */
-const findSizeBaseline = async ({ github, context, workflowId, artifactName, artifactPrefix }) => {
+const findSizeBaseline = async ({
+  github,
+  context,
+  workflowId,
+  artifactName,
+  artifactPrefix,
+  targetSha,
+}) => {
+  if (!targetSha) throw new Error('targetSha is required to select a lineage-safe baseline');
+
   const { data } = await github.rest.actions.listWorkflowRuns({
     branch: 'canary',
     event: 'push',
@@ -22,6 +32,22 @@ const findSizeBaseline = async ({ github, context, workflowId, artifactName, art
   });
 
   for (const run of data.workflow_runs) {
+    const { data: comparison } = await github.request(
+      'GET /repos/{owner}/{repo}/compare/{basehead}',
+      {
+        basehead: `${run.head_sha}...${targetSha}`,
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+      },
+    );
+
+    if (comparison.status !== 'ahead' && comparison.status !== 'identical') {
+      console.log(
+        `Skipping canary run ${run.id} (${run.head_sha}): not an ancestor of ${targetSha} (${comparison.status})`,
+      );
+      continue;
+    }
+
     const { data: artifacts } = await github.rest.actions.listWorkflowRunArtifacts({
       owner: context.repo.owner,
       per_page: 100,

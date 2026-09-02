@@ -1,6 +1,7 @@
 'use client';
 
-import { Block, Center, Flexbox, Skeleton } from '@lobehub/ui';
+import { Block, Center, Flexbox } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 
 import PromptInput from '@/routes/(main)/(create)/video/features/PromptInput';
@@ -15,20 +16,20 @@ const SkeletonList = memo<SkeletonListProps>(({ embedInput = true }) => {
       <Block variant={'borderless'}>
         <Flexbox gap={12}>
           {/* Prompt text skeleton */}
-          <Skeleton.Button active style={{ height: 20, width: '95%' }} />
+          <Skeleton height={20} width={'95%'} />
 
           {/* Metadata skeleton (model tag, resolution, aspect ratio) */}
           <Flexbox horizontal gap={4} style={{ marginBottom: 10 }}>
-            <Skeleton.Button active style={{ height: 22, width: 120 }} />
-            <Skeleton.Button active style={{ height: 22, width: 80 }} />
-            <Skeleton.Button active style={{ height: 22, width: 60 }} />
+            <Skeleton height={22} width={120} />
+            <Skeleton height={22} width={80} />
+            <Skeleton height={22} width={60} />
           </Flexbox>
 
           {/* Video player skeleton */}
-          <Skeleton.Button active style={{ aspectRatio: '16/9', height: 'auto', width: '100%' }} />
+          <Skeleton height={'auto'} style={{ aspectRatio: '16/9' }} />
 
           {/* Timestamp skeleton */}
-          <Skeleton.Button active style={{ height: 14, width: 140 }} />
+          <Skeleton height={14} width={140} />
         </Flexbox>
       </Block>
       <div style={{ flex: 1 }} />

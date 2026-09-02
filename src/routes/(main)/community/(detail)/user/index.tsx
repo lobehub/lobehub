@@ -15,7 +15,6 @@ import { UserDetailProvider } from './features/DetailProvider';
 import UserHeader from './features/Header';
 import UserContent from './features/UserContent';
 import { useUserDetail } from './features/useUserDetail';
-import Loading from './loading';
 
 interface UserDetailPageProps {
   mobile?: boolean;
@@ -32,7 +31,7 @@ const UserDetailPage = memo<UserDetailPageProps>(({ mobile }) => {
     useMarketAuth();
 
   const useUserProfile = useDiscoverStore((s) => s.useUserProfile);
-  const { data, isLoading, mutate } = useUserProfile({ username });
+  const { data, mutate } = useUserProfile({ username });
 
   // When inside a workspace scope, /community/user/:slug and /community/org/:slug are not the
   // right surface — redirect to the dedicated workspace community page.
@@ -119,8 +118,6 @@ const UserDetailPage = memo<UserDetailPageProps>(({ mobile }) => {
       user,
     };
   }, [data, handleEditProfile, handleStatusChange, isOwner, mobile]);
-
-  if (isLoading) return <Loading />;
   if (!contextConfig) return <NotFound />;
 
   return (

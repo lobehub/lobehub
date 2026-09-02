@@ -885,6 +885,7 @@
   "lobehub.ox-alpha.description": "Ox Alpha는 GLM-5.3-Flash로 공개되었습니다. 요청은 자동으로 GLM-5.3-Flash로 리디렉션됩니다.",
   "lobehub.qwen3.7-max.description": "Qwen3.7-Max는 복잡한 코딩, 추론, 사무 자동화 및 장기 자율 워크플로우를 위한 Alibaba Cloud의 플래그십 에이전트 시대 모델입니다.",
   "lobehub.qwen3.7-plus.description": "Qwen3.7-Plus는 Qwen3.7 시리즈의 비용 효율적인 멀티모달 모델로, 강력한 텍스트 기능과 업그레이드된 비전-언어 이해를 결합하여 코딩, 도구 사용, GUI 작업 및 생산성 워크플로우를 지원합니다.",
+  "lobehub.qwen3.8-max-0902.description": "Qwen3.8 Max의 무료 코딩 업그레이드 — 동일한 가격에 TerminalBench 3.0 성능이 두 배 이상 향상 (11.3 → 29.0), 프론트엔드 CodeArena 리더보드에서 1위를 차지하며, repo 수준 코드 이해에서 Opus 5를 능가합니다.",
   "lobehub.qwen3.8-max-preview.description": "Qwen3.8-Max-Preview는 알리바바의 차세대 2.4T-파라미터 플래그십 모델의 미리보기로, Qwen3.7-Max에 비해 코딩 및 전문 생산성에서 주요한 향상을 이루었으며, 풀스택 개발 및 데이터 분석과 같은 복잡한 장기 과제에서 선도적인 성능을 제공합니다.",
   "lobehub.qwen3.8-max.description": "Qwen3.8 Max는 복잡한 코딩, 추론, 전문 생산성 및 장기적인 에이전트 워크플로를 위한 Alibaba Cloud의 플래그십 모델입니다.",
   "lobehub.seedance-1-5-pro-251215.description": "ByteDance의 Seedance 1.5 Pro는 텍스트-비디오, 이미지-비디오(첫 프레임, 첫+마지막 프레임) 및 시각과 동기화된 오디오 생성을 지원합니다.",

@@ -2,8 +2,8 @@
 
 import { agentDisplayName, type AgentItem } from '@lobechat/types';
 import { ModelIcon } from '@lobehub/icons';
-import { Flexbox, Icon, Popover, Skeleton } from '@lobehub/ui';
-import { ActionIcon, Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Popover } from '@lobehub/ui';
+import { ActionIcon, Skeleton, Text } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles } from 'antd-style';
 import { BookOpen, FileText, Settings } from 'lucide-react';
@@ -11,6 +11,7 @@ import { memo, type PropsWithChildren, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
+import { ArticleSkeleton } from '@/components/Skeleton';
 import ModelSelect from '@/features/ModelSelect';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -156,8 +157,8 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
         )
       ) : footerLoading ? (
         <Flexbox horizontal align={'center'} className={styles.footer} gap={14}>
-          <Skeleton.Button active size={'small'} style={{ height: 16, width: 90 }} />
-          <Skeleton.Button active size={'small'} style={{ height: 16, width: 60 }} />
+          <Skeleton height={16} width={90} />
+          <Skeleton height={16} width={60} />
         </Flexbox>
       ) : canConfigure && (merged.model || hasStats) ? (
         <Flexbox horizontal align={'center'} className={styles.footer} gap={14} wrap={'wrap'}>
@@ -198,7 +199,7 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
 
     const content = showSkeleton ? (
       <div style={{ padding: 16, width: 280 }}>
-        <Skeleton active avatar paragraph={{ rows: 2 }} />
+        <ArticleSkeleton avatar rows={2} />
       </div>
     ) : (
       <AgentProfileCard

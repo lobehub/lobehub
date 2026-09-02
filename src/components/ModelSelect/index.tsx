@@ -247,7 +247,7 @@ export const ModelInfoTags = memo<ModelInfoTagsProps>(
   },
 );
 
-interface ModelItemRenderProps extends ChatModelCard, Partial<Omit<FlexboxProps, 'id' | 'title'>> {
+interface ModelItemRenderProps extends ChatModelCard, Pick<FlexboxProps, 'className' | 'style'> {
   abilities?: ModelAbilities;
   audio?: boolean;
   newBadgeLabel?: string;
@@ -271,7 +271,8 @@ export const ModelItemRender = memo<ModelItemRenderProps>(
     id,
     displayName,
     releasedAt,
-    ...rest
+    className,
+    style,
   }) => {
     const { mobile } = useResponsive();
     const displayNameOrId = displayName || id;
@@ -280,14 +281,14 @@ export const ModelItemRender = memo<ModelItemRenderProps>(
       <Flexbox
         horizontal
         align={'center'}
+        className={className}
         gap={32}
         justify={'space-between'}
-        {...rest}
         style={{
           overflow: 'hidden',
           position: 'relative',
           width: '100%',
-          ...rest.style,
+          ...style,
         }}
       >
         <Flexbox

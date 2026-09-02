@@ -1,7 +1,8 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { CodeDiff, Flexbox, Skeleton } from '@lobehub/ui';
+import { CodeDiff, Flexbox } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui/base-ui';
 import path from 'path-browserify-esm';
 import { memo } from 'react';
 
@@ -13,7 +14,7 @@ interface EditArgs {
 }
 
 const Edit = memo<BuiltinRenderProps<EditArgs>>(({ args }) => {
-  if (!args) return <Skeleton active />;
+  if (!args) return <Skeleton.Text rows={4} />;
 
   const filePath = args.file_path || '';
   const fileName = filePath ? path.basename(filePath) : '';

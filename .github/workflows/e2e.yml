@@ -94,7 +94,7 @@ jobs:
           SKIP_LINT: '1'
 
       # ===== Bundle size gate (web dist) =====
-      # Baseline: artifact uploaded by the latest successful canary push run of this workflow.
+      # Baseline: artifact from the latest successful canary commit in the tested SHA's lineage.
       - name: Find latest canary baseline run
         if: env.SIZE_GATE_ENABLED == 'true'
         id: baseline_run
@@ -104,7 +104,13 @@ jobs:
           result-encoding: string
           script: |
             const finder = require('${{ github.workspace }}/.github/scripts/find-size-baseline.cjs');
-            return await finder({ github, context, workflowId: 'e2e.yml', artifactName: 'bundle-size-baseline-web' });
+            return await finder({
+              github,
+              context,
+              workflowId: 'e2e.yml',
+              artifactName: 'bundle-size-baseline-web',
+              targetSha: context.payload.pull_request?.head.sha ?? context.sha,
+            });
 
       - name: Download web dist size baseline
         if: env.SIZE_GATE_ENABLED == 'true' && steps.baseline_run.outputs.result != ''
@@ -141,7 +147,13 @@ jobs:
           result-encoding: string
           script: |
             const finder = require('${{ github.workspace }}/.github/scripts/find-size-baseline.cjs');
-            return await finder({ github, context, workflowId: 'e2e.yml', artifactName: 'bundle-size-baseline-entry-graph' });
+            return await finder({
+              github,
+              context,
+              workflowId: 'e2e.yml',
+              artifactName: 'bundle-size-baseline-entry-graph',
+              targetSha: context.payload.pull_request?.head.sha ?? context.sha,
+            });
 
       - name: Download entry-graph baseline
         if: env.SIZE_GATE_ENABLED == 'true' && steps.entry_graph_baseline_run.outputs.result != ''

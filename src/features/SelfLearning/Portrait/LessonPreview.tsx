@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, SkeletonParagraph } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { SkeletonText, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -129,7 +129,7 @@ const LessonPreview = memo<LessonPreviewProps>(({ code, layer, lessonId, lessonP
         </Flexbox>
       </Flexbox>
 
-      {isLoading && !data && <SkeletonParagraph rows={3} />}
+      {isLoading && !data && <SkeletonText rows={3} />}
 
       {/* Without this the card sits on "loading…" forever: SWR clears isLoading on failure. */}
       {!!error && !data && (

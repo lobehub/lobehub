@@ -1,7 +1,7 @@
 'use client';
 
 import type { TaskStatus, WorkSummaryItem } from '@lobechat/types';
-import { Block, Center, Empty, Flexbox, Icon, Skeleton } from '@lobehub/ui';
+import { Block, Center, Empty, Flexbox, Icon } from '@lobehub/ui';
 import { Button, Tag, Text } from '@lobehub/ui/base-ui';
 import { Progress } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncError from '@/components/AsyncError';
+import { ArticleSkeleton } from '@/components/Skeleton';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import {
   getProjectAcceptancePath,
@@ -174,7 +175,7 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
               onRetry={() => void goalSWR.mutate()}
             />
           ) : goalSWR.isLoading && goals.length === 0 ? (
-            <Skeleton active paragraph={{ rows: 4 }} />
+            <ArticleSkeleton rows={4} />
           ) : goals.length === 0 ? (
             <Block padding={24} variant={'outlined'}>
               <Center gap={10}>
@@ -260,7 +261,7 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
               onRetry={() => void workSWR.mutate()}
             />
           ) : workSWR.isLoading ? (
-            <Skeleton active paragraph={{ rows: 4 }} />
+            <ArticleSkeleton rows={4} />
           ) : works.length === 0 ? (
             <Empty
               description={t('overview.worksEmptyDescription')}

@@ -12,12 +12,11 @@ import { DiscoverTab } from '@/types/discover';
 import ModelEmpty from '../../features/ModelEmpty';
 import Pagination from '../features/Pagination';
 import List from './features/List';
-import Loading from './loading';
 
 const ModelPage = memo<{ mobile?: boolean }>(() => {
   const { q, page, category, sort, order } = useQuery() as ModelQueryParams;
   const useModelList = useDiscoverStore((s) => s.useModelList);
-  const { data, isLoading, error, mutate } = useModelList({
+  const { data, error, mutate } = useModelList({
     category,
     order,
     page,
@@ -35,8 +34,6 @@ const ModelPage = memo<{ mobile?: boolean }>(() => {
       error={error}
       errorVariant={'page'}
       isEmpty={items.length === 0}
-      isLoading={isLoading}
-      loading={<Loading />}
       onRetry={() => mutate()}
     >
       {data && (

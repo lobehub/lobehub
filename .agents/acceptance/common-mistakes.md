@@ -1009,14 +1009,14 @@ not.
 
 **What happened.** A round's `plan[]` was filled with the agent's task list —
 "find the root cause", "fix it and add a regression test", "record the flows" —
-instead of acceptance criteria. `plan[]` is the *frozen check plan*: every item
+instead of acceptance criteria. `plan[]` is the _frozen check plan_: every item
 is a check that must be executed by a case with the same `id`, and a planned
 item with no case renders as **未执行** rather than vanishing. The three items
 had no `id`, so the server numbered them `case-1..3` and three permanent
 `not executed` gate checks appeared on the user's acceptance board — gates that
 can never pass, on work that was in fact complete.
 
-**Rule.** `plan[]` holds only what the *user* would accept or reject, each with
+**Rule.** `plan[]` holds only what the _user_ would accept or reject, each with
 a stable `id` that a case in the same round fulfills. Your own steps —
 investigate, fix, test, record — are not checks. If a round has one criterion,
 `plan[]` has exactly one item.

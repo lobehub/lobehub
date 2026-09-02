@@ -2,8 +2,8 @@ import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
 import type { RecentItem, TaskStatus } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
 import type { FlexboxProps } from '@lobehub/ui';
-import { Flexbox, Icon, Skeleton } from '@lobehub/ui';
-import { Avatar, Segmented, Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Avatar, Segmented, Skeleton, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { HashIcon } from 'lucide-react';
 import { memo, type ReactNode, useMemo, useState } from 'react';
@@ -252,7 +252,7 @@ interface SkeletonLineProps {
  */
 const SkeletonLine = memo<SkeletonLineProps>(({ bar, flex, line, width }) => (
   <Flexbox align={'flex-start'} flex={flex} height={line} justify={'center'}>
-    <Skeleton.Block active height={bar} width={width} />
+    <Skeleton height={bar} width={width} />
   </Flexbox>
 ));
 
@@ -278,12 +278,7 @@ const LoadingRows = memo<{ avatarSize?: number; withTime?: boolean }>(
       {SKELETON_ROWS.map(({ description, title }, index) => (
         <Flexbox horizontal align={'flex-start'} className={styles.rowBox} gap={12} key={index}>
           <Flexbox flex={'none'} paddingBlock={3}>
-            <Skeleton.Avatar
-              active
-              className={styles.topicAvatar}
-              shape={'circle'}
-              size={avatarSize}
-            />
+            <Skeleton.Avatar className={styles.topicAvatar} shape={'circle'} size={avatarSize} />
           </Flexbox>
           <Flexbox className={styles.rowText} gap={3}>
             <SkeletonLine bar={14} line={22} width={title} />

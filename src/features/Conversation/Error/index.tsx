@@ -5,8 +5,8 @@ import { AgentRuntimeErrorType, getErrorCodeSpec } from '@lobechat/model-runtime
 import { type ChatMessageError, type ErrorType, type IToolErrorType } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
-import { Block, Highlighter, Skeleton } from '@lobehub/ui';
-import { type AlertProps } from '@lobehub/ui/base-ui';
+import { Block, Highlighter } from '@lobehub/ui';
+import { type AlertProps, Skeleton } from '@lobehub/ui/base-ui';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -82,7 +82,7 @@ const loading = () => (
       width: '100%',
     }}
   >
-    <Skeleton.Button active block />
+    <Skeleton height={36} />
   </Block>
 );
 

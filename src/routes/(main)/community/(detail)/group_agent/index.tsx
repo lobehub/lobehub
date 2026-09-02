@@ -13,7 +13,6 @@ import { DetailProvider } from './features/DetailProvider';
 import Details from './features/Details';
 import Header from './features/Header';
 import StatusPage from './features/StatusPage';
-import Loading from './loading';
 
 interface GroupAgentDetailPageProps {
   mobile?: boolean;
@@ -26,9 +25,7 @@ const GroupAgentDetailPage = memo<GroupAgentDetailPageProps>(({ mobile }) => {
 
   // Fetch group agent detail
   const useGroupAgentDetail = useDiscoverStore((s) => s.useGroupAgentDetail);
-  const { data, isLoading } = useGroupAgentDetail({ identifier, version });
-
-  if (isLoading) return <Loading />;
+  const { data } = useGroupAgentDetail({ identifier, version });
 
   if (!data) return <NotFound />;
 
@@ -76,8 +73,7 @@ const GroupAgentDetailPage = memo<GroupAgentDetailPageProps>(({ mobile }) => {
     locale: (data as any)?.locale,
     memberAgents: (data as any)?.memberAgents || [],
     ownerType: ((data as any)?.author?.type === 'organization' ? 'organization' : 'user') as
-      | 'organization'
-      | 'user',
+      'organization' | 'user',
     status: (data as any)?.group?.status,
     summary: (data as any)?.summary,
     tags: (data as any)?.currentVersion?.tags,

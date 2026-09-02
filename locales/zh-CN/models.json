@@ -885,6 +885,7 @@
   "lobehub.ox-alpha.description": "Ox Alpha 已被揭示为 GLM-5.3-Flash。请求会自动重定向到 GLM-5.3-Flash。",
   "lobehub.qwen3.7-max.description": "Qwen3.7-Max 是阿里云的旗舰智能代理时代模型，适用于复杂编码、推理、办公自动化和长时间自主工作流。",
   "lobehub.qwen3.7-plus.description": "Qwen3.7-Plus 是 Qwen3.7 系列中性价比高的多模态模型，结合了强大的文本能力和升级的视觉语言理解能力，适用于编码、工具使用、GUI 任务和生产力工作流。",
+  "lobehub.qwen3.8-max-0902.description": "在相同价格下，Qwen3.8 Max 的免费编码升级——TerminalBench 3.0 提升超过两倍（11.3 → 29.0），登顶前端 CodeArena 排行榜，并在仓库级代码理解方面超越 Opus 5。",
   "lobehub.qwen3.8-max-preview.description": "Qwen3.8-Max-Preview 是阿里巴巴下一代 2.4T 参数旗舰模型的预览版，在编码和专业生产力方面相比 Qwen3.7-Max 取得了重大突破，并在全栈开发和数据分析等复杂的长周期任务上表现领先。",
   "lobehub.qwen3.8-max.description": "Qwen3.8 Max 是阿里云面向复杂编码、推理、专业生产力和长周期智能代理工作流的旗舰模型。",
   "lobehub.seedance-1-5-pro-251215.description": "字节跳动推出的 Seedance 1.5 Pro 支持文本生成视频、图像生成视频（首帧、首+尾帧）以及与视觉同步的音频生成。",

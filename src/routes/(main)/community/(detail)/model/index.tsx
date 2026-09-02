@@ -10,7 +10,6 @@ import NotFound from '../components/NotFound';
 import { DetailProvider } from './features/DetailProvider';
 import Details from './features/Details';
 import Header from './features/Header';
-import Loading from './loading';
 
 interface ModelDetailPageProps {
   mobile?: boolean;
@@ -21,9 +20,7 @@ const ModelDetailPage = memo<ModelDetailPageProps>(({ mobile }) => {
   const identifier = decodeURIComponent(params.slug ?? '');
 
   const useModelDetail = useDiscoverStore((s) => s.useModelDetail);
-  const { data, isLoading } = useModelDetail({ identifier });
-
-  if (isLoading) return <Loading />;
+  const { data } = useModelDetail({ identifier });
   if (!data) return <NotFound />;
 
   return (

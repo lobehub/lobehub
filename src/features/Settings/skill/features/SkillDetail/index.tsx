@@ -2,8 +2,8 @@
 
 import { getLobehubSkillProviderById } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { Markdown, Skeleton, Tooltip } from '@lobehub/ui';
-import { Avatar, Button, confirmModal, toast } from '@lobehub/ui/base-ui';
+import { Markdown, Tooltip } from '@lobehub/ui';
+import { Avatar, Button, confirmModal, Skeleton, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { Plus, SquareArrowOutUpRight, Trash2, Unplug, Wrench } from 'lucide-react';
@@ -386,7 +386,7 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
           <Suspense
             fallback={
               <div style={{ padding: 24 }}>
-                <Skeleton active paragraph={{ rows: 6 }} title={false} />
+                <Skeleton.Text rows={6} />
               </div>
             }
           >
@@ -480,7 +480,7 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
   if (syncing) {
     return (
       <div style={{ padding: 24 }}>
-        <Skeleton active paragraph={{ rows: 6 }} title={false} />
+        <Skeleton.Text rows={6} />
       </div>
     );
   }

@@ -2,8 +2,8 @@
 
 import { type NetworkProxySettings } from '@lobechat/electron-client-ipc';
 import { type FormGroupItemType } from '@lobehub/ui';
-import { Flexbox, Form, Skeleton } from '@lobehub/ui';
-import { Button, RadioGroup, Switch, toast } from '@lobehub/ui/base-ui';
+import { Flexbox, Form } from '@lobehub/ui';
+import { Button, RadioGroup, Skeleton, Switch, toast } from '@lobehub/ui/base-ui';
 import { Form as AntdForm, Input } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -206,7 +206,7 @@ const ProxyForm = () => {
     }
   }, [proxySettings, testUrl, form, t]);
 
-  if (isLoading) return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
+  if (isLoading) return <Skeleton.Text rows={5} />;
 
   const enableProxyGroup: FormGroupItemType = {
     children: [

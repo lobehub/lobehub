@@ -594,6 +594,39 @@ identify the fallback by a row count — it is shaped per navKey now
 (`NAV_SKELETON_SHAPES`), so memory/discover render header plus a nav list and no body
 at all, while settings renders a search box plus four accordion groups.
 
+#### Hold a route's Suspense fallback by parking its data request
+
+**Situation:** the route skeleton is now held by data (`SWRConfig{ suspense: true }`
+at the layout), not only by the lazy module, so parking the chunk no longer keeps it
+on screen once the module is cached. The fallback lasts a few hundred ms.
+
+**Works:** park the route's own tRPC call with raw CDP `Fetch.enable` — the skeleton
+stays up until the request is released, so it can be measured and screenshotted at
+leisure. `.agents/acceptance/scripts/park-request.cjs <browser-ws> <urlPattern> <holdMs>`
+does this against an `agent-browser` session:
+
+```bash
+node .agents/acceptance/scripts/park-request.cjs \
+  "$(agent-browser --session lobehub-dev get cdp-url)" '*trpc/lambda/aiProvider*' 25000
+```
+
+Name the route's **own** query in the pattern (`aiProvider*` for the provider page).
+A broad `*trpc*` parks the shell's queries too and the route never mounts, which reads
+as a product hang. For the error state, prefer `agent-browser network route <pattern> --abort` — an aborted request settles, so the boundary renders instead of hanging.
+
+#### `SWRConfig` reaches hooks below it, never the component that renders it
+
+**Situation:** opting one page out of a subtree's suspense (a page whose sections are
+gated independently and must keep their own Retry).
+
+**Doesn't work:** wrapping that page's own JSX in `<SWRConfig value={{ suspense: false }}>`.
+The page's hooks run in its component body, which is _above_ the element it returns, so
+they still read the subtree's config and the page keeps suspending. The symptom is a
+whole route thrown to the error boundary the first time one section's fetch fails.
+
+**Works:** move the hooks into a child component and wrap that child. Verify by failing
+one section's request and confirming the rest of the page still renders.
+
 #### Park a route's lazy chunk to hold its pending sidebar on screen
 
 **Situation:** verifying what a route's `NavPanel` fallback (or any `dynamicElement`
