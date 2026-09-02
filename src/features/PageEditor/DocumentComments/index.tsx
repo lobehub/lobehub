@@ -177,10 +177,41 @@ const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
     if (isFocusedRootMissing) handleFocusMissing();
     else if (isFocusedRootFailed) handleFocusFailed();
   }, [handleFocusFailed, handleFocusMissing, isFocusedRootFailed, isFocusedRootMissing]);
+  // The pinned root lives in its own detail entry, so the list handlers (which only patch
+  // the paginated caches) are mirrored into it; a post-delete 404 flows through
+  // `isNotFound` and is not a refresh failure.
   const mutateFocusedRoot = focusedRoot.mutate;
   const refreshPinned = useCallback(async () => {
-    await Promise.all([mutateFocusedRoot(), refresh()]);
+    await Promise.all([mutateFocusedRoot().catch(() => undefined), refresh()]);
   }, [mutateFocusedRoot, refresh]);
+  const updatePinnedReplyCount = useCallback(
+    async (rootCommentId: string, delta: number) => {
+      await Promise.all([
+        updateReplyCount(rootCommentId, delta),
+        mutateFocusedRoot(
+          (current) =>
+            current && current.id === rootCommentId
+              ? { ...current, replyCount: Math.max(0, current.replyCount + delta) }
+              : current,
+          { revalidate: false },
+        ),
+      ]);
+    },
+    [mutateFocusedRoot, updateReplyCount],
+  );
+  const handlePinnedRootUpdate: DocumentCommentUpdateHandler = useCallback(
+    async (comment, value) => {
+      await handleUpdate(comment, value);
+      await mutateFocusedRoot(
+        (current) =>
+          current && current.id === comment.id
+            ? { ...current, ...value, updatedAt: new Date() }
+            : current,
+        { revalidate: false },
+      );
+    },
+    [handleUpdate, mutateFocusedRoot],
+  );
 
   if (!workspaceId) return null;
 
@@ -226,8 +257,8 @@ const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
               root={pinnedThread.root}
               onFocusMissing={handleReplyFocusMissing}
               onMutated={refreshPinned}
-              onReplyCountChange={updateReplyCount}
-              onRootUpdate={handleUpdate}
+              onReplyCountChange={updatePinnedReplyCount}
+              onRootUpdate={handlePinnedRootUpdate}
               onSummaryChange={updateSummaryTotal}
             />
           )}

@@ -1,4 +1,4 @@
-import type { DocumentCommentThread } from '@lobechat/types';
+import type { DocumentCommentItem, DocumentCommentThread } from '@lobechat/types';
 import { Center, Flexbox } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { Fragment, memo, useCallback, useEffect, useMemo, useState } from 'react';
@@ -73,8 +73,22 @@ const Thread = memo<ThreadProps>(
     const focusedReply = useDocumentCommentDetail(hasFocusedReply ? undefined : focusedReplyId);
     const mutateFocusedReply = focusedReply.mutate;
     const refreshThread = useCallback(async () => {
-      await Promise.all([reloadReplies(), mutateFocusedReply(), onMutated()]);
+      // A post-delete 404 on the detail entry flows through `isNotFound`; it is not a failure.
+      await Promise.all([
+        reloadReplies(),
+        mutateFocusedReply().catch(() => undefined),
+        onMutated(),
+      ]);
     }, [mutateFocusedReply, onMutated, reloadReplies]);
+    // Reply edits patch the paginated cache; mirror them into the pinned detail entry too.
+    const patchFocusedReply = useCallback(
+      (next: DocumentCommentItem) =>
+        mutateFocusedReply(
+          (current) => (current && current.id === next.id ? { ...current, ...next } : current),
+          { revalidate: false },
+        ),
+      [mutateFocusedReply],
+    );
     const handleReplySubmit = useCallback(
       async ({ clientId, content, editorData }: DocumentCommentSubmitInput) => {
         const replyTarget =
@@ -149,31 +163,40 @@ const Thread = memo<ThreadProps>(
     const handleReplyUpdate: DocumentCommentUpdateHandler = useCallback(
       async (comment, value) => {
         const optimisticComment = { ...comment, ...value, updatedAt: new Date() };
-        await mutateReplies((pages) => replaceReplyComment(pages, optimisticComment), {
-          revalidate: false,
-        });
+        await Promise.all([
+          mutateReplies((pages) => replaceReplyComment(pages, optimisticComment), {
+            revalidate: false,
+          }),
+          patchFocusedReply(optimisticComment),
+        ]);
 
         let updated: Awaited<ReturnType<typeof documentCommentService.update>>;
         try {
           updated = await documentCommentService.update({ ...value, id: comment.id });
           if (!updated) throw new Error('Document comment reply update returned no result');
         } catch (error) {
-          await mutateReplies((pages) => replaceReplyComment(pages, comment), {
-            revalidate: false,
-          });
+          await Promise.all([
+            mutateReplies((pages) => replaceReplyComment(pages, comment), {
+              revalidate: false,
+            }),
+            patchFocusedReply(comment),
+          ]);
           throw error;
         }
 
         try {
-          await mutateReplies((pages) => replaceReplyComment(pages, updated), {
-            revalidate: false,
-          });
+          await Promise.all([
+            mutateReplies((pages) => replaceReplyComment(pages, updated), {
+              revalidate: false,
+            }),
+            patchFocusedReply(updated),
+          ]);
         } catch (error) {
           console.error('Failed to reconcile the updated document comment reply', error);
           void reloadReplies();
         }
       },
-      [mutateReplies, reloadReplies],
+      [mutateReplies, patchFocusedReply, reloadReplies],
     );
 
     // NOT_FOUND, or a reply from another thread, means the linked reply is gone; any other
