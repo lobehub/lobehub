@@ -41,6 +41,8 @@ const getEffectiveAgentId = (agentId?: string): string => {
 export const store: CreateStore = (publicState) => (set, get) => ({
   ...initialState,
   ...publicState,
+  leftActions: publicState?.leftActions ?? initialState.leftActions,
+  rightActions: publicState?.rightActions ?? initialState.rightActions,
 
   clearInputCompletionError: () => {
     set({ inputCompletionError: undefined, inputCompletionErrorDismissed: false });

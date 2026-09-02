@@ -124,6 +124,11 @@ export class GoalActionImpl {
     await this.refreshGoalGraph(goalId);
   };
 
+  updateGoalRequirement = async (goalId: string, requirement: string): Promise<void> => {
+    await goalService.updateRequirement(goalId, requirement);
+    await this.refreshGoalGraph(goalId);
+  };
+
   /**
    * Ask the server to run the coordinator now. The goal keeps advancing on its
    * own afterwards as its Work Tasks settle, so this is a nudge rather than the

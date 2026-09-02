@@ -657,10 +657,15 @@ describe('WechatAdapter', () => {
       const bytes = Buffer.from([9, 8, 7, 6]);
       const arrayBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
 
+      // chat 4.38.x types `fetchData` as `() => Promise<Buffer>`; 4.39 widens it to
+      // `Buffer | ArrayBuffer`. The adapter normalizes both at runtime, so keep
+      // exercising the ArrayBuffer path whichever version the range resolves to.
+      const fetchData = (async () => arrayBuffer) as unknown as () => Promise<Buffer>;
+
       await adapter.postMessage(threadId, {
         attachments: [
           {
-            fetchData: async () => arrayBuffer,
+            fetchData,
             mimeType: 'image/png',
             name: 'lazy.png',
             type: 'image',

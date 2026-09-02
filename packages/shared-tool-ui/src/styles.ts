@@ -1,5 +1,17 @@
-import { textGroupStyles, textStyles } from '@lobehub/ui/base-ui';
+import { textStyles } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
+
+const localTextGroupStyles = createStaticStyles(({ css }) => ({
+  shinyGroup: css`
+    @supports (-webkit-mask-clip: text) {
+      & {
+        --shiny-origin: static;
+
+        position: relative;
+      }
+    }
+  `,
+}));
 
 /**
  * Inspector text style — ellipsis + secondary color + flex align
@@ -8,7 +20,7 @@ export const inspectorTextStyles = createStaticStyles(({ css, cssVar }) => ({
   root: css`
     /* Coordinate space for the shiny sweep: every shimmering span in the row
      * resolves its overlay against this box, so they read as one wave. */
-    ${textGroupStyles.shinyGroup}
+    ${localTextGroupStyles.shinyGroup}
 
     overflow: hidden;
     display: flex;
@@ -55,5 +67,5 @@ export const shinyTextStyles = {
 };
 
 export const shinyGroupStyles = {
-  shinyGroup: textGroupStyles.shinyGroup,
+  shinyGroup: localTextGroupStyles.shinyGroup,
 };

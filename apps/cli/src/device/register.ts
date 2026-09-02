@@ -4,6 +4,21 @@ import type { DeviceIdentity } from '@lobechat/device-identity';
 import { deriveDeviceId, deriveScopedFallbackId } from '@lobechat/device-identity';
 
 import { createLambdaClient } from '../api/client';
+import { isTransientNetworkError } from '../utils/error';
+
+const WORKSPACE_TOKEN_RETRY_DELAYS_MS = [250, 1000, 2500];
+
+async function withWorkspaceTokenRetry<T>(operation: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      const delay = WORKSPACE_TOKEN_RETRY_DELAYS_MS[attempt];
+      if (delay === undefined || !isTransientNetworkError(error)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+}
 
 /**
  * Resolve a stable device identity. An explicit `--device-id` wins (lets a user
@@ -73,7 +88,7 @@ export async function mintWorkspaceConnectToken(
   workspaceId: string,
 ): Promise<{ token: string; workspaceId: string }> {
   const trpc = createLambdaClient(auth, workspaceId);
-  return trpc.device.mintWorkspaceConnectToken.mutate();
+  return withWorkspaceTokenRetry(() => trpc.device.mintWorkspaceConnectToken.mutate());
 }
 
 /**

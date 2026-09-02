@@ -276,7 +276,11 @@ const memoryProcedure = authedProcedure.use(serverDatabase).use(async (opts) => 
 });
 const memorySearchProcedure = memoryProcedure.use(async (opts) => {
   const { ctx } = opts;
-  const ftsSearchRepo = await createFtsSearchRepo({ db: ctx.serverDB, userId: ctx.userId });
+  const ftsSearchRepo = await createFtsSearchRepo({
+    db: ctx.serverDB,
+    userId: ctx.userId,
+    usage: 'memory',
+  });
 
   return opts.next({
     ctx: {

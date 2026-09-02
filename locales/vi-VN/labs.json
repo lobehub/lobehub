@@ -16,6 +16,8 @@
   "features.codexAppServer.title": "Thời gian chạy Máy chủ Ứng dụng Codex",
   "features.desktopSplitView.desc": "Hiển thị hai tab trên màn hình máy tính cạnh nhau, với khả năng điều hướng độc lập và thanh chia có thể điều chỉnh kích thước.",
   "features.desktopSplitView.title": "Chế độ Xem Tab Chia",
+  "features.evalCapture.desc": "Thêm một hành động tin nhắn để ghi lại một lượt hội thoại — bao gồm ngữ cảnh trước đó, đầu vào và câu trả lời đã tạo ra — làm một trường hợp kiểm tra đánh giá.",
+  "features.evalCapture.title": "Lưu một lượt làm trường hợp đánh giá",
   "features.groupChat.desc": "Kích hoạt phối hợp trò chuyện nhóm với nhiều tác nhân.",
   "features.groupChat.title": "Trò Chuyện Nhóm (Đa Tác Nhân)",
   "features.heteroSessionImport.desc": "Thêm mục \"Nhập phiên làm việc của đại lý cục bộ\" vào menu danh sách chủ đề: quét các bản ghi Claude Code / Codex CLI cục bộ và nhập chúng dưới dạng chủ đề, với đồng bộ hóa gia tăng khi nhập lại.",

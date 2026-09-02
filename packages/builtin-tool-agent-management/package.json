@@ -8,6 +8,9 @@
     "./executor": "./src/executor.ts"
   },
   "main": "./src/index.ts",
+  "scripts": {
+    "test": "vitest"
+  },
   "dependencies": {
     "@lobechat/agent-manager-runtime": "workspace:*",
     "@lobechat/const": "workspace:*",

@@ -16,6 +16,8 @@
   "features.codexAppServer.title": "Codex 應用伺服器運行時",
   "features.desktopSplitView.desc": "顯示兩個桌面標籤頁並排，具有獨立的導航功能和可調整大小的分隔線。",
   "features.desktopSplitView.title": "分割標籤檢視",
+  "features.evalCapture.desc": "新增一個訊息操作，可捕捉對話輪次——包括其先前的上下文、輸入及生成的回答——作為評估測試案例。",
+  "features.evalCapture.title": "儲存對話輪次作為評估案例",
   "features.groupChat.desc": "啟用多智能體群組聊天編排功能。",
   "features.groupChat.title": "群組聊天（多智能體）",
   "features.heteroSessionImport.desc": "在主題列表選單中新增「匯入本地代理會話」項目：掃描本地 Claude Code / Codex CLI 轉錄內容並將其匯入為主題，重新匯入時進行增量同步。",

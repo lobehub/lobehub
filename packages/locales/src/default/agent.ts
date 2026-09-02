@@ -244,8 +244,9 @@ export default {
   'channel.slack.webhookMigrationTitle': 'Consider migrating to Socket Mode (WebSocket)',
   'channel.slack.webhookMigrationDesc':
     'Socket Mode provides real-time event delivery via WebSocket without exposing a public HTTP endpoint. To migrate, enable Socket Mode in your Slack app settings, generate an App-Level Token, then switch the Connection Mode to WebSocket in Advanced Settings.',
-  'channel.secretTokenHint': 'Optional. Used to verify webhook requests from Telegram.',
-  'channel.secretTokenPlaceholder': 'Optional secret for webhook verification',
+  'channel.secretTokenHint':
+    'Used to verify webhook requests from Telegram. Leave blank and LobeHub derives one for this bot — verification is always on.',
+  'channel.secretTokenPlaceholder': 'Leave blank to auto-generate',
   'channel.telegram.description': 'Connect this agent to Telegram for private and group chats.',
   'channel.testConnection': 'Test Connection',
   'channel.testFailed': 'Connection test failed',

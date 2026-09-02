@@ -1,3 +1,4 @@
+import { MAX_UPLOAD_FILE_SIZE, UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE } from '@lobechat/const';
 import { parseDataUri } from '@lobechat/model-runtime/utils/uriParser';
 import { uuid } from '@lobechat/utils';
 import dayjs from 'dayjs';
@@ -5,10 +6,34 @@ import { sha256 } from 'js-sha256';
 
 import { fileEnv } from '@/envs/file';
 import { lambdaClient } from '@/libs/trpc/client';
-import { type FileMetadata, type UploadBase64ToS3Result } from '@/types/files';
-import { type FileUploadState, type FileUploadStatus } from '@/types/files/upload';
+import type { FileMetadata, UploadBase64ToS3Result } from '@/types/files';
+import type { FileUploadState, FileUploadStatus } from '@/types/files/upload';
 
 export const UPLOAD_NETWORK_ERROR = 'NetWorkError';
+
+const MAX_MULTIPART_PARTS = 10_000;
+const HASH_BUFFER_SIZE = 4 * 1024 * 1024;
+const MULTIPART_PART_SIZE = 32 * 1024 * 1024;
+const MULTIPART_UPLOAD_THRESHOLD = 64 * 1024 * 1024;
+
+export const hashFile = async (file: File, signal?: AbortSignal): Promise<string> => {
+  const hasher = sha256.create();
+  const reader = file.stream().getReader({ mode: 'byob' });
+  let buffer = new ArrayBuffer(HASH_BUFFER_SIZE);
+
+  try {
+    while (true) {
+      if (signal?.aborted) throw signal.reason ?? new Error('Upload cancelled by user');
+
+      const { done, value } = await reader.read(new Uint8Array(buffer));
+      if (done) return hasher.hex();
+      hasher.update(value);
+      buffer = value.buffer as ArrayBuffer;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+};
 
 /**
  * Generate file storage path metadata for S3-compatible storage
@@ -60,6 +85,8 @@ class UploadService {
     file: File,
     { onProgress, directory, pathname, abortController }: UploadFileToS3Options,
   ): Promise<{ data: FileMetadata; success: boolean }> => {
+    if (file.size > MAX_UPLOAD_FILE_SIZE) throw new Error(UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE);
+
     // Server-side upload logic
 
     // if is server mode, upload to server s3,
@@ -112,7 +139,7 @@ class UploadService {
 
     // Use unified upload method
     const { data: metadata } = await this.uploadFileToS3(file, options);
-    const hash = sha256(await file.arrayBuffer());
+    const hash = await hashFile(file, options.abortController?.signal);
 
     return {
       fileType: mimeType,
@@ -142,86 +169,149 @@ class UploadService {
       pathname?: string;
     },
   ): Promise<FileMetadata> => {
-    const xhr = new XMLHttpRequest();
-
-    const { preSignUrl, ...result } = await this.getSignedUploadUrl(file, { directory, pathname });
+    const {
+      date,
+      dirname,
+      filename,
+      pathname: uploadPathname,
+    } = generateFilePathMetadata(file.name, { directory, pathname });
+    const result = { date, dirname, filename, path: uploadPathname };
     const startTime = Date.now();
 
-    // Setup abort listener
-    if (abortController) {
-      abortController.signal.addEventListener('abort', () => {
-        xhr.abort();
-      });
+    try {
+      if (file.size >= MULTIPART_UPLOAD_THRESHOLD) {
+        await this.uploadMultipart(file, uploadPathname, abortController?.signal, (loaded) => {
+          onProgress?.('uploading', this.getUploadState(loaded, file.size, startTime));
+        });
+      } else {
+        const preSignUrl = await lambdaClient.upload.createS3PreSignedUrl.mutate({
+          pathname: uploadPathname,
+          size: file.size,
+        });
+
+        await this.putBlob(
+          preSignUrl,
+          file,
+          abortController?.signal,
+          (loaded) => {
+            onProgress?.('uploading', this.getUploadState(loaded, file.size, startTime));
+          },
+          file.type,
+        );
+      }
+    } catch (error) {
+      if (abortController?.signal.aborted) {
+        onProgress?.('cancelled', { progress: 0, restTime: 0, speed: 0 });
+      }
+      throw error;
     }
 
-    xhr.upload.addEventListener('progress', (event) => {
-      if (event.lengthComputable) {
-        const progress = Number(((event.loaded / event.total) * 100).toFixed(1));
-
-        const speedInByte = event.loaded / ((Date.now() - startTime) / 1000);
-
-        onProgress?.('uploading', {
-          // if the progress is 100, it means the file is uploaded
-          // but the server is still processing it
-          // so make it as 99.9 and let users think it's still uploading
-          progress: progress === 100 ? 99.9 : progress,
-          restTime: (event.total - event.loaded) / speedInByte,
-          speed: speedInByte,
-        });
-      }
-    });
-
-    xhr.open('PUT', preSignUrl);
-    xhr.setRequestHeader('Content-Type', file.type);
-    const data = await file.arrayBuffer();
-
-    await new Promise((resolve, reject) => {
-      xhr.addEventListener('load', () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          onProgress?.('success', {
-            progress: 100,
-            restTime: 0,
-            speed: file.size / ((Date.now() - startTime) / 1000),
-          });
-          resolve(xhr.response);
-        } else {
-          reject(xhr.statusText);
-        }
-      });
-      xhr.addEventListener('error', () => {
-        if (xhr.status === 0) reject(UPLOAD_NETWORK_ERROR);
-        else reject(xhr.statusText);
-      });
-      xhr.addEventListener('abort', () => {
-        onProgress?.('cancelled', { progress: 0, restTime: 0, speed: 0 });
-        reject(new Error('Upload cancelled by user'));
-      });
-      xhr.send(data);
+    onProgress?.('success', {
+      progress: 100,
+      restTime: 0,
+      speed: file.size / Math.max((Date.now() - startTime) / 1000, 0.001),
     });
 
     return result;
   };
 
-  private getSignedUploadUrl = async (
-    file: File,
-    options: { directory?: string; pathname?: string } = {},
-  ): Promise<
-    FileMetadata & {
-      preSignUrl: string;
-    }
-  > => {
-    // Generate file path metadata
-    const { date, dirname, filename, pathname } = generateFilePathMetadata(file.name, options);
-
-    const preSignUrl = await lambdaClient.upload.createS3PreSignedUrl.mutate({ pathname });
+  private getUploadState = (loaded: number, total: number, startTime: number): FileUploadState => {
+    const elapsed = Math.max((Date.now() - startTime) / 1000, 0.001);
+    const speed = loaded / elapsed;
+    const progress = total > 0 ? Number(((loaded / total) * 100).toFixed(1)) : 0;
 
     return {
-      date,
-      dirname,
-      filename,
-      path: pathname,
-      preSignUrl,
+      progress: progress === 100 ? 99.9 : progress,
+      restTime: speed > 0 ? (total - loaded) / speed : 0,
+      speed,
     };
+  };
+
+  private putBlob = async (
+    url: string,
+    blob: Blob,
+    signal: AbortSignal | undefined,
+    onProgress: (loaded: number) => void,
+    contentType?: string,
+  ): Promise<string | undefined> => {
+    if (signal?.aborted) throw signal.reason ?? new Error('Upload cancelled by user');
+
+    const xhr = new XMLHttpRequest();
+    const abort = () => xhr.abort();
+    signal?.addEventListener('abort', abort, { once: true });
+
+    try {
+      return await new Promise<string | undefined>((resolve, reject) => {
+        xhr.upload.addEventListener('progress', (event) => {
+          if (event.lengthComputable) onProgress(event.loaded);
+        });
+        xhr.addEventListener('load', () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(xhr.getResponseHeader?.('ETag') || undefined);
+          } else reject(xhr.statusText);
+        });
+        xhr.addEventListener('error', () => {
+          if (xhr.status === 0) reject(UPLOAD_NETWORK_ERROR);
+          else reject(xhr.statusText);
+        });
+        xhr.addEventListener('abort', () => reject(new Error('Upload cancelled by user')));
+        xhr.open('PUT', url);
+        if (contentType) xhr.setRequestHeader('Content-Type', contentType);
+        xhr.send(blob);
+      });
+    } finally {
+      signal?.removeEventListener('abort', abort);
+    }
+  };
+
+  private uploadMultipart = async (
+    file: File,
+    pathname: string,
+    signal: AbortSignal | undefined,
+    onProgress: (loaded: number) => void,
+  ): Promise<void> => {
+    const partSize = Math.max(MULTIPART_PART_SIZE, Math.ceil(file.size / MAX_MULTIPART_PARTS));
+    const partCount = Math.ceil(file.size / partSize);
+    const parts: Array<{ etag: string; partNumber: number }> = [];
+    const { uploadId } = await lambdaClient.upload.createS3MultipartUpload.mutate({
+      contentType: file.type || undefined,
+      pathname,
+      size: file.size,
+    });
+
+    try {
+      for (let partNumber = 1; partNumber <= partCount; partNumber++) {
+        if (signal?.aborted) throw signal.reason ?? new Error('Upload cancelled by user');
+
+        const offset = (partNumber - 1) * partSize;
+        const end = Math.min(offset + partSize, file.size);
+        const url = await lambdaClient.upload.createS3MultipartUploadPartUrl.mutate({
+          partNumber,
+          pathname,
+          uploadId,
+        });
+
+        const etag = await this.putBlob(url, file.slice(offset, end), signal, (loaded) => {
+          onProgress(offset + loaded);
+        });
+        if (etag) parts.push({ etag, partNumber });
+        onProgress(end);
+      }
+
+      await lambdaClient.upload.completeS3MultipartUpload.mutate({
+        partCount,
+        parts: parts.length === partCount ? parts : undefined,
+        pathname,
+        uploadId,
+      });
+    } catch (error) {
+      try {
+        await lambdaClient.upload.abortS3MultipartUpload.mutate({ pathname, uploadId });
+      } catch (abortError) {
+        console.error('Failed to abort S3 multipart upload:', abortError);
+      }
+      throw error;
+    }
   };
 }
 

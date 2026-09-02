@@ -8,6 +8,8 @@
  * Consumed by both `default/models.ts` (Node) and `default/models.vite.ts` (Vite SPA).
  */
 export const lobeHubOnlineModelDescriptions = {
+  'lobehub.claude-fable-5-1.description':
+    'Stronger than Fable 5 on long-running coding and research — 55.8% on Terminal-Bench 4.0 versus 42.0%, at the same $10/$50 with cache reads at a quarter of the cost.',
   'lobehub.claude-fable-5.description':
     "Claude Fable 5 is the world's strongest model for demanding reasoning, long-horizon agentic work, and complex coding. It is also the most expensive model.",
   'lobehub.claude-haiku-4-5-20251001.description':

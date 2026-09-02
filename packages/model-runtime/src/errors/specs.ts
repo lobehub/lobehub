@@ -12,7 +12,8 @@ import type { ErrorAttribution, ErrorCategory, ErrorSeverity } from './taxonomy'
 export type CloudErrorCode =
   | typeof ChatErrorType.FreePlanLimit
   | typeof ChatErrorType.InsufficientBudgetForModel
-  | typeof ChatErrorType.LobeHubModelDeprecated;
+  | typeof ChatErrorType.LobeHubModelDeprecated
+  | typeof ChatErrorType.SubscriptionPlanLimit;
 
 /** Every code the spec table can classify. */
 export type SpecErrorCode = CloudErrorCode | ILobeAgentRuntimeErrorType;
@@ -190,6 +191,18 @@ export const ERROR_CODE_SPECS: SpecMap = {
     retryable: false,
     countAsFailure: false,
     description: 'LobeHub Cloud balance is positive but below the model’s estimated cost.',
+  },
+  [ChatErrorType.SubscriptionPlanLimit]: {
+    code: ChatErrorType.SubscriptionPlanLimit,
+    numericId: 2903,
+    category: 'quota',
+    severity: 'warning',
+    attribution: 'user',
+    httpStatus: 402,
+    retryable: false,
+    countAsFailure: false,
+    description:
+      'LobeHub Cloud paid-plan allowance reached, or the plan tier does not cover the requested model.',
   },
 
   // ─── 3xxx Capacity ────────────────────────────────────────────────────

@@ -184,6 +184,17 @@ describe('GoalService', () => {
     expect(raised?.status).not.toBe('paused');
   });
 
+  it('edits the standing requirement in place', async () => {
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ requirement: '初版验收', title: 'Editable', work: ['A'] });
+
+    const updated = await service.updateRequirement(graph.goal.id, '改过的验收标准');
+
+    expect(updated.requirement).toBe('改过的验收标准');
+    expect((await service.graph(graph.goal.id)).goal.requirement).toBe('改过的验收标准');
+    await expect(service.updateRequirement('goal_missing', 'x')).rejects.toThrow();
+  });
+
   it('leaves a deliberately paused goal paused when its budget changes', async () => {
     // Nothing distinguishes a user pause from a budget pause on the row, so the
     // reopen is limited to goals whose budget was actually binding.
@@ -220,8 +231,10 @@ describe('GoalService', () => {
     vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
       problemStatement: '核心问题的一句话陈述',
       works: [
-        { instruction: '收集原始材料', title: '方向A:收集' },
-        { instruction: '分析并综合结论', title: '方向B:分析' },
+        { dependsOn: [], instruction: '收集原始材料', title: '方向A:收集' },
+        { dependsOn: [0], instruction: '分析并综合结论', title: '方向B:分析' },
+        // Self and forward references are planner hallucinations — dropped.
+        { dependsOn: [1, 2, 9], instruction: '汇编最终报告', title: '方向C:汇编' },
       ],
     });
     const service = new GoalService(serverDB, userId);
@@ -241,9 +254,62 @@ describe('GoalService', () => {
     expect(after.nodes.filter((n) => n.kind === 'task').map((n) => n.title)).toEqual([
       '方向A:收集',
       '方向B:分析',
+      '方向C:汇编',
     ]);
     expect(after.nodes.find((n) => n.kind === 'problem')?.description).toBe('核心问题的一句话陈述');
-    expect(after.edges.filter((e) => e.kind === 'decomposes')).toHaveLength(2);
+    expect(after.edges.filter((e) => e.kind === 'decomposes')).toHaveLength(3);
+
+    // The planner's dependsOn indices become depends_on edges, dependent →
+    // prerequisite; the self and forward references were dropped.
+    const byTitle = new Map(after.nodes.map((n) => [n.title, n.id]));
+    const deps = after.edges
+      .filter((e) => e.kind === 'depends_on')
+      .map((e) => [e.sourceNodeId, e.targetNodeId]);
+    expect(deps).toHaveLength(2);
+    expect(deps).toEqual(
+      expect.arrayContaining([
+        [byTitle.get('方向B:分析'), byTitle.get('方向A:收集')],
+        [byTitle.get('方向C:汇编'), byTitle.get('方向B:分析')],
+      ]),
+    );
+  });
+
+  it('plans the decomposition once when two advances race through the planner', async () => {
+    // The queued kickoff and the client's fire-and-forget fallback can both
+    // reach plan_decomposition together; the atomic planning claim must stop
+    // the loser BEFORE the planner call, so nothing double-plans or double-pays.
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let plannerCalls = 0;
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockImplementation(async () => {
+      plannerCalls += 1;
+      await gate;
+      return {
+        problemStatement: '并发规划',
+        works: [
+          { dependsOn: [], instruction: '收集', title: '方向A' },
+          { dependsOn: [0], instruction: '分析', title: '方向B' },
+        ],
+      };
+    });
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ problemDescription: '原话', title: 'Raced planning' });
+
+    const ticks = Promise.all([service.tick(graph.goal.id), service.tick(graph.goal.id)]);
+    // The winner holds the planner open; the loser must lose the claim and
+    // return without ever entering it.
+    await vi.waitFor(() => expect(plannerCalls).toBe(1));
+    release();
+    const results = await ticks;
+
+    expect(plannerCalls).toBe(1);
+    expect(results.filter((r) => r.outcome === 'advanced')).toHaveLength(1);
+    expect(results.filter((r) => r.outcome === 'waiting_external')).toHaveLength(1);
+    const after = await service.graph(graph.goal.id);
+    expect(after.nodes.filter((n) => n.kind === 'task')).toHaveLength(2);
+    expect(after.edges.filter((e) => e.kind === 'depends_on')).toHaveLength(1);
   });
 
   it('falls back to a single work when the planner fails, instead of stalling', async () => {

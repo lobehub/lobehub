@@ -22,7 +22,7 @@ import {
 } from '../types';
 import { formatUsageStats } from '../utils';
 import { TELEGRAM_API_BASE, TelegramApi } from './api';
-import { extractBotId, setTelegramWebhook } from './helpers';
+import { extractBotId, resolveTelegramSecretToken, setTelegramWebhook } from './helpers';
 import { markdownToTelegramHTML } from './markdownToHTML';
 import { sendTelegramAttachments } from './sendAttachments';
 
@@ -109,15 +109,7 @@ class TelegramWebhookClient implements PlatformClient {
     });
 
     try {
-      const baseUrl = (this.config.credentials.webhookProxyUrl || this.context.appUrl || '')
-        .trim()
-        .replace(/\/$/, '');
-      const webhookUrl = `${baseUrl}/api/agent/webhooks/telegram/${this.applicationId}`;
-      await setTelegramWebhook(
-        this.config.credentials.botToken,
-        webhookUrl,
-        this.config.credentials.secretToken || undefined,
-      );
+      const webhookUrl = await this.registerWebhook();
 
       await updateBotRuntimeStatus({
         applicationId: this.applicationId,
@@ -135,6 +127,34 @@ class TelegramWebhookClient implements PlatformClient {
       });
       throw error;
     }
+  }
+
+  /**
+   * Re-register the webhook with Telegram using the current credentials.
+   *
+   * Called by `BotMessageRouter` when an inbound update was rejected as
+   * unverified (401): that means Telegram is still delivering to a webhook
+   * registered without (or with a stale) `secret_token` — e.g. a bot created
+   * before verification became mandatory. Re-running `setWebhook` with the
+   * resolved secret makes Telegram's retry of the rejected update carry the
+   * right header, so the bot heals without operator action.
+   */
+  async reconcileWebhook(): Promise<void> {
+    const webhookUrl = await this.registerWebhook();
+    log('TelegramBot appId=%s webhook re-registered, webhook=%s', this.applicationId, webhookUrl);
+  }
+
+  private async registerWebhook(): Promise<string> {
+    const baseUrl = (this.config.credentials.webhookProxyUrl || this.context.appUrl || '')
+      .trim()
+      .replace(/\/$/, '');
+    const webhookUrl = `${baseUrl}/api/agent/webhooks/telegram/${this.applicationId}`;
+    await setTelegramWebhook(
+      this.config.credentials.botToken,
+      webhookUrl,
+      resolveTelegramSecretToken(this.config.credentials),
+    );
+    return webhookUrl;
   }
 
   async stop(): Promise<void> {
@@ -166,7 +186,10 @@ class TelegramWebhookClient implements PlatformClient {
     return {
       telegram: createTelegramAdapter({
         botToken: this.config.credentials.botToken,
-        secretToken: this.config.credentials.secretToken || undefined,
+        // Always verified: the operator's secret when set, otherwise the same
+        // derived secret `start()` registered with Telegram. We never pass
+        // `allowUnverifiedWebhooks` — see `resolveTelegramSecretToken`.
+        secretToken: resolveTelegramSecretToken(this.config.credentials),
       }),
     };
   }

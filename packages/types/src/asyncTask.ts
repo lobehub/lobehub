@@ -17,6 +17,11 @@ export enum AsyncTaskStatus {
 export enum AsyncTaskErrorType {
   EmbeddingError = 'EmbeddingError',
 
+  /**
+   * File exceeds the in-memory parser limit and cannot be chunked.
+   */
+  FileTooLargeToParse = 'FileTooLargeToParse',
+
   /* ↓ cloud slot | free plan limit error type ↓ */
   /**
    * Free plan users are not allowed to use this feature

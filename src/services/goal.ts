@@ -90,6 +90,9 @@ class GoalService {
     priority?: number;
     title: string;
   }) => lambdaClient.goal.addNode.mutate(params);
+
+  updateRequirement = async (id: string, requirement: string) =>
+    lambdaClient.goal.updateRequirement.mutate({ id, requirement });
 }
 
 export const goalService = new GoalService();
