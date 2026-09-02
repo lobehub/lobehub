@@ -119,6 +119,7 @@
   "KeyValueEditor.keyPlaceholder": "Sleutel",
   "KeyValueEditor.valuePlaceholder": "Waarde",
   "LocalFile.action.open": "Openen",
+  "LocalFile.action.preview": "Voorbeeld",
   "LocalFile.action.showInFolder": "In map tonen",
   "MaxTokenSlider.unlimited": "Onbeperkt",
   "ModelSelect.featureTag.audio": "Dit model ondersteunt audio-invoerherkenning.",

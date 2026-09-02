@@ -2,7 +2,7 @@ import type { TaskStatus } from '@lobechat/types';
 import { useEffect } from 'react';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
-import { isScheduledTaskListKey, isTaskListKey, taskKeys } from '@/libs/swr/keys';
+import { isMyTaskListKey, isScheduledTaskListKey, isTaskListKey, taskKeys } from '@/libs/swr/keys';
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
 
@@ -132,6 +132,8 @@ export class TaskListSliceActionImpl {
       // A schedule can be attached, changed or removed from any task edit, so
       // the automated roll-up has to be revalidated alongside the main list.
       mutate(isScheduledTaskListKey),
+      // Assigning or creating moves a task in or out of "My tasks".
+      mutate(isMyTaskListKey),
     ]);
   };
 
@@ -307,6 +309,33 @@ export class TaskListSliceActionImpl {
           offset,
           orderBy: 'updatedAt',
         }),
+      { revalidateOnFocus: false },
+    );
+  };
+
+  /**
+   * The Tasks page's "My tasks" tab — the caller's own slice of the workspace
+   * (`assigned` to them as a member, or `created` by them). Consumed like the
+   * scheduled roll-up: its own SWR result, never the shared `tasks` field, so
+   * flipping the tab cannot leak one collection into the other.
+   */
+  useFetchMyTaskList = (options: {
+    enabled?: boolean;
+    limit?: number;
+    offset?: number;
+    scope: 'assigned' | 'created';
+    /**
+     * Server-side status narrowing (the `hideCompleted` display option
+     * translated by `getVisibleTaskStatuses`). Applied before `limit` /
+     * `offset` so a page can never come back empty while older unfinished
+     * tasks exist; part of the cache key for the same reason as `scope`.
+     */
+    statuses?: TaskStatus[];
+  }) => {
+    const { enabled = true, limit, offset, scope, statuses } = options;
+    return useClientDataSWR(
+      enabled ? taskKeys.myList(scope, statuses, limit, offset) : null,
+      async () => this.fetchTaskList({ limit, offset, orderBy: 'updatedAt', scope, statuses }),
       { revalidateOnFocus: false },
     );
   };

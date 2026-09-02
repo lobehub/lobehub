@@ -135,7 +135,7 @@ vi.mock('../Files', () => ({
 vi.mock('../Review', () => ({
   default: (props: { composerTarget: ComposerTarget }) => {
     renderedReview.current = props;
-    return <div />;
+    return <div data-testid="review" />;
   },
 }));
 vi.mock('../ProgressSection', () => ({ default: () => <div /> }));
@@ -885,6 +885,24 @@ describe('AgentWorkingSidebar — tab strip', () => {
     expect(globalStore.openWorkingSidebar).toHaveBeenCalledWith('review');
   });
 
+  it('mounts Review only while its visible tab is active', () => {
+    agentStore.activeAgentId = 'agent';
+    reviewState.repoType = 'git';
+    reviewState.workingDirectory = '/repo';
+    localStorageState.openTabsByContext = { 'draft:agent:/repo': ['params', 'review'] };
+    globalStore.status.workingSidebarTab = 'params';
+
+    render(<AgentWorkingSidebar />);
+
+    expect(screen.queryByTestId('review')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'workingPanel.review.title' }));
+    expect(screen.getByTestId('review')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'settingModel.params.panel.tab' }));
+    expect(screen.queryByTestId('review')).not.toBeInTheDocument();
+  });
+
   it('opens Skills and Documents by default for a new workspace context', () => {
     localStorageState.openTabsByContext = {};
     globalStore.status.workingSidebarTab = 'overview';
@@ -960,6 +978,9 @@ describe('AgentWorkingSidebar — tab strip', () => {
       contextKey: expectedKey,
       writable: true,
     });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Review from Overview' }));
+    await waitFor(() => expect(screen.getByTestId('review')).toBeInTheDocument());
     expect(renderedReview.current?.composerTarget).toEqual({
       contextKey: expectedKey,
       writable: true,
@@ -988,6 +1009,9 @@ describe('AgentWorkingSidebar — tab strip', () => {
       reason: 'read-only',
       writable: false,
     });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Review from Overview' }));
+    await waitFor(() => expect(screen.getByTestId('review')).toBeInTheDocument());
     expect(renderedReview.current?.composerTarget).toEqual({
       reason: 'read-only',
       writable: false,

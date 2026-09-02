@@ -416,6 +416,7 @@
   "builtins.lobe-task.apiName.deleteTaskComment": "Usuń komentarz",
   "builtins.lobe-task.apiName.editTask": "Edytuj zadanie",
   "builtins.lobe-task.apiName.listTasks": "Lista zadań",
+  "builtins.lobe-task.apiName.listWorkspaceMembers": "Lista członków",
   "builtins.lobe-task.apiName.runTask": "Uruchom zadanie",
   "builtins.lobe-task.apiName.runTasks": "Uruchom zadania",
   "builtins.lobe-task.apiName.setTaskSchedule": "Ustaw harmonogram",

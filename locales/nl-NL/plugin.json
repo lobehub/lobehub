@@ -416,6 +416,7 @@
   "builtins.lobe-task.apiName.deleteTaskComment": "Opmerking verwijderen",
   "builtins.lobe-task.apiName.editTask": "Taak bewerken",
   "builtins.lobe-task.apiName.listTasks": "Taken weergeven",
+  "builtins.lobe-task.apiName.listWorkspaceMembers": "Leden weergeven",
   "builtins.lobe-task.apiName.runTask": "Taak uitvoeren",
   "builtins.lobe-task.apiName.runTasks": "Taken uitvoeren",
   "builtins.lobe-task.apiName.setTaskSchedule": "Schema instellen",

@@ -414,6 +414,7 @@ export default {
   'builtins.lobe-task.apiName.deleteTaskComment': 'Delete comment',
   'builtins.lobe-task.apiName.editTask': 'Edit task',
   'builtins.lobe-task.apiName.listTasks': 'List tasks',
+  'builtins.lobe-task.apiName.listWorkspaceMembers': 'List members',
   'builtins.lobe-task.apiName.runTask': 'Run task',
   'builtins.lobe-task.apiName.runTasks': 'Run tasks',
   'builtins.lobe-task.apiName.setTaskSchedule': 'Set schedule',

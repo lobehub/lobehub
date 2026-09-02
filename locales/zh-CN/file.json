@@ -177,6 +177,8 @@
   "pageEditor.history.versionCount_one": "共 {{count}} 个版本",
   "pageEditor.history.versionCount_other": "共 {{count}} 个版本",
   "pageEditor.likes.count": "{{count}} 人点赞",
+  "pageEditor.likes.count_one": "{{count}} 个赞",
+  "pageEditor.likes.count_other": "{{count}} 个赞",
   "pageEditor.likes.failed": "点赞操作失败，请重试",
   "pageEditor.likes.like": "觉得不错？点个赞",
   "pageEditor.likes.liked": "已点赞",

@@ -416,6 +416,7 @@
   "builtins.lobe-task.apiName.deleteTaskComment": "删除评论",
   "builtins.lobe-task.apiName.editTask": "编辑任务",
   "builtins.lobe-task.apiName.listTasks": "任务列表",
+  "builtins.lobe-task.apiName.listWorkspaceMembers": "成员列表",
   "builtins.lobe-task.apiName.runTask": "启动任务",
   "builtins.lobe-task.apiName.runTasks": "批量启动任务",
   "builtins.lobe-task.apiName.setTaskSchedule": "设置调度",

@@ -147,13 +147,15 @@ const { apiKeyEnvironmentName, expectedHostPrefix, urlEnvironmentName } =
 const databaseUrl = process.env.DATABASE_URL;
 const elasticsearchApiKey = process.env[apiKeyEnvironmentName];
 const elasticsearchUrl = process.env[urlEnvironmentName];
+/** Same explicit opt-in as the application runtime; see `packages/env/src/ftsSearch.ts`. */
+const allowInsecureHttp = process.env.ES_ALLOW_INSECURE_HTTP === 'true';
 const namespace = process.env.ES_INDEX_NAMESPACE;
 const configuredStateDirectory = process.env.ES_REINDEX_STATE_DIR;
 const stateDirectory = path.resolve(configuredStateDirectory ?? '.elasticsearch-reindex');
 
 if (!databaseUrl) throw new Error('DATABASE_URL is required');
 if (!namespace) throw new Error('ES_INDEX_NAMESPACE is required');
-if (apply && !elasticsearchApiKey) {
+if (apply && !elasticsearchApiKey && !allowInsecureHttp) {
   throw new Error(`${apiKeyEnvironmentName} is required with --apply`);
 }
 if (apply && !elasticsearchUrl) {
@@ -359,6 +361,7 @@ const run = async () => {
     bulkMaxBytes: bulkMaxBytes ?? 50 * 1024 * 1024,
     credentialEnvName: apiKeyEnvironmentName,
     endpointHostname,
+    endpointAuthentication: elasticsearchApiKey ? 'api_key' : 'none',
     endpointEnvName: urlEnvironmentName,
     expectedHostPrefix: expectedHostPrefix ?? null,
     batchSizeByEntity,
@@ -385,7 +388,8 @@ const run = async () => {
   );
 
   const client = new FtsSearchReindexHttpClient({
-    apiKey: elasticsearchApiKey!,
+    allowInsecureHttp,
+    apiKey: elasticsearchApiKey,
     requestTimeoutMs,
     url: elasticsearchUrl!,
   });

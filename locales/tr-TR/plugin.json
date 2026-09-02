@@ -416,6 +416,7 @@
   "builtins.lobe-task.apiName.deleteTaskComment": "Yorumu sil",
   "builtins.lobe-task.apiName.editTask": "Görevi düzenle",
   "builtins.lobe-task.apiName.listTasks": "Görevleri listele",
+  "builtins.lobe-task.apiName.listWorkspaceMembers": "Üyeleri listele",
   "builtins.lobe-task.apiName.runTask": "Görevi çalıştır",
   "builtins.lobe-task.apiName.runTasks": "Görevleri çalıştır",
   "builtins.lobe-task.apiName.setTaskSchedule": "Zamanlama ayarla",

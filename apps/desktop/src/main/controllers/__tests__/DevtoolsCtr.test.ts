@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
+import { runWithIpcContext } from '@/utils/ipc';
 
 import DevtoolsCtr from '../DevtoolsCtr';
 
@@ -71,6 +72,7 @@ describe('DevtoolsCtr', () => {
       await expect(devtoolsCtr.getAppProcessMetrics()).resolves.toEqual({
         cpuPercent: 3.75,
         gpu: null,
+        rendererResidentMB: null,
       });
     });
 
@@ -83,6 +85,7 @@ describe('DevtoolsCtr', () => {
       await expect(devtoolsCtr.getAppProcessMetrics()).resolves.toEqual({
         cpuPercent: 4,
         gpu: { cpuPercent: 2.5, memoryMB: 64 },
+        rendererResidentMB: null,
       });
     });
 
@@ -95,6 +98,7 @@ describe('DevtoolsCtr', () => {
       await expect(devtoolsCtr.getAppProcessMetrics()).resolves.toEqual({
         cpuPercent: 4,
         gpu: { cpuPercent: 4, memoryMB: 4 },
+        rendererResidentMB: null,
       });
     });
 
@@ -104,7 +108,22 @@ describe('DevtoolsCtr', () => {
       await expect(devtoolsCtr.getAppProcessMetrics()).resolves.toEqual({
         cpuPercent: 0,
         gpu: null,
+        rendererResidentMB: null,
       });
+    });
+
+    it('should report the resident set of the renderer that asked', async () => {
+      getAppMetricsMock.mockReturnValue([
+        { cpu: { percentCPUUsage: 1 }, memory: { workingSetSize: 1024 }, pid: 10, type: 'Browser' },
+        { cpu: { percentCPUUsage: 2 }, memory: { workingSetSize: 8192 }, pid: 42, type: 'Tab' },
+      ]);
+      const sender = { getOSProcessId: () => 42 } as any;
+
+      await expect(
+        runWithIpcContext({ event: { sender } as any, sender }, () =>
+          devtoolsCtr.getAppProcessMetrics(),
+        ),
+      ).resolves.toEqual({ cpuPercent: 3, gpu: null, rendererResidentMB: 8 });
     });
   });
 

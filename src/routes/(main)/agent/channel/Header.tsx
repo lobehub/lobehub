@@ -2,15 +2,8 @@
 
 import { exportJSONFile } from '@lobechat/utils/client';
 import { Flexbox, Icon } from '@lobehub/ui';
-import {
-  ActionIcon,
-  confirmModal,
-  type DropdownItem,
-  DropdownMenu,
-  Switch,
-  Tag,
-  toast,
-} from '@lobehub/ui/base-ui';
+import type { DropdownItem } from '@lobehub/ui/base-ui';
+import { ActionIcon, confirmModal, DropdownMenu, Switch, Tag, toast } from '@lobehub/ui/base-ui';
 import {
   BookOpen,
   Download,
@@ -78,6 +71,7 @@ const Header = memo<HeaderProps>(
     const toggleDisabled = disabled || (paidFeatureBlocked && !currentConfig?.enabled);
     const effectiveEnabled = pendingEnabled ?? currentConfig?.enabled;
     const hasProviders = !!providers?.length;
+    const setupGuideUrl = platformDef?.documentation?.setupGuideUrl;
 
     useEffect(() => {
       if (!currentConfig || pendingEnabled === currentConfig.enabled) setPendingEnabled(undefined);
@@ -224,15 +218,6 @@ const Header = memo<HeaderProps>(
     })();
     const menuItems: DropdownItem[] = [];
 
-    if (platformDef?.documentation?.setupGuideUrl) {
-      menuItems.push({
-        icon: <Icon icon={BookOpen} />,
-        key: 'docs',
-        label: t('channel.documentation'),
-        onClick: () =>
-          window.open(platformDef.documentation?.setupGuideUrl, '_blank', 'noopener,noreferrer'),
-      });
-    }
     if (platformDef?.documentation?.portalUrl) {
       menuItems.push({
         icon: <Icon icon={ExternalLink} />,
@@ -314,6 +299,14 @@ const Header = memo<HeaderProps>(
                   disabled={toggleDisabled}
                   loading={toggleLoading}
                   onChange={handleToggleEnable}
+                />
+              )}
+              {setupGuideUrl && (
+                <ActionIcon
+                  aria-label={t('channel.documentation')}
+                  icon={BookOpen}
+                  title={t('channel.documentation')}
+                  onClick={() => window.open(setupGuideUrl, '_blank', 'noopener,noreferrer')}
                 />
               )}
               <DropdownMenu items={menuItems} placement={'bottomRight'}>

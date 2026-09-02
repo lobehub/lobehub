@@ -27,6 +27,7 @@ import isEqual from 'fast-deep-equal';
 import {
   ArrowLeft,
   Check,
+  CircleDashed,
   FolderClosed,
   Group,
   ListChecks,
@@ -54,6 +55,7 @@ import { acceptanceHomePath } from '../Viewer/routes';
 import type { AcceptanceStatusAction } from '../Viewer/statusActions';
 import AcceptanceBatchBar from './AcceptanceBatchBar';
 import {
+  acceptanceListEmptyVariant,
   type AcceptanceListFilter,
   DEFAULT_ACCEPTANCE_LIST_FILTER,
   normalizeAcceptanceListFilter,
@@ -320,6 +322,18 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
     const error = searching ? search.error : pagedRest.error;
     const isLoading = searching ? search.isLoading : isLoadingInitial;
     const mutate = searching ? search.mutate : pagedRest.mutate;
+
+    // Deduped against the workspace shell's own `filter: 'all'` read, so this
+    // probe costs no extra request — it only answers whether a zero-result
+    // filter is hiding anything at all (see acceptanceListEmptyVariant).
+    const allProbe = useAcceptanceList(!error && !isLoading && items.length === 0, {
+      filter: 'all',
+    });
+    const emptyVariant = acceptanceListEmptyVariant({
+      allListEmpty: allProbe.data ? allProbe.data.length === 0 : undefined,
+      filter,
+      searching: Boolean(trimmedQuery),
+    });
 
     const groups = groupAcceptanceList(items, groupMode);
     const showGroups = shouldRenderAcceptanceGroups(groupMode, groups);
@@ -681,7 +695,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
             ) : isLoading ? (
               <SkeletonList rows={6} style={{ paddingBlock: 6, paddingInline: 8 }} />
             ) : items.length === 0 ? (
-              trimmedQuery || filter !== 'all' ? (
+              emptyVariant === 'filtered' ? (
                 // A zero-result FILTER must read as "no match for this query",
                 // never as the first-run empty state.
                 <div className={styles.searchEmpty}>
@@ -705,8 +719,12 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                 </div>
               ) : (
                 <Center className={styles.emptyState}>
+                  {/* The dashed circle is the acceptance "awaiting" glyph
+                      (AcceptanceStatusPill) — the domain's own mark, not the
+                      generic inbox. */}
                   <Empty
                     description={t('acceptance.workspace.listEmpty')}
+                    icon={CircleDashed}
                     title={t('acceptance.workspace.listEmptyTitle')}
                   />
                 </Center>

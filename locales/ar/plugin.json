@@ -416,6 +416,7 @@
   "builtins.lobe-task.apiName.deleteTaskComment": "حذف تعليق",
   "builtins.lobe-task.apiName.editTask": "تعديل مهمة",
   "builtins.lobe-task.apiName.listTasks": "عرض المهام",
+  "builtins.lobe-task.apiName.listWorkspaceMembers": "قائمة الأعضاء",
   "builtins.lobe-task.apiName.runTask": "تشغيل مهمة",
   "builtins.lobe-task.apiName.runTasks": "تشغيل مهام",
   "builtins.lobe-task.apiName.setTaskSchedule": "تعيين الجدول الزمني",

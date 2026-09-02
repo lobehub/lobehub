@@ -1,9 +1,43 @@
 import { normalizeListTasksParams, UNFINISHED_TASK_STATUSES } from '@lobechat/builtin-tool-task';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTaskRuntime } from '../task';
 
 const verifyMocks = vi.hoisted(() => ({ createCriteriaFromDrafts: vi.fn() }));
+
+const memberMocks = vi.hoisted(() => ({
+  findLinksByUserIds: vi.fn(),
+  getDisplayInfoByIds: vi.fn(),
+  getEmailsByIds: vi.fn(),
+  notifyTaskAssigned: vi.fn(),
+  searchAssignableMembers: vi.fn(),
+}));
+
+vi.mock('@/database/models/messengerAccountLink', () => ({
+  MessengerAccountLinkModel: { findByUserIds: memberMocks.findLinksByUserIds },
+}));
+
+vi.mock('@/business/server/task/notifyTaskAssigned', () => ({
+  notifyTaskAssigned: memberMocks.notifyTaskAssigned,
+}));
+
+vi.mock('@/database/models/user', () => ({
+  UserModel: {
+    getDisplayInfoByIds: memberMocks.getDisplayInfoByIds,
+    getEmailsByIds: memberMocks.getEmailsByIds,
+  },
+}));
+
+vi.mock('@/database/models/workspaceMember', () => ({
+  WorkspaceMemberModel: vi.fn().mockImplementation(() => ({
+    searchAssignableMembers: memberMocks.searchAssignableMembers,
+  })),
+}));
+
+// Keep the role gate deterministic: only 'viewer' is excluded here.
+vi.mock('@lobechat/const/rbac', () => ({
+  canWorkspaceRoleBeTaskAssignee: (role?: string | null) => !!role && role !== 'viewer',
+}));
 
 vi.mock('@/server/routers/lambda/task', () => ({
   taskRouter: { createCaller: () => ({}) },
@@ -843,6 +877,340 @@ describe('createTaskRuntime', () => {
       expect(result.success).toBe(false);
       expect(result.content).toContain('Started 2/3 tasks (1 failed)');
       expect(result.content).toContain('T-B — failed: Task already has a running topic');
+    });
+  });
+});
+
+describe('createTaskRuntime — human assignee (assigneeUserId)', () => {
+  const db = {} as any;
+
+  const makeCreateDeps = (created: Record<string, unknown>) => {
+    const agentModel = { existsById: vi.fn().mockResolvedValue(true) };
+    const taskModel = { resolve: vi.fn() };
+    const taskService = { createTask: vi.fn().mockResolvedValue(created) };
+    return { agentModel, taskCaller: {} as any, taskModel, taskService };
+  };
+
+  const alice = { avatar: null, fullName: 'Alice', id: 'usr_2', username: 'alice' };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    memberMocks.getDisplayInfoByIds.mockResolvedValue([alice]);
+    memberMocks.getEmailsByIds.mockResolvedValue([]);
+    memberMocks.findLinksByUserIds.mockResolvedValue([]);
+  });
+
+  describe('createTask', () => {
+    it('assigns the member alongside the defaulted executing agent, labels it and notifies them', async () => {
+      const deps = makeCreateDeps({
+        assigneeUserId: 'usr_2',
+        id: 'task-1',
+        identifier: 'T-1',
+        name: 'Review',
+        priority: 0,
+        status: 'backlog',
+      });
+      const runtime = createTaskRuntime({
+        agentModel: deps.agentModel as any,
+        agentId: 'agt-xyz',
+        db,
+        taskCaller: deps.taskCaller,
+        taskModel: deps.taskModel as any,
+        taskService: deps.taskService as any,
+        userId: 'usr_1',
+        workspaceId: 'ws_1',
+      });
+
+      const result = await runtime.createTask({
+        assigneeUserId: 'usr_2',
+        instruction: 'Review the doc',
+        name: 'Review',
+      });
+
+      expect(result.success).toBe(true);
+      // The member is the human owner; the executing agent still defaults to
+      // the current agent — the two sides coexist.
+      expect(deps.taskService.createTask).toHaveBeenCalledWith(
+        expect.objectContaining({ assigneeAgentId: 'agt-xyz', assigneeUserId: 'usr_2' }),
+      );
+      expect(result.content).toContain('Assignee: Alice (usr_2)');
+      expect(memberMocks.notifyTaskAssigned).toHaveBeenCalledWith({
+        actorUserId: 'usr_1',
+        assigneeUserId: 'usr_2',
+        taskId: 'task-1',
+        taskIdentifier: 'T-1',
+        taskName: 'Review',
+        workspaceId: 'ws_1',
+      });
+    });
+
+    it('stays silent on self-assignment', async () => {
+      const deps = makeCreateDeps({
+        assigneeUserId: 'usr_1',
+        id: 'task-1',
+        identifier: 'T-1',
+        name: 'Mine',
+        status: 'backlog',
+      });
+      const runtime = createTaskRuntime({
+        agentModel: deps.agentModel as any,
+        db,
+        taskCaller: deps.taskCaller,
+        taskModel: deps.taskModel as any,
+        taskService: deps.taskService as any,
+        userId: 'usr_1',
+      });
+
+      await runtime.createTask({ assigneeUserId: 'usr_1', instruction: 'x', name: 'Mine' });
+
+      expect(memberMocks.notifyTaskAssigned).not.toHaveBeenCalled();
+    });
+
+    it('accepts an explicit agent and a member in the same call (coexisting assignees)', async () => {
+      const deps = makeCreateDeps({ id: 'task-1', identifier: 'T-1', status: 'backlog' });
+      const runtime = createTaskRuntime({
+        agentModel: deps.agentModel as any,
+        db,
+        taskCaller: deps.taskCaller,
+        taskModel: deps.taskModel as any,
+        taskService: deps.taskService as any,
+        userId: 'usr_1',
+      });
+
+      const result = await runtime.createTask({
+        assigneeAgentId: 'agt-1',
+        assigneeUserId: 'usr_2',
+        instruction: 'x',
+        name: 'Both',
+      });
+
+      expect(result.success).toBe(true);
+      expect(deps.taskService.createTask).toHaveBeenCalledWith(
+        expect.objectContaining({ assigneeAgentId: 'agt-1', assigneeUserId: 'usr_2' }),
+      );
+    });
+  });
+
+  describe('editTask', () => {
+    const makeEditDeps = (current: Record<string, unknown>) => ({
+      agentModel: { existsById: vi.fn().mockResolvedValue(true) },
+      taskCaller: { update: vi.fn().mockResolvedValue({}) } as any,
+      taskModel: {
+        resolve: vi.fn().mockResolvedValue({ id: 'task-1', identifier: 'T-1', ...current }),
+      },
+      taskService: {} as any,
+    });
+
+    it('setting the member leaves the agent side untouched (assignees coexist)', async () => {
+      const deps = makeEditDeps({ assigneeAgentId: 'agt-old', assigneeUserId: null });
+      const runtime = createTaskRuntime({
+        agentModel: deps.agentModel as any,
+        db,
+        taskCaller: deps.taskCaller,
+        taskModel: deps.taskModel as any,
+        taskService: deps.taskService,
+        userId: 'usr_1',
+      });
+
+      const result = await runtime.editTask({ assigneeUserId: 'usr_2', identifier: 'T-1' });
+
+      expect(result.success).toBe(true);
+      expect(deps.taskCaller.update).toHaveBeenCalledWith({
+        assigneeUserId: 'usr_2',
+        id: 'task-1',
+      });
+      expect(result.content).toContain('assignee member → Alice (usr_2)');
+      expect(result.content).not.toContain('assignee agent cleared');
+    });
+
+    it('setting the agent leaves the member side untouched (assignees coexist)', async () => {
+      const deps = makeEditDeps({ assigneeAgentId: null, assigneeUserId: 'usr_2' });
+      const runtime = createTaskRuntime({
+        agentModel: deps.agentModel as any,
+        taskCaller: deps.taskCaller,
+        taskModel: deps.taskModel as any,
+        taskService: deps.taskService,
+      });
+
+      await runtime.editTask({ assigneeAgentId: 'agt-new', identifier: 'T-1' });
+
+      expect(deps.taskCaller.update).toHaveBeenCalledWith({
+        assigneeAgentId: 'agt-new',
+        id: 'task-1',
+      });
+    });
+
+    it('clearing the member leaves the agent side untouched', async () => {
+      const deps = makeEditDeps({ assigneeAgentId: null, assigneeUserId: 'usr_2' });
+      const runtime = createTaskRuntime({
+        agentModel: deps.agentModel as any,
+        taskCaller: deps.taskCaller,
+        taskModel: deps.taskModel as any,
+        taskService: deps.taskService,
+      });
+
+      const result = await runtime.editTask({ assigneeUserId: null, identifier: 'T-1' });
+
+      expect(deps.taskCaller.update).toHaveBeenCalledWith({ assigneeUserId: null, id: 'task-1' });
+      expect(result.content).toContain('assignee member cleared');
+    });
+
+    it('accepts an agent and a member in the same call (coexisting assignees)', async () => {
+      const deps = makeEditDeps({});
+      const runtime = createTaskRuntime({
+        agentModel: deps.agentModel as any,
+        db,
+        taskCaller: deps.taskCaller,
+        taskModel: deps.taskModel as any,
+        taskService: deps.taskService,
+        userId: 'usr_1',
+      });
+
+      const result = await runtime.editTask({
+        assigneeAgentId: 'agt-1',
+        assigneeUserId: 'usr_2',
+        identifier: 'T-1',
+      });
+
+      expect(result.success).toBe(true);
+      expect(deps.taskCaller.update).toHaveBeenCalledWith({
+        assigneeAgentId: 'agt-1',
+        assigneeUserId: 'usr_2',
+        id: 'task-1',
+      });
+    });
+  });
+
+  describe('listWorkspaceMembers', () => {
+    const baseDeps = {
+      agentModel: {} as any,
+      taskCaller: {} as any,
+      taskModel: {} as any,
+      taskService: {} as any,
+    };
+
+    it('lists the assignable page the directory query returns, with a self marker', async () => {
+      // Role gating, narrowing and the cap all happen in the model's SQL; the
+      // runtime only decorates the page it gets back.
+      memberMocks.searchAssignableMembers.mockResolvedValue({
+        rows: [
+          { role: 'owner', userId: 'usr_1' },
+          { role: 'member', userId: 'usr_2' },
+        ],
+        total: 2,
+      });
+      memberMocks.getDisplayInfoByIds.mockResolvedValue([
+        { avatar: null, fullName: 'Me', id: 'usr_1', username: 'me' },
+        alice,
+      ]);
+      const runtime = createTaskRuntime({ ...baseDeps, db, userId: 'usr_1', workspaceId: 'ws_1' });
+
+      const result = await runtime.listWorkspaceMembers();
+
+      expect(result.success).toBe(true);
+      expect(memberMocks.searchAssignableMembers).toHaveBeenCalledWith('ws_1', {
+        limit: 50,
+        query: undefined,
+      });
+      expect(memberMocks.getDisplayInfoByIds).toHaveBeenCalledWith(db, ['usr_1', 'usr_2']);
+      // IM identities are read under this workspace's scope only.
+      expect(memberMocks.findLinksByUserIds).toHaveBeenCalledWith(db, ['usr_1', 'usr_2'], {
+        workspaceId: 'ws_1',
+      });
+      expect(result.state).toEqual({ count: 2, success: true, total: 2 });
+      expect(result.content).toContain('- Me  @me  role=owner  (you)  id=usr_1');
+      expect(result.content).toContain('- Alice  @alice  role=member  id=usr_2');
+    });
+
+    it('surfaces email and linked IM identities so platform handles resolve exactly', async () => {
+      memberMocks.searchAssignableMembers.mockResolvedValue({
+        rows: [{ role: 'member', userId: 'usr_2' }],
+        total: 1,
+      });
+      memberMocks.getDisplayInfoByIds.mockResolvedValue([alice]);
+      memberMocks.getEmailsByIds.mockResolvedValue([{ email: 'alice@lobehub.com', id: 'usr_2' }]);
+      memberMocks.findLinksByUserIds.mockResolvedValue([
+        {
+          platform: 'discord',
+          platformUserId: '4521',
+          platformUsername: 'Neko',
+          userId: 'usr_2',
+        },
+        { platform: 'slack', platformUserId: 'U123', platformUsername: null, userId: 'usr_2' },
+      ]);
+      const runtime = createTaskRuntime({ ...baseDeps, db, userId: 'usr_1', workspaceId: 'ws_1' });
+
+      const result = await runtime.listWorkspaceMembers();
+
+      expect(result.content).toContain(
+        '- Alice  @alice  alice@lobehub.com  role=member  im=discord:@Neko(4521),slack:U123  id=usr_2',
+      );
+    });
+
+    it('passes the folded query and the cap to the directory lookup and announces the cut', async () => {
+      memberMocks.getEmailsByIds.mockResolvedValue([{ email: 'alice@lobehub.com', id: 'usr_2' }]);
+      memberMocks.findLinksByUserIds.mockResolvedValue([
+        { platform: 'discord', platformUserId: '4521', platformUsername: 'Neko', userId: 'usr_2' },
+      ]);
+      const runtime = createTaskRuntime({ ...baseDeps, db, userId: 'usr_1', workspaceId: 'ws_1' });
+
+      // A native Discord mention is folded to the bare platform id before it
+      // reaches SQL; the page it returns is decorated and echoed with the needle.
+      memberMocks.searchAssignableMembers.mockResolvedValueOnce({
+        rows: [{ role: 'member', userId: 'usr_2' }],
+        total: 1,
+      });
+      const byMention = await runtime.listWorkspaceMembers({ query: '<@!4521>' });
+      expect(memberMocks.searchAssignableMembers).toHaveBeenLastCalledWith('ws_1', {
+        limit: 50,
+        query: '4521',
+      });
+      expect(byMention.state).toEqual({ count: 1, query: '4521', success: true, total: 1 });
+      expect(byMention.content).toContain('matching "4521" (1)');
+      expect(byMention.content).toContain('im=discord:@Neko(4521)  id=usr_2');
+
+      // The cap is announced so the model refines instead of assuming it saw everyone.
+      memberMocks.searchAssignableMembers.mockResolvedValueOnce({
+        rows: [{ role: 'member', userId: 'usr_2' }],
+        total: 3,
+      });
+      const capped = await runtime.listWorkspaceMembers({ limit: 1 });
+      expect(memberMocks.searchAssignableMembers).toHaveBeenLastCalledWith('ws_1', {
+        limit: 1,
+        query: undefined,
+      });
+      expect(capped.state).toEqual({ count: 1, success: true, total: 3 });
+      expect(capped.content).toContain('(1 of 3 — pass query to narrow)');
+
+      memberMocks.searchAssignableMembers.mockResolvedValueOnce({ rows: [], total: 0 });
+      const none = await runtime.listWorkspaceMembers({ query: 'nobody' });
+      expect(none.state).toEqual({ count: 0, query: 'nobody', success: true, total: 0 });
+      expect(none.content).toContain('No workspace members match "nobody"');
+    });
+
+    it('returns only the caller outside a workspace', async () => {
+      memberMocks.getDisplayInfoByIds.mockResolvedValue([
+        { avatar: null, fullName: 'Me', id: 'usr_1', username: 'me' },
+      ]);
+      const runtime = createTaskRuntime({ ...baseDeps, db, userId: 'usr_1' });
+
+      const result = await runtime.listWorkspaceMembers();
+
+      expect(memberMocks.searchAssignableMembers).not.toHaveBeenCalled();
+      expect(memberMocks.findLinksByUserIds).toHaveBeenCalledWith(db, ['usr_1'], {
+        workspaceId: null,
+      });
+      expect(result.content).toContain('Not in a workspace');
+      expect(result.content).toContain('(you)  id=usr_1');
+    });
+
+    it('fails clearly when no database is wired', async () => {
+      const runtime = createTaskRuntime({ ...baseDeps, userId: 'usr_1' });
+
+      const result = await runtime.listWorkspaceMembers();
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('unavailable');
     });
   });
 });

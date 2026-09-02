@@ -1,6 +1,6 @@
 ---
-title: Migrate Search Data to Elasticsearch (3.x)
-description: Safely backfill LobeHub search data into an empty Elasticsearch project with durable resume support.
+title: Migrate from pg_search to Elasticsearch (3.x)
+description: Safely move an existing LobeHub deployment from PostgreSQL pg_search to Elasticsearch.
 tags:
   - Elasticsearch
   - Search
@@ -8,9 +8,29 @@ tags:
   - Self-hosting
 ---
 
-# Migrate Search Data to Elasticsearch
+# Migrate from pg\_search to Elasticsearch
 
-The 3.x migration tool copies LobeHub's 14 searchable entity types from PostgreSQL into a new Elasticsearch project. It atomically records the cursor, counters, and item-level failures in a local checkpoint file, so running the same command with the same state directory resumes the existing attempt.
+This guide moves an existing LobeHub deployment from PostgreSQL `pg_search` to Elasticsearch while
+the application remains available. The 3.x migration tool copies LobeHub's 14 searchable entity
+types into a new Elasticsearch project. It atomically records cursors, counters, and item-level
+failures in a local checkpoint file, so running the same command with the same state directory
+resumes the existing attempt.
+
+This workflow is for a database that has already applied the historical `pg_search` migrations and
+currently serves search with `FTS_SEARCH_PROVIDER=pg_search`. For backend selection and the ongoing
+Elasticsearch data flow, read [Full-Text Search](/docs/self-hosting/advanced/full-text-search).
+
+<Callout type="warning">
+  Neon stopped offering `pg_search` to new projects on March 19, 2026. Neon has notified affected
+  existing customers that the extension will be removed on September 21, 2026; queries, indexes,
+  and applications that still depend on it will stop working after removal. Complete this
+  migration before that deadline. Setting `FTS_SEARCH_PROVIDER=elasticsearch` on a fresh database
+  does not skip LobeHub's historical `pg_search` migrations: `bun run db:migrate` still attempts to
+  create the extension and BM25 indexes, and fails when the database service does not provide them.
+  See Neon's
+  [pg\_search notice](https://neon.com/docs/extensions/pg_search) and
+  [extension catalog](https://neon.com/docs/extensions/pg-extensions) for the current service state.
+</Callout>
 
 <Callout type="warning">
   The reindex command does not switch product search requests to Elasticsearch. Keep the application on PostgreSQL search while you backfill and validate the new indexes. The regular database migration creates the PostgreSQL Outbox schema and the schema-managed Memory fanout GIN index; it does not install search-capture functions or triggers. Capture starts only after you explicitly run `bun run db:install-fts-search-capture` or start `bun run fts-search:reindex -- --apply`, even if the incremental consumer is still paused.
@@ -18,15 +38,15 @@ The 3.x migration tool copies LobeHub's 14 searchable entity types from PostgreS
 
 ## Environment variables
 
-| Variable                  | Required | Purpose                                                                                                                                    |
-| ------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `DATABASE_URL`            | Yes      | PostgreSQL source database and incremental-change Outbox. Reindex checkpoints are not stored in the database.                              |
-| `ES_URL`                  | Apply    | HTTPS endpoint of the new, empty Elasticsearch project that receives the 3.x search indexes.                                               |
-| `ES_API_KEY`              | Apply    | Elasticsearch API key used to create indexes, write bulk documents, refresh/count indexes, and create aliases. Do not use a read-only key. |
-| `ES_INDEX_NAMESPACE`      | Yes      | Stable deployment-owned prefix, for example `lobehub`. It produces aliases such as `lobehub-messages`. Keep it unchanged across reruns.    |
-| `FTS_SEARCH_SYNC_ENABLED` | Sync     | Set to `true` only after the full backfill is ready and before running the incremental consumer.                                           |
-| `ES_REINDEX_STATE_DIR`    | Mutate   | Local checkpoint directory. It must be explicit for mutations and must persist across every resume attempt.                                |
-| `FTS_SEARCH_PROVIDER`     | Runtime  | Full-text search provider: `pg_search` (default) or `elasticsearch`. Keep `pg_search` until backfill, catch-up, and validation finish.     |
+| Variable                  | Required | Purpose                                                                                                                                                                                   |
+| ------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`            | Yes      | PostgreSQL source database and incremental-change Outbox. Reindex checkpoints are not stored in the database.                                                                             |
+| `ES_URL`                  | Apply    | Endpoint of the new, empty Elasticsearch target that receives the 3.x search indexes. HTTPS, or plaintext HTTP only for loopback or with `ES_ALLOW_INSECURE_HTTP=true`.                   |
+| `ES_API_KEY`              | Apply    | Elasticsearch API key used to create indexes, write bulk documents, refresh/count indexes, and create aliases. Do not use a read-only key. Required unless `ES_ALLOW_INSECURE_HTTP=true`. |
+| `ES_ALLOW_INSECURE_HTTP`  | Compose  | `true` only for an Elasticsearch node with security disabled that is reachable exclusively inside a private container network, such as the optional Docker Compose service.               |
+| `ES_INDEX_NAMESPACE`      | Yes      | Stable deployment-owned prefix, for example `lobehub`. It produces aliases such as `lobehub-messages`. Keep it unchanged across reruns.                                                   |
+| `FTS_SEARCH_SYNC_ENABLED` | Sync     | Set to `true` only after the full backfill is ready and before running the incremental consumer.                                                                                          |
+| `FTS_SEARCH_PROVIDER`     | Cutover  | Set to `elasticsearch` after backfill, catch-up, and validation finish to switch user search traffic.                                                                                     |
 
 `ES_URL` and `ES_API_KEY` are not needed for the read-only `--status` command.
 Operators that keep multiple Elasticsearch targets in one environment can select an explicit pair
@@ -37,7 +57,9 @@ hostname and variable names, never credential values.
 
 Remote Elasticsearch targets must use HTTPS. Plain HTTP is accepted only for loopback addresses
 such as `localhost` during local development, so an API key cannot be sent unencrypted to a remote
-host.
+host. The single explicit exception is `ES_ALLOW_INSECURE_HTTP=true`, which permits plaintext HTTP
+to a private container hostname without an API key; even then the runtime, reindex, and sync
+clients all refuse to send an API key over plaintext HTTP.
 
 ## Before you start
 
@@ -46,26 +68,24 @@ host.
    [`analysis-icu`](https://www.elastic.co/docs/reference/elasticsearch/plugins/analysis-icu)
    plugin. Elastic Cloud Serverless includes core analysis plugins; on Elastic Cloud Hosted, enable
    the provided plugin for the deployment; on self-managed Elasticsearch, install it on every node
-   and restart every node before the first `--apply`.
+   and restart every node before the first `--apply`. Docker Compose deployments can instead enable
+   the optional `elasticsearch` service of the official Compose file, whose image is built with the
+   plugin included; see
+   [Run Elasticsearch with Docker Compose](/docs/self-hosting/advanced/full-text-search#run-elasticsearch-with-docker-compose).
 
-2. Back up PostgreSQL before enabling Elasticsearch capture.
+2. Create and verify a PostgreSQL recovery point before enabling Elasticsearch capture, then
+   rehearse the migration against an isolated database copy and an isolated empty Elasticsearch
+   target. The rehearsal should exercise at least one batch for every non-empty entity, a resume
+   using the same checkpoint, incremental catch-up, and the application smoke tests you will use at
+   cutover.
 
-3. If an existing, write-heavy database is about to apply the migration, run the following
-   statement in the database SQL editor, outside a transaction. It builds the Memory fanout index
-   without blocking writes, so the regular migration can reuse it. A new or low-traffic
-   installation can skip this pre-step and let the migration create the index normally:
+   On Neon, create a child branch for the rehearsal and use a manual snapshot or the root branch's
+   point-in-time restore window for production recovery. A child branch is an isolated test copy;
+   it is not itself a point-in-time restore point. See Neon's
+   [branching](https://neon.com/docs/introduction/branching) and
+   [backup and restore](https://neon.com/docs/guides/backup-restore) documentation.
 
-   ```sql
-   CREATE INDEX CONCURRENTLY IF NOT EXISTS "user_memories_contexts_user_memory_ids_gin_idx"
-   ON "user_memories_contexts" USING gin ("user_memory_ids");
-   ```
-
-   `IF NOT EXISTS` does not verify an existing index definition. If an interrupted build left this
-   index invalid, or the installer reports that its table, column, GIN operator class, or predicate
-   is wrong, run `DROP INDEX CONCURRENTLY "user_memories_contexts_user_memory_ids_gin_idx"` outside
-   a transaction, recreate it with the statement above, and then continue.
-
-4. Apply the database migrations for the same LobeHub release:
+3. Apply the database migrations for the same LobeHub release:
 
    ```bash
    bun run db:migrate
@@ -76,7 +96,7 @@ host.
    PostgreSQL-only deployment can stop here: it still maintains the schema-managed GIN index, but
    does not pay the trigger or Outbox capture-write overhead.
 
-5. Install the optional PostgreSQL change capture before the first backfill:
+4. Install the optional PostgreSQL change capture before the first backfill:
 
    ```bash
    bun run db:install-fts-search-capture
@@ -91,7 +111,7 @@ host.
    capture active while preparing the Elasticsearch target. If you do not intend to enable
    Elasticsearch, do not run it.
 
-6. Keep the application's search backend on PostgreSQL and keep incremental Elasticsearch draining disabled.
+5. Keep the application's search backend on PostgreSQL and keep incremental Elasticsearch draining disabled.
 
 The first production mapping is version `v1`. The tool creates physical indexes such as `lobehub-messages-v1`. After all 14 indexes finish and their counts match the durable checkpoints, it creates stable aliases such as `lobehub-messages`. An alias is only a stable Elasticsearch name; creating it does not change which search backend serves users.
 
@@ -198,6 +218,13 @@ counts, retries, cursors, failures, and final state. It never records database o
 URLs, credentials, or document source text. Keep these private files with the checkpoint when
 moving or archiving a run.
 
+The backfill command exports OpenTelemetry only when `ENABLE_TELEMETRY` is set. In that case, pass
+`--telemetry-environment=<development|preview|production>` and configure either
+`OTEL_EXPORTER_OTLP_ENDPOINT` or both signal-specific metrics and traces endpoints. Otherwise leave
+telemetry disabled and use the local event and summary files. Always set the same explicit
+`ES_INDEX_NAMESPACE` for the migration command, incremental consumer, and application runtime;
+the command has no development fallback for a missing namespace.
+
 ## Run from the Docker image
 
 The official image includes `/app/fts-search-elasticsearch-reindex.cjs`:
@@ -215,10 +242,27 @@ docker run --rm --user "$(id -u):$(id -g)" --env-file .env \
 ```
 
 The bind mount is required for resume after a `--rm` container exits. Running with the host user's
-ID lets the process write the bind-mounted directory without changing its ownership. If Docker
-Compose already supplies the same environment variables and database network, mount the same
-persistent state directory and run the image as a one-time service instead of starting a second
-application server.
+ID lets the process write the bind-mounted directory without changing its ownership.
+
+## Run from Docker Compose
+
+The official `docker-compose/deploy/docker-compose.yml` already defines the same command as the
+`fts-search-reindex` service, wired to the Compose PostgreSQL, the optional in-network
+`elasticsearch` service, and a named `fts-search-reindex-state` volume for the checkpoint:
+
+```bash
+docker compose run --rm fts-search-reindex --status
+docker compose run --rm fts-search-reindex --apply --fresh-run --yes
+```
+
+Extra arguments are passed through, so the rehearsal, `--entity`, `--skip-failure`, and resume
+commands above work unchanged. The service uses the `ES_URL`, `ES_ALLOW_INSECURE_HTTP`, and
+`ES_INDEX_NAMESPACE` values from `.env`; with an external Elastic Cloud target, set `ES_URL` and
+`ES_API_KEY` there instead, leave `ES_ALLOW_INSECURE_HTTP` unset, and keep the `elasticsearch`
+profile out of `COMPOSE_PROFILES`; the service depends only on PostgreSQL, so the bundled node is
+neither built nor started. The complete Compose sequence,
+including enabling the node and the sync worker, is in
+[Run Elasticsearch with Docker Compose](/docs/self-hosting/advanced/full-text-search#run-elasticsearch-with-docker-compose).
 
 ## Start incremental synchronization
 
@@ -232,6 +276,14 @@ bun run fts-search:sync -- --max-steps=8 --yes
 One invocation processes at most eight drain steps and then exits. `hasMore: true` in the final JSON
 means the bound was reached safely; run it again. Schedule the same command with cron, a container
 job, or another process supervisor so it continues to run while Elasticsearch search is enabled.
+Omitting `--max-steps` processes one step; accepted values are from 1 through 100.
+
+For a long-running worker instead of an external scheduler, add `--interval-seconds=<1-3600>`: the
+command repeats the same bounded drain, continues immediately while `hasMore` is true, sleeps for
+the interval otherwise, and stops cleanly on `SIGINT` / `SIGTERM` after finishing the drain step in
+progress (not the whole bound), so a supervisor's stop timeout only needs to cover one step. A run that leaves failed or
+dead-letter work still exits non-zero, so the supervisor's restart policy and logs surface it. The
+Compose `fts-search-sync` service (profile `elasticsearch-sync`) uses this mode.
 The consumer validates the PostgreSQL capture definitions and every Elasticsearch write alias before
 claiming work. Missing or stale capture infrastructure, an invalid alias, retryable write failure, or
 dead-letter work produces a non-zero exit code. It never installs triggers and never deletes failed
@@ -251,6 +303,14 @@ Keep scheduling the consumer and run `bun run fts-search:reindex -- --status` un
 switching queries. Then set `FTS_SEARCH_PROVIDER=elasticsearch` and redeploy the application. Keep
 `FTS_SEARCH_PROVIDER=pg_search` until catch-up is complete. Elasticsearch failures remain visible to
 callers; the search path does not silently fall back to PostgreSQL or `ilike`.
+
+After deployment, keep the old BM25 indexes and `pg_search` extension during an agreed observation
+window. Confirm that successful backend operations are attributed to `elasticsearch`, no new
+`pg_search` operations appear, the Outbox repeatedly returns to zero lag with no dead work, and the
+product search surfaces your deployment uses pass smoke tests. While the old database objects still
+exist, rollback is limited to restoring `FTS_SEARCH_PROVIDER=pg_search` and redeploying; the Outbox
+consumer may continue running while you diagnose Elasticsearch. If you stop that consumer after
+capture has been installed, source changes continue accumulating in the Outbox until it resumes.
 
 ## Resume and verify
 
@@ -295,3 +355,37 @@ progress.
   the application is ready to switch search backends by itself. Keep `fts-search:sync` scheduled for as
   long as Elasticsearch serves search traffic.
 </Callout>
+
+## Remove pg\_search before the Neon deadline
+
+After Elasticsearch has served search reliably through your observation window and a current
+PostgreSQL recovery point is available, inspect the remaining LobeHub-managed objects:
+
+```bash
+bun run scripts/pgSearchCleanup/index.ts --status
+```
+
+Then remove them without copying SQL from this guide:
+
+```bash
+bun run scripts/pgSearchCleanup/index.ts --apply --yes
+```
+
+Use a direct `DATABASE_URL`, not a transaction-pool endpoint. The command refuses to apply before
+`FTS_SEARCH_PROVIDER=elasticsearch`, refuses unrecognized BM25 indexes, removes the known indexes
+concurrently, and then removes the extension without `CASCADE`. It is safe to rerun after an
+interrupted cleanup. It does not remove the Elasticsearch Outbox, capture triggers, or incremental
+consumer.
+
+The official image includes `/app/fts-search-pg-search-cleanup.cjs`:
+
+```bash
+docker run --rm --env-file .env \
+  lobehub/lobehub:latest /app/fts-search-pg-search-cleanup.cjs --status
+docker run --rm --env-file .env \
+  lobehub/lobehub:latest /app/fts-search-pg-search-cleanup.cjs --apply --yes
+```
+
+Affected Neon deployments must complete this cleanup before September 21, 2026. Other PostgreSQL
+providers can keep `pg_search` installed, but removing the retired objects avoids continuing to
+maintain unused BM25 indexes.

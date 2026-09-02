@@ -119,6 +119,7 @@
   "KeyValueEditor.keyPlaceholder": "Chiave",
   "KeyValueEditor.valuePlaceholder": "Valore",
   "LocalFile.action.open": "Apri",
+  "LocalFile.action.preview": "Anteprima",
   "LocalFile.action.showInFolder": "Mostra nella Cartella",
   "MaxTokenSlider.unlimited": "Illimitato",
   "ModelSelect.featureTag.audio": "Questo modello supporta il riconoscimento dell'input audio.",

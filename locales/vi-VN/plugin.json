@@ -416,6 +416,7 @@
   "builtins.lobe-task.apiName.deleteTaskComment": "Xóa bình luận",
   "builtins.lobe-task.apiName.editTask": "Chỉnh sửa nhiệm vụ",
   "builtins.lobe-task.apiName.listTasks": "Liệt kê nhiệm vụ",
+  "builtins.lobe-task.apiName.listWorkspaceMembers": "Danh sách thành viên",
   "builtins.lobe-task.apiName.runTask": "Chạy nhiệm vụ",
   "builtins.lobe-task.apiName.runTasks": "Chạy các nhiệm vụ",
   "builtins.lobe-task.apiName.setTaskSchedule": "Đặt lịch trình",

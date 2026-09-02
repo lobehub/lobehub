@@ -105,7 +105,11 @@ const RUNNABLE_AUTOMATION = and(
 
 interface TaskListFilterOptions {
   assigneeAgentId?: string;
+  /** Only tasks assigned to this workspace member. */
+  assigneeUserId?: string;
   automated?: boolean;
+  /** Only tasks created by this user. */
+  createdByUserId?: string;
   parentTaskId?: string | null;
   projectId?: string;
   visibility?: 'private' | 'public';
@@ -200,7 +204,9 @@ export class TaskModel {
 
   private buildListConditions = ({
     assigneeAgentId,
+    assigneeUserId,
     automated,
+    createdByUserId,
     parentTaskId,
     projectId,
     visibility,
@@ -208,6 +214,8 @@ export class TaskModel {
     const conditions = [this.ownership()];
 
     if (assigneeAgentId) conditions.push(eq(tasks.assigneeAgentId, assigneeAgentId));
+    if (assigneeUserId) conditions.push(eq(tasks.assigneeUserId, assigneeUserId));
+    if (createdByUserId) conditions.push(eq(tasks.createdByUserId, createdByUserId));
     if (automated === true) conditions.push(RUNNABLE_AUTOMATION);
     // `IS NOT TRUE`, not `NOT (…)`: nullable automation fields make the
     // runnable expression NULL for manual tasks, and WHERE would drop them.
@@ -1709,6 +1717,15 @@ export class TaskModel {
       .insert(taskComments)
       .values({ ...data, visibility, workspaceId: this.workspaceId ?? null })
       .returning();
+    return comment;
+  }
+
+  async findCommentById(id: string): Promise<TaskCommentItem | undefined> {
+    const [comment] = await this.db
+      .select()
+      .from(taskComments)
+      .where(and(eq(taskComments.id, id), this.commentsOwnership()))
+      .limit(1);
     return comment;
   }
 

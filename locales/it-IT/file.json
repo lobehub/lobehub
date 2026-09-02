@@ -177,6 +177,8 @@
   "pageEditor.history.versionCount_one": "{{count}} versione",
   "pageEditor.history.versionCount_other": "{{count}} versioni",
   "pageEditor.likes.count": "{{count}} mi piace",
+  "pageEditor.likes.count_one": "{{count}} mi piace",
+  "pageEditor.likes.count_other": "{{count}} mi piacciono",
   "pageEditor.likes.failed": "Impossibile aggiornare il tuo mi piace. Riprova.",
   "pageEditor.likes.like": "Trovi utile questa pagina? Dai un mi piace",
   "pageEditor.likes.liked": "Mi piace",

@@ -177,6 +177,8 @@
   "pageEditor.history.versionCount_one": "{{count}} Version",
   "pageEditor.history.versionCount_other": "{{count}} Versionen",
   "pageEditor.likes.count": "{{count}} Likes",
+  "pageEditor.likes.count_one": "{{count}} Gefällt mir",
+  "pageEditor.likes.count_other": "{{count}} Gefällt mir",
   "pageEditor.likes.failed": "Fehler beim Aktualisieren Ihres Likes. Versuchen Sie es erneut.",
   "pageEditor.likes.like": "Finden Sie diese Seite hilfreich? Geben Sie ihr ein Like.",
   "pageEditor.likes.liked": "Gefällt mir",

@@ -1,6 +1,8 @@
 import type { AppProcessMetrics, GpuStatus } from '@lobechat/electron-client-ipc';
 import { app } from 'electron';
 
+import { getIpcContext } from '@/utils/ipc';
+
 import { ControllerModule, IpcMethod } from './index';
 
 interface CompleteGpuInfo {
@@ -28,6 +30,9 @@ export default class DevtoolsCtr extends ControllerModule {
   async getAppProcessMetrics(): Promise<AppProcessMetrics> {
     const metrics = app.getAppMetrics();
     const gpuProcesses = metrics.filter((metric) => metric.type === 'GPU');
+    const rendererPid = getIpcContext()?.sender.getOSProcessId();
+    const renderer =
+      rendererPid === undefined ? undefined : metrics.find((metric) => metric.pid === rendererPid);
 
     return {
       cpuPercent: metrics.reduce((sum, metric) => sum + metric.cpu.percentCPUUsage, 0),
@@ -39,6 +44,7 @@ export default class DevtoolsCtr extends ControllerModule {
               memoryMB:
                 gpuProcesses.reduce((sum, metric) => sum + metric.memory.workingSetSize, 0) / 1024,
             },
+      rendererResidentMB: renderer ? renderer.memory.workingSetSize / 1024 : null,
     };
   }
 

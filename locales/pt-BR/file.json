@@ -177,6 +177,8 @@
   "pageEditor.history.versionCount_one": "{{count}} versão",
   "pageEditor.history.versionCount_other": "{{count}} versões",
   "pageEditor.likes.count": "{{count}} curtidas",
+  "pageEditor.likes.count_one": "{{count}} curtida",
+  "pageEditor.likes.count_other": "{{count}} curtidas",
   "pageEditor.likes.failed": "Falha ao atualizar sua curtida. Tente novamente.",
   "pageEditor.likes.like": "Achou esta página útil? Dê uma curtida",
   "pageEditor.likes.liked": "Curtido",

@@ -416,6 +416,7 @@
   "builtins.lobe-task.apiName.deleteTaskComment": "댓글 삭제",
   "builtins.lobe-task.apiName.editTask": "작업 편집",
   "builtins.lobe-task.apiName.listTasks": "작업 목록",
+  "builtins.lobe-task.apiName.listWorkspaceMembers": "워크스페이스 멤버 목록",
   "builtins.lobe-task.apiName.runTask": "작업 실행",
   "builtins.lobe-task.apiName.runTasks": "작업들 실행",
   "builtins.lobe-task.apiName.setTaskSchedule": "일정 설정",

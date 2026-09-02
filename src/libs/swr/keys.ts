@@ -326,6 +326,9 @@ export const isTaskListKey = (key: unknown): boolean =>
 export const isScheduledTaskListKey = (key: unknown): boolean =>
   Array.isArray(key) && key[0] === 'task:scheduledList';
 
+export const isMyTaskListKey = (key: unknown): boolean =>
+  Array.isArray(key) && key[0] === 'task:myList';
+
 /**
  * Goal Graph reads. Keyed by the `goals` row id (not the carrier task's
  * identifier) because that is what every `goal.*` procedure takes.
@@ -403,6 +406,23 @@ export const taskKeys = {
    * heartbeat. Kept off `list` because it is a different result set entirely —
    * sharing the key would let one section's fetch overwrite the other's.
    */
+  /**
+   * The Tasks page's "My tasks" tab: work assigned to, or created by, the
+   * caller. Its own root for the same reason as `scheduledList` — a different
+   * result set from `list`, so a shared entry would let one tab's fetch
+   * overwrite the other's.
+   */
+  myList: def(
+    'task:myList',
+    (scope: 'assigned' | 'created', statuses?: string[], limit?: number, offset?: number) => [
+      'task:myList',
+      scope,
+      // Status narrowing is part of the identity: "hide completed" and "show
+      // all" are different server pages, not a client-side view of one page.
+      statuses ? [...statuses].sort().join(',') : 'all',
+      ...(limit === undefined && offset === undefined ? [] : [{ limit, offset }]),
+    ],
+  ),
   scheduledList: def(
     'task:scheduledList',
     (
