@@ -136,6 +136,90 @@ describe('useAgentShare · updateConfig', () => {
     });
   });
 
+  it('does not resend a failed write when a later queued write lands (happy-path contrast)', async () => {
+    // Paired with the failure regression below: on the happy path, B's
+    // outgoing payload still composes on top of A once A is confirmed to
+    // have succeeded — the fix must not turn this into a diff-only send.
+    let releaseFirst: (value: any) => void = () => {};
+    service.updateShareConfig.mockImplementationOnce(
+      (_agentId: string, patch: any) =>
+        new Promise((resolve) => {
+          releaseFirst = () =>
+            resolve({ ...buildShare(), shareConfig: { ...buildShare().shareConfig, ...patch } });
+        }),
+    );
+
+    const { result } = renderHook(() => useAgentShare('agent-1'));
+
+    await act(async () => {
+      void result.current.updateConfig((current) => ({
+        toolGrants: [...(current.toolGrants ?? []), { identifier: 'tool-a' }],
+      }));
+      void result.current.updateConfig((current) => ({
+        toolGrants: [...(current.toolGrants ?? []), { identifier: 'tool-b' }],
+      }));
+    });
+
+    await waitFor(() => expect(service.updateShareConfig).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      releaseFirst(undefined);
+    });
+
+    await waitFor(() => expect(service.updateShareConfig).toHaveBeenCalledTimes(2));
+
+    expect(service.updateShareConfig.mock.calls[1][1]).toEqual({
+      toolGrants: [{ identifier: 'tool-a' }, { identifier: 'tool-b' }],
+    });
+  });
+
+  it("does not let A's failed write leak into B's outgoing payload", async () => {
+    // A fails outright while B is already queued behind it. Pre-fix, B's
+    // payload was baked at CALL time from the optimistic `[A, B]`
+    // projection, so it silently re-persisted A's edit server-side even
+    // though A's own write was reported failed — because `updateShareConfig`
+    // overwrites the whole `toolGrants` array rather than diffing it.
+    let rejectFirst: (reason: unknown) => void = () => {};
+    service.updateShareConfig.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectFirst = reject;
+        }),
+    );
+    service.updateShareConfig.mockImplementationOnce(async (_agentId: string, patch: any) => ({
+      ...buildShare(),
+      shareConfig: { ...buildShare().shareConfig, ...patch },
+    }));
+
+    const { result } = renderHook(() => useAgentShare('agent-1'));
+
+    let editingA: Promise<unknown> = Promise.resolve();
+    await act(async () => {
+      editingA = result.current.updateConfig((current) => ({
+        toolGrants: [...(current.toolGrants ?? []), { identifier: 'tool-a' }],
+      }));
+      void result.current.updateConfig((current) => ({
+        toolGrants: [...(current.toolGrants ?? []), { identifier: 'tool-b' }],
+      }));
+    });
+    // The queue must not stall on A's eventual rejection.
+    editingA.catch(() => undefined);
+
+    await waitFor(() => expect(service.updateShareConfig).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      rejectFirst(new Error('write A failed'));
+    });
+
+    await waitFor(() => expect(service.updateShareConfig).toHaveBeenCalledTimes(2));
+
+    // B's outgoing payload must be resolved as if A never happened, not
+    // against the optimistic `[A, B]` UI projection A was already baked into.
+    expect(service.updateShareConfig.mock.calls[1][1]).toEqual({
+      toolGrants: [{ identifier: 'tool-b' }],
+    });
+  });
+
   it('does not let an earlier response revert a later queued write before it lands (A/B/C interleaving)', async () => {
     // Reproduces the lost-update window exactly: A is in flight, B is toggled
     // while A is still pending (queued behind it), and A's response lands

@@ -43,11 +43,40 @@ export const useAgentShare = (agentId: string) => {
   /**
    * The config as it will be once every write issued so far has landed —
    * `undefined` while unknown, `null` once the share row is known to be gone.
-   * Patches resolve against THIS, not against the last rendered `share`, so
-   * two edits fired before the first response composes rather than the second
-   * overwriting the first.
+   * A functional patch's UI-facing preview resolves against THIS at CALL
+   * time, so two edits fired before the first response composes visually
+   * rather than the second overwriting the first. It does NOT drive the
+   * network payload any more — see `sendConfigRef` for why the two had to
+   * split.
    */
   const latestConfigRef = useRef<AgentShareConfigState | null | undefined>(undefined);
+  /**
+   * Mirrors `latestConfigRef`, but only ever advances/rolls back at SEND
+   * time, inside a queued `updateConfig` task — never at call time. This is
+   * what a functional patch's OUTGOING payload resolves against.
+   *
+   * Why call-time resolution isn't enough: say two functional edits are
+   * queued back to back — toggle tool A (sends `toolGrants: [A]`), then
+   * toggle tool B. If B's payload were baked at call time from
+   * `latestConfigRef` (which already includes A's optimistic projection),
+   * it would resolve to `[A, B]` regardless of what happens to A's write.
+   * If A's request then FAILS, the server never persisted A — but the queue
+   * still sends B's already-baked `[A, B]`, silently re-persisting A anyway.
+   * `mergeShareConfig` / `AgentShareModel.updateConfig` overwrite whole
+   * jsonb keys rather than diffing them, so B's write can't just apply a
+   * delta on top of whatever the server actually has; it sends the full
+   * array it was told to send.
+   *
+   * Resolving each patch against `sendConfigRef` at SEND time instead fixes
+   * this: `enqueue` serializes writes strictly (a queued task's body does
+   * not start until every earlier task has fully settled), so by the time
+   * B's task runs, A's outcome is already known. A success advances
+   * `sendConfigRef` to include A; a failure rolls it back to exclude A
+   * (see the `catch` branch in `updateConfig`) — either way B resolves its
+   * patch against the config the server will actually see, so a failed A
+   * never leaks into B's request.
+   */
+  const sendConfigRef = useRef<AgentShareConfigState | null | undefined>(undefined);
   const pendingWritesRef = useRef(0);
 
   /**
@@ -84,15 +113,20 @@ export const useAgentShare = (agentId: string) => {
   if (identityRef.current !== agentId) {
     identityRef.current = agentId;
     latestConfigRef.current = undefined;
+    sendConfigRef.current = undefined;
     pendingWritesRef.current = 0;
     queueRef.current = null;
   }
 
   // Only adopt a server snapshot while idle: mid-flight it would be older than
-  // the local projection above.
+  // the local projection above. Keep both refs in lockstep — an idle re-seed
+  // is a fresh confirmed baseline, so there is no pending edit for
+  // `sendConfigRef` to preserve over it either.
   useEffect(() => {
     if (pendingWritesRef.current > 0) return;
-    latestConfigRef.current = share === undefined ? undefined : (share?.shareConfig ?? null);
+    const next = share === undefined ? undefined : (share?.shareConfig ?? null);
+    latestConfigRef.current = next;
+    sendConfigRef.current = next;
   }, [share]);
 
   /**
@@ -126,6 +160,11 @@ export const useAgentShare = (agentId: string) => {
       if (identityRef.current !== writeIdentity) return;
       if (pendingWritesRef.current > 1) return;
       latestConfigRef.current = updated?.shareConfig ?? null;
+      // The server response reflects every write processed so far, so it is
+      // also a fresh confirmed baseline for `sendConfigRef` — any patch still
+      // resolving against it from here composes on top of a value the server
+      // agrees with, not a locally-mirrored guess.
+      sendConfigRef.current = latestConfigRef.current;
       await mutate(updated, { revalidate: false });
     },
     [mutate],
@@ -184,10 +223,12 @@ export const useAgentShare = (agentId: string) => {
       // row survives as `private`, so its config stays editable.)
       if (!base) return Promise.resolve();
 
-      const resolved = typeof patch === 'function' ? patch(base) : patch;
+      const uiPatch = typeof patch === 'function' ? patch(base) : patch;
       // Project the patch locally right away, so the control reflects the edit
-      // immediately AND the next patch composes on top of this one.
-      latestConfigRef.current = mergeShareConfig(base, resolved);
+      // immediately AND the next patch composes on top of this one. This is a
+      // UI-only preview — the outgoing network payload is resolved separately
+      // below, at send time, against `sendConfigRef` (see its doc comment).
+      latestConfigRef.current = mergeShareConfig(base, uiPatch);
       const optimisticConfig = latestConfigRef.current;
       void mutate(
         (current) => (current ? { ...current, shareConfig: optimisticConfig } : current),
@@ -197,10 +238,38 @@ export const useAgentShare = (agentId: string) => {
       );
 
       return runWrite(async () => {
+        // Resolve the OUTGOING payload now, not at call time: `enqueue`
+        // guarantees no earlier queued write's task body is still running by
+        // the time this one starts, so `sendConfigRef` already reflects every
+        // earlier write's real outcome (advanced on success, rolled back on
+        // failure) instead of the optimistic UI projection above, which
+        // cannot un-bake a since-failed edit once composed into it.
+        //
+        // Skip touching the shared ref once `agentId` has moved on (this task
+        // belongs to an abandoned identity, per `commitIfCurrent`'s doc): fall
+        // back to the call-time `base` this closure already captured, which
+        // reproduces the pre-fix behavior for that edge case instead of
+        // reading/mutating a ref that now belongs to a different agent.
+        const forCurrentIdentity = identityRef.current === agentId;
+        // `sendConfigRef.current` is only ever `null`/`undefined` in lockstep
+        // with `latestConfigRef` (see both refs' reset points above), and
+        // `base` already proved non-null via the guard at the top of this
+        // callback — so falling back to `base` here also keeps `sendBase`
+        // non-null for `patch`'s functional form.
+        const sendBase = forCurrentIdentity ? (sendConfigRef.current ?? base) : base;
+        const resolved = typeof patch === 'function' ? patch(sendBase) : patch;
+        if (forCurrentIdentity) sendConfigRef.current = mergeShareConfig(sendBase, resolved);
+
         try {
           const updated = await agentShareService.updateShareConfig(agentId, resolved);
           await commitIfCurrent(agentId, updated);
         } catch (error) {
+          // Roll back this write's contribution so the NEXT queued write's
+          // send-time resolution does not see it. Re-check identity rather
+          // than reusing `forCurrentIdentity`: it may have changed while the
+          // request was in flight, in which case `sendConfigRef` now belongs
+          // to a different agent and must be left alone.
+          if (identityRef.current === agentId) sendConfigRef.current = sendBase;
           // Drop the optimistic projection and re-read the server truth; the
           // effect above re-seeds `latestConfigRef` once the queue drains.
           // Skipped once `agentId` has moved on — that re-read effect now
