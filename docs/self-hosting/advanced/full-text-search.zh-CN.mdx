@@ -47,10 +47,9 @@ FTS_SEARCH_PROVIDER=pg_search
 如果搜索需要独立容量、希望把搜索存储从事务 PostgreSQL 中拆开，或者数据库服务即将停止支持
 `pg_search`，可以选择 Elasticsearch。
 
-Neon 已于 2026 年 3 月 19 日停止为新项目提供 `pg_search`。Neon 的 `pg_search` 专页说明已有项目仍可使用，
-并会由 Neon 联系受影响用户；扩展列表则把已有安装标记为需要迁移。已经在 Neon 上运行 LobeHub 的用户应先向
-Neon 核对项目状态，再按照[从 pg\_search 迁移到 Elasticsearch](/zh/docs/self-hosting/advanced/elasticsearch-migration)
-制定迁移计划。执行前请同时核对 Neon 的
+Neon 已于 2026 年 3 月 19 日停止为新项目提供 `pg_search`，并已通知受影响的现有客户：该扩展将在
+2026 年 9 月 21 日从 Neon 移除，此后依赖它的查询、索引和应用都会停止工作。已经在 Neon 上运行 LobeHub 的用户应在截止日期前完成
+[从 pg\_search 迁移到 Elasticsearch](/zh/docs/self-hosting/advanced/elasticsearch-migration)。执行前请同时核对 Neon 的
 [最新 pg\_search 公告](https://neon.com/docs/extensions/pg_search)和
 [扩展列表](https://neon.com/docs/extensions/pg-extensions)。
 
