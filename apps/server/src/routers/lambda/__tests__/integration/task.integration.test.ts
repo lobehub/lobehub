@@ -224,7 +224,7 @@ describe('Task Router Integration', () => {
       });
       await serverDB.insert(workspaceMembers).values([
         { role: 'owner', userId, workspaceId },
-        { role: 'member', userId: otherUserId, workspaceId },
+        { role: 'member', userId: otherUserId!, workspaceId },
       ]);
       const wsAgentId = 'agt_assignee_coexist_ws';
       await serverDB
@@ -509,7 +509,7 @@ describe('Task Router Integration', () => {
       });
       await serverDB.insert(workspaceMembers).values([
         { role: 'owner', userId, workspaceId },
-        { role: 'member', userId: otherUserId, workspaceId },
+        { role: 'member', userId: otherUserId!, workspaceId },
       ]);
       return {
         wsCaller: taskRouter.createCaller({ ...createTestContext(userId), workspaceId }),
@@ -1425,7 +1425,7 @@ describe('Task Router Integration', () => {
       });
       await serverDB.insert(workspaceMembers).values([
         { role: 'owner', userId, workspaceId },
-        { role: 'member', userId: otherUserId, workspaceId },
+        { role: 'member', userId: otherUserId!, workspaceId },
       ]);
       const wsCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
       const wsOtherCaller = taskRouter.createCaller({
@@ -1500,7 +1500,7 @@ describe('Task Router Integration', () => {
       });
       await serverDB.insert(workspaceMembers).values([
         { role: 'owner', userId, workspaceId },
-        { role: 'member', userId: otherUserId, workspaceId },
+        { role: 'member', userId: otherUserId!, workspaceId },
       ]);
       const wsCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
 
@@ -1591,7 +1591,7 @@ describe('Task Router Integration', () => {
       });
       await serverDB.insert(workspaceMembers).values([
         { role: 'owner', userId, workspaceId },
-        { role: 'member', userId: otherUserId, workspaceId },
+        { role: 'member', userId: otherUserId!, workspaceId },
         { deletedAt: new Date(), role: 'member', userId: removedId, workspaceId },
       ]);
       const wsCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
@@ -1724,7 +1724,7 @@ describe('Task Router Integration', () => {
       });
       await serverDB.insert(workspaceMembers).values([
         { role: 'owner', userId, workspaceId },
-        { role: 'member', userId: otherUserId, workspaceId },
+        { role: 'member', userId: otherUserId!, workspaceId },
       ]);
       const wsCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
 

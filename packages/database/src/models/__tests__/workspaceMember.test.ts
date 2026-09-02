@@ -177,7 +177,10 @@ describe('WorkspaceMemberModel', () => {
         .update(users)
         .set({ fullName: 'Bob Li', username: 'bob' })
         .where(eq(users.id, otherUserId));
-      await model.addMember({ role: 'owner', userId: inviterId, workspaceId });
+      // `addMember` only hands out non-owner roles; seed the owner row directly.
+      await serverDB
+        .insert(workspaceMembers)
+        .values({ role: 'owner', userId: inviterId, workspaceId });
       await model.addMember({ userId: memberId, workspaceId });
       await model.addMember({ userId: otherUserId, workspaceId });
       await model.addMember({ role: 'viewer', userId: viewerId, workspaceId });
