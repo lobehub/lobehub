@@ -119,6 +119,7 @@
   "KeyValueEditor.keyPlaceholder": "键",
   "KeyValueEditor.valuePlaceholder": "值",
   "LocalFile.action.open": "打开",
+  "LocalFile.action.preview": "预览",
   "LocalFile.action.showInFolder": "在文件夹中显示",
   "MaxTokenSlider.unlimited": "无限制",
   "ModelSelect.featureTag.audio": "该模型支持音频输入识别",
