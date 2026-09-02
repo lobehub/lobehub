@@ -89,6 +89,7 @@ describe('useEditorRootLifecycle with a real editor', () => {
   it('leaks the kernel into the global registry when the lifecycle is not applied', async () => {
     const { editor, unmount } = renderRealEditor({ lifecycle: false });
     await waitFor(() => expect(rootOf(editor())).toBeTruthy());
+    await waitFor(() => expect(isRegistered(editor())).toBe(true));
 
     unmount();
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -106,6 +107,7 @@ describe('useEditorRootLifecycle with a real editor', () => {
   it('detaches the root but keeps the kernel while hidden', async () => {
     const { editor, rerender, tree } = renderRealEditor({ lifecycle: true });
     await waitFor(() => expect(rootOf(editor())).toBeTruthy());
+    await waitFor(() => expect(isRegistered(editor())).toBe(true));
     const root = rootOf(editor());
 
     rerender(tree('hidden'));
