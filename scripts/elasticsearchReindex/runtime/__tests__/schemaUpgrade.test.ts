@@ -83,7 +83,7 @@ describe('detectFtsSearchIndexSchemaState', () => {
 describe('planFtsSearchIndexSchemaUpgrade', () => {
   it('reports up_to_date when the served version matches the target', () => {
     const plan = planFtsSearchIndexSchemaUpgrade(
-      { type: 'versioned', version: FTS_SEARCH_INDEX_SCHEMA_VERSION },
+      { indices: {}, type: 'versioned', version: FTS_SEARCH_INDEX_SCHEMA_VERSION },
       FTS_SEARCH_INDEX_SCHEMA_VERSION,
     );
 
@@ -91,7 +91,7 @@ describe('planFtsSearchIndexSchemaUpgrade', () => {
   });
 
   it('plans a copy upgrade from version 1 to version 2', () => {
-    const plan = planFtsSearchIndexSchemaUpgrade({ type: 'versioned', version: 1 }, 2);
+    const plan = planFtsSearchIndexSchemaUpgrade({ indices: {}, type: 'versioned', version: 1 }, 2);
 
     expect(plan).toEqual({ fromVersion: 1, strategy: 'copy', toVersion: 2, type: 'upgrade' });
   });
@@ -113,14 +113,14 @@ describe('planFtsSearchIndexSchemaUpgrade', () => {
   });
 
   it('throws when the served version is newer than the running build', () => {
-    expect(() => planFtsSearchIndexSchemaUpgrade({ type: 'versioned', version: 3 }, 2)).toThrow(
-      'newer than this build',
-    );
+    expect(() =>
+      planFtsSearchIndexSchemaUpgrade({ indices: {}, type: 'versioned', version: 3 }, 2),
+    ).toThrow('newer than this build');
   });
 
   it('throws when the served version has no journal entry', () => {
-    expect(() => planFtsSearchIndexSchemaUpgrade({ type: 'versioned', version: 0 }, 2)).toThrow(
-      'no upgrade entry',
-    );
+    expect(() =>
+      planFtsSearchIndexSchemaUpgrade({ indices: {}, type: 'versioned', version: 0 }, 2),
+    ).toThrow('no upgrade entry');
   });
 });
