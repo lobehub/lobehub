@@ -27,7 +27,10 @@ import {
 } from './optimistic';
 import { styles } from './styles';
 import Thread from './Thread';
-import { useDocumentCommentDeepLink } from './useDocumentCommentDeepLink';
+import {
+  type DocumentCommentFocusMissReason,
+  useDocumentCommentDeepLink,
+} from './useDocumentCommentDeepLink';
 
 const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
   const { t } = useTranslation('file');
@@ -132,30 +135,48 @@ const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
 
   // Deep-link landing. Lists are oldest-first and a notification usually points at the
   // newest comment, so the target root is fetched by id and pinned above the list until it
-  // shows up on a loaded page; NOT_FOUND (or a non-root id) means the thread is gone.
+  // shows up on a loaded page. NOT_FOUND, a non-root id, or a root from another document
+  // means the thread is gone; any other lookup failure is reported, never swallowed.
   const focusRootCommentId = focus?.rootCommentId;
   const hasFocusedThread =
     Boolean(focusRootCommentId) && threads.items.some(({ root }) => root.id === focusRootCommentId);
   const focusedRoot = useDocumentCommentDetail(hasFocusedThread ? undefined : focusRootCommentId);
+  const focusedRootData = focusedRoot.data;
+  const isFocusedRootUsable =
+    Boolean(focusedRootData) &&
+    !focusedRootData?.parentCommentId &&
+    focusedRootData?.documentId === documentId;
   const pinnedThread =
-    focus && !hasFocusedThread && focusedRoot.data && !focusedRoot.data.parentCommentId
-      ? { replyCount: focusedRoot.data.replyCount, root: focusedRoot.data }
+    focus && !hasFocusedThread && focusedRootData && isFocusedRootUsable
+      ? { replyCount: focusedRootData.replyCount, root: focusedRootData }
       : undefined;
   const isFocusedRootMissing =
     Boolean(focusRootCommentId) &&
-    (focusedRoot.isNotFound || Boolean(focusedRoot.data?.parentCommentId));
+    (focusedRoot.isNotFound || (Boolean(focusedRootData) && !isFocusedRootUsable));
+  const isFocusedRootFailed =
+    Boolean(focusRootCommentId) && Boolean(focusedRoot.error) && !focusedRoot.isNotFound;
   const handleFocusMissing = useCallback(() => {
     toast.info(t('pageEditor.comments.deepLinkMissing'));
     clearFocus();
   }, [clearFocus, t]);
-  // The linked reply is gone but its thread is not: keep the thread and land on the root.
-  const handleReplyFocusMissing = useCallback(() => {
-    toast.info(t('pageEditor.comments.deepLinkMissing'));
-    focusRoot();
-  }, [focusRoot, t]);
+  const handleFocusFailed = useCallback(() => {
+    toast.error(t('pageEditor.comments.deepLinkLoadFailed'));
+    clearFocus();
+  }, [clearFocus, t]);
+  // The linked reply is gone (or failed to load) but its thread is not: keep the thread and
+  // land on the root.
+  const handleReplyFocusMissing = useCallback(
+    (reason: DocumentCommentFocusMissReason) => {
+      if (reason === 'missing') toast.info(t('pageEditor.comments.deepLinkMissing'));
+      else toast.error(t('pageEditor.comments.deepLinkLoadFailed'));
+      focusRoot();
+    },
+    [focusRoot, t],
+  );
   useEffect(() => {
     if (isFocusedRootMissing) handleFocusMissing();
-  }, [handleFocusMissing, isFocusedRootMissing]);
+    else if (isFocusedRootFailed) handleFocusFailed();
+  }, [handleFocusFailed, handleFocusMissing, isFocusedRootFailed, isFocusedRootMissing]);
   const mutateFocusedRoot = focusedRoot.mutate;
   const refreshPinned = useCallback(async () => {
     await Promise.all([mutateFocusedRoot(), refresh()]);

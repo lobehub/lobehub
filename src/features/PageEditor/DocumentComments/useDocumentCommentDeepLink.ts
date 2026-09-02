@@ -6,6 +6,9 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 const COMMENT_QUERY = 'comment';
 const COMMENT_THREAD_QUERY = 'commentThread';
 
+/** Why a deep-link target could not be landed on. */
+export type DocumentCommentFocusMissReason = 'failed' | 'missing';
+
 export interface DocumentCommentFocus {
   /** The comment to scroll to and highlight; equals `rootCommentId` for roots. */
   commentId: string;

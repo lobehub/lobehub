@@ -25,14 +25,17 @@ import {
 } from './optimistic';
 import { styles } from './styles';
 import { useAutoLoadReplies } from './useAutoLoadReplies';
-import type { DocumentCommentFocus } from './useDocumentCommentDeepLink';
+import type {
+  DocumentCommentFocus,
+  DocumentCommentFocusMissReason,
+} from './useDocumentCommentDeepLink';
 
 interface ThreadProps extends DocumentCommentThread {
   documentId: string;
   /** Deep-link target inside this thread; forces replies to load and highlights the card. */
   focus?: DocumentCommentFocus;
-  /** Called when the deep-linked reply no longer exists in this thread. */
-  onFocusMissing?: () => void;
+  /** The deep-linked reply is gone from this thread ('missing') or could not be loaded ('failed'). */
+  onFocusMissing?: (reason: DocumentCommentFocusMissReason) => void;
   onMutated: () => void | Promise<void>;
   onReplyCountChange: (rootCommentId: string, delta: number) => void | Promise<unknown>;
   onRootUpdate: DocumentCommentUpdateHandler;
@@ -62,9 +65,16 @@ const Thread = memo<ThreadProps>(
     const createOptimistic = useOptimisticDocumentComment();
     const mutateReplies = replies.mutate;
     const reloadReplies = replies.reload;
+    // The linked reply is fetched by id and shown first until it appears on a loaded page
+    // (replies are oldest-first). It lives in its own cache entry, so thread refreshes
+    // revalidate it too — a deleted pinned reply must not linger.
+    const hasFocusedReply =
+      Boolean(focusedReplyId) && replies.items.some((item) => item.id === focusedReplyId);
+    const focusedReply = useDocumentCommentDetail(hasFocusedReply ? undefined : focusedReplyId);
+    const mutateFocusedReply = focusedReply.mutate;
     const refreshThread = useCallback(async () => {
-      await Promise.all([reloadReplies(), onMutated()]);
-    }, [onMutated, reloadReplies]);
+      await Promise.all([reloadReplies(), mutateFocusedReply(), onMutated()]);
+    }, [mutateFocusedReply, onMutated, reloadReplies]);
     const handleReplySubmit = useCallback(
       async ({ clientId, content, editorData }: DocumentCommentSubmitInput) => {
         const replyTarget =
@@ -166,11 +176,8 @@ const Thread = memo<ThreadProps>(
       [mutateReplies, reloadReplies],
     );
 
-    // The linked reply is fetched by id and shown first until it appears on a loaded page
-    // (replies are oldest-first); NOT_FOUND, or a reply from another thread, means it is gone.
-    const hasFocusedReply =
-      Boolean(focusedReplyId) && replies.items.some((item) => item.id === focusedReplyId);
-    const focusedReply = useDocumentCommentDetail(hasFocusedReply ? undefined : focusedReplyId);
+    // NOT_FOUND, or a reply from another thread, means the linked reply is gone; any other
+    // lookup failure is reported so the miss is never silent.
     const visibleReplies = useMemo(() => {
       const pinned = focusedReply.data;
       if (!pinned || hasFocusedReply || pinned.parentCommentId !== root.id) return replies.items;
@@ -180,9 +187,12 @@ const Thread = memo<ThreadProps>(
       Boolean(focusedReplyId) &&
       (focusedReply.isNotFound ||
         Boolean(focusedReply.data && focusedReply.data.parentCommentId !== root.id));
+    const isFocusedReplyFailed =
+      Boolean(focusedReplyId) && Boolean(focusedReply.error) && !focusedReply.isNotFound;
     useEffect(() => {
-      if (isFocusedReplyMissing) onFocusMissing?.();
-    }, [isFocusedReplyMissing, onFocusMissing]);
+      if (isFocusedReplyMissing) onFocusMissing?.('missing');
+      else if (isFocusedReplyFailed) onFocusMissing?.('failed');
+    }, [isFocusedReplyFailed, isFocusedReplyMissing, onFocusMissing]);
 
     const toggleReplyTarget = useCallback((commentId: string) => {
       setReplyTargetId((current) => (current === commentId ? null : commentId));
