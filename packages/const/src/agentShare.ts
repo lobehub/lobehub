@@ -8,6 +8,19 @@ import type { AgentShareToolGrant } from '@lobechat/types';
 export const AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR = 5;
 
 /**
+ * Page size of a visitor's own topic list on a shared agent.
+ *
+ * Deliberately NOT tied to the share's live `maxTopicsPerVisitor`: that cap
+ * only gates the ADMISSION of new topics (a COUNT check at creation time).
+ * Using it as the read-side LIMIT would hide a visitor's older conversations
+ * the moment the creator lowers the cap below what the visitor had already
+ * created — and the visitor surface has no pagination or deep links to reach
+ * them. A fixed, generous bound keeps every topic a visitor was ever allowed
+ * to create reachable.
+ */
+export const AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT = 200;
+
+/**
  * Default `AgentShareConfig.maxTurnsPerTopic` applied when a share is first
  * created and whenever a legacy/partial config is normalized.
  */

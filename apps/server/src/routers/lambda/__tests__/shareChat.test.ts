@@ -454,27 +454,27 @@ describe('shareChatRouter', () => {
       // senderId)` unambiguously identifies the share conversation without a
       // share-instance column on `topics`.
       expect(TopicModelMock).toHaveBeenCalledWith(expect.anything(), OWNER);
-      expect(mockQueryBySender).toHaveBeenCalledWith(
-        { agentId: share.agentId, senderId: VISITOR },
-        { pageSize: share.shareConfig.maxTopicsPerVisitor },
-      );
+      expect(mockQueryBySender).toHaveBeenCalledWith({
+        agentId: share.agentId,
+        senderId: VISITOR,
+      });
     });
 
-    it('follows a raised maxTopicsPerVisitor cap as the list page size', async () => {
-      // Same resolution the creation admission gate uses — a creator who
-      // raises the cap must get a larger visitor topic list, not one silently
-      // truncated at the package default.
+    it('does not tie the list page size to the live maxTopicsPerVisitor cap', async () => {
+      // The cap only gates admission of NEW topics. A creator lowering it below
+      // what a visitor already created must not hide those older conversations —
+      // the visitor surface has no pagination or deep links to recover them.
       mockAccessCheck.mockResolvedValue({
         ...share,
-        shareConfig: { ...share.shareConfig, maxTopicsPerVisitor: 50 },
+        shareConfig: { ...share.shareConfig, maxTopicsPerVisitor: 1 },
       });
       const caller = await createCaller();
       await caller.getTopics({ shareId: 'share-1' });
 
-      expect(mockQueryBySender).toHaveBeenCalledWith(
-        { agentId: share.agentId, senderId: VISITOR },
-        { pageSize: 50 },
-      );
+      expect(mockQueryBySender).toHaveBeenCalledWith({
+        agentId: share.agentId,
+        senderId: VISITOR,
+      });
     });
   });
 

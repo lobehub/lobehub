@@ -1,4 +1,4 @@
-import { AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR } from '@lobechat/const';
+import { AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT } from '@lobechat/const';
 import type {
   ChatTopicMetadata,
   ChatTopicStatus,
@@ -130,7 +130,7 @@ export interface VisitorTopicItem {
  * would otherwise have a visitor's list silently truncated below what that
  * visitor is actually allowed to create.
  */
-const VISITOR_TOPIC_PAGE_SIZE = AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR;
+const VISITOR_TOPIC_PAGE_SIZE = AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT;
 
 export interface CreateTopicParams {
   agentId?: string | null;
