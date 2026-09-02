@@ -15,6 +15,7 @@ import { operationSelectors } from '@/store/chat/selectors';
 
 import { shouldSubmitOnEnter } from './composerEnterGuard';
 import { isTerminalVisitorError, resolveVisitorErrorKey } from './resolveVisitorErrorKey';
+import { sendVisitorMessage } from './sendVisitorMessage';
 import { useShareRunStop } from './useShareRunStop';
 
 interface VisitorComposerProps {
@@ -79,15 +80,7 @@ const VisitorComposer = memo<VisitorComposerProps>(
       setSending(true);
       setValue('');
       try {
-        const result = await useChatStore.getState().executeGatewayAgent({
-          context: {
-            agentId,
-            agentShareId: shareId,
-            scope: 'main',
-            topicId: topicId ?? undefined,
-          },
-          message,
-        });
+        const result = await sendVisitorMessage({ agentId, message, shareId, topicId });
         if (result.topicId && !topicId) onTopicCreated?.(result.topicId);
       } catch (error) {
         console.error('[AgentShareVisitor] send failed:', error);

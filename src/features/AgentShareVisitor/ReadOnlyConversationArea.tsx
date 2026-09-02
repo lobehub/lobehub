@@ -5,6 +5,7 @@ import { memo, useMemo } from 'react';
 
 import ReadOnlyAgentHome from '@/features/AgentHome/ReadOnly';
 import { ChatList, ConversationProvider } from '@/features/Conversation';
+import { useOperationState } from '@/hooks/useOperationState';
 import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
@@ -32,12 +33,19 @@ const ReadOnlyConversationArea = memo<ReadOnlyConversationAreaProps>(
     const chatKey = useMemo(() => messageMapKey(context), [context]);
     const replaceMessages = useChatStore((state) => state.replaceMessages);
     const messages = useChatStore((state) => state.dbMessagesMap[chatKey]);
+    // Same feed the owner surface uses (`ConversationArea.tsx`). Without it the
+    // per-conversation store stays on the all-false default, so the list never
+    // sees "generating": the assistant placeholder renders nothing and the
+    // streaming fade-in (`useChatMarkdown`'s `animated`) is permanently off,
+    // which is what made visitor output look choppy.
+    const operationState = useOperationState(context);
 
     return (
       <ConversationProvider
         context={context}
         hasInitMessages={!!messages}
         messages={messages}
+        operationState={operationState}
         onMessagesChange={(nextMessages, nextContext, meta) => {
           replaceMessages(nextMessages, { context: nextContext, source: meta?.source });
         }}
