@@ -377,8 +377,16 @@ export class AgentShareModel {
    * comes back as a different instance — a hard delete (`deleteByAgentId`) or
    * the agent being deleted and recreated under the same id.
    *
-   * Deliberately cheap (one primary-key-ish lookup, no join): it runs once per
-   * runtime step. Returns `false` — never throws — for an ordinary
+   * The agent must ALSO still be personal (`agents.workspaceId IS NULL`) —
+   * the same condition `findByShareId` resolves through. Sharing is
+   * personal-only, and `transferAgent` does not touch `agent_shares`, so a
+   * creator moving the agent into a workspace mid-run leaves the share row
+   * intact while every entry point stops resolving it; without this join the
+   * in-flight run would keep spending under the creator after the share was
+   * effectively revoked.
+   *
+   * Deliberately cheap (one indexed lookup + a primary-key join): it runs once
+   * per runtime step. Returns `false` — never throws — for an ordinary
    * "no longer authorized" outcome; a THROWN error must be treated as
    * unauthorized too by the caller (fail closed, never fail open).
    */
@@ -389,7 +397,8 @@ export class AgentShareModel {
     const [share] = await db
       .select({ id: agentShares.id, visibility: agentShares.visibility })
       .from(agentShares)
-      .where(eq(agentShares.agentId, params.agentId))
+      .innerJoin(agents, eq(agentShares.agentId, agents.id))
+      .where(and(eq(agentShares.agentId, params.agentId), isNull(agents.workspaceId)))
       .limit(1);
 
     return !!share && share.id === params.shareId && share.visibility === 'link';

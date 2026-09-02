@@ -1465,11 +1465,12 @@ export const agentRouter = router({
    * 2. an ownership-scoped agent-slug lookup;
    * 3. an agent-share lookup by custom slug or share id.
    *
-   * Step 3 deliberately does NOT check share visibility: `share.getSharedAgent`
-   * remains the access gate, and routing a private share to the share surface
-   * is what lets it render the same forbidden / sign-in state as before. So
-   * this exposes nothing that `getSharedAgent` does not already expose, and an
-   * own slug always wins over a share slug of the same name.
+   * Step 3 applies the same existence rule as `assertShareAccess`: a private
+   * share is only visible to its owner, so a stranger gets `notFound` rather
+   * than `share` and cannot use this resolver to probe which custom slugs /
+   * ids exist. `share.getSharedAgent` remains the access gate for everything
+   * else (sign-in state, view counting). An own slug always wins over a share
+   * slug of the same name.
    */
   resolveAgentRoute: agentProcedure
     .input(z.object({ slugOrId: z.string().trim().min(1) }))
@@ -1488,9 +1489,8 @@ export const agentRouter = router({
       // The creator following their own share link is not a visitor: the
       // client redirects `ownShare` to the agent's share settings.
       if (share) {
-        return share.ownerId === ctx.userId
-          ? { agentId: share.agentId, kind: 'ownShare' }
-          : { kind: 'share' };
+        if (share.ownerId === ctx.userId) return { agentId: share.agentId, kind: 'ownShare' };
+        if (share.visibility === 'link') return { kind: 'share' };
       }
 
       return { kind: 'notFound' };

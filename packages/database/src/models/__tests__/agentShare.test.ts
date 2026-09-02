@@ -455,6 +455,44 @@ describe('AgentShareModel', () => {
     });
   });
 
+  describe('isRunStillAuthorized', () => {
+    it('authorizes a live link share on a personal agent', async () => {
+      const created = await agentShareModel.create(agentId, 'link');
+
+      expect(
+        await AgentShareModel.isRunStillAuthorized(serverDB, { agentId, shareId: created!.id }),
+      ).toBe(true);
+    });
+
+    it('revokes once the share is paused or replaced', async () => {
+      const created = await agentShareModel.create(agentId, 'link');
+
+      await agentShareModel.updateVisibility(agentId, 'private');
+      expect(
+        await AgentShareModel.isRunStillAuthorized(serverDB, { agentId, shareId: created!.id }),
+      ).toBe(false);
+
+      await agentShareModel.updateVisibility(agentId, 'link');
+      expect(
+        await AgentShareModel.isRunStillAuthorized(serverDB, {
+          agentId,
+          shareId: '00000000-0000-0000-0000-000000000000',
+        }),
+      ).toBe(false);
+    });
+
+    // `transferAgent` does not touch `agent_shares`; the per-step check must
+    // notice the agent left personal scope on its own, like `findByShareId`.
+    it('revokes an in-flight run once the agent is moved into a workspace', async () => {
+      const created = await agentShareModel.create(agentId, 'link');
+      await serverDB.update(agents).set({ workspaceId }).where(eq(agents.id, agentId));
+
+      expect(
+        await AgentShareModel.isRunStillAuthorized(serverDB, { agentId, shareId: created!.id }),
+      ).toBe(false);
+    });
+  });
+
   describe('readCurrentVisitorCaps', () => {
     it('reads fresh caps and the live shareId', async () => {
       const created = await agentShareModel.create(agentId);

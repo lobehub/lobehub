@@ -1051,7 +1051,11 @@ describe('agentRouter', () => {
 
     it('falls back to an agent share when no own agent claims the slug', async () => {
       agentModelMock.resolveIdBySlug.mockResolvedValue(null);
-      findBySlugOrIdMock.mockResolvedValue({ ownerId: 'someone-else', shareId: 'share-1' } as any);
+      findBySlugOrIdMock.mockResolvedValue({
+        ownerId: 'someone-else',
+        shareId: 'share-1',
+        visibility: 'link',
+      } as any);
 
       const caller = agentRouter.createCaller(mockCtx);
 
@@ -1074,7 +1078,9 @@ describe('agentRouter', () => {
       });
     });
 
-    it('routes a private share to the share surface, which owns the access gate', async () => {
+    // Same rule as `assertShareAccess`: a paused share must look exactly like
+    // a missing one to a stranger, or this resolver becomes a slug oracle.
+    it('reports a stranger’s private share as not found', async () => {
       agentModelMock.resolveIdBySlug.mockResolvedValue(null);
       findBySlugOrIdMock.mockResolvedValue({
         ownerId: 'someone-else',
@@ -1085,6 +1091,21 @@ describe('agentRouter', () => {
       const caller = agentRouter.createCaller(mockCtx);
 
       expect(await caller.resolveAgentRoute({ slugOrId: 'private-bot' })).toEqual({
+        kind: 'notFound',
+      });
+    });
+
+    it('routes a stranger’s link share to the share surface', async () => {
+      agentModelMock.resolveIdBySlug.mockResolvedValue(null);
+      findBySlugOrIdMock.mockResolvedValue({
+        ownerId: 'someone-else',
+        shareId: 'share-1',
+        visibility: 'link',
+      } as any);
+
+      const caller = agentRouter.createCaller(mockCtx);
+
+      expect(await caller.resolveAgentRoute({ slugOrId: 'open-bot' })).toEqual({
         kind: 'share',
       });
     });
