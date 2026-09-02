@@ -15,7 +15,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     displayName: 'Claude Fable 5.1',
     enabled: true,
     family: 'claude-mythos',
-    generation: 'mythos-5-1',
+    generation: 'mythos-5.1',
     id: 'claude-fable-5-1',
     knowledgeCutoff: '2026-06',
     maxOutput: 128_000,

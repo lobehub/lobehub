@@ -50,7 +50,7 @@ const zhipuChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576,
     description:
-      'GLM-5.3-Flash is the first natively multimodal GLM-5 model. It inherits the GLM-5.3 text contract with always-on thinking, adds image, video and file understanding, and lands coding quality close to the flagship at roughly one-tenth of the price.',
+      'GLM-5.3-Flash is the first natively multimodal GLM-5 model. It inherits the GLM-5.3 text contract with always-on thinking, adds image and video understanding, and lands coding quality close to the flagship at roughly one-tenth of the price.',
     displayName: 'GLM-5.3-Flash',
     enabled: true,
     family: 'glm',
