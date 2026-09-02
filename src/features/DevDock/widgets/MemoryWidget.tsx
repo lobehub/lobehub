@@ -7,6 +7,8 @@ import { formatSize } from '@/utils/format';
 
 import { useAppProcessMetrics } from './appProcessMetrics';
 
+const formatCompactSize = (bytes: number) => formatSize(bytes).replace(' ', '').replace('B', '');
+
 const styles = createStaticStyles(({ css }) => ({
   high: css`
     color: ${cssVar.colorError};
@@ -97,9 +99,9 @@ const MemoryWidget = memo(() => {
           : 'Renderer private footprint · resident minus footprint (freed pages the OS has not reclaimed yet, plus some read-only library pages) · JS heap used / limit'
       }
     >
-      {memory.privateBytes !== undefined && `Renderer ${formatSize(memory.privateBytes)} · `}
-      {reclaimableBytes !== undefined && `Reclaimable ${formatSize(reclaimableBytes)} · `}
-      JS {formatSize(memory.jsHeapUsedBytes)} · {percent.toFixed(1)}%
+      {memory.privateBytes !== undefined && `R ${formatCompactSize(memory.privateBytes)} · `}
+      {reclaimableBytes !== undefined && `Recl ${formatCompactSize(reclaimableBytes)} · `}
+      JS {formatCompactSize(memory.jsHeapUsedBytes)} · {percent.toFixed(1)}%
     </span>
   );
 });
