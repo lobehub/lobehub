@@ -27,8 +27,8 @@ interface AgentRouteSwitchProps {
  */
 const AgentRouteSwitch = memo<AgentRouteSwitchProps>(({ fallback, ownElement, shareElement }) => {
   const { aid } = useParams<{ aid?: string }>();
-  const { isLoading, kind } = useAgentRouteResolution(aid);
-  const branch = resolveAgentRouteBranch({ isLoading, kind });
+  const { error, isLoading, kind } = useAgentRouteResolution(aid);
+  const branch = resolveAgentRouteBranch({ error, isLoading, kind });
 
   if (branch === 'loading') return <>{fallback ?? null}</>;
 

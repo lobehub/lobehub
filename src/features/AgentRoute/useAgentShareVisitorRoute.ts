@@ -46,9 +46,9 @@ export const resolveAgentRouteParam = (
 export const useIsAgentShareVisitorRoute = (): boolean => {
   const { pathname } = useActiveLocation();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
-  const { isLoading, kind } = useAgentRouteResolution(
+  const { error, isLoading, kind } = useAgentRouteResolution(
     resolveAgentRouteParam(pathname, activeWorkspaceSlug),
   );
 
-  return resolveAgentRouteBranch({ isLoading, kind }) === 'share';
+  return resolveAgentRouteBranch({ error, isLoading, kind }) === 'share';
 };

@@ -270,7 +270,14 @@ class AgentService {
    * properties.
    */
   resolveAgentRoute = async (slugOrId: string) => {
-    return lambdaClient.agent.resolveAgentRoute.query({ slugOrId });
+    // An anonymous visitor on a share URL gets UNAUTHORIZED here (the
+    // resolver is auth-gated); opt out of the global 401 handler so it does
+    // not hard-redirect them to /signin before the share surface's own
+    // sign-in prompt can render (mirrors `agentShareService.getSharedAgent`).
+    return lambdaClient.agent.resolveAgentRoute.query(
+      { slugOrId },
+      { context: { showNotification: false } },
+    );
   };
 
   /** Rename an agent's url slug (validated server-side; see `updateAgentSlug`). */

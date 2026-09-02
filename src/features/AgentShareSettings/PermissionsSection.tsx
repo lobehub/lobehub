@@ -32,15 +32,11 @@ const PermissionsSection = memo<PermissionsSectionProps>(({ onChange, shareConfi
             onChange={(checked) => onChange({ allowReadMemory: checked })}
           />
         </SettingRow>
-        <SettingRow
-          desc={t('share.settings.permissions.allowCreatorViewSessionsHint')}
-          label={t('share.settings.permissions.allowCreatorViewSessions')}
-        >
-          <Switch
-            checked={shareConfig.allowCreatorViewSessions ?? false}
-            onChange={(checked) => onChange({ allowCreatorViewSessions: checked })}
-          />
-        </SettingRow>
+        {/* `allowCreatorViewSessions` is persisted (zod schema + DB default false)
+            but no read path honors it yet — creator reads unconditionally
+            exclude visitor rows (see packages/database/src/models/topic.ts).
+            Hidden here until that read path exists, so the switch is not
+            surfaced as a working control. */}
         <SettingRow
           desc={t('share.settings.permissions.showModelInfoHint')}
           label={t('share.settings.permissions.showModelInfo')}

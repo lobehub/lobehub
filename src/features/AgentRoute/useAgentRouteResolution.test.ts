@@ -44,4 +44,21 @@ describe('resolveAgentRouteBranch', () => {
     expect(resolveAgentRouteBranch({ isLoading: false, kind: 'notFound' })).toBe('own');
     expect(resolveAgentRouteBranch({ isLoading: false })).toBe('own');
   });
+
+  it('routes an UNAUTHORIZED lookup to the share surface, which owns the sign-in CTA', () => {
+    const unauthorized = { data: { code: 'UNAUTHORIZED' } };
+
+    expect(resolveAgentRouteBranch({ error: unauthorized, isLoading: false })).toBe('share');
+    // Even with a stale/unset kind, an UNAUTHORIZED error wins over the fallback.
+    expect(
+      resolveAgentRouteBranch({ error: unauthorized, isLoading: false, kind: 'notFound' }),
+    ).toBe('share');
+  });
+
+  it('keeps the creator fallback for a non-401 lookup failure', () => {
+    const notFound = { data: { code: 'NOT_FOUND' } };
+
+    expect(resolveAgentRouteBranch({ error: notFound, isLoading: false })).toBe('own');
+    expect(resolveAgentRouteBranch({ error: new Error('network'), isLoading: false })).toBe('own');
+  });
 });
