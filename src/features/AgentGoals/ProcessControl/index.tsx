@@ -81,7 +81,7 @@ const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
   // to control here, so the page keeps its original shape.
   if (!graph || graph.nodes.length === 0) return null;
 
-// The coordinator is decomposing the problem into tasks. `running` with zero
+  // The coordinator is decomposing the problem into tasks. `running` with zero
   // Works counts too: the decomposition claim flips the status before the
   // planner returns, and a re-plan after all Works were removed is the same
   // state. The surfaces below promise the incoming structure instead of
@@ -89,7 +89,11 @@ const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
   const planning =
     ['planning', 'running'].includes(graph.goal.status) &&
     !graph.nodes.some((view) => view.node.kind === 'task');
-  const criteriaIds = graph.goal.config?.acceptance?.criteriaIds ?? [];
+  // Presence of the acceptance block (not a non-empty list) keeps the section
+  // mounted: removing the last criterion must leave the add control reachable,
+  // while legacy prose-only goals (no acceptance config at all) show nothing.
+  const acceptanceConfig = graph.goal.config?.acceptance;
+  const criteriaIds = acceptanceConfig?.criteriaIds ?? [];
   // A closed goal cannot move: the coordinator returns immediately for these,
   // and a Work added here would sit `proposed` forever. Stop offering actions
   // that cannot land. The goal otherwise advances entirely on its own — the
@@ -115,7 +119,7 @@ const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
         {/* The structured acceptance standard the terminal goal acceptance is
             gated on. Collapsed by default — reference material, like the task
             detail's 交付验收 section. Prose-only legacy goals have none. */}
-        {!!criteriaIds.length && (
+        {!!acceptanceConfig && (
           <AccordionItem
             itemKey={'acceptance'}
             paddingBlock={6}
@@ -125,7 +129,7 @@ const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
                 <Text fontSize={14} weight={600}>
                   {t('goalAcceptance.title')}
                 </Text>
-                <Tag size={'small'}>{criteriaIds.length}</Tag>
+                {criteriaIds.length > 0 && <Tag size={'small'}>{criteriaIds.length}</Tag>}
                 <Text fontSize={12} type={'secondary'}>
                   {t('goalAcceptance.gateHint')}
                 </Text>

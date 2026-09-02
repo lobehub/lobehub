@@ -405,6 +405,15 @@ export class AgentOperationModel {
     return row ?? null;
   }
 
+  /** Batch lookup for callers that would otherwise issue one query per id. */
+  async findByIds(operationIds: string[]) {
+    if (operationIds.length === 0) return [];
+    return this.db
+      .select()
+      .from(agentOperations)
+      .where(and(inArray(agentOperations.id, operationIds), this.ownership()));
+  }
+
   /**
    * Operations recorded for one topic, newest first — the lookup that turns a
    * topic id (what a user actually has on hand) into the operation ids their

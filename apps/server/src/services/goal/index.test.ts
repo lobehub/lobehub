@@ -29,6 +29,7 @@ import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRunt
 
 import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
+import { VerifyPlanGeneratorService } from '../verify/planGenerator';
 import { GoalCriteriaGeneratorService } from './criteriaGenerator';
 import { LEASE_EXPIRED_ERROR, VERIFICATION_FAILED_ERROR } from './decideNextMove';
 import { GoalService } from './index';
@@ -80,6 +81,42 @@ describe('GoalService', () => {
     expect(byId.get(criteriaIds[1])?.title).toBe('Docs are complete');
     // the how-to-judge instruction landed in a linked document
     expect(byId.get(criteriaIds[1])?.documentId).toBeTruthy();
+  });
+
+  it('rebinding criteria also updates the dispatched terminal acceptance task', async () => {
+    // Editing the standard after the terminal Goal-acceptance Work exists must
+    // not leave that Work's Acceptance gating on the stale id list.
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({
+      criteria: [{ title: 'Original criterion' }],
+      requirement: 'Deliver with evidence',
+      title: 'Rebind criteria goal',
+      work: ['Only work'],
+    });
+
+    const created = await service.tick(graph.goal.id);
+    await taskModel.updateStatus(created.taskId!, 'completed');
+    await service.tick(graph.goal.id); // synthesize finding
+    await service.tick(graph.goal.id); // create acceptance work
+    const acceptanceTaskCreated = await service.tick(graph.goal.id); // dispatch it
+    expect(acceptanceTaskCreated.taskId).toBeDefined();
+
+    const [replacementId] = await new VerifyPlanGeneratorService(
+      serverDB,
+      userId,
+    ).createCriteriaFromDrafts([
+      { onFail: 'manual', required: true, title: 'Replacement criterion', verifierType: 'agent' },
+    ]);
+    await service.setAcceptanceCriteria(graph.goal.id, [replacementId]);
+
+    const goal = (await service.graph(graph.goal.id)).goal;
+    expect(goal.config?.acceptance?.criteriaIds).toEqual([replacementId]);
+    const acceptance = await new AcceptanceModel(serverDB, userId).findBySubject(
+      'task',
+      acceptanceTaskCreated.taskId!,
+    );
+    expect(acceptance?.config?.verifyCriteriaIds).toEqual([replacementId]);
   });
 
   it('creates only one responsible task when ticks race on the same work node', async () => {

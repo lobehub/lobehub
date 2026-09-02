@@ -258,6 +258,32 @@ export class GoalService {
     await this.goalModel.update(goalId, {
       config: { ...goal.config, acceptance: { criteriaIds } },
     });
+
+    // A terminal Goal-acceptance Work may already be dispatched — its
+    // Acceptance row snapshotted the previous id list. Rebind it too, or the
+    // page would present the new criteria as gates while the verifier keeps
+    // materializing plans from the stale list. A verify round already
+    // materialized for an in-flight run stays as-is (rounds are immutable
+    // snapshots); every later run instantiates from the updated config.
+    const graph = await this.graphModel.getGraph(goalId);
+    const terminalTaskId = graph?.nodes.find(
+      (node) => node.kind === 'task' && node.title === GOAL_ACCEPTANCE_TASK_TITLE && node.taskId,
+    )?.taskId;
+    if (!terminalTaskId) return;
+
+    const acceptance = await this.acceptanceService.acceptanceModel.findBySubject(
+      'task',
+      terminalTaskId,
+    );
+    if (!acceptance || acceptance.status === 'accepted') return;
+    await this.acceptanceService.acceptanceModel.update(acceptance.id, {
+      config: {
+        ...acceptance.config,
+        ...(criteriaIds.length > 0
+          ? { verifyCriteriaIds: criteriaIds }
+          : { verifyCriteriaIds: undefined }),
+      },
+    });
   };
 
   graph = async (goalId: string) => {
@@ -287,13 +313,24 @@ export class GoalService {
       activeTasks.map((n) => n.taskId),
     );
 
-    const operationModel = new AgentOperationModel(this.db, this.userId, this.workspaceId);
+    // One batched read: the graph polls every few seconds per open client, so
+    // a per-topic operation lookup would scale queries with task concurrency.
+    const operationIds = [
+      ...new Set(running.flatMap((topic) => (topic.operationId ? [topic.operationId] : []))),
+    ];
+    const operations = await new AgentOperationModel(
+      this.db,
+      this.userId,
+      this.workspaceId,
+    ).findByIds(operationIds);
+    const operationById = new Map(operations.map((operation) => [operation.id, operation]));
+
     const heartbeats: Record<string, Date> = {};
     for (const topic of running) {
       const nodeId = topic.taskId ? nodeByTaskId.get(topic.taskId) : undefined;
       if (!nodeId || !topic.operationId || heartbeats[nodeId]) continue;
-      const operation = await operationModel.findById(topic.operationId);
-      if (operation?.updatedAt) heartbeats[nodeId] = operation.updatedAt;
+      const updatedAt = operationById.get(topic.operationId)?.updatedAt;
+      if (updatedAt) heartbeats[nodeId] = updatedAt;
     }
 
     return Object.keys(heartbeats).length > 0 ? heartbeats : undefined;

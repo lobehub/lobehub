@@ -6,21 +6,21 @@ import { builtinTools } from '@lobechat/builtin-tools';
 import type { AgentManagementContext } from '@lobechat/context-engine';
 import { buildExpertiseContextSnapshot, SkillEngine } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
-import {
-  buildGoalOverviewPrompt,
-  buildTaskManagerDefaultsPrompt,
-  resourcesTreePrompt,
-} from '@lobechat/prompts';
+import { buildTaskManagerDefaultsPrompt, resourcesTreePrompt } from '@lobechat/prompts';
 import type { LobeAgentAgencyConfig, WorkingDirConfig, WorkspaceInitResult } from '@lobechat/types';
-import { getActivePluginIds, getWorkingDirEffectivePath } from '@lobechat/types';
+import {
+  buildGoalOverviewContext,
+  getActivePluginIds,
+  getWorkingDirEffectivePath,
+} from '@lobechat/types';
 import debug from 'debug';
 
 import type { AgentModel } from '@/database/models/agent';
-import { GoalGraphModel } from '@/database/models/goalGraph';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { AiModelModel } from '@/database/models/aiModel';
 import { DeviceModel } from '@/database/models/device';
 import { ExpertiseModel } from '@/database/models/expertise';
+import { GoalGraphModel } from '@/database/models/goalGraph';
 import type { MessageModel } from '@/database/models/message';
 import type { TopicModel } from '@/database/models/topic';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
@@ -733,29 +733,11 @@ export const prepareOperation = async (
         appContext.viewedGoal.goalId,
       );
       if (snapshot) {
-        let workSeq = 0;
         initialContext = {
           ...initialContext,
           initialContext: {
             ...initialContext.initialContext,
-            goalOverview: {
-              contextPrompt: buildGoalOverviewPrompt({
-                findings: snapshot.nodes
-                  .filter((node) => node.kind === 'finding')
-                  .map((node) => node.title),
-                goal: {
-                  requirement: snapshot.goal.requirement,
-                  status: snapshot.goal.status,
-                  title: snapshot.goal.title,
-                },
-                pendingDecisions: snapshot.decisions
-                  .filter((decision) => decision.status === 'pending')
-                  .map((decision) => ({ question: decision.question })),
-                work: snapshot.nodes
-                  .filter((node) => node.kind === 'task')
-                  .map((node) => ({ seq: ++workSeq, status: node.status, title: node.title })),
-              }),
-            },
+            goalOverview: buildGoalOverviewContext(snapshot),
           },
         };
       }

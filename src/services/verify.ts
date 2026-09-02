@@ -24,6 +24,9 @@ import type {
 } from '@/database/schemas/verify';
 import { lambdaClient } from '@/libs/trpc/client';
 
+/** Criterion row plus the judge instruction resolved from its linked document. */
+export type GoalCriterionWithInstruction = VerifyCriterionItem & { instruction?: string };
+
 export type AcceptanceBundle = Awaited<ReturnType<typeof lambdaClient.acceptance.getBundle.query>>;
 export type AcceptanceBySubject = Awaited<
   ReturnType<typeof lambdaClient.acceptance.getBySubject.query>
@@ -427,8 +430,8 @@ export class VerifyService {
 
   // ---- criteria / rubric management ----
   /** Resolve a specific criteria id list (e.g. a goal's acceptance standard), in order. */
-  getCriteria = (ids: string[]): Promise<VerifyCriterionItem[]> =>
-    lambdaClient.verify.getCriteria.query({ ids }) as Promise<VerifyCriterionItem[]>;
+  getCriteria = (ids: string[]): Promise<GoalCriterionWithInstruction[]> =>
+    lambdaClient.verify.getCriteria.query({ ids }) as Promise<GoalCriterionWithInstruction[]>;
 
   listCriteria = (): Promise<VerifyCriterionItem[]> =>
     lambdaClient.verify.listCriteria.query() as Promise<VerifyCriterionItem[]>;

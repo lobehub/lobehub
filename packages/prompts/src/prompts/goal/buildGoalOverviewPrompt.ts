@@ -6,29 +6,9 @@
 // injects it into the last user message (same channel as the Task Manager
 // context) — the agent answers from the on-screen state without tool calls.
 
-export interface GoalOverviewWorkItem {
-  /** 1-based attempt count so far, when known. */
-  attempts?: number;
-  /** 1-based Work number as shown in the UI (#1, #2 …). */
-  seq?: number;
-  status: string;
-  title: string;
-}
+import type { InitialGoalOverviewContext } from '@lobechat/types';
 
-export interface GoalOverviewDecision {
-  question: string;
-}
-
-export interface BuildGoalOverviewPromptInput {
-  findings: string[];
-  goal: {
-    requirement?: string | null;
-    status: string;
-    title: string;
-  };
-  pendingDecisions: GoalOverviewDecision[];
-  work: GoalOverviewWorkItem[];
-}
+export type BuildGoalOverviewPromptInput = InitialGoalOverviewContext;
 
 /**
  * Goal overview prompt for the goal-page conversational reference.

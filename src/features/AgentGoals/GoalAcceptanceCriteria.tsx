@@ -7,10 +7,10 @@ import { PencilIcon, PlusIcon, XIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { VerifyCriterionItem } from '@/database/schemas/verify';
 import { usePermission } from '@/hooks/usePermission';
 import { useClientDataSWR } from '@/libs/swr';
 import { goalService } from '@/services/goal';
+import type { GoalCriterionWithInstruction } from '@/services/verify';
 import { verifyService } from '@/services/verify';
 import { useGoalStore } from '@/store/goal';
 
@@ -61,10 +61,16 @@ const GoalAcceptanceCriteria = memo<{ criteriaIds: string[]; goalId: string }>(
 
     const [editingId, setEditingId] = useState<string | 'new' | null>(null);
     const [form, setForm] = useState<CriterionFormValue>(emptyForm);
+    // The judge instruction the editor opened with — an unchanged instruction
+    // means the row can update in place; a changed one persists a replacement
+    // criterion (the rule body lives in an immutable linked document).
+    const [initialInstruction, setInitialInstruction] = useState('');
     const [saving, setSaving] = useState(false);
 
-    const openEdit = (item: VerifyCriterionItem) => {
-      setForm({ description: item.description ?? '', instruction: '', title: item.title });
+    const openEdit = (item: GoalCriterionWithInstruction) => {
+      const instruction = item.instruction ?? '';
+      setForm({ description: item.description ?? '', instruction, title: item.title });
+      setInitialInstruction(instruction);
       setEditingId(item.id);
     };
 
@@ -83,7 +89,7 @@ const GoalAcceptanceCriteria = memo<{ criteriaIds: string[]; goalId: string }>(
       setSaving(true);
       try {
         const instruction = form.instruction.trim();
-        if (editingId !== 'new' && editingId && !instruction) {
+        if (editingId !== 'new' && editingId && instruction === initialInstruction.trim()) {
           await verifyService.updateCriterion(editingId, {
             description: form.description.trim() || null,
             title,
@@ -113,9 +119,9 @@ const GoalAcceptanceCriteria = memo<{ criteriaIds: string[]; goalId: string }>(
       } finally {
         setSaving(false);
       }
-    }, [criteriaIds, editingId, form, mutate, rebind, saving]);
+    }, [criteriaIds, editingId, form, initialInstruction, mutate, rebind, saving]);
 
-    const handleRemove = (item: VerifyCriterionItem) => {
+    const handleRemove = (item: GoalCriterionWithInstruction) => {
       confirmModal({
         content: t('goalAcceptance.removeConfirm.content', { title: item.title }),
         okButtonProps: { danger: true },
@@ -141,12 +147,8 @@ const GoalAcceptanceCriteria = memo<{ criteriaIds: string[]; goalId: string }>(
         />
         <TextArea
           autoSize={{ maxRows: 6, minRows: 2 }}
+          placeholder={t('goalAcceptance.form.instructionPlaceholder')}
           value={form.instruction}
-          placeholder={
-            editingId === 'new'
-              ? t('goalAcceptance.form.instructionPlaceholder')
-              : t('goalAcceptance.form.instructionKeepPlaceholder')
-          }
           onChange={(event) => setForm((prev) => ({ ...prev, instruction: event.target.value }))}
         />
         <Flexbox horizontal gap={8}>
@@ -172,12 +174,17 @@ const GoalAcceptanceCriteria = memo<{ criteriaIds: string[]; goalId: string }>(
       </Flexbox>
     );
 
-    if (criteriaIds.length === 0) return null;
-
     // The section header (title + count + gate hint) belongs to the hosting
     // accordion row in ProcessControl — this renders the list body only.
     return (
       <Block paddingBlock={4} paddingInline={16} variant={'outlined'}>
+        {criteriaIds.length === 0 && editingId !== 'new' && (
+          <Flexbox className={styles.row}>
+            <Text fontSize={13} type={'secondary'}>
+              {t('goalAcceptance.empty')}
+            </Text>
+          </Flexbox>
+        )}
         {(criteria ?? []).map((item, index) => (
           <Flexbox className={styles.row} gap={4} key={item.id}>
             {editingId === item.id ? (
@@ -209,6 +216,15 @@ const GoalAcceptanceCriteria = memo<{ criteriaIds: string[]; goalId: string }>(
                 {item.description && (
                   <Text fontSize={13} style={{ paddingInlineStart: 30 }} type={'secondary'}>
                     {item.description}
+                  </Text>
+                )}
+                {item.instruction && (
+                  <Text
+                    fontSize={12}
+                    style={{ color: cssVar.colorTextTertiary, paddingInlineStart: 30 }}
+                  >
+                    {t('goalAcceptance.judgePrefix')}
+                    {item.instruction}
                   </Text>
                 )}
               </>

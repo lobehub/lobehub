@@ -1,3 +1,5 @@
+import { buildGoalOverviewPrompt } from '@lobechat/prompts';
+import type { InitialGoalOverviewContext } from '@lobechat/types';
 import debug from 'debug';
 
 import { BaseProcessor } from '../base/BaseProcessor';
@@ -8,9 +10,13 @@ const log = debug('context-engine:provider:GoalContextSyntheticInjector');
 const makeSyntheticToolCallId = () => `synthetic-getGoalContext-${Date.now()}`;
 
 export interface GoalContextSyntheticInjectorConfig {
-  /** Prebuilt goal overview — the synthetic `getGoalContext` result body. */
-  contextPrompt?: string;
   enabled?: boolean;
+  /**
+   * Structured snapshot of the viewed goal — the injector owns rendering it
+   * into the synthetic `getGoalContext` result body, so transports only ship
+   * data and prompt wording stays in one place.
+   */
+  overview?: InitialGoalOverviewContext;
 }
 
 /**
@@ -36,8 +42,8 @@ export class GoalContextSyntheticInjector extends BaseProcessor {
   }
 
   protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
-    if (!this.config.enabled || !this.config.contextPrompt) {
-      log('Disabled or no contextPrompt, skipping');
+    if (!this.config.enabled || !this.config.overview) {
+      log('Disabled or no overview, skipping');
       return this.markAsExecuted(context);
     }
 
@@ -75,7 +81,7 @@ export class GoalContextSyntheticInjector extends BaseProcessor {
     };
 
     const toolMsg: Message = {
-      content: this.config.contextPrompt,
+      content: buildGoalOverviewPrompt(this.config.overview),
       id: `synthetic-tool-goal-${Date.now()}`,
       role: 'tool',
       tool_call_id: toolCallId,

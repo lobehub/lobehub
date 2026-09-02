@@ -1802,12 +1802,12 @@ export default {
   'goalDetail.acceptance': 'Acceptance checks',
   'goalAcceptance.add': 'Add criterion',
   'goalAcceptance.edit': 'Edit',
+  'goalAcceptance.empty': 'No criteria yet — add the outcomes the final acceptance should check.',
   'goalAcceptance.form.descriptionPlaceholder': 'What this criterion covers (optional)',
-  'goalAcceptance.form.instructionKeepPlaceholder':
-    'How to judge — leave empty to keep the current judging instruction',
   'goalAcceptance.form.instructionPlaceholder':
     'How to judge — what evidence makes this pass or fail (optional)',
   'goalAcceptance.form.titlePlaceholder': 'Criterion, stated as an outcome',
+  'goalAcceptance.judgePrefix': 'How to judge: ',
   'goalAcceptance.gateHint': 'The final goal acceptance checks each of these',
   'goalAcceptance.remove': 'Remove',
   'goalAcceptance.removeConfirm.content':

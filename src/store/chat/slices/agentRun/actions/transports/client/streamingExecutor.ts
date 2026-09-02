@@ -22,12 +22,9 @@ import {
   resolveSubAgentModel,
 } from '@lobechat/const';
 import { type ToolsEngine } from '@lobechat/context-engine';
+import { buildTaskDetailPrompt, buildTaskListPrompt } from '@lobechat/prompts';
 import {
-  buildGoalOverviewPrompt,
-  buildTaskDetailPrompt,
-  buildTaskListPrompt,
-} from '@lobechat/prompts';
-import {
+  buildGoalOverviewContext,
   type ConversationContext,
   type LobeAgentChatConfig,
   type MessageMetadata,
@@ -456,26 +453,9 @@ export class StreamingExecutorActionImpl {
       try {
         const snapshot = getGoalStoreState().goalGraphById[viewedGoal.goalId];
         if (snapshot) {
-          let workSeq = 0;
-          const contextPrompt = buildGoalOverviewPrompt({
-            findings: snapshot.nodes
-              .filter((node) => node.kind === 'finding')
-              .map((node) => node.title),
-            goal: {
-              requirement: snapshot.goal.requirement,
-              status: snapshot.goal.status,
-              title: snapshot.goal.title,
-            },
-            pendingDecisions: snapshot.decisions
-              .filter((decision) => decision.status === 'pending')
-              .map((decision) => ({ question: decision.question })),
-            work: snapshot.nodes
-              .filter((node) => node.kind === 'task')
-              .map((node) => ({ seq: ++workSeq, status: node.status, title: node.title })),
-          });
           runtimeInitialContext = {
             ...runtimeInitialContext,
-            goalOverview: { contextPrompt },
+            goalOverview: buildGoalOverviewContext(snapshot),
           };
           log('[internal_createAgentState] injected goal overview context (%s)', viewedGoal.goalId);
         }

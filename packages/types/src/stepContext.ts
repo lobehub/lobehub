@@ -277,7 +277,31 @@ export interface InitialTaskManagerContext {
   contextPrompt: string;
 }
 
+export interface GoalOverviewWorkItem {
+  /** 1-based attempt count so far, when known. */
+  attempts?: number;
+  /** 1-based Work number as shown in the UI (#1, #2 …). */
+  seq?: number;
+  status: string;
+  title: string;
+}
+
+export interface GoalOverviewDecision {
+  question: string;
+}
+
+/**
+ * Structured snapshot of the goal the user is viewing. Producers (goal page /
+ * server pipeline) pass the data; the context-engine injector owns turning it
+ * into prompt text, so wording changes never touch the transports.
+ */
 export interface InitialGoalOverviewContext {
-  /** Prebuilt prompt describing the goal progress shown on the page. */
-  contextPrompt: string;
+  findings: string[];
+  goal: {
+    requirement?: string | null;
+    status: string;
+    title: string;
+  };
+  pendingDecisions: GoalOverviewDecision[];
+  work: GoalOverviewWorkItem[];
 }

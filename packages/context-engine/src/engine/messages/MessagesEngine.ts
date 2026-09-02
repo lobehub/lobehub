@@ -442,8 +442,8 @@ export class MessagesEngine {
       // getGoalContext tool pair after the last user message: environment
       // state arrives as machine-provided tool output, not as user words.
       new GoalContextSyntheticInjector({
-        contextPrompt: initialContext?.goalOverview?.contextPrompt,
-        enabled: !!initialContext?.goalOverview?.contextPrompt,
+        enabled: !!initialContext?.goalOverview,
+        overview: initialContext?.goalOverview,
       }),
       // Onboarding synthetic state (fake getOnboardingState tool call pair to drive action loop)
       new OnboardingSyntheticStateInjector({

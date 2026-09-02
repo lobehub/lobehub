@@ -1,3 +1,5 @@
+import { buildGoalOverviewPrompt } from '@lobechat/prompts';
+import type { InitialGoalOverviewContext } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import type { PipelineContext } from '../../types';
@@ -10,11 +12,18 @@ const createContext = (messages: any[]): PipelineContext => ({
   metadata: {},
 });
 
-const OVERVIEW = '<goal_overview>Goal: Demo [running]</goal_overview>';
+const OVERVIEW: InitialGoalOverviewContext = {
+  findings: [],
+  goal: { status: 'running', title: 'Demo' },
+  pendingDecisions: [],
+  work: [{ seq: 1, status: 'active', title: 'Only work' }],
+};
+// The injector owns prompt composition — callers pass structured data only.
+const OVERVIEW_PROMPT = buildGoalOverviewPrompt(OVERVIEW);
 
 describe('GoalContextSyntheticInjector', () => {
   it('injects a getGoalContext tool pair right after the last user message', async () => {
-    const provider = new GoalContextSyntheticInjector({ contextPrompt: OVERVIEW, enabled: true });
+    const provider = new GoalContextSyntheticInjector({ enabled: true, overview: OVERVIEW });
     const result = await provider.process(
       createContext([
         { content: 'sys', role: 'system' },
@@ -30,7 +39,8 @@ describe('GoalContextSyntheticInjector', () => {
     expect(assistant.tool_calls?.[0]?.function?.name).toBe('getGoalContext');
     expect(tool.role).toBe('tool');
     expect(tool.tool_call_id).toBe(assistant.tool_calls?.[0]?.id);
-    expect(tool.content).toBe(OVERVIEW);
+    expect(tool.content).toBe(OVERVIEW_PROMPT);
+    expect(tool.content).toContain('<goal_overview>');
     // the user message itself stays untouched
     expect(result.messages[3].content).toBe('现在进展如何？');
   });
@@ -39,7 +49,7 @@ describe('GoalContextSyntheticInjector', () => {
     // The pair is injected per-request into the pipeline and never persisted,
     // so a long conversation still carries exactly one pair — after the LAST
     // user message — no matter how many earlier turns exist.
-    const provider = new GoalContextSyntheticInjector({ contextPrompt: OVERVIEW, enabled: true });
+    const provider = new GoalContextSyntheticInjector({ enabled: true, overview: OVERVIEW });
     const result = await provider.process(
       createContext([
         { content: 'sys', role: 'system' },
@@ -68,7 +78,7 @@ describe('GoalContextSyntheticInjector', () => {
     // [user][real assistant tool_call][real tool result]. The synthetic pair
     // lands right after the user message; both tool exchanges stay adjacent
     // and self-contained, so provider-side tool ordering remains valid.
-    const provider = new GoalContextSyntheticInjector({ contextPrompt: OVERVIEW, enabled: true });
+    const provider = new GoalContextSyntheticInjector({ enabled: true, overview: OVERVIEW });
     const result = await provider.process(
       createContext([
         { content: 'sys', role: 'system' },
@@ -108,9 +118,9 @@ describe('GoalContextSyntheticInjector', () => {
     const messages = [{ content: 'sys', role: 'system' }];
 
     for (const provider of [
-      new GoalContextSyntheticInjector({ contextPrompt: OVERVIEW, enabled: false }),
+      new GoalContextSyntheticInjector({ enabled: false, overview: OVERVIEW }),
       new GoalContextSyntheticInjector({ enabled: true }),
-      new GoalContextSyntheticInjector({ contextPrompt: OVERVIEW, enabled: true }),
+      new GoalContextSyntheticInjector({ enabled: true, overview: OVERVIEW }),
     ]) {
       const result = await provider.process(createContext([...messages]));
       expect(result.messages).toHaveLength(1);
