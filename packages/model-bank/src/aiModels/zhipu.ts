@@ -44,6 +44,7 @@ const zhipuChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
       structuredOutput: true,
+      video: true,
       vision: true,
     },
     contextWindowTokens: 1_048_576,
