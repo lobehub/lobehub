@@ -1,12 +1,11 @@
 'use client';
 
-import { Empty, Flexbox } from '@lobehub/ui';
+import { Empty, Flexbox, Skeleton } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { MessageSquare } from 'lucide-react';
 import { memo, useCallback, useState, useTransition } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import ArticleSkeleton from '@/components/Skeleton/Article';
 import { type SkillCommentItem, type SkillCommentListResponse } from '@/types/discover';
 
 import CommentItem from './CommentItem';
@@ -59,7 +58,7 @@ const CommentList = memo<CommentListProps>(({ initialData, fetchMore }) => {
           {isPending && items.length === 0 ? (
             <Flexbox gap={24}>
               {Array.from({ length: 3 }).map((_, i) => (
-                <ArticleSkeleton key={i} rows={2} title={120} />
+                <Skeleton active key={i} paragraph={{ rows: 2 }} title={{ width: 120 }} />
               ))}
             </Flexbox>
           ) : (
