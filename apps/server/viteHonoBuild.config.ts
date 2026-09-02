@@ -20,6 +20,9 @@ export default defineConfig({
       },
       output: {
         chunkFileNames: 'chunks/[name]-[hash].js',
+        // rolldown's default splitting makes the S3 and file chunks import each other, and the
+        // S3 chunk then evaluates before the shared `__esmMin` helper exists (500 on every lambda call)
+        codeSplitting: { groups: [{ name: 'server', test: /./ }] },
         entryFileNames: '[name].js',
         format: 'es',
       },
