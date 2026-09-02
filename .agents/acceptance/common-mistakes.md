@@ -959,10 +959,11 @@ paths fall through to the SPA HTML shell, so a `grep` for your symbol "fails" ag
 and `bunx vitest run` to the MAIN checkout, where the same relative test paths exist in
 their pre-change form — the run prints `lint clean · tests N passed` against files your
 edits never touched, and a regression test you just added "passes" without ever
-executing. The tell is the count: fewer tests reported than the file now contains.
-Before trusting any gate result in a worktree session, `pwd` (or prefix the command
-with an explicit `cd <worktree> &&`) and require the test count to match the file's
-`it(` count.
+executing. The tell is the count: fewer tests reported than the file now declares —
+though the number alone cannot be trusted either way, since `it.each` expands one
+declaration into many executed cases. Before trusting any gate result in a worktree
+session, `pwd` (or prefix the command with an explicit `cd <worktree> &&`) and
+confirm the NAME of the test you just added appears in the runner's output.
 
 **Correct approach:** invoke the script by absolute path from the worktree, and before
 capturing any evidence prove the SPA's identity rather than the server's liveness:

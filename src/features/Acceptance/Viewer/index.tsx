@@ -71,7 +71,16 @@ const AcceptancePage = ({
               }}
             >
               {focused ? (
-                <AcceptanceFocusWorkspace />
+                <>
+                  {/* The focused branch zeroes the frame padding, so the
+                      notice carries its own margins. A shared viewer needs
+                      the capability explanation here MOST — this is where
+                      the owner-only review controls are visibly absent. */}
+                  <AcceptanceSharedNotice
+                    style={{ marginBlockStart: 16, marginInline: 20, width: 'auto' }}
+                  />
+                  <AcceptanceFocusWorkspace />
+                </>
               ) : (
                 <>
                   <AcceptanceSharedNotice />
