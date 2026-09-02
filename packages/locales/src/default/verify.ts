@@ -54,6 +54,7 @@ export default {
   'acceptance.checks.viewTrace': 'View verification run',
   'acceptance.checks.finalRoundHint':
     'The final result and evidence come from this round — click to locate it.',
+  'acceptance.checks.holisticTitle': 'Task delivery acceptance',
   'acceptance.checks.introduced': 'Added in round {{round}}',
   'acceptance.checks.introducedHint':
     'This check first appeared in that round — click to locate it.',

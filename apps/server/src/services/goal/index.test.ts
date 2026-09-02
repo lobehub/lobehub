@@ -30,6 +30,7 @@ import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRunt
 import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
 import { GoalCriteriaGeneratorService } from './criteriaGenerator';
+import { LEASE_EXPIRED_ERROR, VERIFICATION_FAILED_ERROR } from './decideNextMove';
 import { GoalService } from './index';
 import type { GoalTickObservation } from './traceObservation';
 
@@ -59,6 +60,28 @@ afterEach(async () => {
 });
 
 describe('GoalService', () => {
+  it('persists structured criteria on create and records their ids on the goal config', async () => {
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({
+      criteria: [
+        { description: 'Runs end to end locally', title: 'Local run works' },
+        { instruction: 'Check README covers install and run', title: 'Docs are complete' },
+      ],
+      title: 'Structured goal',
+      work: ['Only work'],
+    });
+
+    const criteriaIds = graph.goal.config?.acceptance?.criteriaIds ?? [];
+    expect(criteriaIds).toHaveLength(2);
+
+    const rows = await serverDB.query.verifyCriteria.findMany();
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    expect(byId.get(criteriaIds[0])?.title).toBe('Local run works');
+    expect(byId.get(criteriaIds[1])?.title).toBe('Docs are complete');
+    // the how-to-judge instruction landed in a linked document
+    expect(byId.get(criteriaIds[1])?.documentId).toBeTruthy();
+  });
+
   it('creates only one responsible task when ticks race on the same work node', async () => {
     const service = new GoalService(serverDB, userId);
     const graph = await service.create({ title: 'Concurrent goal', work: ['Single owner work'] });
@@ -115,6 +138,31 @@ describe('GoalService', () => {
 
     expect(runSpy).toHaveBeenCalledTimes(1);
   });
+
+  it.each([LEASE_EXPIRED_ERROR, VERIFICATION_FAILED_ERROR])(
+    'does not dispatch recovery for an overdue goal with %s',
+    async (error) => {
+      const runSpy = vi
+        .spyOn(TaskRunnerService.prototype, 'runTask')
+        .mockResolvedValue({} as never);
+      const service = new GoalService(serverDB, userId);
+      const taskModel = new TaskModel(serverDB, userId);
+      const graph = await service.create({
+        config: { schedule: { deadline: new Date(Date.now() - 1000).toISOString() } },
+        title: `Overdue recovery ${error}`,
+        work: ['Do not retry'],
+      });
+      const created = await service.tick(graph.goal.id);
+      await taskModel.updateStatus(created.taskId!, 'paused', { error });
+      runSpy.mockClear();
+
+      const stopped = await service.tick(graph.goal.id);
+
+      expect(runSpy).not.toHaveBeenCalled();
+      expect(stopped).toMatchObject({ outcome: 'no_progress' });
+      expect(stopped.message).toContain('Deadline passed');
+    },
+  );
 
   it('hands back a dispatch claim whose worker died before the run existed', async () => {
     // The claim is taken just before `runTask` creates the topic. If the worker

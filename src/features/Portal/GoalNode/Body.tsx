@@ -7,6 +7,11 @@ import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
+  coordinatorGateReason,
+  coordinatorReasonCopy,
+  viewGateKind,
+} from '@/features/AgentGoals/ProcessControl/coordinatorCopy';
+import {
   buildGoalGraphView,
   type GoalNodeView,
 } from '@/features/AgentGoals/ProcessControl/goalGraphViewModel';
@@ -141,6 +146,14 @@ const Body = memo(() => {
   const { node } = nodeView;
   const isFinding = node.kind === 'finding';
 
+  // Coordinator gates localize; arbitrary gates keep their stored copy.
+  const gateKind = node.kind === 'decision' ? viewGateKind(nodeView) : undefined;
+  const rawGateReason = gateKind ? coordinatorGateReason(nodeView.decision?.question) : undefined;
+  const gateReasonCopy = coordinatorReasonCopy(rawGateReason);
+  const gateReasonText = gateReasonCopy
+    ? t(gateReasonCopy.key as any, gateReasonCopy.params)
+    : rawGateReason;
+
   return (
     <Flexbox flex={1} gap={16} padding={16} style={{ minHeight: 0, overflowY: 'auto' }}>
       <Flexbox horizontal align={'center'} gap={8}>
@@ -173,8 +186,9 @@ const Body = memo(() => {
         ))}
 
       {node.kind === 'decision' && nodeView.decision && (
-        <Section title={t('goalProcess.gate.why')}>
-          <Text fontSize={13}>{nodeView.decision.question}</Text>
+        <Section title={t('goalProcess.gate.decisionPointLabel')}>
+          {/* State the problem itself; the resolution options carry the choices. */}
+          <Text fontSize={13}>{gateReasonText ?? nodeView.decision.question}</Text>
         </Section>
       )}
 

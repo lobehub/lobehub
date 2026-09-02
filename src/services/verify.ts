@@ -426,6 +426,10 @@ export class VerifyService {
     lambdaClient.verify.createCriteria.mutate({ drafts }) as Promise<string[]>;
 
   // ---- criteria / rubric management ----
+  /** Resolve a specific criteria id list (e.g. a goal's acceptance standard), in order. */
+  getCriteria = (ids: string[]): Promise<VerifyCriterionItem[]> =>
+    lambdaClient.verify.getCriteria.query({ ids }) as Promise<VerifyCriterionItem[]>;
+
   listCriteria = (): Promise<VerifyCriterionItem[]> =>
     lambdaClient.verify.listCriteria.query() as Promise<VerifyCriterionItem[]>;
 

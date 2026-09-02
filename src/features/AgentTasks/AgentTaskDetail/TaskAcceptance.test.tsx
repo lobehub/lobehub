@@ -68,6 +68,7 @@ vi.mock('@/features/Acceptance', async () => ({
   CheckRow: ({ check }: { check: { title: string } }) => (
     <div data-testid="acceptance-check-detail">detail: {check.title}</div>
   ),
+  checkDisplayTitle: (title: string) => title,
   checkHeadMeta: () => ({ color: 'green', icon: () => null }),
   shouldGroupChecks: (checkCount: number) => checkCount > 10,
   groupChecks: (checks: Array<{ category: string }>) =>

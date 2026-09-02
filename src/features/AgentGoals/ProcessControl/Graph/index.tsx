@@ -178,9 +178,9 @@ const useEdgeLabel = () => {
         case 'contradicts': {
           return t('goalProcess.edge.contradicts');
         }
-        case 'depends_on': {
-          return t('goalProcess.edge.dependsOn');
-        }
+        // `depends_on` is drawn blocker → blocked as a dashed edge — the dash
+        // already reads as "blocked on"; any word on it invites a backwards
+        // reading, so it carries no label.
         case 'investigates': {
           return t('goalProcess.edge.investigates');
         }

@@ -378,6 +378,13 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
         // `maxIterations` is the per-Work attempt budget above; it is not the
         // graph-wide round cap, which counts runs across every Work and would
         // strand the fourth task of a goal whose limit is three attempts.
+        // Structured criteria persist alongside the prose requirement: the goal
+        // page shows/edits them and the terminal acceptance is gated on them.
+        criteria: reviewedCriteria.map(({ description, instruction: how, title: name }) => ({
+          description,
+          instruction: how,
+          title: name,
+        })),
         maxTotalCost: budget.maxTotalCost ?? undefined,
         // No seed work: the coordinator plans the decomposition on first
         // advance, turning a complex ask into several explorable directions.

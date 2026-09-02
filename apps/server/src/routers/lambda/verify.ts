@@ -360,6 +360,16 @@ export const verifyRouter = router({
     .input(z.object({ ids: z.array(z.string()) }))
     .mutation(async ({ ctx, input }) => ctx.criterionModel.forkRubricCriteria(input.ids)),
 
+  /** Resolve a specific criteria id list (e.g. the ones bound to a goal), in input order. */
+  getCriteria: verifyProcedure
+    .input(z.object({ ids: z.array(z.string()) }))
+    .query(async ({ ctx, input }) => {
+      if (input.ids.length === 0) return [];
+      const rows = await ctx.criterionModel.findByIds(input.ids);
+      const byId = new Map(rows.map((row) => [row.id, row]));
+      return input.ids.map((id) => byId.get(id)).filter(Boolean);
+    }),
+
   listCriteria: verifyProcedure.query(async ({ ctx }) => ctx.criterionModel.query()),
 
   updateCriterion: verifyWriteProcedure

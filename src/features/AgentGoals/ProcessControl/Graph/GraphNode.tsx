@@ -11,6 +11,7 @@ import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
 import { shinyTextStyles } from '@/styles';
 
+import { coordinatorNodeTitleKey } from '../coordinatorCopy';
 import type { GoalNodeView } from '../goalGraphViewModel';
 import { KIND_COLOR, KIND_ICON } from '../shared';
 import { useElapsed } from '../useElapsed';
@@ -259,6 +260,8 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
   const palette = KIND_COLOR[node.kind];
   const isTask = node.kind === 'task';
   const attempts = view.attempts.length;
+  // Coordinator-authored node titles are English; recognized ones localize.
+  const coordinatorTitleKey = coordinatorNodeTitleKey(view);
 
   return (
     <div style={{ position: 'relative' }}>
@@ -315,7 +318,9 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
             <Icon icon={KIND_ICON[node.kind]} size={16} />
           </div>
           <Flexbox gap={2} style={{ flex: 1, minWidth: 0 }}>
-            <span className={styles.title}>{node.title}</span>
+            <span className={styles.title}>
+              {coordinatorTitleKey ? t(coordinatorTitleKey as any) : node.title}
+            </span>
             {subtitle && <span className={styles.subtitle}>{subtitle}</span>}
           </Flexbox>
         </div>

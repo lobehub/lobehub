@@ -360,15 +360,29 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
 
       {hasBody && bodyExpanded && (
         <Flexbox gap={8} paddingInline={4}>
+          {/* Both blocks carry a label naming what they are — an unlabeled blob
+              of model output reads as page noise, not as the run's record. */}
           {activity.summary && (
-            <Text
-              fontSize={13}
-              style={{ color: cssVar.colorTextDescription, whiteSpace: 'pre-wrap' }}
-            >
-              {activity.summary}
-            </Text>
+            <Flexbox gap={2}>
+              <Text fontSize={12} style={{ color: cssVar.colorTextTertiary }}>
+                {t('taskDetail.run.summaryLabel')}
+              </Text>
+              <Text
+                fontSize={13}
+                style={{ color: cssVar.colorTextDescription, whiteSpace: 'pre-wrap' }}
+              >
+                {activity.summary}
+              </Text>
+            </Flexbox>
           )}
-          {activity.content && <RunContent content={activity.content} />}
+          {activity.content && (
+            <Flexbox gap={2}>
+              <Text fontSize={12} style={{ color: cssVar.colorTextTertiary }}>
+                {t('taskDetail.run.outputLabel')}
+              </Text>
+              <RunContent content={activity.content} />
+            </Flexbox>
+          )}
           {/* The verdict's evidence, next to the delivery it judged — reading
               one should never require leaving for the acceptance page. */}
           {activity.verify && (

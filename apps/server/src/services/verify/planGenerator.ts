@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { TRACING_SCENARIOS, VERIFY_INSTRUCTION_FILE_TYPE } from '@lobechat/const';
-import { isProgrammaticTestCheck } from '@lobechat/const/verify';
+import { HOLISTIC_CHECK_TITLE, isProgrammaticTestCheck } from '@lobechat/const/verify';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
 import {
   chainVerifyPlan,
@@ -89,7 +89,7 @@ const buildHolisticAgentItem = (requirement?: string, goal?: string): VerifyChec
     // rather than the operation-level auto-repair loop.
     onFail: 'manual',
     required: true,
-    title: 'Task delivery acceptance',
+    title: HOLISTIC_CHECK_TITLE,
     verifierConfig: {},
     verifierType: 'agent',
   };

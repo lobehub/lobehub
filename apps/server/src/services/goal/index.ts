@@ -1,4 +1,5 @@
 import type { GoalAdvanceEffect } from '@lobechat/agent-tracing';
+import { buildGoalRequirement } from '@lobechat/builtin-tool-goal';
 import { GOAL_COORDINATOR_ACTOR_ID } from '@lobechat/const/goal';
 import type {
   GoalConfig,
@@ -30,6 +31,7 @@ import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRunt
 import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
 import { AcceptanceService } from '../verify/acceptanceService';
+import { VerifyPlanGeneratorService } from '../verify/planGenerator';
 import { GoalCriteriaGeneratorService, type GoalDecompositionDraft } from './criteriaGenerator';
 import {
   decideNextMove,
@@ -70,6 +72,14 @@ export interface CreateGoalGraphInput {
    * on an agent's page sets that, but the author is still the person.
    */
   createdByAgentId?: string;
+  /**
+   * Structured acceptance criteria. Persisted as `verify_criteria` rows and
+   * recorded on `config.acceptance.criteriaIds`, so the goal page can show and
+   * edit them and the terminal Goal-acceptance Work verifies against exactly
+   * these checks. Callers still fold the same criteria into `requirement`
+   * prose — that text remains what every Work's execution context reads.
+   */
+  criteria?: Array<{ description?: string; instruction?: string; title: string }>;
   maxRounds?: number;
   maxTotalCost?: number;
   /**
@@ -159,13 +169,48 @@ export class GoalService {
       ).findManageableById(input.projectId);
       if (!project) throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
     }
+    // Persist the structured acceptance criteria first: their ids ride on the
+    // goal config so the page can edit them and the terminal acceptance Work
+    // is gated on exactly these checks (not an AI re-derivation of the prose).
+    let config = input.config;
+    let requirement = input.requirement;
+    if (input.criteria?.length) {
+      // The prose requirement must keep carrying the full standard (the goal
+      // page's 什么算完成 block and every Work's execution context read it).
+      // Callers normally compose it via `buildGoalRequirement`; guard API
+      // callers that pass criteria with a bare requirement.
+      const carriesCriteria = input.criteria.every((item) =>
+        input.requirement?.includes(item.title),
+      );
+      if (!carriesCriteria) {
+        requirement = buildGoalRequirement(input.title, input.criteria, input.requirement);
+      }
+    }
+    if (input.criteria?.length) {
+      const criteriaIds = await new VerifyPlanGeneratorService(
+        this.db,
+        this.userId,
+        this.workspaceId,
+      ).createCriteriaFromDrafts(
+        input.criteria.map((item) => ({
+          description: item.description,
+          instruction: item.instruction,
+          onFail: 'manual',
+          required: true,
+          title: item.title,
+          verifierType: 'agent',
+        })),
+      );
+      config = { ...config, acceptance: { criteriaIds } };
+    }
+
     const goal = await this.goalModel.create({
       agentId: input.agentId,
-      config: input.config,
+      config,
       maxRounds: input.maxRounds,
       maxTotalCost: input.maxTotalCost,
       projectId: input.projectId,
-      requirement: input.requirement,
+      requirement,
       subjectType: 'standalone',
       title: input.title,
     });
@@ -202,7 +247,57 @@ export class GoalService {
     return (await this.graphModel.getGraph(goal.id))!;
   };
 
-  graph = async (goalId: string) => this.requireGraph(goalId);
+  /**
+   * Replace the goal's structured acceptance criteria id list (goal-page
+   * editing). The criteria rows themselves are edited through the verify
+   * criteria endpoints; this only rebinds which of them gate the goal.
+   */
+  setAcceptanceCriteria = async (goalId: string, criteriaIds: string[]) => {
+    const goal = await this.goalModel.findById(goalId);
+    if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    await this.goalModel.update(goalId, {
+      config: { ...goal.config, acceptance: { criteriaIds } },
+    });
+  };
+
+  graph = async (goalId: string) => {
+    const graph = await this.requireGraph(goalId);
+    return { ...graph, runHeartbeats: await this.collectRunHeartbeats(graph) };
+  };
+
+  /**
+   * Live heartbeat per active task node: the `agent_operations.updatedAt` of
+   * the run behind it. The runtime refreshes that lease every ~90s while
+   * `goal_nodes.updatedAt` only moves on observations / status changes, so a
+   * client judging liveness from the node row alone would cry "lost" over any
+   * long quiet stretch (a big tool call, the verify stage) the reclaim path
+   * considers perfectly healthy.
+   */
+  private collectRunHeartbeats = async (
+    graph: GoalGraphSnapshot,
+  ): Promise<Record<string, Date> | undefined> => {
+    const activeTasks = graph.nodes.filter(
+      (node): node is GoalGraphNode & { taskId: string } =>
+        node.kind === 'task' && node.status === 'active' && !!node.taskId,
+    );
+    if (activeTasks.length === 0) return undefined;
+
+    const nodeByTaskId = new Map(activeTasks.map((node) => [node.taskId, node.id]));
+    const running = await this.taskTopicModel.findRunningByTaskIds(
+      activeTasks.map((n) => n.taskId),
+    );
+
+    const operationModel = new AgentOperationModel(this.db, this.userId, this.workspaceId);
+    const heartbeats: Record<string, Date> = {};
+    for (const topic of running) {
+      const nodeId = topic.taskId ? nodeByTaskId.get(topic.taskId) : undefined;
+      if (!nodeId || !topic.operationId || heartbeats[nodeId]) continue;
+      const operation = await operationModel.findById(topic.operationId);
+      if (operation?.updatedAt) heartbeats[nodeId] = operation.updatedAt;
+    }
+
+    return Object.keys(heartbeats).length > 0 ? heartbeats : undefined;
+  };
 
   /** Current lifecycle status, without paying for the whole graph. */
   status = async (goalId: string): Promise<GoalStatus | undefined> =>
@@ -308,6 +403,11 @@ export class GoalService {
    * Rounds are counted across every Work Task in the graph, not per Work — the
    * budget is the goal's, so `setBudget` has to read it exactly the way the
    * coordinator does or raising a budget would not reliably unstick a goal.
+   *
+   * The calendar-time budget (schedule.deadline) is evaluated in the same
+   * shape: time is the long-horizon budget unit the attempt/round/dollar trio
+   * cannot express, and a goal whose deadline passed must stop the same way a
+   * goal out of money does.
    */
   private evaluateBudget = async (goal: GoalItem, graph: GoalGraphSnapshot) => {
     const taskIds = graph.nodes.flatMap((node) => (node.taskId ? [node.taskId] : []));
@@ -727,8 +827,19 @@ export class GoalService {
         name: frontier.title,
         projectId: graph.goal.projectId ?? undefined,
       });
+      // The terminal Goal-acceptance Work is gated on the goal's structured
+      // criteria when it has them: the verify plan materializes exactly those
+      // rows (deterministic checklist) instead of AI-deriving checks from the
+      // requirement prose. Ordinary Work keeps the prose-scoped contract.
+      const goalCriteriaIds =
+        frontier.title === GOAL_ACCEPTANCE_TASK_TITLE
+          ? graph.goal.config?.acceptance?.criteriaIds
+          : undefined;
       const acceptance = await this.acceptanceService.ensureForSubject('task', task.id, {
-        config: { enabled: true },
+        config: {
+          enabled: true,
+          ...(goalCriteriaIds?.length ? { verifyCriteriaIds: goalCriteriaIds } : {}),
+        },
         requirement: this.buildTaskAcceptanceRequirement(
           graph,
           frontier.title,

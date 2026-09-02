@@ -123,6 +123,16 @@ export const goalRouter = router({
           .optional(),
         maxRounds: z.number().int().positive().optional(),
         maxTotalCost: z.number().positive().optional(),
+/** Structured acceptance criteria — persisted rows that gate the terminal acceptance. */
+        criteria: z
+          .array(
+            z.object({
+              description: z.string().optional(),
+              instruction: z.string().optional(),
+              title: z.string().min(1),
+            }),
+          )
+          .optional(),
         problemDescription: z.string().optional(),
         projectId: z.string().optional(),
         requirement: z.string().optional(),
@@ -271,6 +281,18 @@ export const goalRouter = router({
       mapGoalError(error, 'resume');
     }
   }),
+
+  /** Rebind which persisted verify criteria gate this goal's terminal acceptance. */
+  setAcceptanceCriteria: goalWriteProcedure
+    .input(idInput.extend({ criteriaIds: z.array(z.string()) }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await ctx.goalService.setAcceptanceCriteria(input.id, input.criteriaIds);
+        return { success: true };
+      } catch (error) {
+        mapGoalError(error, 'setAcceptanceCriteria');
+      }
+    }),
 
   setBudget: goalWriteProcedure
     .input(

@@ -65,6 +65,7 @@
   "acceptance.checks.emptyFilter.needsFix": "没有待修复的检查项",
   "acceptance.checks.emptyFilter.pending": "没有待验收的检查项",
   "acceptance.checks.finalRoundHint": "最终结果与证据来自该轮，点击查看",
+  "acceptance.checks.holisticTitle": "任务交付验收",
   "acceptance.checks.introduced": "第 {{round}} 轮引入",
   "acceptance.checks.introducedHint": "该检查在此轮首次出现，点击查看",
   "acceptance.checks.iterated": "迭代 {{count}} 次",

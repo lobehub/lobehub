@@ -42,3 +42,10 @@ export type GoalSubjectType = (typeof goalSubjectTypes)[number];
  * unanswerable — a stable id for the one non-human actor is what separates them.
  */
 export const GOAL_COORDINATOR_ACTOR_ID = 'goal-coordinator';
+
+/**
+ * Fixed title of the terminal Goal-acceptance Work the coordinator creates
+ * once every other Work is terminal. Stored in English as data; clients
+ * recognize it and render the localized copy (`goalProcess.node.terminalAcceptance`).
+ */
+export const GOAL_ACCEPTANCE_TASK_TITLE = 'Complete full Goal acceptance';

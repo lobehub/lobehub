@@ -252,6 +252,40 @@ completion whose `content` is parsed as the object. A text-only evidence check i
 Assert the round from three places together: the toast copy (a MutationObserver on
 `document.body`), the rows' `status`/`action`/`created_at`, and the card count.
 
+#### Structured generation crashes on the deepseek provider path — stub via openai instead
+
+**Situation:** driving a server-side `generateObject` scenario (e.g. `verify_plan_gen`)
+through `llm-stub.mjs` when the resolved model config is `deepseek` (the OSS default).
+
+**Doesn't work:** pointing the deepseek provider's keyVaults at the stub. The chat
+turn streams fine, but `generateObject` fails with `TypeError: Cannot read properties
+of undefined (reading '0')` (visible in `llm_generation_tracing.error_detail`), and
+the caller silently falls back (verify plan gen → holistic single check), which reads
+as "my feature didn't run".
+
+**Works:** route the generation through the openai protocol path — e.g. point the
+resolver's agent (for verify: `update agents set model='gpt-5.6-luna', provider='openai'
+where slug='verify-agent'`) at the stubbed openai provider. The server-side openai
+provider calls `/v1/responses`, which the stub answers correctly for `stream:false`
+structured generation (`llm_generation_tracing.success=t` is the confirmation probe).
+
+#### Forcing the goal frontier 失联 state needs >15 min, not the server's 5
+
+**Situation:** A/B-forcing the goal page's 失联 (lost-heartbeat) banner by backdating
+`goal_nodes.updated_at` / `agent_operations.updated_at` with SQL.
+
+**Doesn't work:** backdating by ~10 minutes because the server reclaim default
+(`resolveOperationLeaseTimeout`) is 5 minutes. The frontier still shows 运行中: the
+client view model has its own `DEFAULT_LEASE_TIMEOUT_MS = 15 min` and only honors
+`goal.config.recovery.operationLeaseTimeoutMs` when the goal sets one.
+
+**Works:** backdate past the client's window (25 min is comfortable), or create the
+goal with an explicit `--operation-lease-timeout-ms`. Liveness = the newer of the
+node row and `runHeartbeats` (the running operation's `updated_at` served by
+`goal.graph`), so the A/B is: node stale + op fresh → 运行中; both stale → 失联.
+Restore the forced rows (node/task/task_topics/operation status + timestamps) after
+capturing.
+
 #### A CLI-created topic has no trigger/status and is filtered out of the Agent paged view
 
 **Situation:** building a topic fixture with `lh topic create`, writing fields such as
@@ -1959,6 +1993,31 @@ followed by `Error converting image to base64`. Production uses a real object-st
 domain and is unaffected, so this is purely a local verification-environment gate and
 not a product defect — do not report it as a bug, and do not work around it by
 switching to inline base64, which would verify a path the product never takes.
+
+#### Real web-search evidence needs local SearXNG — the on-disk search1api keys are dead
+
+**Situation:** a check needs the product's real web-search pipeline (builtin
+`lobe-web-browsing____search` executing an actual HTTP search and rendering result
+cards), e.g. "ask the agent a weather question".
+
+**Doesn't work:** `SEARCH_PROVIDERS=search1api` with any `SEARCH1API_SEARCH_API_KEY`
+found in sibling repo `.env` files — they all return 401 (verify with a direct
+`curl api.search1api.com/search` before blaming the product). Keyless fallbacks
+don't exist: with no `SEARCH_PROVIDERS` the impl list is empty and every search
+returns "all configured providers returned errors"; public SearXNG instances
+rate-limit (429) or ship JSON-disabled (HTML back).
+
+**Works:** run a local SearXNG:
+`docker run -d -p 8888:8080 -v <dir>:/etc/searxng searxng/searxng` with a
+`settings.yml` of `use_default_settings: true`, `server.limiter: false`, and
+`search.formats: [html, json]`, then start the dev server with
+`SEARCH_PROVIDERS=searxng SEARXNG_URL=http://localhost:8888`. It aggregates real
+engines, so the whole product path (server search impl → result cards → tool
+message persistence) is genuine. English queries return results more reliably
+than Chinese ones. One trap when the model is a tool_call-emitting stub AND a
+synthetic context injector is active (e.g. `getGoalContext`): "last message is a
+tool result → answer" fires on the injected pair and skips the search — key the
+stub's answer-mode off the NAME of the last `function_call` instead.
 
 ## Detailed references
 

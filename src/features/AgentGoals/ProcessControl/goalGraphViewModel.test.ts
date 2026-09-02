@@ -170,6 +170,24 @@ describe('buildGoalGraphView', () => {
     expect(view.needsYou).toBe(1);
   });
 
+  it('keeps a work running when the run operation heartbeat is fresh despite a quiet node row', () => {
+    // The node row only moves on observations / status changes; a long tool
+    // call or the verify stage keeps the operation lease fresh while the row
+    // goes quiet. That must not read as "lost".
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [event('w1', 'activated', 30)],
+        nodes: [node('w1', { status: 'active', taskId: 'task-1', updatedAt: at(30) })],
+        runHeartbeats: { w1: at(119) },
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1.isStale).toBe(false);
+    expect(view.byId.w1.heartbeatAt).toEqual(at(119));
+    expect(view.frontier[0]).toMatchObject({ kind: 'running' });
+  });
+
   it('keeps a fresh active work running, with the current attempt start for the clock', () => {
     const view = buildGoalGraphView(
       snapshot({
@@ -263,20 +281,22 @@ describe('buildGoalGraphView', () => {
     expect(view.byId.w1.findings.map((n) => n.id)).toEqual(['f1']);
   });
 
-  it('keeps only the most recent finished tasks, ahead of the live rows', () => {
+  it('keeps only the most recent finished tasks, shown in work numbering ahead of live rows', () => {
+    // w2 finished AFTER w3: recency picks which rows stay (w1 drops), but the
+    // list still reads #2 then #3 — not "most recently finished first".
     const view = buildGoalGraphView(
       snapshot({
         nodes: [
           node('w1', { resolvedAt: at(10), status: 'resolved' }),
-          node('w2', { resolvedAt: at(20), status: 'resolved' }),
-          node('w3', { resolvedAt: at(30), status: 'resolved' }),
+          node('w2', { resolvedAt: at(30), status: 'resolved' }),
+          node('w3', { resolvedAt: at(20), status: 'resolved' }),
           node('w4'),
         ],
       }),
       NOW,
     );
 
-    expect(view.frontier.map((item) => item.view.node.id)).toEqual(['w3', 'w2', 'w4']);
+    expect(view.frontier.map((item) => item.view.node.id)).toEqual(['w2', 'w3', 'w4']);
     expect(view.advanceable).toBe(1);
   });
 

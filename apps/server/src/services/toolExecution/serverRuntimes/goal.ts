@@ -54,6 +54,9 @@ export const goalRuntime: ServerRuntimeRegistration = {
             // `maxIterations` caps attempts on one Work; it is deliberately not
             // passed as `maxRounds`, which counts runs across every Work in the
             // graph and would strand later tasks that have not run at all.
+            // Structured criteria persist alongside the prose requirement so the
+            // goal page can edit them and the terminal acceptance runs exactly them.
+            criteria: drafts,
             maxTotalCost: args.maxTotalCost ?? undefined,
             // No seed work: the coordinator plans the decomposition on first
             // advance, so a complex ask becomes several explorable directions

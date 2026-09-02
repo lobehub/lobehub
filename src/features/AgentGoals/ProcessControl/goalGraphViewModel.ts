@@ -54,9 +54,11 @@ export interface GoalNodeView {
   findings: GoalGraphNode[];
   /** Decision only: the Work this gate was opened for — its ledger is the case. */
   gateSubjectId?: string;
+  /** Latest liveness signal: node row update or the run operation's lease heartbeat. */
+  heartbeatAt: Date;
   /** Decisions on this node a human already resolved. */
   humanTouches: GoalGraphDecision[];
-  /** Active for longer than the lease window with no update — the coordinator would reclaim it. */
+  /** Active for longer than the lease window with no heartbeat — the coordinator would reclaim it. */
   isStale: boolean;
   node: GoalGraphNode;
   /** The Work that produced this finding. */
@@ -179,7 +181,7 @@ export const buildGoalGraphView = (
   snapshot: GoalGraphSnapshot,
   now: number = Date.now(),
 ): GoalGraphView => {
-  const { decisions, edges, events, goal, nodes, workVersions } = snapshot;
+  const { decisions, edges, events, goal, nodes, runHeartbeats, workVersions } = snapshot;
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const lease = leaseTimeoutMs(goal);
 
@@ -222,6 +224,14 @@ export const buildGoalGraphView = (
     const attempts = buildAttempts(node, events);
     const open = attempts.at(-1);
     const isRunningAttempt = node.status === 'active' && open?.outcome === 'running';
+    // Liveness = the newer of the node row (moves on observations / status
+    // changes) and the run operation's lease heartbeat (refreshed ~90s while
+    // the agent works). Judging from the node row alone flags any long quiet
+    // stretch — a big tool call, the verify stage — as lost while the
+    // coordinator's reclaim path still sees a healthy lease.
+    const heartbeatAt = new Date(
+      Math.max(node.updatedAt.getTime(), runHeartbeats?.[node.id]?.getTime() ?? 0),
+    );
     return {
       answers: supportsByFinding.get(node.id) ?? [],
       artifactCount: artifactCounts.get(node.id) ?? 0,
@@ -233,9 +243,10 @@ export const buildGoalGraphView = (
       dependsOn: dependsOn.get(node.id) ?? [],
       findings: producesByWork.get(node.id) ?? [],
       gateSubjectId: gateSubject.get(node.id),
+      heartbeatAt,
       humanTouches: nodeDecisions.filter((d) => d.status === 'resolved' && !!d.resolvedByUserId),
       isStale:
-        node.kind === 'task' && node.status === 'active' && now - node.updatedAt.getTime() > lease,
+        node.kind === 'task' && node.status === 'active' && now - heartbeatAt.getTime() > lease,
       node,
       producedBy: producedByFinding.get(node.id),
       seq: node.kind === 'task' ? ++seq : undefined,
@@ -271,8 +282,16 @@ export const buildGoalGraphView = (
 
   const done = views
     .filter((view) => view.node.kind === 'task' && TERMINAL_NODE_STATUSES.has(view.node.status))
+    // Recency picks WHICH finished rows stay visible…
     .sort((a, b) => resolvedTime(b.node) - resolvedTime(a.node))
     .slice(0, RECENT_DONE)
+    // …but the list displays them in the stable Work numbering (#1, #2, …) —
+    // "most recently finished first" reads as the sequence having changed.
+    .sort(
+      (a, b) =>
+        (a.seq ?? Number.MAX_SAFE_INTEGER) - (b.seq ?? Number.MAX_SAFE_INTEGER) ||
+        resolvedTime(a.node) - resolvedTime(b.node),
+    )
     .map((view) => ({ key: `done:${view.node.id}`, kind: 'done' as const, rank: -1, view }));
 
   frontier.sort((a, b) => a.rank - b.rank || b.view.node.priority - a.view.node.priority);

@@ -326,6 +326,26 @@ list items, table rows, fenced code, and literal transcript output, which are ex
 the places the break is the content. Never run a proseWrap formatter over files under
 `assets/`.
 
+### L-E20 — Seeding an entity below its composing layer, then publishing its page as evidence
+
+**Wrong approach:** build a goal/task fixture by calling the service or TRPC endpoint
+directly with minimal fields, skipping the client-side composer the real creation flows
+run (e.g. `buildGoalRequirement` folding acceptance criteria into the requirement
+prose), then screenshot the entity page as feature evidence.
+
+**Why it fails:** the page renders the under-composed data faithfully — a requirement
+reduced to one bare sentence — and the reviewer reads that as a code regression in an
+untouched block ("这块怎么被改了？canary 才是对的"). A whole feedback round gets spent
+disproving a defect that only exists in the fixture. The diff shows nothing because
+nothing changed.
+
+**Correct approach:** drive fixtures through the same composition the product uses —
+either the real creation surface, or the same shaping helpers the callers invoke — and
+before publishing an entity page as evidence, compare its populated fields against a
+canary-created sibling. When a service accepts decomposed inputs, prefer adding a
+server-side guard that re-derives the composed field, so no API caller (fixtures
+included) can create the under-composed shape at all.
+
 ## Product and interaction contracts
 
 ### L-D1 — Rebuilding a canonical surface from visual impression

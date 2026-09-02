@@ -11,6 +11,7 @@ import { goalService } from '@/services/goal';
 import { useChatStore } from '@/store/chat';
 import { goalSelectors, useGoalStore } from '@/store/goal';
 
+import GoalAcceptanceCriteria from '../GoalAcceptanceCriteria';
 import Activity from './Activity';
 import Findings from './Findings';
 import Frontier, { type FrontierActions } from './Frontier';
@@ -80,7 +81,7 @@ const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
   // to control here, so the page keeps its original shape.
   if (!graph || graph.nodes.length === 0) return null;
 
-  // The coordinator is decomposing the problem into tasks. `running` with zero
+// The coordinator is decomposing the problem into tasks. `running` with zero
   // Works counts too: the decomposition claim flips the status before the
   // planner returns, and a re-plan after all Works were removed is the same
   // state. The surfaces below promise the incoming structure instead of
@@ -88,6 +89,7 @@ const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
   const planning =
     ['planning', 'running'].includes(graph.goal.status) &&
     !graph.nodes.some((view) => view.node.kind === 'task');
+  const criteriaIds = graph.goal.config?.acceptance?.criteriaIds ?? [];
   // A closed goal cannot move: the coordinator returns immediately for these,
   // and a Work added here would sit `proposed` forever. Stop offering actions
   // that cannot land. The goal otherwise advances entirely on its own — the
@@ -110,6 +112,31 @@ const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
       <Graph graph={graph} planning={planning} selectedId={selectedId} onSelect={select} />
 
       <Accordion defaultExpandedKeys={['findings', 'activity']} gap={0}>
+        {/* The structured acceptance standard the terminal goal acceptance is
+            gated on. Collapsed by default — reference material, like the task
+            detail's 交付验收 section. Prose-only legacy goals have none. */}
+        {!!criteriaIds.length && (
+          <AccordionItem
+            itemKey={'acceptance'}
+            paddingBlock={6}
+            paddingInline={0}
+            title={
+              <Flexbox horizontal align={'center'} gap={8}>
+                <Text fontSize={14} weight={600}>
+                  {t('goalAcceptance.title')}
+                </Text>
+                <Tag size={'small'}>{criteriaIds.length}</Tag>
+                <Text fontSize={12} type={'secondary'}>
+                  {t('goalAcceptance.gateHint')}
+                </Text>
+              </Flexbox>
+            }
+          >
+            <Flexbox className={styles.section}>
+              <GoalAcceptanceCriteria criteriaIds={criteriaIds} goalId={goalId} />
+            </Flexbox>
+          </AccordionItem>
+        )}
         <AccordionItem
           itemKey={'findings'}
           paddingBlock={6}

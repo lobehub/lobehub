@@ -232,6 +232,12 @@ export interface RuntimeInitialContext {
    */
   activeTopicDocument?: RuntimeActiveTopicDocumentContext;
   /**
+   * Goal progress overview, built from the goal detail page the user is
+   * currently viewing. Injected into the last user message so the LLM can
+   * answer progress questions about the goal without extra tool calls.
+   */
+  goalOverview?: InitialGoalOverviewContext;
+  /**
    * Ad-hoc tool manifests injected by callers for the current request.
    * Merged into the tool resolution output without passing through ToolsEngine.
    * Deduplication: manifests whose identifier already appears in enabledToolIds are skipped.
@@ -268,5 +274,10 @@ export interface RuntimeInitialContext {
 
 export interface InitialTaskManagerContext {
   /** Prebuilt prompt describing the tasks shown on the page. */
+  contextPrompt: string;
+}
+
+export interface InitialGoalOverviewContext {
+  /** Prebuilt prompt describing the goal progress shown on the page. */
   contextPrompt: string;
 }
