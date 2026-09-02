@@ -493,7 +493,7 @@ const isApiUsableForShareVisitor = (humanIntervention: unknown): boolean =>
   humanIntervention === undefined || humanIntervention === 'never';
 
 /**
- * Structural counterpart to `applyShareGateToDataToolAccess`: strip any builtin
+ * Structural counterpart to `applyShareGateToDataToolAccess`: strip any tool's
  * API whose OWN `humanIntervention` policy cannot honestly complete under a
  * share visitor's forced `headless` approval mode. Reads the SAME `humanIntervention`
  * metadata every builtin tool already declares for the approval-UI feature, so
@@ -501,10 +501,18 @@ const isApiUsableForShareVisitor = (humanIntervention: unknown): boolean =>
  * intervention-gated API is caught automatically instead of requiring a manual
  * audit.
  *
- * Scoped to builtin identifiers only (`isGovernedByBuiltinAllowlist`) — MCP /
- * market / custom plugin manifests are not `BuiltinToolManifest`s and don't
- * carry this field's tool-level fallback the same way; they are governed
- * exclusively by {@link filterPluginsByShareGate}.
+ * Applies to EVERY manifest still in `toolSet.manifestMap` at this point,
+ * builtin or not — MCP/connector manifests (`buildConnectorManifests.ts`) map
+ * a connector tool's `needs_approval` permission onto this SAME `humanIntervention:
+ * 'required'` field, and `ToolExecutionService.executeTool`'s dispatch-time
+ * connector-permission gate only hard-blocks `disabled`, deliberately leaving
+ * `needs_approval` to this manifest strip — so a share run (always `headless`,
+ * see {@link isApiUsableForShareVisitor}) would otherwise auto-run a
+ * creator-configured "needs approval" connector call with no approver ever
+ * present. `isGovernedByBuiltinAllowlist` is intentionally NOT consulted here:
+ * that allowlist decides which BUILTIN tools may be exposed at all (still
+ * enforced earlier in {@link applyShareGateToToolSet}), not which manifests
+ * this intervention strip should look at.
  *
  * A tool whose TOOL-LEVEL `humanIntervention` (the fallback every API without
  * its own entry inherits) is itself unusable loses every API and is dropped
@@ -515,13 +523,13 @@ const isApiUsableForShareVisitor = (humanIntervention: unknown): boolean =>
  * headless auto-runs those, so removing them from the offer is the layer that
  * keeps a share visitor's model from invoking a consent-gated API without its
  * consent step ever happening. `'always'`-policy APIs stay unreachable either
- * way (headless converts them to blocked results); data-bearing APIs are
- * additionally re-blocked at dispatch by {@link isShareBlockedDataToolCall}.
+ * way (headless converts them to blocked results); data-bearing BUILTIN APIs
+ * are additionally re-blocked at dispatch by {@link isShareBlockedDataToolCall}
+ * — non-builtin manifests have no such dispatch-time backstop, which is why
+ * this assembly-time strip is their ONLY enforcement point.
  */
 const applyShareGateToInterventionRequiredApis = (toolSet: ShareGateToolSet): void => {
   for (const identifier of Object.keys(toolSet.manifestMap)) {
-    if (!isGovernedByBuiltinAllowlist(identifier)) continue;
-
     const manifest = toolSet.manifestMap[identifier];
     if (!Array.isArray(manifest.api) || manifest.api.length === 0) continue;
 

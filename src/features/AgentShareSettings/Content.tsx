@@ -75,7 +75,11 @@ const AgentShareSettingsContent = memo<AgentShareSettingsContentProps>(({ agentI
                 shareConfig={share.shareConfig}
                 onChange={handleConfigChange}
               />
-              <LimitsSection shareConfig={share.shareConfig} onChange={handleConfigChange} />
+              <LimitsSection
+                agentId={agentId}
+                shareConfig={share.shareConfig}
+                onChange={handleConfigChange}
+              />
             </>
           )}
         </>

@@ -15,6 +15,7 @@ const DEFAULT_MONTHLY_SPEND_LIMIT = 10;
 type CountField = 'maxTopicsPerVisitor' | 'maxTurnsPerTopic';
 
 interface LimitsSectionProps {
+  agentId: string;
   onChange: (patch: AgentShareConfigPatch) => void;
   shareConfig: AgentShareConfigState;
 }
@@ -24,7 +25,7 @@ interface LimitsSectionProps {
  * run is billed to the creator, so these are the only things standing between
  * a shared link and an unbounded bill.
  */
-const LimitsSection = memo<LimitsSectionProps>(({ onChange, shareConfig }) => {
+const LimitsSection = memo<LimitsSectionProps>(({ agentId, onChange, shareConfig }) => {
   const { t } = useTranslation('agent');
 
   // Typing must not fire a request per keystroke: the drafts hold the raw
@@ -49,7 +50,7 @@ const LimitsSection = memo<LimitsSectionProps>(({ onChange, shareConfig }) => {
     }
   }, []);
 
-  const schedule = useDebouncedLimitPatch(async (patch) => onChange(patch), settle);
+  const schedule = useDebouncedLimitPatch(agentId, async (patch) => onChange(patch), settle);
 
   const handleCountChange = (field: CountField, value: number | null) => {
     setCountDraft((prev) => {
