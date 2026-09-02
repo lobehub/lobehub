@@ -20,7 +20,6 @@ import {
   AGENT_SHARE_NO_DATA_GRANT_BUILTIN_IDENTIFIERS,
   builtinTools,
 } from '@lobechat/builtin-tools';
-import { buildShareToolEntry } from '@lobechat/const';
 import { ToolNameResolver } from '@lobechat/context-engine';
 import { describe, expect, it } from 'vitest';
 
@@ -106,7 +105,9 @@ const buildToolSet = (
 
 describe('filterPluginsByShareGate', () => {
   it('keeps only allowlisted plugin ids', () => {
-    const gate = buildGate({ enabledToolIds: ['web-search', 'mcp-github'] });
+    const gate = buildGate({
+      toolGrants: [{ identifier: 'web-search' }, { identifier: 'mcp-github' }],
+    });
 
     expect(filterPluginsByShareGate(['web-search', 'local-system', 'mcp-github'], gate)).toEqual([
       'web-search',
@@ -116,15 +117,15 @@ describe('filterPluginsByShareGate', () => {
 
   it('exposes no tools when the allowlist is missing or empty', () => {
     expect(filterPluginsByShareGate(['web-search'], buildGate())).toEqual([]);
-    expect(filterPluginsByShareGate(['web-search'], buildGate({ enabledToolIds: [] }))).toEqual([]);
+    expect(filterPluginsByShareGate(['web-search'], buildGate({ toolGrants: [] }))).toEqual([]);
   });
 
-  it('treats a per-API entry as candidacy for the whole identifier', () => {
+  it('treats a per-API grant as candidacy for the whole identifier', () => {
     // Narrowing down to the specific granted API happens later, in
     // `applyShareGateToToolSet`, once the real manifest is known — this pass
     // only decides whether the identifier is a candidate at all.
     const gate = buildGate({
-      enabledToolIds: [toolName(LobeAgentIdentifier, LobeAgentApiName.analyzeMedia)],
+      toolGrants: [{ apis: [LobeAgentApiName.analyzeMedia], identifier: LobeAgentIdentifier }],
     });
 
     expect(filterPluginsByShareGate([LobeAgentIdentifier, 'mcp-github'], gate)).toEqual([
@@ -268,7 +269,10 @@ describe('applyShareGateToToolSet', () => {
       { apis: [{ name: 'searchAgent' }], identifier: AgentManagementIdentifier },
     ]);
 
-    applyShareGateToToolSet(toolSet, buildGate({ enabledToolIds: [CalculatorIdentifier] }));
+    applyShareGateToToolSet(
+      toolSet,
+      buildGate({ toolGrants: [{ identifier: CalculatorIdentifier }] }),
+    );
 
     expect(toolSet.enabledToolIds).toEqual([CalculatorIdentifier]);
     expect(toolSet.activatableToolIds).toEqual([CalculatorIdentifier]);
@@ -283,7 +287,10 @@ describe('applyShareGateToToolSet', () => {
       { apis: [{ name: 'searchAgent' }], identifier: AgentManagementIdentifier },
     ]);
 
-    applyShareGateToToolSet(toolSet, buildGate({ enabledToolIds: [AgentManagementIdentifier] }));
+    applyShareGateToToolSet(
+      toolSet,
+      buildGate({ toolGrants: [{ identifier: AgentManagementIdentifier }] }),
+    );
 
     expect(toolSet.enabledToolIds).toEqual([]);
     expect(toolSet.manifestMap).toEqual({});
@@ -294,13 +301,16 @@ describe('applyShareGateToToolSet', () => {
     // `TopicReferenceExecutionRuntime.getTopicContext` resolves a free-form
     // topicId via `TopicModel.findOwnTopicById`, scoped only to the creator's
     // whole store — not to this share/agent. A share config saved while it was
-    // still allowlisted could still carry it in `enabledToolIds`; the gate must
+    // still allowlisted could still carry it in `toolGrants`; the gate must
     // keep dropping it rather than newly trusting the stored config.
     const toolSet = buildToolSet([
       { apis: [{ name: 'getTopicContext' }], identifier: TopicReferenceIdentifier },
     ]);
 
-    applyShareGateToToolSet(toolSet, buildGate({ enabledToolIds: [TopicReferenceIdentifier] }));
+    applyShareGateToToolSet(
+      toolSet,
+      buildGate({ toolGrants: [{ identifier: TopicReferenceIdentifier }] }),
+    );
 
     expect(toolSet.enabledToolIds).toEqual([]);
     expect(toolSet.manifestMap).toEqual({});
@@ -310,7 +320,7 @@ describe('applyShareGateToToolSet', () => {
   it('keeps a non-builtin plugin the owner enabled', () => {
     const toolSet = buildToolSet([{ apis: [{ name: 'run' }], identifier: 'mcp-github' }]);
 
-    applyShareGateToToolSet(toolSet, buildGate({ enabledToolIds: ['mcp-github'] }));
+    applyShareGateToToolSet(toolSet, buildGate({ toolGrants: [{ identifier: 'mcp-github' }] }));
 
     expect(toolSet.enabledToolIds).toEqual(['mcp-github']);
   });
@@ -337,7 +347,7 @@ describe('applyShareGateToToolSet', () => {
     applyShareGateToToolSet(
       toolSet,
       buildGate({
-        enabledToolIds: [toolName(LobeAgentIdentifier, LobeAgentApiName.analyzeMedia)],
+        toolGrants: [{ apis: [LobeAgentApiName.analyzeMedia], identifier: LobeAgentIdentifier }],
       }),
     );
 
@@ -363,7 +373,7 @@ describe('applyShareGateToToolSet', () => {
     // dropped entirely rather than left offering nothing.
     applyShareGateToToolSet(
       toolSet,
-      buildGate({ enabledToolIds: [toolName(LobeAgentIdentifier, 'noSuchApi')] }),
+      buildGate({ toolGrants: [{ apis: ['noSuchApi'], identifier: LobeAgentIdentifier }] }),
     );
 
     expect(toolSet.enabledToolIds).toEqual([]);
@@ -382,9 +392,9 @@ describe('applyShareGateToToolSet', () => {
     applyShareGateToToolSet(
       toolSet,
       buildGate({
-        enabledToolIds: [
-          LobeAgentIdentifier,
-          toolName(LobeAgentIdentifier, LobeAgentApiName.analyzeMedia),
+        toolGrants: [
+          { identifier: LobeAgentIdentifier },
+          { apis: [LobeAgentApiName.analyzeMedia], identifier: LobeAgentIdentifier },
         ],
       }),
     );
@@ -402,7 +412,10 @@ describe('applyShareGateToToolSet', () => {
       },
     ]);
 
-    applyShareGateToToolSet(toolSet, buildGate({ enabledToolIds: [LobeAgentIdentifier] }));
+    applyShareGateToToolSet(
+      toolSet,
+      buildGate({ toolGrants: [{ identifier: LobeAgentIdentifier }] }),
+    );
 
     const manifest = toolSet.manifestMap[LobeAgentIdentifier];
     expect(manifest.api.map((api) => api.name)).not.toContain(LobeAgentApiName.callSubAgent);
@@ -425,14 +438,14 @@ describe('applyShareGateToToolSet', () => {
       ]);
 
     const denied = build();
-    applyShareGateToToolSet(denied, buildGate({ enabledToolIds: [MemoryIdentifier] }));
+    applyShareGateToToolSet(denied, buildGate({ toolGrants: [{ identifier: MemoryIdentifier }] }));
     expect(denied.manifestMap[MemoryIdentifier]).toBeUndefined();
     expect(denied.enabledToolIds).toEqual([]);
 
     const granted = build();
     applyShareGateToToolSet(
       granted,
-      buildGate({ allowReadMemory: true, enabledToolIds: [MemoryIdentifier] }),
+      buildGate({ allowReadMemory: true, toolGrants: [{ identifier: MemoryIdentifier }] }),
     );
     expect(granted.manifestMap[MemoryIdentifier].api.map((api) => api.name)).toEqual([
       MemoryApiName.searchUserMemory,
@@ -456,7 +469,10 @@ describe('applyShareGateToToolSet', () => {
       },
     ]);
 
-    applyShareGateToToolSet(toolSet, buildGate({ enabledToolIds: [CalculatorIdentifier] }));
+    applyShareGateToToolSet(
+      toolSet,
+      buildGate({ toolGrants: [{ identifier: CalculatorIdentifier }] }),
+    );
 
     expect(toolSet.manifestMap[CalculatorIdentifier].api.map((api) => api.name)).toEqual([
       'safe',
@@ -471,7 +487,10 @@ describe('applyShareGateToToolSet', () => {
     ]);
     (toolSet.manifestMap[CalculatorIdentifier] as any).humanIntervention = 'required';
 
-    applyShareGateToToolSet(toolSet, buildGate({ enabledToolIds: [CalculatorIdentifier] }));
+    applyShareGateToToolSet(
+      toolSet,
+      buildGate({ toolGrants: [{ identifier: CalculatorIdentifier }] }),
+    );
 
     expect(toolSet.manifestMap[CalculatorIdentifier]).toBeUndefined();
     expect(toolSet.enabledToolIds).toEqual([]);
@@ -494,7 +513,7 @@ describe('applyShareGateToToolSet', () => {
       },
     ]);
 
-    applyShareGateToToolSet(toolSet, buildGate({ enabledToolIds: ['mcp-github'] }));
+    applyShareGateToToolSet(toolSet, buildGate({ toolGrants: [{ identifier: 'mcp-github' }] }));
 
     expect(toolSet.manifestMap['mcp-github'].api.map((api) => api.name)).toEqual(['listRepos']);
     // `type: 'mcp'` means `ToolNameResolver.generate` appends a THIRD
@@ -518,14 +537,13 @@ describe('applyShareGateToToolSet', () => {
       },
     ]);
 
-    // The GRANT entry in `shareConfig.enabledToolIds` is always the plain
-    // `identifier____apiName` shape (`buildShareToolEntry`), independent of
-    // whatever `ToolNameResolver.generate` does for the WIRE tool-call name
+    // The grant in `shareConfig.toolGrants` names the RAW api name, independent
+    // of whatever `ToolNameResolver.generate` does for the WIRE tool-call name
     // — the third `____mcp` segment only ever appears on the generated
-    // dispatch name asserted below, never on the grant entry itself.
+    // dispatch name asserted below, never on the grant itself.
     applyShareGateToToolSet(
       toolSet,
-      buildGate({ enabledToolIds: [buildShareToolEntry('mcp-github', 'listRepos')] }),
+      buildGate({ toolGrants: [{ apis: ['listRepos'], identifier: 'mcp-github' }] }),
     );
 
     expect(toolSet.manifestMap['mcp-github'].api.map((api) => api.name)).toEqual(['listRepos']);
@@ -555,7 +573,7 @@ describe('applyShareGateToToolSet', () => {
 
     applyShareGateToToolSet(
       toolSet,
-      buildGate({ enabledToolIds: [buildShareToolEntry('mcp-github', longApiName)] }),
+      buildGate({ toolGrants: [{ apis: [longApiName], identifier: 'mcp-github' }] }),
     );
 
     expect(toolSet.manifestMap['mcp-github'].api.map((api) => api.name)).toEqual([longApiName]);
@@ -565,6 +583,66 @@ describe('applyShareGateToToolSet', () => {
     expect(toolSet.tools!.map((tool: any) => tool.function.name)).not.toContain(
       toolName('mcp-github', nonAsciiApiName, 'mcp'),
     );
+  });
+
+  // `ToolNameResolver.generate` hashes the IDENTIFIER segment too — on
+  // invalid characters unconditionally, and on length once the api segment
+  // alone is not enough to fit under the cap. A prune that decides "belongs
+  // to this identifier" by comparing the generated name's first segment
+  // against the raw identifier never matches such a tool and silently keeps
+  // every entry — failing OPEN for exactly the MCP connectors whose
+  // identifiers are server-supplied and unconstrained.
+  it('narrows a per-API grant on an MCP manifest whose IDENTIFIER is non-ASCII and therefore MD5-hashed', () => {
+    const identifier = '中文连接器';
+    const toolSet = buildToolSet([
+      { apis: [{ name: 'listRepos' }, { name: 'deleteRepo' }], identifier, type: 'mcp' },
+    ]);
+
+    // Sanity: the generated name must NOT start with the literal identifier,
+    // otherwise this test would not exercise the hashed path.
+    expect(toolName(identifier, 'listRepos', 'mcp').startsWith(identifier)).toBe(false);
+
+    applyShareGateToToolSet(
+      toolSet,
+      buildGate({ toolGrants: [{ apis: ['listRepos'], identifier }] }),
+    );
+
+    expect(toolSet.manifestMap[identifier].api.map((api) => api.name)).toEqual(['listRepos']);
+    expect(toolSet.tools!.map((tool: any) => tool.function.name)).toEqual([
+      toolName(identifier, 'listRepos', 'mcp'),
+    ]);
+  });
+
+  it('narrows a per-API grant on an MCP manifest whose IDENTIFIER is long enough to be MD5-hashed', () => {
+    const identifier = 'x'.repeat(70);
+    const apiName = 'y'.repeat(20);
+    const toolSet = buildToolSet([
+      { apis: [{ name: apiName }, { name: 'deleteRepo' }], identifier, type: 'mcp' },
+    ]);
+
+    expect(toolName(identifier, apiName, 'mcp').startsWith(identifier)).toBe(false);
+
+    applyShareGateToToolSet(toolSet, buildGate({ toolGrants: [{ apis: [apiName], identifier }] }));
+
+    expect(toolSet.manifestMap[identifier].api.map((api) => api.name)).toEqual([apiName]);
+    expect(toolSet.tools!.map((tool: any) => tool.function.name)).toEqual([
+      toolName(identifier, apiName, 'mcp'),
+    ]);
+  });
+
+  it('drops an MCP tool entirely (dropToolFromSet) even when its IDENTIFIER segment is MD5-hashed', () => {
+    const identifier = '中文连接器';
+    const toolSet = buildToolSet([
+      { apis: [{ name: 'listRepos' }], identifier, type: 'mcp' },
+      { apis: [{ name: 'listRepos' }], identifier: 'mcp-gitlab', type: 'mcp' },
+    ]);
+
+    applyShareGateToToolSet(toolSet, buildGate({ toolGrants: [{ identifier: 'mcp-gitlab' }] }));
+
+    expect(toolSet.manifestMap[identifier]).toBeUndefined();
+    expect(toolSet.tools!.map((tool: any) => tool.function.name)).toEqual([
+      toolName('mcp-gitlab', 'listRepos', 'mcp'),
+    ]);
   });
 
   it('drops an MCP tool identifier entirely (dropToolFromSet) without leaving stray generated-name entries behind', () => {
@@ -577,7 +655,7 @@ describe('applyShareGateToToolSet', () => {
     // untouched — proves `dropToolFromSet`'s identifier-prefix match isn't
     // accidentally over- or under-matching once a third `____mcp` segment is
     // in play.
-    applyShareGateToToolSet(toolSet, buildGate({ enabledToolIds: ['mcp-gitlab'] }));
+    applyShareGateToToolSet(toolSet, buildGate({ toolGrants: [{ identifier: 'mcp-gitlab' }] }));
 
     expect(toolSet.manifestMap['mcp-github']).toBeUndefined();
     expect(toolSet.manifestMap['mcp-gitlab']).toBeDefined();
@@ -589,7 +667,7 @@ describe('applyShareGateToToolSet', () => {
 
 // Dispatch-time full gate, asserted against the REAL manifests: a call that
 // bypassed assembly must clear the master allowlist, the owner's
-// enabledToolIds picker, the UNSTRIPPED manifest's humanIntervention policy,
+// toolGrants picker, the UNSTRIPPED manifest's humanIntervention policy,
 // and the data-tool rules — in that order, all fail-closed.
 describe('isShareBlockedBuiltinDispatch', () => {
   it('blocks an allowlisted builtin the owner did not enable', () => {
@@ -599,7 +677,7 @@ describe('isShareBlockedBuiltinDispatch', () => {
   it('passes an enabled builtin with no intervention semantics', () => {
     expect(
       isShareBlockedBuiltinDispatch(
-        { enabledToolIds: [LobeAgentIdentifier] },
+        { toolGrants: [{ identifier: LobeAgentIdentifier }] },
         LobeAgentIdentifier,
         LobeAgentApiName.analyzeMedia,
       ),
@@ -614,7 +692,7 @@ describe('isShareBlockedBuiltinDispatch', () => {
     for (const apiName of [LobeAgentApiName.createPlan, LobeAgentApiName.askUserQuestion]) {
       expect(
         isShareBlockedBuiltinDispatch(
-          { enabledToolIds: [LobeAgentIdentifier] },
+          { toolGrants: [{ identifier: LobeAgentIdentifier }] },
           LobeAgentIdentifier,
           apiName,
         ),
@@ -629,7 +707,7 @@ describe('isShareBlockedBuiltinDispatch', () => {
     // dedicated dispatch rule.
     expect(
       isShareBlockedBuiltinDispatch(
-        { enabledToolIds: [LobeAgentIdentifier] },
+        { toolGrants: [{ identifier: LobeAgentIdentifier }] },
         LobeAgentIdentifier,
         LobeAgentApiName.callSubAgent,
       ),
@@ -637,7 +715,7 @@ describe('isShareBlockedBuiltinDispatch', () => {
   });
 
   it('still applies the data-tool rules after the enable check', () => {
-    const enabled = { enabledToolIds: [MemoryIdentifier] };
+    const enabled = { toolGrants: [{ identifier: MemoryIdentifier }] };
 
     expect(
       isShareBlockedBuiltinDispatch(enabled, MemoryIdentifier, MemoryApiName.searchUserMemory),
@@ -665,16 +743,16 @@ describe('isShareBlockedBuiltinDispatch', () => {
   it('blocks a builtin outside the master allowlist regardless of enablement', () => {
     expect(
       isShareBlockedBuiltinDispatch(
-        { enabledToolIds: [AgentManagementIdentifier] },
+        { toolGrants: [{ identifier: AgentManagementIdentifier }] },
         AgentManagementIdentifier,
         'searchAgent',
       ),
     ).toBe(true);
   });
 
-  it('a per-API entry grants only the named API, not the whole identifier', () => {
+  it('a per-API grant grants only the named API, not the whole identifier', () => {
     const enabled = {
-      enabledToolIds: [toolName(LobeAgentIdentifier, LobeAgentApiName.analyzeMedia)],
+      toolGrants: [{ apis: [LobeAgentApiName.analyzeMedia], identifier: LobeAgentIdentifier }],
     };
 
     expect(

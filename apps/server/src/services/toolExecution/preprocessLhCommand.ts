@@ -7,6 +7,10 @@ import { isDev } from '@/utils/env';
 
 const log = debug('lobe-server:lh-command');
 
+/** Error surfaced when an Agent Share visitor's sandbox command tries to invoke the `lh` CLI. */
+export const SHARE_VISITOR_LH_BLOCKED_MESSAGE =
+  'The LobeHub CLI is unavailable in shared conversations.';
+
 export interface PreprocessResult {
   command: string;
   error?: string;
@@ -136,7 +140,7 @@ export const preprocessLhCommand = async (
     log('Refused lh command for Agent Share visitor run (user %s)', userId);
     return {
       command,
-      error: 'The LobeHub CLI is unavailable in shared conversations.',
+      error: SHARE_VISITOR_LH_BLOCKED_MESSAGE,
       isLhCommand: true,
       skipSkillLookup: true,
     };

@@ -7,11 +7,10 @@ import { describe, expect, it } from 'vitest';
 import {
   getShareApiAvailability,
   getShareToolAvailability,
-  getVisitorVisibleEnabledToolIds,
+  getVisitorVisibleGrantedToolIds,
   runtimeManagedShareCandidateToolIds,
   setShareToolGrant,
   toggleShareToolApi,
-  toggleShareToolId,
   toggleShareToolsetGrant,
 } from './toolVisitorAvailability';
 
@@ -48,104 +47,97 @@ describe('runtimeManagedShareCandidateToolIds', () => {
   });
 });
 
-describe('getVisitorVisibleEnabledToolIds', () => {
+describe('getVisitorVisibleGrantedToolIds', () => {
   it('hides persisted grants the gate can never honor', () => {
     expect(
-      getVisitorVisibleEnabledToolIds(['mcp-github', KnowledgeBaseIdentifier, 'lobe-local-system']),
+      getVisitorVisibleGrantedToolIds([
+        { identifier: 'mcp-github' },
+        { identifier: KnowledgeBaseIdentifier },
+        { identifier: 'lobe-local-system' },
+      ]),
     ).toEqual(['mcp-github']);
   });
 
-  it('tolerates an unset whitelist', () => {
-    expect(getVisitorVisibleEnabledToolIds(undefined)).toEqual([]);
+  it('tolerates an unset grant list', () => {
+    expect(getVisitorVisibleGrantedToolIds(undefined)).toEqual([]);
   });
 
-  it('renders one identifier for a toolset with only per-API entries', () => {
+  it('renders one identifier for a toolset granted only per-API', () => {
     expect(
-      getVisitorVisibleEnabledToolIds([
-        `${LobeAgentIdentifier}____${LobeAgentApiName.analyzeMedia}`,
-        `${LobeAgentIdentifier}____${LobeAgentApiName.updatePlan}`,
+      getVisitorVisibleGrantedToolIds([
+        {
+          apis: [LobeAgentApiName.analyzeMedia, LobeAgentApiName.updatePlan],
+          identifier: LobeAgentIdentifier,
+        },
       ]),
     ).toEqual([LobeAgentIdentifier]);
   });
 });
 
-describe('toggleShareToolId', () => {
-  it('adds and removes over the stored array', () => {
-    expect(toggleShareToolId(['a'], 'b')).toEqual(['a', 'b']);
-    expect(toggleShareToolId(['a', 'b'], 'a')).toEqual(['b']);
-    expect(toggleShareToolId(undefined, 'a')).toEqual(['a']);
-  });
-
-  it('preserves ids the picker never renders', () => {
-    // `lobe-local-system` is filtered out of the display list; toggling an
-    // unrelated tool must not silently drop it from the persisted whitelist.
-    const stored = ['lobe-local-system', 'mcp-github'];
-
-    expect(toggleShareToolId(stored, 'calculator')).toEqual([
-      'lobe-local-system',
-      'mcp-github',
-      'calculator',
-    ]);
-    expect(toggleShareToolId(stored, 'mcp-github')).toEqual(['lobe-local-system']);
-  });
-});
-
 describe('setShareToolGrant', () => {
-  it('writes a bare toolset-level entry for "all"', () => {
-    expect(setShareToolGrant(['calculator'], LobeAgentIdentifier, 'all')).toEqual([
-      'calculator',
-      LobeAgentIdentifier,
+  it('writes an `apis`-less entry for "all"', () => {
+    expect(setShareToolGrant([{ identifier: 'calculator' }], LobeAgentIdentifier, 'all')).toEqual([
+      { identifier: 'calculator' },
+      { identifier: LobeAgentIdentifier },
     ]);
   });
 
-  it('writes one per-API entry per name for an array grant', () => {
+  it('writes one `apis`-scoped entry for an array grant', () => {
     expect(
       setShareToolGrant(undefined, LobeAgentIdentifier, [LobeAgentApiName.analyzeMedia]),
-    ).toEqual([`${LobeAgentIdentifier}____${LobeAgentApiName.analyzeMedia}`]);
+    ).toEqual([{ apis: [LobeAgentApiName.analyzeMedia], identifier: LobeAgentIdentifier }]);
   });
 
-  it('removes every entry for the identifier on "none"', () => {
+  it('drops the identifier entirely on "none"', () => {
     const stored = [
-      `${LobeAgentIdentifier}____${LobeAgentApiName.analyzeMedia}`,
-      LobeAgentIdentifier,
-      'calculator',
+      { apis: [LobeAgentApiName.analyzeMedia], identifier: LobeAgentIdentifier },
+      { identifier: 'calculator' },
     ];
 
-    expect(setShareToolGrant(stored, LobeAgentIdentifier, 'none')).toEqual(['calculator']);
+    expect(setShareToolGrant(stored, LobeAgentIdentifier, 'none')).toEqual([
+      { identifier: 'calculator' },
+    ]);
   });
 
   it('replaces a prior grant for the same identifier rather than accumulating', () => {
-    const stored = [`${LobeAgentIdentifier}____${LobeAgentApiName.analyzeMedia}`];
+    const stored = [{ apis: [LobeAgentApiName.analyzeMedia], identifier: LobeAgentIdentifier }];
 
-    expect(setShareToolGrant(stored, LobeAgentIdentifier, 'all')).toEqual([LobeAgentIdentifier]);
+    expect(setShareToolGrant(stored, LobeAgentIdentifier, 'all')).toEqual([
+      { identifier: LobeAgentIdentifier },
+    ]);
   });
 });
 
 describe('toggleShareToolsetGrant', () => {
   it('grants everything when the identifier has no grant yet', () => {
-    expect(toggleShareToolsetGrant(undefined, LobeAgentIdentifier)).toEqual([LobeAgentIdentifier]);
+    expect(toggleShareToolsetGrant(undefined, LobeAgentIdentifier)).toEqual([
+      { identifier: LobeAgentIdentifier },
+    ]);
   });
 
   it('grants everything when only a partial per-API grant exists', () => {
-    const stored = [`${LobeAgentIdentifier}____${LobeAgentApiName.analyzeMedia}`];
+    const stored = [{ apis: [LobeAgentApiName.analyzeMedia], identifier: LobeAgentIdentifier }];
 
-    expect(toggleShareToolsetGrant(stored, LobeAgentIdentifier)).toEqual([LobeAgentIdentifier]);
+    expect(toggleShareToolsetGrant(stored, LobeAgentIdentifier)).toEqual([
+      { identifier: LobeAgentIdentifier },
+    ]);
   });
 
-  it('revokes entirely when the toolset-level entry is already granted', () => {
-    expect(toggleShareToolsetGrant([LobeAgentIdentifier], LobeAgentIdentifier)).toEqual([]);
+  it('revokes entirely when every API is already granted', () => {
+    expect(
+      toggleShareToolsetGrant([{ identifier: LobeAgentIdentifier }], LobeAgentIdentifier),
+    ).toEqual([]);
   });
 
-  it('replaces every existing per-API entry for the identifier, not just one', () => {
+  it('leaves grants for other identifiers untouched', () => {
     const stored = [
-      `${LobeAgentIdentifier}____${LobeAgentApiName.analyzeMedia}`,
-      `${LobeAgentIdentifier}____${LobeAgentApiName.updatePlan}`,
-      'calculator',
+      { apis: [LobeAgentApiName.analyzeMedia], identifier: LobeAgentIdentifier },
+      { identifier: 'calculator' },
     ];
 
     expect(toggleShareToolsetGrant(stored, LobeAgentIdentifier)).toEqual([
-      'calculator',
-      LobeAgentIdentifier,
+      { identifier: 'calculator' },
+      { identifier: LobeAgentIdentifier },
     ]);
   });
 });
@@ -156,7 +148,7 @@ describe('toggleShareToolApi', () => {
   it('adds the first per-API grant for an ungranted identifier', () => {
     expect(
       toggleShareToolApi(undefined, LobeAgentIdentifier, LobeAgentApiName.analyzeMedia, available),
-    ).toEqual([`${LobeAgentIdentifier}____${LobeAgentApiName.analyzeMedia}`]);
+    ).toEqual([{ apis: [LobeAgentApiName.analyzeMedia], identifier: LobeAgentIdentifier }]);
   });
 
   it('expands a toolset-level grant, then narrows it by the toggled API', () => {
@@ -164,32 +156,32 @@ describe('toggleShareToolApi', () => {
     // REST of the available APIs, not wipe the whole grant.
     expect(
       toggleShareToolApi(
-        [LobeAgentIdentifier],
+        [{ identifier: LobeAgentIdentifier }],
         LobeAgentIdentifier,
         LobeAgentApiName.analyzeMedia,
         available,
       ),
-    ).toEqual([`${LobeAgentIdentifier}____${LobeAgentApiName.updatePlan}`]);
+    ).toEqual([{ apis: [LobeAgentApiName.updatePlan], identifier: LobeAgentIdentifier }]);
   });
 
-  it('stays as explicit per-API entries once every available API is individually selected, rather than collapsing to a toolset-level grant', () => {
-    // Least privilege: a toolset-level entry also grants any API added to
-    // this tool LATER (e.g. a plugin update) that the owner never reviewed.
-    // Only the toolset chip (`toggleShareToolsetGrant`) may write `'all'`.
-    const stored = [`${LobeAgentIdentifier}____${LobeAgentApiName.analyzeMedia}`];
+  it('stays an explicit `apis` list once every available API is individually selected, rather than collapsing to a toolset-level grant', () => {
+    // Least privilege: an `apis`-less entry also grants any API added to this
+    // tool LATER (e.g. a plugin update) that the owner never reviewed. Only
+    // the toolset chip (`toggleShareToolsetGrant`) may write `'all'`.
+    const stored = [{ apis: [LobeAgentApiName.analyzeMedia], identifier: LobeAgentIdentifier }];
 
     expect(
       toggleShareToolApi(stored, LobeAgentIdentifier, LobeAgentApiName.updatePlan, available),
-    ).toEqual(
-      expect.arrayContaining([
-        `${LobeAgentIdentifier}____${LobeAgentApiName.analyzeMedia}`,
-        `${LobeAgentIdentifier}____${LobeAgentApiName.updatePlan}`,
-      ]),
-    );
+    ).toEqual([
+      {
+        apis: expect.arrayContaining([LobeAgentApiName.analyzeMedia, LobeAgentApiName.updatePlan]),
+        identifier: LobeAgentIdentifier,
+      },
+    ]);
   });
 
   it('removes the grant entirely once the last selected API is toggled off', () => {
-    const stored = [`${LobeAgentIdentifier}____${LobeAgentApiName.analyzeMedia}`];
+    const stored = [{ apis: [LobeAgentApiName.analyzeMedia], identifier: LobeAgentIdentifier }];
 
     expect(
       toggleShareToolApi(stored, LobeAgentIdentifier, LobeAgentApiName.analyzeMedia, available),

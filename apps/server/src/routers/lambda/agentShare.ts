@@ -1,4 +1,3 @@
-import { parseShareToolEntry } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -13,36 +12,47 @@ import { assertAgentShareCreationEnabled } from './_helpers/agentShareFeatureGat
 const agentIdInput = z.object({ agentId: z.string().trim().min(1) }).strict();
 
 /**
- * One `enabledToolIds` entry — either a bare toolset identifier
- * (`lobe-agent`) or a per-API scoped grant (`lobe-agent____analyzeMedia`,
- * exactly one `PLUGIN_SCHEMA_SEPARATOR`). Validated with the same
- * {@link parseShareToolEntry} the runtime gates use to interpret a stored
- * entry, so a malformed value can never be persisted in the first place.
+ * One `toolGrants` entry: a tool identifier, optionally narrowed to specific
+ * API names. `apis` omitted grants every API the tool offers (still subject to
+ * the runtime visitor gates); `apis` present grants only the named ones, and
+ * is never empty — a tool with no granted API is simply absent from the list.
+ * Duplicate API names within one entry are rejected rather than silently
+ * deduped, so a client bug surfaces instead of persisting a redundant row.
  */
-const shareToolEntrySchema = z
-  .string()
-  .trim()
-  .min(1)
-  .refine((entry) => !!parseShareToolEntry(entry), {
-    message: 'Expected a tool identifier or `identifier____apiName` entry',
-  });
+const shareToolGrantSchema = z
+  .object({
+    apis: z
+      .array(z.string().trim().min(1))
+      .min(1)
+      .refine((apis) => new Set(apis).size === apis.length, {
+        message: 'Duplicate api name in a tool grant',
+      })
+      .optional(),
+    identifier: z.string().trim().min(1),
+  })
+  .strict();
 
 export const agentShareConfigSchema = z
   .object({
     allowCreatorViewSessions: z.boolean().optional(),
     allowReadMemory: z.boolean().optional(),
-    // Deduped so repeated toggles/patches from the client never accumulate
-    // duplicate entries in the persisted jsonb array.
-    enabledToolIds: z
-      .array(shareToolEntrySchema)
-      .transform((ids) => Array.from(new Set(ids)))
-      .optional(),
     maxTopicsPerVisitor: z.number().int().positive().optional(),
     maxTurnsPerTopic: z.number().int().positive().optional(),
-    /** `null` clears the cap back to "unlimited" (removes the stored key). */
-    monthlySpendLimit: z.number().nonnegative().nullable().optional(),
+    monthlySpendLimit: z.number().nonnegative().optional(),
     showErrorDetails: z.boolean().optional(),
     showModelInfo: z.boolean().optional(),
+    /**
+     * At most one entry per identifier: two entries for the same tool would
+     * make the effective grant depend on the merge rule in
+     * `resolveShareToolGrants` rather than on what the creator picked, so the
+     * ambiguity is rejected at the door instead of silently resolved.
+     */
+    toolGrants: z
+      .array(shareToolGrantSchema)
+      .refine((grants) => new Set(grants.map((grant) => grant.identifier)).size === grants.length, {
+        message: 'Duplicate tool identifier in toolGrants',
+      })
+      .optional(),
   })
   .strict();
 
@@ -112,7 +122,7 @@ export const agentShareRouter = router({
 
     return {
       monthlySpend,
-      monthlySpendLimit: share.shareConfig.monthlySpendLimit ?? null,
+      monthlySpendLimit: share.shareConfig.monthlySpendLimit,
       topicCount: visitors.topicCount,
       // Raw page-view count (`agentShares.userViewCount`): bumped on every
       // non-owner page load, NOT deduplicated by visitor — a repeat visitor

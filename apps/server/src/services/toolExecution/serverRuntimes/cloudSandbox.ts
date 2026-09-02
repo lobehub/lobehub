@@ -1,5 +1,6 @@
 import { CloudSandboxIdentifier, type ISandboxService } from '@lobechat/builtin-tool-cloud-sandbox';
 import { CloudSandboxExecutionRuntime } from '@lobechat/builtin-tool-cloud-sandbox/executionRuntime';
+import debug from 'debug';
 
 import { UserModel } from '@/database/models/user';
 import { FileService } from '@/server/services/file';
@@ -8,10 +9,13 @@ import { createSandboxService } from '@/server/services/sandbox';
 import {
   isLhCommand,
   preprocessLhCommand,
+  SHARE_VISITOR_LH_BLOCKED_MESSAGE,
 } from '@/server/services/toolExecution/preprocessLhCommand';
 
 import { resolveContentWorkspaceId } from './resolveWorkspaceScope';
 import { type ServerRuntimeRegistration } from './types';
+
+const log = debug('lobe-server:cloud-sandbox');
 
 /** Sandbox tools whose `command` param can carry an `lh` invocation. */
 const SHELL_TOOL_NAMES = new Set(['execScript', 'runCommand']);
@@ -37,6 +41,8 @@ const withLhPreprocessing = (
   service: ISandboxService,
   resolve: {
     userId: string;
+    /** Raw context workspace id, log-only — cheap to read, unlike {@link resolveContentWorkspaceId}. */
+    workspaceIdHint: string | undefined;
     workspaceId: () => Promise<string | undefined>;
     isShareVisitor: boolean;
   },
@@ -56,9 +62,15 @@ const withLhPreprocessing = (
     // refuses too — see its `shareVisitorBlocked` param — but this is the
     // primary, intended-to-be-load-bearing check).
     if (resolve.isShareVisitor && isLhCommand(command)) {
+      log(
+        'Refused lh command for share visitor (user %s, workspace %s): %s',
+        resolve.userId,
+        resolve.workspaceIdHint,
+        command.slice(0, 80),
+      );
       return {
         error: {
-          message: 'The LobeHub CLI is unavailable in shared conversations.',
+          message: SHARE_VISITOR_LH_BLOCKED_MESSAGE,
           name: 'ShareVisitorBlocked',
         },
         result: null,
@@ -132,6 +144,7 @@ export const cloudSandboxRuntime: ServerRuntimeRegistration = {
         isShareVisitor: Boolean(context.agentShareVisitor),
         userId: context.userId,
         workspaceId: () => (workspaceIdPromise ??= resolveContentWorkspaceId(context)),
+        workspaceIdHint: context.workspaceId,
       }),
     );
   },

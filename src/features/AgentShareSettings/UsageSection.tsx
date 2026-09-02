@@ -54,11 +54,9 @@ const UsageSection = memo<UsageSectionProps>(({ agentId }) => {
   );
 
   const spend = data?.monthlySpend ?? null;
-  const limit = data?.monthlySpendLimit ?? null;
-  // `0` is a real cap ("stop everything"), so it must not fall back to the
-  // unlimited branch; the zero case is special-cased below to avoid dividing
-  // by it in the progress computation.
-  const hasLimit = limit !== null;
+  // Every share carries a cap, so this is only ever absent while the stats
+  // request is still in flight.
+  const limit = data?.monthlySpendLimit;
 
   return (
     <Section desc={t('share.settings.usage.desc')} title={t('share.settings.usage.title')}>
@@ -80,16 +78,18 @@ const UsageSection = memo<UsageSectionProps>(({ agentId }) => {
                   {t('share.settings.usage.monthlySpend')}
                 </Text>
                 <Text fontSize={12}>
-                  {hasLimit
-                    ? t('share.settings.usage.spendOfLimit', {
+                  {limit === undefined
+                    ? formatPrice(spend)
+                    : t('share.settings.usage.spendOfLimit', {
                         limit: formatPrice(limit),
                         spend: formatPrice(spend),
-                      })
-                    : t('share.settings.usage.spendNoLimit', { spend: formatPrice(spend) })}
+                      })}
                 </Text>
               </Flexbox>
-              {hasLimit && (
+              {limit !== undefined && (
                 <Progress
+                  // A `0` cap ("stop all visitor runs") is special-cased so the
+                  // progress computation never divides by it.
                   percent={limit === 0 ? 100 : Math.min(100, Math.round((spend / limit) * 100))}
                   showInfo={false}
                   size={'small'}

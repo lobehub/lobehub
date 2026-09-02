@@ -15,7 +15,7 @@ import ToolRow from './ToolRow';
 import {
   getShareToolAvailability,
   getShareToolCandidateIds,
-  getVisitorVisibleEnabledToolIds,
+  getVisitorVisibleGrantedToolIds,
 } from './toolVisitorAvailability';
 import type { AgentShareConfigPatch, AgentShareConfigState } from './useAgentShare';
 
@@ -37,7 +37,7 @@ const ToolsSection = memo<ToolsSectionProps>(({ agentId, onChange, shareConfig }
 
   const agentConfig = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
   const candidateToolIds = getShareToolCandidateIds(getActivePluginIds(agentConfig?.plugins));
-  const selectedToolIds = getVisitorVisibleEnabledToolIds(shareConfig.enabledToolIds);
+  const selectedToolIds = getVisitorVisibleGrantedToolIds(shareConfig.toolGrants);
 
   // Two buckets, extension-manager style: what visitors already get, then what
   // else could be granted. Toggling moves a tool between them, so the owner
@@ -48,16 +48,11 @@ const ToolsSection = memo<ToolsSectionProps>(({ agentId, onChange, shareConfig }
       getShareToolAvailability(toolId, { allowReadMemory: shareConfig.allowReadMemory }) !==
         'blocked',
   );
+  // Includes tools the gate always refuses: they still render below as
+  // disabled chips (so the owner learns why a configured tool cannot be
+  // shared), and the group's count must match the chips actually rendered in
+  // it — a smaller "grantable only" count reads as a rendering bug.
   const availableIds = candidateToolIds.filter((toolId) => !enabledIds.includes(toolId));
-  // Rendered as disabled chips (so the owner learns why a configured tool
-  // cannot be shared) but excluded from the "not granted" COUNT — a tool the
-  // gate refuses outright is never actually grantable, so counting it would
-  // overstate how many real choices are left.
-  const availableGrantableCount = availableIds.filter(
-    (toolId) =>
-      getShareToolAvailability(toolId, { allowReadMemory: shareConfig.allowReadMemory }) !==
-      'blocked',
-  ).length;
 
   const renderTool = (toolId: string, selected: boolean) => (
     <ToolRow
@@ -95,7 +90,7 @@ const ToolsSection = memo<ToolsSectionProps>(({ agentId, onChange, shareConfig }
           {availableIds.length > 0 && (
             <Flexbox gap={8}>
               <Text fontSize={12} type={'secondary'}>
-                {t('share.settings.tools.availableGroup', { count: availableGrantableCount })}
+                {t('share.settings.tools.availableGroup', { count: availableIds.length })}
               </Text>
               <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
                 {availableIds.map((toolId) => renderTool(toolId, false))}

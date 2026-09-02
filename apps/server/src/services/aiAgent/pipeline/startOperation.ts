@@ -145,10 +145,10 @@ export const startOperation = async (
             // actual chokepoint) via `isShareBlockedDataToolCall` — see
             // `shareGate.ts`.
             allowReadMemory: shareGate.shareConfig.allowReadMemory,
-            // Mirrors `shareConfig.enabledToolIds` so tool runtimes resolved
+            // Mirrors `shareConfig.toolGrants` so tool runtimes resolved
             // outside `toolManifestMap` (e.g. `activateSkill`, which queries
             // builtin/DB skills by name) can enforce the same allowlist.
-            enabledToolIds: shareGate.shareConfig.enabledToolIds,
+            toolGrants: shareGate.shareConfig.toolGrants,
             // Sourced from the agent's OWN persisted assignment
             // (`agentConfig.knowledgeBases`, already blanked by
             // `applyShareGateToAgentConfig` in `execAgent`), never from visitor

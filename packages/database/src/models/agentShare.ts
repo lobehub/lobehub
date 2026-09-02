@@ -1,6 +1,7 @@
 import {
   AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR,
   AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC,
+  AGENT_SHARE_DEFAULT_MONTHLY_SPEND_LIMIT,
   AGENT_SHARE_SLUG_PATTERN,
   RESERVED_AGENT_SHARE_SLUGS,
 } from '@lobechat/const';
@@ -8,7 +9,12 @@ import type { ShareVisibility } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { and, eq, exists, isNull, ne, sql } from 'drizzle-orm';
 
-import type { AgentShareConfig, AgentShareConfigPatch, AgentShareItem } from '../schemas';
+import type {
+  AgentShareConfig,
+  AgentShareConfigPatch,
+  AgentShareItem,
+  NormalizedAgentShareConfig,
+} from '../schemas';
 import { agents, agentShares } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { normalizeInboxAgentAvatar, normalizeInboxAgentTitle } from '../utils/inboxAgent';
@@ -17,34 +23,34 @@ import { isUuid } from '../utils/uuid';
 const DEFAULT_AGENT_SHARE_CONFIG = {
   allowCreatorViewSessions: false,
   allowReadMemory: false,
-  enabledToolIds: [],
   maxTopicsPerVisitor: AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR,
   maxTurnsPerTopic: AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC,
+  monthlySpendLimit: AGENT_SHARE_DEFAULT_MONTHLY_SPEND_LIMIT,
   showErrorDetails: false,
   showModelInfo: false,
+  toolGrants: [],
 } satisfies AgentShareConfig;
 
 /** Fill fields missing from rows created before a field was introduced, or never explicitly set. */
-const normalizeAgentShareConfig = (config: AgentShareConfig | null): AgentShareConfig => ({
+const normalizeAgentShareConfig = (
+  config: AgentShareConfig | null,
+): NormalizedAgentShareConfig => ({
   allowCreatorViewSessions:
     config?.allowCreatorViewSessions ?? DEFAULT_AGENT_SHARE_CONFIG.allowCreatorViewSessions,
   allowReadMemory: config?.allowReadMemory ?? DEFAULT_AGENT_SHARE_CONFIG.allowReadMemory,
-  enabledToolIds: config?.enabledToolIds ?? DEFAULT_AGENT_SHARE_CONFIG.enabledToolIds,
   maxTopicsPerVisitor:
     config?.maxTopicsPerVisitor ?? DEFAULT_AGENT_SHARE_CONFIG.maxTopicsPerVisitor,
   maxTurnsPerTopic: config?.maxTurnsPerTopic ?? DEFAULT_AGENT_SHARE_CONFIG.maxTurnsPerTopic,
-  // Unlike the boolean/list fields above, an unset spend cap means
-  // "unlimited" (enforced by the Cloud billing gate), not "0" — leave it
-  // `undefined` rather than defaulting it to a number.
-  monthlySpendLimit: config?.monthlySpendLimit,
+  monthlySpendLimit: config?.monthlySpendLimit ?? DEFAULT_AGENT_SHARE_CONFIG.monthlySpendLimit,
   showErrorDetails: config?.showErrorDetails ?? DEFAULT_AGENT_SHARE_CONFIG.showErrorDetails,
   showModelInfo: config?.showModelInfo ?? DEFAULT_AGENT_SHARE_CONFIG.showModelInfo,
   slug: config?.slug,
+  toolGrants: config?.toolGrants ?? DEFAULT_AGENT_SHARE_CONFIG.toolGrants,
 });
 
 /** An `agentShares` row with `shareConfig` filled via `normalizeAgentShareConfig`. */
 type NormalizedAgentShareItem = Omit<AgentShareItem, 'shareConfig'> & {
-  shareConfig: AgentShareConfig;
+  shareConfig: NormalizedAgentShareConfig;
 };
 
 export type AgentShareData = NonNullable<
@@ -171,9 +177,8 @@ export class AgentShareModel {
    * every field on the current `AgentShareConfig` is a top-level scalar/array,
    * so there is no nested object that needs its own merge branch.
    *
-   * `null`-valued keys REMOVE the key from the stored jsonb (back to
-   * "unset"), and `slug` is stripped even if smuggled past the type — it has
-   * its own validated write path (`updateSlug`).
+   * `slug` is stripped even if smuggled past the type — it has its own
+   * validated write path (`updateSlug`).
    */
   updateConfig = async (
     agentId: string,
@@ -181,20 +186,11 @@ export class AgentShareModel {
   ): Promise<NormalizedAgentShareItem | null> =>
     this.withOwnedPersonalAgentLock(agentId, async (tx) => {
       const { slug: _slug, ...patch } = config as AgentShareConfigPatch & { slug?: unknown };
-      const setEntries = Object.entries(patch).filter(([, v]) => v !== null && v !== undefined);
-      const removeKeys = Object.keys(patch).filter(
-        (key) => (patch as Record<string, unknown>)[key] === null,
-      );
+      const setEntries = Object.entries(patch).filter(([, v]) => v !== undefined);
 
       let configExpr = sql`COALESCE(${agentShares.shareConfig}, '{}'::jsonb)`;
       if (setEntries.length > 0) {
         configExpr = sql`${configExpr} || ${JSON.stringify(Object.fromEntries(setEntries))}::jsonb`;
-      }
-      for (const key of removeKeys) {
-        // Parens are load-bearing: `-` has higher precedence than `||` in
-        // Postgres, so unparenthesized `a || b - key` deletes from the patch
-        // operand only. `::text` picks the key-deletion operator overload.
-        configExpr = sql`(${configExpr}) - ${key}::text`;
       }
 
       const [updated] = await tx

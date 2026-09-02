@@ -676,7 +676,7 @@ export const prepareOperation = async (
   // only trimmed the initial candidate id list — it does not stop
   // `lobe-activator` from dynamically activating (and `ToolExecutionService`
   // from executing, with the CREATOR's credentials) a creator-connected tool
-  // that was never in `shareConfig.enabledToolIds`. Mutates the discovery maps
+  // that was never in `shareConfig.toolGrants`. Mutates the discovery maps
   // in place, so the `toolSet` handed to `createOperation` is the pruned one.
   if (shareGate) {
     applyShareGateToToolSet(

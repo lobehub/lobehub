@@ -505,7 +505,7 @@ describe('BuiltinToolsExecutor share-visitor gate', () => {
 
   it('blocks an allowlisted builtin the owner did not enable for the share', async () => {
     // On the master allowlist AND permission-granted, but absent from the
-    // owner's enabledToolIds picker — must still be blocked at dispatch.
+    // owner's toolGrants picker — must still be blocked at dispatch.
     const result = await executor.execute(memoryPayload('searchUserMemory'), {
       ...context,
       agentShareVisitor: { ...visitorIds, allowReadMemory: true },
@@ -524,7 +524,7 @@ describe('BuiltinToolsExecutor share-visitor gate', () => {
       agentShareVisitor: {
         ...visitorIds,
         allowReadMemory: true,
-        enabledToolIds: ['lobe-user-memory'],
+        toolGrants: [{ identifier: 'lobe-user-memory' }],
       },
     });
 
@@ -541,7 +541,10 @@ describe('BuiltinToolsExecutor share-visitor gate', () => {
         identifier: 'lobe-consent-tool',
         type: 'default' as any,
       },
-      { ...context, agentShareVisitor: { ...visitorIds, enabledToolIds: ['lobe-consent-tool'] } },
+      {
+        ...context,
+        agentShareVisitor: { ...visitorIds, toolGrants: [{ identifier: 'lobe-consent-tool' }] },
+      },
     );
 
     expect(result.error?.code).toBe('SHARE_GATE_BLOCKED');
@@ -551,7 +554,7 @@ describe('BuiltinToolsExecutor share-visitor gate', () => {
   it('blocks memory reads without allowReadMemory', async () => {
     const result = await executor.execute(memoryPayload('searchUserMemory'), {
       ...context,
-      agentShareVisitor: { ...visitorIds, enabledToolIds: ['lobe-user-memory'] },
+      agentShareVisitor: { ...visitorIds, toolGrants: [{ identifier: 'lobe-user-memory' }] },
     });
 
     expect(result.error?.code).toBe('SHARE_GATE_BLOCKED');
@@ -564,7 +567,7 @@ describe('BuiltinToolsExecutor share-visitor gate', () => {
       agentShareVisitor: {
         ...visitorIds,
         allowReadMemory: true,
-        enabledToolIds: ['lobe-user-memory'],
+        toolGrants: [{ identifier: 'lobe-user-memory' }],
       },
     });
     expect(read.error?.code).not.toBe('SHARE_GATE_BLOCKED');
@@ -575,7 +578,7 @@ describe('BuiltinToolsExecutor share-visitor gate', () => {
       agentShareVisitor: {
         ...visitorIds,
         allowReadMemory: true,
-        enabledToolIds: ['lobe-user-memory'],
+        toolGrants: [{ identifier: 'lobe-user-memory' }],
       },
     });
     expect(write.error?.code).toBe('SHARE_GATE_BLOCKED');

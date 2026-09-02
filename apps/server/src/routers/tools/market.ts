@@ -210,6 +210,14 @@ const execInSandboxHandler = async ({
   // context only.
   const userId = ctx.userId;
 
+  if (input?.userId && input.userId !== ctx.userId) {
+    log(
+      'execInSandbox: ignored deprecated input.userId=%s (differs from ctx.userId=%s)',
+      input.userId,
+      ctx.userId,
+    );
+  }
+
   log('execInSandbox: tool=%s, topicId=%s', toolName, topicId);
 
   try {

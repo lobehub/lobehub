@@ -114,7 +114,7 @@ export const applyShareVisitorSandboxOverride = (
   if (resolveToolMode(chatConfig) === 'chat') return plan;
 
   const grantsSandbox = hasShareToolGrant(
-    resolveShareToolGrants(shareGate.shareConfig.enabledToolIds),
+    resolveShareToolGrants(shareGate.shareConfig.toolGrants),
     CloudSandboxManifest.identifier,
   );
   if (!grantsSandbox) return plan;

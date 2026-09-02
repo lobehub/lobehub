@@ -21,3 +21,21 @@ export interface SharedAgentData {
   slug: string | null;
   visibility: ShareVisibility;
 }
+
+/**
+ * One tool the creator granted to share visitors.
+ *
+ * Lives in `@lobechat/types` (rather than next to the other agent-share
+ * helpers in `@lobechat/const`) because both `@lobechat/const` and
+ * `@lobechat/types`' own `AgentShareVisitorContext` need it, and `const`
+ * already depends on `types` — the reverse direction would be a cycle.
+ */
+export interface AgentShareToolGrant {
+  /**
+   * Granted API names. Omitted = every API the tool offers (still subject to
+   * the runtime visitor gates). Never an empty array — a tool with no granted
+   * API is simply absent from the list.
+   */
+  apis?: string[];
+  identifier: string;
+}

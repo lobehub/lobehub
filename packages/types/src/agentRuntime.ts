@@ -1,3 +1,5 @@
+import type { AgentShareToolGrant } from './agent/share';
+
 /** Request-scoped pricing inputs resolved before model execution. */
 export interface ModelPricingContext {
   plan: string;
@@ -37,7 +39,7 @@ export enum RequestTrigger {
 /**
  * Everything one shared-agent visitor run carries: WHO the run belongs to
  * (`agentId` / `shareId` / `visitorUserId`), WHAT the visitor is allowed to
- * reach (`allowReadMemory` / `enabledToolIds` / `knowledgeBaseIds`), and HOW
+ * reach (`allowReadMemory` / `toolGrants` / `knowledgeBaseIds`), and HOW
  * much of the run is shown back to them (`showErrorDetails` / `showModelInfo`).
  *
  * Single source of truth for the runtime-side share marker: it is stamped once
@@ -63,13 +65,6 @@ export interface AgentShareVisitorContext {
    */
   allowReadMemory?: boolean;
   /**
-   * Mirrors `shareConfig.enabledToolIds` so tool runtimes that resolve their
-   * target outside `toolManifestMap` (e.g. `activateSkill`,
-   * `lobe-topic-reference`) can apply the same allowlist the assembled tool set
-   * already enforces.
-   */
-  enabledToolIds?: string[];
-  /**
    * The agent's OWN persisted knowledge-base assignment, never derived from
    * visitor input, so `isShareBlockedDataToolCall` can id-scope
    * `viewKnowledgeBase`'s `id` argument. Always empty today (a share grants no
@@ -86,6 +81,13 @@ export interface AgentShareVisitorContext {
   showErrorDetails?: boolean;
   /** `AgentShareConfig.showModelInfo` — gates visitor-facing model/provider/usage redaction. */
   showModelInfo?: boolean;
+  /**
+   * Mirrors `shareConfig.toolGrants` so tool runtimes that resolve their
+   * target outside `toolManifestMap` (e.g. `activateSkill`,
+   * `lobe-topic-reference`) can apply the same allowlist the assembled tool set
+   * already enforces.
+   */
+  toolGrants?: AgentShareToolGrant[];
   /** The visitor's user id, under which the run's spend is attributed. */
   visitorUserId: string;
 }

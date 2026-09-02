@@ -14,7 +14,7 @@ export type AgentShareConfigState = NonNullable<AgentShareInfo>['shareConfig'];
 /**
  * A config patch, or a function producing one from the LATEST known config.
  * Use the function form for any edit derived from the current value (toggling
- * an item in `enabledToolIds`, say) — a plain object captures whatever the
+ * a tool in `toolGrants`, say) — a plain object captures whatever the
  * component rendered with, which is stale the moment a previous write is
  * still in flight.
  */

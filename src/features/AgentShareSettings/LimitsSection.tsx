@@ -1,16 +1,13 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { InputNumber, Switch } from '@lobehub/ui/base-ui';
+import { InputNumber } from '@lobehub/ui/base-ui';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Section, SettingRow } from './SectionLayout';
 import type { AgentShareConfigPatch, AgentShareConfigState } from './useAgentShare';
 import { type AgentShareLimitPatch, useDebouncedLimitPatch } from './useDebouncedLimitPatch';
-
-/** Default cap offered when the owner first switches the monthly budget on. */
-const DEFAULT_MONTHLY_SPEND_LIMIT = 10;
 
 type CountField = 'maxTopicsPerVisitor' | 'maxTurnsPerTopic';
 
@@ -33,9 +30,7 @@ const LimitsSection = memo<LimitsSectionProps>(({ agentId, onChange, shareConfig
   // dropped once the write it belongs to has settled, so the field falls back
   // to the (now updated) server value.
   const [countDraft, setCountDraft] = useState<Partial<Record<CountField, number>>>({});
-  // `null` is a meaningful draft value here ("unlimited"), so absence is
-  // expressed with the wrapper object rather than with `null` itself.
-  const [spendDraft, setSpendDraft] = useState<{ value: number | null } | undefined>();
+  const [spendDraft, setSpendDraft] = useState<number | undefined>();
 
   const settle = useCallback((patch: AgentShareLimitPatch) => {
     setCountDraft((prev) => {
@@ -45,8 +40,8 @@ const LimitsSection = memo<LimitsSectionProps>(({ agentId, onChange, shareConfig
       }
       return next;
     });
-    if ('monthlySpendLimit' in patch) {
-      setSpendDraft((prev) => (prev && prev.value === patch.monthlySpendLimit ? undefined : prev));
+    if (patch.monthlySpendLimit !== undefined) {
+      setSpendDraft((prev) => (prev === patch.monthlySpendLimit ? undefined : prev));
     }
   }, []);
 
@@ -68,13 +63,12 @@ const LimitsSection = memo<LimitsSectionProps>(({ agentId, onChange, shareConfig
   };
 
   const handleSpendChange = (value: number | null) => {
-    setSpendDraft({ value });
-    // `null` removes the cap entirely — unlimited, not zero.
-    if (value === null || value >= 0) schedule({ monthlySpendLimit: value });
+    // `null` is an empty/half-typed field, NOT "no cap": the cap is mandatory,
+    // so hold the draft and commit nothing until a number comes back.
+    if (value === null) return;
+    setSpendDraft(value);
+    if (value >= 0) schedule({ monthlySpendLimit: value });
   };
-
-  const spendLimit = spendDraft ? spendDraft.value : (shareConfig.monthlySpendLimit ?? null);
-  const hasSpendLimit = spendLimit !== null;
 
   return (
     <Section desc={t('share.settings.limits.desc')} title={t('share.settings.limits.title')}>
@@ -104,30 +98,16 @@ const LimitsSection = memo<LimitsSectionProps>(({ agentId, onChange, shareConfig
           />
         </SettingRow>
         <SettingRow
+          desc={t('share.settings.limits.monthlySpendLimitHint')}
           label={t('share.settings.limits.monthlySpendLimit')}
-          desc={
-            hasSpendLimit
-              ? t('share.settings.limits.monthlySpendLimitHint')
-              : t('share.settings.limits.monthlySpendUnlimited')
-          }
         >
-          <Flexbox horizontal align={'center'} gap={8}>
-            {hasSpendLimit && (
-              <InputNumber
-                min={0}
-                step={1}
-                style={{ width: 120 }}
-                value={spendLimit}
-                onChange={(value) => handleSpendChange(value ?? 0)}
-              />
-            )}
-            <Switch
-              checked={hasSpendLimit}
-              onChange={(checked) =>
-                handleSpendChange(checked ? DEFAULT_MONTHLY_SPEND_LIMIT : null)
-              }
-            />
-          </Flexbox>
+          <InputNumber
+            min={0}
+            step={1}
+            style={{ width: 160 }}
+            value={spendDraft ?? shareConfig.monthlySpendLimit ?? null}
+            onChange={handleSpendChange}
+          />
         </SettingRow>
       </Flexbox>
     </Section>

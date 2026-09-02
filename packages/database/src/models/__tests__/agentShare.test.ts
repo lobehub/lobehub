@@ -61,11 +61,11 @@ describe('AgentShareModel', () => {
         shareConfig: {
           allowCreatorViewSessions: false,
           allowReadMemory: false,
-          enabledToolIds: [],
           maxTopicsPerVisitor: 5,
           maxTurnsPerTopic: 20,
           showErrorDetails: false,
           showModelInfo: false,
+          toolGrants: [],
         },
         userViewCount: 0,
         visibility: 'private',
@@ -114,13 +114,13 @@ describe('AgentShareModel', () => {
       expect(ownerShare?.shareConfig).toEqual({
         allowCreatorViewSessions: false,
         allowReadMemory: false,
-        enabledToolIds: [],
         maxTopicsPerVisitor: 5,
         maxTurnsPerTopic: 20,
-        monthlySpendLimit: undefined,
+        monthlySpendLimit: 10,
         showErrorDetails: false,
         showModelInfo: false,
         slug: undefined,
+        toolGrants: [],
       });
       expect(resolvedShare?.shareConfig).toEqual(ownerShare?.shareConfig);
     });
@@ -130,12 +130,12 @@ describe('AgentShareModel', () => {
       const config: AgentShareConfig = {
         allowCreatorViewSessions: true,
         allowReadMemory: true,
-        enabledToolIds: ['search'],
         maxTopicsPerVisitor: 10,
         maxTurnsPerTopic: 40,
         monthlySpendLimit: 25,
         showErrorDetails: true,
         showModelInfo: true,
+        toolGrants: [{ identifier: 'search' }],
       };
 
       const updated = await agentShareModel.updateConfig(agentId, config);
@@ -149,8 +149,8 @@ describe('AgentShareModel', () => {
       await agentShareModel.create(agentId);
 
       await agentShareModel.updateConfig(agentId, {
-        enabledToolIds: ['search'],
         maxTopicsPerVisitor: 10,
+        toolGrants: [{ identifier: 'search' }],
       });
       const updated = await agentShareModel.updateConfig(agentId, {
         maxTurnsPerTopic: 40,
@@ -158,27 +158,28 @@ describe('AgentShareModel', () => {
       });
 
       expect(updated?.shareConfig).toMatchObject({
-        enabledToolIds: ['search'],
         maxTopicsPerVisitor: 10,
         maxTurnsPerTopic: 40,
         showModelInfo: true,
+        toolGrants: [{ identifier: 'search' }],
       });
     });
 
-    it('removes a key when patched with null, and never accepts slug via updateConfig', async () => {
+    it('overwrites the spend cap, and never accepts slug via updateConfig', async () => {
       await agentShareModel.create(agentId);
       await agentShareModel.updateConfig(agentId, { monthlySpendLimit: 25 });
 
-      const cleared = await agentShareModel.updateConfig(agentId, {
-        monthlySpendLimit: null,
+      const updated = await agentShareModel.updateConfig(agentId, {
+        monthlySpendLimit: 0,
         showModelInfo: true,
         // smuggled past the type on purpose — must be stripped, not persisted
         ...({ slug: 'sneaky-slug' } as object),
       });
 
-      expect(cleared?.shareConfig.monthlySpendLimit).toBeUndefined();
-      expect(cleared?.shareConfig.showModelInfo).toBe(true);
-      expect(cleared?.shareConfig.slug).toBeUndefined();
+      // `0` is a real cap ("stop all visitor runs"), never a cleared one.
+      expect(updated?.shareConfig.monthlySpendLimit).toBe(0);
+      expect(updated?.shareConfig.showModelInfo).toBe(true);
+      expect(updated?.shareConfig.slug).toBeUndefined();
       expect(await AgentShareModel.findBySlugOrId(serverDB, 'sneaky-slug')).toBeNull();
     });
 

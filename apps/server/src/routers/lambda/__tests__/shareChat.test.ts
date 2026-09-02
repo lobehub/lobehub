@@ -119,7 +119,7 @@ const share = {
   ownerId: OWNER,
   shareConfig: {
     allowReadMemory: false,
-    enabledToolIds: [],
+    toolGrants: [],
     maxTopicsPerVisitor: 2,
     maxTurnsPerTopic: 3,
   },

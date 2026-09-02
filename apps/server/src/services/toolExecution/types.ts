@@ -165,7 +165,7 @@ export interface ToolExecutionContext {
    * counterpart of the assembly-time tool-set trim, which only shapes what the
    * model is OFFERED, not what the executor will run. That gate is strictly
    * wider than a plain data-tool check: master default-deny allowlist, the
-   * owner's `enabledToolIds` picker, and humanIntervention policy, and it
+   * owner's `toolGrants` picker, and humanIntervention policy, and it
    * internally delegates to `isShareBlockedDataToolCall` for the per-API
    * data-tool rules.
    *

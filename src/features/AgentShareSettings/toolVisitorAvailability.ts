@@ -5,12 +5,8 @@ import {
   isAgentShareAllowedBuiltinIdentifier,
   runtimeManagedToolIds,
 } from '@lobechat/builtin-tools';
-import {
-  buildShareToolEntry,
-  parseShareToolEntry,
-  resolveShareToolGrants,
-  type ShareToolGrant,
-} from '@lobechat/const';
+import { resolveShareToolGrants, type ShareToolGrant } from '@lobechat/const';
+import type { AgentShareToolGrant, ExtendedHumanInterventionConfig } from '@lobechat/types';
 
 /**
  * How a tool the owner configured on the agent relates to a share visitor's run:
@@ -31,7 +27,7 @@ export type ShareToolAvailability = 'available' | 'blocked' | 'needsMemoryPermis
  * 1. `isAgentShareAllowedBuiltinIdentifier` — the master default-deny
  *    allowlist. Non-builtin identifiers (MCP servers, market plugins, custom
  *    plugins) fall outside its jurisdiction entirely and are governed only by
- *    the owner's `enabledToolIds` picker.
+ *    the owner's `toolGrants` picker.
  * 2. `AGENT_SHARE_NO_DATA_GRANT_BUILTIN_IDENTIFIERS` — tools that survive the
  *    allowlist only to be blocked outright by `DATA_TOOL_ACCESS_RULES`, whose
  *    grant is unconditionally `none` (knowledge base, agent documents: no such
@@ -57,81 +53,63 @@ export const isToolAvailableToVisitors = (toolId: string): boolean =>
   getShareToolAvailability(toolId) !== 'blocked';
 
 /**
- * `shareConfig.enabledToolIds` reduced down to the toolset identifiers that
- * should render as an active visitor grant — one entry per identifier, whether
- * it came from a toolset-level entry or one-or-more per-API entries (see
- * {@link resolveShareToolGrants}). A share edited while a since-denied builtin
- * was still allowed may keep a now-blocked identifier persisted; rendering it
- * as selected would confirm a grant no visitor run can use.
+ * `shareConfig.toolGrants` reduced down to the toolset identifiers that should
+ * render as an active visitor grant — one entry per identifier, whether it
+ * grants every API or only some (see {@link resolveShareToolGrants}). A share
+ * edited while a since-denied builtin was still allowed may keep a now-blocked
+ * identifier persisted; rendering it as selected would confirm a grant no
+ * visitor run can use.
  *
  * PRESENTATION ONLY. Never build a save payload from this — see
  * {@link toggleShareToolsetGrant} / {@link toggleShareToolApi}, which compose
- * over the FULL persisted array so entries this picker does not render survive
+ * over the FULL persisted list so grants this picker does not render survive
  * the write.
  */
-export const getVisitorVisibleEnabledToolIds = (enabledToolIds: string[] | undefined): string[] =>
-  Array.from(resolveShareToolGrants(enabledToolIds).keys()).filter((identifier) =>
+export const getVisitorVisibleGrantedToolIds = (
+  toolGrants: AgentShareToolGrant[] | undefined,
+): string[] =>
+  Array.from(resolveShareToolGrants(toolGrants).keys()).filter((identifier) =>
     isToolAvailableToVisitors(identifier),
   );
 
 /**
- * Add or remove `toolId` from the PERSISTED whitelist.
- *
- * Deliberately composes over the stored array rather than the displayed one:
- * the picker only renders tools this agent currently has configured and that
- * the gate can honor, so replacing the array with the rendered selection would
- * silently drop ids belonging to a plugin the owner temporarily disabled, or
- * to a tool a newer build knows about and this one does not.
- */
-export const toggleShareToolId = (
-  enabledToolIds: string[] | undefined,
-  toolId: string,
-): string[] => {
-  const stored = enabledToolIds ?? [];
-
-  return stored.includes(toolId) ? stored.filter((id) => id !== toolId) : [...stored, toolId];
-};
-
-/**
- * Replace `identifier`'s grant in the PERSISTED whitelist with `grant`:
- * `'all'` writes a bare toolset-level entry, an array of API names writes one
- * per-API entry each, and `'none'` removes every entry for `identifier`
- * (toolset-level and per-API alike). Always composes over the FULL stored
- * array, same reasoning as {@link toggleShareToolId} — entries for OTHER
- * identifiers this picker does not render must survive the write.
+ * Replace `identifier`'s grant in the PERSISTED list with `grant`: `'all'`
+ * writes an entry with no `apis`, an array of API names writes an entry
+ * scoped to them, and `'none'` drops the identifier's entry entirely. Always
+ * composes over the FULL stored list, same reasoning as
+ * {@link toggleShareToolsetGrant} — grants for OTHER identifiers this picker
+ * does not render must survive the write.
  */
 export const setShareToolGrant = (
-  enabledToolIds: string[] | undefined,
+  toolGrants: AgentShareToolGrant[] | undefined,
   identifier: string,
   grant: 'all' | 'none' | string[],
-): string[] => {
-  const withoutIdentifier = (enabledToolIds ?? []).filter(
-    (entry) => parseShareToolEntry(entry)?.identifier !== identifier,
-  );
+): AgentShareToolGrant[] => {
+  const withoutIdentifier = (toolGrants ?? []).filter((entry) => entry.identifier !== identifier);
 
   if (grant === 'none') return withoutIdentifier;
-  if (grant === 'all') return [...withoutIdentifier, buildShareToolEntry(identifier)];
+  if (grant === 'all') return [...withoutIdentifier, { identifier }];
 
-  return [
-    ...withoutIdentifier,
-    ...grant.map((apiName) => buildShareToolEntry(identifier, apiName)),
-  ];
+  return [...withoutIdentifier, { apis: grant, identifier }];
 };
 
 /**
- * Toggle `identifier`'s TOOLSET-level chip: granting `'all'` when it is
- * currently anything less (unset, or a partial per-API grant), and revoking
- * entirely (`'none'`) when it already grants every API. Matches the tri-state
- * the owner-facing row renders: all APIs granted -> toolset-level entry; some
- * -> per-API entries; none -> removed.
+ * Toggle `identifier`'s TOOLSET-level chip. The click cycle is the mature
+ * checkbox convention (antd `indeterminate`, Gmail's select-all): none -> all,
+ * partial -> all, all -> none. A partial per-API grant therefore always widens
+ * to the full toolset on the first click rather than clearing, so one click is
+ * never silently destructive of an intent the owner has to rebuild per API.
+ *
+ * The chip renders the matching tri-state: no grant -> empty box, partial ->
+ * indeterminate (minus) box, every API -> checked box.
  */
 export const toggleShareToolsetGrant = (
-  enabledToolIds: string[] | undefined,
+  toolGrants: AgentShareToolGrant[] | undefined,
   identifier: string,
-): string[] =>
-  resolveShareToolGrants(enabledToolIds).get(identifier) === 'all'
-    ? setShareToolGrant(enabledToolIds, identifier, 'none')
-    : setShareToolGrant(enabledToolIds, identifier, 'all');
+): AgentShareToolGrant[] =>
+  resolveShareToolGrants(toolGrants).get(identifier) === 'all'
+    ? setShareToolGrant(toolGrants, identifier, 'none')
+    : setShareToolGrant(toolGrants, identifier, 'all');
 
 /**
  * Toggle a single `apiName` within `identifier`'s grant, expanding a
@@ -142,30 +120,30 @@ export const toggleShareToolsetGrant = (
  * `blocked`) — the caller (which already has the manifest) is the only place
  * that set is known.
  *
- * Deliberately does NOT collapse back to a toolset-level `'all'` entry when
+ * Deliberately does NOT collapse back to a toolset-level `'all'` grant when
  * every currently-available API ends up individually ticked — least
- * privilege: a toolset-level entry also grants any API added to this tool
+ * privilege: a grant without `apis` also covers any API added to this tool
  * LATER (e.g. a plugin update), which the owner never explicitly reviewed.
  * Only the toolset chip / {@link toggleShareToolsetGrant} writes `'all'`.
- * Still collapses to `'none'` (removing the identifier entirely) when no API
+ * Still collapses to `'none'` (dropping the identifier entirely) when no API
  * remains selected, so the toolset row's tri-state stays consistent with
  * per-API toggling.
  */
 export const toggleShareToolApi = (
-  enabledToolIds: string[] | undefined,
+  toolGrants: AgentShareToolGrant[] | undefined,
   identifier: string,
   apiName: string,
   availableApiNames: string[],
-): string[] => {
-  const grant = resolveShareToolGrants(enabledToolIds).get(identifier);
+): AgentShareToolGrant[] => {
+  const grant = resolveShareToolGrants(toolGrants).get(identifier);
   const current = new Set(grant === 'all' ? availableApiNames : grant instanceof Set ? grant : []);
 
   if (current.has(apiName)) current.delete(apiName);
   else current.add(apiName);
 
-  if (current.size === 0) return setShareToolGrant(enabledToolIds, identifier, 'none');
+  if (current.size === 0) return setShareToolGrant(toolGrants, identifier, 'none');
 
-  return setShareToolGrant(enabledToolIds, identifier, Array.from(current));
+  return setShareToolGrant(toolGrants, identifier, Array.from(current));
 };
 
 /**
@@ -195,7 +173,7 @@ export const toggleShareToolApi = (
 export const getShareApiAvailability = (
   identifier: string,
   apiName: string,
-  humanIntervention?: unknown,
+  humanIntervention?: ExtendedHumanInterventionConfig,
 ): 'available' | 'blocked' => {
   if (identifier === LobeAgentIdentifier && apiName === LobeAgentApiName.callSubAgent) {
     return 'blocked';
@@ -209,16 +187,16 @@ export const getShareApiAvailability = (
 export type { ShareToolGrant };
 
 /**
- * `identifier`'s resolved grant from the PERSISTED whitelist: `'all'` for a
- * toolset-level entry, a `Set` of API names for one-or-more per-API entries,
- * or `undefined` when the identifier has no grant at all. Drives the
- * toolset row's tri-state checkbox and which per-API checkboxes render
- * checked once expanded.
+ * `identifier`'s resolved grant from the PERSISTED list: `'all'` for a grant
+ * without `apis`, a `Set` of API names for an `apis`-scoped grant, or
+ * `undefined` when the identifier has no grant at all. Drives the toolset
+ * row's tri-state checkbox and which per-API checkboxes render checked once
+ * expanded.
  */
 export const getShareToolGrantForIdentifier = (
-  enabledToolIds: string[] | undefined,
+  toolGrants: AgentShareToolGrant[] | undefined,
   identifier: string,
-): ShareToolGrant | undefined => resolveShareToolGrants(enabledToolIds).get(identifier);
+): ShareToolGrant | undefined => resolveShareToolGrants(toolGrants).get(identifier);
 
 /**
  * Runtime-managed builtin tool identifiers (Knowledge Base, Memory, Web
@@ -226,7 +204,7 @@ export const getShareToolGrantForIdentifier = (
  * independently of `agentConfig.plugins`. `getActivePluginIds` only reflects
  * the owner's plugin selection, so a picker built from that list alone could
  * never surface these ids — and `applyShareGateToToolSet` strips any tool id
- * absent from `enabledToolIds`, so e.g. the "allow reading memory" switch
+ * absent from `toolGrants`, so e.g. the "allow reading memory" switch
  * would silently have no effect.
  *
  * Filtered through {@link isToolAvailableToVisitors} so tools the gate always

@@ -71,7 +71,7 @@ describe('imageGenerationRuntime', () => {
       agentShareVisitor: {
         agentId: 'agent-1',
         allowReadMemory: true,
-        enabledToolIds: ['lobe-image-generation'],
+        toolGrants: [{ identifier: 'lobe-image-generation' }],
         shareId: 'share-1',
         visitorUserId: 'visitor-1',
       },
@@ -86,7 +86,7 @@ describe('imageGenerationRuntime', () => {
     });
     // Permission fields of the runtime object must never leak into billing metadata.
     expect(callerContext.spendOrigin!.agentShare).not.toHaveProperty('allowReadMemory');
-    expect(callerContext.spendOrigin!.agentShare).not.toHaveProperty('enabledToolIds');
+    expect(callerContext.spendOrigin!.agentShare).not.toHaveProperty('toolGrants');
   });
 
   it('omits spend attribution for a non-share run', () => {

@@ -373,7 +373,7 @@ export default {
 
   'share.entry': 'Share this Agent',
   'share.settings.limits.desc':
-    'Every visitor run is billed to your account, so these caps are what keep a shared link from running up your bill.',
+    'Every visitor run is billed to your account, so these caps are what keep a shared link from running up your bill. They always apply — you can change the numbers, but not turn them off.',
   'share.settings.limits.maxTopicsPerVisitor': 'Conversations per visitor',
   'share.settings.limits.maxTopicsPerVisitorHint':
     'How many separate conversations each signed-in visitor can start.',
@@ -383,8 +383,6 @@ export default {
   'share.settings.limits.monthlySpendLimit': 'Monthly spend cap',
   'share.settings.limits.monthlySpendLimitHint':
     'Visitor runs stop once this month’s spend on this Agent reaches the cap.',
-  'share.settings.limits.monthlySpendUnlimited':
-    'No cap — visitor runs keep spending from your balance.',
   'share.settings.limits.title': 'Limits',
   'share.settings.link.copied': 'Link copied',
   'share.settings.link.copy': 'Copy link',
@@ -433,7 +431,6 @@ export default {
   'share.settings.usage.conversations': 'Conversations',
   'share.settings.usage.desc': 'What this share has attracted, and what it has cost you.',
   'share.settings.usage.monthlySpend': 'This month’s spend',
-  'share.settings.usage.spendNoLimit': '${{spend}} — no cap set',
   'share.settings.usage.spendOfLimit': '${{spend}} of ${{limit}}',
   'share.settings.usage.title': 'Usage',
   'share.settings.usage.views': 'Visits',

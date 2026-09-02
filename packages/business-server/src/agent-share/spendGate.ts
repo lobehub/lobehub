@@ -14,10 +14,11 @@ export interface AgentShareSpendGateParams {
   /** The shared agent. */
   agentId: string;
   /**
-   * The creator's configured cap for this share, in USD.
-   * `undefined` / `null` means the creator set no cap.
+   * The creator's configured cap for this share, in USD. Always present —
+   * `normalizeAgentShareConfig` guarantees a share carries a cap, and `0` is a
+   * real lower bound meaning "stop all visitor runs".
    */
-  monthlySpendLimit?: number | null;
+  monthlySpendLimit: number;
   /** The creator whose account is billed for this run. */
   ownerUserId: string;
   /** The `agentShares.id` this run is authorized against. */

@@ -5,7 +5,7 @@ import { mergeShareConfig } from './shareConfigPatch';
 describe('mergeShareConfig', () => {
   const base = {
     allowReadMemory: false,
-    enabledToolIds: ['a'],
+    toolGrants: [{ identifier: 'a' }],
     maxTopicsPerVisitor: 5,
     maxTurnsPerTopic: 20,
     monthlySpendLimit: 10,
@@ -18,16 +18,16 @@ describe('mergeShareConfig', () => {
     });
   });
 
-  it('removes a key patched with null, mirroring the server jsonb merge', () => {
-    const merged = mergeShareConfig(base, { monthlySpendLimit: null });
+  it('overwrites the spend cap with a zero cap, mirroring the server jsonb merge', () => {
+    const merged = mergeShareConfig(base, { monthlySpendLimit: 0 });
 
-    expect('monthlySpendLimit' in merged).toBe(false);
+    expect(merged.monthlySpendLimit).toBe(0);
     expect(merged.maxTopicsPerVisitor).toBe(5);
   });
 
   it('does not mutate the base', () => {
-    mergeShareConfig(base, { enabledToolIds: ['a', 'b'] });
+    mergeShareConfig(base, { toolGrants: [{ identifier: 'a' }, { identifier: 'b' }] });
 
-    expect(base.enabledToolIds).toEqual(['a']);
+    expect(base.toolGrants).toEqual([{ identifier: 'a' }]);
   });
 });

@@ -32,6 +32,7 @@ vi.mock('@/server/services/sandbox', () => ({
 vi.mock('@/server/services/toolExecution/preprocessLhCommand', () => ({
   isLhCommand: (command: string) => command.startsWith('lh'),
   preprocessLhCommand: mocks.preprocessLhCommand,
+  SHARE_VISITOR_LH_BLOCKED_MESSAGE: 'The LobeHub CLI is unavailable in shared conversations.',
 }));
 
 const buildContext = (overrides: Record<string, unknown> = {}) =>

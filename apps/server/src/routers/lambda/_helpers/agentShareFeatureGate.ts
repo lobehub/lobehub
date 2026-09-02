@@ -4,6 +4,32 @@ import { TRPCError } from '@trpc/server';
 import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
 
 /**
+ * Shared shape of {@link assertAgentShareCreationEnabled} and
+ * {@link assertAgentShareVisitorEnabled}: both check the same
+ * `ENABLE_BUSINESS_FEATURES` compile-time gate, then a single per-capability
+ * feature flag, differing only in which flag key and which error message to
+ * use. Factored out so the two exports cannot drift.
+ */
+const createAgentShareGate =
+  (flagKey: 'enableAgentShare' | 'enableAgentShareVisitor', notEnabledMessage: string) =>
+  async (userId: string) => {
+    if (!ENABLE_BUSINESS_FEATURES) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: 'Agent sharing is not available on this deployment',
+      });
+    }
+
+    const featureFlags = await getServerFeatureFlagsStateFromRuntimeConfig(userId);
+    if (featureFlags[flagKey] !== true) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: notEnabledMessage,
+      });
+    }
+  };
+
+/**
  * Availability gates for Agent Share, split into the two independent
  * capabilities the feature actually has — CREATING a share (publishing) and
  * VISITING one (opening/chatting on an already-live share). Both share the
@@ -29,36 +55,12 @@ import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFla
  * previewing their own share — see the call site in `share.ts`'s
  * `getSharedAgent`, which only applies it to non-owner viewers.
  */
-export const assertAgentShareCreationEnabled = async (userId: string) => {
-  if (!ENABLE_BUSINESS_FEATURES) {
-    throw new TRPCError({
-      code: 'FORBIDDEN',
-      message: 'Agent sharing is not available on this deployment',
-    });
-  }
+export const assertAgentShareCreationEnabled = createAgentShareGate(
+  'enableAgentShare',
+  'Agent sharing is not enabled for this account',
+);
 
-  const featureFlags = await getServerFeatureFlagsStateFromRuntimeConfig(userId);
-  if (featureFlags.enableAgentShare !== true) {
-    throw new TRPCError({
-      code: 'FORBIDDEN',
-      message: 'Agent sharing is not enabled for this account',
-    });
-  }
-};
-
-export const assertAgentShareVisitorEnabled = async (userId: string) => {
-  if (!ENABLE_BUSINESS_FEATURES) {
-    throw new TRPCError({
-      code: 'FORBIDDEN',
-      message: 'Agent sharing is not available on this deployment',
-    });
-  }
-
-  const featureFlags = await getServerFeatureFlagsStateFromRuntimeConfig(userId);
-  if (featureFlags.enableAgentShareVisitor !== true) {
-    throw new TRPCError({
-      code: 'FORBIDDEN',
-      message: 'Shared agents are not available for this account',
-    });
-  }
-};
+export const assertAgentShareVisitorEnabled = createAgentShareGate(
+  'enableAgentShareVisitor',
+  'Shared agents are not available for this account',
+);

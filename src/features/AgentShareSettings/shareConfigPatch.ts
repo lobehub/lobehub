@@ -3,9 +3,9 @@ import type { AgentShareConfigPatchInput } from '@/services/agentShare';
 import type { AgentShareConfigState } from './useAgentShare';
 
 /**
- * Client-side mirror of `AgentShareModel.updateConfig`'s jsonb merge: a
- * `null`/`undefined` value REMOVES the key (back to "unset"), everything else
- * overwrites it.
+ * Client-side mirror of `AgentShareModel.updateConfig`'s jsonb merge: a key
+ * present in the patch overwrites the base value, and an `undefined` value is
+ * "not part of this patch" — the server skips it, so the base value stands.
  *
  * Used to keep a local copy of the config in step with writes that are still
  * in flight, so a second edit composes on top of the first instead of being
@@ -15,12 +15,7 @@ export const mergeShareConfig = (
   base: AgentShareConfigState,
   patch: AgentShareConfigPatchInput,
 ): AgentShareConfigState => {
-  const next: Record<string, unknown> = { ...base };
+  const patched = Object.entries(patch).filter(([, value]) => value !== undefined);
 
-  for (const [key, value] of Object.entries(patch)) {
-    if (value === null || value === undefined) delete next[key];
-    else next[key] = value;
-  }
-
-  return next as AgentShareConfigState;
+  return Object.assign({ ...base }, Object.fromEntries(patched));
 };

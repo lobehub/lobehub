@@ -31,7 +31,9 @@ interface ToolRowProps {
 
 /**
  * One toolset row in the visitor tool picker: the existing selectable
- * `PluginTag` chip (toggles the toolset-level grant), plus an expand chevron
+ * `PluginTag` chip — checked for a full grant, indeterminate (minus) for a
+ * partial per-API one, and toggling between them via
+ * {@link toggleShareToolsetGrant} — plus an expand chevron
  * — shown only when the tool has more than one visitor-grantable API — that
  * reveals a per-API checkbox list underneath.
  *
@@ -63,22 +65,17 @@ const ToolRow = memo<ToolRowProps>(({ agentId, toolId, selected, shareConfig, on
     .map((api) => api.name);
   const canExpand = !blocked && grantableApiNames.length > 1;
 
-  const grant = getShareToolGrantForIdentifier(shareConfig.enabledToolIds, toolId);
+  const grant = getShareToolGrantForIdentifier(shareConfig.toolGrants, toolId);
 
   const toggleTool = () => {
     onChange((current) => ({
-      enabledToolIds: toggleShareToolsetGrant(current.enabledToolIds, toolId),
+      toolGrants: toggleShareToolsetGrant(current.toolGrants, toolId),
     }));
   };
 
   const toggleApi = (apiName: string) => {
     onChange((current) => ({
-      enabledToolIds: toggleShareToolApi(
-        current.enabledToolIds,
-        toolId,
-        apiName,
-        grantableApiNames,
-      ),
+      toolGrants: toggleShareToolApi(current.toolGrants, toolId, apiName, grantableApiNames),
     }));
   };
 
@@ -99,6 +96,7 @@ const ToolRow = memo<ToolRowProps>(({ agentId, toolId, selected, shareConfig, on
             useAllMetaList
             agentId={agentId}
             disabled={blocked}
+            indeterminate={grant instanceof Set}
             pluginId={toolId}
             selected={selected}
             onSelect={blocked ? undefined : toggleTool}

@@ -1,4 +1,4 @@
-import { PLUGIN_SCHEMA_SEPARATOR } from './plugin';
+import type { AgentShareToolGrant } from '@lobechat/types';
 
 /**
  * Default `AgentShareConfig.maxTopicsPerVisitor` applied when a share is
@@ -12,6 +12,15 @@ export const AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR = 5;
  * created and whenever a legacy/partial config is normalized.
  */
 export const AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC = 20;
+
+/**
+ * Default `AgentShareConfig.monthlySpendLimit` (in USD credits) applied when a
+ * share is first created and whenever a partial config is normalized.
+ *
+ * The cap is mandatory — a share never runs uncapped — so this is the value a
+ * creator starts from and can raise or lower, but never clear.
+ */
+export const AGENT_SHARE_DEFAULT_MONTHLY_SPEND_LIMIT = 10;
 
 /**
  * Upper bound on a visitor-submitted `prompt` for an agent-share visitor run.
@@ -86,84 +95,40 @@ export const RESERVED_AGENT_SHARE_SLUGS: string[] = [
 ];
 
 /**
- * One parsed `shareConfig.enabledToolIds` entry.
- *
- * An entry is either a bare toolset identifier (`lobe-agent`), which grants
- * every (non-blocked) API of that tool, or a per-API scoped entry
- * (`lobe-agent____analyzeMedia`, joined with {@link PLUGIN_SCHEMA_SEPARATOR}),
- * which grants only the named API. `apiName` is absent for the toolset-level
- * form.
- */
-export interface ShareToolEntry {
-  apiName?: string;
-  identifier: string;
-}
-
-/**
- * Parse one raw `enabledToolIds` entry into its identifier and optional
- * per-API scope. Returns `undefined` for a malformed entry — more than one
- * separator, or an empty identifier/apiName segment — so callers can drop it
- * instead of silently misinterpreting the raw string (used by both the router
- * zod validator, which rejects malformed input outright, and the runtime
- * gates, which fail closed by ignoring it).
- *
- * Single source of truth for this encoding, shared by the server gates
- * (`apps/server/src/services/aiAgent/shareGate.ts`) and the client share
- * settings UI (`src/features/AgentShareSettings`), so both sides agree on what
- * a stored entry means.
- */
-export const parseShareToolEntry = (entry: string): ShareToolEntry | undefined => {
-  const parts = entry.split(PLUGIN_SCHEMA_SEPARATOR);
-
-  if (parts.length === 1) {
-    const [identifier] = parts;
-    return identifier ? { identifier } : undefined;
-  }
-
-  if (parts.length !== 2) return undefined;
-
-  const [identifier, apiName] = parts;
-  return identifier && apiName ? { apiName, identifier } : undefined;
-};
-
-/** Inverse of {@link parseShareToolEntry}: build a raw `enabledToolIds` entry. */
-export const buildShareToolEntry = (identifier: string, apiName?: string): string =>
-  apiName ? `${identifier}${PLUGIN_SCHEMA_SEPARATOR}${apiName}` : identifier;
-
-/**
- * One identifier's resolved grant: `'all'` for a toolset-level entry, or the
- * specific `Set` of API names a per-API entry named.
+ * One identifier's resolved grant: `'all'` for a toolset-level grant (no
+ * `apis`), or the specific `Set` of API names the grant named.
  */
 export type ShareToolGrant = 'all' | Set<string>;
 
 /**
- * Reduce raw `enabledToolIds` entries into one grant per identifier.
+ * Reduce `shareConfig.toolGrants` into one grant per identifier.
  *
- * A toolset-level entry always wins over per-API entries for the same
- * identifier, regardless of array order — once an identifier resolves to
- * `'all'` it can never be narrowed back down by a later per-API entry, matching
- * the "toolset-level entry wins" rule every gate enforces.
+ * `toolGrants` is expected to hold at most one entry per identifier (the
+ * router rejects duplicates), but the reduction still merges defensively so a
+ * hand-edited row can never widen access unexpectedly: a grant without `apis`
+ * always wins over per-API ones for the same identifier, regardless of array
+ * order, and two per-API grants union their API names. An explicit empty
+ * `apis` array is malformed (the router rejects it) and is read fail-closed as
+ * "no API granted" — never silently widened to a toolset-level grant.
  */
 export const resolveShareToolGrants = (
-  entries: string[] | undefined,
+  toolGrants: AgentShareToolGrant[] | undefined,
 ): Map<string, ShareToolGrant> => {
   const grants = new Map<string, ShareToolGrant>();
 
-  for (const raw of entries ?? []) {
-    const parsed = parseShareToolEntry(raw);
-    if (!parsed) continue;
-
-    const { identifier, apiName } = parsed;
+  for (const { identifier, apis } of toolGrants ?? []) {
+    if (!identifier) continue;
     if (grants.get(identifier) === 'all') continue;
 
-    if (!apiName) {
+    if (!apis) {
       grants.set(identifier, 'all');
       continue;
     }
+    if (apis.length === 0) continue;
 
     const existing = grants.get(identifier);
     const apiNames = existing instanceof Set ? existing : new Set<string>();
-    apiNames.add(apiName);
+    for (const apiName of apis) apiNames.add(apiName);
     grants.set(identifier, apiNames);
   }
 

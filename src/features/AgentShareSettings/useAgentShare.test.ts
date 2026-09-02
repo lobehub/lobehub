@@ -76,7 +76,7 @@ const buildShare = (config: Record<string, unknown> = {}) => ({
   id: 'share-1',
   shareConfig: {
     allowReadMemory: false,
-    enabledToolIds: [],
+    toolGrants: [],
     maxTopicsPerVisitor: 5,
     maxTurnsPerTopic: 20,
     ...config,
@@ -112,10 +112,10 @@ describe('useAgentShare · updateConfig', () => {
 
     await act(async () => {
       void result.current.updateConfig((current) => ({
-        enabledToolIds: [...(current.enabledToolIds ?? []), 'tool-a'],
+        toolGrants: [...(current.toolGrants ?? []), { identifier: 'tool-a' }],
       }));
       void result.current.updateConfig((current) => ({
-        enabledToolIds: [...(current.enabledToolIds ?? []), 'tool-b'],
+        toolGrants: [...(current.toolGrants ?? []), { identifier: 'tool-b' }],
       }));
     });
 
@@ -128,9 +128,11 @@ describe('useAgentShare · updateConfig', () => {
 
     await waitFor(() => expect(service.updateShareConfig).toHaveBeenCalledTimes(2));
 
-    expect(service.updateShareConfig.mock.calls[0][1]).toEqual({ enabledToolIds: ['tool-a'] });
+    expect(service.updateShareConfig.mock.calls[0][1]).toEqual({
+      toolGrants: [{ identifier: 'tool-a' }],
+    });
     expect(service.updateShareConfig.mock.calls[1][1]).toEqual({
-      enabledToolIds: ['tool-a', 'tool-b'],
+      toolGrants: [{ identifier: 'tool-a' }, { identifier: 'tool-b' }],
     });
   });
 
@@ -176,10 +178,10 @@ describe('useAgentShare · updateConfig', () => {
 
     await act(async () => {
       void result.current.updateConfig((current) => ({
-        enabledToolIds: [...(current.enabledToolIds ?? []), 'tool-a'],
+        toolGrants: [...(current.toolGrants ?? []), { identifier: 'tool-a' }],
       }));
       void result.current.updateConfig((current) => ({
-        enabledToolIds: [...(current.enabledToolIds ?? []), 'tool-b'],
+        toolGrants: [...(current.toolGrants ?? []), { identifier: 'tool-b' }],
       }));
     });
 
@@ -192,11 +194,14 @@ describe('useAgentShare · updateConfig', () => {
 
     // A's response landed while B was still queued — the projection (and the
     // SWR cache the UI reads) must not have regressed back to just A.
-    expect(result.current.share?.shareConfig.enabledToolIds).toEqual(['tool-a', 'tool-b']);
+    expect(result.current.share?.shareConfig.toolGrants).toEqual([
+      { identifier: 'tool-a' },
+      { identifier: 'tool-b' },
+    ]);
 
     await act(async () => {
       void result.current.updateConfig((current) => ({
-        enabledToolIds: [...(current.enabledToolIds ?? []), 'tool-c'],
+        toolGrants: [...(current.toolGrants ?? []), { identifier: 'tool-c' }],
       }));
     });
 
@@ -209,35 +214,45 @@ describe('useAgentShare · updateConfig', () => {
       releaseC(undefined);
     });
 
-    expect(service.updateShareConfig.mock.calls[0][1]).toEqual({ enabledToolIds: ['tool-a'] });
+    expect(service.updateShareConfig.mock.calls[0][1]).toEqual({
+      toolGrants: [{ identifier: 'tool-a' }],
+    });
     expect(service.updateShareConfig.mock.calls[1][1]).toEqual({
-      enabledToolIds: ['tool-a', 'tool-b'],
+      toolGrants: [{ identifier: 'tool-a' }, { identifier: 'tool-b' }],
     });
     // The final persisted patch for C must still contain B — it was never
     // reverted by A's earlier, now-stale response.
     expect(service.updateShareConfig.mock.calls[2][1]).toEqual({
-      enabledToolIds: ['tool-a', 'tool-b', 'tool-c'],
+      toolGrants: [{ identifier: 'tool-a' }, { identifier: 'tool-b' }, { identifier: 'tool-c' }],
     });
-    expect(result.current.share?.shareConfig.enabledToolIds).toEqual([
-      'tool-a',
-      'tool-b',
-      'tool-c',
+    expect(result.current.share?.shareConfig.toolGrants).toEqual([
+      { identifier: 'tool-a' },
+      { identifier: 'tool-b' },
+      { identifier: 'tool-c' },
     ]);
   });
 
-  it('keeps whitelist ids the picker never renders', async () => {
-    swr.seed(buildShare({ enabledToolIds: ['lobe-local-system', 'mcp-github'] }));
+  it('keeps granted tools the picker never renders', async () => {
+    swr.seed(
+      buildShare({
+        toolGrants: [{ identifier: 'lobe-local-system' }, { identifier: 'mcp-github' }],
+      }),
+    );
 
     const { result } = renderHook(() => useAgentShare('agent-1'));
 
     await act(async () => {
       await result.current.updateConfig((current) => ({
-        enabledToolIds: [...(current.enabledToolIds ?? []), 'calculator'],
+        toolGrants: [...(current.toolGrants ?? []), { identifier: 'calculator' }],
       }));
     });
 
     expect(service.updateShareConfig.mock.calls[0][1]).toEqual({
-      enabledToolIds: ['lobe-local-system', 'mcp-github', 'calculator'],
+      toolGrants: [
+        { identifier: 'lobe-local-system' },
+        { identifier: 'mcp-github' },
+        { identifier: 'calculator' },
+      ],
     });
   });
 
