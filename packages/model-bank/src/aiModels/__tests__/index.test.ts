@@ -275,3 +275,27 @@ describe('Google Gemini 3.1 Flash Image models', () => {
     );
   });
 });
+
+describe('Anthropic Fable cards', () => {
+  it('does not expose the adaptive-thinking toggle', () => {
+    // Fable models always think. Switching the toggle off makes buildModelExtendParams emit
+    // `thinking: { type: 'disabled' }`, which the API rejects with a 400
+    // `"thinking.type.disabled" is not supported for this model`.
+    const fableCards = LOBE_DEFAULT_MODEL_LIST.filter(
+      (m) => m.providerId === 'anthropic' && m.id.startsWith('claude-fable-'),
+    );
+
+    expect(fableCards.length).toBeGreaterThan(0);
+    for (const card of fableCards) {
+      expect(card.settings?.extendParams ?? []).not.toContain('enableAdaptiveThinking');
+    }
+  });
+
+  it('keeps the toggle on Opus cards, which accept disabled thinking', () => {
+    const opus5 = LOBE_DEFAULT_MODEL_LIST.find(
+      (m) => m.providerId === 'anthropic' && m.id === 'claude-opus-5',
+    );
+
+    expect(opus5?.settings?.extendParams).toContain('enableAdaptiveThinking');
+  });
+});

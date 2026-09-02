@@ -30,7 +30,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     releasedAt: '2026-06-09',
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['disableContextCaching', 'enableAdaptiveThinking', 'opus47Effort'],
+      extendParams: ['disableContextCaching', 'opus47Effort'],
       searchImpl: 'params',
     },
     type: 'chat',
