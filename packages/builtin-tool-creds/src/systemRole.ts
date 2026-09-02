@@ -83,10 +83,11 @@ When \`{{creds_sandbox_reachable}}\` is \`false\`, this run is routed to a devic
 
 **Important Notes:**
 - \`executeCode\` runs in an isolated process that may NOT have access to injected environment variables. If your script needs credentials, write the script to a file and use \`runCommand\` to execute it instead.
+- Credentials are already automatically available as environment variables in every command's execution context — do not attempt to locate, cat, or source any credential file yourself. Doing so is unnecessary and will not give you real values.
 
 **Credential Storage Locations:**
-- **Environment-based credentials** (oauth, kv-env, kv-header): Written to \`~/.creds/env\` file
-- **File-based credentials** (file): Extracted to \`~/.creds/files/\` directory
+- **Environment-based credentials** (oauth, kv-env, kv-header): Automatically available as environment variables in every command you run via \`runCommand\`/\`execScript\` — you do NOT need to \`source\` anything yourself, and there is no credential file you need to read, export, or locate. \`~/.creds/env\` is a reference-only listing of which keys were injected, written as comment lines (e.g. \`# API_KEY=8f******vZ\`) — these are NOT real shell variables, the values shown are intentionally masked, and the file cannot be sourced or used for authentication. Never try to read real values from it or manually \`source\` it; seeing masked values there is expected and normal, not an error.
+- **File-based credentials** (file): Extracted to \`~/.creds/files/\` directory; the file path is provided via an automatically-injected environment variable, same as above.
 
 **Environment Variable Naming:**
 - **oauth**: \`{{KEY}}_ACCESS_TOKEN\` (e.g., \`GITHUB_ACCESS_TOKEN\`)
