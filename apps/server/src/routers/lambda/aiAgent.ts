@@ -753,6 +753,55 @@ const assertCanUseOperationAgent = async (params: {
 };
 
 /**
+ * Ownership guard for operation-keyed READ endpoints (`getOperationStatus`,
+ * `getPendingInterventions`). The runtime coordinator keys operations purely
+ * by id and returns the raw operation metadata — including the executing
+ * user's full `agentConfig` and `modelRuntimeConfig` — so the id itself must
+ * not act as a bearer token.
+ *
+ * Historically that was inert: an operation id was only ever known to the
+ * user who started it. Agent Share breaks the assumption on purpose — a share
+ * run executes under the CREATOR's identity while the VISITOR receives the
+ * `operationId` (to attach to the Gateway stream, which redacts creator
+ * details). Without this guard the visitor could replay that id here and read
+ * the unredacted creator config the stream path deliberately hides.
+ *
+ * Visible to: the operation's owner, or (workspace runs) a member with `use`
+ * access to the operation's agent in the SAME workspace as the caller.
+ * Everything else — including share visitors — resolves as NOT_FOUND so the
+ * endpoint does not confirm which ids exist.
+ */
+const assertOperationVisibleToCaller = async (params: {
+  db: LobeChatDatabase;
+  operationId: string;
+  userId: string;
+  workspaceId?: string | null;
+}) => {
+  const { db, operationId, userId, workspaceId } = params;
+
+  const [row] = await db
+    .select({
+      agentId: agentOperations.agentId,
+      userId: agentOperations.userId,
+      workspaceId: agentOperations.workspaceId,
+    })
+    .from(agentOperations)
+    .where(eq(agentOperations.id, operationId))
+    .limit(1);
+
+  const notFound = () => new TRPCError({ code: 'NOT_FOUND', message: 'Operation not found' });
+
+  if (!row) throw notFound();
+  if (row.userId === userId) return;
+
+  if (!row.workspaceId || !workspaceId || row.workspaceId !== workspaceId || !row.agentId) {
+    throw notFound();
+  }
+
+  await assertCanUseWorkspaceAgent({ agentId: row.agentId, db, userId, workspaceId });
+};
+
+/**
  * Resolve client-supplied conversation ids before an agent run writes through
  * AiAgentService. Checking only the requested agent/group is insufficient: an
  * existing topic or parent message can belong to a different, view-only
@@ -2577,6 +2626,13 @@ export const aiAgentRouter = router({
 
       log('Getting operation status for %s', operationId);
 
+      await assertOperationVisibleToCaller({
+        db: ctx.serverDB,
+        operationId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+
       // Get operation status using AgentRuntimeService
       const operationStatus = await ctx.agentRuntimeService.getOperationStatus({
         historyLimit,
@@ -2594,10 +2650,28 @@ export const aiAgentRouter = router({
 
       log('Getting pending interventions for operationId: %s, userId: %s', operationId, userId);
 
+      // Same bearer-token hazard as `getOperationStatus`: an operation id must
+      // resolve to a run the caller may see, and the user-wide listing may only
+      // ever enumerate the CALLER's own runs — `input.userId` is not a way to
+      // read another user's pending interventions.
+      if (operationId) {
+        await assertOperationVisibleToCaller({
+          db: ctx.serverDB,
+          operationId,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+      } else if (userId && userId !== ctx.userId) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Cannot list operations of another user',
+        });
+      }
+
       // Get pending interventions using AgentRuntimeService
       const result = await ctx.agentRuntimeService.getPendingInterventions({
         operationId: operationId || undefined,
-        userId: userId || undefined,
+        userId: operationId ? undefined : ctx.userId,
       });
 
       return result;
