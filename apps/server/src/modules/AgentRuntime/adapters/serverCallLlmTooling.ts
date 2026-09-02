@@ -12,6 +12,8 @@ import {
   ToolResolver,
 } from '@lobechat/context-engine';
 
+import type { ExecutionPlan } from '@/helpers/executionTarget';
+
 import type { RuntimeExecutorContext } from '../context';
 import { buildToolDiscoveryConfig, log } from '../executorHelpers';
 import { resolveRunActiveDeviceId } from '../executors/resolveRunActiveDeviceId';
@@ -28,6 +30,15 @@ export interface ServerCallLlmTooling {
    * offered.
    */
   activeDeviceId?: string;
+  /**
+   * The run's resolved execution target (`local`/`device`/`sandbox`/`auto`/
+   * `none`), straight from `state.metadata.executionPlan.target`. Exposed
+   * alongside `activeDeviceId` because `'auto'` is the one target where a
+   * device can be routed (`activeDeviceId` set) while the cloud sandbox is
+   * *also* reachable — see `AgentToolsEngine`'s `agentModeRules` gate for
+   * `lobe-cloud-sandbox`, which allows it for `'auto'` regardless of routing.
+   */
+  executionTarget?: ExecutionPlan['target'];
   resolved: ResolvedToolSet;
   resolvedSkills?: ResolvedSkillSet;
   toolDiscoveryConfig?: ToolDiscoveryConfig;
@@ -47,6 +58,7 @@ export const resolveServerCallLlmTooling = (
   // `resolveRunActiveDeviceId` swallows the id whenever the plan/policy
   // forbids devices — the same filter the tool executors apply.
   const activeDeviceId = resolveRunActiveDeviceId(state.metadata);
+  const executionTarget = (state.metadata?.executionPlan as ExecutionPlan | undefined)?.target;
   const operationToolSet: OperationToolSet = state.operationToolSet ?? {
     enabledToolIds: [],
     executorMap: state.toolExecutorMap ?? {},
@@ -95,6 +107,7 @@ export const resolveServerCallLlmTooling = (
 
   return {
     activeDeviceId,
+    executionTarget,
     resolved,
     resolvedSkills,
     toolDiscoveryConfig,

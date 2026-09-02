@@ -882,12 +882,16 @@ export const discoverTools = async (
     // Effective runtimeMode from the plan's resolved target — same value the
     // engine derives, single derivation point.
     const agentRuntimeMode = executionTargetToRuntimeMode(executionPlan.target);
-    // When sandbox is not the active runtime, remove lobe-cloud-sandbox from the
+    // Mirrors AgentToolsEngine's agentModeRules gate: auto mode lets the model
+    // choose per call whether to run in the cloud sandbox or on the
+    // auto-routed device, so Cloud Sandbox stays allowed there too.
+    const cloudSandboxAllowed = agentRuntimeMode === 'cloud' || executionPlan.target === 'auto';
+    // When sandbox isn't reachable, remove lobe-cloud-sandbox from the
     // manifest map. The initial seed via getEnabledPluginManifests (which includes
     // defaultToolIds) may have already placed it there, and the allowedBuiltinTools
     // loop below only guards the discoverable-builtin append path. Deleting here
     // covers both sources in a single point.
-    if (agentRuntimeMode !== 'cloud') {
+    if (!cloudSandboxAllowed) {
       delete toolManifestMap[CloudSandboxManifest.identifier];
     }
     // Same single-point deletion for the device tools: a `none` / `sandbox`
@@ -904,10 +908,9 @@ export const discoverTools = async (
     }
     for (const tool of allowedBuiltinTools) {
       if (!isManifestIngestAllowed(tool.identifier)) continue;
-      // lobe-cloud-sandbox is only activator-discoverable when runtimeMode resolves
-      // to 'cloud' (i.e. executionTarget='sandbox').
-      if (tool.identifier === CloudSandboxManifest.identifier && agentRuntimeMode !== 'cloud')
-        continue;
+      // lobe-cloud-sandbox is only activator-discoverable when the sandbox is
+      // reachable (executionTarget='sandbox', or 'auto' — see cloudSandboxAllowed above).
+      if (tool.identifier === CloudSandboxManifest.identifier && !cloudSandboxAllowed) continue;
       // device tools are only activator-discoverable in device-capable sessions
       if (stripDeviceTools && isDeviceToolIdentifier(tool.identifier)) continue;
       if (tool.discoverable !== false && !toolManifestMap[tool.identifier]) {

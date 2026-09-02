@@ -305,7 +305,12 @@ export const createServerAgentToolsEngine = (
     // Always-on builtin tools
     ...Object.fromEntries(alwaysOnToolIds.map((id) => [id, true])),
     // System-level rules (may override user selection for specific tools)
-    [CloudSandboxManifest.identifier]: runtimeMode === 'cloud',
+    // Auto mode lets the model choose per call whether to run in the cloud
+    // sandbox or on the auto-routed device — `injectCredsToSandbox` has no
+    // device branch and always targets the sandbox regardless of routing —
+    // so the dedicated Cloud Sandbox tool is offered here too, not only when
+    // the target is literally 'sandbox'.
+    [CloudSandboxManifest.identifier]: runtimeMode === 'cloud' || executionTarget === 'auto',
     [KnowledgeBaseManifest.identifier]: hasEnabledKnowledgeBases,
     // Local-system: the user must have opted into local runtime
     // (`runtimeMode === 'local'`) AND have an online, auto-activated device
