@@ -10,6 +10,7 @@ import {
   shouldExposeSelfFeedbackIntentTool,
 } from '@lobechat/builtin-tool-self-iteration';
 import { manualModeExcludeToolIds } from '@lobechat/builtin-tools';
+import { hasShareToolGrant, resolveShareToolGrants } from '@lobechat/const';
 import type {
   AgentGroupConfig,
   LobeToolManifest,
@@ -80,10 +81,46 @@ import {
   isMultimodalUnderstandingConfigured,
 } from '../helpers/mediaAvailability';
 import { resolveServerSearchDecision } from '../searchDecision';
-import { filterPluginsByShareGate } from '../shareGate';
+import { type AgentShareGate, filterPluginsByShareGate } from '../shareGate';
 import type { ExecRunContext, InternalExecAgentParams } from '../types';
 
 const log = debug('lobe-server:ai-agent-service');
+
+/**
+ * Agent Share visitors can never reach the creator's own device —
+ * `canUseDevice` is already forced `false` for them by
+ * `resolveDeviceAccessPolicy` (`deviceAccessPolicy.ts`) — so when the
+ * creator's agent targets `local`/`auto`, `resolveExecutionPlan` collapses
+ * straight to `{ kind: 'none' }` instead of ever reaching a device. That is
+ * correct in general, but it also silently drops a `lobe-cloud-sandbox` grant
+ * the owner explicitly gave to visitors: the sandbox manifest only
+ * materializes when the plan resolves to `sandbox` (`agentRuntimeMode` in
+ * {@link discoverTools}), and `none` never does.
+ *
+ * Forces the plan to the cloud sandbox in that one case — a visitor's run has
+ * no device to fall back to anyway, so the sandbox is the only execution
+ * surface the grant could ever mean. Chat mode is excluded: it means "no
+ * tools", not "no device", so a share run explicitly put in chat mode must
+ * still resolve to `none`. Returns `plan` unchanged for every non-share run,
+ * a share run without the grant, and a plan that already resolved to
+ * `sandbox`.
+ */
+export const applyShareVisitorSandboxOverride = (
+  plan: ExecutionPlan,
+  shareGate: AgentShareGate | undefined,
+  chatConfig: Parameters<typeof resolveToolMode>[0],
+): ExecutionPlan => {
+  if (!shareGate || plan.kind === 'sandbox') return plan;
+  if (resolveToolMode(chatConfig) === 'chat') return plan;
+
+  const grantsSandbox = hasShareToolGrant(
+    resolveShareToolGrants(shareGate.shareConfig.enabledToolIds),
+    CloudSandboxManifest.identifier,
+  );
+  if (!grantsSandbox) return plan;
+
+  return { kind: 'sandbox', target: 'sandbox' };
+};
 
 export interface ToolDiscoveryDeps {
   agentDocumentsService: AgentDocumentsService;
@@ -648,6 +685,14 @@ export const discoverTools = async (
       requestedDeviceId,
       trigger: requestTrigger,
     });
+    // See `applyShareVisitorSandboxOverride` — a share visitor granted
+    // `lobe-cloud-sandbox` must still get the sandbox even when the creator's
+    // agent targets a device the visitor can never reach.
+    executionPlan = applyShareVisitorSandboxOverride(
+      executionPlan,
+      shareGate,
+      agentConfig.chatConfig ?? undefined,
+    );
     // A fixed device target must never degrade to the cloud sandbox or a
     // different device. Persist a visible assistant error and fail the RPC
     // before tool/runtime preparation so no operation can start elsewhere.

@@ -24,12 +24,21 @@ const SHELL_TOOL_NAMES = new Set(['execScript', 'runCommand']);
  * model that reaches for the cloud-sandbox shell instead of the skills one —
  * both expose a `runCommand` and nothing tells the model they differ — gets a
  * bare `lh: not found` for a command the platform advertises.
+ *
+ * `isShareVisitor` (set from `context.agentShareVisitor`, see the factory
+ * below) disables the shim entirely: a share visitor's run executes under the
+ * creator's identity, so the shim's `lh() { LOBEHUB_JWT=… }` prelude would
+ * otherwise hand a JWT scoped to the CREATOR's own account into a shell the
+ * VISITOR fully controls. `lobe-cloud-sandbox` is allowlisted for share
+ * visitors specifically because this shim is skipped for them — see
+ * `AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS` in `@lobechat/builtin-tools`.
  */
 const withLhPreprocessing = (
   service: ISandboxService,
   resolve: {
     userId: string;
     workspaceId: () => Promise<string | undefined>;
+    isShareVisitor: boolean;
   },
 ): ISandboxService => ({
   // Delegated explicitly rather than spread: `createSandboxService` returns a
@@ -40,8 +49,30 @@ const withLhPreprocessing = (
       return service.callTool(toolName, params);
     }
 
+    // Fail closed BEFORE any workspace/JWT resolution: a share visitor never
+    // gets the `lh` shim, so an `lh` invocation in their sandbox command
+    // returns a plain error result the model can react to, instead of
+    // silently falling through to `preprocessLhCommand` (which independently
+    // refuses too — see its `shareVisitorBlocked` param — but this is the
+    // primary, intended-to-be-load-bearing check).
+    if (resolve.isShareVisitor && isLhCommand(command)) {
+      return {
+        error: {
+          message: 'The LobeHub CLI is unavailable in shared conversations.',
+          name: 'ShareVisitorBlocked',
+        },
+        result: null,
+        success: false,
+      };
+    }
+
     const workspaceId = isLhCommand(command) ? await resolve.workspaceId() : undefined;
-    const result = await preprocessLhCommand(command, resolve.userId, workspaceId);
+    const result = await preprocessLhCommand(
+      command,
+      resolve.userId,
+      workspaceId,
+      resolve.isShareVisitor,
+    );
 
     if (result.error) {
       return {
@@ -98,6 +129,7 @@ export const cloudSandboxRuntime: ServerRuntimeRegistration = {
 
     return new CloudSandboxExecutionRuntime(
       withLhPreprocessing(sandboxService, {
+        isShareVisitor: Boolean(context.agentShareVisitor),
         userId: context.userId,
         workspaceId: () => (workspaceIdPromise ??= resolveContentWorkspaceId(context)),
       }),

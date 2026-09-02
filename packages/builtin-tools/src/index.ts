@@ -208,7 +208,7 @@ export const runtimeManagedToolIds = [
  * (`lobe-agent-management`, `lobe-task`, `lobe-creds`, `lobe-message`,
  * `lobe-skill-store`, `lobe-agent-builder`, `lobe-skills`,
  * `lobe-group-agent-builder`, `lobe-group-management`, `agent-signal-review`,
- * `lobe-user-interaction`, `lobe-activator`, `lobe-cloud-sandbox`,
+ * `lobe-user-interaction`, `lobe-activator`,
  * `lobe-local-system`, `lobe-browser`, `lobe-remote-device`,
  * `lobe-topic-reference`, and the hidden system-only self-iteration tools),
  * see the denied-bucket doc block at the bottom of
@@ -221,6 +221,14 @@ export const AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS = new Set<string>([
   VerifyToolManifest.identifier,
   AcceptanceEvidenceManifest.identifier,
   LobeAgentManifest.identifier,
+  // `lobe-cloud-sandbox`: allowed because a share-visitor run gets its own
+  // fresh per-topic sandbox session, not the creator's. The `lh` CLI JWT
+  // shim that would otherwise mint a creator-scoped token inside the shell
+  // is skipped for visitor runs (see `cloudSandbox.ts` /
+  // `preprocessLhCommand.ts`), and `lobe-creds` stays denied so
+  // `~/.creds/env` is never written into that session either. See the
+  // positive-evidence doc block in `shareGate.ts` for the full rationale.
+  CloudSandboxManifest.identifier,
   // Data-bearing tools whose whole-identifier grant AND per-API write/always-
   // blocked surface is further narrowed server-side by
   // `DATA_TOOL_ACCESS_RULES` in `shareGate.ts` — being on this allowlist only

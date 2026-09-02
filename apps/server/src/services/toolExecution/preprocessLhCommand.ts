@@ -115,9 +115,31 @@ export const preprocessLhCommand = async (
   command: string,
   userId: string,
   workspaceId?: string,
+  /**
+   * Belt-and-braces guard: true when the caller is executing inside an Agent
+   * Share visitor's run (`context.agentShareVisitor` set). The visitor's
+   * shell command is model-supplied and the visitor fully controls it, so
+   * minting `signUserJWT(userId)` here would hand them a JWT scoped to the
+   * CREATOR's own account inside a shell they control.
+   * `serverRuntimes/cloudSandbox.ts` already short-circuits before ever
+   * reaching this function for a share-visitor `lh` command — this second
+   * check exists so the refusal doesn't rely solely on that caller
+   * remembering to keep re-checking it.
+   */
+  shareVisitorBlocked = false,
 ): Promise<PreprocessResult> => {
   if (!isLhCommand(command)) {
     return { command, isLhCommand: false, skipSkillLookup: false };
+  }
+
+  if (shareVisitorBlocked) {
+    log('Refused lh command for Agent Share visitor run (user %s)', userId);
+    return {
+      command,
+      error: 'The LobeHub CLI is unavailable in shared conversations.',
+      isLhCommand: true,
+      skipSkillLookup: true,
+    };
   }
 
   try {
