@@ -1155,10 +1155,15 @@ describe('createTaskRuntime — human assignee (assigneeUserId)', () => {
 
       // A Discord handle resolves by exact IM identity, not by name similarity.
       const byHandle = await runtime.listWorkspaceMembers({ query: '@neko' });
-      expect(byHandle.state).toEqual({ count: 1, query: '@neko', success: true, total: 1 });
-      expect(byHandle.content).toContain('matching "@neko" (1)');
+      expect(byHandle.state).toEqual({ count: 1, query: 'neko', success: true, total: 1 });
+      expect(byHandle.content).toContain('matching "neko" (1)');
       expect(byHandle.content).toContain('id=usr_2');
       expect(byHandle.content).not.toContain('usr_4');
+
+      // So does the native mention wrapper a Discord digest carries verbatim.
+      const byMention = await runtime.listWorkspaceMembers({ query: '<@!4521>' });
+      expect(byMention.state).toEqual({ count: 1, query: '4521', success: true, total: 1 });
+      expect(byMention.content).toContain('id=usr_2');
 
       // The cap is announced so the model refines instead of assuming it saw everyone.
       const capped = await runtime.listWorkspaceMembers({ limit: 1 });

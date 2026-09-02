@@ -8,6 +8,7 @@ export {
   DEFAULT_LIST_WORKSPACE_MEMBERS_LIMIT,
   matchesMemberQuery,
   normalizeListWorkspaceMembersParams,
+  normalizeMemberQuery,
   selectAssignableMembers,
 } from './listWorkspaceMembers';
 export { TaskIdentifier, TaskManifest } from './manifest';

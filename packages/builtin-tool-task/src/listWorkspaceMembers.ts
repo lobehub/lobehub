@@ -10,14 +10,33 @@ export interface ListWorkspaceMembersQuery {
   query?: string;
 }
 
+// Native chat-platform mention wrappers the model may pass through verbatim:
+// Slack `<@U123>` / `<@U123|name>`, Discord `<@4521>` / `<@!4521>` (nickname
+// form). The wrapper carries no identity of its own — only the id inside does.
+const NATIVE_MENTION_WRAPPER = /^<@!?([^\s>|]*)(?:\|[^>]*)?>$/;
+
 /**
- * Normalize tool-facing listWorkspaceMembers params: a trimmed, case-folded
- * `query` (omitted when blank) and a `limit` clamped into the supported range.
+ * Fold a raw query into the needle `matchesMemberQuery` compares against:
+ * trimmed and lower-cased, with a native mention wrapper or a leading `@`
+ * stripped so `<@U123>`, `@neko` and `neko` all reach the same comparison.
+ * `undefined` when nothing usable is left (blank, or a bare `@`).
+ */
+export const normalizeMemberQuery = (raw: string | undefined): string | undefined => {
+  const trimmed = raw?.trim() ?? '';
+  const unwrapped = NATIVE_MENTION_WRAPPER.exec(trimmed)?.[1] ?? trimmed;
+  const needle = (unwrapped.startsWith('@') ? unwrapped.slice(1) : unwrapped).trim().toLowerCase();
+  return needle || undefined;
+};
+
+/**
+ * Normalize tool-facing listWorkspaceMembers params: the folded `query` (see
+ * `normalizeMemberQuery`, omitted when blank) and a `limit` clamped into the
+ * supported range.
  */
 export const normalizeListWorkspaceMembersParams = (
   params: ListWorkspaceMembersParams = {},
 ): ListWorkspaceMembersQuery => {
-  const query = params.query?.trim().toLowerCase() || undefined;
+  const query = normalizeMemberQuery(params.query);
   const requested = Number.isFinite(params.limit)
     ? Math.floor(params.limit as number)
     : DEFAULT_LIST_WORKSPACE_MEMBERS_LIMIT;
@@ -26,15 +45,14 @@ export const normalizeListWorkspaceMembersParams = (
 };
 
 /**
- * Whether a member matches a (normalized, lower-cased) query: an exact user id,
- * or a case-insensitive substring of the display name, @handle, email or any
- * linked IM identity — so "neko", "@neko", "alice@acme.com" and a raw
- * platform user id all resolve the same person.
+ * Whether a member matches a needle produced by `normalizeMemberQuery`: an
+ * exact user id, or a case-insensitive substring of the display name, @handle,
+ * email or any linked IM identity — so "neko", "@neko", "<@4521>",
+ * "alice@acme.com" and a raw platform user id all resolve the same person.
  */
-export const matchesMemberQuery = (member: TaskAssignableMember, query: string): boolean => {
-  if (member.id === query) return true;
-  const needle = query.startsWith('@') ? query.slice(1) : query;
+export const matchesMemberQuery = (member: TaskAssignableMember, needle: string): boolean => {
   if (!needle) return false;
+  if (member.id.toLowerCase() === needle) return true;
   const haystacks = [member.name, member.username, member.email, ...(member.imAccounts ?? [])];
   return haystacks.some((value) => value?.toLowerCase().includes(needle));
 };

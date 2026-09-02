@@ -164,7 +164,7 @@ export const TaskManifest: BuiltinToolManifest = {
           },
           query: {
             description:
-              'Case-insensitive filter matched against display name, @handle, email, linked IM identity, or an exact user ID. Omit to list the whole (capped) directory.',
+              'Case-insensitive filter matched against display name, @handle, email, linked IM identity, or an exact user ID. Native mentions may be passed as-is (`<@U123>`, `<@!4521>`). Omit to list the whole (capped) directory.',
             type: 'string',
           },
         },
