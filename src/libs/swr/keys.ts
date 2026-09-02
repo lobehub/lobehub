@@ -1082,20 +1082,25 @@ export const verifyKeys = {
    */
   acceptancePage: def(
     'verify:acceptancePage',
-    (workspaceId: string | undefined, filter: string, cursor?: string) => [
+    (workspaceId: string | undefined, filter: string, projectId?: string, cursor?: string) => [
       'verify:acceptancePage',
       workspaceId ?? '',
       filter,
+      projectId ?? '',
       cursor ?? '',
     ],
   ),
   /** Query inputs are part of the key so server-side list filtering never reuses stale rows. */
-  acceptances: def('verify:acceptances', (limit?: number, q?: string, filter?: string) => [
+  acceptances: def(
     'verify:acceptances',
-    String(limit ?? ''),
-    q ?? '',
-    filter ?? '',
-  ]),
+    (limit?: number, q?: string, filter?: string, projectId?: string) => [
+      'verify:acceptances',
+      String(limit ?? ''),
+      q ?? '',
+      filter ?? '',
+      projectId ?? '',
+    ],
+  ),
   criteria: def('verify:criteria', () => ['verify:criteria']),
   instruction: def('verify:instruction', (documentId: string) => [
     'verify:instruction',

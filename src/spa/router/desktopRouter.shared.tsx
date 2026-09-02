@@ -42,6 +42,7 @@ import MemorySkeleton from '@/components/Skeleton/Memory';
 import ResourceHomeSkeleton from '@/components/Skeleton/ResourceHome';
 import RouteSegmentSkeleton from '@/components/Skeleton/RouteSegment';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
+import { acceptanceRouteMeta } from '@/features/Acceptance/routeMeta';
 import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { goalDetailRouteMeta, goalsRouteMeta } from '@/features/AgentGoals/routeMeta';
 import AgentRouteSwitch from '@/features/AgentRoute/AgentRouteSwitch';
@@ -1016,6 +1017,23 @@ export const sharedMainAreaChildren: RouteObject[] = [
         ),
         handle: { meta: goalsRouteMeta },
         path: 'goals',
+      },
+      {
+        children: [
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/acceptance/empty'),
+              'Desktop > Project Acceptance > Empty',
+            ),
+            index: true,
+          },
+        ],
+        element: dynamicLayout(
+          () => import('@/routes/(main)/project/[projectId]/acceptance'),
+          'Desktop > Project Acceptance',
+        ),
+        handle: { meta: acceptanceRouteMeta },
+        path: 'acceptance',
       },
     ],
     element: dynamicLayout(
