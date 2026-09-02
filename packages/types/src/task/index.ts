@@ -28,6 +28,47 @@ export type TaskAutomationMode = 'heartbeat' | 'schedule';
  */
 export type TaskRunTrigger = 'manual' | 'schedule' | 'heartbeat' | 'goal';
 
+/**
+ * A clarifying question the intent reader wants answered before an agent
+ * starts. Only raised when different answers change what gets delivered.
+ */
+export interface TaskIntentClarification {
+  /** What concretely changes depending on the answer. */
+  impact?: string;
+  /** Enumerable candidate answers, offered as one-tap chips. */
+  options?: string[];
+  question: string;
+}
+
+/**
+ * What the intent reader understood from the raw text typed into the task
+ * composer. Purely advisory — nothing here is persisted until the user (or the
+ * auto path, for an unambiguous request) confirms it.
+ */
+export interface TaskIntentAnalysis {
+  clarifications: TaskIntentClarification[];
+  /** How sure the reader is the brief can go to an executor as-is. */
+  confidence: 'high' | 'medium' | 'low';
+  /** Whether this is a single delivery or a standing goal. */
+  kind: 'task' | 'goal';
+  kindReason?: string;
+  /** The request rewritten as a full brief, without added scope. */
+  refinedInstruction: string;
+  /** One sentence, addressed to the user: the outcome that was understood. */
+  summary: string;
+  title: string;
+}
+
+/**
+ * The brief produced after the user answers, replacing the pre-answer reading.
+ * A second pass is needed because the first one was written while those details
+ * were still open, so it names them as gaps the answers have since closed.
+ */
+export interface TaskInstructionSynthesis {
+  instruction: string;
+  title: string;
+}
+
 // ── Config types ──
 
 export interface CheckpointConfig {

@@ -18,12 +18,13 @@ import type {
   ToolSource,
 } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { ChatTopicBotContext } from '@lobechat/types';
-import { getActivePluginIds, RequestTrigger } from '@lobechat/types';
+import type { ChatTopicBotContext, RequestTrigger } from '@lobechat/types';
+import { getActivePluginIds } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import type { ModelAbilities } from 'model-bank';
 
+import type { loadModels } from '@/business/client/model-bank/loadModels';
 import { AiModelModel } from '@/database/models/aiModel';
 import { AiProviderModel } from '@/database/models/aiProvider';
 import { ChatGroupModel } from '@/database/models/chatGroup';
@@ -47,8 +48,8 @@ import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import type { ServerAgentToolsContext } from '@/server/modules/Mecha';
 import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
 import type { AgentDocumentsService } from '@/server/services/agentDocuments';
-import { isAgentSignalEnabledForUser } from '@/server/services/agentSignal/featureGate';
 import {
+  isAgentSignalEnabledForUser,
   isLobeAiAgentSlug,
   resolveAgentSelfIterationCapability,
 } from '@/server/services/agentSignal/featureGate';
@@ -67,7 +68,11 @@ import {
   resolveUserDisplayMap,
 } from '@/server/utils/connectorAttribution';
 
-import { buildAllowedBuiltinTools, isDeviceToolIdentifier, REMOTE_DEVICE_TOOL_IDENTIFIERS } from '../deviceToolRegistry';
+import {
+  buildAllowedBuiltinTools,
+  isDeviceToolIdentifier,
+  REMOTE_DEVICE_TOOL_IDENTIFIERS,
+} from '../deviceToolRegistry';
 import { buildBotConversationGroupContext, buildGroupAgentContext } from '../helpers/groupContext';
 import {
   getMediaAvailabilityFromFileTypes,
@@ -97,11 +102,11 @@ export interface ToolDiscoveryInput {
   agentSlug?: string | null;
   attachedFileIds?: string[];
   botContext?: ChatTopicBotContext;
+  /** Tri-state disabled plugin identifiers captured before pinned-id collapse. */
+  disabledPluginIds: string[];
   disableLocalSystem?: boolean;
   disableSelfFeedbackIntentTool?: boolean;
   disableTools?: boolean;
-  /** Tri-state disabled plugin identifiers captured before pinned-id collapse. */
-  disabledPluginIds: string[];
   discordContext?: any;
   exclusivePluginIds?: string[];
   files?: InternalExecAgentParams['files'];
@@ -112,8 +117,8 @@ export interface ToolDiscoveryInput {
   /** Shared lazy history loader — also consumed by the caller after discovery. */
   loadHistoryMessages: () => Promise<any[]>;
   localDeviceId?: string;
-  requestTrigger?: RequestTrigger;
   requestedDeviceId?: string;
+  requestTrigger?: RequestTrigger;
   selectedToolIds?: string[];
   throwIfExecutionAborted: (stage: string) => Promise<void>;
   topicBoundDeviceId?: string | null;
@@ -123,9 +128,7 @@ export interface ToolDiscoveryResult {
   activeDeviceId?: string;
   activeDeviceScope?: 'personal' | 'workspace';
   agentPlugins: string[];
-  builtinModels: Awaited<
-    ReturnType<(typeof import('@/business/client/model-bank/loadModels'))['loadModels']>
-  >;
+  builtinModels: Awaited<ReturnType<typeof loadModels>>;
   composioManifests: LobeToolManifest[];
   connectorManifests: ReturnType<typeof buildConnectorManifests>;
   executionPlan?: ExecutionPlan;
@@ -137,9 +140,9 @@ export interface ToolDiscoveryResult {
   searchDecision: ReturnType<typeof resolveServerSearchDecision>;
   toolExecutorMap: Record<string, ToolExecutor>;
   toolManifestMap: Record<string, any>;
-  toolSourceMap: Record<string, ToolSource>;
   tools?: any[];
   toolsEngine?: ToolsEngine;
+  toolSourceMap: Record<string, ToolSource>;
   toolsResult: { enabledToolIds: string[]; tools?: any[] | undefined };
 }
 
@@ -490,9 +493,8 @@ export const discoverTools = async (
 
     // 5e. Create tools using Server AgentToolsEngine
     hasEnabledKnowledgeBases =
-      agentConfig.knowledgeBases?.some(
-        (kb: { enabled?: boolean | null }) => kb.enabled === true,
-      ) ?? false;
+      agentConfig.knowledgeBases?.some((kb: { enabled?: boolean | null }) => kb.enabled === true) ??
+      false;
 
     try {
       hasAgentDocuments = await deps.agentDocumentsService.hasDocuments(resolvedAgentId);

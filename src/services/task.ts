@@ -1,4 +1,10 @@
-import type { CheckpointConfig, TaskAutomationMode, TaskStatus } from '@lobechat/types';
+import type {
+  CheckpointConfig,
+  TaskAutomationMode,
+  TaskInstructionSynthesis,
+  TaskIntentAnalysis,
+  TaskStatus,
+} from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -62,6 +68,27 @@ class TaskService {
   getVerifyConfig = async (id: string) => lambdaClient.task.getVerifyConfig.query({ id });
 
   // ── Mutations ──
+
+  /**
+   * Read a composer draft and report what it means. A mutation on the wire
+   * (it spends a model call), but it creates nothing — the caller decides
+   * whether to act on the reading.
+   */
+  analyzeIntent = async (params: {
+    context?: string;
+    instruction: string;
+  }): Promise<TaskIntentAnalysis> => lambdaClient.task.analyzeIntent.mutate(params);
+
+  /**
+   * Rewrite the confirmed draft into the brief that gets executed, with the
+   * user's answers folded in. Also a mutation on the wire, and also creates
+   * nothing.
+   */
+  synthesizeInstruction = async (params: {
+    answers: { answer: string; question: string }[];
+    context?: string;
+    instruction: string;
+  }): Promise<TaskInstructionSynthesis> => lambdaClient.task.synthesizeInstruction.mutate(params);
 
   create = async (params: {
     assigneeAgentId?: string;

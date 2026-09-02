@@ -7,7 +7,7 @@ import { useEditor } from '@lobehub/editor/react';
 import { Flexbox, Icon } from '@lobehub/ui';
 import { ActionIcon, Button, Text, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { InputNumber } from 'antd';
-import { createGlobalStyle, createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import {
   ArrowLeft,
   Paperclip,
@@ -21,6 +21,7 @@ import {
 import { type KeyboardEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import GeneratingBorder from '@/components/GeneratingBorder';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import {
   CriterionList,
@@ -133,65 +134,9 @@ const styles = createStaticStyles(({ css }) => ({
     padding-inline: 16px;
   `,
   inputShell: css`
-    position: relative;
-
     overflow: hidden;
-
     min-height: 208px;
-    border-radius: 8px;
-
     background: ${cssVar.colorBgElevated};
-  `,
-  inputShellLoading: css`
-    background: ${cssVar.colorBgElevated};
-
-    &::after {
-      pointer-events: none;
-      content: '';
-
-      position: absolute;
-      z-index: 1;
-      inset: 0;
-
-      padding: 2px;
-      border-radius: inherit;
-
-      background: conic-gradient(
-        from var(--goal-border-angle),
-        ${cssVar.colorBorderSecondary} 0deg 210deg,
-        #ff3d8d 238deg,
-        #8b5cf6 258deg,
-        #00c8ff 278deg,
-        #22e6a8 298deg,
-        #ffd43b 318deg,
-        #ff6b35 338deg,
-        ${cssVar.colorBorderSecondary} 360deg
-      );
-
-      mask:
-        linear-gradient(#fff 0 0) content-box,
-        linear-gradient(#fff 0 0);
-
-      animation: goal-input-flow 1.8s linear infinite;
-
-      mask-composite: exclude;
-    }
-
-    @keyframes goal-input-flow {
-      from {
-        --goal-border-angle: 0deg;
-      }
-
-      to {
-        --goal-border-angle: 360deg;
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      &::after {
-        animation: none;
-      }
-    }
   `,
   instructionEditor: css`
     min-height: 36px;
@@ -241,14 +186,6 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorText};
   `,
 }));
-
-const GoalBorderFlowStyle = createGlobalStyle`
-  @property --goal-border-angle {
-    inherits: false;
-    initial-value: 0deg;
-    syntax: '<angle>';
-  }
-`;
 
 const GENERATION_ESTIMATE_SECONDS = 90;
 
@@ -489,7 +426,6 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
 
   return (
     <Flexbox onKeyDown={handleKeyDown}>
-      <GoalBorderFlowStyle />
       <Flexbox horizontal className={styles.head}>
         <Flexbox flex={1} gap={6}>
           {step === 'review' && (
@@ -518,9 +454,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
           )}
           {step !== 'review' && (
             <>
-              <div
-                className={`${styles.inputShell} ${step === 'preparing' ? styles.inputShellLoading : ''}`}
-              >
+              <GeneratingBorder className={styles.inputShell} generating={step === 'preparing'}>
                 <EditorCanvas
                   disabled={!canCreate || step === 'preparing'}
                   editor={editor}
@@ -531,7 +465,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
                   style={{ fontSize: 14, minHeight: 206, padding: 16 }}
                   onContentChange={handleContentChange}
                 />
-              </div>
+              </GeneratingBorder>
               {step === 'preparing' ? (
                 <Flexbox
                   horizontal

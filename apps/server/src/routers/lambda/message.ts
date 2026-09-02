@@ -62,6 +62,7 @@ const messageSearchProcedure = messageProcedure.use(async (opts) => {
   const ftsSearchRepo = await createFtsSearchRepo({
     db: ctx.serverDB,
     userId: ctx.userId,
+    usage: 'message_search',
     workspaceId,
   });
 

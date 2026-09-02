@@ -204,6 +204,7 @@ describe('KnowledgeBaseSearchService', () => {
       expect(createFtsSearchRepo).toHaveBeenCalledWith({
         callerAgentVisibility: 'public',
         db: serverDB,
+        usage: 'knowledge_base',
         userId,
         workspaceId: 'workspace-1',
       });

@@ -172,6 +172,20 @@ export const isThinkingDisplayOmittedByDefaultModel = (model: string): boolean =
 const EFFORTS_INCOMPATIBLE_WITH_DISABLED_THINKING = new Set(['xhigh', 'max']);
 
 /**
+ * Claude Fable 5.1 / Mythos 5.1 reject forced tool use. `tool_choice` of type `any`
+ * or `tool` returns a 400; keep `auto` (or `none`) and use `strict: true` for schema
+ * enforcement instead. Fable 5 / Mythos 5 still accept forced choice.
+ * @see https://platform.claude.com/docs/en/models/fable-5-1/whats-new-fable-5-1#forced-tool-use-is-not-supported
+ */
+export const rejectsForcedToolChoice = (model: string): boolean => {
+  const parsed = parseClaudeModelId(model);
+  if (!parsed || !isClaudeFamily(parsed, ['fable', 'mythos'])) return false;
+  if (parsed.majorVersion > 5) return true;
+
+  return parsed.majorVersion === 5 && hasMinorVersionAtLeast(parsed, 1);
+};
+
+/**
  * Claude Opus 5 and later reject `thinking: {type: 'disabled'}` combined with effort `xhigh` or
  * `max`. Every lower effort level stays valid alongside disabled thinking, so callers should drop
  * `effort` only for this specific pairing.

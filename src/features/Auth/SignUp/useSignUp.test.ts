@@ -61,7 +61,7 @@ describe('useSignUp', () => {
     mockEnableEmailVerification = false;
     Object.defineProperty(window, 'location', {
       configurable: true,
-      value: { ...originalLocation, href: '' },
+      value: { ...originalLocation, href: '', origin: originalLocation.origin },
       writable: true,
     });
   });
@@ -148,7 +148,9 @@ describe('useSignUp', () => {
       });
 
       expect(mockSignUpEmail).toHaveBeenCalledWith(
-        expect.objectContaining({ callbackURL: '/onboarding?callbackUrl=%2Fdashboard' }),
+        expect.objectContaining({
+          callbackURL: `${originalLocation.origin}/onboarding?callbackUrl=%2Fdashboard`,
+        }),
       );
       expect(window.location.href).toBe('/onboarding?callbackUrl=%2Fdashboard');
     });

@@ -50,6 +50,7 @@ import { connectorRouter } from './connector';
 import { deviceRouter } from './device';
 import { documentRouter } from './document';
 import { documentCommentRouter } from './documentComment';
+import { documentLikeRouter } from './documentLike';
 import { expertiseRouter } from './expertise';
 import { exporterRouter } from './exporter';
 import { fileRouter } from './file';
@@ -128,6 +129,7 @@ export const lambdaRouter = router({
   device: deviceRouter,
   document: documentRouter,
   documentComment: documentCommentRouter,
+  documentLike: documentLikeRouter,
   exporter: exporterRouter,
   file: fileRouter,
   followUpAction: followUpActionRouter,

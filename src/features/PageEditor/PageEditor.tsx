@@ -19,6 +19,7 @@ import { usePageStore } from '@/store/page';
 import { StyleSheet } from '@/utils/styles';
 
 import DocumentComments from './DocumentComments';
+import DocumentLikes from './DocumentLikes';
 import EditorCanvas from './EditorCanvas';
 import Header from './Header';
 import LockedAlert from './LockedAlert';
@@ -316,6 +317,7 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
                 compact status badge lives in the Header (EditingIndicator). */}
             <LockedAlert />
             <EditorCanvas askCopilotTarget={askCopilotTarget} />
+            {documentId && <DocumentLikes documentId={documentId} key={documentId} />}
             {documentId && <DocumentComments documentId={documentId} />}
           </Flexbox>
         </WideScreenContainer>

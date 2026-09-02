@@ -11,13 +11,14 @@ import type {
   ExecAgentResult,
   HeterogeneousTopicModel,
   LobeAgentAgencyConfig,
+  RequestTrigger,
   WorkingDirConfig,
 } from '@lobechat/types';
 import {
   applyTopicModelToHeterogeneousProvider,
   buildHeteroExecArgs,
+  ChatErrorType,
   getWorkingDirEffectivePath,
-  RequestTrigger,
 } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
@@ -59,15 +60,6 @@ export interface HeteroDispatchDeps {
     topicId: string;
   }) => Promise<void>;
   db: LobeChatDatabase;
-  finalizeHeteroDispatchError: (params: {
-    agentId: string;
-    assistantMessageId: string;
-    detail: string;
-    errorType?: ErrorType;
-    message: string;
-    operationId: string;
-    topicId: string;
-  }) => Promise<void>;
   getMarketService: () => Promise<MarketService>;
   messageModel: MessageModel;
   resolveDeviceWorkspaceId: (deviceId: string | undefined) => Promise<string | undefined>;
@@ -77,11 +69,112 @@ export interface HeteroDispatchDeps {
   workspaceId?: string;
 }
 
+/**
+ * Finalize a hetero run that fails *synchronously at dispatch* — before the
+ * CLI/agent process ever starts (device offline → DEVICE_NOT_FOUND, no bound
+ * device, access denied, sandbox spawn rejected). These paths never produce a
+ * `heteroFinish` (CLI exit) or `agentNotify` done callback, so without this
+ * each one would strand the run: the assistant bubble would show an error but
+ * the UI stream would never close and a long-run task would hang in `running`.
+ *
+ * Routes through the SAME terminal funnel a normal exit uses —
+ * `CompletionLifecycle.completeOperation` finalizes the op row and fires the
+ * run's onComplete/onError hooks, so the task lifecycle (onTopicComplete → task
+ * failed) and any IM bot completion callback fire exactly as they would for a
+ * real failure — then closes the UI stream and clears the (never-started)
+ * running operation. The hooks were registered and serialized onto
+ * `runningOperation` at dispatch time.
+ *
+ * Stream-close / hook dispatch / metadata clear are best-effort: a failure
+ * there must not mask the original dispatch error the caller surfaces.
+ */
+const finalizeHeteroDispatchError = async (
+  deps: HeteroDispatchDeps,
+  params: {
+    agentId?: string;
+    assistantMessageId: string;
+    detail: string;
+    /**
+     * Client error type. Defaults to the generic `ServerAgentRuntimeError`; pass a
+     * dedicated `ChatErrorType` (e.g. `DeviceGatewayNotConfigured`) so the web
+     * client renders a specific localized headline instead of the generic copy.
+     */
+    errorType?: ErrorType;
+    message: string;
+    operationId: string;
+    topicId: string;
+  },
+): Promise<void> => {
+  const {
+    agentId,
+    assistantMessageId,
+    detail,
+    errorType = ChatErrorType.ServerAgentRuntimeError,
+    message,
+    operationId,
+    topicId,
+  } = params;
+
+  // 1. Error bubble — written first so a stream subscriber reacting to the
+  //    end event below re-reads a message that already carries the error.
+  await deps.messageModel.update(assistantMessageId, {
+    content: '',
+    error: { body: { detail }, message, type: errorType },
+  });
+
+  // 1b. Finalize the run through CompletionLifecycle's single entry — the SAME
+  //     owner the CLI exit (heteroFinish) / in-process paths use. It marks the
+  //     agent_operations row terminal (the row was inserted at recordStart, but a
+  //     dispatch failure goes through THIS path, not heteroFinish, so without
+  //     finalizing it the row stays status='running' forever) AND fires the run's
+  //     onComplete/onError hooks (task lifecycle → task failed + IM bot callback).
+  //     `skipErrorMessageWrite` keeps the bespoke device-specific bubble written
+  //     in step 1; verify is done-only, so it no-ops on this error path.
+  await new CompletionLifecycle(deps.db, deps.userId, deps.workspaceId).completeOperation(
+    {
+      agentId,
+      assistantMessageId,
+      error: { message, type: errorType },
+      operationId,
+      serializedHooks: hookDispatcher.getSerializedHooks(operationId),
+      topicId,
+      userId: deps.userId,
+    },
+    'error',
+    { skipErrorMessageWrite: true },
+  );
+
+  // 2. Close the UI stream.
+  try {
+    await createStreamEventManager().publishAgentRuntimeEnd({
+      finalState: { error: detail },
+      operationId,
+      reason: 'error',
+      reasonDetail: detail,
+      stepIndex: 0,
+    });
+  } catch (err) {
+    log('finalizeHeteroDispatchError: publishAgentRuntimeEnd failed (non-fatal): %O', err);
+  }
+
+  // 3. The operation never started — settle the topic so reconnect /
+  //    heteroIngest validation and the next turn don't see a stale operation.
+  //    Settle, not take: dropping the marker alone would strand `status` on
+  //    'running' with nothing left for any later settle to match — see
+  //    `ServerOperationStore.clearRunningMark`. 'active' rather than 'unread'
+  //    because a dispatch that never started produced nothing to read.
+  try {
+    await deps.topicModel.settleRunningOperation(topicId, operationId, 'active');
+  } catch (err) {
+    log('finalizeHeteroDispatchError: clear runningOperation failed (non-fatal): %O', err);
+  }
+};
+
 export interface HeteroDispatchInput {
   canManageAgent: boolean;
   effectiveRequestedDeviceId?: string;
-  heteroType: HeterogeneousAgentType;
   heterogeneousProvider?: LobeAgentAgencyConfig['heterogeneousProvider'];
+  heteroType: HeterogeneousAgentType;
   hooks?: AgentHook[];
   isPublicWorkspaceAgent: boolean;
   localDeviceId?: string;
@@ -90,8 +183,8 @@ export interface HeteroDispatchInput {
   operationTaskId?: string;
   parentOperationId?: string;
   pinnedHeterogeneousTopicModel?: HeterogeneousTopicModel;
-  requestTrigger?: RequestTrigger;
   requestedDeviceId?: string;
+  requestTrigger?: RequestTrigger;
   runAttachments: { imageList?: Array<{ alt: string; id: string; url: string }> };
   /** Ids of the rows THIS turn just persisted (excluded from recovery history). */
   selfMessageIds: Set<string>;
@@ -461,7 +554,7 @@ export const dispatchHeteroAgent = async (
   };
 
   if (agentConfig.agencyConfig?.heterogeneousProvider?.authMode === 'api') {
-    await deps.finalizeHeteroDispatchError({
+    await finalizeHeteroDispatchError(deps, {
       agentId: resolvedAgentId,
       assistantMessageId,
       detail: HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR,
@@ -499,7 +592,7 @@ export const dispatchHeteroAgent = async (
         'execAgent: device access denied for remote hetero dispatch (reason=%s)',
         deviceAccessReason,
       );
-      await deps.finalizeHeteroDispatchError({
+      await finalizeHeteroDispatchError(deps, {
         agentId: resolvedAgentId,
         assistantMessageId,
         detail: 'This sender is not allowed to run agents on a bound device.',
@@ -524,7 +617,7 @@ export const dispatchHeteroAgent = async (
     }
     if (!remoteDeviceId) {
       log('execAgent: openclaw/hermes requires a local or connected device');
-      await deps.finalizeHeteroDispatchError({
+      await finalizeHeteroDispatchError(deps, {
         agentId: resolvedAgentId,
         assistantMessageId,
         detail: 'No local or connected device is available for this agent.',
@@ -595,7 +688,7 @@ export const dispatchHeteroAgent = async (
     );
     if (!result.success) {
       log('execAgent: remote hetero dispatch failed: %s', result.error);
-      await deps.finalizeHeteroDispatchError({
+      await finalizeHeteroDispatchError(deps, {
         agentId: resolvedAgentId,
         assistantMessageId,
         detail: result.error ?? 'Device dispatch failed',
@@ -680,7 +773,7 @@ export const dispatchHeteroAgent = async (
       const dispatchDeviceId = heteroPlan.kind === 'device' ? heteroPlan.deviceId : undefined;
       if (!dispatchDeviceId) {
         log('execAgent: hetero executionTarget=device but no boundDeviceId set');
-        await deps.finalizeHeteroDispatchError({
+        await finalizeHeteroDispatchError(deps, {
           agentId: resolvedAgentId,
           assistantMessageId,
           detail: !supportsCloudHeterogeneousSandbox(heteroType)
@@ -771,7 +864,7 @@ export const dispatchHeteroAgent = async (
       });
       if (!result.success) {
         log('execAgent: hetero device dispatch failed: %s', result.error);
-        await deps.finalizeHeteroDispatchError({
+        await finalizeHeteroDispatchError(deps, {
           agentId: resolvedAgentId,
           assistantMessageId,
           detail: result.error ?? 'Device dispatch failed',
@@ -798,7 +891,7 @@ export const dispatchHeteroAgent = async (
     } else {
       if (!supportsCloudHeterogeneousSandbox(heteroType)) {
         const message = `${getHeterogeneousAgentTitle(heteroType)} requires a local or connected device; cloud sandbox execution is not supported.`;
-        await deps.finalizeHeteroDispatchError({
+        await finalizeHeteroDispatchError(deps, {
           agentId: resolvedAgentId,
           assistantMessageId,
           detail: message,
@@ -828,9 +921,8 @@ export const dispatchHeteroAgent = async (
       // (which eagerly touches server-only ModelRuntime env at module init), so
       // importing it statically would couple that whole subsystem into every
       // `aiAgent` import. Only this cloud-CLI branch needs it.
-      const { spawnHeteroSandbox } = await import(
-        '@/server/services/heterogeneousAgent/sandboxRunner'
-      );
+      const { spawnHeteroSandbox } =
+        await import('@/server/services/heterogeneousAgent/sandboxRunner');
       const marketService = await deps.getMarketService();
       // The sandbox authenticates its nested `lh` calls with this JWT. The
       // narrow `hetero-operation` token (used for the device-dispatch path
@@ -854,16 +946,16 @@ export const dispatchHeteroAgent = async (
         // the same terminal funnel so the stranded run surfaces an error and
         // its task is marked failed instead of hanging in `running`.
         log('execAgent: hetero sandbox spawn failed: %O', err);
-        await deps
-          .finalizeHeteroDispatchError({
-            agentId: resolvedAgentId,
-            assistantMessageId,
-            detail: err instanceof Error ? err.message : String(err),
-            message: 'Hetero sandbox spawn failed',
-            operationId,
-            topicId,
-          })
-          .catch((finalizeErr) => log('execAgent: sandbox-failure finalize failed: %O', finalizeErr));
+        await finalizeHeteroDispatchError(deps, {
+          agentId: resolvedAgentId,
+          assistantMessageId,
+          detail: err instanceof Error ? err.message : String(err),
+          message: 'Hetero sandbox spawn failed',
+          operationId,
+          topicId,
+        }).catch((finalizeErr) =>
+          log('execAgent: sandbox-failure finalize failed: %O', finalizeErr),
+        );
       });
     }
   }

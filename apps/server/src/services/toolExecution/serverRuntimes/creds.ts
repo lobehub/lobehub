@@ -14,7 +14,7 @@ const log = debug('lobe-server:creds-runtime');
  * Server-side Creds Service implementation
  * Wraps MarketService.market.creds to provide ICredsService interface
  */
-class ServerCredsService implements ICredsService {
+export class ServerCredsService implements ICredsService {
   private marketService: MarketService;
   private workspaceId?: string;
 
@@ -111,7 +111,15 @@ class ServerCredsService implements ICredsService {
     log('injectCreds: keys=%O, topicId=%s', params.keys, params.topicId);
 
     // Market's generic inject endpoint resolves organization credentials from
-    // the workspaceId signed into this service's trusted-client token.
+    // the workspaceId signed into this service's trusted-client token, and —
+    // when `sandbox` is true (the default) — already writes the *real*
+    // (unmasked) values into the sandbox's ~/.creds/env server-side before
+    // responding. The `credentials.env` map in that response is masked for
+    // safe display to the model, so it must never be written into the
+    // sandbox again here: an earlier version of this method did exactly
+    // that, appending a masked `export` line after market's real one. Since
+    // re-sourcing ~/.creds/env applies `export`s in file order, the masked
+    // line silently shadowed the real credential for every later command.
     const result = await this.marketService.market.creds.inject({
       keys: params.keys,
       sandbox: params.sandbox,
@@ -200,6 +208,7 @@ export const credsRuntime: ServerRuntimeRegistration = {
       accessToken,
       userInfo: { userId: context.userId, workspaceId: context.workspaceId },
     });
+
     const credsService = new ServerCredsService(marketService, context.workspaceId);
 
     return new CredsExecutionRuntime(credsService, {

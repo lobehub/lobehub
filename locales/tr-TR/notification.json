@@ -40,6 +40,8 @@
   "document_comment_activity_title": "Belgenizde yeni bir yorum",
   "document_comment_mentioned": "{{actorLabel}} \"{{documentTitle}}\" üzerindeki bir yorumda sizi bahsetti.",
   "document_comment_mentioned_title": "Bir belge yorumunda bahsedildiniz",
+  "document_liked": "{{actorLabel}} belgenizi beğendi: \"{{documentTitle}}\".",
+  "document_liked_title": "Birisi belgenizi beğendi",
   "email.footer.contactSupport": "Destek ile iletişime geçin",
   "email.footer.joinDiscord": "Discord'a katılın",
   "email.footer.manage": "Bildirimleri yönet",

@@ -40,6 +40,8 @@
   "document_comment_activity_title": "Bình luận mới về tài liệu của bạn",
   "document_comment_mentioned": "{{actorLabel}} đã nhắc đến bạn trong một bình luận về \"{{documentTitle}}\".",
   "document_comment_mentioned_title": "Bạn đã được nhắc đến trong một bình luận tài liệu",
+  "document_liked": "{{actorLabel}} đã thích tài liệu của bạn \"{{documentTitle}}\".",
+  "document_liked_title": "Ai đó đã thích tài liệu của bạn",
   "email.footer.contactSupport": "Liên hệ hỗ trợ",
   "email.footer.joinDiscord": "Tham gia Discord",
   "email.footer.manage": "Quản lý thông báo",

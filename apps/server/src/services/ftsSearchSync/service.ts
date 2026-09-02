@@ -48,11 +48,21 @@ export interface FtsSearchSyncDrainResult {
   released: number;
 }
 
+export type FtsSearchSyncBulkRequestResult =
+  'item_error' | 'mixed' | 'request_error' | 'response_error' | 'success';
+
+export interface FtsSearchSyncBulkEntitySample {
+  bytes: number;
+  items: number;
+  result: FtsSearchSyncBulkRequestResult;
+}
+
 export interface FtsSearchSyncBulkRequestSample {
   bytes: number;
   durationMs: number;
+  entities: Partial<Record<FtsSearchSyncWork['entity'], FtsSearchSyncBulkEntitySample>>;
   items: number;
-  result: 'item_error' | 'mixed' | 'request_error' | 'response_error' | 'success';
+  result: FtsSearchSyncBulkRequestResult;
 }
 
 const workKey = (work: FtsSearchSyncWork) => `${work.entity}:${work.documentId}:${work.revision}`;
@@ -85,6 +95,45 @@ const buildOperation = (
   };
   const body = `${JSON.stringify(metadata)}\n${JSON.stringify(source)}\n`;
   return { body, bytes: Buffer.byteLength(body), work };
+};
+
+const summarizeBulkEntities = (
+  operations: FtsSearchSyncOperation[],
+  result: FtsSearchSyncBulkRequestResult,
+  failedWorkKeys?: Set<string>,
+): FtsSearchSyncBulkRequestSample['entities'] => {
+  const summaries = new Map<
+    FtsSearchSyncWork['entity'],
+    { bytes: number; failed: number; items: number }
+  >();
+
+  for (const operation of operations) {
+    const entity = operation.work.entity;
+    const current = summaries.get(entity) ?? { bytes: 0, failed: 0, items: 0 };
+    current.bytes += operation.bytes;
+    current.items += 1;
+    if (failedWorkKeys?.has(workKey(operation.work))) current.failed += 1;
+    summaries.set(entity, current);
+  }
+
+  const entitySamples: FtsSearchSyncBulkRequestSample['entities'] = {};
+  for (const [entity, summary] of summaries) {
+    const entityResult =
+      failedWorkKeys === undefined
+        ? result
+        : summary.failed === 0
+          ? 'success'
+          : summary.failed === summary.items
+            ? 'item_error'
+            : 'mixed';
+    entitySamples[entity] = {
+      bytes: summary.bytes,
+      items: summary.items,
+      result: entityResult,
+    };
+  }
+
+  return entitySamples;
 };
 
 /** Bounded PostgreSQL projection → byte-aware Elasticsearch bulk drain. */
@@ -181,6 +230,7 @@ export class FtsSearchSyncService {
         result.bulkRequestSamples.push({
           bytes: requestBytes,
           durationMs: Date.now() - startedAt,
+          entities: summarizeBulkEntities(operations, 'request_error'),
           items: operations.length,
           result: 'request_error',
         });
@@ -193,6 +243,7 @@ export class FtsSearchSyncService {
         result.bulkRequestSamples.push({
           bytes: requestBytes,
           durationMs: Date.now() - startedAt,
+          entities: summarizeBulkEntities(operations, 'response_error'),
           items: operations.length,
           result: 'response_error',
         });
@@ -228,12 +279,14 @@ export class FtsSearchSyncService {
         }
       }
 
+      const bulkResult =
+        failures.length === 0 ? 'success' : acknowledged.length === 0 ? 'item_error' : 'mixed';
       result.bulkRequestSamples.push({
         bytes: requestBytes,
         durationMs: Date.now() - startedAt,
+        entities: summarizeBulkEntities(operations, bulkResult, new Set(failures.map(workKey))),
         items: operations.length,
-        result:
-          failures.length === 0 ? 'success' : acknowledged.length === 0 ? 'item_error' : 'mixed',
+        result: bulkResult,
       });
 
       const deleted = await this.outbox.acknowledgeMany(acknowledged);

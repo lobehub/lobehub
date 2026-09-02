@@ -40,6 +40,8 @@
   "document_comment_activity_title": "Новый комментарий к вашему документу",
   "document_comment_mentioned": "{{actorLabel}} упомянул вас в комментарии к \"{{documentTitle}}\".",
   "document_comment_mentioned_title": "Вы были упомянуты в комментарии к документу",
+  "document_liked": "{{actorLabel}} понравился ваш документ \"{{documentTitle}}\".",
+  "document_liked_title": "Кому-то понравился ваш документ",
   "email.footer.contactSupport": "Связаться с поддержкой",
   "email.footer.joinDiscord": "Присоединиться к Discord",
   "email.footer.manage": "Управление уведомлениями",

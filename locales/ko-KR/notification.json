@@ -40,6 +40,8 @@
   "document_comment_activity_title": "귀하의 문서에 대한 새 댓글",
   "document_comment_mentioned": "{{actorLabel}}님이 \"{{documentTitle}}\"의 댓글에서 귀하를 언급했습니다.",
   "document_comment_mentioned_title": "문서 댓글에서 귀하가 언급되었습니다",
+  "document_liked": "{{actorLabel}}님이 귀하의 문서 \"{{documentTitle}}\"을(를) 좋아합니다.",
+  "document_liked_title": "누군가 귀하의 문서를 좋아합니다",
   "email.footer.contactSupport": "지원팀에 문의하기",
   "email.footer.joinDiscord": "디스코드에 참여하기",
   "email.footer.manage": "알림 관리",

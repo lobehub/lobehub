@@ -40,6 +40,8 @@
   "document_comment_activity_title": "Нов коментар във вашия документ",
   "document_comment_mentioned": "{{actorLabel}} ви спомена в коментар на \"{{documentTitle}}\".",
   "document_comment_mentioned_title": "Бяхте споменати в коментар на документ",
+  "document_liked": "{{actorLabel}} хареса вашия документ „{{documentTitle}}“.",
+  "document_liked_title": "Някой хареса вашия документ",
   "email.footer.contactSupport": "Свържете се с поддръжката",
   "email.footer.joinDiscord": "Присъединете се към Discord",
   "email.footer.manage": "Управление на известията",

@@ -141,7 +141,7 @@ describe('ShellProcessManager', () => {
           return result;
         });
 
-        await vi.advanceTimersByTimeAsync(29_999);
+        await vi.advanceTimersByTimeAsync(59_999);
         expect(resolved).toBe(false);
 
         await vi.advanceTimersByTimeAsync(1);

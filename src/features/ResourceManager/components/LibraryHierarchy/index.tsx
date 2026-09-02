@@ -18,6 +18,7 @@ import { useTreeStore } from '@/store/tree';
 import AddButton from '../Header/AddButton';
 import { KnowledgeBaseListProvider } from '../KnowledgeBaseListProvider';
 import { HierarchyNode } from './HierarchyNode';
+import SearchResults from './SearchResults';
 import { resolveHierarchySelectedKey } from './selection';
 import TreeSkeleton from './TreeSkeleton';
 
@@ -31,9 +32,10 @@ interface VisibleNode {
 const LibraryHierarchy = memo(() => {
   const { t } = useTranslation('file');
   const { currentFolderSlug } = useFolderPath();
-  const [libraryId, currentViewItemId] = useResourceManagerStore((s) => [
+  const [libraryId, currentViewItemId, librarySearchQuery] = useResourceManagerStore((s) => [
     s.libraryId,
     s.currentViewItemId,
+    s.librarySearchQuery,
   ]);
 
   const children = useTreeStore((s) => s.children);
@@ -104,39 +106,48 @@ const LibraryHierarchy = memo(() => {
     </Center>
   );
 
+  // A typed query swaps the tree for flat, library-scoped results. The tree
+  // stays mounted underneath in store terms (children / expanded are untouched),
+  // so clearing the query brings the exact same tree back.
+  const hasSearchQuery = librarySearchQuery.trim().length > 0;
+
   return (
     <KnowledgeBaseListProvider>
-      <AsyncBoundary
-        data={hasData ? (children[''] ?? true) : undefined}
-        empty={emptyState}
-        error={rootError}
-        errorVariant={'block'}
-        isEmpty={isRootEmpty}
-        isLoading={isRootLoading}
-        loading={<TreeSkeleton />}
-        onRetry={() => loadChildren('')}
-      >
-        <Flexbox paddingInline={4} style={{ height: '100%' }}>
-          <VList
-            bufferSize={typeof window !== 'undefined' ? window.innerHeight : 0}
-            style={{ height: '100%' }}
-          >
-            {visibleNodes.map(({ item, key, level, parentKey }) => (
-              <div key={key} style={{ paddingBottom: 2 }}>
-                <HierarchyNode
-                  isExpanded={!!expanded[item.id]}
-                  isLoading={status[item.id] === 'loading'}
-                  item={item}
-                  level={level}
-                  parentKey={parentKey}
-                  selectedKey={selectedKey}
-                  onToggle={toggle}
-                />
-              </div>
-            ))}
-          </VList>
-        </Flexbox>
-      </AsyncBoundary>
+      {hasSearchQuery && libraryId ? (
+        <SearchResults libraryId={libraryId} query={librarySearchQuery} />
+      ) : (
+        <AsyncBoundary
+          data={hasData ? (children[''] ?? true) : undefined}
+          empty={emptyState}
+          error={rootError}
+          errorVariant={'block'}
+          isEmpty={isRootEmpty}
+          isLoading={isRootLoading}
+          loading={<TreeSkeleton />}
+          onRetry={() => loadChildren('')}
+        >
+          <Flexbox paddingInline={4} style={{ height: '100%' }}>
+            <VList
+              bufferSize={typeof window !== 'undefined' ? window.innerHeight : 0}
+              style={{ height: '100%' }}
+            >
+              {visibleNodes.map(({ item, key, level, parentKey }) => (
+                <div key={key} style={{ paddingBottom: 2 }}>
+                  <HierarchyNode
+                    isExpanded={!!expanded[item.id]}
+                    isLoading={status[item.id] === 'loading'}
+                    item={item}
+                    level={level}
+                    parentKey={parentKey}
+                    selectedKey={selectedKey}
+                    onToggle={toggle}
+                  />
+                </div>
+              ))}
+            </VList>
+          </Flexbox>
+        </AsyncBoundary>
+      )}
     </KnowledgeBaseListProvider>
   );
 });

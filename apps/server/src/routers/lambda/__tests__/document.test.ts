@@ -2,6 +2,7 @@
 import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { DOCUMENT_FOLDER_TYPE } from '@/database/schemas';
 import { TransferErrorCode } from '@/types/transferError';
 
 const mocks = vi.hoisted(() => ({
@@ -9,7 +10,9 @@ const mocks = vi.hoisted(() => ({
   assertCanPerformResourceAction: vi.fn(),
   businessFileTransferStorageCheck: vi.fn(),
   countFileUsageInSubtree: vi.fn(),
+  createDocument: vi.fn(),
   findById: vi.fn(),
+  findBySlug: vi.fn(),
   getAccessLevel: vi.fn(),
   getResourceMeta: vi.fn(),
   publishToWorkspace: vi.fn(),
@@ -29,6 +32,7 @@ vi.mock('@/database/models/document', async (importOriginal) => ({
   DocumentModel: vi.fn(() => ({
     countFileUsageInSubtree: mocks.countFileUsageInSubtree,
     findById: mocks.findById,
+    findBySlug: mocks.findBySlug,
     subtreeHasForeignRows: mocks.subtreeHasForeignRows,
     transferTo: mocks.transferTo,
   })),
@@ -44,6 +48,7 @@ vi.mock('@/database/models/resourcePermission', () => ({
 }));
 vi.mock('@/server/services/document', () => ({
   DocumentService: vi.fn(() => ({
+    createDocument: mocks.createDocument,
     publishToWorkspace: mocks.publishToWorkspace,
     updateDocument: mocks.updateDocument,
   })),
@@ -178,6 +183,158 @@ describe('documentRouter transferDocument', () => {
       parentId: 'old-parent',
       title: 'Renamed',
     });
+  });
+});
+
+describe('documentRouter createDocument under a knowledge-base folder', () => {
+  const caller = () =>
+    documentRouter.createCaller({
+      serverDB: {},
+      userId: 'member-1',
+      workspaceId: 'ws-1',
+      workspaceRole: 'member',
+    } as any);
+  const kbFolder = { fileType: DOCUMENT_FOLDER_TYPE, knowledgeBaseId: 'kb-1', metadata: null };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.assertCanPerformResourceAction.mockResolvedValue(undefined);
+    mocks.assertCanEditResource.mockResolvedValue(undefined);
+    mocks.findBySlug.mockResolvedValue(undefined);
+    // The parent folder was created by another member inside a public KB.
+    mocks.getResourceMeta.mockResolvedValue({
+      userId: 'creator-1',
+      visibility: 'public',
+      workspaceId: 'ws-1',
+    });
+    mocks.createDocument.mockResolvedValue({ id: 'docs_new', visibility: 'public' });
+  });
+
+  it('authorizes through the KB instead of the folder ACL for a KB-scoped parent', async () => {
+    mocks.findById.mockResolvedValue({ id: 'folder-1', ...kbFolder });
+
+    await caller().createDocument({ parentId: 'folder-1', title: 'Doc' });
+
+    // The KB browse permission is the authority — the folder's own (default
+    // `view`) document ACL must not be consulted, or every non-creator member
+    // gets locked out of the folder.
+    expect(mocks.assertCanEditResource).not.toHaveBeenCalled();
+    expect(mocks.assertCanPerformResourceAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'view',
+        resourceId: 'kb-1',
+        resourceType: 'knowledgeBase',
+      }),
+    );
+    expect(mocks.createDocument).toHaveBeenCalled();
+  });
+
+  it('reads the KB id from metadata for legacy folders without the column', async () => {
+    mocks.findById.mockResolvedValue({
+      fileType: DOCUMENT_FOLDER_TYPE,
+      id: 'folder-1',
+      knowledgeBaseId: null,
+      metadata: { knowledgeBaseId: 'kb-1' },
+    });
+
+    await caller().createDocument({ parentId: 'folder-1', title: 'Doc' });
+
+    expect(mocks.assertCanEditResource).not.toHaveBeenCalled();
+    expect(mocks.assertCanPerformResourceAction).toHaveBeenCalledWith(
+      expect.objectContaining({ resourceId: 'kb-1', resourceType: 'knowledgeBase' }),
+    );
+  });
+
+  it('still denies when the KB itself is not browsable (restricted KB)', async () => {
+    mocks.findById.mockResolvedValue({ id: 'folder-1', ...kbFolder });
+    mocks.assertCanPerformResourceAction.mockRejectedValueOnce(
+      new TRPCError({ code: 'FORBIDDEN' }),
+    );
+
+    await expect(
+      caller().createDocument({ parentId: 'folder-1', title: 'Doc' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(mocks.createDocument).not.toHaveBeenCalled();
+  });
+
+  it('keeps the folder document ACL check for a non-KB workspace parent', async () => {
+    mocks.findById.mockResolvedValue({
+      fileType: DOCUMENT_FOLDER_TYPE,
+      id: 'folder-1',
+      knowledgeBaseId: null,
+      metadata: null,
+    });
+
+    await caller().createDocument({ parentId: 'folder-1', title: 'Doc' });
+
+    expect(mocks.assertCanEditResource).toHaveBeenCalledWith(
+      expect.objectContaining({ resourceId: 'folder-1', resourceType: 'document' }),
+    );
+  });
+
+  it("keeps the document ACL for another member's KB page used as the parent", async () => {
+    // Pages inside a KB carry the same knowledgeBaseId as folders; only real
+    // folders may take the KB route, otherwise a view-only page's ACL is skipped.
+    mocks.findById.mockResolvedValue({
+      fileType: 'custom/document',
+      id: 'page-1',
+      knowledgeBaseId: 'kb-1',
+      metadata: null,
+    });
+    mocks.assertCanEditResource.mockRejectedValueOnce(new TRPCError({ code: 'FORBIDDEN' }));
+
+    await expect(
+      caller().createDocument({ parentId: 'page-1', title: 'Doc' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(mocks.assertCanEditResource).toHaveBeenCalledWith(
+      expect.objectContaining({ resourceId: 'page-1', resourceType: 'document' }),
+    );
+    expect(mocks.assertCanPerformResourceAction).not.toHaveBeenCalled();
+    expect(mocks.createDocument).not.toHaveBeenCalled();
+  });
+
+  it("keeps another member's private KB folder creator-only", async () => {
+    mocks.getResourceMeta.mockResolvedValue({
+      userId: 'creator-1',
+      visibility: 'private',
+      workspaceId: 'ws-1',
+    });
+    mocks.findById.mockResolvedValue({ id: 'folder-1', ...kbFolder });
+    mocks.assertCanEditResource.mockRejectedValueOnce(new TRPCError({ code: 'FORBIDDEN' }));
+
+    await expect(
+      caller().createDocument({ parentId: 'folder-1', title: 'Doc' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    // Private foreign parents never take the KB bypass.
+    expect(mocks.assertCanPerformResourceAction).not.toHaveBeenCalled();
+    expect(mocks.createDocument).not.toHaveBeenCalled();
+  });
+
+  it('authorizes a move into a KB folder through the KB as well', async () => {
+    mocks.findById.mockImplementation(async (id: string) =>
+      id === 'doc-1'
+        ? {
+            id: 'doc-1',
+            parentId: null,
+            userId: 'member-1',
+            visibility: 'public',
+            workspaceId: 'ws-1',
+          }
+        : { id, ...kbFolder },
+    );
+
+    await caller().updateDocument({ id: 'doc-1', parentId: 'kb-folder' });
+
+    // Only the document itself goes through the document edit guard; the
+    // destination folder is authorized through its KB.
+    expect(mocks.assertCanEditResource).toHaveBeenCalledTimes(1);
+    expect(mocks.assertCanEditResource).toHaveBeenCalledWith(
+      expect.objectContaining({ resourceId: 'doc-1' }),
+    );
+    expect(mocks.assertCanPerformResourceAction).toHaveBeenCalledWith(
+      expect.objectContaining({ resourceId: 'kb-1', resourceType: 'knowledgeBase' }),
+    );
+    expect(mocks.updateDocument).toHaveBeenCalled();
   });
 });
 

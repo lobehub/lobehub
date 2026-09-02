@@ -1,4 +1,5 @@
 import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
+import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import type { TaskListItem, TaskParticipant, TaskVerifyConfig } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -15,9 +16,11 @@ import type { LobeChatDatabase } from '@/database/type';
 import { assertAgentUsableBy } from '@/database/utils/agent-access';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { markSilentTRPCErrorLog } from '@/libs/trpc/utils/errorLogger';
 import { EditLockService } from '@/server/services/editLock';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
 import { TaskService } from '@/server/services/task';
+import { TaskIntentService } from '@/server/services/task/intent';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 import { TaskRunnerService } from '@/server/services/taskRunner';
 import { AcceptanceService } from '@/server/services/verify/acceptanceService';
@@ -37,6 +40,7 @@ const taskProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => 
       editLockService: new EditLockService(ctx.userId),
       taskLifecycle: new TaskLifecycleService(ctx.serverDB, ctx.userId, wsId),
       taskModel: new TaskModel(ctx.serverDB, ctx.userId, wsId),
+      taskIntentService: new TaskIntentService(ctx.serverDB, ctx.userId, wsId),
       taskService: new TaskService(ctx.serverDB, ctx.userId, wsId),
       taskTopicModel: new TaskTopicModel(ctx.serverDB, ctx.userId, wsId),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId),
@@ -230,6 +234,72 @@ async function resolveSafeParentTaskId(
 }
 
 export const taskRouter = router({
+  /**
+   * Read a composer draft and report what it means — a name, the outcome as
+   * understood, the questions that would change the deliverable, and whether
+   * it is really a standing goal. Returns a reading only; nothing is created.
+   */
+  analyzeIntent: taskProcedureWrite
+    .input(
+      z.object({
+        context: z.string().optional(),
+        instruction: z.string().min(1).max(20_000),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ctx.taskIntentService.analyze(input);
+      } catch (error) {
+        const errorType = (error as { errorType?: unknown } | null)?.errorType;
+        if (errorType === AgentRuntimeErrorType.InvalidProviderAPIKey) {
+          const trpcError = new TRPCError({
+            cause: error,
+            code: 'PRECONDITION_FAILED',
+            message: AgentRuntimeErrorType.InvalidProviderAPIKey,
+          });
+          // Runtime errors are plain payloads, so tRPC normalizes them into an
+          // Error cause; mark the cause the shared handler actually receives.
+          markSilentTRPCErrorLog(trpcError.cause);
+          throw trpcError;
+        }
+
+        throw error;
+      }
+    }),
+
+  /**
+   * Rewrite a confirmed draft into the brief that gets executed, folding in the
+   * answers the user just gave. Returns a brief only; nothing is created.
+   */
+  synthesizeInstruction: taskProcedureWrite
+    .input(
+      z.object({
+        answers: z
+          .array(z.object({ answer: z.string().min(1), question: z.string().min(1) }))
+          .max(3),
+        context: z.string().optional(),
+        instruction: z.string().min(1).max(20_000),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ctx.taskIntentService.synthesize(input);
+      } catch (error) {
+        const errorType = (error as { errorType?: unknown } | null)?.errorType;
+        if (errorType === AgentRuntimeErrorType.InvalidProviderAPIKey) {
+          const trpcError = new TRPCError({
+            cause: error,
+            code: 'PRECONDITION_FAILED',
+            message: AgentRuntimeErrorType.InvalidProviderAPIKey,
+          });
+          markSilentTRPCErrorLog(trpcError.cause);
+          throw trpcError;
+        }
+
+        throw error;
+      }
+    }),
+
   reorderSubtasks: taskProcedureWrite
     .input(
       z.object({

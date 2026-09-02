@@ -29,7 +29,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
  * package's `:hover` background rule without an `!important`.
  */
 const HEADER_STYLE = { background: 'transparent', margin: 0 } as const;
-const TRIGGER_STYLE = { padding: 0 } as const;
+/** `font: inherit` drops the trigger's built-in 500 weight so the summary row
+ *  reads as plain body text instead of a heading. */
+const TRIGGER_STYLE = { font: 'inherit', padding: 0 } as const;
 /** The stripped header has no padding of its own, so the expanded process would
  *  otherwise start flush against it. */
 const CONTENT_STYLE = { paddingBlockStart: 8 } as const;

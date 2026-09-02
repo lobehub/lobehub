@@ -40,6 +40,8 @@
   "document_comment_activity_title": "你的文档有新评论",
   "document_comment_mentioned": "{{actorLabel}} 在文档「{{documentTitle}}」的评论中提到了你。",
   "document_comment_mentioned_title": "你在文档评论中被提及",
+  "document_liked": "{{actorLabel}} 赞了你的文档「{{documentTitle}}」。",
+  "document_liked_title": "你的文档收到点赞",
   "email.footer.contactSupport": "联系支持",
   "email.footer.joinDiscord": "加入 Discord",
   "email.footer.manage": "管理通知",

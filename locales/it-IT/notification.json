@@ -40,6 +40,8 @@
   "document_comment_activity_title": "Nuovo commento sul tuo documento",
   "document_comment_mentioned": "{{actorLabel}} ti ha menzionato in un commento su \"{{documentTitle}}\".",
   "document_comment_mentioned_title": "Sei stato menzionato in un commento sul documento",
+  "document_liked": "{{actorLabel}} ha apprezzato il tuo documento \"{{documentTitle}}\".",
+  "document_liked_title": "Qualcuno ha apprezzato il tuo documento",
   "email.footer.contactSupport": "Contatta il supporto",
   "email.footer.joinDiscord": "Unisciti a Discord",
   "email.footer.manage": "Gestisci notifiche",

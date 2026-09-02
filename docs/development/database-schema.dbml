@@ -2539,22 +2539,29 @@ table project_knowledge_bases {
   }
 }
 
-table project_works {
+table project_working_directories {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   project_id text [not null]
-  work_id text [not null]
-  added_by_user_id text
+  device_id uuid
   workspace_id text
+  added_by_user_id text
+  path text [not null]
+  name varchar(255) [not null]
+  permission text [not null, default: 'readWrite']
+  is_primary boolean [not null, default: false]
   sort_order integer [not null, default: 0]
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    (project_id, work_id) [name: 'project_works_project_id_work_id_unique', unique]
-    (project_id, sort_order) [name: 'project_works_project_id_sort_order_idx']
-    work_id [name: 'project_works_work_id_idx']
-    workspace_id [name: 'project_works_workspace_id_idx']
+    (project_id, device_id, path) [name: 'project_working_directories_project_device_path_unique', unique]
+    project_id [name: 'project_working_directories_project_primary_unique', unique]
+    (project_id, sort_order) [name: 'project_working_directories_project_sort_order_idx']
+    device_id [name: 'project_working_directories_device_id_idx']
+    workspace_id [name: 'project_working_directories_workspace_id_idx']
+
+
   }
 }
 
@@ -2591,6 +2598,25 @@ table projects {
     (status, updated_at) [name: 'projects_status_updated_at_idx']
     coordinator_agent_id [name: 'projects_coordinator_agent_id_unique', unique]
     
+  }
+}
+
+table project_works {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  project_id text [not null]
+  work_id text [not null]
+  added_by_user_id text
+  workspace_id text
+  sort_order integer [not null, default: 0]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (project_id, work_id) [name: 'project_works_project_id_work_id_unique', unique]
+    (project_id, sort_order) [name: 'project_works_project_id_sort_order_idx']
+    work_id [name: 'project_works_work_id_idx']
+    workspace_id [name: 'project_works_workspace_id_idx']
   }
 }
 
@@ -3290,6 +3316,8 @@ table topics {
   editor_data jsonb
   agent_id text
   group_id text
+  project_id text
+  project_working_directory_id uuid
   user_id text [not null]
   client_id text
   description text
@@ -3323,6 +3351,8 @@ table topics {
     session_id [name: 'topics_session_id_idx']
     group_id [name: 'topics_group_id_idx']
     agent_id [name: 'topics_agent_id_idx']
+    project_id [name: 'topics_project_id_idx']
+    project_working_directory_id [name: 'topics_project_working_directory_id_idx']
     trigger [name: 'topics_trigger_idx']
     status [name: 'topics_status_idx']
     model [name: 'topics_model_idx']

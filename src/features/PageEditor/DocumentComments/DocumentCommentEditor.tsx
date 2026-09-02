@@ -96,10 +96,11 @@ const DocumentCommentEditor = memo<DocumentCommentEditorProps>(
           mentionOption={mentionOption}
           placeholder={placeholder}
           contentStyle={{
-            maxHeight: compact ? 120 : 184,
             minHeight: compact ? 24 : 44,
-            overflowY: 'auto',
-            padding: 0,
+            // On top of ChatInput's own 8px/12px body padding: keep content —
+            // images especially — clear of the box edges.
+            paddingBlock: '6px 10px',
+            paddingInline: 8,
           }}
           onContentChange={() => onChange?.(readTopicCommentEditorValue(editor))}
           onInit={handleInit}

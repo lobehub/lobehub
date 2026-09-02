@@ -568,8 +568,7 @@ node .agents/acceptance/scripts/park-request.cjs \
 
 Name the route's **own** query in the pattern (`aiProvider*` for the provider page).
 A broad `*trpc*` parks the shell's queries too and the route never mounts, which reads
-as a product hang. For the error state, prefer `agent-browser network route <pattern>
---abort` — an aborted request settles, so the boundary renders instead of hanging.
+as a product hang. For the error state, prefer `agent-browser network route <pattern> --abort` — an aborted request settles, so the boundary renders instead of hanging.
 
 #### `SWRConfig` reaches hooks below it, never the component that renders it
 
@@ -577,7 +576,7 @@ as a product hang. For the error state, prefer `agent-browser network route <pat
 gated independently and must keep their own Retry).
 
 **Doesn't work:** wrapping that page's own JSX in `<SWRConfig value={{ suspense: false }}>`.
-The page's hooks run in its component body, which is *above* the element it returns, so
+The page's hooks run in its component body, which is _above_ the element it returns, so
 they still read the subtree's config and the page keeps suspending. The symptom is a
 whole route thrown to the error boundary the first time one section's fetch fails.
 
@@ -1859,12 +1858,41 @@ unrelated dirty files, while the intended worktree change stays uncommitted. The
 only tell is an unexpected diffstat / parent commit; `push <branch>` then reports
 "Everything up-to-date" because the worktree branch ref never moved.
 
+The same reset has a second, harder-to-spot consequence: it also retargets
+`init-dev-env.sh dev`, so the dev server and its Vite serve the MAIN checkout while
+every health signal stays green — see `common-mistakes.md` L-S17.
+
 **Works:** in any worktree session, prefix every git/check command with an explicit
 `cd <worktree> &&`, and read the commit output's diffstat + `git log -1` parent
 before pushing. Recovery for a mistaken main-repo commit: `git reset --mixed HEAD~1`
 restores the user's branch and leaves their working tree as it was (verify against
 the session-start `gitStatus` snapshot); nothing needs force-pushing because the
 wrong-branch push was a no-op.
+
+#### Proving which prompt version the running server holds
+
+**Situation:** verifying a change to a prompt under `packages/prompts` — the assertion is
+about the model's behaviour, so the run is only meaningful if the server is executing the
+new prompt.
+
+**Doesn't work:** trusting the Vite HMR line (`page reload packages/prompts/src/...`).
+That is the client reloading; the Next server keeps the workspace package it started
+with, so it answers with the old prompt indefinitely. Reading the model's output and
+judging "this looks like the new behaviour" is circular — the whole point of the change
+is that the output should differ, so any difference confirms the hypothesis either way.
+
+**Works:** every traced generation records the version it ran. After one call, read it
+back:
+
+```bash
+docker exec lobehub-agent-testing-postgres psql -U postgres -d postgres -tAc \
+  "select prompt_version, model, created_at from llm_generation_tracing \
+   where scenario='<scenario>' order by created_at desc limit 1"
+```
+
+A stale version means the server needs a real process restart (PROJECT.md §6), not a
+reload. Gate the first evidence-bearing call on this row, not on the edit's timestamp —
+otherwise the round publishes new-prompt claims backed by old-prompt output.
 
 #### Server-side reads of local S3 evidence are blocked by SSRF protection — private IPs must be allowed explicitly
 

@@ -1,4 +1,5 @@
 import type {
+  GoalEdgeKind,
   GoalGraphDecision,
   GoalGraphSnapshot,
   GoalNodeKind,
@@ -21,7 +22,88 @@ const nodeIcon: Record<GoalNodeKind, string> = {
   problem: '◇',
   task: '▣',
 };
+/**
+ * Every edge kind reads `source <kind> target`, so a row listing its INCOMING
+ * edges by kind states the relationship backwards: an incoming `depends_on`
+ * means the other node depends on THIS one, not the reverse. Render the inverse
+ * verb instead, so each entry is a true sentence about the row it sits on.
+ */
+const inverseEdgeLabel: Record<GoalEdgeKind, string> = {
+  contradicts: 'contradicted by',
+  decomposes: 'part of',
+  depends_on: 'blocks',
+  investigates: 'investigated by',
+  leads_to: 'follows',
+  produces: 'produced by',
+  supports: 'supported by',
+};
+
 const terminalOutcomes = new Set(['achieved', 'waiting_human', 'no_progress', 'failed']);
+
+/** Backoff bounds for a transient `goal tick` failure. */
+const TICK_RETRY_BASE_MS = 1000;
+const TICK_RETRY_MAX_MS = 30_000;
+
+/**
+ * tRPC codes that are a verdict about the REQUEST, not about the trip to the
+ * server: retrying them just reproduces the same answer. Everything else —
+ * including a transport failure that never reached tRPC — is treated as a blip
+ * worth surviving, because `goal run` is meant to be left unattended for hours
+ * and a dropped socket must not end the run half-way.
+ */
+const fatalTickCodes = new Set([
+  'BAD_REQUEST',
+  'CONFLICT',
+  'FORBIDDEN',
+  'NOT_FOUND',
+  'PARSE_ERROR',
+  'UNAUTHORIZED',
+]);
+
+const trpcErrorCode = (error: unknown): string | undefined => {
+  const value = error as { data?: { code?: string }; shape?: { data?: { code?: string } } };
+  return value?.data?.code ?? value?.shape?.data?.code;
+};
+
+/**
+ * A transport-level failure (`fetch failed`, ECONNRESET, a 502 from a proxy)
+ * carries no tRPC envelope at all, so the ABSENCE of a code is the signal that
+ * the request never got a verdict. Erring towards retry keeps an unrecognised
+ * error shape from killing a multi-hour run.
+ */
+const isRetryableTickError = (error: unknown) => {
+  const code = trpcErrorCode(error);
+  return code === undefined || !fatalTickCodes.has(code);
+};
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Run one coordinator tick, riding out transient failures until `retryWindowMs`
+ * of CONSECUTIVE failure has elapsed. The window is wall-clock rather than an
+ * attempt count so a long outage is survivable without making the backoff
+ * pointlessly aggressive; each delay is also clamped to what's left of the
+ * window so the command never sleeps past its own budget (and so a tiny window
+ * stays fast instead of blocking on the first 1s backoff).
+ */
+const tickWithRetry = async <T>(
+  tick: () => Promise<T>,
+  retryWindowMs: number,
+  onRetry: (error: unknown, delayMs: number) => void,
+): Promise<T> => {
+  const deadline = Date.now() + retryWindowMs;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await tick();
+    } catch (error) {
+      const remaining = deadline - Date.now();
+      if (!isRetryableTickError(error) || remaining <= 0) throw error;
+      const delay = Math.min(TICK_RETRY_BASE_MS * 2 ** attempt, TICK_RETRY_MAX_MS, remaining);
+      onRetry(error, delay);
+      await sleep(delay);
+    }
+  }
+};
 
 interface GoalRunTickResult extends GoalTickResult {
   pollCount?: number;
@@ -45,20 +127,20 @@ function printGraph(graph: GoalGraphSnapshot) {
     incoming.set(edge.targetNodeId, list);
   }
   const rows = graph.nodes.map((node) => {
-    const dependencies = (incoming.get(node.id) ?? [])
-      .map((edge) => `${edge.kind}:${edge.sourceNodeId.slice(0, 8)}`)
+    const relations = (incoming.get(node.id) ?? [])
+      .map((edge) => `${inverseEdgeLabel[edge.kind] ?? edge.kind} ${edge.sourceNodeId.slice(0, 8)}`)
       .join(', ');
     return [
       `${nodeIcon[node.kind]} ${node.kind}`,
       node.status,
       truncate(node.title, 46),
       node.taskId ?? '-',
-      dependencies || '-',
+      relations || '-',
       node.id,
     ];
   });
   console.log();
-  printTable(rows, ['TYPE', 'STATUS', 'TITLE', 'TASK', 'INCOMING', 'NODE ID']);
+  printTable(rows, ['TYPE', 'STATUS', 'TITLE', 'TASK', 'RELATIONS', 'NODE ID']);
 }
 
 function printTick(result: GoalTickResult) {
@@ -209,39 +291,80 @@ export function registerGoalCommand(program: Command) {
   goal
     .command('run <id>')
     .description('Tick until the goal reaches a stop condition')
-    .option('--max-ticks <n>', 'Safety limit for this CLI invocation', '100')
+    .option(
+      '--max-ticks <n>',
+      'Safety limit on ADVANCING ticks; idle polls of an unchanged waiting state do not count',
+      '100',
+    )
     .option('--poll-ms <ms>', 'Delay while waiting for task execution', '3000')
+    .option(
+      '--retry-window-ms <ms>',
+      'Keep retrying a failing tick for this long before giving up (0 disables retry)',
+      '600000',
+    )
     .option('--json', 'Output tick results as JSON')
-    .action(async (id: string, options: { json?: boolean; maxTicks: string; pollMs: string }) => {
-      const client = await getTrpcClient();
-      const results: GoalRunTickResult[] = [];
-      const maxTicks = Number.parseInt(options.maxTicks, 10);
-      const pollMs = Number.parseInt(options.pollMs, 10);
-      for (let index = 0; index < maxTicks; index++) {
-        const { data } = await client.goal.tick.mutate({ id });
-        const previous = results.at(-1);
-        if (isSameWaitingState(previous, data)) {
-          previous.pollCount = (previous.pollCount ?? 1) + 1;
-          previous.waitedMs = (previous.waitedMs ?? pollMs) + pollMs;
-        } else {
-          results.push(
-            data.outcome === 'waiting_external'
-              ? { ...data, pollCount: 1, waitedMs: pollMs }
-              : data,
+    .action(
+      async (
+        id: string,
+        options: { json?: boolean; maxTicks: string; pollMs: string; retryWindowMs: string },
+      ) => {
+        const client = await getTrpcClient();
+        const results: GoalRunTickResult[] = [];
+        const maxTicks = Number.parseInt(options.maxTicks, 10);
+        const pollMs = Number.parseInt(options.pollMs, 10);
+        const retryWindowMs = Number.parseInt(options.retryWindowMs, 10);
+        // Only ticks that CHANGED something count against the budget. Polling an
+        // unchanged `waiting_external` state is the coordinator idling while a
+        // Work runs — a Work that legitimately takes an hour would otherwise
+        // burn the whole allowance on no-ops and stop a healthy goal half-way.
+        let advancingTicks = 0;
+        let exhaustedBudget = false;
+        for (;;) {
+          // Pinned explicitly: inferring `T` through the callback collapses the
+          // router's return type to `unknown` in the CLI's standalone
+          // type-check, which has no built `@lobechat/types` to resolve against.
+          const { data } = await tickWithRetry<{ data: GoalTickResult }>(
+            () => client.goal.tick.mutate({ id }),
+            retryWindowMs,
+            (error, delayMs) => {
+              if (options.json) return;
+              const message = error instanceof Error ? error.message : String(error);
+              log.warn(`Tick failed (${message}); retrying in ${delayMs}ms`);
+            },
           );
-          if (!options.json) printTick(data);
+          const previous = results.at(-1);
+          const isIdlePoll = isSameWaitingState(previous, data);
+          if (isIdlePoll) {
+            previous.pollCount = (previous.pollCount ?? 1) + 1;
+            previous.waitedMs = (previous.waitedMs ?? pollMs) + pollMs;
+          } else {
+            advancingTicks++;
+            results.push(
+              data.outcome === 'waiting_external'
+                ? { ...data, pollCount: 1, waitedMs: pollMs }
+                : data,
+            );
+            if (!options.json) printTick(data);
+          }
+          if (terminalOutcomes.has(data.outcome)) break;
+          if (!isIdlePoll && advancingTicks >= maxTicks) {
+            exhaustedBudget = true;
+            break;
+          }
+          if (data.outcome === 'waiting_external') await sleep(pollMs);
         }
-        if (terminalOutcomes.has(data.outcome)) break;
-        if (data.outcome === 'waiting_external') {
-          await new Promise((resolve) => setTimeout(resolve, pollMs));
+        if (options.json) outputJson(results);
+        if (exhaustedBudget) {
+          // A half-finished goal must not look like success to a wrapper script:
+          // the whole reason this branch exists is that the run still has work
+          // left, so leave a non-zero code behind for the caller to branch on.
+          process.exitCode = 1;
+          log.warn(
+            `Stopped after ${advancingTicks} advancing ticks (--max-ticks ${maxTicks}); the goal is unfinished. Resume with: lh goal run ${id}`,
+          );
         }
-      }
-      if (options.json) outputJson(results);
-      const last = results.at(-1);
-      if (last && !terminalOutcomes.has(last.outcome)) {
-        log.warn(`Stopped after ${maxTicks} ticks; rerun to continue.`);
-      }
-    });
+      },
+    );
 
   for (const action of ['pause', 'resume'] as const) {
     goal

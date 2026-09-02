@@ -40,6 +40,8 @@
   "document_comment_activity_title": "نظر جدید روی سند شما",
   "document_comment_mentioned": "{{actorLabel}} شما را در نظری روی \"{{documentTitle}}\" ذکر کرد.",
   "document_comment_mentioned_title": "شما در یک نظر سند ذکر شدید",
+  "document_liked": "{{actorLabel}} سند شما را با عنوان \"{{documentTitle}}\" پسندید.",
+  "document_liked_title": "کسی سند شما را پسندید",
   "email.footer.contactSupport": "تماس با پشتیبانی",
   "email.footer.joinDiscord": "به دیسکورد بپیوندید",
   "email.footer.manage": "مدیریت اعلان‌ها",

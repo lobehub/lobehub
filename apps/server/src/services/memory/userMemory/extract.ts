@@ -1410,7 +1410,7 @@ export class MemoryExtractionExecutor {
     tokenLimit?: number,
   ): Promise<UserMemoryHybridSearchAggregatedResult> {
     const db = await this.db;
-    const ftsSearchRepo = await createFtsSearchRepo({ db, userId });
+    const ftsSearchRepo = await createFtsSearchRepo({ db, userId, usage: 'memory_extraction' });
     const userMemoryModel = new UserMemoryModel(db, userId, ftsSearchRepo);
     // TODO: make topK configurable
     const topK = 10;

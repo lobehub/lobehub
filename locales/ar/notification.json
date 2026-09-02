@@ -40,6 +40,8 @@
   "document_comment_activity_title": "تعليق جديد على مستندك",
   "document_comment_mentioned": "{{actorLabel}} أشار إليك في تعليق على \"{{documentTitle}}\".",
   "document_comment_mentioned_title": "تم الإشارة إليك في تعليق على مستند",
+  "document_liked": "{{actorLabel}} أعجب بوثيقتك \"{{documentTitle}}\".",
+  "document_liked_title": "أحدهم أعجب بوثيقتك",
   "email.footer.contactSupport": "اتصل بالدعم",
   "email.footer.joinDiscord": "انضم إلى Discord",
   "email.footer.manage": "إدارة الإشعارات",

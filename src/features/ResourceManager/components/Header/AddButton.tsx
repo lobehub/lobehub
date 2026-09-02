@@ -12,7 +12,7 @@ import { Button, toast } from '@lobehub/ui/base-ui';
 import { Upload } from 'antd';
 import { FilePenLine, FileUp, FolderIcon, FolderUp, Link, Plus } from 'lucide-react';
 import { type ChangeEvent } from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useId, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useCurrentFolderId } from '@/features/ResourceManager/hooks/useCurrentFolderId';
@@ -45,8 +45,20 @@ const getAcceptedFileTypes = (category: FilesTabs): string | undefined => {
   }
 };
 
-const AddButton = () => {
+interface AddButtonProps {
+  /**
+   * Render a square icon-only trigger (sidebar toolbar) instead of the
+   * labelled primary button used in the Explorer header.
+   */
+  iconOnly?: boolean;
+}
+
+const AddButton = ({ iconOnly }: AddButtonProps = {}) => {
   const { t } = useTranslation('file');
+  // Several instances can be mounted at once (Explorer header, sidebar toolbar,
+  // empty state); a fixed id would make every "Upload folder" label open the
+  // first instance's input.
+  const folderUploadInputId = useId();
   const uploadFolderWithStructure = useFileStore((s) => s.uploadFolderWithStructure);
   const createResourceAndSync = useFileStore((s) => s.createResourceAndSync);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -119,7 +131,7 @@ const AddButton = () => {
       );
 
       // Generate unique folder name
-      const baseName = 'Untitled';
+      const baseName = t('pageList.untitled');
       const existingNames = new Set(foldersAtSameLevel.map((folder) => folder.name));
 
       let uniqueName = baseName;
@@ -221,7 +233,7 @@ const AddButton = () => {
         closeOnClick: false,
         icon: <Icon icon={FolderUp} />,
         key: 'upload-folder',
-        label: <label htmlFor="folder-upload-input">{t('header.actions.uploadFolder')}</label>,
+        label: <label htmlFor={folderUploadInputId}>{t('header.actions.uploadFolder')}</label>,
       },
       {
         type: 'divider',
@@ -243,6 +255,7 @@ const AddButton = () => {
     ],
     [
       category,
+      folderUploadInputId,
       handleCreateFolder,
       handleOpenPageEditor,
       handleOpenNotionGuide,
@@ -264,14 +277,24 @@ const AddButton = () => {
             setMenuOpen(open);
           }}
         >
-          <Button data-no-highlight disabled={!canCreate} icon={Plus} type="primary">
-            {t('addLibrary')}
-          </Button>
+          {iconOnly ? (
+            <Button
+              data-no-highlight
+              aria-label={t('addLibrary')}
+              disabled={!canCreate}
+              icon={Plus}
+              title={canCreate ? t('addLibrary') : undefined}
+            />
+          ) : (
+            <Button data-no-highlight disabled={!canCreate} icon={Plus} type="primary">
+              {t('addLibrary')}
+            </Button>
+          )}
         </DropdownMenu>
       </Tooltip>
       <input
         multiple
-        id="folder-upload-input"
+        id={folderUploadInputId}
         style={{ display: 'none' }}
         type="file"
         // @ts-expect-error - webkitdirectory is not in the React types

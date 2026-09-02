@@ -1,6 +1,7 @@
 import { Command } from 'commander';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { log } from '../utils/logger';
 import { registerGoalCommand } from './goal';
 
 const { mockClient } = vi.hoisted(() => ({
@@ -87,6 +88,96 @@ describe('goal run command', () => {
   });
 });
 
+describe('goal run resilience', () => {
+  let previousExitCode: number | string | undefined;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    previousExitCode = process.exitCode;
+  });
+
+  afterEach(() => {
+    process.exitCode = previousExitCode;
+  });
+
+  const achieved = { goalId: 'goal-1', message: 'Goal achieved', outcome: 'achieved' };
+  // A tRPC rejection carries its verdict on `error.data.code`; a transport
+  // failure (`fetch failed`) has no such envelope at all.
+  const trpcError = (code: string) =>
+    Object.assign(new Error(`${code} from server`), { data: { code } });
+
+  const run = (...args: string[]) =>
+    createProgram().parseAsync(['node', 'test', 'goal', 'run', 'goal-1', ...args]);
+
+  const loggedOutput = () =>
+    vi
+      .mocked(console.log)
+      .mock.calls.map(([value]) => String(value))
+      .join('\n');
+
+  it('rides out a transient tick failure instead of ending the run', async () => {
+    // A single `fetch failed` used to abort the whole loop and leave the goal
+    // stranded mid-flight, which is what forced an external supervisor script.
+    mockClient.goal.tick.mutate
+      .mockRejectedValueOnce(new Error('fetch failed'))
+      .mockResolvedValueOnce({ data: achieved });
+
+    await run('--poll-ms', '0', '--retry-window-ms', '20');
+
+    expect(mockClient.goal.tick.mutate).toHaveBeenCalledTimes(2);
+    expect(loggedOutput()).toContain('Goal achieved');
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it('does not retry a verdict about the request itself', async () => {
+    mockClient.goal.tick.mutate.mockRejectedValue(trpcError('NOT_FOUND'));
+
+    await expect(run('--poll-ms', '0', '--retry-window-ms', '5000')).rejects.toThrow('NOT_FOUND');
+
+    expect(mockClient.goal.tick.mutate).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives up once the retry window is spent', async () => {
+    mockClient.goal.tick.mutate.mockRejectedValue(new Error('fetch failed'));
+
+    await expect(run('--poll-ms', '0', '--retry-window-ms', '20')).rejects.toThrow('fetch failed');
+
+    expect(mockClient.goal.tick.mutate.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it('spends the tick budget on progress, not on idle polls', async () => {
+    // Three unchanged `waiting_external` polls sit between two advancing ticks.
+    // The budget of 2 must cover only the advancing pair — counting the polls
+    // stopped healthy goals whose Work simply took a while to finish.
+    mockClient.goal.tick.mutate
+      .mockResolvedValueOnce({ data: waitingResult })
+      .mockResolvedValueOnce({ data: waitingResult })
+      .mockResolvedValueOnce({ data: waitingResult })
+      .mockResolvedValueOnce({ data: waitingResult })
+      .mockResolvedValueOnce({ data: achieved });
+
+    await run('--poll-ms', '0', '--max-ticks', '2');
+
+    expect(mockClient.goal.tick.mutate).toHaveBeenCalledTimes(5);
+    expect(loggedOutput()).toContain('Goal achieved');
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it('reports an unfinished goal with a non-zero exit code', async () => {
+    // Each tick advances to a different task, so every one spends budget.
+    mockClient.goal.tick.mutate.mockImplementation(async () => ({
+      data: { ...waitingResult, taskId: `task-${mockClient.goal.tick.mutate.mock.calls.length}` },
+    }));
+
+    await run('--poll-ms', '0', '--max-ticks', '2');
+
+    expect(mockClient.goal.tick.mutate).toHaveBeenCalledTimes(2);
+    expect(process.exitCode).toBe(1);
+    expect(vi.mocked(log.warn)).toHaveBeenCalledWith(expect.stringContaining('unfinished'));
+  });
+});
+
 describe('goal show command', () => {
   const node = (kind: string, title: string) => ({
     createdAt: new Date(0),
@@ -144,6 +235,50 @@ describe('goal show command', () => {
     expect(output).toContain('● finding');
     expect(output).toContain('◆ decision');
     expect(output).not.toContain('undefined');
+  });
+
+  it("states an incoming edge from the row owner's side, not the source's", async () => {
+    // Edges read `source <kind> target`, so listing an INCOMING `depends_on` as
+    // `depends_on:<source>` claimed the exact opposite of the graph: it made the
+    // framework node look like it depended on the node that depends on IT, so a
+    // correct plan read as a reversed one.
+    mockClient.goal.graph.query.mockResolvedValue({
+      data: {
+        decisions: [],
+        edges: [
+          {
+            goalId: 'goal-1',
+            id: 'e1',
+            kind: 'decomposes',
+            sourceNodeId: 'problem-node-id',
+            targetNodeId: 'task-node-id',
+          },
+          {
+            goalId: 'goal-1',
+            id: 'e2',
+            kind: 'depends_on',
+            sourceNodeId: 'finding-node-id',
+            targetNodeId: 'task-node-id',
+          },
+        ],
+        events: [],
+        goal: { id: 'goal-1', requirement: null, status: 'review', title: 'Three quotes' },
+        nodes: [
+          node('problem', 'Collect three quotes'),
+          node('task', 'Build the harness'),
+          node('finding', 'Downstream work'),
+        ],
+        workVersions: [],
+      },
+    });
+
+    const output = await render();
+
+    expect(output).toContain('RELATIONS');
+    // The task is part of the problem, and it BLOCKS the node that depends on it.
+    expect(output).toContain('part of problem-');
+    expect(output).toContain('blocks finding-');
+    expect(output).not.toContain('depends_on');
   });
 
   it('still shows the responsible task id next to its node', async () => {
