@@ -62,6 +62,126 @@ describe('Anthropic generateObject', () => {
     expect(requestParams.messages).toEqual([{ content: 'Generate data', role: 'user' }]);
   });
 
+  it('should use auto tool_choice and strict schema tools on Fable 5.1', async () => {
+    const { requestParams } = await buildAnthropicGenerateObjectRequest({
+      messages: [{ content: 'Generate a person object', role: 'user' as const }],
+      model: 'claude-fable-5-1',
+      schema: {
+        description: 'Extract person information',
+        name: 'person_extractor',
+        schema: {
+          properties: { age: { type: 'number' }, name: { type: 'string' } },
+          required: ['name', 'age'],
+          type: 'object' as const,
+        },
+      },
+    } as any);
+
+    expect(requestParams.tool_choice).toEqual({ type: 'auto' });
+    expect(requestParams.tools).toEqual([
+      expect.objectContaining({
+        name: 'person_extractor',
+        strict: true,
+      }),
+    ]);
+  });
+
+  it('should key the Fable 5.1 tool_choice guard on config.requestModel', async () => {
+    const { requestParams } = await buildAnthropicGenerateObjectRequest(
+      {
+        messages: [{ content: 'Generate a person object', role: 'user' as const }],
+        model: 'my-custom-router-model',
+        schema: {
+          name: 'person_extractor',
+          schema: { properties: { name: { type: 'string' } }, type: 'object' as const },
+        },
+      } as any,
+      { requestModel: 'global.anthropic.claude-fable-5-1' },
+    );
+
+    expect(requestParams.tool_choice).toEqual({ type: 'auto' });
+  });
+
+  it('should keep forced tool_choice on Fable 5', async () => {
+    const { requestParams } = await buildAnthropicGenerateObjectRequest({
+      messages: [{ content: 'Generate a person object', role: 'user' as const }],
+      model: 'claude-fable-5',
+      schema: {
+        name: 'person_extractor',
+        schema: { properties: { name: { type: 'string' } }, type: 'object' as const },
+      },
+    } as any);
+
+    expect(requestParams.tool_choice).toEqual({
+      name: 'person_extractor',
+      type: 'tool',
+    });
+  });
+
+  it('should use auto tool_choice for tools mode on Fable 5.1', async () => {
+    const { requestParams } = await buildAnthropicGenerateObjectRequest({
+      messages: [{ content: 'Call a tool', role: 'user' as const }],
+      model: 'claude-fable-5-1',
+      tools: [
+        {
+          function: {
+            description: 'Get weather information',
+            name: 'get_weather',
+            parameters: {
+              properties: { city: { type: 'string' } },
+              required: ['city'],
+              type: 'object' as const,
+            },
+          },
+          type: 'function' as const,
+        },
+      ],
+    } as any);
+
+    expect(requestParams.tool_choice).toEqual({ type: 'auto' });
+  });
+
+  it('should still use auto tool_choice when the request model is an opaque mapped id', async () => {
+    const { requestParams } = await buildAnthropicGenerateObjectRequest(
+      {
+        messages: [{ content: 'Generate', role: 'user' as const }],
+        model: 'claude-fable-5-1',
+        schema: {
+          name: 'result',
+          schema: {
+            additionalProperties: false,
+            properties: { title: { type: 'string' } },
+            required: ['title'],
+            type: 'object' as const,
+          },
+        },
+      } as any,
+      { requestModel: 'custom-deployment-id' },
+    );
+
+    expect(requestParams.tool_choice).toEqual({ type: 'auto' });
+    expect((requestParams.tools?.[0] as any).strict).toBe(true);
+  });
+
+  it('should respect an explicit strict: false opt-out on Fable 5.1', async () => {
+    const { requestParams } = await buildAnthropicGenerateObjectRequest({
+      messages: [{ content: 'Generate', role: 'user' as const }],
+      model: 'claude-fable-5-1',
+      schema: {
+        name: 'verdict',
+        schema: {
+          properties: { claim: { type: 'string' }, suggestion: { type: 'string' } },
+          required: ['claim'],
+          type: 'object' as const,
+        },
+        strict: false,
+      },
+    } as any);
+
+    expect(requestParams.tool_choice).toEqual({ type: 'auto' });
+    expect((requestParams.tools?.[0] as any).strict).toBe(false);
+  });
+
   describe('use struct output schema', () => {
     it('should return structured data on successful API call', async () => {
       const mockClient = {

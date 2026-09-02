@@ -28,14 +28,16 @@ import type {
   CreateTodosParams,
   UpdatePlanParams,
   UpdateTodosParams,
+  VentParams,
+  VentState,
 } from '../../types';
-import { LobeAgentApiName } from '../../types';
+import { LobeAgentApiName, VENT_CATEGORIES, VENT_SEVERITIES } from '../../types';
 import {
   type PlanDocument,
   PlanExecutionRuntime,
   type PlanRuntimeContext,
   type PlanRuntimeService,
-} from './PlanRuntime';
+} from '../../PlanRuntime';
 import { getTodosFromContext } from './planTodoHelper';
 import { resolveClientMediaPayloadItems } from './resolveMediaUris';
 
@@ -181,6 +183,48 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
 
   clearTodos = (params: ClearTodosParams, ctx: BuiltinToolContext): Promise<BuiltinToolResult> =>
     this.planRuntime.clearTodos(params, toPlanRuntimeContext(ctx));
+
+  // ==================== Vent ====================
+
+  /**
+   * Privately flag platform friction. The report's durable record is the
+   * persisted tool-call message itself; this just validates the input and
+   * surfaces a settled state for the inspector.
+   */
+  vent = async (params: VentParams, ctx: BuiltinToolContext): Promise<BuiltinToolResult> => {
+    if (!VENT_CATEGORIES.includes(params?.category)) {
+      const message = 'vent requires a valid category.';
+      return {
+        content: message,
+        error: { message, type: 'InvalidArguments' },
+        state: { recorded: false, reason: 'invalid_category' } satisfies VentState,
+        success: false,
+      };
+    }
+
+    if (!VENT_SEVERITIES.includes(params?.severity)) {
+      const message = 'vent requires a valid severity.';
+      return {
+        content: message,
+        error: { message, type: 'InvalidArguments' },
+        state: { recorded: false, reason: 'invalid_severity' } satisfies VentState,
+        success: false,
+      };
+    }
+
+    const ventId = ctx.toolCallId ? `vent:${ctx.toolCallId}` : null;
+
+    return {
+      content: 'Flagged platform friction for the builders.',
+      state: {
+        category: params.category,
+        recorded: true,
+        severity: params.severity,
+        ventId,
+      } satisfies VentState,
+      success: true,
+    };
+  };
 
   // ==================== Media Analysis ====================
 

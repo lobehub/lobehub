@@ -89,6 +89,8 @@ export interface GoalCriterionDraft {
 
 export interface CreateGoalParams {
   criteria: GoalCriterionDraft[];
+  /** ISO-8601 calendar-time budget; past it the coordinator stops dispatching. */
+  deadline?: string | null;
   instruction: string;
   maxIterations?: number | null;
   maxTotalCost?: number | null;

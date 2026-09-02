@@ -15,6 +15,7 @@ import type {
   ElasticsearchFtsSearchErrorCode,
   ElasticsearchFtsSearchRequestResult,
   ElasticsearchFtsSearchTraceContext,
+  FtsSearchUsage,
 } from './observability';
 import { recordElasticsearchFtsSearchRequest } from './observability';
 
@@ -113,6 +114,7 @@ export interface ElasticsearchFtsSearchHttpClientOptions {
   apiKey: string;
   requestTimeoutMs?: number;
   url: string;
+  usage?: FtsSearchUsage;
 }
 
 export interface ElasticsearchFtsSearchSyncIndexIdentity {
@@ -237,11 +239,18 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
   private readonly apiKey: string;
   private readonly requestTimeoutMs: number;
   private readonly url: URL;
+  private readonly usage: FtsSearchUsage;
 
-  constructor({ apiKey, requestTimeoutMs = 10_000, url }: ElasticsearchFtsSearchHttpClientOptions) {
+  constructor({
+    apiKey,
+    requestTimeoutMs = 10_000,
+    url,
+    usage = 'unattributed',
+  }: ElasticsearchFtsSearchHttpClientOptions) {
     this.apiKey = apiKey;
     this.requestTimeoutMs = requestTimeoutMs;
     this.url = parseElasticsearchUrl(url);
+    this.usage = usage;
   }
 
   /** Fails closed unless every incremental destination is a writable alias with tombstone support. */
@@ -496,6 +505,7 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
       'fts.search.elasticsearch.query_field_count': input.queryFieldCount,
       'fts.search.elasticsearch.query_truncated': input.truncated,
       'fts.search.elasticsearch.trace_context': traceContext,
+      'fts.search.elasticsearch.usage': this.usage,
     });
     const record = (
       result: ElasticsearchFtsSearchRequestResult,
@@ -520,6 +530,7 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
         serverTookMs,
         traceContext,
         truncated: input.truncated,
+        usage: this.usage,
       });
     };
     const logFailure = (errorCode: ElasticsearchFtsSearchErrorCode, status?: number) => {
@@ -538,6 +549,7 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
         traceContext,
         traceId,
         truncated: input.truncated,
+        usage: this.usage,
       });
     };
 

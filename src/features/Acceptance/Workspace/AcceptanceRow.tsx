@@ -1,9 +1,9 @@
 'use client';
 
 import type { AcceptanceStatus } from '@lobechat/types';
-import { Icon } from '@lobehub/ui';
+import { Center, Flexbox, Icon } from '@lobehub/ui';
 import type { DropdownItem } from '@lobehub/ui/base-ui';
-import { ActionIcon, confirmModal, DropdownMenu, toast } from '@lobehub/ui/base-ui';
+import { ActionIcon, Checkbox, confirmModal, DropdownMenu, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import {
@@ -21,10 +21,11 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { memo, useRef, useState } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
+import { openRenameModal } from '@/components/RenameModal';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { mutate as globalMutate } from '@/libs/swr';
 import { verifyKeys } from '@/libs/swr/keys';
@@ -36,34 +37,19 @@ import { openMergeAcceptanceModal } from './MergeAcceptanceModal';
 import { useAcceptanceProjectMenuItem } from './useAcceptanceProjectMenuItem';
 
 const styles = createStaticStyles(({ css }) => ({
-  editRow: css`
-    padding-block: 4px;
-    padding-inline: 4px;
+  itemProject: css`
+    overflow: hidden;
+
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
   itemTime: css`
     flex: none;
     padding-inline-start: 8px;
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
-  `,
-  itemTitleInput: css`
-    width: 100%;
-    min-width: 0;
-    height: 24px;
-    padding-inline: 6px;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: 4px;
-
-    font-size: 13px;
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorBgContainer};
-    outline: none;
-
-    &:focus {
-      border-color: ${cssVar.colorPrimary};
-      box-shadow: 0 0 0 2px ${cssVar.colorPrimaryBg};
-    }
   `,
   spin: css`
     animation: acceptance-spin 1.1s linear infinite;
@@ -118,60 +104,56 @@ const AcceptanceRow = memo<{
   active: boolean;
   item: AcceptanceListItem;
   onChanged: () => Promise<unknown> | unknown;
-}>(({ active, item, onChanged }) => {
+  /**
+   * Show the row's project on a second line. Set by every grouping mode EXCEPT
+   * "by project", where the bucket header already names it and a second line
+   * would only repeat the header.
+   */
+  showProject?: boolean;
+  /** Multi-select is running: the row picks instead of navigating. */
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
+}>(({ active, item, onChanged, onToggleSelect, selectable, selected, showProject }) => {
   const { t } = useTranslation('verify');
   const navigate = useNavigate();
-  const [editing, setEditing] = useState(false);
   const [mutating, setMutating] = useState(false);
-  const isSavingRef = useRef(false);
 
   const glyph = glyphOf(item.status as AcceptanceStatus);
   const meta = glyphMeta[glyph];
   const title = item.subject.title || item.subjectId;
-  const [draftTitle, setDraftTitle] = useState(title);
 
   const refresh = () =>
     Promise.all([onChanged(), globalMutate(verifyKeys.acceptanceBundle(item.id))]);
 
-  const startRename = () => {
-    setDraftTitle(title);
-    setEditing(true);
-  };
-
-  const cancelRename = () => {
-    if (isSavingRef.current) return;
-    setDraftTitle(title);
-    setEditing(false);
-  };
-
-  const commitRename = async () => {
-    if (isSavingRef.current) return;
-    const next = draftTitle.trim();
-    if (!next) {
-      toast.error(t('acceptance.workspace.renameEmpty'));
-      setDraftTitle(title);
-      setEditing(false);
-      return;
-    }
-    if (next === title) {
-      setEditing(false);
-      return;
-    }
-    isSavingRef.current = true;
-    setMutating(true);
-    try {
-      await verifyService.renameAcceptance(item.id, next);
-      await refresh();
-      toast.success(t('acceptance.workspace.renameSuccess'));
-      setEditing(false);
-    } catch (error) {
-      console.error('[acceptance:rename]', error);
-      toast.error(t('acceptance.workspace.renameError'));
-    } finally {
-      isSavingRef.current = false;
-      setMutating(false);
-    }
-  };
+  /**
+   * The shared rename dialog, same as a topic's. An in-place input inside a
+   * narrow panel gave a long delivery title a ~200px editing window with no
+   * room to see what was being edited; the modal is also where the note about
+   * what a rename does and does not touch can actually be read.
+   */
+  const startRename = () =>
+    openRenameModal({
+      defaultValue: title,
+      description: t('acceptance.workspace.renameModal.description'),
+      title: t('acceptance.workspace.actions.rename'),
+      onSave: async (next) => {
+        setMutating(true);
+        try {
+          await verifyService.renameAcceptance(item.id, next);
+          await refresh();
+          toast.success(t('acceptance.workspace.renameSuccess'));
+        } catch (error) {
+          console.error('[acceptance:rename]', error);
+          toast.error(t('acceptance.workspace.renameError'));
+          // Re-throw: the shared modal closes on a RESOLVED save, which would
+          // discard the title the user just typed and leave no way to retry.
+          throw error;
+        } finally {
+          setMutating(false);
+        }
+      },
+    });
 
   const changeStatus = async (status: 'accepted' | 'closed' | 'delivered' | 'rejected') => {
     setMutating(true);
@@ -291,7 +273,21 @@ const AcceptanceRow = memo<{
     };
   });
 
+  // Deciding the delivery is what this menu is FOR — status leads, then the
+  // filing actions, then the destructive one behind its own divider. Buried
+  // under rename/move/merge it read as an afterthought of housekeeping.
   const menuItems: DropdownItem[] = [
+    ...(statusItems.length > 0
+      ? [
+          {
+            children: statusItems,
+            icon: <Icon icon={CircleDashed} />,
+            key: 'status',
+            label: t('acceptance.workspace.actions.status'),
+          },
+          { type: 'divider' as const },
+        ]
+      : []),
     {
       icon: <Icon icon={Pencil} />,
       key: 'rename',
@@ -305,17 +301,7 @@ const AcceptanceRow = memo<{
       label: t('acceptance.workspace.actions.merge'),
       onClick: mergeIntoAcceptance,
     },
-    ...(statusItems.length > 0
-      ? [
-          {
-            children: statusItems,
-            icon: <Icon icon={CircleDashed} />,
-            key: 'status',
-            label: t('acceptance.workspace.actions.status'),
-          },
-          { type: 'divider' as const },
-        ]
-      : []),
+    { type: 'divider' as const },
     {
       danger: true,
       icon: <Icon icon={Trash2} />,
@@ -325,65 +311,80 @@ const AcceptanceRow = memo<{
     },
   ];
 
-  if (editing) {
-    return (
-      <div className={styles.editRow}>
-        <input
-          autoFocus
-          className={styles.itemTitleInput}
-          value={draftTitle}
-          onBlur={() => void commitRename()}
-          onChange={(event) => setDraftTitle(event.target.value)}
-          onFocus={(event) => event.currentTarget.select()}
-          onKeyDown={(event) => {
-            event.stopPropagation();
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              void commitRename();
-            }
-            if (event.key === 'Escape') {
-              event.preventDefault();
-              cancelRename();
-            }
-          }}
-        />
-      </div>
-    );
-  }
+  const statusGlyph = (
+    <Icon
+      className={SPINNING_GLYPHS.has(glyph) ? styles.spin : undefined}
+      icon={meta.icon}
+      size={16}
+      style={{ color: meta.color }}
+    />
+  );
 
+  // While selecting, the row PICKS instead of navigating:
+  // - `active` carries the ticked state — navigation is off, so no row can be
+  //   "the open one" for the duration;
+  // - the checkbox takes the leading slot and the status glyph moves next to
+  //   the timestamp, so a status sweep still sees what it is sweeping without
+  //   the row growing a second line;
+  // - the row's own menu steps aside — the batch bar owns what happens to a
+  //   selection, and one delete path per surface is enough.
   return (
     <NavItem
-      active={active}
+      active={selectable ? selected : active}
+      icon={selectable ? undefined : statusGlyph}
       key={item.id}
       style={mutating ? { opacity: 0.62, pointerEvents: 'none' } : undefined}
       title={title}
       titleColor={cssVar.colorText}
+      // Only where the grouping does not already say it, and only when the row
+      // actually has one — stamping "ungrouped" on every other row would cost a
+      // line of height to say nothing.
       actions={
-        <DropdownMenu
-          iconSpaceMode={'group'}
-          items={menuItems}
-          placement={'bottomRight'}
-          popupProps={{ style: { minWidth: 160 } }}
-        >
-          <ActionIcon
-            icon={MoreHorizontal}
-            size={'small'}
-            title={t('acceptance.workspace.actions.more')}
-          />
-        </DropdownMenu>
+        selectable ? undefined : (
+          <DropdownMenu
+            iconSpaceMode={'group'}
+            items={menuItems}
+            placement={'bottomRight'}
+            popupProps={{ style: { minWidth: 160 } }}
+          >
+            <ActionIcon
+              icon={MoreHorizontal}
+              size={'small'}
+              title={t('acceptance.workspace.actions.more')}
+            />
+          </DropdownMenu>
+        )
+      }
+      description={
+        showProject && item.project ? (
+          <span className={styles.itemProject}>{item.project.name}</span>
+        ) : undefined
       }
       extra={
-        <span className={styles.itemTime}>{relativeTime(item.updatedAt ?? item.createdAt)}</span>
+        <Flexbox horizontal align={'center'} gap={6}>
+          {selectable && statusGlyph}
+          <span className={styles.itemTime}>{relativeTime(item.updatedAt ?? item.createdAt)}</span>
+        </Flexbox>
       }
-      icon={
-        <Icon
-          className={SPINNING_GLYPHS.has(glyph) ? styles.spin : undefined}
-          icon={meta.icon}
-          size={16}
-          style={{ color: meta.color }}
-        />
+      slots={
+        selectable
+          ? {
+              iconPostfix: (
+                <Center
+                  flex={'none'}
+                  height={showProject && item.project ? 22 : undefined}
+                  style={showProject && item.project ? { alignSelf: 'flex-start' } : undefined}
+                  width={28}
+                >
+                  {/* Read-only on purpose: the whole row is the hit target, so
+                      the box reflects the state rather than owning it. */}
+                  <Checkbox readOnly checked={selected} />
+                </Center>
+              ),
+            }
+          : undefined
       }
-      onClick={() => navigate(`/acceptance/${item.id}`)}
+      onClick={() => (selectable ? onToggleSelect?.() : navigate(`/acceptance/${item.id}`))}
     />
   );
 });

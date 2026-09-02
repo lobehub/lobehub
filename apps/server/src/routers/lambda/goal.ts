@@ -113,6 +113,12 @@ export const goalRouter = router({
                 operationLeaseTimeoutMs: z.number().int().min(60_000).optional(),
               })
               .optional(),
+            schedule: z
+              .object({
+                /** ISO-8601 instant; past it the coordinator stops dispatching. */
+                deadline: z.string().datetime().nullable().optional(),
+              })
+              .optional(),
           })
           .optional(),
         maxRounds: z.number().int().positive().optional(),
@@ -269,6 +275,8 @@ export const goalRouter = router({
   setBudget: goalWriteProcedure
     .input(
       idInput.extend({
+        /** ISO-8601 calendar-time budget; null clears the deadline. */
+        deadline: z.string().datetime().nullable().optional(),
         maxRounds: z.number().int().positive().nullable().optional(),
         maxTotalCost: z.number().positive().nullable().optional(),
       }),
@@ -297,4 +305,14 @@ export const goalRouter = router({
       mapGoalError(error, 'tick');
     }
   }),
+
+  updateRequirement: goalWriteProcedure
+    .input(idInput.extend({ requirement: z.string().min(1) }))
+    .mutation(async ({ ctx, input: { id, requirement } }) => {
+      try {
+        return { data: await ctx.goalService.updateRequirement(id, requirement), success: true };
+      } catch (error) {
+        mapGoalError(error, 'updateRequirement');
+      }
+    }),
 });

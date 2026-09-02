@@ -7,7 +7,7 @@ import { createStaticStyles, cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { shinyTextStyles } from '@/styles';
+import { shinyGroupStyles, shinyTextStyles } from '@/styles';
 
 import type { GetAgentInfoParams } from '../../../types';
 
@@ -42,8 +42,10 @@ export const GetAgentInfoInspector = memo<
   // Initial streaming state
   if (isArgumentsStreaming && !agentId) {
     return (
-      <div className={cx(styles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-group-agent-builder.apiName.getAgentInfo')}</span>
+      <div className={styles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-group-agent-builder.apiName.getAgentInfo')}
+        </span>
       </div>
     );
   }
@@ -52,14 +54,21 @@ export const GetAgentInfoInspector = memo<
     <Flexbox
       horizontal
       align={'center'}
-      className={cx(styles.root, (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}
+      className={cx(styles.root, shinyGroupStyles.shinyGroup)}
       gap={8}
     >
-      <span className={styles.title}>
+      <span
+        className={cx(
+          styles.title,
+          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
+        )}
+      >
         {t('builtins.lobe-group-agent-builder.apiName.getAgentInfo')}:
       </span>
       {avatar && <Avatar avatar={avatar} shape={'square'} size={20} title={title || undefined} />}
-      <span>{title || agentId}</span>
+      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+        {title || agentId}
+      </span>
     </Flexbox>
   );
 });

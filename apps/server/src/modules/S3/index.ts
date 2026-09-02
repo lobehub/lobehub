@@ -1,10 +1,15 @@
 import {
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
+  CreateMultipartUploadCommand,
   DeleteObjectCommand,
   DeleteObjectsCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  paginateListParts,
   PutObjectCommand,
   S3Client,
+  UploadPartCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import mime from 'mime';
@@ -162,6 +167,87 @@ export class S3 {
       headers: this.setAcl ? { 'x-amz-acl': PUBLIC_READ_ACL_HEADER } : undefined,
       url,
     };
+  }
+
+  public async createMultipartUpload(key: string, contentType?: string): Promise<string> {
+    const response = await this.client.send(
+      new CreateMultipartUploadCommand({
+        ACL: this.setAcl ? PUBLIC_READ_ACL_HEADER : undefined,
+        Bucket: this.bucket,
+        ContentType: contentType || undefined,
+        Key: key,
+      }),
+    );
+
+    if (!response.UploadId) throw new Error(`S3 did not return an upload id for ${key}`);
+
+    return response.UploadId;
+  }
+
+  public async createPreSignedUploadPartUrl(
+    key: string,
+    uploadId: string,
+    partNumber: number,
+  ): Promise<string> {
+    const command = new UploadPartCommand({
+      Bucket: this.bucket,
+      Key: key,
+      PartNumber: partNumber,
+      UploadId: uploadId,
+    });
+
+    return getSignedUrl(this.client, command, { expiresIn: 3600 });
+  }
+
+  public async completeMultipartUpload(
+    key: string,
+    uploadId: string,
+    expectedPartCount: number,
+    uploadedParts?: Array<{ ETag: string; PartNumber: number }>,
+  ) {
+    const parts = uploadedParts ? [...uploadedParts] : [];
+
+    if (!uploadedParts) {
+      for await (const page of paginateListParts(
+        { client: this.client },
+        { Bucket: this.bucket, Key: key, UploadId: uploadId },
+      )) {
+        for (const part of page.Parts ?? []) {
+          if (!part.ETag || !part.PartNumber) continue;
+          parts.push({ ETag: part.ETag, PartNumber: part.PartNumber });
+        }
+      }
+    }
+
+    parts.sort((a, b) => a.PartNumber - b.PartNumber);
+    const hasAllParts =
+      parts.length === expectedPartCount &&
+      parts.every((part, index) => part.PartNumber === index + 1);
+
+    if (!hasAllParts) {
+      throw new Error(
+        `S3 multipart upload ${uploadId} has ${parts.length}/${expectedPartCount} parts`,
+      );
+    }
+
+    return this.client.send(
+      new CompleteMultipartUploadCommand({
+        Bucket: this.bucket,
+        Key: key,
+        MultipartUpload: { Parts: parts },
+        UploadId: uploadId,
+      }),
+    );
+  }
+
+  public async abortMultipartUpload(key: string, uploadId: string) {
+    return this.client.send(
+      new AbortMultipartUploadCommand({
+        Bucket: this.bucket,
+        Key: key,
+        UploadId: uploadId,
+      }),
+    );
   }
 
   public async createPreSignedUrlForPreview(key: string, expiresIn?: number): Promise<string> {

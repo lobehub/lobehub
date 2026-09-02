@@ -32,8 +32,13 @@ export const createMoveLocalFilesInspector = (translationKey: string) => {
       const showShiny = isArgumentsStreaming || isLoading;
 
       return (
-        <div className={cx(inspectorTextStyles.root, showShiny && shinyTextStyles.shinyText)}>
-          <span style={{ marginInlineEnd: 6 }}>{t(translationKey as any)}</span>
+        <div className={inspectorTextStyles.root}>
+          <span
+            className={cx(showShiny && shinyTextStyles.shinyText)}
+            style={{ marginInlineEnd: 6 }}
+          >
+            {t(translationKey as any)}
+          </span>
           {totalCount > 0 && (
             <Text code as={'span'} fontSize={12}>
               {successCount === undefined ? totalCount : `${successCount}/${totalCount}`}

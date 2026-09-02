@@ -230,9 +230,15 @@ const dispatchOnAfterCall = async (
   const executor = getExecutor(identity.identifier);
   if (!executor?.onAfterCall) return;
 
+  const result = (data?.result ?? {}) as BuiltinToolResult;
+
   await executor.onAfterCall({
     ...identity,
-    result: (data?.result ?? {}) as BuiltinToolResult,
+    // Gateway/hetero tool_end events carry the terminal outcome beside
+    // `result`, while client-tool results already include `result.success`.
+    // Normalize both shapes so hook-only heterogeneous executors do not treat
+    // a successful shell command as failed and skip git/worktree side effects.
+    result: { ...result, success: result.success ?? data?.isSuccess },
     topicId,
   });
 };

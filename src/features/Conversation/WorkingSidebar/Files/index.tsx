@@ -321,15 +321,16 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
     setIsSearching(true);
     setSearchEntries(undefined);
 
-    void projectFileService
-      .searchProjectFiles({
+    void Promise.resolve(
+      projectFileService.searchProjectFiles({
         changedOnly,
         deviceId,
         excludeIgnored: hideIgnored,
         limit: PROJECT_FILE_TREE_SEARCH_LIMIT,
         query: normalizedDebouncedQuery,
         scope: workingDirectory,
-      })
+      }),
+    )
       .then((result) => {
         if (cancelled) return;
         setSearchEntries(result?.entries ?? []);

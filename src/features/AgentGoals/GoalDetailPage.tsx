@@ -1,22 +1,22 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
+import { PauseIcon, PlayIcon } from 'lucide-react';
 import { memo, type ReactNode, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NotFound from '@/components/404';
 import AsyncError from '@/components/AsyncError';
-import CollapsibleContent from '@/components/CollapsibleContent';
 import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
-import RunningGlyph from '@/features/Home/components/RunningGlyph';
 import NavHeader from '@/features/NavHeader';
 import { PortalContent } from '@/features/Portal/router';
 import RightPanel from '@/features/RightPanel';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useActivityTime } from '@/hooks/useActivityTime';
+import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { type GoalMetricKind } from '@/store/chat/slices/portal/initialState';
@@ -24,6 +24,7 @@ import { goalSelectors, useGoalStore } from '@/store/goal';
 
 import GoalDetailActions from './GoalDetailActions';
 import { formatSpan, goalStatusKey } from './goalPresentation';
+import GoalRequirement from './GoalRequirement';
 import GoalStatusGlyph from './GoalStatusGlyph';
 import ProcessControl from './ProcessControl';
 
@@ -79,16 +80,15 @@ const Metric = memo<{
 
 Metric.displayName = 'GoalHeaderMetric';
 
-/** Relative "last activity" readout; isolated so its refresh never re-renders the page. */
-const LivenessValue = memo<{ active: boolean; latest?: Date }>(({ active, latest }) => {
+/** Relative "last activity" readout; isolated so its refresh never re-renders the page.
+ *  Plain text on purpose: the status control already carries the "running"
+ *  animation, and a second spinner here said the same thing twice. */
+const LivenessValue = memo<{ latest?: Date }>(({ latest }) => {
   const { text } = useActivityTime(latest);
   return (
-    <>
-      {active && <RunningGlyph size={14} />}
-      <Text fontSize={16} weight={600}>
-        {text || '—'}
-      </Text>
-    </>
+    <Text fontSize={16} weight={600}>
+      {text || '—'}
+    </Text>
   );
 });
 
@@ -102,9 +102,12 @@ interface GoalDetailPageProps {
 
 const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const { t } = useTranslation('chat');
+  const { allowed: canEdit } = usePermission('create_content');
   const useFetchGoalGraph = useGoalStore((s) => s.useFetchGoalGraph);
   const { error, isLoading, mutate } = useFetchGoalGraph(goalId);
   const snapshot = useGoalStore(goalSelectors.goalGraph(goalId));
+  const pauseGoal = useGoalStore((s) => s.pauseGoal);
+  const resumeGoal = useGoalStore((s) => s.resumeGoal);
 
   const showPortal = useChatStore(chatPortalSelectors.showPortal);
   const openGoalMetric = useChatStore((s) => s.openGoalMetric);
@@ -115,14 +118,12 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   useEffect(() => () => clearPortalStack(), [clearPortalStack, goalId]);
 
   const liveness = useMemo(() => {
-    if (!snapshot) return { active: false, latest: undefined };
+    if (!snapshot) return { latest: undefined };
     let latest: Date | undefined;
-    let active = false;
     for (const node of snapshot.nodes) {
       if (!latest || node.updatedAt > latest) latest = node.updatedAt;
-      if (node.kind === 'task' && node.status === 'active') active = true;
     }
-    return { active, latest };
+    return { latest };
   }, [snapshot]);
 
   if (error && !snapshot) return <AsyncError error={error} variant={'page'} onRetry={mutate} />;
@@ -137,6 +138,15 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const tasks = nodes.filter((node) => node.kind === 'task').length;
   const findings = nodes.filter((node) => node.kind === 'finding').length;
   const open = (metric: GoalMetricKind) => () => openGoalMetric(goalId, metric);
+
+  const paused = goal.status === 'paused';
+  // Pace control exists only while the coordinator loop is actually moving (or
+  // explicitly paused). A goal in review awaits the human, and a closed goal
+  // cannot move — pausing either would be a dead or misleading button.
+  const canPause =
+    canEdit &&
+    nodes.length > 0 &&
+    ['paused', 'planning', 'running', 'verifying'].includes(goal.status);
 
   const durationText = goal.startedAt
     ? formatSpan((goal.completedAt ?? new Date()).getTime() - goal.startedAt.getTime())
@@ -228,23 +238,31 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                 />
                 <Metric
                   label={t('goalProcess.metrics.liveness')}
-                  value={<LivenessValue active={liveness.active} latest={liveness.latest} />}
+                  value={<LivenessValue latest={liveness.latest} />}
                   onClick={open('liveness')}
                 />
               </Flexbox>
-              {goal.requirement && (
-                <Flexbox gap={4} paddingBlock={'8px 0'}>
-                  <Text fontSize={12} type={'secondary'} weight={500}>
-                    {t('goalProcess.requirement')}
-                  </Text>
-                  {/* Generated acceptance criteria run long — clamp like the task
-                      instruction does, with the shared show-more affordance. */}
-                  <CollapsibleContent maxHeight={160}>
-                    <Text fontSize={14} style={{ lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>
-                      {goal.requirement}
+              {/* Pause/resume above the requirement document — its reviewed
+                  home. The status glyph keeps the "running" animation; this
+                  button is only the control. */}
+              {canPause && (
+                <Flexbox horizontal align={'center'} gap={10} paddingBlock={'8px 0'}>
+                  <Button
+                    icon={paused ? PlayIcon : PauseIcon}
+                    type={paused ? 'primary' : 'default'}
+                    onClick={() => void (paused ? resumeGoal(goal.id) : pauseGoal(goal.id))}
+                  >
+                    {paused ? t('goalProcess.resume') : t('goalProcess.pause')}
+                  </Button>
+                  {paused && (
+                    <Text fontSize={12} type={'secondary'}>
+                      {t('goalProcess.paused')}
                     </Text>
-                  </CollapsibleContent>
+                  )}
                 </Flexbox>
+              )}
+              {goal.requirement && (
+                <GoalRequirement goalId={goal.id} requirement={goal.requirement} />
               )}
             </Flexbox>
 

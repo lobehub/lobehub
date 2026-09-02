@@ -62,6 +62,7 @@ const messageSearchProcedure = messageProcedure.use(async (opts) => {
   const ftsSearchRepo = await createFtsSearchRepo({
     db: ctx.serverDB,
     userId: ctx.userId,
+    usage: 'message_search',
     workspaceId,
   });
 
@@ -215,8 +216,8 @@ export const messageRouter = router({
 
   listAll: messageProcedure
     .input(
-      z
-        .object({
+      messageAnalyticsSchema
+        .extend({
           current: z.number().optional(),
           pageSize: z.number().optional(),
         })

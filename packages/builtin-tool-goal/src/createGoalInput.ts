@@ -3,6 +3,7 @@
  * server runtime: both create the same Goal Graph, so the wording the agent and
  * the verifier read must not drift between the two paths.
  */
+import type { GoalSchedulePolicy } from '@lobechat/types';
 
 export interface GoalCriterionInput {
   description?: string;
@@ -21,6 +22,24 @@ export interface GoalCriterionInput {
  */
 export const resolveGoalAttemptBudget = (maxIterations?: number | null): number | undefined =>
   typeof maxIterations === 'number' ? Math.min(10, Math.max(2, maxIterations)) : undefined;
+
+/**
+ * The goal's calendar-time budget, as the schedule config the coordinator reads.
+ *
+ * `null` is the manifest's documented "no user-specified deadline" — the cleared
+ * input field — and returns `undefined` so the schedule block stays off the
+ * config entirely. An invalid string is dropped rather than stored: a deadline
+ * that cannot be parsed would either never fire (silently no budget) or fire
+ * immediately (silently paused goal), and both hide the mistake from the user.
+ */
+export const resolveGoalScheduleConfig = (
+  deadline?: string | null,
+): GoalSchedulePolicy | undefined => {
+  if (typeof deadline !== 'string' || deadline.trim() === '') return undefined;
+  const parsed = new Date(deadline);
+  if (Number.isNaN(parsed.getTime())) return undefined;
+  return { deadline: parsed.toISOString() };
+};
 
 /**
  * The goal's acceptance requirement. The Goal Graph models "what counts as

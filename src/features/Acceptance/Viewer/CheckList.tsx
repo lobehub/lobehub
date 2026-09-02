@@ -1491,6 +1491,7 @@ const CheckRow = memo<{
                 <Flexbox gap={10} style={{ marginBlockStart: 6 }}>
                   {hasAnnotatableEvidence(check) && (
                     <Button
+                      outdent
                       icon={<Icon icon={Images} />}
                       style={{ alignSelf: 'flex-start' }}
                       type={'text'}

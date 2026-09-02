@@ -85,7 +85,7 @@ describe('createLambdaFileStorePort', () => {
       ...auth,
       getServerUrl: async () => 'https://cloud.lobehub.com/',
     });
-    await port!.createS3PreSignedUrl({ pathname: 'files/a/b.png' });
+    await port!.createS3PreSignedUrl({ pathname: 'files/a/b.png', size: 123 });
 
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe(
       'https://cloud.lobehub.com/trpc/lambda/upload.createS3PreSignedUrl',

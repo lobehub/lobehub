@@ -981,6 +981,7 @@ export const agentDocumentRouter = router({
           agentId: z.string(),
           content: z.string(),
           hintIsSkill: z.boolean().optional(),
+          parentId: z.string().optional(),
           title: z.string(),
         })
         .and(agentDocumentToolTriggerSchema),
@@ -993,6 +994,7 @@ export const agentDocumentRouter = router({
           input.content,
           {
             hintIsSkill: input.hintIsSkill,
+            parentId: input.parentId,
           },
         );
 
@@ -1037,6 +1039,7 @@ export const agentDocumentRouter = router({
           agentId: z.string(),
           content: z.string(),
           hintIsSkill: z.boolean().optional(),
+          parentId: z.string().optional(),
           title: z.string(),
           topicId: z.string(),
         })
@@ -1051,7 +1054,7 @@ export const agentDocumentRouter = router({
           title,
           input.content,
           input.topicId,
-          { hintIsSkill: input.hintIsSkill },
+          { hintIsSkill: input.hintIsSkill, parentId: input.parentId },
         );
 
         if (input.trigger === 'tool') {

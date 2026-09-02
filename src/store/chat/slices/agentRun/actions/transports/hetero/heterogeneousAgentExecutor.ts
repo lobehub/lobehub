@@ -325,14 +325,14 @@ const subscribeBroadcasts = (
     if (data.sessionId === sessionId) callbacks.onError(data.error);
   };
 
-  ipc.on('heteroAgentEvent' as any, onStreamEvent);
-  ipc.on('heteroAgentSessionComplete' as any, onComplete);
-  ipc.on('heteroAgentSessionError' as any, onError);
+  const unsubscribeStreamEvent = ipc.on('heteroAgentEvent' as any, onStreamEvent);
+  const unsubscribeComplete = ipc.on('heteroAgentSessionComplete' as any, onComplete);
+  const unsubscribeError = ipc.on('heteroAgentSessionError' as any, onError);
 
   return () => {
-    ipc.removeListener('heteroAgentEvent' as any, onStreamEvent);
-    ipc.removeListener('heteroAgentSessionComplete' as any, onComplete);
-    ipc.removeListener('heteroAgentSessionError' as any, onError);
+    unsubscribeStreamEvent();
+    unsubscribeComplete();
+    unsubscribeError();
   };
 };
 

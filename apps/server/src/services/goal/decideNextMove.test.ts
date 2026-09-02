@@ -205,11 +205,46 @@ describe('decideNextMove', () => {
       expect(move.message).toContain('3/');
     });
 
+    it('stops when the deadline passed instead of dispatching', () => {
+      // A calendar deadline is a budget unit the attempt/round/dollar trio
+      // cannot express; past it the coordinator must park the goal exactly
+      // like any other exhausted budget.
+      const move = decide(snapshot, {
+        budget: {
+          costLimitReached: false,
+          deadlinePassed: true,
+          roundLimitReached: false,
+          runs: 0,
+          totalCost: 0,
+        },
+        frontierTask: task(),
+      });
+
+      expect(move).toMatchObject({ branch: 'budget_exhausted', outcome: 'no_progress' });
+      expect(move.message).toContain('Deadline passed');
+    });
+
+    it('checks the deadline before the round and cost budgets', () => {
+      const move = decide(snapshot, {
+        budget: {
+          costLimitReached: true,
+          deadlinePassed: true,
+          roundLimitReached: true,
+          runs: 9,
+          totalCost: 9,
+        },
+        frontierTask: task(),
+      });
+
+      expect(move.message).toContain('Deadline passed');
+    });
+
     it('dispatches when the budget still has room', () => {
       expect(
         decide(snapshot, {
           budget: {
             costLimitReached: false,
+            deadlinePassed: false,
             roundLimitReached: false,
             runs: 1,
             totalCost: 0.5,

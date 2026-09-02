@@ -33,23 +33,29 @@ export const ExecuteCodeInspector = memo<
   if (isArgumentsStreaming) {
     if (!description)
       return (
-        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-          <span>{t('builtins.lobe-cloud-sandbox.apiName.executeCode')}</span>
+        <div className={inspectorTextStyles.root}>
+          <span className={shinyTextStyles.shinyText}>
+            {t('builtins.lobe-cloud-sandbox.apiName.executeCode')}
+          </span>
         </div>
       );
 
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-cloud-sandbox.apiName.executeCode')}: </span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-cloud-sandbox.apiName.executeCode')}:{' '}
+        </span>
         <span className={highlightTextStyles.gold}>{description}</span>
       </div>
     );
   }
 
   return (
-    <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
+    <div className={inspectorTextStyles.root}>
       <span style={{ marginInlineStart: 2 }}>
-        <span>{t('builtins.lobe-cloud-sandbox.apiName.executeCode')}: </span>
+        <span className={cx(isLoading && shinyTextStyles.shinyText)}>
+          {t('builtins.lobe-cloud-sandbox.apiName.executeCode')}:{' '}
+        </span>
         {description && <span className={highlightTextStyles.primary}>{description}</span>}
         {isLoading ? null : pluginState?.success ? (
           <Check className={styles.statusIcon} color={cssVar.colorSuccess} size={14} />

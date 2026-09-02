@@ -3,7 +3,7 @@
 import { Accordion, Flexbox } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { MoreHorizontal } from 'lucide-react';
-import { type ComponentType, memo, useMemo } from 'react';
+import { type ComponentType, memo, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
@@ -18,6 +18,7 @@ import { preferenceSelectors } from '@/store/user/selectors';
 import { type GroupedTopic } from '@/types/topic';
 
 import { useAgentTopicGroupMode } from '../hooks/useAgentTopicGroupMode';
+import { useScrollActiveTopicIntoView } from '../hooks/useScrollActiveTopicIntoView';
 import { useNavigateToAgentTopics } from '../hooks/useTopicNavigation';
 
 export interface GroupItemComponentProps {
@@ -37,10 +38,11 @@ const GroupedAccordion = memo<GroupedAccordionProps>(({ GroupItem }) => {
   const topicIncludeCompleted = useUserStore(preferenceSelectors.topicIncludeCompleted);
   const { topicGroupMode } = useAgentTopicGroupMode();
 
-  const [hasMore, isExpandingPageSize, activeAgentId] = useChatStore((s) => [
+  const [hasMore, isExpandingPageSize, activeAgentId, activeTopicId] = useChatStore((s) => [
     topicSelectors.hasMoreTopicsForSidebar(s),
     topicSelectors.isExpandingPageSize(s),
     s.activeAgentId,
+    s.activeTopicId,
   ]);
 
   const groupSelector = useMemo(
@@ -57,9 +59,36 @@ const GroupedAccordion = memo<GroupedAccordionProps>(({ GroupItem }) => {
 
   const groupIds = useMemo(() => groupTopics.map((group) => group.id), [groupTopics]);
   const { expandedKeys, setExpandedKeys } = useTopicGroupCollapse(topicGroupMode, groupIds);
+  const activeGroupId = useMemo(
+    () =>
+      activeTopicId
+        ? groupTopics.find((group) => group.children.some((topic) => topic.id === activeTopicId))
+            ?.id
+        : undefined,
+    [activeTopicId, groupTopics],
+  );
+  const expandedActiveTargetRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (!activeTopicId || !activeGroupId) return;
+
+    const target = `${activeTopicId}:${activeGroupId}`;
+    if (expandedActiveTargetRef.current === target) return;
+    expandedActiveTargetRef.current = target;
+
+    if (!expandedKeys.includes(activeGroupId)) {
+      setExpandedKeys([...expandedKeys, activeGroupId]);
+    }
+  }, [activeGroupId, activeTopicId, expandedKeys, setExpandedKeys]);
+
+  const listReady = useMemo(
+    () => `${groupIds.join(':')}|${expandedKeys.join(':')}`,
+    [expandedKeys, groupIds],
+  );
+  const listRef = useScrollActiveTopicIntoView(activeTopicId, listReady);
 
   return (
-    <Flexbox gap={2}>
+    <Flexbox gap={2} ref={listRef}>
       <Accordion
         expandedKeys={expandedKeys}
         gap={2}

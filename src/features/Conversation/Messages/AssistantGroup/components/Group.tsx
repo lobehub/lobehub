@@ -380,7 +380,7 @@ const Group = memo<GroupChildrenProps>(
 
     return (
       <MessageAggregationContext value={contextValue}>
-        <Flexbox className={styles.container} gap={8}>
+        <Flexbox className={styles.container} gap={4}>
           {foldProcess ? (
             <>
               <ProcessFold durationText={durationText} stepCount={llmCallCount}>

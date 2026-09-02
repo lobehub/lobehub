@@ -504,6 +504,26 @@ supposed to have — a dialog opens, a request fires, a store field changes. Tre
 closed and nothing happened" as the expected failure signature, not as a missed click. When
 the entry is nested, verify the child's own dispatch wiring, not the parent's.
 
+### L-D13 — Picking `cssVar` color-scale steps by antd-palette intuition
+
+**Wrong approach:** choose antd-style palette steps (`cssVar.blue1` for a tint,
+`cssVar.blue6` for the primary line) from the standard antd 10-step palette in
+your head, and judge the result from the code alone.
+
+**Why it fails:** LobeHub's theme overrides the color scales with an 11-step
+palette whose primary-strength band sits at x9–x10 — light-mode `blue-6`
+resolves to `#acd4ff` and `blue-7` to `#93c8ff`, both near-pastel, nothing like
+antd's `blue-6` `#1677ff`. The UI then renders washed out while every token
+name in the code reads correct, and a one-step "fix" (x1→x2, x6→x7) changes
+almost nothing.
+
+**Correct approach:** never pick a scale step without reading the resolved
+value in the running app (`getComputedStyle` on the element, or resolve
+`--ant-<color>-<n>` from the element's scope — the variables are scoped, not on
+`:root`). For a tinted-tile + line pairing, the working band is around x3 for
+the tint and x9–x10 for the line, verified in both themes: the scale flips in
+dark mode, so a step that is a tint in light is a deep fill in dark.
+
 ## Environment safety
 
 ### L-S0 — Concluding a dependency moved from the root manifest alone
@@ -686,6 +706,41 @@ with unrelated identifiers — a component name like `SkillRow` also matches a C
 `addSkillRow`, so a substring count "confirms" the wrong state.
 
 ---
+
+**Same failure, fourth shape — the dep optimizer is wedged, and only Vite needs
+restarting.** The SPA sits on the HTML loading shell (`rootChildren: 0`, `innerText`
+empty) with a clean console and `vite connected` — no error anywhere. Crawling the
+module graph from the entry is what names it: every direct import returns 200 while
+`node_modules/.vite/deps/*` answers **504**, so `import()` of the entry fails with the
+generic `Failed to fetch dynamically imported module`, which reads like a broken route
+tree in the branch under test. Recovery is `rm -rf node_modules/.vite/deps` plus a real
+Vite process restart — and Vite is its OWN process here (`bash -c source /tmp/dev-env.sh
+&& bun run dev:spa`), independent of the `next dev` tree, so a shared worktree's Next
+server does not have to be touched. Reuse the same env file the running pair was
+started from rather than re-deriving it.
+
+### L-S17 — Diagnosing the feature when the dev DB lost its seeded user row
+
+**Wrong approach:** see the product's own list endpoint return `{ items: [] }` and its
+write endpoints fail, and start debugging the query, the scope filter, or the change
+under test.
+
+**Why it fails:** the dev server resolves `ctx.userId` for the seeded account without
+needing a `sessions` row, so a database that lost its `users` row still reads as
+authenticated: `setup-auth.sh status --surface web` reports green, every read returns
+an empty result, and every write dies inside Postgres on the `user_id` foreign key.
+The tRPC error surfaces as a giant `Failed query: insert into "acceptances" …` whose
+FK cause is only visible in the params tail, so it reads as a schema or payload
+problem rather than a missing row. The managed acceptance Postgres is shared and
+long-lived, so a `clean-db` from any worktree leaves every later run in this state.
+
+**Correct approach:** when reads are empty AND writes fail, check the row before the
+code — `select id from users` in the DB the server actually uses. Resolve that DB from
+the env file the running server was launched with, never from `test-env.sh` defaults;
+a dev server started by another session can point somewhere else entirely. Re-seed with
+`init-dev-env.sh seed-user`, then prove the fix with a real product write (an `ensure`
+round-trip), and re-run `setup-auth.sh web-seed` because the SPA's client-side auth
+gate still redirects to `/signin` after the row is recreated.
 
 ### L-S8 — Reading a first-boot renderer crash as a defect of the change under test
 

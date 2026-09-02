@@ -24,6 +24,11 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
               'Set true only when the document captures reusable procedural knowledge or durable agent behavior.',
             type: 'boolean',
           },
+          parentId: {
+            description:
+              'Parent folder document ID. Use the "documentId" field returned for a folder by listDocuments. Omit to create at the root.',
+            type: 'string',
+          },
           scope: {
             default: 'agent',
             description:

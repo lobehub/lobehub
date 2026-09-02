@@ -16,6 +16,8 @@
   "features.codexAppServer.title": "Codex Uygulama Sunucusu Çalışma Zamanı",
   "features.desktopSplitView.desc": "İki masaüstü sekmesini yan yana göster, bağımsız gezinme ve yeniden boyutlandırılabilir bir ayırıcı ile.",
   "features.desktopSplitView.title": "Sekme Bölme Görünümü",
+  "features.evalCapture.desc": "Bir konuşma turunu — önceki bağlamı, girdi ve ürettiği cevabı — bir değerlendirme test vakası olarak yakalayan bir mesaj eylemi ekler.",
+  "features.evalCapture.title": "Bir turu değerlendirme vakası olarak kaydet",
   "features.groupChat.desc": "Çoklu temsilci grup sohbeti koordinasyonunu etkinleştirin.",
   "features.groupChat.title": "Grup Sohbeti (Çoklu Temsilci)",
   "features.heteroSessionImport.desc": "Konu listesi menüsüne \"Yerel Aracı Oturumlarını İçe Aktar\" seçeneği ekleyin: yerel Claude Code / Codex CLI transkriptlerini tarayın ve bunları konular olarak içe aktarın, yeniden içe aktarma sırasında artımlı senkronizasyon sağlayın.",
