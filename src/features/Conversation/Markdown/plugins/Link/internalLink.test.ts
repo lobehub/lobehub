@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseInternalLink } from './internalLink';
+import { isBareLinkLabel, parseInternalLink } from './internalLink';
 
 describe('parseInternalLink', () => {
   it('parses official agent document links', () => {
@@ -164,5 +164,18 @@ describe('parseInternalLink', () => {
     expect(parseInternalLink('/favicon.ico')).toBeNull();
     expect(parseInternalLink('/manifest.webmanifest')).toBeNull();
     expect(parseInternalLink('/.well-known/assetlinks.json')).toBeNull();
+  });
+});
+
+describe('isBareLinkLabel', () => {
+  it('treats pasted addresses as bare', () => {
+    expect(isBareLinkLabel('https://app.lobehub.com/acceptance/acc_1')).toBe(true);
+    expect(isBareLinkLabel('http://localhost:3010/task/tsk_1')).toBe(true);
+    expect(isBareLinkLabel('/acceptance/acc_1')).toBe(true);
+  });
+
+  it('treats authored text as not bare', () => {
+    expect(isBareLinkLabel('验收报告')).toBe(false);
+    expect(isBareLinkLabel('Acceptance report')).toBe(false);
   });
 });

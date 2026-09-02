@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { memo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { shouldHardNavigateToWorkbench } from '@/libs/next/workbenchNavigation';
@@ -21,8 +22,12 @@ import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocu
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 
-import type { InternalLinkReference } from '../internalLink';
-import { InternalEntityPreview } from './InternalEntityPreview';
+import { type InternalLinkReference, isBareLinkLabel } from '../internalLink';
+import {
+  getPreviewData,
+  InternalEntityPreview,
+  internalEntityPreviewKey,
+} from './InternalEntityPreview';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   link: css`
@@ -31,7 +36,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
 
     color: ${cssVar.colorText} !important;
-    text-decoration-color: ${cssVar.colorBorder};
+
+    /* Tertiary, not colorBorder: on a dark background colorBorder sits so
+       close to the bubble that the underline vanishes and the link reads as
+       plain text — findability is the underline's whole job here. */
+    text-decoration-color: ${cssVar.colorTextTertiary};
     text-decoration-line: underline;
     text-decoration-thickness: 1px;
     text-underline-offset: 3px;
@@ -73,6 +82,7 @@ interface InternalEntityLinkProps {
 }
 
 export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, reference }) => {
+  const { t } = useTranslation('chat');
   const navigate = useWorkspaceAwareNavigate();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const [openAcceptance, openAgentDetail, openDocument, openTaskDetail, openVerifyReport] =
@@ -83,6 +93,18 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
       s.openTaskDetail,
       s.openVerifyReport,
     ]);
+  // A pasted URL says nothing about what it points to, so resolve the entity's
+  // own title and show that instead — the same read the hover preview makes,
+  // under the same key, so whichever fires first serves the other. Authored
+  // link text is never replaced, and a failed read just leaves the URL.
+  const shouldResolveTitle = reference.type !== 'route' && isBareLinkLabel(label);
+  const { data: entity } = useClientDataSWR(
+    shouldResolveTitle ? internalEntityPreviewKey(reference) : null,
+    () => getPreviewData(reference, t),
+    { revalidateOnFocus: false },
+  );
+  const displayLabel = (shouldResolveTitle && entity?.title) || label;
+
   const linkedAgentId = reference.type === 'document' ? reference.agentId : undefined;
   const shouldResolveAgentDocument = !!linkedAgentId && linkedAgentId === activeAgentId;
   const { data: agentDocuments, mutate: resolveAgentDocuments } = useClientDataSWR(
@@ -197,14 +219,14 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
       onClick={handleClick}
     >
       {icon && <Icon icon={icon} size={14} />}
-      {label}
+      {displayLabel}
     </a>
   );
 
   if (reference.type === 'route' || reference.workspaceSlug) return link;
 
   return (
-    <InternalEntityPreview fallbackTitle={label} reference={reference}>
+    <InternalEntityPreview fallbackTitle={displayLabel} reference={reference}>
       {link}
     </InternalEntityPreview>
   );

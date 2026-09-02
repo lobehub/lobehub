@@ -74,6 +74,15 @@ const isInternalHost = (url: URL, currentOrigin?: string) => {
   }
 };
 
+/**
+ * Whether a link's visible text is just the pasted address — an autolinked URL
+ * or a root-relative path — rather than something a human wrote. Only such a
+ * label may be replaced by the entity's resolved title; authored link text is
+ * the author's choice and stays.
+ */
+export const isBareLinkLabel = (label: string) =>
+  label.startsWith('http://') || label.startsWith('https://') || label.startsWith('/');
+
 /** Parse a LobeHub route into a semantic entity reference. */
 export const parseInternalLink = (
   href: string | undefined,
