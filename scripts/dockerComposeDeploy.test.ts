@@ -160,6 +160,23 @@ describe('deploy docker-compose optional Elasticsearch', () => {
   });
 
   it('keeps the in-network Elasticsearch URL on plain HTTP when setup.sh switches to HTTPS', () => {
-    expect(setupScript).toContain('"/ES_URL=/! s#http://#https://#" .env');
+    const sedExpression =
+      "'/^#\\{0,1\\} \\{0,1\\}[A-Za-z0-9_]*=/{/ES_URL=/!s|http://|https://|;}' .env";
+    expect(setupScript).toContain(sedExpression);
+    // The rewrite must only touch assignments: the warning comment that tells operators not to
+    // pair ES_API_KEY with an http:// URL has to keep saying http://.
+    for (const envExample of envExamples) {
+      const rewritten = envExample
+        .split('\n')
+        .map((line) =>
+          /^#? ?\w*=/.test(line) && !line.includes('ES_URL=')
+            ? line.replace('http://', 'https://')
+            : line,
+        )
+        .join('\n');
+      expect(rewritten).toContain('# ES_URL=http://elasticsearch:9200\n');
+      expect(rewritten).toContain('http:// ');
+      expect(rewritten).not.toContain('https:// ');
+    }
   });
 });
