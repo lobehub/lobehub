@@ -10,7 +10,11 @@ export interface ElasticsearchFtsSearchMappingProperty {
 }
 
 export interface FtsSearchIndexDefinition<Entity extends FtsSearchDocumentEntity> {
-  indexedOnlyFields?: readonly (keyof FtsSearchDocumentSourceMap[Entity] & string)[];
+  /**
+   * Long text that is indexed for matching but excluded from `_source`. Every provider path only
+   * reads candidate IDs and scores from Elasticsearch and hydrates snippets from PostgreSQL, so
+   * storing the raw text again in `_source` would only inflate index size and bulk payloads.
+   */
   longTextFields?: readonly (keyof FtsSearchDocumentSourceMap[Entity] & string)[];
   mappings: {
     dynamic: 'strict';
@@ -20,6 +24,12 @@ export interface FtsSearchIndexDefinition<Entity extends FtsSearchDocumentEntity
     >;
   };
   queryFields: readonly (keyof FtsSearchDocumentSourceMap[Entity] & string)[];
+}
+
+export interface FtsSearchIndexMappings {
+  _source: { excludes: readonly string[] };
+  dynamic: 'strict';
+  properties: Record<string, ElasticsearchFtsSearchMappingProperty>;
 }
 
 const mixedText = { analyzer: 'lobehub_icu_english', type: 'text' } as const;
@@ -135,7 +145,6 @@ export const FTS_SEARCH_INDEX_DEFINITIONS = {
     queryFields: ['title', 'description', 'slug', 'tags', 'system_role'],
   } satisfies FtsSearchIndexDefinition<'agents'>,
   chatGroups: {
-    indexedOnlyFields: ['content'],
     longTextFields: ['content'],
     mappings: {
       dynamic: 'strict',
@@ -362,7 +371,6 @@ export const FTS_SEARCH_INDEX_DEFINITIONS = {
     ],
   } satisfies FtsSearchIndexDefinition<'memoryPreferences'>,
   messages: {
-    indexedOnlyFields: ['summary'],
     longTextFields: ['content', 'summary'],
     mappings: {
       dynamic: 'strict',
@@ -448,8 +456,37 @@ export const FTS_SEARCH_INDEX_DEFINITIONS = {
   [Entity in FtsSearchDocumentEntity]: FtsSearchIndexDefinition<Entity>;
 };
 
-/** First production Elasticsearch mapping version. Development-only iterations were never shipped. */
-export const FTS_SEARCH_INDEX_SCHEMA_VERSION = 1;
+/**
+ * Elasticsearch mapping version. Bump it whenever the index body changes in a way that requires a
+ * full backfill; the reindex tool creates `<alias>-v<version>` and switches aliases explicitly.
+ *
+ * - v1: first production mapping.
+ * - v2: `longTextFields` excluded from `_source`.
+ */
+export const FTS_SEARCH_INDEX_SCHEMA_VERSION = 2;
+
+/**
+ * Full index mapping body sent to Elasticsearch. `_source.excludes` lists the long text fields; a
+ * field excluded here can no longer be returned, highlighted, or reindexed from Elasticsearch, which
+ * is acceptable because PostgreSQL remains the source of truth and every rebuild reads from it.
+ */
+export const getFtsSearchIndexMappings = (
+  entity: FtsSearchDocumentEntity,
+): FtsSearchIndexMappings => {
+  const { longTextFields, mappings } = FTS_SEARCH_INDEX_DEFINITIONS[entity] as {
+    longTextFields?: readonly string[];
+    mappings: {
+      dynamic: 'strict';
+      properties: Record<string, ElasticsearchFtsSearchMappingProperty>;
+    };
+  };
+
+  return {
+    _source: { excludes: [...(longTextFields ?? [])].sort() },
+    dynamic: mappings.dynamic,
+    properties: mappings.properties,
+  };
+};
 
 const toIndexSegment = (entity: FtsSearchDocumentEntity) =>
   entity.replaceAll(/[A-Z]/g, (character) => `-${character.toLowerCase()}`);

@@ -3,6 +3,7 @@ import type { FtsSearchDocumentEntity } from '@lobechat/types';
 import { FTS_SEARCH_DOCUMENT_ENTITIES } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getFtsSearchIndexAlias } from '../../../../packages/database/src/repositories/ftsSearchDocument';
 import type { FtsSearchReindexFailure, FtsSearchReindexRunState } from '../checkpointRepository';
 import type {
   FtsSearchReindexElasticsearchClient,
@@ -62,6 +63,7 @@ const createDependencies = () => {
     ensureAlias: vi.fn().mockResolvedValue(undefined),
     ensureIndex: vi.fn().mockResolvedValue(undefined),
     refresh: vi.fn().mockResolvedValue(undefined),
+    switchAliases: vi.fn().mockResolvedValue(undefined),
   };
   const repository: FtsSearchReindexStateRepository = {
     checkpointBatch: vi.fn(
@@ -248,6 +250,32 @@ describe('FtsSearchReindexService', () => {
       'validate-incremental-sync-source',
       ...Array.from({ length: 14 }, () => 'create-alias'),
     ]);
+  });
+
+  it('atomically switches aliases instead of ensuring them one by one when requested', async () => {
+    const { builder, client, repository, state } = createDependencies();
+    const service = new FtsSearchReindexService(builder, repository, client, {
+      switchAliases: true,
+    });
+
+    await expect(service.run('test', 1)).resolves.toMatchObject({
+      status: 'ready_for_incremental_sync',
+    });
+
+    expect(client.switchAliases).toHaveBeenCalledOnce();
+    expect(client.switchAliases).toHaveBeenCalledWith(
+      expect.arrayContaining(
+        state.progress.map((progress) => ({
+          alias: getFtsSearchIndexAlias('test', progress.entity),
+          physicalIndex: progress.physicalIndex,
+        })),
+      ),
+    );
+    expect(vi.mocked(client.switchAliases).mock.calls[0][0]).toHaveLength(
+      FTS_SEARCH_DOCUMENT_ENTITIES.length,
+    );
+    expect(client.ensureAlias).not.toHaveBeenCalled();
+    expect(repository.markReadyForIncrementalSync).toHaveBeenCalledOnce();
   });
 
   it('keeps a selected-entity run backfilling until every entity is complete', async () => {

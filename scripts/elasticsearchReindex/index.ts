@@ -75,6 +75,7 @@ const apply = args.has('--apply');
 const freshRun = args.has('--fresh-run');
 const skipFailureArgument = process.argv.find((item) => item.startsWith('--skip-failure='));
 const status = args.has('--status');
+const switchAliases = args.has('--switch-aliases');
 const yes = args.has('--yes');
 const batchSize = readPositiveIntegerArgument('--batch-size');
 const bulkConcurrency = readPositiveIntegerArgument('--bulk-concurrency');
@@ -91,7 +92,7 @@ const requestTimeoutMs = readPositiveIntegerArgument('--request-timeout-ms');
 const retryBaseDelayMs = readNonNegativeIntegerArgument('--retry-base-delay-ms');
 const telemetryEnvironment = resolveFtsSearchReindexTelemetryEnvironment(process.argv.slice(2));
 
-const knownArguments = new Set(['--apply', '--fresh-run', '--status', '--yes']);
+const knownArguments = new Set(['--apply', '--fresh-run', '--status', '--switch-aliases', '--yes']);
 const unknownArgument = process.argv
   .slice(2)
   .find(
@@ -125,6 +126,7 @@ if (mutationModes > 0 && !yes) {
   throw new Error('Mutating commands require --yes after reviewing their documented effects');
 }
 if (freshRun && !apply) throw new Error('--fresh-run can only be used with --apply');
+if (switchAliases && !apply) throw new Error('--switch-aliases can only be used with --apply');
 
 const readFailureReference = ():
   { documentId: string; entity: FtsSearchDocumentEntity } | undefined => {
@@ -350,6 +352,19 @@ const run = async () => {
   if (existing && existing.run.status !== 'ready_for_incremental_sync') {
     await outbox.fenceSourceWrites();
   }
+  if (switchAliases) {
+    /**
+     * Moving an alias while the sync consumer still holds Outbox claims could acknowledge a change
+     * against the old index and never replay it into the new one. Active leases are the observable
+     * signal that the consumer has not been paused, so refuse the cutover instead of guessing.
+     */
+    const { inFlight } = await outbox.stats();
+    if (inFlight > 0) {
+      throw new Error(
+        `Outbox still has ${inFlight} in-flight claims; pause the incremental sync consumer before --switch-aliases`,
+      );
+    }
+  }
   auditLogger = new FtsSearchReindexFileLogger({
     runId: prepared.run.id,
     sessionId: randomUUID(),
@@ -374,6 +389,7 @@ const run = async () => {
     requestTimeoutMs: requestTimeoutMs ?? 30_000,
     retryBaseDelayMs: retryBaseDelayMs ?? 500,
     schemaVersion: prepared.run.schemaVersion,
+    switchAliases,
     type: 'session_started',
   });
   console.log(
@@ -430,6 +446,7 @@ const run = async () => {
         await auditLogger!.append(event);
       },
       retryBaseDelayMs,
+      switchAliases,
       validateIncrementalSyncSource: () => outbox.assertCaptureInfrastructure(),
     },
   );

@@ -2,11 +2,14 @@ import type { FtsSearchDocumentEntity } from '@lobechat/types';
 import { FTS_SEARCH_DOCUMENT_ENTITIES } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 
-import type { FtsSearchDocumentBuilder } from '../../../packages/database/src/repositories/ftsSearchDocument';
+import type {
+  FtsSearchDocumentBuilder,
+  FtsSearchIndexMappings,
+} from '../../../packages/database/src/repositories/ftsSearchDocument';
 import {
   FTS_SEARCH_INDEX_ANALYSIS,
-  FTS_SEARCH_INDEX_DEFINITIONS,
   getFtsSearchIndexAlias,
+  getFtsSearchIndexMappings,
 } from '../../../packages/database/src/repositories/ftsSearchDocument';
 import type {
   FtsSearchReindexBatchFailure,
@@ -29,6 +32,16 @@ export interface FtsSearchReindexElasticsearchClient {
     options?: FtsSearchReindexIndexOptions,
   ) => Promise<void>;
   refresh: (index: string) => Promise<void>;
+  /**
+   * Atomically point every stable alias at its new physical index, replacing aliases that still
+   * target an older schema version. One `_aliases` request keeps the 14 aliases on one schema.
+   */
+  switchAliases: (targets: FtsSearchReindexAliasTarget[]) => Promise<void>;
+}
+
+export interface FtsSearchReindexAliasTarget {
+  alias: string;
+  physicalIndex: string;
 }
 
 export interface FtsSearchReindexIndexOptions {
@@ -36,7 +49,7 @@ export interface FtsSearchReindexIndexOptions {
 }
 
 export interface FtsSearchReindexIndexBody {
-  mappings: (typeof FTS_SEARCH_INDEX_DEFINITIONS)[FtsSearchDocumentEntity]['mappings'] & {
+  mappings: FtsSearchIndexMappings & {
     _meta: { reindex_run_id: string; schema_version: number };
   };
   settings: { analysis: typeof FTS_SEARCH_INDEX_ANALYSIS };
@@ -57,6 +70,11 @@ export interface FtsSearchReindexServiceOptions {
   /** Parallel key-range workers for high-volume entities. */
   rangeConcurrencyByEntity: Partial<Record<FtsSearchRangeEntity, number>>;
   retryBaseDelayMs: number;
+  /**
+   * Replace stable aliases that still target an older schema version in one atomic request. Only
+   * safe while the incremental sync consumer is paused; the default fails closed on any conflict.
+   */
+  switchAliases: boolean;
   validateIncrementalSyncSource: () => Promise<void> | void;
 }
 
@@ -298,6 +316,7 @@ export class FtsSearchReindexService {
       maxRequestRetries: options.maxRequestRetries ?? DEFAULT_MAX_REQUEST_RETRIES,
       onProgress: options.onProgress ?? (() => {}),
       retryBaseDelayMs: options.retryBaseDelayMs ?? DEFAULT_RETRY_BASE_DELAY_MS,
+      switchAliases: options.switchAliases ?? false,
       validateIncrementalSyncSource: options.validateIncrementalSyncSource ?? (() => {}),
     };
     if (!Number.isInteger(this.options.batchSize) || this.options.batchSize < 1) {
@@ -377,7 +396,7 @@ export class FtsSearchReindexService {
             physicalIndex,
             {
               mappings: {
-                ...FTS_SEARCH_INDEX_DEFINITIONS[entity].mappings,
+                ...getFtsSearchIndexMappings(entity),
                 _meta: {
                   reindex_run_id: state.run.id,
                   schema_version: state.run.schemaVersion,
@@ -944,11 +963,20 @@ export class FtsSearchReindexService {
     }
 
     await this.options.validateIncrementalSyncSource();
-    for (const progress of currentState.progress) {
-      await this.client.ensureAlias(
-        getFtsSearchIndexAlias(namespace, progress.entity),
-        progress.physicalIndex,
+    if (this.options.switchAliases) {
+      await this.client.switchAliases(
+        currentState.progress.map((progress) => ({
+          alias: getFtsSearchIndexAlias(namespace, progress.entity),
+          physicalIndex: progress.physicalIndex,
+        })),
       );
+    } else {
+      for (const progress of currentState.progress) {
+        await this.client.ensureAlias(
+          getFtsSearchIndexAlias(namespace, progress.entity),
+          progress.physicalIndex,
+        );
+      }
     }
     await this.repository.markReadyForIncrementalSync(initialState.run.id);
     await this.emitProgress({ type: 'aliases_created' });

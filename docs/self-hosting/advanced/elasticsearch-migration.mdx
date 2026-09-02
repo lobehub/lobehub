@@ -113,11 +113,12 @@ clients all refuse to send an API key over plaintext HTTP.
 
 5. Keep the application's search backend on PostgreSQL and keep incremental Elasticsearch draining disabled.
 
-The first production mapping is version `v1`. The tool creates physical indexes such as `lobehub-messages-v1`. After all 14 indexes finish and their counts match the durable checkpoints, it creates stable aliases such as `lobehub-messages`. An alias is only a stable Elasticsearch name; creating it does not change which search backend serves users.
+The first production mapping is version `v1`. The tool creates physical indexes such as `lobehub-messages-v1`. After all 14 indexes finish and their counts match the durable checkpoints, it creates stable aliases such as `lobehub-messages`. An alias is only a stable Elasticsearch name; creating it does not change which search backend serves users. Physical index names always embed the schema version; the stable aliases never do.
 
-If a stable alias already points to another physical index, the command fails instead of moving it.
-Online schema-version upgrades require a separately coordinated dual-write migration and are not
-supported by this initial migration tool.
+By default, the command fails instead of moving a stable alias that already points to another
+physical index. This also protects a later schema-version upgrade from silently repointing an
+alias. See [Schema version upgrades](#schema-version-upgrades) for the supported way to move a
+stable alias from one schema version to the next.
 
 ## Run from source
 
@@ -318,6 +319,7 @@ capture has been installed, source changes continue accumulating in the Outbox u
 - Request-level failures do not advance the cursor. If one concurrent bulk succeeds and another fails, the entire database batch is replayed safely on resume. Item-level failures are recorded in the local checkpoint and replayed before an entity can complete.
 - The tool refuses to create aliases while any entity or item-level failure is incomplete.
 - The final status is `ready_for_incremental_sync`. At this point the full snapshot, aliases, and the Outbox high-water boundary exist, but user queries must still remain on PostgreSQL.
+- Upgrading to a new schema version reuses this same resumable backfill into new, version-suffixed physical indexes, plus a `--switch-aliases` flag for the atomic cutover; see [Schema version upgrades](#schema-version-upgrades).
 
 The high-water revision is an observation point for catch-up monitoring, not a committed database
 snapshot. An incremental consumer must process every queued row and must never discard rows only
@@ -355,6 +357,63 @@ progress.
   the application is ready to switch search backends by itself. Keep `fts-search:sync` scheduled for as
   long as Elasticsearch serves search traffic.
 </Callout>
+
+## Schema version upgrades
+
+The reindex tool supports an online, no-downtime upgrade of the search index schema version (for
+example `v1` to `v2`), using the same resumable backfill mechanics as the initial migration plus a
+`--switch-aliases` flag that atomically cuts every stable alias over to the new physical indexes.
+`--switch-aliases` is only accepted together with `--apply --yes`. The default reindex behavior is
+unchanged: without `--switch-aliases`, the command still fails closed if a stable alias already
+points to a different physical index. The command also refuses `--switch-aliases` while the Outbox
+has in-flight claims; pause the incremental sync consumer first.
+
+For example, schema version `2` excludes long text fields from `_source` while keeping them indexed
+and searchable. The application only reads candidate document IDs back from Elasticsearch and
+hydrates the full content from PostgreSQL, so nothing user-visible changes, and per-index storage
+shrinks substantially.
+
+Follow this procedure for an online, no-downtime upgrade:
+
+1. Pause the incremental sync consumer (set `FTS_SEARCH_SYNC_ENABLED=false` or stop the
+   `fts-search:sync` process). Product search keeps serving from the current stable aliases, and the
+   Outbox keeps accumulating changes; nothing is lost.
+
+2. Start a fresh backfill into the new schema version's physical indexes:
+
+   ```bash
+   bun run fts-search:reindex -- --apply --fresh-run --yes
+   ```
+
+   A schema-version bump always needs a new checkpoint (`--fresh-run`), because it targets new
+   version-suffixed physical indexes (for example `-v2`) written with `external_gte` versioning from
+   a base revision reserved through the write fence. This run is resumable exactly like an initial
+   migration.
+
+3. After the backfill reaches `ready_for_incremental_sync`, cut over atomically:
+
+   ```bash
+   bun run fts-search:reindex -- --apply --switch-aliases --yes
+   ```
+
+   This repoints all stable aliases from the old physical indexes to the new ones in a single atomic
+   `_aliases` request. Passing `--switch-aliases` from the start in step 2 performs the same cutover
+   automatically as soon as the backfill completes, instead of requiring this separate invocation.
+
+4. Resume the incremental sync consumer. Pending Outbox rows replay into the new schema version's
+   indexes; rows older than what the backfill already captured are rejected by Elasticsearch as
+   version conflicts (409), which the sync consumer treats as success.
+
+5. After verifying search, delete the old physical indexes manually, for example:
+
+   ```bash
+   DELETE /lobehub-messages-v1
+   ```
+
+   The reindex tool never deletes indexes.
+
+To roll back before step 4, repoint the stable aliases back to the old physical indexes manually via
+`_aliases`, then resume the sync consumer.
 
 ## Remove pg\_search before the Neon deadline
 

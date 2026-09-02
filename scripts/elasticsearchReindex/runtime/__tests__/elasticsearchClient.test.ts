@@ -4,9 +4,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   FTS_SEARCH_INDEX_ANALYSIS,
   FTS_SEARCH_INDEX_DEFINITIONS,
+  getFtsSearchIndexMappings,
 } from '../../../../packages/database/src/repositories/ftsSearchDocument';
 import { FtsSearchReindexHttpClient } from '../elasticsearchClient';
-import type { FtsSearchReindexIndexBody } from '../reindexService';
+import type { FtsSearchReindexAliasTarget, FtsSearchReindexIndexBody } from '../reindexService';
 
 const response = (body: unknown, status = 200) =>
   new Response(body === undefined ? undefined : JSON.stringify(body), {
@@ -15,15 +16,16 @@ const response = (body: unknown, status = 200) =>
   });
 
 const reindexMeta = { reindex_run_id: '00000000-0000-4000-8000-000000000001', schema_version: 1 };
+const agentsMappings = getFtsSearchIndexMappings('agents');
 const agentsIndexBody: FtsSearchReindexIndexBody = {
-  mappings: { ...FTS_SEARCH_INDEX_DEFINITIONS.agents.mappings, _meta: reindexMeta },
+  mappings: { ...agentsMappings, _meta: reindexMeta },
   settings: { analysis: FTS_SEARCH_INDEX_ANALYSIS },
 };
 const existingAgentsMapping = {
   'lobehub-messages-v1': {
     mappings: {
       _meta: reindexMeta,
-      ...FTS_SEARCH_INDEX_DEFINITIONS.agents.mappings,
+      ...agentsMappings,
     },
   },
 };
@@ -183,6 +185,7 @@ describe('FtsSearchReindexHttpClient', () => {
           'lobehub-messages-v1': {
             mappings: {
               _meta: reindexMeta,
+              _source: { excludes: agentsMappings._source.excludes },
               dynamic: 'strict',
               properties: {
                 ...FTS_SEARCH_INDEX_DEFINITIONS.agents.mappings.properties,
@@ -229,6 +232,73 @@ describe('FtsSearchReindexHttpClient', () => {
     );
   });
 
+  it('refuses to resume into an existing index with different _source excludes', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response(undefined))
+      .mockResolvedValueOnce(
+        response({
+          'lobehub-messages-v1': {
+            mappings: {
+              _meta: reindexMeta,
+              _source: { excludes: [] },
+              dynamic: 'strict',
+              properties: agentsMappings.properties,
+            },
+          },
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new FtsSearchReindexHttpClient({
+      apiKey: 'secret-key',
+      url: 'https://search.example.com',
+    });
+
+    await expect(client.ensureIndex('lobehub-messages-v1', agentsIndexBody)).rejects.toThrow(
+      '_source excludes are incompatible',
+    );
+  });
+
+  it('accepts an existing index whose _source excludes only differ in order', async () => {
+    const messagesMappings = getFtsSearchIndexMappings('messages');
+    const messagesIndexBody: FtsSearchReindexIndexBody = {
+      mappings: { ...messagesMappings, _meta: reindexMeta },
+      settings: { analysis: FTS_SEARCH_INDEX_ANALYSIS },
+    };
+    expect(messagesMappings._source.excludes.length).toBeGreaterThan(1);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response(undefined))
+      .mockResolvedValueOnce(
+        response({
+          'lobehub-messages-v1': {
+            mappings: {
+              _meta: reindexMeta,
+              _source: { excludes: [...messagesMappings._source.excludes].reverse() },
+              dynamic: 'strict',
+              properties: messagesMappings.properties,
+            },
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        response({
+          'lobehub-messages-v1': {
+            settings: { index: { analysis: FTS_SEARCH_INDEX_ANALYSIS } },
+          },
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new FtsSearchReindexHttpClient({
+      apiKey: 'secret-key',
+      url: 'https://search.example.com',
+    });
+
+    await expect(
+      client.ensureIndex('lobehub-messages-v1', messagesIndexBody),
+    ).resolves.toBeUndefined();
+  });
+
   it('keeps an alias that already targets the expected writable index', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       response({
@@ -267,5 +337,122 @@ describe('FtsSearchReindexHttpClient', () => {
       'Elasticsearch alias lobehub-messages already points to a different index',
     );
     expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  describe('switchAliases', () => {
+    const targets: FtsSearchReindexAliasTarget[] = [
+      { alias: 'lobehub-agents', physicalIndex: 'lobehub-agents-v2' },
+      { alias: 'lobehub-messages', physicalIndex: 'lobehub-messages-v2' },
+    ];
+
+    it('sends a single /_aliases request that removes old indices and adds the new write index', async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({
+            'lobehub-agents-v1': { aliases: { 'lobehub-agents': { is_write_index: true } } },
+          }),
+        )
+        .mockResolvedValueOnce(
+          response({
+            'lobehub-messages-v1': { aliases: { 'lobehub-messages': { is_write_index: true } } },
+          }),
+        )
+        .mockResolvedValueOnce(response({ acknowledged: true }));
+      vi.stubGlobal('fetch', fetchMock);
+      const client = new FtsSearchReindexHttpClient({
+        apiKey: 'secret-key',
+        url: 'https://search.example.com',
+      });
+
+      await client.switchAliases(targets);
+
+      const aliasCalls = fetchMock.mock.calls.filter(([endpoint]) =>
+        String(endpoint).endsWith('/_aliases'),
+      );
+      expect(aliasCalls).toHaveLength(1);
+      const [, init] = aliasCalls[0];
+      expect(JSON.parse(init.body)).toEqual({
+        actions: [
+          { remove: { alias: 'lobehub-agents', index: 'lobehub-agents-v1' } },
+          { add: { alias: 'lobehub-agents', index: 'lobehub-agents-v2', is_write_index: true } },
+          { remove: { alias: 'lobehub-messages', index: 'lobehub-messages-v1' } },
+          {
+            add: { alias: 'lobehub-messages', index: 'lobehub-messages-v2', is_write_index: true },
+          },
+        ],
+      });
+    });
+
+    it('only adds the new index when an alias does not exist yet (404)', async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(response(undefined, 404))
+        .mockResolvedValueOnce(response(undefined, 404))
+        .mockResolvedValueOnce(response({ acknowledged: true }));
+      vi.stubGlobal('fetch', fetchMock);
+      const client = new FtsSearchReindexHttpClient({
+        apiKey: 'secret-key',
+        url: 'https://search.example.com',
+      });
+
+      await client.switchAliases(targets);
+
+      const [, init] = fetchMock.mock.calls.at(-1)!;
+      expect(JSON.parse(init.body)).toEqual({
+        actions: [
+          { add: { alias: 'lobehub-agents', index: 'lobehub-agents-v2', is_write_index: true } },
+          {
+            add: { alias: 'lobehub-messages', index: 'lobehub-messages-v2', is_write_index: true },
+          },
+        ],
+      });
+    });
+
+    it('skips the remove action when the alias already targets the new physical index', async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({
+            'lobehub-agents-v2': { aliases: { 'lobehub-agents': { is_write_index: true } } },
+          }),
+        )
+        .mockResolvedValueOnce(response(undefined, 404))
+        .mockResolvedValueOnce(response({ acknowledged: true }));
+      vi.stubGlobal('fetch', fetchMock);
+      const client = new FtsSearchReindexHttpClient({
+        apiKey: 'secret-key',
+        url: 'https://search.example.com',
+      });
+
+      await client.switchAliases(targets);
+
+      const [, init] = fetchMock.mock.calls.at(-1)!;
+      expect(JSON.parse(init.body)).toEqual({
+        actions: [
+          { add: { alias: 'lobehub-agents', index: 'lobehub-agents-v2', is_write_index: true } },
+          {
+            add: { alias: 'lobehub-messages', index: 'lobehub-messages-v2', is_write_index: true },
+          },
+        ],
+      });
+    });
+
+    it('throws when the /_aliases request does not respond ok', async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(response(undefined, 404))
+        .mockResolvedValueOnce(response(undefined, 404))
+        .mockResolvedValueOnce(response(undefined, 500));
+      vi.stubGlobal('fetch', fetchMock);
+      const client = new FtsSearchReindexHttpClient({
+        apiKey: 'secret-key',
+        url: 'https://search.example.com',
+      });
+
+      await expect(client.switchAliases(targets)).rejects.toThrow(
+        'Elasticsearch alias switch failed',
+      );
+    });
   });
 });

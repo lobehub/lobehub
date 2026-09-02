@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { resolveElasticsearchTransport } from '../../../packages/database/src/repositories/ftsSearch/elasticsearch/url';
 import type {
+  FtsSearchReindexAliasTarget,
   FtsSearchReindexBulkItemResult,
   FtsSearchReindexElasticsearchClient,
   FtsSearchReindexIndexBody,
@@ -57,6 +58,7 @@ const mappingResponseSchema = z.record(
           schema_version: z.number().int().positive().optional(),
         })
         .optional(),
+      _source: z.object({ excludes: z.array(z.string()).optional() }).optional(),
       dynamic: z.union([z.boolean(), z.string()]).optional(),
       properties: z.record(z.string(), mappingPropertyResponseSchema),
     }),
@@ -171,6 +173,16 @@ export class FtsSearchReindexHttpClient implements FtsSearchReindexElasticsearch
     ) {
       throw new FtsSearchReindexRequestError(
         `Elasticsearch index mapping or reindex run identity is incompatible for ${index}; restore the matching checkpoint or use a clean target`,
+      );
+    }
+    /**
+     * `_source.excludes` decides which long text fields are stored. A resumed run against an index
+     * that stores different fields would silently mix storage shapes under one schema version.
+     */
+    const actualExcludes = [...(actual._source?.excludes ?? [])].sort();
+    if (!isDeepStrictEqual(actualExcludes, [...expected.mappings._source.excludes].sort())) {
+      throw new FtsSearchReindexRequestError(
+        `Elasticsearch _source excludes are incompatible for ${index}`,
       );
     }
     for (const [field, expectedProperty] of Object.entries(expected.mappings.properties)) {
@@ -300,6 +312,56 @@ export class FtsSearchReindexHttpClient implements FtsSearchReindexElasticsearch
       throw new FtsSearchReindexRequestError(
         `Elasticsearch alias creation failed for ${alias} (${createResponse.status})`,
         createResponse.status,
+      );
+    }
+  }
+
+  private async readAliasTargets(alias: string): Promise<string[]> {
+    const response = await this.request(`/_alias/${encodeURIComponent(alias)}`, { method: 'GET' });
+    if (response.status === 404) return [];
+    if (!response.ok) {
+      throw new FtsSearchReindexRequestError(
+        `Elasticsearch alias check failed for ${alias} (${response.status})`,
+        response.status,
+      );
+    }
+    const parsed = aliasResponseSchema.safeParse(await response.json());
+    if (!parsed.success) {
+      throw new FtsSearchReindexRequestError(
+        `Elasticsearch alias response has an invalid shape for ${alias}`,
+        response.status,
+        parsed.error,
+      );
+    }
+    return Object.entries(parsed.data)
+      .filter(([, value]) => Object.hasOwn(value.aliases, alias))
+      .map(([index]) => index);
+  }
+
+  async switchAliases(targets: FtsSearchReindexAliasTarget[]): Promise<void> {
+    const actions: Record<string, { alias: string; index: string; is_write_index?: boolean }>[] =
+      [];
+    for (const { alias, physicalIndex } of targets) {
+      const currentTargets = await this.readAliasTargets(alias);
+      for (const index of currentTargets) {
+        if (index !== physicalIndex) actions.push({ remove: { alias, index } });
+      }
+      actions.push({ add: { alias, index: physicalIndex, is_write_index: true } });
+    }
+
+    /**
+     * A single `_aliases` request applies every remove/add atomically, so readers and the sync
+     * writer never observe a mix of old and new schema versions across entities.
+     */
+    const response = await this.request('/_aliases', {
+      body: JSON.stringify({ actions }),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    });
+    if (!response.ok) {
+      throw new FtsSearchReindexRequestError(
+        `Elasticsearch alias switch failed (${response.status})`,
+        response.status,
       );
     }
   }

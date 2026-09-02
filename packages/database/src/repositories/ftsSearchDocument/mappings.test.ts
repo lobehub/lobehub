@@ -5,6 +5,7 @@ import {
   FTS_SEARCH_INDEX_DEFINITIONS,
   FTS_SEARCH_INDEX_SCHEMA_VERSION,
   getFtsSearchIndexAlias,
+  getFtsSearchIndexMappings,
   getFtsSearchPhysicalIndexName,
 } from './mappings';
 import {
@@ -45,12 +46,12 @@ describe('search index mappings', () => {
   });
 
   it('provides deployment-neutral versioned alias and physical names', () => {
-    expect(FTS_SEARCH_INDEX_SCHEMA_VERSION).toBe(1);
+    expect(FTS_SEARCH_INDEX_SCHEMA_VERSION).toBe(2);
     expect(getFtsSearchIndexAlias('lobehub-dev', 'knowledgeBases')).toBe(
       'lobehub-dev-knowledge-bases',
     );
     expect(getFtsSearchPhysicalIndexName('lobehub-dev', 'knowledgeBases')).toBe(
-      'lobehub-dev-knowledge-bases-v1',
+      'lobehub-dev-knowledge-bases-v2',
     );
     expect(getFtsSearchPhysicalIndexName('lobehub-dev', 'knowledgeBases', 4)).toBe(
       'lobehub-dev-knowledge-bases-v4',
@@ -123,6 +124,51 @@ describe('search index mappings', () => {
 
     expect(FTS_SEARCH_INDEX_DEFINITIONS.documents.mappings.properties.content).toEqual(
       expect.objectContaining({ analyzer: 'lobehub_icu_english' }),
+    );
+  });
+
+  describe('getFtsSearchIndexMappings', () => {
+    it.each(FTS_SEARCH_DOCUMENT_ENTITIES)(
+      'reuses the %s definition dynamic and properties',
+      (entity) => {
+        const definition = FTS_SEARCH_INDEX_DEFINITIONS[entity];
+        const mappings = getFtsSearchIndexMappings(entity);
+
+        expect(mappings.dynamic).toBe('strict');
+        expect(mappings.properties).toEqual(definition.mappings.properties);
+      },
+    );
+
+    it('excludes exactly the sorted long text fields for messages', () => {
+      expect(getFtsSearchIndexMappings('messages')._source.excludes).toEqual([
+        'content',
+        'summary',
+      ]);
+    });
+
+    it('excludes exactly the sorted long text fields for memoryExperiences', () => {
+      expect(getFtsSearchIndexMappings('memoryExperiences')._source.excludes).toEqual([
+        'action',
+        'key_learning',
+        'possible_outcome',
+        'reasoning',
+        'situation',
+      ]);
+    });
+
+    it('excludes nothing for files, which has no long text fields', () => {
+      expect(getFtsSearchIndexMappings('files')._source.excludes).toEqual([]);
+    });
+
+    it.each(FTS_SEARCH_DOCUMENT_ENTITIES)(
+      'only excludes fields that exist in the %s mapping properties',
+      (entity) => {
+        const mappings = getFtsSearchIndexMappings(entity);
+
+        for (const excludedField of mappings._source.excludes) {
+          expect(Object.keys(mappings.properties)).toContain(excludedField);
+        }
+      },
     );
   });
 });
