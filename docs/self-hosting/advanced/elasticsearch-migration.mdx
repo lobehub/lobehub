@@ -332,13 +332,13 @@ After Elasticsearch has served search reliably through your observation window a
 PostgreSQL recovery point is available, inspect the remaining LobeHub-managed objects:
 
 ```bash
-bun run fts-search:cleanup-pg-search -- --status
+bun run scripts/pgSearchCleanup/index.ts --status
 ```
 
 Then remove them without copying SQL from this guide:
 
 ```bash
-bun run fts-search:cleanup-pg-search -- --apply --yes
+bun run scripts/pgSearchCleanup/index.ts --apply --yes
 ```
 
 Use a direct `DATABASE_URL`, not a transaction-pool endpoint. The command refuses to apply before

@@ -100,8 +100,8 @@ bun run db:install-fts-search-capture
 bun run fts-search:reindex -- --status
 bun run fts-search:reindex -- --apply --yes
 bun run fts-search:sync -- --max-steps=8 --yes
-bun run fts-search:cleanup-pg-search -- --status
-bun run fts-search:cleanup-pg-search -- --apply --yes
+bun run scripts/pgSearchCleanup/index.ts --status
+bun run scripts/pgSearchCleanup/index.ts --apply --yes
 ```
 
 Read `docs/self-hosting/advanced/elasticsearch-migration.mdx` or its Chinese counterpart before
