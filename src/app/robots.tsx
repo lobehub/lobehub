@@ -24,7 +24,9 @@ const robots = (): MetadataRoute.Robots => {
       },
       {
         allow: ['/'],
-        disallow: ['/api/*', '/signin', '/signup', '/knowledge/*', '/share/*'],
+        // `/agent/*` also hosts Agent Share visitor pages (`/agent/:slugOrId`):
+        // link-visible, creator-owned content that must never be indexed.
+        disallow: ['/api/*', '/signin', '/signup', '/knowledge/*', '/share/*', '/agent/*'],
         userAgent: '*',
       },
     ],
