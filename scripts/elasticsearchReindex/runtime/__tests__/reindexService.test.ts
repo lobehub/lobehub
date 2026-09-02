@@ -254,7 +254,15 @@ describe('FtsSearchReindexService', () => {
 
   it('atomically switches aliases instead of ensuring them one by one when requested', async () => {
     const { builder, client, repository, state } = createDependencies();
+    const lifecycle: string[] = [];
+    const assertAliasSwitchAllowed = vi.fn(async () => {
+      lifecycle.push('assert-alias-switch-allowed');
+    });
+    vi.mocked(client.switchAliases).mockImplementation(async () => {
+      lifecycle.push('switch-aliases');
+    });
     const service = new FtsSearchReindexService(builder, repository, client, {
+      assertAliasSwitchAllowed,
       switchAliases: true,
     });
 
@@ -262,6 +270,7 @@ describe('FtsSearchReindexService', () => {
       status: 'ready_for_incremental_sync',
     });
 
+    expect(lifecycle).toEqual(['assert-alias-switch-allowed', 'switch-aliases']);
     expect(client.switchAliases).toHaveBeenCalledOnce();
     expect(client.switchAliases).toHaveBeenCalledWith(
       expect.arrayContaining(
@@ -276,6 +285,23 @@ describe('FtsSearchReindexService', () => {
     );
     expect(client.ensureAlias).not.toHaveBeenCalled();
     expect(repository.markReadyForIncrementalSync).toHaveBeenCalledOnce();
+  });
+
+  it('blocks the alias switch and marking ready when assertAliasSwitchAllowed rejects', async () => {
+    const { builder, client, repository } = createDependencies();
+    const assertAliasSwitchAllowed = vi
+      .fn()
+      .mockRejectedValue(new Error('outbox consumer is still draining'));
+    const service = new FtsSearchReindexService(builder, repository, client, {
+      assertAliasSwitchAllowed,
+      switchAliases: true,
+    });
+
+    await expect(service.run('test', 1)).rejects.toThrow('outbox consumer is still draining');
+
+    expect(assertAliasSwitchAllowed).toHaveBeenCalledOnce();
+    expect(client.switchAliases).not.toHaveBeenCalled();
+    expect(repository.markReadyForIncrementalSync).not.toHaveBeenCalled();
   });
 
   it('keeps a selected-entity run backfilling until every entity is complete', async () => {

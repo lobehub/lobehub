@@ -1,0 +1,239 @@
+// @vitest-environment node
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  FTS_SEARCH_INDEX_ANALYSIS,
+  getFtsSearchIndexMappings,
+} from '../../../../packages/database/src/repositories/ftsSearchDocument';
+import type { FtsSearchIndexCopyElasticsearchClient } from '../indexCopyService';
+import { FtsSearchIndexCopyError, FtsSearchIndexCopyService } from '../indexCopyService';
+
+const createClient = (
+  overrides: Partial<FtsSearchIndexCopyElasticsearchClient> = {},
+): FtsSearchIndexCopyElasticsearchClient => ({
+  count: vi.fn().mockResolvedValue(0),
+  ensureIndex: vi.fn().mockResolvedValue(undefined),
+  getTask: vi.fn().mockResolvedValue({
+    completed: true,
+    created: 0,
+    failures: [],
+    total: 0,
+    updated: 0,
+    versionConflicts: 0,
+  }),
+  refresh: vi.fn().mockResolvedValue(undefined),
+  startReindex: vi
+    .fn()
+    .mockImplementation(async (_source: string, destination: string) => `task-${destination}`),
+  switchAliases: vi.fn().mockResolvedValue(undefined),
+  ...overrides,
+});
+
+beforeEach(() => vi.clearAllMocks());
+
+describe('FtsSearchIndexCopyService', () => {
+  it('copies each entity into the next schema version and reports counts', async () => {
+    const pendingTaskIds = new Set<string>();
+    const getTask = vi.fn(async (taskId: string) => {
+      if (!pendingTaskIds.has(taskId)) {
+        pendingTaskIds.add(taskId);
+        return {
+          completed: false,
+          created: 0,
+          failures: [],
+          total: 10,
+          updated: 0,
+          versionConflicts: 0,
+        };
+      }
+      return {
+        completed: true,
+        created: taskId.includes('agents') ? 3 : 7,
+        failures: [],
+        total: 10,
+        updated: taskId.includes('agents') ? 2 : 4,
+        versionConflicts: 1,
+      };
+    });
+    const count = vi.fn(async (index: string) => {
+      if (index === 'test-agents-v1' || index === 'test-agents-v2') return 12;
+      if (index === 'test-messages-v1' || index === 'test-messages-v2') return 34;
+      throw new Error(`unexpected count index ${index}`);
+    });
+    const client = createClient({ count, getTask });
+    const events: unknown[] = [];
+    const service = new FtsSearchIndexCopyService(client, {
+      entities: ['agents', 'messages'],
+      onProgress: (event) => {
+        events.push(event);
+      },
+      pollIntervalMs: 0,
+    });
+
+    const result = await service.run('test', 1, 2);
+
+    expect(client.ensureIndex).toHaveBeenCalledWith('test-agents-v2', {
+      mappings: {
+        ...getFtsSearchIndexMappings('agents'),
+        _meta: { reindex_run_id: 'copy-v1-v2', schema_version: 2 },
+      },
+      settings: { analysis: FTS_SEARCH_INDEX_ANALYSIS },
+    });
+    expect(client.ensureIndex).toHaveBeenCalledWith('test-messages-v2', {
+      mappings: {
+        ...getFtsSearchIndexMappings('messages'),
+        _meta: { reindex_run_id: 'copy-v1-v2', schema_version: 2 },
+      },
+      settings: { analysis: FTS_SEARCH_INDEX_ANALYSIS },
+    });
+
+    expect(client.startReindex).toHaveBeenCalledWith('test-agents-v1', 'test-agents-v2');
+    expect(client.startReindex).toHaveBeenCalledWith('test-messages-v1', 'test-messages-v2');
+
+    // One "not completed" call followed by one "completed" call per entity.
+    expect(getTask).toHaveBeenCalledTimes(4);
+    expect(client.refresh).toHaveBeenCalledWith('test-agents-v2');
+    expect(client.refresh).toHaveBeenCalledWith('test-messages-v2');
+
+    expect(events).toContainEqual({
+      entity: 'agents',
+      taskId: 'task-test-agents-v2',
+      type: 'copy_started',
+    });
+    expect(events).toContainEqual({
+      entity: 'messages',
+      taskId: 'task-test-messages-v2',
+      type: 'copy_started',
+    });
+    expect(events).toContainEqual({
+      created: 3,
+      entity: 'agents',
+      sourceCount: 12,
+      targetCount: 12,
+      type: 'copy_completed',
+      updated: 2,
+      versionConflicts: 1,
+    });
+    expect(events).toContainEqual({
+      created: 7,
+      entity: 'messages',
+      sourceCount: 34,
+      targetCount: 34,
+      type: 'copy_completed',
+      updated: 4,
+      versionConflicts: 1,
+    });
+
+    expect(result).toEqual({
+      aliasesSwitched: false,
+      entities: {
+        agents: { sourceCount: 12, targetCount: 12, updated: 2, versionConflicts: 1 },
+        messages: { sourceCount: 34, targetCount: 34, updated: 4, versionConflicts: 1 },
+      },
+    });
+    expect(client.switchAliases).not.toHaveBeenCalled();
+  });
+
+  it('wraps a reported reindex task failure in FtsSearchIndexCopyError', async () => {
+    const client = createClient({
+      getTask: vi.fn().mockResolvedValue({
+        completed: true,
+        created: 0,
+        failures: [{ reason: 'boom' }],
+        total: 1,
+        updated: 0,
+        versionConflicts: 0,
+      }),
+    });
+    const service = new FtsSearchIndexCopyService(client, {
+      entities: ['agents'],
+      pollIntervalMs: 0,
+    });
+
+    const error = await service.run('test', 1, 2).catch((thrown) => thrown);
+
+    expect(error).toBeInstanceOf(FtsSearchIndexCopyError);
+    expect(error).toMatchObject({ entity: 'agents', name: 'FtsSearchIndexCopyError' });
+    expect((error as FtsSearchIndexCopyError).cause).toEqual(
+      expect.objectContaining({ message: expect.stringContaining('reported 1 failures') }),
+    );
+  });
+
+  it('calls assertAliasSwitchAllowed before switching aliases when requested', async () => {
+    const order: string[] = [];
+    const client = createClient({
+      switchAliases: vi.fn(async () => {
+        order.push('switch-aliases');
+      }),
+    });
+    const assertAliasSwitchAllowed = vi.fn(async () => {
+      order.push('assert-alias-switch-allowed');
+    });
+    const events: unknown[] = [];
+    const service = new FtsSearchIndexCopyService(client, {
+      assertAliasSwitchAllowed,
+      entities: ['agents', 'messages'],
+      onProgress: (event) => {
+        events.push(event);
+      },
+      pollIntervalMs: 0,
+      switchAliases: true,
+    });
+
+    const result = await service.run('test', 1, 2);
+
+    expect(order).toEqual(['assert-alias-switch-allowed', 'switch-aliases']);
+    expect(client.switchAliases).toHaveBeenCalledWith([
+      { alias: 'test-agents', physicalIndex: 'test-agents-v2' },
+      { alias: 'test-messages', physicalIndex: 'test-messages-v2' },
+    ]);
+    expect(result.aliasesSwitched).toBe(true);
+    expect(events).toContainEqual({ type: 'aliases_switched' });
+  });
+
+  it('does not switch aliases when assertAliasSwitchAllowed rejects', async () => {
+    const client = createClient();
+    const assertAliasSwitchAllowed = vi
+      .fn()
+      .mockRejectedValue(new Error('sync consumer is still draining the outbox'));
+    const service = new FtsSearchIndexCopyService(client, {
+      assertAliasSwitchAllowed,
+      entities: ['agents'],
+      pollIntervalMs: 0,
+      switchAliases: true,
+    });
+
+    await expect(service.run('test', 1, 2)).rejects.toThrow(
+      'sync consumer is still draining the outbox',
+    );
+    expect(client.switchAliases).not.toHaveBeenCalled();
+  });
+
+  it('does not switch aliases when switchAliases is false', async () => {
+    const client = createClient();
+    const service = new FtsSearchIndexCopyService(client, {
+      entities: ['agents'],
+      pollIntervalMs: 0,
+    });
+
+    const result = await service.run('test', 1, 2);
+
+    expect(client.switchAliases).not.toHaveBeenCalled();
+    expect(result.aliasesSwitched).toBe(false);
+  });
+
+  it('rejects when fromVersion is not older than toVersion', async () => {
+    const client = createClient();
+    const service = new FtsSearchIndexCopyService(client, {
+      entities: ['agents'],
+      pollIntervalMs: 0,
+    });
+
+    await expect(service.run('test', 2, 2)).rejects.toThrow(
+      'requires an older source schema version',
+    );
+    await expect(service.run('test', 3, 2)).rejects.toThrow(
+      'requires an older source schema version',
+    );
+  });
+});

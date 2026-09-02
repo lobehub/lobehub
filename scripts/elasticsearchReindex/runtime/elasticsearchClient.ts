@@ -4,6 +4,10 @@ import { z } from 'zod';
 
 import { resolveElasticsearchTransport } from '../../../packages/database/src/repositories/ftsSearch/elasticsearch/url';
 import type {
+  FtsSearchIndexCopyElasticsearchClient,
+  FtsSearchIndexCopyTaskStatus,
+} from './indexCopyService';
+import type {
   FtsSearchReindexAliasTarget,
   FtsSearchReindexBulkItemResult,
   FtsSearchReindexElasticsearchClient,
@@ -65,6 +69,27 @@ const mappingResponseSchema = z.record(
   }),
 );
 
+const reindexStartResponseSchema = z.object({ task: z.string() });
+
+const reindexTaskResponseSchema = z.object({
+  completed: z.boolean(),
+  error: z.unknown().optional(),
+  response: z
+    .object({ failures: z.array(z.unknown()).optional() })
+    .passthrough()
+    .optional(),
+  task: z.object({
+    status: z
+      .object({
+        created: z.number().int().nonnegative().optional(),
+        total: z.number().int().nonnegative().optional(),
+        updated: z.number().int().nonnegative().optional(),
+        version_conflicts: z.number().int().nonnegative().optional(),
+      })
+      .passthrough(),
+  }),
+});
+
 const settingsResponseSchema = z.record(
   z.string(),
   z.object({
@@ -94,7 +119,9 @@ export class FtsSearchReindexRequestError extends Error {
 }
 
 /** Minimal credential-safe Elasticsearch transport for the self-host reindex command. */
-export class FtsSearchReindexHttpClient implements FtsSearchReindexElasticsearchClient {
+export class FtsSearchReindexHttpClient
+  implements FtsSearchReindexElasticsearchClient, FtsSearchIndexCopyElasticsearchClient
+{
   private readonly authorizationHeader: string | undefined;
   private readonly requestTimeoutMs: number;
   private readonly url: URL;
@@ -401,6 +428,71 @@ export class FtsSearchReindexHttpClient implements FtsSearchReindexElasticsearch
         response.status,
       );
     }
+  }
+
+  /**
+   * Starts a server-side copy that keeps each document's external version, so a repeated run
+   * only rewrites documents whose version moved and skips the rest as version conflicts.
+   */
+  async startReindex(source: string, destination: string): Promise<string> {
+    const response = await this.request('/_reindex?wait_for_completion=false', {
+      body: JSON.stringify({
+        conflicts: 'proceed',
+        dest: { index: destination, version_type: 'external' },
+        source: { index: source },
+      }),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    });
+    if (!response.ok) {
+      throw new FtsSearchReindexRequestError(
+        `Elasticsearch reindex start failed for ${source} -> ${destination} (${response.status})`,
+        response.status,
+      );
+    }
+    const parsed = reindexStartResponseSchema.safeParse(await response.json());
+    if (!parsed.success) {
+      throw new FtsSearchReindexRequestError(
+        `Elasticsearch reindex start response has an invalid shape for ${source}`,
+        response.status,
+        parsed.error,
+      );
+    }
+    return parsed.data.task;
+  }
+
+  async getTask(taskId: string): Promise<FtsSearchIndexCopyTaskStatus> {
+    const response = await this.request(`/_tasks/${encodeURIComponent(taskId)}`, {
+      method: 'GET',
+    });
+    if (!response.ok) {
+      throw new FtsSearchReindexRequestError(
+        `Elasticsearch task lookup failed for ${taskId} (${response.status})`,
+        response.status,
+      );
+    }
+    const parsed = reindexTaskResponseSchema.safeParse(await response.json());
+    if (!parsed.success) {
+      throw new FtsSearchReindexRequestError(
+        `Elasticsearch task response has an invalid shape for ${taskId}`,
+        response.status,
+        parsed.error,
+      );
+    }
+    if (parsed.data.completed && parsed.data.error !== undefined) {
+      throw new FtsSearchReindexRequestError(
+        `Elasticsearch reindex task ${taskId} failed: ${JSON.stringify(parsed.data.error)}`,
+      );
+    }
+    const status = parsed.data.task.status;
+    return {
+      completed: parsed.data.completed,
+      created: status.created ?? 0,
+      failures: parsed.data.response?.failures ?? [],
+      total: status.total ?? 0,
+      updated: status.updated ?? 0,
+      versionConflicts: status.version_conflicts ?? 0,
+    };
   }
 
   async refresh(index: string): Promise<void> {

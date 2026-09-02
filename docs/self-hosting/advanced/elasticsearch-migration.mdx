@@ -319,7 +319,7 @@ capture has been installed, source changes continue accumulating in the Outbox u
 - Request-level failures do not advance the cursor. If one concurrent bulk succeeds and another fails, the entire database batch is replayed safely on resume. Item-level failures are recorded in the local checkpoint and replayed before an entity can complete.
 - The tool refuses to create aliases while any entity or item-level failure is incomplete.
 - The final status is `ready_for_incremental_sync`. At this point the full snapshot, aliases, and the Outbox high-water boundary exist, but user queries must still remain on PostgreSQL.
-- Upgrading to a new schema version reuses this same resumable backfill into new, version-suffixed physical indexes, plus a `--switch-aliases` flag for the atomic cutover; see [Schema version upgrades](#schema-version-upgrades).
+- Upgrading to a new schema version normally copies documents directly inside Elasticsearch with `--copy-from-schema-version`, preserving document versions and reading nothing from PostgreSQL; a `--switch-aliases` flag performs the atomic cutover. When the source schema version no longer keeps every field in `_source`, the upgrade instead falls back to this same resumable backfill into new, version-suffixed physical indexes. See [Schema version upgrades](#schema-version-upgrades).
 
 The high-water revision is an observation point for catch-up monitoring, not a committed database
 snapshot. An incremental consumer must process every queued row and must never discard rows only
@@ -361,50 +361,70 @@ progress.
 ## Schema version upgrades
 
 The reindex tool supports an online, no-downtime upgrade of the search index schema version (for
-example `v1` to `v2`), using the same resumable backfill mechanics as the initial migration plus a
-`--switch-aliases` flag that atomically cuts every stable alias over to the new physical indexes.
-`--switch-aliases` is only accepted together with `--apply --yes`. The default reindex behavior is
-unchanged: without `--switch-aliases`, the command still fails closed if a stable alias already
-points to a different physical index. The command also refuses `--switch-aliases` while the Outbox
-has in-flight claims; pause the incremental sync consumer first.
+example `v1` to `v2`) by copying documents directly inside Elasticsearch, without re-scanning
+PostgreSQL. Pass `--copy-from-schema-version=<N>`, where `N` must be older than the schema version
+currently built into the tool. The flag is mutating and requires `--yes`, and it is mutually
+exclusive with `--apply`, `--status`, and `--skip-failure`. For each entity, it reindexes the
+`<namespace>-<entity>-v<N>` physical index into `<namespace>-<entity>-v<current>` using
+Elasticsearch's own `_reindex` API with `conflicts: proceed` and `version_type: external`, so
+document versions carry over and no PostgreSQL row is read. It creates the target physical indexes
+with the current mappings when they do not already exist, waits for each entity's reindex task,
+refreshes the target, and prints per-entity source/target document counts plus the updated and
+version-conflict counts.
+
+Because document versions are preserved, running `--copy-from-schema-version` again is safe: it
+only rewrites documents whose version changed since the previous run, and reports every other
+document as a version conflict rather than an error.
+
+`--switch-aliases` can be combined with `--copy-from-schema-version`. Immediately before switching,
+the command checks the Outbox for in-flight claims and refuses to proceed if any exist, so the
+incremental sync consumer must be paused first. The switch moves every stable alias to the new
+physical indexes in one atomic `_aliases` request.
+
+<Callout type="warning">
+  The in-place copy only works when the SOURCE schema version still stores every mapped field in
+  `_source`. Schema version `v1` does; `v2` and later versions do not, because they exclude long
+  text fields from `_source`. So `v1` to `v2` can use `--copy-from-schema-version`, but any later
+  upgrade that changes how an already-excluded field is indexed (a different analyzer or field
+  type) cannot reconstruct that field from `_source` and must fall back to a full PostgreSQL
+  backfill: `--apply --fresh-run --yes`, then `--apply --switch-aliases --yes` once it reaches
+  `ready_for_incremental_sync`, with the incremental sync consumer paused for the whole backfill.
+</Callout>
 
 For example, schema version `2` excludes long text fields from `_source` while keeping them indexed
 and searchable. The application only reads candidate document IDs back from Elasticsearch and
 hydrates the full content from PostgreSQL, so nothing user-visible changes, and per-index storage
 shrinks substantially.
 
-Follow this procedure for an online, no-downtime upgrade:
+Follow this procedure for the `v1` to `v2` upgrade:
 
-1. Pause the incremental sync consumer (set `FTS_SEARCH_SYNC_ENABLED=false` or stop the
-   `fts-search:sync` process). Product search keeps serving from the current stable aliases, and the
-   Outbox keeps accumulating changes; nothing is lost.
-
-2. Start a fresh backfill into the new schema version's physical indexes:
+1. Keep the incremental sync consumer running. Start the copy:
 
    ```bash
-   bun run fts-search:reindex -- --apply --fresh-run --yes
+   bun run fts-search:reindex -- --copy-from-schema-version=1 --yes
    ```
 
-   A schema-version bump always needs a new checkpoint (`--fresh-run`), because it targets new
-   version-suffixed physical indexes (for example `-v2`) written with `external_gte` versioning from
-   a base revision reserved through the write fence. This run is resumable exactly like an initial
-   migration.
+   Product search keeps serving from the current `v1` aliases and stays fresh throughout; this
+   first pass carries the bulk of the data and takes most of the time.
 
-3. After the backfill reaches `ready_for_incremental_sync`, cut over atomically:
+2. Pause the incremental sync consumer (set `FTS_SEARCH_SYNC_ENABLED=false` or stop the
+   `fts-search:sync` process). The Outbox keeps accumulating changes; nothing is lost.
+
+3. Run the copy again with `--switch-aliases`:
 
    ```bash
-   bun run fts-search:reindex -- --apply --switch-aliases --yes
+   bun run fts-search:reindex -- --copy-from-schema-version=1 --switch-aliases --yes
    ```
 
-   This repoints all stable aliases from the old physical indexes to the new ones in a single atomic
-   `_aliases` request. Passing `--switch-aliases` from the start in step 2 performs the same cutover
-   automatically as soon as the backfill completes, instead of requiring this separate invocation.
+   This second pass only copies documents that changed since step 1, so it finishes quickly, then
+   atomically switches every stable alias to the `v2` physical indexes. This short window is the
+   only time search freshness lags behind the source data.
 
-4. Resume the incremental sync consumer. Pending Outbox rows replay into the new schema version's
-   indexes; rows older than what the backfill already captured are rejected by Elasticsearch as
-   version conflicts (409), which the sync consumer treats as success.
+4. Resume the incremental sync consumer. Pending Outbox rows replay into the `v2` indexes; anything
+   already newer in `v2` is rejected by Elasticsearch as a version conflict (409), which the sync
+   consumer treats as success.
 
-5. After verifying search, delete the old physical indexes manually, for example:
+5. After verifying search, delete the old `v1` physical indexes manually, for example:
 
    ```bash
    DELETE /lobehub-messages-v1
@@ -412,8 +432,8 @@ Follow this procedure for an online, no-downtime upgrade:
 
    The reindex tool never deletes indexes.
 
-To roll back before step 4, repoint the stable aliases back to the old physical indexes manually via
-`_aliases`, then resume the sync consumer.
+To roll back before step 4, repoint the stable aliases back to the `v1` physical indexes manually
+via `_aliases`, then resume the sync consumer.
 
 ## Remove pg\_search before the Neon deadline
 

@@ -56,6 +56,12 @@ export interface FtsSearchReindexIndexBody {
 }
 
 export interface FtsSearchReindexServiceOptions {
+  /**
+   * Runs immediately before the alias switch rather than at command start: a backfill can take
+   * hours, and a sync consumer that resumes in between would acknowledge Outbox rows into the old
+   * index that the new one never sees.
+   */
+  assertAliasSwitchAllowed: () => Promise<void> | void;
   batchSize: number;
   /** Overrides the PostgreSQL page size for entities whose source rows differ materially in size. */
   batchSizeByEntity: Partial<Record<FtsSearchDocumentEntity, number>>;
@@ -305,6 +311,7 @@ export class FtsSearchReindexService {
     options: Partial<FtsSearchReindexServiceOptions> = {},
   ) {
     this.options = {
+      assertAliasSwitchAllowed: options.assertAliasSwitchAllowed ?? (() => {}),
       batchSize: options.batchSize ?? DEFAULT_BATCH_SIZE,
       bulkConcurrency: options.bulkConcurrency ?? DEFAULT_BULK_CONCURRENCY,
       bulkMaxBytes: options.bulkMaxBytes ?? DEFAULT_BULK_MAX_BYTES,
@@ -964,6 +971,7 @@ export class FtsSearchReindexService {
 
     await this.options.validateIncrementalSyncSource();
     if (this.options.switchAliases) {
+      await this.options.assertAliasSwitchAllowed();
       await this.client.switchAliases(
         currentState.progress.map((progress) => ({
           alias: getFtsSearchIndexAlias(namespace, progress.entity),

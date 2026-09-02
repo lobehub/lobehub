@@ -217,7 +217,7 @@ docker run --rm --env-file .env \
 - 整个请求失败时不会推进游标；如果同一批中的部分并发请求成功、另一部分失败，续跑时会安全重放整个数据库批次。逐条写入失败会写入本地 checkpoint，并在该数据类型完成前重试。
 - 任何数据类型或逐条失败尚未完成时，工具都会拒绝创建别名。
 - 最终状态为 `ready_for_incremental_sync`。此时全量快照、别名和增量队列的追平边界已经就绪，但用户查询仍必须留在 PostgreSQL。
-- 升级结构版本时会复用同一套可续跑的回填机制，写入带新版本号后缀的物理索引，并可使用 `--switch-aliases` 参数完成原子切换，详见[结构版本升级](#结构版本升级)。
+- 升级结构版本通常会直接在 Elasticsearch 内部复制文档（`--copy-from-schema-version`），保留文档版本号，且完全不读取 PostgreSQL；`--switch-aliases` 参数负责原子切换。如果源结构版本已经不再把全部字段保存在 `_source` 中，升级会改为回退到同一套可续跑的回填机制，写入带新版本号后缀的物理索引。详见[结构版本升级](#结构版本升级)。
 
 这个修订号只用于观察增量追平进度，不是数据库已经提交的快照边界。增量消费器必须处理队列里的每一条记录，不能仅因修订号小于或等于该值就丢弃记录。
 
@@ -241,33 +241,41 @@ ES_REINDEX_STATE_DIR=.elasticsearch-reindex bun run fts-search:reindex -- --appl
 
 ## 结构版本升级
 
-回填工具支持在线、不停机地升级搜索索引结构版本（例如从 `v1` 升级到 `v2`）：使用与首次迁移相同的可续跑回填机制，再加上一个 `--switch-aliases` 参数，用于把全部稳定别名原子切换到新的物理索引。`--switch-aliases` 只能与 `--apply --yes` 一起使用。默认回填行为保持不变：不传 `--switch-aliases` 时，如果稳定别名已经指向另一个物理索引，命令仍会直接失败。增量队列存在尚未处理完的任务时，命令也会拒绝 `--switch-aliases`；请先暂停增量消费器。
+回填工具支持在线、不停机地升级搜索索引结构版本（例如从 `v1` 升级到 `v2`）：直接在 Elasticsearch 内部复制文档，不需要重新扫描 PostgreSQL。传入 `--copy-from-schema-version=<N>`，其中 `N` 必须早于工具当前内置的结构版本。该参数会写入数据，必须搭配 `--yes`，并且与 `--apply`、`--status`、`--skip-failure` 互斥。对每个数据类型，它会使用 Elasticsearch 自身的 `_reindex` API（`conflicts: proceed`、`version_type: external`），把 `<命名空间>-<数据类型>-v<N>` 物理索引复制到 `<命名空间>-<数据类型>-v<当前版本>`，因此文档版本号会被保留，也不会读取任何 PostgreSQL 数据。如果目标物理索引尚不存在，命令会先按当前 mapping 创建；然后等待每个数据类型的 reindex 任务完成、刷新目标索引，并打印每个数据类型的源 / 目标文档数，以及更新数量和版本冲突数量。
+
+由于文档版本号被保留，重复执行 `--copy-from-schema-version` 是安全的：再次执行只会重写自上一次执行后版本发生变化的文档，其余文档都会被报告为版本冲突，而不是错误。
+
+`--switch-aliases` 可以和 `--copy-from-schema-version` 一起使用。切换别名前，命令会检查增量队列中是否存在正在处理的任务，如果存在就拒绝执行，因此必须先暂停增量消费器。切换会在一次原子 `_aliases` 请求中移动全部稳定别名。
+
+<Callout type="warning">
+  这种就地复制只在源结构版本仍然把全部映射字段保存在 `_source` 中时才有效。`v1` 满足这个条件，但 `v2` 及之后的版本不满足，因为它们会把长文本字段从 `_source` 中排除。因此 `v1` 升级到 `v2` 可以使用 `--copy-from-schema-version`，但之后任何改变了某个已被排除字段索引方式（分析器或字段类型变化）的升级，都无法从 `_source` 重建该字段，必须回退到完整的 PostgreSQL 全量回填：先执行 `--apply --fresh-run --yes`，等状态变为 `ready_for_incremental_sync` 后再执行 `--apply --switch-aliases --yes`，并在整个回填期间保持增量消费器暂停。
+</Callout>
 
 例如，结构版本 `2` 会把长文本字段从 `_source` 中排除，但这些字段仍会被索引、可被搜索。应用只从 Elasticsearch 读取候选文档 ID，再从 PostgreSQL 补全完整内容，因此不会影响用户可见的结果，同时单个索引的存储占用会大幅下降。
 
-在线、不停机升级请按以下步骤操作：
+`v1` 升级到 `v2` 请按以下步骤操作：
 
-1. 暂停增量消费器（设置 `FTS_SEARCH_SYNC_ENABLED=false`，或停止 `fts-search:sync` 进程）。产品搜索继续使用当前的稳定别名提供服务，增量队列会持续积累变更，不会丢失数据。
-
-2. 向新结构版本的物理索引开始一次全新回填：
+1. 保持增量消费器持续运行，开始复制：
 
    ```bash
-   bun run fts-search:reindex -- --apply --fresh-run --yes
+   bun run fts-search:reindex -- --copy-from-schema-version=1 --yes
    ```
 
-   结构版本升级必须使用新的 checkpoint（`--fresh-run`），因为它会写入带新版本号后缀的物理索引（例如 `-v2`），并基于通过写入围栏预留的基准修订号，使用 `external_gte` 版本机制写入；这次执行和首次迁移一样可以安全续跑。
+   产品搜索继续由当前的 `v1` 别名提供服务并全程保持数据新鲜；这一步会复制大部分数据，耗时也最长。
 
-3. 回填状态变为 `ready_for_incremental_sync` 后，执行原子切换：
+2. 暂停增量消费器（设置 `FTS_SEARCH_SYNC_ENABLED=false`，或停止 `fts-search:sync` 进程）。增量队列会持续积累变更，不会丢失数据。
+
+3. 带上 `--switch-aliases` 再执行一次复制：
 
    ```bash
-   bun run fts-search:reindex -- --apply --switch-aliases --yes
+   bun run fts-search:reindex -- --copy-from-schema-version=1 --switch-aliases --yes
    ```
 
-   这会在一次原子 `_aliases` 请求中，把全部稳定别名从旧物理索引切换到新物理索引。如果在第 2 步就带上 `--switch-aliases`，回填一完成就会自动执行同样的切换，不需要再单独执行这一步。
+   这一次只会复制第 1 步之后发生变化的文档，因此耗时很短；完成后会立即原子切换全部稳定别名到 `v2` 物理索引。这段短暂窗口是搜索数据滞后于源数据的唯一时间段。
 
-4. 恢复增量消费器。增量队列中待处理的记录会重放写入新结构版本的索引；早于回填已经覆盖范围的记录会被 Elasticsearch 判定为版本冲突（409）拒绝，消费器会把这种情况视为成功。
+4. 恢复增量消费器。增量队列中待处理的记录会重放写入 `v2` 索引；如果 `v2` 中已经有更新的版本，Elasticsearch 会将其判定为版本冲突（409）并拒绝，消费器会把这种情况视为成功。
 
-5. 确认搜索正常后，手动删除旧的物理索引，例如：
+5. 确认搜索正常后，手动删除旧的 `v1` 物理索引，例如：
 
    ```bash
    DELETE /lobehub-messages-v1
@@ -275,7 +283,7 @@ ES_REINDEX_STATE_DIR=.elasticsearch-reindex bun run fts-search:reindex -- --appl
 
    回填工具本身不会删除任何索引。
 
-如果需要在第 4 步之前回滚，可以手动通过 `_aliases` 把稳定别名指回旧的物理索引，再恢复增量消费器。
+如果需要在第 4 步之前回滚，可以手动通过 `_aliases` 把稳定别名指回 `v1` 物理索引，再恢复增量消费器。
 
 ## 在 Neon 截止日期前卸载 pg\_search
 

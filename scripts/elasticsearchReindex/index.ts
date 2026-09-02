@@ -33,6 +33,8 @@ import {
 } from './options';
 import { runFtsSearchReindexCommand } from './preparation';
 import {
+  FtsSearchIndexCopyError,
+  FtsSearchIndexCopyService,
   type FtsSearchReindexAuditValue,
   FtsSearchReindexEntityError,
   FtsSearchReindexFileLogger,
@@ -76,6 +78,7 @@ const freshRun = args.has('--fresh-run');
 const skipFailureArgument = process.argv.find((item) => item.startsWith('--skip-failure='));
 const status = args.has('--status');
 const switchAliases = args.has('--switch-aliases');
+const copyFromSchemaVersion = readPositiveIntegerArgument('--copy-from-schema-version');
 const yes = args.has('--yes');
 const batchSize = readPositiveIntegerArgument('--batch-size');
 const bulkConcurrency = readPositiveIntegerArgument('--bulk-concurrency');
@@ -102,6 +105,7 @@ const unknownArgument = process.argv
       !item.startsWith('--batch-size=') &&
       !item.startsWith('--bulk-concurrency=') &&
       !item.startsWith('--bulk-max-bytes=') &&
+      !item.startsWith('--copy-from-schema-version=') &&
       !item.startsWith('--entity-batch-size=') &&
       !item.startsWith('--entity=') &&
       !item.startsWith('--entity-concurrency=') &&
@@ -118,15 +122,25 @@ const unknownArgument = process.argv
   );
 if (unknownArgument) throw new Error(`Unknown argument: ${unknownArgument}`);
 
-const mutationModes = [apply, Boolean(skipFailureArgument)].filter(Boolean).length;
+const copyIndices = copyFromSchemaVersion !== undefined;
+const mutationModes = [apply, copyIndices, Boolean(skipFailureArgument)].filter(Boolean).length;
 if (mutationModes > 1 || (status && mutationModes > 0)) {
-  throw new Error('Choose exactly one of --status, --apply, or --skip-failure');
+  throw new Error(
+    'Choose exactly one of --status, --apply, --copy-from-schema-version, or --skip-failure',
+  );
 }
 if (mutationModes > 0 && !yes) {
   throw new Error('Mutating commands require --yes after reviewing their documented effects');
 }
 if (freshRun && !apply) throw new Error('--fresh-run can only be used with --apply');
-if (switchAliases && !apply) throw new Error('--switch-aliases can only be used with --apply');
+if (switchAliases && !apply && !copyIndices) {
+  throw new Error('--switch-aliases can only be used with --apply or --copy-from-schema-version');
+}
+if (copyIndices && copyFromSchemaVersion >= FTS_SEARCH_INDEX_SCHEMA_VERSION) {
+  throw new Error(
+    `--copy-from-schema-version must be older than the current schema version ${FTS_SEARCH_INDEX_SCHEMA_VERSION}`,
+  );
+}
 
 const readFailureReference = ():
   { documentId: string; entity: FtsSearchDocumentEntity } | undefined => {
@@ -157,10 +171,10 @@ const stateDirectory = path.resolve(configuredStateDirectory ?? '.elasticsearch-
 
 if (!databaseUrl) throw new Error('DATABASE_URL is required');
 if (!namespace) throw new Error('ES_INDEX_NAMESPACE is required');
-if (apply && !elasticsearchApiKey && !allowInsecureHttp) {
+if ((apply || copyIndices) && !elasticsearchApiKey && !allowInsecureHttp) {
   throw new Error(`${apiKeyEnvironmentName} is required with --apply`);
 }
-if (apply && !elasticsearchUrl) {
+if ((apply || copyIndices) && !elasticsearchUrl) {
   throw new Error(`${urlEnvironmentName} is required with --apply`);
 }
 if ((apply || failureReference) && !configuredStateDirectory) {
@@ -280,6 +294,55 @@ const printStatus = async () => {
 let auditLogger: FtsSearchReindexFileLogger | undefined;
 const executionStartedAt = Date.now();
 
+/**
+ * Active Outbox leases are the observable sign that the incremental sync consumer has not been
+ * paused. Moving an alias under a running consumer could acknowledge a change into the old index
+ * that the new one never receives, so the cutover refuses instead of guessing.
+ */
+const assertSyncConsumerPaused = async () => {
+  const { inFlight } = await outbox.stats();
+  if (inFlight > 0) {
+    throw new Error(
+      `Outbox still has ${inFlight} in-flight claims; pause the incremental sync consumer before --switch-aliases`,
+    );
+  }
+};
+
+const runIndexCopy = async () => {
+  const endpointHostname = new URL(elasticsearchUrl!).hostname;
+  assertFtsSearchReindexElasticsearchHostname(endpointHostname, expectedHostPrefix);
+  console.log(
+    JSON.stringify({
+      endpointEnvName: urlEnvironmentName,
+      endpointHostname,
+      expectedHostPrefix: expectedHostPrefix ?? null,
+      fromSchemaVersion: copyFromSchemaVersion,
+      switchAliases,
+      toSchemaVersion: FTS_SEARCH_INDEX_SCHEMA_VERSION,
+      type: 'index_copy_started',
+    }),
+  );
+  const client = new FtsSearchReindexHttpClient({
+    allowInsecureHttp,
+    apiKey: elasticsearchApiKey,
+    requestTimeoutMs,
+    url: elasticsearchUrl!,
+  });
+  const service = new FtsSearchIndexCopyService(client, {
+    assertAliasSwitchAllowed: assertSyncConsumerPaused,
+    entities,
+    entityConcurrency,
+    onProgress: (event) => console.log(JSON.stringify(event)),
+    switchAliases,
+  });
+  const result = await service.run(
+    namespace,
+    copyFromSchemaVersion!,
+    FTS_SEARCH_INDEX_SCHEMA_VERSION,
+  );
+  console.log(JSON.stringify({ ...result, type: 'index_copy_completed' }));
+};
+
 const run = async () => {
   if (failureReference) {
     await runFtsSearchReindexCommand({
@@ -300,6 +363,11 @@ const run = async () => {
         await printStatus();
       },
     });
+    return;
+  }
+
+  if (copyIndices) {
+    await runIndexCopy();
     return;
   }
 
@@ -351,19 +419,6 @@ const run = async () => {
   });
   if (existing && existing.run.status !== 'ready_for_incremental_sync') {
     await outbox.fenceSourceWrites();
-  }
-  if (switchAliases) {
-    /**
-     * Moving an alias while the sync consumer still holds Outbox claims could acknowledge a change
-     * against the old index and never replay it into the new one. Active leases are the observable
-     * signal that the consumer has not been paused, so refuse the cutover instead of guessing.
-     */
-    const { inFlight } = await outbox.stats();
-    if (inFlight > 0) {
-      throw new Error(
-        `Outbox still has ${inFlight} in-flight claims; pause the incremental sync consumer before --switch-aliases`,
-      );
-    }
   }
   auditLogger = new FtsSearchReindexFileLogger({
     runId: prepared.run.id,
@@ -445,6 +500,7 @@ const run = async () => {
         console.log(JSON.stringify(event));
         await auditLogger!.append(event);
       },
+      assertAliasSwitchAllowed: assertSyncConsumerPaused,
       retryBaseDelayMs,
       switchAliases,
       validateIncrementalSyncSource: () => outbox.assertCaptureInfrastructure(),
@@ -467,7 +523,10 @@ const run = async () => {
 
 observeFtsSearchReindexRun(run)
   .catch(async (error) => {
-    const rootError = error instanceof FtsSearchReindexEntityError ? error.cause : error;
+    const rootError =
+      error instanceof FtsSearchReindexEntityError || error instanceof FtsSearchIndexCopyError
+        ? error.cause
+        : error;
     logErrorSummary('❌ Elasticsearch reindex failed:', rootError);
     if (auditLogger) {
       const failure = {

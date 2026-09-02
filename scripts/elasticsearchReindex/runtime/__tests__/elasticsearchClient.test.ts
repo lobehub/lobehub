@@ -455,4 +455,136 @@ describe('FtsSearchReindexHttpClient', () => {
       );
     });
   });
+
+  describe('startReindex', () => {
+    it('starts an external-version, conflict-tolerant reindex without waiting for completion', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(response({ task: 'node1:123' }));
+      vi.stubGlobal('fetch', fetchMock);
+      const client = new FtsSearchReindexHttpClient({
+        apiKey: 'secret-key',
+        url: 'https://search.example.com',
+      });
+
+      await expect(client.startReindex('lobehub-agents-v1', 'lobehub-agents-v2')).resolves.toBe(
+        'node1:123',
+      );
+
+      expect(fetchMock).toHaveBeenCalledOnce();
+      const [endpoint, init] = fetchMock.mock.calls[0];
+      expect(String(endpoint)).toBe(
+        'https://search.example.com/_reindex?wait_for_completion=false',
+      );
+      expect(init.method).toBe('POST');
+      expect(JSON.parse(init.body)).toEqual({
+        conflicts: 'proceed',
+        dest: { index: 'lobehub-agents-v2', version_type: 'external' },
+        source: { index: 'lobehub-agents-v1' },
+      });
+    });
+
+    it('throws when the reindex start request fails', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(response(undefined, 500));
+      vi.stubGlobal('fetch', fetchMock);
+      const client = new FtsSearchReindexHttpClient({
+        apiKey: 'secret-key',
+        url: 'https://search.example.com',
+      });
+
+      await expect(client.startReindex('lobehub-agents-v1', 'lobehub-agents-v2')).rejects.toThrow(
+        'Elasticsearch reindex start failed',
+      );
+    });
+
+    it('rejects an invalid reindex start response shape', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(response({ task: 123 }));
+      vi.stubGlobal('fetch', fetchMock);
+      const client = new FtsSearchReindexHttpClient({
+        apiKey: 'secret-key',
+        url: 'https://search.example.com',
+      });
+
+      await expect(client.startReindex('lobehub-agents-v1', 'lobehub-agents-v2')).rejects.toThrow(
+        'reindex start response has an invalid shape',
+      );
+    });
+  });
+
+  describe('getTask', () => {
+    it('maps a running task with missing counters and failures to defaults', async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue(response({ completed: false, task: { status: {} } }));
+      vi.stubGlobal('fetch', fetchMock);
+      const client = new FtsSearchReindexHttpClient({
+        apiKey: 'secret-key',
+        url: 'https://search.example.com',
+      });
+
+      await expect(client.getTask('node1:123')).resolves.toEqual({
+        completed: false,
+        created: 0,
+        failures: [],
+        total: 0,
+        updated: 0,
+        versionConflicts: 0,
+      });
+      expect(String(fetchMock.mock.calls[0][0])).toBe(
+        'https://search.example.com/_tasks/node1%3A123',
+      );
+    });
+
+    it('maps a completed task with reported counters and failures', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        response({
+          completed: true,
+          response: { failures: [{ id: 'doc-1' }] },
+          task: { status: { created: 5, total: 10, updated: 3, version_conflicts: 2 } },
+        }),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+      const client = new FtsSearchReindexHttpClient({
+        apiKey: 'secret-key',
+        url: 'https://search.example.com',
+      });
+
+      await expect(client.getTask('node1:123')).resolves.toEqual({
+        completed: true,
+        created: 5,
+        failures: [{ id: 'doc-1' }],
+        total: 10,
+        updated: 3,
+        versionConflicts: 2,
+      });
+    });
+
+    it('throws when a completed task reports an error', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        response({
+          completed: true,
+          error: { reason: 'process was killed' },
+          task: { status: {} },
+        }),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+      const client = new FtsSearchReindexHttpClient({
+        apiKey: 'secret-key',
+        url: 'https://search.example.com',
+      });
+
+      await expect(client.getTask('node1:123')).rejects.toThrow(
+        'Elasticsearch reindex task node1:123 failed',
+      );
+    });
+
+    it('throws when the task lookup request fails', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(response(undefined, 404));
+      vi.stubGlobal('fetch', fetchMock);
+      const client = new FtsSearchReindexHttpClient({
+        apiKey: 'secret-key',
+        url: 'https://search.example.com',
+      });
+
+      await expect(client.getTask('node1:123')).rejects.toThrow('Elasticsearch task lookup failed');
+    });
+  });
 });
