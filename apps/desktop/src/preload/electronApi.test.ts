@@ -87,13 +87,14 @@ describe('setupElectronApi', () => {
   });
 
   it('reads precise renderer process memory', async () => {
-    mockGetProcessMemoryInfo.mockResolvedValue({ private: 2_621_440 });
+    mockGetProcessMemoryInfo.mockResolvedValue({ private: 2_621_440, shared: 1024 });
     setupElectronApi();
 
     const exposedAPI = mockContextBridgeExposeInMainWorld.mock.calls[1][1];
 
     await expect(exposedAPI.getRendererMemoryInfo()).resolves.toEqual({
       privateBytes: 2_684_354_560,
+      sharedBytes: 1_048_576,
     });
     expect(mockGetProcessMemoryInfo).toHaveBeenCalledOnce();
   });

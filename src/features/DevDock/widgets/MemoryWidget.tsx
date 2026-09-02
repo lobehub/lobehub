@@ -5,6 +5,8 @@ import { memo, useEffect, useState } from 'react';
 
 import { formatSize } from '@/utils/format';
 
+import { useAppProcessMetrics } from './appProcessMetrics';
+
 const styles = createStaticStyles(({ css }) => ({
   high: css`
     color: ${cssVar.colorError};
@@ -24,6 +26,7 @@ interface HeapSample {
   jsHeapLimitBytes: number;
   jsHeapUsedBytes: number;
   privateBytes?: number;
+  sharedBytes?: number;
 }
 
 const readHeap = (): HeapSample | null => {
@@ -41,6 +44,7 @@ const readHeap = (): HeapSample | null => {
 
 const MemoryWidget = memo(() => {
   const [memory, setMemory] = useState<HeapSample | null>(null);
+  const residentMB = useAppProcessMetrics()?.rendererResidentMB ?? null;
 
   useEffect(() => {
     if (!readHeap()) return;
@@ -49,15 +53,18 @@ const MemoryWidget = memo(() => {
     let disposed = false;
     const update = async () => {
       let privateBytes: number | undefined;
+      let sharedBytes: number | undefined;
 
       try {
-        privateBytes = (await getRendererMemoryInfo?.())?.privateBytes;
+        const info = await getRendererMemoryInfo?.();
+        privateBytes = info?.privateBytes;
+        sharedBytes = info?.sharedBytes;
       } catch {
         /* native process metrics unavailable — JS heap remains useful */
       }
 
       const heap = readHeap();
-      if (heap && !disposed) setMemory({ ...heap, privateBytes });
+      if (heap && !disposed) setMemory({ ...heap, privateBytes, sharedBytes });
     };
 
     void update();
@@ -71,6 +78,12 @@ const MemoryWidget = memo(() => {
   if (!memory) return null;
 
   const percent = (memory.jsHeapUsedBytes / memory.jsHeapLimitBytes) * 100;
+  // macOS keeps madvise(MADV_FREE_REUSABLE) pages in the resident set until it needs
+  // them, so resident minus private footprint is what the allocator already gave back.
+  const reclaimableBytes =
+    residentMB !== null && memory.privateBytes !== undefined
+      ? Math.max(0, residentMB * 1024 * 1024 - memory.privateBytes - (memory.sharedBytes ?? 0))
+      : undefined;
 
   return (
     <span
@@ -81,10 +94,11 @@ const MemoryWidget = memo(() => {
       title={
         memory.privateBytes === undefined
           ? 'JS heap used / limit'
-          : 'Renderer private memory · JS heap used / limit'
+          : 'Renderer private footprint · resident minus footprint (freed pages the OS has not reclaimed yet, plus some read-only library pages) · JS heap used / limit'
       }
     >
       {memory.privateBytes !== undefined && `Renderer ${formatSize(memory.privateBytes)} · `}
+      {reclaimableBytes !== undefined && `Reclaimable ${formatSize(reclaimableBytes)} · `}
       JS {formatSize(memory.jsHeapUsedBytes)} · {percent.toFixed(1)}%
     </span>
   );
