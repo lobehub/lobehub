@@ -44,6 +44,7 @@ import {
   FtsSearchReindexHttpClient,
   FtsSearchReindexService,
   planFtsSearchIndexSchemaUpgrade,
+  reconcileCompletedBackfillCheckpoint,
   summarizeFtsSearchReindexError,
 } from './runtime';
 
@@ -368,7 +369,14 @@ const runUpgrade = async () => {
       type: 'schema_upgrade_planned',
     }),
   );
-  if (plan.type === 'up_to_date') return;
+  if (plan.type === 'up_to_date') {
+    if (configuredStateDirectory) {
+      const reconciled = await reconcileCompletedBackfillCheckpoint(repository, namespace);
+      if (reconciled)
+        console.log(JSON.stringify({ runId: reconciled, type: 'checkpoint_reconciled' }));
+    }
+    return;
+  }
 
   if (plan.strategy === 'copy') {
     await runIndexCopy(plan.fromVersion, plan.toVersion);

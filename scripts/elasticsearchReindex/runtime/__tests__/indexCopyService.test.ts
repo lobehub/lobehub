@@ -37,6 +37,31 @@ const createClient = (
 beforeEach(() => vi.clearAllMocks());
 
 describe('FtsSearchIndexCopyService', () => {
+  it('refreshes the source index before starting _reindex so unrefreshed consumer writes are copied', async () => {
+    const order: string[] = [];
+    const client = createClient({
+      refresh: vi.fn(async (index: string) => {
+        order.push(`refresh:${index}`);
+      }),
+      startReindex: vi.fn(async (source: string, destination: string) => {
+        order.push(`reindex:${source}->${destination}`);
+        return `task-${destination}`;
+      }),
+    });
+    const service = new FtsSearchIndexCopyService(client, {
+      entities: ['agents'],
+      pollIntervalMs: 0,
+    });
+
+    await service.run('test', 1, 2);
+
+    expect(order).toEqual([
+      'refresh:test-agents-v1',
+      'reindex:test-agents-v1->test-agents-v2',
+      'refresh:test-agents-v2',
+    ]);
+  });
+
   it('copies each entity into the next schema version and reports counts', async () => {
     const pendingTaskIds = new Set<string>();
     const getTask = vi.fn(async (taskId: string) => {

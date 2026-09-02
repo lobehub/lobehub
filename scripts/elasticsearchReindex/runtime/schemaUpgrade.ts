@@ -8,6 +8,7 @@ import {
   getFtsSearchIndexSchemaVersionRecord,
   parseFtsSearchPhysicalIndexVersion,
 } from '../../../packages/database/src/repositories/ftsSearchDocument';
+import type { FtsSearchReindexRunState } from './checkpointRepository';
 
 export interface FtsSearchSchemaDetectionClient {
   resolveAliasTarget: (alias: string) => Promise<string | null>;
@@ -92,4 +93,31 @@ export const planFtsSearchIndexSchemaUpgrade = (
     toVersion: targetVersion,
     type: 'upgrade',
   };
+};
+
+export interface FtsSearchBackfillCheckpointRepository {
+  getTargetRun: (
+    namespace: string,
+    version: number,
+  ) => Promise<FtsSearchReindexRunState | null | undefined>;
+  markReadyForIncrementalSync: (runId: string) => Promise<void>;
+}
+
+/**
+ * A backfill upgrade switches aliases and then marks its checkpoint ready in two separate steps.
+ * If the process dies in between, the aliases already serve the target version, so a rerun plans
+ * `up_to_date` and would leave the checkpoint `backfilling` forever. Finish that bookkeeping when
+ * every entity is complete and return the run id; anything less is a different, unfinished run
+ * that must not be marked ready. Call only after the schema plan confirmed the aliases are current.
+ */
+export const reconcileCompletedBackfillCheckpoint = async (
+  repository: FtsSearchBackfillCheckpointRepository,
+  namespace: string,
+  targetVersion: number = FTS_SEARCH_INDEX_SCHEMA_VERSION,
+): Promise<string | null> => {
+  const state = await repository.getTargetRun(namespace, targetVersion);
+  if (!state || state.run.status !== 'backfilling') return null;
+  if (!state.progress.every((progress) => progress.status === 'completed')) return null;
+  await repository.markReadyForIncrementalSync(state.run.id);
+  return state.run.id;
 };

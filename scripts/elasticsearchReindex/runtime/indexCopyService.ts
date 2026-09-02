@@ -216,6 +216,13 @@ export class FtsSearchIndexCopyService {
       settings: { analysis: FTS_SEARCH_INDEX_ANALYSIS },
     });
 
+    /**
+     * `_reindex` copies from a search snapshot, so documents the sync consumer bulk-wrote without
+     * `refresh` right before it was stopped are invisible until the next background refresh. Force
+     * one on the source first; otherwise such an acknowledged update (its Outbox row already
+     * deleted) would be missing from the target and published as stale after the alias switch.
+     */
+    await this.client.refresh(source);
     const taskId = await this.client.startReindex(source, target);
     await this.options.onProgress({ entity, taskId, type: 'copy_started' });
 

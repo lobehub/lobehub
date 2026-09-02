@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { FTS_SEARCH_DOCUMENT_ENTITIES } from '@lobechat/types';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   FTS_SEARCH_INDEX_SCHEMA_VERSION,
@@ -8,7 +8,11 @@ import {
   getFtsSearchPhysicalIndexName,
 } from '../../../../packages/database/src/repositories/ftsSearchDocument';
 import type { FtsSearchSchemaDetectionClient } from '../schemaUpgrade';
-import { detectFtsSearchIndexSchemaState, planFtsSearchIndexSchemaUpgrade } from '../schemaUpgrade';
+import {
+  detectFtsSearchIndexSchemaState,
+  planFtsSearchIndexSchemaUpgrade,
+  reconcileCompletedBackfillCheckpoint,
+} from '../schemaUpgrade';
 
 const namespace = 'test';
 
@@ -129,5 +133,45 @@ describe('planFtsSearchIndexSchemaUpgrade', () => {
     expect(() =>
       planFtsSearchIndexSchemaUpgrade({ indices: {}, type: 'versioned', version: 1 }, 3),
     ).toThrow('re-validate');
+  });
+});
+
+describe('reconcileCompletedBackfillCheckpoint', () => {
+  const createState = (
+    runStatus: 'backfilling' | 'ready_for_incremental_sync',
+    entityStatuses: ('completed' | 'backfilling')[],
+  ) =>
+    ({
+      progress: entityStatuses.map((status, index) => ({ entity: `entity-${index}`, status })),
+      run: { id: 'run-1', status: runStatus },
+    }) as any;
+
+  it('marks a run ready when the alias switch completed but the checkpoint stayed backfilling', async () => {
+    const repository = {
+      getTargetRun: vi
+        .fn()
+        .mockResolvedValue(createState('backfilling', ['completed', 'completed'])),
+      markReadyForIncrementalSync: vi.fn().mockResolvedValue(undefined),
+    };
+    await expect(reconcileCompletedBackfillCheckpoint(repository, 'test', 2)).resolves.toBe(
+      'run-1',
+    );
+    expect(repository.getTargetRun).toHaveBeenCalledWith('test', 2);
+    expect(repository.markReadyForIncrementalSync).toHaveBeenCalledWith('run-1');
+  });
+
+  it('leaves an unfinished or already-ready checkpoint untouched', async () => {
+    for (const state of [
+      undefined,
+      createState('backfilling', ['completed', 'backfilling']),
+      createState('ready_for_incremental_sync', ['completed', 'completed']),
+    ]) {
+      const repository = {
+        getTargetRun: vi.fn().mockResolvedValue(state),
+        markReadyForIncrementalSync: vi.fn().mockResolvedValue(undefined),
+      };
+      await expect(reconcileCompletedBackfillCheckpoint(repository, 'test', 2)).resolves.toBeNull();
+      expect(repository.markReadyForIncrementalSync).not.toHaveBeenCalled();
+    }
   });
 });
