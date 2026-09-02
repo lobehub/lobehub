@@ -1,4 +1,8 @@
-import { type OpenAIChatMessage, type VoiceMessageRecording } from '@lobechat/types';
+import {
+  type OpenAIChatMessage,
+  type UIChatMessage,
+  type VoiceMessageRecording,
+} from '@lobechat/types';
 import { type IEditor, type SlashOptions } from '@lobehub/editor';
 import { type ChatInputProps } from '@lobehub/editor/react';
 import { type MenuProps } from '@lobehub/ui';
@@ -30,10 +34,6 @@ export const initialSendButtonState: SendButtonProps = {
 
 export type SlashPlacement = 'top' | 'bottom';
 
-export interface ContextWindowMessage {
-  content: string;
-}
-
 export interface ChatInputFeature {
   inputCompletion?: boolean;
   inputHistory?: boolean;
@@ -61,7 +61,12 @@ export interface PublicState {
   allowExpand?: boolean;
   canRecordVoiceMessage?: boolean;
   contextSelectionKey?: string;
-  contextWindowMessages?: ContextWindowMessage[];
+  /**
+   * Messages that will enter the next request's context window (full
+   * `UIChatMessage`s so token accounting can count tool calls / results /
+   * reasoning, not just text content).
+   */
+  contextWindowMessages?: UIChatMessage[];
   draftKey?: string;
   expand?: boolean;
   feature?: ChatInputFeature;
