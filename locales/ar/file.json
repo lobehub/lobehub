@@ -177,6 +177,8 @@
   "pageEditor.history.versionCount_one": "نسخة واحدة {{count}}",
   "pageEditor.history.versionCount_other": "{{count}} نسخ",
   "pageEditor.likes.count": "{{count}} إعجاب",
+  "pageEditor.likes.count_one": "{{count}} إعجاب",
+  "pageEditor.likes.count_other": "{{count}} إعجابات",
   "pageEditor.likes.failed": "فشل في تحديث إعجابك. حاول مرة أخرى.",
   "pageEditor.likes.like": "هل تجد هذه الصفحة مفيدة؟ أعطها إعجابًا",
   "pageEditor.likes.liked": "تم الإعجاب",

@@ -177,6 +177,8 @@
   "pageEditor.history.versionCount_one": "{{count}} sürüm",
   "pageEditor.history.versionCount_other": "{{count}} sürüm",
   "pageEditor.likes.count": "{{count}} beğeni",
+  "pageEditor.likes.count_one": "{{count}} beğeni",
+  "pageEditor.likes.count_other": "{{count}} beğeni",
   "pageEditor.likes.failed": "Beğeninizi güncellemek başarısız oldu. Tekrar deneyin.",
   "pageEditor.likes.like": "Bu sayfayı faydalı buldunuz mu? Beğeni bırakın",
   "pageEditor.likes.liked": "Beğenildi",

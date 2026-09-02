@@ -119,6 +119,7 @@
   "KeyValueEditor.keyPlaceholder": "Khóa",
   "KeyValueEditor.valuePlaceholder": "Giá trị",
   "LocalFile.action.open": "Mở",
+  "LocalFile.action.preview": "Xem trước",
   "LocalFile.action.showInFolder": "Hiển thị trong thư mục",
   "MaxTokenSlider.unlimited": "Không giới hạn",
   "ModelSelect.featureTag.audio": "Mô hình này hỗ trợ nhận dạng đầu vào âm thanh.",

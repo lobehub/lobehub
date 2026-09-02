@@ -177,6 +177,8 @@
   "pageEditor.history.versionCount_one": "{{count}}개 버전",
   "pageEditor.history.versionCount_other": "{{count}}개 버전",
   "pageEditor.likes.count": "{{count}}개 좋아요",
+  "pageEditor.likes.count_one": "{{count}}개 좋아요",
+  "pageEditor.likes.count_other": "{{count}}개 좋아요",
   "pageEditor.likes.failed": "좋아요를 업데이트하지 못했습니다. 다시 시도해 주세요.",
   "pageEditor.likes.like": "이 페이지가 도움이 되었나요? 좋아요를 눌러주세요.",
   "pageEditor.likes.liked": "좋아요 완료",

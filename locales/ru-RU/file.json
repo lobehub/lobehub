@@ -177,6 +177,8 @@
   "pageEditor.history.versionCount_one": "{{count}} версия",
   "pageEditor.history.versionCount_other": "{{count}} версий",
   "pageEditor.likes.count": "{{count}} лайков",
+  "pageEditor.likes.count_one": "{{count}} отметка \"Нравится\"",
+  "pageEditor.likes.count_other": "{{count}} отметок \"Нравится\"",
   "pageEditor.likes.failed": "Не удалось обновить ваш лайк. Попробуйте снова.",
   "pageEditor.likes.like": "Эта страница полезна? Поставьте лайк",
   "pageEditor.likes.liked": "Понравилось",

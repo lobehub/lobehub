@@ -177,6 +177,8 @@
   "pageEditor.history.versionCount_one": "{{count}} نسخه",
   "pageEditor.history.versionCount_other": "{{count}} نسخه",
   "pageEditor.likes.count": "{{count}} پسند",
+  "pageEditor.likes.count_one": "{{count}} پسند",
+  "pageEditor.likes.count_other": "{{count}} پسند",
   "pageEditor.likes.failed": "به‌روزرسانی پسند شما انجام نشد. دوباره تلاش کنید.",
   "pageEditor.likes.like": "آیا این صفحه را مفید یافتید؟ به آن یک پسند بدهید",
   "pageEditor.likes.liked": "پسندیده شد",

@@ -177,6 +177,8 @@
   "pageEditor.history.versionCount_one": "{{count}} версия",
   "pageEditor.history.versionCount_other": "{{count}} версии",
   "pageEditor.likes.count": "{{count}} харесвания",
+  "pageEditor.likes.count_one": "{{count}} харесване",
+  "pageEditor.likes.count_other": "{{count}} харесвания",
   "pageEditor.likes.failed": "Неуспешно актуализиране на вашето харесване. Опитайте отново.",
   "pageEditor.likes.like": "Намирате тази страница за полезна? Харесайте я.",
   "pageEditor.likes.liked": "Харесано",

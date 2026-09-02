@@ -416,6 +416,7 @@
   "builtins.lobe-task.apiName.deleteTaskComment": "حذف نظر",
   "builtins.lobe-task.apiName.editTask": "ویرایش وظیفه",
   "builtins.lobe-task.apiName.listTasks": "لیست وظایف",
+  "builtins.lobe-task.apiName.listWorkspaceMembers": "لیست اعضا",
   "builtins.lobe-task.apiName.runTask": "اجرای وظیفه",
   "builtins.lobe-task.apiName.runTasks": "اجرای وظایف",
   "builtins.lobe-task.apiName.setTaskSchedule": "تنظیم زمان‌بندی",

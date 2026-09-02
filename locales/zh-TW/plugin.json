@@ -416,6 +416,7 @@
   "builtins.lobe-task.apiName.deleteTaskComment": "刪除評論",
   "builtins.lobe-task.apiName.editTask": "編輯任務",
   "builtins.lobe-task.apiName.listTasks": "列出任務",
+  "builtins.lobe-task.apiName.listWorkspaceMembers": "列出成員",
   "builtins.lobe-task.apiName.runTask": "執行任務",
   "builtins.lobe-task.apiName.runTasks": "執行多個任務",
   "builtins.lobe-task.apiName.setTaskSchedule": "設定排程",

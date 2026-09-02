@@ -177,6 +177,8 @@
   "pageEditor.history.versionCount_one": "{{count}} 件のバージョン",
   "pageEditor.history.versionCount_other": "{{count}} 件のバージョン",
   "pageEditor.likes.count": "{{count}} 件のいいね",
+  "pageEditor.likes.count_one": "{{count}} 件の「いいね」",
+  "pageEditor.likes.count_other": "{{count}} 件の「いいね」",
   "pageEditor.likes.failed": "いいねの更新に失敗しました。もう一度お試しください。",
   "pageEditor.likes.like": "このページは役に立ちましたか？いいねを押してください",
   "pageEditor.likes.liked": "いいね済み",

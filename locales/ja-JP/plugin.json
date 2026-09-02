@@ -416,6 +416,7 @@
   "builtins.lobe-task.apiName.deleteTaskComment": "コメントを削除",
   "builtins.lobe-task.apiName.editTask": "タスクを編集",
   "builtins.lobe-task.apiName.listTasks": "タスクを一覧表示",
+  "builtins.lobe-task.apiName.listWorkspaceMembers": "メンバー一覧",
   "builtins.lobe-task.apiName.runTask": "タスクを実行",
   "builtins.lobe-task.apiName.runTasks": "タスクを実行",
   "builtins.lobe-task.apiName.setTaskSchedule": "スケジュールを設定",

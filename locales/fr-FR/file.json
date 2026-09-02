@@ -177,6 +177,8 @@
   "pageEditor.history.versionCount_one": "{{count}} version",
   "pageEditor.history.versionCount_other": "{{count}} versions",
   "pageEditor.likes.count": "{{count}} mentions J’aime",
+  "pageEditor.likes.count_one": "{{count}} j'aime",
+  "pageEditor.likes.count_other": "{{count}} j'aimes",
   "pageEditor.likes.failed": "Échec de la mise à jour de votre mention J’aime. Veuillez réessayer.",
   "pageEditor.likes.like": "Vous trouvez cette page utile ? Donnez-lui une mention J’aime",
   "pageEditor.likes.liked": "Mention J’aime",

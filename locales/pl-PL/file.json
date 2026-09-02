@@ -177,6 +177,8 @@
   "pageEditor.history.versionCount_one": "{{count}} wersja",
   "pageEditor.history.versionCount_other": "{{count}} wersji",
   "pageEditor.likes.count": "{{count}} polubień",
+  "pageEditor.likes.count_one": "{{count}} polubienie",
+  "pageEditor.likes.count_other": "{{count}} polubienia",
   "pageEditor.likes.failed": "Nie udało się zaktualizować polubienia. Spróbuj ponownie.",
   "pageEditor.likes.like": "Czy ta strona jest pomocna? Polub ją",
   "pageEditor.likes.liked": "Polubione",

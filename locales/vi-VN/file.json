@@ -177,6 +177,8 @@
   "pageEditor.history.versionCount_one": "{{count}} phiên bản",
   "pageEditor.history.versionCount_other": "{{count}} phiên bản",
   "pageEditor.likes.count": "{{count}} lượt thích",
+  "pageEditor.likes.count_one": "{{count}} lượt thích",
+  "pageEditor.likes.count_other": "{{count}} lượt thích",
   "pageEditor.likes.failed": "Không thể cập nhật lượt thích của bạn. Vui lòng thử lại.",
   "pageEditor.likes.like": "Bạn thấy trang này hữu ích? Hãy thích nó",
   "pageEditor.likes.liked": "Đã thích",

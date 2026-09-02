@@ -177,6 +177,8 @@
   "pageEditor.history.versionCount_one": "{{count}} versie",
   "pageEditor.history.versionCount_other": "{{count}} versies",
   "pageEditor.likes.count": "{{count}} vind-ik-leuks",
+  "pageEditor.likes.count_one": "{{count}} vind-ik-leuk",
+  "pageEditor.likes.count_other": "{{count}} vind-ik-leuks",
   "pageEditor.likes.failed": "Het bijwerken van je vind-ik-leuk is mislukt. Probeer het opnieuw.",
   "pageEditor.likes.like": "Vind je deze pagina nuttig? Geef een vind-ik-leuk",
   "pageEditor.likes.liked": "Vind-ik-leuk",

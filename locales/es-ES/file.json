@@ -177,6 +177,8 @@
   "pageEditor.history.versionCount_one": "{{count}} versión",
   "pageEditor.history.versionCount_other": "{{count}} versiones",
   "pageEditor.likes.count": "{{count}} me gusta",
+  "pageEditor.likes.count_one": "{{count}} me gusta",
+  "pageEditor.likes.count_other": "{{count}} me gustas",
   "pageEditor.likes.failed": "No se pudo actualizar tu me gusta. Inténtalo de nuevo.",
   "pageEditor.likes.like": "¿Te parece útil esta página? Dale un me gusta",
   "pageEditor.likes.liked": "Me gusta",
