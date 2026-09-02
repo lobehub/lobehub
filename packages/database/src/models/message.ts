@@ -4496,8 +4496,19 @@ export class MessageModel {
         ),
       );
 
+  /**
+   * Creator-facing "clear all my messages".
+   *
+   * Agent-share visitor messages are stored under the creator's `userId` but
+   * are hidden from every creator-facing listing (see `notShareVisitorMessage`
+   * in `../utils/shareVisitor`), so an id-less sweep must not destroy them —
+   * "clear all" can only mean the rows the creator can actually see. Id-targeted
+   * deletes (`deleteMessage`, `deleteMessages`) intentionally stay unfiltered:
+   * they act on rows the caller explicitly named, and the read boundary already
+   * prevents visitor message ids from reaching the creator.
+   */
   deleteAllMessages = async () => {
-    return this.db.delete(messages).where(and(this.ownership()));
+    return this.db.delete(messages).where(and(this.ownership(), notShareVisitorMessage()));
   };
 
   /**
@@ -4505,6 +4516,11 @@ export class MessageModel {
    * This will delete messages that have either:
    * 1. Direct agentId match (new data)
    * 2. SessionId match via agentsToSessions lookup (legacy data)
+   *
+   * This is the creator's "clear this agent's messages" action, so visitor
+   * messages are excluded (see {@link deleteAllMessages}). Deleting the agent
+   * itself is a different path: `messages.agent_id` / `topics.agent_id` cascade
+   * at the DB level, so visitor rows do go away with the agent.
    */
   batchDeleteByAgentId = async (agentId: string) => {
     // Get the associated sessionId for backward compatibility with legacy data
@@ -4521,7 +4537,9 @@ export class MessageModel {
       ? or(eq(messages.agentId, agentId), eq(messages.sessionId, associatedSessionId))
       : eq(messages.agentId, agentId);
 
-    return this.db.delete(messages).where(and(this.ownership(), agentCondition));
+    return this.db
+      .delete(messages)
+      .where(and(this.ownership(), agentCondition, notShareVisitorMessage()));
   };
 
   // **************** Helper *************** //

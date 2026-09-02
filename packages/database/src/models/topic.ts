@@ -1447,6 +1447,10 @@ export class TopicModel {
    * Deletes multiple topics based on the sessionId.
    * `restrictToCreator` limits the sweep to the caller's own rows (workspace
    * non-owner members must not clear teammates' topics).
+   *
+   * Visitor topics have no sessionId, so the null-session (inbox) branch would
+   * otherwise sweep them in — see {@link deleteAll} for why bulk sweeps exclude
+   * them.
    */
   batchDeleteBySessionId = async (
     sessionId?: string | null,
@@ -1458,6 +1462,7 @@ export class TopicModel {
         and(
           this.matchSession(sessionId),
           options?.restrictToCreator ? this.mine() : this.ownership(),
+          this.notShareVisitor(),
         ),
       );
   };
@@ -1465,6 +1470,9 @@ export class TopicModel {
   /**
    * Deletes multiple topics based on the groupId.
    * `restrictToCreator` limits the sweep to the caller's own rows in workspace mode.
+   *
+   * Visitor topics have no groupId, so the null-group branch would otherwise
+   * sweep them in — see {@link deleteAll}.
    */
   batchDeleteByGroupId = async (
     groupId?: string | null,
@@ -1473,7 +1481,11 @@ export class TopicModel {
     return this.db
       .delete(topics)
       .where(
-        and(this.matchGroup(groupId), options?.restrictToCreator ? this.mine() : this.ownership()),
+        and(
+          this.matchGroup(groupId),
+          options?.restrictToCreator ? this.mine() : this.ownership(),
+          this.notShareVisitor(),
+        ),
       );
   };
 
@@ -1481,6 +1493,11 @@ export class TopicModel {
    * Deletes all topics matching the given agentId (`topics.agentId`).
    * `restrictToCreator` limits the sweep to the caller's own rows (workspace
    * non-owner members must not clear teammates' topics).
+   *
+   * This is the creator's "clear this agent's topics" action, so agent-share
+   * visitor topics are excluded (see {@link deleteAll}). Deleting the agent
+   * itself is a different path: `topics.agent_id` cascades at the DB level, so
+   * visitor topics do go away with the agent without any call to this method.
    */
   batchDeleteByAgentId = async (agentId: string, options?: { restrictToCreator?: boolean }) => {
     return this.db
@@ -1489,6 +1506,7 @@ export class TopicModel {
         and(
           options?.restrictToCreator ? this.mine() : this.ownership(),
           eq(topics.agentId, agentId),
+          this.notShareVisitor(),
         ),
       );
   };
@@ -1500,8 +1518,21 @@ export class TopicModel {
     return this.db.delete(topics).where(and(inArray(topics.id, ids), this.ownership()));
   };
 
+  /**
+   * Creator-facing "clear all my topics".
+   *
+   * Agent-share visitor topics live under the creator's `userId` but are hidden
+   * from every creator-facing listing (see `notShareVisitorTopic` in
+   * `../utils/shareVisitor`), so a sweep the creator cannot see the contents of
+   * must not destroy them — "clear all" can only mean the rows the creator sees.
+   * The same rule applies to the other id-less sweeps here.
+   *
+   * Id-targeted deletes (`delete`, `batchDelete`) intentionally stay unfiltered:
+   * they are ownership actions on a row the caller explicitly named, and the
+   * read boundary already prevents visitor topic ids from leaking to the creator.
+   */
   deleteAll = async () => {
-    return this.db.delete(topics).where(this.mine());
+    return this.db.delete(topics).where(and(this.mine(), this.notShareVisitor()));
   };
 
   // **************** Update *************** //

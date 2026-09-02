@@ -997,6 +997,72 @@ describe('MessageModel Delete Tests', () => {
     });
   });
 
+  describe('agent-share visitor messages', () => {
+    // Visitor messages live under the creator's userId but are invisible to the
+    // creator, so id-less sweeps must leave them alone.
+    beforeEach(async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(agents).values([{ id: 'share-agent', userId, title: 'Shared Agent' }]);
+
+        await trx.insert(topics).values([
+          { agentId: 'share-agent', id: 'creator-topic', userId },
+          { agentId: 'share-agent', id: 'visitor-topic', senderId: 'visitor-a', userId },
+        ]);
+
+        await trx.insert(messages).values([
+          {
+            agentId: 'share-agent',
+            content: 'creator message',
+            id: 'creator-msg',
+            role: 'user',
+            topicId: 'creator-topic',
+            userId,
+          },
+          {
+            agentId: 'share-agent',
+            content: 'visitor message',
+            id: 'visitor-msg',
+            role: 'user',
+            topicId: 'visitor-topic',
+            userId,
+          },
+        ]);
+      });
+    });
+
+    it('deleteAllMessages should keep visitor messages', async () => {
+      await messageModel.deleteAllMessages();
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].id).toBe('visitor-msg');
+    });
+
+    it('batchDeleteByAgentId should keep visitor messages', async () => {
+      await messageModel.batchDeleteByAgentId('share-agent');
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].id).toBe('visitor-msg');
+    });
+
+    it('deleting the agent still cascades visitor messages away', async () => {
+      await serverDB.delete(agents).where(eq(agents.id, 'share-agent'));
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining).toHaveLength(0);
+    });
+  });
+
   describe('topic usage rollup', () => {
     const usageMsg = (id: string, totalTokens: number, cost: number) => ({
       id,
