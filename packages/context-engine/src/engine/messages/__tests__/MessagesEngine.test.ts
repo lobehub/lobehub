@@ -87,8 +87,9 @@ describe('MessagesEngine', () => {
           createBasicParams({ stepContext: { todos: messageTodos } }),
         ).process();
 
-        expect(result.messages[0].content).toContain('<todo_context>');
-        expect(result.messages[0].content).toContain('Message task');
+        expect(result.messages[0].content).toBe('Hello');
+        expect(result.messages.at(-1)?.content).toContain('<todo_context>');
+        expect(result.messages.at(-1)?.content).toContain('Message task');
       });
 
       it('prefers message state over plan metadata', async () => {
@@ -99,8 +100,9 @@ describe('MessagesEngine', () => {
           }),
         ).process();
 
-        expect(result.messages[0].content).toContain('Message task');
-        expect(result.messages[0].content).not.toContain('Metadata task');
+        expect(result.messages[0].content).toBe('Hello');
+        expect(result.messages.at(-1)?.content).toContain('Message task');
+        expect(result.messages.at(-1)?.content).not.toContain('Metadata task');
       });
 
       it('uses an empty message tombstone to suppress non-empty metadata', async () => {
@@ -111,8 +113,11 @@ describe('MessagesEngine', () => {
           }),
         ).process();
 
-        expect(result.messages[0].content).not.toContain('<todo_context>');
-        expect(result.messages[0].content).not.toContain('Metadata task');
+        expect(result.messages).toHaveLength(2);
+        expect(result.messages[0].content).toBe('Hello');
+        expect(
+          result.messages.some((message) => String(message.content).includes('<todo_context>')),
+        ).toBe(false);
       });
 
       it('falls back to enabled plan metadata when message state is undefined', async () => {
@@ -120,7 +125,62 @@ describe('MessagesEngine', () => {
           createBasicParams({ planTodo: { enabled: true, todos: metadataTodos } }),
         ).process();
 
-        expect(result.messages[0].content).toContain('Metadata task');
+        expect(result.messages[0].content).toBe('Hello');
+        expect(result.messages.at(-1)?.content).toContain('Metadata task');
+      });
+
+      it('skips TODO injection when disabled for the current LLM call', async () => {
+        const result = await new MessagesEngine(
+          createBasicParams({
+            planTodo: { enabled: true, injectTodos: false, todos: metadataTodos },
+          }),
+        ).process();
+
+        expect(
+          result.messages.some((message) => String(message.content).includes('<todo_context>')),
+        ).toBe(false);
+      });
+
+      it('keeps the historical prefix stable across create, update, and clear', async () => {
+        const createResult = await new MessagesEngine(
+          createBasicParams({ stepContext: { todos: metadataTodos } }),
+        ).process();
+        const updateResult = await new MessagesEngine(
+          createBasicParams({ stepContext: { todos: messageTodos } }),
+        ).process();
+        const clearResult = await new MessagesEngine(
+          createBasicParams({ stepContext: { todos: { items: [], updatedAt: 'cleared' } } }),
+        ).process();
+        const signatures = (messages: typeof createResult.messages) =>
+          messages.map(({ content, role }) => JSON.stringify({ content, role }));
+
+        expect(signatures(updateResult.messages.slice(0, -1))).toEqual(
+          signatures(createResult.messages.slice(0, -1)),
+        );
+        expect(signatures(clearResult.messages)).toEqual(
+          signatures(createResult.messages.slice(0, -1)),
+        );
+      });
+
+      it('keeps historical and virtual-tail providers in their intended messages', async () => {
+        const result = await new MessagesEngine(
+          createBasicParams({
+            additionalContexts: [
+              {
+                content: { text: 'Runtime tail', type: 'text' },
+                placement: 'virtual_tail',
+                wrapper: { tag: 'runtime_context' },
+              },
+            ],
+            stepContext: { todos: messageTodos },
+            topicReferences: [{ summary: 'Referenced summary', topicId: 'topic-1' }],
+          }),
+        ).process();
+
+        expect(result.messages[0].content).toContain('<topic_reference_context>');
+        expect(result.messages[0].content).not.toContain('<todo_context>');
+        expect(result.messages.at(-1)?.content).toContain('<todo_context>');
+        expect(result.messages.at(-1)?.content).toContain('<runtime_context>');
       });
     });
 

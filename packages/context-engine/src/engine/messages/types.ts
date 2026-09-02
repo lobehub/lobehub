@@ -202,6 +202,8 @@ export interface AgentGroupConfig {
 export interface PlanTodoConfig {
   /** Whether plan/todo context injection is enabled */
   enabled?: boolean;
+  /** Whether to inject the current todos into this LLM call */
+  injectTodos?: boolean;
   /** The current plan to inject (injected before first user message) */
   plan?: Plan;
   /** The current todo list to inject (injected at end of last user message) */

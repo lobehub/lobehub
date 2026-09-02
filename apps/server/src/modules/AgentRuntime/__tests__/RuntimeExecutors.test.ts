@@ -2177,7 +2177,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           ...overrides,
         });
 
-      const callWithMessages = async (
+      const callAndGetMessages = async (
         messages: any[],
         state: AgentState,
         contextOverrides?: Partial<RuntimeExecutorContext>,
@@ -2195,10 +2195,90 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           state,
         );
 
-        return mockChat.mock.calls[0][0].messages.find(
-          (message: { role?: string }) => message.role === 'user',
-        )?.content as string;
+        return mockChat.mock.calls[0][0].messages as Array<{
+          content?: unknown;
+          role?: string;
+        }>;
       };
+
+      const callWithMessages = async (
+        messages: any[],
+        state: AgentState,
+        contextOverrides?: Partial<RuntimeExecutorContext>,
+      ) =>
+        (await callAndGetMessages(messages, state, contextOverrides))
+          .filter((message) => message.role === 'user')
+          .map((message) => String(message.content))
+          .join('\n\n');
+
+      it.each([
+        { apiNames: ['listDocuments'], expected: false, stepCount: 1, stepIndex: 1 },
+        { apiNames: ['updateTodos'], expected: true, stepCount: 1, stepIndex: 1 },
+        {
+          apiNames: ['updateTodos', 'listDocuments'],
+          expected: true,
+          stepCount: 1,
+          stepIndex: 1,
+        },
+        { apiNames: ['listDocuments'], expected: true, stepCount: 11, stepIndex: 10 },
+      ])(
+        'injects TODOs=$expected after $apiNames at runtime step $stepIndex',
+        async ({ apiNames, expected, stepCount, stepIndex }) => {
+          const todos = {
+            items: [{ status: 'processing', text: 'Review the cache report' }],
+            updatedAt: 'now',
+          };
+          const content = await callWithMessages(
+            [
+              { content: 'Keep going', role: 'user' },
+              {
+                content: '',
+                role: 'assistant',
+                tool_calls: [
+                  {
+                    function: { arguments: '{}', name: 'lobe-agent____createTodos' },
+                    id: 'create-call',
+                    type: 'function',
+                  },
+                ],
+              },
+              {
+                content: 'created',
+                plugin: { apiName: 'createTodos', identifier: 'lobe-agent' },
+                pluginState: { todos },
+                role: 'tool',
+                tool_call_id: 'create-call',
+              },
+              {
+                content: '',
+                role: 'assistant',
+                tool_calls: apiNames.map((apiName, index) => ({
+                  function: {
+                    arguments: '{}',
+                    name: `${apiName === 'listDocuments' ? 'docs' : 'lobe-agent'}____${apiName}`,
+                  },
+                  id: `current-call-${index}`,
+                  type: 'function',
+                })),
+              },
+              ...apiNames.map((apiName, index) => ({
+                content: 'result',
+                plugin: {
+                  apiName,
+                  identifier: apiName === 'listDocuments' ? 'docs' : 'lobe-agent',
+                },
+                ...(apiName === 'updateTodos' && { pluginState: { todos } }),
+                role: 'tool',
+                tool_call_id: `current-call-${index}`,
+              })),
+            ],
+            stateWithLobeAgent({ stepCount }),
+            { stepIndex },
+          );
+
+          expect(content.includes('<todo_context>')).toBe(expected);
+        },
+      );
 
       it('injects the newest valid message TODO state and skips Notebook', async () => {
         mockFindPlanDocuments.mockResolvedValue([
@@ -2232,6 +2312,44 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         expect(content).not.toContain('Old task');
         expect(content).not.toContain('Stale metadata task');
         expect(mockFindPlanDocuments).not.toHaveBeenCalled();
+      });
+
+      it('keeps tool-loop history unchanged and injects pluginState todos at the tail', async () => {
+        const messages = await callAndGetMessages(
+          [
+            { content: 'Refactor the parser', role: 'user' },
+            {
+              content: '',
+              role: 'assistant',
+              tool_calls: [
+                {
+                  function: { arguments: '{}', name: 'createTodos' },
+                  id: 'call-1',
+                  type: 'function',
+                },
+              ],
+            },
+            {
+              content: 'created',
+              pluginState: {
+                todos: {
+                  items: [{ status: 'processing', text: 'Write parser tests' }],
+                  updatedAt: 'new',
+                },
+              },
+              role: 'tool',
+              tool_call_id: 'call-1',
+            },
+          ],
+          stateWithLobeAgent(),
+        );
+        const userMessages = messages.filter((message) => message.role === 'user');
+
+        expect(userMessages).toHaveLength(2);
+        expect(userMessages[0].content).toBe('Refactor the parser');
+        expect(userMessages[1].content).toContain('<todo_context>');
+        expect(userMessages[1].content).toContain('Write parser tests');
+        expect(messages.at(-1)?.role).toBe('user');
       });
 
       it.each([{ items: [], updatedAt: 'canonical-clear' }, []])(
