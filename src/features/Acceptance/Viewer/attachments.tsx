@@ -15,6 +15,14 @@ import { useFileStore } from '@/store/file';
 const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
 
 const styles = createStaticStyles(({ css }) => ({
+  flushUpload: css`
+    display: contents;
+
+    .ant-upload,
+    .ant-upload-select {
+      display: contents;
+    }
+  `,
   remove: css`
     cursor: pointer;
 
@@ -213,6 +221,7 @@ export const AttachmentUploadButton = memo<AttachmentUploadButtonProps>(({ disab
     <Upload
       multiple
       accept={'image/*'}
+      className={styles.flushUpload}
       disabled={disabled}
       showUploadList={false}
       beforeUpload={(file, fileList) => {
@@ -221,7 +230,13 @@ export const AttachmentUploadButton = memo<AttachmentUploadButtonProps>(({ disab
         return false;
       }}
     >
-      <Button disabled={disabled} icon={<Icon icon={ImagePlus} />} size={'small'} type={'text'}>
+      <Button
+        outdent
+        disabled={disabled}
+        icon={<Icon icon={ImagePlus} />}
+        size={'small'}
+        type={'text'}
+      >
         {t('acceptance.review.attach')}
       </Button>
     </Upload>

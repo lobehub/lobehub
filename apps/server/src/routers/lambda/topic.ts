@@ -88,6 +88,7 @@ const topicSearchProcedure = topicProcedure.use(async (opts) => {
   const ftsSearchRepo = await createFtsSearchRepo({
     db: ctx.serverDB,
     userId: ctx.userId,
+    usage: 'topic_search',
     workspaceId,
   });
 

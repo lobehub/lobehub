@@ -3,6 +3,7 @@ import debug from 'debug';
 import type { Pricing } from 'model-bank';
 
 import { stripUnsupportedClaudeAssistantPrefill } from '../../providers/anthropic/claudePrefill';
+import { rejectsForcedToolChoice } from '../../providers/anthropic/modelId';
 import type { GenerateObjectOptions, GenerateObjectPayload } from '../../types';
 import { buildAnthropicMessages, buildAnthropicTools } from '../contextBuilders/anthropic';
 import { buildAnthropicInitialUsage } from '../usageConverters/anthropic';
@@ -68,11 +69,17 @@ export const buildAnthropicGenerateObjectRequest = async (
     : undefined;
 
   let finalTools;
-  let tool_choice: Anthropic.ToolChoiceAny | Anthropic.ToolChoiceTool;
+  let tool_choice: Anthropic.ToolChoiceAuto | Anthropic.ToolChoiceAny | Anthropic.ToolChoiceTool;
   let schemaToolName: string | undefined;
+  // Check both the logical model id and the mapped request model: a router may map
+  // `claude-fable-5-1` to an opaque deployment / inference-profile id that
+  // `rejectsForcedToolChoice` cannot parse, and forced tool_choice would still 400.
+  const forcedToolChoiceRejected = [model, config?.requestModel].some(
+    (id): id is string => !!id && rejectsForcedToolChoice(id),
+  );
   if (tools) {
     finalTools = buildAnthropicTools(tools);
-    tool_choice = { type: 'any' };
+    tool_choice = forcedToolChoiceRejected ? { type: 'auto' } : { type: 'any' };
   } else if (schema) {
     // Convert OpenAI-style schema to Anthropic tool format
     const tool: Anthropic.ToolUnion = {
@@ -80,14 +87,25 @@ export const buildAnthropicGenerateObjectRequest = async (
         schema.description || 'Generate structured output according to the provided schema',
       input_schema: schema.schema as Anthropic.Tool.InputSchema,
       name: schema.name || 'structured_output',
-      ...(config?.schemaToolStrict && schema.strict !== undefined ? { strict: schema.strict } : {}),
+      // Without forced tool_choice, `strict: true` is what keeps the arguments
+      // schema-valid. Respect an explicit `strict: false` opt-out though: strict
+      // mode requires every declared property to be required, and schemas with
+      // optional fields would otherwise fail validation with a 400.
+      ...(forcedToolChoiceRejected
+        ? { strict: schema.strict !== false }
+        : config?.schemaToolStrict && schema.strict !== undefined
+          ? { strict: schema.strict }
+          : {}),
     };
     log('converted tool: %O', tool);
 
     finalTools = [tool];
     schemaToolName = tool.name;
-    tool_choice =
-      config?.schemaToolChoice === 'any' ? { type: 'any' } : { name: tool.name, type: 'tool' };
+    tool_choice = forcedToolChoiceRejected
+      ? { type: 'auto' }
+      : config?.schemaToolChoice === 'any'
+        ? { type: 'any' }
+        : { name: tool.name, type: 'tool' };
   } else {
     throw new Error('tools or schema is required');
   }

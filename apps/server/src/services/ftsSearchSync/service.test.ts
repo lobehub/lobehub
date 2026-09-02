@@ -21,10 +21,10 @@ const createHarness = (
   sources: Map<string, Record<string, unknown>>,
 ) => {
   const builder = {
-    buildByIds: vi.fn(async (_entity: string, ids: readonly string[]) =>
+    buildByIds: vi.fn(async (entity: string, ids: readonly string[]) =>
       ids.flatMap((id) => {
         const source = sources.get(id);
-        return source ? [{ entity: 'agents', id, source }] : [];
+        return source ? [{ entity, id, source }] : [];
       }),
     ),
   };
@@ -104,6 +104,47 @@ describe('FtsSearchSyncService', () => {
       failed: 2,
     });
     expect(result.bulkBytes).toBeGreaterThan(0);
+    expect(result.bulkRequestSamples[0].entities).toEqual({
+      agents: {
+        bytes: expect.any(Number),
+        items: 4,
+        result: 'mixed',
+      },
+    });
+  });
+
+  it('attributes malformed bulk responses to every entity in the request', async () => {
+    const works: FtsSearchSyncWork[] = [
+      { documentId: 'message', entity: 'messages', leaseToken: '1', revision: 1 },
+      { documentId: 'agent', entity: 'agents', leaseToken: '2', revision: 2 },
+    ];
+    const harness = createHarness(
+      works,
+      new Map(works.map((item) => [item.documentId, { id: item.documentId, title: 'title' }])),
+    );
+    harness.client.bulk.mockResolvedValue({
+      errors: false,
+      items: [{ index: { status: 201 } }],
+    });
+    const service = new FtsSearchSyncService(
+      harness.builder as never,
+      harness.outbox as never,
+      harness.client,
+      'lobehub-test',
+    );
+
+    const result = await service.drainOnce();
+
+    expect(result.bulkRequestSamples).toEqual([
+      expect.objectContaining({
+        entities: {
+          agents: { bytes: expect.any(Number), items: 1, result: 'response_error' },
+          messages: { bytes: expect.any(Number), items: 1, result: 'response_error' },
+        },
+        items: 2,
+        result: 'response_error',
+      }),
+    ]);
   });
 
   it('writes a soft tombstone when the PostgreSQL row no longer exists', async () => {
@@ -233,7 +274,7 @@ describe('FtsSearchSyncService', () => {
       'lobehub-test',
     );
 
-    await service.drainOnce();
+    const result = await service.drainOnce();
 
     const body = harness.client.bulk.mock.calls[0][0] as string;
     const documentIds = body
@@ -242,6 +283,10 @@ describe('FtsSearchSyncService', () => {
       .filter((_, index) => index % 2 === 0)
       .map((line) => JSON.parse(line).index._id);
     expect(documentIds).toEqual(['urgent-message', 'ordinary-agent']);
+    expect(result.bulkRequestSamples[0].entities).toEqual({
+      agents: { bytes: expect.any(Number), items: 1, result: 'success' },
+      messages: { bytes: expect.any(Number), items: 1, result: 'success' },
+    });
   });
 
   it('releases unprocessed claims after exhausting the bulk-request budget', async () => {

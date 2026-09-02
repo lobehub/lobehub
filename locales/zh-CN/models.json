@@ -798,6 +798,7 @@
   "lobehub.MiniMax-M2.7-highspeed.description": "与 M2.7 功能相同，但响应速度显著提升。",
   "lobehub.MiniMax-M2.7.description": "一个自我进化的模型，具备顶级的编码和智能代理性能。",
   "lobehub.MiniMax-M3.description": "一个前沿的多模态模型，专注于编码和智能代理任务，具备原生图像和视频理解能力。",
+  "lobehub.claude-fable-5-1.description": "在长时间编码与研究任务上强于 Fable 5——Terminal-Bench 4.0 得分 55.8%（Fable 5 为 42.0%），价格同为 $10/$50，缓存读取成本仅为四分之一。",
   "lobehub.claude-fable-5.description": "Claude Fable 5 是全球最强大的模型，适用于高要求的推理、长时间智能代理工作和复杂编码，同时也是最昂贵的模型。",
   "lobehub.claude-haiku-4-5-20251001.description": "Claude Haiku 4.5 是 Anthropic 最快且最智能的 Haiku 模型。",
   "lobehub.claude-opus-4-6.description": "Claude Opus 4.6 是 Anthropic 最智能的模型，用于构建代理和编码。",

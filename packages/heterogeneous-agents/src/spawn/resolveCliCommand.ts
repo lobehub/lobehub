@@ -122,6 +122,35 @@ const isPathLikeCommand = (command: string): boolean =>
     ? path.win32.isAbsolute(command) || /[\\/]/.test(command)
     : path.isAbsolute(command) || command.includes(path.sep);
 
+/**
+ * A login *interactive* shell has to load the user's full interactive config —
+ * oh-my-zsh, plugins, nvm — before it can print PATH. On a developer machine
+ * that is over a second when idle, and this probe runs while the machine is
+ * busy doing the very work that needed the CLI. Three seconds left barely more
+ * than twice the idle cost, and a machine under load spent it, which surfaced
+ * as "CLI not found" for a CLI that was installed and had just run.
+ */
+const LOGIN_SHELL_PATH_TIMEOUT_MS = 10_000;
+
+/**
+ * Surfaced on `CliCommandStatus.error` so callers can tell a slow machine from
+ * a missing binary. Matched by `isLoginShellTimeoutStatus`.
+ */
+export const LOGIN_SHELL_TIMEOUT_STATUS_ERROR =
+  'Timed out reading PATH from the login shell while looking for the CLI';
+
+/** Whether a detection result failed because the shell probe ran out of time. */
+export const isLoginShellTimeoutStatus = (status?: { error?: string }): boolean =>
+  status?.error === LOGIN_SHELL_TIMEOUT_STATUS_ERROR;
+
+/** Distinguishes "the probe ran out of time" from "the shell had nothing". */
+export class LoginShellPathTimeoutError extends Error {
+  constructor() {
+    super('Timed out reading PATH from the login shell');
+    this.name = 'LoginShellPathTimeoutError';
+  }
+}
+
 const getLoginShellPath = async (): Promise<string | undefined> => {
   if (isWindows()) return undefined;
 
@@ -130,7 +159,7 @@ const getLoginShellPath = async (): Promise<string | undefined> => {
 
   try {
     const { stdout } = await execFilePromise(shell, ['-ilc', 'printf "%s" "$PATH"'], {
-      timeout: 3000,
+      timeout: LOGIN_SHELL_PATH_TIMEOUT_MS,
       windowsHide: true,
     });
 
@@ -139,21 +168,65 @@ const getLoginShellPath = async (): Promise<string | undefined> => {
       .map((line) => line.trim())
       .reverse()
       .find((line) => line.includes(path.delimiter));
-  } catch {
+  } catch (error) {
+    // `execFile` kills the child on timeout and reports it as a signal, so a
+    // slow shell and a hostile one are told apart here rather than downstream.
+    if ((error as { killed?: boolean })?.killed) throw new LoginShellPathTimeoutError();
     return undefined;
   }
 };
 
 /**
- * Share one login-shell lookup between concurrent probes, but discard it once
- * settled. A later Rescan must observe PATH edits made by an installer while
- * the desktop app is already running.
+ * The login-shell PATH, resolved once per process.
+ *
+ * It used to be discarded the moment it settled, so a Rescan could observe PATH
+ * edits made by an installer while the app was running. That put a
+ * second-long, timeout-prone subprocess on the critical path of *every* spawn —
+ * and since the caller detects with `force`, every session paid it. The value
+ * is cached for the process now and `invalidateLoginShellPathCache()` gives
+ * Rescan the same freshness explicitly.
+ *
+ * A probe that *timed out* is deliberately not cached — that is the transient
+ * case, and pinning it would leave the process believing there is no login
+ * PATH until restart. A probe that completed is cached even when it found
+ * nothing, because that is a real answer rather than a missed one.
  */
+let cachedShellPath: { value: string | undefined } | undefined;
+/**
+ * Bumped on every invalidation. A probe that started before a Rescan carries
+ * the older generation and is refused the cache when it lands — without this,
+ * a ten-second probe in flight would write the pre-Rescan PATH back moments
+ * after the user asked for a fresh one, which is precisely the edit they were
+ * trying to make visible.
+ */
+let shellPathGeneration = 0;
+
 const getCurrentLoginShellPath = async (): Promise<string | undefined> => {
-  shellPathPromise ??= getLoginShellPath().finally(() => {
-    shellPathPromise = undefined;
-  });
+  if (cachedShellPath) return cachedShellPath.value;
+
+  if (!shellPathPromise) {
+    const generation = shellPathGeneration;
+    shellPathPromise = getLoginShellPath()
+      .then((value) => {
+        if (generation === shellPathGeneration) cachedShellPath = { value };
+        return value;
+      })
+      .finally(() => {
+        if (generation === shellPathGeneration) shellPathPromise = undefined;
+      });
+  }
   return shellPathPromise;
+};
+
+/**
+ * Drop the cached login-shell PATH so the next probe re-reads it, and disown
+ * any probe already running so its result cannot satisfy or repopulate the
+ * fresh scan.
+ */
+export const invalidateLoginShellPathCache = (): void => {
+  cachedShellPath = undefined;
+  shellPathGeneration += 1;
+  shellPathPromise = undefined;
 };
 
 // Machine-wide then per-user PATH, the two halves Windows concatenates into a
@@ -559,7 +632,17 @@ export const detectValidatedCommandCandidates = async (
 
     if (!recoveryAttempted) {
       recoveryAttempted = true;
-      recovered = await recoverProbeEnvironment(probeEnv);
+      try {
+        recovered = await recoverProbeEnvironment(probeEnv);
+      } catch (error) {
+        // A timed-out shell probe is not evidence the CLI is missing, and
+        // reporting it as such sends the user to reinstall software that is
+        // already there. Say what actually happened instead.
+        if (error instanceof LoginShellPathTimeoutError) {
+          return { ...lastStatus, available: false, error: LOGIN_SHELL_TIMEOUT_STATUS_ERROR };
+        }
+        throw error;
+      }
     }
     if (!recovered) continue;
 

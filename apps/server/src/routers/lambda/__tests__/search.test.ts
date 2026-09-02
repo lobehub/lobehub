@@ -95,7 +95,11 @@ describe('searchRouter', () => {
       type: 'message',
     });
     expect(createFtsSearchRepo).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'test-user', workspaceId: undefined }),
+      expect.objectContaining({
+        usage: 'unified_search',
+        userId: 'test-user',
+        workspaceId: undefined,
+      }),
     );
     expect(UserModel.findById).not.toHaveBeenCalled();
     expect(getUserSettings).not.toHaveBeenCalled();

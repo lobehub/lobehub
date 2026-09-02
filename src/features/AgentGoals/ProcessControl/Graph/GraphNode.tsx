@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
+import { shinyTextStyles } from '@/styles';
 
 import type { GoalNodeView } from '../goalGraphViewModel';
 import { KIND_COLOR, KIND_ICON } from '../shared';
@@ -71,6 +72,30 @@ const styles = createStaticStyles(({ css }) => ({
   gate: css`
     border-color: ${cssVar.colorWarningBorder};
     background: ${cssVar.colorWarningBg};
+  `,
+  ghost: css`
+    border-style: dashed;
+  `,
+  ghostBar: css`
+    height: 8px;
+    border-radius: 4px;
+    background: ${cssVar.colorFillSecondary};
+    animation: goal-ghost-pulse 1.6s ease-in-out infinite;
+
+    @keyframes goal-ghost-pulse {
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.4;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+    }
   `,
   glyph: css`
     display: flex;
@@ -218,8 +243,9 @@ const useStateChip = (data: GraphNodeData): StateChip | null => {
 const RunningClock = memo<{ startedAt?: Date }>(({ startedAt }) => {
   const elapsed = useElapsed(startedAt);
   if (!elapsed) return null;
-  // Sits right behind the state chip in the status row — no auto margin.
-  return <span style={{ fontSize: 11 }}>{elapsed}</span>;
+  // Sits right behind the state chip in the status row — no auto margin. The
+  // clock is ambient context, so it reads in a light tint, not body color.
+  return <span style={{ color: cssVar.colorTextTertiary, fontSize: 11 }}>{elapsed}</span>;
 });
 
 RunningClock.displayName = 'GoalGraphRunningClock';
@@ -273,6 +299,15 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
                 <span className={styles.human}>@</span>
               </Tooltip>
             )}
+            {/* Top-right corner: this Work carries its own verifier. Icon only —
+                the word added nothing the hover hint doesn't say better. */}
+            {isTask && node.taskId && (
+              <Tooltip title={t('goalProcess.node.verifierTooltip')}>
+                <span style={{ display: 'inline-flex', marginInlineStart: 'auto' }}>
+                  <Icon color={cssVar.colorTextTertiary} icon={ShieldCheck} size={13} />
+                </span>
+              </Tooltip>
+            )}
           </div>
         )}
         <div className={styles.head}>
@@ -286,16 +321,6 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
         </div>
         {isTask && (
           <div className={styles.metrics}>
-            {/* "Not dispatched" moved to the status row with every other
-                state; an unassigned task simply has no verifier metric yet. */}
-            {node.taskId && (
-              <Tooltip title={t('goalProcess.node.verifierTooltip')}>
-                <span className={styles.metric}>
-                  <Icon icon={ShieldCheck} size={13} />
-                  {t('goalProcess.node.verifier')}
-                </span>
-              </Tooltip>
-            )}
             <Tooltip title={t('goalProcess.node.attemptsTooltip', { count: attempts })}>
               <span className={styles.metric}>
                 <Icon icon={Repeat2} size={13} />
@@ -326,5 +351,43 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
 });
 
 GraphNodeView.displayName = 'GoalGraphNodeView';
+
+/**
+ * A placeholder card shown while the coordinator is still decomposing the goal:
+ * same silhouette as a task node, dashed and pulsing, so the map promises the
+ * structure that is about to arrive instead of sitting empty.
+ */
+export const GhostNodeView = memo(() => {
+  const { t } = useTranslation('chat');
+  return (
+    <div style={{ position: 'relative' }}>
+      <Handle
+        className={styles.handle}
+        isConnectable={false}
+        position={Position.Top}
+        type={'target'}
+      />
+      <div className={cx(styles.card, styles.ghost)}>
+        <div className={styles.head}>
+          <div
+            className={styles.glyph}
+            style={{ background: KIND_COLOR.task.soft, color: KIND_COLOR.task.line }}
+          >
+            <Icon icon={KIND_ICON.task} size={16} />
+          </div>
+          <Flexbox gap={7} style={{ flex: 1, minWidth: 0, paddingBlockStart: 1 }}>
+            <span className={cx(styles.title, shinyTextStyles.shinyText)}>
+              {t('goalProcess.node.generating')}
+            </span>
+            <span className={styles.ghostBar} style={{ width: '84%' }} />
+            <span className={styles.ghostBar} style={{ width: '56%' }} />
+          </Flexbox>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+GhostNodeView.displayName = 'GoalGraphGhostNodeView';
 
 export default GraphNodeView;

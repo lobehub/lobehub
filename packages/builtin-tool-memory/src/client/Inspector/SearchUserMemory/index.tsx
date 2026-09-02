@@ -23,8 +23,10 @@ export const SearchUserMemoryInspector = memo<
   // Initial streaming state
   if (isArgumentsStreaming && !query) {
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-user-memory.apiName.searchUserMemory')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-user-memory.apiName.searchUserMemory')}
+        </span>
       </div>
     );
   }
@@ -40,13 +42,10 @@ export const SearchUserMemoryInspector = memo<
   const hasResults = resultCount > 0;
 
   return (
-    <div
-      className={cx(
-        inspectorTextStyles.root,
-        (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-      )}
-    >
-      <span>{t('builtins.lobe-user-memory.apiName.searchUserMemory')}: </span>
+    <div className={inspectorTextStyles.root}>
+      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+        {t('builtins.lobe-user-memory.apiName.searchUserMemory')}:{' '}
+      </span>
       {query && <span className={highlightTextStyles.primary}>{query}</span>}
       {!isLoading &&
         !isArgumentsStreaming &&

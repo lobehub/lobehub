@@ -15,6 +15,7 @@ import { asyncTasks } from './asyncTask';
 import { chatGroups, chatGroupsAgents } from './chatGroup';
 import { documentCommentMentions, documentComments } from './documentComment';
 import { documentHistories } from './documentHistory';
+import { documentLikes } from './documentLike';
 import { documents, files, knowledgeBases } from './file';
 import { generationBatches, generations, generationTopics } from './generation';
 import { messageGroups, messages, messagesFiles, messageTranslates } from './message';
@@ -322,7 +323,23 @@ export const documentsRelations = relations(documents, ({ one, many }) => ({
   topics: many(topicDocuments),
   chunks: many(documentChunks),
   comments: many(documentComments),
+  likes: many(documentLikes),
   histories: many(documentHistories),
+}));
+
+export const documentLikesRelations = relations(documentLikes, ({ one }) => ({
+  document: one(documents, {
+    fields: [documentLikes.documentId],
+    references: [documents.id],
+  }),
+  user: one(users, {
+    fields: [documentLikes.userId],
+    references: [users.id],
+  }),
+  workspace: one(workspaces, {
+    fields: [documentLikes.workspaceId],
+    references: [workspaces.id],
+  }),
 }));
 
 export const documentHistoriesRelations = relations(documentHistories, ({ one }) => ({

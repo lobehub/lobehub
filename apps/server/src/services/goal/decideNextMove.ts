@@ -421,6 +421,15 @@ const decideForTask = (
   // stays total if a status slips through.
   if (task.status === 'running' || task.status === 'scheduled') return 'parked';
 
+  if (budget?.deadlinePassed) {
+    return {
+      ...base,
+      branch: 'budget_exhausted',
+      message: `Deadline passed (${graph.goal.config?.schedule?.deadline ?? 'unknown'}); no new Work will be dispatched`,
+      outcome: 'no_progress',
+    };
+  }
+
   if (budget?.roundLimitReached || budget?.costLimitReached) {
     return {
       ...base,

@@ -13,7 +13,10 @@ import { defineCommandBinary } from '@/core/infrastructure/BinaryManager';
 // agents` package so the desktop manager path and the `lh hetero exec` CLI /
 // sandbox path resolve binaries identically. This module only adapts it into
 // the desktop `BinarySpec` shape.
-export { detectHeterogeneousCliCommand } from '@lobechat/heterogeneous-agents/resolveCliCommand';
+export {
+  detectHeterogeneousCliCommand,
+  invalidateLoginShellPathCache,
+} from '@lobechat/heterogeneous-agents/resolveCliCommand';
 
 interface ValidatedBinaryOptions {
   candidates: string[];

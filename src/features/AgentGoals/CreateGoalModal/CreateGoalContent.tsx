@@ -449,13 +449,12 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
         requirement: buildGoalRequirement(title, reviewedCriteria, budget.requirement),
         title,
       });
-      // `goal.create` already queued an advance; this runs the same driver so
-      // the goal is visibly moving by the time the modal closes even where the
-      // queue is unavailable. It must be `advance`, not a single tick: whichever
-      // driver claims the Work has to carry it past binding the task into
-      // actually starting it, and the loser stops at `waiting_external`.
-      await goalService.advance(graph.goal.id);
-
+      // `goal.create` already queued the first advance server-side, but on a
+      // queue-less serverless deployment that kickoff is an in-process timer
+      // the host may freeze before firing. This request-bound advance is the
+      // durable fallback — fired and forgotten so the modal still closes
+      // immediately; the server dedupes a raced decomposition.
+      void goalService.advance(graph.goal.id).catch(() => {});
       close();
       onCreated?.({ agentId: graph.goal.agentId ?? undefined, goalId: graph.goal.id });
     } catch (error) {

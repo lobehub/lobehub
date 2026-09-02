@@ -471,7 +471,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
     );
 
     return (
-      <Flexbox data-testid="topic-item" style={{ position: 'relative' }}>
+      <Flexbox data-testid="topic-item" data-topic-id={id} style={{ position: 'relative' }}>
         {metaCard ? (
           <Popover
             arrow={false}

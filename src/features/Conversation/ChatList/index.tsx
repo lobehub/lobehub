@@ -28,6 +28,8 @@ import VirtualizedList from './components/VirtualizedList';
 import { useAgentSignalReceipts } from './hooks/useAgentSignalReceipts';
 import { useMessageRefreshError } from './hooks/useMessageRefreshError';
 import { resolveMessageListFeedback } from './resolveMessageListFeedback';
+import type { MessageDeepLink } from './utils/messageDeepLink';
+import { resolveMessageDeepLink } from './utils/messageDeepLink';
 
 const MessageAuthorConfigLoader = memo<{ agentId: string; isLogin: boolean | undefined }>(
   ({ agentId, isLogin }) => {
@@ -77,6 +79,8 @@ export interface ChatListProps {
    * Custom item renderer. If not provided, uses default ChatItem.
    */
   itemContent?: (index: number, id: string) => ReactNode;
+  /** Message hash target to locate after the virtual list has rendered. */
+  messageDeepLink?: MessageDeepLink;
   /**
    * Force showing welcome component even when messages exist
    */
@@ -100,6 +104,7 @@ const ChatList = memo<ChatListProps>(
     headerSlot,
     welcome,
     itemContent,
+    messageDeepLink,
     showWelcome,
   }) => {
     // Fetch messages (SWR key is null when skipFetch is true)
@@ -141,6 +146,10 @@ const ChatList = memo<ChatListProps>(
       [allDisplayMessages, filterItem],
     );
     const displayMessageIds = useMemo(() => displayMessages.map((m) => m.id), [displayMessages]);
+    const resolvedMessageDeepLink = useMemo(
+      () => resolveMessageDeepLink(displayMessages, messageDeepLink),
+      [displayMessages, messageDeepLink],
+    );
     const overlayHeight = useConversationStore(inputSelectors.chatInputOverlayHeight);
     const latestMessageId = displayMessageIds.at(-1);
 
@@ -265,6 +274,7 @@ const ChatList = memo<ChatListProps>(
             footerSlot={footerSlot}
             headerSlot={headerSlot}
             itemContent={itemContent ?? defaultItemContent}
+            messageDeepLink={resolvedMessageDeepLink}
           />
         </MessageActionProvider>
       );

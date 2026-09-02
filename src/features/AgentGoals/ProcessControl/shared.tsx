@@ -12,10 +12,14 @@ import { memo } from 'react';
  * filling a node with its status color.
  */
 export const KIND_COLOR: Record<GoalNodeKind, { line: string; soft: string }> = {
-  decision: { line: cssVar.orange6, soft: cssVar.orange1 },
-  finding: { line: cssVar.green6, soft: cssVar.green1 },
-  problem: { line: cssVar.purple6, soft: cssVar.purple1 },
-  task: { line: cssVar.blue6, soft: cssVar.blue1 },
+  // LobeHub's theme palette is an 11-step scale, not antd's 10-step one: the
+  // primary-strength band sits at x9–x10, and x6/x7 resolve to near-pastel
+  // tints (light-mode blue-7 is #93c8ff). x3/x10 gives the glyph a visible
+  // tinted tile with a saturated line in both themes.
+  decision: { line: cssVar.orange10, soft: cssVar.orange3 },
+  finding: { line: cssVar.green10, soft: cssVar.green3 },
+  problem: { line: cssVar.purple10, soft: cssVar.purple3 },
+  task: { line: cssVar.blue10, soft: cssVar.blue3 },
 };
 
 export const KIND_ICON: Record<GoalNodeKind, LucideIcon> = {

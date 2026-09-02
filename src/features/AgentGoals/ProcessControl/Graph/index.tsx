@@ -23,7 +23,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { GoalGraphView, GoalNodeView } from '../goalGraphViewModel';
 import { KindDot } from '../shared';
-import GraphNodeView, { type GraphNodeData } from './GraphNode';
+import GraphNodeView, { GhostNodeView, type GraphNodeData } from './GraphNode';
 import { layoutGraph, NODE_WIDTH } from './layout';
 
 /**
@@ -81,17 +81,36 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
   `,
+  /* Fullscreen chrome floats over the canvas in two corner cards instead of a
+     full-width bar, so a node panned to the top edge is never hidden behind an
+     opaque header strip. */
+  float: css`
+    position: absolute;
+    z-index: 1;
+    inset-block-start: 16px;
+
+    display: flex;
+    gap: 12px;
+    align-items: center;
+
+    padding-block: 8px;
+    padding-inline: 14px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorBgContainer};
+    box-shadow: ${cssVar.boxShadowTertiary};
+  `,
+  floatLeft: css`
+    inset-inline-start: 16px;
+  `,
+  floatRight: css`
+    inset-inline-end: 16px;
+  `,
   overlay: css`
     position: fixed;
     z-index: 1000;
     inset: 0;
-
-    display: flex;
-    flex-direction: column;
-
-    padding-block: 12px 16px;
-    padding-inline: 24px;
-
     background: ${cssVar.colorBgLayout};
   `,
 }));
@@ -101,6 +120,8 @@ type GraphViewMode = 'stage' | 'all';
 interface GraphProps {
   graph: GoalGraphView;
   onSelect: (nodeId: string) => void;
+  /** The coordinator is still decomposing: show ghost task cards under the problem. */
+  planning?: boolean;
   selectedId?: string;
 }
 
@@ -182,10 +203,16 @@ const useEdgeLabel = () => {
   );
 };
 
-const nodeTypes = { goalNode: GraphNodeView };
+const nodeTypes = { goalGhost: GhostNodeView, goalNode: GraphNodeView };
+
+/** Ghost placeholders rendered beneath the problem while planning runs. */
+const GHOST_COUNT = 3;
+const GHOST_GAP = 32;
+const GHOST_RANK_GAP = 56;
+const GHOST_HEIGHT = 88;
 
 const Canvas = memo<GraphProps & { className: string; interactive: boolean; view: GraphViewMode }>(
-  ({ className, graph, interactive, onSelect, selectedId, view }) => {
+  ({ className, graph, interactive, onSelect, planning, selectedId, view }) => {
     const { fitView } = useReactFlow();
     const subtitleOf = useSubtitle();
     const edgeLabel = useEdgeLabel();
@@ -205,17 +232,50 @@ const Canvas = memo<GraphProps & { className: string; interactive: boolean; view
       return layoutGraph(nodes, edges);
     }, [graph, visibleIds]);
 
+    const ghosts = useMemo(() => {
+      if (!planning) return [];
+      const problem = graph.nodes.find((item) => item.node.kind === 'problem');
+      const box = problem ? positions[problem.node.id] : undefined;
+      const centerX = box ? box.x + box.width / 2 : 0;
+      const y = box ? box.y + box.height + GHOST_RANK_GAP : 0;
+      const width = NODE_WIDTH.task;
+      const total = width * GHOST_COUNT + GHOST_GAP * (GHOST_COUNT - 1);
+      return Array.from({ length: GHOST_COUNT }, (_, i) => ({
+        id: `goal-ghost-${i}`,
+        sourceId: problem && box ? problem.node.id : undefined,
+        x: centerX - total / 2 + i * (width + GHOST_GAP),
+        y,
+      }));
+    }, [planning, graph, positions]);
+
     // Inline, the canvas hugs its content: a two-node graph in a fixed 560px
     // frame is mostly empty margin, and `fitView` then shrinks the nodes to
     // fill it. Sizing the frame from the layout keeps small graphs at natural
     // node scale; 560px stays the ceiling so large graphs still zoom out.
     const inlineHeight = useMemo(() => {
       const boxes = Object.values(positions);
-      if (boxes.length === 0) return 216;
-      const top = Math.min(...boxes.map((box) => box.y));
-      const bottom = Math.max(...boxes.map((box) => box.y + box.height));
+      if (boxes.length === 0 && ghosts.length === 0) return 216;
+      const top = Math.min(...boxes.map((box) => box.y), ...ghosts.map((ghost) => ghost.y));
+      const bottom = Math.max(
+        ...boxes.map((box) => box.y + box.height),
+        ...ghosts.map((ghost) => ghost.y + GHOST_HEIGHT),
+      );
       return Math.min(560, Math.max(216, bottom - top + 72));
-    }, [positions]);
+    }, [positions, ghosts]);
+
+    const ghostFlowNodes: FlowNode[] = useMemo(
+      () =>
+        ghosts.map((ghost) => ({
+          data: {},
+          draggable: false,
+          id: ghost.id,
+          position: { x: ghost.x, y: ghost.y },
+          selectable: false,
+          type: 'goalGhost',
+          width: NODE_WIDTH.task,
+        })),
+      [ghosts],
+    );
 
     const flowNodes: FlowNode[] = useMemo(
       () =>
@@ -272,13 +332,30 @@ const Canvas = memo<GraphProps & { className: string; interactive: boolean; view
       [graph, visibleIds, selectedId, edgeLabel],
     );
 
+    const ghostFlowEdges: FlowEdge[] = useMemo(
+      () =>
+        ghosts
+          .filter((ghost) => ghost.sourceId)
+          .map((ghost) => ({
+            animated: true,
+            id: `${ghost.id}-edge`,
+            source: ghost.sourceId!,
+            target: ghost.id,
+            type: 'default',
+          })),
+      [ghosts],
+    );
+
+    const allNodes = useMemo(() => [...flowNodes, ...ghostFlowNodes], [flowNodes, ghostFlowNodes]);
+    const allEdges = useMemo(() => [...flowEdges, ...ghostFlowEdges], [flowEdges, ghostFlowEdges]);
+
     useEffect(() => {
       const timer = setTimeout(
         () => fitView({ duration: 200, maxZoom: 1, minZoom: 0.6, padding: 0.12 }),
         30,
       );
       return () => clearTimeout(timer);
-    }, [view, flowNodes.length, fitView]);
+    }, [view, allNodes.length, fitView]);
 
     return (
       <div className={className} style={interactive ? undefined : { height: inlineHeight }}>
@@ -288,21 +365,26 @@ const Canvas = memo<GraphProps & { className: string; interactive: boolean; view
             the framing the layout chose. Fullscreen is where it is navigable. */}
         <ReactFlow
           fitView
-          edges={flowEdges}
+          edges={allEdges}
           maxZoom={interactive ? 1.5 : 1}
           minZoom={0.3}
           nodeTypes={nodeTypes}
-          nodes={flowNodes}
+          nodes={allNodes}
           nodesConnectable={false}
           nodesDraggable={false}
           panOnDrag={interactive}
-          panOnScroll={false}
+          // Fullscreen reads like Figma on a trackpad: two-finger scroll pans
+          // and pinch (ctrl+wheel) zooms. Wheel-to-zoom is off — on a mouse,
+          // zooming stays on pinch/double-click and the +/- controls.
+          panOnScroll={interactive}
           preventScrolling={interactive}
           proOptions={{ hideAttribution: true }}
           zoomOnDoubleClick={interactive}
           zoomOnPinch={interactive}
-          zoomOnScroll={interactive}
-          onNodeClick={(_, node) => onSelect(node.id)}
+          zoomOnScroll={false}
+          onNodeClick={(_, node) => {
+            if (node.type !== 'goalGhost') onSelect(node.id);
+          }}
         >
           <Background
             color={cssVar.colorBorderSecondary}
@@ -324,56 +406,68 @@ const Graph = memo<GraphProps>((props) => {
   const [view, setView] = useState<GraphViewMode>('stage');
   const [fullscreen, setFullscreen] = useState(false);
 
-  const head = (
-    <Flexbox horizontal align={'center'} justify={'space-between'} paddingBlock={4}>
-      <Flexbox horizontal align={'center'} gap={12}>
-        <Text fontSize={16} weight={600}>
-          {t('goalProcess.graph.title')}
-        </Text>
-        <Segmented
-          size={'small'}
-          value={view}
-          options={[
-            { label: t('goalProcess.graph.view.stage'), value: 'stage' },
-            { label: t('goalProcess.graph.view.all'), value: 'all' },
-          ]}
-          onChange={(value) => setView(value as GraphViewMode)}
-        />
-      </Flexbox>
-      <Flexbox horizontal align={'center'} gap={12}>
-        <Flexbox horizontal align={'center'} className={styles.legend} gap={10}>
-          {(['problem', 'task', 'finding', 'decision'] as const).map((kind) => (
-            <Flexbox horizontal align={'center'} gap={4} key={kind}>
-              <KindDot kind={kind} />
-              <span>{t(`goalProcess.kind.${kind}` as const)}</span>
-            </Flexbox>
-          ))}
+  const titleAndViews = (
+    <>
+      <Text fontSize={16} weight={600}>
+        {t('goalProcess.graph.title')}
+      </Text>
+      <Segmented
+        size={'small'}
+        value={view}
+        options={[
+          { label: t('goalProcess.graph.view.stage'), value: 'stage' },
+          { label: t('goalProcess.graph.view.all'), value: 'all' },
+        ]}
+        onChange={(value) => setView(value as GraphViewMode)}
+      />
+    </>
+  );
+  const legend = (
+    <Flexbox horizontal align={'center'} className={styles.legend} gap={10}>
+      {(['problem', 'task', 'finding', 'decision'] as const).map((kind) => (
+        <Flexbox horizontal align={'center'} gap={4} key={kind}>
+          <KindDot kind={kind} />
+          <span>{t(`goalProcess.kind.${kind}` as const)}</span>
         </Flexbox>
-        <ActionIcon
-          icon={fullscreen ? X : Maximize2}
-          size={'small'}
-          title={
-            fullscreen ? t('goalProcess.graph.exitFullscreen') : t('goalProcess.graph.fullscreen')
-          }
-          onClick={() => setFullscreen(!fullscreen)}
-        />
-      </Flexbox>
+      ))}
     </Flexbox>
+  );
+  const toggle = (
+    <ActionIcon
+      icon={fullscreen ? X : Maximize2}
+      size={'small'}
+      title={fullscreen ? t('goalProcess.graph.exitFullscreen') : t('goalProcess.graph.fullscreen')}
+      onClick={() => setFullscreen(!fullscreen)}
+    />
   );
 
   if (fullscreen)
     return (
       <div className={styles.overlay}>
-        {head}
         <ReactFlowProvider>
           <Canvas {...props} interactive className={cx(styles.canvas, styles.full)} view={view} />
         </ReactFlowProvider>
+        {/* Corner cards float over the canvas — the map owns the whole screen
+            and panned content stays visible between them. */}
+        <div className={cx(styles.float, styles.floatLeft)}>{titleAndViews}</div>
+        <div className={cx(styles.float, styles.floatRight)}>
+          {legend}
+          {toggle}
+        </div>
       </div>
     );
 
   return (
     <Flexbox gap={4}>
-      {head}
+      <Flexbox horizontal align={'center'} justify={'space-between'} paddingBlock={4}>
+        <Flexbox horizontal align={'center'} gap={12}>
+          {titleAndViews}
+        </Flexbox>
+        <Flexbox horizontal align={'center'} gap={12}>
+          {legend}
+          {toggle}
+        </Flexbox>
+      </Flexbox>
       <ReactFlowProvider>
         <Canvas {...props} className={styles.canvas} interactive={false} view={view} />
       </ReactFlowProvider>

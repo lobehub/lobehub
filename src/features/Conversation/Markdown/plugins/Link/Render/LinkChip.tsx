@@ -25,20 +25,17 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     vertical-align: -0.15em;
   `,
   sideBrowser: css`
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.15s;
+    color: ${cssVar.colorTextTertiary};
+    transition: color 0.15s;
+
+    &:hover {
+      color: ${cssVar.colorText};
+    }
   `,
   wrapper: css`
     display: inline-flex;
     gap: 2px;
     align-items: center;
-
-    &:hover [data-side-browser],
-    &:focus-within [data-side-browser] {
-      pointer-events: auto;
-      opacity: 1;
-    }
   `,
 }));
 

@@ -252,7 +252,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [WebOnboardingManifest.identifier]: WebOnboardingRenders as Record<string, BuiltinRender>,
     [OPENCODE_IDENTIFIER]: heterogeneousCliRenders,
     [PI_IDENTIFIER]: heterogeneousCliRenders,
-    [KIMI_CODE_IDENTIFIER]: KimiCodeRenders,
+    [KIMI_CODE_IDENTIFIER]: KimiCodeRenders as Record<string, BuiltinRender>,
     codex: {
       ...CodexRenders,
       command_execution: RunCommandRender as BuiltinRender,

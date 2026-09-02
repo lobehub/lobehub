@@ -1225,6 +1225,21 @@ table document_histories {
   }
 }
 
+table document_likes {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  document_id text [not null]
+  user_id text [not null]
+  workspace_id text [not null]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (document_id, user_id) [name: 'document_likes_document_id_user_id_unique', unique]
+    (document_id, created_at) [name: 'document_likes_document_id_created_at_idx']
+    user_id [name: 'document_likes_user_id_idx']
+    workspace_id [name: 'document_likes_workspace_id_idx']
+  }
+}
+
 table document_shares {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   document_id varchar(255) [not null]
@@ -4146,6 +4161,12 @@ ref: document_comments.workspace_id - workspaces.id
 ref: document_histories.document_id > documents.id
 
 ref: document_histories.user_id - users.id
+
+ref: document_likes.document_id > documents.id
+
+ref: document_likes.user_id - users.id
+
+ref: document_likes.workspace_id - workspaces.id
 
 ref: documents.file_id > files.id
 

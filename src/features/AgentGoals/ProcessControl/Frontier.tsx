@@ -10,6 +10,7 @@ import { Fragment, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
+import { openAddGoalTaskModal } from '@/features/AgentGoals/AddTaskModal';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
 import { useActivityTime } from '@/hooks/useActivityTime';
 
@@ -102,7 +103,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 export interface FrontierActions {
-  addTask: (title: string) => Promise<void>;
+  addTask: (title: string, description?: string) => Promise<void>;
   decide: (decisionId: string, optionId: string, resolution?: string) => void;
 }
 
@@ -111,6 +112,8 @@ interface FrontierProps {
   canEdit: boolean;
   graph: GoalGraphView;
   onSelect: (nodeId: string) => void;
+  /** The coordinator is still decomposing — the empty list is a promise, not a lull. */
+  planning?: boolean;
 }
 
 /** Server option ids are stable; their labels are English strings from the coordinator. */
@@ -390,66 +393,24 @@ const FrontierRow = memo<{
 
 FrontierRow.displayName = 'GoalFrontierRow';
 
-const AddTaskRow = memo<{ onAdd: (title: string) => Promise<void> }>(({ onAdd }) => {
+/** Opening a modal keeps the frontier header quiet — the brief gets a real form. */
+const AddTaskButton = memo<{ onAdd: FrontierActions['addTask'] }>(({ onAdd }) => {
   const { t } = useTranslation('chat');
-  const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  const submit = async () => {
-    if (!title.trim() || busy) return;
-    setBusy(true);
-    try {
-      await onAdd(title.trim());
-      setTitle('');
-      setOpen(false);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  if (!open)
-    return (
-      <Button
-        icon={<Icon icon={Plus} />}
-        size={'small'}
-        type={'text'}
-        onClick={() => setOpen(true)}
-      >
-        {t('goalProcess.frontier.add')}
-      </Button>
-    );
-
   return (
-    <Flexbox horizontal align={'center'} gap={8}>
-      <TextArea
-        autoFocus
-        autoSize={{ maxRows: 2, minRows: 1 }}
-        placeholder={t('goalProcess.frontier.add')}
-        style={{ width: 260 }}
-        value={title}
-        onChange={(event) => setTitle(event.target.value)}
-        onPressEnter={(event) => {
-          event.preventDefault();
-          void submit();
-        }}
-      />
-      <Button
-        disabled={!title.trim()}
-        loading={busy}
-        size={'small'}
-        type={'primary'}
-        onClick={submit}
-      >
-        {t('goalProcess.frontier.add')}
-      </Button>
-    </Flexbox>
+    <Button
+      icon={<Icon icon={Plus} />}
+      size={'small'}
+      type={'text'}
+      onClick={() => openAddGoalTaskModal({ onAdd })}
+    >
+      {t('goalProcess.frontier.add')}
+    </Button>
   );
 });
 
-AddTaskRow.displayName = 'GoalAddTaskRow';
+AddTaskButton.displayName = 'GoalAddTaskButton';
 
-const Frontier = memo<FrontierProps>(({ actions, canEdit, graph, onSelect }) => {
+const Frontier = memo<FrontierProps>(({ actions, canEdit, graph, onSelect, planning }) => {
   const { t } = useTranslation('chat');
   const [showBlocked, setShowBlocked] = useState(false);
 
@@ -474,25 +435,36 @@ const Frontier = memo<FrontierProps>(({ actions, canEdit, graph, onSelect }) => 
             </Text>
           )}
         </Flexbox>
-        {canEdit && <AddTaskRow onAdd={actions.addTask} />}
+        {canEdit && <AddTaskButton onAdd={actions.addTask} />}
       </Flexbox>
 
       <div className={styles.list}>
         <Block gap={0} padding={2} variant={'borderless'}>
-          {graph.frontier.length === 0 && (
-            <Flexbox gap={2} padding={12}>
-              <Text weight={500}>
-                {achieved
-                  ? t('goalProcess.frontier.achievedTitle')
-                  : t('goalProcess.frontier.emptyTitle')}
-              </Text>
-              <Text fontSize={12} type={'secondary'}>
-                {achieved
-                  ? t('goalProcess.frontier.achievedDescription')
-                  : t('goalProcess.frontier.emptyDescription')}
-              </Text>
-            </Flexbox>
-          )}
+          {graph.frontier.length === 0 &&
+            (planning ? (
+              <Flexbox horizontal align={'center'} gap={10} padding={12}>
+                <RunningGlyph size={16} />
+                <Flexbox gap={2}>
+                  <Text weight={500}>{t('goalProcess.planning.title')}</Text>
+                  <Text fontSize={12} type={'secondary'}>
+                    {t('goalProcess.planning.description')}
+                  </Text>
+                </Flexbox>
+              </Flexbox>
+            ) : (
+              <Flexbox gap={2} padding={12}>
+                <Text weight={500}>
+                  {achieved
+                    ? t('goalProcess.frontier.achievedTitle')
+                    : t('goalProcess.frontier.emptyTitle')}
+                </Text>
+                <Text fontSize={12} type={'secondary'}>
+                  {achieved
+                    ? t('goalProcess.frontier.achievedDescription')
+                    : t('goalProcess.frontier.emptyDescription')}
+                </Text>
+              </Flexbox>
+            ))}
           {graph.frontier.map((item, index) => (
             <Fragment key={item.key}>
               {index > 0 && <Divider dashed style={{ margin: 0 }} />}

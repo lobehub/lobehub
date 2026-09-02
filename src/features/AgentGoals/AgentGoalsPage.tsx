@@ -12,6 +12,7 @@ import GoalSkeleton from '@/components/Skeleton/Goal';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { goalSelectors, useGoalStore } from '@/store/goal';
 
 import { createGoalModal } from './CreateGoalModal';
@@ -72,6 +73,7 @@ interface AgentGoalsPageProps {
 
 const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
   const { t } = useTranslation('chat');
+  const navigate = useWorkspaceAwareNavigate();
   const scopeId = projectId ? `project:${projectId}` : agentId!;
   const useFetchGoals = useGoalStore((s) => s.useFetchGoals);
   const refreshGoals = useGoalStore((s) => s.refreshGoals);
@@ -103,7 +105,14 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
       initialRoundBudget: seed?.roundBudget,
       initialTitle: seed?.title,
       projectId,
-      onCreated: () => void refreshGoals(scopeId),
+      // Land the user inside the goal right away: the detail page polls while
+      // the goal is still planning, so the exploration graph grows in place
+      // instead of the modal blocking on it.
+      onCreated: (goal) => {
+        void refreshGoals(scopeId);
+        const ownerId = goal.agentId ?? agentId;
+        navigate(ownerId ? `/agent/${ownerId}/goal/${goal.goalId}` : `/goal/${goal.goalId}`);
+      },
     });
   };
 

@@ -1,9 +1,8 @@
 'use client';
 
-import { Accordion, AccordionItem, Flexbox, Icon } from '@lobehub/ui';
-import { Button, Tag, Text } from '@lobehub/ui/base-ui';
+import { Accordion, AccordionItem, Flexbox } from '@lobehub/ui';
+import { Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { Pause, Play } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -43,8 +42,6 @@ const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
 
   const useFetchGoalGraph = useGoalStore((s) => s.useFetchGoalGraph);
   const decideGoal = useGoalStore((s) => s.decideGoal);
-  const pauseGoal = useGoalStore((s) => s.pauseGoal);
-  const resumeGoal = useGoalStore((s) => s.resumeGoal);
   const refreshGoalGraph = useGoalStore((s) => s.refreshGoalGraph);
   const openTaskDetail = useChatStore((s) => s.openTaskDetail);
   const openGoalNode = useChatStore((s) => s.openGoalNode);
@@ -55,8 +52,8 @@ const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
 
   const actions: FrontierActions = useMemo(
     () => ({
-      addTask: async (title: string) => {
-        await goalService.addNode({ id: goalId, kind: 'task', title });
+      addTask: async (title: string, description?: string) => {
+        await goalService.addNode({ description, id: goalId, kind: 'task', title });
         await refreshGoalGraph(goalId);
       },
       decide: (decisionId, optionId, resolution) =>
@@ -83,7 +80,14 @@ const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
   // to control here, so the page keeps its original shape.
   if (!graph || graph.nodes.length === 0) return null;
 
-  const paused = graph.goal.status === 'paused';
+  // The coordinator is decomposing the problem into tasks. `running` with zero
+  // Works counts too: the decomposition claim flips the status before the
+  // planner returns, and a re-plan after all Works were removed is the same
+  // state. The surfaces below promise the incoming structure instead of
+  // reading as an empty goal — the graph poll fills them in as nodes land.
+  const planning =
+    ['planning', 'running'].includes(graph.goal.status) &&
+    !graph.nodes.some((view) => view.node.kind === 'task');
   // A closed goal cannot move: the coordinator returns immediately for these,
   // and a Work added here would sit `proposed` forever. Stop offering actions
   // that cannot land. The goal otherwise advances entirely on its own — the
@@ -94,27 +98,16 @@ const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
   return (
     <Flexbox gap={20}>
       <Flexbox gap={12}>
-        <Flexbox horizontal align={'center'} gap={8}>
-          {canAct && (
-            <Button
-              icon={<Icon icon={paused ? Play : Pause} />}
-              size={'small'}
-              onClick={() => void (paused ? resumeGoal(goalId) : pauseGoal(goalId))}
-            >
-              {paused ? t('goalProcess.resume') : t('goalProcess.pause')}
-            </Button>
-          )}
-          {paused && (
-            <Text fontSize={12} type={'secondary'}>
-              {t('goalProcess.paused')}
-            </Text>
-          )}
-        </Flexbox>
-
-        <Frontier actions={actions} canEdit={canAct} graph={graph} onSelect={select} />
+        <Frontier
+          actions={actions}
+          canEdit={canAct}
+          graph={graph}
+          planning={planning}
+          onSelect={select}
+        />
       </Flexbox>
 
-      <Graph graph={graph} selectedId={selectedId} onSelect={select} />
+      <Graph graph={graph} planning={planning} selectedId={selectedId} onSelect={select} />
 
       <Accordion defaultExpandedKeys={['findings', 'activity']} gap={0}>
         <AccordionItem

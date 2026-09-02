@@ -43,6 +43,7 @@ import {
   count,
   desc,
   eq,
+  getTableColumns,
   gt,
   gte,
   inArray,
@@ -61,6 +62,7 @@ import { today } from '@/utils/time';
 
 import type { FtsSearchCandidateSource } from '../repositories/ftsSearch';
 import {
+  agents,
   agentsToSessions,
   chunks,
   documents,
@@ -2036,19 +2038,27 @@ export class MessageModel {
     return result[0];
   };
 
-  queryAll = async (params?: { current?: number; pageSize?: number }) => {
-    const { current = 0, pageSize = 100 } = params ?? {};
+  queryAll = async (params?: MessageAnalyticsFilters & { current?: number; pageSize?: number }) => {
+    const { current = 0, pageSize = 100, ...filters } = params ?? {};
     const offset = current * pageSize;
 
     const result = await this.db
-      .select()
+      .select({
+        ...getTableColumns(messages),
+        agentName: agents.name,
+        agentTitle: agents.title,
+      })
       .from(messages)
-      .where(and(this.ownership()))
+      .leftJoin(agents, eq(messages.agentId, agents.id))
+      .where(genWhere(this.analyticsConditions(filters)))
       .orderBy(desc(messages.createdAt))
       .limit(pageSize)
       .offset(offset);
 
-    return result as DBMessageItem[];
+    return result as (DBMessageItem & {
+      agentName: string | null;
+      agentTitle: string | null;
+    })[];
   };
 
   queryBySessionId = async (sessionId?: string | null) => {

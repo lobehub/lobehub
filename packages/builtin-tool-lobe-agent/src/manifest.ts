@@ -2,7 +2,13 @@ import type { BuiltinToolManifest } from '@lobechat/types';
 
 import { isDesktop } from './const';
 import { systemPrompt } from './systemRole';
-import { LobeAgentApiName, LobeAgentIdentifier } from './types';
+import {
+  LobeAgentApiName,
+  LobeAgentIdentifier,
+  VENT_CATEGORIES,
+  VENT_EVIDENCE_REF_TYPES,
+  VENT_SEVERITIES,
+} from './types';
 
 export const LobeAgentManifest: BuiltinToolManifest = {
   api: [
@@ -258,6 +264,72 @@ export const LobeAgentManifest: BuiltinToolManifest = {
           },
         },
         required: ['description', 'instruction'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Privately report friction in your own working conditions to the platform builders when you are genuinely blocked — a missing tool, a parameter/schema mismatch, conflicting or wrong docs, anomalous platform behavior, or an environment limit causing repeated failure. Not user-facing; it only records the report and does not fix anything. Use sparingly: at most one vent per task, only for the single worst blocker.',
+      name: LobeAgentApiName.vent,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          category: {
+            description:
+              'Friction category: missing_tool, schema_mismatch, doc_conflict, platform_bug, env_limitation, or other.',
+            enum: [...VENT_CATEGORIES],
+            type: 'string',
+          },
+          severity: {
+            description:
+              'How badly it blocked the task: high = could not complete, medium = forced a costly workaround, low = friction but recovered.',
+            enum: [...VENT_SEVERITIES],
+            type: 'string',
+          },
+          summary: {
+            description:
+              'One short sentence naming the specific friction. Name the tool/surface if one is at fault.',
+            type: 'string',
+          },
+          details: {
+            description:
+              'What you tried, what you expected, what actually happened, and why it blocked you. Specific enough for an engineer to reproduce or fix.',
+            type: 'string',
+          },
+          attempts: {
+            description: 'How many times you hit this wall before venting, when countable.',
+            minimum: 1,
+            type: 'integer',
+          },
+          toolName: {
+            description:
+              'Exact tool/API/surface involved, when one specific component is at fault.',
+            type: 'string',
+          },
+          evidenceRefs: {
+            description:
+              'Optional stable references that ground the report. Prefer tool_call, message, operation, topic, or task refs.',
+            items: {
+              additionalProperties: false,
+              properties: {
+                id: { description: 'Stable evidence identifier.', type: 'string' },
+                summary: {
+                  description: 'Optional short note explaining why this evidence matters.',
+                  type: 'string',
+                },
+                type: {
+                  description: 'Evidence object type.',
+                  enum: [...VENT_EVIDENCE_REF_TYPES],
+                  type: 'string',
+                },
+              },
+              required: ['id', 'type'],
+              type: 'object',
+            },
+            type: 'array',
+          },
+        },
+        required: ['category', 'severity', 'summary', 'details'],
         type: 'object',
       },
     },

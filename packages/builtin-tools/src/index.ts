@@ -2,7 +2,10 @@ import { AcceptanceEvidenceManifest } from '@lobechat/builtin-tool-acceptance-ev
 import { LobeActivatorManifest } from '@lobechat/builtin-tool-activator';
 import { AgentBuilderManifest } from '@lobechat/builtin-tool-agent-builder';
 import { AgentDocumentsManifest } from '@lobechat/builtin-tool-agent-documents';
-import { AgentManagementManifest } from '@lobechat/builtin-tool-agent-management';
+import {
+  AgentManagementManifest,
+  resolveAgentManagementManifest,
+} from '@lobechat/builtin-tool-agent-management';
 import {
   agentSignalFeedbackIntentManifest,
   agentSignalReflectionManifest,
@@ -335,6 +338,8 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     hidden: true,
     identifier: AgentManagementManifest.identifier,
     manifest: AgentManagementManifest,
+    // Context-aware: hides the `callAgent` API inside sub-agent runs.
+    resolveManifest: resolveAgentManagementManifest,
     type: 'builtin',
   },
   {

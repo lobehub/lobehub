@@ -25,6 +25,13 @@ const AcceptanceCheckOwnerToolbar = () => {
   const { acceptanceId } = useAcceptanceScope();
   const { data, mutate } = useAcceptanceBundle(acceptanceId);
   const [predicting, setPredicting] = useState(false);
+  /**
+   * Authoring the standing checklist and the goal writes through the SUBJECT
+   * (`ensureForSubject`), which is still resolved in the caller's own scope — it
+   * cannot reach a teammate's row, and the workspace-unique insert fallback then
+   * fails. Until that path is reviewer-aware these stay the creator's, so the page
+   * never offers an action that is guaranteed to answer `NOT_FOUND`.
+   */
   if (!data?.isOwner) return null;
 
   const standing = data.acceptance.config?.checklist ?? [];

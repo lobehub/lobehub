@@ -67,9 +67,9 @@ const GithubRunCommandInspector = memo<
   const hasResult = !pulse && pluginState && pluginState.success !== undefined;
 
   return (
-    <div className={cx(inspectorTextStyles.root, pulse && shinyTextStyles.shinyText)}>
+    <div className={inspectorTextStyles.root}>
       <Github className={styles.icon} size={14} />
-      <span className={styles.ghPrefix}>gh</span>
+      <span className={cx(styles.ghPrefix, pulse && shinyTextStyles.shinyText)}>gh</span>
       {label && (
         <span className={styles.chip}>
           <span className={styles.command}>{label}</span>

@@ -8,9 +8,10 @@ import type {
   Plan,
   TodoItem,
   TodoState,
+  TodoUpdateOperation,
   UpdatePlanParams,
   UpdateTodosParams,
-} from '../../../types';
+} from '../types';
 
 export interface PlanDocument {
   content: string | null;
@@ -70,6 +71,22 @@ const toPlan = (doc: PlanDocument, completed = false): Plan => ({
   id: doc.id,
   updatedAt: doc.updatedAt.toISOString(),
 });
+
+/**
+ * Weak instruction-following models drop the required `type` discriminator
+ * while still sending an unambiguous payload (production example from
+ * glm-5.3-flash: `{"index": 0, "status": "processing"}`). Infer the operation
+ * type where the intent is unambiguous; index-only payloads stay undefined —
+ * they could equally mean `remove` or `complete`, and guessing a destructive
+ * operation is worse than asking the model to retry.
+ */
+const inferOperationType = (op: TodoUpdateOperation): TodoUpdateOperation['type'] | undefined => {
+  if (op.type) return op.type;
+  if (op.index !== undefined && (op.status !== undefined || op.newText !== undefined))
+    return 'update';
+  if (op.index === undefined && op.text !== undefined) return 'add';
+  return undefined;
+};
 
 const readTodosFromPlan = (doc: PlanDocument | null): TodoItem[] => {
   const todos = doc?.metadata?.todos;
@@ -160,62 +177,114 @@ export class PlanExecutionRuntime {
     const existingTodos = await this.resolveExistingTodos(context);
     const updatedTodos = [...existingTodos];
     const results: string[] = [];
+    const skipped: string[] = [];
 
-    for (const op of operations) {
-      switch (op.type) {
+    operations.forEach((op, position) => {
+      const label = `Operation ${position + 1}`;
+      const type = inferOperationType(op);
+
+      const resolveIndex = (): number | undefined => {
+        if (op.index !== undefined && op.index >= 0 && op.index < updatedTodos.length)
+          return op.index;
+        skipped.push(
+          `${label} ("${type}"): "index" must be 0-${updatedTodos.length - 1}, got ${op.index ?? 'nothing'}`,
+        );
+        return undefined;
+      };
+
+      switch (type) {
         case 'add': {
           if (op.text) {
             updatedTodos.push({ status: 'todo', text: op.text });
             results.push(`Added: "${op.text}"`);
+          } else {
+            skipped.push(`${label} ("add"): missing "text"`);
           }
           break;
         }
         case 'update': {
-          if (op.index !== undefined && op.index >= 0 && op.index < updatedTodos.length) {
-            const updatedItem = { ...updatedTodos[op.index] };
+          // An update that carries neither field would "apply" without changing
+          // anything — the same silent success this whole branch exists to kill.
+          if (op.newText === undefined && op.status === undefined) {
+            skipped.push(
+              `${label} ("update"): provide "newText" and/or "status" (use "remove"/"complete" to drop or finish an item)`,
+            );
+            break;
+          }
+          const index = resolveIndex();
+          if (index !== undefined) {
+            const updatedItem = { ...updatedTodos[index] };
             if (op.newText !== undefined) updatedItem.text = op.newText;
             if (op.status !== undefined) updatedItem.status = op.status;
-            updatedTodos[op.index] = updatedItem;
-            results.push(`Updated item ${op.index + 1}`);
+            updatedTodos[index] = updatedItem;
+            results.push(`Updated item ${index + 1}`);
           }
           break;
         }
         case 'remove': {
-          if (op.index !== undefined && op.index >= 0 && op.index < updatedTodos.length) {
-            const removed = updatedTodos.splice(op.index, 1)[0];
+          const index = resolveIndex();
+          if (index !== undefined) {
+            const removed = updatedTodos.splice(index, 1)[0];
             results.push(`Removed: "${removed.text}"`);
           }
           break;
         }
         case 'complete': {
-          if (op.index !== undefined && op.index >= 0 && op.index < updatedTodos.length) {
-            updatedTodos[op.index] = { ...updatedTodos[op.index], status: 'completed' };
-            results.push(`Completed: "${updatedTodos[op.index].text}"`);
+          const index = resolveIndex();
+          if (index !== undefined) {
+            updatedTodos[index] = { ...updatedTodos[index], status: 'completed' };
+            results.push(`Completed: "${updatedTodos[index].text}"`);
           }
           break;
         }
         case 'processing': {
-          if (op.index !== undefined && op.index >= 0 && op.index < updatedTodos.length) {
-            updatedTodos[op.index] = { ...updatedTodos[op.index], status: 'processing' };
-            results.push(`In progress: "${updatedTodos[op.index].text}"`);
+          const index = resolveIndex();
+          if (index !== undefined) {
+            updatedTodos[index] = { ...updatedTodos[index], status: 'processing' };
+            results.push(`In progress: "${updatedTodos[index].text}"`);
           }
           break;
         }
+        default: {
+          skipped.push(
+            `${label}: "type" is required and must be one of add / update / remove / complete / processing, e.g. {"type": "update", "index": 0, "status": "processing"}`,
+          );
+        }
       }
-    }
+    });
 
     const now = new Date().toISOString();
-    const actionSummary =
-      results.length > 0
-        ? `🔄 Applied ${results.length} operation${results.length > 1 ? 's' : ''}:\n${results.map((r) => `- ${r}`).join('\n')}`
-        : 'No operations applied.';
+    const skippedSummary =
+      skipped.length > 0
+        ? `⚠️ Skipped ${skipped.length} invalid operation${skipped.length > 1 ? 's' : ''}:\n${skipped.map((r) => `- ${r}`).join('\n')}`
+        : '';
+
+    // Every operation was invalid: fail loudly so the model can fix its
+    // arguments and retry, instead of reading a "success" that changed nothing
+    // (observed in production: 5 identical retries against a silent no-op).
+    if (results.length === 0) {
+      return {
+        content: [
+          'No operations applied.',
+          skippedSummary,
+          formatTodoStateSummary(existingTodos, now),
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+        success: false,
+      };
+    }
+
+    const actionSummary = `🔄 Applied ${results.length} operation${results.length > 1 ? 's' : ''}:\n${results.map((r) => `- ${r}`).join('\n')}`;
 
     const todoState: TodoState = { items: updatedTodos, updatedAt: now };
 
     if (context.topicId) await this.syncTodosToPlan(context.topicId, todoState);
 
     return {
-      content: actionSummary + '\n\n' + formatTodoStateSummary(updatedTodos, now),
+      content: [actionSummary, skippedSummary, formatTodoStateSummary(updatedTodos, now)]
+        .filter(Boolean)
+        .join('\n\n'),
       state: { todos: todoState },
       success: true,
     };

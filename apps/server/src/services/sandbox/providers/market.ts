@@ -15,6 +15,17 @@ import type {
 const log = debug('lobe-server:sandbox:market');
 const REDACTED_SANDBOX_PARAM = '[redacted]';
 const SANDBOX_AUTH_ENV_PATTERN = /\b(LOBEHUB_JWT|GITHUB_TOKEN)=("[^"]*"|'[^']*'|\S+)/g;
+/**
+ * Any command that writes into `~/.creds/env` (the injectCredsToSandbox
+ * write path — see `serverRuntimes/creds.ts`'s `writeEnvCredsToSandbox`)
+ * carries arbitrary, caller-named plaintext secrets whose variable names
+ * `SANDBOX_AUTH_ENV_PATTERN` can't predict. Rather than extend that
+ * name-specific pattern (which would need updating every time a new
+ * credential key shape shows up), blank the whole command when it targets
+ * that path — the credential name/value details aren't worth preserving in
+ * a debug log anyway.
+ */
+const CREDS_ENV_WRITE_PATTERN = />>\s*~\/\.creds\/env\b/;
 
 export class MarketSandboxProvider implements SandboxProvider {
   readonly capabilities = {
@@ -153,10 +164,12 @@ export const redactSandboxParams = (params: Record<string, unknown>) => {
   if (params.zipUrl) redacted.zipUrl = REDACTED_SANDBOX_PARAM;
   if (params.skillZipUrls) redacted.skillZipUrls = REDACTED_SANDBOX_PARAM;
   if (typeof params.command === 'string') {
-    redacted.command = params.command.replaceAll(
-      SANDBOX_AUTH_ENV_PATTERN,
-      (_, name: string) => `${name}=${REDACTED_SANDBOX_PARAM}`,
-    );
+    redacted.command = CREDS_ENV_WRITE_PATTERN.test(params.command)
+      ? REDACTED_SANDBOX_PARAM
+      : params.command.replaceAll(
+          SANDBOX_AUTH_ENV_PATTERN,
+          (_, name: string) => `${name}=${REDACTED_SANDBOX_PARAM}`,
+        );
   }
 
   return redacted;

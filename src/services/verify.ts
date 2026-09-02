@@ -32,6 +32,14 @@ export type AcceptanceListItem = Awaited<
   ReturnType<typeof lambdaClient.acceptance.list.query>
 >[number];
 
+export type AcceptanceListPage = Awaited<ReturnType<typeof lambdaClient.acceptance.listPage.query>>;
+
+/** The list's status split, shared by the flat and paged reads. */
+export type AcceptanceListFilter = 'active' | 'all' | 'completed';
+
+/** The lifecycle states a reviewer may set by hand from the acceptance list. */
+export type AcceptanceStatusOverride = 'accepted' | 'closed' | 'delivered' | 'rejected';
+
 /** Editable fields of a single delivery-check criterion. */
 export interface UpdateCriterionValue {
   description?: string | null;
@@ -179,6 +187,13 @@ export class VerifyService {
       options?.quiet ? { context: { showNotification: false } } : undefined,
     );
 
+  /** One keyset page of the acceptance feed — what the list panel scrolls. */
+  listAcceptancePage = (params: {
+    cursor?: string;
+    filter?: AcceptanceListFilter;
+    limit?: number;
+  }): Promise<AcceptanceListPage> => lambdaClient.acceptance.listPage.query(params);
+
   /**
    * Acceptance status for a known set of subjects. `listAcceptances` is capped
    * at the newest rows across every subject type, so a list surface deriving
@@ -276,8 +291,16 @@ export class VerifyService {
     lambdaClient.acceptance.setProject.mutate({ id, projectId });
 
   /** Owner override of the acceptance's decision state from the list. */
-  updateAcceptanceStatus = (id: string, status: 'accepted' | 'closed' | 'delivered' | 'rejected') =>
+  updateAcceptanceStatus = (id: string, status: AcceptanceStatusOverride) =>
     lambdaClient.acceptance.updateStatus.mutate({ id, status });
+
+  /**
+   * Sweep a multi-selection into one decision state. Reports what landed —
+   * rows that could not take the transition come back in `failedIds` instead
+   * of failing the whole sweep.
+   */
+  updateAcceptanceStatusBatch = (ids: string[], status: AcceptanceStatusOverride) =>
+    lambdaClient.acceptance.updateStatusBatch.mutate({ ids, status });
 
   /**
    * Fold one acceptance into another — the source's checks (and the rounds /
@@ -289,6 +312,9 @@ export class VerifyService {
 
   /** Delete the acceptance aggregate (its round reports detach, not delete). */
   deleteAcceptance = (id: string) => lambdaClient.acceptance.remove.mutate({ id });
+
+  /** Batch twin of `deleteAcceptance` for the list's multi-selection. */
+  deleteAcceptanceBatch = (ids: string[]) => lambdaClient.acceptance.removeBatch.mutate({ ids });
 
   // ---- per-run plan ----
   getVerifyState = (operationId: string): Promise<VerifyStateResponse | null> =>
