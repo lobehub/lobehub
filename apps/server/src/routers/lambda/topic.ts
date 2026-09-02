@@ -53,7 +53,10 @@ import {
   resolveContext,
   resolveContextWithAgentId,
 } from './_helpers/resolveContext';
-import { assertCreatorTopicTargets } from './_helpers/shareVisitorTargetGuard';
+import {
+  assertCreatorMessageTargets,
+  assertCreatorTopicTargets,
+} from './_helpers/shareVisitorTargetGuard';
 import { basicContextSchema } from './_schema/context';
 
 /** Ctx slice consumed by the conversation General-access guards. */
@@ -359,6 +362,13 @@ export const topicRouter = router({
         guardCtx(ctx),
         resolvedTopics.map((item) => ({ agentId: item.agentId, groupId: item.groupId })),
       );
+      // `messages` are REPARENTED onto the new topic by ownership only. A
+      // visitor message (creator-owned row under a `senderId` topic) moved to
+      // a creator topic would escape `notShareVisitorMessage()` for good.
+      await assertCreatorMessageTargets(
+        guardCtx(ctx),
+        resolvedTopics.flatMap((item) => item.messages ?? []),
+      );
 
       const data = await ctx.topicModel.batchCreate(resolvedTopics as any);
 
@@ -498,6 +508,8 @@ export const topicRouter = router({
       await assertCanUseConversationTargets(guardCtx(ctx), [
         { agentId: resolved.agentId, groupId: rest.groupId },
       ]);
+      // See batchCreateTopics — reparenting a visitor message would leak it.
+      await assertCreatorMessageTargets(guardCtx(ctx), rest.messages ?? []);
 
       const data = await ctx.topicModel.create({
         ...rest,

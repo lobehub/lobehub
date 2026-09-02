@@ -30,7 +30,10 @@ import {
   assertCanUseTopicTargets,
 } from './_helpers/conversationResourceGuard';
 import { resolveAgentIdFromSession, resolveContext } from './_helpers/resolveContext';
-import { assertCreatorMessageTargets } from './_helpers/shareVisitorTargetGuard';
+import {
+  assertCreatorMessageTargets,
+  assertCreatorTopicTargets,
+} from './_helpers/shareVisitorTargetGuard';
 import { basicContextSchema } from './_schema/context';
 
 const { logTiming, runTimedStage } = createTimingHelpers('lobe-server:chat:lobehub:timing');
@@ -185,6 +188,15 @@ export const messageRouter = router({
         guardCtx(ctx),
         operations.flatMap((op) => (op.type === 'createMessage' ? [op.message] : [])),
       );
+      // Creates carry no message id, but they DO name a topic: refuse to
+      // append creator rows into a visitor transcript (the workspace guard
+      // above is a no-op in personal mode, where every share lives).
+      await assertCreatorTopicTargets(
+        guardCtx(ctx),
+        operations.flatMap((op) =>
+          op.type === 'createMessage' && op.message.topicId ? [op.message.topicId] : [],
+        ),
+      );
 
       return ctx.messageService.batchMutate(operations);
     }),
@@ -306,6 +318,9 @@ export const messageRouter = router({
       // DB-resolved target as well.
       if (input.topicId) {
         await assertCanUseTopicTargets(guardCtx(ctx), [input.topicId]);
+        // Visitor topics carry the creator's userId, so ownership alone would
+        // let the creator write into a visitor's private transcript.
+        await assertCreatorTopicTargets(guardCtx(ctx), [input.topicId]);
       }
 
       // Create message with the resolved agentId

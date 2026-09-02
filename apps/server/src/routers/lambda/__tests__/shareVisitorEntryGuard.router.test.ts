@@ -9,10 +9,14 @@ vi.mock('@/database/core/db-adaptor', () => ({
 
 const mockTopicFindOwnTopicById = vi.fn();
 const mockTopicFindShareVisitorTopicIds = vi.fn();
+const mockTopicBatchCreate = vi.fn();
+const mockTopicCreate = vi.fn();
 const mockTopicDelete = vi.fn();
 const mockTopicUpdate = vi.fn();
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn(() => ({
+    batchCreate: mockTopicBatchCreate,
+    create: mockTopicCreate,
     delete: mockTopicDelete,
     findOwnTopicById: mockTopicFindOwnTopicById,
     findShareVisitorTopicIds: mockTopicFindShareVisitorTopicIds,
@@ -32,11 +36,13 @@ vi.mock('@/database/models/message', () => ({
 }));
 
 const mockServiceBatchMutate = vi.fn();
+const mockServiceCreateMessage = vi.fn();
 const mockServiceUpdateMessage = vi.fn();
 const mockServiceUpdateMessagePlugin = vi.fn();
 vi.mock('@/server/services/message', () => ({
   MessageService: vi.fn(() => ({
     batchMutate: mockServiceBatchMutate,
+    createMessage: mockServiceCreateMessage,
     updateMessage: mockServiceUpdateMessage,
     updateMessagePlugin: mockServiceUpdateMessagePlugin,
   })),
@@ -54,6 +60,16 @@ vi.mock('@/database/models/file', () => ({
 const mockDeleteFiles = vi.fn();
 vi.mock('@/server/services/file', () => ({
   FileService: vi.fn(() => ({ deleteFiles: mockDeleteFiles })),
+}));
+
+// Topic creation canonicalizes agent/session through the DB; the guard under
+// test runs after that step, so short-circuit it.
+vi.mock('../_helpers/resolveContext', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  resolveContextWithAgentId: vi.fn(async (input: { agentId?: string }) => ({
+    agentId: input.agentId,
+    sessionId: 'session-1',
+  })),
 }));
 
 const { topicRouter } = await import('../topic');
@@ -179,6 +195,84 @@ describe('agent-share visitor guards on creator-facing RPCs', () => {
       await messageCaller().update({ id: 'msg-1', value: { content: 'ok' } });
 
       expect(mockServiceUpdateMessage).toHaveBeenCalled();
+    });
+  });
+
+  // Creation paths name no existing message id, but they can still reach a
+  // visitor transcript: a new message can be appended INTO a visitor topic,
+  // and a new topic can ADOPT visitor messages (reparenting them out of the
+  // `senderId` scope the visitor predicates key on).
+  describe('creation paths', () => {
+    beforeEach(() => {
+      mockTopicFindShareVisitorTopicIds.mockImplementation(async (ids: string[]) =>
+        ids.filter((id) => id === visitorTopicId),
+      );
+      mockMessageFindShareVisitorMessageIds.mockImplementation(async (ids: string[]) =>
+        ids.filter((id) => id === visitorMessageId),
+      );
+    });
+
+    it('message.createMessage rejects a visitor topic with NOT_FOUND', async () => {
+      await expect(
+        messageCaller().createMessage({
+          agentId: 'agent-1',
+          content: 'injected',
+          role: 'user',
+          topicId: visitorTopicId,
+        } as any),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect(mockServiceCreateMessage).not.toHaveBeenCalled();
+    });
+
+    it('message.batchMutate rejects a createMessage into a visitor topic with NOT_FOUND', async () => {
+      await expect(
+        messageCaller().batchMutate({
+          operations: [
+            {
+              message: { agentId: 'agent-1', content: 'x', role: 'user', topicId: visitorTopicId },
+              type: 'createMessage',
+            } as any,
+          ],
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect(mockServiceBatchMutate).not.toHaveBeenCalled();
+    });
+
+    it('topic.createTopic rejects adopting a visitor message with NOT_FOUND', async () => {
+      await expect(
+        topicCaller().createTopic({
+          agentId: 'agent-1',
+          messages: ['msg-1', visitorMessageId],
+          title: 'stolen',
+        } as any),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect(mockTopicCreate).not.toHaveBeenCalled();
+    });
+
+    it('topic.batchCreateTopics rejects adopting a visitor message with NOT_FOUND', async () => {
+      await expect(
+        topicCaller().batchCreateTopics([
+          { agentId: 'agent-1', messages: ['msg-1'], title: 'fine' },
+          { agentId: 'agent-1', messages: [visitorMessageId], title: 'stolen' },
+        ] as any),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect(mockTopicBatchCreate).not.toHaveBeenCalled();
+    });
+
+    it('still lets the creator create a topic adopting their own messages', async () => {
+      mockTopicCreate.mockResolvedValue({ id: 'topic-new' });
+
+      await topicCaller().createTopic({
+        agentId: 'agent-1',
+        messages: ['msg-1'],
+        title: 'ok',
+      } as any);
+
+      expect(mockTopicCreate).toHaveBeenCalled();
     });
   });
 });
