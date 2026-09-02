@@ -101,7 +101,7 @@ export class TrashModel {
   private visibleResource = () =>
     this.workspaceId
       ? or(
-          sql`${trashItems.meta}->>'visibility' IS DISTINCT FROM 'private'`,
+          sql`COALESCE(${trashItems.meta}->>'visibility', '') <> 'private'`,
           sql`${trashItems.meta}->>'creatorUserId' = ${this.userId}`,
         )
       : undefined;
