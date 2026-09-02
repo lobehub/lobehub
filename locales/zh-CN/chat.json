@@ -1657,6 +1657,7 @@
   "taskIntent.answersHeading": "补充说明",
   "taskIntent.back": "返回修改",
   "taskIntent.confirm": "创建任务",
+  "taskIntent.create": "创建",
   "taskIntent.createDirectly": "直接创建，跳过理解",
   "taskIntent.created": "任务已创建",
   "taskIntent.generate": "生成",

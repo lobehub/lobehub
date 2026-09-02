@@ -1657,6 +1657,7 @@
   "taskIntent.answersHeading": "Clarifications",
   "taskIntent.back": "Edit draft",
   "taskIntent.confirm": "Create task",
+  "taskIntent.create": "Create",
   "taskIntent.createDirectly": "Create without reading the draft",
   "taskIntent.created": "Task created",
   "taskIntent.generate": "Generate",

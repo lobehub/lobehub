@@ -409,15 +409,28 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
           // exists, what it ended up called, or where it went. The name matters
           // most after a reading, since that name is what the reading produced.
           toast.success({
-            description: result.name || draft.name,
+            // The open affordance rides in the description rather than the
+            // action slot: the toast's job is to say the task exists, and a
+            // filled button pulled to the far right read as the thing to do
+            // next. The action slot is right-aligned and shrink-wrapped by the
+            // toast itself, so lining the link up under the task name means
+            // putting it in the same column as the name.
+            description: (
+              <Flexbox align={'flex-start'} gap={2}>
+                <Text>{result.name || draft.name}</Text>
+                <Button
+                  size={'small'}
+                  style={{ paddingInline: 0 }}
+                  type={'text'}
+                  onClick={() =>
+                    navigate(taskDetailPath(result.identifier, result.assigneeAgentId ?? undefined))
+                  }
+                >
+                  {t('taskIntent.openCreated')}
+                </Button>
+              </Flexbox>
+            ),
             title: t('taskIntent.created'),
-            actions: [
-              {
-                label: t('taskIntent.openCreated'),
-                onClick: () =>
-                  navigate(taskDetailPath(result.identifier, result.assigneeAgentId ?? undefined)),
-              },
-            ],
           });
           onCreated?.({
             agentId: result.assigneeAgentId ?? undefined,
@@ -623,7 +636,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     // The ring belongs to the whole input surface — editor, controls and submit
     // are one thing being read, so lighting only the text area would draw a
     // second boundary the composer does not otherwise have.
-    <GeneratingBorder generating={isAnalyzing}>
+    <GeneratingBorder generating={isAnalyzing || isSynthesizing}>
       <Block
         style={{ overflow: 'hidden', position: 'relative' }}
         variant={'outlined'}

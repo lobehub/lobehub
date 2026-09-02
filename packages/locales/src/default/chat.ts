@@ -1719,6 +1719,7 @@ export default {
   'taskIntent.createDirectly': 'Create without reading the draft',
   'taskIntent.moreCreateOptions': 'More create options',
   'taskIntent.confirm': 'Create task',
+  'taskIntent.create': 'Create',
   'taskIntent.generate': 'Generate',
   'taskIntent.goalCallout.action': 'Create a goal',
   'taskIntent.goalCallout.desc':

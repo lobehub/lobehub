@@ -462,8 +462,36 @@ describe('CreateTaskInlineEntry', () => {
     // stub collapses to the key, so the assertion is on the action instead.)
     await waitFor(() => expect(toastSuccessMock).toHaveBeenCalledTimes(1));
 
-    toastSuccessMock.mock.calls[0][0].actions[0].onClick();
+    // Opening is an offer, not the next step. The toast's action slot is
+    // right-aligned and shrink-wrapped by the component, so the link rides in
+    // the description instead — same column as the task name.
+    const { actions, description } = toastSuccessMock.mock.calls[0][0];
+    expect(actions).toBeUndefined();
+
+    render(description as ReactNode);
+    fireEvent.click(screen.getByText('taskIntent.openCreated'));
     expect(navigateMock).toHaveBeenCalledWith(expect.stringContaining('TASK-9'));
+  });
+
+  it('confirms every creation path, not only the straight-through one', async () => {
+    editorMarkdownMock.value = 'Write a project plan';
+    createTaskMock.mockResolvedValue({ identifier: 'TASK-9', name: 'Write the Q3 project plan' });
+    analyzeIntentMock.mockResolvedValue({
+      ...clearReading,
+      clarifications: [{ options: ['lobe-chat'], question: 'Which repo?' }],
+      confidence: 'medium',
+    });
+
+    render(<CreateTaskInlineEntry variant="hero" />);
+    fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
+
+    await screen.findByText('taskIntent.reviewStep');
+    fireEvent.click(screen.getByText('lobe-chat'));
+    fireEvent.click(await screen.findByText('taskIntent.generate'));
+
+    // The toast lives in the one place every path funnels through, so the
+    // answered path confirms itself exactly like the unanswered one.
+    await waitFor(() => expect(toastSuccessMock).toHaveBeenCalledTimes(1));
   });
 
   describe('intent recognition', () => {
@@ -555,6 +583,28 @@ describe('CreateTaskInlineEntry', () => {
       ]);
       // One press: the rewrite and the create, with no page in between.
       await waitFor(() => expect(createTaskMock).toHaveBeenCalledTimes(1));
+    });
+
+    it('names the button for what pressing it does', async () => {
+      analyzeIntentMock.mockResolvedValue({
+        ...clearReading,
+        clarifications: [{ options: ['lobe-chat'], question: 'Which repo?' }],
+        confidence: 'medium',
+      });
+
+      render(<CreateTaskInlineEntry variant="hero" />);
+      fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
+
+      // Nothing answered yet: pressing it writes no brief and makes no model
+      // call, so promising "generate" would name work that never happens.
+      await screen.findByText('taskIntent.reviewStep');
+      expect(screen.getByText('taskIntent.create')).toBeDefined();
+      expect(screen.queryByText('taskIntent.generate')).toBeNull();
+
+      fireEvent.click(screen.getByText('lobe-chat'));
+
+      await screen.findByText('taskIntent.generate');
+      expect(screen.queryByText('taskIntent.create')).toBeNull();
     });
 
     it('has no confirmation step between the last answer and the task', async () => {
