@@ -763,6 +763,14 @@ export class AgentRuntimeService {
    * normally instead of hanging. Falls back to `interruptOperation` when no
    * state was readable. A persistence failure is logged, never rethrown: the
    * run must stop regardless of whether the terminal status could be written.
+   *
+   * The completion lifecycle (`emitSignalEvents` + `dispatchHooks`) must run
+   * here too: this abort short-circuits `executeStep` before `runtime.step()`,
+   * so no downstream path is left to persist the terminal status. Without it
+   * `saveAgentState` would only update the runtime-state cache and publish the
+   * terminal stream event, leaving `agent_operations` stuck on `running` —
+   * which `TopicModel.tryReserveTaskCallback` then reads as a live run and
+   * blocks the visitor's next send on that topic for the abandoned-run TTL.
    */
   private async buildShareAbortResult(
     operationId: string,
@@ -772,11 +780,19 @@ export class AgentRuntimeService {
 
     try {
       if (state) {
-        await this.coordinator.saveAgentState(operationId, {
+        const interruptedState: AgentState = {
           ...state,
           lastModified: new Date().toISOString(),
           status: 'interrupted',
-        });
+        };
+        await this.coordinator.saveAgentState(operationId, interruptedState);
+
+        await this.completionLifecycle.emitSignalEvents(
+          operationId,
+          interruptedState,
+          'interrupted',
+        );
+        await this.completionLifecycle.dispatchHooks(operationId, interruptedState, 'interrupted');
       } else {
         await this.interruptOperation(operationId);
       }
