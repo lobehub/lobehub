@@ -2194,6 +2194,51 @@ table messenger_installations {
   }
 }
 
+table metric_points {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  metric_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  value "numeric(20, 6)" [not null]
+  observed_at "timestamp with time zone" [not null]
+  actor_type text [not null]
+  actor_id text
+  operation_id text
+  source_type text [not null]
+  metadata jsonb
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (metric_id, observed_at) [name: 'metric_points_series_time_idx']
+    user_id [name: 'metric_points_user_id_idx']
+    workspace_id [name: 'metric_points_workspace_id_idx']
+  }
+}
+
+table metrics {
+  id text [pk, not null]
+  user_id text [not null]
+  workspace_id text
+  subject_type text [not null]
+  subject_id text [not null]
+  key text [not null]
+  title text
+  kind text [not null, default: 'gauge']
+  unit text
+  config jsonb
+  metadata jsonb
+  deleted_at "timestamp with time zone"
+  is_deleted boolean
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (subject_type, subject_id, key) [name: 'metrics_subject_key_unique', unique]
+    user_id [name: 'metrics_user_id_idx']
+    workspace_id [name: 'metrics_workspace_id_idx']
+  }
+}
+
 table nextauth_accounts {
   access_token text
   expires_at integer
@@ -2560,8 +2605,8 @@ table project_working_directories {
     (project_id, sort_order) [name: 'project_working_directories_project_sort_order_idx']
     device_id [name: 'project_working_directories_device_id_idx']
     workspace_id [name: 'project_working_directories_workspace_id_idx']
-
-
+    
+    
   }
 }
 

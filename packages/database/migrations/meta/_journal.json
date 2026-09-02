@@ -1099,6 +1099,13 @@
       "when": 1788281814640,
       "tag": "0156_project_working_directories",
       "breakpoints": true
+    },
+    {
+      "idx": 157,
+      "version": "7",
+      "when": 1788399005304,
+      "tag": "0157_add_metrics_tables",
+      "breakpoints": true
     }
   ],
   "version": "6"
