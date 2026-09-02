@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => {
   return {
     createSandboxService: vi.fn(),
     FakeSandboxService,
+    MarketService: vi.fn(() => ({})),
     preprocessLhCommand: vi.fn(),
     sandboxService: new FakeSandboxService(),
   };
@@ -21,7 +22,7 @@ vi.mock('@/server/services/file', () => ({
 }));
 
 vi.mock('@/server/services/market', () => ({
-  MarketService: vi.fn(() => ({})),
+  MarketService: mocks.MarketService,
 }));
 
 vi.mock('@/server/services/sandbox', () => ({
@@ -84,6 +85,22 @@ describe('cloudSandboxRuntime', () => {
       expect.objectContaining({
         command:
           'lh() { LOBEHUB_WORKSPACE_ID=\'ws-42\' npx -y @lobehub/cli "$@"; }\nlh agent edit agt_1 -t x',
+      }),
+    );
+  });
+
+  // `injectCredsToSandbox` (the `creds` runtime) threads `workspaceId` into its
+  // MarketService, which routes workspace requests to an `org-<id>` sandbox
+  // session on the market backend. If this runtime's MarketService omits
+  // `workspaceId`, its shell calls resolve to the personal session instead —
+  // a different sandbox than the one credentials were just injected into.
+  it('scopes its MarketService to the request workspace', async () => {
+    const { cloudSandboxRuntime } = await import('../cloudSandbox');
+    await cloudSandboxRuntime.factory(buildContext({ workspaceId: 'ws-42' }));
+
+    expect(mocks.MarketService).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userInfo: { userId: 'user-1', workspaceId: 'ws-42' },
       }),
     );
   });
