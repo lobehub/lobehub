@@ -4,12 +4,21 @@
  *
  * Usage (inside actions/github-script):
  *   const comment = require('<workspace>/.github/scripts/size-gate-comment.cjs');
- *   await comment({ github, context, title: 'Web dist', report, failed, identifier: 'web' });
+ *   await comment({ github, context, title: 'Web dist', report, failed, identifier: 'web', issueNumber });
  *
  * `identifier` keeps one comment per gate: the web (e2e) and desktop (asar)
  * workflows run independently on the same PR and must not overwrite each other.
  */
-const sizeGateComment = async ({ github, context, title, report, failed, identifier }) => {
+const sizeGateComment = async ({
+  github,
+  context,
+  title,
+  report,
+  failed,
+  identifier,
+  issueNumber,
+}) => {
+  const number = issueNumber ?? context.issue.number;
   if (!identifier)
     throw new Error('sizeGateComment requires an `identifier` (e.g. "web" | "asar")');
   const commentIdentifier = `<!-- SIZE-GATE-COMMENT-${identifier} -->`;
@@ -23,7 +32,7 @@ ${report}
 *Baseline: latest \`canary\` build (workflow artifact). Thresholds configurable via \`SIZE_GATE_PERCENT\` / \`SIZE_GATE_FLOOR_BYTES\`.*`;
 
   const { data: comments } = await github.rest.issues.listComments({
-    issue_number: context.issue.number,
+    issue_number: number,
     owner: context.repo.owner,
     repo: context.repo.repo,
   });
@@ -43,7 +52,7 @@ ${report}
 
   const result = await github.rest.issues.createComment({
     body,
-    issue_number: context.issue.number,
+    issue_number: number,
     owner: context.repo.owner,
     repo: context.repo.repo,
   });
