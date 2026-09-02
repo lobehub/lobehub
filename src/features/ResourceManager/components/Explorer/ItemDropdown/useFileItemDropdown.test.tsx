@@ -9,7 +9,7 @@ interface SendToMessengerParams {
 
 const mocks = vi.hoisted(() => ({
   confirmModal: vi.fn(),
-  deleteResource: vi.fn(async () => undefined),
+  deleteResource: vi.fn<() => Promise<void>>(async () => {}),
   refreshFileList: vi.fn(async () => undefined),
   revalidateTree: vi.fn(async () => undefined),
   useSendToMessengerMenuItem: vi.fn((_params: SendToMessengerParams) => undefined),
@@ -110,9 +110,9 @@ describe('useFileItemDropdown — workspace resource permissions', () => {
     const deleteItem = items.find((item) => item?.key === 'delete');
 
     expect(renameItem).toBeTruthy();
-    expect(renameItem?.disabled).not.toBe(true);
+    expect(renameItem && 'disabled' in renameItem ? renameItem.disabled : undefined).not.toBe(true);
     expect(deleteItem).toBeTruthy();
-    expect(deleteItem?.disabled).not.toBe(true);
+    expect(deleteItem && 'disabled' in deleteItem ? deleteItem.disabled : undefined).not.toBe(true);
   });
 
   it('closes the confirmation without waiting for the delete request', async () => {

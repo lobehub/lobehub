@@ -77,7 +77,6 @@ describe('TrashService', () => {
       const file = await creatorModel.create({
         fileType: 'text/plain',
         name: 'shared.txt',
-        parentId: null,
         size: 4,
         url: 'files/shared.txt',
         visibility: 'public',

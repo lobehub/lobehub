@@ -1569,6 +1569,16 @@ describe.skipIf(!isServerDB)('FtsSearchRepo', () => {
           userId,
           workspaceId,
         },
+        {
+          deletedAt: new Date(),
+          fileType: 'text/plain',
+          isDeleted: true,
+          name: 'kubernetes-trashed-personal.txt',
+          size: 10,
+          url: 'file://kubernetes-trashed-personal.txt',
+          userId,
+          workspaceId: null,
+        },
       ]);
 
       await serverDB.insert(documents).values([
@@ -1618,6 +1628,33 @@ describe.skipIf(!isServerDB)('FtsSearchRepo', () => {
           userId,
           workspaceId,
         },
+        {
+          content: 'Kubernetes trashed personal page body',
+          deletedAt: new Date(),
+          fileType: 'custom/document',
+          filename: 'kubernetes-trashed-personal-page',
+          isDeleted: true,
+          source: 'internal://ws-page-trashed',
+          sourceType: 'file',
+          title: 'Kubernetes trashed personal page',
+          totalCharCount: 0,
+          totalLineCount: 0,
+          userId,
+          workspaceId: null,
+        },
+        {
+          deletedAt: new Date(),
+          fileType: DOCUMENT_FOLDER_TYPE,
+          filename: 'kubernetes-trashed-personal-folder',
+          isDeleted: true,
+          source: 'internal://ws-folder-trashed',
+          sourceType: 'file',
+          title: 'Kubernetes trashed personal folder',
+          totalCharCount: 0,
+          totalLineCount: 0,
+          userId,
+          workspaceId: null,
+        },
       ]);
 
       await serverDB.insert(chatGroups).values([
@@ -1628,6 +1665,13 @@ describe.skipIf(!isServerDB)('FtsSearchRepo', () => {
       await serverDB.insert(knowledgeBases).values([
         { name: 'Kubernetes personal base', userId, workspaceId: null },
         { name: 'Kubernetes workspace base', userId, workspaceId },
+        {
+          deletedAt: new Date(),
+          isDeleted: true,
+          name: 'Kubernetes trashed personal base',
+          userId,
+          workspaceId: null,
+        },
       ]);
     });
 
@@ -1655,6 +1699,14 @@ describe.skipIf(!isServerDB)('FtsSearchRepo', () => {
       const results = await new FtsSearchRepo(serverDB, userId).search({ query: 'Kubernetes' });
 
       expectEveryHitScopedTo(results, 'personal');
+    });
+
+    it('should never surface trashed resource rows in personal mode', async () => {
+      const results = await new FtsSearchRepo(serverDB, userId).search({ query: 'Kubernetes' });
+
+      expect(results.map((result) => result.title.toLowerCase())).not.toContainEqual(
+        expect.stringContaining('trashed'),
+      );
     });
 
     it('should never surface personal rows in workspace mode', async () => {

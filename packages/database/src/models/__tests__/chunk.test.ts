@@ -217,6 +217,16 @@ describe('ChunkModel', () => {
       expect(result[0].id).toBe(chunk1.id);
       expect(result[1].id).toBe(chunk2.id);
       expect(result[0].similarity).toBeGreaterThan(result[1].similarity);
+
+      await serverDB.update(files).set({ isDeleted: true }).where(eq(files.id, fileId));
+
+      await expect(
+        chunkModel.semanticSearch({
+          embedding: designThinkingQuery2,
+          fileIds: [fileId],
+          query: 'design thinking',
+        }),
+      ).resolves.toHaveLength(0);
     });
     // Additional search scenario without file ID
     it('should perform semantic search without fileIds', async () => {
@@ -423,7 +433,7 @@ describe('ChunkModel', () => {
   describe('countByFileId', () => {
     it('should count chunks by file id', async () => {
       const fileId = '1';
-      const [chunk1, chunk2, chunk3] = await serverDB
+      const [chunk1, chunk2] = await serverDB
         .insert(chunks)
         .values([
           { text: 'Chunk 1', userId, index: 0 },
@@ -479,6 +489,16 @@ describe('ChunkModel', () => {
       expect(result[0].id).toBe(chunk1.id);
       expect(result[1].id).toBe(chunk2.id);
       expect(result[0].similarity).toBeGreaterThan(result[1].similarity);
+
+      await serverDB.update(files).set({ isDeleted: true }).where(eq(files.id, fileId));
+
+      await expect(
+        chunkModel.semanticSearchForChat({
+          embedding: designThinkingQuery2,
+          fileIds: [fileId],
+          query: 'design thinking',
+        }),
+      ).resolves.toHaveLength(0);
     });
   });
 

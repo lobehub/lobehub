@@ -882,6 +882,25 @@ describe('AgentDocumentModel', () => {
       expect(byFilename['web-page']?.content).toBe('');
       expect(byFilename['web-page']?.contentCharCount).toBe('web body'.length);
     });
+
+    it('should exclude resource-trashed backing documents from every active read', async () => {
+      const created = await agentDocumentModel.create(agentId, 'trashed.md', 'private context', {
+        policyLoad: PolicyLoad.ALWAYS,
+        templateId: AGENT_SKILL_TEMPLATE_ID,
+      });
+
+      await serverDB
+        .update(documents)
+        .set({ deletedAt: new Date(), isDeleted: true })
+        .where(eq(documents.id, created.documentId));
+
+      await expect(agentDocumentModel.findById(created.id)).resolves.toBeUndefined();
+      await expect(agentDocumentModel.findByAgent(agentId)).resolves.toEqual([]);
+      await expect(agentDocumentModel.listByAgent(agentId)).resolves.toEqual([]);
+      await expect(agentDocumentModel.findSkillDocsByAgent(agentId)).resolves.toEqual([]);
+      await expect(agentDocumentModel.findContextByAgent(agentId)).resolves.toEqual([]);
+      await expect(agentDocumentModel.hasByAgent(agentId)).resolves.toBe(false);
+    });
   });
 
   describe('hasByAgent', () => {

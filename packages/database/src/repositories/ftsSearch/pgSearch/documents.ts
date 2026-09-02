@@ -28,6 +28,7 @@ export async function searchFolders(
       description: documents.description,
       filename: documents.filename,
       id: documents.id,
+      isDeleted: documents.isDeleted,
       knowledgeBaseId: documents.knowledgeBaseId,
       score: sql<number>`paradedb.score(${documents.id})`.as('score'),
       slug: documents.slug,
@@ -63,6 +64,7 @@ export async function searchFolders(
     .where(
       and(
         context.liftedScopeWhere(hits.workspaceId),
+        context.liftedTrashWhere(hits.isDeleted),
         excludeKbIds && excludeKbIds.length > 0
           ? or(isNull(hits.knowledgeBaseId), notInArray(hits.knowledgeBaseId, excludeKbIds))
           : undefined,
@@ -103,6 +105,7 @@ export async function searchPages(
       fileId: documents.fileId,
       filename: documents.filename,
       id: documents.id,
+      isDeleted: documents.isDeleted,
       knowledgeBaseId: documents.knowledgeBaseId,
       score: sql<number>`paradedb.score(${documents.id})`.as('score'),
       title: documents.title,
@@ -134,6 +137,7 @@ export async function searchPages(
     .where(
       and(
         context.liftedScopeWhere(hits.workspaceId),
+        context.liftedTrashWhere(hits.isDeleted),
         excludeKbIds && excludeKbIds.length > 0
           ? or(isNull(hits.knowledgeBaseId), notInArray(hits.knowledgeBaseId, excludeKbIds))
           : undefined,

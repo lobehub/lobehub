@@ -180,7 +180,11 @@ describe('TrashAction', () => {
       action.useFetchTrash(true, undefined, 'workspace-b');
       const secondSuccess = vi.mocked(useClientDataSWR).mock.calls.at(-1)?.[2]?.onSuccess;
 
-      firstSuccess?.({ items: [buildItem({ title: 'Workspace A' })], nextCursor: null }, '', {});
+      firstSuccess?.(
+        { items: [buildItem({ title: 'Workspace A' })], nextCursor: null },
+        '',
+        undefined as never,
+      );
       expect(useTrashStore.getState().itemsScopeId).toBeNull();
 
       secondSuccess?.(
@@ -189,7 +193,7 @@ describe('TrashAction', () => {
           nextCursor: null,
         },
         '',
-        {},
+        undefined as never,
       );
       expect(useTrashStore.getState()).toMatchObject({
         items: [expect.objectContaining({ title: 'Workspace B' })],
@@ -211,10 +215,18 @@ describe('TrashAction', () => {
       action.useFetchTrash(true, 'file', 'workspace-a');
       const fileSuccess = vi.mocked(useClientDataSWR).mock.calls.at(-1)?.[2]?.onSuccess;
 
-      allSuccess?.({ items: [buildItem({ resourceType: 'document' })], nextCursor: null }, '', {});
+      allSuccess?.(
+        { items: [buildItem({ resourceType: 'document' })], nextCursor: null },
+        '',
+        undefined as never,
+      );
       expect(useTrashStore.getState().items).toEqual([]);
 
-      fileSuccess?.({ items: [buildItem({ title: 'Current files' })], nextCursor: null }, '', {});
+      fileSuccess?.(
+        { items: [buildItem({ title: 'Current files' })], nextCursor: null },
+        '',
+        undefined as never,
+      );
       expect(useTrashStore.getState().items).toEqual([
         expect.objectContaining({ title: 'Current files' }),
       ]);
@@ -244,7 +256,7 @@ describe('TrashAction', () => {
           nextCursor: null,
         },
         '',
-        {},
+        undefined as never,
       );
       resolvePage({
         items: [buildItem({ id: 'trash_a_2', title: 'Late Workspace A' })],

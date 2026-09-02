@@ -331,6 +331,7 @@ export async function searchFiles(
       createdAt: files.createdAt,
       fileType: files.fileType,
       id: files.id,
+      isDeleted: files.isDeleted,
       name: files.name,
       score: sql<number>`paradedb.score(${files.id})`.as('score'),
       size: files.size,
@@ -371,6 +372,7 @@ export async function searchFiles(
     .where(
       and(
         context.liftedScopeWhere(hits.workspaceId),
+        context.liftedTrashWhere(hits.isDeleted),
         // A file linked to any restricted KB is fully hidden. The subquery
         // avoids leaking it through a different joined membership row.
         excludeKbIds && excludeKbIds.length > 0
@@ -480,6 +482,7 @@ export async function searchKnowledgeBases(
       createdAt: knowledgeBases.createdAt,
       description: knowledgeBases.description,
       id: knowledgeBases.id,
+      isDeleted: knowledgeBases.isDeleted,
       name: knowledgeBases.name,
       score: sql<number>`paradedb.score(${knowledgeBases.id})`.as('score'),
       updatedAt: knowledgeBases.updatedAt,
@@ -510,6 +513,7 @@ export async function searchKnowledgeBases(
     .where(
       and(
         context.liftedScopeWhere(hits.workspaceId),
+        context.liftedTrashWhere(hits.isDeleted),
         // Keep excluded knowledge bases out of the inner BM25 scan so TopN
         // ranking remains intact; restricted rows only consume pool slots.
         excludeIds && excludeIds.length > 0 ? notInArray(hits.id, excludeIds) : undefined,

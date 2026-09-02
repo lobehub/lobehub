@@ -148,7 +148,7 @@ const NoteFileItem = memo<NoteFileItemProps>(
           </div>
         ) : (
           isSupportedForChunking && (
-            <Tooltip title={t('FileManager.actions.chunkingTooltip')}>
+            <Tooltip title={t('components:FileManager.actions.chunkingTooltip')}>
               <div
                 className={cx('floatingChunkBadge', styles.floatingChunkBadge)}
                 style={{ cursor: 'pointer' }}
