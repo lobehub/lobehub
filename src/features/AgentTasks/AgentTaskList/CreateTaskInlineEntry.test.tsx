@@ -514,7 +514,7 @@ describe('CreateTaskInlineEntry', () => {
       // button says so — it reads "create task" on no step any more, which is
       // what left users unsure whether pressing it was the end of the flow.
       fireEvent.click(screen.getByText('lobe-chat'));
-      fireEvent.click(await screen.findByText('taskIntent.confirmCreate'));
+      fireEvent.click(await screen.findByText('taskIntent.generate'));
 
       await waitFor(() => expect(createTaskMock).toHaveBeenCalledTimes(1));
       // The answer reaches the task through the rewritten brief, not as a list
@@ -540,18 +540,43 @@ describe('CreateTaskInlineEntry', () => {
       fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
 
       await screen.findByText('taskIntent.reviewStep');
-      // Still on a question: rewriting the brief here would fold in answers
-      // that do not exist yet.
+      // Answering is not what triggers the rewrite — there is no step between
+      // the last answer and the task, so pressing generate is.
       fireEvent.click(screen.getByText('lobe-chat'));
+      fireEvent.click(await screen.findByText('PDF'));
       expect(synthesizeInstructionMock).not.toHaveBeenCalled();
 
-      fireEvent.click(await screen.findByText('PDF'));
+      fireEvent.click(await screen.findByText('taskIntent.generate'));
 
       await waitFor(() => expect(synthesizeInstructionMock).toHaveBeenCalledTimes(1));
       expect(synthesizeInstructionMock.mock.calls[0][0].answers).toEqual([
         { answer: 'lobe-chat', question: 'Which repo?' },
         { answer: 'PDF', question: 'Which format?' },
       ]);
+      // One press: the rewrite and the create, with no page in between.
+      await waitFor(() => expect(createTaskMock).toHaveBeenCalledTimes(1));
+    });
+
+    it('has no confirmation step between the last answer and the task', async () => {
+      analyzeIntentMock.mockResolvedValue({
+        ...clearReading,
+        clarifications: [{ options: ['lobe-chat'], question: 'Which repo?' }],
+        confidence: 'medium',
+      });
+
+      render(<CreateTaskInlineEntry variant="hero" />);
+      fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
+
+      await screen.findByText('taskIntent.reviewStep');
+      fireEvent.click(screen.getByText('lobe-chat'));
+
+      // No confirm tab, no answers recap, no second instruction editor: the
+      // question the user is on is the last thing standing between them and
+      // the task.
+      expect(screen.queryByText('taskIntent.confirmStep')).toBeNull();
+      expect(screen.queryByText('taskIntent.confirmHeading')).toBeNull();
+      expect(screen.queryByText('taskIntent.instructionLabel')).toBeNull();
+      expect(screen.getByText('taskIntent.generate')).toBeDefined();
     });
 
     it('falls back to appending the answers when the second reading fails', async () => {
@@ -568,7 +593,7 @@ describe('CreateTaskInlineEntry', () => {
 
       await screen.findByText('taskIntent.reviewStep');
       fireEvent.click(screen.getByText('lobe-chat'));
-      fireEvent.click(await screen.findByText('taskIntent.confirmCreate'));
+      fireEvent.click(await screen.findByText('taskIntent.generate'));
 
       await waitFor(() => expect(createTaskMock).toHaveBeenCalledTimes(1));
       expect(createTaskMock.mock.calls[0][0].instruction).toContain(
@@ -576,10 +601,12 @@ describe('CreateTaskInlineEntry', () => {
       );
     });
 
-    it('sends a rich-text mirror carrying the same answers as the instruction', async () => {
-      // editorData wins over the markdown when a task is rendered, so a mirror
-      // left on the pre-review draft would show the user a brief the agent
-      // never received.
+    it('sends no stale mirror alongside a rewritten brief', async () => {
+      // The mirror wins over the markdown when a task is rendered, so shipping
+      // the pre-answer draft's document next to a rewritten brief would show
+      // the user something the agent never received. Freshly written prose has
+      // no mirror to inherit: send none, and let the page rebuild from the
+      // markdown that was actually run.
       editorJsonMock.value = {
         root: {
           children: [
@@ -599,21 +626,35 @@ describe('CreateTaskInlineEntry', () => {
 
       await screen.findByText('taskIntent.reviewStep');
       fireEvent.click(screen.getByText('lobe-chat'));
-      fireEvent.click(await screen.findByText('taskIntent.confirmCreate'));
+      fireEvent.click(await screen.findByText('taskIntent.generate'));
 
       await waitFor(() => expect(createTaskMock).toHaveBeenCalledTimes(1));
       const { editorData, instruction } = createTaskMock.mock.calls[0][0];
-      const mirrored = (editorData as any).root.children
-        .flatMap((node: any) => (node.children ?? []).map((child: any) => child.text))
-        .join('\n');
 
-      // Whatever the brief ends up being, the mirror has to say the same thing:
-      // the mirror is what the task page renders, the markdown is what the
-      // agent receives, and a task where they disagree shows the user a brief
-      // that was never run.
       expect(instruction).toBe('Write the Q3 plan for lobe-chat.');
-      expect(mirrored).toBe(instruction);
-      expect(mirrored).not.toContain('Write a project plan');
+      expect(editorData).toBeUndefined();
+    });
+
+    it('falls back to appending the answers when the second reading fails', async () => {
+      // Same contract as the first reading: an assist, never a gate.
+      synthesizeInstructionMock.mockRejectedValue(new Error('offline'));
+      analyzeIntentMock.mockResolvedValue({
+        ...clearReading,
+        clarifications: [{ options: ['lobe-chat'], question: 'Which repo?' }],
+        confidence: 'medium',
+      });
+
+      render(<CreateTaskInlineEntry variant="hero" />);
+      fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
+
+      await screen.findByText('taskIntent.reviewStep');
+      fireEvent.click(screen.getByText('lobe-chat'));
+      fireEvent.click(await screen.findByText('taskIntent.generate'));
+
+      await waitFor(() => expect(createTaskMock).toHaveBeenCalledTimes(1));
+      expect(createTaskMock.mock.calls[0][0].instruction).toContain(
+        '## taskIntent.answersHeading\n- Which repo? lobe-chat',
+      );
     });
 
     it('offers the goal handoff only for a request read as a standing goal', async () => {

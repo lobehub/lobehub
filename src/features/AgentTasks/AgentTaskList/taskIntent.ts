@@ -1,7 +1,5 @@
 import type { TaskIntentAnalysis } from '@lobechat/types';
 
-import { getEditorAttachmentStateFromJson } from '@/features/EditorCanvas/editorAttachments';
-
 /** Answers keyed by the index of the clarification they belong to. */
 export type ClarificationAnswers = Record<number, string>;
 
@@ -85,60 +83,17 @@ export const appendParagraphsToEditorJson = (json: unknown, lines: string[]): un
   };
 };
 
-const markdownLines = (markdown: string) =>
-  markdown
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean);
-
 const answersBlock = (pairs: { answer: string; question: string }[], heading: string): string[] => [
   `## ${heading}`,
   ...pairs.map(({ answer, question }) => `- ${question} ${answer}`),
 ];
 
 /**
- * What the review step's instruction editor opens with: the draft the user
- * wrote, extended by the generated brief where that brief adds anything.
+ * Fold the answered clarifications into the draft.
  *
- * The editor renders `editorData` in preference to `content`, so the two must
- * agree. There are three cases, and the split is about what a markdown
- * round-trip would cost:
- *
- * - the brief adds nothing → hand back the draft's own document untouched;
- * - the draft carries file or image nodes → keep that document and append the
- *   brief as plain paragraphs, because re-parsing markdown would drop them;
- * - otherwise → drop the mirror and let the editor build rich nodes from the
- *   combined markdown, which renders the brief's own headings and lists.
- */
-export const buildInstructionSeed = ({
-  analysis,
-  editorJson,
-  instruction,
-}: {
-  analysis: TaskIntentAnalysis;
-  editorJson: unknown;
-  instruction: string;
-}): { content: string; editorData: unknown } => {
-  const content = preserveOriginalInstruction(instruction, analysis.refinedInstruction);
-  if (content === instruction.trim()) return { content, editorData: editorJson };
-
-  const { hasCompletedAttachments, hasIncompleteAttachments } =
-    getEditorAttachmentStateFromJson(editorJson);
-  if (!hasCompletedAttachments && !hasIncompleteAttachments) {
-    return { content, editorData: undefined };
-  }
-
-  return {
-    content,
-    editorData: appendParagraphsToEditorJson(
-      editorJson,
-      markdownLines(analysis.refinedInstruction),
-    ),
-  };
-};
-
-/**
- * Fold the answered clarifications into the instruction the user reviewed.
+ * Only reached when the rewrite could not run: the brief the user gets is then
+ * their own text with their own answers under it, and no model prose they
+ * never saw.
  *
  * Both fields are extended together: `instruction` is the markdown the agent
  * reads, `editorData` its rich-text mirror, and a mirror that is missing the

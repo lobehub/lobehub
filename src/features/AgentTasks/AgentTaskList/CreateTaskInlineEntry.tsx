@@ -46,7 +46,6 @@ import {
   answeredClarifications,
   buildConfirmedDraft,
   buildGoalSeed,
-  buildInstructionSeed,
   type ClarificationAnswers,
   shouldConfirmIntent,
 } from './taskIntent';
@@ -134,17 +133,10 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   // is what gets created, so the user has to be able to read it and change it.
   // It is a second editor rather than the composer's own so that going back
   // returns to the untouched draft.
-  const reviewEditor = useEditor();
-  const [instructionSeed, setInstructionSeed] = useState<{
-    content: string;
-    editorData: unknown;
-  }>({ content: '', editorData: undefined });
-  const [instructionRevision, setInstructionRevision] = useState(0);
   // Set once the second reading has folded the answers into the instruction.
   // The appended Q&A block is then already redundant — leaving it on would put
   // the answers in the brief twice, once woven in and once as a list.
   const [isSynthesizing, setIsSynthesizing] = useState(false);
-  const [isSynthesized, setIsSynthesized] = useState(false);
 
   // A private agent can only run a private task. Coerce + lock the
   // visibility chip when the selected agent is private.
@@ -480,17 +472,6 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
         setAnalysis(result);
         setIntentTitle(result.title);
         setIntentAnswers({});
-        setInstructionSeed(
-          buildInstructionSeed({
-            analysis: result,
-            editorJson: draft.editorJson,
-            instruction: draft.instruction,
-          }),
-        );
-        setIsSynthesized(false);
-        // A new reading is new content: bump the revision so the review editor
-        // reloads instead of keeping the previous draft's text.
-        setInstructionRevision((revision) => revision + 1);
         return;
       }
 
@@ -529,63 +510,56 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
    * read the other.
    */
   /**
-   * The second reading, run when the user reaches the confirm step.
+   * Generate and create, in one press.
    *
-   * The first one was written before the answers existed, so its brief still
-   * names those details as open — concatenating the answers under it leaves a
-   * document that contradicts itself. This rewrites the whole brief with the
-   * answers folded in, and the user reviews *that* in the instruction editor.
+   * The first reading ran before the user answered, so its brief still names
+   * the answered details as open — creating from it, or from it with the
+   * answers stapled underneath, hands the executor a document that contradicts
+   * itself. So pressing generate writes the brief again with the answers folded
+   * in as settled facts, and creates the task from that. There is no page in
+   * between: the brief is on the task's own page the moment it exists.
    *
-   * Like the first reading it is an assist, never a gate: on failure the seed
-   * from the first pass stays, and the answers are appended as before.
+   * Like the first reading it is an assist, never a gate — a failed rewrite
+   * falls back to the draft with the answers appended, which is what the flow
+   * did before this step existed.
    */
-  const handleEnterConfirmStep = useCallback(async () => {
-    const draft = readDraft();
-    if (!analysis || !draft) return;
-
-    const pairs = answeredClarifications(analysis, intentAnswers);
-    // Nothing was answered, so there is nothing new to fold in.
-    if (pairs.length === 0) return;
-
-    setIsSynthesizing(true);
-    try {
-      const result = await taskService.synthesizeInstruction({
-        answers: pairs,
-        context: assigneeMeta?.title ? `Assigned agent: ${assigneeMeta.title}` : undefined,
-        instruction: draft.instruction,
-      });
-
-      // No mirror: the brief is freshly written prose, so let the editor build
-      // its own rich text from the markdown rather than carry a stale document.
-      setInstructionSeed({ content: result.instruction, editorData: undefined });
-      setIntentTitle((current) => result.title.trim() || current);
-      setIsSynthesized(true);
-      setInstructionRevision((revision) => revision + 1);
-    } catch {
-      // Keep the first pass's seed; `handleConfirmIntent` still appends the
-      // answers, which is exactly the behaviour before this step existed.
-      setIsSynthesized(false);
-    } finally {
-      setIsSynthesizing(false);
-    }
-  }, [analysis, assigneeMeta?.title, intentAnswers, readDraft]);
-
   const handleConfirmIntent = useCallback(async () => {
     const draft = readDraft();
     if (!analysis || !draft) return;
 
-    // Cmd+Enter can confirm from a question step, where the instruction editor
-    // has not mounted yet. Falling back to the seed rather than the raw draft
-    // keeps that path identical to clicking through to the confirm step.
-    const edited = String(reviewEditor?.getDocument?.('markdown') ?? '').trim();
+    const pairs = answeredClarifications(analysis, intentAnswers);
+
+    if (pairs.length > 0) {
+      setIsSynthesizing(true);
+      try {
+        const written = await taskService.synthesizeInstruction({
+          answers: pairs,
+          context: assigneeMeta?.title ? `Assigned agent: ${assigneeMeta.title}` : undefined,
+          instruction: draft.instruction,
+        });
+
+        await submitDraft({
+          // Freshly written prose has no mirror to inherit. Sending the
+          // pre-answer draft's document instead would win over this markdown
+          // when the task renders, showing a brief the agent never received.
+          editorJson: undefined,
+          instruction: written.instruction,
+          name: written.title.trim() || intentTitle.trim() || analysis.title,
+        });
+        return;
+      } catch {
+        // Fall through to the append path below.
+      } finally {
+        setIsSynthesizing(false);
+      }
+    }
+
     const confirmed = buildConfirmedDraft({
       analysis,
-      answers: isSynthesized ? {} : intentAnswers,
-      editorJson: edited
-        ? (reviewEditor?.getDocument?.('json') as unknown)
-        : instructionSeed.editorData,
+      answers: intentAnswers,
+      editorJson: draft.editorJson,
       heading: t('taskIntent.answersHeading'),
-      instruction: edited || instructionSeed.content || draft.instruction,
+      instruction: draft.instruction,
     });
 
     await submitDraft({
@@ -593,17 +567,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       instruction: confirmed.instruction,
       name: intentTitle.trim() || analysis.title,
     });
-  }, [
-    analysis,
-    instructionSeed,
-    intentAnswers,
-    intentTitle,
-    isSynthesized,
-    readDraft,
-    reviewEditor,
-    submitDraft,
-    t,
-  ]);
+  }, [analysis, assigneeMeta?.title, intentAnswers, intentTitle, readDraft, submitDraft, t]);
 
   // Hands the draft (and any answers already given) to the goal modal, then
   // drops back to composing: the goal flow owns the outcome from here, and the
@@ -612,12 +576,11 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     const draft = readDraft();
     if (!analysis || !draft) return;
 
-    const edited = String(reviewEditor?.getDocument?.('markdown') ?? '').trim();
     const seed = buildGoalSeed({
       analysis,
       answers: intentAnswers,
       heading: t('taskIntent.answersHeading'),
-      instruction: edited || instructionSeed.content || draft.instruction,
+      instruction: draft.instruction,
     });
 
     createGoalModal({
@@ -631,13 +594,11 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   }, [
     analysis,
     assigneeAgentId,
-    instructionSeed,
     intentAnswers,
     intentTitle,
     projectId,
     readDraft,
     resetComposer,
-    reviewEditor,
     t,
   ]);
 
@@ -681,16 +642,11 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
           <TaskIntentReview
             analysis={analysis}
             answers={intentAnswers}
-            instructionEditor={reviewEditor}
-            instructionRevision={instructionRevision}
-            instructionSeed={instructionSeed}
-            isCreating={isCreating}
-            isSynthesizing={isSynthesizing}
+            isCreating={isCreating || isSynthesizing}
             title={intentTitle}
             onAnswerChange={handleAnswerChange}
             onBack={() => setAnalysis(null)}
             onConfirm={handleConfirmIntent}
-            onEnterConfirmStep={handleEnterConfirmStep}
             onSwitchToGoal={canCreateGoal ? handleSwitchToGoal : undefined}
             onTitleChange={setIntentTitle}
           />

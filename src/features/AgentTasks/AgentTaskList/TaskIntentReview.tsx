@@ -2,18 +2,12 @@
 
 import { OptionCard } from '@lobechat/shared-tool-ui/components';
 import type { TaskIntentAnalysis } from '@lobechat/types';
-import type { IEditor } from '@lobehub/editor';
 import { Flexbox, Icon, TextArea } from '@lobehub/ui';
-import { ActionIcon, Button, Tabs, Text } from '@lobehub/ui/base-ui';
+import { Button, Tabs, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ArrowLeft, Check, ListChecks, Paperclip, Sparkles, Target } from 'lucide-react';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { ArrowLeft, Check, Sparkles, Target } from 'lucide-react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-
-import GeneratingBorder from '@/components/GeneratingBorder';
-import { EditorCanvas } from '@/features/EditorCanvas';
-import { pickAndInsertAttachments } from '@/features/EditorCanvas/editorAttachments';
-import { shinyTextStyles } from '@/styles';
 
 import type { ClarificationAnswers } from './taskIntent';
 
@@ -113,24 +107,11 @@ const styles = createStaticStyles(({ css }) => ({
 export interface TaskIntentReviewProps {
   analysis: TaskIntentAnalysis;
   answers: ClarificationAnswers;
-  /** Editor the confirmed instruction is read back from. Owned by the composer. */
-  instructionEditor?: IEditor;
-  /** Bumped when a new reading arrives, so the editor reloads its seed. */
-  instructionRevision: number;
-  /** What the instruction editor opens with: markdown plus its rich-text mirror. */
-  instructionSeed: { content: string; editorData: unknown };
+  /** True while the brief is being written and the task created. */
   isCreating?: boolean;
-  /** True while the second reading folds the answers into the instruction. */
-  isSynthesizing?: boolean;
   onAnswerChange: (index: number, value: string) => void;
   onBack: () => void;
   onConfirm: () => void;
-  /**
-   * Fired once the user reaches the confirm step. The answers are all in by
-   * then, which is what the second reading needs — running it any earlier
-   * would rewrite the brief around answers that do not exist yet.
-   */
-  onEnterConfirmStep?: () => void;
   /** Omitted when goals are unavailable — the exit is then simply not offered. */
   onSwitchToGoal?: () => void;
   onTitleChange: (title: string) => void;
@@ -143,18 +124,14 @@ export interface TaskIntentReviewProps {
  * It only ever renders for a draft the reader could not settle on its own, so
  * everything here is something the user is the only one able to answer. The
  * questions stay optional: skipping them creates exactly the task the composer
- * would have created before, which keeps the step a checkpoint rather than a
- * form to fill in.
+ * would have created before, which keeps this a checkpoint rather than a form
+ * to fill in. Answering the last one and pressing generate is the whole flow —
+ * the brief is written from the answers and the task created in one step.
  */
 const TaskIntentReview = memo<TaskIntentReviewProps>((props) => {
   const {
     analysis,
     answers,
-    instructionEditor,
-    instructionRevision,
-    instructionSeed,
-    isSynthesizing,
-    onEnterConfirmStep,
     isCreating,
     onAnswerChange,
     onBack,
@@ -176,7 +153,6 @@ const TaskIntentReview = memo<TaskIntentReviewProps>((props) => {
   const isAnswered = useCallback((index: number) => Boolean(answers[index]?.trim()), [answers]);
 
   // One past the last question: the step that says what answering produced.
-  const confirmIndex = clarifications.length;
 
   const pickOption = useCallback(
     (index: number, option: string) => {
@@ -186,41 +162,27 @@ const TaskIntentReview = memo<TaskIntentReviewProps>((props) => {
       onAnswerChange(index, cleared ? '' : option);
       if (cleared) return;
 
-      // Sweep to the next still-unanswered question, and when there is none
-      // left, to the confirm step — answering the last question has to lead
-      // somewhere, or the form just sits on it with nothing having happened.
+      // Sweep to the next still-unanswered question. When there is none left
+      // the form stays put: the primary button already reads "generate", so
+      // the step the user is on is also the last thing they have to press.
       const next = clarifications.findIndex((_, i) => i !== index && !answers[i]?.trim());
-      setActiveIndex(next >= 0 ? next : clarifications.length);
+      if (next >= 0) setActiveIndex(next);
     },
     [answers, clarifications, onAnswerChange],
   );
 
   const showGoalExit = analysis.kind === 'goal' && Boolean(onSwitchToGoal);
-  const onConfirmStep = activeIndex >= confirmIndex;
-
-  // Only on the transition: the effect would otherwise re-run the second
-  // reading on every keystroke the confirm step re-renders for.
-  const enteredConfirmRef = useRef(false);
-  useEffect(() => {
-    if (!onConfirmStep) {
-      enteredConfirmRef.current = false;
-      return;
-    }
-    if (enteredConfirmRef.current) return;
-    enteredConfirmRef.current = true;
-    onEnterConfirmStep?.();
-  }, [onConfirmStep, onEnterConfirmStep]);
   const active = clarifications[activeIndex];
+  const onLastQuestion = activeIndex >= clarifications.length - 1;
 
-  // The primary button is the only thing telling the user where they are, so it
-  // names the step it is on: advancing through the questions, then confirming.
-  // Leaving it as "Create task" throughout made every step look like the last
-  // one — pressing it on Q1 created the task and the confirm step was
-  // unreachable in practice.
-  const primary = onConfirmStep
+  // The primary button names the step it is on: advancing through the
+  // questions, then generating. There is no confirmation page between the last
+  // answer and the task — pressing generate writes the brief from the answers
+  // and creates it, and the brief is on the task's own page afterwards.
+  const primary = onLastQuestion
     ? {
         action: onConfirm,
-        label: t(clarifications.length > 0 ? 'taskIntent.confirmCreate' : 'taskIntent.confirm'),
+        label: clarifications.length > 0 ? t('taskIntent.generate') : t('taskIntent.confirm'),
       }
     : { action: () => setActiveIndex(activeIndex + 1), label: t('taskIntent.next') };
 
@@ -278,94 +240,12 @@ const TaskIntentReview = memo<TaskIntentReviewProps>((props) => {
                   </Flexbox>
                 ),
               })),
-              {
-                key: String(confirmIndex),
-                label: (
-                  <Flexbox horizontal align={'center'} gap={6}>
-                    <Icon icon={ListChecks} size={12} />
-                    <Text>{t('taskIntent.confirmStep')}</Text>
-                  </Flexbox>
-                ),
-              },
             ]}
             onChange={(key) => setActiveIndex(Number(key))}
           />
         )}
 
-        {/* The instruction belongs to the step that says what will be created.
-            Showing it beside a question would compete with answering it, and
-            the answers are folded in only once the user confirms. */}
-        {onConfirmStep && (
-          <Flexbox gap={8}>
-            <Flexbox horizontal align={'center'} justify={'space-between'}>
-              <Text fontSize={12} type={'secondary'}>
-                {isSynthesizing ? (
-                  <span className={shinyTextStyles.shinyText}>{t('taskIntent.synthesizing')}</span>
-                ) : (
-                  t('taskIntent.instructionLabel')
-                )}
-              </Text>
-              <ActionIcon
-                icon={Paperclip}
-                size={'small'}
-                title={t('upload.action.tooltip')}
-                onClick={() => pickAndInsertAttachments(instructionEditor)}
-              />
-            </Flexbox>
-            <GeneratingBorder generating={isSynthesizing}>
-              <Flexbox className={styles.instruction}>
-                <EditorCanvas
-                  contentRevision={instructionRevision}
-                  editor={instructionEditor}
-                  editorData={instructionSeed}
-                  entityId={'task-intent-review'}
-                  floatingToolbar={false}
-                  placeholder={t('createTask.instructionPlaceholder')}
-                  style={{ fontSize: 13, padding: '8px 12px' }}
-                />
-              </Flexbox>
-            </GeneratingBorder>
-          </Flexbox>
-        )}
-
-        {onConfirmStep && clarifications.length > 0 && (
-          <Flexbox gap={10}>
-            <Text fontSize={12} type={'secondary'}>
-              {t('taskIntent.confirmHeading')}
-            </Text>
-            <Flexbox gap={4}>
-              {clarifications.map((clarification, index) => {
-                const answer = answers[index]?.trim();
-                return (
-                  // Each row is also the way back: reviewing an answer and
-                  // changing it should not require hunting for its tab.
-                  <Flexbox
-                    className={styles.answerRow}
-                    gap={2}
-                    key={clarification.question}
-                    onClick={() => setActiveIndex(index)}
-                  >
-                    <Text fontSize={12} type={'secondary'}>
-                      {clarification.question}
-                    </Text>
-                    {answer ? (
-                      <Text>{answer}</Text>
-                    ) : (
-                      // Skipping is allowed, but it must be visible: an
-                      // unanswered question is never written into the brief.
-                      <Text fontSize={13} type={'secondary'}>
-                        {t('taskIntent.skipped')}
-                      </Text>
-                    )}
-                  </Flexbox>
-                );
-              })}
-            </Flexbox>
-          </Flexbox>
-        )}
-
         {active &&
-          !onConfirmStep &&
           (() => {
             const index = activeIndex;
             const options = active.options ?? [];

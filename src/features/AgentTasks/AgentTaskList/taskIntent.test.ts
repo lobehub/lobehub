@@ -5,7 +5,6 @@ import {
   appendParagraphsToEditorJson,
   buildConfirmedDraft,
   buildGoalSeed,
-  buildInstructionSeed,
   preserveOriginalInstruction,
   shouldConfirmIntent,
 } from './taskIntent';
@@ -89,43 +88,6 @@ describe('appendParagraphsToEditorJson', () => {
 
   it('passes the document straight through when there is nothing to add', () => {
     expect(appendParagraphsToEditorJson({}, [])).toEqual({});
-  });
-});
-
-describe('buildInstructionSeed', () => {
-  const plainDoc = lexicalDoc([paragraphOf('fix the readme typo')]);
-
-  it('keeps the draft document untouched when the brief adds nothing', () => {
-    const seed = buildInstructionSeed({
-      analysis: analysis({ refinedInstruction: 'fix the readme typo' }),
-      editorJson: plainDoc,
-      instruction: 'fix the readme typo',
-    });
-
-    expect(seed.content).toBe('fix the readme typo');
-    expect(seed.editorData).toBe(plainDoc);
-  });
-
-  it('drops the mirror for a plain draft so the brief renders as rich markdown', () => {
-    const seed = buildInstructionSeed({
-      analysis: analysis(),
-      editorJson: plainDoc,
-      instruction: 'fix the readme typo',
-    });
-
-    expect(seed.content).toBe('fix the readme typo\n\nFix the typo in the README title.');
-    expect(seed.editorData).toBeUndefined();
-  });
-
-  it('keeps the mirror when the draft carries an attachment markdown cannot express', () => {
-    const seed = buildInstructionSeed({
-      analysis: analysis(),
-      editorJson: fileAttachmentDoc,
-      instruction: 'fix the readme typo',
-    });
-
-    expect((seed.editorData as any).root.children[1].type).toBe('file');
-    expect(textOf(seed.editorData)).toContain('Fix the typo in the README title.');
   });
 });
 
