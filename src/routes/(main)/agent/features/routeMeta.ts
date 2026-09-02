@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { lazy } from 'react';
 
+import AgentShareSkeleton from '@/components/Skeleton/AgentShare';
 import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
 import ProfileSkeleton from '@/components/Skeleton/Profile';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
@@ -91,7 +92,7 @@ export const agentStatisticsRouteMeta = routeMeta({
 export const agentShareRouteMeta = routeMeta({
   DynamicMeta: ShareDynamicMeta,
   icon: Share2Icon,
-  Skeleton: createSurfaceSkeleton('form'),
+  Skeleton: AgentShareSkeleton,
   titleKey: 'navigation.agentShare',
 });
 

@@ -1,11 +1,12 @@
 'use client';
 
-import { Flexbox, Skeleton } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { Alert, toast } from '@lobehub/ui/base-ui';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import { AgentShareSettingsBodySkeleton } from '@/components/Skeleton/AgentShare';
 
 import LimitsSection from './LimitsSection';
 import LinkSection from './LinkSection';
@@ -41,6 +42,10 @@ const AgentShareSettingsContent = memo<AgentShareSettingsContentProps>(({ agentI
     [t, updateConfig],
   );
 
+  // Same skeleton as the route-level one so the page does not reflow between
+  // the chunk load and the share fetch.
+  if (isLoading && !share && !error) return <AgentShareSettingsBodySkeleton />;
+
   return (
     <Flexbox gap={16} paddingBlock={16}>
       {/* Sharing grants real execution on the creator's account — say so plainly. */}
@@ -52,8 +57,6 @@ const AgentShareSettingsContent = memo<AgentShareSettingsContentProps>(({ agentI
       />
       {error && !share ? (
         <AsyncError error={error} variant={'block'} onRetry={() => void mutate()} />
-      ) : isLoading && !share ? (
-        <Skeleton active paragraph={{ rows: 6 }} />
       ) : (
         <>
           <LinkSection

@@ -3,14 +3,14 @@
 import { memo, Suspense } from 'react';
 import { useParams } from 'react-router';
 
-import SurfaceSkeleton from '@/components/Skeleton/Surface';
+import AgentShareSkeleton from '@/components/Skeleton/AgentShare';
 import AgentShareSettingsPage from '@/features/AgentShareSettings/Page';
 import ResourceConfigAccessGate from '@/features/ResourcePermission/ResourceConfigAccessGate';
 
 const AgentSharePage = memo(() => {
   const { aid } = useParams<{ aid: string }>();
 
-  const skeleton = <SurfaceSkeleton variant={'form'} />;
+  const skeleton = <AgentShareSkeleton />;
 
   return (
     <Suspense fallback={skeleton}>
