@@ -23,6 +23,11 @@ const styles = createStaticStyles(({ css }) => ({
       color: ${cssVar.colorText};
       background: ${cssVar.colorFillTertiary};
     }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimaryBorder};
+      outline-offset: 1px;
+    }
   `,
   title: css`
     overflow: hidden;
@@ -62,8 +67,21 @@ export const LocalFile = ({
       align={'center'}
       className={styles.container}
       gap={4}
+      // Inline chip, not a <button> (block layout inside markdown prose) — so
+      // give the clickable state complete button semantics by hand.
+      role={handleClick ? 'button' : undefined}
       style={{ display: 'inline-flex', verticalAlign: 'middle' }}
+      tabIndex={handleClick ? 0 : undefined}
       onClick={handleClick}
+      onKeyDown={
+        handleClick
+          ? (event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return;
+              event.preventDefault();
+              handleClick();
+            }
+          : undefined
+      }
     >
       <FileIcon fileName={name} isDirectory={isDirectory} size={22} variant={'raw'} />
       <Flexbox horizontal align={'baseline'} gap={4} style={{ overflow: 'hidden', width: '100%' }}>
