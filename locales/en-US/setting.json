@@ -1655,6 +1655,7 @@
   "trash.deletedBy.you": "You",
   "trash.desc": "Deleted Resource items stay here for {{days}} days and can be restored. After that they are removed permanently.",
   "trash.empty.desc": "Deleted files, documents, folders, and knowledge bases stay here for {{days}} days before they are removed for good.",
+  "trash.empty.scheduled": "{{count}} item(s) queued for permanent deletion",
   "trash.empty.title": "Trash is empty",
   "trash.emptyConfirm.content": "Permanently delete {{count}} item(s)? This cannot be undone.",
   "trash.emptyConfirm.title": "Empty trash",

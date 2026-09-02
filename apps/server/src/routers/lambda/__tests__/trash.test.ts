@@ -63,7 +63,7 @@ describe('trashRouter workspace resource permissions', () => {
       },
     ]);
     mocks.service.restore.mockResolvedValue({ failed: [], restored: [] });
-    mocks.service.emptyTrash.mockResolvedValue({ purged: 0 });
+    mocks.service.emptyTrash.mockResolvedValue({ scheduled: 0 });
     mocks.service.purge.mockResolvedValue({ failed: [], purged: 0, purgedIds: [] });
   });
 

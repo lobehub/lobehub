@@ -1702,6 +1702,7 @@ When I am ___, I need ___
   'trash.empty.desc':
     'Deleted files, documents, folders, and knowledge bases stay here for {{days}} days before they are removed for good.',
   'trash.empty.title': 'Trash is empty',
+  'trash.empty.scheduled': '{{count}} item(s) queued for permanent deletion',
   'trash.emptyConfirm.content': 'Permanently delete {{count}} item(s)? This cannot be undone.',
   'trash.emptyConfirm.title': 'Empty trash',
   'trash.emptyType.desc': 'No deleted {{type}} right now.',

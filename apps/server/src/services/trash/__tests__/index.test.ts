@@ -24,12 +24,14 @@ import { TrashService } from '../index';
 const accessMocks = vi.hoisted(() => ({ restrictedKnowledgeBaseIds: [] as string[] }));
 const fileServiceMocks = vi.hoisted(() => ({ deleteFiles: vi.fn() }));
 const notificationMocks = vi.hoisted(() => ({ notifyResourceTrashMutation: vi.fn() }));
+const workflowMocks = vi.hoisted(() => ({ triggerTrashPurge: vi.fn() }));
 
 vi.mock('@/server/services/knowledgeBaseAccess', () => ({
   getRestrictedKnowledgeBaseIds: vi.fn(async () => accessMocks.restrictedKnowledgeBaseIds),
 }));
 
 vi.mock('@/business/server/resource/notifyTrashMutation', () => notificationMocks);
+vi.mock('@/server/workflows/trash', () => workflowMocks);
 
 vi.mock('@/server/services/file', () => ({
   FileService: class {
@@ -52,6 +54,7 @@ let trashModel: TrashModel;
 beforeEach(async () => {
   vi.clearAllMocks();
   accessMocks.restrictedKnowledgeBaseIds = [];
+  workflowMocks.triggerTrashPurge.mockResolvedValue(true);
   await serverDB.delete(users);
   await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
   service = new TrashService(serverDB, userId);
@@ -234,7 +237,7 @@ describe('TrashService', () => {
         ),
       ).toEqual(['kb_open']);
 
-      expect(await workspaceService.emptyTrash()).toEqual({ purged: 1 });
+      expect(await workspaceService.emptyTrash()).toEqual({ scheduled: 1 });
       expect(
         (await registry.list({ limit: 20 })).items.map((item) => item.resourceId).sort(),
       ).toEqual(['docs_restricted', 'file_restricted', 'kb_restricted']);
@@ -556,14 +559,14 @@ describe('TrashService', () => {
       });
 
       const outcome = await TrashService.sweepExpired(serverDB);
-      expect(outcome).toEqual({ failed: 0, pruned: 1, purged: 2 });
+      expect(outcome).toEqual({ failed: 0, pruned: 1, purged: 2, scanned: 2 });
       expect(await serverDB.select().from(files).where(eq(files.id, mine.id))).toHaveLength(0);
       expect(await serverDB.select().from(files).where(eq(files.id, theirs.id))).toHaveLength(0);
       expect(await serverDB.select().from(files).where(eq(files.id, fresh.id))).toHaveLength(1);
       expect((await service.list()).items.map((i) => i.resourceId)).toEqual([fresh.id]);
     });
 
-    it('emptyTrash purges everything in scope', async () => {
+    it('emptyTrash atomically queues everything in scope for the bounded sweep', async () => {
       const a = await fileModel.create({
         fileType: 'text/plain',
         name: 'a.txt',
@@ -577,9 +580,18 @@ describe('TrashService', () => {
         url: 'files/b.txt',
       });
       await service.trashFiles([a.id, b.id]);
-      const { purged } = await service.emptyTrash();
-      expect(purged).toBe(2);
+      const outcome = await service.emptyTrash();
+      expect(outcome).toEqual({ scheduled: 2 });
       expect((await service.list()).items).toHaveLength(0);
+      expect(await serverDB.select().from(files)).toHaveLength(2);
+      expect(workflowMocks.triggerTrashPurge).toHaveBeenCalledOnce();
+
+      expect(await TrashService.sweepExpired(serverDB)).toEqual({
+        failed: 0,
+        pruned: 0,
+        purged: 2,
+        scanned: 2,
+      });
       expect(await serverDB.select().from(files)).toHaveLength(0);
     });
 
@@ -610,10 +622,10 @@ describe('TrashService', () => {
       await creatorService.trashFiles([privateFile.id, publicFile.id]);
 
       const ownerService = new TrashService(serverDB, otherUserId, workspaceId);
-      expect(await ownerService.emptyTrash()).toEqual({ purged: 1 });
+      expect(await ownerService.emptyTrash()).toEqual({ scheduled: 1 });
 
       expect(await serverDB.select().from(files).where(eq(files.id, publicFile.id))).toHaveLength(
-        0,
+        1,
       );
       expect(await serverDB.select().from(files).where(eq(files.id, privateFile.id))).toHaveLength(
         1,
@@ -621,6 +633,14 @@ describe('TrashService', () => {
       expect((await creatorService.list()).items.map((item) => item.resourceId)).toEqual([
         privateFile.id,
       ]);
+
+      await TrashService.sweepExpired(serverDB);
+      expect(await serverDB.select().from(files).where(eq(files.id, publicFile.id))).toHaveLength(
+        0,
+      );
+      expect(await serverDB.select().from(files).where(eq(files.id, privateFile.id))).toHaveLength(
+        1,
+      );
     });
   });
 });

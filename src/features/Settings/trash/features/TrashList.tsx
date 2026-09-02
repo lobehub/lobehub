@@ -179,9 +179,9 @@ const TrashList = () => {
         : t('trash.actions.empty'),
       onOk: async () => {
         try {
-          await emptyTrash();
+          const outcome = await emptyTrash();
           setSelectedIds([]);
-          toast.success(t('trash.purge.success'));
+          toast.success(t('trash.empty.scheduled', { count: outcome.scheduled }));
         } catch (cause) {
           console.error(cause);
           toast.error(t('trash.actions.failed'));

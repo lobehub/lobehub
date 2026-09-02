@@ -1655,6 +1655,7 @@
   "trash.deletedBy.you": "你",
   "trash.desc": "删除的资源会在回收站保留 {{days}} 天，期间可以随时恢复；到期后将被永久删除。",
   "trash.empty.desc": "已删除的文件、文档、文件夹和知识库会在这里保留 {{days}} 天，之后才会被永久删除。",
+  "trash.empty.scheduled": "已将 {{count}} 项加入永久删除队列",
   "trash.empty.title": "回收站是空的",
   "trash.emptyConfirm.content": "永久删除这 {{count}} 项？此操作无法撤销。",
   "trash.emptyConfirm.title": "清空回收站",

@@ -19,6 +19,7 @@ import type { LobeChatDatabase, Transaction } from '@/database/type';
 import type { SoftDeleteOptions } from '@/database/utils/softDelete';
 import { FileService } from '@/server/services/file';
 import { getRestrictedKnowledgeBaseIds } from '@/server/services/knowledgeBaseAccess';
+import { triggerTrashPurge } from '@/server/workflows/trash';
 
 import {
   resolveTrashHandler,
@@ -57,6 +58,11 @@ export interface TrashPurgeOutcome {
   purgedIds: string[];
 }
 
+export interface TrashEmptyOutcome {
+  /** Roots handed to the retention worker for permanent deletion. */
+  scheduled: number;
+}
+
 export interface TrashSweepOutcome {
   /** Roots that threw during purge — left in place for the next tick. */
   failed: number;
@@ -64,6 +70,8 @@ export interface TrashSweepOutcome {
   pruned: number;
   /** Roots hard-deleted this tick. */
   purged: number;
+  /** Roots attempted by this bounded sweep invocation. */
+  scanned: number;
 }
 
 /**
@@ -373,25 +381,32 @@ export class TrashService {
     return outcome;
   };
 
-  /** Permanently delete every root in the caller's bin, optionally one type only. */
+  /** Queue every visible root in scope for bounded background deletion. */
   emptyTrash = async (options?: {
     resourceType?: TrashResourceType;
-  }): Promise<{ purged: number }> => {
-    let purged = 0;
-    // Page through: purging shrinks the set, so re-listing until empty is the
-    // simplest way to stay correct under concurrent deletes.
-    for (;;) {
-      const page = await this.list({
-        limit: TRASH_PURGE_BATCH_SIZE,
-        resourceType: options?.resourceType,
-      });
-      const ids = page.items.map((item) => item.id);
-      if (ids.length === 0) break;
-      const result = await this.purge(ids);
-      purged += result.purged;
-      if (result.purged === 0) break;
+  }): Promise<TrashEmptyOutcome> => {
+    const excludeKnowledgeBaseIds = this.workspaceId
+      ? await getRestrictedKnowledgeBaseIds({
+          serverDB: this.db,
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        })
+      : [];
+    const scheduled = await this.trashModel.expireAllRoots({
+      excludeKnowledgeBaseIds,
+      resourceType: options?.resourceType,
+    });
+
+    if (scheduled > 0) {
+      try {
+        await triggerTrashPurge();
+      } catch (error) {
+        // The scheduled retention sweep remains the durable fallback.
+        log('failed to trigger immediate trash purge: %O', error);
+      }
     }
-    return { purged };
+
+    return { scheduled };
   };
 
   private purgeRoot = async (root: TrashItemRow) => {
@@ -430,11 +445,12 @@ export class TrashService {
     db: LobeChatDatabase,
     options?: { limit?: number; now?: Date },
   ): Promise<TrashSweepOutcome> => {
-    const outcome: TrashSweepOutcome = { failed: 0, pruned: 0, purged: 0 };
+    const outcome: TrashSweepOutcome = { failed: 0, pruned: 0, purged: 0, scanned: 0 };
     const roots = await TrashModel.listExpiredRoots(db, {
       limit: options?.limit ?? TRASH_PURGE_BATCH_SIZE,
       now: options?.now,
     });
+    outcome.scanned = roots.length;
 
     for (const root of roots) {
       const service = new TrashService(db, root.userId, root.workspaceId ?? undefined);

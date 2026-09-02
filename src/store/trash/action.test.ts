@@ -133,9 +133,9 @@ describe('TrashAction', () => {
     });
 
     it('emptyTrash honours the active type filter and clears the list', async () => {
-      vi.spyOn(trashService, 'emptyTrash').mockResolvedValue({ purged: 2 });
+      vi.spyOn(trashService, 'emptyTrash').mockResolvedValue({ scheduled: 2 });
       useTrashStore.setState({ activeType: 'file' });
-      await useTrashStore.getState().emptyTrash();
+      await expect(useTrashStore.getState().emptyTrash()).resolves.toEqual({ scheduled: 2 });
       expect(trashService.emptyTrash).toHaveBeenCalledWith('file');
       expect(useTrashStore.getState().items).toEqual([]);
       expect(mutate).toHaveBeenCalledWith(['trash:list', 'personal', 'file']);

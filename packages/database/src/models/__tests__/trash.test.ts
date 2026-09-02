@@ -170,6 +170,35 @@ describe('TrashModel', () => {
     });
   });
 
+  describe('expireAllRoots', () => {
+    it('hides the selected active roots and makes them immediately sweepable', async () => {
+      const deletedAt = at('2026-08-01T00:00:00Z');
+      await model.register({
+        deletedAt,
+        root: { resourceId: 'file_queued', resourceType: 'file' },
+      });
+      await model.register({
+        deletedAt,
+        root: { resourceId: 'doc_active', resourceType: 'document' },
+      });
+      await otherModel.register({
+        deletedAt,
+        root: { resourceId: 'file_other', resourceType: 'file' },
+      });
+
+      await expect(model.expireAllRoots({ resourceType: 'file' })).resolves.toBe(1);
+      expect((await model.list()).items.map((item) => item.resourceId)).toEqual(['doc_active']);
+      expect(await model.countByType()).toEqual({ document: 1 });
+      expect(await model.findByResource('file', 'file_queued')).toBeUndefined();
+
+      const due = await TrashModel.listExpiredRoots(serverDB, {
+        limit: 10,
+        now: at('2026-08-02T00:00:00Z'),
+      });
+      expect(due.map((item) => item.resourceId)).toEqual(['file_queued']);
+    });
+  });
+
   describe('sweep helpers', () => {
     it('listExpiredRoots returns roots past their expiry across users, oldest first', async () => {
       const now = at('2026-09-15T00:00:00Z');

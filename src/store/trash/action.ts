@@ -162,13 +162,15 @@ export class TrashActionImpl {
 
   emptyTrash = async () => {
     const { activeType, items } = this.#get();
+    let outcome: Awaited<ReturnType<typeof trashService.emptyTrash>> = { scheduled: 0 };
     await this.#withLoading(
       items.map((item) => item.id),
       async () => {
-        await trashService.emptyTrash(activeType);
+        outcome = await trashService.emptyTrash(activeType);
         this.#set({ items: [], nextCursor: null }, false, 'emptyTrash');
       },
     );
+    return outcome;
   };
 
   useFetchTrash = (

@@ -15,6 +15,7 @@ import {
   desc,
   eq,
   exists,
+  gt,
   inArray,
   isNull,
   lt,
@@ -104,6 +105,9 @@ export class TrashModel {
           sql`${trashItems.meta}->>'creatorUserId' = ${this.userId}`,
         )
       : undefined;
+
+  /** Roots not explicitly queued by "empty trash" (`expiresAt = deletedAt`). */
+  private active = () => gt(trashItems.expiresAt, trashItems.deletedAt);
 
   private excludeRestrictedResources = (knowledgeBaseIds: string[]): SQL | undefined => {
     if (knowledgeBaseIds.length === 0) return;
@@ -245,6 +249,32 @@ export class TrashModel {
     }
   };
 
+  /**
+   * Atomically move every visible root in scope into the background purge queue.
+   * The retention sweep owns the expensive storage/database deletion work.
+   */
+  expireAllRoots = async (options?: {
+    excludeKnowledgeBaseIds?: string[];
+    resourceType?: TrashResourceType;
+  }): Promise<number> => {
+    const rows = await this.db
+      .update(trashItems)
+      .set({ expiresAt: sql`${trashItems.deletedAt}` })
+      .where(
+        and(
+          this.ownership(),
+          isNull(trashItems.rootId),
+          this.active(),
+          options?.resourceType ? eq(trashItems.resourceType, options.resourceType) : undefined,
+          this.visibleResource(),
+          this.excludeRestrictedResources(options?.excludeKnowledgeBaseIds ?? []),
+        ),
+      )
+      .returning({ id: trashItems.id });
+
+    return rows.length;
+  };
+
   // ─────────────────────────── reads ───────────────────────────
 
   /**
@@ -262,6 +292,7 @@ export class TrashModel {
         and(
           this.ownership(),
           isNull(trashItems.rootId),
+          this.active(),
           params.resourceType ? eq(trashItems.resourceType, params.resourceType) : undefined,
           this.visibleResource(),
           cursor
@@ -291,6 +322,7 @@ export class TrashModel {
         and(
           this.ownership(),
           isNull(trashItems.rootId),
+          this.active(),
           this.visibleResource(),
           this.excludeRestrictedResources(excludeKnowledgeBaseIds),
         ),
@@ -302,7 +334,7 @@ export class TrashModel {
 
   findById = async (id: string): Promise<TrashItemRow | undefined> => {
     return this.db.query.trashItems.findFirst({
-      where: and(eq(trashItems.id, id), this.ownership()),
+      where: and(eq(trashItems.id, id), this.ownership(), this.active()),
     });
   };
 
@@ -311,7 +343,7 @@ export class TrashModel {
     return this.db
       .select()
       .from(trashItems)
-      .where(and(inArray(trashItems.id, ids), this.ownership()));
+      .where(and(inArray(trashItems.id, ids), this.ownership(), this.active()));
   };
 
   /** Registry ids backed by a restricted knowledge base or one of its contents. */
@@ -389,6 +421,7 @@ export class TrashModel {
         eq(trashItems.resourceType, resourceType),
         eq(trashItems.resourceId, resourceId),
         this.ownership(),
+        this.active(),
       ),
     });
   };
@@ -397,21 +430,6 @@ export class TrashModel {
   findChildren = async (rootId: string, trx?: Transaction): Promise<TrashItemRow[]> => {
     const db = trx ?? this.db;
     return db.select().from(trashItems).where(eq(trashItems.rootId, rootId));
-  };
-
-  /** Every root in scope — used by "empty trash". */
-  listAllRootIds = async (options?: { resourceType?: TrashResourceType }): Promise<string[]> => {
-    const rows = await this.db
-      .select({ id: trashItems.id })
-      .from(trashItems)
-      .where(
-        and(
-          this.ownership(),
-          isNull(trashItems.rootId),
-          options?.resourceType ? eq(trashItems.resourceType, options.resourceType) : undefined,
-        ),
-      );
-    return rows.map((row) => row.id);
   };
 
   // ─────────────────────────── sweep (global, not user-scoped) ───────────────────────────
