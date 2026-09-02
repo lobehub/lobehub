@@ -1,3 +1,5 @@
+import { PLUGIN_SCHEMA_SEPARATOR } from './plugin';
+
 /**
  * Default `AgentShareConfig.maxTopicsPerVisitor` applied when a share is
  * first created and whenever a legacy/partial config is normalized. Kept
@@ -82,3 +84,105 @@ export const RESERVED_AGENT_SHARE_SLUGS: string[] = [
   'verify-agent',
   'web-onboarding',
 ];
+
+/**
+ * One parsed `shareConfig.enabledToolIds` entry.
+ *
+ * An entry is either a bare toolset identifier (`lobe-agent`), which grants
+ * every (non-blocked) API of that tool, or a per-API scoped entry
+ * (`lobe-agent____analyzeMedia`, joined with {@link PLUGIN_SCHEMA_SEPARATOR}),
+ * which grants only the named API. `apiName` is absent for the toolset-level
+ * form.
+ */
+export interface ShareToolEntry {
+  apiName?: string;
+  identifier: string;
+}
+
+/**
+ * Parse one raw `enabledToolIds` entry into its identifier and optional
+ * per-API scope. Returns `undefined` for a malformed entry — more than one
+ * separator, or an empty identifier/apiName segment — so callers can drop it
+ * instead of silently misinterpreting the raw string (used by both the router
+ * zod validator, which rejects malformed input outright, and the runtime
+ * gates, which fail closed by ignoring it).
+ *
+ * Single source of truth for this encoding, shared by the server gates
+ * (`apps/server/src/services/aiAgent/shareGate.ts`) and the client share
+ * settings UI (`src/features/AgentShareSettings`), so both sides agree on what
+ * a stored entry means.
+ */
+export const parseShareToolEntry = (entry: string): ShareToolEntry | undefined => {
+  const parts = entry.split(PLUGIN_SCHEMA_SEPARATOR);
+
+  if (parts.length === 1) {
+    const [identifier] = parts;
+    return identifier ? { identifier } : undefined;
+  }
+
+  if (parts.length !== 2) return undefined;
+
+  const [identifier, apiName] = parts;
+  return identifier && apiName ? { apiName, identifier } : undefined;
+};
+
+/** Inverse of {@link parseShareToolEntry}: build a raw `enabledToolIds` entry. */
+export const buildShareToolEntry = (identifier: string, apiName?: string): string =>
+  apiName ? `${identifier}${PLUGIN_SCHEMA_SEPARATOR}${apiName}` : identifier;
+
+/**
+ * One identifier's resolved grant: `'all'` for a toolset-level entry, or the
+ * specific `Set` of API names a per-API entry named.
+ */
+export type ShareToolGrant = 'all' | Set<string>;
+
+/**
+ * Reduce raw `enabledToolIds` entries into one grant per identifier.
+ *
+ * A toolset-level entry always wins over per-API entries for the same
+ * identifier, regardless of array order — once an identifier resolves to
+ * `'all'` it can never be narrowed back down by a later per-API entry, matching
+ * the "toolset-level entry wins" rule every gate enforces.
+ */
+export const resolveShareToolGrants = (
+  entries: string[] | undefined,
+): Map<string, ShareToolGrant> => {
+  const grants = new Map<string, ShareToolGrant>();
+
+  for (const raw of entries ?? []) {
+    const parsed = parseShareToolEntry(raw);
+    if (!parsed) continue;
+
+    const { identifier, apiName } = parsed;
+    if (grants.get(identifier) === 'all') continue;
+
+    if (!apiName) {
+      grants.set(identifier, 'all');
+      continue;
+    }
+
+    const existing = grants.get(identifier);
+    const apiNames = existing instanceof Set ? existing : new Set<string>();
+    apiNames.add(apiName);
+    grants.set(identifier, apiNames);
+  }
+
+  return grants;
+};
+
+/** Whether `identifier` has any grant (toolset-level or per-API) in `grants`. */
+export const hasShareToolGrant = (
+  grants: Map<string, ShareToolGrant>,
+  identifier: string,
+): boolean => grants.has(identifier);
+
+/** Whether `identifier`'s specific `apiName` is granted — toolset-level grants every API. */
+export const isShareToolApiGranted = (
+  grants: Map<string, ShareToolGrant>,
+  identifier: string,
+  apiName: string,
+): boolean => {
+  const grant = grants.get(identifier);
+  if (!grant) return false;
+  return grant === 'all' || grant.has(apiName);
+};

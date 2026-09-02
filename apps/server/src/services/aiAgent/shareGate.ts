@@ -17,7 +17,14 @@ import {
   builtinTools,
   isBuiltinToolIdentifier,
 } from '@lobechat/builtin-tools';
+import {
+  hasShareToolGrant,
+  isShareToolApiGranted,
+  resolveShareToolGrants,
+  type ShareToolGrant,
+} from '@lobechat/const';
 import type { LobeToolManifest, ToolExecutor, ToolSource } from '@lobechat/context-engine';
+import { ToolNameResolver } from '@lobechat/context-engine';
 
 import type { AgentShareConfig } from '@/database/schemas';
 
@@ -25,10 +32,21 @@ import type { AgentShareConfig } from '@/database/schemas';
  * Separator between a tool identifier and its API name in a generated
  * function-call name (e.g. `lobe-activator____activateTools`). Mirrors
  * `PLUGIN_SCHEMA_SEPARATOR` in `@lobechat/context-engine`'s `ToolNameResolver`
- * — not re-exported from there, so duplicated here for the `tools` filter
- * below rather than reaching into the engine's internal module.
+ * — not re-exported from there, so duplicated here for the identifier-level
+ * `tools` filters below (which only ever compare the FIRST segment, so
+ * `ToolNameResolver.generate`'s api/type normalization can't affect them).
+ * API-level filtering must instead go through {@link generateToolNames} /
+ * {@link pruneToolsForIdentifier}, which use the real resolver.
  */
 const PLUGIN_SCHEMA_SEPARATOR = '____';
+
+/**
+ * Single shared resolver instance for regenerating function-calling names
+ * from a manifest's identifier/api/type — same class `ToolsEngine` used to
+ * build `toolSet.tools` in the first place. Stateless (no per-call config),
+ * so one instance is safe to reuse across every gate pass.
+ */
+const toolNameResolver = new ToolNameResolver();
 
 /**
  * Server-side gate for shared-agent visitor conversations.
@@ -70,11 +88,16 @@ export interface AgentShareGate {
 /**
  * Intersect a run's candidate plugin/skill ids with the share whitelist.
  * The whitelist defaults to empty, so an unconfigured share exposes no tools.
+ *
+ * Identifier-level only: an entry granting just one API
+ * (`lobe-agent____analyzeMedia`) still counts as "this identifier is a
+ * candidate" here — narrowing the offer down to that specific API happens
+ * later, in {@link applyShareGateToToolSet}, once the real manifest is known.
  */
 export const filterPluginsByShareGate = (pluginIds: string[], gate: AgentShareGate): string[] => {
-  const allowed = new Set(gate.shareConfig.enabledToolIds ?? []);
+  const grants = resolveShareToolGrants(gate.shareConfig.enabledToolIds);
 
-  return pluginIds.filter((id) => allowed.has(id));
+  return pluginIds.filter((id) => hasShareToolGrant(grants, id));
 };
 
 /**
@@ -342,7 +365,13 @@ export const isShareBlockedBuiltinDispatch = (
   if (!isGovernedByBuiltinAllowlist(identifier)) return false;
 
   if (!SHARE_VISITOR_ALLOWED_IDENTIFIERS.has(identifier)) return true;
-  if (!(agentShare.enabledToolIds ?? []).includes(identifier)) return true;
+  // The owner's picker must grant this identifier at all (toolset-level or
+  // naming this specific `apiName`) — a per-API entry for a DIFFERENT api on
+  // the same identifier does not authorize this call.
+  if (
+    !isShareToolApiGranted(resolveShareToolGrants(agentShare.enabledToolIds), identifier, apiName)
+  )
+    return true;
 
   // Sub-agent dispatch has no humanIntervention config to catch it, and the
   // server sub-agent runner spawns the child via a plain `execAgent` call
@@ -429,17 +458,17 @@ const applyShareGateToDataToolAccess = (toolSet: ShareGateToolSet, gate: AgentSh
  * exempted; a share with no configured tools is a plain-chat run).
  */
 export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentShareGate): void => {
-  const ownerAllowed = new Set(gate.shareConfig.enabledToolIds ?? []);
+  const grants = resolveShareToolGrants(gate.shareConfig.enabledToolIds);
 
   // A tool must clear BOTH gates: the owner's own `enabledToolIds` picker
-  // (`ownerAllowed`), AND — for builtin identifiers only — the default-deny
-  // master allowlist (`SHARE_VISITOR_ALLOWED_IDENTIFIERS`). Non-builtin
-  // identifiers (MCP/market/custom plugins) are outside
-  // `isGovernedByBuiltinAllowlist`'s population, so they pass straight through
-  // to the owner-picker check unaffected — this allowlist must never decide
-  // their fate, in either direction.
+  // (`grants` — toolset-level OR at least one per-API entry), AND — for
+  // builtin identifiers only — the default-deny master allowlist
+  // (`SHARE_VISITOR_ALLOWED_IDENTIFIERS`). Non-builtin identifiers (MCP/market/
+  // custom plugins) are outside `isGovernedByBuiltinAllowlist`'s population, so
+  // they pass straight through to the owner-picker check unaffected — this
+  // allowlist must never decide their fate, in either direction.
   const isAllowed = (id: string) => {
-    if (!ownerAllowed.has(id)) return false;
+    if (!hasShareToolGrant(grants, id)) return false;
     if (!isGovernedByBuiltinAllowlist(id)) return true;
     return SHARE_VISITOR_ALLOWED_IDENTIFIERS.has(id);
   };
@@ -471,6 +500,53 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
   stripSubAgentDispatchApis(toolSet);
   applyShareGateToDataToolAccess(toolSet, gate);
   applyShareGateToInterventionRequiredApis(toolSet);
+  applyShareGateToPerApiGrants(toolSet, grants);
+};
+
+/**
+ * Narrow each surviving tool's offered APIs down to what the owner's picker
+ * actually granted for it. Runs LAST in {@link applyShareGateToToolSet}, after
+ * every other strip (data-tool write/always-blocked APIs, sub-agent dispatch,
+ * humanIntervention) has already trimmed `manifest.api` — so a per-API grant
+ * naming an API another rule already removed is simply a no-op here, never an
+ * unstrip.
+ *
+ * A toolset-level entry (`grant === 'all'`) leaves the tool's remaining APIs
+ * untouched. A per-API entry (`grant` is a `Set`) drops every remaining API
+ * not named in it; if that empties the API list entirely, the tool is dropped
+ * outright — the same treatment `applyShareGateToDataToolAccess` gives a
+ * `'none'` grant, since an identifier with zero callable APIs offers a share
+ * visitor's model nothing.
+ *
+ * Matches on the manifest's real `api[].name` list (via `stripApisFromTool`)
+ * rather than parsing generated tool-call names directly:
+ * `ToolNameResolver.generate` MD5-hashes an oversized or invalid-character API
+ * segment, so the manifest is the only reliable source for which entries in
+ * `toolSet.tools` belong to which granted API.
+ */
+const applyShareGateToPerApiGrants = (
+  toolSet: ShareGateToolSet,
+  grants: Map<string, ShareToolGrant>,
+): void => {
+  for (const identifier of Object.keys(toolSet.manifestMap)) {
+    const grant = grants.get(identifier);
+    if (!grant || grant === 'all') continue;
+
+    const manifest = toolSet.manifestMap[identifier];
+    if (!Array.isArray(manifest.api) || manifest.api.length === 0) continue;
+
+    const blockedApiNames = new Set(
+      manifest.api.filter((api) => !grant.has(api.name)).map((api) => api.name),
+    );
+    if (blockedApiNames.size === 0) continue;
+
+    if (blockedApiNames.size === manifest.api.length) {
+      dropToolFromSet(toolSet, identifier);
+      continue;
+    }
+
+    stripApisFromTool(toolSet, identifier, blockedApiNames);
+  }
 };
 
 /**
@@ -639,9 +715,6 @@ const applyShareGateToInterventionRequiredApis = (toolSet: ShareGateToolSet): vo
  *   browser session on the CREATOR's own machine is a far larger blast radius
  *   than any single data store.
  *
- * - `lobe-cloud-sandbox`: general-purpose shell/script execution
- *   authenticated as the creator, including `lh` CLI credential injection.
- *
  * - `lobe-web-onboarding`: reads and WRITES the creator's own onboarding
  *   `SOUL.md` document and persona.
  *
@@ -667,6 +740,24 @@ const applyShareGateToInterventionRequiredApis = (toolSet: ShareGateToolSet): vo
  *   {@link applyShareGateToInterventionRequiredApis} for the structural fix
  *   that catches this failure mode generically on every ALLOWED tool's
  *   individual APIs.
+ */
+
+/**
+ * Positive evidence for builtin identifiers that WERE added to
+ * `AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS` despite reaching outside a single
+ * data store — recorded here, rather than left implicit, because their
+ * general-purpose reach needs an explicit safety argument instead of just the
+ * absence of a known exploit.
+ *
+ * - `lobe-cloud-sandbox`: general-purpose shell/script execution, but a share
+ *   visitor's run gets a fresh, isolated per-topic sandbox session — never
+ *   the creator's own sandbox state. The `lh` CLI's JWT credential shim
+ *   (`preprocessLhCommand.ts`) that would otherwise mint a creator-scoped
+ *   token inside a shell the visitor controls is skipped entirely for
+ *   `agentShareVisitor` runs (`serverRuntimes/cloudSandbox.ts`), and
+ *   `lobe-creds` stays denied above so nothing ever writes `~/.creds/env`
+ *   into that session either. No creator credential or JWT is therefore
+ *   reachable from inside a visitor's sandbox command.
  */
 
 /**
@@ -717,6 +808,58 @@ const stripSubAgentDispatchApis = (toolSet: ShareGateToolSet): void => {
   }
 };
 
+/**
+ * Regenerate the exact function-calling name `ToolsEngine` would have used
+ * for each of `apiNames`, via the SAME `ToolNameResolver.generate` it used to
+ * build `toolSet.tools` originally.
+ *
+ * A naive `` `${identifier}${SEP}${apiName}` `` string only matches what is
+ * actually in `toolSet.tools` when neither segment needed normalizing.
+ * `generate` (1) MD5-hashes an api/identifier segment that contains
+ * characters strict providers reject or that pushes the name past the
+ * provider length cap, and (2) appends a third `${SEP}<type>` segment for any
+ * manifest whose `type` isn't `builtin`/`default` — MCP/connector manifests
+ * are `type: 'mcp'` (see `buildConnectorManifests.ts`). Both are common for
+ * MCP tools (server-controlled, often long/non-ASCII api names), so skipping
+ * this and slicing the raw string instead silently fails OPEN: the manifest
+ * loses the API but its generated tool-call name survives in `tools[]` and
+ * stays callable.
+ */
+const generateToolNames = (
+  identifier: string,
+  apiNames: Iterable<string>,
+  type: LobeToolManifest['type'],
+): Set<string> => {
+  const names = new Set<string>();
+  for (const apiName of apiNames) names.add(toolNameResolver.generate(identifier, apiName, type));
+  return names;
+};
+
+/**
+ * Drop every `toolSet.tools` entry that belongs to `identifier` and is not in
+ * `allowedNames`. "Belongs to `identifier`" is decided by the generated
+ * name's FIRST `${SEP}`-delimited segment — safe to compare against the raw
+ * identifier because `ToolNameResolver.generate` only ever normalizes the
+ * identifier segment on its own oversized/invalid-character content, never
+ * because of an unrelated api/type segment, so an unnormalized identifier
+ * always keeps its literal text as that first segment. Pass an empty
+ * `allowedNames` to drop every entry for the identifier.
+ */
+const pruneToolsForIdentifier = (
+  toolSet: ShareGateToolSet,
+  identifier: string,
+  allowedNames: ReadonlySet<string>,
+): void => {
+  if (!toolSet.tools) return;
+  pruneArrayInPlace(toolSet.tools, (tool) => {
+    const name: string | undefined = tool?.function?.name;
+    if (name?.split(PLUGIN_SCHEMA_SEPARATOR)?.[0] !== identifier) return true;
+    return allowedNames.has(name);
+  });
+};
+
+const EMPTY_TOOL_NAME_SET: ReadonlySet<string> = new Set();
+
 /** Remove one tool identifier from every parallel structure of the tool set. */
 const dropToolFromSet = (toolSet: ShareGateToolSet, identifier: string): void => {
   delete toolSet.manifestMap[identifier];
@@ -724,12 +867,7 @@ const dropToolFromSet = (toolSet: ShareGateToolSet, identifier: string): void =>
   delete toolSet.executorMap[identifier];
   pruneArrayInPlace(toolSet.enabledToolIds, (id) => id !== identifier);
   pruneArrayInPlace(toolSet.activatableToolIds, (id) => id !== identifier);
-  if (toolSet.tools) {
-    pruneArrayInPlace(toolSet.tools, (tool) => {
-      const toolIdentifier = tool?.function?.name?.split(PLUGIN_SCHEMA_SEPARATOR)?.[0];
-      return toolIdentifier !== identifier;
-    });
-  }
+  pruneToolsForIdentifier(toolSet, identifier, EMPTY_TOOL_NAME_SET);
 };
 
 /** Drop `blockedApiNames` from one tool's manifest AND its function-calling schema. */
@@ -741,20 +879,22 @@ const stripApisFromTool = (
   const manifest = toolSet.manifestMap[identifier];
   if (!manifest) return;
 
-  toolSet.manifestMap[identifier] = {
-    ...manifest,
-    api: manifest.api.filter((api) => !blockedApiNames.has(api.name)),
-  };
+  const survivingApi = manifest.api.filter((api) => !blockedApiNames.has(api.name));
 
-  if (toolSet.tools) {
-    pruneArrayInPlace(toolSet.tools, (tool) => {
-      const name: string | undefined = tool?.function?.name;
-      if (!name?.startsWith(`${identifier}${PLUGIN_SCHEMA_SEPARATOR}`)) return true;
+  toolSet.manifestMap[identifier] = { ...manifest, api: survivingApi };
 
-      const apiName = name.slice(identifier.length + PLUGIN_SCHEMA_SEPARATOR.length);
-      return !blockedApiNames.has(apiName);
-    });
-  }
+  // Fail-closed: only keep `tools[]` entries this file can PROVE still
+  // belong to a surviving API, by regenerating their exact names rather than
+  // reverse-parsing whatever is already in `tools[]`.
+  pruneToolsForIdentifier(
+    toolSet,
+    identifier,
+    generateToolNames(
+      identifier,
+      survivingApi.map((api) => api.name),
+      manifest.type,
+    ),
+  );
 };
 
 const pruneArrayInPlace = <T>(array: T[], keep: (item: T) => boolean): void => {

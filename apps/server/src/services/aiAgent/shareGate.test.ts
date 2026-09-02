@@ -20,6 +20,8 @@ import {
   AGENT_SHARE_NO_DATA_GRANT_BUILTIN_IDENTIFIERS,
   builtinTools,
 } from '@lobechat/builtin-tools';
+import { buildShareToolEntry } from '@lobechat/const';
+import { ToolNameResolver } from '@lobechat/context-engine';
 import { describe, expect, it } from 'vitest';
 
 import type { AgentShareGate, ShareGateToolSet } from './shareGate';
@@ -42,9 +44,20 @@ const buildGate = (config: Partial<AgentShareGate['shareConfig']> = {}): AgentSh
   visitorUserId: 'visitor-1',
 });
 
-const SEPARATOR = '____';
-
-const toolName = (identifier: string, apiName: string) => `${identifier}${SEPARATOR}${apiName}`;
+/**
+ * Go through the REAL `ToolNameResolver` — the same class `shareGate.ts` and
+ * `ToolsEngine` use — instead of hand-concatenating `identifier____apiName`.
+ * A hand-built string only matches what the resolver actually produces when
+ * neither segment needs normalizing; it silently diverges for a `type` other
+ * than `builtin`/`default` (an extra `____<type>` segment) or for an
+ * api/identifier name the resolver MD5-hashes (invalid characters, or long
+ * enough to hit the provider name-length cap). Using the real resolver here
+ * is what makes the MCP-manifest and long-name tests below fail against a
+ * naive slice-based strip instead of staying false-green.
+ */
+const toolNameResolver = new ToolNameResolver();
+const toolName = (identifier: string, apiName: string, type: string = 'builtin') =>
+  toolNameResolver.generate(identifier, apiName, type);
 
 /**
  * Build a tool set whose parallel structures (manifests, maps, id arrays and
@@ -55,6 +68,7 @@ const buildToolSet = (
   entries: Array<{
     apis: Array<{ humanIntervention?: unknown; name: string }>;
     identifier: string;
+    type?: string;
   }>,
 ): ShareGateToolSet => {
   const toolSet: ShareGateToolSet = {
@@ -66,7 +80,7 @@ const buildToolSet = (
     tools: [],
   };
 
-  for (const { apis, identifier } of entries) {
+  for (const { apis, identifier, type = 'builtin' } of entries) {
     toolSet.manifestMap[identifier] = {
       api: apis.map((api) => ({
         description: api.name,
@@ -75,12 +89,15 @@ const buildToolSet = (
         parameters: { properties: {}, type: 'object' },
       })),
       identifier,
-      type: 'builtin',
+      type,
     } as any;
     toolSet.sourceMap[identifier] = 'builtin' as any;
     toolSet.executorMap[identifier] = {} as any;
     for (const api of apis) {
-      toolSet.tools!.push({ function: { name: toolName(identifier, api.name) }, type: 'function' });
+      toolSet.tools!.push({
+        function: { name: toolName(identifier, api.name, type) },
+        type: 'function',
+      });
     }
   }
 
@@ -100,6 +117,19 @@ describe('filterPluginsByShareGate', () => {
   it('exposes no tools when the allowlist is missing or empty', () => {
     expect(filterPluginsByShareGate(['web-search'], buildGate())).toEqual([]);
     expect(filterPluginsByShareGate(['web-search'], buildGate({ enabledToolIds: [] }))).toEqual([]);
+  });
+
+  it('treats a per-API entry as candidacy for the whole identifier', () => {
+    // Narrowing down to the specific granted API happens later, in
+    // `applyShareGateToToolSet`, once the real manifest is known — this pass
+    // only decides whether the identifier is a candidate at all.
+    const gate = buildGate({
+      enabledToolIds: [toolName(LobeAgentIdentifier, LobeAgentApiName.analyzeMedia)],
+    });
+
+    expect(filterPluginsByShareGate([LobeAgentIdentifier, 'mcp-github'], gate)).toEqual([
+      LobeAgentIdentifier,
+    ]);
   });
 });
 
@@ -130,13 +160,21 @@ describe('AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS', () => {
     for (const identifier of [
       AgentManagementIdentifier,
       'lobe-local-system',
-      'lobe-cloud-sandbox',
       'lobe-creds',
       'lobe-task',
       TopicReferenceIdentifier,
     ]) {
       expect(AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS.has(identifier)).toBe(false);
     }
+  });
+
+  // `lobe-cloud-sandbox` is allowlisted despite its general-purpose reach: a
+  // share visitor's run gets an isolated per-topic sandbox session with no
+  // `lh` CLI JWT shim, so it cannot mint or exfiltrate the creator's
+  // credentials — see the positive-evidence doc block above
+  // `applyShareGateToInterventionRequiredApis` in `shareGate.ts`.
+  it('allowlists lobe-cloud-sandbox now that visitor runs get a credential-free sandbox session', () => {
+    expect(AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS.has('lobe-cloud-sandbox')).toBe(true);
   });
 });
 
@@ -288,6 +326,74 @@ describe('applyShareGateToToolSet', () => {
     expect(toolSet.tools).toEqual([]);
   });
 
+  it('narrows a per-API grant down to just the named API', () => {
+    const toolSet = buildToolSet([
+      {
+        apis: [{ name: LobeAgentApiName.analyzeMedia }, { name: LobeAgentApiName.updatePlan }],
+        identifier: LobeAgentIdentifier,
+      },
+    ]);
+
+    applyShareGateToToolSet(
+      toolSet,
+      buildGate({
+        enabledToolIds: [toolName(LobeAgentIdentifier, LobeAgentApiName.analyzeMedia)],
+      }),
+    );
+
+    // The identifier itself stays enabled (it has a surviving API)...
+    expect(toolSet.enabledToolIds).toEqual([LobeAgentIdentifier]);
+    // ...but only the granted API remains on the manifest and the
+    // function-calling schema.
+    expect(toolSet.manifestMap[LobeAgentIdentifier].api.map((api) => api.name)).toEqual([
+      LobeAgentApiName.analyzeMedia,
+    ]);
+    expect(toolSet.tools!.map((tool: any) => tool.function.name)).toEqual([
+      toolName(LobeAgentIdentifier, LobeAgentApiName.analyzeMedia),
+    ]);
+  });
+
+  it('drops the whole tool when a per-API grant names no surviving API', () => {
+    const toolSet = buildToolSet([
+      { apis: [{ name: LobeAgentApiName.analyzeMedia }], identifier: LobeAgentIdentifier },
+    ]);
+
+    // Granted API name does not exist on this manifest at all (e.g. stale
+    // config from a renamed API) — zero APIs survive, so the identifier is
+    // dropped entirely rather than left offering nothing.
+    applyShareGateToToolSet(
+      toolSet,
+      buildGate({ enabledToolIds: [toolName(LobeAgentIdentifier, 'noSuchApi')] }),
+    );
+
+    expect(toolSet.enabledToolIds).toEqual([]);
+    expect(toolSet.manifestMap).toEqual({});
+    expect(toolSet.tools).toEqual([]);
+  });
+
+  it('lets a toolset-level entry grant every surviving API, overriding a redundant per-API entry', () => {
+    const toolSet = buildToolSet([
+      {
+        apis: [{ name: LobeAgentApiName.analyzeMedia }, { name: LobeAgentApiName.updatePlan }],
+        identifier: LobeAgentIdentifier,
+      },
+    ]);
+
+    applyShareGateToToolSet(
+      toolSet,
+      buildGate({
+        enabledToolIds: [
+          LobeAgentIdentifier,
+          toolName(LobeAgentIdentifier, LobeAgentApiName.analyzeMedia),
+        ],
+      }),
+    );
+
+    expect(toolSet.manifestMap[LobeAgentIdentifier].api.map((api) => api.name).sort()).toEqual(
+      [LobeAgentApiName.analyzeMedia, LobeAgentApiName.updatePlan].sort(),
+    );
+  });
+
   it('strips callSubAgent and pins the dispatch-free systemRole', () => {
     const toolSet = buildToolSet([
       {
@@ -384,14 +490,99 @@ describe('applyShareGateToToolSet', () => {
       {
         apis: [{ name: 'listRepos' }, { humanIntervention: 'required', name: 'deleteRepo' }],
         identifier: 'mcp-github',
+        type: 'mcp',
       },
     ]);
 
     applyShareGateToToolSet(toolSet, buildGate({ enabledToolIds: ['mcp-github'] }));
 
     expect(toolSet.manifestMap['mcp-github'].api.map((api) => api.name)).toEqual(['listRepos']);
+    // `type: 'mcp'` means `ToolNameResolver.generate` appends a THIRD
+    // `____mcp` segment to the function-calling name — a naive
+    // `identifier____apiName` string would never match this, so this
+    // assertion only passes when the strip regenerates the real name.
     expect(toolSet.tools!.map((tool: any) => tool.function.name)).toEqual([
-      toolName('mcp-github', 'listRepos'),
+      toolName('mcp-github', 'listRepos', 'mcp'),
+    ]);
+    expect(toolSet.tools!.map((tool: any) => tool.function.name)).not.toContain(
+      `mcp-github____deleteRepo____mcp`,
+    );
+  });
+
+  it('narrows a per-API grant on a non-builtin (MCP) manifest, matching the real `____<type>`-suffixed generated name', () => {
+    const toolSet = buildToolSet([
+      {
+        apis: [{ name: 'listRepos' }, { name: 'deleteRepo' }],
+        identifier: 'mcp-github',
+        type: 'mcp',
+      },
+    ]);
+
+    // The GRANT entry in `shareConfig.enabledToolIds` is always the plain
+    // `identifier____apiName` shape (`buildShareToolEntry`), independent of
+    // whatever `ToolNameResolver.generate` does for the WIRE tool-call name
+    // — the third `____mcp` segment only ever appears on the generated
+    // dispatch name asserted below, never on the grant entry itself.
+    applyShareGateToToolSet(
+      toolSet,
+      buildGate({ enabledToolIds: [buildShareToolEntry('mcp-github', 'listRepos')] }),
+    );
+
+    expect(toolSet.manifestMap['mcp-github'].api.map((api) => api.name)).toEqual(['listRepos']);
+    expect(toolSet.tools!.map((tool: any) => tool.function.name)).toEqual([
+      toolName('mcp-github', 'listRepos', 'mcp'),
+    ]);
+  });
+
+  it('narrows a per-API grant on an MCP manifest whose blocked API name is long/non-ASCII enough to be MD5-hashed', () => {
+    // `ToolNameResolver.generate` hashes the API segment once the raw name
+    // would push the generated tool-call name past the provider length cap,
+    // and hashes on invalid characters regardless of length — both common
+    // for server-controlled MCP API names, unlike a builtin's small fixed
+    // API surface. A strip that slices `identifier.length + SEPARATOR.length`
+    // off the generated name (instead of regenerating it) would recover
+    // garbage here and fail to match either API, leaving the blocked one
+    // reachable.
+    const longApiName = 'a'.repeat(80);
+    const nonAsciiApiName = '删除仓库';
+    const toolSet = buildToolSet([
+      {
+        apis: [{ name: longApiName }, { name: nonAsciiApiName }],
+        identifier: 'mcp-github',
+        type: 'mcp',
+      },
+    ]);
+
+    applyShareGateToToolSet(
+      toolSet,
+      buildGate({ enabledToolIds: [buildShareToolEntry('mcp-github', longApiName)] }),
+    );
+
+    expect(toolSet.manifestMap['mcp-github'].api.map((api) => api.name)).toEqual([longApiName]);
+    expect(toolSet.tools!.map((tool: any) => tool.function.name)).toEqual([
+      toolName('mcp-github', longApiName, 'mcp'),
+    ]);
+    expect(toolSet.tools!.map((tool: any) => tool.function.name)).not.toContain(
+      toolName('mcp-github', nonAsciiApiName, 'mcp'),
+    );
+  });
+
+  it('drops an MCP tool identifier entirely (dropToolFromSet) without leaving stray generated-name entries behind', () => {
+    const toolSet = buildToolSet([
+      { apis: [{ name: 'listRepos' }], identifier: 'mcp-github', type: 'mcp' },
+      { apis: [{ name: 'listRepos' }], identifier: 'mcp-gitlab', type: 'mcp' },
+    ]);
+
+    // `mcp-github` gets no grant at all; `mcp-gitlab` does, and must survive
+    // untouched — proves `dropToolFromSet`'s identifier-prefix match isn't
+    // accidentally over- or under-matching once a third `____mcp` segment is
+    // in play.
+    applyShareGateToToolSet(toolSet, buildGate({ enabledToolIds: ['mcp-gitlab'] }));
+
+    expect(toolSet.manifestMap['mcp-github']).toBeUndefined();
+    expect(toolSet.manifestMap['mcp-gitlab']).toBeDefined();
+    expect(toolSet.tools!.map((tool: any) => tool.function.name)).toEqual([
+      toolName('mcp-gitlab', 'listRepos', 'mcp'),
     ]);
   });
 });
@@ -478,6 +669,21 @@ describe('isShareBlockedBuiltinDispatch', () => {
         AgentManagementIdentifier,
         'searchAgent',
       ),
+    ).toBe(true);
+  });
+
+  it('a per-API entry grants only the named API, not the whole identifier', () => {
+    const enabled = {
+      enabledToolIds: [toolName(LobeAgentIdentifier, LobeAgentApiName.analyzeMedia)],
+    };
+
+    expect(
+      isShareBlockedBuiltinDispatch(enabled, LobeAgentIdentifier, LobeAgentApiName.analyzeMedia),
+    ).toBe(false);
+    // updatePlan carries no intervention config either, so only the picker's
+    // per-API scoping is what blocks it here.
+    expect(
+      isShareBlockedBuiltinDispatch(enabled, LobeAgentIdentifier, LobeAgentApiName.updatePlan),
     ).toBe(true);
   });
 });

@@ -156,6 +156,48 @@ describe('agentShareRouter', () => {
     expect(mockUpdateConfig).not.toHaveBeenCalled();
   });
 
+  it('accepts a bare toolset identifier and a per-API scoped entry in enabledToolIds', async () => {
+    const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+    const config = { enabledToolIds: ['calculator', 'lobe-agent____analyzeMedia'] };
+
+    await caller.updateShareConfig({ agentId: 'agent-1', config });
+
+    expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', config);
+  });
+
+  it('rejects a malformed enabledToolIds entry', async () => {
+    const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+    // More than one separator.
+    await expect(
+      caller.updateShareConfig({
+        agentId: 'agent-1',
+        config: { enabledToolIds: ['lobe-agent____analyzeMedia____extra'] },
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    // Empty apiName segment.
+    await expect(
+      caller.updateShareConfig({
+        agentId: 'agent-1',
+        config: { enabledToolIds: ['lobe-agent____'] },
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
+  });
+
+  it('dedupes enabledToolIds entries before forwarding the patch', async () => {
+    const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+    await caller.updateShareConfig({
+      agentId: 'agent-1',
+      config: { enabledToolIds: ['calculator', 'calculator', 'lobe-agent____analyzeMedia'] },
+    });
+
+    expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', {
+      enabledToolIds: ['calculator', 'lobe-agent____analyzeMedia'],
+    });
+  });
+
   it('does not expose dropped v1 config fields in the config API', () => {
     expect(
       agentShareConfigSchema.safeParse({

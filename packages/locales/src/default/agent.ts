@@ -440,6 +440,8 @@ export default {
   'share.settings.usage.visitors': 'Visitors',
   'share.settings.tools.desc':
     'Only the tools you tick here can be called during a visitor run. Tools that could reach your device or local files are never offered.',
+  'share.settings.tools.apiNotAvailableToVisitors':
+    'This action can never be used in a shared run — it either needs your approval or is otherwise off-limits to visitors.',
   'share.settings.tools.availableGroup': 'Not granted · {{count}}',
   'share.settings.tools.empty': 'This Agent has no tools that can be granted to visitors.',
   'share.settings.tools.grantedEmpty':

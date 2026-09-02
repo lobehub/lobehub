@@ -1,3 +1,4 @@
+import { parseShareToolEntry } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -11,11 +12,31 @@ import { assertAgentShareCreationEnabled } from './_helpers/agentShareFeatureGat
 
 const agentIdInput = z.object({ agentId: z.string().trim().min(1) }).strict();
 
+/**
+ * One `enabledToolIds` entry — either a bare toolset identifier
+ * (`lobe-agent`) or a per-API scoped grant (`lobe-agent____analyzeMedia`,
+ * exactly one `PLUGIN_SCHEMA_SEPARATOR`). Validated with the same
+ * {@link parseShareToolEntry} the runtime gates use to interpret a stored
+ * entry, so a malformed value can never be persisted in the first place.
+ */
+const shareToolEntrySchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine((entry) => !!parseShareToolEntry(entry), {
+    message: 'Expected a tool identifier or `identifier____apiName` entry',
+  });
+
 export const agentShareConfigSchema = z
   .object({
     allowCreatorViewSessions: z.boolean().optional(),
     allowReadMemory: z.boolean().optional(),
-    enabledToolIds: z.array(z.string().trim().min(1)).optional(),
+    // Deduped so repeated toggles/patches from the client never accumulate
+    // duplicate entries in the persisted jsonb array.
+    enabledToolIds: z
+      .array(shareToolEntrySchema)
+      .transform((ids) => Array.from(new Set(ids)))
+      .optional(),
     maxTopicsPerVisitor: z.number().int().positive().optional(),
     maxTurnsPerTopic: z.number().int().positive().optional(),
     /** `null` clears the cap back to "unlimited" (removes the stored key). */

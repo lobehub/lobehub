@@ -1,22 +1,21 @@
 'use client';
 
 import { getActivePluginIds } from '@lobechat/types';
-import { Flexbox, Tooltip } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import PluginTag from '@/features/ProfileEditor/PluginTag';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
 import { Section } from './SectionLayout';
+import ToolRow from './ToolRow';
 import {
   getShareToolAvailability,
   getShareToolCandidateIds,
   getVisitorVisibleEnabledToolIds,
-  toggleShareToolId,
 } from './toolVisitorAvailability';
 import type { AgentShareConfigPatch, AgentShareConfigState } from './useAgentShare';
 
@@ -40,17 +39,6 @@ const ToolsSection = memo<ToolsSectionProps>(({ agentId, onChange, shareConfig }
   const candidateToolIds = getShareToolCandidateIds(getActivePluginIds(agentConfig?.plugins));
   const selectedToolIds = getVisitorVisibleEnabledToolIds(shareConfig.enabledToolIds);
 
-  const toggleTool = (toolId: string) => {
-    // Functional patch: resolved against the latest known config at send time,
-    // so toggling two tools in quick succession composes instead of the second
-    // payload overwriting the first. Composing over the FULL persisted array
-    // (not `selectedToolIds`, which is display-filtered) keeps ids this picker
-    // does not render from being wiped.
-    onChange((current) => ({
-      enabledToolIds: toggleShareToolId(current.enabledToolIds, toolId),
-    }));
-  };
-
   // Two buckets, extension-manager style: what visitors already get, then what
   // else could be granted. Toggling moves a tool between them, so the owner
   // reads the effective grant at a glance instead of scanning checkboxes.
@@ -61,39 +49,26 @@ const ToolsSection = memo<ToolsSectionProps>(({ agentId, onChange, shareConfig }
         'blocked',
   );
   const availableIds = candidateToolIds.filter((toolId) => !enabledIds.includes(toolId));
+  // Rendered as disabled chips (so the owner learns why a configured tool
+  // cannot be shared) but excluded from the "not granted" COUNT — a tool the
+  // gate refuses outright is never actually grantable, so counting it would
+  // overstate how many real choices are left.
+  const availableGrantableCount = availableIds.filter(
+    (toolId) =>
+      getShareToolAvailability(toolId, { allowReadMemory: shareConfig.allowReadMemory }) !==
+      'blocked',
+  ).length;
 
-  const renderTool = (toolId: string, selected: boolean) => {
-    const availability = getShareToolAvailability(toolId, {
-      allowReadMemory: shareConfig.allowReadMemory,
-    });
-    // A blocked tool can never reach a visitor run, so offer it disabled with
-    // an explanation rather than letting the owner "grant" something the
-    // server always strips.
-    const blocked = availability === 'blocked';
-
-    return (
-      <Tooltip
-        key={toolId}
-        title={
-          blocked
-            ? t('share.settings.tools.notAvailableToVisitors')
-            : availability === 'needsMemoryPermission'
-              ? t('share.settings.tools.needsMemoryPermission')
-              : undefined
-        }
-      >
-        <PluginTag
-          selectable
-          useAllMetaList
-          agentId={agentId}
-          disabled={blocked}
-          pluginId={toolId}
-          selected={selected}
-          onSelect={blocked ? undefined : () => toggleTool(toolId)}
-        />
-      </Tooltip>
-    );
-  };
+  const renderTool = (toolId: string, selected: boolean) => (
+    <ToolRow
+      agentId={agentId}
+      key={toolId}
+      selected={selected}
+      shareConfig={shareConfig}
+      toolId={toolId}
+      onChange={onChange}
+    />
+  );
 
   return (
     <Section desc={t('share.settings.tools.desc')} title={t('share.settings.tools.title')}>
@@ -120,7 +95,7 @@ const ToolsSection = memo<ToolsSectionProps>(({ agentId, onChange, shareConfig }
           {availableIds.length > 0 && (
             <Flexbox gap={8}>
               <Text fontSize={12} type={'secondary'}>
-                {t('share.settings.tools.availableGroup', { count: availableIds.length })}
+                {t('share.settings.tools.availableGroup', { count: availableGrantableCount })}
               </Text>
               <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
                 {availableIds.map((toolId) => renderTool(toolId, false))}
