@@ -45,6 +45,7 @@ export * from './task';
 export * from './topic';
 export * from './topicComment';
 export * from './user';
+export * from './userExecutionPolicy';
 export * from './userMemories';
 export * from './verify';
 export * from './work';

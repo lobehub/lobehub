@@ -1,6 +1,11 @@
 import { Hono } from 'hono';
 
 import { check } from './handlers/check';
+import {
+  deleteExecutionPolicyHandler,
+  getExecutionPolicyByUserHandler,
+  upsertExecutionPolicyHandler,
+} from './handlers/executionPolicy';
 import { log as logHandler } from './handlers/log';
 import { listLogs } from './handlers/logs';
 import {
@@ -36,5 +41,14 @@ app.delete('/rules/:id', serviceTokenAuth(), deleteRuleHandler);
 
 // GET /api/governance/logs — paginated audit log query (admin panel)
 app.get('/logs', serviceTokenAuth(), listLogs);
+
+// User execution policy CRUD (admin panel). The CLI/desktop fetch path does
+// NOT go through this router — it authenticates as the end user via the
+// lambda tRPC router (`ctx.userId`), not the service token, so it is never
+// distributed to end-user devices. See
+// `apps/server/src/routers/lambda/executionPolicy.ts`.
+app.get('/execution-policy/:userId', serviceTokenAuth(), getExecutionPolicyByUserHandler);
+app.put('/execution-policy/:userId', serviceTokenAuth(), upsertExecutionPolicyHandler);
+app.delete('/execution-policy/:userId', serviceTokenAuth(), deleteExecutionPolicyHandler);
 
 export default app;

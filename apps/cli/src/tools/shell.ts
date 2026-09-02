@@ -9,6 +9,10 @@ import {
 
 import { resolveCommandMode, resolveSandboxNetwork } from '../settings';
 import { decideSandbox } from '../settings/commandMode';
+import {
+  resolveExecutionPolicyOverlay,
+  resolvePushedCommandMode,
+} from '../settings/executionPolicy';
 import { log } from '../utils/logger';
 import { ensureSandboxWorkspace } from './sandboxWorkspace';
 import { applySandboxHostPaths } from './srtWin';
@@ -59,9 +63,11 @@ export const resetSandboxCapabilityCache = () => {
  * `onUnavailable: 'deny'` for the same reason one layer further down.
  */
 export async function runCommand(params: RunCommandParams): Promise<RunCommandResult> {
+  const pushedCommandMode = await resolvePushedCommandMode();
+
   const decision = decideSandbox({
     deviceNetwork: resolveSandboxNetwork(),
-    mode: resolveCommandMode(),
+    mode: resolveCommandMode(pushedCommandMode),
     requested: params.sandbox,
     requestedNetwork: params.sandboxNetwork,
   });
@@ -99,13 +105,17 @@ export async function runCommand(params: RunCommandParams): Promise<RunCommandRe
   }
 
   const { createLocalSandboxPolicy } = await import('@lobechat/device-sandbox');
+  const overlay = await resolveExecutionPolicyOverlay();
 
   return runCommandCore(
     { ...params, cwd },
     {
       logger: log,
       processManager,
-      sandboxPolicy: createLocalSandboxPolicy(cwd, { allowNetwork: decision.allowNetwork }),
+      sandboxPolicy: createLocalSandboxPolicy(cwd, {
+        allowNetwork: decision.allowNetwork,
+        overlay,
+      }),
     },
   );
 }

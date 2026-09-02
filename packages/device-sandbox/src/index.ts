@@ -6,6 +6,7 @@ export {
   createLocalSandboxPolicy,
   LOCAL_SANDBOX_NETWORK_DOMAINS,
   type LocalSandboxPolicyOptions,
+  type LocalSandboxPolicyOverlay,
 } from './presets';
 export { SrtSandboxRuntime, srtSandboxRuntime } from './runtime';
 export { canInstallSandbox, installDeviceSandbox } from './setup';

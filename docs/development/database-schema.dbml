@@ -948,6 +948,47 @@ table chat_groups_agents {
   }
 }
 
+table command_execution_logs {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  execution_target text [not null]
+  device_id text
+  tool_identifier text [not null]
+  api_name text [not null]
+  command_text text [not null]
+  blocked boolean [not null]
+  matched_rule_id uuid
+  success boolean
+  error_message text
+  duration_ms integer
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'command_execution_logs_user_id_idx']
+    created_at [name: 'command_execution_logs_created_at_idx']
+    execution_target [name: 'command_execution_logs_execution_target_idx']
+    blocked [name: 'command_execution_logs_blocked_idx']
+  }
+}
+
+table command_governance_rules {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  pattern text [not null]
+  pattern_type text [not null]
+  scope text [not null, default: 'all']
+  action text [not null, default: 'deny']
+  enabled boolean [not null, default: true]
+  created_by text
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'command_governance_rules_user_id_idx']
+    (user_id, enabled) [name: 'command_governance_rules_user_id_enabled_idx']
+  }
+}
+
 table user_connector_tools {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   user_connector_id uuid [not null]
@@ -1570,9 +1611,9 @@ table goal_edges {
     (source_node_id, target_node_id, kind) [name: 'goal_edges_source_target_kind_unique', unique]
     goal_id [name: 'goal_edges_goal_id_idx']
     target_node_id [name: 'goal_edges_target_node_id_idx']
-
-
-
+    
+    
+    
   }
 }
 
@@ -1659,8 +1700,8 @@ table goal_nodes {
     (goal_id, kind) [name: 'goal_nodes_goal_id_kind_idx']
     (goal_id, id) [name: 'goal_nodes_goal_id_id_unique', unique]
     task_id [name: 'goal_nodes_task_id_unique', unique]
-
-
+    
+    
   }
 }
 
@@ -3168,6 +3209,23 @@ table users {
     created_at [name: 'users_created_at_idx']
     created_at [name: 'users_banned_true_created_at_idx']
   }
+}
+
+table user_execution_policies {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null, unique]
+  enabled boolean [not null, default: true]
+  writable_roots jsonb [not null, default: `[]`]
+  readable_roots jsonb
+  denied_write_roots jsonb
+  denied_read_roots jsonb
+  allow_network boolean [not null, default: false]
+  allowed_network_domains jsonb
+  env_allowlist jsonb
+  command_mode text [not null, default: 'sandbox']
+  created_by text
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
 }
 
 table user_memories {

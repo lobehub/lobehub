@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import type { SandboxCapability } from '@lobechat/device-sandbox';
+import type { LocalSandboxPolicyOverlay, SandboxCapability } from '@lobechat/device-sandbox';
 import type {
   DesktopShellSettings,
   DeviceSandboxCapabilityResult,
@@ -26,10 +26,12 @@ import {
 } from '@lobechat/local-file-shell/shell';
 
 import { binNames } from '@/modules/cliEmbedding/generateCliWrapper';
+import { callLambdaMutation } from '@/modules/heterogeneousAgent/fileStorePort';
 import { createLogger } from '@/utils/logger';
 
 import CliCtr from './CliCtr';
 import { ControllerModule, IpcMethod } from './index';
+import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 
 const logger = createLogger('controllers:ShellCommandCtr');
 
@@ -162,6 +164,64 @@ export default class ShellCommandCtr extends ControllerModule {
       networkIsolation: false,
       reason: error.message,
     });
+  }
+
+  /**
+   * Admin-configured Local Sandbox overlay for the signed-in user, memoized
+   * for the same reason as `sandboxCapability`: cheap to reuse, no reason to
+   * hit the network on every sandboxed command. Refreshed periodically rather
+   * than once per app run — unlike the capability probe, this can change any
+   * time an admin edits the policy.
+   *
+   * `undefined` on any failure (no controller, signed out, offline, no policy
+   * configured) is always safe here: this only NARROWS/EXTENDS an
+   * already-sandboxed run, never decides whether one is sandboxed at all, so
+   * falling back to "no overlay" is just today's plain Local Sandbox default —
+   * no disk cache or strict fallback needed, unlike the CLI's `commandMode`
+   * push-down (see `apps/cli/src/settings/executionPolicy.ts`), which gates
+   * whether a fence applies at all and fails to the strictest bound instead.
+   */
+  private overlayCache?: { at: number; overlay: LocalSandboxPolicyOverlay | undefined };
+
+  private async resolveExecutionPolicyOverlay(): Promise<LocalSandboxPolicyOverlay | undefined> {
+    const REFRESH_INTERVAL_MS = 10 * 60 * 1000;
+    if (this.overlayCache && Date.now() - this.overlayCache.at < REFRESH_INTERVAL_MS) {
+      return this.overlayCache.overlay;
+    }
+
+    const overlay = await (async (): Promise<LocalSandboxPolicyOverlay | undefined> => {
+      try {
+        const remoteServerConfigCtr = this.app.getController(RemoteServerConfigCtr);
+        const accessToken = await remoteServerConfigCtr?.getAccessToken();
+        const serverUrl = await remoteServerConfigCtr?.getRemoteServerUrl();
+        if (!accessToken || !serverUrl) return undefined;
+
+        const policy = await callLambdaMutation<{
+          allowedNetworkDomains?: string[];
+          deniedReadRoots?: string[];
+          deniedWriteRoots?: string[];
+          envAllowlist?: string[];
+          readableRoots?: string[];
+          writableRoots?: string[];
+        } | null>({ accessToken, serverUrl }, 'executionPolicy.get', undefined);
+        if (!policy) return undefined;
+
+        return {
+          allowedNetworkDomains: policy.allowedNetworkDomains,
+          deniedReadRoots: policy.deniedReadRoots,
+          deniedWriteRoots: policy.deniedWriteRoots,
+          envAllowlist: policy.envAllowlist,
+          readableRoots: policy.readableRoots,
+          writableRoots: policy.writableRoots,
+        };
+      } catch (error) {
+        logger.debug('Execution-policy fetch failed, running without an overlay:', error);
+        return undefined;
+      }
+    })();
+
+    this.overlayCache = { at: Date.now(), overlay };
+    return overlay;
   }
 
   /**
@@ -319,6 +379,7 @@ export default class ShellCommandCtr extends ControllerModule {
     }
 
     const { createLocalSandboxPolicy } = await import('@lobechat/device-sandbox');
+    const overlay = await this.resolveExecutionPolicyOverlay();
 
     // `runCommand` converts sandbox failures (policy conflict, busy runtime,
     // a fence that cannot be established) into `{ success: false, error }`
@@ -330,6 +391,7 @@ export default class ShellCommandCtr extends ControllerModule {
       processManager,
       sandboxPolicy: createLocalSandboxPolicy(params.cwd, {
         allowNetwork: params.sandboxNetwork === true,
+        overlay,
       }),
     });
   }

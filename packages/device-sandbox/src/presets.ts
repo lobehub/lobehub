@@ -1,4 +1,5 @@
 import os from 'node:os';
+import path from 'node:path';
 
 import type { SandboxPolicy } from './types';
 
@@ -46,13 +47,42 @@ export const LOCAL_SANDBOX_NETWORK_DOMAINS = [
   'gitlab.com',
 ] as const;
 
+/**
+ * Admin-configured, per-user overlay on top of the Local Sandbox default
+ * (`packages/database`'s `user_execution_policies`, resolved server-side —
+ * see `apps/server/src/services/governance/executionPolicy.ts`). Applied only
+ * when the run is already fenced by Local Sandbox; it never changes whether a
+ * run is sandboxed, only what the fence allows once it is.
+ */
+export interface LocalSandboxPolicyOverlay {
+  /** Replaces {@link LOCAL_SANDBOX_NETWORK_DOMAINS} when network is allowed, rather than adding to it — the admin's list is the allowlist for this user. */
+  allowedNetworkDomains?: readonly string[];
+  deniedReadRoots?: readonly string[];
+  deniedWriteRoots?: readonly string[];
+  envAllowlist?: readonly string[];
+  readableRoots?: readonly string[];
+  /** Added to the always-present `[cwd, tmpdir]`, not a replacement of them. */
+  writableRoots?: readonly string[];
+}
+
 export interface LocalSandboxPolicyOptions {
   /**
-   * Allow the run to reach {@link LOCAL_SANDBOX_NETWORK_DOMAINS}. Everything
+   * Allow the run to reach {@link LOCAL_SANDBOX_NETWORK_DOMAINS} (or, when
+   * `overlay.allowedNetworkDomains` is set, that list instead). Everything
    * else stays blocked — this is never "the network is open".
    */
   allowNetwork?: boolean;
+  overlay?: LocalSandboxPolicyOverlay;
 }
+
+/**
+ * Expand a leading `~` the way a shell would — admin-authored policy roots are
+ * typed by a human, and `~/…` is the natural way to write "this user's home".
+ * Every other path is passed through untouched; `normalizeWritableRoots`
+ * downstream is what actually validates it's an absolute, existing path.
+ */
+const expandHome = (root: string): string =>
+  root === '~' || root.startsWith('~/') ? path.join(os.homedir(), root.slice(1)) : root;
 
 /**
  * Policy for the desktop "Local Sandbox" execution environment — the option a
@@ -81,10 +111,28 @@ export interface LocalSandboxPolicyOptions {
  */
 export const createLocalSandboxPolicy = (
   cwd: string,
-  { allowNetwork = false }: LocalSandboxPolicyOptions = {},
+  { allowNetwork = false, overlay }: LocalSandboxPolicyOptions = {},
 ): SandboxPolicy => ({
   allowNetwork,
   onUnavailable: 'deny',
-  writableRoots: [cwd, os.tmpdir()],
-  ...(allowNetwork ? { allowedNetworkDomains: [...LOCAL_SANDBOX_NETWORK_DOMAINS] } : {}),
+  writableRoots: [
+    ...new Set([cwd, os.tmpdir(), ...(overlay?.writableRoots?.map(expandHome) ?? [])]),
+  ],
+  ...(allowNetwork
+    ? {
+        allowedNetworkDomains: overlay?.allowedNetworkDomains?.length
+          ? [...overlay.allowedNetworkDomains]
+          : [...LOCAL_SANDBOX_NETWORK_DOMAINS],
+      }
+    : {}),
+  ...(overlay?.deniedReadRoots?.length
+    ? { deniedReadRoots: overlay.deniedReadRoots.map(expandHome) }
+    : {}),
+  ...(overlay?.deniedWriteRoots?.length
+    ? { deniedWriteRoots: overlay.deniedWriteRoots.map(expandHome) }
+    : {}),
+  ...(overlay?.readableRoots?.length
+    ? { readableRoots: overlay.readableRoots.map(expandHome) }
+    : {}),
+  ...(overlay?.envAllowlist?.length ? { envAllowlist: [...overlay.envAllowlist] } : {}),
 });

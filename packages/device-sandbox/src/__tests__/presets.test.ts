@@ -1,4 +1,5 @@
 import os from 'node:os';
+import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -58,5 +59,63 @@ describe('createLocalSandboxPolicy', () => {
 
     expect(policy.deniedReadRoots).toBeUndefined();
     expect(policy.readableRoots).toBeUndefined();
+  });
+});
+
+describe('createLocalSandboxPolicy overlay', () => {
+  it('adds admin-configured writable roots to, not instead of, cwd/tmpdir', () => {
+    const policy = createLocalSandboxPolicy(process.cwd(), {
+      overlay: { writableRoots: [os.tmpdir()] },
+    });
+
+    // os.tmpdir() overlaps with the always-present default, so the Set
+    // dedupes it rather than doubling the entry.
+    expect(policy.writableRoots).toEqual([process.cwd(), os.tmpdir()]);
+  });
+
+  it('expands a leading ~ against the real home directory', () => {
+    const policy = createLocalSandboxPolicy(process.cwd(), {
+      overlay: { deniedWriteRoots: ['~/.ssh'], writableRoots: ['~/Downloads'] },
+    });
+
+    expect(policy.writableRoots).toContain(path.join(os.homedir(), 'Downloads'));
+    expect(policy.deniedWriteRoots).toEqual([path.join(os.homedir(), '.ssh')]);
+  });
+
+  it('leaves deniedReadRoots/deniedWriteRoots/readableRoots unset with no overlay', () => {
+    const policy = createLocalSandboxPolicy(process.cwd(), { overlay: {} });
+
+    expect(policy.deniedReadRoots).toBeUndefined();
+    expect(policy.deniedWriteRoots).toBeUndefined();
+    expect(policy.readableRoots).toBeUndefined();
+    expect(policy.envAllowlist).toBeUndefined();
+  });
+
+  it('replaces (not extends) the network allowlist when the overlay sets one', () => {
+    const policy = createLocalSandboxPolicy(process.cwd(), {
+      allowNetwork: true,
+      overlay: { allowedNetworkDomains: ['*.internal.example.com'] },
+    });
+
+    expect(policy.allowedNetworkDomains).toEqual(['*.internal.example.com']);
+  });
+
+  it('falls back to the default registry allowlist when the overlay sets no domains', () => {
+    const policy = createLocalSandboxPolicy(process.cwd(), {
+      allowNetwork: true,
+      overlay: { writableRoots: ['~/Downloads'] },
+    });
+
+    expect(policy.allowedNetworkDomains).toEqual([...LOCAL_SANDBOX_NETWORK_DOMAINS]);
+  });
+
+  it('never opens the network from the overlay alone — allowNetwork still gates it', () => {
+    const policy = createLocalSandboxPolicy(process.cwd(), {
+      allowNetwork: false,
+      overlay: { allowedNetworkDomains: ['*.internal.example.com'] },
+    });
+
+    expect(policy.allowNetwork).toBe(false);
+    expect(policy.allowedNetworkDomains).toBeUndefined();
   });
 });

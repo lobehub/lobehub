@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { App } from '@/core/App';
 
 import CliCtr from '../CliCtr';
+import RemoteServerConfigCtr from '../RemoteServerConfigCtr';
 import ShellCommandCtr from '../ShellCommandCtr';
 
 const { ipcMainHandleMock } = vi.hoisted(() => ({
@@ -38,6 +39,18 @@ vi.mock('../CliCtr', () => ({
   default: class CliCtr {},
 }));
 
+vi.mock('../RemoteServerConfigCtr', () => ({
+  default: class RemoteServerConfigCtr {},
+}));
+
+const { mockCallLambdaMutation } = vi.hoisted(() => ({
+  mockCallLambdaMutation: vi.fn(),
+}));
+
+vi.mock('@/modules/heterogeneousAgent/fileStorePort', () => ({
+  callLambdaMutation: (...args: unknown[]) => mockCallLambdaMutation(...args),
+}));
+
 const { mockBinNames } = vi.hoisted(() => ({
   // Upstream's own names, so every pre-existing expectation below is unchanged.
   mockBinNames: vi.fn(() => ['lobehub', 'lh', 'lobe']),
@@ -62,11 +75,22 @@ const {
 vi.mock('@lobechat/device-sandbox', () => ({
   canInstallSandbox: () => mockCanInstallSandbox(),
   installDeviceSandbox: () => mockInstallDeviceSandbox(),
-  createLocalSandboxPolicy: (cwd: string, options?: { allowNetwork?: boolean }) => ({
+  createLocalSandboxPolicy: (
+    cwd: string,
+    options?: { allowNetwork?: boolean; overlay?: Record<string, unknown> },
+  ) => ({
     allowNetwork: options?.allowNetwork === true,
     onUnavailable: 'deny',
-    writableRoots: [cwd],
-    ...(options?.allowNetwork ? { allowedNetworkDomains: ['*.npmjs.org'] } : {}),
+    writableRoots: [cwd, ...((options?.overlay?.writableRoots as string[] | undefined) ?? [])],
+    ...(options?.allowNetwork
+      ? {
+          allowedNetworkDomains: (options?.overlay?.allowedNetworkDomains as
+            string[] | undefined) ?? ['*.npmjs.org'],
+        }
+      : {}),
+    ...(options?.overlay?.deniedWriteRoots
+      ? { deniedWriteRoots: options.overlay.deniedWriteRoots }
+      : {}),
   }),
   createSandboxLaunchPlan: (...args: unknown[]) => mockCreateSandboxLaunchPlan(...args),
   probeSandboxCapability: () => mockProbeSandboxCapability(),
@@ -76,8 +100,20 @@ const mockCliCtr = {
   runCliCommand: vi.fn().mockResolvedValue({ exitCode: 0, stderr: '', stdout: 'cli output\n' }),
 };
 
+// Resolves to `undefined` by default (no signed-in remote server, matching
+// most tests' assumption of no policy) — the overlay tests below override
+// these per case.
+const mockRemoteServerConfigCtr = {
+  getAccessToken: vi.fn(),
+  getRemoteServerUrl: vi.fn(),
+};
+
 const mockApp = {
-  getController: vi.fn((c: unknown) => (c === CliCtr ? mockCliCtr : undefined)),
+  getController: vi.fn((c: unknown) => {
+    if (c === CliCtr) return mockCliCtr;
+    if (c === RemoteServerConfigCtr) return mockRemoteServerConfigCtr;
+    return undefined;
+  }),
 } as unknown as App;
 
 describe('ShellCommandCtr (thin wrapper)', () => {
@@ -104,6 +140,12 @@ describe('ShellCommandCtr (thin wrapper)', () => {
     vi.clearAllMocks();
     mockProcessOutput = '';
     listeners = new Map();
+
+    // `clearAllMocks` clears call history, not a `mockResolvedValue` set by an
+    // earlier test — reset explicitly so "no remote server" is the default.
+    mockRemoteServerConfigCtr.getAccessToken.mockReset();
+    mockRemoteServerConfigCtr.getRemoteServerUrl.mockReset();
+    mockCallLambdaMutation.mockReset();
 
     const childProcessModule = await import('node:child_process');
     mockSpawn = vi.mocked(childProcessModule.spawn);
@@ -321,6 +363,75 @@ describe('ShellCommandCtr (thin wrapper)', () => {
         ['-c', 'echo test'],
         expect.anything(),
       );
+    });
+
+    it('applies the admin-configured execution-policy overlay to a sandboxed run', async () => {
+      mockRemoteServerConfigCtr.getAccessToken.mockResolvedValue('token-123');
+      mockRemoteServerConfigCtr.getRemoteServerUrl.mockResolvedValue('https://server.example.com');
+      mockCallLambdaMutation.mockResolvedValue({
+        allowedNetworkDomains: ['*.internal.example.com'],
+        deniedWriteRoots: ['/repo/.ssh'],
+        writableRoots: ['/extra'],
+      });
+      finishSpawnedProcess();
+
+      await ctr.handleRunCommand({
+        command: 'echo test',
+        cwd: '/repo',
+        sandbox: true,
+        sandboxNetwork: true,
+      });
+
+      expect(mockCallLambdaMutation).toHaveBeenCalledWith(
+        { accessToken: 'token-123', serverUrl: 'https://server.example.com' },
+        'executionPolicy.get',
+        undefined,
+      );
+      expect(mockCreateSandboxLaunchPlan).toHaveBeenCalledWith(
+        expect.objectContaining({
+          policy: expect.objectContaining({
+            allowedNetworkDomains: ['*.internal.example.com'],
+            deniedWriteRoots: ['/repo/.ssh'],
+            writableRoots: ['/repo', '/extra'],
+          }),
+        }),
+      );
+    });
+
+    it('runs with no overlay when the user has no signed-in remote server', async () => {
+      // Default mock state: getAccessToken/getRemoteServerUrl resolve to
+      // undefined. Must degrade to the plain preset, not throw or block.
+      finishSpawnedProcess();
+
+      const result = await ctr.handleRunCommand({
+        command: 'echo test',
+        cwd: '/repo',
+        sandbox: true,
+      });
+
+      expect(mockCallLambdaMutation).not.toHaveBeenCalled();
+      expect(mockCreateSandboxLaunchPlan).toHaveBeenCalledWith(
+        expect.objectContaining({ policy: expect.objectContaining({ writableRoots: ['/repo'] }) }),
+      );
+      expect(result.success).not.toBe(false);
+    });
+
+    it('runs with no overlay when the policy fetch fails', async () => {
+      mockRemoteServerConfigCtr.getAccessToken.mockResolvedValue('token-123');
+      mockRemoteServerConfigCtr.getRemoteServerUrl.mockResolvedValue('https://server.example.com');
+      mockCallLambdaMutation.mockRejectedValue(new Error('network down'));
+      finishSpawnedProcess();
+
+      const result = await ctr.handleRunCommand({
+        command: 'echo test',
+        cwd: '/repo',
+        sandbox: true,
+      });
+
+      expect(mockCreateSandboxLaunchPlan).toHaveBeenCalledWith(
+        expect.objectContaining({ policy: expect.objectContaining({ writableRoots: ['/repo'] }) }),
+      );
+      expect(result.success).not.toBe(false);
     });
 
     it('refuses a sandboxed run with no working directory to confine', async () => {
