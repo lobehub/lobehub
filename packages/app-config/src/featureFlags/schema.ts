@@ -2,6 +2,13 @@ import type { IFeatureFlagsState } from '@lobechat/types';
 import { z } from 'zod';
 
 // Define a union type for feature flag values: either boolean or array of user IDs
+//
+// NOTE: `agent_share` / `agent_share_visitor` additionally accept raw EMAIL
+// addresses in that array (see `evaluateFeatureFlag`). Those arrays live in the
+// published runtime config (Redis) and in env vars, which therefore hold user
+// email addresses — a data category that was previously absent from flag
+// storage. Keep that in mind when logging, exporting, or replicating the
+// runtime config, and prefer user IDs when an ID is already at hand.
 const FeatureFlagValue = z.union([z.boolean(), z.array(z.string())]);
 const isDev = process.env.NODE_ENV === 'development';
 
