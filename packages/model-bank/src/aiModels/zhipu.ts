@@ -43,6 +43,7 @@ const zhipuChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+      search: true,
       structuredOutput: true,
       video: true,
       vision: true,
@@ -69,6 +70,7 @@ const zhipuChatModels: AIChatModelCard[] = [
     releasedAt: '2026-08-26',
     settings: {
       extendParams: ['glm5_3ReasoningEffort', 'preserveThinking'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
