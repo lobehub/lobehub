@@ -86,12 +86,14 @@ const renderRealEditor = ({ lifecycle }: { lifecycle: boolean }) => {
 };
 
 describe('useEditorRootLifecycle with a real editor', () => {
-  it('registers the kernel when the lifecycle is not applied', async () => {
+  it('leaks the kernel into the global registry when the lifecycle is not applied', async () => {
     const { editor, unmount } = renderRealEditor({ lifecycle: false });
     await waitFor(() => expect(rootOf(editor())).toBeTruthy());
     await waitFor(() => expect(isRegistered(editor())).toBe(true));
 
     unmount();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(isRegistered(editor())).toBe(true);
   });
 
   it('destroys the kernel on a direct visible unmount', async () => {
@@ -111,6 +113,7 @@ describe('useEditorRootLifecycle with a real editor', () => {
     rerender(tree('hidden'));
     expect(rootOf(editor())).toBeNull();
     expect(root!.isConnected).toBe(true);
+    expect(isRegistered(editor())).toBe(true);
   });
 
   it('restores the same root to the same kernel when revealed', async () => {
