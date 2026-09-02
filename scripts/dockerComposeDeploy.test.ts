@@ -19,6 +19,7 @@ const compose = parse(readFileSync(path.join(deployDirectory, 'docker-compose.ym
       ports?: string[];
       profiles?: string[];
       restart?: string;
+      stop_grace_period?: string;
       volumes?: string[];
     }
   >;
@@ -130,6 +131,8 @@ describe('deploy docker-compose optional Elasticsearch', () => {
     ]);
     expect(sync.environment).toContain('FTS_SEARCH_SYNC_ENABLED=true');
     expect(sync.environment).toContain('MIGRATION_DB=1');
+    // Compose's default 10s grace period would SIGKILL a drain step in flight.
+    expect(sync.stop_grace_period).toBe('2m');
   });
 
   it('never switches the search provider on behalf of the operator', () => {

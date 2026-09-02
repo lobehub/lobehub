@@ -57,6 +57,27 @@ describe('runElasticsearchFtsSearchSync', () => {
     expect(drainOnce).toHaveBeenCalledOnce();
   });
 
+  it('stops after the current step when the stop signal aborts mid-run', async () => {
+    const controller = new AbortController();
+    const { drainOnce, runtime } = createRuntime([]);
+    drainOnce
+      .mockImplementationOnce(async () => {
+        controller.abort();
+        return drainResult({ hasMore: true });
+      })
+      .mockResolvedValueOnce(drainResult({ hasMore: true }));
+
+    await expect(
+      runElasticsearchFtsSearchSync({
+        loadRuntime: async () => runtime,
+        maxSteps: 8,
+        stopSignal: controller.signal,
+      }),
+    ).resolves.toMatchObject({ hasMore: true, steps: 1 });
+    // The claimed work of the finished step is settled; no further step is started.
+    expect(drainOnce).toHaveBeenCalledOnce();
+  });
+
   it('fails before draining when durable dead letters already exist', async () => {
     const { runtime } = createRuntime([]);
     const service = runtime.getFtsSearchSyncService();

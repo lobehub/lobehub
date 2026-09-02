@@ -193,7 +193,7 @@ bun run fts-search:sync -- --max-steps=8 --yes
 省略 `--max-steps` 时只执行一轮；可用范围为 1 到 100。
 
 如果不想依赖外部调度器，可以加上 `--interval-seconds=<1-3600>` 让命令作为长期任务运行：它会重复执行同样的有界消费，`hasMore`
-为 true 时立即继续，否则等待指定秒数，并在收到 `SIGINT` / `SIGTERM` 时正常停止。留下失败或死信任务的那一轮仍会以非零状态退出，因此进程管理器的重启策略和日志能够暴露问题。Compose
+为 true 时立即继续，否则等待指定秒数，并在收到 `SIGINT` / `SIGTERM` 时完成当前正在进行的那一步消费（而不是整个上限）后正常停止，因此进程管理器的停止超时只需覆盖一步。留下失败或死信任务的那一轮仍会以非零状态退出，因此进程管理器的重启策略和日志能够暴露问题。Compose
 中的 `fts-search-sync` 服务（profile `elasticsearch-sync`）使用的就是这种模式。
 
 官方镜像内置 `/app/fts-search-elasticsearch-sync.cjs`，执行的是同一套有界消费逻辑：

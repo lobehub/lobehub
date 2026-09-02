@@ -242,6 +242,11 @@ services:
       - .env
     entrypoint: ['/bin/node', '/app/fts-search-elasticsearch-sync.cjs']
     command: ['--max-steps=8', '--interval-seconds=${FTS_SEARCH_SYNC_INTERVAL_SECONDS:-15}', '--yes']
+    # On SIGTERM the worker finishes only the current drain step (not all 8) and
+    # then exits, so the grace period has to cover one step: its bulk request may
+    # wait up to 20s plus database settlement. Compose's default of 10s would
+    # SIGKILL mid-step and leave claims to expire into retries.
+    stop_grace_period: 2m
     restart: always
     networks:
       - lobe-network

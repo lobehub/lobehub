@@ -28,6 +28,11 @@ export interface RunElasticsearchFtsSearchSyncOptions {
   loadRuntime?: () => Promise<FtsSearchSyncRuntime>;
   logStep?: (summary: ElasticsearchFtsSearchSyncRunSummary) => void;
   maxSteps: number;
+  /**
+   * When aborted, the run stops after the current drain step instead of using the whole bound,
+   * so a supervisor stop only has to wait for one step rather than `maxSteps` of them.
+   */
+  stopSignal?: AbortSignal;
 }
 
 const loadRuntime = () => import('../../apps/server/src/services/ftsSearchSync');
@@ -37,6 +42,7 @@ export const runElasticsearchFtsSearchSync = async ({
   loadRuntime: load = loadRuntime,
   logStep = () => undefined,
   maxSteps,
+  stopSignal,
 }: RunElasticsearchFtsSearchSyncOptions): Promise<ElasticsearchFtsSearchSyncRunSummary> => {
   const runtime = await load();
   await runtime.verifyFtsSearchSyncReadiness();
@@ -77,6 +83,7 @@ export const runElasticsearchFtsSearchSync = async ({
       throw new Error('Elasticsearch full-text search sync left retryable failed work');
     }
     if (drained.claimed === 0 || !drained.hasMore) break;
+    if (stopSignal?.aborted) break;
   }
 
   if (await service.hasDeadLetters()) {
@@ -144,11 +151,12 @@ export const runElasticsearchFtsSearchSyncCli = async ({
       );
     }
 
-    const runOnce = async () => {
+    const runOnce = async (signal?: AbortSignal) => {
       const summary = await runElasticsearchFtsSearchSync({
         loadRuntime: load,
         logStep: (step) => logSuccess(JSON.stringify({ ...step, type: 'fts_search_sync_step' })),
         maxSteps: options.maxSteps,
+        stopSignal: signal,
       });
       logSuccess(JSON.stringify({ ...summary, success: true, type: 'fts_search_sync_completed' }));
       return summary;
@@ -162,7 +170,9 @@ export const runElasticsearchFtsSearchSyncCli = async ({
     /**
      * Interval mode is the Compose-friendly long-running form of the same bounded drain. Each
      * iteration keeps the bounded semantics; a drain that leaves failed or dead work still exits
-     * non-zero so the supervisor restart policy and logs make the failure visible.
+     * non-zero so the supervisor restart policy and logs make the failure visible. A stop signal
+     * ends the run after the current step, so the supervisor's grace period only has to cover one
+     * step, never a whole bounded run.
      */
     const signal = stopSignal ?? createProcessStopSignal();
     logSuccess(
@@ -173,7 +183,7 @@ export const runElasticsearchFtsSearchSyncCli = async ({
       }),
     );
     while (!signal.aborted) {
-      const summary = await runOnce();
+      const summary = await runOnce(signal);
       if (signal.aborted) break;
       if (!summary.hasMore) await sleep(options.intervalSeconds * 1000, signal);
     }

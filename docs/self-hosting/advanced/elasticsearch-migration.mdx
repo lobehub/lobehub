@@ -280,7 +280,8 @@ Omitting `--max-steps` processes one step; accepted values are from 1 through 10
 
 For a long-running worker instead of an external scheduler, add `--interval-seconds=<1-3600>`: the
 command repeats the same bounded drain, continues immediately while `hasMore` is true, sleeps for
-the interval otherwise, and stops cleanly on `SIGINT` / `SIGTERM`. A run that leaves failed or
+the interval otherwise, and stops cleanly on `SIGINT` / `SIGTERM` after finishing the drain step in
+progress (not the whole bound), so a supervisor's stop timeout only needs to cover one step. A run that leaves failed or
 dead-letter work still exits non-zero, so the supervisor's restart policy and logs surface it. The
 Compose `fts-search-sync` service (profile `elasticsearch-sync`) uses this mode.
 The consumer validates the PostgreSQL capture definitions and every Elasticsearch write alias before
