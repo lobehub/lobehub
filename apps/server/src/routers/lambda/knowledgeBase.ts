@@ -315,11 +315,7 @@ export const knowledgeBaseRouter = router({
     .use(withScopedPermission('knowledge_base:delete'))
     .mutation(async ({ ctx }) => {
       const knowledgeBases = await ctx.knowledgeBaseModel.query();
-      const ids = ctx.workspaceId
-        ? knowledgeBases
-            .filter((knowledgeBase) => knowledgeBase.userId === ctx.userId)
-            .map((kb) => kb.id)
-        : knowledgeBases.map((knowledgeBase) => knowledgeBase.id);
+      const ids = knowledgeBases.map((knowledgeBase) => knowledgeBase.id);
       await ctx.trashService.trashKnowledgeBases(ids);
     }),
 

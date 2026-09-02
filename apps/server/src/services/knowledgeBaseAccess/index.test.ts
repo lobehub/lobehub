@@ -241,6 +241,23 @@ describe('assertFileNotInRestrictedKnowledgeBase', () => {
 
     await expect(assertFileNotInRestrictedKnowledgeBase(ctx, 'file-1')).resolves.toBeUndefined();
   });
+
+  it('does not hide a shared file through a trashed restricted KB when its other KB is live and open', async () => {
+    const ctx = {
+      // Both memberships survive KB soft-delete. The restricted scan returns
+      // nothing because its live-KB predicate excludes the trashed restriction.
+      serverDB: dbWithResults(
+        [{ knowledgeBaseId: 'kb-restricted-trashed' }, { knowledgeBaseId: 'kb-open-live' }],
+        [],
+      ),
+      userId: 'member',
+      workspaceId: 'ws-1',
+    };
+
+    await expect(
+      assertFileNotInRestrictedKnowledgeBase(ctx, 'file-shared'),
+    ).resolves.toBeUndefined();
+  });
 });
 
 describe('assertContentsNotInRestrictedKnowledgeBase', () => {
@@ -331,6 +348,7 @@ describe('workspace-wide subject scoping', () => {
   // A grant reaching these scans would restrict the knowledge base for
   // everyone, so both direct reads must pin the workspace-wide subject.
   const workspaceWide = '"resource_permissions"."user_id" is null';
+  const liveKnowledgeBase = '"knowledge_bases"."is_deleted" IS NOT TRUE';
 
   it('getUseLevelKnowledgeBaseIds reads only the workspace-wide rows', async () => {
     const { clauses, db } = dbCapturingWhere();
@@ -338,6 +356,7 @@ describe('workspace-wide subject scoping', () => {
     await getUseLevelKnowledgeBaseIds(db, 'ws-1');
 
     expect(clauses[0]).toContain(workspaceWide);
+    expect(clauses[0]).toContain(liveKnowledgeBase);
   });
 
   it('getRestrictedKnowledgeBaseIds reads only the workspace-wide rows', async () => {
@@ -346,5 +365,6 @@ describe('workspace-wide subject scoping', () => {
     await getRestrictedKnowledgeBaseIds({ serverDB: db, userId: 'member', workspaceId: 'ws-1' });
 
     expect(clauses[0]).toContain(workspaceWide);
+    expect(clauses[0]).toContain(liveKnowledgeBase);
   });
 });

@@ -16,6 +16,7 @@ const mockKnowledgeBaseModelCopyToWorkspace = vi.fn();
 const mockKnowledgeBaseModelFindById = vi.fn();
 const mockKnowledgeBaseModelTransferTo = vi.fn();
 const mockKnowledgeBaseModelHasForeignLinkedRows = vi.fn().mockResolvedValue(false);
+const mockKnowledgeBaseModelQuery = vi.fn();
 const mockKnowledgeBaseModelUpdate = vi.fn();
 const mockTrashKnowledgeBases = vi.fn();
 const mockDocumentModelFindByIds = vi.fn();
@@ -65,6 +66,7 @@ vi.mock('@/database/models/knowledgeBase', () => ({
     countFileUsage: mockKnowledgeBaseModelCountFileUsage,
     findById: mockKnowledgeBaseModelFindById,
     hasForeignLinkedRows: mockKnowledgeBaseModelHasForeignLinkedRows,
+    query: mockKnowledgeBaseModelQuery,
     transferTo: mockKnowledgeBaseModelTransferTo,
     update: mockKnowledgeBaseModelUpdate,
   })),
@@ -96,6 +98,20 @@ describe('knowledgeBaseRouter', () => {
     });
     mockKnowledgeBaseModelTransferTo.mockResolvedValue({ id: 'kb-1' });
     mockKnowledgeBaseModelUpdate.mockResolvedValue({ id: 'kb-1' });
+    mockKnowledgeBaseModelQuery.mockResolvedValue([]);
+  });
+
+  describe('removeAllKnowledgeBases', () => {
+    it("trashes every visible workspace library, including another member's public library", async () => {
+      mockKnowledgeBaseModelQuery.mockResolvedValue([
+        { id: 'kb-own', userId: 'test-user' },
+        { id: 'kb-shared', userId: 'another-member' },
+      ]);
+
+      await caller.removeAllKnowledgeBases();
+
+      expect(mockTrashKnowledgeBases).toHaveBeenCalledWith(['kb-own', 'kb-shared']);
+    });
   });
 
   describe('updateKnowledgeBase', () => {

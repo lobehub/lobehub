@@ -10,6 +10,7 @@ import {
   resourcePermissions,
 } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { notTrashed } from '@/database/utils/softDelete';
 import {
   assertCanPerformResourceAction,
   type ResourceMeta,
@@ -88,6 +89,7 @@ export const getUseLevelKnowledgeBaseIds = async (
         // member, and must never mark the knowledge base itself as restricted.
         isNull(resourcePermissions.userId),
         eq(resourcePermissions.accessLevel, 'use'),
+        notTrashed(knowledgeBases.isDeleted),
         // A permission row staged on a still-private KB is inert until the KB
         // is published — private KBs are creator-only regardless of the row.
         eq(knowledgeBases.visibility, 'public'),
@@ -122,6 +124,7 @@ export const getRestrictedKnowledgeBaseIds = async (
         // Workspace-wide rows only — see `getUseLevelKnowledgeBaseIds`.
         isNull(resourcePermissions.userId),
         eq(resourcePermissions.accessLevel, 'use'),
+        notTrashed(knowledgeBases.isDeleted),
         // A `use` row staged while the KB is still private must not leak into
         // member-facing filters: the private KB is already creator-only, and
         // filtering here would also hide its files from open KBs they share.

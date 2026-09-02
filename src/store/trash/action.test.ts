@@ -1,15 +1,15 @@
 import type { TrashItem } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { mutate, useClientDataSWR } from '@/libs/swr';
 import { trashService } from '@/services/trash';
 
+import { mutateTrash, useTrashDataSWR } from './hooks';
 import { trashSelectors } from './selectors';
 import { useTrashStore } from './store';
 
-vi.mock('@/libs/swr', () => ({
-  mutate: vi.fn(),
-  useClientDataSWR: vi.fn(),
+vi.mock('./hooks', () => ({
+  mutateTrash: vi.fn(),
+  useTrashDataSWR: vi.fn(),
 }));
 
 const buildItem = (overrides: Partial<TrashItem> = {}): TrashItem => ({
@@ -34,7 +34,7 @@ describe('TrashAction', () => {
     action.setActiveType(undefined);
     action.useFetchTrash(false, undefined, null);
     vi.clearAllMocks();
-    vi.mocked(mutate).mockResolvedValue(undefined as never);
+    vi.mocked(mutateTrash).mockResolvedValue(undefined as never);
     useTrashStore.setState({
       activeType: undefined,
       countByType: { document: 1, file: 2 },
@@ -64,9 +64,11 @@ describe('TrashAction', () => {
       expect(useTrashStore.getState().items.map((i) => i.id)).toEqual(['trash_2']);
       expect(useTrashStore.getState().loadingIds).toEqual([]);
       // recycle-bin list + counts, plus a filter-based sweep of the affected namespaces
-      expect(mutate).toHaveBeenCalledWith(['trash:list', 'personal', 'all']);
-      expect(mutate).toHaveBeenCalledWith(['trash:countByType', 'personal']);
-      const filterCall = vi.mocked(mutate).mock.calls.find(([key]) => typeof key === 'function');
+      expect(mutateTrash).toHaveBeenCalledWith(['trash:list', 'personal', 'all']);
+      expect(mutateTrash).toHaveBeenCalledWith(['trash:countByType', 'personal']);
+      const filterCall = vi
+        .mocked(mutateTrash)
+        .mock.calls.find(([key]) => typeof key === 'function');
       expect(filterCall).toBeTruthy();
       const filter = filterCall![0] as (key: unknown) => boolean;
       expect(filter(['file:list', 'x', {}])).toBe(true);
@@ -85,7 +87,9 @@ describe('TrashAction', () => {
       await useTrashStore.getState().restore(['trash_1']);
       expect(useTrashStore.getState().items.map((i) => i.id)).toEqual(['trash_2']);
       // nothing came back — no cross-store revalidation
-      expect(vi.mocked(mutate).mock.calls.some(([key]) => typeof key === 'function')).toBe(false);
+      expect(vi.mocked(mutateTrash).mock.calls.some(([key]) => typeof key === 'function')).toBe(
+        false,
+      );
     });
 
     it('marks rows as loading while the call is in flight', async () => {
@@ -122,7 +126,7 @@ describe('TrashAction', () => {
         purged: 1,
         purgedIds: ['trash_1'],
       });
-      vi.mocked(mutate).mockRejectedValue(new Error('refresh unavailable'));
+      vi.mocked(mutateTrash).mockRejectedValue(new Error('refresh unavailable'));
 
       await expect(useTrashStore.getState().purge(['trash_1'])).resolves.toMatchObject({
         purged: 1,
@@ -138,7 +142,7 @@ describe('TrashAction', () => {
       await expect(useTrashStore.getState().emptyTrash()).resolves.toEqual({ scheduled: 2 });
       expect(trashService.emptyTrash).toHaveBeenCalledWith('file');
       expect(useTrashStore.getState().items).toEqual([]);
-      expect(mutate).toHaveBeenCalledWith(['trash:list', 'personal', 'file']);
+      expect(mutateTrash).toHaveBeenCalledWith(['trash:list', 'personal', 'file']);
     });
 
     it('keeps the local list truthful when emptyTrash scheduling fails', async () => {
@@ -185,9 +189,9 @@ describe('TrashAction', () => {
     it('keys data by workspace and ignores a stale response from the previous scope', () => {
       const action = useTrashStore.getState();
       action.useFetchTrash(true, undefined, 'workspace-a');
-      const firstSuccess = vi.mocked(useClientDataSWR).mock.calls.at(-1)?.[2]?.onSuccess;
+      const firstSuccess = vi.mocked(useTrashDataSWR).mock.calls.at(-1)?.[2]?.onSuccess;
       action.useFetchTrash(true, undefined, 'workspace-b');
-      const secondSuccess = vi.mocked(useClientDataSWR).mock.calls.at(-1)?.[2]?.onSuccess;
+      const secondSuccess = vi.mocked(useTrashDataSWR).mock.calls.at(-1)?.[2]?.onSuccess;
 
       firstSuccess?.(
         { items: [buildItem({ title: 'Workspace A' })], nextCursor: null },
@@ -208,7 +212,7 @@ describe('TrashAction', () => {
         items: [expect.objectContaining({ title: 'Workspace B' })],
         itemsScopeId: 'workspace-b',
       });
-      expect(vi.mocked(useClientDataSWR).mock.calls.map(([key]) => key)).toEqual([
+      expect(vi.mocked(useTrashDataSWR).mock.calls.map(([key]) => key)).toEqual([
         ['trash:list', 'workspace-a', 'all'],
         ['trash:list', 'workspace-b', 'all'],
       ]);
@@ -218,11 +222,11 @@ describe('TrashAction', () => {
       const action = useTrashStore.getState();
       action.setActiveType(undefined);
       action.useFetchTrash(true, undefined, 'workspace-a');
-      const allSuccess = vi.mocked(useClientDataSWR).mock.calls.at(-1)?.[2]?.onSuccess;
+      const allSuccess = vi.mocked(useTrashDataSWR).mock.calls.at(-1)?.[2]?.onSuccess;
 
       action.setActiveType('file');
       action.useFetchTrash(true, 'file', 'workspace-a');
-      const fileSuccess = vi.mocked(useClientDataSWR).mock.calls.at(-1)?.[2]?.onSuccess;
+      const fileSuccess = vi.mocked(useTrashDataSWR).mock.calls.at(-1)?.[2]?.onSuccess;
 
       allSuccess?.(
         { items: [buildItem({ resourceType: 'document' })], nextCursor: null },
@@ -258,7 +262,7 @@ describe('TrashAction', () => {
 
       const pending = action.loadMore();
       action.useFetchTrash(true, undefined, 'workspace-b');
-      const workspaceBSuccess = vi.mocked(useClientDataSWR).mock.calls.at(-1)?.[2]?.onSuccess;
+      const workspaceBSuccess = vi.mocked(useTrashDataSWR).mock.calls.at(-1)?.[2]?.onSuccess;
       workspaceBSuccess?.(
         {
           items: [buildItem({ title: 'Workspace B', workspaceId: 'workspace-b' })],

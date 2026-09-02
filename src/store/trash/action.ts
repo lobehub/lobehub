@@ -5,15 +5,21 @@ import type {
   TrashResourceType,
 } from '@lobechat/types';
 import type { SWRResponse } from 'swr';
+import type { StateCreator } from 'zustand/vanilla';
 
-import { mutate, useClientDataSWR } from '@/libs/swr';
-import { trashService } from '@/services/trash';
-import type { StoreSetter } from '@/store/types';
+import type { trashService as trashServiceInstance } from '@/services/trash';
 
+import { mutateTrash, useTrashDataSWR } from './hooks';
 import { trashKeys } from './keys';
 import type { TrashStore } from './store';
 
-type Setter = StoreSetter<TrashStore>;
+type TrashService = typeof trashServiceInstance;
+type EmptyTrashOutcome = Awaited<ReturnType<TrashService['emptyTrash']>>;
+type PurgeOutcome = Awaited<ReturnType<TrashService['purge']>>;
+type RestoreOutcome = Awaited<ReturnType<TrashService['restore']>>;
+type TrashSlice = StateCreator<TrashStore, [['zustand/devtools', never]], [], TrashAction>;
+
+const getTrashService = async () => (await import('@/services/trash')).trashService;
 
 /** SWR key roots whose lists can regain rows after a restore. */
 const RESTORE_AFFECTED_KEY_PREFIXES = [
@@ -28,54 +34,38 @@ const RESTORE_AFFECTED_KEY_PREFIXES = [
   'video:',
 ];
 
-export const trashSlice = (set: Setter, get: () => TrashStore, _api?: unknown) =>
-  new TrashActionImpl(set, get, _api);
-
 /**
  * Recycle-bin store. Rows are removed optimistically on restore / purge and
  * the list + counts are revalidated afterwards so a failed call self-corrects.
  */
-export class TrashActionImpl {
-  #activeResourceType?: TrashResourceType;
-  #activeScopeId: string | null = null;
-  readonly #get: () => TrashStore;
-  readonly #set: Setter;
+export const trashSlice: TrashSlice = (set, get) => {
+  let activeResourceType: TrashResourceType | undefined;
+  let activeScopeId: string | null = null;
 
-  constructor(set: Setter, get: () => TrashStore, _api?: unknown) {
-    void _api;
-    this.#set = set;
-    this.#get = get;
-  }
-
-  setActiveType = (activeType?: TrashResourceType) => {
-    this.#activeResourceType = activeType;
-    this.#set(
-      { activeType, isTrashInit: false, items: [], nextCursor: null },
-      false,
-      'setActiveType',
-    );
-  };
-
-  refresh = async () => {
+  const refresh = async () => {
     const results = await Promise.allSettled([
-      mutate(trashKeys.list(this.#activeScopeId, this.#get().activeType)),
-      mutate(trashKeys.countByType(this.#activeScopeId)),
+      mutateTrash(trashKeys.list(activeScopeId, get().activeType)),
+      mutateTrash(trashKeys.countByType(activeScopeId)),
     ]);
     for (const result of results) {
       if (result.status === 'rejected') console.error('[trash:refresh]', result.reason);
     }
   };
 
-  /**
-   * A restore brings rows back into Resource lists owned by other stores.
-   * Revalidate every mounted SWR key in
-   * those namespaces so a user returning from the recycle bin sees the restored
-   * file, document, folder, or knowledge base without a reload. `mutate` with a
-   * filter only re-fetches keys that have a mounted subscriber, so this is cheap.
-   */
-  revalidateRestoredScopes = async () => {
+  const withLoading = async (ids: string[], run: () => Promise<void>) => {
+    set({ loadingIds: [...get().loadingIds, ...ids] }, false, 'loading/start');
     try {
-      await mutate(
+      await run();
+    } finally {
+      const done = new Set(ids);
+      set({ loadingIds: get().loadingIds.filter((id) => !done.has(id)) }, false, 'loading/end');
+      await refresh();
+    }
+  };
+
+  const revalidateRestoredScopes = async () => {
+    try {
+      await mutateTrash(
         (key: unknown) =>
           Array.isArray(key) &&
           typeof key[0] === 'string' &&
@@ -86,143 +76,140 @@ export class TrashActionImpl {
     }
   };
 
-  loadMore = async () => {
-    const { activeType, itemsScopeId, nextCursor } = this.#get();
-    if (!nextCursor) return;
-    const requestResourceType = activeType;
-    const requestScopeId = this.#activeScopeId;
-    if (itemsScopeId !== requestScopeId) return;
-    const page = await trashService.list({ cursor: nextCursor, resourceType: activeType });
-    const state = this.#get();
-    if (
-      this.#activeScopeId !== requestScopeId ||
-      this.#activeResourceType !== requestResourceType ||
-      state.activeType !== requestResourceType ||
-      state.itemsScopeId !== requestScopeId ||
-      state.nextCursor !== nextCursor
-    )
-      return;
-    this.#set(
-      { items: [...state.items, ...page.items], nextCursor: page.nextCursor },
-      false,
-      'loadMore',
-    );
-  };
-
-  #withLoading = async (ids: string[], run: () => Promise<void>) => {
-    this.#set({ loadingIds: [...this.#get().loadingIds, ...ids] }, false, 'loading/start');
-    try {
-      await run();
-    } finally {
-      const done = new Set(ids);
-      this.#set(
-        { loadingIds: this.#get().loadingIds.filter((id) => !done.has(id)) },
+  return {
+    setActiveType: (activeType?: TrashResourceType) => {
+      activeResourceType = activeType;
+      set({ activeType, isTrashInit: false, items: [], nextCursor: null }, false, 'setActiveType');
+    },
+    refresh,
+    revalidateRestoredScopes,
+    loadMore: async () => {
+      const { activeType, itemsScopeId, nextCursor } = get();
+      if (!nextCursor) return;
+      const requestResourceType = activeType;
+      const requestScopeId = activeScopeId;
+      if (itemsScopeId !== requestScopeId) return;
+      const trashService = await getTrashService();
+      const page = await trashService.list({ cursor: nextCursor, resourceType: activeType });
+      const state = get();
+      if (
+        activeScopeId !== requestScopeId ||
+        activeResourceType !== requestResourceType ||
+        state.activeType !== requestResourceType ||
+        state.itemsScopeId !== requestScopeId ||
+        state.nextCursor !== nextCursor
+      )
+        return;
+      set(
+        { items: [...state.items, ...page.items], nextCursor: page.nextCursor },
         false,
-        'loading/end',
+        'loadMore',
       );
-      await this.refresh();
-    }
-  };
-
-  /**
-   * Restore roots. Returns the server outcome so the caller can toast the
-   * partial failures (for example, a document whose parent folder is still in
-   * the bin). Only the successfully restored rows leave the list.
-   */
-  restore = async (ids: string[]) => {
-    let outcome: Awaited<ReturnType<typeof trashService.restore>> = { failed: [], restored: [] };
-    await this.#withLoading(ids, async () => {
-      outcome = await trashService.restore(ids);
-      const gone = new Set(outcome.restored.map((item) => item.id));
-      // `notFound` rows were dropped from the registry server-side.
-      for (const failure of outcome.failed) if (failure.code === 'notFound') gone.add(failure.id);
-      this.#set(
-        { items: this.#get().items.filter((item) => !gone.has(item.id)) },
-        false,
-        'restore',
+    },
+    restore: async (ids: string[]) => {
+      let outcome: RestoreOutcome = { failed: [], restored: [] };
+      await withLoading(ids, async () => {
+        const trashService = await getTrashService();
+        outcome = await trashService.restore(ids);
+        const gone = new Set(outcome.restored.map((item) => item.id));
+        for (const failure of outcome.failed) if (failure.code === 'notFound') gone.add(failure.id);
+        set({ items: get().items.filter((item) => !gone.has(item.id)) }, false, 'restore');
+      });
+      if (outcome.restored.length > 0) void revalidateRestoredScopes();
+      return outcome;
+    },
+    purge: async (ids: string[]) => {
+      let outcome: PurgeOutcome = {
+        failed: [],
+        purged: 0,
+        purgedIds: [],
+      };
+      await withLoading(ids, async () => {
+        const trashService = await getTrashService();
+        outcome = await trashService.purge(ids);
+        const gone = new Set(outcome.purgedIds);
+        set({ items: get().items.filter((item) => !gone.has(item.id)) }, false, 'purge');
+      });
+      return outcome;
+    },
+    emptyTrash: async () => {
+      const { activeType, items } = get();
+      let outcome: EmptyTrashOutcome = { scheduled: 0 };
+      await withLoading(
+        items.map((item) => item.id),
+        async () => {
+          const trashService = await getTrashService();
+          outcome = await trashService.emptyTrash(activeType);
+          set({ items: [], nextCursor: null }, false, 'emptyTrash');
+        },
       );
-    });
-    if (outcome.restored.length > 0) void this.revalidateRestoredScopes();
-    return outcome;
+      return outcome;
+    },
+    useFetchTrash: (
+      enabled: boolean,
+      resourceType?: TrashResourceType,
+      scopeId: string | null = null,
+    ): SWRResponse<TrashListResult> => {
+      activeScopeId = scopeId;
+      activeResourceType = resourceType;
+      return useTrashDataSWR<TrashListResult>(
+        enabled ? trashKeys.list(scopeId, resourceType) : null,
+        async () => (await getTrashService()).list({ resourceType }),
+        {
+          onSuccess: (data) => {
+            if (
+              activeScopeId !== scopeId ||
+              activeResourceType !== resourceType ||
+              get().activeType !== resourceType
+            )
+              return;
+            set(
+              {
+                isTrashInit: true,
+                items: data.items,
+                itemsScopeId: scopeId,
+                nextCursor: data.nextCursor,
+              },
+              false,
+              'fetchTrash',
+            );
+          },
+        },
+      );
+    },
+    useFetchTrashCount: (
+      enabled: boolean,
+      scopeId: string | null = null,
+    ): SWRResponse<TrashCountByType> => {
+      activeScopeId = scopeId;
+      return useTrashDataSWR<TrashCountByType>(
+        enabled ? trashKeys.countByType(scopeId) : null,
+        async () => (await getTrashService()).countByType(),
+        {
+          onSuccess: (data) => {
+            if (activeScopeId !== scopeId) return;
+            set({ countByType: data, countScopeId: scopeId }, false, 'fetchTrashCount');
+          },
+        },
+      );
+    },
   };
+};
 
-  purge = async (ids: string[]) => {
-    let outcome: Awaited<ReturnType<typeof trashService.purge>> = {
-      failed: [],
-      purged: 0,
-      purgedIds: [],
-    };
-    await this.#withLoading(ids, async () => {
-      outcome = await trashService.purge(ids);
-      const gone = new Set(outcome.purgedIds);
-      this.#set({ items: this.#get().items.filter((item) => !gone.has(item.id)) }, false, 'purge');
-    });
-    return outcome;
-  };
-
-  emptyTrash = async () => {
-    const { activeType, items } = this.#get();
-    let outcome: Awaited<ReturnType<typeof trashService.emptyTrash>> = { scheduled: 0 };
-    await this.#withLoading(
-      items.map((item) => item.id),
-      async () => {
-        outcome = await trashService.emptyTrash(activeType);
-        this.#set({ items: [], nextCursor: null }, false, 'emptyTrash');
-      },
-    );
-    return outcome;
-  };
-
-  useFetchTrash = (
+export interface TrashAction {
+  emptyTrash: () => Promise<EmptyTrashOutcome>;
+  loadMore: () => Promise<void>;
+  purge: (ids: string[]) => Promise<PurgeOutcome>;
+  refresh: () => Promise<void>;
+  restore: (ids: string[]) => Promise<RestoreOutcome>;
+  revalidateRestoredScopes: () => Promise<void>;
+  setActiveType: (activeType?: TrashResourceType) => void;
+  useFetchTrash: (
     enabled: boolean,
     resourceType?: TrashResourceType,
-    scopeId: string | null = null,
-  ): SWRResponse<TrashListResult> => {
-    this.#activeScopeId = scopeId;
-    this.#activeResourceType = resourceType;
-    return useClientDataSWR<TrashListResult>(
-      enabled ? trashKeys.list(scopeId, resourceType) : null,
-      () => trashService.list({ resourceType }),
-      {
-        onSuccess: (data) => {
-          if (
-            this.#activeScopeId !== scopeId ||
-            this.#activeResourceType !== resourceType ||
-            this.#get().activeType !== resourceType
-          )
-            return;
-          this.#set(
-            {
-              isTrashInit: true,
-              items: data.items,
-              itemsScopeId: scopeId,
-              nextCursor: data.nextCursor,
-            },
-            false,
-            'fetchTrash',
-          );
-        },
-      },
-    );
-  };
-
-  useFetchTrashCount = (
-    enabled: boolean,
-    scopeId: string | null = null,
-  ): SWRResponse<TrashCountByType> => {
-    this.#activeScopeId = scopeId;
-    return useClientDataSWR<TrashCountByType>(
-      enabled ? trashKeys.countByType(scopeId) : null,
-      () => trashService.countByType(),
-      {
-        onSuccess: (data) => {
-          if (this.#activeScopeId !== scopeId) return;
-          this.#set({ countByType: data, countScopeId: scopeId }, false, 'fetchTrashCount');
-        },
-      },
-    );
-  };
+    scopeId?: string | null,
+  ) => SWRResponse<TrashListResult>;
+  useFetchTrashCount: (enabled: boolean, scopeId?: string | null) => SWRResponse<TrashCountByType>;
 }
 
-export type TrashAction = Pick<TrashActionImpl, keyof TrashActionImpl>;
 export type { TrashItem };
