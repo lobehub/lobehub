@@ -38,7 +38,7 @@
 **65+ providers and core modules with 90%+ coverage**, including:
 
 - **100% coverage**: deepseek, nvidia, qiniu, wenxin, giteeai, v0, zeroone, ai360, akashchat, baichuan, bedrock, cohere, mistral, moonshot, ollama, openrouter, search1api, sensenova, spark, zhipu, vercelaigateway, cometapi, cerebras, ollamacloud, internlm, hunyuan, huggingface, groq, modelscope, nebius, stepfun, lmstudio, newapi, fireworksai, jina, tencentcloud, togetherai, ai21, sambanova, upstage, vllm
-- **95-99%**: ModelRuntime, computeChatCost, computeImageCost, openai streams, createImage, github, vertexai, volcengine, siliconcloud, ppio, minimax, cloudflare, fal
+- **95-99%**: ModelRuntime, computeChatCost, computeImageCost, openai streams, createImage, github, vertexai, volcengine, siliconcloud, ppio, minimax, cloudflare, fal, wavespeed
 - **90-94%**: contextBuilders, streams (anthropic, protocol, qwen), openai provider
 
 **Good - Coverage (80-89%)**:

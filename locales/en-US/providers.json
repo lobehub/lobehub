@@ -76,6 +76,7 @@
   "vllm.description": "vLLM is a fast, easy-to-use library for LLM inference and serving.",
   "volcengine.description": "ByteDance’s model service platform offers secure, feature-rich, cost-competitive model access plus end-to-end tooling for data, fine-tuning, inference, and evaluation.",
   "volcenginecodingplan.description": "Volcengine Coding Plan from ByteDance provides access to multiple coding models including Doubao-Seed-Code, GLM-4.7, DeepSeek-V3.2, and Kimi-K2.5 via a fixed-fee subscription.",
+  "wavespeed.description": "WaveSpeed AI is an inference platform for image, video and audio generation, serving flagship open and closed models through one fast, low-latency API.",
   "wenxin.description": "An enterprise all-in-one platform for foundation models and AI-native app development, offering end-to-end tooling for generative AI model and application workflows.",
   "xai.description": "xAI builds AI to accelerate scientific discovery, with a mission to deepen humanity’s understanding of the universe.",
   "xiaomimimo.description": "Xiaomi MiMo provides a conversational model service with an OpenAI-compatible API. The mimo-v2-flash model supports deep reasoning, streaming output, function calling, a 256K context window, and a maximum output of 128K.",

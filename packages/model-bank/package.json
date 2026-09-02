@@ -86,6 +86,7 @@
     "./vllm": "./src/aiModels/vllm.ts",
     "./volcengine": "./src/aiModels/volcengine.ts",
     "./volcengineCodingPlan": "./src/aiModels/volcengineCodingPlan.ts",
+    "./wavespeed": "./src/aiModels/wavespeed.ts",
     "./wenxin": "./src/aiModels/wenxin.ts",
     "./xai": "./src/aiModels/xai.ts",
     "./xiaomimimo": "./src/aiModels/xiaomimimo.ts",

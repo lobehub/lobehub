@@ -764,6 +764,24 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 
 上述示例表示先禁用所有模型，再启用 `flux-pro-1.1` 和 `flux-kontext-pro`（显示名为 `FLUX.1 Kontext [pro]`）。
 
+## WaveSpeed AI
+
+### `WAVESPEED_API_KEY`
+
+- 类型：必选
+- 描述：这是你在 WaveSpeed AI 服务中申请的 API 密钥
+- 默认值：-
+- 示例：`1234567890abcdef1234567890abcdef`
+
+### `WAVESPEED_MODEL_LIST`
+
+- 类型：可选
+- 描述：用来控制 WaveSpeed AI 模型列表，使用 `+` 增加一个模型，使用 `-` 来隐藏一个模型，使用 `模型名=展示名` 来自定义模型的展示名，用英文逗号隔开。模型定义语法规则与其他 provider 保持一致。
+- 默认值：`-`
+- 示例：`-all,+bytedance/seedream-v5.0-pro,+google/nano-banana-2/text-to-image=Nano Banana 2`
+
+上述示例表示先禁用所有模型，再启用 `bytedance/seedream-v5.0-pro` 和 `google/nano-banana-2/text-to-image`（显示名为 `Nano Banana 2`）。
+
 ## NewAPI
 
 ### `NEWAPI_API_KEY`

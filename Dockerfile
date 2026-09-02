@@ -352,6 +352,8 @@ ENV \
     ENABLED_FAL="" FAL_API_KEY="" FAL_MODEL_LIST="" \
     # BFL
     BFL_API_KEY="" BFL_MODEL_LIST="" \
+    # WaveSpeed AI
+    WAVESPEED_API_KEY="" WAVESPEED_MODEL_LIST="" \
     # Vercel AI Gateway
     VERCELAIGATEWAY_API_KEY="" VERCELAIGATEWAY_MODEL_LIST="" \
     # Cerebras
