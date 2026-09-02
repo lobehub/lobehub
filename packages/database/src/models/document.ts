@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, inArray, isNull, ne, notInArray, or, sum } from 'drizzle-orm';
 
-import type { DocumentItem, NewDocument } from '../schemas';
+import type { DocumentItem, NewDocument, TrashDetachedEdge } from '../schemas';
 import {
   DOCUMENT_FOLDER_TYPE,
   documentCommentMentions,
@@ -17,6 +17,8 @@ import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export interface QueryDocumentParams {
   current?: number;
+  /** Server-derived document ids hidden by a trashed restricted knowledge base. */
+  excludeDocumentIds?: string[];
   /**
    * Knowledge-base ids whose documents must be dropped from the listing —
    * restricted (member No-access) libraries. Applied inside the query so
@@ -134,6 +136,7 @@ export class DocumentModel {
   query = async ({
     current = 0,
     pageSize = 9999,
+    excludeDocumentIds,
     excludeKnowledgeBaseIds,
     fileTypes,
     sourceTypes,
@@ -143,6 +146,10 @@ export class DocumentModel {
   }> => {
     const offset = current * pageSize;
     const conditions = [this.ownership()];
+
+    if (excludeDocumentIds?.length) {
+      conditions.push(notInArray(documents.id, excludeDocumentIds));
+    }
 
     if (fileTypes?.length) {
       conditions.push(inArray(documents.fileType, fileTypes));
@@ -304,22 +311,23 @@ export class DocumentModel {
   softDeleteSubtree = async (
     rootId: string,
     options: SoftDeleteOptions,
-  ): Promise<DocumentItem[]> => {
+  ): Promise<{ detachedEdges: TrashDetachedEdge[]; documents: DocumentItem[] }> => {
     const subtree = await this.collectSubtree(rootId);
-    if (subtree.length === 0) return [];
+    if (subtree.length === 0) return { detachedEdges: [], documents: [] };
     const ids = subtree
       .filter((document) => !options.restrictToCreator || document.userId === this.userId)
       .map((document) => document.id);
-    if (ids.length === 0) return [];
+    if (ids.length === 0) return { detachedEdges: [], documents: [] };
 
+    let detachedEdges: TrashDetachedEdge[] = [];
     if (this.workspaceId) {
       // A public folder may contain another member's private subtree. Keep
       // retained boundary nodes reachable without reading or exposing them to
-      // the actor: move only their roots to the workspace top level and leave
-      // the private subtree below each boundary intact.
-      await this.db
-        .update(documents)
-        .set({ parentId: null })
+      // the actor: move only their roots to the workspace top level, remember
+      // the original edges for restore, and leave each private subtree intact.
+      const boundaryDocuments = await this.db
+        .select({ originalParentId: documents.parentId, resourceId: documents.id })
+        .from(documents)
         .where(
           and(
             buildWorkspaceWhere(
@@ -333,14 +341,67 @@ export class DocumentModel {
             inArray(documents.parentId, ids),
             notInArray(documents.id, ids),
           ),
-        );
+        )
+        .for('update');
+
+      detachedEdges = boundaryDocuments
+        .filter((edge): edge is { originalParentId: string; resourceId: string } =>
+          Boolean(edge.originalParentId),
+        )
+        .map((edge) => ({ ...edge, resourceType: 'document' }));
+
+      if (detachedEdges.length > 0) {
+        await this.db
+          .update(documents)
+          .set({ parentId: null })
+          .where(
+            inArray(
+              documents.id,
+              detachedEdges.map((edge) => edge.resourceId),
+            ),
+          );
+      }
     }
 
-    return this.db
+    const trashedDocuments = await this.db
       .update(documents)
       .set(trashStamp(options.deletedAt))
       .where(and(this.ownership(), inArray(documents.id, ids)))
       .returning();
+
+    return { detachedEdges, documents: trashedDocuments };
+  };
+
+  restoreDetachedParents = async (edges: TrashDetachedEdge[]): Promise<void> => {
+    if (!this.workspaceId || edges.length === 0) return;
+
+    const byParent = new Map<string, string[]>();
+    for (const edge of edges) {
+      if (edge.resourceType !== 'document') continue;
+      const ids = byParent.get(edge.originalParentId) ?? [];
+      ids.push(edge.resourceId);
+      byParent.set(edge.originalParentId, ids);
+    }
+
+    for (const [parentId, ids] of byParent) {
+      await this.db
+        .update(documents)
+        .set({ parentId })
+        .where(
+          and(
+            buildWorkspaceWhere(
+              { userId: this.userId, workspaceId: this.workspaceId },
+              {
+                isDeleted: documents.isDeleted,
+                userId: documents.userId,
+                workspaceId: documents.workspaceId,
+              },
+            ),
+            inArray(documents.id, ids),
+            isNull(documents.parentId),
+          ),
+        );
+    }
   };
 
   restore = async (ids: string[]): Promise<DocumentItem[]> => {

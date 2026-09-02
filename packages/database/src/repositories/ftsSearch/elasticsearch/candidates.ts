@@ -279,6 +279,9 @@ export const searchElasticsearchCandidates = async (
   const { entity } = target;
   const { filter, mustNot } = buildScopeClauses(entity, request.scope);
   mustNot.push({ term: { fts_search_sync_deleted: true } });
+  if (request.filters.excludeIds?.length) {
+    mustNot.push({ terms: { id: request.filters.excludeIds } });
+  }
   if (request.filters.agentId && (entity === 'topics' || entity === 'messages')) {
     filter.push({ term: { agent_id: request.filters.agentId } });
   }

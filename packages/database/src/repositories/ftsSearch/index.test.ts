@@ -43,6 +43,30 @@ beforeEach(async () => {
 });
 
 describe('FtsSearchRepo candidate search', () => {
+  it('forwards caller-relative exact exclusions to each resource search', async () => {
+    const backendFtsSearch = vi.fn().mockResolvedValue({ candidates: [], items: [] });
+    const repo = new FtsSearchRepo(serverDB, userId, undefined, undefined, {
+      backend: { key: 'policy', search: backendFtsSearch },
+    });
+
+    await repo.search({
+      excludeFileIds: ['file-trashed-exclusive'],
+      excludeKnowledgeBaseIds: ['kb-live-restricted'],
+      query: 'secret',
+      type: 'file',
+    });
+
+    expect(backendFtsSearch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entity: 'files',
+        filters: {
+          excludeIds: ['file-trashed-exclusive'],
+          excludeKnowledgeBaseIds: ['kb-live-restricted'],
+        },
+      }),
+    );
+  });
+
   it('forwards candidate-only requests through the selected backend without product hydration', async () => {
     const backendFtsSearch = vi.fn().mockResolvedValue({
       candidates: [{ id: 'memory-context-1', score: 8 }],

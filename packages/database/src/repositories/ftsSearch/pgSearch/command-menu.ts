@@ -322,6 +322,7 @@ export async function searchFiles(
   query: string,
   limit: number,
   excludeKbIds?: string[],
+  excludeIds?: string[],
 ): Promise<FtsSearchBackendResponse<FtsSearchFileResult>> {
   const bm25Query = sanitizeBm25Query(query);
   const { db } = context;
@@ -373,6 +374,7 @@ export async function searchFiles(
       and(
         context.liftedScopeWhere(hits.workspaceId),
         context.liftedTrashWhere(hits.isDeleted),
+        excludeIds?.length ? notInArray(hits.id, excludeIds) : undefined,
         // A file linked to any restricted KB is fully hidden. The subquery
         // avoids leaking it through a different joined membership row.
         excludeKbIds && excludeKbIds.length > 0

@@ -65,7 +65,12 @@ vi.mock('@/server/services/trash', () => ({
 }));
 vi.mock('@/server/routers/lambda/_helpers/knowledgeBaseAccess', () => ({
   assertContentsNotInRestrictedKnowledgeBase: mocks.assertContentsNotInRestrictedKnowledgeBase,
-  getRestrictedKnowledgeBaseIds: vi.fn().mockResolvedValue([]),
+  getRestrictedKnowledgeBasePolicy: vi.fn().mockResolvedValue({
+    allRestrictedKnowledgeBaseIds: [],
+    liveRestrictedKnowledgeBaseIds: [],
+    trashedExclusiveDocumentIds: [],
+    trashedExclusiveFileIds: [],
+  }),
 }));
 vi.mock('@/server/services/workspacePermission', () => ({
   hasWorkspaceScopedPermission: vi.fn(),

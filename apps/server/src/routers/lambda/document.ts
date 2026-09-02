@@ -27,7 +27,7 @@ import { TransferErrorCode } from '@/types/transferError';
 import { isWorkspaceNonOwner } from './_helpers/assertWorkspaceRowManageable';
 import {
   assertContentsNotInRestrictedKnowledgeBase,
-  getRestrictedKnowledgeBaseIds,
+  getRestrictedKnowledgeBasePolicy,
 } from './_helpers/knowledgeBaseAccess';
 import {
   compareDocumentHistoryItemsInputSchema,
@@ -369,10 +369,14 @@ export const documentRouter = router({
       // KB pages are ordinary workspace-public documents, so listings must
       // drop rows from restricted (member No-access) libraries. The exclusion
       // runs inside the query so pagination and totals stay correct.
-      const excludeKnowledgeBaseIds = ctx.workspaceId
-        ? await getRestrictedKnowledgeBaseIds(ctx)
-        : [];
-      return ctx.documentService.queryDocuments({ ...input, excludeKnowledgeBaseIds });
+      const restrictedPolicy = ctx.workspaceId
+        ? await getRestrictedKnowledgeBasePolicy(ctx)
+        : undefined;
+      return ctx.documentService.queryDocuments({
+        ...input,
+        excludeDocumentIds: restrictedPolicy?.trashedExclusiveDocumentIds,
+        excludeKnowledgeBaseIds: restrictedPolicy?.liveRestrictedKnowledgeBaseIds,
+      });
     }),
 
   acquireDocumentLock: documentProcedure

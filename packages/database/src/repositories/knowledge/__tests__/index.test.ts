@@ -227,6 +227,19 @@ describe('KnowledgeRepo', () => {
       expect(result.every((item) => item.id !== 'other-doc')).toBe(true);
     });
 
+    it('should exclude exact files and documents selected by the server access policy', async () => {
+      const visible = await knowledgeRepo.query({ showFilesInKnowledgeBase: true });
+      expect(visible.map((item) => item.id)).toEqual(expect.arrayContaining(['doc-1', 'file-1']));
+
+      const filtered = await knowledgeRepo.query({
+        excludeDocumentIds: ['doc-1'],
+        excludeFileIds: ['file-1'],
+        showFilesInKnowledgeBase: true,
+      });
+      expect(filtered.map((item) => item.id)).not.toContain('doc-1');
+      expect(filtered.map((item) => item.id)).not.toContain('file-1');
+    });
+
     it('should omit document bodies from summary queries', async () => {
       const content = `Preview body ${'x'.repeat(RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH)}`;
       await serverDB.insert(documents).values({

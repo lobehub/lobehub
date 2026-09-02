@@ -6,7 +6,15 @@ import { createdAt, timestamptz } from './_helpers';
 import { users } from './user';
 import { workspaces } from './workspace';
 
+export interface TrashDetachedEdge {
+  originalParentId: string;
+  resourceId: string;
+  resourceType: 'document' | 'file';
+}
+
 export interface TrashItemRowMeta extends TrashItemMeta {
+  /** Internal hierarchy snapshot; never expose through the public Trash DTO. */
+  detachedEdges?: TrashDetachedEdge[];
   /** Internal retry hand-off; never expose through the public Trash DTO. */
   storageCleanup?: {
     files: { fileHash: string; url: string }[];

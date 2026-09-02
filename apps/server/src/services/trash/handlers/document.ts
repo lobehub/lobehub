@@ -22,12 +22,14 @@ export const softDeleteDocuments = async (
   const cascades: TrashCascade[] = [];
 
   for (const id of new Set(ids)) {
-    const trashedDocuments = await documentModel.softDeleteSubtree(id, options);
+    const { detachedEdges: detachedDocumentEdges, documents: trashedDocuments } =
+      await documentModel.softDeleteSubtree(id, options);
     const root = trashedDocuments.find((document) => document.id === id);
     if (!root) continue;
 
     const documentIds = trashedDocuments.map((document) => document.id);
     const anchoredFiles = await fileModel.findByParentIds(documentIds);
+    const detachedFileEdges = await fileModel.detachPrivateChildren(documentIds);
     const associatedFileIds = trashedDocuments
       .map((document) => document.fileId)
       .filter((fileId): fileId is string => Boolean(fileId));
@@ -36,6 +38,7 @@ export const softDeleteDocuments = async (
       options,
     );
 
+    const rootEntry = documentEntry(root);
     cascades.push({
       children: [
         ...trashedDocuments
@@ -43,7 +46,13 @@ export const softDeleteDocuments = async (
           .map((document) => documentEntry(document)),
         ...files.map((file) => fileEntry(file)),
       ],
-      root: documentEntry(root),
+      root: {
+        ...rootEntry,
+        meta: {
+          ...rootEntry.meta,
+          detachedEdges: [...detachedDocumentEdges, ...detachedFileEdges],
+        },
+      },
     });
   }
 
@@ -90,7 +99,11 @@ export const documentHandler: TrashHandler = {
       .filter((child) => child.resourceType === 'file')
       .map((child) => child.resourceId);
     await documentModel.restore(documentIds);
-    await new FileModel(ctx.db, ctx.userId, ctx.workspaceId).restore(fileIds);
+    const fileModel = new FileModel(ctx.db, ctx.userId, ctx.workspaceId);
+    await fileModel.restore(fileIds);
+    const detachedEdges = root.meta?.detachedEdges ?? [];
+    await documentModel.restoreDetachedParents(detachedEdges);
+    await fileModel.restoreDetachedParents(detachedEdges);
   },
   type: 'document',
 };

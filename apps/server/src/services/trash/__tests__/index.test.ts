@@ -29,7 +29,12 @@ const notificationMocks = vi.hoisted(() => ({ notifyResourceTrashMutation: vi.fn
 const workflowMocks = vi.hoisted(() => ({ triggerTrashPurge: vi.fn() }));
 
 vi.mock('@/server/services/knowledgeBaseAccess', () => ({
-  getRestrictedKnowledgeBaseIds: vi.fn(async () => accessMocks.restrictedKnowledgeBaseIds),
+  getRestrictedKnowledgeBasePolicy: vi.fn(async () => ({
+    allRestrictedKnowledgeBaseIds: accessMocks.restrictedKnowledgeBaseIds,
+    liveRestrictedKnowledgeBaseIds: accessMocks.restrictedKnowledgeBaseIds,
+    trashedExclusiveDocumentIds: [],
+    trashedExclusiveFileIds: [],
+  })),
 }));
 
 vi.mock('@/business/server/resource/notifyTrashMutation', () => notificationMocks);
@@ -245,6 +250,46 @@ describe('TrashService', () => {
       ).toEqual(['docs_restricted', 'file_restricted', 'kb_restricted']);
     });
 
+    it('rejects direct restore and purge of a restricted trashed knowledge base', async () => {
+      const workspaceId = 'trash-restricted-mutation-workspace';
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Restricted mutation',
+        primaryOwnerId: otherUserId,
+        slug: workspaceId,
+      });
+      const creatorModel = new KnowledgeBaseModel(serverDB, userId, workspaceId);
+      const restricted = await creatorModel.create({
+        name: 'Restricted library',
+        visibility: 'public',
+      });
+      const creatorService = new TrashService(serverDB, userId, workspaceId);
+      const [root] = await creatorService.trashKnowledgeBases([restricted.id]);
+      accessMocks.restrictedKnowledgeBaseIds = [restricted.id];
+
+      const actorService = new TrashService(serverDB, otherUserId, workspaceId);
+      await expect(actorService.restore([root.id])).resolves.toEqual({
+        failed: [{ code: 'notFound', id: root.id }],
+        restored: [],
+      });
+      await expect(actorService.purge([root.id])).resolves.toEqual({
+        failed: [{ code: 'notFound', id: root.id }],
+        purged: 0,
+        purgedIds: [],
+      });
+
+      expect(
+        await serverDB
+          .select({ isDeleted: knowledgeBases.isDeleted })
+          .from(knowledgeBases)
+          .where(eq(knowledgeBases.id, restricted.id)),
+      ).toEqual([{ isDeleted: true }]);
+      expect(await actorService.findByIds([root.id])).toHaveLength(0);
+      expect(await new TrashModel(serverDB, userId, workspaceId).findByIds([root.id])).toHaveLength(
+        1,
+      );
+    });
+
     it('restores a file with its mirror document and knowledge-base association intact', async () => {
       const knowledgeBase = await knowledgeBaseModel.create({ name: 'Research' });
       const { id: fileId } = await fileModel.create({
@@ -331,7 +376,7 @@ describe('TrashService', () => {
       expect(await fileModel.findById(fileId)).toMatchObject({ parentId: folder.id });
     });
 
-    it("keeps another member's private subtree reachable when trashing its public parent", async () => {
+    it("restores another member's detached private documents and files without overwriting moves", async () => {
       const workspaceId = 'trash-private-descendant-workspace';
       await serverDB.insert(workspaces).values({
         id: workspaceId,
@@ -341,6 +386,7 @@ describe('TrashService', () => {
       });
       const ownerModel = new DocumentModel(serverDB, userId, workspaceId);
       const memberModel = new DocumentModel(serverDB, otherUserId, workspaceId);
+      const memberFileModel = new FileModel(serverDB, otherUserId, workspaceId);
       const publicFolder = await ownerModel.create({
         fileType: 'custom/folder',
         source: '',
@@ -359,14 +405,126 @@ describe('TrashService', () => {
         totalCharCount: 0,
         totalLineCount: 0,
       });
+      const movedPrivateFolder = await memberModel.create({
+        fileType: 'custom/folder',
+        parentId: publicFolder.id,
+        source: '',
+        sourceType: 'api',
+        title: 'Private folder moved later',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+      const privateDestination = await memberModel.create({
+        fileType: 'custom/folder',
+        source: '',
+        sourceType: 'api',
+        title: 'Private destination',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+      const privateFile = await memberFileModel.create({
+        fileType: 'text/plain',
+        name: 'private child.txt',
+        parentId: publicFolder.id,
+        size: 1,
+        url: 'files/private-child.txt',
+        visibility: 'private',
+      });
 
-      const [root] = await new TrashService(serverDB, userId, workspaceId).trashDocuments([
-        publicFolder.id,
-      ]);
+      const actorService = new TrashService(serverDB, userId, workspaceId);
+      const [root] = await actorService.trashDocuments([publicFolder.id]);
 
       expect(await ownerModel.findById(publicFolder.id)).toBeUndefined();
       expect(await memberModel.findById(privateFolder.id)).toMatchObject({ parentId: null });
+      expect(await memberModel.findById(movedPrivateFolder.id)).toMatchObject({ parentId: null });
+      expect(await memberFileModel.findById(privateFile.id)).toMatchObject({ parentId: null });
       expect(await new TrashModel(serverDB, userId, workspaceId).findChildren(root.id)).toEqual([]);
+
+      const [internalRoot] = await serverDB
+        .select()
+        .from(trashItems)
+        .where(eq(trashItems.id, root.id));
+      expect(internalRoot.meta?.detachedEdges).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ resourceId: privateFolder.id, resourceType: 'document' }),
+          expect.objectContaining({ resourceId: movedPrivateFolder.id, resourceType: 'document' }),
+          expect.objectContaining({ resourceId: privateFile.id, resourceType: 'file' }),
+        ]),
+      );
+      expect(JSON.stringify((await actorService.list()).items)).not.toContain(privateFolder.id);
+      expect(JSON.stringify((await actorService.list()).items)).not.toContain(privateFile.id);
+
+      await memberModel.update(movedPrivateFolder.id, { parentId: privateDestination.id });
+      await actorService.restore([root.id]);
+
+      expect(await memberModel.findById(privateFolder.id)).toMatchObject({
+        parentId: publicFolder.id,
+      });
+      expect(await memberModel.findById(movedPrivateFolder.id)).toMatchObject({
+        parentId: privateDestination.id,
+      });
+      expect(await memberFileModel.findById(privateFile.id)).toMatchObject({
+        parentId: publicFolder.id,
+      });
+
+      const [purgeRoot] = await actorService.trashDocuments([publicFolder.id]);
+      await actorService.purge([purgeRoot.id]);
+      expect(await memberModel.findById(privateFolder.id)).toMatchObject({ parentId: null });
+      expect(await memberFileModel.findById(privateFile.id)).toMatchObject({ parentId: null });
+    });
+
+    it('rolls back detached private edges when the trash transaction fails', async () => {
+      const workspaceId = 'trash-private-edge-rollback-workspace';
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Private edge rollback',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      const actorModel = new DocumentModel(serverDB, userId, workspaceId);
+      const memberModel = new DocumentModel(serverDB, otherUserId, workspaceId);
+      const publicFolder = await actorModel.create({
+        fileType: 'custom/folder',
+        source: '',
+        sourceType: 'api',
+        title: 'Shared folder',
+        totalCharCount: 0,
+        totalLineCount: 0,
+        visibility: 'public',
+      });
+      const privateChild = await memberModel.create({
+        fileType: 'custom/page',
+        parentId: publicFolder.id,
+        source: '',
+        sourceType: 'api',
+        title: 'Private child',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+
+      await serverDB.execute(
+        sql`ALTER TABLE workspace_audit_logs RENAME TO workspace_audit_logs_unavailable`,
+      );
+      try {
+        await expect(
+          new TrashService(serverDB, userId, workspaceId).trashDocuments([publicFolder.id]),
+        ).rejects.toThrow();
+      } finally {
+        await serverDB.execute(
+          sql`ALTER TABLE workspace_audit_logs_unavailable RENAME TO workspace_audit_logs`,
+        );
+      }
+
+      expect(await actorModel.findById(publicFolder.id)).toMatchObject({ id: publicFolder.id });
+      expect(await memberModel.findById(privateChild.id)).toMatchObject({
+        parentId: publicFolder.id,
+      });
+      expect(
+        await new TrashModel(serverDB, userId, workspaceId).findByResource(
+          'document',
+          publicFolder.id,
+        ),
+      ).toBeUndefined();
     });
 
     it('keeps knowledge-base membership and content live until purge, then removes exclusive files', async () => {
@@ -688,6 +846,13 @@ describe('TrashService', () => {
         .update(trashItems)
         .set({
           meta: {
+            detachedEdges: [
+              {
+                originalParentId: 'private-parent-id',
+                resourceId: 'private-resource-id',
+                resourceType: 'document',
+              },
+            ],
             storageCleanup: {
               files: [{ fileHash: 'private-hash', url: 'files/private-storage-key.txt' }],
               pending: true,
@@ -703,6 +868,8 @@ describe('TrashService', () => {
       expect(outcome.restored[0].meta).toBeNull();
       expect(JSON.stringify({ found, outcome })).not.toContain('private-hash');
       expect(JSON.stringify({ found, outcome })).not.toContain('private-storage-key');
+      expect(JSON.stringify({ found, outcome })).not.toContain('private-parent-id');
+      expect(JSON.stringify({ found, outcome })).not.toContain('private-resource-id');
     });
 
     it('does not start storage cleanup when the database purge rejects', async () => {

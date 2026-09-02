@@ -2,7 +2,6 @@ import { TRASH_LIST_PAGE_SIZE, TRASH_RETENTION_MS } from '@lobechat/const';
 import type {
   TrashCountByType,
   TrashItem,
-  TrashItemMeta,
   TrashListParams,
   TrashListResult,
   TrashResourceType,
@@ -31,7 +30,7 @@ import type { LobeChatDatabase, Transaction } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
 export interface TrashRegisterEntry {
-  meta?: TrashItemMeta | null;
+  meta?: TrashItemRowMeta | null;
   resourceId: string;
   resourceType: TrashResourceType;
   title?: string | null;
@@ -68,7 +67,11 @@ const ROOT_TABLES: Record<TrashResourceType, { id: any; isDeleted: any; table: a
 };
 
 export const toPublicTrashItem = (row: TrashItemRow): TrashItem => {
-  const { storageCleanup: _storageCleanup, ...publicMeta } = row.meta ?? {};
+  const {
+    detachedEdges: _detachedEdges,
+    storageCleanup: _storageCleanup,
+    ...publicMeta
+  } = row.meta ?? {};
   return {
     deletedAt: row.deletedAt,
     deletedByUserId: row.deletedByUserId,

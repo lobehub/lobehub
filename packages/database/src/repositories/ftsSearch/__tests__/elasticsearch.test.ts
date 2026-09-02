@@ -267,6 +267,27 @@ describe('ElasticsearchFtsSearchBackend', () => {
         pagination: 'bounded',
       }),
     );
+
+    const exactFiltered = await backend.search(
+      request('files', {
+        filters: {
+          excludeIds: ['file-open'],
+          excludeKnowledgeBaseIds: ['file-kb-restricted'],
+        },
+      }),
+    );
+    expect(exactFiltered.items).toEqual([]);
+    expect(client.search).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          query: {
+            bool: expect.objectContaining({
+              must_not: expect.arrayContaining([{ terms: { id: ['file-open'] } }]),
+            }),
+          },
+        }),
+      }),
+    );
   });
 
   it('builds exact memory-layer candidate filters without hydrating index documents', async () => {

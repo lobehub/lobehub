@@ -42,7 +42,7 @@ import {
 import {
   assertFileNotInRestrictedKnowledgeBase,
   assertKnowledgeBaseBrowsable,
-  getRestrictedKnowledgeBaseIds,
+  getRestrictedKnowledgeBasePolicy,
 } from './_helpers/knowledgeBaseAccess';
 
 const fileTransferEntityTypeSchema = z.enum(['document', 'file', 'folder']);
@@ -53,6 +53,21 @@ const markdownPreviewTypes = new Set<string>(MARKDOWN_MIME_TYPES);
 
 const isMarkdownFile = (item: { fileType: string; name: string }) =>
   markdownPreviewTypes.has(item.fileType) || /\.md(?:arkdown)?$/i.test(item.name);
+
+const getRestrictedResourceFilters = async (
+  ctx: Parameters<typeof getRestrictedKnowledgeBasePolicy>[0],
+) => {
+  const policy = await getRestrictedKnowledgeBasePolicy(ctx);
+  return {
+    ...(policy.trashedExclusiveDocumentIds.length > 0
+      ? { excludeDocumentIds: policy.trashedExclusiveDocumentIds }
+      : {}),
+    ...(policy.trashedExclusiveFileIds.length > 0
+      ? { excludeFileIds: policy.trashedExclusiveFileIds }
+      : {}),
+    excludeKnowledgeBaseIds: policy.liveRestrictedKnowledgeBaseIds,
+  };
+};
 
 const assertAllFilesAccessible = (requestedIds: string[], files: Array<{ id: string }>): void => {
   const accessibleIds = new Set(files.map((file) => file.id));
@@ -400,12 +415,12 @@ export const fileRouter = router({
 
   getFiles: fileProcedure.input(QueryFileListSchema).query(async ({ ctx, input }) => {
     if (input.knowledgeBaseId) await assertKnowledgeBaseBrowsable(ctx, input.knowledgeBaseId);
-    const excludeKnowledgeBaseIds =
+    const restrictedFilters =
       !input.knowledgeBaseId && input.showFilesInKnowledgeBase
-        ? await getRestrictedKnowledgeBaseIds(ctx)
-        : undefined;
+        ? await getRestrictedResourceFilters(ctx)
+        : {};
 
-    const fileList = await ctx.fileModel.query({ ...input, excludeKnowledgeBaseIds });
+    const fileList = await ctx.fileModel.query({ ...input, ...restrictedFilters });
     const statusMap = await getKnowledgeItemStatusMap(ctx, fileList);
 
     const resultFiles = [] as any[];
@@ -444,9 +459,7 @@ export const fileRouter = router({
 
   getKnowledgeItems: fileProcedure.input(QueryFileListSchema).query(async ({ ctx, input }) => {
     if (input.knowledgeBaseId) await assertKnowledgeBaseBrowsable(ctx, input.knowledgeBaseId);
-    const excludeKnowledgeBaseIds = input.knowledgeBaseId
-      ? undefined
-      : await getRestrictedKnowledgeBaseIds(ctx);
+    const restrictedFilters = input.knowledgeBaseId ? {} : await getRestrictedResourceFilters(ctx);
 
     // Request one more item than limit to check if there are more items
     const limit = input.limit ?? 50;
@@ -456,7 +469,7 @@ export const fileRouter = router({
     const includeContentPreview = input.includeContentPreview === true;
     const knowledgeItems = await ctx.knowledgeRepo.query({
       ...input,
-      excludeKnowledgeBaseIds,
+      ...restrictedFilters,
       includeContent,
       includeContentPreview,
       limit: limit + 1,
@@ -571,9 +584,9 @@ export const fileRouter = router({
     .input(QueryFileListSchema)
     .query(async ({ ctx, input }): Promise<{ ids: string[]; total: number }> => {
       if (input.knowledgeBaseId) await assertKnowledgeBaseBrowsable(ctx, input.knowledgeBaseId);
-      const excludeKnowledgeBaseIds = input.knowledgeBaseId
-        ? undefined
-        : await getRestrictedKnowledgeBaseIds(ctx);
+      const restrictedFilters = input.knowledgeBaseId
+        ? {}
+        : await getRestrictedResourceFilters(ctx);
 
       const ids: string[] = [];
       const batchSize = 500;
@@ -583,7 +596,7 @@ export const fileRouter = router({
       while (hasMore) {
         const knowledgeItems = await ctx.knowledgeRepo.query({
           ...input,
-          excludeKnowledgeBaseIds,
+          ...restrictedFilters,
           includeContent: false,
           includeContentPreview: false,
           limit: batchSize + 1,
@@ -613,9 +626,9 @@ export const fileRouter = router({
       if (query.knowledgeBaseId) {
         await assertKnowledgeBaseBrowsable(ctx, query.knowledgeBaseId);
       }
-      const excludeKnowledgeBaseIds = query.knowledgeBaseId
-        ? undefined
-        : await getRestrictedKnowledgeBaseIds(ctx);
+      const restrictedFilters = query.knowledgeBaseId
+        ? {}
+        : await getRestrictedResourceFilters(ctx);
 
       const fileIds: string[] = [];
       const documentIds: string[] = [];
@@ -626,7 +639,7 @@ export const fileRouter = router({
       while (hasMore) {
         const knowledgeItems = await ctx.knowledgeRepo.query({
           ...query,
-          excludeKnowledgeBaseIds,
+          ...restrictedFilters,
           includeContent: false,
           includeContentPreview: false,
           limit: batchSize + 1,

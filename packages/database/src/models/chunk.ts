@@ -109,7 +109,15 @@ export class ChunkModel {
       })
       .from(chunks)
       .innerJoin(fileChunks, eq(chunks.id, fileChunks.chunkId))
-      .where(and(eq(fileChunks.fileId, id), this.ownership(), this.fileChunksOwnership()))
+      .innerJoin(files, eq(fileChunks.fileId, files.id))
+      .where(
+        and(
+          eq(fileChunks.fileId, id),
+          this.ownership(),
+          this.fileChunksOwnership(),
+          this.filesOwnership(),
+        ),
+      )
       .limit(20)
       .offset(page * 20)
       .orderBy(asc(chunks.index));
@@ -126,7 +134,15 @@ export class ChunkModel {
       .select()
       .from(chunks)
       .innerJoin(fileChunks, eq(chunks.id, fileChunks.chunkId))
-      .where(and(eq(fileChunks.fileId, id), this.ownership(), this.fileChunksOwnership()));
+      .innerJoin(files, eq(fileChunks.fileId, files.id))
+      .where(
+        and(
+          eq(fileChunks.fileId, id),
+          this.ownership(),
+          this.fileChunksOwnership(),
+          this.filesOwnership(),
+        ),
+      );
 
     return data
       .map((item) => item.chunks)

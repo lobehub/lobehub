@@ -41,19 +41,40 @@ export class PgSearchFtsSearchBackend implements FtsSearchBackend {
     if (entity === 'topics') return searchTopics(this.context, query, limit, filters.agentId);
     if (entity === 'messages') return searchMessages(this.context, query, limit, filters.agentId);
     if (entity === 'files') {
-      return searchFiles(this.context, query, limit, filters.excludeKnowledgeBaseIds);
+      return searchFiles(
+        this.context,
+        query,
+        limit,
+        filters.excludeKnowledgeBaseIds,
+        filters.excludeIds,
+      );
     }
     if (entity === 'knowledgeBases') {
-      return searchKnowledgeBases(this.context, query, limit, filters.excludeKnowledgeBaseIds);
+      return searchKnowledgeBases(this.context, query, limit, [
+        ...(filters.excludeKnowledgeBaseIds ?? []),
+        ...(filters.excludeIds ?? []),
+      ]);
     }
     if (entity === 'userMemories') return searchMemories(this.context, query, limit);
 
     if (entity === 'documents') {
       if (filters.documentKind === 'folder') {
-        return searchFolders(this.context, query, limit, filters.excludeKnowledgeBaseIds);
+        return searchFolders(
+          this.context,
+          query,
+          limit,
+          filters.excludeKnowledgeBaseIds,
+          filters.excludeIds,
+        );
       }
       if (filters.documentKind === 'page') {
-        return searchPages(this.context, query, limit, filters.excludeKnowledgeBaseIds);
+        return searchPages(
+          this.context,
+          query,
+          limit,
+          filters.excludeKnowledgeBaseIds,
+          filters.excludeIds,
+        );
       }
       if (filters.documentKind === 'knowledgeBaseDocument') {
         return searchKnowledgeBaseDocuments(

@@ -19,7 +19,7 @@ import {
 } from 'drizzle-orm';
 import type { PgTransaction } from 'drizzle-orm/pg-core';
 
-import type { FileItem, NewFile, NewGlobalFile } from '../schemas';
+import type { FileItem, NewFile, NewGlobalFile, TrashDetachedEdge } from '../schemas';
 import {
   asyncTasks,
   chunks,
@@ -162,6 +162,74 @@ export class FileModel {
       .select()
       .from(files)
       .where(and(this.ownership(), inArray(files.parentId, parentIds)));
+  };
+
+  detachPrivateChildren = async (parentIds: string[]): Promise<TrashDetachedEdge[]> => {
+    if (!this.workspaceId || parentIds.length === 0) return [];
+
+    const boundaryFiles = await this.db
+      .select({ originalParentId: files.parentId, resourceId: files.id })
+      .from(files)
+      .where(
+        and(
+          buildWorkspaceWhere(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            { isDeleted: files.isDeleted, userId: files.userId, workspaceId: files.workspaceId },
+          ),
+          inArray(files.parentId, parentIds),
+          eq(files.visibility, 'private'),
+          ne(files.userId, this.userId),
+        ),
+      )
+      .for('update');
+
+    const detachedEdges = boundaryFiles
+      .filter((edge): edge is { originalParentId: string; resourceId: string } =>
+        Boolean(edge.originalParentId),
+      )
+      .map((edge) => ({ ...edge, resourceType: 'file' as const }));
+
+    if (detachedEdges.length > 0) {
+      await this.db
+        .update(files)
+        .set({ parentId: null })
+        .where(
+          inArray(
+            files.id,
+            detachedEdges.map((edge) => edge.resourceId),
+          ),
+        );
+    }
+
+    return detachedEdges;
+  };
+
+  restoreDetachedParents = async (edges: TrashDetachedEdge[]): Promise<void> => {
+    if (!this.workspaceId || edges.length === 0) return;
+
+    const byParent = new Map<string, string[]>();
+    for (const edge of edges) {
+      if (edge.resourceType !== 'file') continue;
+      const ids = byParent.get(edge.originalParentId) ?? [];
+      ids.push(edge.resourceId);
+      byParent.set(edge.originalParentId, ids);
+    }
+
+    for (const [parentId, ids] of byParent) {
+      await this.db
+        .update(files)
+        .set({ parentId })
+        .where(
+          and(
+            buildWorkspaceWhere(
+              { userId: this.userId, workspaceId: this.workspaceId },
+              { isDeleted: files.isDeleted, userId: files.userId, workspaceId: files.workspaceId },
+            ),
+            inArray(files.id, ids),
+            isNull(files.parentId),
+          ),
+        );
+    }
   };
 
   /**
@@ -483,10 +551,13 @@ export class FileModel {
     knowledgeBaseId,
     showFilesInKnowledgeBase,
     callerAgentVisibility,
+    excludeFileIds,
     excludeKnowledgeBaseIds,
     visibility,
   }: QueryFileListParams & {
     callerAgentVisibility?: 'private' | 'public' | null;
+    /** Server-derived resource ids hidden by a trashed restricted knowledge base. */
+    excludeFileIds?: string[];
     /**
      * Server-derived list of restricted knowledge bases the caller may not
      * browse. Files linked to these KBs are dropped from cross-KB listings;
@@ -500,6 +571,7 @@ export class FileModel {
       q ? ilike(files.name, `%${q}%`) : undefined,
       this.ownership(callerAgentVisibility),
       visibility ? eq(files.visibility, visibility) : undefined,
+      excludeFileIds?.length ? notInArray(files.id, excludeFileIds) : undefined,
       // Artifacts owned by another surface (acceptance evidence) stay reachable
       // by id, but never appear in a listing. Applied here rather than in
       // `ownership()` so single-row reads and deletes still resolve them.

@@ -18,7 +18,7 @@ import type { TrashItemRow } from '@/database/schemas';
 import type { LobeChatDatabase, Transaction } from '@/database/type';
 import type { SoftDeleteOptions } from '@/database/utils/softDelete';
 import { FileService } from '@/server/services/file';
-import { getRestrictedKnowledgeBaseIds } from '@/server/services/knowledgeBaseAccess';
+import { getRestrictedKnowledgeBasePolicy } from '@/server/services/knowledgeBaseAccess';
 import { triggerTrashPurge } from '@/server/workflows/trash';
 
 import {
@@ -281,32 +281,41 @@ export class TrashService {
   countByType = async (): Promise<TrashCountByType> => {
     if (!this.workspaceId) return this.trashModel.countByType();
 
-    const restrictedKnowledgeBaseIds = await getRestrictedKnowledgeBaseIds({
+    const { allRestrictedKnowledgeBaseIds } = await getRestrictedKnowledgeBasePolicy({
       serverDB: this.db,
       userId: this.userId,
       workspaceId: this.workspaceId,
     });
-    return this.trashModel.countByType(restrictedKnowledgeBaseIds);
+    return this.trashModel.countByType(allRestrictedKnowledgeBaseIds);
   };
 
   findByIds = async (ids: string[]): Promise<TrashItem[]> => {
-    const items = (await this.trashModel.findByIds(ids)).map(this.toItem);
-    return this.filterRestrictedResources(items);
+    const rows = await this.filterRestrictedRows(await this.trashModel.findByIds(ids));
+    return rows.map(this.toItem);
+  };
+
+  private filterRestrictedRows = async (rows: TrashItemRow[]): Promise<TrashItemRow[]> => {
+    if (!this.workspaceId || rows.length === 0) return rows;
+
+    const visibleIds = new Set(
+      (await this.filterRestrictedResources(rows.map(this.toItem))).map((item) => item.id),
+    );
+    return rows.filter((row) => visibleIds.has(row.id));
   };
 
   private filterRestrictedResources = async (items: TrashItem[]): Promise<TrashItem[]> => {
     if (!this.workspaceId || items.length === 0) return items;
 
-    const restrictedKnowledgeBaseIds = await getRestrictedKnowledgeBaseIds({
+    const { allRestrictedKnowledgeBaseIds } = await getRestrictedKnowledgeBasePolicy({
       serverDB: this.db,
       userId: this.userId,
       workspaceId: this.workspaceId,
     });
-    if (restrictedKnowledgeBaseIds.length === 0) return items;
+    if (allRestrictedKnowledgeBaseIds.length === 0) return items;
 
     const hidden = await this.trashModel.findRestrictedResourceRootIds(
       items,
-      restrictedKnowledgeBaseIds,
+      allRestrictedKnowledgeBaseIds,
     );
 
     return items.filter((item) => !hidden.has(item.id));
@@ -323,7 +332,7 @@ export class TrashService {
     const outcome: TrashRestoreOutcome = { failed: [], restored: [] };
     const batchOperationId = randomUUID();
     const restoredAt = new Date();
-    const roots = await this.trashModel.findByIds(itemIds);
+    const roots = await this.filterRestrictedRows(await this.trashModel.findByIds(itemIds));
     const known = new Set(roots.map((row) => row.id));
     for (const id of itemIds) {
       if (!known.has(id)) outcome.failed.push({ code: 'notFound', id });
@@ -369,7 +378,9 @@ export class TrashService {
 
   /** Permanently delete roots by registry id (their cascade goes with them). */
   purge = async (itemIds: string[]): Promise<TrashPurgeOutcome> => {
-    const roots = (await this.trashModel.findByIds(itemIds)).filter((row) => !row.rootId);
+    const roots = (
+      await this.filterRestrictedRows(await this.trashModel.findByIds(itemIds))
+    ).filter((row) => !row.rootId);
     const outcome: TrashPurgeOutcome = { failed: [], purged: 0, purgedIds: [] };
     const found = new Set(roots.map((root) => root.id));
     for (const id of itemIds) {
@@ -393,11 +404,13 @@ export class TrashService {
     resourceType?: TrashResourceType;
   }): Promise<TrashEmptyOutcome> => {
     const excludeKnowledgeBaseIds = this.workspaceId
-      ? await getRestrictedKnowledgeBaseIds({
-          serverDB: this.db,
-          userId: this.userId,
-          workspaceId: this.workspaceId,
-        })
+      ? (
+          await getRestrictedKnowledgeBasePolicy({
+            serverDB: this.db,
+            userId: this.userId,
+            workspaceId: this.workspaceId,
+          })
+        ).allRestrictedKnowledgeBaseIds
       : [];
     const scheduledIds = await this.trashModel.expireAllRoots({
       excludeKnowledgeBaseIds,

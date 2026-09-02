@@ -18,6 +18,7 @@ export async function searchFolders(
   query: string,
   limit: number,
   excludeKbIds?: string[],
+  excludeIds?: string[],
 ): Promise<FtsSearchBackendResponse<FtsSearchFolderResult>> {
   const bm25Query = sanitizeBm25Query(query);
   const { db } = context;
@@ -65,6 +66,7 @@ export async function searchFolders(
       and(
         context.liftedScopeWhere(hits.workspaceId),
         context.liftedTrashWhere(hits.isDeleted),
+        excludeIds?.length ? notInArray(hits.id, excludeIds) : undefined,
         excludeKbIds && excludeKbIds.length > 0
           ? or(isNull(hits.knowledgeBaseId), notInArray(hits.knowledgeBaseId, excludeKbIds))
           : undefined,
@@ -95,6 +97,7 @@ export async function searchPages(
   query: string,
   limit: number,
   excludeKbIds?: string[],
+  excludeIds?: string[],
 ): Promise<FtsSearchBackendResponse<FtsSearchPageResult>> {
   const bm25Query = sanitizeBm25Query(query);
   const { db } = context;
@@ -138,6 +141,7 @@ export async function searchPages(
       and(
         context.liftedScopeWhere(hits.workspaceId),
         context.liftedTrashWhere(hits.isDeleted),
+        excludeIds?.length ? notInArray(hits.id, excludeIds) : undefined,
         excludeKbIds && excludeKbIds.length > 0
           ? or(isNull(hits.knowledgeBaseId), notInArray(hits.knowledgeBaseId, excludeKbIds))
           : undefined,

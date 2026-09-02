@@ -237,6 +237,10 @@ export type RecentItemKind = 'file' | 'page';
 interface KnowledgeQueryParams extends QueryFileListParams {
   /** Restrict the result set to rows created by a specific workspace member. */
   creatorUserId?: string;
+  /** Server-derived document ids hidden by a trashed restricted knowledge base. */
+  excludeDocumentIds?: string[];
+  /** Server-derived file ids hidden by a trashed restricted knowledge base. */
+  excludeFileIds?: string[];
   /**
    * Server-derived list of restricted knowledge bases the caller may not
    * browse (resource-permission `use` level). Content linked to these KBs is
@@ -426,6 +430,8 @@ export class KnowledgeRepo {
     q,
     sortType,
     sorter,
+    excludeDocumentIds,
+    excludeFileIds,
     excludeKnowledgeBaseIds,
     includeContent = true,
     includeContentPreview = false,
@@ -468,6 +474,7 @@ export class KnowledgeRepo {
         }),
         this.fileCategoryFilter(category),
         this.fileSourceFilter(sourceFilter),
+        excludeFileIds?.length ? notInArray(f.id, excludeFileIds) : undefined,
         // Exclude files in knowledge base if needed
         !knowledgeBaseId && !showFilesInKnowledgeBase ? this.notInAnyKnowledgeBase() : undefined,
         !knowledgeBaseId && excludeKnowledgeBaseIds?.length
@@ -490,6 +497,7 @@ export class KnowledgeRepo {
         }),
         this.documentCategoryFilter(category),
         this.documentSourceFilter(sourceFilter),
+        excludeDocumentIds?.length ? notInArray(d.id, excludeDocumentIds) : undefined,
         // Inside a knowledge base only standalone rows (folders and notes with no
         // backing file) belong to the document arm — documents that do have a file
         // already come back through the file arm.
