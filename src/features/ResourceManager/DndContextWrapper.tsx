@@ -160,11 +160,15 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
         ? treeState.moveItems(itemsToMove, fromParent, toParent)
         : treeState.moveItem(drag.id, fromParent, toParent);
 
-      movePromise.catch(() => {
-        toast.error(t('FileManager.actions.moveError'));
-      });
-
-      toast.success(t('FileManager.actions.moveSuccess'));
+      // Report once the server has the move: the tree's optimistic rows are
+      // not proof it landed, and a rejected move must not read as success.
+      movePromise
+        .then(() => {
+          toast.success(t('FileManager.actions.moveSuccess'));
+        })
+        .catch(() => {
+          toast.error(t('FileManager.actions.moveError'));
+        });
 
       if (isDraggingSelection) {
         setSelectedFileIds([]);
