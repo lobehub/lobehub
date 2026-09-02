@@ -1108,7 +1108,7 @@ describe('createTaskRuntime — human assignee (assigneeUserId)', () => {
       // Viewers cannot own tasks, so they are not offered as candidates.
       expect(memberMocks.getDisplayInfoByIds).toHaveBeenCalledWith(db, ['usr_1', 'usr_2']);
       expect(memberMocks.findLinksByUserIds).toHaveBeenCalledWith(db, ['usr_1', 'usr_2']);
-      expect(result.state).toEqual({ count: 2, success: true });
+      expect(result.state).toEqual({ count: 2, success: true, total: 2 });
       expect(result.content).toContain('- Me  @me  role=owner  (you)  id=usr_1');
       expect(result.content).toContain('- Alice  @alice  role=member  id=usr_2');
       expect(result.content).not.toContain('usr_3');
@@ -1134,6 +1134,40 @@ describe('createTaskRuntime — human assignee (assigneeUserId)', () => {
       expect(result.content).toContain(
         '- Alice  @alice  alice@lobehub.com  role=member  im=discord:@Neko(4521),slack:U123  id=usr_2',
       );
+    });
+
+    it('narrows the directory with query (name, handle, email, IM id) and caps it with limit', async () => {
+      memberMocks.listMembers.mockResolvedValue([
+        { role: 'owner', userId: 'usr_1' },
+        { role: 'member', userId: 'usr_2' },
+        { role: 'member', userId: 'usr_4' },
+      ]);
+      memberMocks.getDisplayInfoByIds.mockResolvedValue([
+        { avatar: null, fullName: 'Me', id: 'usr_1', username: 'me' },
+        alice,
+        { avatar: null, fullName: 'Bob Li', id: 'usr_4', username: 'bob' },
+      ]);
+      memberMocks.getEmailsByIds.mockResolvedValue([{ email: 'alice@lobehub.com', id: 'usr_2' }]);
+      memberMocks.findLinksByUserIds.mockResolvedValue([
+        { platform: 'discord', platformUserId: '4521', platformUsername: 'Neko', userId: 'usr_2' },
+      ]);
+      const runtime = createTaskRuntime({ ...baseDeps, db, userId: 'usr_1', workspaceId: 'ws_1' });
+
+      // A Discord handle resolves by exact IM identity, not by name similarity.
+      const byHandle = await runtime.listWorkspaceMembers({ query: '@neko' });
+      expect(byHandle.state).toEqual({ count: 1, query: '@neko', success: true, total: 1 });
+      expect(byHandle.content).toContain('matching "@neko" (1)');
+      expect(byHandle.content).toContain('id=usr_2');
+      expect(byHandle.content).not.toContain('usr_4');
+
+      // The cap is announced so the model refines instead of assuming it saw everyone.
+      const capped = await runtime.listWorkspaceMembers({ limit: 1 });
+      expect(capped.state).toEqual({ count: 1, success: true, total: 3 });
+      expect(capped.content).toContain('(1 of 3 — pass query to narrow)');
+
+      const none = await runtime.listWorkspaceMembers({ query: 'nobody' });
+      expect(none.state).toEqual({ count: 0, query: 'nobody', success: true, total: 0 });
+      expect(none.content).toContain('No workspace members match "nobody"');
     });
 
     it('returns only the caller outside a workspace', async () => {

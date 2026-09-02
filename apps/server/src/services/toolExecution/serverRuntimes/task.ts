@@ -1,4 +1,9 @@
-import { normalizeListTasksParams, TaskIdentifier } from '@lobechat/builtin-tool-task';
+import type { ListWorkspaceMembersParams } from '@lobechat/builtin-tool-task';
+import {
+  normalizeListTasksParams,
+  selectAssignableMembers,
+  TaskIdentifier,
+} from '@lobechat/builtin-tool-task';
 import { canWorkspaceRoleBeTaskAssignee } from '@lobechat/const/rbac';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { TaskAssignableMember, TaskCreatedItem } from '@lobechat/prompts';
@@ -28,6 +33,7 @@ import { tasks } from '@/database/schemas';
 import { appEnv } from '@/envs/app';
 import { taskRouter } from '@/server/routers/lambda/task';
 import { TaskService } from '@/server/services/task';
+import { after } from '@/server/utils/scheduleAfterResponse';
 
 import { type ServerRuntimeRegistration } from './types';
 
@@ -134,22 +140,34 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
 
   // Assignment ping (Linear-style), mirroring `task.create` in the router: the
   // runtime calls TaskService directly (to persist `context.origin`), so the
-  // router's notify hook never fires for tool-created tasks. Fire-and-forget —
-  // the `@/business` slot defaults to a no-op and never throws.
+  // router's notify hook never fires for tool-created tasks. Delivered after
+  // the response as best-effort work — the `@/business` slot defaults to a
+  // no-op, and a rejecting implementation must not become an unhandled
+  // rejection. Silent for self-assignment; the assignee lock already
+  // guarantees the member can open the task (private tasks cannot be assigned
+  // to anyone but their creator).
   const notifyMemberAssigned = (task: {
     assigneeUserId: string | null;
     id: string;
     identifier: string;
     name: string | null;
   }) => {
-    if (!task.assigneeUserId || !deps.userId || task.assigneeUserId === deps.userId) return;
-    void notifyTaskAssigned({
+    const { assigneeUserId } = task;
+    if (!assigneeUserId || !deps.userId || assigneeUserId === deps.userId) return;
+    const params = {
       actorUserId: deps.userId,
-      assigneeUserId: task.assigneeUserId,
+      assigneeUserId,
       taskId: task.id,
       taskIdentifier: task.identifier,
       taskName: task.name,
       workspaceId: deps.workspaceId,
+    };
+    after(async () => {
+      try {
+        await notifyTaskAssigned(params);
+      } catch (error) {
+        console.error('[task-runtime] Failed to send assignment notification', error);
+      }
     });
   };
 
@@ -506,7 +524,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       }
     },
 
-    listWorkspaceMembers: async () => {
+    listWorkspaceMembers: async (args: ListWorkspaceMembersParams = {}) => {
       const db = deps.db;
       const userId = deps.userId;
       if (!db || !userId) {
@@ -542,7 +560,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
           imMap.set(link.userId, [...(imMap.get(link.userId) ?? []), alias]);
         }
 
-        const members: TaskAssignableMember[] = memberRows.map((m) => {
+        const directory: TaskAssignableMember[] = memberRows.map((m) => {
           const profile = profileMap.get(m.userId);
           return {
             email: emailMap.get(m.userId),
@@ -554,10 +572,14 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
             username: profile?.username,
           };
         });
+        // Bounded, model-visible slice: `query` narrows by name / handle /
+        // email / IM identity and `limit` caps the page, so a large workspace
+        // never floods the context (the header tells the model how many matched).
+        const { members, query, total } = selectAssignableMembers(directory, args);
 
         return {
-          content: formatWorkspaceMembers(members, { inWorkspace: !!workspaceId }),
-          state: { count: members.length, success: true },
+          content: formatWorkspaceMembers(members, { inWorkspace: !!workspaceId, query, total }),
+          state: { count: members.length, query, success: true, total },
           success: true,
         };
       } catch (error) {

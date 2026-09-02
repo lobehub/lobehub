@@ -29,7 +29,12 @@ import { TaskRunnerService } from '@/server/services/taskRunner';
 import { AcceptanceService } from '@/server/services/verify/acceptanceService';
 import { resolveTaskAcceptance } from '@/server/services/verify/taskAcceptance';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
-import { extractMentionedUserIds, validateMentionedUserIds } from '@/server/utils/commentMentions';
+import {
+  extractMentionedUserIds,
+  filterActiveWorkspaceMemberIds,
+  validateMentionedUserIds,
+} from '@/server/utils/commentMentions';
+import { after } from '@/server/utils/scheduleAfterResponse';
 import { TransferErrorCode } from '@/types/transferError';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
@@ -204,6 +209,108 @@ function collectTaskCommentRecipients(params: {
   for (const userId of mentionedUserIds) byUserId.set(userId, 'mentioned');
   byUserId.delete(actorUserId);
   return [...byUserId].map(([userId, kind]) => ({ kind, userId }));
+}
+
+/**
+ * Whether a notification deep-linking to `task` would land on a page `userId`
+ * cannot open. Mirrors `TaskModel.ownership()`: public tasks are visible to
+ * every member, private ones only to their creator. Membership is a separate
+ * check (`filterActiveWorkspaceMemberIds`).
+ */
+function isTaskHiddenFrom(
+  task: { createdByUserId: string; visibility: 'private' | 'public' },
+  userId: string,
+): boolean {
+  return task.visibility === 'private' && task.createdByUserId !== userId;
+}
+
+interface TaskNotificationCtx {
+  serverDB: LobeChatDatabase;
+  taskModel: TaskModel;
+  workspaceId: string;
+}
+
+/**
+ * Re-authorize every recipient against the task before any id reaches the
+ * delivery slot (same contract as topic and document comments): a member
+ * @mentioned on a private task they cannot see must not receive its title and
+ * link, and the creator / assignee rows can outlive workspace membership.
+ */
+async function filterRecipientsByTaskAccess(
+  ctx: TaskNotificationCtx,
+  taskId: string,
+  recipients: TaskCommentActivityRecipient[],
+): Promise<TaskCommentActivityRecipient[]> {
+  if (recipients.length === 0) return [];
+  const task = await ctx.taskModel.findById(taskId);
+  if (!task) return [];
+
+  const visible = recipients.filter(({ userId }) => !isTaskHiddenFrom(task, userId));
+  const activeUserIds = new Set(
+    await filterActiveWorkspaceMemberIds(
+      ctx.serverDB,
+      ctx.workspaceId,
+      visible.map(({ userId }) => userId),
+    ),
+  );
+  return visible.filter(({ userId }) => activeUserIds.has(userId));
+}
+
+/**
+ * Member comment ping (Linear-style), delivered after the response as
+ * best-effort work: the `@/business` slot defaults to a no-op, and a rejecting
+ * implementation must neither fail the mutation nor surface as an unhandled
+ * rejection. `after()` keeps the work alive past the response on serverless.
+ */
+function notifyCommentActivityBestEffort(
+  ctx: TaskNotificationCtx,
+  params: Parameters<typeof notifyTaskCommentActivity>[0],
+) {
+  after(async () => {
+    try {
+      const recipients = await filterRecipientsByTaskAccess(ctx, params.taskId, params.recipients);
+      if (recipients.length === 0) return;
+      await notifyTaskCommentActivity({ ...params, recipients });
+    } catch (error) {
+      console.error('[task-comment] Failed to send activity notification', error);
+    }
+  });
+}
+
+/**
+ * Assignment ping (Linear-style), delivered after the response as best-effort
+ * work. Silent for self-assignment; the assignee lock already guarantees the
+ * member is active and can open the task (`assertAssigneeUserVisibilityCompat`
+ * rejects private tasks assigned to anyone but their creator). Callers decide
+ * whether the assignee actually changed.
+ */
+function notifyAssignedBestEffort(
+  ctx: { userId: string; workspaceId?: string | null },
+  task: {
+    assigneeUserId: string | null;
+    id: string;
+    identifier: string;
+    name: string | null;
+  },
+) {
+  const { assigneeUserId } = task;
+  if (!assigneeUserId || assigneeUserId === ctx.userId) return;
+
+  const params = {
+    actorUserId: ctx.userId,
+    assigneeUserId,
+    taskId: task.id,
+    taskIdentifier: task.identifier,
+    taskName: task.name,
+    workspaceId: ctx.workspaceId ?? undefined,
+  };
+  after(async () => {
+    try {
+      await notifyTaskAssigned(params);
+    } catch (error) {
+      console.error('[task] Failed to send assignment notification', error);
+    }
+  });
 }
 
 async function assertAssigneeAgentBelongsToUser(
@@ -425,7 +532,6 @@ export const taskRouter = router({
         // assignee learn about new discussion; @mentioned members get the
         // stronger "mentioned" notification instead. Agent-authored progress
         // notes stay silent — they are not a conversation between members.
-        // Fire-and-forget through the `@/business` slot (default no-op).
         if (ctx.workspaceId && !input.authorAgentId) {
           const recipients = collectTaskCommentRecipients({
             actorUserId: ctx.userId,
@@ -433,13 +539,16 @@ export const taskRouter = router({
             task,
           });
           if (recipients.length > 0) {
-            void notifyTaskCommentActivity({
-              actorUserId: ctx.userId,
-              commentId: comment.id,
-              recipients,
-              taskId: task.id,
-              workspaceId: ctx.workspaceId,
-            });
+            notifyCommentActivityBestEffort(
+              { serverDB: ctx.serverDB, taskModel: model, workspaceId: ctx.workspaceId },
+              {
+                actorUserId: ctx.userId,
+                commentId: comment.id,
+                recipients,
+                taskId: task.id,
+                workspaceId: ctx.workspaceId,
+              },
+            );
           }
         }
         return { data: comment, message: 'Comment added', success: true };
@@ -508,13 +617,16 @@ export const taskRouter = router({
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Comment not found' });
         }
         if (workspaceId && addedMentionUserIds.length > 0) {
-          void notifyTaskCommentActivity({
-            actorUserId: ctx.userId,
-            commentId: comment.id,
-            recipients: addedMentionUserIds.map((userId) => ({ kind: 'mentioned', userId })),
-            taskId: comment.taskId,
-            workspaceId,
-          });
+          notifyCommentActivityBestEffort(
+            { serverDB: ctx.serverDB, taskModel: ctx.taskModel, workspaceId },
+            {
+              actorUserId: ctx.userId,
+              commentId: comment.id,
+              recipients: addedMentionUserIds.map((userId) => ({ kind: 'mentioned', userId })),
+              taskId: comment.taskId,
+              workspaceId,
+            },
+          );
         }
         return { data: comment, message: 'Comment updated', success: true };
       } catch (error) {
@@ -626,20 +738,8 @@ export const taskRouter = router({
         await ctx.taskModel.delete(task.id).catch(() => {});
         throw error;
       }
-      // Assignment ping (Linear-style): creating a task already assigned to
-      // another member notifies them. Fire-and-forget through the `@/business`
-      // slot (default impl is a no-op; a notification failure never affects
-      // the mutation).
-      if (task.assigneeUserId && task.assigneeUserId !== ctx.userId) {
-        void notifyTaskAssigned({
-          actorUserId: ctx.userId,
-          assigneeUserId: task.assigneeUserId,
-          taskId: task.id,
-          taskIdentifier: task.identifier,
-          taskName: task.name,
-          workspaceId: ctx.workspaceId ?? undefined,
-        });
-      }
+      // Creating a task already assigned to another member notifies them.
+      notifyAssignedBestEffort(ctx, task);
       return { data: task, message: 'Task created', success: true };
     } catch (error) {
       if (error instanceof TRPCError) throw error;
@@ -1383,23 +1483,10 @@ export const taskRouter = router({
         normalizedUpdateData,
       );
       if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
-      // Assignment ping (Linear-style): only an actual assignee change to
-      // someone other than the actor notifies — re-saving the same assignee
-      // or assigning yourself stays silent. Fire-and-forget through the
-      // `@/business` slot (default impl is a no-op).
-      if (
-        task.assigneeUserId &&
-        task.assigneeUserId !== resolved.assigneeUserId &&
-        task.assigneeUserId !== ctx.userId
-      ) {
-        void notifyTaskAssigned({
-          actorUserId: ctx.userId,
-          assigneeUserId: task.assigneeUserId,
-          taskId: task.id,
-          taskIdentifier: task.identifier,
-          taskName: task.name,
-          workspaceId: ctx.workspaceId ?? undefined,
-        });
+      // Only an actual assignee change notifies — re-saving the same assignee
+      // stays silent (self-assignment is filtered inside the helper).
+      if (task.assigneeUserId !== resolved.assigneeUserId) {
+        notifyAssignedBestEffort(ctx, task);
       }
       return { data: task, message: 'Task updated', success: true };
     } catch (error) {

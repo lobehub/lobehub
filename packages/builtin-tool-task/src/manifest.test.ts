@@ -33,7 +33,14 @@ describe('TaskManifest human assignee (assigneeUserId)', () => {
   it('exposes listWorkspaceMembers so ids are resolved instead of guessed', () => {
     const api = findApi(TaskApiName.listWorkspaceMembers);
     expect(api).toBeDefined();
-    expect(api?.parameters).toMatchObject({ properties: {}, required: [], type: 'object' });
+    // Bounded directory: an optional narrowing query and a page cap, nothing required.
+    expect(api?.parameters).toMatchObject({
+      properties: { limit: { type: 'number' }, query: { type: 'string' } },
+      required: [],
+      type: 'object',
+    });
+    // The client path has no IM identities, so the contract only promises them where available.
+    expect(api?.description).toContain('where available');
     // Read-only: must not register a Work entity.
     expect(api?.work).toBeUndefined();
     // The assignee params point the model at the resolver.

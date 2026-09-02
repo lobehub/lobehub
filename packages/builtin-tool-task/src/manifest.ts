@@ -154,10 +154,20 @@ export const TaskManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'List the workspace members a task can be assigned to, with their user IDs, emails, and linked IM identities (Discord/Slack/Telegram handles and platform user ids). Call this before setting assigneeUserId on createTask / createTasks / editTask so a person named by the user ("assign this to Alice", "assign to @neko", a `<@platformUserId>` mention) is resolved to a real ID instead of guessed — prefer an exact im/email match over name similarity. Outside a workspace only the current user is returned.',
+        'List the workspace members a task can be assigned to, with their user IDs, emails and, where available, linked IM identities (Discord/Slack/Telegram handles and platform user ids). Call this before setting assigneeUserId on createTask / createTasks / editTask so a person named by the user ("assign this to Alice", "assign to @neko", a `<@platformUserId>` mention) is resolved to a real ID instead of guessed — prefer an exact im/email match over name similarity. Pass `query` to narrow a large directory; the result is capped by `limit`, so refine the query rather than paging. Outside a workspace only the current user is returned.',
       name: TaskApiName.listWorkspaceMembers,
       parameters: {
-        properties: {},
+        properties: {
+          limit: {
+            description: 'Maximum number of members to return (default 50, max 100).',
+            type: 'number',
+          },
+          query: {
+            description:
+              'Case-insensitive filter matched against display name, @handle, email, linked IM identity, or an exact user ID. Omit to list the whole (capped) directory.',
+            type: 'string',
+          },
+        },
         required: [],
         type: 'object',
       },

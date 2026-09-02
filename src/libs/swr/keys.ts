@@ -412,11 +412,17 @@ export const taskKeys = {
    * result set from `list`, so a shared entry would let one tab's fetch
    * overwrite the other's.
    */
-  myList: def('task:myList', (scope: 'assigned' | 'created', limit?: number, offset?: number) => [
+  myList: def(
     'task:myList',
-    scope,
-    ...(limit === undefined && offset === undefined ? [] : [{ limit, offset }]),
-  ]),
+    (scope: 'assigned' | 'created', statuses?: string[], limit?: number, offset?: number) => [
+      'task:myList',
+      scope,
+      // Status narrowing is part of the identity: "hide completed" and "show
+      // all" are different server pages, not a client-side view of one page.
+      statuses ? [...statuses].sort().join(',') : 'all',
+      ...(limit === undefined && offset === undefined ? [] : [{ limit, offset }]),
+    ],
+  ),
   scheduledList: def(
     'task:scheduledList',
     (

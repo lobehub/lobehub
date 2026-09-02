@@ -775,6 +775,19 @@ describe('human assignee formatting', () => {
     );
   });
 
+  it('formatWorkspaceMembers announces a capped or filtered directory', () => {
+    const alice = { id: 'usr_2', name: 'Alice Chen', role: 'member', username: 'alice' };
+    expect(formatWorkspaceMembers([alice], { inWorkspace: true, total: 3 })).toContain(
+      'Workspace members that can be assigned tasks (1 of 3 — pass query to narrow).',
+    );
+    expect(
+      formatWorkspaceMembers([alice], { inWorkspace: true, query: 'ali', total: 1 }),
+    ).toContain('Workspace members that can be assigned tasks matching "ali" (1).');
+    expect(formatWorkspaceMembers([], { inWorkspace: true, query: 'zed', total: 0 })).toBe(
+      'No workspace members match "zed". Try a different name, @handle, email or platform id.',
+    );
+  });
+
   it('formatWorkspaceMembers explains personal mode and empty results', () => {
     expect(
       formatWorkspaceMembers([{ id: 'usr_1', isSelf: true, name: 'Me' }], { inWorkspace: false }),

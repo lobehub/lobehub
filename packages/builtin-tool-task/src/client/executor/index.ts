@@ -32,12 +32,14 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 import { normalizeListTasksParams } from '../../listTasks';
+import { selectAssignableMembers } from '../../listWorkspaceMembers';
 import { TaskIdentifier } from '../../manifest';
 import type {
   AddTaskCommentParams,
   CreateTaskParams,
   CreateTasksItemResult,
   DeleteTaskCommentParams,
+  ListWorkspaceMembersParams,
   RunTasksItemResult,
   UpdateTaskCommentParams,
 } from '../../types';
@@ -704,14 +706,17 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     }
   };
 
-  listWorkspaceMembers = async (): Promise<BuiltinToolResult> => {
+  listWorkspaceMembers = async (
+    params: ListWorkspaceMembersParams = {},
+  ): Promise<BuiltinToolResult> => {
     try {
       const selfId = userProfileSelectors.userId(useUserStore.getState());
       const inWorkspace = !!getActiveWorkspaceSlug();
 
       // Personal mode: the caller is the only human a task can be assigned to
-      // (the server enforces the same rule).
-      const members: TaskAssignableMember[] = inWorkspace
+      // (the server enforces the same rule). The client directory carries
+      // profile fields only — linked IM identities are a server-runtime extra.
+      const directory: TaskAssignableMember[] = inWorkspace
         ? getWorkspaceMembers()
             .filter((m) => canWorkspaceRoleBeTaskAssignee(m.role))
             .map((m) => ({
@@ -731,10 +736,12 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
               },
             ]
           : [];
+      // Same bounded `query` / `limit` contract as the server runtime.
+      const { members, query, total } = selectAssignableMembers(directory, params);
 
       return {
-        content: formatWorkspaceMembers(members, { inWorkspace }),
-        state: { count: members.length, success: true },
+        content: formatWorkspaceMembers(members, { inWorkspace, query, total }),
+        state: { count: members.length, query, success: true, total },
         success: true,
       };
     } catch (error) {

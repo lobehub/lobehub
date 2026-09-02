@@ -331,16 +331,27 @@ export interface TaskAssignableMember {
  */
 export const formatWorkspaceMembers = (
   members: TaskAssignableMember[],
-  options: { inWorkspace: boolean } = { inWorkspace: true },
+  options: { inWorkspace: boolean; query?: string; total?: number } = { inWorkspace: true },
 ): string => {
+  const { inWorkspace, query } = options;
   if (members.length === 0) {
-    return options.inWorkspace
+    if (query)
+      return `No workspace members match "${query}". Try a different name, @handle, email or platform id.`;
+    return inWorkspace
       ? 'No workspace members can be assigned tasks.'
       : 'Not in a workspace: tasks can only be assigned to agents here.';
   }
 
-  const header = options.inWorkspace
-    ? `Workspace members that can be assigned tasks (${members.length}). Use the id as assigneeUserId:`
+  // "(3)" when the whole directory fits; "(50 of 213 — pass query to narrow)"
+  // when the cap cut it, so the model refines instead of assuming it saw all.
+  const total = options.total ?? members.length;
+  const count =
+    total > members.length
+      ? `${members.length} of ${total} — pass query to narrow`
+      : `${members.length}`;
+  const scope = query ? ` matching "${query}"` : '';
+  const header = inWorkspace
+    ? `Workspace members that can be assigned tasks${scope} (${count}). Use the id as assigneeUserId:`
     : 'Not in a workspace — the only person a task can be assigned to is you:';
 
   const lines = members.map((m) => {

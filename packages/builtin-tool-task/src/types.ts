@@ -153,11 +153,20 @@ export interface ListTasksState {
 
 // ==================== listWorkspaceMembers ====================
 
-export interface ListWorkspaceMembersParams {}
+export interface ListWorkspaceMembersParams {
+  /** Cap on the members returned (default 50, max 100). */
+  limit?: number;
+  /** Case-insensitive match on name, @handle, email, linked IM identity, or an exact user id. */
+  query?: string;
+}
 
 export interface ListWorkspaceMembersState {
+  /** Members actually returned (after `query` and `limit`). */
   count: number;
+  query?: string;
   success: boolean;
+  /** Members matching `query` before the `limit` cap. */
+  total: number;
 }
 
 // ==================== viewTask ====================

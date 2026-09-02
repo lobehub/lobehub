@@ -167,13 +167,33 @@ describe('TaskExecutor — human assignee (assigneeUserId)', () => {
       const result = await taskExecutor.listWorkspaceMembers();
 
       expect(result.success).toBe(true);
-      expect(result.state).toEqual({ count: 2, success: true });
+      expect(result.state).toEqual({ count: 2, success: true, total: 2 });
       expect(result.content).toContain('- Me  @me  role=owner  (you)  id=usr_1');
       expect(result.content).toContain(
         '- Alice Chen  @alice  alice@lobehub.com  role=member  id=usr_2',
       );
       // Viewers cannot own tasks, so they are not offered as candidates.
       expect(result.content).not.toContain('usr_3');
+    });
+
+    it('narrows the directory with query and caps it with limit, same contract as the server', async () => {
+      const byEmail = await taskExecutor.listWorkspaceMembers({ query: 'ALICE@lobehub.com' });
+      expect(byEmail.state).toEqual({
+        count: 1,
+        query: 'alice@lobehub.com',
+        success: true,
+        total: 1,
+      });
+      expect(byEmail.content).toContain('id=usr_2');
+      expect(byEmail.content).not.toContain('usr_1');
+
+      const capped = await taskExecutor.listWorkspaceMembers({ limit: 1 });
+      expect(capped.state).toEqual({ count: 1, success: true, total: 2 });
+      expect(capped.content).toContain('(1 of 2 — pass query to narrow)');
+
+      const none = await taskExecutor.listWorkspaceMembers({ query: 'zed' });
+      expect(none.success).toBe(true);
+      expect(none.content).toContain('No workspace members match "zed"');
     });
 
     it('returns only the signed-in user outside a workspace', async () => {

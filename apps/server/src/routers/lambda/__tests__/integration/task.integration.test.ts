@@ -67,6 +67,16 @@ vi.mock('@/business/server/task/notifyTaskCommentActivity', () => ({
   notifyTaskCommentActivity: (...args: unknown[]) => mockNotifyTaskCommentActivity(...args),
 }));
 
+// Notifications are retained past the response through `after()`; run that
+// work eagerly here and flush it before asserting on the slots above.
+const afterResponseTasks = vi.hoisted(() => [] as Promise<unknown>[]);
+vi.mock('@/server/utils/scheduleAfterResponse', () => ({
+  after: (work: () => unknown) => void afterResponseTasks.push(Promise.resolve().then(work)),
+}));
+const flushAfterResponse = async () => {
+  while (afterResponseTasks.length > 0) await Promise.all(afterResponseTasks.splice(0));
+};
+
 describe('Task Router Integration', () => {
   let serverDB: LobeChatDatabase;
   let userId: string;
@@ -240,6 +250,7 @@ describe('Task Router Integration', () => {
 
       expect(task.data.assigneeAgentId).toBe(wsAgentId);
       expect(task.data.assigneeUserId).toBe(otherUserId);
+      await flushAfterResponse();
       expect(mockNotifyTaskAssigned).toHaveBeenCalledTimes(1);
       expect(mockNotifyTaskAssigned).toHaveBeenCalledWith(
         expect.objectContaining({ assigneeUserId: otherUserId, taskId: task.data.id }),
@@ -517,10 +528,12 @@ describe('Task Router Integration', () => {
 
       // The creator commenting on their own task with no mentions pings nobody.
       await wsCaller.addComment({ content: 'note to self', id: task.data.id });
+      await flushAfterResponse();
       expect(mockNotifyTaskCommentActivity).not.toHaveBeenCalled();
 
       // Another member commenting pings the creator as ambient activity.
       const comment = await wsOtherCaller.addComment({ content: 'hello', id: task.data.id });
+      await flushAfterResponse();
       expect(mockNotifyTaskCommentActivity).toHaveBeenCalledTimes(1);
       expect(mockNotifyTaskCommentActivity).toHaveBeenCalledWith({
         actorUserId: otherUserId,
@@ -537,6 +550,7 @@ describe('Task Router Integration', () => {
         editorData: editorDataWith(otherUserId!, userId, 'not-a-member'),
         id: task.data.id,
       });
+      await flushAfterResponse();
       expect(mockNotifyTaskCommentActivity).toHaveBeenLastCalledWith({
         actorUserId: userId,
         commentId: mentioned.data.id,
@@ -553,9 +567,11 @@ describe('Task Router Integration', () => {
         assigneeUserId: otherUserId,
         instruction: 'Assigned',
       });
+      await flushAfterResponse();
       mockNotifyTaskCommentActivity.mockClear();
 
       await wsCaller.addComment({ content: 'ping', id: task.data.id });
+      await flushAfterResponse();
       expect(mockNotifyTaskCommentActivity).toHaveBeenLastCalledWith(
         expect.objectContaining({
           recipients: [{ kind: 'commented', userId: otherUserId }],
@@ -568,6 +584,7 @@ describe('Task Router Integration', () => {
         editorData: editorDataWith(otherUserId!),
         id: task.data.id,
       });
+      await flushAfterResponse();
       expect(mockNotifyTaskCommentActivity).toHaveBeenLastCalledWith(
         expect.objectContaining({ recipients: [{ kind: 'mentioned', userId: otherUserId }] }),
       );
@@ -579,6 +596,7 @@ describe('Task Router Integration', () => {
         .insert(agents)
         .values({ id: wsAgentId, slug: wsAgentId, userId, workspaceId })
         .onConflictDoNothing();
+      await flushAfterResponse();
       mockNotifyTaskCommentActivity.mockClear();
       await wsCaller.addComment({
         authorAgentId: wsAgentId,
@@ -586,6 +604,7 @@ describe('Task Router Integration', () => {
         editorData: editorDataWith(otherUserId!),
         id: task.data.id,
       });
+      await flushAfterResponse();
       expect(mockNotifyTaskCommentActivity).not.toHaveBeenCalled();
     });
 
@@ -603,6 +622,7 @@ describe('Task Router Integration', () => {
         editorData: editorDataWith(otherUserId!),
         id: task.data.id,
       });
+      await flushAfterResponse();
       mockNotifyTaskCommentActivity.mockClear();
 
       // Keeping the same mention does not re-notify.
@@ -611,6 +631,7 @@ describe('Task Router Integration', () => {
         content: '@Member edited',
         editorData: editorDataWith(otherUserId!),
       });
+      await flushAfterResponse();
       expect(mockNotifyTaskCommentActivity).not.toHaveBeenCalled();
 
       // Adding a new mention pings only the new member.
@@ -619,6 +640,7 @@ describe('Task Router Integration', () => {
         content: '@Member @Third',
         editorData: editorDataWith(otherUserId!, thirdUserId),
       });
+      await flushAfterResponse();
       expect(mockNotifyTaskCommentActivity).toHaveBeenCalledTimes(1);
       expect(mockNotifyTaskCommentActivity).toHaveBeenCalledWith({
         actorUserId: userId,
@@ -630,7 +652,43 @@ describe('Task Router Integration', () => {
 
       // Content-only edits never notify.
       await wsCaller.updateComment({ commentId: comment.data.id, content: 'plain' });
+      await flushAfterResponse();
       expect(mockNotifyTaskCommentActivity).toHaveBeenCalledTimes(1);
+    });
+
+    it('should never notify members who cannot open a private task', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const thirdUserId = await createTestUser(serverDB);
+      const { wsCaller, workspaceId } = await setupWorkspace();
+      const { workspaceMembers } = await import('@/database/schemas');
+      await serverDB
+        .insert(workspaceMembers)
+        .values({ role: 'member', userId: thirdUserId, workspaceId });
+      // A private task is visible to its creator only (assigning it to another
+      // member is rejected upstream), yet the creator can still @mention anyone.
+      const task = await wsCaller.create({
+        instruction: 'Secret',
+        name: 'Secret',
+        visibility: 'private',
+      });
+
+      // The mention must not leak the task's title and link to a member who
+      // cannot open it — neither on a new comment nor on an edit.
+      const comment = await wsCaller.addComment({
+        content: '@Member',
+        editorData: editorDataWith(otherUserId!),
+        id: task.data.id,
+      });
+      await flushAfterResponse();
+      expect(mockNotifyTaskCommentActivity).not.toHaveBeenCalled();
+
+      await wsCaller.updateComment({
+        commentId: comment.data.id,
+        content: '@Member @Third',
+        editorData: editorDataWith(otherUserId!, thirdUserId),
+      });
+      await flushAfterResponse();
+      expect(mockNotifyTaskCommentActivity).not.toHaveBeenCalled();
     });
 
     it('should never notify in personal mode', async () => {
@@ -640,6 +698,7 @@ describe('Task Router Integration', () => {
         editorData: editorDataWith('someone'),
         id: task.data.id,
       });
+      await flushAfterResponse();
       expect(mockNotifyTaskCommentActivity).not.toHaveBeenCalled();
     });
   });
@@ -1447,9 +1506,11 @@ describe('Task Router Integration', () => {
 
       // Create without assignee, then assign another member → notifies once.
       const task = await wsCaller.create({ instruction: 'Notify target', name: 'Notify target' });
+      await flushAfterResponse();
       expect(mockNotifyTaskAssigned).not.toHaveBeenCalled();
 
       await wsCaller.update({ assigneeUserId: otherUserId, id: task.data.id });
+      await flushAfterResponse();
       expect(mockNotifyTaskAssigned).toHaveBeenCalledTimes(1);
       expect(mockNotifyTaskAssigned).toHaveBeenCalledWith({
         actorUserId: userId,
@@ -1462,14 +1523,17 @@ describe('Task Router Integration', () => {
 
       // Re-saving the same assignee is a no-op → no second notification.
       await wsCaller.update({ assigneeUserId: otherUserId, id: task.data.id });
+      await flushAfterResponse();
       expect(mockNotifyTaskAssigned).toHaveBeenCalledTimes(1);
 
       // Self-assignment never notifies.
       await wsCaller.update({ assigneeUserId: userId, id: task.data.id });
+      await flushAfterResponse();
       expect(mockNotifyTaskAssigned).toHaveBeenCalledTimes(1);
 
       // Clearing the assignee never notifies.
       await wsCaller.update({ assigneeUserId: null, id: task.data.id });
+      await flushAfterResponse();
       expect(mockNotifyTaskAssigned).toHaveBeenCalledTimes(1);
 
       // Creating a task already assigned to another member notifies too.
@@ -1477,6 +1541,7 @@ describe('Task Router Integration', () => {
         assigneeUserId: otherUserId,
         instruction: 'Assigned at creation',
       });
+      await flushAfterResponse();
       expect(mockNotifyTaskAssigned).toHaveBeenCalledTimes(2);
       expect(mockNotifyTaskAssigned).toHaveBeenLastCalledWith(
         expect.objectContaining({

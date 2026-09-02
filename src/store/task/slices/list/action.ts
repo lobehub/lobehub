@@ -324,11 +324,18 @@ export class TaskListSliceActionImpl {
     limit?: number;
     offset?: number;
     scope: 'assigned' | 'created';
+    /**
+     * Server-side status narrowing (the `hideCompleted` display option
+     * translated by `getVisibleTaskStatuses`). Applied before `limit` /
+     * `offset` so a page can never come back empty while older unfinished
+     * tasks exist; part of the cache key for the same reason as `scope`.
+     */
+    statuses?: TaskStatus[];
   }) => {
-    const { enabled = true, limit, offset, scope } = options;
+    const { enabled = true, limit, offset, scope, statuses } = options;
     return useClientDataSWR(
-      enabled ? taskKeys.myList(scope, limit, offset) : null,
-      async () => this.fetchTaskList({ limit, offset, orderBy: 'updatedAt', scope }),
+      enabled ? taskKeys.myList(scope, statuses, limit, offset) : null,
+      async () => this.fetchTaskList({ limit, offset, orderBy: 'updatedAt', scope, statuses }),
       { revalidateOnFocus: false },
     );
   };

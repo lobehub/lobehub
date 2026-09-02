@@ -27,7 +27,7 @@ import CreateTaskInlineEntry from './CreateTaskInlineEntry';
 import EmptyState from './EmptyState';
 import KanbanBoard from './KanbanBoard';
 import type { TaskListViewOptions } from './listViewOptions';
-import { normalizeTaskListViewOptions } from './listViewOptions';
+import { getVisibleTaskStatuses, normalizeTaskListViewOptions } from './listViewOptions';
 import { shouldRenderTaskAgentPanelToggle } from './taskAgentPanelToggle';
 import TaskList from './TaskList';
 import TaskListVisibilityFilter from './TaskListVisibilityFilter';
@@ -120,6 +120,20 @@ export const getScheduledTaskViewOptions = (
   orderDirection: 'desc',
 });
 
+/**
+ * "My tasks" is a paginated server list, so anything that reorders or cuts the
+ * result has to happen before `limit` / `offset`: ordering is pinned to the
+ * server's updatedAt-desc page order (a client sort would only sort each page
+ * on its own), and `hideCompleted` is sent as a status filter
+ * (`getVisibleTaskStatuses`) rather than applied to the fetched page.
+ * Grouping stays client-side — it only arranges the rows of the current page.
+ */
+export const getMyTaskViewOptions = (viewOptions: TaskListViewOptions): TaskListViewOptions => ({
+  ...viewOptions,
+  orderBy: 'updatedAt',
+  orderDirection: 'desc',
+});
+
 const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   const { t } = useTranslation('chat');
   const navigate = useWorkspaceAwareNavigate();
@@ -169,12 +183,15 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
     offset: (collectionPage - 1) * COLLECTION_PAGE_SIZE,
     projectId,
   });
+  const rawViewOptions = useGlobalStore(systemStatusSelectors.taskListViewOptions);
+  const viewOptions = useMemo(() => normalizeTaskListViewOptions(rawViewOptions), [rawViewOptions]);
   const useFetchMyTaskList = useTaskStore((s) => s.useFetchMyTaskList);
   const mineSWR = useFetchMyTaskList({
     enabled: isMineCollection,
     limit: COLLECTION_PAGE_SIZE,
     offset: (collectionPage - 1) * COLLECTION_PAGE_SIZE,
     scope: myTaskScope,
+    statuses: getVisibleTaskStatuses(viewOptions),
   });
   // The scheduled and "My tasks" tabs share one paginated-list shape; pick the
   // active tab's SWR handle so the pagination/empty/error plumbing is written
@@ -183,12 +200,11 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   const collectionTasks = collectionSWR.data?.data ?? [];
   const collectionTasksTotal = collectionSWR.data?.total ?? 0;
   const isCollectionListInit = collectionSWR.data !== undefined;
-  const rawViewOptions = useGlobalStore(systemStatusSelectors.taskListViewOptions);
-  const viewOptions = useMemo(() => normalizeTaskListViewOptions(rawViewOptions), [rawViewOptions]);
   const scheduledViewOptions = useMemo(
     () => getScheduledTaskViewOptions(viewOptions),
     [viewOptions],
   );
+  const myTaskViewOptions = useMemo(() => getMyTaskViewOptions(viewOptions), [viewOptions]);
   useEffect(() => {
     if (!isCollectionListInit) return;
     setCollectionPage((page) => clampCollectionPage(page, collectionTasksTotal));
@@ -352,7 +368,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
             error={collectionSWR.error}
             isLoading={collectionSWR.isLoading || (!isCollectionListInit && !collectionSWR.error)}
             items={collectionTasks}
-            options={isMineCollection ? viewOptions : scheduledViewOptions}
+            options={isMineCollection ? myTaskViewOptions : scheduledViewOptions}
             routeScope={routeScope}
             emptyDescription={
               isMineCollection
@@ -364,7 +380,6 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
                 : t('taskList.scheduled.empty')
             }
             onRetry={() => collectionSWR.mutate()}
-            onShowHiddenCompleted={isMineCollection ? handleShowHiddenCompleted : undefined}
           />
           {(collectionTasksTotal > COLLECTION_PAGE_SIZE || collectionPage > 1) && (
             <Flexbox horizontal justify={'center'} paddingBlock={8}>

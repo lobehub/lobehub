@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   clampCollectionPage,
+  getMyTaskViewOptions,
   getScheduledTaskViewOptions,
   getTaskCreateActionBehavior,
   getTaskPageHeaderVisibility,
@@ -39,6 +40,26 @@ describe('AgentTasksPage', () => {
         orderBy: 'updatedAt',
         orderDirection: 'desc',
         showSubTasks: true,
+      });
+    });
+  });
+
+  describe('getMyTaskViewOptions', () => {
+    it('pins ordering to the updatedAt-desc server page and keeps the rest of the view', () => {
+      expect(
+        getMyTaskViewOptions({
+          ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
+          groupBy: 'priority',
+          hideCompleted: false,
+          orderBy: 'title',
+          orderDirection: 'asc',
+        }),
+      ).toEqual({
+        ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
+        groupBy: 'priority',
+        hideCompleted: false,
+        orderBy: 'updatedAt',
+        orderDirection: 'desc',
       });
     });
   });
