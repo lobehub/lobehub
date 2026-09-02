@@ -36,6 +36,10 @@ describe('createFileStoreImageUploader', () => {
       headers: { 'Content-Type': 'image/png' },
       method: 'PUT',
     });
+    expect(port.createS3PreSignedUrl).toHaveBeenCalledWith({
+      pathname: expect.stringMatching(/^files\/\d{4}-\d{2}-\d{2}\/[a-f0-9]{64}\.png$/),
+      size: Buffer.from(PNG_BASE64, 'base64').length,
+    });
 
     const createFileInput = vi.mocked(port.createFile).mock.calls[0][0];
     expect(createFileInput).toMatchObject({

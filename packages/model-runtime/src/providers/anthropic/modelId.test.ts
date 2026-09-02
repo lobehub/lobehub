@@ -9,6 +9,7 @@ import {
   isThinkingWithToolClaudeModel,
   parseClaudeModelId,
   rejectsDisabledThinkingAtEffort,
+  rejectsForcedToolChoice,
   shouldDropUnsupportedClaudeAssistantPrefill,
   shouldOmitSamplingParams,
 } from './modelId';
@@ -72,6 +73,14 @@ describe('parseClaudeModelId', () => {
       family: 'mythos',
       majorVersion: 5,
       normalizedModelId: 'claude-mythos-5-preview',
+      source: 'anthropic',
+    });
+    expect(parseClaudeModelId('claude-fable-5-1')).toEqual({
+      family: 'fable',
+      majorVersion: 5,
+      minorSeparator: '-',
+      minorVersion: 1,
+      normalizedModelId: 'claude-fable-5-1',
       source: 'anthropic',
     });
   });
@@ -143,7 +152,9 @@ describe('isAdaptiveThinkingDefaultOnModel', () => {
 describe('isAlwaysThinkingClaudeModel', () => {
   it('should return true for the families that reject disabled thinking', () => {
     expect(isAlwaysThinkingClaudeModel('claude-fable-5')).toBe(true);
+    expect(isAlwaysThinkingClaudeModel('claude-fable-5-1')).toBe(true);
     expect(isAlwaysThinkingClaudeModel('claude-mythos-5')).toBe(true);
+    expect(isAlwaysThinkingClaudeModel('global.anthropic.claude-fable-5-1')).toBe(true);
     expect(isAlwaysThinkingClaudeModel('anthropic/claude-fable-5')).toBe(true);
     expect(isAlwaysThinkingClaudeModel('global.anthropic.claude-fable-5')).toBe(true);
   });
@@ -175,6 +186,24 @@ describe('isThinkingDisplayOmittedByDefaultModel', () => {
     expect(isThinkingDisplayOmittedByDefaultModel('claude-opus-4-5-20251101')).toBe(false);
     expect(isThinkingDisplayOmittedByDefaultModel('claude-haiku-4-5-20251001')).toBe(false);
     expect(isThinkingDisplayOmittedByDefaultModel('gpt-5')).toBe(false);
+  });
+});
+
+describe('rejectsForcedToolChoice', () => {
+  it('should reject forced tool_choice on Fable 5.1 / Mythos 5.1 and later', () => {
+    expect(rejectsForcedToolChoice('claude-fable-5-1')).toBe(true);
+    expect(rejectsForcedToolChoice('claude-mythos-5-1')).toBe(true);
+    expect(rejectsForcedToolChoice('global.anthropic.claude-fable-5-1')).toBe(true);
+    expect(rejectsForcedToolChoice('anthropic/claude-fable-5-1')).toBe(true);
+  });
+
+  it('should keep forced tool_choice valid on Fable 5 / Mythos 5 and other families', () => {
+    expect(rejectsForcedToolChoice('claude-fable-5')).toBe(false);
+    expect(rejectsForcedToolChoice('claude-mythos-5')).toBe(false);
+    expect(rejectsForcedToolChoice('claude-opus-5')).toBe(false);
+    expect(rejectsForcedToolChoice('claude-sonnet-5')).toBe(false);
+    expect(rejectsForcedToolChoice('claude-opus-4-8')).toBe(false);
+    expect(rejectsForcedToolChoice('gpt-5')).toBe(false);
   });
 });
 

@@ -28,6 +28,12 @@ export {
 
 export const HeterogeneousAgentSessionErrorCode = {
   AuthRequired: 'auth_required',
+  /**
+   * The shell probe that resolves PATH ran out of time. Distinct from
+   * `CliNotFound` because it says nothing about whether the CLI is installed —
+   * conflating them told users to reinstall a working binary.
+   */
+  CliDetectionTimeout: 'cli_detection_timeout',
   CliNotFound: 'cli_not_found',
   Overloaded: 'overloaded',
   RateLimit: 'rate_limit',

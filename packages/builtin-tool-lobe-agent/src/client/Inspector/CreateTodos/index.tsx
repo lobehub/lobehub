@@ -2,7 +2,6 @@
 
 import { TodoInspectorSummary } from '@lobechat/shared-tool-ui/components';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { cx } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -34,20 +33,21 @@ export const CreateTodosInspector = memo<
 
   if (isArgumentsStreaming && summary.total === 0) {
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-agent.apiName.createTodos')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-agent.apiName.createTodos')}
+        </span>
       </div>
     );
   }
 
   return (
-    <div
-      className={cx(
-        inspectorTextStyles.root,
-        (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-      )}
-    >
-      <TodoInspectorSummary label={t(TODO_SUMMARY_LABEL_KEYS[summary.state])} summary={summary} />
+    <div className={inspectorTextStyles.root}>
+      <TodoInspectorSummary
+        label={t(TODO_SUMMARY_LABEL_KEYS[summary.state])}
+        shiny={isArgumentsStreaming || isLoading}
+        summary={summary}
+      />
     </div>
   );
 });

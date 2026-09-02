@@ -145,10 +145,12 @@ function setupIpcCapture() {
       ipcRenderer: {
         on: vi.fn((channel: string, handler: (...args: any[]) => void) => {
           listeners.set(channel, handler);
+          return () => {
+            if (listeners.get(channel) === handler) listeners.delete(channel);
+          };
         }),
-        removeListener: vi.fn((channel: string, handler: (...args: any[]) => void) => {
-          if (listeners.get(channel) === handler) listeners.delete(channel);
-        }),
+        // A separately bridged callback does not preserve the listener proxy identity.
+        removeListener: vi.fn(),
       },
     },
   };
@@ -661,6 +663,12 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
     return { get, store };
   }
+
+  it('releases all IPC subscriptions after a run settles', async () => {
+    await runWithEvents([ccInit(), ccResult()]);
+
+    expect([...ipc.getListeners().keys()]).toEqual([]);
+  });
 
   describe('cancellation coordination', () => {
     /**

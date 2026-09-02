@@ -1030,6 +1030,19 @@ export const verifyKeys = {
       [...subjectIds].sort().join(','),
     ],
   ),
+  /**
+   * One scroll page of the list panel. Keyed by workspace + the status split +
+   * the cursor, mirroring `reportSummaries` — the sibling paged feed.
+   */
+  acceptancePage: def(
+    'verify:acceptancePage',
+    (workspaceId: string | undefined, filter: string, cursor?: string) => [
+      'verify:acceptancePage',
+      workspaceId ?? '',
+      filter,
+      cursor ?? '',
+    ],
+  ),
   /** Query inputs are part of the key so server-side list filtering never reuses stale rows. */
   acceptances: def('verify:acceptances', (limit?: number, q?: string, filter?: string) => [
     'verify:acceptances',
@@ -1066,9 +1079,14 @@ export const verifyKeys = {
   tracing: def('verify:tracing', (tracingId: string) => ['verify:tracing', tracingId]),
 };
 
-/** Match every parameterized Acceptance list key (filter / limit / search variants). */
+/**
+ * Match every cached Acceptance list read — the flat window's filter / limit /
+ * search variants AND every loaded page of the panel's scroll feed. A write has
+ * no idea how deep the panel has scrolled, so it invalidates the whole family.
+ */
 export const isAcceptanceListKey = (key: unknown): boolean =>
-  Array.isArray(key) && key[0] === verifyKeys.acceptances.root;
+  Array.isArray(key) &&
+  (key[0] === verifyKeys.acceptances.root || key[0] === verifyKeys.acceptancePage.root);
 
 // ---- inbox / notifications ----------------------------------------------
 export const inboxKeys = {

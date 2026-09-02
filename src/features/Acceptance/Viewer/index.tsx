@@ -78,7 +78,7 @@ const AcceptancePage = ({ acceptanceId: explicitAcceptanceId }: AcceptancePagePr
                     editSlot={<AcceptanceGoalEdit />}
                     reportSlot={<AcceptanceViewReportLink />}
                   />
-                  <AcceptanceCheckInventory canReview toolbar={<AcceptanceCheckOwnerToolbar />} />
+                  <AcceptanceCheckInventory toolbar={<AcceptanceCheckOwnerToolbar />} />
                   <AcceptanceDecision />
                 </>
               )}

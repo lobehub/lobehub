@@ -38,6 +38,7 @@ import {
   readStatus,
   removePid,
   removeStatus,
+  reportDaemonStartupReady,
   spawnDaemon,
   stopDaemon,
   writeStatus,
@@ -177,12 +178,12 @@ export function registerConnectCommand(program: Command) {
     .option('--gateway <url>', 'Device gateway URL')
     .option('--device-id <id>', 'Device ID')
     .option('-v, --verbose', 'Enable verbose logging')
-    .action((options: ConnectOptions) => {
+    .action(async (options: ConnectOptions) => {
       const wasStopped = stopDaemon();
       if (wasStopped) {
         log.info('Stopped existing daemon.');
       }
-      handleDaemonStart({ ...options, daemon: true });
+      await handleDaemonStart({ ...options, daemon: true });
     });
 
   const serviceCmd = connectCmd
@@ -283,7 +284,7 @@ function handleStop() {
   }
 }
 
-function handleDaemonStart(options: ConnectOptions) {
+async function handleDaemonStart(options: ConnectOptions) {
   const existingPid = getRunningDaemonPid();
   if (existingPid !== null) {
     log.error(`Daemon is already running (PID ${existingPid}).`);
@@ -293,7 +294,7 @@ function handleDaemonStart(options: ConnectOptions) {
 
   // Build args to re-run with --daemon-child
   const args = buildDaemonArgs(options);
-  const pid = spawnDaemon(args);
+  const pid = await spawnDaemon(args);
 
   log.info(`Daemon started (PID ${pid}).`);
   log.info(`  Logs: ${getLogPath()}`);
@@ -806,6 +807,8 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
       error(`Device registration failed (non-fatal): ${(err as Error).message}`);
     }
   }
+
+  await reportDaemonStartupReady();
 
   // Connect
   await client.connect();

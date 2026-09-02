@@ -45,7 +45,8 @@ describe('GoalGraphModel', () => {
     expect(edge).toMatchObject({ goalId: goal.id, kind: 'leads_to' });
     expect(graph?.nodes).toHaveLength(2);
     expect(graph?.edges).toHaveLength(1);
-    expect(graph?.events.map((event) => event.eventType)).toEqual(['created', 'created', 'linked']);
+    // Newest first — getGraph bounds and orders the trail for the polling UI.
+    expect(graph?.events.map((event) => event.eventType)).toEqual(['linked', 'created', 'created']);
   });
 
   it('records who made each transition', async () => {
@@ -237,5 +238,55 @@ describe('GoalGraphModel', () => {
     const graph = await otherGraphModel.getGraph(goal.id);
     expect(graph?.nodes[0].status).toBe('proposed');
     expect(graph?.events).toHaveLength(1);
+  });
+
+  it('caps the events a graph read carries, newest first', async () => {
+    // The detail page polls getGraph every few seconds; without a limit a
+    // long-horizon goal's payload grew linearly with its age.
+    const goal = await goalModel.create({ subjectType: 'standalone', title: 'Noisy graph' });
+    const node = await graphModel.createNode(goal.id, { kind: 'task', title: 'Churn' });
+    for (let i = 0; i < GoalGraphModel.GRAPH_EVENT_LIMIT + 5; i++) {
+      await graphModel.updateNodeStatus(goal.id, node!.id, i % 2 ? 'active' : 'waiting');
+    }
+
+    const graph = await graphModel.getGraph(goal.id);
+
+    expect(graph?.events).toHaveLength(GoalGraphModel.GRAPH_EVENT_LIMIT);
+    const createdAt = graph!.events.map((event) => event.createdAt.getTime());
+    expect([...createdAt].sort((a, b) => b - a)).toEqual(createdAt);
+    expect(graph!.events[0].eventType).toBe('updated');
+  });
+
+  it('records a goal-level status transition as a system-attributed event', async () => {
+    // The lifecycle event types existed in the schema but nothing wrote them,
+    // so a goal's planning → running → paused path left no trace at all.
+    const goal = await goalModel.create({ subjectType: 'standalone', title: 'Status trail' });
+    const coordinator = new GoalGraphModel(serverDB, userId, undefined, {
+      id: GOAL_COORDINATOR_ACTOR_ID,
+      type: 'system',
+    });
+
+    await coordinator.recordGoalStatus(goal.id, 'planning', 'running');
+    await coordinator.recordGoalStatus(goal.id, 'running', 'paused', 'nothing ready');
+    // A same-status write is a no-op — re-stamping would flood the timeline.
+    await coordinator.recordGoalStatus(goal.id, 'paused', 'paused');
+
+    const events = (await graphModel.getGraph(goal.id))!.events.filter(
+      (event) => event.entityType === 'goal',
+    );
+
+    expect(events).toHaveLength(2);
+    // Newest first: [1] is the earlier activation, [0] the later pause.
+    expect(events[1]).toMatchObject({
+      actorId: GOAL_COORDINATOR_ACTOR_ID,
+      actorType: 'system',
+      entityId: goal.id,
+      eventType: 'activated',
+      reason: 'status planning → running',
+    });
+    expect(events[0]).toMatchObject({
+      eventType: 'updated',
+      reason: 'nothing ready',
+    });
   });
 });

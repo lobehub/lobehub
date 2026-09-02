@@ -36,7 +36,7 @@ import { resolveInboxBlockState } from './inboxBlockState';
 import InboxBriefCard from './InboxBriefCard';
 import MarkAllReadButton from './MarkAllReadButton';
 import NeedsYouRailCard from './NeedsYouRailCard';
-import { resolveShownNewsOffset } from './newsDayOffset';
+import { resolveShownNewsOffset, shouldShowNewsItemTime } from './newsDayOffset';
 import NewsList from './NewsList';
 import { ownsRailSections } from './railSectionPlacement';
 import RunningTasksCard from './RunningTasksCard';
@@ -497,7 +497,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
             {t(shownNewsOffset === 0 ? 'inbox.news.emptyToday' : 'inbox.news.emptyDay')}
           </span>
         ) : (
-          <NewsList bare={isRail} news={news} />
+          <NewsList bare={isRail} news={news} showTime={shouldShowNewsItemTime(shownNewsOffset)} />
         ),
       subtitle: t('inbox.news.subtitle'),
     });

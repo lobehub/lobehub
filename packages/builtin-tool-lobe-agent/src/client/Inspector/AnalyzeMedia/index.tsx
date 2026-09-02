@@ -25,8 +25,10 @@ export const AnalyzeMediaInspector = memo<
 
   if (isArgumentsStreaming && !question) {
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-agent.apiName.analyzeMedia')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-agent.apiName.analyzeMedia')}
+        </span>
       </div>
     );
   }

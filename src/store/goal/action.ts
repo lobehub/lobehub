@@ -114,9 +114,18 @@ export class GoalActionImpl {
 
   setGoalBudget = async (
     goalId: string,
-    budget: { maxRounds?: number | null; maxTotalCost?: number | null },
+    budget: {
+      deadline?: string | null;
+      maxRounds?: number | null;
+      maxTotalCost?: number | null;
+    },
   ): Promise<void> => {
     await goalService.setBudget({ id: goalId, ...budget });
+    await this.refreshGoalGraph(goalId);
+  };
+
+  updateGoalRequirement = async (goalId: string, requirement: string): Promise<void> => {
+    await goalService.updateRequirement(goalId, requirement);
     await this.refreshGoalGraph(goalId);
   };
 

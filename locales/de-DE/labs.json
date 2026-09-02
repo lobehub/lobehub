@@ -16,6 +16,8 @@
   "features.codexAppServer.title": "Codex App-Server-Laufzeit",
   "features.desktopSplitView.desc": "Zeigen Sie zwei Desktop-Tabs nebeneinander an, mit unabhängiger Navigation und einem anpassbaren Trennbalken.",
   "features.desktopSplitView.title": "Geteilte Tab-Ansicht",
+  "features.evalCapture.desc": "Fügt eine Nachrichtenaktion hinzu, die eine Gesprächsrunde – ihren vorherigen Kontext, die Eingabe und die daraus resultierende Antwort – als Evaluierungstestfall erfasst.",
+  "features.evalCapture.title": "Speichern Sie eine Runde als Evaluierungsfall",
   "features.groupChat.desc": "Koordination von Gruppenchats mit mehreren Agenten aktivieren.",
   "features.groupChat.title": "Gruppenchat (Multi-Agenten)",
   "features.heteroSessionImport.desc": "Fügen Sie einen Eintrag \"Lokale Agentensitzungen importieren\" zum Themenlistenmenü hinzu: Scannen Sie lokale Claude Code / Codex CLI-Transkripte und importieren Sie diese als Themen, mit inkrementeller Synchronisierung beim erneuten Import.",

@@ -115,6 +115,7 @@ describe('ElasticsearchFtsSearchHttpClient', () => {
       serverTookMs: 12,
       traceContext: expect.any(String),
       truncated: false,
+      usage: 'unattributed',
     });
   });
 
@@ -175,6 +176,7 @@ describe('ElasticsearchFtsSearchHttpClient', () => {
       traceContext: expect.any(String),
       traceId: expect.any(String),
       truncated: true,
+      usage: 'unattributed',
     });
     expect(JSON.stringify(errorSpy.mock.calls)).not.toContain('secret-query-fragment');
   });

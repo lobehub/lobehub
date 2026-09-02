@@ -10,8 +10,9 @@ import type {
   GoalNodeKind,
   GoalNodeStatus,
   GoalNodeWorkVersionRelation,
+  GoalStatus,
 } from '@lobechat/types';
-import { and, asc, count, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 
 import { goals } from '../schemas/goal';
 import {
@@ -123,7 +124,8 @@ export class GoalGraphModel {
         .select()
         .from(goalEvents)
         .where(eq(goalEvents.goalId, goalId))
-        .orderBy(asc(goalEvents.createdAt)),
+        .orderBy(desc(goalEvents.createdAt))
+        .limit(GoalGraphModel.GRAPH_EVENT_LIMIT),
       this.db
         .select({ link: goalNodeWorkVersions })
         .from(goalNodeWorkVersions)
@@ -140,6 +142,57 @@ export class GoalGraphModel {
       nodes,
       workVersions: linkedWorkVersions.map(({ link }) => link),
     };
+  };
+
+  /**
+   * How many events one graph read carries.
+   *
+   * `getGraph` backs both the coordinator (which never reads events) and the
+   * detail page (which polls it every few seconds and renders the most recent
+   * lifecycle entries), so the read has to be bounded: a long-horizon goal
+   * accumulates events for months and an unbounded query made every poll's
+   * payload — and the client's rebuild cost — grow linearly with goal age.
+   * Newest wins: the audit trail's full history stays queryable in the
+   * database, and the trajectory (`lh trace goal`) already records decisions
+   * with more fidelity than these events ever carried.
+   */
+  static readonly GRAPH_EVENT_LIMIT = 200;
+
+  /**
+   * Record a goal-level lifecycle transition as an event.
+   *
+   * `goal_events` carries `entity_type = 'goal'` and the lifecycle event types
+   * (`activated`, `resolved`, `rejected`, `retired`) for exactly this, but no
+   * writer used them — a goal's planning → running → paused → achieved moves
+   * were invisible on its own timeline, only node transitions ever got one.
+   * Called alongside the row update in `GoalService.transitionStatus`; kept
+   * separate because the `goals` row update lives on `GoalModel` and must not
+   * depend on this model's actor.
+   */
+  recordGoalStatus = async (
+    goalId: string,
+    from: GoalStatus,
+    to: GoalStatus,
+    reason?: string,
+  ): Promise<void> => {
+    if (from === to) return;
+    const eventType: GoalEventType =
+      to === 'running'
+        ? 'activated'
+        : to === 'achieved'
+          ? 'resolved'
+          : to === 'failed' || to === 'canceled'
+            ? 'rejected'
+            : 'updated';
+    await this.db.insert(goalEvents).values({
+      actorId: this.actor?.id ?? this.userId,
+      actorType: this.actor?.type ?? 'user',
+      entityId: goalId,
+      entityType: 'goal',
+      eventType,
+      goalId,
+      reason: reason ?? `status ${from} → ${to}`,
+    });
   };
 
   attachWorkVersion = async (

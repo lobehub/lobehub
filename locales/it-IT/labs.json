@@ -16,6 +16,8 @@
   "features.codexAppServer.title": "Runtime del Server dell'App Codex",
   "features.desktopSplitView.desc": "Mostra due schede desktop affiancate, con navigazione indipendente e un divisore ridimensionabile.",
   "features.desktopSplitView.title": "Vista a Schede Divise",
+  "features.evalCapture.desc": "Aggiunge un'azione di messaggio che cattura un turno di conversazione — il contesto precedente, l'input e la risposta prodotta — come caso di test di valutazione.",
+  "features.evalCapture.title": "Salva un turno come caso di valutazione",
   "features.groupChat.desc": "Abilita il coordinamento della chat di gruppo con più agenti.",
   "features.groupChat.title": "Chat di Gruppo (Multi-Agente)",
   "features.heteroSessionImport.desc": "Aggiungi una voce \"Importa sessioni agente locali\" al menu dell'elenco degli argomenti: analizza le trascrizioni locali di Claude Code / Codex CLI e importale come argomenti, con sincronizzazione incrementale al momento della reimportazione.",

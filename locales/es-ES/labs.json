@@ -16,6 +16,8 @@
   "features.codexAppServer.title": "Entorno de Ejecución del Servidor de Aplicaciones Codex",
   "features.desktopSplitView.desc": "Muestra dos pestañas de escritorio lado a lado, con navegación independiente y un divisor ajustable.",
   "features.desktopSplitView.title": "Vista Dividida de Pestañas",
+  "features.evalCapture.desc": "Agrega una acción de mensaje que captura un turno de conversación —su contexto previo, entrada y la respuesta que produjo— como un caso de prueba de evaluación.",
+  "features.evalCapture.title": "Guardar un turno como caso de evaluación",
   "features.groupChat.desc": "Activa la coordinación de chat grupal con múltiples agentes.",
   "features.groupChat.title": "Chat Grupal (Multiagente)",
   "features.heteroSessionImport.desc": "Agrega una entrada \"Importar sesiones de agentes locales\" al menú de la lista de temas: escanea las transcripciones locales de Claude Code / Codex CLI y las importa como temas, con sincronización incremental al volver a importar.",

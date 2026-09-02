@@ -1,12 +1,13 @@
 'use client';
 
-import { Flexbox, FormGroup, highlighterThemes, mermaidThemes, Skeleton } from '@lobehub/ui';
+import { Flexbox, Form, FormGroup, highlighterThemes, mermaidThemes, Skeleton } from '@lobehub/ui';
 import { Select, Switch, Tabs } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
+import { FORM_STYLE } from '@/const/layoutTokens';
 import { useSaveState } from '@/hooks/useSaveState';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
@@ -70,41 +71,59 @@ const ChatAppearance = memo(() => {
         <ChatTransitionPreview key={general.transitionMode} mode={general.transitionMode} />
       </FormGroup>
 
-      <FormGroup
-        active={false}
+      <Form
         collapsible={false}
-        title={t('settingChatAppearance.autoScrollOnStreaming.title')}
+        itemsType={'group'}
         variant={'filled'}
-        extra={
-          <Flexbox horizontal align={'center'} gap={8}>
-            {renderSaveHint('enableAutoScrollOnStreaming')}
-            <Switch
-              checked={general.enableAutoScrollOnStreaming ?? true}
-              onChange={(checked) => handleChange('enableAutoScrollOnStreaming', checked)}
-            />
-          </Flexbox>
-        }
-      >
-        {null}
-      </FormGroup>
-
-      <FormGroup
-        collapsible={false}
-        gap={16}
-        title={t('settingChatAppearance.linkIcon.title')}
-        variant={'filled'}
-        extra={
-          <Flexbox horizontal align={'center'} gap={8}>
-            {renderSaveHint('enableMessageLinkIcon')}
-            <Switch
-              checked={general.enableMessageLinkIcon ?? true}
-              onChange={(checked) => handleChange('enableMessageLinkIcon', checked)}
-            />
-          </Flexbox>
-        }
-      >
-        <LinkIconPreview />
-      </FormGroup>
+        items={[
+          {
+            children: [
+              {
+                children: (
+                  <Flexbox horizontal align={'center'} gap={8}>
+                    {renderSaveHint('enableAutoScrollOnStreaming')}
+                    <Switch
+                      checked={general.enableAutoScrollOnStreaming ?? true}
+                      onChange={(checked) => handleChange('enableAutoScrollOnStreaming', checked)}
+                    />
+                  </Flexbox>
+                ),
+                label: t('settingChatAppearance.autoScrollOnStreaming.title'),
+                minWidth: undefined,
+              },
+              {
+                children: (
+                  <Flexbox horizontal align={'center'} gap={8}>
+                    {renderSaveHint('expandWorkflowWhileStreaming')}
+                    <Switch
+                      checked={general.expandWorkflowWhileStreaming ?? false}
+                      onChange={(checked) => handleChange('expandWorkflowWhileStreaming', checked)}
+                    />
+                  </Flexbox>
+                ),
+                label: t('settingChatAppearance.workflowStreamingExpand.title'),
+                minWidth: undefined,
+              },
+              {
+                children: (
+                  <Flexbox horizontal align={'center'} gap={8}>
+                    {renderSaveHint('enableMessageLinkIcon')}
+                    <Switch
+                      checked={general.enableMessageLinkIcon ?? true}
+                      onChange={(checked) => handleChange('enableMessageLinkIcon', checked)}
+                    />
+                  </Flexbox>
+                ),
+                desc: <LinkIconPreview />,
+                label: t('settingChatAppearance.linkIcon.title'),
+                minWidth: undefined,
+              },
+            ],
+            title: t('settingChatAppearance.chatBehavior.title'),
+          },
+        ]}
+        {...FORM_STYLE}
+      />
 
       <FormGroup
         collapsible={false}

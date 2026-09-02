@@ -12,12 +12,21 @@ import { AnnotationCanvas } from './Annotation';
 import { AttachmentStrip, AttachmentUploadButton, useFeedbackAttachments } from './attachments';
 import { frostedModalStyles } from './modals';
 
+export const CHECK_REJECT_MODAL_SIZE = { height: '98dvh', width: '98vw' } as const;
+export const TEXT_REJECT_MODAL_WIDTH = 'min(560px, calc(100vw - 32px))';
+
 const styles = createStaticStyles(({ css }) => ({
   modalPopup: css`
     > div {
       display: flex;
       flex-direction: column;
-      height: 100%;
+    }
+  `,
+  modalPopupMedia: css`
+    > div {
+      width: ${CHECK_REJECT_MODAL_SIZE.width};
+      max-width: ${CHECK_REJECT_MODAL_SIZE.width};
+      height: ${CHECK_REJECT_MODAL_SIZE.height};
     }
   `,
   fullscreenBody: css`
@@ -41,8 +50,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   modalFooter: css`
     flex: none;
-    padding-block: 12px;
-    padding-inline: 20px;
+    padding-block-start: 12px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   regionIndex: css`
@@ -184,13 +192,24 @@ const readDraft = (key: string | undefined): RejectDraft | null => {
 
 const ZOOM_STEPS = [0.5, 0.75, 1, 1.5, 2, 3, 4];
 
-export const CHECK_REJECT_MODAL_SIZE = { height: '98dvh', width: '98vw' } as const;
-export const TEXT_REJECT_MODAL_WIDTH = 'min(560px, calc(100vw - 32px))';
-
 export const checkRejectModalSize = (evidenceCount: number) =>
   evidenceCount > 0
     ? CHECK_REJECT_MODAL_SIZE
     : ({ height: 'auto', width: TEXT_REJECT_MODAL_WIDTH } as const);
+
+export const checkRejectModalShell = (evidenceCount: number) => {
+  const modalSize = checkRejectModalSize(evidenceCount);
+  return {
+    classNames: {
+      popup: cx(styles.modalPopup, evidenceCount > 0 && styles.modalPopupMedia),
+    },
+    styles: {
+      ...frostedModalStyles,
+      content: { display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' },
+    },
+    width: modalSize.width,
+  };
+};
 
 export const rejectModalTitle = (title: string, description?: string) => ({
   description: description?.trim() || undefined,
@@ -456,7 +475,7 @@ const CheckRejectModalContent = memo<CheckRejectModalProps>(
     return (
       <div className={styles.modalBody}>
         {activeEvidence && (
-          <Flexbox flex={1} gap={12} padding={16} style={{ minHeight: 0 }}>
+          <Flexbox flex={1} gap={12} style={{ minHeight: 0 }}>
             <Flexbox gap={12} height={'100%'} style={{ minHeight: 0 }}>
               {thumbnails}
               <div className={styles.fullscreenBody} style={{ position: 'relative' }}>
@@ -518,23 +537,13 @@ CheckRejectModalContent.displayName = 'AcceptanceCheckRejectModalContent';
 /** Per-check reject modal — media gets a near-fullscreen annotation surface without losing context. */
 export const openCheckRejectModal = (options: CheckRejectModalProps) => {
   const modalTitle = rejectModalTitle(options.checkTitle, options.checkDescription);
-  const modalSize = checkRejectModalSize(options.evidence.length);
+  const shell = checkRejectModalShell(options.evidence.length);
 
   return createModal({
-    classNames: { popup: styles.modalPopup },
+    ...shell,
     content: <CheckRejectModalContent {...options} />,
     footer: null,
     maskClosable: true,
-    styles: {
-      ...frostedModalStyles,
-      content: { display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden', padding: 0 },
-      popup: {
-        display: 'flex',
-        flexDirection: 'column',
-        height: modalSize.height,
-        maxWidth: modalSize.width,
-      },
-    },
     title: (
       <Flexbox gap={2}>
         <Text strong>{modalTitle.title}</Text>
@@ -545,6 +554,5 @@ export const openCheckRejectModal = (options: CheckRejectModalProps) => {
         )}
       </Flexbox>
     ),
-    width: modalSize.width,
   });
 };

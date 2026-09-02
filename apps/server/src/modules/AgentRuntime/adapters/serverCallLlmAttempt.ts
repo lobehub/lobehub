@@ -23,6 +23,7 @@ import type {
   ModelReasoning,
   ModelUsage,
 } from '@lobechat/types';
+import { AgentRuntimeErrorType, ChatErrorType } from '@lobechat/types';
 import { pickString, toRecord } from '@lobechat/utils/object';
 
 import type { ModelCompletionFailureReason } from '@/business/server/recordModelCompletionFailure';
@@ -58,9 +59,41 @@ interface CreateServerCallLlmAttemptInput {
   userAgent?: string;
 }
 
-const createStreamExecutionError = (errorData: unknown) => {
+/**
+ * Codes a stream `error` payload may legitimately carry in its `type` field.
+ *
+ * Stream error data is untyped: providers pass their own vocabulary through
+ * (`api_error`, `invalid_request_error`, the bare string `error`, …), so `type`
+ * is only promoted to a classification when it names a code we actually own.
+ */
+const KNOWN_ERROR_CODES = new Set<string>([
+  ...Object.values(AgentRuntimeErrorType),
+  ...Object.values(ChatErrorType).map(String),
+]);
+
+/**
+ * Wrap a stream `error` event payload into a throwable Error.
+ *
+ * Stream sources emit two shapes. A flat one carries `message` at the top
+ * level; the classified one — what provider stream transformers produce for
+ * terminal policy rejections — nests the human text under `body` and puts the
+ * code in `type`:
+ *
+ * ```ts
+ * { body: { context: {…}, message: 'The content was blocked (SAFETY)…' }, type: 'ProviderContentPolicyViolation' }
+ * ```
+ *
+ * Both halves of that shape used to be dropped. `message` was read only from
+ * the top level, so the entire payload was `JSON.stringify`-ed into the text,
+ * and the code was copied onto the Error as `type` — which `formatErrorForState`
+ * does not read (it keys off `errorType`, and its `type`-only path deliberately
+ * excludes Error instances). A classified provider rejection therefore landed as
+ * an opaque bare 500 carrying a JSON blob for a message.
+ */
+export const createStreamExecutionError = (errorData: unknown) => {
   const errorRecord = toRecord(errorData);
-  const message = pickString(errorRecord?.message);
+  const body = toRecord(errorRecord?.body);
+  const message = pickString(errorRecord?.message) ?? pickString(body?.message);
   const error = new Error(
     message ? `LLM stream error: ${message}` : `LLM stream error: ${JSON.stringify(errorData)}`,
   );
@@ -68,6 +101,19 @@ const createStreamExecutionError = (errorData: unknown) => {
   if (errorRecord) {
     const { message: _message, ...details } = errorRecord;
     Object.assign(error, details);
+
+    // Surface the classification under the key the error formatter reads, so a
+    // typed stream rejection keeps its code instead of collapsing into a 500.
+    const errorType = pickString(errorRecord.errorType) ?? pickString(errorRecord.type);
+    if (errorType && KNOWN_ERROR_CODES.has(errorType)) {
+      // Hand the payload's `body` over as `_responseBody` in the same step.
+      // `formatErrorForState` builds the display body from
+      // `_responseBody ?? error ?? <the thrown value>`; without this it would
+      // fall through to the Error itself and emit `body: { body: {…}, type,
+      // errorType }`, pushing `provider` / `context` one level below the
+      // `ChatMessageError.body` contract that the renderers read.
+      Object.assign(error, { errorType, ...(body ? { _responseBody: body } : {}) });
+    }
   }
 
   return error;

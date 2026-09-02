@@ -20,14 +20,10 @@ export const ListDocumentsInspector = memo<
   const styles = inspectorChipStyles;
 
   return (
-    <div
-      style={{ flexWrap: 'wrap', gap: 4 }}
-      className={cx(
-        inspectorTextStyles.root,
-        (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-      )}
-    >
-      <span>{t('builtins.lobe-agent-documents.apiName.listDocuments')}</span>
+    <div className={inspectorTextStyles.root} style={{ flexWrap: 'wrap', gap: 4 }}>
+      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+        {t('builtins.lobe-agent-documents.apiName.listDocuments')}
+      </span>
       {scope && (
         <>
           <span className={styles.separator}>·</span>

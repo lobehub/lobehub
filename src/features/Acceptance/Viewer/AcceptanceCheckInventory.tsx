@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Select, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Select, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import { ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -28,6 +28,7 @@ import CheckList, {
 } from './CheckList';
 import { EMPTY_ID_SET, setAggregateEntry } from './expandState';
 import { useAcceptanceBundle } from './useAcceptanceBundle';
+import { canReviewAcceptance } from './visibility';
 
 const styles = createStaticStyles(({ css }) => ({
   countBadge: css`
@@ -43,14 +44,12 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface AcceptanceCheckInventoryProps {
-  canReview?: boolean;
   children?: ReactNode;
   onOpenTrace?: (verifierOperationId: string) => void | Promise<void>;
   toolbar?: ReactNode;
 }
 
 const AcceptanceCheckInventory = ({
-  canReview = false,
   children,
   onOpenTrace,
   toolbar,
@@ -152,7 +151,29 @@ const AcceptanceCheckInventory = ({
 
   if (!data) return null;
 
+  const canReview = canReviewAcceptance(data);
   const checks = data.checks;
+
+  /**
+   * Every mutation the checklist fires goes through here.
+   *
+   * A rejected promise handed back to CheckList would escape as an unhandled
+   * rejection AND strand the row's own pending flag — the row that raised it
+   * spins forever, with the reason only in the console. Failing loudly and
+   * returning `false` lets the row settle and say what happened.
+   */
+  const runReviewMutation = async (action: () => Promise<unknown>) => {
+    try {
+      await action();
+      await mutate();
+      void globalMutate(isAcceptanceListKey);
+      return true;
+    } catch (cause) {
+      console.error('[acceptance:review]', cause);
+      toast.error(cause instanceof Error ? cause.message : t('acceptance.actionError'));
+      return false;
+    }
+  };
   const counts = {
     accepted: checks.filter((check) => checkFilterState(check) === 'accepted').length,
     ignored: checks.filter((check) => checkFilterState(check) === 'ignored').length,
@@ -247,34 +268,32 @@ const AcceptanceCheckInventory = ({
         onDismissProposal={
           canReview
             ? async (input) => {
-                await verifyService.adjudicateProposal({
-                  adjudication: input.adjudication,
-                  id: data.acceptance.id,
-                  predictionId: input.predictionId,
-                });
-                await mutate();
-                void globalMutate(isAcceptanceListKey);
+                await runReviewMutation(() =>
+                  verifyService.adjudicateProposal({
+                    adjudication: input.adjudication,
+                    id: data.acceptance.id,
+                    predictionId: input.predictionId,
+                  }),
+                );
               }
             : undefined
         }
         onGroupFeedback={async (category, comment, fileIds) => {
           if (!canReview) return false;
-          await verifyService.addGroupFeedback({
-            category,
-            comment,
-            fileIds: fileIds.length > 0 ? fileIds : undefined,
-            id: data.acceptance.id,
-          });
-          await mutate();
-          void globalMutate(isAcceptanceListKey);
-          return true;
+          return runReviewMutation(() =>
+            verifyService.addGroupFeedback({
+              category,
+              comment,
+              fileIds: fileIds.length > 0 ? fileIds : undefined,
+              id: data.acceptance.id,
+            }),
+          );
         }}
         onReview={async (input) => {
           if (!canReview) return false;
-          await verifyService.reviewChecks({ id: data.acceptance.id, ...input });
-          await mutate();
-          void globalMutate(isAcceptanceListKey);
-          return true;
+          return runReviewMutation(() =>
+            verifyService.reviewChecks({ id: data.acceptance.id, ...input }),
+          );
         }}
         onToggleGroup={(key) =>
           setCollapsedGroups((previous) => {
