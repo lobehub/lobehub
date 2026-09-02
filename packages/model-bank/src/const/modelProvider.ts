@@ -75,6 +75,7 @@ export enum ModelProvider {
   VertexAI = 'vertexai',
   VLLM = 'vllm',
   Volcengine = 'volcengine',
+  VolcengineAgentPlan = 'volcengineagentplan',
   VolcengineCodingPlan = 'volcenginecodingplan',
   Wenxin = 'wenxin',
   XAI = 'xai',

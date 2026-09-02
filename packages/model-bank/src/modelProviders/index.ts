@@ -77,6 +77,7 @@ import VercelAIGatewayProvider from './vercelaigateway';
 import VertexAIProvider from './vertexai';
 import VLLMProvider from './vllm';
 import VolcengineProvider from './volcengine';
+import VolcengineAgentPlanProvider from './volcengineAgentPlan';
 import VolcengineCodingPlanProvider from './volcengineCodingPlan';
 import WenxinProvider from './wenxin';
 import XAIProvider from './xai';
@@ -202,6 +203,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   BaichuanProvider,
   VolcengineProvider,
   VolcengineCodingPlanProvider,
+  VolcengineAgentPlanProvider,
   MinimaxProvider,
   MinimaxCodingPlanProvider,
   LMStudioProvider,
@@ -321,6 +323,7 @@ export { default as VercelAIGatewayProviderCard } from './vercelaigateway';
 export { default as VertexAIProviderCard } from './vertexai';
 export { default as VLLMProviderCard } from './vllm';
 export { default as VolcengineProviderCard } from './volcengine';
+export { default as VolcengineAgentPlanProviderCard } from './volcengineAgentPlan';
 export { default as VolcengineCodingPlanProviderCard } from './volcengineCodingPlan';
 export { default as WenxinProviderCard } from './wenxin';
 export { default as XAIProviderCard } from './xai';
