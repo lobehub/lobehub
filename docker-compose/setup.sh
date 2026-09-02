@@ -558,8 +558,9 @@ section_configurate_host() {
         ask "(y/n)" "y"
         if [[ "$ask_result" == "y" ]]; then
             PROTOCOL="https"
-            # Replace all http with https
-            sed "${SED_INPLACE_ARGS[@]}" "s#http://#https://#" .env
+            # Replace all http with https, except the in-network Elasticsearch
+            # endpoint, which is plain HTTP inside the Compose network by design.
+            sed "${SED_INPLACE_ARGS[@]}" "/ES_URL=/! s#http://#https://#" .env
         fi
     fi
     

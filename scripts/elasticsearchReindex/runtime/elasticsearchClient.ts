@@ -2,7 +2,7 @@ import { isDeepStrictEqual } from 'node:util';
 
 import { z } from 'zod';
 
-import { parseElasticsearchUrl } from '../../../packages/database/src/repositories/ftsSearch/elasticsearch/url';
+import { resolveElasticsearchTransport } from '../../../packages/database/src/repositories/ftsSearch/elasticsearch/url';
 import type {
   FtsSearchReindexBulkItemResult,
   FtsSearchReindexElasticsearchClient,
@@ -73,7 +73,10 @@ const settingsResponseSchema = z.record(
 );
 
 export interface FtsSearchReindexHttpClientOptions {
-  apiKey: string;
+  /** Explicit opt-in for plaintext HTTP / no API key on a private container network. */
+  allowInsecureHttp?: boolean;
+  /** Required unless `allowInsecureHttp` is enabled; never sent over plaintext HTTP. */
+  apiKey?: string;
   requestTimeoutMs?: number;
   url: string;
 }
@@ -90,21 +93,27 @@ export class FtsSearchReindexRequestError extends Error {
 
 /** Minimal credential-safe Elasticsearch transport for the self-host reindex command. */
 export class FtsSearchReindexHttpClient implements FtsSearchReindexElasticsearchClient {
-  private readonly apiKey: string;
+  private readonly authorizationHeader: string | undefined;
   private readonly requestTimeoutMs: number;
   private readonly url: URL;
 
-  constructor({ apiKey, requestTimeoutMs = 30_000, url }: FtsSearchReindexHttpClientOptions) {
-    this.apiKey = apiKey;
+  constructor({
+    allowInsecureHttp,
+    apiKey,
+    requestTimeoutMs = 30_000,
+    url,
+  }: FtsSearchReindexHttpClientOptions) {
+    const transport = resolveElasticsearchTransport({ allowInsecureHttp, apiKey, url });
+    this.authorizationHeader = transport.authorizationHeader;
     this.requestTimeoutMs = requestTimeoutMs;
-    this.url = parseElasticsearchUrl(url);
+    this.url = transport.url;
   }
 
   private async request(path: string, init: RequestInit = {}) {
     return fetch(new URL(path, this.url), {
       ...init,
       headers: {
-        Authorization: `ApiKey ${this.apiKey}`,
+        ...(this.authorizationHeader ? { Authorization: this.authorizationHeader } : {}),
         ...init.headers,
       },
       signal: AbortSignal.timeout(this.requestTimeoutMs),

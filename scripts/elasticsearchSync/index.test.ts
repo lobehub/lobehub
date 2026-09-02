@@ -122,4 +122,57 @@ describe('runElasticsearchFtsSearchSyncCli', () => {
       expect.stringContaining('"type":"fts_search_sync_completed"'),
     );
   });
+
+  it('keeps draining in interval mode until the stop signal aborts', async () => {
+    const { drainOnce, runtime } = createRuntime([
+      drainResult({ hasMore: true }),
+      drainResult(),
+      drainResult(),
+    ]);
+    const controller = new AbortController();
+    const sleep = vi.fn(async (_milliseconds: number, signal: AbortSignal) => {
+      expect(signal).toBe(controller.signal);
+      if (sleep.mock.calls.length === 2) controller.abort();
+    });
+    const logSuccess = vi.fn();
+
+    await expect(
+      runElasticsearchFtsSearchSyncCli({
+        args: ['--interval-seconds=15', '--max-steps=1', '--yes'],
+        loadRuntime: async () => runtime,
+        logSuccess,
+        sleep,
+        stopSignal: controller.signal,
+      }),
+    ).resolves.toBe(0);
+
+    // Run 1 reports hasMore, so the worker continues immediately; runs 2 and 3 sleep.
+    expect(drainOnce).toHaveBeenCalledTimes(3);
+    expect(sleep).toHaveBeenCalledTimes(2);
+    expect(sleep).toHaveBeenCalledWith(15_000, controller.signal);
+    expect(logSuccess).toHaveBeenLastCalledWith(
+      JSON.stringify({ type: 'fts_search_sync_interval_stopped' }),
+    );
+  });
+
+  it('exits non-zero from interval mode when a bounded run fails', async () => {
+    const { runtime } = createRuntime([drainResult({ dead: 1, failed: 1 })]);
+    const sleep = vi.fn();
+    const logError = vi.fn();
+
+    await expect(
+      runElasticsearchFtsSearchSyncCli({
+        args: ['--interval-seconds=15', '--yes'],
+        loadRuntime: async () => runtime,
+        logError,
+        sleep,
+        stopSignal: new AbortController().signal,
+      }),
+    ).resolves.toBe(1);
+    expect(sleep).not.toHaveBeenCalled();
+    expect(logError).toHaveBeenCalledWith(
+      'Elasticsearch full-text search sync failed:',
+      'Elasticsearch full-text search sync created dead-letter work',
+    );
+  });
 });

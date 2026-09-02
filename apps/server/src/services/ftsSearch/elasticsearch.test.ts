@@ -38,6 +38,53 @@ describe('ElasticsearchFtsSearchHttpClient', () => {
     ).not.toThrow();
   });
 
+  it('rejects an API key over plaintext HTTP even when insecure HTTP is allowed', () => {
+    expect(
+      () =>
+        new ElasticsearchFtsSearchHttpClient({
+          allowInsecureHttp: true,
+          apiKey: 'test-api-key',
+          url: 'http://elasticsearch:9200',
+        }),
+    ).toThrow('must not be sent over plaintext HTTP');
+  });
+
+  it('requires an API key unless insecure private-network access is explicitly allowed', () => {
+    expect(
+      () => new ElasticsearchFtsSearchHttpClient({ url: 'https://search.example.com' }),
+    ).toThrow('API key is required unless ES_ALLOW_INSECURE_HTTP=true');
+  });
+
+  it('sends unauthenticated requests to an explicitly insecure private-network endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ hits: { hits: [] }, took: 1 }), {
+        headers: { 'Content-Type': 'application/json' },
+        status: 200,
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new ElasticsearchFtsSearchHttpClient({
+      allowInsecureHttp: true,
+      url: 'http://elasticsearch:9200',
+    });
+
+    await client.search({
+      body: { query: { match_all: {} } },
+      entity: 'agents',
+      executedQueryChars: 1,
+      index: 'lobehub-agents',
+      originalQueryChars: 1,
+      pagination: 'bounded',
+      queryFieldCount: 1,
+      truncated: false,
+    });
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [endpoint, init] = fetchMock.mock.calls[0];
+    expect(String(endpoint)).toBe('http://elasticsearch:9200/lobehub-agents/_search');
+    expect(Object.keys(init.headers)).not.toContain('Authorization');
+  });
+
   it('returns no write targets without making requests when no aliases are provided', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

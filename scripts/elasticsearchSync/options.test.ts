@@ -23,6 +23,28 @@ describe('parseElasticsearchFtsSearchSyncCliOptions', () => {
     },
   );
 
+  it('accepts an optional interval for the long-running Compose worker mode', () => {
+    expect(
+      parseElasticsearchFtsSearchSyncCliOptions([
+        '--max-steps=8',
+        '--interval-seconds=15',
+        '--yes',
+      ]),
+    ).toEqual({ intervalSeconds: 15, maxSteps: 8, yes: true });
+    expect(parseElasticsearchFtsSearchSyncCliOptions(['--yes'])).not.toHaveProperty(
+      'intervalSeconds',
+    );
+  });
+
+  it.each(['--interval-seconds=0', '--interval-seconds=3601', '--interval-seconds=1.5'])(
+    'rejects invalid interval %s',
+    (argument) => {
+      expect(() => parseElasticsearchFtsSearchSyncCliOptions([argument])).toThrow(
+        '--interval-seconds must be an integer between 1 and 3600',
+      );
+    },
+  );
+
   it('rejects duplicate or unknown arguments', () => {
     expect(() =>
       parseElasticsearchFtsSearchSyncCliOptions(['--max-steps=1', '--max-steps=2']),

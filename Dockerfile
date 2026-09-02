@@ -132,9 +132,13 @@ COPY --from=builder /deps/node_modules/drizzle-orm /app/node_modules/drizzle-orm
 COPY --from=builder /app/scripts/serverLauncher/startServer.js /app/startServer.js
 COPY --from=builder /app/scripts/_shared /app/scripts/_shared
 
+# /app/.elasticsearch-reindex is the default checkpoint directory of the Elasticsearch reindex
+# command. Creating it here lets a Docker named volume mounted on it inherit nextjs ownership so
+# the one-off Compose service can write checkpoints without running as root.
 RUN set -e && \
     addgroup -S -g 1001 nodejs && \
     adduser -D -G nodejs -H -S -h /app -u 1001 nextjs && \
+    mkdir -p /app/.elasticsearch-reindex && \
     chown -R nextjs:nodejs /app /etc/proxychains4.conf
 
 ## Production image, copy all the files and run next

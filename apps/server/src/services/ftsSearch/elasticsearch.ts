@@ -9,7 +9,7 @@ import type {
   ElasticsearchFtsSearchInput,
   ElasticsearchFtsSearchResponse,
 } from '@/database/repositories/ftsSearch';
-import { parseElasticsearchUrl } from '@/database/repositories/ftsSearch/elasticsearch/url';
+import { resolveElasticsearchTransport } from '@/database/repositories/ftsSearch/elasticsearch/url';
 
 import type {
   ElasticsearchFtsSearchErrorCode,
@@ -111,7 +111,10 @@ export interface ElasticsearchFtsSearchBulkResponse {
 }
 
 export interface ElasticsearchFtsSearchHttpClientOptions {
-  apiKey: string;
+  /** Explicit opt-in for plaintext HTTP / no API key on a private container network. */
+  allowInsecureHttp?: boolean;
+  /** Required unless `allowInsecureHttp` is enabled; never sent over plaintext HTTP. */
+  apiKey?: string;
   requestTimeoutMs?: number;
   url: string;
   usage?: FtsSearchUsage;
@@ -236,21 +239,30 @@ const getTraceDetails = (): {
 
 /** HTTP transport that never logs credentials, request text, or Elasticsearch payloads. */
 export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchClient {
-  private readonly apiKey: string;
+  private readonly authorizationHeader: string | undefined;
   private readonly requestTimeoutMs: number;
   private readonly url: URL;
   private readonly usage: FtsSearchUsage;
 
   constructor({
+    allowInsecureHttp,
     apiKey,
     requestTimeoutMs = 10_000,
     url,
     usage = 'unattributed',
   }: ElasticsearchFtsSearchHttpClientOptions) {
-    this.apiKey = apiKey;
+    const transport = resolveElasticsearchTransport({ allowInsecureHttp, apiKey, url });
+    this.authorizationHeader = transport.authorizationHeader;
     this.requestTimeoutMs = requestTimeoutMs;
-    this.url = parseElasticsearchUrl(url);
+    this.url = transport.url;
     this.usage = usage;
+  }
+
+  /** Adds the Authorization header only for authenticated endpoints. */
+  private headers(extra: Record<string, string> = {}): Record<string, string> {
+    return this.authorizationHeader
+      ? { Authorization: this.authorizationHeader, ...extra }
+      : { ...extra };
   }
 
   /** Fails closed unless every incremental destination is a writable alias with tombstone support. */
@@ -261,7 +273,7 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
   private async getFtsSearchSyncWriteTargetMap(aliases: string[]) {
     const aliasPath = aliases.map(encodeURIComponent).join(',');
     const aliasResponse = await fetch(new URL(`/_alias/${aliasPath}`, this.url), {
-      headers: { Authorization: `ApiKey ${this.apiKey}` },
+      headers: this.headers(),
       method: 'GET',
       signal: AbortSignal.timeout(this.requestTimeoutMs),
     });
@@ -327,7 +339,7 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
         this.url,
       ),
       {
-        headers: { Authorization: `ApiKey ${this.apiKey}` },
+        headers: this.headers(),
         method: 'GET',
         signal: AbortSignal.timeout(this.requestTimeoutMs),
       },
@@ -382,7 +394,7 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
         this.url,
       ),
       {
-        headers: { Authorization: `ApiKey ${this.apiKey}` },
+        headers: this.headers(),
         method: 'GET',
         signal: AbortSignal.timeout(this.requestTimeoutMs),
       },
@@ -452,10 +464,7 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
     const endpoint = new URL('/_bulk?require_alias=true', this.url);
     const response = await fetch(endpoint, {
       body,
-      headers: {
-        'Authorization': `ApiKey ${this.apiKey}`,
-        'Content-Type': 'application/x-ndjson',
-      },
+      headers: this.headers({ 'Content-Type': 'application/x-ndjson' }),
       method: 'POST',
       signal: AbortSignal.timeout(this.requestTimeoutMs),
     });
@@ -556,10 +565,7 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
     try {
       const response = await fetch(endpoint, {
         body,
-        headers: {
-          'Authorization': `ApiKey ${this.apiKey}`,
-          'Content-Type': 'application/json',
-        },
+        headers: this.headers({ 'Content-Type': 'application/json' }),
         method: 'POST',
         signal: AbortSignal.timeout(this.requestTimeoutMs),
       });

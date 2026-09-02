@@ -93,13 +93,48 @@ export interface RunElasticsearchFtsSearchSyncCliOptions {
   loadRuntime?: () => Promise<FtsSearchSyncRuntime>;
   logError?: Logger;
   logSuccess?: Logger;
+  /** Injectable sleep for the long-running interval mode. */
+  sleep?: (milliseconds: number, signal: AbortSignal) => Promise<void>;
+  /** Aborting this signal stops interval mode after the current bounded run finishes. */
+  stopSignal?: AbortSignal;
 }
+
+const defaultSleep = (milliseconds: number, signal: AbortSignal) =>
+  new Promise<void>((resolve) => {
+    if (signal.aborted) {
+      resolve();
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, milliseconds);
+    const onAbort = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+
+/**
+ * SIGINT / SIGTERM stop interval mode gracefully so a container supervisor can stop the worker
+ * between bounded runs without abandoning claimed Outbox work mid-run.
+ */
+const createProcessStopSignal = () => {
+  const controller = new AbortController();
+  const stop = () => controller.abort();
+  process.once('SIGINT', stop);
+  process.once('SIGTERM', stop);
+  return controller.signal;
+};
 
 export const runElasticsearchFtsSearchSyncCli = async ({
   args = process.argv.slice(2),
   loadRuntime: load,
   logError = console.error,
   logSuccess = console.log,
+  sleep = defaultSleep,
+  stopSignal,
 }: RunElasticsearchFtsSearchSyncCliOptions = {}): Promise<number> => {
   try {
     const options = parseElasticsearchFtsSearchSyncCliOptions(args);
@@ -109,12 +144,40 @@ export const runElasticsearchFtsSearchSyncCli = async ({
       );
     }
 
-    const summary = await runElasticsearchFtsSearchSync({
-      loadRuntime: load,
-      logStep: (step) => logSuccess(JSON.stringify({ ...step, type: 'fts_search_sync_step' })),
-      maxSteps: options.maxSteps,
-    });
-    logSuccess(JSON.stringify({ ...summary, success: true, type: 'fts_search_sync_completed' }));
+    const runOnce = async () => {
+      const summary = await runElasticsearchFtsSearchSync({
+        loadRuntime: load,
+        logStep: (step) => logSuccess(JSON.stringify({ ...step, type: 'fts_search_sync_step' })),
+        maxSteps: options.maxSteps,
+      });
+      logSuccess(JSON.stringify({ ...summary, success: true, type: 'fts_search_sync_completed' }));
+      return summary;
+    };
+
+    if (options.intervalSeconds === undefined) {
+      await runOnce();
+      return 0;
+    }
+
+    /**
+     * Interval mode is the Compose-friendly long-running form of the same bounded drain. Each
+     * iteration keeps the bounded semantics; a drain that leaves failed or dead work still exits
+     * non-zero so the supervisor restart policy and logs make the failure visible.
+     */
+    const signal = stopSignal ?? createProcessStopSignal();
+    logSuccess(
+      JSON.stringify({
+        intervalSeconds: options.intervalSeconds,
+        maxSteps: options.maxSteps,
+        type: 'fts_search_sync_interval_started',
+      }),
+    );
+    while (!signal.aborted) {
+      const summary = await runOnce();
+      if (signal.aborted) break;
+      if (!summary.hasMore) await sleep(options.intervalSeconds * 1000, signal);
+    }
+    logSuccess(JSON.stringify({ type: 'fts_search_sync_interval_stopped' }));
     return 0;
   } catch (error) {
     logError('Elasticsearch full-text search sync failed:', summarizeFtsSearchReindexError(error));

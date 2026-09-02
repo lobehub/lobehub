@@ -50,6 +50,37 @@ describe('FtsSearchReindexHttpClient', () => {
     ).not.toThrow();
   });
 
+  it('rejects an API key over plaintext HTTP even when insecure HTTP is allowed', () => {
+    expect(
+      () =>
+        new FtsSearchReindexHttpClient({
+          allowInsecureHttp: true,
+          apiKey: 'secret-key',
+          url: 'http://elasticsearch:9200',
+        }),
+    ).toThrow('must not be sent over plaintext HTTP');
+  });
+
+  it('requires an API key unless insecure private-network access is explicitly allowed', () => {
+    expect(() => new FtsSearchReindexHttpClient({ url: 'https://search.example.com' })).toThrow(
+      'API key is required unless ES_ALLOW_INSECURE_HTTP=true',
+    );
+  });
+
+  it('sends unauthenticated requests to an explicitly insecure private-network endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(response({ count: 3 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new FtsSearchReindexHttpClient({
+      allowInsecureHttp: true,
+      url: 'http://elasticsearch:9200',
+    });
+
+    await expect(client.count('lobehub-agents-v1')).resolves.toBe(3);
+    const [endpoint, init] = fetchMock.mock.calls[0];
+    expect(String(endpoint)).toBe('http://elasticsearch:9200/lobehub-agents-v1/_count');
+    expect(Object.keys(init.headers)).not.toContain('Authorization');
+  });
+
   it('creates a missing index without exposing credentials in the URL', async () => {
     const fetchMock = vi
       .fn()

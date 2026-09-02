@@ -38,14 +38,15 @@ Elasticsearch data flow, read [Full-Text Search](/docs/self-hosting/advanced/ful
 
 ## Environment variables
 
-| Variable                  | Required | Purpose                                                                                                                                    |
-| ------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `DATABASE_URL`            | Yes      | PostgreSQL source database and incremental-change Outbox. Reindex checkpoints are not stored in the database.                              |
-| `ES_URL`                  | Apply    | HTTPS endpoint of the new, empty Elasticsearch project that receives the 3.x search indexes.                                               |
-| `ES_API_KEY`              | Apply    | Elasticsearch API key used to create indexes, write bulk documents, refresh/count indexes, and create aliases. Do not use a read-only key. |
-| `ES_INDEX_NAMESPACE`      | Yes      | Stable deployment-owned prefix, for example `lobehub`. It produces aliases such as `lobehub-messages`. Keep it unchanged across reruns.    |
-| `FTS_SEARCH_SYNC_ENABLED` | Sync     | Set to `true` only after the full backfill is ready and before running the incremental consumer.                                           |
-| `FTS_SEARCH_PROVIDER`     | Cutover  | Set to `elasticsearch` after backfill, catch-up, and validation finish to switch user search traffic.                                      |
+| Variable                  | Required | Purpose                                                                                                                                                                                   |
+| ------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`            | Yes      | PostgreSQL source database and incremental-change Outbox. Reindex checkpoints are not stored in the database.                                                                             |
+| `ES_URL`                  | Apply    | Endpoint of the new, empty Elasticsearch target that receives the 3.x search indexes. HTTPS, or plaintext HTTP only for loopback or with `ES_ALLOW_INSECURE_HTTP=true`.                   |
+| `ES_API_KEY`              | Apply    | Elasticsearch API key used to create indexes, write bulk documents, refresh/count indexes, and create aliases. Do not use a read-only key. Required unless `ES_ALLOW_INSECURE_HTTP=true`. |
+| `ES_ALLOW_INSECURE_HTTP`  | Compose  | `true` only for an Elasticsearch node with security disabled that is reachable exclusively inside a private container network, such as the optional Docker Compose service.               |
+| `ES_INDEX_NAMESPACE`      | Yes      | Stable deployment-owned prefix, for example `lobehub`. It produces aliases such as `lobehub-messages`. Keep it unchanged across reruns.                                                   |
+| `FTS_SEARCH_SYNC_ENABLED` | Sync     | Set to `true` only after the full backfill is ready and before running the incremental consumer.                                                                                          |
+| `FTS_SEARCH_PROVIDER`     | Cutover  | Set to `elasticsearch` after backfill, catch-up, and validation finish to switch user search traffic.                                                                                     |
 
 `ES_URL` and `ES_API_KEY` are not needed for the read-only `--status` command.
 Operators that keep multiple Elasticsearch targets in one environment can select an explicit pair
@@ -56,7 +57,9 @@ hostname and variable names, never credential values.
 
 Remote Elasticsearch targets must use HTTPS. Plain HTTP is accepted only for loopback addresses
 such as `localhost` during local development, so an API key cannot be sent unencrypted to a remote
-host.
+host. The single explicit exception is `ES_ALLOW_INSECURE_HTTP=true`, which permits plaintext HTTP
+to a private container hostname without an API key; even then the runtime, reindex, and sync
+clients all refuse to send an API key over plaintext HTTP.
 
 ## Before you start
 
@@ -65,7 +68,10 @@ host.
    [`analysis-icu`](https://www.elastic.co/docs/reference/elasticsearch/plugins/analysis-icu)
    plugin. Elastic Cloud Serverless includes core analysis plugins; on Elastic Cloud Hosted, enable
    the provided plugin for the deployment; on self-managed Elasticsearch, install it on every node
-   and restart every node before the first `--apply`.
+   and restart every node before the first `--apply`. Docker Compose deployments can instead enable
+   the optional `elasticsearch` service of the official Compose file, whose image is built with the
+   plugin included; see
+   [Run Elasticsearch with Docker Compose](/docs/self-hosting/advanced/full-text-search#run-elasticsearch-with-docker-compose).
 
 2. Create and verify a PostgreSQL recovery point before enabling Elasticsearch capture, then
    rehearse the migration against an isolated database copy and an isolated empty Elasticsearch
@@ -236,10 +242,25 @@ docker run --rm --user "$(id -u):$(id -g)" --env-file .env \
 ```
 
 The bind mount is required for resume after a `--rm` container exits. Running with the host user's
-ID lets the process write the bind-mounted directory without changing its ownership. If Docker
-Compose already supplies the same environment variables and database network, mount the same
-persistent state directory and run the image as a one-time service instead of starting a second
-application server.
+ID lets the process write the bind-mounted directory without changing its ownership.
+
+## Run from Docker Compose
+
+The official `docker-compose/deploy/docker-compose.yml` already defines the same command as the
+`fts-search-reindex` service, wired to the Compose PostgreSQL, the optional in-network
+`elasticsearch` service, and a named `fts-search-reindex-state` volume for the checkpoint:
+
+```bash
+docker compose run --rm fts-search-reindex --status
+docker compose run --rm fts-search-reindex --apply --fresh-run --yes
+```
+
+Extra arguments are passed through, so the rehearsal, `--entity`, `--skip-failure`, and resume
+commands above work unchanged. The service uses the `ES_URL`, `ES_ALLOW_INSECURE_HTTP`, and
+`ES_INDEX_NAMESPACE` values from `.env`; with an external Elastic Cloud target, set `ES_URL` and
+`ES_API_KEY` there instead and leave `ES_ALLOW_INSECURE_HTTP` unset. The complete Compose sequence,
+including enabling the node and the sync worker, is in
+[Run Elasticsearch with Docker Compose](/docs/self-hosting/advanced/full-text-search#run-elasticsearch-with-docker-compose).
 
 ## Start incremental synchronization
 
@@ -254,6 +275,12 @@ One invocation processes at most eight drain steps and then exits. `hasMore: tru
 means the bound was reached safely; run it again. Schedule the same command with cron, a container
 job, or another process supervisor so it continues to run while Elasticsearch search is enabled.
 Omitting `--max-steps` processes one step; accepted values are from 1 through 100.
+
+For a long-running worker instead of an external scheduler, add `--interval-seconds=<1-3600>`: the
+command repeats the same bounded drain, continues immediately while `hasMore` is true, sleeps for
+the interval otherwise, and stops cleanly on `SIGINT` / `SIGTERM`. A run that leaves failed or
+dead-letter work still exits non-zero, so the supervisor's restart policy and logs surface it. The
+Compose `fts-search-sync` service (profile `elasticsearch-sync`) uses this mode.
 The consumer validates the PostgreSQL capture definitions and every Elasticsearch write alias before
 claiming work. Missing or stale capture infrastructure, an invalid alias, retryable write failure, or
 dead-letter work produces a non-zero exit code. It never installs triggers and never deletes failed

@@ -54,7 +54,13 @@ interface FtsSearchBackendFactoryDependencies {
 }
 
 export interface ElasticsearchFtsSearchConfig {
-  apiKey: string;
+  /**
+   * Explicit opt-in for plaintext HTTP / no API key on a private container network.
+   * Optional so downstream callers that build a config literal keep the secure default (`false`).
+   */
+  allowInsecureHttp?: boolean;
+  /** Required unless `allowInsecureHttp` is enabled; never sent over plaintext HTTP. */
+  apiKey?: string;
   indexNamespace: string;
   url: string;
 }
@@ -73,9 +79,13 @@ export const loadElasticsearchFtsSearchConfig = (): ElasticsearchFtsSearchConfig
   const indexNamespace =
     ftsSearchEnv.ES_INDEX_NAMESPACE ??
     (process.env.NODE_ENV === 'development' ? 'lobehub-dev' : undefined);
-  if (!ftsSearchEnv.ES_API_KEY || !ftsSearchEnv.ES_URL || !indexNamespace) return;
+  const allowInsecureHttp = ftsSearchEnv.ES_ALLOW_INSECURE_HTTP === 'true';
+  /** The Elastic Cloud path keeps requiring an API key; only the explicit insecure mode may omit it. */
+  if (!ftsSearchEnv.ES_URL || !indexNamespace) return;
+  if (!ftsSearchEnv.ES_API_KEY && !allowInsecureHttp) return;
 
   return {
+    allowInsecureHttp,
     apiKey: ftsSearchEnv.ES_API_KEY,
     indexNamespace,
     url: ftsSearchEnv.ES_URL,

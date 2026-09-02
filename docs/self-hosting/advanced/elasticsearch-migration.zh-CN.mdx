@@ -32,25 +32,29 @@ Elasticsearch。3.x 迁移工具会把 PostgreSQL 中 14 类可搜索数据复�
 
 ## 环境变量
 
-| 变量                        | 是否必需 | 用途                                                             |
-| ------------------------- | ---- | -------------------------------------------------------------- |
-| `DATABASE_URL`            | 是    | PostgreSQL 源数据库和增量变更队列；回填 checkpoint 不写入数据库。                   |
-| `ES_URL`                  | 执行时  | 新建空 Elasticsearch 项目的 HTTPS 地址，用于接收 3.x 搜索索引。                  |
-| `ES_API_KEY`              | 执行时  | 用于创建索引、批量写入、刷新 / 统计索引和创建别名的 Elasticsearch 密钥，不能使用只读密钥。         |
-| `ES_INDEX_NAMESPACE`      | 是    | 当前部署长期不变的索引前缀，例如 `lobehub`；会生成 `lobehub-messages` 等别名，续跑时不能修改。 |
-| `FTS_SEARCH_SYNC_ENABLED` | 增量同步 | 只有全量回填就绪后才能设为 `true`，用于启用增量消费器。                                |
-| `FTS_SEARCH_PROVIDER`     | 切换时  | 回填、追平和验收完成后设为 `elasticsearch`，将用户搜索请求切换到 Elasticsearch。        |
+| 变量                        | 是否必需    | 用途                                                                                                  |
+| ------------------------- | ------- | --------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`            | 是       | PostgreSQL 源数据库和增量变更队列；回填 checkpoint 不写入数据库。                                                        |
+| `ES_URL`                  | 执行时     | 接收 3.x 搜索索引的新建空 Elasticsearch 目标地址。使用 HTTPS；明文 HTTP 只允许用于回环地址，或在 `ES_ALLOW_INSECURE_HTTP=true` 时使用。 |
+| `ES_API_KEY`              | 执行时     | 用于创建索引、批量写入、刷新 / 统计索引和创建别名的 Elasticsearch 密钥，不能使用只读密钥。除 `ES_ALLOW_INSECURE_HTTP=true` 外均为必需。        |
+| `ES_ALLOW_INSECURE_HTTP`  | Compose | 仅对关闭安全认证且只能在私有容器网络内访问的 Elasticsearch 节点（例如官方 Compose 的可选服务）设为 `true`。                               |
+| `ES_INDEX_NAMESPACE`      | 是       | 当前部署长期不变的索引前缀，例如 `lobehub`；会生成 `lobehub-messages` 等别名，续跑时不能修改。                                      |
+| `FTS_SEARCH_SYNC_ENABLED` | 增量同步    | 只有全量回填就绪后才能设为 `true`，用于启用增量消费器。                                                                     |
+| `FTS_SEARCH_PROVIDER`     | 切换时     | 回填、追平和验收完成后设为 `elasticsearch`，将用户搜索请求切换到 Elasticsearch。                                             |
 
 只读的 `--status` 命令不需要 `ES_URL` 和 `ES_API_KEY`。
 如果同一个环境中保存了多套 Elasticsearch 目标，可以同时传入 `--elasticsearch-url-env=<变量名>` 和 `--elasticsearch-api-key-env=<变量名>` 显式选择其中一组。两个参数必须成对使用；还可以通过 `--expected-elasticsearch-host-prefix=<主机名前缀>` 在任何回填写入前拒绝错误目标。命令会打印并记录选中的主机名和变量名，但不会记录密钥值。
 
-远程 Elasticsearch 目标必须使用 HTTPS。只有本地开发时的 `localhost` 等回环地址可以使用明文 HTTP，避免把 API 密钥通过未加密连接发送到远程主机。
+远程 Elasticsearch 目标必须使用 HTTPS。只有本地开发时的 `localhost` 等回环地址可以使用明文 HTTP，避免把 API 密钥通过未加密连接发送到远程主机。唯一的显式例外是
+`ES_ALLOW_INSECURE_HTTP=true`：它允许对私有容器网络内的主机名使用无 API 密钥的明文 HTTP；即便如此，运行时、回填和同步三个客户端都会拒绝通过明文 HTTP 发送 API 密钥。
 
 ## 开始前
 
 1. 在正式使用的区域创建一个新的空 Elasticsearch 项目。LobeHub 搜索分析器依赖官方
    [`analysis-icu`](https://www.elastic.co/docs/reference/elasticsearch/plugins/analysis-icu)
-   插件。Elastic Cloud Serverless 已包含核心分析插件；Elastic Cloud Hosted 需要为部署启用官方插件；自行管理的 Elasticsearch 必须在所有节点安装插件并重启所有节点。请在首次执行 `--apply` 前完成。
+   插件。Elastic Cloud Serverless 已包含核心分析插件；Elastic Cloud Hosted 需要为部署启用官方插件；自行管理的 Elasticsearch 必须在所有节点安装插件并重启所有节点。请在首次执行 `--apply` 前完成。Docker Compose
+   部署也可以改为启用官方 Compose 文件中的可选 `elasticsearch` 服务，其镜像构建时已内置该插件，详见
+   [使用 Docker Compose 运行 Elasticsearch](/zh/docs/self-hosting/advanced/full-text-search#使用-docker-compose-运行-elasticsearch)。
 
 2. 在启用 Elasticsearch 采集前创建并验证 PostgreSQL 恢复点，再使用隔离的数据库副本和空
    Elasticsearch 目标演练。演练至少要覆盖每个非空数据类型的一个批次、使用同一 checkpoint
@@ -157,7 +161,23 @@ docker run --rm --user "$(id -u):$(id -g)" --env-file .env \
   lobehub/lobehub:latest /app/fts-search-elasticsearch-reindex.cjs --apply --fresh-run --yes
 ```
 
-使用 `--rm` 时必须挂载状态目录，否则容器退出后无法续跑。命令使用宿主机当前用户的 ID 运行，使进程可以写入挂载目录，同时不会修改目录所有者。如果 Docker Compose 已提供相同的环境变量和数据库网络，请挂载同一个持久化状态目录，并把镜像作为一次性服务运行，不要再启动一个应用服务实例。
+使用 `--rm` 时必须挂载状态目录，否则容器退出后无法续跑。命令使用宿主机当前用户的 ID 运行，使进程可以写入挂载目录，同时不会修改目录所有者。
+
+## 使用 Docker Compose 运行
+
+官方 `docker-compose/deploy/docker-compose.yml` 已将同一条命令定义为 `fts-search-reindex`
+服务，并接入 Compose 内的 PostgreSQL、可选的内部网络 `elasticsearch` 服务，以及保存 checkpoint 的命名卷
+`fts-search-reindex-state`：
+
+```bash
+docker compose run --rm fts-search-reindex --status
+docker compose run --rm fts-search-reindex --apply --fresh-run --yes
+```
+
+额外参数会原样传入，因此上文的演练、`--entity`、`--skip-failure` 和续跑命令都可以直接使用。该服务读取 `.env` 中的
+`ES_URL`、`ES_ALLOW_INSECURE_HTTP` 和 `ES_INDEX_NAMESPACE`；如果目标是外部 Elastic Cloud，请改为在其中设置
+`ES_URL` 和 `ES_API_KEY`，并不要设置 `ES_ALLOW_INSECURE_HTTP`。包含启用节点和同步任务的完整 Compose 流程见
+[使用 Docker Compose 运行 Elasticsearch](/zh/docs/self-hosting/advanced/full-text-search#使用-docker-compose-运行-elasticsearch)。
 
 ## 启动增量同步
 
@@ -170,6 +190,10 @@ bun run fts-search:sync -- --max-steps=8 --yes
 
 每次最多执行 8 轮消费后退出。最终 JSON 中出现 `hasMore: true` 只表示本次达到上限，可以安全再次执行。应使用 cron、容器任务或其他进程管理器持续调度同一条命令，Elasticsearch 承担搜索期间不能停止。消费器会在领取任务前校验 PostgreSQL 采集定义和全部 Elasticsearch 写入别名；采集设施缺失或过期、别名异常、可重试写入失败或死信都会返回非零退出码。消费器不会自动安装触发器，也不会自动删除失败任务。
 省略 `--max-steps` 时只执行一轮；可用范围为 1 到 100。
+
+如果不想依赖外部调度器，可以加上 `--interval-seconds=<1-3600>` 让命令作为长期任务运行：它会重复执行同样的有界消费，`hasMore`
+为 true 时立即继续，否则等待指定秒数，并在收到 `SIGINT` / `SIGTERM` 时正常停止。留下失败或死信任务的那一轮仍会以非零状态退出，因此进程管理器的重启策略和日志能够暴露问题。Compose
+中的 `fts-search-sync` 服务（profile `elasticsearch-sync`）使用的就是这种模式。
 
 官方镜像内置 `/app/fts-search-elasticsearch-sync.cjs`，执行的是同一套有界消费逻辑：
 
