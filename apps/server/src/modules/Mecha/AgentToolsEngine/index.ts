@@ -9,6 +9,7 @@
  * - Gets model capabilities from provided function
  * - No dependency on frontend stores (useToolStore, useAgentStore, etc.)
  */
+import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation';
@@ -323,6 +324,12 @@ export const createServerAgentToolsEngine = (
     // Browser drives the device's in-app browser — same device gate as
     // local-system: local runtime routed to an online, auto-activated device.
     [BrowserManifest.identifier]:
+      runtimeMode === 'local' &&
+      hasDeviceProxy &&
+      !!deviceContext?.deviceOnline &&
+      !!deviceContext?.autoActivated,
+    [AuvManifest.identifier]:
+      !disableLocalSystem &&
       runtimeMode === 'local' &&
       hasDeviceProxy &&
       !!deviceContext?.deviceOnline &&

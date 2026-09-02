@@ -13,6 +13,7 @@ import {
 } from '@lobechat/heterogeneous-agents/scanHost';
 import { type ILocalSystemService, LocalSystemExecutionRuntime } from '@lobechat/tool-runtime';
 
+import AuvService, { type AuvRunCommandParams } from '@/services/auvSrv';
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import ImessageBridgeService from '@/services/imessageBridgeSrv';
 import { createLogger } from '@/utils/logger';
@@ -35,6 +36,7 @@ type AvailableRemotePlatformRuntime = Extract<RemotePlatformCommandRuntime, { av
 // Hardcoded (not imported) so the desktop main process keeps zero builtin-tool
 // package deps — importing one risks the @lobechat/types stub runtime leak.
 const BrowserIdentifier = 'lobe-browser';
+const AuvIdentifier = 'lobe-auv';
 
 function parseHermesSessionId(stderr: string): string | undefined {
   for (const line of stderr.split(/\r?\n/).reverse()) {
@@ -142,6 +144,10 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
   private get service() {
     return this.app.getService(GatewayConnectionService);
+  }
+
+  private get auvService() {
+    return this.app.getService(AuvService);
   }
 
   private get remoteServerConfigCtr() {
@@ -402,11 +408,29 @@ export default class GatewayConnectionCtr extends ControllerModule {
     return runDeviceRpc(method, params, this.deviceControlDeps);
   }
 
+  /**
+   * Dispatches a device-gateway tool call to its desktop-owned runtime.
+   *
+   * Triggering workflow:
+   *
+   * {@link GatewayConnectionService.setToolCallHandler}
+   *   -> `tool_call_request`
+   *     -> {@link GatewayConnectionCtr.executeToolCall}
+   *
+   * Upstream:
+   * - {@link GatewayConnectionService.setToolCallHandler}
+   *
+   * Downstream:
+   * - {@link GatewayConnectionCtr.executeAuvToolCall}
+   * - {@link LocalSystemExecutionRuntime.executeToolCall}
+   */
   private async executeToolCall(
     identifier: string | undefined,
     apiName: string,
     args: unknown,
   ): Promise<BuiltinServerRuntimeOutput> {
+    if (identifier === AuvIdentifier) return this.executeAuvToolCall(apiName, args);
+
     // Browser is a renderer-resident tool: forward to the client executor via
     // BrowserControlCtr instead of the local-system apiName switch below.
     if (identifier === BrowserIdentifier) {
@@ -490,6 +514,33 @@ export default class GatewayConnectionCtr extends ControllerModule {
         );
       }
     }
+  }
+
+  /**
+   * Executes the stable LobeHub CLI tool against the app-owned AUV daemon.
+   *
+   * Triggering workflow:
+   *
+   * {@link GatewayConnectionCtr.executeToolCall}
+   *   -> `lobe-auv/runCommand`
+   *     -> {@link GatewayConnectionCtr.executeAuvToolCall}
+   *
+   * Upstream:
+   * - {@link GatewayConnectionCtr.executeToolCall}
+   *
+   * Downstream:
+   * - {@link AuvService.runCommand}
+   */
+  private async executeAuvToolCall(
+    apiName: string,
+    args: unknown,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    if (apiName !== 'runCommand') {
+      throw new Error(`AUV tool "${apiName}" is not available on this device`);
+    }
+
+    const result = await this.auvService.runCommand(args as AuvRunCommandParams);
+    return { content: JSON.stringify(result), state: result, success: true };
   }
 
   /**

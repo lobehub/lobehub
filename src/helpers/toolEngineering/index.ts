@@ -1,6 +1,7 @@
 /**
  * Tools Engineering - Unified tools processing using ToolsEngine
  */
+import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation';
@@ -265,6 +266,7 @@ export const createAgentToolsEngine = (
     // Browser rides the same local-runtime gate as local-system because the
     // control IPC only exists in the desktop main process.
     [BrowserManifest.identifier]: agentChatConfigSelectors.isLocalSystemEnabled(agentState),
+    [AuvManifest.identifier]: agentChatConfigSelectors.isLocalSystemEnabled(agentState),
     [CloudSandboxManifest.identifier]: agentChatConfigSelectors.isCloudSandboxEnabled(agentState),
     [KnowledgeBaseManifest.identifier]: kbEnabled,
     [LocalSystemManifest.identifier]: agentChatConfigSelectors.isLocalSystemEnabled(agentState),
