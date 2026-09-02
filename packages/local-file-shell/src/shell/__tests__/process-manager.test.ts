@@ -5,9 +5,14 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import treeKill from 'tree-kill';
 
 import type { ShellProcess } from '../process-manager';
 import { ShellProcessManager } from '../process-manager';
+
+vi.mock('tree-kill', () => ({ default: vi.fn() }));
+
+const treeKillMock = vi.mocked(treeKill);
 
 function createMockProcess(exitCode: number | null = null, pid?: number): ChildProcess {
   const process = new EventEmitter() as ChildProcess;
@@ -50,6 +55,18 @@ describe('ShellProcessManager', () => {
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lobehub-shell-process-manager-'));
+    treeKillMock.mockReset();
+    treeKillMock.mockImplementation((pid, signalOrCallback, callback) => {
+      const signal = typeof signalOrCallback === 'function' ? 'SIGKILL' : signalOrCallback;
+      const onComplete = typeof signalOrCallback === 'function' ? signalOrCallback : callback;
+
+      try {
+        process.kill(pid, signal);
+        onComplete?.();
+      } catch (error) {
+        onComplete?.(error);
+      }
+    });
     manager = new ShellProcessManager(tmpDir);
   });
 
@@ -321,6 +338,18 @@ describe('ShellProcessManager', () => {
   });
 
   describe('kill', () => {
+    it('should contain asynchronous process-tree kill errors', () => {
+      treeKillMock.mockImplementation((_pid, _signal, callback) => {
+        callback?.(Object.assign(new Error('kill EPERM'), { code: 'EPERM' }));
+      });
+
+      const process = createMockProcess(null, 12_345);
+      manager.register('test-1', createShellProcess(manager, 'test-1', process));
+
+      expect(() => manager.kill('test-1')).not.toThrow();
+      expect(treeKillMock).toHaveBeenCalledWith(12_345, 'SIGKILL', expect.any(Function));
+    });
+
     it('should kill process successfully', () => {
       const process = createMockProcess();
       manager.register('test-1', createShellProcess(manager, 'test-1', process));
