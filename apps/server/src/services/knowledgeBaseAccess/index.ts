@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server';
 import { and, eq, inArray, isNull, ne, or } from 'drizzle-orm';
 
+import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import {
   documents,
@@ -34,12 +35,30 @@ export const assertKnowledgeBaseBrowsable = async (
   knowledgeBaseId: string,
   meta?: ResourceMeta,
 ): Promise<void> => {
+  const liveKnowledgeBase = meta
+    ? undefined
+    : await new KnowledgeBaseModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined).findById(
+        knowledgeBaseId,
+      );
+
+  if (!meta && !liveKnowledgeBase) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Knowledge base not found' });
+  }
+
   if (!ctx.workspaceId) return;
+
+  const resourceMeta =
+    meta ??
+    ({
+      userId: liveKnowledgeBase!.userId,
+      visibility: liveKnowledgeBase!.visibility ?? null,
+      workspaceId: liveKnowledgeBase!.workspaceId ?? null,
+    } satisfies ResourceMeta);
 
   await assertCanPerformResourceAction({
     action: 'view',
     db: ctx.serverDB,
-    meta,
+    meta: resourceMeta,
     resourceId: knowledgeBaseId,
     resourceType: 'knowledgeBase',
     userId: ctx.userId,

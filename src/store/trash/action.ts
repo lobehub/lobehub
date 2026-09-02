@@ -7,10 +7,10 @@ import type {
 import type { SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
-import { trashKeys } from '@/libs/swr/keys';
 import { trashService } from '@/services/trash';
 import type { StoreSetter } from '@/store/types';
 
+import { trashKeys } from './keys';
 import type { TrashStore } from './store';
 
 type Setter = StoreSetter<TrashStore>;

@@ -140,6 +140,15 @@ describe('TrashAction', () => {
       expect(useTrashStore.getState().items).toEqual([]);
       expect(mutate).toHaveBeenCalledWith(['trash:list', 'personal', 'file']);
     });
+
+    it('keeps the local list truthful when emptyTrash scheduling fails', async () => {
+      vi.spyOn(trashService, 'emptyTrash').mockRejectedValue(new Error('queue unavailable'));
+
+      await expect(useTrashStore.getState().emptyTrash()).rejects.toThrow('queue unavailable');
+
+      expect(useTrashStore.getState().items.map((item) => item.id)).toEqual(['trash_1', 'trash_2']);
+      expect(useTrashStore.getState().loadingIds).toEqual([]);
+    });
   });
 
   describe('paging / filter', () => {

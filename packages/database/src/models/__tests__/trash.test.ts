@@ -186,7 +186,8 @@ describe('TrashModel', () => {
         root: { resourceId: 'file_other', resourceType: 'file' },
       });
 
-      await expect(model.expireAllRoots({ resourceType: 'file' })).resolves.toBe(1);
+      const queuedIds = await model.expireAllRoots({ resourceType: 'file' });
+      expect(queuedIds).toHaveLength(1);
       expect((await model.list()).items.map((item) => item.resourceId)).toEqual(['doc_active']);
       expect(await model.countByType()).toEqual({ document: 1 });
       expect(await model.findByResource('file', 'file_queued')).toBeUndefined();
@@ -196,6 +197,15 @@ describe('TrashModel', () => {
         now: at('2026-08-02T00:00:00Z'),
       });
       expect(due.map((item) => item.resourceId)).toEqual(['file_queued']);
+
+      await model.restoreQueuedRoots(queuedIds);
+      expect((await model.list()).items.map((item) => item.resourceId).sort()).toEqual([
+        'doc_active',
+        'file_queued',
+      ]);
+      expect(await TrashModel.listExpiredRoots(serverDB, { limit: 10, now: deletedAt })).toEqual(
+        [],
+      );
     });
   });
 

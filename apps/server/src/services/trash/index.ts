@@ -392,21 +392,23 @@ export class TrashService {
           workspaceId: this.workspaceId,
         })
       : [];
-    const scheduled = await this.trashModel.expireAllRoots({
+    const scheduledIds = await this.trashModel.expireAllRoots({
       excludeKnowledgeBaseIds,
       resourceType: options?.resourceType,
     });
 
-    if (scheduled > 0) {
+    if (scheduledIds.length > 0) {
       try {
-        await triggerTrashPurge();
+        const accepted = await triggerTrashPurge();
+        if (!accepted) throw new Error('Trash purge queue is not configured');
       } catch (error) {
-        // The scheduled retention sweep remains the durable fallback.
-        log('failed to trigger immediate trash purge: %O', error);
+        await this.trashModel.restoreQueuedRoots(scheduledIds);
+        log('failed to schedule trash purge; restored %d roots: %O', scheduledIds.length, error);
+        throw error;
       }
     }
 
-    return { scheduled };
+    return { scheduled: scheduledIds.length };
   };
 
   private purgeRoot = async (root: TrashItemRow) => {

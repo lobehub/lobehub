@@ -256,7 +256,7 @@ export class TrashModel {
   expireAllRoots = async (options?: {
     excludeKnowledgeBaseIds?: string[];
     resourceType?: TrashResourceType;
-  }): Promise<number> => {
+  }): Promise<string[]> => {
     const rows = await this.db
       .update(trashItems)
       .set({ expiresAt: sql`${trashItems.deletedAt}` })
@@ -272,7 +272,29 @@ export class TrashModel {
       )
       .returning({ id: trashItems.id });
 
-    return rows.length;
+    return rows.map((row) => row.id);
+  };
+
+  /**
+   * Put roots back on their normal retention deadline when immediate purge
+   * scheduling fails. Only rows still carrying the queue marker are touched,
+   * so an already-purged or independently restored row is left alone.
+   */
+  restoreQueuedRoots = async (ids: string[]): Promise<void> => {
+    if (ids.length === 0) return;
+
+    await this.db
+      .update(trashItems)
+      .set({
+        expiresAt: sql`${trashItems.deletedAt} + (${TRASH_RETENTION_MS}::bigint * interval '1 millisecond')`,
+      })
+      .where(
+        and(
+          inArray(trashItems.id, ids),
+          this.ownership(),
+          eq(trashItems.expiresAt, trashItems.deletedAt),
+        ),
+      );
   };
 
   // ─────────────────────────── reads ───────────────────────────

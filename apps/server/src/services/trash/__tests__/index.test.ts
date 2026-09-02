@@ -595,6 +595,38 @@ describe('TrashService', () => {
       expect(await serverDB.select().from(files)).toHaveLength(0);
     });
 
+    it('keeps roots visible when the purge queue is unavailable', async () => {
+      const file = await fileModel.create({
+        fileType: 'text/plain',
+        name: 'queue-unavailable.txt',
+        size: 1,
+        url: 'files/queue-unavailable.txt',
+      });
+      await service.trashFiles([file.id]);
+      workflowMocks.triggerTrashPurge.mockResolvedValue(false);
+
+      await expect(service.emptyTrash()).rejects.toThrow('Trash purge queue is not configured');
+
+      expect((await service.list()).items.map((item) => item.resourceId)).toEqual([file.id]);
+      expect(await serverDB.select().from(files).where(eq(files.id, file.id))).toHaveLength(1);
+    });
+
+    it('keeps roots visible when publishing purge work fails', async () => {
+      const file = await fileModel.create({
+        fileType: 'text/plain',
+        name: 'queue-rejected.txt',
+        size: 1,
+        url: 'files/queue-rejected.txt',
+      });
+      await service.trashFiles([file.id]);
+      workflowMocks.triggerTrashPurge.mockRejectedValue(new Error('publish rejected'));
+
+      await expect(service.emptyTrash()).rejects.toThrow('publish rejected');
+
+      expect((await service.list()).items.map((item) => item.resourceId)).toEqual([file.id]);
+      expect(await serverDB.select().from(files).where(eq(files.id, file.id))).toHaveLength(1);
+    });
+
     it("emptyTrash leaves another member's private workspace items untouched", async () => {
       const workspaceId = 'trash-private-empty-workspace';
       await serverDB.insert(workspaces).values({

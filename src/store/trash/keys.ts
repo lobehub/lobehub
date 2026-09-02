@@ -1,0 +1,15 @@
+import type { TrashResourceType } from '@lobechat/types';
+
+/**
+ * Trash stays behind a deferred settings boundary. Keep its cache keys local
+ * so loading the recycle bin does not turn the eager central SWR registry into
+ * a shared first-screen chunk.
+ */
+export const trashKeys = {
+  countByType: (workspaceId?: string | null) => ['trash:countByType', workspaceId ?? 'personal'],
+  list: (workspaceId?: string | null, resourceType?: TrashResourceType | null) => [
+    'trash:list',
+    workspaceId ?? 'personal',
+    resourceType ?? 'all',
+  ],
+};
