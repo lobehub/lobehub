@@ -2,7 +2,6 @@
 
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { Flexbox } from '@lobehub/ui';
-import { LobeHub } from '@lobehub/ui/brand';
 import { createStaticStyles, keyframes } from 'antd-style';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -71,6 +70,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   // The mark carries the fade, not the whole stack: multiplying it into the
   // caption too leaves quaternary text at ~0.2 alpha, which is unreadable.
   mark: css`
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1;
     opacity: 0.48;
   `,
   // Floated rather than stacked in flow: a caption that joins the column would
@@ -172,9 +174,7 @@ const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
           >
             <div className={styles.contentBrand}>
               <div className={styles.brand}>
-                <div className={styles.mark}>
-                  <LobeHub size={56} type={'mono'} />
-                </div>
+                <div className={styles.mark}>LobeHub</div>
                 {waiting && <LoadingHint />}
               </div>
             </div>
