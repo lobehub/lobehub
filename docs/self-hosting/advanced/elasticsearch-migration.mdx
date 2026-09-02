@@ -113,7 +113,7 @@ clients all refuse to send an API key over plaintext HTTP.
 
 5. Keep the application's search backend on PostgreSQL and keep incremental Elasticsearch draining disabled.
 
-The first production mapping is version `v1`. The tool creates physical indexes such as `lobehub-messages-v1`. After all 14 indexes finish and their counts match the durable checkpoints, it creates stable aliases such as `lobehub-messages`. An alias is only a stable Elasticsearch name; creating it does not change which search backend serves users. Physical index names always embed the schema version; the stable aliases never do.
+A fresh migration always targets the current schema version, `v2` (see the [Schema version upgrades](#schema-version-upgrades) section for the version journal). The tool creates physical indexes such as `lobehub-messages-v2`. After all 14 indexes finish and their counts match the durable checkpoints, it creates stable aliases such as `lobehub-messages`. An alias is only a stable Elasticsearch name; creating it does not change which search backend serves users. Physical index names always embed the schema version; the stable aliases never do.
 
 By default, the command fails instead of moving a stable alias that already points to another
 physical index. This also protects a later schema-version upgrade from silently repointing an
