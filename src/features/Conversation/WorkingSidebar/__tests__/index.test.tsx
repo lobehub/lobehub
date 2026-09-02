@@ -333,6 +333,9 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
         </div>
       );
     },
+    Skeleton: {
+      Text: () => <div data-testid="params-loading" />,
+    },
   };
 });
 
