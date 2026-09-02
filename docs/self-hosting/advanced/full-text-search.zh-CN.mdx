@@ -1,0 +1,128 @@
+---
+title: 全文搜索
+description: 为 LobeHub 产品搜索选择并运行 pg_search 或 Elasticsearch 后端。
+tags:
+  - 全文搜索
+  - Elasticsearch
+  - pg_search
+  - 私有部署
+---
+
+# 全文搜索
+
+LobeHub 使用全文搜索检索助手、话题、消息、文件、知识库、群聊和记忆等产品数据。这里的全文搜索与助手可调用的联网搜索工具无关。
+
+LobeHub 支持两种产品搜索后端：
+
+| 后端              | 适用场景                                              | 额外运维工作                                                 |
+| --------------- | ------------------------------------------------- | ------------------------------------------------------ |
+| `pg_search`     | PostgreSQL 已支持 ParadeDB `pg_search` 扩展，希望部署结构尽量简单 | BM25 索引由 PostgreSQL 维护，不需要单独运行搜索同步任务                   |
+| `elasticsearch` | 希望搜索服务独立扩容，或者数据库服务即将停止支持 `pg_search`              | 需要 Elasticsearch 项目、首次全量回填、PostgreSQL 变更采集和持续运行的增量消费任务 |
+
+`FTS_SEARCH_PROVIDER` 为整个部署选择唯一的后端，可用值为 `pg_search` 和
+`elasticsearch`，默认值是 `pg_search`。选中的后端不可用时，LobeHub 不会静默切换到另一个后端。
+
+<Callout type="warning">
+  设置 `FTS_SEARCH_PROVIDER=elasticsearch` 不会让历史数据库迁移跳过 `pg_search`。当前
+  Elasticsearch 迁移流程面向已经执行过 `pg_search` 迁移的现有 LobeHub 数据库。对于无法安装
+  `pg_search` 的数据库服务，仅选择 Elasticsearch 目前还不能完成全新建库：`bun run db:migrate`
+  仍会执行创建扩展和 BM25 索引的历史迁移，并在数据库服务不提供它们时失败。
+</Callout>
+
+## 如何选择
+
+### 继续使用 `pg_search`
+
+如果 PostgreSQL 服务支持 `pg_search`，BM25 索引没有挤占其他数据库工作负载，并且你不希望额外维护一套搜索服务，可以继续使用默认后端。
+
+自建数据库时，LobeHub 的 Docker 示例使用 `paradedb/paradedb:latest-pg17` 镜像并预加载
+`pg_search`。执行正常的 LobeHub 数据库迁移以安装扩展和项目维护的 BM25 索引，并保持：
+
+```bash
+FTS_SEARCH_PROVIDER=pg_search
+```
+
+### 使用 Elasticsearch
+
+如果搜索需要独立容量、希望把搜索存储从事务 PostgreSQL 中拆开，或者数据库服务即将停止支持
+`pg_search`，可以选择 Elasticsearch。
+
+Neon 已于 2026 年 3 月 19 日停止为新项目提供 `pg_search`。Neon 的 `pg_search` 专页说明已有项目仍可使用，
+并会由 Neon 联系受影响用户；扩展列表则把已有安装标记为需要迁移。已经在 Neon 上运行 LobeHub 的用户应先向
+Neon 核对项目状态，再按照[从 pg\_search 迁移到 Elasticsearch](/zh/docs/self-hosting/advanced/elasticsearch-migration)
+制定迁移计划。执行前请同时核对 Neon 的
+[最新 pg\_search 公告](https://neon.com/docs/extensions/pg_search)和
+[扩展列表](https://neon.com/docs/extensions/pg-extensions)。
+
+Elasticsearch 后端需要：
+
+- LobeHub 服务端可以通过 HTTPS 访问的 Elasticsearch 项目；
+- 官方 ICU 分析插件；Elastic Cloud Serverless 已内置，自建集群则必须在每个节点安装；
+- `ES_URL`、`ES_API_KEY` 和保持不变的 `ES_INDEX_NAMESPACE`；
+- 先完成全量回填，再持续消费 PostgreSQL 增量队列；
+- 只有全量回填完成且增量队列追平后，才能设置 `FTS_SEARCH_PROVIDER=elasticsearch`。
+
+完整的演练、回填、切换、回滚和可选清理流程，请参阅
+[从 pg\_search 迁移到 Elasticsearch](/zh/docs/self-hosting/advanced/elasticsearch-migration)。
+
+## Elasticsearch 如何同步数据
+
+PostgreSQL 始终是数据事实来源。启用 Elasticsearch 路径后，采集触发器会把源数据变更合并写入持久化增量队列，持续运行的消费任务再把这些变更写入 Elasticsearch。搜索时，Elasticsearch 只返回候选标识，LobeHub 仍会回到 PostgreSQL 校验权限并读取最终结果。
+
+运行链路如下：
+
+```text
+PostgreSQL 写入
+  -> 采集触发器
+  -> 全文搜索增量队列
+  -> 持续运行的 fts-search:sync 消费任务
+  -> Elasticsearch 索引
+  -> 候选结果检索
+  -> PostgreSQL 权限校验和结果读取
+```
+
+全量回填只负责首次快照，不能代替持续消费任务。只要 Elasticsearch 仍在提供搜索，就必须持续调度
+`fts-search:sync`。
+
+## 配置项
+
+| 变量                        | 用途                                         |
+| ------------------------- | ------------------------------------------ |
+| `FTS_SEARCH_PROVIDER`     | 整个部署使用的搜索后端：`pg_search` 或 `elasticsearch`  |
+| `ES_URL`                  | Elasticsearch 项目的 HTTPS 地址                 |
+| `ES_API_KEY`              | 具备建索引、批量写入、刷新、统计、别名和搜索权限的 Elasticsearch 密钥 |
+| `ES_INDEX_NAMESPACE`      | 当前部署独占且保持不变的物理索引和别名前缀                      |
+| `FTS_SEARCH_SYNC_ENABLED` | 启用增量消费任务；首次全量回填就绪后才能设为 `true`              |
+| `ES_REINDEX_STATE_DIR`    | 全量回填及每次续跑都要复用的持久化本地状态目录                    |
+
+不同 LobeHub 部署不能共用同一个索引前缀。迁移或增量消费期间不能更改此前缀。
+
+## 监控 Elasticsearch 搜索
+
+LobeHub 会输出有限维度的 OpenTelemetry 指标和链路，不会记录原始查询、用户标识、文档标识或索引正文。主要指标包括：
+
+| 指标                                               | 可以回答的问题                      |
+| ------------------------------------------------ | ---------------------------- |
+| `fts_search_backend_operations_total`            | 按后端、数据类型、操作和结果统计的请求量及失败量     |
+| `fts_search_backend_operation_duration`          | 搜索后端的端到端耗时                   |
+| `fts_search_backend_result_count`                | 请求数量、候选数量和 PostgreSQL 最终返回数量 |
+| `fts_search_elasticsearch_requests_total`        | 实际 Elasticsearch 请求量和结果      |
+| `fts_search_elasticsearch_request_duration`      | 包含响应解析的 Elasticsearch 请求耗时   |
+| `fts_search_elasticsearch_request_size`          | 序列化后的请求体大小                   |
+| `fts_search_elasticsearch_response_decoded_size` | 解码后的响应体大小                    |
+| `fts_search_elasticsearch_response_hits`         | 每次 Elasticsearch 请求返回的候选数量   |
+| `fts_search_elasticsearch_server_took`           | Elasticsearch 上报的服务端处理时间     |
+
+链路名称为 `fts.search.backend.<operation>`。分析 Elasticsearch 成本时，需要同时查看请求量、请求与响应大小、
+候选数量、服务端耗时和索引存储，不能只看其中一项。自部署 OpenTelemetry 环境请参阅
+[Grafana 可观测性](/zh/docs/self-hosting/advanced/observability/grafana)。
+
+## 运维原则
+
+- 生产迁移前先备份 PostgreSQL，并使用隔离的数据库副本和 Elasticsearch 项目完成演练。
+- 同一次全量回填的每次续跑都必须使用同一个持久化状态目录，不能让两个任务同时操作同一份状态和物理索引。
+- 所有数据类型完成、失败数为 0、增量队列追平前，必须继续让 `pg_search` 对外提供搜索。
+- 切换后保留旧 BM25 索引和扩展一段约定好的回滚窗口；删除它们是另一项可选且不可直接撤销的操作。
+- 绝不能使用 `DROP EXTENSION pg_search CASCADE`。必须先检查并删除已知 BM25 索引，让不带
+  `CASCADE` 的扩展删除在发现未知依赖时主动失败。
+- 删除 `pg_search` 后，不能删除 Elasticsearch 依赖的增量队列、采集触发器和持续消费任务。
