@@ -183,21 +183,11 @@ const TaskIntentReview = memo<TaskIntentReviewProps>((props) => {
   // questions, then generating. There is no confirmation page between the last
   // answer and the task — pressing generate writes the brief from the answers
   // and creates it, and the brief is on the task's own page afterwards.
-  // The button names what pressing it does. With an answer in hand there is a
-  // brief to write from it, so it reads "generate"; with every question skipped
-  // nothing is generated at all — no model call is even made — and calling it
-  // "generate" would promise work that does not happen.
-  const hasAnswer = clarifications.some((_, index) => isAnswered(index));
+  // One label for the last step, whether or not anything was answered. Naming
+  // it for the machinery behind it ("generate") described what the product does
+  // rather than what the user gets: either way the press ends with a task.
   const primary = onLastQuestion
-    ? {
-        action: onConfirm,
-        label:
-          clarifications.length === 0
-            ? t('taskIntent.confirm')
-            : hasAnswer
-              ? t('taskIntent.generate')
-              : t('taskIntent.create'),
-      }
+    ? { action: onConfirm, label: t('taskIntent.create') }
     : { action: () => setActiveIndex(activeIndex + 1), label: t('taskIntent.next') };
 
   return (

@@ -487,7 +487,7 @@ describe('CreateTaskInlineEntry', () => {
 
     await screen.findByText('taskIntent.reviewStep');
     fireEvent.click(screen.getByText('lobe-chat'));
-    fireEvent.click(await screen.findByText('taskIntent.generate'));
+    fireEvent.click(await screen.findByText('taskIntent.create'));
 
     // The toast lives in the one place every path funnels through, so the
     // answered path confirms itself exactly like the unanswered one.
@@ -542,7 +542,7 @@ describe('CreateTaskInlineEntry', () => {
       // button says so — it reads "create task" on no step any more, which is
       // what left users unsure whether pressing it was the end of the flow.
       fireEvent.click(screen.getByText('lobe-chat'));
-      fireEvent.click(await screen.findByText('taskIntent.generate'));
+      fireEvent.click(await screen.findByText('taskIntent.create'));
 
       await waitFor(() => expect(createTaskMock).toHaveBeenCalledTimes(1));
       // The answer reaches the task through the rewritten brief, not as a list
@@ -574,7 +574,7 @@ describe('CreateTaskInlineEntry', () => {
       fireEvent.click(await screen.findByText('PDF'));
       expect(synthesizeInstructionMock).not.toHaveBeenCalled();
 
-      fireEvent.click(await screen.findByText('taskIntent.generate'));
+      fireEvent.click(await screen.findByText('taskIntent.create'));
 
       await waitFor(() => expect(synthesizeInstructionMock).toHaveBeenCalledTimes(1));
       expect(synthesizeInstructionMock.mock.calls[0][0].answers).toEqual([
@@ -585,7 +585,7 @@ describe('CreateTaskInlineEntry', () => {
       await waitFor(() => expect(createTaskMock).toHaveBeenCalledTimes(1));
     });
 
-    it('names the button for what pressing it does', async () => {
+    it('names the last step "create", answered or not', async () => {
       analyzeIntentMock.mockResolvedValue({
         ...clearReading,
         clarifications: [{ options: ['lobe-chat'], question: 'Which repo?' }],
@@ -595,16 +595,15 @@ describe('CreateTaskInlineEntry', () => {
       render(<CreateTaskInlineEntry variant="hero" />);
       fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
 
-      // Nothing answered yet: pressing it writes no brief and makes no model
-      // call, so promising "generate" would name work that never happens.
+      // Whether or not the question gets an answer, pressing it ends with a
+      // task — naming it for the machinery behind it described the product's
+      // internals rather than what the user gets.
       await screen.findByText('taskIntent.reviewStep');
       expect(screen.getByText('taskIntent.create')).toBeDefined();
-      expect(screen.queryByText('taskIntent.generate')).toBeNull();
 
       fireEvent.click(screen.getByText('lobe-chat'));
 
-      await screen.findByText('taskIntent.generate');
-      expect(screen.queryByText('taskIntent.create')).toBeNull();
+      expect(screen.getByText('taskIntent.create')).toBeDefined();
     });
 
     it('has no confirmation step between the last answer and the task', async () => {
@@ -626,7 +625,7 @@ describe('CreateTaskInlineEntry', () => {
       expect(screen.queryByText('taskIntent.confirmStep')).toBeNull();
       expect(screen.queryByText('taskIntent.confirmHeading')).toBeNull();
       expect(screen.queryByText('taskIntent.instructionLabel')).toBeNull();
-      expect(screen.getByText('taskIntent.generate')).toBeDefined();
+      expect(screen.getByText('taskIntent.create')).toBeDefined();
     });
 
     it('falls back to appending the answers when the second reading fails', async () => {
@@ -643,7 +642,7 @@ describe('CreateTaskInlineEntry', () => {
 
       await screen.findByText('taskIntent.reviewStep');
       fireEvent.click(screen.getByText('lobe-chat'));
-      fireEvent.click(await screen.findByText('taskIntent.generate'));
+      fireEvent.click(await screen.findByText('taskIntent.create'));
 
       await waitFor(() => expect(createTaskMock).toHaveBeenCalledTimes(1));
       expect(createTaskMock.mock.calls[0][0].instruction).toContain(
@@ -676,7 +675,7 @@ describe('CreateTaskInlineEntry', () => {
 
       await screen.findByText('taskIntent.reviewStep');
       fireEvent.click(screen.getByText('lobe-chat'));
-      fireEvent.click(await screen.findByText('taskIntent.generate'));
+      fireEvent.click(await screen.findByText('taskIntent.create'));
 
       await waitFor(() => expect(createTaskMock).toHaveBeenCalledTimes(1));
       const { editorData, instruction } = createTaskMock.mock.calls[0][0];
@@ -699,7 +698,7 @@ describe('CreateTaskInlineEntry', () => {
 
       await screen.findByText('taskIntent.reviewStep');
       fireEvent.click(screen.getByText('lobe-chat'));
-      fireEvent.click(await screen.findByText('taskIntent.generate'));
+      fireEvent.click(await screen.findByText('taskIntent.create'));
 
       await waitFor(() => expect(createTaskMock).toHaveBeenCalledTimes(1));
       expect(createTaskMock.mock.calls[0][0].instruction).toContain(
