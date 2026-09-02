@@ -176,10 +176,11 @@ export const messageRouter = router({
         }),
       );
 
-      await assertCanUseMessageTargets(
-        guardCtx(ctx),
-        operations.flatMap((op) => (op.type === 'createMessage' ? [] : [op.id])),
-      );
+      const targetedIds = operations.flatMap((op) => (op.type === 'createMessage' ? [] : [op.id]));
+      await assertCanUseMessageTargets(guardCtx(ctx), targetedIds);
+      // Same visitor exclusion the single-message update RPCs apply — the
+      // batch path reaches the ownership-only model writes directly.
+      await assertCreatorMessageTargets(guardCtx(ctx), targetedIds);
       await assertCanUseCreateMessageTargets(
         guardCtx(ctx),
         operations.flatMap((op) => (op.type === 'createMessage' ? [op.message] : [])),

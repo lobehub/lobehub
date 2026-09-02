@@ -31,10 +31,12 @@ vi.mock('@/database/models/message', () => ({
   })),
 }));
 
+const mockServiceBatchMutate = vi.fn();
 const mockServiceUpdateMessage = vi.fn();
 const mockServiceUpdateMessagePlugin = vi.fn();
 vi.mock('@/server/services/message', () => ({
   MessageService: vi.fn(() => ({
+    batchMutate: mockServiceBatchMutate,
     updateMessage: mockServiceUpdateMessage,
     updateMessagePlugin: mockServiceUpdateMessagePlugin,
   })),
@@ -155,6 +157,19 @@ describe('agent-share visitor guards on creator-facing RPCs', () => {
       ).rejects.toMatchObject({ code: 'NOT_FOUND' });
 
       expect(mockMessageUpdateTranslate).not.toHaveBeenCalled();
+    });
+
+    it('message.batchMutate rejects a batch that targets a visitor message with NOT_FOUND', async () => {
+      await expect(
+        messageCaller().batchMutate({
+          operations: [
+            { id: 'msg-1', type: 'updateMessage', value: { content: 'ok' } },
+            { id: visitorMessageId, type: 'updateToolMessage', value: { content: 'hacked' } },
+          ],
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect(mockServiceBatchMutate).not.toHaveBeenCalled();
     });
 
     it('lets the creator update their own message', async () => {
