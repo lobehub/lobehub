@@ -4,7 +4,7 @@ name: Release Desktop Canary
 # Canary 自动发版工作流
 # ============================================
 # 触发条件:
-#   1. canary 分支有 push (合入 PR) 且 commit 前缀为 style/feat/fix/refactor/release (支持 gitmoji)
+#   1. canary 分支有 push (合入 PR) 且 commit 前缀为 style/feat/fix/perf/refactor/release (支持 gitmoji)
 #   2. 手动触发 (workflow_dispatch)
 #
 # 并发策略:
@@ -76,13 +76,13 @@ jobs:
           commit_msg=$(git log -1 --pretty=%s HEAD)
           echo "📝 Head commit: $commit_msg"
 
-          # 检查是否匹配 style/feat/fix/refactor/release 前缀 (支持 gitmoji 前缀)
-          if echo "$commit_msg" | grep -qiE '^(💄\s*)?style(\(.+\))?:|^(✨\s*)?feat(\(.+\))?:|^(🐛\s*)?fix(\(.+\))?:|^(♻️\s*)?refactor(\(.+\))?:|^(🚀\s*)?release(\(.+\))?:'; then
+          # 检查是否匹配 style/feat/fix/perf/refactor/release 前缀 (支持 gitmoji 前缀)
+          if echo "$commit_msg" | grep -qiE '^(💄\s*)?style(\(.+\))?:|^(✨\s*)?feat(\(.+\))?:|^(🐛\s*)?fix(\(.+\))?:|^(⚡️\s*)?perf(\(.+\))?:|^(♻️\s*)?refactor(\(.+\))?:|^(🚀\s*)?release(\(.+\))?:'; then
             echo "should_build=true" >> $GITHUB_OUTPUT
             echo "✅ Commit matches canary build trigger: $commit_msg"
           else
             echo "should_build=false" >> $GITHUB_OUTPUT
-            echo "⏭️ Commit does not match style/feat/fix/refactor/release prefix, skipping: $commit_msg"
+            echo "⏭️ Commit does not match style/feat/fix/perf/refactor/release prefix, skipping: $commit_msg"
           fi
 
       - name: Calculate canary version
@@ -183,7 +183,7 @@ jobs:
             echo "### ⚠️ Important Notes"
             echo
             echo "- **This is an automated canary build and is NOT intended for production use.**"
-            echo "- Canary builds are triggered by \`build\`/\`fix\`/\`style\` commits on the \`canary\` branch."
+            echo "- Canary builds are triggered by \`style\`/\`feat\`/\`fix\`/\`perf\`/\`refactor\`/\`release\` commits on the \`canary\` branch."
             echo "- May contain **unstable or incomplete changes**. **Use at your own risk.**"
             echo "- It is strongly recommended to **back up your data** before using a canary build."
             echo
