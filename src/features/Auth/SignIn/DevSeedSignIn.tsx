@@ -43,9 +43,13 @@ const DevSeedSignIn = memo(() => {
               // The dev route is an API endpoint that sets the session cookie
               // and redirects, so this must be a full navigation — not a
               // client-side router push.
-              window.location.assign(
-                new URL(`${SEED_SIGN_IN_PATH}?account=${account}`, window.location.origin).href,
-              );
+              const target = new URL(SEED_SIGN_IN_PATH, window.location.origin);
+              target.searchParams.set('account', account);
+              // Forward the sign-in page's callbackUrl so the quick login
+              // returns to the deep link that triggered it (e.g. a share URL).
+              const callbackUrl = new URLSearchParams(window.location.search).get('callbackUrl');
+              if (callbackUrl) target.searchParams.set('callbackUrl', callbackUrl);
+              window.location.assign(target.href);
             }}
           >
             {account === 'ultimate' ? 'Ultimate' : 'Free'}
