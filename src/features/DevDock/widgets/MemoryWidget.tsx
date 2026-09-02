@@ -6,6 +6,7 @@ import { memo, useEffect, useState } from 'react';
 import { formatSize } from '@/utils/format';
 
 import { useAppProcessMetrics } from './appProcessMetrics';
+import { isMemoryHigh } from './metricUtils';
 
 const formatCompactSize = (bytes: number) => formatSize(bytes).replace(' ', '').replace('B', '');
 
@@ -80,6 +81,7 @@ const MemoryWidget = memo(() => {
   if (!memory) return null;
 
   const percent = (memory.jsHeapUsedBytes / memory.jsHeapLimitBytes) * 100;
+  const high = isMemoryHigh(percent, memory.privateBytes);
   // macOS keeps madvise(MADV_FREE_REUSABLE) pages in the resident set until it needs
   // them, so resident minus private footprint is what the allocator already gave back.
   const reclaimableBytes =
@@ -89,19 +91,16 @@ const MemoryWidget = memo(() => {
 
   return (
     <span
-      className={cx(
-        styles.text,
-        percent >= 90 ? styles.high : percent >= 70 ? styles.mid : undefined,
-      )}
+      className={cx(styles.text, high ? styles.high : percent >= 70 ? styles.mid : undefined)}
       title={
         memory.privateBytes === undefined
           ? 'JS heap used / limit'
-          : 'Renderer private footprint · resident minus footprint (freed pages the OS has not reclaimed yet, plus some read-only library pages) · JS heap used / limit'
+          : 'R = Renderer private footprint (red at 1 GiB) · F = freed pages the OS has not reclaimed yet (plus some read-only library pages) · J = JS heap used / limit'
       }
     >
-      {memory.privateBytes !== undefined && `R ${formatCompactSize(memory.privateBytes)} · `}
-      {reclaimableBytes !== undefined && `Recl ${formatCompactSize(reclaimableBytes)} · `}
-      JS {formatCompactSize(memory.jsHeapUsedBytes)} · {percent.toFixed(1)}%
+      {memory.privateBytes !== undefined && `R${formatCompactSize(memory.privateBytes)} · `}
+      {reclaimableBytes !== undefined && `F${formatCompactSize(reclaimableBytes)} · `}J
+      {formatCompactSize(memory.jsHeapUsedBytes)} · {percent.toFixed(1)}%
     </span>
   );
 });

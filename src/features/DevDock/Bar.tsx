@@ -182,7 +182,7 @@ const Bar = memo(() => {
   const { center, right, tabs } = selectBarLayout(items, pinOverrides, activePanelId);
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.bar} gap={4}>
+    <Flexbox horizontal align={'center'} className={styles.bar} gap={3}>
       <button
         className={styles.iconButton}
         title={'Collapse DevDock'}
