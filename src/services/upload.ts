@@ -2,38 +2,19 @@ import { MAX_UPLOAD_FILE_SIZE, UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE } from '@lob
 import { parseDataUri } from '@lobechat/model-runtime/utils/uriParser';
 import { uuid } from '@lobechat/utils';
 import dayjs from 'dayjs';
-import { sha256 } from 'js-sha256';
 
 import { fileEnv } from '@/envs/file';
 import { lambdaClient } from '@/libs/trpc/client';
 import type { FileMetadata, UploadBase64ToS3Result } from '@/types/files';
 import type { FileUploadState, FileUploadStatus } from '@/types/files/upload';
 
+import { hashFile } from './hashFile';
+
 export const UPLOAD_NETWORK_ERROR = 'NetWorkError';
 
 const MAX_MULTIPART_PARTS = 10_000;
-const HASH_BUFFER_SIZE = 4 * 1024 * 1024;
 const MULTIPART_PART_SIZE = 32 * 1024 * 1024;
 const MULTIPART_UPLOAD_THRESHOLD = 64 * 1024 * 1024;
-
-export const hashFile = async (file: File, signal?: AbortSignal): Promise<string> => {
-  const hasher = sha256.create();
-  const reader = file.stream().getReader({ mode: 'byob' });
-  let buffer = new ArrayBuffer(HASH_BUFFER_SIZE);
-
-  try {
-    while (true) {
-      if (signal?.aborted) throw signal.reason ?? new Error('Upload cancelled by user');
-
-      const { done, value } = await reader.read(new Uint8Array(buffer));
-      if (done) return hasher.hex();
-      hasher.update(value);
-      buffer = value.buffer as ArrayBuffer;
-    }
-  } finally {
-    reader.releaseLock();
-  }
-};
 
 /**
  * Generate file storage path metadata for S3-compatible storage

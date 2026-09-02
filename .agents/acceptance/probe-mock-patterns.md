@@ -479,6 +479,34 @@ there the auto-attach to the current conversation is exactly what you want.
 
 ### Driving the UI
 
+#### Driving a 资源库 upload with agent-browser: use the Add-menu input, and a same-build A/B for the hashing thread
+
+**Situation:** uploading a multi-GB fixture through the resource library (`/resource`)
+to verify the upload/hash pipeline without a real drag-and-drop.
+
+**Doesn't work:** `agent-browser upload` on the first `input[type=file][multiple]` the
+page exposes. That input belongs to another surface; `dockUploadFileList` stays empty
+and nothing errors, which reads as "the upload never started".
+
+**Works:** open the header `Add` menu first (`find role button click --name "Add"`),
+then upload into the antd input it mounts:
+`agent-browser upload '.ant-upload input[type=file][multiple]' <file>`. Poll
+`window.__LOBE_STORES.file().dockUploadFileList` for `status` / `uploadState.progress`;
+the hash phase is `pending` with a climbing `progress`, upload is `uploading`, and the
+row auto-clears \~3 s after `success`, so screenshot on the first `success` sample.
+Note the `eval` output is a JSON-encoded string — `\"status\":\"success\"` — so a
+`rg` trigger must not assume bare quotes (`'status.{2,6}success'`).
+
+To prove the hash left the main thread without checking out old code, run the same
+file twice in the same build: once after `window.Worker = undefined` (the shared
+`hashFile` then falls back to its inline streaming path, byte-for-byte the pre-worker
+behaviour) and once untouched. A 16 ms `setInterval` sampler's longest gap is the
+stall metric (measured: 16.4 s vs 61 ms for 1.1 GB); wrap `window.Worker` to record
+the constructed script URL and `window.fetch` to timestamp `file.checkFileHash`, which
+marks the end of hashing. A re-upload of the same file still hashes and then dedups
+(only `checkFileHash` + `createFile`), so it is a cheap way to re-capture the progress
+UI without another transfer.
+
 #### The composer's slash menu needs real key events — `keyboard type` never opens it
 
 **Situation:** driving the chat composer's `/` slash menu (or anything else gated on

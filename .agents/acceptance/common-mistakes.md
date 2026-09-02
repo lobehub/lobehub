@@ -742,6 +742,24 @@ a dev server started by another session can point somewhere else entirely. Re-se
 round-trip), and re-run `setup-auth.sh web-seed` because the SPA's client-side auth
 gate still redirects to `/signin` after the row is recreated.
 
+### L-S20 — Bootstrapping the isolated stack with the script's default DB port hits another project's Postgres
+
+**Wrong approach:** run `init-dev-env.sh setup-db` / `seed-user` / `dev` from a fresh
+worktree and trust "database migration pass" plus a started server.
+
+**Why it fails:** the script defaults to `DB_PORT=5433` / `REDIS_PORT=6380`, but on a
+machine where those ports were already taken the managed containers were created on
+5434 / 6381 (`docker ps` shows `lobehub-agent-testing-postgres` → `0.0.0.0:5434`). The
+default then dials whatever owns 5433 — another project's Postgres — and fails with
+`password authentication failed` (`routine: 'auth_failed'`), or worse, succeeds against
+a database that is not ours. The dev server started in that state serves a healthy page
+whose every tRPC write fails far from the cause.
+
+**Correct approach:** read the managed containers' host ports from `docker ps` first and
+pass them explicitly to every subcommand and to the backgrounded `dev`
+(`DB_PORT=5434 REDIS_PORT=6381 init-dev-env.sh …`). Treat a `migrate` that fails with
+`auth_failed` as a port mismatch, never as a credentials problem.
+
 ### L-S8 — Reading a first-boot renderer crash as a defect of the change under test
 
 **Wrong approach:** treat the Electron dev instance's first renderer boot as

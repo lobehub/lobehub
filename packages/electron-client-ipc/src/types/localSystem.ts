@@ -88,6 +88,10 @@ export interface RenameLocalFileResult {
   success: boolean;
 }
 
+export interface HashLocalFileParams {
+  path: string;
+}
+
 export interface LocalReadFileParams {
   /** Working directory a relative `path` resolves against. See {@link ListLocalFileParams.cwd}. */
   cwd?: string;
