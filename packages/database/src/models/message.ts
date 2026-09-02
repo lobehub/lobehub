@@ -463,6 +463,17 @@ const computeTopicMessageStats = (counts: number[]): TopicMessageStats => {
 // **************** Agent Share (visitor-scoped projections) *************** //
 
 /**
+ * Opt-in escape hatch for the write paths that legitimately act on agent-share
+ * visitor rows. Visitor messages are stored under the creator's `userId`, so
+ * ownership alone cannot tell a creator action apart from a runtime action;
+ * mutation entry points therefore fail closed and only the agent runtime (which
+ * drives visitor turns under the creator's identity) passes this.
+ */
+export interface ShareVisitorWriteOptions {
+  includeShareVisitor?: boolean;
+}
+
+/**
  * Per-share switches that relax {@link toVisitorMessage}'s default redaction.
  * Both default to `false` (strip everything), so a caller that forgets to pass
  * options gets the fail-closed projection.
@@ -4286,13 +4297,26 @@ export class MessageModel {
     }
   };
 
-  deleteMessage = async (id: string) => {
+  /**
+   * Delete one message (plus the tool messages it owns).
+   *
+   * Agent-share visitor messages live under the creator's `userId`, so plain
+   * ownership matches them: by default this refuses to touch them, which keeps
+   * the creator-facing `message.removeMessage` from destroying a visitor's
+   * conversation even when the creator obtained a raw visitor message id (e.g.
+   * through data export). The agent runtime — which also runs visitor turns
+   * under the creator's identity and must clean up its own placeholders — opts
+   * back in with `includeShareVisitor`.
+   */
+  deleteMessage = async (id: string, options?: ShareVisitorWriteOptions) => {
+    const visitorGuard = options?.includeShareVisitor ? undefined : notShareVisitorMessage();
+
     return this.db.transaction(async (tx) => {
       // 1. Query the complete information of the message to be deleted
       const message = await tx
         .select()
         .from(messages)
-        .where(and(eq(messages.id, id), this.ownership()))
+        .where(and(eq(messages.id, id), this.ownership(), visitorGuard))
         .limit(1);
 
       // If the message to be deleted is not found, return directly
@@ -4333,7 +4357,7 @@ export class MessageModel {
       // 6. Delete all related messages
       await tx
         .delete(messages)
-        .where(and(this.ownership(), inArray(messages.id, messageIdsToDelete)));
+        .where(and(this.ownership(), inArray(messages.id, messageIdsToDelete), visitorGuard));
 
       await this.reconcileActiveBranchSnapshots(tx, activeBranchSnapshots);
 
@@ -4345,15 +4369,21 @@ export class MessageModel {
     });
   };
 
-  deleteMessages = async (ids: string[]) => {
+  /**
+   * Batch twin of {@link MessageModel.deleteMessage} — same agent-share visitor
+   * rule: visitor messages are skipped unless the caller explicitly opts in.
+   */
+  deleteMessages = async (ids: string[], options?: ShareVisitorWriteOptions) => {
     if (ids.length === 0) return;
+
+    const visitorGuard = options?.includeShareVisitor ? undefined : notShareVisitorMessage();
 
     return this.db.transaction(async (tx) => {
       // 1. Query all messages to be deleted with their parentId
       const toDelete = await tx
         .select({ id: messages.id, parentId: messages.parentId, topicId: messages.topicId })
         .from(messages)
-        .where(and(this.ownership(), inArray(messages.id, ids)));
+        .where(and(this.ownership(), inArray(messages.id, ids), visitorGuard));
 
       if (toDelete.length === 0) return;
 
@@ -4415,8 +4445,9 @@ export class MessageModel {
           .where(and(eq(messages.id, child.id), this.ownership()));
       }
 
-      // 6. Delete the messages
-      await tx.delete(messages).where(and(this.ownership(), inArray(messages.id, ids)));
+      // 6. Delete the messages. Deletes the ids that survived the step-1
+      // filter, not the raw input, so a mixed batch drops only the visitor rows.
+      await tx.delete(messages).where(and(this.ownership(), inArray(messages.id, [...deleteSet])));
 
       await this.reconcileActiveBranchSnapshots(tx, activeBranchSnapshots);
 
@@ -4503,9 +4534,10 @@ export class MessageModel {
    * are hidden from every creator-facing listing (see `notShareVisitorMessage`
    * in `../utils/shareVisitor`), so an id-less sweep must not destroy them —
    * "clear all" can only mean the rows the creator can actually see. Id-targeted
-   * deletes (`deleteMessage`, `deleteMessages`) intentionally stay unfiltered:
-   * they act on rows the caller explicitly named, and the read boundary already
-   * prevents visitor message ids from reaching the creator.
+   * deletes ({@link MessageModel.deleteMessage}, {@link MessageModel.deleteMessages})
+   * apply the same guard by default — a creator can obtain visitor ids out of
+   * band (data export), so "the caller named the id" is not proof the row is
+   * theirs to delete. Runtime cleanup opts back in via `includeShareVisitor`.
    */
   deleteAllMessages = async () => {
     return this.db.delete(messages).where(and(this.ownership(), notShareVisitorMessage()));

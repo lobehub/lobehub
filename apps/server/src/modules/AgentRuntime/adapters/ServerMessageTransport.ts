@@ -82,7 +82,10 @@ export class ServerMessageTransport implements MessageTransport {
   }
 
   async deleteMessage(id: string): Promise<void> {
-    await this.messageModel.deleteMessage(id);
+    // Runtime cleanup path (orphaned placeholders / approval teardown). Agent-share
+    // visitor turns run under the creator's identity, so the runtime must be able to
+    // delete rows the creator-facing delete guard fails closed on.
+    await this.messageModel.deleteMessage(id, { includeShareVisitor: true });
   }
 
   async findToolMessageIdByToolCallId(

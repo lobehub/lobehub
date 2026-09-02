@@ -1052,6 +1052,58 @@ describe('MessageModel Delete Tests', () => {
       expect(remaining[0].id).toBe('visitor-msg');
     });
 
+    it('deleteMessage should keep a visitor message', async () => {
+      // The creator can obtain a raw visitor message id out of band (data
+      // export), so naming the id must not be enough to destroy it.
+      await messageModel.deleteMessage('visitor-msg');
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining.map((m) => m.id).sort()).toEqual(['creator-msg', 'visitor-msg']);
+    });
+
+    it('deleteMessage should still delete the creator own message', async () => {
+      await messageModel.deleteMessage('creator-msg');
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining.map((m) => m.id)).toEqual(['visitor-msg']);
+    });
+
+    it('deleteMessage should delete a visitor message when the runtime opts in', async () => {
+      await messageModel.deleteMessage('visitor-msg', { includeShareVisitor: true });
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining.map((m) => m.id)).toEqual(['creator-msg']);
+    });
+
+    it('deleteMessages should drop only the non-visitor ids of a mixed batch', async () => {
+      await messageModel.deleteMessages(['creator-msg', 'visitor-msg']);
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining.map((m) => m.id)).toEqual(['visitor-msg']);
+    });
+
+    it('deleteMessages should delete visitor messages when the runtime opts in', async () => {
+      await messageModel.deleteMessages(['visitor-msg'], { includeShareVisitor: true });
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining.map((m) => m.id)).toEqual(['creator-msg']);
+    });
+
     it('deleting the agent still cascades visitor messages away', async () => {
       await serverDB.delete(agents).where(eq(agents.id, 'share-agent'));
 

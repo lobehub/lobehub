@@ -293,7 +293,9 @@ export const buildServerVirtualSubAgentRunner = (
       //    an inline tool error instead.
       if (!result?.success) {
         try {
-          await ctx.messageModel.deleteMessage(placeholder.id);
+          // Runtime placeholder cleanup — also valid inside an agent-share
+          // visitor topic, hence the explicit opt-in.
+          await ctx.messageModel.deleteMessage(placeholder.id, { includeShareVisitor: true });
         } catch (error) {
           log(
             'buildServerVirtualSubAgentRunner: failed to clean up placeholder %s: %O',
@@ -475,7 +477,8 @@ export const buildServerAgentMemberRunner = (
       if (startedCount === 0) {
         for (const id of new Set([...anchorIds, groupTool.id])) {
           try {
-            await ctx.messageModel.deleteMessage(id);
+            // Runtime placeholder cleanup — see the sub-agent runner above.
+            await ctx.messageModel.deleteMessage(id, { includeShareVisitor: true });
           } catch (error) {
             log('buildServerAgentMemberRunner: cleanup failed for %s: %O', id, error);
           }

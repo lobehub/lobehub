@@ -397,6 +397,14 @@ export class AgentOperationModel {
     };
   }
 
+  /**
+   * Raw ownership-scoped lookup. Agent-share visitor runs execute under the
+   * CREATOR's identity, so this DOES return their operations — required by the
+   * agent runtime (execution, intervention, completion, verify, abandon), which
+   * has to resolve the operation it is currently driving no matter who started
+   * it. Creator-facing read entry points must use
+   * {@link AgentOperationModel.findOwnOperationById} instead.
+   */
   async findById(operationId: string) {
     const [row] = await this.db
       .select()
@@ -413,6 +421,29 @@ export class AgentOperationModel {
       .select()
       .from(agentOperations)
       .where(and(inArray(agentOperations.id, operationIds), this.ownership()));
+  }
+
+  /**
+   * Creator-facing twin of {@link AgentOperationModel.findById}: excludes
+   * operations recorded inside an agent-share visitor topic, so a creator
+   * handed a raw visitor operation id gets nothing back instead of reading a
+   * visitor conversation's trajectory (e.g. via a pre-signed trace URL).
+   *
+   * Mirrors `TopicModel.findById` / `TopicModel.findOwnTopicById`.
+   */
+  async findOwnOperationById(operationId: string) {
+    const [row] = await this.db
+      .select()
+      .from(agentOperations)
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          this.ownership(),
+          notShareVisitorTopicRef(agentOperations.topicId),
+        ),
+      )
+      .limit(1);
+    return row ?? null;
   }
 
   /**

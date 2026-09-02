@@ -55,7 +55,8 @@ const runResumeAfterRateLimit: ScheduledRunHandlers['resume_after_rate_limit'] =
       await messageModel.update(failedMessage.id, { error: null });
       parentMessageId = failedMessage.id;
     } else {
-      await messageModel.deleteMessage(failedMessage.id);
+      // Scheduled-run retry cleanup runs as the runtime, not as the creator.
+      await messageModel.deleteMessage(failedMessage.id, { includeShareVisitor: true });
       parentMessageId = failedMessage.parentId ?? run.userMessageId;
     }
   }

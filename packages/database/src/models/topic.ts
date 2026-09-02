@@ -1437,10 +1437,18 @@ export class TopicModel {
   // **************** Delete *************** //
 
   /**
-   * Delete a session, also delete all messages and topics associated with it.
+   * Delete one topic, cascading to the messages associated with it.
+   *
+   * Agent-share visitor topics carry the creator's `userId`, so ownership alone
+   * would let the creator-facing `topic.removeTopic` destroy a visitor
+   * conversation from a raw topic id (obtainable out of band, e.g. through data
+   * export). Excluded here for the same reason the bulk sweeps exclude them —
+   * see {@link deleteAll}.
    */
   delete = async (id: string) => {
-    return this.db.delete(topics).where(and(eq(topics.id, id), this.ownership()));
+    return this.db
+      .delete(topics)
+      .where(and(eq(topics.id, id), this.ownership(), this.notShareVisitor()));
   };
 
   /**
@@ -1513,9 +1521,13 @@ export class TopicModel {
 
   /**
    * Deletes multiple topics and all messages associated with them in a transaction.
+   *
+   * Agent-share visitor topics are excluded — see {@link TopicModel.delete}.
    */
   batchDelete = async (ids: string[]) => {
-    return this.db.delete(topics).where(and(inArray(topics.id, ids), this.ownership()));
+    return this.db
+      .delete(topics)
+      .where(and(inArray(topics.id, ids), this.ownership(), this.notShareVisitor()));
   };
 
   /**
@@ -1527,9 +1539,9 @@ export class TopicModel {
    * must not destroy them — "clear all" can only mean the rows the creator sees.
    * The same rule applies to the other id-less sweeps here.
    *
-   * Id-targeted deletes (`delete`, `batchDelete`) intentionally stay unfiltered:
-   * they are ownership actions on a row the caller explicitly named, and the
-   * read boundary already prevents visitor topic ids from leaking to the creator.
+   * Id-targeted deletes ({@link TopicModel.delete}, {@link TopicModel.batchDelete})
+   * apply the same guard: a creator can obtain a visitor topic id out of band
+   * (data export), so naming the id is not proof the row is theirs to delete.
    */
   deleteAll = async () => {
     return this.db.delete(topics).where(and(this.mine(), this.notShareVisitor()));
