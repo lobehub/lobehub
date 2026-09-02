@@ -182,6 +182,8 @@ export const lobeHubOnlineModelDescriptions = {
     "Qwen3.7-Max is Alibaba Cloud's flagship agent-era model for complex coding, reasoning, office automation, and long-horizon autonomous workflows.",
   'lobehub.qwen3.7-plus.description':
     'Qwen3.7-Plus is a cost-effective multimodal model in the Qwen3.7 series, combining strong text capabilities with upgraded vision-language understanding for coding, tool use, GUI tasks, and productivity workflows.',
+  'lobehub.qwen3.8-max-0902.description':
+    'A free coding upgrade over Qwen3.8 Max at the same price — TerminalBench 3.0 more than doubles (11.3 → 29.0), tops the front-end CodeArena leaderboard, and beats Opus 5 on repo-level code understanding.',
   'lobehub.qwen3.8-max-preview.description':
     "Qwen3.8-Max-Preview is a preview of Alibaba's next-generation 2.4T-parameter flagship model, with major gains over Qwen3.7-Max in coding and professional productivity, and leading performance on complex long-horizon tasks such as full-stack development and data analysis.",
   'lobehub.qwen3.8-max.description':
