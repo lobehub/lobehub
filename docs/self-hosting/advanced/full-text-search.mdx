@@ -74,7 +74,7 @@ The Elasticsearch backend requires:
 - `FTS_SEARCH_PROVIDER=elasticsearch` only after the backfill and incremental queue are complete.
 
 See [Migrate from pg\_search to Elasticsearch](/docs/self-hosting/advanced/elasticsearch-migration)
-for the complete rehearsal, backfill, cutover, rollback, and optional cleanup procedure.
+for the complete rehearsal, backfill, cutover, and rollback procedure.
 
 ## How Elasticsearch synchronization works
 
@@ -107,7 +107,6 @@ The full reindex is only the initial snapshot. It does not replace the recurring
 | `ES_API_KEY`              | Elasticsearch API key with index creation, bulk write, refresh, count, alias, and search permissions |
 | `ES_INDEX_NAMESPACE`      | Stable deployment-owned prefix for physical indexes and aliases                                      |
 | `FTS_SEARCH_SYNC_ENABLED` | Enables the incremental consumer; set to `true` only after the initial backfill is ready             |
-| `ES_REINDEX_STATE_DIR`    | Durable local checkpoint directory used by a backfill and every resume attempt                       |
 
 Do not reuse one namespace for unrelated LobeHub deployments. Do not change the namespace while a
 migration or incremental consumer is active.
@@ -142,9 +141,6 @@ the self-hosted OpenTelemetry stack.
   workers against the same checkpoint and physical indexes.
 - Keep `pg_search` serving requests until every entity is complete, failures are zero, and the
   incremental queue has caught up.
-- After cutover, retain the old BM25 indexes and extension for an agreed rollback window. Removing
-  them is a separate, optional, destructive phase.
-- Never use `DROP EXTENSION pg_search CASCADE`; review and remove known BM25 indexes first, and let a
-  non-cascading extension drop refuse unexpected dependencies.
-- Do not remove the Elasticsearch Outbox, capture triggers, or recurring consumer after removing
-  `pg_search`; they are required by the active Elasticsearch backend.
+- Use the supported cleanup command after cutover; users do not need to copy database-object SQL.
+- Keep the Elasticsearch Outbox, capture triggers, and recurring consumer. They are required by the
+  active Elasticsearch backend and are unrelated to Neon's removal of `pg_search`.

@@ -45,8 +45,7 @@ Elasticsearch data flow, read [Full-Text Search](/docs/self-hosting/advanced/ful
 | `ES_API_KEY`              | Apply    | Elasticsearch API key used to create indexes, write bulk documents, refresh/count indexes, and create aliases. Do not use a read-only key. |
 | `ES_INDEX_NAMESPACE`      | Yes      | Stable deployment-owned prefix, for example `lobehub`. It produces aliases such as `lobehub-messages`. Keep it unchanged across reruns.    |
 | `FTS_SEARCH_SYNC_ENABLED` | Sync     | Set to `true` only after the full backfill is ready and before running the incremental consumer.                                           |
-| `ES_REINDEX_STATE_DIR`    | Mutate   | Local checkpoint directory. It must be explicit for mutations and must persist across every resume attempt.                                |
-| `FTS_SEARCH_PROVIDER`     | Runtime  | Full-text search provider: `pg_search` (default) or `elasticsearch`. Keep `pg_search` until backfill, catch-up, and validation finish.     |
+| `FTS_SEARCH_PROVIDER`     | Cutover  | Set to `elasticsearch` after backfill, catch-up, and validation finish to switch user search traffic.                                      |
 
 `ES_URL` and `ES_API_KEY` are not needed for the read-only `--status` command.
 Operators that keep multiple Elasticsearch targets in one environment can select an explicit pair
@@ -80,22 +79,7 @@ host.
    [branching](https://neon.com/docs/introduction/branching) and
    [backup and restore](https://neon.com/docs/guides/backup-restore) documentation.
 
-3. If an existing, write-heavy database is about to apply the migration, run the following
-   statement in the database SQL editor, outside a transaction. It builds the Memory fanout index
-   without blocking writes, so the regular migration can reuse it. A new or low-traffic
-   installation can skip this pre-step and let the migration create the index normally:
-
-   ```sql
-   CREATE INDEX CONCURRENTLY IF NOT EXISTS "user_memories_contexts_user_memory_ids_gin_idx"
-   ON "user_memories_contexts" USING gin ("user_memory_ids");
-   ```
-
-   `IF NOT EXISTS` does not verify an existing index definition. If an interrupted build left this
-   index invalid, or the installer reports that its table, column, GIN operator class, or predicate
-   is wrong, run `DROP INDEX CONCURRENTLY "user_memories_contexts_user_memory_ids_gin_idx"` outside
-   a transaction, recreate it with the statement above, and then continue.
-
-4. Apply the database migrations for the same LobeHub release:
+3. Apply the database migrations for the same LobeHub release:
 
    ```bash
    bun run db:migrate
@@ -106,7 +90,7 @@ host.
    PostgreSQL-only deployment can stop here: it still maintains the schema-managed GIN index, but
    does not pay the trigger or Outbox capture-write overhead.
 
-5. Install the optional PostgreSQL change capture before the first backfill:
+4. Install the optional PostgreSQL change capture before the first backfill:
 
    ```bash
    bun run db:install-fts-search-capture
@@ -121,7 +105,7 @@ host.
    capture active while preparing the Elasticsearch target. If you do not intend to enable
    Elasticsearch, do not run it.
 
-6. Keep the application's search backend on PostgreSQL and keep incremental Elasticsearch draining disabled.
+5. Keep the application's search backend on PostgreSQL and keep incremental Elasticsearch draining disabled.
 
 The first production mapping is version `v1`. The tool creates physical indexes such as `lobehub-messages-v1`. After all 14 indexes finish and their counts match the durable checkpoints, it creates stable aliases such as `lobehub-messages`. An alias is only a stable Elasticsearch name; creating it does not change which search backend serves users.
 
@@ -342,97 +326,36 @@ progress.
   long as Elasticsearch serves search traffic.
 </Callout>
 
-## Optional: remove the old pg\_search objects
+## Remove pg\_search before the Neon deadline
 
-This phase is destructive and is not required for Elasticsearch to work. Start it only after the
-observation window is closed, a current PostgreSQL recovery point is available, Elasticsearch is
-healthy, and the rollback plan has been rehearsed on an isolated database copy. Save the read-only
-inventory, migration status JSON, and command output as private operational evidence.
+After Elasticsearch has served search reliably through your observation window and a current
+PostgreSQL recovery point is available, inspect the remaining LobeHub-managed objects:
 
-First, inventory the installed extension and every BM25 index:
-
-```sql
-SELECT extversion
-FROM pg_extension
-WHERE extname = 'pg_search';
-
-SELECT
-  index_namespace.nspname AS schema_name,
-  index_relation.relname AS index_name,
-  table_relation.relname AS table_name,
-  index_record.indisvalid AS is_valid,
-  COALESCE(index_stats.idx_scan, 0) AS scans_since_stats_reset,
-  database_stats.stats_reset
-FROM pg_index AS index_record
-JOIN pg_class AS index_relation ON index_relation.oid = index_record.indexrelid
-JOIN pg_namespace AS index_namespace ON index_namespace.oid = index_relation.relnamespace
-JOIN pg_class AS table_relation ON table_relation.oid = index_record.indrelid
-JOIN pg_am AS access_method ON access_method.oid = index_relation.relam
-LEFT JOIN pg_stat_user_indexes AS index_stats ON index_stats.indexrelid = index_relation.oid
-LEFT JOIN pg_stat_database AS database_stats ON database_stats.datname = current_database()
-WHERE access_method.amname = 'bm25'
-ORDER BY index_namespace.nspname, index_relation.relname;
+```bash
+bun run fts-search:cleanup-pg-search -- --status
 ```
 
-Save this inventory at both the start and end of the observation window. Require every
-`scans_since_stats_reset` value to remain unchanged. If `stats_reset` changes between the two
-samples, restart the observation window because the scan counters are no longer comparable. This
-database-side check catches custom or direct SQL use of BM25 indexes that application telemetry
-cannot see.
+Then remove them without copying SQL from this guide:
 
-For LobeHub databases migrated through 3.x, the expected project-managed set is the 14 indexes in
-the next command block. Stop and investigate if the inventory contains another BM25 index, another
-schema, an unexpected table, or an invalid index. It may belong to a custom application or an
-interrupted operation and must not be deleted by this procedure.
-
-Remove only the known indexes, one statement at a time and outside a transaction. A short lock
-timeout prevents a busy table from blocking application writes for a long time. If a statement
-times out, let the conflicting transaction finish, inventory again, and resume from the first
-remaining index. The block below is a reviewed command inventory, not one multi-statement query:
-configure the two timeouts once, then submit each `DROP INDEX CONCURRENTLY` line separately in the
-same autocommit session. Disable any editor option that wraps submissions in an automatic
-transaction. If the editor does not preserve a session, configure equivalent session timeouts in
-the database client before each drop.
-
-```sql
-SET lock_timeout = '2s';
-SET statement_timeout = '10min';
-
-DROP INDEX CONCURRENTLY IF EXISTS public."agents_bm25_idx";
-DROP INDEX CONCURRENTLY IF EXISTS public."chat_groups_bm25_idx";
-DROP INDEX CONCURRENTLY IF EXISTS public."documents_bm25_idx";
-DROP INDEX CONCURRENTLY IF EXISTS public."files_bm25_idx";
-DROP INDEX CONCURRENTLY IF EXISTS public."knowledge_bases_bm25_idx";
-DROP INDEX CONCURRENTLY IF EXISTS public."messages_bm25_idx";
-DROP INDEX CONCURRENTLY IF EXISTS public."topics_bm25_idx";
-DROP INDEX CONCURRENTLY IF EXISTS public."user_memories_activities_bm25_idx";
-DROP INDEX CONCURRENTLY IF EXISTS public."user_memories_bm25_idx";
-DROP INDEX CONCURRENTLY IF EXISTS public."user_memories_contexts_bm25_idx";
-DROP INDEX CONCURRENTLY IF EXISTS public."user_memories_experiences_bm25_idx";
-DROP INDEX CONCURRENTLY IF EXISTS public."user_memories_identities_bm25_idx";
-DROP INDEX CONCURRENTLY IF EXISTS public."user_memories_preferences_bm25_idx";
-DROP INDEX CONCURRENTLY IF EXISTS public."user_memory_persona_documents_bm25_idx";
+```bash
+bun run fts-search:cleanup-pg-search -- --apply --yes
 ```
 
-Run the inventory query again and require zero BM25 indexes. Recheck Elasticsearch search and
-incremental synchronization before starting the second phase. Then remove the extension without
-`CASCADE`:
+Use a direct `DATABASE_URL`, not a transaction-pool endpoint. The command refuses to apply before
+`FTS_SEARCH_PROVIDER=elasticsearch`, refuses unrecognized BM25 indexes, removes the known indexes
+concurrently, and then removes the extension without `CASCADE`. It is safe to rerun after an
+interrupted cleanup. It does not remove the Elasticsearch Outbox, capture triggers, or incremental
+consumer.
 
-```sql
-DROP EXTENSION IF EXISTS pg_search;
+The official image includes `/app/fts-search-pg-search-cleanup.cjs`:
+
+```bash
+docker run --rm --env-file .env \
+  lobehub/lobehub:latest /app/fts-search-pg-search-cleanup.cjs --status
+docker run --rm --env-file .env \
+  lobehub/lobehub:latest /app/fts-search-pg-search-cleanup.cjs --apply --yes
 ```
 
-Never add `CASCADE`. A non-cascading drop intentionally fails if a custom view, function, index, or
-other object still depends on `pg_search`; review that object separately instead of broadening the
-cleanup. After the drop, require the extension query and BM25 inventory to return no rows, and repeat
-the Elasticsearch search and Outbox checks.
-
-Do not delete the FTS Outbox, its sequence or indexes, the change-capture functions and triggers, or
-the recurring `fts-search:sync` job. Those objects belong to the active Elasticsearch path, not to
-the retired `pg_search` query backend.
-
-After the extension is removed, switching the environment variable back is no longer a complete
-rollback. Recovery requires restoring the PostgreSQL recovery point or deliberately reinstalling
-`pg_search` and recreating the exact BM25 indexes for the running LobeHub release. Review database
-migrations before every future LobeHub upgrade: any later migration that assumes `pg_search`
-exists or creates another BM25 index will fail after this optional cleanup.
+Affected Neon deployments must complete this cleanup before September 21, 2026. Other PostgreSQL
+providers can keep `pg_search` installed, but removing the retired objects avoids continuing to
+maintain unused BM25 indexes.
