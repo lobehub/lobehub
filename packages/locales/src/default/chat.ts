@@ -522,7 +522,7 @@ export default {
     'The saved Codex thread could not be resumed safely, so a new conversation has started for this topic.',
   'heteroAgent.switchCwd.cancel': 'Cancel',
   'heteroAgent.switchCwd.content':
-    'Claude Code sessions are pinned to a working directory. Switching will start a new session for this topic — chat messages stay, but the previous session context cannot be resumed.',
+    'Agent sessions are pinned to a working directory. Switching will start a new session for this topic — chat messages stay, but the previous session context cannot be resumed.',
   'heteroAgent.switchCwd.ok': 'Switch and start new session',
   'heteroAgent.switchCwd.title': 'Switch working directory?',
   'heteroAgent.cloudNotConfigured.action': 'Configure',
