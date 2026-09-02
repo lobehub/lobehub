@@ -86,13 +86,18 @@ const renderRealEditor = ({ lifecycle }: { lifecycle: boolean }) => {
 };
 
 describe('useEditorRootLifecycle with a real editor', () => {
-  it('leaks the kernel into the global registry when the lifecycle is not applied', async () => {
+  it('leaves the kernel alive when the lifecycle is not applied', async () => {
     const { editor, unmount } = renderRealEditor({ lifecycle: false });
     await waitFor(() => expect(rootOf(editor())).toBeTruthy());
+    const destroy = vi.spyOn(editor(), 'destroy');
 
     unmount();
     await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(isRegistered(editor())).toBe(true);
+    // Whether an orphaned kernel lingers in the global registry is the editor
+    // library's concern (>= 4.25.1 unregisters it on root detach); what the
+    // lifecycle adds is destroying it, so that is the observable difference.
+    expect(destroy).not.toHaveBeenCalled();
+    expect(editor().getLexicalEditor()).not.toBeNull();
   });
 
   it('destroys the kernel on a direct visible unmount', async () => {
@@ -107,11 +112,17 @@ describe('useEditorRootLifecycle with a real editor', () => {
     const { editor, rerender, tree } = renderRealEditor({ lifecycle: true });
     await waitFor(() => expect(rootOf(editor())).toBeTruthy());
     const root = rootOf(editor());
+    const lexicalEditor = editor().getLexicalEditor();
+    const destroy = vi.spyOn(editor(), 'destroy');
 
     rerender(tree('hidden'));
     expect(rootOf(editor())).toBeNull();
     expect(root!.isConnected).toBe(true);
-    expect(isRegistered(editor())).toBe(true);
+    // Registry membership while hidden depends on the editor version (>= 4.25.1
+    // unregisters until the root is re-attached, see the "revealed" case); the
+    // hook's guarantee is that the kernel itself survives hiding.
+    expect(editor().getLexicalEditor()).toBe(lexicalEditor);
+    expect(destroy).not.toHaveBeenCalled();
   });
 
   it('restores the same root to the same kernel when revealed', async () => {

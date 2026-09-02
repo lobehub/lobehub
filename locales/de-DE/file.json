@@ -100,6 +100,8 @@
   "pageEditor.comments.author.former": "Ehemaliges Mitglied",
   "pageEditor.comments.cancel": "Abbrechen",
   "pageEditor.comments.createFailed": "Kommentar konnte nicht veröffentlicht werden. Ihr Entwurf ist noch vorhanden.",
+  "pageEditor.comments.deepLinkLoadFailed": "Der verlinkte Kommentar konnte nicht geladen werden. Bitte versuchen Sie es erneut.",
+  "pageEditor.comments.deepLinkMissing": "Dieser Kommentar ist nicht mehr verfügbar.",
   "pageEditor.comments.delete": "Löschen",
   "pageEditor.comments.deleteConfirm.content": "Diesen Kommentar löschen? Antworten bleiben sichtbar, wenn dieser Kommentar einen Thread hat.",
   "pageEditor.comments.deleteConfirm.title": "Kommentar löschen",

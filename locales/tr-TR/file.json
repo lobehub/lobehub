@@ -100,6 +100,8 @@
   "pageEditor.comments.author.former": "Eski üye",
   "pageEditor.comments.cancel": "İptal",
   "pageEditor.comments.createFailed": "Yorum yayınlanamadı. Taslağınız hala burada.",
+  "pageEditor.comments.deepLinkLoadFailed": "Bağlantılı yorumu yükleme başarısız oldu. Tekrar deneyin.",
+  "pageEditor.comments.deepLinkMissing": "Bu yorum artık mevcut değil.",
   "pageEditor.comments.delete": "Sil",
   "pageEditor.comments.deleteConfirm.content": "Bu yorumu silmek istiyor musunuz? Eğer bu yorumun bir dizisi varsa, yanıtlar görünür kalacaktır.",
   "pageEditor.comments.deleteConfirm.title": "Yorumu sil",

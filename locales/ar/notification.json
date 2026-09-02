@@ -37,6 +37,8 @@
   "document_comment_activity": "{{actorLabel}} علق على مستندك \"{{documentTitle}}\".",
   "document_comment_activity_replied": "{{actorLabel}} رد على تعليقك في \"{{documentTitle}}\".",
   "document_comment_activity_replied_title": "رد جديد على تعليقك",
+  "document_comment_activity_thread": "{{actorLabel}} رد على سلسلة تعليقات تشارك فيها في \"{{documentTitle}}\".",
+  "document_comment_activity_thread_title": "رد جديد في سلسلة تعليقاتك",
   "document_comment_activity_title": "تعليق جديد على مستندك",
   "document_comment_mentioned": "{{actorLabel}} أشار إليك في تعليق على \"{{documentTitle}}\".",
   "document_comment_mentioned_title": "تم الإشارة إليك في تعليق على مستند",

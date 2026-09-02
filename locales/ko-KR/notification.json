@@ -37,6 +37,8 @@
   "document_comment_activity": "{{actorLabel}}님이 귀하의 문서 \"{{documentTitle}}\"에 댓글을 남겼습니다.",
   "document_comment_activity_replied": "{{actorLabel}}님이 \"{{documentTitle}}\"에서 귀하의 댓글에 답글을 남겼습니다.",
   "document_comment_activity_replied_title": "귀하의 댓글에 대한 새 답글",
+  "document_comment_activity_thread": "{{actorLabel}}님이 \"{{documentTitle}}\"에서 참여 중인 댓글 스레드에 답글을 남겼습니다.",
+  "document_comment_activity_thread_title": "댓글 스레드에 새 답글이 있습니다",
   "document_comment_activity_title": "귀하의 문서에 대한 새 댓글",
   "document_comment_mentioned": "{{actorLabel}}님이 \"{{documentTitle}}\"의 댓글에서 귀하를 언급했습니다.",
   "document_comment_mentioned_title": "문서 댓글에서 귀하가 언급되었습니다",

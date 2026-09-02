@@ -100,6 +100,8 @@
   "pageEditor.comments.author.former": "Бивш член",
   "pageEditor.comments.cancel": "Отказ",
   "pageEditor.comments.createFailed": "Неуспешно публикуване на коментар. Вашият чернови все още е тук.",
+  "pageEditor.comments.deepLinkLoadFailed": "Неуспешно зареждане на свързания коментар. Опитайте отново.",
+  "pageEditor.comments.deepLinkMissing": "Този коментар вече не е наличен.",
   "pageEditor.comments.delete": "Изтрий",
   "pageEditor.comments.deleteConfirm.content": "Да изтрия ли този коментар? Отговорите ще останат видими, ако този коментар има нишка.",
   "pageEditor.comments.deleteConfirm.title": "Изтриване на коментар",

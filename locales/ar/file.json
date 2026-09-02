@@ -100,6 +100,8 @@
   "pageEditor.comments.author.former": "عضو سابق",
   "pageEditor.comments.cancel": "إلغاء",
   "pageEditor.comments.createFailed": "فشل نشر التعليق. لا يزال المسودة موجودة هنا.",
+  "pageEditor.comments.deepLinkLoadFailed": "فشل تحميل التعليق المرتبط. حاول مرة أخرى.",
+  "pageEditor.comments.deepLinkMissing": "هذا التعليق لم يعد متاحًا.",
   "pageEditor.comments.delete": "حذف",
   "pageEditor.comments.deleteConfirm.content": "هل تريد حذف هذا التعليق؟ ستظل الردود مرئية إذا كان لهذا التعليق سلسلة.",
   "pageEditor.comments.deleteConfirm.title": "حذف التعليق",

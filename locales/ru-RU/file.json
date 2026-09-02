@@ -100,6 +100,8 @@
   "pageEditor.comments.author.former": "Бывший участник",
   "pageEditor.comments.cancel": "Отмена",
   "pageEditor.comments.createFailed": "Не удалось опубликовать комментарий. Ваш черновик все еще здесь.",
+  "pageEditor.comments.deepLinkLoadFailed": "Не удалось загрузить связанный комментарий. Попробуйте еще раз.",
+  "pageEditor.comments.deepLinkMissing": "Этот комментарий больше недоступен.",
   "pageEditor.comments.delete": "Удалить",
   "pageEditor.comments.deleteConfirm.content": "Удалить этот комментарий? Ответы останутся видимыми, если у этого комментария есть ветка.",
   "pageEditor.comments.deleteConfirm.title": "Удалить комментарий",

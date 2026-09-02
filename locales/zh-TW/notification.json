@@ -37,6 +37,8 @@
   "document_comment_activity": "{{actorLabel}} 在您的文件「{{documentTitle}}」中留下了評論。",
   "document_comment_activity_replied": "{{actorLabel}} 回覆了您在「{{documentTitle}}」中的評論。",
   "document_comment_activity_replied_title": "您的評論有新的回覆",
+  "document_comment_activity_thread": "{{actorLabel}} 在您參與的「{{documentTitle}}」評論串中回覆了。",
+  "document_comment_activity_thread_title": "您的評論串有新回覆",
   "document_comment_activity_title": "您的文件有新的評論",
   "document_comment_mentioned": "{{actorLabel}} 在「{{documentTitle}}」的評論中提到了您。",
   "document_comment_mentioned_title": "您在文件評論中被提及",

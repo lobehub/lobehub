@@ -100,6 +100,8 @@
   "pageEditor.comments.author.former": "元メンバー",
   "pageEditor.comments.cancel": "キャンセル",
   "pageEditor.comments.createFailed": "コメントの投稿に失敗しました。下書きはそのまま残っています。",
+  "pageEditor.comments.deepLinkLoadFailed": "リンクされたコメントの読み込みに失敗しました。再試行してください。",
+  "pageEditor.comments.deepLinkMissing": "このコメントはもう利用できません。",
   "pageEditor.comments.delete": "削除",
   "pageEditor.comments.deleteConfirm.content": "このコメントを削除しますか？スレッドがある場合、返信は表示されたままになります。",
   "pageEditor.comments.deleteConfirm.title": "コメントを削除",

@@ -30,6 +30,11 @@ export interface DocumentCommentItem {
   workspaceId: string;
 }
 
+/** One comment fetched by id; roots also carry their live reply count. */
+export interface DocumentCommentDetail extends DocumentCommentItem {
+  replyCount: number;
+}
+
 export interface DocumentCommentThread {
   replyCount: number;
   root: DocumentCommentItem;

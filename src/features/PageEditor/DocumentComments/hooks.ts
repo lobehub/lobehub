@@ -1,4 +1,5 @@
 import type {
+  DocumentCommentDetail,
   DocumentCommentItem,
   DocumentCommentReplyPage,
   DocumentCommentSummary,
@@ -13,6 +14,7 @@ import { documentCommentKeys } from '@/libs/swr/keys';
 import { documentCommentService } from '@/services/documentComment';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import {
   createOptimisticComment,
@@ -61,6 +63,21 @@ export const useDocumentCommentSummary = (documentId?: string | null) =>
     () => documentCommentService.summary(documentId!),
     { dedupingInterval: 30_000 },
   );
+
+/**
+ * One comment by id. Lists are oldest-first and a notification usually points
+ * at the newest comment, so a deep link fetches its target directly instead of
+ * paging towards it; `isNotFound` means the comment is gone.
+ */
+export const useDocumentCommentDetail = (commentId?: string | null) => {
+  const workspaceId = useActiveWorkspaceId();
+  const response = useClientDataSWR<DocumentCommentDetail>(
+    commentId && workspaceId ? documentCommentKeys.detail(workspaceId, commentId) : null,
+    () => documentCommentService.get(commentId!),
+  );
+
+  return { ...response, isNotFound: isTrpcErrorCode(response.error, 'NOT_FOUND') };
+};
 
 export const useOptimisticDocumentComment = () => {
   const workspaceId = useActiveWorkspaceId();

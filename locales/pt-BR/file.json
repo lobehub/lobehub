@@ -100,6 +100,8 @@
   "pageEditor.comments.author.former": "Ex-membro",
   "pageEditor.comments.cancel": "Cancelar",
   "pageEditor.comments.createFailed": "Falha ao publicar o comentário. Seu rascunho ainda está aqui.",
+  "pageEditor.comments.deepLinkLoadFailed": "Falha ao carregar o comentário vinculado. Tente novamente.",
+  "pageEditor.comments.deepLinkMissing": "Este comentário não está mais disponível.",
   "pageEditor.comments.delete": "Excluir",
   "pageEditor.comments.deleteConfirm.content": "Excluir este comentário? As respostas permanecerão visíveis se este comentário tiver um encadeamento.",
   "pageEditor.comments.deleteConfirm.title": "Excluir comentário",
