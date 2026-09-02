@@ -1060,6 +1060,7 @@ export class AiAgentService {
     const loadHistoryMessages = createHistoryMessagesLoader(
       {
         db: this.db,
+        isShareVisitorRun: !!shareGate,
         messageModel: this.messageModel,
         userId: this.userId,
         workspaceId: this.workspaceId,

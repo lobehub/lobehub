@@ -487,6 +487,20 @@ export const setupTurn = async (
     // The pinned model lives in the top-level `topics.model`/`provider` columns
     // (config source of truth), NOT in metadata.
     const existingTopic = await deps.topicModel.findById(topicId);
+
+    // Fail-closed guard: a non-share run must never operate on a share-visitor
+    // topic. `findById` is ownership-scoped but deliberately does NOT exclude
+    // visitor topics (see its JSDoc) — they carry the CREATOR's own userId for
+    // billing attribution, so `deps.userId`'s ownership check alone lets a
+    // creator-authenticated but non-share call (e.g. hitting `aiAgent.execAgent`
+    // directly with a leaked/guessed visitor topicId) load a visitor
+    // conversation as if it were their own. A share visitor's own run is
+    // authorized separately via `shareGate` — already re-validated upstream by
+    // `findVisitorTopicOrThrow` in `shareChat.ts` — and must keep working.
+    if (!shareGate && existingTopic?.senderId) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic not found' });
+    }
+
     const pinnedModel = existingTopic?.model;
     if (pinnedModel) {
       model = modelOverride || pinnedModel;

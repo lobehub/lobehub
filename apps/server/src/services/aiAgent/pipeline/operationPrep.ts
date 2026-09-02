@@ -56,7 +56,13 @@ export interface HistoryLoaderInput {
  * cached so the run pays the query at most once.
  */
 export const createHistoryMessagesLoader = (
-  deps: { db: LobeChatDatabase; messageModel: MessageModel; userId: string; workspaceId?: string },
+  deps: {
+    db: LobeChatDatabase;
+    isShareVisitorRun: boolean;
+    messageModel: MessageModel;
+    userId: string;
+    workspaceId?: string;
+  },
   input: HistoryLoaderInput,
 ): (() => Promise<any[]>) => {
   const {
@@ -75,9 +81,15 @@ export const createHistoryMessagesLoader = (
   let historyMessagesCache: any[] | undefined;
   // The run's own topic was resolved and authorized upstream (a share visitor
   // run reaches here through `findVisitorTopicOrThrow`), and it executes under
-  // the CREATOR's identity — so these reads must opt out of `query()`'s
-  // creator-facing agent-share exclusion or the agent loses its history.
-  const historyQueryOptions = { allowShareVisitor: true, postProcessUrl };
+  // the CREATOR's identity — so an AUTHORIZED share run must opt out of
+  // `query()`'s creator-facing agent-share exclusion or the agent loses its
+  // history. A non-share run must NOT get this opt-out: `turnSetup`'s
+  // visitor-topic guard rejects a non-share run whose `appContext.topicId`
+  // resolves to a visitor topic, but this loader is cheap defense-in-depth in
+  // case that guard is ever bypassed or a future call site skips it — without
+  // it, a non-share run pointed at a leaked visitor topicId would still load
+  // the visitor's transcript into the owner's model context.
+  const historyQueryOptions = { allowShareVisitor: deps.isShareVisitorRun, postProcessUrl };
 
   return async () => {
     if (historyMessagesCache) return historyMessagesCache;

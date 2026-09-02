@@ -225,6 +225,78 @@ describe('useAgentShare · updateConfig', () => {
   });
 });
 
+describe('useAgentShare · agent identity change', () => {
+  // The settings page component is not remounted when navigating between two
+  // agents' share pages — it just receives a new `agentId` prop (mirrors
+  // `useDebouncedLimitPatch`'s doc). Without the identity guard, a write still
+  // in flight for agent A would land its response in the SAME shared
+  // `latestConfigRef` agent B's edits derive from.
+  it("does not let agent A's in-flight write pollute agent B's config after navigating without unmount", async () => {
+    const shareA = buildShare({ maxTurnsPerTopic: 20 });
+    const shareB = buildShare({ maxTurnsPerTopic: 99 });
+    swr.seed(shareA);
+
+    let releaseA: () => void = () => {};
+    service.updateShareConfig.mockImplementationOnce(
+      (_agentId: string, patch: any) =>
+        new Promise((resolve) => {
+          releaseA = () => resolve({ ...shareA, shareConfig: { ...shareA.shareConfig, ...patch } });
+        }),
+    );
+
+    const { result, rerender } = renderHook(({ agentId }) => useAgentShare(agentId), {
+      initialProps: { agentId: 'agent-A' },
+    });
+
+    // Kick off an edit on A that stays in flight (server hasn't responded yet).
+    let editingA: Promise<unknown> = Promise.resolve();
+    await act(async () => {
+      editingA = result.current.updateConfig({ maxTurnsPerTopic: 5 });
+    });
+    await waitFor(() => expect(service.updateShareConfig).toHaveBeenCalledTimes(1));
+    expect(service.updateShareConfig).toHaveBeenNthCalledWith(1, 'agent-A', {
+      maxTurnsPerTopic: 5,
+    });
+
+    // Navigate to agent B without unmounting. Simulate SWR's own key switch
+    // resolving to B's row (a real key change would trigger a fresh fetch).
+    act(() => {
+      rerender({ agentId: 'agent-B' });
+    });
+    act(() => {
+      swr.set(shareB);
+    });
+
+    // B's server snapshot must be adopted — not blocked behind A's pending
+    // write count, which belongs to a hook instance the component reused.
+    expect(result.current.share?.shareConfig.maxTurnsPerTopic).toBe(99);
+
+    // The next edit on B must derive its patch from B's config (99), not from
+    // whatever `latestConfigRef` held for A.
+    service.updateShareConfig.mockImplementationOnce(async (_agentId: string, patch: any) => ({
+      ...shareB,
+      shareConfig: { ...shareB.shareConfig, ...patch },
+    }));
+    await act(async () => {
+      await result.current.updateConfig((current) => ({
+        maxTurnsPerTopic: current.maxTurnsPerTopic + 1,
+      }));
+    });
+    expect(service.updateShareConfig).toHaveBeenNthCalledWith(2, 'agent-B', {
+      maxTurnsPerTopic: 100,
+    });
+    expect(result.current.share?.shareConfig.maxTurnsPerTopic).toBe(100);
+
+    // A's stale write finally resolves — its response must be dropped rather
+    // than clobbering the config B's edits now derive from.
+    await act(async () => {
+      releaseA();
+      await editingA;
+    });
+    expect(result.current.share?.shareConfig.maxTurnsPerTopic).toBe(100);
+  });
+});
+
 describe('useAgentShare · getShareStatus failure', () => {
   it('exposes the fetch error instead of swallowing it', () => {
     const fetchError = new Error('network down');
