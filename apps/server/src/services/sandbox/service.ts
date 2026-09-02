@@ -1,4 +1,5 @@
 import {
+  CloudSandboxIdentifier,
   type SandboxCallToolResult,
   type SandboxExportFileResult,
   selectSandboxInitFiles,
@@ -7,6 +8,11 @@ import debug from 'debug';
 import { sha256 } from 'js-sha256';
 
 import { FileModel } from '@/database/models/file';
+import {
+  checkCommand,
+  type CommandGovernanceContext,
+  logCommandExecution,
+} from '@/server/services/governance';
 
 import {
   buildSandboxFilesInitCommand,
@@ -24,6 +30,15 @@ import type {
 
 const log = debug('lobe-server:sandbox:service');
 
+/**
+ * Sandbox tool names that spawn a shell command, and therefore are the ones
+ * command governance gates. Mirrors `SHELL_TOOL_NAMES` in
+ * `toolExecution/serverRuntimes/cloudSandbox.ts` (kept as a separate literal
+ * rather than a shared import — that module belongs to the Agent tool-call
+ * layer, this one gates every caller of `SandboxMiddlewareService`).
+ */
+const GOVERNED_SHELL_TOOL_NAMES = new Set(['execScript', 'runCommand']);
+
 export class SandboxMiddlewareService implements SandboxService {
   readonly capabilities: SandboxProviderCapabilities;
   readonly kind: SandboxProviderKind;
@@ -38,12 +53,79 @@ export class SandboxMiddlewareService implements SandboxService {
     this.kind = provider.kind;
   }
 
+  /**
+   * The single collection point for every caller of the sandbox provider —
+   * the Agent tool-call path (`toolExecution/serverRuntimes/cloudSandbox.ts`)
+   * and the front-end "run" path (`routers/tools/market.ts` →
+   * `execInSandboxHandler`) both end up here. Command governance is gated at
+   * this chokepoint rather than upstream so both paths, and both shell tool
+   * names (`runCommand`/`execScript`), are covered by one check — and so a
+   * new sandbox shell tool is covered automatically.
+   *
+   * `checkCommand`/`logCommandExecution` no-op with zero DB access when
+   * `COMMAND_GOVERNANCE_ENABLED` is off, and fail open on any internal error
+   * — see `services/governance/policyGate.ts`.
+   */
   async callTool(
     toolName: string,
     params: Record<string, unknown>,
   ): Promise<SandboxCallToolResult> {
     await this.ensureFilesInitialized();
-    return this.provider.callTool(toolName, params);
+
+    const { serverDB, userId } = this.options;
+
+    if (!GOVERNED_SHELL_TOOL_NAMES.has(toolName) || !serverDB || !userId) {
+      return this.provider.callTool(toolName, params);
+    }
+
+    const ctx: CommandGovernanceContext = {
+      apiName: toolName,
+      commandText:
+        typeof params?.command === 'string' ? params.command : JSON.stringify(params ?? {}),
+      executionTarget: 'sandbox',
+      toolIdentifier: CloudSandboxIdentifier,
+      userId,
+    };
+
+    const decision = await checkCommand(ctx, serverDB);
+
+    if (!decision.allowed) {
+      try {
+        await logCommandExecution(ctx, { blocked: true, matchedRuleId: decision.ruleId }, serverDB);
+      } catch (auditError) {
+        log('Failed to record blocked-command audit log: %O', auditError);
+      }
+
+      return {
+        error: {
+          message:
+            'This command was blocked by a command governance rule set by your administrator.',
+          name: 'COMMAND_BLOCKED',
+        },
+        result: null,
+        success: false,
+      };
+    }
+
+    const startedAt = Date.now();
+    const result = await this.provider.callTool(toolName, params);
+
+    try {
+      await logCommandExecution(
+        ctx,
+        {
+          blocked: false,
+          durationMs: Date.now() - startedAt,
+          errorMessage: result.error?.message,
+          success: result.success,
+        },
+        serverDB,
+      );
+    } catch (auditError) {
+      log('Failed to record command execution audit log: %O', auditError);
+    }
+
+    return result;
   }
 
   /**
