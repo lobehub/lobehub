@@ -15,9 +15,13 @@ const styles = createStaticStyles(({ css }) => ({
   body: css`
     overflow-y: auto;
 
-    /* Roomier than the question steps need: the confirm step also carries the
-       instruction editor, and clamping it lower buried the answers recap. */
-    max-height: 420px;
+    /* Viewport-relative, because the footer holds the only way forward: a fixed
+       cap sized for a tall window pushed "create" below the fold on a short one,
+       leaving the panel's primary action unreachable without scrolling. The
+       question list scrolls inside this box instead, and the footer stays put.
+       (The absolute cap is the leftover from the confirm step's instruction
+        editor, which no longer exists — the questions never needed it.) */
+    max-height: min(420px, 42dvh);
     padding-block: 12px 16px;
     padding-inline: 16px;
   `,
