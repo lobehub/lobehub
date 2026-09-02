@@ -422,12 +422,14 @@ describe('AgentShareModel', () => {
       expect(share.shareId).toBe(created!.id);
     });
 
-    it('rejects non-owner access to a private share', async () => {
+    // NOT_FOUND rather than FORBIDDEN so a stranger cannot tell a paused share
+    // from a non-existent one.
+    it('hides a private share from non-owners as NOT_FOUND', async () => {
       const created = await agentShareModel.create(agentId);
 
       await expect(
         AgentShareModel.findByShareIdWithAccessCheck(serverDB, created!.id, otherUserId),
-      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      ).rejects.toMatchObject({ code: 'NOT_FOUND', message: 'Share not found' });
     });
 
     it('allows authenticated access to a link share', async () => {

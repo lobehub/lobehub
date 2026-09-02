@@ -50,9 +50,17 @@ describe('resolveVisitorErrorKey', () => {
     );
   });
 
-  it('maps a NOT_FOUND send to the unavailable copy', () => {
+  it('maps a topic-level NOT_FOUND send to the recoverable unavailable copy', () => {
     expect(resolveVisitorErrorKey(trpcError('NOT_FOUND', 'Topic not found'))).toBe(
       'share.visitor.errors.unavailable',
+    );
+  });
+
+  it('maps a share-level NOT_FOUND send to the paused-share copy', () => {
+    // A paused share answers NOT_FOUND to a stranger (no existence probing),
+    // which for a visitor mid-session means the same as "sharing paused".
+    expect(resolveVisitorErrorKey(trpcError('NOT_FOUND', 'Share not found'))).toBe(
+      'share.visitor.errors.sharingPaused',
     );
   });
 

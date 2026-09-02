@@ -34,19 +34,24 @@ export const resolveVisitorErrorKey = (error: unknown): string => {
   )
     return 'share.visitor.errors.promptTooLong';
 
-  // The share itself stopped accepting traffic mid-session: the creator flipped
-  // visibility away from `link` (`resolveLinkShareOrThrow` → FORBIDDEN) or
-  // deleted the share/topic entirely (NOT_FOUND). `useSharedAgent` never
-  // revalidates, so the page keeps rendering the stale "everything is fine"
-  // shell — without this branch the visitor only sees the generic copy and
-  // retries forever.
+  // The share itself stopped accepting traffic mid-session: the creator
+  // paused it (a stranger on a private share gets NOT_FOUND 'Share not found'
+  // from `assertShareAccess`, deliberately indistinguishable from a deleted
+  // one), flipped it off `link` while previewing as owner
+  // (`resolveLinkShareOrThrow` → FORBIDDEN), or deleted the topic
+  // (NOT_FOUND 'Topic not found'). `useSharedAgent` never revalidates, so the
+  // page keeps rendering the stale "everything is fine" shell — without this
+  // branch the visitor only sees the generic copy and retries forever.
   if (error instanceof TRPCClientError) {
     if (error.data?.code === 'FORBIDDEN') return 'share.visitor.errors.sharingPaused';
-    // NOT_FOUND is ambiguous: a deleted share AND a deleted topic both surface
-    // it, and the client cannot tell them apart. Mapped to the "reload the
-    // page" copy but deliberately NOT terminal (see below): a topic-level
-    // NOT_FOUND must stay recoverable by switching / starting a new topic.
-    if (error.data?.code === 'NOT_FOUND') return 'share.visitor.errors.unavailable';
+    if (error.data?.code === 'NOT_FOUND') {
+      // Share-level vs topic-level NOT_FOUND can only be told apart by the
+      // server message (`shareChat.ts` / `AgentShareModel`): the share one is
+      // terminal, the topic one must stay recoverable by switching / starting
+      // a new topic (see `TERMINAL_VISITOR_ERROR_KEYS`).
+      if (message === 'Share not found') return 'share.visitor.errors.sharingPaused';
+      return 'share.visitor.errors.unavailable';
+    }
   }
 
   if (message.includes(ChatErrorType.ShareTurnLimitExceeded))

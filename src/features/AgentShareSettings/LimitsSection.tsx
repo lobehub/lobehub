@@ -30,8 +30,11 @@ const LimitsSection = memo<LimitsSectionProps>(({ agentId, onChange, shareConfig
   // input and the debounced patch commits only valid values. A draft entry is
   // dropped once the write it belongs to has settled, so the field falls back
   // to the (now updated) server value.
-  const [countDraft, setCountDraft] = useState<Partial<Record<CountField, number>>>({});
-  const [spendDraft, setSpendDraft] = useState<number | undefined>();
+  // Drafts may hold `null` (a cleared field): the input is controlled, so a
+  // clear that is not mirrored locally snaps back to the saved value on blur
+  // and a clear-then-type replacement gets swallowed.
+  const [countDraft, setCountDraft] = useState<Partial<Record<CountField, number | null>>>({});
+  const [spendDraft, setSpendDraft] = useState<number | null | undefined>();
 
   const settle = useCallback((patch: AgentShareLimitPatch) => {
     setCountDraft((prev) => {
@@ -49,12 +52,7 @@ const LimitsSection = memo<LimitsSectionProps>(({ agentId, onChange, shareConfig
   const schedule = useDebouncedLimitPatch(agentId, async (patch) => onChange(patch), settle);
 
   const handleCountChange = (field: CountField, value: number | null) => {
-    setCountDraft((prev) => {
-      const next = { ...prev };
-      if (value === null) delete next[field];
-      else next[field] = value;
-      return next;
-    });
+    setCountDraft((prev) => ({ ...prev, [field]: value }));
     // The server schema only accepts positive integers; an empty or invalid
     // field just holds the draft until it becomes valid again.
     if (typeof value === 'number' && Number.isInteger(value) && value >= 1) {
@@ -65,10 +63,9 @@ const LimitsSection = memo<LimitsSectionProps>(({ agentId, onChange, shareConfig
 
   const handleSpendChange = (value: number | null) => {
     // `null` is an empty/half-typed field, NOT "no cap": the cap is mandatory,
-    // so hold the draft and commit nothing until a number comes back.
-    if (value === null) return;
+    // so hold the (empty) draft and commit nothing until a number comes back.
     setSpendDraft(value);
-    if (value >= 0) schedule({ monthlySpendLimit: value });
+    if (value !== null && value >= 0) schedule({ monthlySpendLimit: value });
   };
 
   return (
@@ -83,7 +80,11 @@ const LimitsSection = memo<LimitsSectionProps>(({ agentId, onChange, shareConfig
             min={1}
             step={1}
             style={{ width: 160 }}
-            value={countDraft.maxTopicsPerVisitor ?? shareConfig.maxTopicsPerVisitor ?? null}
+            value={
+              countDraft.maxTopicsPerVisitor !== undefined
+                ? countDraft.maxTopicsPerVisitor
+                : (shareConfig.maxTopicsPerVisitor ?? null)
+            }
             onChange={(value) => handleCountChange('maxTopicsPerVisitor', value)}
           />
         </SettingRow>
@@ -95,7 +96,11 @@ const LimitsSection = memo<LimitsSectionProps>(({ agentId, onChange, shareConfig
             min={1}
             step={1}
             style={{ width: 160 }}
-            value={countDraft.maxTurnsPerTopic ?? shareConfig.maxTurnsPerTopic ?? null}
+            value={
+              countDraft.maxTurnsPerTopic !== undefined
+                ? countDraft.maxTurnsPerTopic
+                : (shareConfig.maxTurnsPerTopic ?? null)
+            }
             onChange={(value) => handleCountChange('maxTurnsPerTopic', value)}
           />
         </SettingRow>
@@ -107,7 +112,7 @@ const LimitsSection = memo<LimitsSectionProps>(({ agentId, onChange, shareConfig
             min={0}
             step={1}
             style={{ width: 160 }}
-            value={spendDraft ?? shareConfig.monthlySpendLimit ?? null}
+            value={spendDraft !== undefined ? spendDraft : (shareConfig.monthlySpendLimit ?? null)}
             onChange={handleSpendChange}
           />
         </SettingRow>

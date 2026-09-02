@@ -481,8 +481,12 @@ export class AgentShareModel {
     viewerId: string,
   ): void => {
     const isOwner = viewerId === share.ownerId;
+    // NOT_FOUND, not FORBIDDEN: a paused (private) share must be
+    // indistinguishable from a share that never existed, otherwise a
+    // stranger can probe custom slugs / ids to learn which private shares
+    // exist. Only the owner ever sees the private row.
     if (!isOwner && share.visibility === 'private') {
-      throw new TRPCError({ code: 'FORBIDDEN', message: 'This share is private' });
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Share not found' });
     }
   };
 
