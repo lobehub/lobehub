@@ -1,8 +1,8 @@
-import { serverDBEnv } from '@/config/db';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import type { SoftDeleteOptions } from '@/database/utils/softDelete';
 
+import { purgeFiles } from './purgeFiles';
 import { documentEntry, fileEntry } from './resourceEntries';
 import {
   type TrashCascade,
@@ -35,14 +35,7 @@ export const softDeleteFiles = async (
 
 export const fileHandler: TrashHandler = {
   purge: async (ctx, root) => {
-    const removed = await new FileModel(ctx.db, ctx.userId, ctx.workspaceId).deleteMany(
-      [root.resourceId],
-      serverDBEnv.REMOVE_GLOBAL_FILE,
-      { includeTrashed: true },
-    );
-    if (removed && removed.length > 0) {
-      await ctx.fileService.deleteFiles(removed.map((file) => file.url!));
-    }
+    await purgeFiles(ctx, [root.resourceId], { includeTrashed: true });
   },
   restore: async (ctx, root, children) => {
     const fileModel = new FileModel(ctx.db, ctx.userId, ctx.workspaceId);

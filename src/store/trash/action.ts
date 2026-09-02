@@ -36,6 +36,7 @@ export const trashSlice = (set: Setter, get: () => TrashStore, _api?: unknown) =
  * the list + counts are revalidated afterwards so a failed call self-corrects.
  */
 export class TrashActionImpl {
+  #activeScopeId: string | null = null;
   readonly #get: () => TrashStore;
   readonly #set: Setter;
 
@@ -55,8 +56,8 @@ export class TrashActionImpl {
 
   refresh = async () => {
     await Promise.all([
-      mutate(trashKeys.list(this.#get().activeType)),
-      mutate(trashKeys.countByType()),
+      mutate(trashKeys.list(this.#activeScopeId, this.#get().activeType)),
+      mutate(trashKeys.countByType(this.#activeScopeId)),
     ]);
   };
 
@@ -148,31 +149,46 @@ export class TrashActionImpl {
   useFetchTrash = (
     enabled: boolean,
     resourceType?: TrashResourceType,
-  ): SWRResponse<TrashListResult> =>
-    useClientDataSWR<TrashListResult>(
-      enabled ? trashKeys.list(resourceType) : null,
+    scopeId: string | null = null,
+  ): SWRResponse<TrashListResult> => {
+    this.#activeScopeId = scopeId;
+    return useClientDataSWR<TrashListResult>(
+      enabled ? trashKeys.list(scopeId, resourceType) : null,
       () => trashService.list({ resourceType }),
       {
         onSuccess: (data) => {
+          if (this.#activeScopeId !== scopeId) return;
           this.#set(
-            { isTrashInit: true, items: data.items, nextCursor: data.nextCursor },
+            {
+              isTrashInit: true,
+              items: data.items,
+              itemsScopeId: scopeId,
+              nextCursor: data.nextCursor,
+            },
             false,
             'fetchTrash',
           );
         },
       },
     );
+  };
 
-  useFetchTrashCount = (enabled: boolean): SWRResponse<TrashCountByType> =>
-    useClientDataSWR<TrashCountByType>(
-      enabled ? trashKeys.countByType() : null,
+  useFetchTrashCount = (
+    enabled: boolean,
+    scopeId: string | null = null,
+  ): SWRResponse<TrashCountByType> => {
+    this.#activeScopeId = scopeId;
+    return useClientDataSWR<TrashCountByType>(
+      enabled ? trashKeys.countByType(scopeId) : null,
       () => trashService.countByType(),
       {
         onSuccess: (data) => {
-          this.#set({ countByType: data }, false, 'fetchTrashCount');
+          if (this.#activeScopeId !== scopeId) return;
+          this.#set({ countByType: data, countScopeId: scopeId }, false, 'fetchTrashCount');
         },
       },
     );
+  };
 }
 
 export type TrashAction = Pick<TrashActionImpl, keyof TrashActionImpl>;

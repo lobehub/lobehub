@@ -278,8 +278,10 @@ export class TrashService {
     return counts;
   };
 
-  findByIds = async (ids: string[]): Promise<TrashItem[]> =>
-    (await this.trashModel.findByIds(ids)).map(this.toItem);
+  findByIds = async (ids: string[]): Promise<TrashItem[]> => {
+    const items = (await this.trashModel.findByIds(ids)).map(this.toItem);
+    return this.filterRestrictedResources(items);
+  };
 
   private filterRestrictedResources = async (items: TrashItem[]): Promise<TrashItem[]> => {
     if (!this.workspaceId || items.length === 0) return items;

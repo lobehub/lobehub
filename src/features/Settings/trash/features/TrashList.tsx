@@ -20,11 +20,12 @@ import { Trash2Icon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useWorkspaceMembers } from '@/business/client/hooks/useWorkspaceMembers';
 import LiteTable, { type LiteTableColumn } from '@/components/LiteTable';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { usePermission } from '@/hooks/usePermission';
-import { trashSelectors, useTrashStore } from '@/store/trash';
+import { useTrashStore } from '@/store/trash';
 
 import {
   getDeletedByLabel,
@@ -71,6 +72,7 @@ const TrashList = () => {
   const { t } = useTranslation('setting');
   const { t: tc } = useTranslation('common');
   const mobile = useIsMobile();
+  const activeWorkspaceId = useActiveWorkspaceId();
   const members = useWorkspaceMembers();
   const { allowed: canRestore, reason: restorePermissionReason } =
     usePermission('edit_own_content');
@@ -79,10 +81,12 @@ const TrashList = () => {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   const [
-    items,
-    nextCursor,
+    storedItems,
+    storedNextCursor,
     activeType,
-    countByType,
+    storedCountByType,
+    itemsScopeId,
+    countScopeId,
     loadingIds,
     setActiveType,
     restore,
@@ -96,6 +100,8 @@ const TrashList = () => {
     s.nextCursor,
     s.activeType,
     s.countByType,
+    s.itemsScopeId,
+    s.countScopeId,
     s.loadingIds,
     s.setActiveType,
     s.restore,
@@ -105,11 +111,14 @@ const TrashList = () => {
     s.useFetchTrash,
     s.useFetchTrashCount,
   ]);
-  const isEmpty = useTrashStore(trashSelectors.isEmpty);
-  const total = useTrashStore(trashSelectors.totalCount);
+  const scopeId = activeWorkspaceId ?? null;
+  const items = itemsScopeId === scopeId ? storedItems : [];
+  const nextCursor = itemsScopeId === scopeId ? storedNextCursor : null;
+  const countByType = countScopeId === scopeId ? storedCountByType : {};
+  const total = Object.values(countByType).reduce((sum, count) => sum + (count ?? 0), 0);
 
-  const { error, isLoading, mutate: retry } = useFetchTrash(true, activeType);
-  useFetchTrashCount(true);
+  const { error, isLoading, mutate: retry } = useFetchTrash(true, activeType, scopeId);
+  useFetchTrashCount(true, scopeId);
 
   const visibleIdSet = new Set(items.map((item) => item.id));
   const effectiveSelectedIds = selectedIds.filter((id) => visibleIdSet.has(id));
@@ -374,7 +383,7 @@ const TrashList = () => {
       <LiteTable
         columns={columns}
         dataSource={items}
-        loading={isLoading && !isEmpty && items.length === 0}
+        loading={isLoading && items.length === 0}
         rowKey={(item) => item.id}
         emptyText={
           <Center height={240} width={'100%'}>

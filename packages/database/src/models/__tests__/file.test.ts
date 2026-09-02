@@ -524,6 +524,38 @@ describe('FileModel', () => {
       expect(exclusiveGlobalFile).toBeUndefined();
     });
 
+    it('keeps database rows intact when deleting an unreferenced storage object fails', async () => {
+      await fileModel.createGlobalFile({
+        creator: userId,
+        fileType: 'text/plain',
+        hashId: 'retryable-hash',
+        size: 100,
+        url: 'https://example.com/retryable.txt',
+      });
+      const file = await fileModel.create({
+        fileHash: 'retryable-hash',
+        fileType: 'text/plain',
+        name: 'retryable.txt',
+        size: 100,
+        url: 'https://example.com/retryable.txt',
+      });
+      const deleteStorage = vi.fn().mockRejectedValue(new Error('storage unavailable'));
+
+      await expect(
+        fileModel.deleteMany([file.id], true, { beforeDeleteGlobalFiles: deleteStorage }),
+      ).rejects.toThrow('storage unavailable');
+
+      expect(deleteStorage).toHaveBeenCalledWith([
+        expect.objectContaining({ id: file.id, url: 'https://example.com/retryable.txt' }),
+      ]);
+      expect(await serverDB.query.files.findFirst({ where: eq(files.id, file.id) })).toBeDefined();
+      expect(
+        await serverDB.query.globalFiles.findFirst({
+          where: eq(globalFiles.hashId, 'retryable-hash'),
+        }),
+      ).toBeDefined();
+    });
+
     it('should delete mirror documents and asyncTasks for all files in batch', async () => {
       const [chunkTask1] = await serverDB
         .insert(asyncTasks)

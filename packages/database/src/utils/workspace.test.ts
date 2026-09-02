@@ -1,4 +1,4 @@
-import { PgDialect } from 'drizzle-orm/pg-core';
+import { alias, PgDialect } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
 
 import { agents } from '../schemas/agent';
@@ -149,6 +149,14 @@ describe('workspace utils', () => {
 
       expect(built.sql).toContain('"files"."is_deleted" IS NOT TRUE');
       expect(built.sql.startsWith('(("files"."workspace_id" = $1')).toBe(true);
+    });
+
+    it('applies the stamp filter when a trash-aware table is aliased', () => {
+      const aliasedFiles = alias(files, 'f');
+      const condition = buildWorkspaceWhere({ userId: 'user-1' }, aliasedFiles);
+      const built = new PgDialect().sqlToQuery(condition);
+
+      expect(built.sql).toContain('"f"."is_deleted" IS NOT TRUE');
     });
 
     it('skips the filter with `includeTrashed` (restore / purge internals)', () => {

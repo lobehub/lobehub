@@ -1,9 +1,8 @@
-import { serverDBEnv } from '@/config/db';
-import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import type { SoftDeleteOptions } from '@/database/utils/softDelete';
 
+import { purgeFiles } from './purgeFiles';
 import { knowledgeBaseEntry } from './resourceEntries';
 import {
   type TrashCascade,
@@ -33,13 +32,7 @@ export const knowledgeBaseHandler: TrashHandler = {
     const knowledgeBaseModel = new KnowledgeBaseModel(ctx.db, ctx.userId, ctx.workspaceId);
     const exclusiveFileIds = await knowledgeBaseModel.findExclusiveFileIds(root.resourceId);
     if (exclusiveFileIds.length > 0) {
-      const removed = await new FileModel(ctx.db, ctx.userId, ctx.workspaceId).deleteMany(
-        exclusiveFileIds,
-        serverDBEnv.REMOVE_GLOBAL_FILE,
-      );
-      if (removed && removed.length > 0) {
-        await ctx.fileService.deleteFiles(removed.map((file) => file.url!));
-      }
+      await purgeFiles(ctx, exclusiveFileIds);
     }
     await knowledgeBaseModel.purge([root.resourceId]);
     if (ctx.workspaceId) {

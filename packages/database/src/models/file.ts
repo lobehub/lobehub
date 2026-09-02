@@ -53,6 +53,17 @@ export interface SandboxInitFileItem {
   url: string;
 }
 
+interface DeleteManyOptions {
+  /**
+   * Runs after the model has identified globally unreferenced objects, but
+   * before any database rows are removed. Throwing keeps every row intact so
+   * an external-storage failure can be retried safely.
+   */
+  beforeDeleteGlobalFiles?: (files: FileItem[]) => Promise<void>;
+  includeTrashed?: boolean;
+  restrictToCreator?: boolean;
+}
+
 export class FileModel {
   private readonly userId: string;
   private db: LobeChatDatabase;
@@ -330,7 +341,7 @@ export class FileModel {
   deleteMany = async (
     ids: string[],
     removeGlobalFile: boolean = true,
-    options?: { includeTrashed?: boolean; restrictToCreator?: boolean },
+    options?: DeleteManyOptions,
   ) => {
     if (ids.length === 0) return [];
 
@@ -351,6 +362,26 @@ export class FileModel {
 
       // Extract file hashes that need to be checked
       const hashList = fileList.map((file) => file.fileHash!).filter(Boolean);
+
+      // Determine which backing objects become unreferenced before deleting
+      // any rows. Trash purge uses the callback to remove those objects first;
+      // a transient storage failure then leaves the URL and all DB relations
+      // available for the next retry.
+      let globallyUnreferencedFiles: FileItem[] = [];
+      if (removeGlobalFile && hashList.length > 0) {
+        const remainingFiles = await trx
+          .select({ fileHash: files.fileHash })
+          .from(files)
+          .where(and(inArray(files.fileHash, hashList), notInArray(files.id, targetIds)));
+        const usedHashes = new Set(remainingFiles.map((file) => file.fileHash));
+        const hashesToDelete = new Set(hashList.filter((hash) => !usedHashes.has(hash)));
+        globallyUnreferencedFiles = fileList.filter(
+          (file) => file.fileHash && hashesToDelete.has(file.fileHash),
+        );
+        if (globallyUnreferencedFiles.length > 0) {
+          await options?.beforeDeleteGlobalFiles?.(globallyUnreferencedFiles);
+        }
+      }
 
       // 2. Delete related chunks
       await this.deleteFileChunks(trx as any, targetIds);
@@ -387,32 +418,17 @@ export class FileModel {
           and(inArray(files.id, targetIds), this.ownership(undefined, options?.includeTrashed)),
         );
 
-      // If global files don't need to be deleted, no storage object should be removed.
-      if (!removeGlobalFile || hashList.length === 0) return [];
-
-      // 4. Find hashes that are no longer referenced
-      const remainingFiles = await trx
-        .select({
-          fileHash: files.fileHash,
-        })
-        .from(files)
-        .where(inArray(files.fileHash, hashList));
-
-      // Put still-in-use hashes into a Set for quick lookup
-      const usedHashes = new Set(remainingFiles.map((file) => file.fileHash));
-
-      // Find hashes to delete (those no longer used by any file)
-      const hashesToDelete = hashList.filter((hash) => !usedHashes.has(hash));
-
-      if (hashesToDelete.length === 0) return [];
+      if (globallyUnreferencedFiles.length === 0) return [];
 
       // 5. Delete global files that are no longer referenced
-      await trx.delete(globalFiles).where(inArray(globalFiles.hashId, hashesToDelete));
+      await trx.delete(globalFiles).where(
+        inArray(
+          globalFiles.hashId,
+          globallyUnreferencedFiles.map((file) => file.fileHash!),
+        ),
+      );
 
-      const hashesToDeleteSet = new Set(hashesToDelete);
-
-      // Return only files whose backing global object became unreferenced.
-      return fileList.filter((file) => file.fileHash && hashesToDeleteSet.has(file.fileHash));
+      return globallyUnreferencedFiles;
     });
   };
 

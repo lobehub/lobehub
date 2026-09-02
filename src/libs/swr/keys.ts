@@ -814,8 +814,15 @@ export const knowledgeBaseKeys = {
 
 // ---- device -------------------------------------------------------------
 export const trashKeys = {
-  countByType: def('trash:countByType', () => ['trash:countByType']),
-  list: def('trash:list', (resourceType?: string | null) => ['trash:list', resourceType ?? 'all']),
+  countByType: def('trash:countByType', (workspaceId?: string | null) => [
+    'trash:countByType',
+    workspaceId ?? 'personal',
+  ]),
+  list: def('trash:list', (workspaceId?: string | null, resourceType?: string | null) => [
+    'trash:list',
+    workspaceId ?? 'personal',
+    resourceType ?? 'all',
+  ]),
 };
 
 export const deviceKeys = {

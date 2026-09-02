@@ -1,9 +1,9 @@
-import { serverDBEnv } from '@/config/db';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import type { SoftDeleteOptions } from '@/database/utils/softDelete';
 
+import { purgeFiles } from './purgeFiles';
 import { documentEntry, fileEntry } from './resourceEntries';
 import {
   type TrashCascade,
@@ -56,14 +56,7 @@ export const documentHandler: TrashHandler = {
       .filter((child) => child.resourceType === 'file')
       .map((child) => child.resourceId);
     if (fileIds.length > 0) {
-      const removed = await new FileModel(ctx.db, ctx.userId, ctx.workspaceId).deleteMany(
-        fileIds,
-        serverDBEnv.REMOVE_GLOBAL_FILE,
-        { includeTrashed: true },
-      );
-      if (removed && removed.length > 0) {
-        await ctx.fileService.deleteFiles(removed.map((file) => file.url!));
-      }
+      await purgeFiles(ctx, fileIds, { includeTrashed: true });
     }
 
     const documentIds = [

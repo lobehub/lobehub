@@ -22,6 +22,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { TrashService } from '../index';
 
 const accessMocks = vi.hoisted(() => ({ restrictedKnowledgeBaseIds: [] as string[] }));
+const fileServiceMocks = vi.hoisted(() => ({ deleteFiles: vi.fn() }));
 const notificationMocks = vi.hoisted(() => ({ notifyResourceTrashMutation: vi.fn() }));
 
 vi.mock('@/server/services/knowledgeBaseAccess', () => ({
@@ -31,7 +32,10 @@ vi.mock('@/server/services/knowledgeBaseAccess', () => ({
 vi.mock('@/business/server/resource/notifyTrashMutation', () => notificationMocks);
 
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({ deleteFile: vi.fn(), deleteFiles: vi.fn() })),
+  FileService: class {
+    deleteFile = vi.fn();
+    deleteFiles = fileServiceMocks.deleteFiles;
+  },
 }));
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -46,6 +50,7 @@ let knowledgeBaseModel: KnowledgeBaseModel;
 let trashModel: TrashModel;
 
 beforeEach(async () => {
+  vi.clearAllMocks();
   accessMocks.restrictedKnowledgeBaseIds = [];
   await serverDB.delete(users);
   await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
@@ -223,6 +228,12 @@ describe('TrashService', () => {
         'kb_open',
       ]);
       expect(await workspaceService.countByType()).toEqual({ knowledgeBase: 1 });
+      const allRoots = await registry.list({ limit: 20 });
+      expect(
+        (await workspaceService.findByIds(allRoots.items.map((item) => item.id))).map(
+          (item) => item.resourceId,
+        ),
+      ).toEqual(['kb_open']);
     });
 
     it('restores a file with its mirror document and knowledge-base association intact', async () => {
@@ -392,6 +403,43 @@ describe('TrashService', () => {
       expect(
         await serverDB.select().from(trashItems).where(eq(trashItems.id, root.id)),
       ).toHaveLength(0);
+    });
+
+    it('keeps a trashed file and its registry entry when storage deletion fails', async () => {
+      await fileModel.createGlobalFile({
+        creator: userId,
+        fileType: 'text/plain',
+        hashId: 'trash-retryable-hash',
+        size: 3,
+        url: 'files/retryable.txt',
+      });
+      const { id: fileId } = await fileModel.create({
+        fileHash: 'trash-retryable-hash',
+        fileType: 'text/plain',
+        name: 'retryable.txt',
+        size: 3,
+        url: 'files/retryable.txt',
+      });
+      const [root] = await service.trashFiles([fileId]);
+      fileServiceMocks.deleteFiles.mockRejectedValueOnce(new Error('storage unavailable'));
+
+      expect(await service.purge([root.id])).toEqual({
+        failed: [{ code: 'purgeFailed', id: root.id }],
+        purged: 0,
+        purgedIds: [],
+      });
+      expect(await serverDB.select().from(files).where(eq(files.id, fileId))).toHaveLength(1);
+      expect(
+        await serverDB.select().from(trashItems).where(eq(trashItems.id, root.id)),
+      ).toHaveLength(1);
+
+      expect(await service.purge([root.id])).toEqual({
+        failed: [],
+        purged: 1,
+        purgedIds: [root.id],
+      });
+      expect(await serverDB.select().from(files).where(eq(files.id, fileId))).toHaveLength(0);
+      expect(fileServiceMocks.deleteFiles).toHaveBeenCalledTimes(2);
     });
   });
 
