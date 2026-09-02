@@ -3,12 +3,12 @@ import { z } from 'zod';
 
 // Define a union type for feature flag values: either boolean or array of user IDs
 //
-// NOTE: `agent_share` / `agent_share_visitor` additionally accept raw EMAIL
-// addresses in that array (see `evaluateFeatureFlag`). Those arrays live in the
-// published runtime config (Redis) and in env vars, which therefore hold user
-// email addresses — a data category that was previously absent from flag
-// storage. Keep that in mind when logging, exporting, or replicating the
-// runtime config, and prefer user IDs when an ID is already at hand.
+// NOTE: `agent_share` additionally accepts raw EMAIL addresses in that array
+// (see `evaluateFeatureFlag`). Such arrays live in the published runtime config
+// (Redis) and in env vars, which therefore hold user email addresses — a data
+// category that was previously absent from flag storage. Keep that in mind when
+// logging, exporting, or replicating the runtime config, and prefer user IDs
+// when an ID is already at hand.
 const FeatureFlagValue = z.union([z.boolean(), z.array(z.string())]);
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -26,28 +26,18 @@ export const FeatureFlagsSchema = z.object({
   edit_agent: FeatureFlagValue.optional(),
 
   /**
-   * Cloud-only grayscale gate for the CREATOR side of Agent Share (publishing
-   * a share). Array values are user IDs or emails (see `evaluateFeatureFlag`),
-   * so admins can grant a rollout by email without resolving a user ID first.
-   * An existing share link keeps resolving for its visitors regardless of
-   * this flag — turning it off never breaks links already handed out, it only
-   * blocks NEW publishes. Self-hosted builds are additionally hard-blocked
-   * server-side by `ENABLE_BUSINESS_FEATURES` (see
-   * `_helpers/agentShareFeatureGate.ts`), so this flag alone can never enable
-   * the feature outside Cloud.
+   * Cloud-only grayscale gate for Agent Share, covering BOTH capabilities the
+   * feature has: PUBLISHING a share (creator side) and OPENING/chatting on a
+   * shared agent (visitor side). A user matched by this flag can do both;
+   * everyone else can do neither. Array values are user IDs or emails (see
+   * `evaluateFeatureFlag`), so admins can grant a rollout by email without
+   * resolving a user ID first. The share OWNER previewing their own share is
+   * never subject to the visitor check — only other visitors are. Self-hosted
+   * builds are additionally hard-blocked server-side by
+   * `ENABLE_BUSINESS_FEATURES` (see `_helpers/agentShareFeatureGate.ts`), so
+   * this flag alone can never enable the feature outside Cloud.
    */
   agent_share: FeatureFlagValue.optional(),
-
-  /**
-   * VISITOR side gate for Agent Share: opening/chatting on an already-live
-   * shared agent. `true` (the default) admits every signed-in visitor of a
-   * `link`-visibility share; an array narrows admission to the listed user
-   * IDs/emails for grayscale testing of the visitor experience. The share
-   * OWNER previewing their own share is never subject to this flag — only
-   * other visitors are. Only meaningful when business features are enabled;
-   * like `agent_share`, it cannot enable anything on a self-hosted build.
-   */
-  agent_share_visitor: FeatureFlagValue.optional(),
 
   ai_image: FeatureFlagValue.optional(),
   speech_to_text: FeatureFlagValue.optional(),
@@ -120,11 +110,6 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   // are additionally hard-blocked by ENABLE_BUSINESS_FEATURES on the server
   // gate, so setting this env-side does not enable the feature there.
   agent_share: false,
-  // Visitor side stays open by default (any signed-in visitor of a `link`
-  // share is admitted) — the creator-side `agent_share` flag above is the
-  // dark-launch gate; this one is only for narrowing the visitor audience
-  // during grayscale testing.
-  agent_share_visitor: true,
 
   ai_image: true,
 
@@ -167,10 +152,9 @@ export const mapFeatureFlagsEnvToState = (
   return {
     isAgentEditable: evaluateFeatureFlag(config.edit_agent, userId),
 
-    // The two email-aware flags: their grayscale whitelists are maintained by
+    // The only email-aware flag: its grayscale whitelist is maintained by
     // admins as raw emails (see evaluateFeatureFlag).
     enableAgentShare: evaluateFeatureFlag(config.agent_share, userId, userEmail),
-    enableAgentShareVisitor: evaluateFeatureFlag(config.agent_share_visitor, userId, userEmail),
     showProvider: evaluateFeatureFlag(config.provider_settings, userId),
 
     showOpenAIApiKey: evaluateFeatureFlag(config.openai_api_key, userId),

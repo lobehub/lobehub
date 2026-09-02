@@ -126,10 +126,7 @@ export const getServerFeatureFlagsFromRuntimeConfig = async (userId?: string) =>
  * alone, so an '@' in one of those arrays can never change an outcome and must
  * not be allowed to trigger a users-table read.
  */
-const EMAIL_AWARE_FLAG_KEYS = [
-  'agent_share',
-  'agent_share_visitor',
-] as const satisfies readonly (keyof IFeatureFlags)[];
+const EMAIL_AWARE_FLAG_KEYS = ['agent_share'] as const satisfies readonly (keyof IFeatureFlags)[];
 
 const EMAIL_CACHE_TTL_MS = 5 * 60 * 1000;
 /**

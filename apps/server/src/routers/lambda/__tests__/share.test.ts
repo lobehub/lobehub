@@ -83,7 +83,7 @@ describe('shareRouter', () => {
     beforeEach(() => {
       vi.clearAllMocks();
       mocks.businessConst.ENABLE_BUSINESS_FEATURES = true;
-      mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShareVisitor: true });
+      mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare: true });
       vi.mocked(AgentShareModel.findBySlugOrId).mockResolvedValue(agentShare as any);
       vi.mocked(AgentShareModel.assertShareAccess).mockReturnValue(undefined);
       vi.mocked(AgentShareModel.incrementUserViewCount).mockResolvedValue(undefined);
@@ -199,8 +199,8 @@ describe('shareRouter', () => {
         expect(AgentShareModel.findBySlugOrId).not.toHaveBeenCalled();
       });
 
-      it('rejects a non-owner visitor when the visitor flag is off', async () => {
-        mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShareVisitor: false });
+      it('rejects a non-owner visitor when the agent share flag is off', async () => {
+        mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare: false });
         const caller = shareRouter.createCaller(
           await createContextInner({ userId: 'visitor-user' }),
         );
@@ -212,14 +212,14 @@ describe('shareRouter', () => {
         expect(AgentShareModel.incrementUserViewCount).not.toHaveBeenCalled();
       });
 
-      it('still lets the owner preview their own share when the visitor flag is off', async () => {
-        mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShareVisitor: false });
+      it('still lets the owner preview their own share when the agent share flag is off', async () => {
+        mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare: false });
         const caller = shareRouter.createCaller(await createContextInner({ userId: 'owner-user' }));
 
         await expect(caller.getSharedAgent({ slugOrId: 'shared-agent' })).resolves.toMatchObject({
           isOwner: true,
         });
-        // The owner path never consults the visitor flag at all.
+        // The owner path never consults the agent share flag at all.
         expect(mockGetFeatureFlagsState).not.toHaveBeenCalled();
       });
     });

@@ -6,13 +6,12 @@ import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFla
 /**
  * Shared shape of {@link assertAgentShareCreationEnabled} and
  * {@link assertAgentShareVisitorEnabled}: both check the same
- * `ENABLE_BUSINESS_FEATURES` compile-time gate, then a single per-capability
- * feature flag, differing only in which flag key and which error message to
+ * `ENABLE_BUSINESS_FEATURES` compile-time gate, then the same
+ * `enableAgentShare` feature flag, differing only in which error message to
  * use. Factored out so the two exports cannot drift.
  */
 const createAgentShareGate =
-  (flagKey: 'enableAgentShare' | 'enableAgentShareVisitor', notEnabledMessage: string) =>
-  async (userId: string) => {
+  (flagKey: 'enableAgentShare', notEnabledMessage: string) => async (userId: string) => {
     if (!ENABLE_BUSINESS_FEATURES) {
       throw new TRPCError({
         code: 'FORBIDDEN',
@@ -30,20 +29,23 @@ const createAgentShareGate =
   };
 
 /**
- * Availability gates for Agent Share, split into the two independent
- * capabilities the feature actually has — CREATING a share (publishing) and
- * VISITING one (opening/chatting on an already-live share). Both share the
- * same two-layer shape, checked here on the server rather than only in the
- * UI (the gap topic-share has — its `ENABLE_BUSINESS_FEATURES` check is
- * client-only, so a self-hosted deployment can enable topic sharing by
- * calling the API directly):
+ * Availability gates for Agent Share. The feature has two capabilities —
+ * CREATING a share (publishing) and VISITING one (opening/chatting on an
+ * already-live share) — but a SINGLE rollout allowlist governs both: a user
+ * matched by `agent_share` can publish and visit, everyone else can do
+ * neither. Two exports remain only so each call site can raise the message
+ * that fits its surface.
+ *
+ * Both gates are checked here on the server rather than only in the UI (the
+ * gap topic-share has — its `ENABLE_BUSINESS_FEATURES` check is client-only,
+ * so a self-hosted deployment can enable topic sharing by calling the API
+ * directly), in two layers:
  *
  * 1. `ENABLE_BUSINESS_FEATURES` — compile-time business-slot constant, false
  *    in OSS builds. Self-hosted deployments cannot flip it with env vars, so
  *    agent sharing is structurally cloud-only end to end.
- * 2. A per-capability feature flag (`enableAgentShare` /
- *    `enableAgentShareVisitor`) — the grayscale whitelist (user IDs or
- *    emails) published by admins, evaluated per user. Both fail closed on
+ * 2. The `enableAgentShare` feature flag — the grayscale whitelist (user IDs
+ *    or emails) published by admins, evaluated per user. It fails closed on
  *    anything other than `true` (including `undefined`, i.e. unconfigured),
  *    so a deployment must explicitly opt a user in.
  *
@@ -52,8 +54,10 @@ const createAgentShareGate =
  * `getShareStatus`, `getShareStats`): a creator removed from the whitelist
  * must still be able to revoke and manage an existing share. Symmetrically,
  * `assertAgentShareVisitorEnabled` must never run for the share OWNER
- * previewing their own share — see the call site in `share.ts`'s
- * `getSharedAgent`, which only applies it to non-owner viewers.
+ * previewing their own share — an owner who is later dropped from the
+ * whitelist would otherwise lose access to their own live share. See the call
+ * site in `share.ts`'s `getSharedAgent`, which only applies it to non-owner
+ * viewers.
  */
 export const assertAgentShareCreationEnabled = createAgentShareGate(
   'enableAgentShare',
@@ -61,6 +65,6 @@ export const assertAgentShareCreationEnabled = createAgentShareGate(
 );
 
 export const assertAgentShareVisitorEnabled = createAgentShareGate(
-  'enableAgentShareVisitor',
+  'enableAgentShare',
   'Shared agents are not available for this account',
 );

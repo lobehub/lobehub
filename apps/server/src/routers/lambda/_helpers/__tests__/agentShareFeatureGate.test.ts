@@ -63,7 +63,7 @@ describe('assertAgentShareVisitorEnabled', () => {
 
   it('rejects on deployments without business features regardless of flags', async () => {
     mocks.businessConst.ENABLE_BUSINESS_FEATURES = false;
-    mocks.getFlags.mockResolvedValue({ enableAgentShareVisitor: true });
+    mocks.getFlags.mockResolvedValue({ enableAgentShare: true });
 
     await expect(assertAgentShareVisitorEnabled('visitor-1')).rejects.toMatchObject({
       code: 'FORBIDDEN',
@@ -72,14 +72,14 @@ describe('assertAgentShareVisitorEnabled', () => {
   });
 
   it('rejects visitors outside the grayscale whitelist', async () => {
-    mocks.getFlags.mockResolvedValue({ enableAgentShareVisitor: false });
+    mocks.getFlags.mockResolvedValue({ enableAgentShare: false });
 
     await expect(assertAgentShareVisitorEnabled('visitor-1')).rejects.toBeInstanceOf(TRPCError);
     expect(mocks.getFlags).toHaveBeenCalledWith('visitor-1');
   });
 
   it('fails closed when the flag is unconfigured', async () => {
-    mocks.getFlags.mockResolvedValue({ enableAgentShareVisitor: undefined });
+    mocks.getFlags.mockResolvedValue({ enableAgentShare: undefined });
 
     await expect(assertAgentShareVisitorEnabled('visitor-1')).rejects.toMatchObject({
       code: 'FORBIDDEN',
@@ -87,7 +87,7 @@ describe('assertAgentShareVisitorEnabled', () => {
   });
 
   it('admits whitelisted visitors', async () => {
-    mocks.getFlags.mockResolvedValue({ enableAgentShareVisitor: true });
+    mocks.getFlags.mockResolvedValue({ enableAgentShare: true });
 
     await expect(assertAgentShareVisitorEnabled('visitor-1')).resolves.toBeUndefined();
   });

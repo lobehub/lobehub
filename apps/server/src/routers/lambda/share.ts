@@ -23,8 +23,8 @@ export const shareRouter = router({
    * Gated in two layers matching `_helpers/agentShareFeatureGate.ts`:
    * `ENABLE_BUSINESS_FEATURES` applies unconditionally (even to the OWNER
    * previewing their own share — an OSS deployment has no agent-share surface
-   * at all), while the `enableAgentShareVisitor` grayscale flag only ever
-   * applies to OTHER visitors, never the owner.
+   * at all), while the `enableAgentShare` grayscale flag only ever applies to
+   * OTHER visitors, never the owner.
    */
   getSharedAgent: authedProcedure
     .use(serverDatabase)

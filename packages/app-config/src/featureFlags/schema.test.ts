@@ -193,20 +193,22 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config).enableAgentShare).toBe(false);
   });
 
-  it('should enable agent share visitors by default and narrow it when configured', () => {
-    expect(DEFAULT_FEATURE_FLAGS.agent_share_visitor).toBe(true);
-    expect(
-      mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'visitor-1').enableAgentShareVisitor,
-    ).toBe(true);
+  it('should gate agent share visitors with the same `agent_share` allowlist', () => {
+    // One flag drives both capabilities, so a visitor is admitted by exactly
+    // the same entry (id or email) that would let them publish a share.
+    expect(DEFAULT_FEATURE_FLAGS.agent_share).toBe(false);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'visitor-1').enableAgentShare).toBe(
+      false,
+    );
 
-    const config = { agent_share_visitor: ['visitor-123', 'visitor@example.com'] };
+    const config = { agent_share: ['visitor-123', 'visitor@example.com'] };
 
-    expect(mapFeatureFlagsEnvToState(config, 'visitor-123').enableAgentShareVisitor).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'visitor-123').enableAgentShare).toBe(true);
     expect(
-      mapFeatureFlagsEnvToState(config, 'user-456', 'visitor@example.com').enableAgentShareVisitor,
+      mapFeatureFlagsEnvToState(config, 'user-456', 'visitor@example.com').enableAgentShare,
     ).toBe(true);
-    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableAgentShareVisitor).toBe(false);
-    expect(mapFeatureFlagsEnvToState(config).enableAgentShareVisitor).toBe(false);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableAgentShare).toBe(false);
+    expect(mapFeatureFlagsEnvToState(config).enableAgentShare).toBe(false);
   });
 
   it('should correctly map boolean feature flags to state', () => {

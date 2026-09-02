@@ -141,7 +141,7 @@ describe('shareChatRouter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.businessConst.ENABLE_BUSINESS_FEATURES = true;
-    mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShareVisitor: true });
+    mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare: true });
     mockAccessCheck.mockResolvedValue(share);
     mockFindById.mockResolvedValue(visitorTopic);
     mockCountBySender.mockResolvedValue(0);
@@ -555,8 +555,8 @@ describe('shareChatRouter', () => {
       expect(mockAccessCheck).not.toHaveBeenCalled();
     });
 
-    it('rejects every procedure when the visitor flag is off for this visitor', async () => {
-      mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShareVisitor: false });
+    it('rejects every procedure when the agent share flag is off for this visitor', async () => {
+      mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare: false });
       const caller = await createCaller();
 
       await expect(caller.getTopics({ shareId: 'share-1' })).rejects.toMatchObject({
