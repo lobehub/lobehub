@@ -4,7 +4,7 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../api/client';
 import { resolveWorkspaceScope, type WorkspaceScope } from '../api/workspace';
 import { CLI_PRIMARY_BIN } from '../constants/identity';
-import { loadActiveWorkspaceId, saveActiveWorkspaceId } from '../settings';
+import { saveActiveWorkspaceId } from '../settings';
 import { formatCost, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
 
@@ -43,6 +43,20 @@ const requireScope = (explicit?: string): string => {
     `No workspace scope. Pass --workspace <id>, or run '${CLI_PRIMARY_BIN} workspace use <id|slug>' first.`,
   );
   process.exit(1);
+};
+
+/**
+ * `LOBEHUB_WORKSPACE_ID` outranks the persisted scope, so writing the file
+ * changes nothing until it is unset. Saying so is the difference between the
+ * user believing they switched and their next mutation hitting another tenant.
+ */
+const warnIfEnvOverridesPersistedScope = (): void => {
+  const fromEnv = process.env.LOBEHUB_WORKSPACE_ID;
+  if (!fromEnv) return;
+
+  log.warn(
+    `LOBEHUB_WORKSPACE_ID=${fromEnv} is set and takes precedence — commands keep running against that workspace until you unset it.`,
+  );
 };
 
 const listWorkspaces = async (): Promise<WorkspaceRow[]> => {
@@ -92,9 +106,18 @@ export function registerWorkspaceCommand(program: Command) {
         const detail = (await (
           await getTrpcClient(scope.workspaceId)
         ).workspace.getById.query()) as WorkspaceRow | null;
+        // The server answers an unknown id with `null` rather than an error, so
+        // without this a typo'd scope reports as healthy and every later
+        // command fails somewhere else.
         if (detail) console.log(`${pc.dim('Name: ')} ${detail.name} ${pc.dim(detail.slug)}`);
-      } catch {
-        log.warn('Could not load this workspace — you may have lost access to it.');
+        else log.warn('This workspace id did not resolve — check it with `workspace list`.');
+      } catch (error) {
+        // A diagnostic command should still print the scope it resolved, but
+        // asserting "lost access" would bury auth, network and OSS-endpoint
+        // failures behind a wrong explanation — report what actually failed.
+        log.warn(
+          `Could not load this workspace: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
     });
 
@@ -106,6 +129,7 @@ export function registerWorkspaceCommand(program: Command) {
       if (options.personal) {
         saveActiveWorkspaceId(null);
         console.log(`Scope set to ${pc.bold('personal')}.`);
+        warnIfEnvOverridesPersistedScope();
         return;
       }
 
@@ -129,11 +153,7 @@ export function registerWorkspaceCommand(program: Command) {
       saveActiveWorkspaceId(match.id);
       console.log(`Scope set to ${pc.bold(match.name)} ${pc.dim(match.id)}.`);
 
-      if (process.env.LOBEHUB_WORKSPACE_ID) {
-        log.warn(
-          'LOBEHUB_WORKSPACE_ID is set and takes precedence — unset it for this to take effect.',
-        );
-      }
+      warnIfEnvOverridesPersistedScope();
     });
 
   // ── workspaces ────────────────────────────────────────
@@ -148,7 +168,9 @@ export function registerWorkspaceCommand(program: Command) {
       if (options.json !== undefined) return outputJson(workspaces, options.json);
       if (workspaces.length === 0) return console.log('No workspaces found.');
 
-      const activeId = loadActiveWorkspaceId();
+      // The marker has to follow the same precedence every other command uses,
+      // or an env-set scope silently stars the wrong row.
+      const activeId = resolveWorkspaceScope().workspaceId;
       printTable(
         workspaces.map((w) => [
           w.id === activeId ? `${pc.green('*')} ${w.id}` : `  ${w.id}`,

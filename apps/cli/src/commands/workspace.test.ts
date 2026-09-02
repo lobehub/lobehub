@@ -81,6 +81,22 @@ describe('workspace command', () => {
       expect(output).not.toContain('* ws_1');
     });
 
+    // The marker has to follow the same precedence every other command uses.
+    it('marks the env-selected workspace over the persisted one', async () => {
+      process.env.LOBEHUB_WORKSPACE_ID = 'ws_1';
+      mockLoadActiveWorkspaceId.mockReturnValue('ws_2');
+      mockClient.workspace.list.query.mockResolvedValue([
+        { id: 'ws_1', name: 'Acme', role: 'owner', slug: 'acme' },
+        { id: 'ws_2', name: 'Beta', role: 'member', slug: 'beta' },
+      ]);
+
+      await run('workspace', 'list');
+
+      const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+      expect(output).toContain('* ws_1');
+      expect(output).not.toContain('* ws_2');
+    });
+
     it('reports an empty account instead of printing an empty table', async () => {
       mockClient.workspace.list.query.mockResolvedValue([]);
 
@@ -129,6 +145,18 @@ describe('workspace command', () => {
 
       expect(mockSaveActiveWorkspaceId).toHaveBeenCalledWith(null);
       expect(mockClient.workspace.list.query).not.toHaveBeenCalled();
+      expect(log.warn).not.toHaveBeenCalled();
+    });
+
+    // Clearing the file does not clear the env var, so "Scope set to personal"
+    // on its own would leave the next mutation pointed at a workspace.
+    it('warns that --personal does not beat LOBEHUB_WORKSPACE_ID', async () => {
+      process.env.LOBEHUB_WORKSPACE_ID = 'ws_env';
+
+      await run('workspace', 'use', '--personal');
+
+      expect(mockSaveActiveWorkspaceId).toHaveBeenCalledWith(null);
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('ws_env'));
     });
   });
 
@@ -362,14 +390,25 @@ describe('workspace command', () => {
       expect(output).toContain('Acme');
     });
 
-    // A revoked membership must not turn `workspace current` into a stack trace.
-    it('warns instead of crashing when the workspace is unreachable', async () => {
-      mockLoadActiveWorkspaceId.mockReturnValue('ws_1');
-      mockClient.workspace.getById.query.mockRejectedValue(new Error('FORBIDDEN'));
+    it('flags a scope id the server cannot resolve', async () => {
+      mockLoadActiveWorkspaceId.mockReturnValue('ws_typo');
+      mockClient.workspace.getById.query.mockResolvedValue(null);
 
       await run('workspace', 'current');
 
-      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('lost access'));
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('did not resolve'));
+    });
+
+    // A revoked membership must not turn `workspace current` into a stack trace,
+    // but the reason has to survive — a network or auth failure is actionable
+    // and must not be reported as a membership problem.
+    it('reports the real reason when the workspace is unreachable', async () => {
+      mockLoadActiveWorkspaceId.mockReturnValue('ws_1');
+      mockClient.workspace.getById.query.mockRejectedValue(new Error('fetch failed'));
+
+      await run('workspace', 'current');
+
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('fetch failed'));
     });
   });
 });
