@@ -5,7 +5,7 @@ import { Skeleton } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
-import { ArticleSkeleton } from '@/components/Skeleton';
+import ArticleSkeleton from '@/components/Skeleton/Article';
 import ListLoading from '@/routes/(main)/community/components/ListLoading';
 
 import Banner from './features/Header/Banner';

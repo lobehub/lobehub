@@ -5,7 +5,7 @@ import { AzureAIProviderCard } from 'model-bank/modelProviders';
 import { useTranslation } from 'react-i18next';
 
 import { FormInput, FormPassword } from '@/components/FormInput';
-import { SkeletonInput } from '@/components/Skeleton';
+import { SkeletonInput } from '@/components/Skeleton/SkeletonInput';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import { KeyVaultsConfigKey, LLMProviderApiTokenKey, LLMProviderBaseUrlKey } from '../../const';

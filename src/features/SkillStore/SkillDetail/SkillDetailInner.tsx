@@ -3,7 +3,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { lazy, memo, Suspense, useState } from 'react';
 
-import { ArticleSkeleton } from '@/components/Skeleton';
+import ArticleSkeleton from '@/components/Skeleton/Article';
 
 import Agents from './Agents';
 import Header from './Header';

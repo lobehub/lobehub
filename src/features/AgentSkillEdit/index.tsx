@@ -10,7 +10,7 @@ import { createStaticStyles } from 'antd-style';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ArticleSkeleton } from '@/components/Skeleton';
+import ArticleSkeleton from '@/components/Skeleton/Article';
 import ContentViewer from '@/features/AgentSkillDetail/ContentViewer';
 import FileTree from '@/features/FileTree';
 import { usePermission } from '@/hooks/usePermission';
@@ -76,7 +76,7 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
   const deleteAgentSkill = useToolStore((s) => s.deleteAgentSkill);
 
   const skillDetail = data?.skillDetail;
-  const resourceTree = data?.resourceTree ?? [];
+  const resourceTree = useMemo(() => data?.resourceTree ?? [], [data?.resourceTree]);
   const contentMap = useMemo(() => buildContentMap(resourceTree), [resourceTree]);
 
   const initialValues: SkillEditFormValues = useMemo(

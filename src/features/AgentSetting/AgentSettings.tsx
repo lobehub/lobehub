@@ -1,6 +1,6 @@
 import { memo, Suspense } from 'react';
 
-import { ArticleSkeleton } from '@/components/Skeleton';
+import ArticleSkeleton from '@/components/Skeleton/Article';
 import { ChatSettingsTabs } from '@/store/global/initialState';
 import { useServerConfigStore } from '@/store/serverConfig';
 

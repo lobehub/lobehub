@@ -7,7 +7,7 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ArticleSkeleton } from '@/components/Skeleton';
+import ArticleSkeleton from '@/components/Skeleton/Article';
 import ContentViewer from '@/features/AgentSkillDetail/ContentViewer';
 import FileTree from '@/features/FileTree';
 import { DetailProvider } from '@/features/MCPPluginDetail/DetailProvider';
@@ -38,7 +38,6 @@ const styles = createStaticStyles(({ css }) => ({
 
 const Schema = memo(() => {
   const { t } = useTranslation('discover');
-  const { t: ts } = useTranslation('setting');
   const { tools, toolsLoading, skillContent } = useDetailContext();
   const [activeKey, setActiveKey] = useState<string[]>([]);
   const [mode, setMode] = useState<ModeType>(ModeType.Docs);

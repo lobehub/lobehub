@@ -6,7 +6,7 @@ import { GithubProviderCard } from 'model-bank/modelProviders';
 import { useTranslation } from 'react-i18next';
 
 import { FormPassword } from '@/components/FormInput';
-import { SkeletonInput } from '@/components/Skeleton';
+import { SkeletonInput } from '@/components/Skeleton/SkeletonInput';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { type GlobalLLMProviderKey } from '@/types/user/settings';
 

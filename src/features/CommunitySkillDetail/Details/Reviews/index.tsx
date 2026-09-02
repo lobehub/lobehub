@@ -6,7 +6,7 @@ import { memo, useCallback } from 'react';
 import AsyncError from '@/components/AsyncError';
 import CommentList, { type CommentListProps } from '@/components/CommentList';
 import RatingOverview from '@/components/RatingOverview';
-import { ArticleSkeleton } from '@/components/Skeleton';
+import ArticleSkeleton from '@/components/Skeleton/Article';
 import { discoverService } from '@/services/discover';
 import { useDiscoverStore } from '@/store/discover';
 

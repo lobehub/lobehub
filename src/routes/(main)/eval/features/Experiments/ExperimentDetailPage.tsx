@@ -7,7 +7,7 @@ import { memo } from 'react';
 import { useParams } from 'react-router';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
-import { ArticleSkeleton } from '@/components/Skeleton';
+import ArticleSkeleton from '@/components/Skeleton/Article';
 import { experimentSelectors, useEvalStore } from '@/store/eval';
 
 import BenchmarksSection from './BenchmarksSection';

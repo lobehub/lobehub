@@ -5,11 +5,10 @@ import { Skeleton } from '@lobehub/ui/base-ui';
 import { cssVar, useResponsive } from 'antd-style';
 import { memo } from 'react';
 
-import {
-  ArticleSkeleton,
-  CommunityListSkeleton,
+import ArticleSkeleton from '@/components/Skeleton/Article';
+import CommunityListSkeleton, {
   type CommunityListSkeletonProps,
-} from '@/components/Skeleton';
+} from '@/components/Skeleton/CommunityList';
 
 const ListLoading = memo<CommunityListSkeletonProps>((props) => (
   <CommunityListSkeleton chrome={'body'} {...props} />

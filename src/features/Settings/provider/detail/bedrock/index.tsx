@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FormPassword } from '@/components/FormInput';
-import { SkeletonInput } from '@/components/Skeleton';
+import { SkeletonInput } from '@/components/Skeleton/SkeletonInput';
 import { usePermission } from '@/hooks/usePermission';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { type GlobalLLMProviderKey } from '@/types/user/settings';
@@ -79,7 +79,7 @@ const useBedrockCard = (): ProviderItem => {
     if (!hasAuthShape) return;
 
     setAuthMode(inferBedrockAuthMode(keyVaults));
-  }, [isLoading, keyVaults?.accessKeyId, keyVaults?.apiKey, keyVaults?.secretAccessKey]);
+  }, [isLoading, keyVaults]);
 
   const authModeOptions = useMemo<TabsItem[]>(
     () => [

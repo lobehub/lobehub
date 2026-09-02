@@ -8,7 +8,7 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
-import { ArticleSkeleton } from '@/components/Skeleton';
+import ArticleSkeleton from '@/components/Skeleton/Article';
 import { useIsMobile } from '@/hooks/useIsMobile';
 
 import ShareDataProvider, { useShareData } from './ShareDataProvider';
