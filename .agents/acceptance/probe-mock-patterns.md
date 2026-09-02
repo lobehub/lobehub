@@ -1656,6 +1656,36 @@ delta. Also: read the feed server's 404 line after boot to learn the exact
 
 ### Dev server, install, and ports
 
+#### Next 16 allows one `next dev` per checkout — a second topology needs a worktree
+
+**Situation:** the user's `dev:next` is already listening (3010) and the run needs a
+second Next instance with different env (for example `bun run dev:hono`, which needs
+`LOBE_DEV_TOPOLOGY=hono` at Next start so its `/trpc` rewrite is registered).
+
+**Doesn't work:** starting the second launcher with other ports from the same
+directory. Next 16 refuses with `Another next dev server is already running`
+(lock under `.next/dev`), the launcher then tears its own children down and exits
+143 — it reads like a port clash but no port was shared.
+
+**Works:** `git worktree add --detach ../<name> HEAD && pnpm install` (\~1 min with
+the shared store) and start the stack from there with absolute paths. Point it at
+the managed acceptance DB (`DB_PORT`/`REDIS_PORT` overrides when 5433/6380 are
+taken) instead of copying the user's `.env`, whose database may be behind the
+branch's migrations. Remove the worktree at teardown.
+
+#### `agent-browser cookies set --curl` wants a `Cookie:` header file, not a curl jar
+
+**Situation:** a session cookie obtained with `curl -c jar` from the app's sign-in
+endpoint must be injected into an isolated agent-browser session.
+
+**Doesn't work:** `cookies set --curl jar.txt` — the Netscape jar format yields
+`no cookies found in input`.
+
+**Works:** write one line `Cookie: name=value; name2=value2` and pass that file
+(`--domain localhost`); `cookies get` then lists the HttpOnly session cookie and the
+next `open` lands signed in. Use a dedicated `--session` name so the harness's
+`lobehub-dev` session and its saved state are untouched.
+
 #### A backgrounded `init-dev-env.sh dev` looks dead while the server is alive on a dynamic port
 
 **Situation:** starting the dev server from a harness-managed background command in a
