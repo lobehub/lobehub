@@ -1,8 +1,5 @@
 export default {
   'workingDirectory.addFolder': 'Add folder…',
-  'workingDirectory.addFolderDesc':
-    'Enter an absolute path on the target device, e.g. /Users/name/projects',
-  'workingDirectory.addFolderTitle': 'Add working directory',
   'workingDirectory.agentDescription':
     'Default working directory for all conversations with this Agent',
   'workingDirectory.agentLevel': 'Agent Working Directory',
@@ -13,7 +10,27 @@ export default {
   'workingDirectory.branchesLoadFailed': 'Failed to load branches',
   'workingDirectory.branchesLoading': 'Loading branches…',
   'workingDirectory.branchesNoMatch': 'No matching branches',
-  'workingDirectory.cancel': 'Cancel',
+  'workingDirectory.browseErrorNotDirectory': 'This path is not a directory',
+  'workingDirectory.browseErrorNotFound': "This path doesn't exist on the device",
+  'workingDirectory.browseErrorPermission': 'You do not have permission to open this directory',
+  'workingDirectory.browseErrorSaveFailed': 'Couldn’t save this working directory',
+  'workingDirectory.browseErrorUnavailable':
+    'The device is unavailable or needs a newer LobeHub client',
+  'workingDirectory.browseErrorUnknown': 'Couldn’t open this directory',
+  'workingDirectory.browseDeviceLabel': 'Remote device',
+  'workingDirectory.browseHome': 'Home',
+  'workingDirectory.browseKeyboardHint':
+    '↑↓ Navigate · Enter Open · Ctrl/⌘+Enter Select · Alt+← Parent',
+  'workingDirectory.browseLoading': 'Loading directory…',
+  'workingDirectory.browseManualHint': 'You can edit or paste a full path above.',
+  'workingDirectory.browseNoFolders': 'No subfolders',
+  'workingDirectory.browseNoMatch': 'No matching folders',
+  'workingDirectory.browseParent': 'Parent directory',
+  'workingDirectory.browsePathLabel': 'Remote directory path',
+  'workingDirectory.browseRetry': 'Retry',
+  'workingDirectory.browseSelectFolder': 'Select folder',
+  'workingDirectory.browseSourceFolder': 'Source folder',
+  'workingDirectory.browseTitle': 'Select remote folder',
   'workingDirectory.checkoutAction': 'Checkout',
   'workingDirectory.checkoutFailed': 'Checkout failed',
   'workingDirectory.chooseDifferentFolder': 'Choose a folder...',
@@ -81,6 +98,7 @@ export default {
     'The directory recorded for this conversation no longer exists — showing the Git snapshot saved on the topic.',
   'workingDirectory.staleWorktreeSnapshot':
     'The worktree “{{name}}” recorded for this conversation no longer exists — showing the Git snapshot saved on the topic.',
+  'workingDirectory.symlink': 'symlink',
   'workingDirectory.title': 'Working Directory',
   'workingDirectory.undo': 'Undo',
   'workingDirectory.topicDescription': 'Override Agent default for this conversation only',
