@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -16,6 +16,11 @@ interface MemberSource {
 }
 
 type BarrelMap = Record<string, MemberSource>;
+
+interface Barrel {
+  file: string;
+  members: BarrelMap;
+}
 
 const toSubpath = (barrelDir: string, specifier: string) => {
   if (!specifier.startsWith('.')) return specifier;
@@ -49,30 +54,37 @@ export const parseBarrel = (code: string, barrelDir: string): BarrelMap => {
 };
 
 const loadBarrelMaps = () => {
-  const esRoot = path.resolve(
-    fileURLToPath(import.meta.url),
-    '../../../node_modules/@lobehub/ui/es',
+  // realpath so bare specifiers resolve from pnpm's isolated store, not the root symlink
+  const esRoot = realpathSync(
+    path.resolve(fileURLToPath(import.meta.url), '../../../node_modules/@lobehub/ui/es'),
   );
-  const maps: Record<string, BarrelMap> = {};
+  const maps: Record<string, Barrel> = {};
   for (const barrel of BARRELS) {
     const barrelDir = barrel ? `${barrel}/` : '';
-    const code = readFileSync(path.join(esRoot, barrelDir, 'index.mjs'), 'utf8');
-    maps[barrel] = parseBarrel(code, barrelDir);
+    const file = path.join(esRoot, barrelDir, 'index.mjs');
+    maps[barrel] = { file, members: parseBarrel(readFileSync(file, 'utf8'), barrelDir) };
   }
   return maps;
 };
 
-const namedExportProxy = (maps: Record<string, BarrelMap>): Plugin => ({
+const namedExportProxy = (maps: Record<string, Barrel>): Plugin => ({
   name: 'lobe-ui-named-export-proxy',
-  load(id) {
+  async load(id) {
     if (!id.startsWith(RESOLVED_NAMED_EXPORT_PREFIX)) return;
 
     const [barrel, member] = id.slice(RESOLVED_NAMED_EXPORT_PREFIX.length).split(':');
-    const entry = maps[barrel]?.[member];
+    const entry = maps[barrel]?.members[member];
     if (!entry)
       return `export { ${member} as default } from '@lobehub/ui/es/${barrel ? `${barrel}/` : ''}index';`;
 
-    return `export { ${entry.imported} as default } from '${entry.source}';`;
+    // Bare specifiers such as react-error-boundary are dependencies of
+    // @lobehub/ui, not of the app, so they only resolve from the barrel's own
+    // location under pnpm's isolated node_modules.
+    const source = entry.source.startsWith('@lobehub/ui/es/')
+      ? entry.source
+      : ((await this.resolve(entry.source, maps[barrel].file))?.id ?? entry.source);
+
+    return `export { ${entry.imported} as default } from ${JSON.stringify(source)};`;
   },
   resolveId(id) {
     if (!id.startsWith(NAMED_EXPORT_PREFIX)) return;

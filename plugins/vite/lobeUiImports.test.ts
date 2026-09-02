@@ -11,9 +11,9 @@ const fixturePlugin: Plugin = {
     if (id !== ENTRY_ID) return;
 
     return `
-      import { ConfigProvider, Flexbox } from '@lobehub/ui';
+      import { ConfigProvider, ErrorBoundary, Flexbox } from '@lobehub/ui';
       import { Button } from '@lobehub/ui/base-ui';
-      export { ConfigProvider, Flexbox, Button };
+      export { ConfigProvider, ErrorBoundary, Flexbox, Button };
     `;
   },
   resolveId(id) {
@@ -49,7 +49,7 @@ describe('lobeUiImports', () => {
       build: {
         minify: false,
         rolldownOptions: {
-          external: /^@lobehub\/ui\/es\//,
+          external: [/^@lobehub\/ui\/es\//, /node_modules\/react-error-boundary\//],
           input: 'virtual:lobe-ui-imports-fixture',
         },
         write: false,
@@ -69,6 +69,8 @@ describe('lobeUiImports', () => {
     expect(code).toContain('@lobehub/ui/es/ConfigProvider/');
     expect(code).toContain('@lobehub/ui/es/Flex/FlexBasic');
     expect(code).toContain('@lobehub/ui/es/base-ui/');
+    expect(code).toContain('react-error-boundary');
+    expect(code).not.toMatch(/from ["']react-error-boundary["']/);
     expect(code).not.toMatch(/from ["']@lobehub\/ui["']/);
     expect(code).not.toMatch(/from ["']@lobehub\/ui\/base-ui["']/);
   });
