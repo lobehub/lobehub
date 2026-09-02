@@ -1,56 +1,63 @@
-import type {
-  RequestCookies as RequestCookiesType,
-  ResponseCookies as ResponseCookiesType,
-} from 'next/dist/compiled/@edge-runtime/cookies';
-import edgeRuntimeCookies from 'next/dist/compiled/@edge-runtime/cookies';
-import type { ReadonlyHeaders } from 'next/dist/server/web/spec-extension/adapters/headers';
-import type { ReadonlyRequestCookies } from 'next/dist/server/web/spec-extension/adapters/request-cookies';
+import type { SerializeOptions } from 'cookie';
+import { parse, serialize } from 'cookie';
 
 import { requireRequestContext } from './context';
 
-const { RequestCookies, ResponseCookies } = edgeRuntimeCookies as {
-  RequestCookies: typeof RequestCookiesType;
-  ResponseCookies: typeof ResponseCookiesType;
-};
+export interface RequestCookie {
+  name: string;
+  value: string;
+}
 
-export const headers = async (): Promise<ReadonlyHeaders> =>
-  new Headers(requireRequestContext('headers').request.headers) as ReadonlyHeaders;
+export type ResponseCookie = RequestCookie & SerializeOptions;
 
-export const cookies = async (): Promise<ReadonlyRequestCookies> => {
+export const headers = async (): Promise<Headers> =>
+  new Headers(requireRequestContext('headers').request.headers);
+
+export const cookies = async () => {
   const { request, responseHeaders } = requireRequestContext('cookies');
-  const requestCookies = new RequestCookies(request.headers);
-  const responseCookies = new ResponseCookies(responseHeaders);
+  const store = new Map<string, string>();
+  for (const [name, value] of Object.entries(parse(request.headers.get('cookie') ?? ''))) {
+    if (value !== undefined) store.set(name, value);
+  }
 
-  const syncReadsWithWrites = () => {
-    for (const cookie of responseCookies.getAll()) {
-      if (cookie.value === '') requestCookies.delete(cookie.name);
-      else requestCookies.set(cookie.name, cookie.value);
-    }
+  const entries = (): RequestCookie[] => [...store].map(([name, value]) => ({ name, value }));
+
+  const write = ({ name, value, ...options }: ResponseCookie) => {
+    responseHeaders.append('set-cookie', serialize(name, value, { path: '/', ...options }));
+    if (value === '') store.delete(name);
+    else store.set(name, value);
+    return compat;
   };
-  syncReadsWithWrites();
 
   const compat = {
-    [Symbol.iterator]: () => requestCookies[Symbol.iterator](),
-    delete: (...args: Parameters<ResponseCookiesType['delete']>) => {
-      responseCookies.delete(...args);
-      syncReadsWithWrites();
-      return compat;
+    [Symbol.iterator]: () => {
+      const pairs = entries().map((cookie) => [cookie.name, cookie] as const);
+      return pairs[Symbol.iterator]();
     },
-    get: (...args: Parameters<RequestCookiesType['get']>) => requestCookies.get(...args),
-    getAll: (...args: Parameters<RequestCookiesType['getAll']>) => requestCookies.getAll(...args),
-    has: (name: string) => requestCookies.has(name),
-    set: (...args: Parameters<ResponseCookiesType['set']>) => {
-      responseCookies.set(...args);
-      syncReadsWithWrites();
-      return compat;
-    },
+    delete: (cookie: string | Partial<ResponseCookie>) =>
+      write({
+        ...(typeof cookie === 'string' ? { name: cookie } : cookie),
+        expires: new Date(0),
+        name: typeof cookie === 'string' ? cookie : (cookie.name ?? ''),
+        value: '',
+      }),
+    get: (name: string): RequestCookie | undefined =>
+      store.has(name) ? { name, value: store.get(name)! } : undefined,
+    getAll: (name?: string) =>
+      name ? entries().filter((cookie) => cookie.name === name) : entries(),
+    has: (name: string) => store.has(name),
+    set: (cookie: string | ResponseCookie, value?: string, options?: SerializeOptions) =>
+      write(typeof cookie === 'string' ? { name: cookie, value: value ?? '', ...options } : cookie),
     get size() {
-      return requestCookies.size;
+      return store.size;
     },
-    toString: () => requestCookies.toString(),
+    toString: () =>
+      entries()
+        .map((cookie) => `${cookie.name}=${cookie.value}`)
+        .join('; '),
   };
 
-  return compat as unknown as ReadonlyRequestCookies;
+  return compat;
 };
 
 export const draftMode = async () => ({

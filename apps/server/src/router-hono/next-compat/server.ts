@@ -1,17 +1,4 @@
-import nextServer from 'next/dist/server/web/exports';
-
 import { type AfterTask, getRequestContext, runAfterTask } from './context';
-
-export const {
-  ImageResponse,
-  NextRequest,
-  NextResponse,
-  URLPattern,
-  userAgent,
-  userAgentFromString,
-} = nextServer;
-
-export type { NextRequest as NextRequestType, NextResponse as NextResponseType } from 'next/server';
 
 export const connection = async () => {};
 

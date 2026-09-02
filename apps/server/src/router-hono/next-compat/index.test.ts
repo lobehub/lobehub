@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { nextCompat, runWithRequestContext } from './context';
 import { cookies, draftMode, headers } from './headers';
-import { after, NextResponse } from './server';
+import { after } from './server';
 
 const createApp = () => new Hono().use('*', nextCompat());
 
@@ -50,6 +50,24 @@ describe('next-compat cookies()', () => {
 
     expect(await response.json()).toEqual({ has: false });
     expect(response.headers.getSetCookie()[0]).toMatch(/^a=; Path=\/; Expires=Thu, 01 Jan 1970/);
+  });
+
+  it('accepts the object form of set() and delete() with cookie options', async () => {
+    const app = createApp().get('/cookie', async (c) => {
+      const store = await cookies();
+      store.set({ httpOnly: true, name: 's', sameSite: 'lax', value: 'v' });
+      store.delete({ name: 'a', path: '/app' });
+
+      return c.json({ all: store.getAll().map((cookie) => cookie.name), text: store.toString() });
+    });
+
+    const response = await app.request('/cookie', { headers: { cookie: 'a=1; z=9' } });
+
+    expect(await response.json()).toEqual({ all: ['z', 's'], text: 'z=9; s=v' });
+    expect(response.headers.getSetCookie()).toEqual([
+      's=v; Path=/; HttpOnly; SameSite=Lax',
+      'a=; Path=/app; Expires=Thu, 01 Jan 1970 00:00:00 GMT',
+    ]);
   });
 
   it('keeps Set-Cookie when the handler response came from a nested app', async () => {
@@ -108,13 +126,5 @@ describe('next-compat after()', () => {
     });
 
     expect(resolved).toBe(true);
-  });
-});
-
-describe('next-compat next/server re-exports', () => {
-  it('keeps the real NextResponse', async () => {
-    const response = NextResponse.json({ ok: true });
-
-    expect(await response.json()).toEqual({ ok: true });
   });
 });
