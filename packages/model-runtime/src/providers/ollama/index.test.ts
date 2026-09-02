@@ -800,6 +800,7 @@ describe('LobeOllamaAI', () => {
         model: 'embed-model',
         prompt: 'test input',
       });
+      // Provider returns native vector (no padding)
       expect(result).toEqual([[0.1, 0.2, 0.3]]);
     });
 
@@ -824,13 +825,14 @@ describe('LobeOllamaAI', () => {
         model: 'embed-model',
         prompt: 'input 2',
       });
+      // Provider returns native vectors (no padding)
       expect(result).toEqual([
         [0.1, 0.2, 0.3],
         [0.4, 0.5, 0.6],
       ]);
     });
 
-    it('should pass dimensions parameter', async () => {
+    it('should not pass dimensions parameter to Ollama API', async () => {
       const embeddingsMock = vi.fn().mockResolvedValue({
         embedding: [0.1, 0.2, 0.3],
       });
@@ -842,6 +844,7 @@ describe('LobeOllamaAI', () => {
         model: 'embed-model',
       });
 
+      // Ollama API should NOT receive dimensions parameter
       expect(embeddingsMock).toHaveBeenCalledWith({
         model: 'embed-model',
         prompt: 'test input',

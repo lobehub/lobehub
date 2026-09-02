@@ -66,7 +66,15 @@ describe('embedUserMemoryTexts', () => {
       },
       { metadata: { trigger: 'memory' }, user: 'user-test' },
     );
-    expect(result).toEqual([[1, 2, 3], undefined, undefined, [4, 5, 6]]);
+    // Vectors should be padded to 1024 dimensions
+    expect(result[0]!.length).toBe(1024);
+    expect(result[0]!.slice(0, 3)).toEqual([1, 2, 3]);
+    expect(result[0]!.slice(3).every((v) => v === 0)).toBe(true);
+    expect(result[1]).toBeUndefined();
+    expect(result[2]).toBeUndefined();
+    expect(result[3]!.length).toBe(1024);
+    expect(result[3]!.slice(0, 3)).toEqual([4, 5, 6]);
+    expect(result[3]!.slice(3).every((v) => v === 0)).toBe(true);
     expect(console.warn).toHaveBeenCalledWith('[user-memory] trimmed embedding input', {
       limit: 3,
       model: 'text-embedding-3-large',
@@ -100,6 +108,9 @@ describe('embedUserMemoryTexts', () => {
       },
       { metadata: { trigger: 'memory' }, user: 'user-test' },
     );
-    expect(result).toEqual([[1, 2, 3]]);
+    // Vector should be padded to 1024 dimensions
+    expect(result[0]!.length).toBe(1024);
+    expect(result[0]!.slice(0, 3)).toEqual([1, 2, 3]);
+    expect(result[0]!.slice(3).every((v) => v === 0)).toBe(true);
   });
 });
