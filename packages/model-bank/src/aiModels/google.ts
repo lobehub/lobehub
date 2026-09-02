@@ -657,7 +657,7 @@ const googleChatModels: AIChatModelCard[] = [
     displayName: 'Nano Banana Pro',
     family: 'gemini',
     generation: 'gemini-3',
-    id: 'gemini-3-pro-image-preview',
+    id: 'gemini-3-pro-image',
     knowledgeCutoff: '2025-01',
     maxOutput: 32_768,
     pricing: {
@@ -669,7 +669,7 @@ const googleChatModels: AIChatModelCard[] = [
         { name: 'textOutput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
-    releasedAt: '2025-11-20',
+    releasedAt: '2026-05-28',
     settings: {
       extendParams: ['imageAspectRatio', 'imageResolution'],
       searchImpl: 'params',
@@ -1092,12 +1092,12 @@ const googleImageModels: AIImageModelCard[] = [
   },
   {
     displayName: 'Nano Banana Pro',
-    id: 'gemini-3-pro-image-preview:image',
+    id: 'gemini-3-pro-image:image',
     type: 'image',
     enabled: true,
     description:
       'Gemini 3 Pro Image (Nano Banana Pro) is Google’s image generation model and also supports multimodal chat.',
-    releasedAt: '2025-11-18',
+    releasedAt: '2026-05-28',
     parameters: nanoBananaProParameters,
     pricing: {
       approximatePricePerImage: 0.134,

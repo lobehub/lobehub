@@ -275,3 +275,42 @@ describe('Google Gemini 3.1 Flash Image models', () => {
     );
   });
 });
+
+describe('latest provider model cards', () => {
+  it('registers stable Gemini Pro image IDs', () => {
+    const googleModels = LOBE_DEFAULT_MODEL_LIST.filter(
+      (model) => model.providerId === ModelProvider.Google,
+    );
+
+    expect(googleModels).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'gemini-3-pro-image', type: 'chat' }),
+        expect.objectContaining({ id: 'gemini-3-pro-image:image', type: 'image' }),
+      ]),
+    );
+  });
+
+  it('registers the latest OpenAI transcription and realtime models', () => {
+    const openaiModels = LOBE_DEFAULT_MODEL_LIST.filter(
+      (model) => model.providerId === ModelProvider.OpenAI,
+    );
+
+    expect(openaiModels).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'gpt-transcribe', type: 'asr' }),
+        expect.objectContaining({
+          contextWindowTokens: 128_000,
+          id: 'gpt-realtime-2.1',
+          maxOutput: 32_000,
+          type: 'realtime',
+        }),
+        expect.objectContaining({
+          contextWindowTokens: 128_000,
+          id: 'gpt-realtime-2.1-mini',
+          maxOutput: 32_000,
+          type: 'realtime',
+        }),
+      ]),
+    );
+  });
+});

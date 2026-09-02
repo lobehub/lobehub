@@ -1398,6 +1398,24 @@ export const openaiTTSModels: AITTSModelCard[] = [
 export const openaiASRModels: AIASRModelCard[] = [
   {
     description:
+      'GPT Transcribe is a high-accuracy speech-to-text model for completed audio files, streamed file transcripts, and committed Realtime turns, with support for context and language hints.',
+    displayName: 'GPT Transcribe',
+    id: 'gpt-transcribe',
+    pricing: {
+      units: [
+        {
+          name: 'audioInput',
+          rate: 0.000_075, // $0.0045 per minute
+          strategy: 'fixed',
+          unit: 'second',
+        },
+      ],
+    },
+    releasedAt: '2026-07-28',
+    type: 'asr',
+  },
+  {
+    description:
       'A general speech recognition model supporting multilingual ASR, speech translation, and language identification.',
     displayName: 'Whisper',
     id: 'whisper-1',
@@ -1531,6 +1549,62 @@ export const openaiImageModels: AIImageModelCard[] = [
 
 // GPT-4o and GPT-4o-mini realtime models
 export const openaiRealtimeModels: AIRealtimeModelCard[] = [
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 128_000,
+    description:
+      'GPT-Realtime-2.1 improves alphanumeric recognition, silence and noise handling, and interruption behavior for reasoning-driven voice agents.',
+    displayName: 'GPT Realtime 2.1',
+    id: 'gpt-realtime-2.1',
+    knowledgeCutoff: '2024-09',
+    maxOutput: 32_000,
+    pricing: {
+      units: [
+        { name: 'audioInput', rate: 32, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioOutput', rate: 64, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput_cacheRead', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 24, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput_cacheRead', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-07-06',
+    type: 'realtime',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 128_000,
+    description:
+      'GPT-Realtime-2.1 mini is a faster, lower-cost distilled reasoning model for realtime voice interactions over WebRTC, WebSocket, or SIP.',
+    displayName: 'GPT Realtime 2.1 Mini',
+    id: 'gpt-realtime-2.1-mini',
+    knowledgeCutoff: '2024-09',
+    maxOutput: 32_000,
+    pricing: {
+      units: [
+        { name: 'audioInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioOutput', rate: 20, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput_cacheRead', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.06, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput_cacheRead', rate: 0.08, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-07-06',
+    type: 'realtime',
+  },
   {
     abilities: {
       functionCall: true,
