@@ -5,13 +5,12 @@ import { Text } from '@lobehub/ui/base-ui';
 import { Progress } from 'antd';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import useSWR from 'swr';
 
-import { shareKeys } from '@/libs/swr/keys';
-import { agentShareService } from '@/services/agentShare';
+import AsyncError from '@/components/AsyncError';
 import { formatPrice } from '@/utils/format';
 
 import { Section } from './SectionLayout';
+import { useShareUsage } from './useShareUsage';
 
 interface StatProps {
   label: string;
@@ -33,6 +32,8 @@ Stat.displayName = 'AgentShareUsageStat';
 
 interface UsageSectionProps {
   agentId: string;
+  /** Live configured cap from the share-status cache; see `useShareUsage`. */
+  monthlySpendLimit?: number;
 }
 
 /**
@@ -44,24 +45,24 @@ interface UsageSectionProps {
  * CONVERSATIONS stays governed by `allowCreatorViewSessions`, which these
  * counts deliberately do not bypass.
  */
-const UsageSection = memo<UsageSectionProps>(({ agentId }) => {
+const UsageSection = memo<UsageSectionProps>(({ agentId, monthlySpendLimit }) => {
   const { t } = useTranslation('agent');
 
-  const { data, isLoading } = useSWR(
-    shareKeys.agentShareStats(agentId),
-    () => agentShareService.getShareStats(agentId),
-    { revalidateOnFocus: false },
-  );
-
-  const spend = data?.monthlySpend ?? null;
-  // Every share carries a cap, so this is only ever absent while the stats
-  // request is still in flight.
-  const limit = data?.monthlySpendLimit;
+  const { data, error, hasLoadError, isLoading, isValidating, limit, mutate, spend } =
+    useShareUsage(agentId, monthlySpendLimit);
 
   return (
     <Section desc={t('share.settings.usage.desc')} title={t('share.settings.usage.title')}>
-      {isLoading && !data ? (
+      {isLoading ? (
         <Skeleton active paragraph={{ rows: 2 }} title={false} />
+      ) : hasLoadError ? (
+        <AsyncError
+          error={error}
+          retrying={isValidating}
+          title={t('share.settings.usage.loadFailed')}
+          variant={'inline'}
+          onRetry={() => void mutate()}
+        />
       ) : (
         <Flexbox gap={16}>
           <Flexbox horizontal gap={16}>

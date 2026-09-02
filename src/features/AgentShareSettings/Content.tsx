@@ -71,7 +71,10 @@ const AgentShareSettingsContent = memo<AgentShareSettingsContentProps>(({ agentI
               configure, so only the on/off + link section stays. */}
           {share?.visibility === 'link' && (
             <>
-              <UsageSection agentId={agentId} />
+              <UsageSection
+                agentId={agentId}
+                monthlySpendLimit={share.shareConfig.monthlySpendLimit}
+              />
               <PermissionsSection shareConfig={share.shareConfig} onChange={handleConfigChange} />
               <ToolsSection
                 agentId={agentId}

@@ -343,6 +343,7 @@
   "share.settings.updateError": "保存失败，请重试。",
   "share.settings.usage.conversations": "会话数",
   "share.settings.usage.desc": "这个分享带来了多少访问，又花了你多少钱。",
+  "share.settings.usage.loadFailed": "用量加载失败",
   "share.settings.usage.monthlySpend": "本月消耗",
   "share.settings.usage.spendOfLimit": "${{spend}} / ${{limit}}",
   "share.settings.usage.title": "用量",

@@ -430,6 +430,7 @@ export default {
   'share.settings.title': 'Share Agent',
   'share.settings.usage.conversations': 'Conversations',
   'share.settings.usage.desc': 'What this share has attracted, and what it has cost you.',
+  'share.settings.usage.loadFailed': 'Usage could not be loaded',
   'share.settings.usage.monthlySpend': 'This month’s spend',
   'share.settings.usage.spendOfLimit': '${{spend}} of ${{limit}}',
   'share.settings.usage.title': 'Usage',
