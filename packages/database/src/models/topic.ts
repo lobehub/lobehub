@@ -109,6 +109,21 @@ export interface TopicListItem extends TopicItem {
 }
 
 /**
+ * Sanitized projection of `topics.metadata.runningOperation` for a visitor DTO
+ * — only the fields `useGatewayReconnect`'s `RunningOperation` needs to resume
+ * a streaming session on reload. Never the full `runningOperation` object: it
+ * also carries device/hetero fields (`deviceId`, `deviceUserId`, `hooks`, …)
+ * that describe creator-side dispatch and must not reach a visitor.
+ */
+export interface VisitorRunningOperation {
+  assistantMessageId: string;
+  heteroType?: string | null;
+  operationId: string;
+  scope?: string;
+  threadId?: string | null;
+}
+
+/**
  * Visitor-facing topic DTO for the agent-share surface. Deliberately narrow:
  * the underlying row is CREATOR-owned and also carries the creator's userId,
  * model/provider snapshot, cost/usage and internal metadata.
@@ -116,6 +131,13 @@ export interface TopicListItem extends TopicItem {
 export interface VisitorTopicItem {
   createdAt: Date;
   id: string;
+  /**
+   * Sanitized `runningOperation` marker, present only while a run is active on
+   * this topic. Lets the share surface reconnect a Gateway stream after a page
+   * reload — see {@link VisitorRunningOperation} for why it's projected
+   * instead of forwarding `topics.metadata.runningOperation` as-is.
+   */
+  runningOperation?: VisitorRunningOperation | null;
   title: string | null;
   updatedAt: Date;
 }
@@ -131,6 +153,22 @@ export interface VisitorTopicItem {
  * visitor is actually allowed to create.
  */
 const VISITOR_TOPIC_PAGE_SIZE = AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT;
+
+/**
+ * Projects `topics.metadata.runningOperation` down to the visitor-safe subset
+ * — see {@link VisitorRunningOperation}. Used by {@link TopicModel.queryBySender}
+ * so a share visitor's topic list can drive `useGatewayReconnect` without ever
+ * receiving the rest of `metadata` (creator-only fields — see the module doc).
+ */
+const pickVisitorRunningOperation = (
+  metadata: ChatTopicMetadata | null | undefined,
+): VisitorRunningOperation | null => {
+  const runningOperation = metadata?.runningOperation;
+  if (!runningOperation) return null;
+
+  const { assistantMessageId, operationId, scope, threadId, heteroType } = runningOperation;
+  return { assistantMessageId, heteroType, operationId, scope, threadId };
+};
 
 export interface CreateTopicParams {
   agentId?: string | null;
@@ -1157,18 +1195,22 @@ export class TopicModel {
    * accepted trade-off of not carrying a share id on the row.
    *
    * Selects a visitor-facing DTO instead of the full row: the visitor surface
-   * only renders id/title, and the row also carries creator-only fields
-   * (owning userId, model/provider snapshot, cost/usage, internal status and
-   * metadata) that must never reach a share visitor.
+   * only renders id/title/runningOperation, and the row also carries
+   * creator-only fields (owning userId, model/provider snapshot, cost/usage,
+   * internal status and the rest of `metadata`) that must never reach a share
+   * visitor. `metadata` itself IS selected (needed to project
+   * `runningOperation`), but only the sanitized projection — never the raw
+   * column — leaves this method; see {@link VisitorRunningOperation}.
    */
   queryBySender = async (
     { agentId, senderId }: { agentId: string; senderId: string },
     { pageSize = VISITOR_TOPIC_PAGE_SIZE }: { pageSize?: number } = {},
-  ): Promise<VisitorTopicItem[]> =>
-    this.db
+  ): Promise<VisitorTopicItem[]> => {
+    const rows = await this.db
       .select({
         createdAt: topics.createdAt,
         id: topics.id,
+        metadata: topics.metadata,
         title: topics.title,
         updatedAt: topics.updatedAt,
       })
@@ -1176,6 +1218,12 @@ export class TopicModel {
       .where(and(this.mine(), eq(topics.agentId, agentId), eq(topics.senderId, senderId)))
       .orderBy(desc(topics.updatedAt))
       .limit(pageSize);
+
+    return rows.map(({ metadata, ...rest }) => ({
+      ...rest,
+      runningOperation: pickVisitorRunningOperation(metadata),
+    }));
+  };
 
   /**
    * Per-visitor topic count on a shared agent — drives `maxTopicsPerVisitor`.

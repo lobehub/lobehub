@@ -398,6 +398,64 @@ describe('TopicModel', () => {
     });
   });
 
+  describe('queryBySender', () => {
+    it('projects only the visitor-safe runningOperation fields, stripping the rest of metadata', async () => {
+      await serverDB.insert(agents).values({ id: 'agent-share-running', userId });
+      await serverDB.insert(topics).values({
+        agentId: 'agent-share-running',
+        id: 't-visitor-running',
+        metadata: {
+          // Creator-only fields that must never reach a visitor.
+          model: 'gpt-4',
+          runningOperation: {
+            assistantMessageId: 'ast-1',
+            deviceId: 'device-1',
+            heteroType: 'claude-code',
+            hooks: [{ event: 'onComplete', type: 'webhook', url: 'https://example.com' } as any],
+            operationId: 'op-1',
+            scope: 'main',
+            threadId: 'thd-1',
+          },
+        },
+        senderId: 'visitor-user-running',
+        title: 'running',
+        userId,
+      });
+
+      const [item] = await topicModel.queryBySender({
+        agentId: 'agent-share-running',
+        senderId: 'visitor-user-running',
+      });
+
+      expect(item.runningOperation).toEqual({
+        assistantMessageId: 'ast-1',
+        heteroType: 'claude-code',
+        operationId: 'op-1',
+        scope: 'main',
+        threadId: 'thd-1',
+      });
+      expect(item).not.toHaveProperty('metadata');
+    });
+
+    it('returns a null runningOperation when the topic has no active run', async () => {
+      await serverDB.insert(agents).values({ id: 'agent-share-idle', userId });
+      await serverDB.insert(topics).values({
+        agentId: 'agent-share-idle',
+        id: 't-visitor-idle',
+        senderId: 'visitor-user-idle',
+        title: 'idle',
+        userId,
+      });
+
+      const [item] = await topicModel.queryBySender({
+        agentId: 'agent-share-idle',
+        senderId: 'visitor-user-idle',
+      });
+
+      expect(item.runningOperation).toBeNull();
+    });
+  });
+
   describe('queryTopics', () => {
     it('filters by the given statuses and is scoped to the owner', async () => {
       await serverDB.insert(topics).values([

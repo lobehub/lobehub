@@ -1117,6 +1117,15 @@ export class GatewayActionImpl {
      * renders, leaving a connected-but-frozen panel.
      */
     agentId?: string;
+    /**
+     * Present on the agent-share visitor surface. Routes the token refresh and
+     * cancellation through the share-authorized `shareChat` procedures instead
+     * of the owner-scoped ones: a visitor has no owner-scoped access to the
+     * creator's topic/operation rows, and the Gateway channel is registered
+     * under the VISITOR's id, so only a visitor-signed token can reconnect it
+     * — see `shareChat.refreshGatewayToken`'s JSDoc.
+     */
+    agentShareId?: string;
     assistantMessageId: string;
     heteroType?: string | null;
     operationId: string;
@@ -1124,7 +1133,8 @@ export class GatewayActionImpl {
     threadId?: string | null;
     topicId: string;
   }): Promise<void> => {
-    const { assistantMessageId, heteroType, operationId, topicId, scope, threadId } = params;
+    const { agentShareId, assistantMessageId, heteroType, operationId, topicId, scope, threadId } =
+      params;
 
     const agentGatewayUrl =
       window.global_serverConfigStore?.getState()?.serverConfig?.agentGatewayUrl;
@@ -1156,7 +1166,12 @@ export class GatewayActionImpl {
     // and does not retry the 404 forever.
     let token: string;
     try {
-      ({ token } = await aiAgentService.refreshGatewayToken(topicId));
+      // Share visitors have no owner-scoped access to `aiAgentService.refreshGatewayToken`
+      // (its TopicModel is scoped to the caller, and share topics belong to the
+      // creator) — see the param JSDoc above for why the visitor mirror is used instead.
+      ({ token } = agentShareId
+        ? await shareChatService.refreshGatewayToken(agentShareId, topicId)
+        : await aiAgentService.refreshGatewayToken(topicId));
     } catch (error) {
       if (isTrpcErrorCode(error, 'NOT_FOUND')) {
         this.clearLocalRunningOperation({ operationId, topicId });
@@ -1173,8 +1188,15 @@ export class GatewayActionImpl {
     if (topicOpIdAfterRefresh && topicOpIdAfterRefresh !== operationId) return;
 
     const agentId = params.agentId ?? this.#get().activeAgentId;
+    // Carry agentShareId the same way executeGatewayAgent's execution context
+    // does — `createGatewayEventHandler` branches on `context.agentShareId` to
+    // skip owner-only side effects (agent-signal emission, message.update on
+    // error), and this context otherwise matches the one
+    // ReadOnlyConversationArea.tsx builds ({ agentId, agentShareId, scope:
+    // 'main', topicId }) for the visitor-rendered bucket.
     const context = {
       agentId,
+      ...(agentShareId && { agentShareId }),
       scope: (scope ?? 'main') as ConversationContext['scope'],
       threadId: threadId ?? null,
       topicId,
@@ -1212,6 +1234,16 @@ export class GatewayActionImpl {
     // Forward local-op cancellation to the server-side agent loop via tRPC.
     // See note in executeGatewayAgent for details.
     this.#get().onOperationCancel(gatewayOpId, async () => {
+      // Share visitors have no access to the owner-scoped interrupt (and no
+      // device runtimes to confirm), so they go through the share mirror —
+      // same split as executeGatewayAgent's cancel path.
+      if (agentShareId) {
+        await shareChatService
+          .interruptTask(agentShareId, topicId, operationId)
+          .catch((err) => console.error('[Gateway] share interruptTask failed:', err));
+        return;
+      }
+
       await interruptGatewayTaskOrThrow({ operationId });
     });
 
@@ -1302,7 +1334,10 @@ export class GatewayActionImpl {
         // was always "still spinning after a reload" — refreshing is what moved
         // the run off the primary path and onto this one.
         const viewing = this.#get().activeTopicId === topicId;
-        if (!superseded) {
+        // Share visitors cannot settle the creator-owned topic row (the topic
+        // router is owner-scoped) — the local clear below still runs. Same
+        // split as executeGatewayAgent's onSessionComplete.
+        if (!superseded && !agentShareId) {
           topicService
             .settleRunningOperation(
               topicId,
@@ -1322,6 +1357,7 @@ export class GatewayActionImpl {
           topicId,
         });
       },
+      agentShareId,
       operationId,
       resumeOnConnect: true,
       token,
