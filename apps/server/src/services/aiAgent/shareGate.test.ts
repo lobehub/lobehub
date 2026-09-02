@@ -351,6 +351,30 @@ describe('applyShareGateToToolSet', () => {
     expect(toolSet.manifestMap[CalculatorIdentifier]).toBeUndefined();
     expect(toolSet.enabledToolIds).toEqual([]);
   });
+
+  it('strips a required-intervention API from a non-builtin (MCP/connector) manifest, keeping its normal APIs', () => {
+    // Mirrors `buildConnectorManifests.ts`: a connector tool with the
+    // `needs_approval` permission maps to `humanIntervention: 'required'` on
+    // an otherwise-ordinary MCP manifest. Regression for the fix that widened
+    // `applyShareGateToInterventionRequiredApis` beyond builtin-only
+    // manifests — the connector permission gate at dispatch time
+    // (`ToolExecutionService.executeTool`) only hard-blocks `disabled`, so
+    // this assembly-time strip is the only thing stopping a share visitor's
+    // headless run from auto-executing a "needs approval" connector call.
+    const toolSet = buildToolSet([
+      {
+        apis: [{ name: 'listRepos' }, { humanIntervention: 'required', name: 'deleteRepo' }],
+        identifier: 'mcp-github',
+      },
+    ]);
+
+    applyShareGateToToolSet(toolSet, buildGate({ enabledToolIds: ['mcp-github'] }));
+
+    expect(toolSet.manifestMap['mcp-github'].api.map((api) => api.name)).toEqual(['listRepos']);
+    expect(toolSet.tools!.map((tool: any) => tool.function.name)).toEqual([
+      toolName('mcp-github', 'listRepos'),
+    ]);
+  });
 });
 
 // Dispatch-time full gate, asserted against the REAL manifests: a call that
