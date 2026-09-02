@@ -6,7 +6,7 @@ import type { TrashHandlerContext } from './types';
 export const purgeFiles = async (
   ctx: TrashHandlerContext,
   ids: string[],
-  options?: { includeTrashed?: boolean },
+  options?: { onlyTrashed?: boolean },
 ) => {
   await new FileModel(ctx.db, ctx.userId, ctx.workspaceId).deleteMany(
     ids,

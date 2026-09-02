@@ -36,6 +36,7 @@ export const trashSlice = (set: Setter, get: () => TrashStore, _api?: unknown) =
  * the list + counts are revalidated afterwards so a failed call self-corrects.
  */
 export class TrashActionImpl {
+  #activeResourceType?: TrashResourceType;
   #activeScopeId: string | null = null;
   readonly #get: () => TrashStore;
   readonly #set: Setter;
@@ -47,6 +48,7 @@ export class TrashActionImpl {
   }
 
   setActiveType = (activeType?: TrashResourceType) => {
+    this.#activeResourceType = activeType;
     this.#set(
       { activeType, isTrashInit: false, items: [], nextCursor: null },
       false,
@@ -78,10 +80,26 @@ export class TrashActionImpl {
   };
 
   loadMore = async () => {
-    const { activeType, nextCursor, items } = this.#get();
+    const { activeType, itemsScopeId, nextCursor } = this.#get();
     if (!nextCursor) return;
+    const requestResourceType = activeType;
+    const requestScopeId = this.#activeScopeId;
+    if (itemsScopeId !== requestScopeId) return;
     const page = await trashService.list({ cursor: nextCursor, resourceType: activeType });
-    this.#set({ items: [...items, ...page.items], nextCursor: page.nextCursor }, false, 'loadMore');
+    const state = this.#get();
+    if (
+      this.#activeScopeId !== requestScopeId ||
+      this.#activeResourceType !== requestResourceType ||
+      state.activeType !== requestResourceType ||
+      state.itemsScopeId !== requestScopeId ||
+      state.nextCursor !== nextCursor
+    )
+      return;
+    this.#set(
+      { items: [...state.items, ...page.items], nextCursor: page.nextCursor },
+      false,
+      'loadMore',
+    );
   };
 
   #withLoading = async (ids: string[], run: () => Promise<void>) => {
@@ -152,12 +170,18 @@ export class TrashActionImpl {
     scopeId: string | null = null,
   ): SWRResponse<TrashListResult> => {
     this.#activeScopeId = scopeId;
+    this.#activeResourceType = resourceType;
     return useClientDataSWR<TrashListResult>(
       enabled ? trashKeys.list(scopeId, resourceType) : null,
       () => trashService.list({ resourceType }),
       {
         onSuccess: (data) => {
-          if (this.#activeScopeId !== scopeId) return;
+          if (
+            this.#activeScopeId !== scopeId ||
+            this.#activeResourceType !== resourceType ||
+            this.#get().activeType !== resourceType
+          )
+            return;
           this.#set(
             {
               isTrashInit: true,

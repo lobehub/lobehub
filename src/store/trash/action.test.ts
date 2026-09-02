@@ -30,6 +30,10 @@ const buildItem = (overrides: Partial<TrashItem> = {}): TrashItem => ({
 describe('TrashAction', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    const action = useTrashStore.getState();
+    action.setActiveType(undefined);
+    action.useFetchTrash(false, undefined, null);
+    vi.clearAllMocks();
     vi.mocked(mutate).mockResolvedValue(undefined as never);
     useTrashStore.setState({
       activeType: undefined,
@@ -178,6 +182,64 @@ describe('TrashAction', () => {
         ['trash:list', 'workspace-a', 'all'],
         ['trash:list', 'workspace-b', 'all'],
       ]);
+    });
+
+    it('ignores a stale first page from the previous resource type', () => {
+      const action = useTrashStore.getState();
+      action.setActiveType(undefined);
+      action.useFetchTrash(true, undefined, 'workspace-a');
+      const allSuccess = vi.mocked(useClientDataSWR).mock.calls.at(-1)?.[2]?.onSuccess;
+
+      action.setActiveType('file');
+      action.useFetchTrash(true, 'file', 'workspace-a');
+      const fileSuccess = vi.mocked(useClientDataSWR).mock.calls.at(-1)?.[2]?.onSuccess;
+
+      allSuccess?.({ items: [buildItem({ resourceType: 'document' })], nextCursor: null }, '', {});
+      expect(useTrashStore.getState().items).toEqual([]);
+
+      fileSuccess?.({ items: [buildItem({ title: 'Current files' })], nextCursor: null }, '', {});
+      expect(useTrashStore.getState().items).toEqual([
+        expect.objectContaining({ title: 'Current files' }),
+      ]);
+    });
+
+    it('ignores a stale next page after switching workspaces', async () => {
+      const action = useTrashStore.getState();
+      action.useFetchTrash(true, undefined, 'workspace-a');
+      useTrashStore.setState({
+        items: [buildItem({ title: 'Workspace A', workspaceId: 'workspace-a' })],
+        itemsScopeId: 'workspace-a',
+        nextCursor: 'workspace-a-cursor',
+      });
+      let resolvePage!: (page: { items: TrashItem[]; nextCursor: string | null }) => void;
+      vi.spyOn(trashService, 'list').mockReturnValue(
+        new Promise((resolve) => {
+          resolvePage = resolve;
+        }),
+      );
+
+      const pending = action.loadMore();
+      action.useFetchTrash(true, undefined, 'workspace-b');
+      const workspaceBSuccess = vi.mocked(useClientDataSWR).mock.calls.at(-1)?.[2]?.onSuccess;
+      workspaceBSuccess?.(
+        {
+          items: [buildItem({ title: 'Workspace B', workspaceId: 'workspace-b' })],
+          nextCursor: null,
+        },
+        '',
+        {},
+      );
+      resolvePage({
+        items: [buildItem({ id: 'trash_a_2', title: 'Late Workspace A' })],
+        nextCursor: null,
+      });
+      await pending;
+
+      expect(useTrashStore.getState()).toMatchObject({
+        items: [expect.objectContaining({ title: 'Workspace B' })],
+        itemsScopeId: 'workspace-b',
+        nextCursor: null,
+      });
     });
   });
 

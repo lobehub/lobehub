@@ -234,6 +234,11 @@ describe('TrashService', () => {
           (item) => item.resourceId,
         ),
       ).toEqual(['kb_open']);
+
+      expect(await workspaceService.emptyTrash()).toEqual({ purged: 1 });
+      expect(
+        (await registry.list({ limit: 20 })).items.map((item) => item.resourceId).sort(),
+      ).toEqual(['docs_restricted', 'file_restricted', 'kb_restricted']);
     });
 
     it('restores a file with its mirror document and knowledge-base association intact', async () => {
@@ -511,6 +516,46 @@ describe('TrashService', () => {
       expect(purged).toBe(2);
       expect((await service.list()).items).toHaveLength(0);
       expect(await serverDB.select().from(files)).toHaveLength(0);
+    });
+
+    it("emptyTrash leaves another member's private workspace items untouched", async () => {
+      const workspaceId = 'trash-private-empty-workspace';
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Private empty trash',
+        primaryOwnerId: otherUserId,
+        slug: workspaceId,
+      });
+      const creatorFileModel = new FileModel(serverDB, userId, workspaceId);
+      const privateFile = await creatorFileModel.create({
+        fileType: 'text/plain',
+        name: 'private.txt',
+        size: 1,
+        url: 'files/private.txt',
+        visibility: 'private',
+      });
+      const publicFile = await creatorFileModel.create({
+        fileType: 'text/plain',
+        name: 'public.txt',
+        size: 1,
+        url: 'files/public.txt',
+        visibility: 'public',
+      });
+      const creatorService = new TrashService(serverDB, userId, workspaceId);
+      await creatorService.trashFiles([privateFile.id, publicFile.id]);
+
+      const ownerService = new TrashService(serverDB, otherUserId, workspaceId);
+      expect(await ownerService.emptyTrash()).toEqual({ purged: 1 });
+
+      expect(await serverDB.select().from(files).where(eq(files.id, publicFile.id))).toHaveLength(
+        0,
+      );
+      expect(await serverDB.select().from(files).where(eq(files.id, privateFile.id))).toHaveLength(
+        1,
+      );
+      expect((await creatorService.list()).items.map((item) => item.resourceId)).toEqual([
+        privateFile.id,
+      ]);
     });
   });
 });

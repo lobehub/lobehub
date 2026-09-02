@@ -38,7 +38,13 @@ import {
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { buildFileCategoryFilter } from '../utils/fileTypeCategory';
-import { isTrashed, restoreStamp, type SoftDeleteOptions, trashStamp } from '../utils/softDelete';
+import {
+  isTrashed,
+  notTrashed,
+  restoreStamp,
+  type SoftDeleteOptions,
+  trashStamp,
+} from '../utils/softDelete';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 /**
@@ -60,7 +66,8 @@ interface DeleteManyOptions {
    * an external-storage failure can be retried safely.
    */
   beforeDeleteGlobalFiles?: (files: FileItem[]) => Promise<void>;
-  includeTrashed?: boolean;
+  /** Only hard-delete rows that are still in the recycle bin. */
+  onlyTrashed?: boolean;
   restrictToCreator?: boolean;
 }
 
@@ -142,6 +149,16 @@ export class FileModel {
    * @returns File record or undefined
    */
   static async getFileById(db: LobeChatDatabase, id: string): Promise<FileItem | undefined> {
+    return db.query.files.findFirst({
+      where: and(eq(files.id, id), notTrashed(files.isDeleted)),
+    });
+  }
+
+  /** Internal storage cleanup may need the backing key of a trashed file. */
+  static async getFileByIdIncludingTrashed(
+    db: LobeChatDatabase,
+    id: string,
+  ): Promise<FileItem | undefined> {
     return db.query.files.findFirst({
       where: eq(files.id, id),
     });
@@ -346,15 +363,19 @@ export class FileModel {
     if (ids.length === 0) return [];
 
     return await this.db.transaction(async (trx) => {
+      const includeTrashed = options?.onlyTrashed;
+      const targetWhere = and(
+        inArray(files.id, ids),
+        this.ownership(undefined, includeTrashed),
+        options?.onlyTrashed ? isTrashed(files.isDeleted) : undefined,
+        // Workspace bulk deletes from non-owner members only touch their own rows.
+        options?.restrictToCreator ? eq(files.userId, this.userId) : undefined,
+      );
+
       // 1. First get the file list to return the deleted files
-      const fileList = await trx.query.files.findMany({
-        where: and(
-          inArray(files.id, ids),
-          this.ownership(undefined, options?.includeTrashed),
-          // Workspace bulk deletes from non-owner members only touch their own rows.
-          options?.restrictToCreator ? eq(files.userId, this.userId) : undefined,
-        ),
-      });
+      // Lock the rows so a concurrent restore cannot turn them live between
+      // the trash-state check, storage deletion, and the final hard delete.
+      const fileList = await trx.select().from(files).where(targetWhere).for('update');
 
       if (fileList.length === 0) return [];
 
@@ -393,7 +414,7 @@ export class FileModel {
           inArray(documents.fileId, targetIds),
           buildWorkspaceWhere(
             {
-              includeTrashed: options?.includeTrashed,
+              includeTrashed,
               userId: this.userId,
               workspaceId: this.workspaceId,
             },
@@ -412,11 +433,7 @@ export class FileModel {
       }
 
       // 5. Delete file records
-      await trx
-        .delete(files)
-        .where(
-          and(inArray(files.id, targetIds), this.ownership(undefined, options?.includeTrashed)),
-        );
+      await trx.delete(files).where(and(inArray(files.id, targetIds), targetWhere));
 
       if (globallyUnreferencedFiles.length === 0) return [];
 

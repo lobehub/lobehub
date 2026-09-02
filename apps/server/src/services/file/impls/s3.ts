@@ -194,7 +194,7 @@ export class S3StaticFileImpl implements FileServiceImpl {
       // Case 1: File proxy URL pattern /f/{fileId} - query database for S3 key
       if (pathname.startsWith('/f/')) {
         const fileId = pathname.slice(3); // Remove '/f/' prefix
-        const file = await FileModel.getFileById(this.db, fileId);
+        const file = await FileModel.getFileByIdIncludingTrashed(this.db, fileId);
         return file?.url ?? null;
       }
 

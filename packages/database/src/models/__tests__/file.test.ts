@@ -556,6 +556,26 @@ describe('FileModel', () => {
       ).toBeDefined();
     });
 
+    it('only hard-deletes files that are still trashed when required', async () => {
+      const liveFile = await fileModel.create({
+        fileType: 'text/plain',
+        name: 'restored.txt',
+        size: 100,
+        url: 'https://example.com/restored.txt',
+      });
+
+      expect(await fileModel.deleteMany([liveFile.id], false, { onlyTrashed: true })).toEqual([]);
+      expect(
+        await serverDB.query.files.findFirst({ where: eq(files.id, liveFile.id) }),
+      ).toBeDefined();
+
+      await fileModel.softDelete([liveFile.id], { deletedAt: new Date() });
+      await fileModel.deleteMany([liveFile.id], false, { onlyTrashed: true });
+      expect(
+        await serverDB.query.files.findFirst({ where: eq(files.id, liveFile.id) }),
+      ).toBeUndefined();
+    });
+
     it('should delete mirror documents and asyncTasks for all files in batch', async () => {
       const [chunkTask1] = await serverDB
         .insert(asyncTasks)
@@ -1716,6 +1736,19 @@ describe('FileModel', () => {
     it('should return undefined for non-existent file', async () => {
       const result = await FileModel.getFileById(serverDB, 'non-existent');
       expect(result).toBeUndefined();
+    });
+
+    it('hides trashed files from public lookup while internal cleanup can still resolve them', async () => {
+      const { id } = await fileModel.create({
+        fileType: 'text/plain',
+        name: 'trashed-file.txt',
+        size: 100,
+        url: 'https://example.com/trashed-file.txt',
+      });
+      await fileModel.softDelete([id], { deletedAt: new Date() });
+
+      expect(await FileModel.getFileById(serverDB, id)).toBeUndefined();
+      expect(await FileModel.getFileByIdIncludingTrashed(serverDB, id)).toMatchObject({ id });
     });
   });
 

@@ -385,9 +385,13 @@ export class TrashService {
     // Page through: purging shrinks the set, so re-listing until empty is the
     // simplest way to stay correct under concurrent deletes.
     for (;;) {
-      const ids = await this.trashModel.listAllRootIds(options);
+      const page = await this.list({
+        limit: TRASH_PURGE_BATCH_SIZE,
+        resourceType: options?.resourceType,
+      });
+      const ids = page.items.map((item) => item.id);
       if (ids.length === 0) break;
-      const result = await this.purge(ids.slice(0, TRASH_PURGE_BATCH_SIZE));
+      const result = await this.purge(ids);
       purged += result.purged;
       if (result.purged === 0) break;
     }

@@ -56,7 +56,7 @@ export const documentHandler: TrashHandler = {
       .filter((child) => child.resourceType === 'file')
       .map((child) => child.resourceId);
     if (fileIds.length > 0) {
-      await purgeFiles(ctx, fileIds, { includeTrashed: true });
+      await purgeFiles(ctx, fileIds, { onlyTrashed: true });
     }
 
     const documentIds = [
