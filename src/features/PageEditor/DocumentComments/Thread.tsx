@@ -89,12 +89,18 @@ const Thread = memo<ThreadProps>(
         ),
       [mutateFocusedReply],
     );
-    // What the reply list renders: the pinned reply first while it is off-page.
-    const visibleReplies = useMemo(() => {
+    // The deep-link target while it is not on a loaded page. It renders on its own, so a
+    // pending or failed page request never hides a reply that was already fetched.
+    const pinnedReply = useMemo(() => {
       const pinned = focusedReply.data;
-      if (!pinned || hasFocusedReply || pinned.parentCommentId !== root.id) return replies.items;
-      return [pinned, ...replies.items];
-    }, [focusedReply.data, hasFocusedReply, replies.items, root.id]);
+      if (!pinned || hasFocusedReply || pinned.parentCommentId !== root.id) return undefined;
+      return pinned;
+    }, [focusedReply.data, hasFocusedReply, root.id]);
+    // Everything a reply action can target: the pinned reply plus the loaded pages.
+    const visibleReplies = useMemo(
+      () => (pinnedReply ? [pinnedReply, ...replies.items] : replies.items),
+      [pinnedReply, replies.items],
+    );
     const handleReplySubmit = useCallback(
       async ({ clientId, content, editorData }: DocumentCommentSubmitInput) => {
         const replyTarget =
@@ -222,6 +228,29 @@ const Thread = memo<ThreadProps>(
       setReplyTargetId((current) => (current === commentId ? null : commentId));
     }, []);
 
+    const renderReply = (reply: DocumentCommentItem) => (
+      <Fragment key={reply.id}>
+        <CommentCard
+          comment={reply}
+          focusToken={focusedReplyId === reply.id ? focus?.token : undefined}
+          replying={replyTargetId === reply.id}
+          variant={'reply'}
+          onMutated={refreshThread}
+          onReply={() => toggleReplyTarget(reply.id)}
+          onUpdate={handleReplyUpdate}
+        />
+        {replyTargetId === reply.id && (
+          <Composer
+            documentId={documentId}
+            key={`reply:${reply.id}`}
+            parentCommentId={reply.id}
+            onSubmit={handleReplySubmit}
+            onSuccess={() => setReplyTargetId(null)}
+          />
+        )}
+      </Fragment>
+    );
+
     return (
       <Flexbox className={styles.thread} ref={containerRef}>
         <CommentCard
@@ -244,6 +273,7 @@ const Thread = memo<ThreadProps>(
                 onSuccess={() => setReplyTargetId(null)}
               />
             )}
+            {pinnedReply && renderReply(pinnedReply)}
             {replies.isLoadingInitial && replyCount > 0 ? (
               <SurfaceSkeleton header={false} variant={'list'} />
             ) : replies.isInitialError ? (
@@ -253,28 +283,7 @@ const Thread = memo<ThreadProps>(
                 onRetry={() => void replies.reload()}
               />
             ) : (
-              visibleReplies.map((reply) => (
-                <Fragment key={reply.id}>
-                  <CommentCard
-                    comment={reply}
-                    focusToken={focusedReplyId === reply.id ? focus?.token : undefined}
-                    replying={replyTargetId === reply.id}
-                    variant={'reply'}
-                    onMutated={refreshThread}
-                    onReply={() => toggleReplyTarget(reply.id)}
-                    onUpdate={handleReplyUpdate}
-                  />
-                  {replyTargetId === reply.id && (
-                    <Composer
-                      documentId={documentId}
-                      key={`reply:${reply.id}`}
-                      parentCommentId={reply.id}
-                      onSubmit={handleReplySubmit}
-                      onSuccess={() => setReplyTargetId(null)}
-                    />
-                  )}
-                </Fragment>
-              ))
+              replies.items.map(renderReply)
             )}
             {replies.error && !replies.isInitialError ? (
               <AsyncError
