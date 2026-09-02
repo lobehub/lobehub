@@ -32,15 +32,14 @@ Elasticsearch。3.x 迁移工具会把 PostgreSQL 中 14 类可搜索数据复�
 
 ## 环境变量
 
-| 变量                        | 是否必需 | 用途                                                                    |
-| ------------------------- | ---- | --------------------------------------------------------------------- |
-| `DATABASE_URL`            | 是    | PostgreSQL 源数据库和增量变更队列；回填 checkpoint 不写入数据库。                          |
-| `ES_URL`                  | 执行时  | 新建空 Elasticsearch 项目的 HTTPS 地址，用于接收 3.x 搜索索引。                         |
-| `ES_API_KEY`              | 执行时  | 用于创建索引、批量写入、刷新 / 统计索引和创建别名的 Elasticsearch 密钥，不能使用只读密钥。                |
-| `ES_INDEX_NAMESPACE`      | 是    | 当前部署长期不变的索引前缀，例如 `lobehub`；会生成 `lobehub-messages` 等别名，续跑时不能修改。        |
-| `FTS_SEARCH_SYNC_ENABLED` | 增量同步 | 只有全量回填就绪后才能设为 `true`，用于启用增量消费器。                                       |
-| `ES_REINDEX_STATE_DIR`    | 执行时  | 本地 checkpoint 目录；修改状态时必须显式配置，且每次续跑都必须保留并使用同一个目录。                      |
-| `FTS_SEARCH_PROVIDER`     | 运行时  | 全文搜索提供方：`pg_search`（默认）或 `elasticsearch`；完成回填、追平和验收前必须保持 `pg_search`。 |
+| 变量                        | 是否必需 | 用途                                                             |
+| ------------------------- | ---- | -------------------------------------------------------------- |
+| `DATABASE_URL`            | 是    | PostgreSQL 源数据库和增量变更队列；回填 checkpoint 不写入数据库。                   |
+| `ES_URL`                  | 执行时  | 新建空 Elasticsearch 项目的 HTTPS 地址，用于接收 3.x 搜索索引。                  |
+| `ES_API_KEY`              | 执行时  | 用于创建索引、批量写入、刷新 / 统计索引和创建别名的 Elasticsearch 密钥，不能使用只读密钥。         |
+| `ES_INDEX_NAMESPACE`      | 是    | 当前部署长期不变的索引前缀，例如 `lobehub`；会生成 `lobehub-messages` 等别名，续跑时不能修改。 |
+| `FTS_SEARCH_SYNC_ENABLED` | 增量同步 | 只有全量回填就绪后才能设为 `true`，用于启用增量消费器。                                |
+| `FTS_SEARCH_PROVIDER`     | 切换时  | 回填、追平和验收完成后设为 `elasticsearch`，将用户搜索请求切换到 Elasticsearch。        |
 
 只读的 `--status` 命令不需要 `ES_URL` 和 `ES_API_KEY`。
 如果同一个环境中保存了多套 Elasticsearch 目标，可以同时传入 `--elasticsearch-url-env=<变量名>` 和 `--elasticsearch-api-key-env=<变量名>` 显式选择其中一组。两个参数必须成对使用；还可以通过 `--expected-elasticsearch-host-prefix=<主机名前缀>` 在任何回填写入前拒绝错误目标。命令会打印并记录选中的主机名和变量名，但不会记录密钥值。
@@ -62,16 +61,7 @@ Elasticsearch。3.x 迁移工具会把 PostgreSQL 中 14 类可搜索数据复�
    [分支文档](https://neon.com/docs/introduction/branching)和
    [备份与恢复文档](https://neon.com/docs/guides/backup-restore)。
 
-3. 如果是已有且写入量较大的数据库，请在执行数据库迁移前，在数据库 SQL 编辑器中、事务之外执行以下语句。它会在不阻塞写入的情况下创建 Memory 扇出索引，后续常规迁移可以直接复用。全新或低流量安装可以跳过这一步，交给迁移正常创建索引：
-
-   ```sql
-   CREATE INDEX CONCURRENTLY IF NOT EXISTS "user_memories_contexts_user_memory_ids_gin_idx"
-   ON "user_memories_contexts" USING gin ("user_memory_ids");
-   ```
-
-   `IF NOT EXISTS` 不会校验同名索引的定义。如果并发创建留下无效索引，或安装器提示索引的表、列、GIN 操作符类或条件不正确，请在事务之外执行 `DROP INDEX CONCURRENTLY "user_memories_contexts_user_memory_ids_gin_idx"`，用上面的语句重新创建，然后继续后续步骤。
-
-4. 执行同一 LobeHub 版本自带的数据库迁移：
+3. 执行同一 LobeHub 版本自带的数据库迁移：
 
    ```bash
    bun run db:migrate
@@ -79,7 +69,7 @@ Elasticsearch。3.x 迁移工具会把 PostgreSQL 中 14 类可搜索数据复�
 
    这一步会创建增量队列的序列、表、普通索引，以及由数据库结构管理的 Memory 扇出 GIN 索引，但不会创建 PostgreSQL 变更采集函数和触发器。只使用 PostgreSQL 搜索的部署可以停在这里：它仍会维护这个 GIN 索引，但不会承担触发器和增量队列的采集写入开销。
 
-5. 在首次回填前安装可选的 PostgreSQL 变更采集：
+4. 在首次回填前安装可选的 PostgreSQL 变更采集：
 
    ```bash
    bun run db:install-fts-search-capture
@@ -87,7 +77,7 @@ Elasticsearch。3.x 迁移工具会把 PostgreSQL 中 14 类可搜索数据复�
 
    安装器会先严格校验由数据库结构管理的 GIN 索引（不会创建这个索引），再在一个事务中原子安装并验证采集函数和 16 个触发器。完整的预期设施已经存在时可以安全重复执行；如果发现部分对象、被禁用的对象或定义异常，安装器会直接失败，不会静默修复。安装成功后，源数据变更会立即写入增量队列。`bun run fts-search:reindex -- --apply` 也会自动执行这一步；如果希望在准备 Elasticsearch 目标期间就开始采集，可以先显式执行安装命令。若不打算启用 Elasticsearch，不要执行这一步。
 
-6. 保持应用搜索后端为 PostgreSQL，并关闭 Elasticsearch 增量消费。
+5. 保持应用搜索后端为 PostgreSQL，并关闭 Elasticsearch 增量消费。
 
 首次正式映射版本是 `v1`。工具会创建 `lobehub-messages-v1` 这类实体索引；14 类索引全部完成且数量与断点记录一致后，再创建 `lobehub-messages` 这类稳定别名。别名只是 Elasticsearch 内部长期不变的名字，创建别名不会改变用户请求当前使用的搜索后端。
 
@@ -223,77 +213,33 @@ ES_REINDEX_STATE_DIR=.elasticsearch-reindex bun run fts-search:reindex -- --appl
   全量回填命令不会代替持续运行的增量消费器，也不会自行宣称应用已经可以切换搜索后端。只要 Elasticsearch 仍在承担搜索，就必须持续调度 `fts-search:sync`。
 </Callout>
 
-## 可选：删除旧 pg\_search 对象
+## 在 Neon 截止日期前卸载 pg\_search
 
-这一步不可直接撤销，而且 Elasticsearch 正常运行并不要求删除旧对象。只有观察窗口已经关闭、当前
-PostgreSQL 恢复点可用、Elasticsearch 运行健康，并且已在隔离数据库副本演练回滚后才能执行。请把只读清单、迁移状态 JSON 和命令输出作为私有运维记录保存。
+Elasticsearch 稳定运行并经过观察窗口，且 PostgreSQL 已有当前恢复点后，先查看剩余的 LobeHub 管理对象：
 
-首先读取扩展版本和全部 BM25 索引：
-
-```sql
-SELECT extversion
-FROM pg_extension
-WHERE extname = 'pg_search';
-
-SELECT
-  index_namespace.nspname AS schema_name,
-  index_relation.relname AS index_name,
-  table_relation.relname AS table_name,
-  index_record.indisvalid AS is_valid,
-  COALESCE(index_stats.idx_scan, 0) AS scans_since_stats_reset,
-  database_stats.stats_reset
-FROM pg_index AS index_record
-JOIN pg_class AS index_relation ON index_relation.oid = index_record.indexrelid
-JOIN pg_namespace AS index_namespace ON index_namespace.oid = index_relation.relnamespace
-JOIN pg_class AS table_relation ON table_relation.oid = index_record.indrelid
-JOIN pg_am AS access_method ON access_method.oid = index_relation.relam
-LEFT JOIN pg_stat_user_indexes AS index_stats ON index_stats.indexrelid = index_relation.oid
-LEFT JOIN pg_stat_database AS database_stats ON database_stats.datname = current_database()
-WHERE access_method.amname = 'bm25'
-ORDER BY index_namespace.nspname, index_relation.relname;
+```bash
+bun run fts-search:cleanup-pg-search -- --status
 ```
 
-请在观察窗口开始和结束时各保存一次清单，并确认所有 `scans_since_stats_reset` 都没有增加。如果两次查询之间
-`stats_reset` 发生变化，索引扫描计数已经无法比较，必须重新开始观察窗口。这项数据库侧检查可以发现应用遥测看不到的自定义或直接 SQL BM25 查询。
+确认后通过脚本完成清理，不需要从文档复制 SQL：
 
-对于已迁移到 3.x 的 LobeHub 数据库，下一段命令中的 14 个索引是项目维护的预期集合。如果清单中出现其他
-BM25 索引、其他 schema、与名称不匹配的表或无效索引，应立即停止并单独调查。它可能属于自定义应用或未完成操作，不能由本文流程删除。
-
-每条语句必须在事务之外独立执行，并且只删除已知索引。较短的锁等待可以避免繁忙数据表长时间阻塞应用写入。如果某条语句超时，先让冲突事务结束，重新读取清单，再从第一个未删除的索引继续。下面是经过核对的命令清单，不是一条多语句查询：先在同一个自动提交会话中配置两项超时，再逐行单独提交 `DROP INDEX CONCURRENTLY`。必须关闭 SQL 编辑器自动包裹事务的功能；如果编辑器不保持同一会话，需要在数据库客户端中为每次删除配置等效的会话超时。
-
-```sql
-SET lock_timeout = '2s';
-SET statement_timeout = '10min';
-
-DROP INDEX CONCURRENTLY IF EXISTS public."agents_bm25_idx";
-DROP INDEX CONCURRENTLY IF EXISTS public."chat_groups_bm25_idx";
-DROP INDEX CONCURRENTLY IF EXISTS public."documents_bm25_idx";
-DROP INDEX CONCURRENTLY IF EXISTS public."files_bm25_idx";
-DROP INDEX CONCURRENTLY IF EXISTS public."knowledge_bases_bm25_idx";
-DROP INDEX CONCURRENTLY IF EXISTS public."messages_bm25_idx";
-DROP INDEX CONCURRENTLY IF EXISTS public."topics_bm25_idx";
-DROP INDEX CONCURRENTLY IF EXISTS public."user_memories_activities_bm25_idx";
-DROP INDEX CONCURRENTLY IF EXISTS public."user_memories_bm25_idx";
-DROP INDEX CONCURRENTLY IF EXISTS public."user_memories_contexts_bm25_idx";
-DROP INDEX CONCURRENTLY IF EXISTS public."user_memories_experiences_bm25_idx";
-DROP INDEX CONCURRENTLY IF EXISTS public."user_memories_identities_bm25_idx";
-DROP INDEX CONCURRENTLY IF EXISTS public."user_memories_preferences_bm25_idx";
-DROP INDEX CONCURRENTLY IF EXISTS public."user_memory_persona_documents_bm25_idx";
+```bash
+bun run fts-search:cleanup-pg-search -- --apply --yes
 ```
 
-再次读取清单并确认 BM25 索引为 0。重新检查 Elasticsearch 搜索和增量同步后，再开始第二阶段，在不使用
-`CASCADE` 的情况下删除扩展：
+请使用直连 `DATABASE_URL`，不要使用事务池地址。只有
+`FTS_SEARCH_PROVIDER=elasticsearch` 时脚本才允许执行；遇到无法识别的 BM25 索引会拒绝继续。脚本会并发删除
+LobeHub 管理的旧索引，再以不带 `CASCADE` 的方式卸载扩展；中断后可以安全重跑。它不会删除 Elasticsearch
+依赖的增量队列、采集触发器或消费任务。
 
-```sql
-DROP EXTENSION IF EXISTS pg_search;
+官方镜像内置 `/app/fts-search-pg-search-cleanup.cjs`：
+
+```bash
+docker run --rm --env-file .env \
+  lobehub/lobehub:latest /app/fts-search-pg-search-cleanup.cjs --status
+docker run --rm --env-file .env \
+  lobehub/lobehub:latest /app/fts-search-pg-search-cleanup.cjs --apply --yes
 ```
 
-绝不能添加 `CASCADE`。如果自定义视图、函数、索引或其他对象仍依赖 `pg_search`，不带 `CASCADE`
-的删除会按预期失败；此时应单独审查依赖对象，不能扩大清理范围。删除后，扩展查询和 BM25 清单必须都不再返回记录，并再次检查 Elasticsearch 搜索和增量队列。
-
-不能删除全文搜索增量队列及其序列和索引、变更采集函数和触发器，也不能停止持续运行的
-`fts-search:sync`。这些对象属于正在使用的 Elasticsearch 链路，不属于已经停用的 `pg_search` 查询后端。
-
-扩展删除后，只把环境变量改回去已经无法完成回滚。恢复需要还原 PostgreSQL 恢复点，或者有计划地重新安装
-`pg_search`，并为当前 LobeHub 版本重新创建定义完全一致的 BM25 索引。以后每次升级 LobeHub 前都必须检查数据库迁移；
-任何仍假设 `pg_search` 存在或尝试创建新 BM25 索引的后续迁移，都会在这项可选清理完成后失败。
+受影响的 Neon 部署必须在 2026 年 9 月 21 日前完成此步骤。其他 PostgreSQL 服务可以保留
+`pg_search`，但删除已停用的对象可以避免继续维护不再使用的 BM25 索引。

@@ -61,7 +61,7 @@ Elasticsearch 后端需要：
 - 先完成全量回填，再持续消费 PostgreSQL 增量队列；
 - 只有全量回填完成且增量队列追平后，才能设置 `FTS_SEARCH_PROVIDER=elasticsearch`。
 
-完整的演练、回填、切换、回滚和可选清理流程，请参阅
+完整的演练、回填、切换和回滚流程，请参阅
 [从 pg\_search 迁移到 Elasticsearch](/zh/docs/self-hosting/advanced/elasticsearch-migration)。
 
 ## Elasticsearch 如何同步数据
@@ -92,7 +92,6 @@ PostgreSQL 写入
 | `ES_API_KEY`              | 具备建索引、批量写入、刷新、统计、别名和搜索权限的 Elasticsearch 密钥 |
 | `ES_INDEX_NAMESPACE`      | 当前部署独占且保持不变的物理索引和别名前缀                      |
 | `FTS_SEARCH_SYNC_ENABLED` | 启用增量消费任务；首次全量回填就绪后才能设为 `true`              |
-| `ES_REINDEX_STATE_DIR`    | 全量回填及每次续跑都要复用的持久化本地状态目录                    |
 
 不同 LobeHub 部署不能共用同一个索引前缀。迁移或增量消费期间不能更改此前缀。
 
@@ -121,7 +120,5 @@ LobeHub 会输出有限维度的 OpenTelemetry 指标和链路，不会记录原
 - 生产迁移前先备份 PostgreSQL，并使用隔离的数据库副本和 Elasticsearch 项目完成演练。
 - 同一次全量回填的每次续跑都必须使用同一个持久化状态目录，不能让两个任务同时操作同一份状态和物理索引。
 - 所有数据类型完成、失败数为 0、增量队列追平前，必须继续让 `pg_search` 对外提供搜索。
-- 切换后保留旧 BM25 索引和扩展一段约定好的回滚窗口；删除它们是另一项可选且不可直接撤销的操作。
-- 绝不能使用 `DROP EXTENSION pg_search CASCADE`。必须先检查并删除已知 BM25 索引，让不带
-  `CASCADE` 的扩展删除在发现未知依赖时主动失败。
-- 删除 `pg_search` 后，不能删除 Elasticsearch 依赖的增量队列、采集触发器和持续消费任务。
+- 切换后使用项目提供的清理命令，不需要手工复制数据库对象 SQL。
+- 必须保留 Elasticsearch 依赖的增量队列、采集触发器和持续消费任务；它们与 Neon 删除 `pg_search` 无关。
