@@ -9,42 +9,64 @@ vi.mock('@/database/core/db-adaptor', () => ({
 
 const mockTopicFindOwnTopicById = vi.fn();
 const mockTopicFindShareVisitorTopicIds = vi.fn();
+const mockTopicFindOwnersByIds = vi.fn();
 const mockTopicBatchCreate = vi.fn();
+const mockTopicBatchMoveToAgent = vi.fn();
 const mockTopicCreate = vi.fn();
 const mockTopicDelete = vi.fn();
+const mockTopicDuplicate = vi.fn();
+const mockTopicSettleRunningOperation = vi.fn();
 const mockTopicUpdate = vi.fn();
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn(() => ({
     batchCreate: mockTopicBatchCreate,
+    batchMoveToAgent: mockTopicBatchMoveToAgent,
     create: mockTopicCreate,
     delete: mockTopicDelete,
+    duplicate: mockTopicDuplicate,
+    findOwnersByIds: mockTopicFindOwnersByIds,
     findOwnTopicById: mockTopicFindOwnTopicById,
     findShareVisitorTopicIds: mockTopicFindShareVisitorTopicIds,
+    settleRunningOperation: mockTopicSettleRunningOperation,
     update: mockTopicUpdate,
   })),
 }));
 
 const mockMessageFindShareVisitorMessageIds = vi.fn();
+const mockMessageDeleteMessagesBySession = vi.fn();
 const mockMessageUpdateTTS = vi.fn();
 const mockMessageUpdateTranslate = vi.fn();
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn(() => ({
+    deleteMessagesBySession: mockMessageDeleteMessagesBySession,
     findShareVisitorMessageIds: mockMessageFindShareVisitorMessageIds,
     updateTTS: mockMessageUpdateTTS,
     updateTranslate: mockMessageUpdateTranslate,
   })),
 }));
 
+const mockServiceAddFilesToMessage = vi.fn();
 const mockServiceBatchMutate = vi.fn();
+const mockServiceCancelCompression = vi.fn();
+const mockServiceCreateCompressionGroup = vi.fn();
 const mockServiceCreateMessage = vi.fn();
+const mockServiceFinalizeCompression = vi.fn();
 const mockServiceUpdateMessage = vi.fn();
+const mockServiceUpdateMessageGroupMetadata = vi.fn();
 const mockServiceUpdateMessagePlugin = vi.fn();
+const mockServiceUpdateToolArguments = vi.fn();
 vi.mock('@/server/services/message', () => ({
   MessageService: vi.fn(() => ({
+    addFilesToMessage: mockServiceAddFilesToMessage,
     batchMutate: mockServiceBatchMutate,
+    cancelCompression: mockServiceCancelCompression,
+    createCompressionGroup: mockServiceCreateCompressionGroup,
     createMessage: mockServiceCreateMessage,
+    finalizeCompression: mockServiceFinalizeCompression,
     updateMessage: mockServiceUpdateMessage,
+    updateMessageGroupMetadata: mockServiceUpdateMessageGroupMetadata,
     updateMessagePlugin: mockServiceUpdateMessagePlugin,
+    updateToolArguments: mockServiceUpdateToolArguments,
   })),
 }));
 
@@ -97,6 +119,7 @@ describe('agent-share visitor guards on creator-facing RPCs', () => {
     mockFindDeletableFilesByTopicId.mockResolvedValue(['file-1']);
     mockFileDeleteMany.mockResolvedValue([{ url: 's3://file-1' }]);
     mockTopicFindOwnTopicById.mockResolvedValue({ id: 'topic-1', userId });
+    mockTopicFindOwnersByIds.mockResolvedValue([]);
   });
 
   describe('topic.removeTopic', () => {
@@ -135,6 +158,42 @@ describe('agent-share visitor guards on creator-facing RPCs', () => {
       await topicCaller().updateTopic({ id: 'topic-1', value: { title: 'ok' } });
 
       expect(mockTopicUpdate).toHaveBeenCalled();
+    });
+  });
+
+  describe('topic.batchMoveTopics', () => {
+    it('rejects a visitor topic with NOT_FOUND and never moves', async () => {
+      mockTopicFindShareVisitorTopicIds.mockResolvedValue([visitorTopicId]);
+
+      await expect(
+        topicCaller().batchMoveTopics({ targetAgentId: 'agent-1', topicIds: [visitorTopicId] }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect(mockTopicBatchMoveToAgent).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('topic.cloneTopic', () => {
+    it('rejects a visitor topic with NOT_FOUND and never duplicates', async () => {
+      mockTopicFindShareVisitorTopicIds.mockResolvedValue([visitorTopicId]);
+
+      await expect(topicCaller().cloneTopic({ id: visitorTopicId })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+
+      expect(mockTopicDuplicate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('topic.settleRunningOperation', () => {
+    it('rejects a visitor topic with NOT_FOUND and never settles', async () => {
+      mockTopicFindShareVisitorTopicIds.mockResolvedValue([visitorTopicId]);
+
+      await expect(
+        topicCaller().settleRunningOperation({ id: visitorTopicId, operationId: 'op-1' }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect(mockTopicSettleRunningOperation).not.toHaveBeenCalled();
     });
   });
 
@@ -188,6 +247,14 @@ describe('agent-share visitor guards on creator-facing RPCs', () => {
       expect(mockServiceBatchMutate).not.toHaveBeenCalled();
     });
 
+    it('message.addFilesToMessage rejects a visitor message with NOT_FOUND', async () => {
+      await expect(
+        messageCaller().addFilesToMessage({ fileIds: ['file-1'], id: visitorMessageId }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect(mockServiceAddFilesToMessage).not.toHaveBeenCalled();
+    });
+
     it('lets the creator update their own message', async () => {
       mockMessageFindShareVisitorMessageIds.mockResolvedValue([]);
       mockServiceUpdateMessage.mockResolvedValue({ messages: [], success: true });
@@ -195,6 +262,89 @@ describe('agent-share visitor guards on creator-facing RPCs', () => {
       await messageCaller().update({ id: 'msg-1', value: { content: 'ok' } });
 
       expect(mockServiceUpdateMessage).toHaveBeenCalled();
+    });
+  });
+
+  describe('message write RPCs guarded by topicId', () => {
+    beforeEach(() => {
+      mockTopicFindShareVisitorTopicIds.mockResolvedValue([visitorTopicId]);
+    });
+
+    it('message.updateToolArguments rejects a visitor topic with NOT_FOUND', async () => {
+      await expect(
+        messageCaller().updateToolArguments({
+          toolCallId: 'tool-1',
+          topicId: visitorTopicId,
+          value: 'hacked',
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect(mockServiceUpdateToolArguments).not.toHaveBeenCalled();
+    });
+
+    it('message.removeMessagesByAssistant rejects a visitor topic with NOT_FOUND', async () => {
+      await expect(
+        messageCaller().removeMessagesByAssistant({ topicId: visitorTopicId }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect(mockMessageDeleteMessagesBySession).not.toHaveBeenCalled();
+    });
+
+    it('message.removeMessagesByGroup rejects a visitor topic with NOT_FOUND', async () => {
+      await expect(
+        messageCaller().removeMessagesByGroup({ groupId: 'group-1', topicId: visitorTopicId }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect(mockMessageDeleteMessagesBySession).not.toHaveBeenCalled();
+    });
+
+    it('message.cancelCompression rejects a visitor topic with NOT_FOUND', async () => {
+      await expect(
+        messageCaller().cancelCompression({
+          agentId: 'agent-1',
+          messageGroupId: 'group-1',
+          topicId: visitorTopicId,
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect(mockServiceCancelCompression).not.toHaveBeenCalled();
+    });
+
+    it('message.createCompressionGroup rejects a visitor topic with NOT_FOUND', async () => {
+      await expect(
+        messageCaller().createCompressionGroup({
+          agentId: 'agent-1',
+          messageIds: ['msg-1'],
+          topicId: visitorTopicId,
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect(mockServiceCreateCompressionGroup).not.toHaveBeenCalled();
+    });
+
+    it('message.finalizeCompression rejects a visitor topic with NOT_FOUND', async () => {
+      await expect(
+        messageCaller().finalizeCompression({
+          agentId: 'agent-1',
+          content: 'summary',
+          messageGroupId: 'group-1',
+          topicId: visitorTopicId,
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect(mockServiceFinalizeCompression).not.toHaveBeenCalled();
+    });
+
+    it('message.updateMessageGroupMetadata rejects a visitor topic with NOT_FOUND', async () => {
+      await expect(
+        messageCaller().updateMessageGroupMetadata({
+          context: { agentId: 'agent-1', topicId: visitorTopicId },
+          expanded: true,
+          messageGroupId: 'group-1',
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect(mockServiceUpdateMessageGroupMetadata).not.toHaveBeenCalled();
     });
   });
 

@@ -450,6 +450,11 @@ export const topicRouter = router({
       // Moving needs `use` on both the source conversations and the target agent.
       await assertCanUseTopicTargets(guardCtx(ctx), input.topicIds);
       await assertCanUseConversationTargets(guardCtx(ctx), [{ agentId: input.targetAgentId }]);
+      // Moving a visitor topic re-parents it off the share and strands the
+      // visitor outside the senderId scope the share depends on — see
+      // `assertCreatorTopicTargets` for why this guard sits at the RPC
+      // boundary rather than in the model defaults.
+      await assertCreatorTopicTargets(guardCtx(ctx), input.topicIds);
 
       return ctx.topicModel.batchMoveToAgent(input.topicIds, input.targetAgentId);
     }),
@@ -459,6 +464,9 @@ export const topicRouter = router({
     .input(z.object({ id: z.string(), newTitle: z.string().optional() }))
     .mutation(async ({ input, ctx }) => {
       await assertCanUseTopicTargets(guardCtx(ctx), [input.id]);
+      // Duplicating a visitor topic would copy its content into creator scope
+      // (see `assertCreatorTopicTargets` on `batchMoveTopics` above).
+      await assertCreatorTopicTargets(guardCtx(ctx), [input.id]);
       const data = await ctx.topicModel.duplicate(input.id, input.newTitle);
 
       return data.topic.id;
@@ -1091,6 +1099,8 @@ export const topicRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       await assertCanUseTopicTargets(guardCtx(ctx), [input.id]);
+      // Same visitor guard as `batchMoveTopics`/`cloneTopic` above.
+      await assertCreatorTopicTargets(guardCtx(ctx), [input.id]);
 
       return ctx.topicModel.settleRunningOperation(input.id, input.operationId, input.status);
     }),

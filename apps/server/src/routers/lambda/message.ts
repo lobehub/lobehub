@@ -133,6 +133,11 @@ export const messageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { id, fileIds, agentId, ...options } = input;
       await assertCanUseMessageTargets(guardCtx(ctx), [id]);
+      // Agent-share visitor messages live under the creator's `userId`;
+      // attaching files to one on the creator's behalf would leak into the
+      // visitor's transcript — see `assertCreatorMessageTargets` for why this
+      // guard sits at the RPC boundary rather than in the model defaults.
+      await assertCreatorMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -219,6 +224,8 @@ export const messageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { messageGroupId, agentId, groupId, threadId, topicId } = input;
       await assertCanUseTopicTargets(guardCtx(ctx), [topicId]);
+      // Same visitor guard as `addFilesToMessage` above.
+      await assertCreatorTopicTargets(guardCtx(ctx), [topicId]);
 
       return ctx.messageService.cancelCompression(messageGroupId, {
         agentId,
@@ -288,6 +295,10 @@ export const messageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { topicId, messageIds, agentId, groupId, threadId } = input;
       await assertCanUseTopicTargets(guardCtx(ctx), [topicId]);
+      // Same visitor guard as `addFilesToMessage` above, plus the message ids
+      // themselves — compression reads and rewrites their content.
+      await assertCreatorTopicTargets(guardCtx(ctx), [topicId]);
+      await assertCreatorMessageTargets(guardCtx(ctx), messageIds);
 
       return ctx.messageService.createCompressionGroup(topicId, messageIds, {
         agentId,
@@ -345,6 +356,8 @@ export const messageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { messageGroupId, content, ...params } = input;
       await assertCanUseTopicTargets(guardCtx(ctx), [params.topicId]);
+      // Same visitor guard as `addFilesToMessage` above.
+      await assertCreatorTopicTargets(guardCtx(ctx), [params.topicId]);
 
       return ctx.messageService.finalizeCompression(messageGroupId, content, params);
     }),
@@ -543,6 +556,8 @@ export const messageRouter = router({
       if (options.topicId) await assertCanUseTopicTargets(guardCtx(ctx), [options.topicId]);
       else
         await assertCanUseConversationTargets(guardCtx(ctx), [{ agentId, groupId: input.groupId }]);
+      // Same visitor guard as `addFilesToMessage` above.
+      if (options.topicId) await assertCreatorTopicTargets(guardCtx(ctx), [options.topicId]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -568,6 +583,8 @@ export const messageRouter = router({
     .mutation(async ({ input, ctx }) => {
       if (input.topicId) await assertCanUseTopicTargets(guardCtx(ctx), [input.topicId]);
       else await assertCanUseConversationTargets(guardCtx(ctx), [{ groupId: input.groupId }]);
+      // Same visitor guard as `addFilesToMessage` above.
+      if (input.topicId) await assertCreatorTopicTargets(guardCtx(ctx), [input.topicId]);
 
       return ctx.messageModel.deleteMessagesBySession(null, input.topicId, input.groupId);
     }),
@@ -655,6 +672,8 @@ export const messageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { messageGroupId, expanded, context } = input;
       await assertCanUseTopicTargets(guardCtx(ctx), [context.topicId]);
+      // Same visitor guard as `addFilesToMessage` above.
+      await assertCreatorTopicTargets(guardCtx(ctx), [context.topicId]);
 
       return ctx.messageService.updateMessageGroupMetadata(messageGroupId, { expanded }, context);
     }),
@@ -815,6 +834,9 @@ export const messageRouter = router({
         await assertCanUseConversationTargets(guardCtx(ctx), [
           { agentId, groupId: options.groupId },
         ]);
+      // Same visitor guard as `addFilesToMessage` above — no message id here,
+      // so it's applied to the resolved topic instead.
+      if (options.topicId) await assertCreatorTopicTargets(guardCtx(ctx), [options.topicId]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,

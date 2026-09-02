@@ -1104,6 +1104,31 @@ describe('MessageModel Delete Tests', () => {
       expect(remaining.map((m) => m.id)).toEqual(['creator-msg']);
     });
 
+    it('deleteMessagesBySession should keep a visitor topic message', async () => {
+      // `removeMessagesByAssistant`/`removeMessagesByGroup` route through this
+      // sweep, so the default must exclude visitor rows just like the id-less
+      // `deleteAllMessages` sweep above.
+      await messageModel.deleteMessagesBySession(undefined, 'visitor-topic');
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining.map((m) => m.id).sort()).toEqual(['creator-msg', 'visitor-msg']);
+    });
+
+    it('deleteMessagesBySession should delete a visitor topic message when the runtime opts in', async () => {
+      await messageModel.deleteMessagesBySession(undefined, 'visitor-topic', null, {
+        includeShareVisitor: true,
+      });
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining.map((m) => m.id)).toEqual(['creator-msg']);
+    });
+
     it('findShareVisitorMessageIds should report only the visitor ids of a mixed batch', async () => {
       // Creator-facing update RPCs diff their targets against this finder, so
       // it must name visitor rows and stay silent about the creator's own.

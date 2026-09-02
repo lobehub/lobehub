@@ -4533,12 +4533,24 @@ export class MessageModel {
         ),
       );
 
+  /**
+   * Creator-facing "clear this session/topic/group" sweep.
+   *
+   * Agent-share visitor messages live under the creator's `userId` but are
+   * hidden from every creator-facing listing (see `notShareVisitorMessage` in
+   * `../utils/shareVisitor`), so an id-less sweep must not destroy them —
+   * same rule as {@link deleteAllMessages}. Runtime cleanup opts back in via
+   * `includeShareVisitor`.
+   */
   deleteMessagesBySession = async (
     sessionId?: string | null,
     topicId?: string | null,
     groupId?: string | null,
-  ) =>
-    this.db
+    options?: ShareVisitorWriteOptions,
+  ) => {
+    const visitorGuard = options?.includeShareVisitor ? undefined : notShareVisitorMessage();
+
+    return this.db
       .delete(messages)
       .where(
         and(
@@ -4546,8 +4558,10 @@ export class MessageModel {
           this.matchSession(sessionId),
           this.matchTopic(topicId),
           this.matchGroup(groupId),
+          visitorGuard,
         ),
       );
+  };
 
   /**
    * Creator-facing "clear all my messages".
