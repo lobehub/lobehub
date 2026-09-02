@@ -168,6 +168,31 @@ describe('TopicModel', () => {
     });
   });
 
+  describe('findOwnTopicsByIds', () => {
+    it('returns the creator’s own topics', async () => {
+      const topic = await topicModel.create({ title: 'own' });
+
+      const found = await topicModel.findOwnTopicsByIds([topic.id]);
+      expect(found.map((t) => t.id)).toEqual([topic.id]);
+    });
+
+    it('excludes an agent-share visitor topic from a mixed batch', async () => {
+      // Visitor topics carry the creator's userId, so ownership alone would let
+      // the creator read a visitor conversation from a raw topic id.
+      const own = await topicModel.create({ title: 'own' });
+      await serverDB.insert(topics).values({
+        id: 'topic-visitor-find-own-ids',
+        senderId: 'visitor-user-x',
+        title: 'visitor topic',
+        userId,
+      });
+
+      const found = await topicModel.findOwnTopicsByIds([own.id, 'topic-visitor-find-own-ids']);
+
+      expect(found.map((t) => t.id)).toEqual([own.id]);
+    });
+  });
+
   describe('findShareVisitorTopicIds', () => {
     it('reports only the visitor ids of a mixed batch', async () => {
       // Creator-facing update RPCs diff their targets against this finder, so

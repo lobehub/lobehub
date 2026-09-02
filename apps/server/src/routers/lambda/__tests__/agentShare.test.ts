@@ -156,6 +156,27 @@ describe('agentShareRouter', () => {
     expect(mockUpdateConfig).not.toHaveBeenCalled();
   });
 
+  it('caps maxTopicsPerVisitor at the visitor topic list limit', async () => {
+    // The visitor topic list (`TopicModel.queryBySender`) is not paginated
+    // and is bounded by `AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT` (200), so a
+    // cap above it would let visitors create topics they can never reopen.
+    const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+    await expect(
+      caller.updateShareConfig({
+        agentId: 'agent-1',
+        config: { maxTopicsPerVisitor: 201 },
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
+
+    await caller.updateShareConfig({
+      agentId: 'agent-1',
+      config: { maxTopicsPerVisitor: 200 },
+    });
+    expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', { maxTopicsPerVisitor: 200 });
+  });
+
   it('accepts a toolset-level grant and a per-API scoped grant in toolGrants', async () => {
     const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
     const config = {

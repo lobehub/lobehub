@@ -1,5 +1,6 @@
 'use client';
 
+import { AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT } from '@lobechat/const';
 import { Flexbox } from '@lobehub/ui';
 import { InputNumber } from '@lobehub/ui/base-ui';
 import { memo, useCallback, useState } from 'react';
@@ -78,6 +79,7 @@ const LimitsSection = memo<LimitsSectionProps>(({ agentId, onChange, shareConfig
           label={t('share.settings.limits.maxTopicsPerVisitor')}
         >
           <InputNumber
+            max={AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT}
             min={1}
             step={1}
             style={{ width: 160 }}

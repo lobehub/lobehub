@@ -793,6 +793,19 @@ export class TopicModel {
   };
 
   /**
+   * Creator-facing twin of {@link TopicModel.findByIds}: excludes agent-share
+   * visitor topics, so a creator handed raw visitor `topicId`s gets nothing
+   * back for those ids instead of reading conversations
+   * `allowCreatorViewSessions=false` is meant to hide.
+   */
+  findOwnTopicsByIds = async (ids: string[]): Promise<TopicItem[]> => {
+    if (ids.length === 0) return [];
+    return this.db.query.topics.findMany({
+      where: and(inArray(topics.id, ids), this.ownership(), notShareVisitorTopic()),
+    });
+  };
+
+  /**
    * Minimal creator projection for router-level workspace row checks on
    * batch-by-ids operations (batch delete / move).
    */

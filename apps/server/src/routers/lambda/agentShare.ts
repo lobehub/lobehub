@@ -1,3 +1,4 @@
+import { AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -36,7 +37,18 @@ export const agentShareConfigSchema = z
   .object({
     allowCreatorViewSessions: z.boolean().optional(),
     allowReadMemory: z.boolean().optional(),
-    maxTopicsPerVisitor: z.number().int().positive().optional(),
+    /**
+     * The visitor topic list (`TopicModel.queryBySender`) is not paginated
+     * and is bounded by `AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT`, so a cap
+     * above that constant would let visitors create topics they can never
+     * reopen.
+     */
+    maxTopicsPerVisitor: z
+      .number()
+      .int()
+      .positive()
+      .max(AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT)
+      .optional(),
     maxTurnsPerTopic: z.number().int().positive().optional(),
     monthlySpendLimit: z.number().nonnegative().optional(),
     showErrorDetails: z.boolean().optional(),

@@ -3677,8 +3677,11 @@ export const aiAgentRouter = router({
   refreshGatewayToken: aiAgentProcedure
     .input(z.object({ topicId: z.string() }))
     .query(async ({ input, ctx }) => {
-      // Verify the topic belongs to this user and has a running operation
-      const topic = await ctx.topicModel.findById(input.topicId);
+      // Verify the topic belongs to this user and has a running operation.
+      // Use the creator-facing finder: a creator must not mint a token
+      // against a visitor's running operation; visitors use
+      // `shareChat.refreshGatewayToken` instead.
+      const topic = await ctx.topicModel.findOwnTopicById(input.topicId);
 
       if (!topic?.metadata?.runningOperation) {
         throw new TRPCError({

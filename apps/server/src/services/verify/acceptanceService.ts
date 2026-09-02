@@ -480,7 +480,9 @@ export class AcceptanceService {
         return task ? { title: task.name ?? task.identifier } : null;
       }
       case 'topic': {
-        const topic = await new TopicModel(this.db, this.userId, this.workspaceId).findById(
+        // Creator-facing lookup: an agent-share visitor topic must not be
+        // treated as a valid acceptance subject for the creator.
+        const topic = await new TopicModel(this.db, this.userId, this.workspaceId).findOwnTopicById(
           subjectId,
         );
         return topic ? { title: topic.title ?? null } : null;
@@ -1027,7 +1029,9 @@ export class AcceptanceService {
         new TaskModel(this.db, this.userId, this.workspaceId).resolveMany(
           idsByType.get('task') ?? [],
         ),
-        new TopicModel(this.db, this.userId, this.workspaceId).findByIds(
+        // Creator-facing lookup: exclude agent-share visitor topics from the
+        // subject summary batch.
+        new TopicModel(this.db, this.userId, this.workspaceId).findOwnTopicsByIds(
           idsByType.get('topic') ?? [],
         ),
         new DocumentModel(this.db, this.userId, this.workspaceId).findByIds(
