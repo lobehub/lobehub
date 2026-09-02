@@ -266,16 +266,12 @@ export class TrashService {
   countByType = async (): Promise<TrashCountByType> => {
     if (!this.workspaceId) return this.trashModel.countByType();
 
-    const counts: TrashCountByType = {};
-    let cursor: string | null | undefined;
-    do {
-      const page = await this.list({ cursor, limit: 200 });
-      for (const item of page.items) {
-        counts[item.resourceType] = (counts[item.resourceType] ?? 0) + 1;
-      }
-      cursor = page.nextCursor;
-    } while (cursor);
-    return counts;
+    const restrictedKnowledgeBaseIds = await getRestrictedKnowledgeBaseIds({
+      serverDB: this.db,
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    });
+    return this.trashModel.countByType(restrictedKnowledgeBaseIds);
   };
 
   findByIds = async (ids: string[]): Promise<TrashItem[]> => {

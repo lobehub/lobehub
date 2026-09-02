@@ -287,6 +287,31 @@ export class DocumentModel {
       .filter((document) => !options.restrictToCreator || document.userId === this.userId)
       .map((document) => document.id);
     if (ids.length === 0) return [];
+
+    if (this.workspaceId) {
+      // A public folder may contain another member's private subtree. Keep
+      // retained boundary nodes reachable without reading or exposing them to
+      // the actor: move only their roots to the workspace top level and leave
+      // the private subtree below each boundary intact.
+      await this.db
+        .update(documents)
+        .set({ parentId: null })
+        .where(
+          and(
+            buildWorkspaceWhere(
+              { userId: this.userId, workspaceId: this.workspaceId },
+              {
+                isDeleted: documents.isDeleted,
+                userId: documents.userId,
+                workspaceId: documents.workspaceId,
+              },
+            ),
+            inArray(documents.parentId, ids),
+            notInArray(documents.id, ids),
+          ),
+        );
+    }
+
     return this.db
       .update(documents)
       .set(trashStamp(options.deletedAt))

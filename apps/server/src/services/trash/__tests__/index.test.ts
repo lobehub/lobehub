@@ -327,6 +327,44 @@ describe('TrashService', () => {
       expect(await fileModel.findById(fileId)).toMatchObject({ parentId: folder.id });
     });
 
+    it("keeps another member's private subtree reachable when trashing its public parent", async () => {
+      const workspaceId = 'trash-private-descendant-workspace';
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Private descendant',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      const ownerModel = new DocumentModel(serverDB, userId, workspaceId);
+      const memberModel = new DocumentModel(serverDB, otherUserId, workspaceId);
+      const publicFolder = await ownerModel.create({
+        fileType: 'custom/folder',
+        source: '',
+        sourceType: 'api',
+        title: 'Shared folder',
+        totalCharCount: 0,
+        totalLineCount: 0,
+        visibility: 'public',
+      });
+      const privateFolder = await memberModel.create({
+        fileType: 'custom/folder',
+        parentId: publicFolder.id,
+        source: '',
+        sourceType: 'api',
+        title: 'Private folder',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+
+      const [root] = await new TrashService(serverDB, userId, workspaceId).trashDocuments([
+        publicFolder.id,
+      ]);
+
+      expect(await ownerModel.findById(publicFolder.id)).toBeUndefined();
+      expect(await memberModel.findById(privateFolder.id)).toMatchObject({ parentId: null });
+      expect(await new TrashModel(serverDB, userId, workspaceId).findChildren(root.id)).toEqual([]);
+    });
+
     it('keeps knowledge-base membership and content live until purge, then removes exclusive files', async () => {
       const knowledgeBase = await knowledgeBaseModel.create({ name: 'Library' });
       const { id: fileId } = await fileModel.create({

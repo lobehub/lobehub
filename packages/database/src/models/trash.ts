@@ -7,7 +7,22 @@ import type {
   TrashListResult,
   TrashResourceType,
 } from '@lobechat/types';
-import { and, asc, count, desc, eq, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  exists,
+  inArray,
+  isNull,
+  lt,
+  lte,
+  not,
+  or,
+  sql,
+} from 'drizzle-orm';
 
 import type { NewTrashItemRow, TrashItemRow } from '../schemas';
 import { documents, files, knowledgeBaseFiles, knowledgeBases, trashItems } from '../schemas';
@@ -89,6 +104,48 @@ export class TrashModel {
           sql`${trashItems.meta}->>'creatorUserId' = ${this.userId}`,
         )
       : undefined;
+
+  private excludeRestrictedResources = (knowledgeBaseIds: string[]): SQL | undefined => {
+    if (knowledgeBaseIds.length === 0) return;
+
+    const fileInRestrictedKnowledgeBase = exists(
+      this.db
+        .select({ fileId: knowledgeBaseFiles.fileId })
+        .from(knowledgeBaseFiles)
+        .where(
+          and(
+            eq(knowledgeBaseFiles.fileId, trashItems.resourceId),
+            inArray(knowledgeBaseFiles.knowledgeBaseId, knowledgeBaseIds),
+          ),
+        ),
+    );
+    const documentInRestrictedKnowledgeBase = exists(
+      this.db
+        .select({ id: documents.id })
+        .from(documents)
+        .leftJoin(knowledgeBaseFiles, eq(documents.fileId, knowledgeBaseFiles.fileId))
+        .where(
+          and(
+            eq(documents.id, trashItems.resourceId),
+            or(
+              inArray(documents.knowledgeBaseId, knowledgeBaseIds),
+              inArray(knowledgeBaseFiles.knowledgeBaseId, knowledgeBaseIds),
+            ),
+          ),
+        ),
+    );
+
+    return not(
+      or(
+        and(
+          eq(trashItems.resourceType, 'knowledgeBase'),
+          inArray(trashItems.resourceId, knowledgeBaseIds),
+        ),
+        and(eq(trashItems.resourceType, 'file'), fileInRestrictedKnowledgeBase),
+        and(eq(trashItems.resourceType, 'document'), documentInRestrictedKnowledgeBase),
+      ) as SQL,
+    );
+  };
 
   // ─────────────────────────── writes ───────────────────────────
 
@@ -226,11 +283,18 @@ export class TrashModel {
     };
   };
 
-  countByType = async (): Promise<TrashCountByType> => {
+  countByType = async (excludeKnowledgeBaseIds: string[] = []): Promise<TrashCountByType> => {
     const rows = await this.db
       .select({ resourceType: trashItems.resourceType, total: count() })
       .from(trashItems)
-      .where(and(this.ownership(), isNull(trashItems.rootId), this.visibleResource()))
+      .where(
+        and(
+          this.ownership(),
+          isNull(trashItems.rootId),
+          this.visibleResource(),
+          this.excludeRestrictedResources(excludeKnowledgeBaseIds),
+        ),
+      )
       .groupBy(trashItems.resourceType);
 
     return Object.fromEntries(rows.map((row) => [row.resourceType, row.total]));
