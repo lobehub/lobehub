@@ -14,6 +14,15 @@ const DEFAULT_OPERATION_LEASE_TIMEOUT_MS = 5 * 60 * 1000;
 // so a transient missed write cannot reclaim a healthy operation.
 export const MIN_OPERATION_LEASE_TIMEOUT_MS = 3 * 60 * 1000;
 
+/**
+ * How long a delivered Work may sit with verification pending before the
+ * coordinator treats the delivery as abandoned and re-dispatches. The verify
+ * judge is a full agent run — tens of minutes on a large delivery — so this
+ * sits far above the operation lease, which is scaled to heartbeat gaps, not
+ * judgments.
+ */
+export const VERIFY_SETTLE_GRACE_MS = 60 * 60 * 1000;
+
 /** How many attempts one Work gets before the coordinator opens a decision gate. */
 export const resolveTaskAttemptBudget = (goal: GoalItem): number => {
   const configured = goal.config?.recovery?.maxAttemptsPerTask;

@@ -42,6 +42,7 @@ import {
   resolveMaxConcurrentTasks,
   resolveOperationLeaseTimeout,
   resolveTaskMaxSteps,
+  VERIFY_SETTLE_GRACE_MS,
 } from './recoveryPolicy';
 import { TaskRecoveryCoordinator } from './taskRecoveryCoordinator';
 import {
@@ -972,6 +973,29 @@ export class GoalService {
     const staleBefore = new Date(Date.now() - resolveOperationLeaseTimeout(graph.goal));
 
     if (!operationId || !topicId) {
+      // No running topic covers two very different shapes. A verify-bound Work
+      // that delivered keeps its task `running` with a *completed* topic until
+      // the verify run settles, and that judgment — a full agent run — outlives
+      // the operation lease routinely. Re-dispatching there pays for a duplicate
+      // attempt the verify settle path will cancel, and the canceled retry then
+      // becomes the newest topic and shadows the delivered one. Hold off while
+      // the delivery is fresh; past the grace window, fall through to the
+      // release below so a verify run that died silently cannot strand the
+      // goal forever.
+      const [lastTopic] = await this.taskTopicModel.findWithHandoff(task.id, 1);
+      if (lastTopic?.status === 'completed') {
+        const deliveredAt = lastTopic.completedAt ?? lastTopic.createdAt;
+        if (new Date(deliveredAt).getTime() >= Date.now() - VERIFY_SETTLE_GRACE_MS) {
+          return {
+            goalId: graph.goal.id,
+            message: `Task ${task.identifier} delivered; waiting for verification to settle`,
+            nodeId,
+            outcome: 'waiting_external',
+            taskId: task.id,
+          };
+        }
+      }
+
       // A task claimed for dispatch but with no run behind it. Normally this is
       // the sliver between the claim and `runTask` creating the topic; if the
       // worker died in there it is permanent, and every later advance would
@@ -1214,7 +1238,16 @@ export class GoalService {
     const existingFinding = graph.edges.some(
       (edge) => edge.sourceNodeId === nodeId && edge.kind === 'produces',
     );
-    const [latest] = await this.taskTopicModel.findWithHandoff(taskId, 1);
+    // The newest row by seq can be a retry that was canceled when verification
+    // accepted an earlier delivery — the settle path cancels the in-flight
+    // attempt it superseded. The finding must be synthesized from the run that
+    // actually delivered, so prefer the newest completed topic (with a handoff
+    // when one exists) over whatever happens to be last.
+    const recent = await this.taskTopicModel.findWithHandoff(taskId, 10);
+    const latest =
+      recent.find((topic) => topic.status === 'completed' && topic.handoff) ??
+      recent.find((topic) => topic.status === 'completed') ??
+      recent[0];
     const completedWork = await this.workModel.registerTask({
       changeType: 'updated',
       rootOperationId: latest?.operationId,
