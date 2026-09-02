@@ -339,7 +339,7 @@ const assertSyncConsumerPaused = async () => {
   const { inFlight } = await outbox.stats();
   if (inFlight > 0) {
     throw new Error(
-      `Outbox still has ${inFlight} in-flight claims; pause the incremental sync consumer before --switch-aliases`,
+      `Outbox still has ${inFlight} in-flight claims; pause the incremental sync consumer first`,
     );
   }
 };
@@ -384,12 +384,15 @@ const runUpgrade = async () => {
 
   /**
    * Backfill upgrades reuse the checkpointed PostgreSQL run: a fresh checkpoint on the first
-   * invocation, resume afterwards. The alias switch is deferred to `--switch-aliases` exactly like
-   * the copy path, so the operator pauses the consumer only for the cutover.
+   * invocation, resume afterwards. Unlike the copy strategy, the consumer must stay paused for the
+   * whole backfill: it writes through the stable alias into the old index and deletes acknowledged
+   * Outbox rows, so any change it applied after the scanner passed that document would never reach
+   * the new index. The check is repeated on every start and resume, not only at the cutover.
    */
   if (!configuredStateDirectory) {
     throw new Error('ES_REINDEX_STATE_DIR is required for a backfill upgrade');
   }
+  await assertSyncConsumerPaused();
   const existing = await repository.getTargetRun(namespace, FTS_SEARCH_INDEX_SCHEMA_VERSION);
   await runBackfill({ aliasMode: switchAliases ? 'switch' : 'defer', freshRun: !existing });
 };

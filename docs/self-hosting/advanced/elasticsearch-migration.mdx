@@ -396,8 +396,9 @@ strategy up to the code's current version:
   invocations resume it. Without `--switch-aliases`, it stops at `awaiting_alias_switch` and leaves
   the existing aliases serving the old version. The incremental sync consumer must stay paused for
   the entire backfill in this strategy — changes made during it are retained in the Outbox and
-  replayed after the switch — which is why it is the slow path, reserved for versions whose
-  `_source` is incomplete or whose new mapping needs data the old index never stored.
+  replayed after the switch — and the command refuses to start or resume the backfill while the
+  Outbox still shows in-flight claims. That pause is why it is the slow path, reserved for versions
+  whose `_source` is incomplete or whose new mapping needs data the old index never stored.
 
 `--upgrade --switch-aliases --yes` runs the same detection and strategy, then, immediately before
 the cutover, checks the Outbox for in-flight claims and refuses to proceed if the incremental sync

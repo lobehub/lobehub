@@ -251,7 +251,7 @@ ES_REINDEX_STATE_DIR=.elasticsearch-reindex bun run fts-search:reindex -- --appl
 - 别名分裂到不同版本（`mixed`）：命令直接拒绝执行，需要先修复别名再升级。
 - 已经处于当前版本：命令不做任何操作。
 - `copy`：对每个数据类型，使用 Elasticsearch 自身的 `_reindex` API（`conflicts: proceed`、`version_type: external`），把旧的物理索引复制到新的 `-v<当前版本>` 物理索引，完全不读取 PostgreSQL。由于文档版本号会被保留，重复执行是安全的 —— 未变化的文档会被报告为版本冲突，而不会被重写。
-- `backfill`：回退到与初始迁移相同的可续跑 PostgreSQL 回填机制，需要设置 `ES_REINDEX_STATE_DIR`。第一次执行会创建全新 checkpoint，之后的执行会继续该 checkpoint。不带 `--switch-aliases` 时，会停在 `awaiting_alias_switch` 状态，旧版本的别名继续对外提供服务。这种策略下，必须在整个回填期间保持增量消费器暂停 —— 期间发生的变更会保留在增量队列中，并在切换后重放 —— 因此它是较慢的路径，只在源结构版本的 `_source` 不完整、或新映射需要旧索引从未保存过的数据时才会用到。
+- `backfill`：回退到与初始迁移相同的可续跑 PostgreSQL 回填机制，需要设置 `ES_REINDEX_STATE_DIR`。第一次执行会创建全新 checkpoint，之后的执行会继续该 checkpoint。不带 `--switch-aliases` 时，会停在 `awaiting_alias_switch` 状态，旧版本的别名继续对外提供服务。这种策略下，必须在整个回填期间保持增量消费器暂停 —— 期间发生的变更会保留在增量队列中，并在切换后重放 —— 命令在开始或续跑回填时若发现增量队列仍有正在处理的认领，会直接拒绝执行。也正因为要暂停，它是较慢的路径，只在源结构版本的 `_source` 不完整、或新映射需要旧索引从未保存过的数据时才会用到。
 
 `--upgrade --switch-aliases --yes` 会执行同样的探测和策略，并在切换前检查增量队列中是否存在正在处理的任务，如果增量消费器仍在处理就拒绝执行。它会在一次原子 `_aliases` 请求中把全部稳定别名移动到新的物理索引。`--switch-aliases` 不能和 `--entity` 同时使用，命令会拒绝这种局部切换。
 
