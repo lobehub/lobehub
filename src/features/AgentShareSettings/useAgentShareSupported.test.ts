@@ -4,10 +4,26 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resolveLinkToggleState, useAgentShareSupported } from './useAgentShareSupported';
 
 const testState = vi.hoisted(() => ({
+  /** What `getShareStatus` resolves to for the non-publishable lookup. */
+  shareStatus: null as { visibility: 'link' | 'private' } | null,
   enableAgentShare: undefined as boolean | undefined,
   enableBusinessFeatures: true,
   hasActiveWorkspace: false,
   isBuiltinAgent: false,
+}));
+
+vi.mock('swr', () => ({
+  default: (key: unknown, fetcher: () => unknown) => ({
+    data: key ? fetcher() : undefined,
+  }),
+}));
+
+vi.mock('@/libs/swr/keys', () => ({
+  shareKeys: { agentShareStatus: (agentId: string) => ['share:agentShareStatus', agentId] },
+}));
+
+vi.mock('@/services/agentShare', () => ({
+  agentShareService: { getShareStatus: () => testState.shareStatus },
 }));
 
 vi.mock('@/business/client/hooks/useHasActiveWorkspace', () => ({
@@ -43,12 +59,13 @@ describe('useAgentShareSupported', () => {
     testState.enableBusinessFeatures = true;
     testState.hasActiveWorkspace = false;
     testState.isBuiltinAgent = false;
+    testState.shareStatus = null;
   });
 
   it('is unsupported without an agentId', () => {
     const { result } = renderHook(() => useAgentShareSupported(undefined));
 
-    expect(result.current).toEqual({ publishable: false, supported: false });
+    expect(result.current).toEqual({ publishable: false, supported: false, visible: false });
   });
 
   it('is unsupported for a workspace agent, regardless of the flags', () => {
@@ -56,7 +73,7 @@ describe('useAgentShareSupported', () => {
 
     const { result } = renderHook(() => useAgentShareSupported('agent-1'));
 
-    expect(result.current).toEqual({ publishable: false, supported: false });
+    expect(result.current).toEqual({ publishable: false, supported: false, visible: false });
   });
 
   it('is unsupported for a builtin agent', () => {
@@ -76,7 +93,7 @@ describe('useAgentShareSupported', () => {
 
     const { result } = renderHook(() => useAgentShareSupported('agent-1'));
 
-    expect(result.current).toEqual({ publishable: false, supported: false });
+    expect(result.current).toEqual({ publishable: false, supported: false, visible: false });
   });
 
   it('is supported but not publishable while the rollout flag is unresolved', () => {
@@ -84,23 +101,45 @@ describe('useAgentShareSupported', () => {
 
     const { result } = renderHook(() => useAgentShareSupported('agent-1'));
 
-    expect(result.current).toEqual({ publishable: false, supported: true });
+    expect(result.current).toEqual({ publishable: false, supported: true, visible: false });
   });
 
-  it('is supported but not publishable when the rollout flag is off', () => {
+  // Outside the allowlist with nothing live: no entry at all — the tab, the
+  // header action and the settings deep link all key off `visible`.
+  it('hides the entry when the rollout flag is off and no share exists', () => {
     testState.enableAgentShare = false;
 
     const { result } = renderHook(() => useAgentShareSupported('agent-1'));
 
-    expect(result.current).toEqual({ publishable: false, supported: true });
+    expect(result.current).toEqual({ publishable: false, supported: true, visible: false });
   });
 
-  it('is publishable when every gate passes', () => {
+  it('hides the entry when the rollout flag is off and the share is already revoked', () => {
+    testState.enableAgentShare = false;
+    testState.shareStatus = { visibility: 'private' };
+
+    const { result } = renderHook(() => useAgentShareSupported('agent-1'));
+
+    expect(result.current).toEqual({ publishable: false, supported: true, visible: false });
+  });
+
+  // An owner rolled back out of the allowlist keeps the entry for a live share
+  // so it stays revocable (the server keeps `disable` open for this case).
+  it('keeps the entry for a live share when the rollout flag is off', () => {
+    testState.enableAgentShare = false;
+    testState.shareStatus = { visibility: 'link' };
+
+    const { result } = renderHook(() => useAgentShareSupported('agent-1'));
+
+    expect(result.current).toEqual({ publishable: false, supported: true, visible: true });
+  });
+
+  it('is publishable and visible when every gate passes', () => {
     testState.enableAgentShare = true;
 
     const { result } = renderHook(() => useAgentShareSupported('agent-1'));
 
-    expect(result.current).toEqual({ publishable: true, supported: true });
+    expect(result.current).toEqual({ publishable: true, supported: true, visible: true });
   });
 });
 

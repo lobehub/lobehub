@@ -36,6 +36,8 @@ const mocks = vi.hoisted(() => ({
     removeAgent: vi.fn(),
   },
   hasActiveWorkspace: true,
+  /** What the share-entry hook's live-share lookup resolves to. */
+  shareStatus: null as { visibility: 'link' | 'private' } | null,
   serverConfigState: {
     featureFlags: { enableAgentShare: undefined as boolean | undefined },
     // Business features on by default in these tests — the Cloud-only
@@ -53,6 +55,16 @@ const mocks = vi.hoisted(() => ({
     editor: undefined as { getDocument: (format: string) => string | undefined } | undefined,
     lockState: { holderId: null as string | null, lockedByOther: false, pending: false },
   },
+}));
+
+// `useAgentShareSupported` looks the live share up (via SWR) only for an
+// account that may not publish; resolve it synchronously here.
+vi.mock('swr', () => ({
+  default: (key: unknown, fetcher: () => unknown) => ({ data: key ? fetcher() : undefined }),
+}));
+
+vi.mock('@/services/agentShare', () => ({
+  agentShareService: { getShareStatus: () => mocks.shareStatus },
 }));
 
 vi.mock('@lobechat/const', async (importOriginal) => ({
@@ -290,9 +302,12 @@ describe('Agent profile Header', () => {
   });
 
   describe('share entry', () => {
-    // Agent sharing is personal-only, so the entry needs a personal agent.
+    // Agent sharing is personal-only, so the entry needs a personal agent;
+    // the rollout flag is on unless a case says otherwise.
     beforeEach(() => {
       mocks.hasActiveWorkspace = false;
+      mocks.serverConfigState.featureFlags.enableAgentShare = true;
+      mocks.shareStatus = null;
     });
 
     it('offers the share entry to a personal agent owner', () => {
@@ -301,22 +316,34 @@ describe('Agent profile Header', () => {
       expect(screen.getByTestId('share-entry-icon')).toBeInTheDocument();
     });
 
-    // The flag only gates *publishing* — an owner rolled back out of the
-    // allowlist still needs the entry to reach (and revoke) a live share.
-    it('keeps the share entry when the account may not publish new shares', () => {
+    // Outside the rollout allowlist the entry is hidden entirely …
+    it('hides the share entry when the account may not publish and has no live share', () => {
       mocks.serverConfigState.featureFlags.enableAgentShare = false;
+      mocks.shareStatus = null;
+
+      render(<Header />);
+
+      expect(screen.queryByTestId('share-entry-icon')).toBeNull();
+    });
+
+    // … unless a share is already live: an owner rolled back out of the
+    // allowlist still needs the entry to reach (and revoke) it.
+    it('keeps the share entry for a live share when the account may not publish', () => {
+      mocks.serverConfigState.featureFlags.enableAgentShare = false;
+      mocks.shareStatus = { visibility: 'link' };
 
       render(<Header />);
 
       expect(screen.getByTestId('share-entry-icon')).toBeInTheDocument();
     });
 
-    it('keeps the share entry while the capability is still unresolved', () => {
+    it('hides the share entry while the capability is still unresolved', () => {
       mocks.serverConfigState.featureFlags.enableAgentShare = undefined;
+      mocks.shareStatus = null;
 
       render(<Header />);
 
-      expect(screen.getByTestId('share-entry-icon')).toBeInTheDocument();
+      expect(screen.queryByTestId('share-entry-icon')).toBeNull();
     });
 
     // Unlike the rollout flag above, `enableBusinessFeatures` is structural:

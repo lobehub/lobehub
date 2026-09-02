@@ -1,6 +1,10 @@
 'use client';
 
+import useSWR from 'swr';
+
 import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
+import { shareKeys } from '@/libs/swr/keys';
+import { agentShareService } from '@/services/agentShare';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useServerConfigStore } from '@/store/serverConfig';
@@ -15,6 +19,13 @@ export interface AgentShareSupport {
   publishable: boolean;
   /** Whether the share management surface applies to this agent at all. */
   supported: boolean;
+  /**
+   * Whether the share entry (profile tab, header action, settings page) should
+   * be shown to this account: `true` when it may publish OR already has a live
+   * share to revoke, `false` when neither, `undefined` while the live-share
+   * lookup for a non-publishable account is still resolving.
+   */
+  visible: boolean | undefined;
 }
 
 /**
@@ -30,16 +41,16 @@ export interface AgentShareSupport {
  * `supported` additionally requires `enableBusinessFeatures`: a self-hosted
  * (OSS) deployment has no Agent Share surface at all — it is structurally
  * blocked server-side by `ENABLE_BUSINESS_FEATURES`
- * (`_helpers/agentShareFeatureGate.ts`), so hiding the whole management
- * surface there is not the same trade-off as gating on `enableAgentShare`
- * below. `enableAgentShare` (the CLOUD grayscale rollout flag) deliberately
- * does NOT narrow `supported`: the server keeps disable / updateConfig /
- * updateSlug / getShareStatus open when that flag is off, so hiding the
- * surface on it would strand an owner rolled back out of the allowlist with a
- * live share they can no longer revoke. Publishing is gated through
- * `publishable` instead, which fails closed on anything other than `true`
- * (including `undefined` / unresolved), mirroring the server's
- * `assertAgentShareCreationEnabled`.
+ * (`_helpers/agentShareFeatureGate.ts`).
+ *
+ * `enableAgentShare` (the CLOUD grayscale rollout flag) does NOT narrow
+ * `supported` either: the server keeps disable / updateConfig / updateSlug /
+ * getShareStatus open when that flag is off, so an owner rolled back out of
+ * the allowlist with a live share must still be able to revoke it. Instead the
+ * flag drives two derived values — `publishable` (fails closed on anything
+ * other than `true`, mirroring the server's `assertAgentShareCreationEnabled`)
+ * and `visible` (publishable, or a live share to revoke) — so an account
+ * outside the allowlist with nothing live sees no share entry at all.
  */
 export const useAgentShareSupported = (agentId?: string | null): AgentShareSupport => {
   const hasActiveWorkspace = useHasActiveWorkspace();
@@ -48,8 +59,24 @@ export const useAgentShareSupported = (agentId?: string | null): AgentShareSuppo
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
 
   const supported = !!agentId && !hasActiveWorkspace && !isBuiltinAgent && enableBusinessFeatures;
+  const publishable = supported && enableAgentShare === true;
 
-  return { publishable: supported && enableAgentShare === true, supported };
+  // Outside the rollout allowlist the entry is hidden entirely — unless a live
+  // share already exists, which the owner must still be able to reach and
+  // revoke. The status lookup only runs for that non-publishable case, so the
+  // allowlisted majority pays nothing extra here.
+  const { data: share } = useSWR(
+    supported && !publishable && agentId ? shareKeys.agentShareStatus(agentId) : null,
+    () => agentShareService.getShareStatus(agentId!),
+    { revalidateOnFocus: false },
+  );
+
+  let visible: boolean | undefined;
+  if (!supported) visible = false;
+  else if (publishable) visible = true;
+  else if (share !== undefined) visible = share?.visibility === 'link';
+
+  return { publishable, supported, visible };
 };
 
 /**

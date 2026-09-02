@@ -30,13 +30,15 @@ const styles = StyleSheet.create({
  */
 const AgentShareSettingsPage = memo(() => {
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
-  const { supported: shareSupported } = useAgentShareSupported(activeAgentId);
+  const { visible: shareVisible } = useAgentShareSupported(activeAgentId);
 
-  // A deep link on an agent that can never be shared (workspace / builtin row)
+  // A deep link on an agent that can never be shared (workspace / builtin row),
+  // or by an account outside the rollout allowlist with nothing live to revoke,
   // lands on the agent instead of a settings surface whose every control would
-  // fail server-side. An account that merely cannot publish still gets the page,
-  // so an existing share stays revocable.
-  if (activeAgentId && !shareSupported) return <Navigate replace to={`/agent/${activeAgentId}`} />;
+  // fail server-side. `undefined` (lookup still resolving) keeps the page so a
+  // revocable share does not flash through a redirect.
+  if (activeAgentId && shareVisible === false)
+    return <Navigate replace to={`/agent/${activeAgentId}`} />;
 
   return (
     <Flexbox height={'100%'} width={'100%'}>

@@ -250,8 +250,8 @@ const Header = memo(() => {
     [],
   );
 
-  const { supported: shareSupported } = useAgentShareSupported(activeAgentId);
-  const canShareAgent = shareSupported && canConfigure;
+  const { visible: shareVisible } = useAgentShareSupported(activeAgentId);
+  const canShareAgent = shareVisible === true && canConfigure;
 
   // Share settings are a sibling tab of the profile group, not a popup — the
   // shortcut just jumps to that tab.

@@ -67,7 +67,7 @@ const AgentProfileTabs = memo<AgentProfileTabsProps>(({ active, agentId }) => {
 
   const canConfigure = !!isAgentEditable && isAccessResolved && canEditContent && canEditResource;
   const channelsSupported = supportsMessageChannels(heterogeneousProviderType);
-  const { supported: shareSupported } = useAgentShareSupported(agentId);
+  const { visible: shareVisible } = useAgentShareSupported(agentId);
 
   const options = useMemo(
     () =>
@@ -84,9 +84,9 @@ const AgentProfileTabs = memo<AgentProfileTabsProps>(({ active, agentId }) => {
           share: t('share', { ns: 'common' }),
           statistics: t('usageStats.title', { ns: 'spend' }),
         },
-        shareSupported,
+        shareSupported: shareVisible === true,
       }),
-    [active, canConfigure, channelsSupported, shareSupported, t],
+    [active, canConfigure, channelsSupported, shareVisible, t],
   );
 
   // A lone segment is a label, not a switcher.
