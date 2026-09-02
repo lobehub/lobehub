@@ -1031,8 +1031,24 @@ export class AiAgentService {
 
       globalMemoryEnabled = agentMemoryEnabled ?? memorySettings?.enabled !== false;
 
-      const generalSettings = settings?.general as { timezone?: string } | undefined;
-      userTimezone = generalSettings?.timezone;
+      // Timezone drives the session-date placeholder rendered back to whoever
+      // is actually conversing. In a share-visitor run that is the VISITOR,
+      // not the creator whose settings this block otherwise reads — memory /
+      // expertise intentionally stay creator-scoped below (gated by
+      // `allowReadMemory`), but the timezone has no such gate and must not
+      // leak the creator's own setting into a visitor's turn.
+      if (shareGate) {
+        const visitorSettings = await new UserModel(
+          this.db,
+          shareGate.visitorUserId,
+        ).getUserSettings();
+        const visitorGeneralSettings = visitorSettings?.general as
+          { timezone?: string } | undefined;
+        userTimezone = visitorGeneralSettings?.timezone;
+      } else {
+        const generalSettings = settings?.general as { timezone?: string } | undefined;
+        userTimezone = generalSettings?.timezone;
+      }
     } catch (error) {
       log('execAgent: failed to fetch user settings: %O', error);
     }

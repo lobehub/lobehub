@@ -300,11 +300,18 @@ export const buildServerCallLlmContext = async ({
   // Tool-specific template variable resolution. The client-side
   // contextEngineering.ts resolves these via Zustand stores and lambdaClient.
   // In execAgent (server/bot) mode we must fetch from DB directly.
+  //
+  // `{{username}}` / `{{language}}` render back to whoever is actually
+  // conversing. In a share-visitor run `ctx.userId` is the CREATOR (the agent
+  // still executes under their identity), so resolving from it here would leak
+  // the creator's own name/locale into a link visitor's turn. Resolve from the
+  // visitor's own user id instead whenever this is a share-visitor run.
   let serverUsername = '';
   let serverLanguage = '';
-  if (ctx.serverDB && ctx.userId) {
+  const userInfoUserId = ctx.agentShareVisitor?.visitorUserId ?? ctx.userId;
+  if (ctx.serverDB && userInfoUserId) {
     try {
-      const userInfo = await UserModel.getInfoForAIGeneration(ctx.serverDB, ctx.userId);
+      const userInfo = await UserModel.getInfoForAIGeneration(ctx.serverDB, userInfoUserId);
       serverUsername = userInfo.userName;
       serverLanguage = userInfo.responseLanguage;
     } catch (error) {
