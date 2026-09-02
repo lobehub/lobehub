@@ -2,8 +2,8 @@
 
 import { isDesktop } from '@lobechat/const';
 import type { FormGroupItemType } from '@lobehub/ui';
-import { Form, Skeleton } from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
+import { Form } from '@lobehub/ui';
+import { Select, Skeleton } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -50,7 +50,7 @@ const FontSettings = memo(() => {
     value: monospaceFontFamily,
   });
 
-  if (!isUserStateInit) return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
+  if (!isUserStateInit) return <Skeleton.Text rows={5} />;
 
   const font: FormGroupItemType = {
     children: [

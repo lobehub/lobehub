@@ -2,8 +2,8 @@
 
 import type { DocumentLikeSummary } from '@lobechat/types';
 import { useAnalytics } from '@lobehub/analytics/react';
-import { Flexbox, Skeleton } from '@lobehub/ui';
-import { Avatar, Text, toast, Tooltip } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Avatar, Skeleton, Text, toast, Tooltip } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ThumbsUp } from 'lucide-react';
 import { memo, useCallback, useRef } from 'react';
@@ -230,8 +230,8 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
   if (isLoading && !data)
     return (
       <Flexbox data-document-likes align={'center'} className={styles.section} gap={16}>
-        <Skeleton.Avatar active shape={'circle'} size={BUTTON_SIZE} />
-        <Skeleton.Button active style={{ height: 20, width: 200 }} />
+        <Skeleton.Avatar shape={'circle'} size={BUTTON_SIZE} />
+        <Skeleton height={20} width={200} />
       </Flexbox>
     );
 
