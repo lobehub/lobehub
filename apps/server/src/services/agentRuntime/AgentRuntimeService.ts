@@ -1179,13 +1179,23 @@ export class AgentRuntimeService {
     if (!agentId || !topicId) return undefined;
 
     try {
-      return await this.messageService.queryMessages({
-        agentId,
-        groupId,
-        skipWorks: options?.skipWorks,
-        threadId,
-        topicId,
-      });
+      return await this.messageService.queryMessages(
+        {
+          agentId,
+          groupId,
+          skipWorks: options?.skipWorks,
+          threadId,
+          topicId,
+        },
+        // The run's own topic is already resolved and authorized; an agent-share
+        // visitor run executes under the CREATOR's identity, so without this the
+        // creator-facing exclusion in `MessageModel.query()` returns an EMPTY
+        // snapshot for the visitor's topic, and the client applies it as the
+        // terminal Source of Truth — wiping the conversation the run just
+        // produced. Visitor-facing redaction of the pushed snapshot happens in
+        // `GatewayStreamNotifier`.
+        { allowShareVisitor: true },
+      );
     } catch (error) {
       // Stream events must never fail the step. If the DB hiccups, fall back
       // to letting the client refresh as before.
