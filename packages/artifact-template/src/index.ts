@@ -90,9 +90,15 @@ export const REACT_ARTIFACT_DEFAULT_DEPENDENCIES: Record<string, string> = {
 export const REACT_ARTIFACT_DEFAULT_DEV_DEPENDENCIES: Record<string, string> = {
   '@types/react': 'latest',
   '@types/react-dom': 'latest',
-  '@vitejs/plugin-react': 'latest',
+  // The preview runs inside Sandpack's Nodebox, which emulates Node 16 and cannot load
+  // native bindings. Vite 5+ requires Node 18/20+ and Vite 8 bundles rolldown (native),
+  // so `latest` breaks the sandbox ("Cannot find native binding", "Vite requires Node.js
+  // 20.19+"). Mirror the pins of Sandpack's own `vite-react-ts` template: Vite 4 plus
+  // `esbuild-wasm`, which Nodebox substitutes for the native esbuild binary.
+  '@vitejs/plugin-react': '^4.3.4',
+  'esbuild-wasm': '^0.17.12',
   'typescript': 'latest',
-  'vite': 'latest',
+  'vite': '4.2.0',
 };
 
 export const REACT_ARTIFACT_TAILWIND_CDN = 'https://cdn.tailwindcss.com';
