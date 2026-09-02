@@ -210,7 +210,7 @@ describe('AiAgentService.execAgent - headless approval default', () => {
       prompt: 'Hello',
       shareGate: {
         agentId: 'agent-1',
-        shareConfig: { enabledToolIds: [] },
+        shareConfig: { toolGrants: [] },
         shareId: 'share-1',
         visitorUserId: 'visitor-1',
       },

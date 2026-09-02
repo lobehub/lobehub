@@ -278,7 +278,7 @@ describe('AiAgentService.execAgent - topic history loading', () => {
         prompt: 'hi',
         shareGate: {
           agentId: 'agent-1',
-          shareConfig: { enabledToolIds: [] },
+          shareConfig: { toolGrants: [] },
           shareId: 'share-1',
           visitorUserId: 'visitor-1',
         },
