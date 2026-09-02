@@ -176,7 +176,8 @@ docker compose run --rm fts-search-reindex --apply --fresh-run --yes
 
 额外参数会原样传入，因此上文的演练、`--entity`、`--skip-failure` 和续跑命令都可以直接使用。该服务读取 `.env` 中的
 `ES_URL`、`ES_ALLOW_INSECURE_HTTP` 和 `ES_INDEX_NAMESPACE`；如果目标是外部 Elastic Cloud，请改为在其中设置
-`ES_URL` 和 `ES_API_KEY`，并不要设置 `ES_ALLOW_INSECURE_HTTP`。包含启用节点和同步任务的完整 Compose 流程见
+`ES_URL` 和 `ES_API_KEY`，不要设置 `ES_ALLOW_INSECURE_HTTP`，也不要在 `COMPOSE_PROFILES` 中启用 `elasticsearch`
+profile；该服务只依赖 PostgreSQL，因此不会构建或启动内置节点。包含启用节点和同步任务的完整 Compose 流程见
 [使用 Docker Compose 运行 Elasticsearch](/zh/docs/self-hosting/advanced/full-text-search#使用-docker-compose-运行-elasticsearch)。
 
 ## 启动增量同步

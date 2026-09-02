@@ -157,7 +157,11 @@ services:
         FROM docker.elastic.co/elasticsearch/elasticsearch:9.5.2
         RUN bin/elasticsearch-plugin install --batch analysis-icu
     container_name: lobe-elasticsearch
-    profiles: [elasticsearch, elasticsearch-reindex, elasticsearch-sync]
+    # Only this profile starts the bundled node. The reindex and sync services
+    # below deliberately do not depend on it, so the same services also work
+    # against an external Elasticsearch (ES_URL + ES_API_KEY in .env) without
+    # building or starting a local node.
+    profiles: [elasticsearch]
     # Intentionally no `ports`: security is disabled, so this node must stay
     # reachable only from services on lobe-network. Never publish 9200.
     environment:
@@ -193,13 +197,13 @@ services:
   #   docker compose run --rm fts-search-reindex --apply --fresh-run --yes
   # The checkpoint lives in the fts-search-reindex-state volume so a later run
   # with the same arguments (without --fresh-run) resumes instead of restarting.
+  # With the bundled node, start the stack with `docker compose up -d --wait`
+  # first so Elasticsearch is healthy before the backfill connects to it.
   fts-search-reindex:
     image: lobehub/lobehub
     profiles: [elasticsearch-reindex]
     depends_on:
       postgresql:
-        condition: service_healthy
-      elasticsearch:
         condition: service_healthy
     environment:
       - 'DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${LOBE_DB_NAME}'
@@ -220,15 +224,14 @@ services:
   # Start it only after the backfill status is ready_for_incremental_sync by
   # adding the elasticsearch-sync profile to COMPOSE_PROFILES in .env. It keeps
   # draining the PostgreSQL Outbox into Elasticsearch and exits non-zero (and is
-  # restarted) when it hits failed or dead-letter work, so check its logs.
+  # restarted) when it hits failed or dead-letter work, so check its logs. It
+  # also exits and is restarted until the Elasticsearch target is reachable.
   fts-search-sync:
     image: lobehub/lobehub
     container_name: lobe-fts-search-sync
     profiles: [elasticsearch-sync]
     depends_on:
       postgresql:
-        condition: service_healthy
-      elasticsearch:
         condition: service_healthy
     environment:
       - 'DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${LOBE_DB_NAME}'

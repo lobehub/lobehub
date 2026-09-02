@@ -153,10 +153,11 @@ the version in both `image` and `FROM` of the `elasticsearch` service and run
    # FTS_SEARCH_PROVIDER stays pg_search (the default) until the last step
    ```
 
-   Then start the stack; the database migrations of the same release create the Outbox schema:
+   Then start the stack and wait for every service, including the new node, to become healthy;
+   the database migrations of the same release create the Outbox schema:
 
    ```bash
-   docker compose up -d
+   docker compose up -d --wait
    ```
 
 2. **Backfill.** Inspect the state, then run the one-off backfill. `--apply` installs the PostgreSQL
@@ -198,6 +199,11 @@ the version in both `image` and `FROM` of the `elasticsearch` service and run
 
    Nothing switches the provider automatically. Rolling back means restoring
    `FTS_SEARCH_PROVIDER=pg_search` and recreating `lobe`; the sync worker may keep running.
+
+External target: the `fts-search-reindex` and `fts-search-sync` services depend only on
+PostgreSQL, not on the bundled node. To run them against Elastic Cloud instead, leave the
+`elasticsearch` profile out of `COMPOSE_PROFILES`, set `ES_URL` and `ES_API_KEY` in `.env`, and do
+not set `ES_ALLOW_INSECURE_HTTP`; steps 2 to 4 are otherwise identical.
 
 Security boundary of this mode: `ES_ALLOW_INSECURE_HTTP=true` permits plaintext HTTP to a
 non-loopback host and lets `ES_API_KEY` be omitted. It never permits sending an API key over

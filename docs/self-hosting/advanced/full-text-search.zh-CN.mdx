@@ -130,10 +130,10 @@ Elasticsearch 单独预留至少 2 GB 内存。Linux 宿主机必须设置 `vm.m
    # FTS_SEARCH_PROVIDER 在最后一步之前保持默认值 pg_search
    ```
 
-   然后启动整套服务；同一版本的数据库迁移会创建增量队列的基础结构：
+   然后启动整套服务并等待包括新节点在内的所有服务通过健康检查；同一版本的数据库迁移会创建增量队列的基础结构：
 
    ```bash
-   docker compose up -d
+   docker compose up -d --wait
    ```
 
 2. **全量回填。** 先查看状态，再执行一次性回填。`--apply` 会安装 PostgreSQL 变更采集、按 ICU
@@ -173,6 +173,10 @@ Elasticsearch 单独预留至少 2 GB 内存。Linux 宿主机必须设置 `vm.m
 
    任何步骤都不会自动切换搜索后端。回滚只需恢复 `FTS_SEARCH_PROVIDER=pg_search` 并重新创建
    `lobe`；同步任务可以继续运行。
+
+外部目标：`fts-search-reindex` 和 `fts-search-sync` 只依赖 PostgreSQL，不依赖内置节点。如果要改为对接 Elastic
+Cloud，请不要在 `COMPOSE_PROFILES` 中启用 `elasticsearch` profile，在 `.env` 中设置 `ES_URL` 和 `ES_API_KEY`，
+且不要设置 `ES_ALLOW_INSECURE_HTTP`；第 2 到第 4 步完全相同。
 
 这一模式的安全边界：`ES_ALLOW_INSECURE_HTTP=true` 允许向非回环主机使用明文 HTTP，并允许省略
 `ES_API_KEY`；但它永远不允许通过明文 HTTP 发送 API 密钥，因此不要把它与 `ES_API_KEY` 和 `http://`

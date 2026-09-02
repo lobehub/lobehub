@@ -54,12 +54,14 @@ describe('deploy docker-compose optional Elasticsearch', () => {
     expect(compose.services.lobe.depends_on).not.toHaveProperty('elasticsearch');
   });
 
-  it('makes the Elasticsearch node available to every profile that depends on it', () => {
-    expect(elasticsearch.profiles).toEqual(ELASTICSEARCH_PROFILES);
-    expect(reindex.depends_on?.elasticsearch.condition).toBe('service_healthy');
-    expect(sync.depends_on?.elasticsearch.condition).toBe('service_healthy');
+  it('keeps the backfill and sync services usable against an external Elasticsearch', () => {
+    // Only the `elasticsearch` profile starts the bundled node. `docker compose run` starts
+    // dependencies, so a `depends_on: elasticsearch` here would build and start the local node
+    // even when .env points at an external Elastic Cloud target.
+    expect(elasticsearch.profiles).toEqual(['elasticsearch']);
     for (const service of [reindex, sync]) {
-      for (const profile of service.profiles!) expect(elasticsearch.profiles).toContain(profile);
+      expect(service.depends_on).not.toHaveProperty('elasticsearch');
+      expect(service.depends_on?.postgresql.condition).toBe('service_healthy');
     }
   });
 

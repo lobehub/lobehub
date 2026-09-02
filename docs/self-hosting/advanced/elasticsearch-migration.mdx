@@ -258,7 +258,9 @@ docker compose run --rm fts-search-reindex --apply --fresh-run --yes
 Extra arguments are passed through, so the rehearsal, `--entity`, `--skip-failure`, and resume
 commands above work unchanged. The service uses the `ES_URL`, `ES_ALLOW_INSECURE_HTTP`, and
 `ES_INDEX_NAMESPACE` values from `.env`; with an external Elastic Cloud target, set `ES_URL` and
-`ES_API_KEY` there instead and leave `ES_ALLOW_INSECURE_HTTP` unset. The complete Compose sequence,
+`ES_API_KEY` there instead, leave `ES_ALLOW_INSECURE_HTTP` unset, and keep the `elasticsearch`
+profile out of `COMPOSE_PROFILES`; the service depends only on PostgreSQL, so the bundled node is
+neither built nor started. The complete Compose sequence,
 including enabling the node and the sync worker, is in
 [Run Elasticsearch with Docker Compose](/docs/self-hosting/advanced/full-text-search#run-elasticsearch-with-docker-compose).
 
