@@ -1,30 +1,8 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { builtinModules } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const BUILTINS = new Set(builtinModules);
-const SPECIFIER_RE =
-  /^\s*import\b[^;'"]*["']([^"'\s./][^"'\s]*)["']|\b(?:import|__require|require)\(\s*["']([^"'\s./][^"'\s]*)["']\s*\)/gm;
-
-export const packageNameOf = (specifier: string): string | undefined => {
-  if (specifier.startsWith('node:')) return;
-  const segments = specifier.split('/');
-  const name = specifier.startsWith('@') ? segments.slice(0, 2).join('/') : segments[0];
-  if (!name || BUILTINS.has(name)) return;
-  return name;
-};
-
-export const collectExternals = (sources: string[]): string[] => {
-  const names = new Set<string>();
-  for (const source of sources) {
-    for (const match of source.matchAll(SPECIFIER_RE)) {
-      const name = packageNameOf(match[1] ?? match[2]);
-      if (name) names.add(name);
-    }
-  }
-  return [...names].sort();
-};
+import { honoNativeExternals } from '../apps/server/honoExternals';
 
 export const resolveInstalledVersion = (name: string, fromDir: string): string | undefined => {
   let dir = fromDir;
@@ -85,18 +63,15 @@ export interface RuntimeManifest {
 }
 
 export const buildRuntimeManifest = (
-  distDir: string,
+  externals: string[],
+  fromDir: string,
   patchesDir: string,
   workspaceFile: string,
 ): RuntimeManifest => {
-  const sources = readdirSync(distDir, { recursive: true, withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.js'))
-    .map((entry) => readFileSync(path.join(entry.parentPath, entry.name), 'utf8'));
-
   const dependencies: Record<string, string> = {};
   const missing: string[] = [];
-  for (const name of collectExternals(sources)) {
-    const version = resolveInstalledVersion(name, distDir);
+  for (const name of [...externals].sort()) {
+    const version = resolveInstalledVersion(name, fromDir);
     if (version) dependencies[name] = version;
     else missing.push(name);
   }
@@ -125,7 +100,7 @@ if (isMain) {
   const workspaceFile = path.resolve(option('--workspace') ?? 'pnpm-workspace.yaml');
 
   const { dependencies, missing, onlyBuiltDependencies, packageManager, patchedDependencies } =
-    buildRuntimeManifest(distDir, patchesDir, workspaceFile);
+    buildRuntimeManifest(honoNativeExternals, distDir, patchesDir, workspaceFile);
   writeFileSync(
     path.join(outDir, 'package.json'),
     JSON.stringify(

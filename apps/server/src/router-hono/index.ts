@@ -1,3 +1,5 @@
+import './polyfills';
+
 import type { Context } from 'hono';
 import { Hono } from 'hono';
 

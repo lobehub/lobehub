@@ -447,6 +447,7 @@
     "react-scan": "^0.5.7",
     "react-virtuoso": "^4.18.11",
     "react-wrap-balancer": "^1.1.1",
+    "reflect-metadata": "^0.2.2",
     "remark": "^15.0.1",
     "remark-gfm": "^4.0.1",
     "remark-html": "^16.0.1",
