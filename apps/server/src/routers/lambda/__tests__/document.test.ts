@@ -258,6 +258,16 @@ describe('documentRouter createDocument under a workspace parent', () => {
     expect(mocks.assertContentsNotInRestrictedKnowledgeBase).not.toHaveBeenCalled();
     expect(mocks.createDocument).not.toHaveBeenCalled();
   });
+
+  it('rejects a missing or trashed parent', async () => {
+    mocks.getResourceMeta.mockResolvedValue(null);
+
+    await expect(
+      caller().createDocument({ parentId: 'trashed-folder', title: 'Doc' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(mocks.assertContentsNotInRestrictedKnowledgeBase).not.toHaveBeenCalled();
+    expect(mocks.createDocument).not.toHaveBeenCalled();
+  });
 });
 
 describe('documentRouter publishDocumentToWorkspace', () => {

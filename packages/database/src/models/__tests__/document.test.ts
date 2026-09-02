@@ -64,6 +64,47 @@ const createTestDocument = async (model: DocumentModel, fModel: FileModel, conte
 };
 
 describe('DocumentModel', () => {
+  describe('isTrashedParent', () => {
+    it('detects a foreign private parent only inside the same workspace scope', async () => {
+      const workspaceId = 'document-parent-state-workspace';
+      const otherWorkspaceId = 'document-parent-state-other-workspace';
+      await serverDB.insert(workspaces).values([
+        {
+          id: workspaceId,
+          name: 'Parent state workspace',
+          primaryOwnerId: userId,
+          slug: workspaceId,
+        },
+        {
+          id: otherWorkspaceId,
+          name: 'Other parent state workspace',
+          primaryOwnerId: userId,
+          slug: otherWorkspaceId,
+        },
+      ]);
+      const foreignParent = await new DocumentModel(serverDB, userId2, workspaceId).create({
+        fileType: DOCUMENT_FOLDER_TYPE,
+        source: '',
+        sourceType: 'api',
+        title: 'Private parent',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+      await serverDB
+        .update(documents)
+        .set({ deletedAt: new Date(), isDeleted: true })
+        .where(eq(documents.id, foreignParent.id));
+
+      await expect(
+        new DocumentModel(serverDB, userId, workspaceId).isTrashedParent(foreignParent.id),
+      ).resolves.toBe(true);
+      await expect(
+        new DocumentModel(serverDB, userId, otherWorkspaceId).isTrashedParent(foreignParent.id),
+      ).resolves.toBe(false);
+      await expect(documentModel.isTrashedParent(foreignParent.id)).resolves.toBe(false);
+    });
+  });
+
   describe('findOrCreateFolder', () => {
     it('should create a new folder when none exists', async () => {
       const folder = await documentModel.findOrCreateFolder('bookmark');

@@ -1,8 +1,21 @@
 'use client';
 
+import { useParams } from 'react-router';
+
 import TrashSettings from '@/features/Settings/trash';
 
-const WorkspaceTrashSetting = () => <TrashSettings showSettingHeader={false} />;
+import { getWorkspaceTrashCacheScope } from './cacheScope';
+
+const WorkspaceTrashSetting = () => {
+  const { workspaceSlug = '' } = useParams<{ workspaceSlug: string }>();
+
+  return (
+    <TrashSettings
+      cacheScope={getWorkspaceTrashCacheScope(workspaceSlug)}
+      showSettingHeader={false}
+    />
+  );
+};
 
 WorkspaceTrashSetting.displayName = 'WorkspaceTrashSetting';
 

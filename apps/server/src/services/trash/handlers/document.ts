@@ -76,9 +76,8 @@ export const documentHandler: TrashHandler = {
     const [document] = await documentModel.findTrashedByIds([root.resourceId]);
     if (!document) throw new TrashRestoreError('notFound');
 
-    if (document.parentId) {
-      const [parent] = await documentModel.findTrashedByIds([document.parentId]);
-      if (parent) throw new TrashRestoreError('parentTrashed');
+    if (document.parentId && (await documentModel.isTrashedParent(document.parentId))) {
+      throw new TrashRestoreError('parentTrashed');
     }
 
     const documentIds = [

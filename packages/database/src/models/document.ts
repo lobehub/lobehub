@@ -254,6 +254,30 @@ export class DocumentModel {
       .where(and(this.ownership(true), inArray(documents.id, ids), isTrashed(documents.isDeleted)));
   };
 
+  /**
+   * Whether a parent is trashed inside this model's exact personal/workspace scope.
+   * This intentionally ignores workspace visibility because restoring a visible
+   * child beneath any trashed parent would create a live orphaned subtree. It
+   * returns only a boolean and must not be used to authorize or expose the parent.
+   */
+  isTrashedParent = async (id: string): Promise<boolean> => {
+    const [row] = await this.db
+      .select({ id: documents.id })
+      .from(documents)
+      .where(
+        and(
+          eq(documents.id, id),
+          isTrashed(documents.isDeleted),
+          this.workspaceId
+            ? eq(documents.workspaceId, this.workspaceId)
+            : and(isNull(documents.workspaceId), eq(documents.userId, this.userId)),
+        ),
+      )
+      .limit(1);
+
+    return Boolean(row);
+  };
+
   findByFileIds = async (fileIds: string[]): Promise<DocumentItem[]> => {
     if (fileIds.length === 0) return [];
     return this.db

@@ -20,7 +20,6 @@ import { Trash2Icon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useWorkspaceMembers } from '@/business/client/hooks/useWorkspaceMembers';
 import LiteTable, { type LiteTableColumn } from '@/components/LiteTable';
 import { useIsMobile } from '@/hooks/useIsMobile';
@@ -68,11 +67,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const TrashList = () => {
+interface TrashListProps {
+  cacheScope: string | null;
+}
+
+const TrashList = ({ cacheScope }: TrashListProps) => {
   const { t } = useTranslation('setting');
   const { t: tc } = useTranslation('common');
   const mobile = useIsMobile();
-  const activeWorkspaceId = useActiveWorkspaceId();
   const members = useWorkspaceMembers();
   const { allowed: canRestore, reason: restorePermissionReason } =
     usePermission('edit_own_content');
@@ -111,7 +113,7 @@ const TrashList = () => {
     s.useFetchTrash,
     s.useFetchTrashCount,
   ]);
-  const scopeId = activeWorkspaceId ?? null;
+  const scopeId = cacheScope;
   const items = itemsScopeId === scopeId ? storedItems : [];
   const nextCursor = itemsScopeId === scopeId ? storedNextCursor : null;
   const countByType = countScopeId === scopeId ? storedCountByType : {};

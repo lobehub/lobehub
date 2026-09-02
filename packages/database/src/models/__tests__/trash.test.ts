@@ -3,7 +3,15 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { files, trashItems, users, workspaces } from '../../schemas';
+import {
+  documents,
+  files,
+  knowledgeBaseFiles,
+  knowledgeBases,
+  trashItems,
+  users,
+  workspaces,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { TrashModel } from '../trash';
 
@@ -155,6 +163,106 @@ describe('TrashModel', () => {
       expect(await deleteActor.countByType()).toEqual({});
       expect((await creator.list()).items.map((item) => item.resourceId)).toEqual(['file_private']);
       expect(await creator.countByType()).toEqual({ file: 1 });
+    });
+
+    it('excludes every root backed by a restricted knowledge base', async () => {
+      const wsModel = new TrashModel(serverDB, userId, workspaceId);
+      await serverDB.insert(knowledgeBases).values([
+        {
+          id: 'trash-restricted-kb',
+          name: 'Restricted',
+          userId,
+          workspaceId,
+        },
+        { id: 'trash-open-kb', name: 'Open', userId, workspaceId },
+      ]);
+      await serverDB.insert(files).values([
+        {
+          fileType: 'text/plain',
+          id: 'trash-restricted-file',
+          name: 'restricted.txt',
+          size: 1,
+          url: 'files/restricted.txt',
+          userId,
+          workspaceId,
+        },
+        {
+          fileType: 'text/plain',
+          id: 'trash-open-file',
+          name: 'open.txt',
+          size: 1,
+          url: 'files/open.txt',
+          userId,
+          workspaceId,
+        },
+      ]);
+      await serverDB.insert(knowledgeBaseFiles).values({
+        fileId: 'trash-restricted-file',
+        knowledgeBaseId: 'trash-restricted-kb',
+        userId,
+        workspaceId,
+      });
+      await serverDB.insert(documents).values([
+        {
+          fileType: 'custom/page',
+          id: 'trash-direct-kb-document',
+          knowledgeBaseId: 'trash-restricted-kb',
+          source: '',
+          sourceType: 'api',
+          title: 'Direct restricted page',
+          totalCharCount: 0,
+          totalLineCount: 0,
+          userId,
+          workspaceId,
+        },
+        {
+          fileId: 'trash-restricted-file',
+          fileType: 'text/plain',
+          id: 'trash-file-backed-document',
+          source: 'files/restricted.txt',
+          sourceType: 'file',
+          title: 'File-backed restricted page',
+          totalCharCount: 0,
+          totalLineCount: 0,
+          userId,
+          workspaceId,
+        },
+        {
+          fileId: 'trash-open-file',
+          fileType: 'text/plain',
+          id: 'trash-open-document',
+          source: 'files/open.txt',
+          sourceType: 'file',
+          title: 'Open page',
+          totalCharCount: 0,
+          totalLineCount: 0,
+          userId,
+          workspaceId,
+        },
+      ]);
+
+      const entries = await Promise.all(
+        [
+          ['trash-restricted-kb', 'knowledgeBase'],
+          ['trash-restricted-file', 'file'],
+          ['trash-direct-kb-document', 'document'],
+          ['trash-file-backed-document', 'document'],
+          ['trash-open-document', 'document'],
+        ].map(async ([resourceId, resourceType], index) =>
+          wsModel.register({
+            deletedAt: at(`2026-08-${String(index + 1).padStart(2, '0')}T00:00:00Z`),
+            root: {
+              resourceId,
+              resourceType: resourceType as 'document' | 'file' | 'knowledgeBase',
+            },
+          }),
+        ),
+      );
+
+      expect(await wsModel.countByType(['trash-restricted-kb'])).toEqual({ document: 1 });
+      const hidden = await wsModel.findRestrictedResourceRootIds(entries, ['trash-restricted-kb']);
+      expect(hidden).toEqual(new Set(entries.slice(0, 4).map((entry) => entry.id)));
+      expect(hidden.has(entries[4].id)).toBe(false);
     });
   });
 

@@ -432,6 +432,80 @@ describe('TrashService', () => {
       expect(await documentModel.findById(child.id)).toBeUndefined();
     });
 
+    it("refuses to restore a public document beneath another creator's private trashed parent", async () => {
+      const workspaceId = 'trash-private-parent-document-workspace';
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Private parent document',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      const actorModel = new DocumentModel(serverDB, userId, workspaceId);
+      const parentOwnerModel = new DocumentModel(serverDB, otherUserId, workspaceId);
+      const parent = await parentOwnerModel.create({
+        fileType: 'custom/folder',
+        source: '',
+        sourceType: 'api',
+        title: 'Private parent',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+      const child = await actorModel.create({
+        fileType: 'custom/page',
+        parentId: parent.id,
+        source: '',
+        sourceType: 'api',
+        title: 'Public child',
+        totalCharCount: 0,
+        totalLineCount: 0,
+        visibility: 'public',
+      });
+      const actorService = new TrashService(serverDB, userId, workspaceId);
+      const [childRoot] = await actorService.trashDocuments([child.id]);
+      await new TrashService(serverDB, otherUserId, workspaceId).trashDocuments([parent.id]);
+
+      const outcome = await actorService.restore([childRoot.id]);
+
+      expect(outcome.failed).toEqual([{ code: 'parentTrashed', id: childRoot.id }]);
+      expect(await actorModel.findById(child.id)).toBeUndefined();
+    });
+
+    it("refuses to restore a public file beneath another creator's private trashed parent", async () => {
+      const workspaceId = 'trash-private-parent-file-workspace';
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Private parent file',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      const parentOwnerModel = new DocumentModel(serverDB, otherUserId, workspaceId);
+      const parent = await parentOwnerModel.create({
+        fileType: 'custom/folder',
+        source: '',
+        sourceType: 'api',
+        title: 'Private parent',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+      const actorFileModel = new FileModel(serverDB, userId, workspaceId);
+      const file = await actorFileModel.create({
+        fileType: 'text/plain',
+        name: 'public.txt',
+        parentId: parent.id,
+        size: 4,
+        url: 'files/public.txt',
+        visibility: 'public',
+      });
+      const actorService = new TrashService(serverDB, userId, workspaceId);
+      const [fileRoot] = await actorService.trashFiles([file.id]);
+      await new TrashService(serverDB, otherUserId, workspaceId).trashDocuments([parent.id]);
+
+      const outcome = await actorService.restore([fileRoot.id]);
+
+      expect(outcome.failed).toEqual([{ code: 'parentTrashed', id: fileRoot.id }]);
+      expect(await actorFileModel.findById(file.id)).toBeUndefined();
+    });
+
     it('purges a trashed file only when explicitly requested', async () => {
       const { id: fileId } = await fileModel.create({
         fileType: 'text/plain',

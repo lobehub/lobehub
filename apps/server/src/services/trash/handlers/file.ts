@@ -47,13 +47,11 @@ export const fileHandler: TrashHandler = {
     const [file] = await fileModel.findTrashedByIds([root.resourceId]);
     if (!file) throw new TrashRestoreError('notFound');
 
-    if (file.parentId) {
-      const [parent] = await new DocumentModel(
-        ctx.db,
-        ctx.userId,
-        ctx.workspaceId,
-      ).findTrashedByIds([file.parentId]);
-      if (parent) throw new TrashRestoreError('parentTrashed');
+    if (
+      file.parentId &&
+      (await new DocumentModel(ctx.db, ctx.userId, ctx.workspaceId).isTrashedParent(file.parentId))
+    ) {
+      throw new TrashRestoreError('parentTrashed');
     }
 
     await fileModel.restore([root.resourceId]);
