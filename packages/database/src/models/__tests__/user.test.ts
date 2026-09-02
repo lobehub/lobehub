@@ -747,6 +747,19 @@ describe('UserModel', () => {
       });
     });
 
+    describe('getEmailsByIds', () => {
+      it('should return empty array for empty ids without querying', async () => {
+        expect(await UserModel.getEmailsByIds(serverDB, [])).toEqual([]);
+      });
+
+      it('should return id + email pairs only', async () => {
+        const result = await UserModel.getEmailsByIds(serverDB, [userId]);
+        expect(result).toHaveLength(1);
+        expect(Object.keys(result[0]).sort()).toEqual(['email', 'id']);
+        expect(result[0].id).toBe(userId);
+      });
+    });
+
     describe('getUserApiKeys', () => {
       it('should return decrypted API keys', async () => {
         await serverDB.insert(userSettings).values({

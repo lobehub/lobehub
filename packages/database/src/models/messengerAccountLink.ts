@@ -1,4 +1,4 @@
-import { and, eq, getTableColumns, type SQL } from 'drizzle-orm';
+import { and, eq, getTableColumns, inArray, type SQL } from 'drizzle-orm';
 
 import type { MessengerAccountLinkItem, NewMessengerAccountLink } from '../schemas';
 import { messengerAccountLinks } from '../schemas';
@@ -401,6 +401,24 @@ export class MessengerAccountLinkModel {
    * Telegram-only callers keep working without code changes; Slack callers in
    * the multi-tenant router pass the resolved `team_id` / `enterprise_id`.
    */
+  /**
+   * IM identities of a set of users, across every platform they linked. Powers
+   * cross-platform person resolution (e.g. mapping a Discord `@handle` or
+   * `<@platformUserId>` mention in a digest to the workspace member to assign a
+   * task to). Identity is user-level, so workspace scoping of the link row is
+   * deliberately ignored. Safe projection only — never exposes credentials.
+   */
+  static findByUserIds = async (
+    db: LobeChatDatabase,
+    userIds: string[],
+  ): Promise<SafeMessengerAccountLink[]> => {
+    if (userIds.length === 0) return [];
+    return db
+      .select(safeLinkColumns)
+      .from(messengerAccountLinks)
+      .where(inArray(messengerAccountLinks.userId, userIds));
+  };
+
   static findByPlatformUser = async (
     db: LobeChatDatabase,
     platform: string,

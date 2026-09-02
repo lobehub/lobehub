@@ -2748,4 +2748,59 @@ describe('TaskModel', () => {
       expect(bobT4.identifier).toBe('T-4');
     });
   });
+
+  describe('my tasks filters', () => {
+    const wsId = 'task-my-tasks-ws';
+
+    beforeEach(async () => {
+      await serverDB
+        .insert(workspaces)
+        .values({ id: wsId, name: 'My Tasks WS', primaryOwnerId: userId, slug: wsId })
+        .onConflictDoNothing();
+    });
+
+    it('should narrow list to tasks assigned to a member', async () => {
+      const me = new TaskModel(serverDB, userId, wsId);
+      const other = new TaskModel(serverDB, userId2, wsId);
+
+      await me.create({ assigneeUserId: userId2, instruction: 'Mine, assigned to other' });
+      const assignedToMe = await other.create({
+        assigneeUserId: userId,
+        instruction: 'Other, assigned to me',
+      });
+      await other.create({ instruction: 'Other, unassigned' });
+
+      const { tasks, total } = await me.list({ assigneeUserId: userId });
+      expect(total).toBe(1);
+      expect(tasks.map((t) => t.id)).toEqual([assignedToMe.id]);
+    });
+
+    it('should narrow list to tasks created by a member', async () => {
+      const me = new TaskModel(serverDB, userId, wsId);
+      const other = new TaskModel(serverDB, userId2, wsId);
+
+      const created = await me.create({ assigneeUserId: userId2, instruction: 'Mine' });
+      await other.create({ assigneeUserId: userId, instruction: 'Other, assigned to me' });
+
+      const { tasks, total } = await me.list({ createdByUserId: userId });
+      expect(total).toBe(1);
+      expect(tasks.map((t) => t.id)).toEqual([created.id]);
+    });
+
+    it('should keep ownership visibility when filtering by assignee', async () => {
+      const me = new TaskModel(serverDB, userId, wsId);
+      const other = new TaskModel(serverDB, userId2, wsId);
+
+      // A private task another member points at me stays invisible — the
+      // assignee filter narrows within `ownership()`, it never widens it.
+      await other.create({
+        assigneeUserId: userId,
+        instruction: 'Private, assigned to me',
+        visibility: 'private',
+      });
+
+      const { total } = await me.list({ assigneeUserId: userId });
+      expect(total).toBe(0);
+    });
+  });
 });

@@ -1532,7 +1532,7 @@ export default {
   'taskDetail.comment.edit': 'Edit',
   'taskDetail.comment.save': 'Save',
   'taskDetail.commentPlaceholder':
-    'Leave feedback to guide the agent — your comments shape the next run...',
+    'Leave a comment, or @ a teammate — comments also guide the next run...',
   'taskDetail.runCollapse': 'Collapse run',
   'taskDetail.runVerify.checklist': 'Acceptance checks',
   'taskDetail.runVerify.errored': 'Verification errored',
@@ -2025,6 +2025,11 @@ export default {
   'taskList.orderBy.status': 'Status',
   'taskList.orderBy.title': 'Title',
   'taskList.orderBy.updatedAt': 'Updated at',
+  'taskList.mine.assigned': 'Assigned',
+  'taskList.mine.created': 'Created',
+  'taskList.mine.emptyAssigned': 'No tasks assigned to you yet',
+  'taskList.mine.emptyCreated': "You haven't created any tasks yet",
+  'taskList.mine.title': 'My tasks',
   'taskList.scheduled.empty': 'No scheduled tasks yet',
   'taskList.scheduled.title': 'Scheduled tasks',
   'taskList.subtaskProgress.loadFailed':

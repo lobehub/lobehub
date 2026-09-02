@@ -8,7 +8,9 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
+import AssigneeUserAvatar from '@/features/AgentTasks/features/AssigneeUserAvatar';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
+import { useUserDisplayMeta } from '@/features/AgentTasks/shared/useUserDisplayMeta';
 import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
 import type { EditTaskParams, EditTaskState } from '../../../types';
@@ -129,6 +131,22 @@ const AssigneeChip = memo<{ agentId: string }>(({ agentId }) => {
 
 AssigneeChip.displayName = 'AssigneeChip';
 
+const MemberChip = memo<{ userId: string }>(({ userId }) => {
+  const meta = useUserDisplayMeta(userId);
+  const displayName = meta?.title || userId;
+
+  return (
+    <span className={styles.assigneeChip} data-testid="member-chip" title={displayName}>
+      <span className={styles.assigneeAvatar}>
+        <AssigneeUserAvatar size={16} userId={userId} />
+      </span>
+      <span className={styles.assigneeName}>{displayName}</span>
+    </span>
+  );
+});
+
+MemberChip.displayName = 'MemberChip';
+
 export const EditTaskInspector = memo<BuiltinInspectorProps<EditTaskParams, EditTaskState>>(
   ({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
     const { t } = useTranslation('plugin');
@@ -191,17 +209,21 @@ export const EditTaskInspector = memo<BuiltinInspectorProps<EditTaskParams, Edit
       });
     }
 
-    if (params.assigneeAgentId !== undefined) {
+    if (params.assigneeAgentId !== undefined || params.assigneeUserId !== undefined) {
+      // Executing agent and human owner are independent sides that can change
+      // (and be set) together — render a chip per assigned side; a call that
+      // only clears reads as unassign.
+      const hasAnyAssignee = Boolean(params.assigneeAgentId || params.assigneeUserId);
       segments.push({
-        content:
-          params.assigneeAgentId === null ? (
-            <span className={styles.chip}>{t('builtins.lobe-task.edit.unassign')}</span>
-          ) : (
-            <>
-              <span className={styles.label}>{t('builtins.lobe-task.edit.assign')}</span>
-              <AssigneeChip agentId={params.assigneeAgentId} />
-            </>
-          ),
+        content: hasAnyAssignee ? (
+          <>
+            <span className={styles.label}>{t('builtins.lobe-task.edit.assign')}</span>
+            {params.assigneeAgentId && <AssigneeChip agentId={params.assigneeAgentId} />}
+            {params.assigneeUserId && <MemberChip userId={params.assigneeUserId} />}
+          </>
+        ) : (
+          <span className={styles.chip}>{t('builtins.lobe-task.edit.unassign')}</span>
+        ),
         key: 'assignee',
       });
     }

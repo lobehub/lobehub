@@ -1,6 +1,7 @@
 import { normalizeListTasksParams, TaskIdentifier } from '@lobechat/builtin-tool-task';
+import { canWorkspaceRoleBeTaskAssignee } from '@lobechat/const/rbac';
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { TaskCreatedItem } from '@lobechat/prompts';
+import type { TaskAssignableMember, TaskCreatedItem } from '@lobechat/prompts';
 import {
   formatDependencyAdded,
   formatDependencyRemoved,
@@ -10,14 +11,19 @@ import {
   formatTaskEdited,
   formatTaskList,
   formatTasksCreated,
+  formatWorkspaceMembers,
   priorityLabel,
 } from '@lobechat/prompts';
 import type { TaskAutomationMode, TaskStatus } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 
+import { notifyTaskAssigned } from '@/business/server/task/notifyTaskAssigned';
 import { AgentModel } from '@/database/models/agent';
+import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLink';
 import { TaskModel } from '@/database/models/task';
+import { UserModel } from '@/database/models/user';
 import { WorkspaceModel } from '@/database/models/workspace';
+import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import { tasks } from '@/database/schemas';
 import { appEnv } from '@/envs/app';
 import { taskRouter } from '@/server/routers/lambda/task';
@@ -113,9 +119,44 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
     } as const;
   };
 
+  // Human-readable label for a member assignee in tool output: "Alice (usr_1)".
+  // Falls back to the bare id when no db is wired (unit tests) or lookup fails.
+  const resolveMemberLabel = async (assigneeUserId: string): Promise<string> => {
+    if (!deps.db) return assigneeUserId;
+    try {
+      const [user] = await UserModel.getDisplayInfoByIds(deps.db, [assigneeUserId]);
+      const name = user?.fullName?.trim() || user?.username?.trim();
+      return name ? `${name} (${assigneeUserId})` : assigneeUserId;
+    } catch {
+      return assigneeUserId;
+    }
+  };
+
+  // Assignment ping (Linear-style), mirroring `task.create` in the router: the
+  // runtime calls TaskService directly (to persist `context.origin`), so the
+  // router's notify hook never fires for tool-created tasks. Fire-and-forget —
+  // the `@/business` slot defaults to a no-op and never throws.
+  const notifyMemberAssigned = (task: {
+    assigneeUserId: string | null;
+    id: string;
+    identifier: string;
+    name: string | null;
+  }) => {
+    if (!task.assigneeUserId || !deps.userId || task.assigneeUserId === deps.userId) return;
+    void notifyTaskAssigned({
+      actorUserId: deps.userId,
+      assigneeUserId: task.assigneeUserId,
+      taskId: task.id,
+      taskIdentifier: task.identifier,
+      taskName: task.name,
+      workspaceId: deps.workspaceId,
+    });
+  };
+
   type CreateTaskArgs = {
     instruction: string;
     assigneeAgentId?: string;
+    assigneeUserId?: string;
     // Bind a goal entity to the created task (see TaskService.createTask).
     goal?: {
       maxRounds?: number | null;
@@ -164,8 +205,12 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
           }
         : undefined;
 
+    // Executing agent and human owner are independent, coexisting sides (the
+    // member owns the outcome, the agent executes) — a member owner does not
+    // suppress the usual current-agent default.
     const task = await taskService().createTask({
       assigneeAgentId: args.assigneeAgentId ?? (scope === 'task' ? undefined : agentId),
+      assigneeUserId: args.assigneeUserId,
       context: origin ? { origin } : undefined,
       createdByAgentId: agentId,
       instruction: args.instruction,
@@ -175,8 +220,13 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       sortOrder: args.sortOrder,
     });
 
+    notifyMemberAssigned(task);
+
     return {
       content: formatTaskCreated({
+        assigneeLabel: task.assigneeUserId
+          ? await resolveMemberLabel(task.assigneeUserId)
+          : undefined,
         // Absolute, workspace-scoped link: this content can be pushed to IM /
         // bot channels and mobile, where a relative path has no app origin to
         // resolve against and the `/{slug}` prefix would otherwise be lost.
@@ -306,6 +356,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
     editTask: async (args: {
       addDependencies?: string[];
       assigneeAgentId?: string | null;
+      assigneeUserId?: string | null;
       description?: string;
       identifier: string;
       instruction?: string;
@@ -319,6 +370,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
 
       const updateData: {
         assigneeAgentId?: string | null;
+        assigneeUserId?: string | null;
         description?: string;
         instruction?: string;
         name?: string;
@@ -339,6 +391,16 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         updateData.assigneeAgentId = args.assigneeAgentId;
         changes.push(
           args.assigneeAgentId ? `assignee agent → ${args.assigneeAgentId}` : 'assignee cleared',
+        );
+      }
+      // Independent of the agent side: the member is the human owner and the
+      // two assignees coexist, so touching one never clears the other.
+      if (args.assigneeUserId !== undefined) {
+        updateData.assigneeUserId = args.assigneeUserId;
+        changes.push(
+          args.assigneeUserId
+            ? `assignee member → ${await resolveMemberLabel(args.assigneeUserId)}`
+            : 'assignee member cleared',
         );
       }
       if (args.instruction !== undefined) {
@@ -441,6 +503,66 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
           content: `Failed to list tasks: ${message}`,
           success: false,
         };
+      }
+    },
+
+    listWorkspaceMembers: async () => {
+      const db = deps.db;
+      const userId = deps.userId;
+      if (!db || !userId) {
+        return { content: 'Member directory is unavailable in this context.', success: false };
+      }
+
+      try {
+        const workspaceId = deps.workspaceId;
+        // Personal mode: the caller is the only human a task can be assigned to
+        // (TaskService.assertAssigneeUserAssignable enforces the same rule).
+        const memberRows = workspaceId
+          ? (await new WorkspaceMemberModel(db, userId).listMembers(workspaceId)).filter((m) =>
+              canWorkspaceRoleBeTaskAssignee(m.role),
+            )
+          : [{ role: null, userId }];
+
+        const memberIds = memberRows.map((m) => m.userId);
+        // Linked IM identities (Discord/Slack/Telegram…) make handle-based
+        // requests ("assign this to @Neko") resolvable by exact platform id
+        // instead of name similarity.
+        const [profiles, emails, imLinks] = await Promise.all([
+          UserModel.getDisplayInfoByIds(db, memberIds),
+          UserModel.getEmailsByIds(db, memberIds),
+          MessengerAccountLinkModel.findByUserIds(db, memberIds),
+        ]);
+        const profileMap = new Map(profiles.map((u) => [u.id, u]));
+        const emailMap = new Map(emails.map((u) => [u.id, u.email]));
+        const imMap = new Map<string, string[]>();
+        for (const link of imLinks) {
+          const alias = link.platformUsername
+            ? `${link.platform}:@${link.platformUsername}(${link.platformUserId})`
+            : `${link.platform}:${link.platformUserId}`;
+          imMap.set(link.userId, [...(imMap.get(link.userId) ?? []), alias]);
+        }
+
+        const members: TaskAssignableMember[] = memberRows.map((m) => {
+          const profile = profileMap.get(m.userId);
+          return {
+            email: emailMap.get(m.userId),
+            id: m.userId,
+            imAccounts: imMap.get(m.userId),
+            isSelf: m.userId === userId,
+            name: profile?.fullName,
+            role: m.role,
+            username: profile?.username,
+          };
+        });
+
+        return {
+          content: formatWorkspaceMembers(members, { inWorkspace: !!workspaceId }),
+          state: { count: members.length, success: true },
+          success: true,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to list members';
+        return { content: `Failed to list workspace members: ${message}`, success: false };
       }
     },
 

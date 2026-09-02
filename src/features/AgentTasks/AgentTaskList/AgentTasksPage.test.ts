@@ -1,24 +1,25 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  clampScheduledPage,
+  clampCollectionPage,
   getScheduledTaskViewOptions,
   getTaskCreateActionBehavior,
   getTaskPageHeaderVisibility,
+  resolveMyTaskScope,
   resolveTaskCollection,
 } from './AgentTasksPage';
 import { DEFAULT_TASK_LIST_VIEW_OPTIONS } from './listViewOptions';
 import { shouldRenderTaskAgentPanelToggle } from './taskAgentPanelToggle';
 
 describe('AgentTasksPage', () => {
-  describe('clampScheduledPage', () => {
+  describe('clampCollectionPage', () => {
     it('moves a stale last page back into range when the result total shrinks', () => {
-      expect(clampScheduledPage(2, 50)).toBe(1);
-      expect(clampScheduledPage(3, 51)).toBe(2);
+      expect(clampCollectionPage(2, 50)).toBe(1);
+      expect(clampCollectionPage(3, 51)).toBe(2);
     });
 
     it('keeps the first page valid for an empty result', () => {
-      expect(clampScheduledPage(1, 0)).toBe(1);
+      expect(clampCollectionPage(1, 0)).toBe(1);
     });
   });
 
@@ -50,6 +51,26 @@ describe('AgentTasksPage', () => {
     it('falls back to ordinary tasks for absent or unknown values', () => {
       expect(resolveTaskCollection(new URLSearchParams())).toBe('tasks');
       expect(resolveTaskCollection(new URLSearchParams('collection=unknown'))).toBe('tasks');
+    });
+
+    it('opens "My tasks" only where the tab is offered', () => {
+      const params = new URLSearchParams('collection=mine');
+      expect(resolveTaskCollection(params, { allowMine: true })).toBe('mine');
+      // Agent/project scopes and personal mode have no member assignment, so a
+      // deep link into the tab lands on ordinary tasks instead of a blank view.
+      expect(resolveTaskCollection(params, { allowMine: false })).toBe('tasks');
+      expect(resolveTaskCollection(params)).toBe('tasks');
+    });
+  });
+
+  describe('resolveMyTaskScope', () => {
+    it('defaults to tasks assigned to me', () => {
+      expect(resolveMyTaskScope(new URLSearchParams())).toBe('assigned');
+      expect(resolveMyTaskScope(new URLSearchParams('scope=unknown'))).toBe('assigned');
+    });
+
+    it('opens the created sub-view from its addressable URL', () => {
+      expect(resolveMyTaskScope(new URLSearchParams('scope=created'))).toBe('created');
     });
   });
 

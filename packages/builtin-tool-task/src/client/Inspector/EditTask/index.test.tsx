@@ -19,6 +19,17 @@ interface AgentDisplayMetaOptions {
 
 const mocks = vi.hoisted(() => ({
   agentMetaById: {} as Record<string, AgentDisplayMeta | undefined>,
+  userMetaById: {} as Record<string, { avatar?: string; title?: string } | undefined>,
+}));
+
+vi.mock('@/features/AgentTasks/features/AssigneeUserAvatar', () => ({
+  default: ({ userId }: { userId?: string | null }) => (
+    <span data-testid="member-avatar" data-user-id={userId || ''} />
+  ),
+}));
+
+vi.mock('@/features/AgentTasks/shared/useUserDisplayMeta', () => ({
+  useUserDisplayMeta: (id?: string | null) => (id ? mocks.userMetaById[id] : undefined),
 }));
 
 vi.mock('@/features/AgentTasks/features/AssigneeAvatar', () => ({
@@ -72,6 +83,7 @@ const renderInspector = (args: Partial<EditTaskParams>) =>
 describe('EditTaskInspector', () => {
   beforeEach(() => {
     mocks.agentMetaById = {};
+    mocks.userMetaById = {};
   });
 
   afterEach(() => {
@@ -115,5 +127,60 @@ describe('EditTaskInspector', () => {
     expect(screen.getByTestId('assignee-avatar').dataset.fallbackToDefault).toBe('false');
     expect(screen.getByText('Lobe AI')).toBeTruthy();
     expect(screen.queryByText('agt_lobe')).toBeNull();
+  });
+});
+
+describe('EditTaskInspector — member assignee', () => {
+  beforeEach(() => {
+    mocks.agentMetaById = {};
+    mocks.userMetaById = {};
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('renders the member name and avatar for assigneeUserId', () => {
+    mocks.userMetaById.usr_2 = { avatar: 'a.png', title: 'Alice Chen' };
+
+    renderInspector({ assigneeUserId: 'usr_2' });
+
+    expect(screen.getByTestId('member-avatar').dataset.userId).toBe('usr_2');
+    expect(screen.getByText('Alice Chen')).toBeTruthy();
+    expect(screen.queryByText('usr_2')).toBeNull();
+    expect(screen.queryByTestId('assignee-avatar')).toBeNull();
+  });
+
+  it('falls back to the user id when no profile is available', () => {
+    renderInspector({ assigneeUserId: 'usr_missing' });
+
+    expect(screen.getByText('usr_missing')).toBeTruthy();
+  });
+
+  it('reads an explicit null member as unassign', () => {
+    renderInspector({ assigneeUserId: null });
+
+    expect(screen.getByText('unassign')).toBeTruthy();
+    expect(screen.queryByTestId('member-avatar')).toBeNull();
+  });
+
+  it('renders both chips when an agent and a member are assigned together', () => {
+    mocks.agentMetaById.agt_new = { title: 'New Agent' };
+    mocks.userMetaById.usr_2 = { avatar: 'a.png', title: 'Alice Chen' };
+
+    renderInspector({ assigneeAgentId: 'agt_new', assigneeUserId: 'usr_2' });
+
+    expect(screen.getByText('New Agent')).toBeTruthy();
+    expect(screen.getByText('Alice Chen')).toBeTruthy();
+    expect(screen.queryByText('unassign')).toBeNull();
+  });
+
+  it('shows the agent chip when the member side is only being cleared', () => {
+    mocks.agentMetaById.agt_new = { title: 'New Agent' };
+
+    renderInspector({ assigneeAgentId: 'agt_new', assigneeUserId: null });
+
+    expect(screen.getByText('New Agent')).toBeTruthy();
+    expect(screen.queryByText('unassign')).toBeNull();
   });
 });

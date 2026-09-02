@@ -11,3 +11,34 @@ describe('TaskManifest Work semantics', () => {
     expect(createTask?.work).toEqual({ action: 'create', resourceType: 'task' });
   });
 });
+
+describe('TaskManifest human assignee (assigneeUserId)', () => {
+  const findApi = (name: string) => TaskManifest.api.find((api) => api.name === name);
+  const props = (name: string) =>
+    (findApi(name)?.parameters as { properties: Record<string, unknown> }).properties;
+
+  it('accepts a workspace member id on createTask and each createTasks item', () => {
+    expect(props(TaskApiName.createTask).assigneeUserId).toMatchObject({ type: 'string' });
+
+    const items = (props(TaskApiName.createTasks).tasks as { items: { properties: any } }).items;
+    expect(items.properties.assigneeUserId).toMatchObject({ type: 'string' });
+  });
+
+  it('lets editTask set or clear the member assignee', () => {
+    expect(props(TaskApiName.editTask).assigneeUserId).toMatchObject({
+      type: ['string', 'null'],
+    });
+  });
+
+  it('exposes listWorkspaceMembers so ids are resolved instead of guessed', () => {
+    const api = findApi(TaskApiName.listWorkspaceMembers);
+    expect(api).toBeDefined();
+    expect(api?.parameters).toMatchObject({ properties: {}, required: [], type: 'object' });
+    // Read-only: must not register a Work entity.
+    expect(api?.work).toBeUndefined();
+    // The assignee params point the model at the resolver.
+    expect(String((props(TaskApiName.createTask).assigneeUserId as any).description)).toContain(
+      'listWorkspaceMembers',
+    );
+  });
+});

@@ -4,6 +4,9 @@ import type { TaskListItem, TaskParticipant, TaskVerifyConfig } from '@lobechat/
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { notifyTaskAssigned } from '@/business/server/task/notifyTaskAssigned';
+import type { TaskCommentActivityRecipient } from '@/business/server/task/notifyTaskCommentActivity';
+import { notifyTaskCommentActivity } from '@/business/server/task/notifyTaskCommentActivity';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentModel } from '@/database/models/agent';
@@ -26,6 +29,7 @@ import { TaskRunnerService } from '@/server/services/taskRunner';
 import { AcceptanceService } from '@/server/services/verify/acceptanceService';
 import { resolveTaskAcceptance } from '@/server/services/verify/taskAcceptance';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
+import { extractMentionedUserIds, validateMentionedUserIds } from '@/server/utils/commentMentions';
 import { TransferErrorCode } from '@/types/transferError';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
@@ -138,6 +142,10 @@ const listSchema = z.object({
   parentTaskId: z.string().nullish(),
   priorities: z.array(z.number().min(0).max(4)).max(5).optional(),
   projectId: z.string().optional(),
+  // "My tasks" narrowing: 'assigned' → tasks whose member assignee is the
+  // caller, 'created' → tasks the caller created. Always resolved against
+  // `ctx.userId` so the endpoint never filters by an arbitrary member.
+  scope: z.enum(['assigned', 'created']).optional(),
   statuses: z.array(z.enum(TASK_STATUSES)).max(10).optional(),
   // UI-side narrowing of the result set. Omitted means "All" (the chip's
   // default 'private' is enforced client-side; the server stays permissive
@@ -176,6 +184,26 @@ async function resolveOrThrow(model: TaskModel, id: string) {
   const task = await model.resolve(id);
   if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
   return task;
+}
+
+/**
+ * Recipients of a new member comment on a task: the creator and the member
+ * assignee as ambient `commented` pings, upgraded to `mentioned` when the
+ * comment @mentions them. The actor never appears in the result.
+ */
+function collectTaskCommentRecipients(params: {
+  actorUserId: string;
+  mentionedUserIds: string[];
+  task: { assigneeUserId: string | null; createdByUserId: string };
+}): TaskCommentActivityRecipient[] {
+  const { actorUserId, mentionedUserIds, task } = params;
+  const byUserId = new Map<string, TaskCommentActivityRecipient['kind']>();
+  for (const userId of [task.createdByUserId, task.assigneeUserId]) {
+    if (userId) byUserId.set(userId, 'commented');
+  }
+  for (const userId of mentionedUserIds) byUserId.set(userId, 'mentioned');
+  byUserId.delete(actorUserId);
+  return [...byUserId].map(([userId, kind]) => ({ kind, userId }));
 }
 
 async function assertAssigneeAgentBelongsToUser(
@@ -373,6 +401,16 @@ export const taskRouter = router({
           { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
           input.authorAgentId,
         );
+        // Resolve @mentions before the insert so an invalid editorData never
+        // leaves a comment behind that nobody was told about.
+        const mentionedUserIds =
+          ctx.workspaceId && !input.authorAgentId
+            ? await validateMentionedUserIds(
+                ctx.serverDB,
+                { actorUserId: ctx.userId, workspaceId: ctx.workspaceId },
+                input.editorData,
+              )
+            : [];
         const comment = await model.addComment({
           authorAgentId: input.authorAgentId,
           authorUserId: input.authorAgentId ? undefined : ctx.userId,
@@ -383,6 +421,27 @@ export const taskRouter = router({
           topicId: input.topicId,
           userId: ctx.userId,
         });
+        // Member comment ping (Linear-style): the task creator and the member
+        // assignee learn about new discussion; @mentioned members get the
+        // stronger "mentioned" notification instead. Agent-authored progress
+        // notes stay silent — they are not a conversation between members.
+        // Fire-and-forget through the `@/business` slot (default no-op).
+        if (ctx.workspaceId && !input.authorAgentId) {
+          const recipients = collectTaskCommentRecipients({
+            actorUserId: ctx.userId,
+            mentionedUserIds,
+            task,
+          });
+          if (recipients.length > 0) {
+            void notifyTaskCommentActivity({
+              actorUserId: ctx.userId,
+              commentId: comment.id,
+              recipients,
+              taskId: task.id,
+              workspaceId: ctx.workspaceId,
+            });
+          }
+        }
         return { data: comment, message: 'Comment added', success: true };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -425,11 +484,37 @@ export const taskRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
+        const workspaceId = ctx.workspaceId ?? undefined;
+        const previous = await ctx.taskModel.findCommentById(input.commentId);
+        if (!previous) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Comment not found' });
+        }
+        // Only members @mentioned for the first time by this edit are pinged;
+        // mentions kept from the previous revision were already notified.
+        let addedMentionUserIds: string[] = [];
+        if (workspaceId && !previous.authorAgentId && input.editorData !== undefined) {
+          const previousMentions = new Set(extractMentionedUserIds(previous.editorData));
+          const nextMentions = await validateMentionedUserIds(
+            ctx.serverDB,
+            { actorUserId: ctx.userId, workspaceId },
+            input.editorData,
+          );
+          addedMentionUserIds = nextMentions.filter((id) => !previousMentions.has(id));
+        }
         const comment = await ctx.taskModel.updateComment(input.commentId, input.content, {
           editorData: input.editorData === undefined ? null : input.editorData,
         });
         if (!comment) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Comment not found' });
+        }
+        if (workspaceId && addedMentionUserIds.length > 0) {
+          void notifyTaskCommentActivity({
+            actorUserId: ctx.userId,
+            commentId: comment.id,
+            recipients: addedMentionUserIds.map((userId) => ({ kind: 'mentioned', userId })),
+            taskId: comment.taskId,
+            workspaceId,
+          });
         }
         return { data: comment, message: 'Comment updated', success: true };
       } catch (error) {
@@ -540,6 +625,20 @@ export const taskRouter = router({
       } catch (error) {
         await ctx.taskModel.delete(task.id).catch(() => {});
         throw error;
+      }
+      // Assignment ping (Linear-style): creating a task already assigned to
+      // another member notifies them. Fire-and-forget through the `@/business`
+      // slot (default impl is a no-op; a notification failure never affects
+      // the mutation).
+      if (task.assigneeUserId && task.assigneeUserId !== ctx.userId) {
+        void notifyTaskAssigned({
+          actorUserId: ctx.userId,
+          assigneeUserId: task.assigneeUserId,
+          taskId: task.id,
+          taskIdentifier: task.identifier,
+          taskName: task.name,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
       }
       return { data: task, message: 'Task created', success: true };
     } catch (error) {
@@ -793,7 +892,7 @@ export const taskRouter = router({
   list: taskProcedure.input(listSchema).query(async ({ input, ctx }) => {
     try {
       const model = ctx.taskModel;
-      const { parentIdentifier, ...query } = input;
+      const { parentIdentifier, scope, ...query } = input;
       let parentTaskId = query.parentTaskId;
 
       if (parentIdentifier) {
@@ -810,6 +909,8 @@ export const taskRouter = router({
 
       const result = await model.list({
         ...query,
+        ...(scope === 'assigned' ? { assigneeUserId: ctx.userId } : {}),
+        ...(scope === 'created' ? { createdByUserId: ctx.userId } : {}),
         parentTaskId,
       });
 
@@ -1282,6 +1383,24 @@ export const taskRouter = router({
         normalizedUpdateData,
       );
       if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
+      // Assignment ping (Linear-style): only an actual assignee change to
+      // someone other than the actor notifies — re-saving the same assignee
+      // or assigning yourself stays silent. Fire-and-forget through the
+      // `@/business` slot (default impl is a no-op).
+      if (
+        task.assigneeUserId &&
+        task.assigneeUserId !== resolved.assigneeUserId &&
+        task.assigneeUserId !== ctx.userId
+      ) {
+        void notifyTaskAssigned({
+          actorUserId: ctx.userId,
+          assigneeUserId: task.assigneeUserId,
+          taskId: task.id,
+          taskIdentifier: task.identifier,
+          taskName: task.name,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+      }
       return { data: task, message: 'Task updated', success: true };
     } catch (error) {
       if (error instanceof TRPCError) throw error;

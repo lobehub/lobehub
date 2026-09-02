@@ -1,5 +1,5 @@
 import type { DocumentCommentItem as DocumentCommentDTO } from '@lobechat/types';
-import { pickNonEmptyString, toRecord } from '@lobechat/utils/object';
+import { toRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
@@ -24,6 +24,7 @@ import {
   getResourceMeta,
 } from '@/server/services/resourcePermission';
 import { getWorkspaceScopedPermissionMatches } from '@/server/services/workspacePermission';
+import { validateMentionedUserIds as validateCommentMentionedUserIds } from '@/server/utils/commentMentions';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 const MAX_EDITOR_DATA_BYTES = 128 * 1024;
@@ -85,27 +86,6 @@ const validateCommentBody = (
       path: ['content'],
     });
   }
-};
-
-const extractMentionedUserIds = (editorData: unknown): string[] => {
-  const root = toRecord(editorData)?.root;
-  const pending: unknown[] = root === undefined ? [] : [root];
-  const userIds = new Set<string>();
-
-  while (pending.length > 0) {
-    const node = toRecord(pending.pop());
-    if (!node) continue;
-
-    const metadata = toRecord(node.metadata);
-    if (node.type === 'mention' && metadata?.type === 'member') {
-      const userId = pickNonEmptyString(metadata.id);
-      if (userId) userIds.add(userId);
-    }
-
-    if (Array.isArray(node.children)) pending.push(...node.children);
-  }
-
-  return [...userIds];
 };
 
 const documentCommentProcedure = wsProcedure.use(serverDatabase).use(async ({ ctx, next }) => {
@@ -182,26 +162,12 @@ const assertDocumentView = async (
     workspaceId: ctx.workspaceId,
   });
 
-const validateMentionedUserIds = async (
-  ctx: PermissionContext,
-  editorData: unknown,
-): Promise<string[]> => {
-  const candidateIds = extractMentionedUserIds(editorData).filter((id) => id !== ctx.userId);
-  if (candidateIds.length === 0) return [];
-
-  const activeMemberships = await ctx.serverDB
-    .select({ userId: workspaceMembers.userId })
-    .from(workspaceMembers)
-    .where(
-      and(
-        eq(workspaceMembers.workspaceId, ctx.workspaceId),
-        inArray(workspaceMembers.userId, candidateIds),
-        isNull(workspaceMembers.deletedAt),
-      ),
-    );
-  const activeUserIds = new Set(activeMemberships.map(({ userId }) => userId));
-  return candidateIds.filter((id) => activeUserIds.has(id));
-};
+const validateMentionedUserIds = (ctx: PermissionContext, editorData: unknown) =>
+  validateCommentMentionedUserIds(
+    ctx.serverDB,
+    { actorUserId: ctx.userId, workspaceId: ctx.workspaceId },
+    editorData,
+  );
 
 const notifyActivitiesBestEffort = (
   ctx: PermissionContext,

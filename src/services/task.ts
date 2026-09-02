@@ -25,6 +25,8 @@ class TaskService {
     parentTaskId?: string | null;
     priorities?: number[];
     projectId?: string;
+    /** "My tasks" narrowing: assigned to the caller, or created by them. */
+    scope?: 'assigned' | 'created';
     statuses?: TaskStatus[];
     visibility?: 'private' | 'public';
   }) => lambdaClient.task.list.query(params);

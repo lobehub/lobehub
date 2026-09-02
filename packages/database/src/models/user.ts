@@ -496,6 +496,23 @@ export class UserModel {
       .where(inArray(users.id, ids));
   };
 
+  /**
+   * Emails for a set of users. Deliberately separate from
+   * {@link UserModel.getDisplayInfoByIds}, whose contract is display-only and
+   * must never leak email — call this only where the audience is allowed to
+   * see addresses (e.g. workspace members resolving a teammate to assign).
+   */
+  static getEmailsByIds = async (
+    db: LobeChatDatabase,
+    ids: string[],
+  ): Promise<Array<{ email: string | null; id: string }>> => {
+    if (ids.length === 0) return [];
+    return db
+      .select({ email: users.email, id: users.id })
+      .from(users)
+      .where(inArray(users.id, ids));
+  };
+
   static getUserApiKeys = async (
     db: LobeChatDatabase,
     id: string,

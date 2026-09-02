@@ -92,13 +92,20 @@ export const formatTaskLine = (t: TaskSummary): string =>
  * Format createTask response
  */
 export const formatTaskCreated = (
-  t: TaskSummary & { baseUrl?: string; instruction: string; parentLabel?: string },
+  t: TaskSummary & {
+    /** Human owner label (e.g. "Alice (usr_1)") when the task was assigned to a workspace member. */
+    assigneeLabel?: string;
+    baseUrl?: string;
+    instruction: string;
+    parentLabel?: string;
+  },
 ): string => {
   const lines = [
     `Task created: ${taskRef(t.identifier, t.baseUrl)} "${t.name}"`,
     `  Status: ${statusIcon(t.status)} ${t.status}`,
     `  Priority: ${priorityLabel(t.priority)}`,
   ];
+  if (t.assigneeLabel) lines.push(`  Assignee: ${t.assigneeLabel}`);
   if (t.parentLabel) lines.push(`  Parent: ${taskRef(t.parentLabel, t.baseUrl)}`);
   lines.push(`  Instruction: ${t.instruction}`);
   return lines.join('\n');
@@ -195,6 +202,8 @@ export const formatTaskDetail = (t: TaskDetailData): string => {
   ];
 
   if (t.agentId) lines.push(`Agent: ${t.agentId}`);
+  // `userId` on the detail payload is the human assignee (workspace member).
+  if (t.userId) lines.push(`Assignee (member): ${t.userId}`);
   if (t.parent) lines.push(`Parent: ${t.parent.identifier}`);
   if (t.topicCount) lines.push(`Topics: ${t.topicCount}`);
   if (t.createdAt) lines.push(`Created: ${t.createdAt}`);
@@ -292,6 +301,61 @@ export const formatTaskDetail = (t: TaskDetailData): string => {
   }
 
   return lines.join('\n');
+};
+
+// ── Workspace members (task assignee candidates) ──
+
+export interface TaskAssignableMember {
+  /** Workspace email — an exact handle for matching a person named by address. */
+  email?: string | null;
+  /** User id — the value to pass as `assigneeUserId`. */
+  id: string;
+  /**
+   * Linked IM identities, formatted `platform:@username(platformUserId)` (or
+   * `platform:platformUserId` without a username). Lets a person named by a
+   * Discord/Slack/Telegram handle or a raw `<@platformUserId>` mention be
+   * resolved deterministically instead of by name similarity.
+   */
+  imAccounts?: string[];
+  /** The signed-in user who invoked the tool. */
+  isSelf?: boolean;
+  name?: string | null;
+  role?: string | null;
+  username?: string | null;
+}
+
+/**
+ * Format the listWorkspaceMembers response: one line per member with the id
+ * the model must pass back as `assigneeUserId`. Shared by the client executor
+ * and the server runtime so both surfaces read identically.
+ */
+export const formatWorkspaceMembers = (
+  members: TaskAssignableMember[],
+  options: { inWorkspace: boolean } = { inWorkspace: true },
+): string => {
+  if (members.length === 0) {
+    return options.inWorkspace
+      ? 'No workspace members can be assigned tasks.'
+      : 'Not in a workspace: tasks can only be assigned to agents here.';
+  }
+
+  const header = options.inWorkspace
+    ? `Workspace members that can be assigned tasks (${members.length}). Use the id as assigneeUserId:`
+    : 'Not in a workspace — the only person a task can be assigned to is you:';
+
+  const lines = members.map((m) => {
+    const name = m.name?.trim() || m.username?.trim() || '(unnamed)';
+    const parts = [`- ${name}`];
+    if (m.username && m.username !== name) parts.push(`@${m.username}`);
+    if (m.email) parts.push(m.email);
+    if (m.role) parts.push(`role=${m.role}`);
+    if (m.imAccounts && m.imAccounts.length > 0) parts.push(`im=${m.imAccounts.join(',')}`);
+    if (m.isSelf) parts.push('(you)');
+    parts.push(`id=${m.id}`);
+    return parts.join('  ');
+  });
+
+  return [header, ...lines].join('\n');
 };
 
 /**

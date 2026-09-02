@@ -25,6 +25,11 @@ export const TaskManifest: BuiltinToolManifest = {
               'Optional agent ID to assign the task to. In task management context, omit it to create an unassigned task.',
             type: 'string',
           },
+          assigneeUserId: {
+            description:
+              "Optional workspace member (user ID) to set as the task's human owner. Coexists with assigneeAgentId — the agent executes the task, the member owns the outcome. Resolve the ID with listWorkspaceMembers first; never guess it.",
+            type: 'string',
+          },
           name: {
             description: 'A short, descriptive name for the task.',
             type: 'string',
@@ -70,6 +75,11 @@ export const TaskManifest: BuiltinToolManifest = {
                 assigneeAgentId: {
                   description:
                     'Optional agent ID to assign the task to. In task management context, omit it to create an unassigned task.',
+                  type: 'string',
+                },
+                assigneeUserId: {
+                  description:
+                    "Optional workspace member (user ID) to set as the task's human owner (coexists with assigneeAgentId). Resolve the ID with listWorkspaceMembers first.",
                   type: 'string',
                 },
                 name: {
@@ -138,6 +148,16 @@ export const TaskManifest: BuiltinToolManifest = {
             type: 'array',
           },
         },
+        required: [],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'List the workspace members a task can be assigned to, with their user IDs, emails, and linked IM identities (Discord/Slack/Telegram handles and platform user ids). Call this before setting assigneeUserId on createTask / createTasks / editTask so a person named by the user ("assign this to Alice", "assign to @neko", a `<@platformUserId>` mention) is resolved to a real ID instead of guessed — prefer an exact im/email match over name similarity. Outside a workspace only the current user is returned.',
+      name: TaskApiName.listWorkspaceMembers,
+      parameters: {
+        properties: {},
         required: [],
         type: 'object',
       },
@@ -215,7 +235,7 @@ export const TaskManifest: BuiltinToolManifest = {
     },
     {
       description:
-        "Edit a task's fields (name, description, instruction, priority), parent, or dependencies (batched). Status changes go through updateTaskStatus; schedule configuration goes through setTaskSchedule.",
+        "Edit a task's fields (name, description, instruction, priority), assignee (agent or workspace member), parent, or dependencies (batched). Status changes go through updateTaskStatus; schedule configuration goes through setTaskSchedule.",
       name: TaskApiName.editTask,
       parameters: {
         properties: {
@@ -226,7 +246,13 @@ export const TaskManifest: BuiltinToolManifest = {
             type: 'array',
           },
           assigneeAgentId: {
-            description: 'Assign the task to this agent ID. Pass null to clear the assignee.',
+            description:
+              'Assign the task to this agent ID (the executing agent; independent of the human owner). Pass null to clear the agent assignee.',
+            type: ['string', 'null'],
+          },
+          assigneeUserId: {
+            description:
+              "Set this workspace member (user ID) as the task's human owner. Independent of assigneeAgentId — both can be set, and touching one never clears the other. Resolve the ID with listWorkspaceMembers first; never guess it. Pass null to clear the human owner.",
             type: ['string', 'null'],
           },
           description: {
