@@ -345,7 +345,9 @@ export class AgentShareModel {
     db: LobeChatDatabase,
     agentId: string,
   ): Promise<
-    Required<Pick<AgentShareConfig, 'maxTopicsPerVisitor' | 'maxTurnsPerTopic'>> & {
+    Required<
+      Pick<AgentShareConfig, 'maxTopicsPerVisitor' | 'maxTurnsPerTopic' | 'monthlySpendLimit'>
+    > & {
       shareId: string | null;
     }
   > => {
@@ -358,6 +360,7 @@ export class AgentShareModel {
     return {
       maxTopicsPerVisitor: normalized.maxTopicsPerVisitor!,
       maxTurnsPerTopic: normalized.maxTurnsPerTopic!,
+      monthlySpendLimit: normalized.monthlySpendLimit!,
       shareId: row?.id ?? null,
     };
   };
