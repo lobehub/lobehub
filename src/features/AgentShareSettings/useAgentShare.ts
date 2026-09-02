@@ -104,10 +104,27 @@ export const useAgentShare = (agentId: string) => {
    * from. The network write itself is never cancelled: A's request already
    * landed server-side by the time this runs; only the LOCAL bookkeeping is
    * skipped.
+   *
+   * Also skipped while a LATER write is still queued or in flight
+   * (`pendingWritesRef.current > 1`, this write itself included). Every
+   * write — from `updateConfig` to `enable`/`disable`/`updateSlug` — is
+   * serialized through the same `queueRef` chain, but each one's outgoing
+   * patch is computed synchronously at call time from `latestConfigRef`, not
+   * re-derived when it actually sends. If an EARLIER write's response were
+   * adopted here while a later write is still pending, it would regress
+   * `latestConfigRef` back to a snapshot older than what the later write's
+   * patch was already built from — and because `mergeShareConfig` /
+   * `AgentShareModel.updateConfig` overwrite whole jsonb keys rather than
+   * diffing them, the later write's request would then silently REVERT the
+   * edit this response is trying to confirm once it lands. Only the LAST
+   * pending write's response is guaranteed to reflect every earlier write's
+   * effect (the server processes them in the same serial order they were
+   * sent), so only it is allowed to update the shared refs / SWR cache.
    */
   const commitIfCurrent = useCallback(
     async (writeIdentity: string, updated: AgentShareInfo) => {
       if (identityRef.current !== writeIdentity) return;
+      if (pendingWritesRef.current > 1) return;
       latestConfigRef.current = updated?.shareConfig ?? null;
       await mutate(updated, { revalidate: false });
     },
@@ -123,9 +140,30 @@ export const useAgentShare = (agentId: string) => {
     return result;
   }, []);
 
+  /**
+   * Wrap a queued write with pending-write accounting, shared by every write
+   * (`enable`/`disable`/`updateConfig`/`updateSlug`) so `commitIfCurrent` can
+   * tell whether its own response is the last one outstanding — see its
+   * comment above. Increments as soon as the write is issued (covers time
+   * spent queued behind an earlier write, not just its own network round
+   * trip) and decrements once it settles either way.
+   */
+  const runWrite = useCallback(
+    <T>(task: () => Promise<T>): Promise<T> => {
+      pendingWritesRef.current += 1;
+      return enqueue(task).finally(() => {
+        // The reset on identity change already zeroed this counter for the
+        // NEW agent; a write issued under the OLD agent must not decrement it
+        // again once it settles late.
+        if (identityRef.current === agentId) pendingWritesRef.current -= 1;
+      });
+    },
+    [agentId, enqueue],
+  );
+
   const enable = useCallback(
     () =>
-      enqueue(async () => {
+      runWrite(async () => {
         // `create` returns any pre-existing row untouched, so a legacy
         // `private` row still needs the explicit flip to `link`.
         const created = await agentShareService.enableShare(agentId, 'link');
@@ -135,7 +173,7 @@ export const useAgentShare = (agentId: string) => {
             : await agentShareService.updateVisibility(agentId, 'link');
         await commitIfCurrent(agentId, updated);
       }),
-    [agentId, commitIfCurrent, enqueue],
+    [agentId, commitIfCurrent, runWrite],
   );
 
   const updateConfig = useCallback(
@@ -151,7 +189,6 @@ export const useAgentShare = (agentId: string) => {
       // immediately AND the next patch composes on top of this one.
       latestConfigRef.current = mergeShareConfig(base, resolved);
       const optimisticConfig = latestConfigRef.current;
-      pendingWritesRef.current += 1;
       void mutate(
         (current) => (current ? { ...current, shareConfig: optimisticConfig } : current),
         {
@@ -159,7 +196,7 @@ export const useAgentShare = (agentId: string) => {
         },
       );
 
-      return enqueue(async () => {
+      return runWrite(async () => {
         try {
           const updated = await agentShareService.updateShareConfig(agentId, resolved);
           await commitIfCurrent(agentId, updated);
@@ -170,15 +207,10 @@ export const useAgentShare = (agentId: string) => {
           // belongs to a different agent's `mutate`/`share` pair.
           if (identityRef.current === agentId) void mutate();
           throw error;
-        } finally {
-          // The reset on identity change already zeroed this counter for the
-          // NEW agent; a write issued under the OLD agent must not decrement
-          // it again once it settles late.
-          if (identityRef.current === agentId) pendingWritesRef.current -= 1;
         }
       });
     },
-    [agentId, commitIfCurrent, enqueue, mutate],
+    [agentId, commitIfCurrent, mutate, runWrite],
   );
 
   /**
@@ -189,20 +221,20 @@ export const useAgentShare = (agentId: string) => {
    */
   const disable = useCallback(
     () =>
-      enqueue(async () => {
+      runWrite(async () => {
         const disabled = await agentShareService.disableShare(agentId);
         await commitIfCurrent(agentId, disabled);
       }),
-    [agentId, commitIfCurrent, enqueue],
+    [agentId, commitIfCurrent, runWrite],
   );
 
   const updateSlug = useCallback(
     (slug: string | null) =>
-      enqueue(async () => {
+      runWrite(async () => {
         const updated = await agentShareService.updateSlug(agentId, slug);
         await commitIfCurrent(agentId, updated);
       }),
-    [agentId, commitIfCurrent, enqueue],
+    [agentId, commitIfCurrent, runWrite],
   );
 
   return { disable, enable, error, isLoading, mutate, share, updateConfig, updateSlug };

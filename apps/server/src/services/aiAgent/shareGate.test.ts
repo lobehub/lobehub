@@ -14,6 +14,7 @@ import {
   systemPromptWithoutSubAgent,
 } from '@lobechat/builtin-tool-lobe-agent';
 import { MemoryApiName, MemoryIdentifier } from '@lobechat/builtin-tool-memory';
+import { TopicReferenceIdentifier } from '@lobechat/builtin-tool-topic-reference';
 import {
   AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS,
   AGENT_SHARE_NO_DATA_GRANT_BUILTIN_IDENTIFIERS,
@@ -132,6 +133,7 @@ describe('AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS', () => {
       'lobe-cloud-sandbox',
       'lobe-creds',
       'lobe-task',
+      TopicReferenceIdentifier,
     ]) {
       expect(AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS.has(identifier)).toBe(false);
     }
@@ -244,6 +246,23 @@ describe('applyShareGateToToolSet', () => {
     ]);
 
     applyShareGateToToolSet(toolSet, buildGate({ enabledToolIds: [AgentManagementIdentifier] }));
+
+    expect(toolSet.enabledToolIds).toEqual([]);
+    expect(toolSet.manifestMap).toEqual({});
+    expect(toolSet.tools).toEqual([]);
+  });
+
+  it('drops a stale lobe-topic-reference grant left over from before it was denied', () => {
+    // `TopicReferenceExecutionRuntime.getTopicContext` resolves a free-form
+    // topicId via `TopicModel.findOwnTopicById`, scoped only to the creator's
+    // whole store — not to this share/agent. A share config saved while it was
+    // still allowlisted could still carry it in `enabledToolIds`; the gate must
+    // keep dropping it rather than newly trusting the stored config.
+    const toolSet = buildToolSet([
+      { apis: [{ name: 'getTopicContext' }], identifier: TopicReferenceIdentifier },
+    ]);
+
+    applyShareGateToToolSet(toolSet, buildGate({ enabledToolIds: [TopicReferenceIdentifier] }));
 
     expect(toolSet.enabledToolIds).toEqual([]);
     expect(toolSet.manifestMap).toEqual({});

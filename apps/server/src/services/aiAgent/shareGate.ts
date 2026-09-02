@@ -318,8 +318,8 @@ export const isShareBlockedDataToolCall = (
  * 1. master default-deny allowlist (`SHARE_VISITOR_ALLOWED_IDENTIFIERS`);
  * 2. the owner's own `enabledToolIds` picker — being on the master allowlist
  *    is necessary but NOT sufficient; a tool the creator never enabled for
- *    this share (e.g. `lobe-topic-reference`, image generation spending the
- *    creator's quota) must not run just because a call reached the executor;
+ *    this share (e.g. image generation spending the creator's quota) must not
+ *    run just because a call reached the executor;
  * 3. `humanIntervention` policy, re-derived from the REAL manifest: the
  *    assembly strip removes intervention-gated APIs from the manifest the
  *    runtime later consults, so at dispatch time such a call looks
@@ -615,6 +615,19 @@ const applyShareGateToInterventionRequiredApis = (toolSet: ShareGateToolSet): vo
  *   tools operating on the creator's group-agent collection and membership,
  *   with no share-run scoping designed in — same risk class as
  *   `lobe-agent-management`.
+ *
+ * - `lobe-topic-reference`: `topicReferenceRuntime.getTopicContext`
+ *   (`apps/server/src/services/toolExecution/serverRuntimes/topicReference.ts`)
+ *   resolves a free-form model-supplied `topicId` via
+ *   `TopicModel.findOwnTopicById`, scoped only to the creator's `userId` — not
+ *   to this share or agent — letting a visitor's model read the summary or
+ *   recent messages of ANY other topic the creator owns by guessing/enumerating
+ *   ids. `DATA_TOOL_ACCESS_RULES` has no entry for it (it isn't a
+ *   memory/knowledge-base/agent-documents style store), so nothing narrows the
+ *   allowlist grant. The automatic `<refer_topic>` injection path
+ *   (`serverCallLlmContextBuilder.ts`) is separately share-scoped via
+ *   `isTopicVisibleToRun` and is unaffected by this denial — only the
+ *   model-invokable tool-call path is unsafe.
  *
  * Denied for lack of positive safety evidence (no confirmed exploit was
  * required to withhold access — the point of default-deny is that an unproven

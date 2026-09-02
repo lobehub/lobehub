@@ -134,6 +134,97 @@ describe('useAgentShare · updateConfig', () => {
     });
   });
 
+  it('does not let an earlier response revert a later queued write before it lands (A/B/C interleaving)', async () => {
+    // Reproduces the lost-update window exactly: A is in flight, B is toggled
+    // while A is still pending (queued behind it), and A's response lands
+    // BEFORE B's request is even sent. Pre-fix, `commitIfCurrent` would
+    // unconditionally adopt A's response into `latestConfigRef`, regressing
+    // the local projection from [A, B] back to just [A] — so when C is then
+    // toggled off that regressed snapshot, C's whole-array write silently
+    // drops B server-side once it lands, even though B's own write already
+    // succeeded. With the fix, an intermediate response is only adopted once
+    // it is the LAST pending write, so the projection (and what the UI reads
+    // off SWR) never regresses mid-flight.
+    let releaseA: (value: any) => void = () => {};
+    let releaseB: (value: any) => void = () => {};
+    let releaseC: (value: any) => void = () => {};
+
+    service.updateShareConfig
+      .mockImplementationOnce(
+        (_agentId: string, patch: any) =>
+          new Promise((resolve) => {
+            releaseA = () =>
+              resolve({ ...buildShare(), shareConfig: { ...buildShare().shareConfig, ...patch } });
+          }),
+      )
+      .mockImplementationOnce(
+        (_agentId: string, patch: any) =>
+          new Promise((resolve) => {
+            releaseB = () =>
+              resolve({ ...buildShare(), shareConfig: { ...buildShare().shareConfig, ...patch } });
+          }),
+      )
+      .mockImplementationOnce(
+        (_agentId: string, patch: any) =>
+          new Promise((resolve) => {
+            releaseC = () =>
+              resolve({ ...buildShare(), shareConfig: { ...buildShare().shareConfig, ...patch } });
+          }),
+      );
+
+    const { result } = renderHook(() => useAgentShare('agent-1'));
+
+    await act(async () => {
+      void result.current.updateConfig((current) => ({
+        enabledToolIds: [...(current.enabledToolIds ?? []), 'tool-a'],
+      }));
+      void result.current.updateConfig((current) => ({
+        enabledToolIds: [...(current.enabledToolIds ?? []), 'tool-b'],
+      }));
+    });
+
+    await waitFor(() => expect(service.updateShareConfig).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      releaseA(undefined);
+    });
+    await waitFor(() => expect(service.updateShareConfig).toHaveBeenCalledTimes(2));
+
+    // A's response landed while B was still queued — the projection (and the
+    // SWR cache the UI reads) must not have regressed back to just A.
+    expect(result.current.share?.shareConfig.enabledToolIds).toEqual(['tool-a', 'tool-b']);
+
+    await act(async () => {
+      void result.current.updateConfig((current) => ({
+        enabledToolIds: [...(current.enabledToolIds ?? []), 'tool-c'],
+      }));
+    });
+
+    await act(async () => {
+      releaseB(undefined);
+    });
+    await waitFor(() => expect(service.updateShareConfig).toHaveBeenCalledTimes(3));
+
+    await act(async () => {
+      releaseC(undefined);
+    });
+
+    expect(service.updateShareConfig.mock.calls[0][1]).toEqual({ enabledToolIds: ['tool-a'] });
+    expect(service.updateShareConfig.mock.calls[1][1]).toEqual({
+      enabledToolIds: ['tool-a', 'tool-b'],
+    });
+    // The final persisted patch for C must still contain B — it was never
+    // reverted by A's earlier, now-stale response.
+    expect(service.updateShareConfig.mock.calls[2][1]).toEqual({
+      enabledToolIds: ['tool-a', 'tool-b', 'tool-c'],
+    });
+    expect(result.current.share?.shareConfig.enabledToolIds).toEqual([
+      'tool-a',
+      'tool-b',
+      'tool-c',
+    ]);
+  });
+
   it('keeps whitelist ids the picker never renders', async () => {
     swr.seed(buildShare({ enabledToolIds: ['lobe-local-system', 'mcp-github'] }));
 

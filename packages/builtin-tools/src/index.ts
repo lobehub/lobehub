@@ -209,12 +209,12 @@ export const runtimeManagedToolIds = [
  * `lobe-skill-store`, `lobe-agent-builder`, `lobe-skills`,
  * `lobe-group-agent-builder`, `lobe-group-management`, `agent-signal-review`,
  * `lobe-user-interaction`, `lobe-activator`, `lobe-cloud-sandbox`,
- * `lobe-local-system`, `lobe-browser`, `lobe-remote-device`, and the hidden
- * system-only self-iteration tools), see the denied-bucket doc block at the
- * bottom of `apps/server/src/services/aiAgent/shareGate.ts`.
+ * `lobe-local-system`, `lobe-browser`, `lobe-remote-device`,
+ * `lobe-topic-reference`, and the hidden system-only self-iteration tools),
+ * see the denied-bucket doc block at the bottom of
+ * `apps/server/src/services/aiAgent/shareGate.ts`.
  */
 export const AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS = new Set<string>([
-  TopicReferenceManifest.identifier,
   CalculatorManifest.identifier,
   WebBrowsingManifest.identifier,
   ImageGenerationManifest.identifier,
