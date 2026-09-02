@@ -51,6 +51,50 @@ const ToolsSection = memo<ToolsSectionProps>(({ agentId, onChange, shareConfig }
     }));
   };
 
+  // Two buckets, extension-manager style: what visitors already get, then what
+  // else could be granted. Toggling moves a tool between them, so the owner
+  // reads the effective grant at a glance instead of scanning checkboxes.
+  const enabledIds = candidateToolIds.filter(
+    (toolId) =>
+      selectedToolIds.includes(toolId) &&
+      getShareToolAvailability(toolId, { allowReadMemory: shareConfig.allowReadMemory }) !==
+        'blocked',
+  );
+  const availableIds = candidateToolIds.filter((toolId) => !enabledIds.includes(toolId));
+
+  const renderTool = (toolId: string, selected: boolean) => {
+    const availability = getShareToolAvailability(toolId, {
+      allowReadMemory: shareConfig.allowReadMemory,
+    });
+    // A blocked tool can never reach a visitor run, so offer it disabled with
+    // an explanation rather than letting the owner "grant" something the
+    // server always strips.
+    const blocked = availability === 'blocked';
+
+    return (
+      <Tooltip
+        key={toolId}
+        title={
+          blocked
+            ? t('share.settings.tools.notAvailableToVisitors')
+            : availability === 'needsMemoryPermission'
+              ? t('share.settings.tools.needsMemoryPermission')
+              : undefined
+        }
+      >
+        <PluginTag
+          selectable
+          useAllMetaList
+          agentId={agentId}
+          disabled={blocked}
+          pluginId={toolId}
+          selected={selected}
+          onSelect={blocked ? undefined : () => toggleTool(toolId)}
+        />
+      </Tooltip>
+    );
+  };
+
   return (
     <Section desc={t('share.settings.tools.desc')} title={t('share.settings.tools.title')}>
       {candidateToolIds.length === 0 ? (
@@ -58,39 +102,31 @@ const ToolsSection = memo<ToolsSectionProps>(({ agentId, onChange, shareConfig }
           {t('share.settings.tools.empty')}
         </Text>
       ) : (
-        <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
-          {candidateToolIds.map((toolId) => {
-            const availability = getShareToolAvailability(toolId, {
-              allowReadMemory: shareConfig.allowReadMemory,
-            });
-            // A blocked tool can never reach a visitor run, so offer it
-            // disabled with an explanation rather than letting the owner
-            // "grant" something the server always strips.
-            const blocked = availability === 'blocked';
-
-            return (
-              <Tooltip
-                key={toolId}
-                title={
-                  blocked
-                    ? t('share.settings.tools.notAvailableToVisitors')
-                    : availability === 'needsMemoryPermission'
-                      ? t('share.settings.tools.needsMemoryPermission')
-                      : undefined
-                }
-              >
-                <PluginTag
-                  selectable
-                  useAllMetaList
-                  agentId={agentId}
-                  disabled={blocked}
-                  pluginId={toolId}
-                  selected={!blocked && selectedToolIds.includes(toolId)}
-                  onSelect={blocked ? undefined : () => toggleTool(toolId)}
-                />
-              </Tooltip>
-            );
-          })}
+        <Flexbox gap={16}>
+          <Flexbox gap={8}>
+            <Text fontSize={12} type={'secondary'}>
+              {t('share.settings.tools.grantedGroup', { count: enabledIds.length })}
+            </Text>
+            {enabledIds.length === 0 ? (
+              <Text fontSize={12} type={'secondary'}>
+                {t('share.settings.tools.grantedEmpty')}
+              </Text>
+            ) : (
+              <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+                {enabledIds.map((toolId) => renderTool(toolId, true))}
+              </Flexbox>
+            )}
+          </Flexbox>
+          {availableIds.length > 0 && (
+            <Flexbox gap={8}>
+              <Text fontSize={12} type={'secondary'}>
+                {t('share.settings.tools.availableGroup', { count: availableIds.length })}
+              </Text>
+              <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+                {availableIds.map((toolId) => renderTool(toolId, false))}
+              </Flexbox>
+            </Flexbox>
+          )}
         </Flexbox>
       )}
     </Section>

@@ -440,7 +440,11 @@ export default {
   'share.settings.usage.visitors': 'Visitors',
   'share.settings.tools.desc':
     'Only the tools you tick here can be called during a visitor run. Tools that could reach your device or local files are never offered.',
+  'share.settings.tools.availableGroup': 'Not granted · {{count}}',
   'share.settings.tools.empty': 'This Agent has no tools that can be granted to visitors.',
+  'share.settings.tools.grantedEmpty':
+    'No tools granted yet — visitors get a plain chat. Pick from the list below to grant one.',
+  'share.settings.tools.grantedGroup': 'Granted to visitors · {{count}}',
   'share.settings.tools.needsMemoryPermission':
     'Also turn on “Allow reading my memory” above, or this tool stays inert for visitors.',
   'share.settings.tools.notAvailableToVisitors':
