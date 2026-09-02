@@ -101,14 +101,28 @@ describe('topic share management gate', () => {
       expect(mockShareCreate).toHaveBeenCalledWith(topicId, undefined);
     });
 
-    it('skips the guard entirely in personal mode', async () => {
+    it('skips the workspace checks in personal mode but still resolves the topic', async () => {
       const caller = topicRouter.createCaller({ userId: memberId } as any);
 
       await caller.enableSharing({ topicId });
 
-      expect(mockTopicFindOwnTopicById).not.toHaveBeenCalled();
+      expect(mockTopicFindOwnTopicById).toHaveBeenCalledWith(topicId);
       expect(mockAssertCanUseTopicTargets).not.toHaveBeenCalled();
       expect(mockShareCreate).toHaveBeenCalledWith(topicId, undefined);
+    });
+
+    // Agent-share visitor topics live under the creator's userId and exist in
+    // personal mode too; publishing one would expose the visitor's title on
+    // the public share endpoint, so the exclusion must not hide behind the
+    // workspace short-circuit.
+    it('rejects an agent-share visitor topic in personal mode', async () => {
+      mockTopicFindOwnTopicById.mockResolvedValue(null);
+      const caller = topicRouter.createCaller({ userId: creatorId } as any);
+
+      await expect(caller.enableSharing({ topicId })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+      expect(mockShareCreate).not.toHaveBeenCalled();
     });
 
     it('rejects a member on a topic that backs no conversation at all', async () => {

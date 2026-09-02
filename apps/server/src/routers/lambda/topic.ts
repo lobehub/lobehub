@@ -173,15 +173,19 @@ const assertCanManageTopicShare = async (
   topicId: string,
   targetVisibility?: 'link' | 'private',
 ) => {
-  if (!ctx.workspaceId) return;
-
   // `findOwnTopicById`: an agent-share visitor topic is stored under the
   // creator's userId, and publishing a public link for one would expose the
-  // visitor's conversation. It is never a shareable topic — fail closed.
+  // visitor's conversation. It is never a shareable topic — fail closed, and
+  // do so BEFORE the personal-mode short-circuit below: visitor topics exist
+  // in personal mode too, so the exclusion cannot depend on a workspace.
   const topic = await ctx.topicModel.findOwnTopicById(topicId);
   if (!topic) {
     throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic not found' });
   }
+
+  // Outside a workspace the remaining checks (agent publish policy, workspace
+  // ownership) have no subject — personal-mode ownership is the whole story.
+  if (!ctx.workspaceId) return;
 
   // Publishing under a restricted agent overrides even topic ownership —
   // that is the whole point of the policy. Resolved only on the publish path
