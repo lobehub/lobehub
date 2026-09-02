@@ -86,7 +86,7 @@ export enum ResourceSourceFilter {
 export const QueryFileListSchema = z.object({
   category: z.string().optional(),
   /** Return a bounded server-generated plain-text preview for preview surfaces. */
-  includeContentPreview: z.boolean().default(false),
+  includeContentPreview: z.boolean().optional(),
   knowledgeBaseId: z.string().optional(),
   limit: z.number().int().positive().default(50),
   offset: z.number().int().min(0).default(0),

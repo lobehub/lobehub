@@ -865,7 +865,7 @@ describe('fileRouter', () => {
       expect(result.items[1]).not.toHaveProperty('editorData');
     });
 
-    it('does not select or return preview content unless the caller opts in', async () => {
+    it('does not select or return content when a current caller explicitly requests metadata only', async () => {
       mockKnowledgeRepoQuery.mockResolvedValue([
         {
           ...mockFile,
@@ -875,13 +875,33 @@ describe('fileRouter', () => {
         },
       ]);
 
-      const result = await caller.getKnowledgeItems({});
+      const result = await caller.getKnowledgeItems({ includeContentPreview: false });
 
       expect(mockKnowledgeRepoQuery).toHaveBeenCalledWith(
         expect.objectContaining({ includeContent: false, includeContentPreview: false }),
       );
       expect(result.items[0]).not.toHaveProperty('contentPreview');
       expect(result.items[0]).not.toHaveProperty('contentPreviewSource');
+    });
+
+    it('preserves full content for legacy clients that omit the preview contract', async () => {
+      mockKnowledgeRepoQuery.mockResolvedValue([
+        {
+          content: '# Legacy document',
+          fileType: 'custom/document',
+          id: 'doc-legacy',
+          name: 'Legacy document',
+          sourceType: 'document' as const,
+        },
+      ]);
+
+      const result = await caller.getKnowledgeItems({});
+
+      expect(mockKnowledgeRepoQuery).toHaveBeenCalledWith(
+        expect.objectContaining({ includeContent: true, includeContentPreview: false }),
+      );
+      expect(result.items[0]).toMatchObject({ content: '# Legacy document', id: 'doc-legacy' });
+      expect(result.items[0]).not.toHaveProperty('contentPreview');
     });
   });
 

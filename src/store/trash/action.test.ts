@@ -115,6 +115,23 @@ describe('TrashAction', () => {
       expect(useTrashStore.getState().items.map((i) => i.id)).toEqual(['trash_2']);
     });
 
+    it('preserves a successful purge outcome when follow-up refresh fails', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.spyOn(trashService, 'purge').mockResolvedValue({
+        failed: [],
+        purged: 1,
+        purgedIds: ['trash_1'],
+      });
+      vi.mocked(mutate).mockRejectedValue(new Error('refresh unavailable'));
+
+      await expect(useTrashStore.getState().purge(['trash_1'])).resolves.toMatchObject({
+        purged: 1,
+      });
+      expect(useTrashStore.getState().items.map((item) => item.id)).toEqual(['trash_2']);
+      expect(useTrashStore.getState().loadingIds).toEqual([]);
+      expect(consoleError).toHaveBeenCalledWith('[trash:refresh]', expect.any(Error));
+    });
+
     it('emptyTrash honours the active type filter and clears the list', async () => {
       vi.spyOn(trashService, 'emptyTrash').mockResolvedValue({ purged: 2 });
       useTrashStore.setState({ activeType: 'file' });

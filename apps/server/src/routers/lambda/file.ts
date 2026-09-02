@@ -444,10 +444,15 @@ export const fileRouter = router({
 
     // Request one more item than limit to check if there are more items
     const limit = input.limit ?? 50;
+    // Absent preserves the legacy response for released clients. Current list
+    // surfaces explicitly send false (metadata only) or true (bounded preview).
+    const includeContent = input.includeContentPreview === undefined;
+    const includeContentPreview = input.includeContentPreview === true;
     const knowledgeItems = await ctx.knowledgeRepo.query({
       ...input,
       excludeKnowledgeBaseIds,
-      includeContent: false,
+      includeContent,
+      includeContentPreview,
       limit: limit + 1,
     });
 
@@ -469,7 +474,7 @@ export const fileRouter = router({
     // larger result sets (visible when switching from Private to Workspace).
     const resultItems = await Promise.all(
       filteredItems.map(async (item) => {
-        const contentPreview = input.includeContentPreview
+        const contentPreview = includeContentPreview
           ? createResourceContentPreview({
               content: item.contentPreviewSource,
               fileType: item.fileType,
@@ -483,7 +488,8 @@ export const fileRouter = router({
             chunkCount: status.chunkCount,
             chunkingError: status.chunkingError,
             chunkingStatus: status.chunkingStatus,
-            ...(input.includeContentPreview ? { contentPreview } : {}),
+            ...(includeContent ? { content: item.content } : {}),
+            ...(includeContentPreview ? { contentPreview } : {}),
             createdAt: item.createdAt,
             embeddingError: status.embeddingError,
             embeddingStatus: status.embeddingStatus,
@@ -507,7 +513,8 @@ export const fileRouter = router({
           chunkCount: null,
           chunkingError: null,
           chunkingStatus: null,
-          ...(input.includeContentPreview ? { contentPreview } : {}),
+          ...(includeContent ? { content: item.content } : {}),
+          ...(includeContentPreview ? { contentPreview } : {}),
           createdAt: item.createdAt,
           embeddingError: null,
           embeddingStatus: null,

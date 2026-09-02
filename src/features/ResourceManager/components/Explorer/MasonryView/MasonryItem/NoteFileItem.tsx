@@ -100,7 +100,7 @@ const NoteFileItem = memo<NoteFileItemProps>(
     name,
     metadata,
   }) => {
-    const { t } = useTranslation(['components', 'file']);
+    const { t } = useTranslation(['common', 'components', 'file']);
     const [isCreatingFileParseTask, parseFiles] = useFileStore((s) => [
       fileManagerSelectors.isCreatingFileParseTask(id)(s),
       s.parseFilesToChunks,
@@ -124,7 +124,7 @@ const NoteFileItem = memo<NoteFileItemProps>(
             ) : (
               <div className={styles.notePreview}>
                 <span style={{ color: 'var(--lobe-text-tertiary)', fontStyle: 'italic' }}>
-                  No content
+                  {t('common:noContent')}
                 </span>
               </div>
             )}

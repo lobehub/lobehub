@@ -57,10 +57,13 @@ export class TrashActionImpl {
   };
 
   refresh = async () => {
-    await Promise.all([
+    const results = await Promise.allSettled([
       mutate(trashKeys.list(this.#activeScopeId, this.#get().activeType)),
       mutate(trashKeys.countByType(this.#activeScopeId)),
     ]);
+    for (const result of results) {
+      if (result.status === 'rejected') console.error('[trash:refresh]', result.reason);
+    }
   };
 
   /**
@@ -71,12 +74,16 @@ export class TrashActionImpl {
    * filter only re-fetches keys that have a mounted subscriber, so this is cheap.
    */
   revalidateRestoredScopes = async () => {
-    await mutate(
-      (key: unknown) =>
-        Array.isArray(key) &&
-        typeof key[0] === 'string' &&
-        RESTORE_AFFECTED_KEY_PREFIXES.some((prefix) => (key[0] as string).startsWith(prefix)),
-    );
+    try {
+      await mutate(
+        (key: unknown) =>
+          Array.isArray(key) &&
+          typeof key[0] === 'string' &&
+          RESTORE_AFFECTED_KEY_PREFIXES.some((prefix) => (key[0] as string).startsWith(prefix)),
+      );
+    } catch (error) {
+      console.error('[trash:revalidateRestoredScopes]', error);
+    }
   };
 
   loadMore = async () => {
