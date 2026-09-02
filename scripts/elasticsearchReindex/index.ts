@@ -139,8 +139,12 @@ if (mutationModes > 0 && !yes) {
   throw new Error('Mutating commands require --yes after reviewing their documented effects');
 }
 if (freshRun && !apply) throw new Error('--fresh-run can only be used with --apply');
-if (switchAliases && !apply && !upgrade) {
-  throw new Error('--switch-aliases can only be used with --apply or --upgrade');
+/**
+ * `--apply` is the initial bootstrap onto an empty target and never moves existing aliases; every
+ * cutover goes through `--upgrade`, which also enforces the consumer pause for the whole backfill.
+ */
+if (switchAliases && !upgrade) {
+  throw new Error('--switch-aliases can only be used with --upgrade');
 }
 if (switchAliases && entities) {
   throw new Error(
@@ -424,7 +428,7 @@ const run = async () => {
     return;
   }
 
-  await runBackfill({ aliasMode: switchAliases ? 'switch' : 'create', freshRun });
+  await runBackfill({ aliasMode: 'create', freshRun });
 };
 
 const runBackfill = async ({

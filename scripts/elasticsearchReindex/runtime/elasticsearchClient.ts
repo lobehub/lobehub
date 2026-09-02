@@ -321,7 +321,7 @@ export class FtsSearchReindexHttpClient
        * protocol; this initial migration fails closed instead of pretending the cutover is safe.
        */
       throw new FtsSearchReindexRequestError(
-        `Elasticsearch alias ${alias} already points to a different index; pause the incremental sync consumer and rerun with --switch-aliases to cut over`,
+        `Elasticsearch alias ${alias} already points to a different index; cut over with --upgrade --switch-aliases after pausing the incremental sync consumer`,
       );
     }
     if (response.status !== 404) {
