@@ -2,6 +2,7 @@ import {
   AgentDocumentsApiName,
   AgentDocumentsIdentifier,
 } from '@lobechat/builtin-tool-agent-documents';
+import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import {
   KnowledgeBaseApiName,
   KnowledgeBaseIdentifier,
@@ -90,6 +91,18 @@ export const filterPluginsByShareGate = (pluginIds: string[], gate: AgentShareGa
 
   return pluginIds.filter((id) => hasShareToolGrant(grants, id));
 };
+
+/**
+ * Whether the share grants `lobe-cloud-sandbox` (at any API scope). Drives
+ * `resolveExecutionPlan`'s `sandboxFallback`: a visitor can never reach the
+ * creator's device, so this grant is only meaningful if the plan resolves to
+ * the sandbox instead of collapsing to `none`.
+ */
+export const shareGateGrantsCloudSandbox = (gate: AgentShareGate): boolean =>
+  hasShareToolGrant(
+    resolveShareToolGrants(gate.shareConfig.toolGrants),
+    CloudSandboxManifest.identifier,
+  );
 
 /**
  * Strip agent files / knowledge bases from a share visitor's resolved agent

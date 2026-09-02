@@ -4,6 +4,7 @@ import {
 } from '@lobechat/builtin-tool-agent-documents';
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
 import { CalculatorIdentifier } from '@lobechat/builtin-tool-calculator';
+import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import {
   KnowledgeBaseApiName,
   KnowledgeBaseIdentifier,
@@ -30,6 +31,7 @@ import {
   filterPluginsByShareGate,
   isShareBlockedBuiltinDispatch,
   isShareBlockedDataToolCall,
+  shareGateGrantsCloudSandbox,
 } from './shareGate';
 
 const buildGate = (config: Partial<AgentShareGate['shareConfig']> = {}): AgentShareGate => ({
@@ -762,6 +764,35 @@ describe('isShareBlockedBuiltinDispatch', () => {
     // per-API scoping is what blocks it here.
     expect(
       isShareBlockedBuiltinDispatch(enabled, LobeAgentIdentifier, LobeAgentApiName.updatePlan),
+    ).toBe(true);
+  });
+});
+
+describe('shareGateGrantsCloudSandbox', () => {
+  it('is false when the share does not grant lobe-cloud-sandbox', () => {
+    expect(shareGateGrantsCloudSandbox(buildGate())).toBe(false);
+    expect(
+      shareGateGrantsCloudSandbox(buildGate({ toolGrants: [{ identifier: 'web-search' }] })),
+    ).toBe(false);
+  });
+
+  it('is true for a whole-identifier grant', () => {
+    expect(
+      shareGateGrantsCloudSandbox(
+        buildGate({ toolGrants: [{ identifier: CloudSandboxManifest.identifier }] }),
+      ),
+    ).toBe(true);
+  });
+
+  // The plan only needs to know the sandbox is in play at all — narrowing to
+  // the granted APIs happens later in `applyShareGateToToolSet`.
+  it('treats an apis-scoped grant as a grant of the identifier', () => {
+    expect(
+      shareGateGrantsCloudSandbox(
+        buildGate({
+          toolGrants: [{ apis: ['runCommand'], identifier: CloudSandboxManifest.identifier }],
+        }),
+      ),
     ).toBe(true);
   });
 });
