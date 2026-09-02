@@ -17,7 +17,7 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
-import ArticleSkeleton from '@/components/Skeleton/Article';
+import { ArticleSkeleton } from '@/components/Skeleton';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { usePermission } from '@/hooks/usePermission';

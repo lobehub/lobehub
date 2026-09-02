@@ -1,7 +1,7 @@
 'use client';
 
-import { Center, Flexbox, Skeleton } from '@lobehub/ui';
-import { Button, Text, toast } from '@lobehub/ui/base-ui';
+import { Center, Flexbox } from '@lobehub/ui';
+import { Button, Skeleton, Text, toast } from '@lobehub/ui/base-ui';
 import { memo, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -225,8 +225,8 @@ const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
       <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
         {isHeaderLoading ? (
           <>
-            <Skeleton.Button active style={{ height: 28, width: 48 }} />
-            <Skeleton.Button active style={{ height: 20, width: 16 }} />
+            <Skeleton height={28} width={48} />
+            <Skeleton height={20} width={16} />
           </>
         ) : (
           <>

@@ -3,7 +3,7 @@
 import { createStaticStyles, cx, responsive } from 'antd-style';
 import { memo } from 'react';
 
-import ArticleSkeleton from '@/components/Skeleton/Article';
+import { ArticleSkeleton } from '@/components/Skeleton';
 
 const styles = createStaticStyles(
   ({ css }) => css`

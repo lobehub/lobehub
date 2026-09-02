@@ -10,7 +10,7 @@ import { createStaticStyles } from 'antd-style';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import ArticleSkeleton from '@/components/Skeleton/Article';
+import { ArticleSkeleton } from '@/components/Skeleton';
 import ContentViewer from '@/features/AgentSkillDetail/ContentViewer';
 import FileTree from '@/features/FileTree';
 import { usePermission } from '@/hooks/usePermission';

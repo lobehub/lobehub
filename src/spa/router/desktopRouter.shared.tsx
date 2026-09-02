@@ -26,6 +26,7 @@ import {
 } from '@/business/client/BusinessDesktopRoutes';
 import BrandTextLoading from '@/components/Loading/BrandTextLoading';
 import AppsSkeleton from '@/components/Skeleton/Apps';
+import CommunityListSkeleton from '@/components/Skeleton/CommunityList';
 import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
 import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
 import GenerationSkeleton from '@/components/Skeleton/Generation';
@@ -503,7 +504,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
           'Desktop > Discover > List > Layout',
           { preloadId: 'community' },
         ),
-        handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('grid') }) },
+        handle: { meta: routeMeta({ Skeleton: CommunityListSkeleton }) },
       },
       // Detail routes (with DetailLayout)
       {

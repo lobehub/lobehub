@@ -10,7 +10,7 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PublishedTime from '@/components/PublishedTime';
-import ArticleSkeleton from '@/components/Skeleton/Article';
+import { ArticleSkeleton } from '@/components/Skeleton';
 import SkillAvatar from '@/components/SkillAvatar';
 import FileTree, { FileTreeSkeleton } from '@/features/FileTree';
 import { useToolStore } from '@/store/tool';

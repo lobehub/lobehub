@@ -4,7 +4,7 @@ import { CloudflareProviderCard } from 'model-bank/modelProviders';
 import { useTranslation } from 'react-i18next';
 
 import { FormInput, FormPassword } from '@/components/FormInput';
-import { SkeletonInput } from '@/components/Skeleton/SkeletonInput';
+import { SkeletonInput } from '@/components/Skeleton';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { type GlobalLLMProviderKey } from '@/types/user/settings';
 

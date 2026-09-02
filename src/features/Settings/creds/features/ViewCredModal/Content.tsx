@@ -10,7 +10,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import ArticleSkeleton from '@/components/Skeleton/Article';
+import { ArticleSkeleton } from '@/components/Skeleton';
 
 import { type CredsApi } from '../useCredsApi';
 

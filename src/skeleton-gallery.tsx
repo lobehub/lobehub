@@ -2,7 +2,7 @@ import { Flexbox, ThemeProvider } from '@lobehub/ui';
 import { type ReactNode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import ArticleSkeleton from '@/components/Skeleton/Article';
+import { ArticleSkeleton } from '@/components/Skeleton';
 import ConversationListSkeleton from '@/components/Skeleton/Conversation/List';
 import TaskItemSkeleton from '@/features/AgentTasks/AgentTaskList/TaskItemSkeleton';
 import { BriefCardSkeleton } from '@/features/DailyBrief/BriefCardSkeleton';

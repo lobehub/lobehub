@@ -1,5 +1,6 @@
 'use client';
 
+import { Skeleton } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 
 export interface SkeletonBarProps {
@@ -9,10 +10,9 @@ export interface SkeletonBarProps {
 }
 
 const SkeletonBar = ({ height, width = '100%', radius }: SkeletonBarProps) => (
-  <div
-    aria-hidden
+  <Skeleton
+    height={28}
     style={{
-      background: cssVar.colorFillTertiary,
       borderRadius: radius ?? cssVar.borderRadius,
       height,
       margin: 0,

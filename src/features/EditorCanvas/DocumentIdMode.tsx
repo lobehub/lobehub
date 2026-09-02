@@ -7,7 +7,7 @@ import { createStoreUpdater } from 'zustand-utils';
 
 import NotFound from '@/components/404';
 import AsyncError from '@/components/AsyncError';
-import ArticleSkeleton from '@/components/Skeleton/Article';
+import { ArticleSkeleton } from '@/components/Skeleton';
 import { useSaveDocumentHotkey } from '@/hooks/useHotkeys';
 import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';

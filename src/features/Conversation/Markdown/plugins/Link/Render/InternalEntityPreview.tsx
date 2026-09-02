@@ -15,7 +15,7 @@ import {
 import { memo, type PropsWithChildren, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import ArticleSkeleton from '@/components/Skeleton/Article';
+import { ArticleSkeleton } from '@/components/Skeleton';
 import { useClientDataSWR } from '@/libs/swr';
 import { agentService } from '@/services/agent';
 import { documentService } from '@/services/document';

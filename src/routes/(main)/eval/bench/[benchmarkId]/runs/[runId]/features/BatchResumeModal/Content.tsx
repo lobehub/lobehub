@@ -7,7 +7,7 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { type FC, memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import ArticleSkeleton from '@/components/Skeleton/Article';
+import { ArticleSkeleton } from '@/components/Skeleton';
 import { agentEvalService } from '@/services/agentEval';
 
 const styles = createStaticStyles(({ css }) => ({

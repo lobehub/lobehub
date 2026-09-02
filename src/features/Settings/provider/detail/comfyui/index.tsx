@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { FormInput, FormPassword } from '@/components/FormInput';
 import KeyValueEditor from '@/components/KeyValueEditor';
-import { SkeletonInput } from '@/components/Skeleton/SkeletonInput';
+import { SkeletonInput } from '@/components/Skeleton';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { type GlobalLLMProviderKey } from '@/types/user/settings';
 

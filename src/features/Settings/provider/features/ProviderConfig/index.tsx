@@ -17,8 +17,7 @@ import { Trans, useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
 import { FormInput, FormPassword } from '@/components/FormInput';
-import { SkeletonInput } from '@/components/Skeleton/SkeletonInput';
-import { SkeletonSwitch } from '@/components/Skeleton/SkeletonSwitch';
+import { SkeletonInput, SkeletonSwitch } from '@/components/Skeleton';
 import { usePermission } from '@/hooks/usePermission';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';

@@ -7,7 +7,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
-import SettingsSectionSkeleton from '@/components/Skeleton/Settings/Section';
+import { SettingsSectionSkeleton } from '@/components/Skeleton';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { useSaveState } from '@/hooks/useSaveState';
 import { useUserStore } from '@/store/user';

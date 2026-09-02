@@ -8,7 +8,7 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { VirtuosoGrid } from 'react-virtuoso';
 
-import ArticleSkeleton from '@/components/Skeleton/Article';
+import { ArticleSkeleton } from '@/components/Skeleton';
 import AgentItem from '@/features/SkillStore/SkillDetail/AgentItem';
 import { agentListStyles as styles } from '@/features/SkillStore/SkillDetail/style';
 import VirtuosoLoading from '@/features/SkillStore/SkillList/VirtuosoLoading';

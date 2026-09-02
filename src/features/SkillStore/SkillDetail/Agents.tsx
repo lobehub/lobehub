@@ -8,7 +8,7 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { VirtuosoGrid } from 'react-virtuoso';
 
-import ArticleSkeleton from '@/components/Skeleton/Article';
+import { ArticleSkeleton } from '@/components/Skeleton';
 import { useClientDataSWR } from '@/libs/swr';
 import { discoverKeys } from '@/libs/swr/keys';
 import { discoverService } from '@/services/discover';

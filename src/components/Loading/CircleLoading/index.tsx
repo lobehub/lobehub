@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
+import { Center, Flexbox, Icon } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { LoaderCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -8,15 +8,7 @@ import { useTranslation } from 'react-i18next';
 const CircleLoading = () => {
   const { t } = useTranslation('common');
   return (
-    <div
-      style={{
-        alignItems: 'center',
-        display: 'flex',
-        height: '100%',
-        justifyContent: 'center',
-        width: '100%',
-      }}
-    >
+    <Center height={'100%'} width={'100%'}>
       <Flexbox align={'center'} gap={8}>
         <div>
           <Icon spin icon={LoaderCircle} size={'large'} />
@@ -25,7 +17,7 @@ const CircleLoading = () => {
           {t('loading')}
         </Text>
       </Flexbox>
-    </div>
+    </Center>
   );
 };
 
