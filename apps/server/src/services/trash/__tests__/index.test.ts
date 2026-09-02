@@ -410,6 +410,34 @@ describe('TrashService', () => {
       ).toHaveLength(0);
     });
 
+    it('purges every registered document attached to a trashed file', async () => {
+      const { id: fileId } = await fileModel.create({
+        fileType: 'text/plain',
+        name: 'page-source.txt',
+        size: 3,
+        url: 'files/page-source.txt',
+      });
+      const document = await documentModel.create({
+        fileId,
+        fileType: 'custom/page',
+        source: '',
+        sourceType: 'api',
+        title: 'Attached page',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+      const [root] = await service.trashFiles([fileId]);
+
+      await service.purge([root.id]);
+
+      expect(await serverDB.select().from(documents).where(eq(documents.id, document.id))).toEqual(
+        [],
+      );
+      expect(
+        await serverDB.select().from(trashItems).where(eq(trashItems.rootId, root.id)),
+      ).toEqual([]);
+    });
+
     it('keeps a trashed file and its registry entry when storage deletion fails', async () => {
       await fileModel.createGlobalFile({
         creator: userId,

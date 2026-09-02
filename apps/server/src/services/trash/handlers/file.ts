@@ -34,8 +34,13 @@ export const softDeleteFiles = async (
 };
 
 export const fileHandler: TrashHandler = {
-  purge: async (ctx, root) => {
+  purge: async (ctx, root, children) => {
     await purgeFiles(ctx, [root.resourceId], { onlyTrashed: true });
+
+    const documentIds = children
+      .filter((child) => child.resourceType === 'document')
+      .map((child) => child.resourceId);
+    await new DocumentModel(ctx.db, ctx.userId, ctx.workspaceId).purge(documentIds);
   },
   restore: async (ctx, root, children) => {
     const fileModel = new FileModel(ctx.db, ctx.userId, ctx.workspaceId);
