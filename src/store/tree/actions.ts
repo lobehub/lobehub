@@ -89,6 +89,22 @@ export class TreeActionImpl {
   };
 
   /**
+   * Folders whose refresh was requested while a fetch for them was already in
+   * flight. That fetch captured its snapshot before the change the caller is
+   * revealing (a create from the sidebar "+" during the initial root load, a
+   * move landing while the destination is still loading), so dropping the
+   * request would leave the new row out of the tree until something else
+   * refreshed it. One follow-up runs once the in-flight fetch settles; repeated
+   * requests collapse into that one.
+   */
+  #queuedRevalidate = new Set<string>();
+
+  #runQueuedRevalidate = (folderId: string) => {
+    if (!this.#queuedRevalidate.delete(folderId)) return;
+    void this.revalidate(folderId);
+  };
+
+  /**
    * `children` is keyed by folder id, but the explorer addresses the current
    * folder by whatever the URL carries — usually the folder slug (see
    * `useFileStore.queryParams.parentId`). Writing under the slug leaves the
@@ -111,6 +127,7 @@ export class TreeActionImpl {
   };
 
   init = (knowledgeBaseId: string) => {
+    this.#queuedRevalidate.clear();
     this.#set(
       {
         children: {},
@@ -127,6 +144,7 @@ export class TreeActionImpl {
   };
 
   reset = () => {
+    this.#queuedRevalidate.clear();
     this.#set(
       {
         children: {},
@@ -184,6 +202,7 @@ export class TreeActionImpl {
         false,
         'tree/loadChildren/success',
       );
+      this.#runQueuedRevalidate(folderId);
     } catch (error) {
       if (this.#get().epoch !== epoch) return;
       console.error(`Failed to load children for ${folderId}:`, error);
@@ -198,6 +217,7 @@ export class TreeActionImpl {
         false,
         'tree/loadChildren/error',
       );
+      this.#runQueuedRevalidate(folderId);
     }
   };
 
@@ -206,7 +226,10 @@ export class TreeActionImpl {
 
     const folderId = this.#resolveFolderKey(folderKey);
     const { epoch, knowledgeBaseId, status } = this.#get();
-    if (status[folderId] === 'loading') return;
+    if (status[folderId] === 'loading' || status[folderId] === 'revalidating') {
+      this.#queuedRevalidate.add(folderId);
+      return;
+    }
 
     this.#set(
       { status: { ...this.#get().status, [folderId]: 'revalidating' } },
@@ -234,6 +257,7 @@ export class TreeActionImpl {
         false,
         'tree/revalidate/success',
       );
+      this.#runQueuedRevalidate(folderId);
     } catch {
       if (this.#get().epoch !== epoch) return;
       this.#set(
@@ -241,6 +265,7 @@ export class TreeActionImpl {
         false,
         'tree/revalidate/error',
       );
+      this.#runQueuedRevalidate(folderId);
     }
   };
 

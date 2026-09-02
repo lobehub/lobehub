@@ -251,6 +251,64 @@ describe('TreeActionImpl folder key resolution', () => {
     expect(matcher('resource:search')).toBe(false);
   });
 
+  it('a revalidate requested during an in-flight root load runs once that load settles', async () => {
+    const state = createState();
+    const actions = new TreeActionImpl(
+      createSetter(() => state),
+      () => state,
+    );
+    // The initial root fetch captured its snapshot before the sidebar "+"
+    // created a row; the refresh must not be dropped on the floor.
+    let resolveInitial!: (value: { items: unknown[] }) => void;
+    const initial = new Promise<{ items: unknown[] }>((resolve) => {
+      resolveInitial = resolve;
+    });
+    const created = { fileType: 'custom/document', id: 'docs_created', name: 'New', slug: null };
+    mockGetKnowledgeItems.mockReturnValueOnce(initial).mockResolvedValue({ items: [created] });
+
+    const load = actions.loadChildren('');
+    expect(state.status['']).toBe('loading');
+
+    await actions.revalidate('');
+    await actions.revalidate('');
+    expect(mockGetKnowledgeItems).toHaveBeenCalledTimes(1);
+
+    resolveInitial({ items: [] });
+    await load;
+    await vi.waitFor(() => {
+      expect(state.children['']?.map((item) => item.id)).toEqual(['docs_created']);
+    });
+    // Both queued requests collapsed into a single follow-up fetch.
+    expect(mockGetKnowledgeItems).toHaveBeenCalledTimes(2);
+    expect(state.status['']).toBe('idle');
+  });
+
+  it('a revalidate requested during an in-flight revalidate follows it instead of racing it', async () => {
+    const state = createState();
+    const actions = new TreeActionImpl(
+      createSetter(() => state),
+      () => state,
+    );
+    let resolveFirst!: (value: { items: unknown[] }) => void;
+    const first = new Promise<{ items: unknown[] }>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const fresh = { fileType: 'custom/document', id: 'docs_fresh', name: 'Fresh', slug: null };
+    mockGetKnowledgeItems.mockReturnValueOnce(first).mockResolvedValue({ items: [fresh] });
+
+    const running = actions.revalidate('folder-a');
+    expect(state.status['folder-a']).toBe('revalidating');
+    await actions.revalidate('folder-a');
+    expect(mockGetKnowledgeItems).toHaveBeenCalledTimes(1);
+
+    resolveFirst({ items: [] });
+    await running;
+    await vi.waitFor(() => {
+      expect(state.children['folder-a']?.map((item) => item.id)).toEqual(['docs_fresh']);
+    });
+    expect(mockGetKnowledgeItems).toHaveBeenCalledTimes(2);
+  });
+
   it('revalidate stores the refetched children under the folder id when addressed by slug', async () => {
     const state = createLoadedState();
     const actions = new TreeActionImpl(
