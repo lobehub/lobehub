@@ -16,6 +16,7 @@ import AcceptanceIdentity from './AcceptanceIdentity';
 import AcceptanceLedgerRail from './AcceptanceLedgerRail';
 import AcceptanceOriginTopic from './AcceptanceOriginTopic';
 import { AcceptanceBundleGate, AcceptanceScope } from './AcceptanceScope';
+import AcceptanceSharedNotice from './AcceptanceSharedNotice';
 import AcceptanceStatusControl from './AcceptanceStatusControl';
 import AcceptanceViewReportLink from './AcceptanceViewReportLink';
 import { acceptanceScrollLayout } from './layout';
@@ -73,6 +74,7 @@ const AcceptancePage = ({
                 <AcceptanceFocusWorkspace />
               ) : (
                 <>
+                  <AcceptanceSharedNotice />
                   <AcceptanceIdentity
                     statusSlot={<AcceptanceStatusControl />}
                     topicSlot={<AcceptanceOriginTopic />}

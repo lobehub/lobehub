@@ -433,6 +433,50 @@ renders. Seed the history and the ledger, but never assert on the live window's 
 percentage — read it back from `agent_quota_snapshots` and report what the run
 actually rendered.
 
+#### Shared-viewer (non-owner) evidence needs a second signed-in user — signed-out hits /signin
+
+**Situation:** capturing how a page renders for someone who is NOT the owner of the
+object (a shared acceptance link, a workspace-member view), on the local full stack.
+
+**Doesn't work:** a fresh storage-empty agent-browser session. The SPA's `/acceptance`
+(and the rest of the main layout) sits behind the client auth gate, so a signed-out
+context redirects to `/signin` before the route mounts — `location.pathname` lands on
+`/signin` and every "the notice never renders" reading is an artifact of the gate, not
+the change under test.
+
+**Works:** seed a second user directly (mirror what `seed-user` writes: a `users` row
+with `onboarding` finished + an `accounts` row with a bcryptjs password hash), then
+sign that user in from INSIDE the visitor session so the cookies land in it:
+
+```js
+await fetch('/api/auth/sign-in/email', {
+  body: JSON.stringify({ email, password }),
+  credentials: 'include',
+  headers: { 'Content-Type': 'application/json' },
+  method: 'POST',
+});
+```
+
+Reload and assert identity with `app-probe.sh auth` before capturing. Use a
+run-specific session name, never `lobehub-dev` (that one is the owner).
+
+#### Ambient `LOBEHUB_TOPIC_ID` hijacks a local CLI ingest — strip it for fixture creation
+
+**Situation:** creating a fixture acceptance on the LOCAL dev server with
+`bun src/index.ts acceptance run ingest` while running inside a LobeHub conversation
+(Claude Code sessions launched from a Topic export `LOBEHUB_TOPIC_ID` /
+`LOBEHUB_AGENT_ID` / `LOBEHUB_OPERATION_ID`).
+
+**Doesn't work:** plain ingest. The CLI auto-attaches to the ambient conversation, and
+that topic id belongs to PRODUCTION — the local server answers
+`topic "tpc_…" not found in the current workspace`, which reads like broken fixture
+data rather than an env leak.
+
+**Works:** strip the ambient ids only for the local fixture ingest
+(`env -u LOBEHUB_TOPIC_ID -u LOBEHUB_AGENT_ID -u LOBEHUB_OPERATION_ID …`) so it lands
+standalone. Keep them for the final PRODUCTION publish of the verification round —
+there the auto-attach to the current conversation is exactly what you want.
+
 ### Driving the UI
 
 #### The composer's slash menu needs real key events — `keyboard type` never opens it
