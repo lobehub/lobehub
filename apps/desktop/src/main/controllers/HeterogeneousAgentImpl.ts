@@ -791,7 +791,11 @@ export default class HeterogeneousAgentCtr {
     const command = this.resolveSessionCommand(session);
     const status =
       command === defaultCommand
-        ? await this.app.binaryManager?.detect?.(defaultCommand, true)
+        ? // Normal launches must reuse the successful binary/PATH detection.
+          // Forcing here invalidates the login-shell PATH cache on every message,
+          // putting a slow interactive shell back on the critical path. Explicit
+          // Rescan actions remain responsible for force-refreshing the cache.
+          await this.app.binaryManager?.detect?.(defaultCommand)
         : await detectHeterogeneousCliCommand(session.agentType, command);
 
     if (!status || status.available) {
