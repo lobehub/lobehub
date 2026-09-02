@@ -146,6 +146,50 @@ describe('goal show command', () => {
     expect(output).not.toContain('undefined');
   });
 
+  it("states an incoming edge from the row owner's side, not the source's", async () => {
+    // Edges read `source <kind> target`, so listing an INCOMING `depends_on` as
+    // `depends_on:<source>` claimed the exact opposite of the graph: it made the
+    // framework node look like it depended on the node that depends on IT, so a
+    // correct plan read as a reversed one.
+    mockClient.goal.graph.query.mockResolvedValue({
+      data: {
+        decisions: [],
+        edges: [
+          {
+            goalId: 'goal-1',
+            id: 'e1',
+            kind: 'decomposes',
+            sourceNodeId: 'problem-node-id',
+            targetNodeId: 'task-node-id',
+          },
+          {
+            goalId: 'goal-1',
+            id: 'e2',
+            kind: 'depends_on',
+            sourceNodeId: 'finding-node-id',
+            targetNodeId: 'task-node-id',
+          },
+        ],
+        events: [],
+        goal: { id: 'goal-1', requirement: null, status: 'review', title: 'Three quotes' },
+        nodes: [
+          node('problem', 'Collect three quotes'),
+          node('task', 'Build the harness'),
+          node('finding', 'Downstream work'),
+        ],
+        workVersions: [],
+      },
+    });
+
+    const output = await render();
+
+    expect(output).toContain('RELATIONS');
+    // The task is part of the problem, and it BLOCKS the node that depends on it.
+    expect(output).toContain('part of problem-');
+    expect(output).toContain('blocks finding-');
+    expect(output).not.toContain('depends_on');
+  });
+
   it('still shows the responsible task id next to its node', async () => {
     mockClient.goal.graph.query.mockResolvedValue({
       data: {

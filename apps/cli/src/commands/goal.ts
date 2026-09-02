@@ -1,4 +1,5 @@
 import type {
+  GoalEdgeKind,
   GoalGraphDecision,
   GoalGraphSnapshot,
   GoalNodeKind,
@@ -21,6 +22,22 @@ const nodeIcon: Record<GoalNodeKind, string> = {
   problem: '◇',
   task: '▣',
 };
+/**
+ * Every edge kind reads `source <kind> target`, so a row listing its INCOMING
+ * edges by kind states the relationship backwards: an incoming `depends_on`
+ * means the other node depends on THIS one, not the reverse. Render the inverse
+ * verb instead, so each entry is a true sentence about the row it sits on.
+ */
+const inverseEdgeLabel: Record<GoalEdgeKind, string> = {
+  contradicts: 'contradicted by',
+  decomposes: 'part of',
+  depends_on: 'blocks',
+  investigates: 'investigated by',
+  leads_to: 'follows',
+  produces: 'produced by',
+  supports: 'supported by',
+};
+
 const terminalOutcomes = new Set(['achieved', 'waiting_human', 'no_progress', 'failed']);
 
 interface GoalRunTickResult extends GoalTickResult {
@@ -45,20 +62,20 @@ function printGraph(graph: GoalGraphSnapshot) {
     incoming.set(edge.targetNodeId, list);
   }
   const rows = graph.nodes.map((node) => {
-    const dependencies = (incoming.get(node.id) ?? [])
-      .map((edge) => `${edge.kind}:${edge.sourceNodeId.slice(0, 8)}`)
+    const relations = (incoming.get(node.id) ?? [])
+      .map((edge) => `${inverseEdgeLabel[edge.kind] ?? edge.kind} ${edge.sourceNodeId.slice(0, 8)}`)
       .join(', ');
     return [
       `${nodeIcon[node.kind]} ${node.kind}`,
       node.status,
       truncate(node.title, 46),
       node.taskId ?? '-',
-      dependencies || '-',
+      relations || '-',
       node.id,
     ];
   });
   console.log();
-  printTable(rows, ['TYPE', 'STATUS', 'TITLE', 'TASK', 'INCOMING', 'NODE ID']);
+  printTable(rows, ['TYPE', 'STATUS', 'TITLE', 'TASK', 'RELATIONS', 'NODE ID']);
 }
 
 function printTick(result: GoalTickResult) {
