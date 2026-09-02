@@ -63,6 +63,8 @@ export const sharedMainAreaChildren: RouteObject[] = [
         element: (
           <AgentRouteSwitch
             fallback={<ConversationLayoutSkeleton />}
+            // Mobile has no share settings page; the agent itself is the closest stop.
+            ownShareRedirect={(agentId) => `/agent/${agentId}`}
             ownElement={dynamicLayout(
               () => import('@/routes/(mobile)/chat/_layout'),
               'Mobile > Chat > Layout',

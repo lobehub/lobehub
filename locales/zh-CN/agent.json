@@ -368,7 +368,6 @@
   "share.visitor.input.placeholder": "和这个分享助手聊聊…",
   "share.visitor.input.send": "发送",
   "share.visitor.input.stop": "停止",
-  "share.visitor.ownerPreview": "你是这个助手的创建者，当前为访客视角预览。仅在分享链接开启时才能发送消息。",
   "share.visitor.privacyNotice": "本次会话运行在创建者的账号下，内容可能对创建者可见，请勿发送敏感信息。",
   "share.visitor.topics.empty": "还没有会话",
   "share.visitor.topics.new": "新建会话",

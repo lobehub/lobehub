@@ -90,7 +90,6 @@ const AgentShareVisitorPage = memo(() => {
     );
   }
 
-  const isOwnerPreview = data.isOwner;
   const interactive = isShareInteractive(data.visibility);
 
   return (
@@ -143,7 +142,7 @@ const AgentShareVisitorPage = memo(() => {
           style={{ background: cssVar.colorFillQuaternary }}
         >
           <Text fontSize={12} type={'secondary'}>
-            {isOwnerPreview ? t('share.visitor.ownerPreview') : t('share.visitor.privacyNotice')}
+            {t('share.visitor.privacyNotice')}
           </Text>
         </Flexbox>
         <VisitorConversation data={data} />

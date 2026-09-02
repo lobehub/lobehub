@@ -29,7 +29,7 @@ export const isBuiltinAgentSlug = (routeAgentId?: string) =>
 export const needsAgentRouteLookup = (routeAgentId?: string) =>
   !isBuiltinAgentSlug(routeAgentId) && looksLikeSlug(routeAgentId);
 
-export type AgentRouteBranch = 'loading' | 'own' | 'share';
+export type AgentRouteBranch = 'loading' | 'own' | 'ownShare' | 'share';
 
 /**
  * Which surface `/agent/:slugOrId` renders for a given resolution state.
@@ -58,7 +58,9 @@ export const resolveAgentRouteBranch = ({
 
   if (isTrpcErrorCode(error, 'UNAUTHORIZED')) return 'share';
 
-  return kind === 'share' ? 'share' : 'own';
+  if (kind === 'share' || kind === 'ownShare') return kind;
+
+  return 'own';
 };
 
 /**
@@ -85,7 +87,7 @@ export const useAgentRouteResolution = (routeAgentId?: string) => {
     /** True only while a slug lookup is in flight, i.e. the kind is unknown yet. */
     isLoading: needsLookup && isLoading,
     kind: needsLookup ? data?.kind : ('own' as const),
-    /** The id behind a user-chosen agent slug, once known. */
-    resolvedAgentId: data?.kind === 'own' ? data.agentId : undefined,
+    /** The id behind a user-chosen agent slug (or the caller's own share slug), once known. */
+    resolvedAgentId: data?.kind === 'own' || data?.kind === 'ownShare' ? data.agentId : undefined,
   };
 };

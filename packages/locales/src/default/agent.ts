@@ -482,8 +482,6 @@ export default {
   'share.visitor.input.placeholder': 'Message this shared agent…',
   'share.visitor.input.send': 'Send',
   'share.visitor.input.stop': 'Stop',
-  'share.visitor.ownerPreview':
-    'You own this agent — this is a preview of what visitors see. Sending is only available while the share link is on.',
   'share.visitor.privacyNotice':
     'This conversation runs on the owner’s account and may be visible to them. Avoid sharing sensitive information.',
   'share.visitor.topics.empty': 'No conversations yet',

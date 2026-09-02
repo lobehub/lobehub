@@ -115,14 +115,17 @@ const protectAgentConfig = async <T extends Record<string, any>>(
 
 /** What a `/agent/:slugOrId` param resolves to — see `resolveAgentRoute`. */
 export interface AgentRouteResolution {
-  /** The resolved agent id. Only present for `own` routes. */
+  /** The resolved agent id. Present for `own` and `ownShare` routes. */
   agentId?: string;
   /**
    * `own`: one of the caller's agents (by id or by agent slug).
-   * `share`: an existing agent share (access is still gated by `getSharedAgent`).
+   * `ownShare`: a share link of the caller's OWN agent — the creator opened
+   *   their own share URL, and is sent to that agent's share settings instead
+   *   of the visitor surface.
+   * `share`: someone else's agent share (access is still gated by `getSharedAgent`).
    * `notFound`: neither — the caller sees the agent not-found surface.
    */
-  kind: 'own' | 'share' | 'notFound';
+  kind: 'own' | 'ownShare' | 'share' | 'notFound';
 }
 
 const agentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
@@ -1482,7 +1485,13 @@ export const agentRouter = router({
       if (agentId) return { agentId, kind: 'own' };
 
       const share = await AgentShareModel.findBySlugOrId(ctx.serverDB, slugOrId);
-      if (share) return { kind: 'share' };
+      // The creator following their own share link is not a visitor: the
+      // client redirects `ownShare` to the agent's share settings.
+      if (share) {
+        return share.ownerId === ctx.userId
+          ? { agentId: share.agentId, kind: 'ownShare' }
+          : { kind: 'share' };
+      }
 
       return { kind: 'notFound' };
     }),

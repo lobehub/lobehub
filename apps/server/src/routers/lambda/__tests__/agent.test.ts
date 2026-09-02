@@ -1051,11 +1051,27 @@ describe('agentRouter', () => {
 
     it('falls back to an agent share when no own agent claims the slug', async () => {
       agentModelMock.resolveIdBySlug.mockResolvedValue(null);
-      findBySlugOrIdMock.mockResolvedValue({ shareId: 'share-1' } as any);
+      findBySlugOrIdMock.mockResolvedValue({ ownerId: 'someone-else', shareId: 'share-1' } as any);
 
       const caller = agentRouter.createCaller(mockCtx);
 
       expect(await caller.resolveAgentRoute({ slugOrId: 'shared-bot' })).toEqual({ kind: 'share' });
+    });
+
+    it('sends the creator following their OWN share link to the agent, not the visitor surface', async () => {
+      agentModelMock.resolveIdBySlug.mockResolvedValue(null);
+      findBySlugOrIdMock.mockResolvedValue({
+        agentId: 'agt_mine',
+        ownerId: mockCtx.userId,
+        shareId: 'share-1',
+      } as any);
+
+      const caller = agentRouter.createCaller(mockCtx);
+
+      expect(await caller.resolveAgentRoute({ slugOrId: 'my-share-slug' })).toEqual({
+        agentId: 'agt_mine',
+        kind: 'ownShare',
+      });
     });
 
     it('routes a private share to the share surface, which owns the access gate', async () => {

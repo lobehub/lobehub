@@ -40,6 +40,10 @@ describe('resolveAgentRouteBranch', () => {
     expect(resolveAgentRouteBranch({ isLoading: false, kind: 'share' })).toBe('share');
   });
 
+  it("redirects the creator's own share link instead of rendering the visitor surface", () => {
+    expect(resolveAgentRouteBranch({ isLoading: false, kind: 'ownShare' })).toBe('ownShare');
+  });
+
   it('falls back to the creator surface, which owns the not-found card', () => {
     expect(resolveAgentRouteBranch({ isLoading: false, kind: 'notFound' })).toBe('own');
     expect(resolveAgentRouteBranch({ isLoading: false })).toBe('own');

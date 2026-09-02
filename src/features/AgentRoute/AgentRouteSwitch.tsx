@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, type ReactElement, type ReactNode } from 'react';
-import { useParams } from 'react-router';
+import { Navigate, useParams } from 'react-router';
 
 import { resolveAgentRouteBranch, useAgentRouteResolution } from './useAgentRouteResolution';
 
@@ -10,9 +10,17 @@ interface AgentRouteSwitchProps {
   fallback?: ReactNode;
   /** The creator's own agent shell (layout + nested routes). */
   ownElement: ReactElement;
+  /**
+   * Where the creator lands when they open their OWN share link. Defaults to
+   * the agent's share settings; a platform without that page (mobile) points
+   * at the agent itself.
+   */
+  ownShareRedirect?: (agentId: string) => string;
   /** The agent-share visitor surface. */
   shareElement: ReactElement;
 }
+
+const defaultOwnShareRedirect = (agentId: string) => `/agent/${agentId}/share`;
 
 /**
  * `/agent/:slugOrId` serves two surfaces: the creator's own agent (by id or by
@@ -25,15 +33,22 @@ interface AgentRouteSwitchProps {
  * The share branch does not render an `Outlet`, so the nested creator routes
  * (`/agent/:aid/docs` …) stay unmounted for a visitor.
  */
-const AgentRouteSwitch = memo<AgentRouteSwitchProps>(({ fallback, ownElement, shareElement }) => {
-  const { aid } = useParams<{ aid?: string }>();
-  const { error, isLoading, kind } = useAgentRouteResolution(aid);
-  const branch = resolveAgentRouteBranch({ error, isLoading, kind });
+const AgentRouteSwitch = memo<AgentRouteSwitchProps>(
+  ({ fallback, ownElement, ownShareRedirect = defaultOwnShareRedirect, shareElement }) => {
+    const { aid } = useParams<{ aid?: string }>();
+    const { error, isLoading, kind, resolvedAgentId } = useAgentRouteResolution(aid);
+    const branch = resolveAgentRouteBranch({ error, isLoading, kind });
 
-  if (branch === 'loading') return <>{fallback ?? null}</>;
+    if (branch === 'loading') return <>{fallback ?? null}</>;
 
-  return branch === 'share' ? shareElement : ownElement;
-});
+    // The creator is never a visitor of their own share: `/agent/<share-slug>`
+    // is what they copied from the share settings, so send them back there.
+    if (branch === 'ownShare' && resolvedAgentId)
+      return <Navigate replace to={ownShareRedirect(resolvedAgentId)} />;
+
+    return branch === 'share' ? shareElement : ownElement;
+  },
+);
 
 AgentRouteSwitch.displayName = 'AgentRouteSwitch';
 
