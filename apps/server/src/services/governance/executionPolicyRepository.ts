@@ -1,5 +1,5 @@
 import type { LobeChatDatabase } from '@lobechat/database';
-import { eq } from 'drizzle-orm';
+import { count, desc, eq } from 'drizzle-orm';
 
 import { userExecutionPolicies } from '@/database/schemas';
 
@@ -53,6 +53,41 @@ export const upsertPolicyForUser = async (
     .returning();
 
   return row;
+};
+
+export interface ListAllPoliciesResult {
+  items: UserExecutionPolicyItem[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
+const DEFAULT_PAGE_SIZE = 50;
+const MAX_PAGE_SIZE = 200;
+
+/**
+ * Every configured policy across every user, most recently updated first —
+ * the admin panel's overview table, mirroring `listAllRules` in
+ * `rulesRepository.ts`.
+ */
+export const listAllPolicies = async (
+  db: LobeChatDatabase,
+  { page = 1, pageSize = DEFAULT_PAGE_SIZE }: { page?: number; pageSize?: number } = {},
+): Promise<ListAllPoliciesResult> => {
+  const clampedPage = Math.max(1, page);
+  const clampedPageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, pageSize));
+
+  const [items, [{ value: total }]] = await Promise.all([
+    db
+      .select()
+      .from(userExecutionPolicies)
+      .orderBy(desc(userExecutionPolicies.updatedAt))
+      .limit(clampedPageSize)
+      .offset((clampedPage - 1) * clampedPageSize),
+    db.select({ value: count() }).from(userExecutionPolicies),
+  ]);
+
+  return { items, page: clampedPage, pageSize: clampedPageSize, total };
 };
 
 /** Delete = restore the user to unrestricted (no row = no policy). */

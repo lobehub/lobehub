@@ -1,5 +1,5 @@
 import type { LobeChatDatabase } from '@lobechat/database';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, count, desc, eq, inArray } from 'drizzle-orm';
 
 import { commandGovernanceRules } from '@/database/schemas';
 
@@ -46,6 +46,41 @@ export const listRulesForUser = (
     .from(commandGovernanceRules)
     .where(eq(commandGovernanceRules.userId, userId))
     .orderBy(desc(commandGovernanceRules.createdAt));
+
+export interface ListAllRulesResult {
+  items: CommandGovernanceRuleItem[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
+const DEFAULT_PAGE_SIZE = 50;
+const MAX_PAGE_SIZE = 200;
+
+/**
+ * Every rule across every user, newest first — the admin panel's overview
+ * table, so an operator isn't forced to already know which user to look up
+ * before seeing anything is configured at all.
+ */
+export const listAllRules = async (
+  db: LobeChatDatabase,
+  { page = 1, pageSize = DEFAULT_PAGE_SIZE }: { page?: number; pageSize?: number } = {},
+): Promise<ListAllRulesResult> => {
+  const clampedPage = Math.max(1, page);
+  const clampedPageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, pageSize));
+
+  const [items, [{ value: total }]] = await Promise.all([
+    db
+      .select()
+      .from(commandGovernanceRules)
+      .orderBy(desc(commandGovernanceRules.createdAt))
+      .limit(clampedPageSize)
+      .offset((clampedPage - 1) * clampedPageSize),
+    db.select({ value: count() }).from(commandGovernanceRules),
+  ]);
+
+  return { items, page: clampedPage, pageSize: clampedPageSize, total };
+};
 
 /**
  * Enabled rules relevant to one execution target — `scope = 'all'` OR

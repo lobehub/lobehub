@@ -5,6 +5,7 @@ import { getServerDB } from '@/database/core/db-adaptor';
 import {
   deletePolicyForUser,
   getPolicyForUser,
+  listAllPolicies,
   upsertPolicyForUser,
 } from '@/server/services/governance';
 
@@ -22,6 +23,27 @@ const UpsertPolicyBodySchema = z.object({
   readableRoots: z.array(z.string()).optional(),
   writableRoots: z.array(z.string()).optional(),
 });
+
+/**
+ * GET /api/governance/execution-policy?page&pageSize — every configured
+ * policy across every user, paginated, for the admin panel's overview table.
+ * Mirrors `listRules`'s no-userId branch in `handlers/rules.ts`.
+ */
+export async function listExecutionPoliciesHandler(c: Context): Promise<Response> {
+  const pageParam = c.req.query('page');
+  const pageSizeParam = c.req.query('pageSize');
+
+  const serverDB = await getServerDB();
+  const result = await listAllPolicies(serverDB, {
+    page: pageParam ? Number(pageParam) : undefined,
+    pageSize: pageSizeParam ? Number(pageSizeParam) : undefined,
+  });
+
+  return c.json(
+    { page: result.page, pageSize: result.pageSize, policies: result.items, total: result.total },
+    200,
+  );
+}
 
 /**
  * GET /api/governance/execution-policy/:userId — admin panel reads one

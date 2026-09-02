@@ -4,6 +4,7 @@ import { check } from './handlers/check';
 import {
   deleteExecutionPolicyHandler,
   getExecutionPolicyByUserHandler,
+  listExecutionPoliciesHandler,
   upsertExecutionPolicyHandler,
 } from './handlers/executionPolicy';
 import { log as logHandler } from './handlers/log';
@@ -47,6 +48,7 @@ app.get('/logs', serviceTokenAuth(), listLogs);
 // lambda tRPC router (`ctx.userId`), not the service token, so it is never
 // distributed to end-user devices. See
 // `apps/server/src/routers/lambda/executionPolicy.ts`.
+app.get('/execution-policy', serviceTokenAuth(), listExecutionPoliciesHandler);
 app.get('/execution-policy/:userId', serviceTokenAuth(), getExecutionPolicyByUserHandler);
 app.put('/execution-policy/:userId', serviceTokenAuth(), upsertExecutionPolicyHandler);
 app.delete('/execution-policy/:userId', serviceTokenAuth(), deleteExecutionPolicyHandler);
