@@ -254,11 +254,21 @@ export const fetchSSE = async (url: string, options: RequestInit & FetchSSEOptio
   let response!: Response;
   const fetchStartTime = Date.now();
 
+  let isStreaming = true;
+  if (options.body && typeof options.body === 'string') {
+    try {
+      const parsedBody = JSON.parse(options.body);
+      if (parsedBody && parsedBody.stream === false) {
+        isStreaming = false;
+      }
+    } catch {}
+  }
+
   const { text, speed: smoothingSpeed } = standardizeAnimationStyle(
     options.responseAnimation ?? {},
   );
-  const shouldSkipTextProcessing = text === 'none';
-  const textSmoothing = text === 'smooth';
+  const shouldSkipTextProcessing = text === 'none' || !isStreaming;
+  const textSmoothing = text === 'smooth' && isStreaming;
 
   // Add text buffer and timer related variables
   let textBuffer = '';
@@ -451,7 +461,10 @@ export const fetchSSE = async (url: string, options: RequestInit & FetchSSEOptio
         }
 
         case 'reasoning': {
-          if (textSmoothing) {
+          if (shouldSkipTextProcessing) {
+            thinking += data;
+            options.onMessageHandle?.({ text: data, type: 'reasoning' });
+          } else if (textSmoothing) {
             thinkingController.pushToQueue(data);
 
             if (!thinkingController.isAnimationActive) thinkingController.startAnimation();

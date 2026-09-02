@@ -185,6 +185,38 @@ describe('fetchSSE', () => {
     });
   });
 
+  it('should skip animation and buffering when stream is false in request body', async () => {
+    const mockOnMessageHandle = vi.fn();
+    const mockOnFinish = vi.fn();
+
+    (fetchEventSource as any).mockImplementationOnce(
+      async (url: string, options: FetchEventSourceInit) => {
+        options.onopen!({ clone: () => ({ ok: true, headers: new Headers() }) } as any);
+        options.onmessage!({ event: 'text', data: JSON.stringify('He') } as any);
+        options.onmessage!({ event: 'text', data: JSON.stringify('llo') } as any);
+        options.onmessage!({ event: 'text', data: JSON.stringify(' World') } as any);
+      },
+    );
+
+    await fetchSSE('/', {
+      body: JSON.stringify({ stream: false }),
+      onMessageHandle: mockOnMessageHandle,
+      onFinish: mockOnFinish,
+      responseAnimation: 'smooth',
+    });
+
+    expect(mockOnMessageHandle).toHaveBeenNthCalledWith(1, { text: 'He', type: 'text' });
+    expect(mockOnMessageHandle).toHaveBeenNthCalledWith(2, { text: 'llo', type: 'text' });
+    expect(mockOnMessageHandle).toHaveBeenNthCalledWith(3, { text: ' World', type: 'text' });
+
+    expect(mockOnFinish).toHaveBeenCalledWith('Hello World', {
+      observationId: null,
+      toolCalls: undefined,
+      traceId: null,
+      type: 'done',
+    });
+  });
+
   describe('reasoning', () => {
     it('should handle reasoning event without smoothing', async () => {
       const mockOnMessageHandle = vi.fn();
