@@ -62,11 +62,12 @@ const withLhPreprocessing = (
     // refuses too — see its `shareVisitorBlocked` param — but this is the
     // primary, intended-to-be-load-bearing check).
     if (resolve.isShareVisitor && isLhCommand(command)) {
+      // Deliberately no command content: it is visitor/model-controlled and
+      // may carry an inline token — same as the `preprocessLhCommand` refusal.
       log(
-        'Refused lh command for share visitor (user %s, workspace %s): %s',
+        'Refused lh command for share visitor (user %s, workspace %s)',
         resolve.userId,
         resolve.workspaceIdHint,
-        command.slice(0, 80),
       );
       return {
         error: {

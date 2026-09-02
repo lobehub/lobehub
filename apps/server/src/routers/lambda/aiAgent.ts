@@ -54,6 +54,7 @@ import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import { agentOperations, topics, workspaceMembers } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { notShareVisitorTopicRef } from '@/database/utils/shareVisitor';
 import { heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { signHeteroOperationJWT, signUserJWT } from '@/libs/trpc/utils/internalJwt';
@@ -768,8 +769,9 @@ const assertCanUseOperationAgent = async (params: {
  *
  * Visible to: the operation's owner, or (workspace runs) a member with `use`
  * access to the operation's agent in the SAME workspace as the caller.
- * Everything else — including share visitors — resolves as NOT_FOUND so the
- * endpoint does not confirm which ids exist.
+ * Everything else — share visitors, AND the creator looking at a visitor's
+ * run — resolves as NOT_FOUND so the endpoint does not confirm which ids
+ * exist.
  */
 const assertOperationVisibleToCaller = async (params: {
   db: LobeChatDatabase;
@@ -779,6 +781,11 @@ const assertOperationVisibleToCaller = async (params: {
 }) => {
   const { db, operationId, userId, workspaceId } = params;
 
+  // Share-visitor runs are ALSO excluded (`notShareVisitorTopicRef`): they
+  // execute under the creator's userId, so the owner shortcut below would
+  // otherwise hand the creator the visitor's run metadata, history and
+  // stream events — the same exclusion `findOwnOperationById` applies to
+  // the trace reads.
   const [row] = await db
     .select({
       agentId: agentOperations.agentId,
@@ -786,7 +793,9 @@ const assertOperationVisibleToCaller = async (params: {
       workspaceId: agentOperations.workspaceId,
     })
     .from(agentOperations)
-    .where(eq(agentOperations.id, operationId))
+    .where(
+      and(eq(agentOperations.id, operationId), notShareVisitorTopicRef(agentOperations.topicId)),
+    )
     .limit(1);
 
   const notFound = () => new TRPCError({ code: 'NOT_FOUND', message: 'Operation not found' });

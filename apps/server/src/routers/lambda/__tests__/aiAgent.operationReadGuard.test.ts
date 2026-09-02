@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { type LobeChatDatabase } from '@lobechat/database';
-import { agentOperations } from '@lobechat/database/schemas';
+import { agentOperations, topics } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -85,6 +85,30 @@ describe('aiAgentRouter operation read guard', () => {
       });
 
       expect(mockGetOperationStatus).not.toHaveBeenCalled();
+    });
+
+    // Share runs execute under the CREATOR's userId inside a visitor topic
+    // (`topics.senderId`), so plain ownership would let the creator read the
+    // visitor's run — the same exclusion `findOwnOperationById` applies.
+    it('hides a visitor-topic operation from its creator-owner', async () => {
+      const [topic] = await serverDB
+        .insert(topics)
+        .values({ senderId: visitorId, title: 'visitor chat', userId: ownerId })
+        .returning();
+      await serverDB
+        .update(agentOperations)
+        .set({ topicId: topic.id })
+        .where(eq(agentOperations.id, operationId));
+
+      await expect(callerFor(ownerId).getOperationStatus({ operationId })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+      await expect(
+        callerFor(ownerId).getPendingInterventions({ operationId }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect(mockGetOperationStatus).not.toHaveBeenCalled();
+      expect(mockGetPendingInterventions).not.toHaveBeenCalled();
     });
 
     it('rejects an unknown operation id without touching the runtime', async () => {
