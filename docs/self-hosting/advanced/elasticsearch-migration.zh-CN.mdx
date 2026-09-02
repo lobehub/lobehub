@@ -218,13 +218,13 @@ ES_REINDEX_STATE_DIR=.elasticsearch-reindex bun run fts-search:reindex -- --appl
 Elasticsearch 稳定运行并经过观察窗口，且 PostgreSQL 已有当前恢复点后，先查看剩余的 LobeHub 管理对象：
 
 ```bash
-bun run fts-search:cleanup-pg-search -- --status
+bun run scripts/pgSearchCleanup/index.ts --status
 ```
 
 确认后通过脚本完成清理，不需要从文档复制 SQL：
 
 ```bash
-bun run fts-search:cleanup-pg-search -- --apply --yes
+bun run scripts/pgSearchCleanup/index.ts --apply --yes
 ```
 
 请使用直连 `DATABASE_URL`，不要使用事务池地址。只有
