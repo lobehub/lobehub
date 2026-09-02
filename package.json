@@ -591,6 +591,7 @@
       "workerd"
     ],
     "overrides": {
+      "@lobehub/editor": "https://pkg.pr.new/@lobehub/editor@205",
       "@react-pdf/image": "3.0.4",
       "@types/react": "19.2.13",
       "@vitest/coverage-v8": "3.2.6",
