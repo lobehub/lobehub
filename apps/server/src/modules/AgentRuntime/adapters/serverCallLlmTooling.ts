@@ -17,6 +17,17 @@ import { buildToolDiscoveryConfig, log } from '../executorHelpers';
 import { resolveRunActiveDeviceId } from '../executors/resolveRunActiveDeviceId';
 
 export interface ServerCallLlmTooling {
+  /**
+   * The device actually routed for this run, if any (same single-track gate
+   * `buildStepToolDelta` uses below). Exposed so callers building prompt
+   * template variables can tell whether `runCommand`/`execScript` will
+   * execute on a device instead of falling back to the cloud sandbox —
+   * `resolved.enabledToolIds.includes('lobe-cloud-sandbox')` alone doesn't
+   * cover it, since Skills' sandbox fallback applies whenever no device is
+   * routed, independent of whether the dedicated Cloud Sandbox tool is
+   * offered.
+   */
+  activeDeviceId?: string;
   resolved: ResolvedToolSet;
   resolvedSkills?: ResolvedSkillSet;
   toolDiscoveryConfig?: ToolDiscoveryConfig;
@@ -83,6 +94,7 @@ export const resolveServerCallLlmTooling = (
     : undefined;
 
   return {
+    activeDeviceId,
     resolved,
     resolvedSkills,
     toolDiscoveryConfig,

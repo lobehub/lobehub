@@ -87,7 +87,7 @@ export const buildServerCallLlmContext = async ({
   }
 
   const { operationId, stepIndex } = ctx;
-  const { resolved, resolvedSkills, toolDiscoveryConfig } = tooling;
+  const { resolved, resolvedSkills, toolDiscoveryConfig, activeDeviceId } = tooling;
   const contextHints = await resolveServerCallLlmContextHints({
     ctx,
     llmPayload,
@@ -261,6 +261,16 @@ export const buildServerCallLlmContext = async ({
   }
 
   const sandboxEnabled = String(resolved.enabledToolIds.includes('lobe-cloud-sandbox'));
+  // `sandbox_enabled` only tracks whether the dedicated Cloud Sandbox tool is
+  // offered (execution target resolved to exactly 'sandbox'). It's not what
+  // determines whether a credential injected via `injectCredsToSandbox` will
+  // actually be reachable: `lobe-skills`' `runCommand`/`execScript` silently
+  // fall back to that same cloud sandbox session whenever no device is
+  // actively routed for this run (see `skillsRuntime`), independent of
+  // `sandbox_enabled` — e.g. the common no-device web/agent session, or an
+  // `auto` target that didn't end up routing to an online device. Give the
+  // creds tool its own, accurate signal instead of reusing this one.
+  const credsSandboxReachable = String(!activeDeviceId);
   let sandboxUploadedFiles = '';
   if (sandboxEnabled === 'true' && ctx.serverDB && ctx.userId && lobehubSkillTopicId) {
     try {
@@ -597,6 +607,7 @@ export const buildServerCallLlmContext = async ({
       ...lobehubSkillVariables,
       COMPOSIO_SERVICES_LIST: composioServicesListStr,
       CREDS_LIST: credsListStr,
+      creds_sandbox_reachable: credsSandboxReachable,
       language: serverLanguage,
       // Only override the generator's 'en-US' locale fallback when the user info
       // fetch actually resolved a language — an empty string would render blank.
