@@ -242,11 +242,12 @@ const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
         )}
       </Flexbox>
 
-      {threads.isInitialError ? (
-        <AsyncError error={threads.error} variant={'block'} onRetry={() => void threads.reload()} />
-      ) : threads.isLoadingInitial ? (
-        <SurfaceSkeleton header={false} variant={'list'} />
-      ) : threads.items.length === 0 && !pinnedThread ? null : (
+      {/* The pinned deep-link thread renders on its own, so a pending or failed list
+          request never hides a target that was already fetched. */}
+      {threads.isInitialError ||
+      threads.isLoadingInitial ||
+      threads.items.length > 0 ||
+      pinnedThread ? (
         <Flexbox className={styles.threadList}>
           {pinnedThread && (
             <Thread
@@ -262,21 +263,31 @@ const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
               onSummaryChange={updateSummaryTotal}
             />
           )}
-          {threads.items.map(({ replyCount, root }) => (
-            <Thread
-              documentId={documentId}
-              focus={focus?.rootCommentId === root.id ? focus : undefined}
-              key={root.id}
-              replyCount={replyCount}
-              root={root}
-              onFocusMissing={handleReplyFocusMissing}
-              onMutated={refresh}
-              onReplyCountChange={updateReplyCount}
-              onRootUpdate={handleUpdate}
-              onSummaryChange={updateSummaryTotal}
+          {threads.isInitialError ? (
+            <AsyncError
+              error={threads.error}
+              variant={'block'}
+              onRetry={() => void threads.reload()}
             />
-          ))}
-          {threads.error ? (
+          ) : threads.isLoadingInitial ? (
+            <SurfaceSkeleton header={false} variant={'list'} />
+          ) : (
+            threads.items.map(({ replyCount, root }) => (
+              <Thread
+                documentId={documentId}
+                focus={focus?.rootCommentId === root.id ? focus : undefined}
+                key={root.id}
+                replyCount={replyCount}
+                root={root}
+                onFocusMissing={handleReplyFocusMissing}
+                onMutated={refresh}
+                onReplyCountChange={updateReplyCount}
+                onRootUpdate={handleUpdate}
+                onSummaryChange={updateSummaryTotal}
+              />
+            ))
+          )}
+          {threads.error && !threads.isInitialError ? (
             <AsyncError
               error={threads.error}
               retrying={threads.isRetrying}
@@ -297,7 +308,7 @@ const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
             )
           )}
         </Flexbox>
-      )}
+      ) : null}
 
       {/* While the thread list is still skeleton-loading the composer would
           float against placeholder content — reveal it with the real list. */}
