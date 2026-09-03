@@ -120,7 +120,7 @@ describe('TrashService', () => {
         });
         await new TrashModel(tx as unknown as LobeChatDatabase, userId).register({
           deletedAt,
-          root: { resourceId: file.id, resourceType: 'file', title: file.name },
+          root: { resourceId: file.id, resourceType: 'file', title: 'transfer-race.txt' },
         });
         trashStamped();
         await release;
