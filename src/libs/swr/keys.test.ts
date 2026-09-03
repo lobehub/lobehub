@@ -142,9 +142,16 @@ describe('isDocumentCommentKeyForEvent', () => {
         event,
       ),
     ).toBe(true);
+    // Pinned deep-link details revalidate on any comment event in the workspace.
+    expect(
+      isDocumentCommentKeyForEvent(documentCommentKeys.detail('workspace-1', 'reply-9'), event),
+    ).toBe(true);
   });
 
   it('does not invalidate other documents, workspaces, or reply threads', () => {
+    expect(
+      isDocumentCommentKeyForEvent(documentCommentKeys.detail('workspace-2', 'root-1'), event),
+    ).toBe(false);
     expect(
       isDocumentCommentKeyForEvent(documentCommentKeys.threads('workspace-2', 'document-1'), event),
     ).toBe(false);

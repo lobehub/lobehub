@@ -65,7 +65,7 @@ export const GOAL_CRITERIA_DRAFT_JSON_SCHEMA = {
 };
 
 /** Bump when the goal decomposition planning prompt meaningfully changes. */
-export const GOAL_DECOMPOSE_PROMPT_VERSION = 'v2';
+export const GOAL_DECOMPOSE_PROMPT_VERSION = 'v3';
 
 export const GOAL_DECOMPOSE_JSON_SCHEMA = {
   name: 'goal_decomposition',
@@ -73,7 +73,7 @@ export const GOAL_DECOMPOSE_JSON_SCHEMA = {
     additionalProperties: false,
     properties: {
       problemStatement: { maxLength: 280, minLength: 1, type: 'string' },
-      works: {
+      tasks: {
         items: {
           additionalProperties: false,
           properties: {
@@ -89,7 +89,7 @@ export const GOAL_DECOMPOSE_JSON_SCHEMA = {
         type: 'array',
       },
     },
-    required: ['problemStatement', 'works'],
+    required: ['problemStatement', 'tasks'],
     type: 'object' as const,
   },
   strict: true,
@@ -101,7 +101,7 @@ interface GoalDecomposeInput {
 
 /**
  * Plan the opening exploration structure of a goal graph: the core question it
- * answers plus the independent work directions to pursue, before anything runs.
+ * answers plus the independent task directions to pursue, before anything runs.
  */
 export const chainGoalDecompose = ({
   requirement,
@@ -112,15 +112,15 @@ export const chainGoalDecompose = ({
     {
       content: [
         'You plan the opening exploration structure for a persistent autonomous goal.',
-        'Decompose the goal into the core question it must answer and the independent work directions that together answer it.',
+        'Decompose the goal into the core question it must answer and the independent task directions that together answer it.',
         'Guidelines:',
         '- problemStatement is 1–2 sentences naming the core question or outcome of the goal, in your own words. Never copy the acceptance-criteria list into it.',
-        '- Return 1–5 works. A complex goal (analysis, research, multi-stage delivery) must be split into several directions that can be explored independently or in sequence — e.g. gather the raw material, analyze it from distinct angles, then synthesize. A genuinely small single-step goal may stay as one work.',
-        '- Each work.title names its direction concisely; titles must be distinct from each other and from the goal name.',
-        '- Each work.instruction is a complete, self-contained brief for an autonomous agent working on that direction only: what to do, the concrete deliverable, and how that deliverable will be judged. Include only the requirements relevant to this direction — never paste the full goal acceptance list into every work.',
-        '- Preserve every concrete URL, scope, constraint, and numeric threshold from the goal in whichever work it belongs to.',
-        '- Order works so that earlier ones produce what later ones consume.',
-        '- For each work, set dependsOn to the 0-based indices of the earlier works whose outputs it consumes; use [] for a work that can start immediately. A pipeline-shaped goal (gather → analyze → synthesize) must express those edges — do not mark every work independent — but never invent a dependency the work does not actually need.',
+        '- Return 1–5 tasks. A complex goal (analysis, research, multi-stage delivery) must be split into several directions that can be explored independently or in sequence — e.g. gather the raw material, analyze it from distinct angles, then synthesize. A genuinely small single-step goal may stay as one task.',
+        '- Each task.title names its direction concisely; titles must be distinct from each other and from the goal name.',
+        '- Each task.instruction is a complete, self-contained brief for an autonomous agent working on that direction only: what to do, the concrete deliverable, and how that deliverable will be judged. Include only the requirements relevant to this direction — never paste the full goal acceptance list into every task.',
+        '- Preserve every concrete URL, scope, constraint, and numeric threshold from the goal in whichever task it belongs to.',
+        '- Order tasks so that earlier ones produce what later ones consume.',
+        '- For each task, set dependsOn to the 0-based indices of the earlier tasks whose outputs it consumes; use [] for a task that can start immediately. A pipeline-shaped goal (gather → analyze → synthesize) must express those edges — do not mark every task independent — but never invent a dependency the task does not actually need.',
         '- Write all fields in the language used by the goal.',
       ].join('\n'),
       role: 'system',

@@ -100,6 +100,8 @@
   "pageEditor.comments.author.former": "Ancien membre",
   "pageEditor.comments.cancel": "Annuler",
   "pageEditor.comments.createFailed": "Échec de la publication du commentaire. Votre brouillon est toujours là.",
+  "pageEditor.comments.deepLinkLoadFailed": "Échec du chargement du commentaire lié. Veuillez réessayer.",
+  "pageEditor.comments.deepLinkMissing": "Ce commentaire n'est plus disponible.",
   "pageEditor.comments.delete": "Supprimer",
   "pageEditor.comments.deleteConfirm.content": "Supprimer ce commentaire ? Les réponses resteront visibles si ce commentaire a un fil de discussion.",
   "pageEditor.comments.deleteConfirm.title": "Supprimer le commentaire",

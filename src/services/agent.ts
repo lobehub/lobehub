@@ -264,12 +264,20 @@ class AgentService {
   };
 
   /**
-   * Resolve a url slug to its agent id. Returns `null` for an unknown slug and
-   * for one the caller can't see — the two are deliberately indistinguishable.
+   * Resolve what a `/agent/:slugOrId` param points at: one of the caller's own
+   * agents (by id or slug), an agent share, or nothing. See the
+   * `resolveAgentRoute` procedure for the resolution order and its privacy
+   * properties.
    */
-  resolveAgentIdBySlug = async (slug: string): Promise<string | null> => {
-    const { agentId } = await lambdaClient.agent.resolveAgentIdBySlug.query({ slug });
-    return agentId;
+  resolveAgentRoute = async (slugOrId: string) => {
+    // An anonymous visitor on a share URL gets UNAUTHORIZED here (the
+    // resolver is auth-gated); opt out of the global 401 handler so it does
+    // not hard-redirect them to /signin before the share surface's own
+    // sign-in prompt can render (mirrors `agentShareService.getSharedAgent`).
+    return lambdaClient.agent.resolveAgentRoute.query(
+      { slugOrId },
+      { context: { showNotification: false } },
+    );
   };
 
   /** Rename an agent's url slug (validated server-side; see `updateAgentSlug`). */

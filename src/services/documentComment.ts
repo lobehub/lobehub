@@ -7,6 +7,8 @@ class DocumentCommentService {
 
   delete = (id: string) => lambdaClient.documentComment.delete.mutate({ id });
 
+  get = (id: string) => lambdaClient.documentComment.get.query({ id });
+
   listReplies = (params: { cursor?: string; limit?: number; rootCommentId: string }) =>
     lambdaClient.documentComment.listReplies.query(params);
 

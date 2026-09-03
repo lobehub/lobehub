@@ -26,9 +26,9 @@ describe('resource manager store actions', () => {
     useFileStore.setState(fileInitialState);
   });
 
-  it('should default workspace resources to private mode when no preference is persisted', () => {
+  it('should default workspace resources to workspace mode when no preference is persisted', () => {
     useResourceManagerStore.setState({
-      listVisibility: 'workspace',
+      listVisibility: 'private',
       selectAllState: 'loaded',
       selectedFileIds: ['file-1'],
     });
@@ -36,10 +36,19 @@ describe('resource manager store actions', () => {
     useResourceManagerStore.getState().hydrateListVisibility('workspace-1');
 
     expect(useResourceManagerStore.getState()).toMatchObject({
-      listVisibility: 'private',
+      listVisibility: 'workspace',
       selectAllState: 'none',
       selectedFileIds: [],
     });
+  });
+
+  it('should restore the persisted private mode over the workspace default', () => {
+    useResourceManagerStore.getState().setListVisibility('private', 'workspace-1');
+    useResourceManagerStore.setState({ listVisibility: 'workspace' });
+
+    useResourceManagerStore.getState().hydrateListVisibility('workspace-1');
+
+    expect(useResourceManagerStore.getState().listVisibility).toBe('private');
   });
 
   it('should drop the previous source rows when the source filter changes', () => {

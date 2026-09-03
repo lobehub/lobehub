@@ -100,6 +100,8 @@
   "pageEditor.comments.author.former": "Thành viên cũ",
   "pageEditor.comments.cancel": "Hủy",
   "pageEditor.comments.createFailed": "Không thể đăng bình luận. Bản nháp của bạn vẫn còn ở đây.",
+  "pageEditor.comments.deepLinkLoadFailed": "Không thể tải nhận xét được liên kết. Vui lòng thử lại.",
+  "pageEditor.comments.deepLinkMissing": "Bình luận này không còn khả dụng.",
   "pageEditor.comments.delete": "Xóa",
   "pageEditor.comments.deleteConfirm.content": "Xóa bình luận này? Các phản hồi sẽ vẫn hiển thị nếu bình luận này có chuỗi.",
   "pageEditor.comments.deleteConfirm.title": "Xóa bình luận",

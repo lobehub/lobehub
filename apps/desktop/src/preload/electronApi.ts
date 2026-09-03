@@ -35,7 +35,7 @@ export const setupElectronApi = () => {
     getRendererMemoryInfo: async (): Promise<RendererMemoryInfo> => {
       const memory = await process.getProcessMemoryInfo();
 
-      return { privateBytes: memory.private * 1024 };
+      return { privateBytes: memory.private * 1024, sharedBytes: memory.shared * 1024 };
     },
     invoke,
     onScreenCaptureSession: (listener: (session: ScreenCaptureSession) => void) => {

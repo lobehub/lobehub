@@ -75,6 +75,24 @@ export const acceptanceBatchTargets = (
 };
 
 /**
+ * The subset of a selection a project move can actually change.
+ *
+ * A row already filed under the target project (or, for `null`, one that is in
+ * no project at all) has nowhere to move — leaving it out keeps the reported
+ * count honest, the same rule the status sweep applies.
+ */
+export const acceptanceProjectTargets = (
+  items: AcceptanceListItem[],
+  selected: string[],
+  projectId: string | null,
+): string[] => {
+  const selectedSet = new Set(selected);
+  return items
+    .filter((item) => selectedSet.has(item.id) && (item.project?.id ?? null) !== projectId)
+    .map((item) => item.id);
+};
+
+/**
  * The server caps one sweep at 200 ids, so a select-all after enough scrolling
  * would be rejected wholesale — accept, close and delete all failing before
  * anything changed. Split the work instead: a sweep is a background chore, and

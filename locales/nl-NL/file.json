@@ -100,6 +100,8 @@
   "pageEditor.comments.author.former": "Voormalig lid",
   "pageEditor.comments.cancel": "Annuleren",
   "pageEditor.comments.createFailed": "Reactie plaatsen mislukt. Je concept is nog steeds hier.",
+  "pageEditor.comments.deepLinkLoadFailed": "Kan de gekoppelde opmerking niet laden. Probeer het opnieuw.",
+  "pageEditor.comments.deepLinkMissing": "Deze opmerking is niet langer beschikbaar.",
   "pageEditor.comments.delete": "Verwijderen",
   "pageEditor.comments.deleteConfirm.content": "Deze reactie verwijderen? Antwoorden blijven zichtbaar als deze reactie een thread heeft.",
   "pageEditor.comments.deleteConfirm.title": "Reactie verwijderen",

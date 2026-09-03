@@ -37,6 +37,8 @@
   "document_comment_activity": "{{actorLabel}} heeft een opmerking gemaakt over uw document \"{{documentTitle}}\".",
   "document_comment_activity_replied": "{{actorLabel}} heeft gereageerd op uw opmerking in \"{{documentTitle}}\".",
   "document_comment_activity_replied_title": "Nieuwe reactie op uw opmerking",
+  "document_comment_activity_thread": "{{actorLabel}} heeft gereageerd in een commentaarthread waar je deel van uitmaakt in \"{{documentTitle}}\".",
+  "document_comment_activity_thread_title": "Nieuwe reactie in jouw commentaarthread",
   "document_comment_activity_title": "Nieuwe opmerking over uw document",
   "document_comment_mentioned": "{{actorLabel}} heeft u genoemd in een opmerking over \"{{documentTitle}}\".",
   "document_comment_mentioned_title": "U bent genoemd in een documentopmerking",

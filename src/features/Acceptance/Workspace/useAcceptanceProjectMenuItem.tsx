@@ -21,30 +21,44 @@ import { buildAcceptanceProjectMenuState } from './acceptanceProjectOptions';
  */
 const PROJECT_OPTIONS_KEY = ['acceptance:projectOptions'];
 
-interface AcceptanceProjectMenuItemParams {
+interface AcceptanceProjectMenuParams {
   /** The project the acceptance is filed under, if any. */
   currentProjectId?: string | null;
   /** `null` takes the acceptance out of its project. */
   onSelect: (projectId: string | null) => void;
+  /**
+   * Offer the "remove from project" entry. Defaults to whether
+   * `currentProjectId` is set; a multi-selection passes its own answer, since
+   * a mixed pick has no single current project.
+   */
+  showRemove?: boolean;
+}
+
+interface AcceptanceProjectMenu {
+  items: DropdownItem[];
+  /** Wire to the menu's open change so projects load on first open, not mount. */
+  onOpenChange: (open: boolean) => void;
 }
 
 /**
- * The "file this delivery under a project" submenu on an acceptance row.
+ * The "file this delivery under a project" menu contents, shared between the
+ * per-row submenu and the batch bar's move dropdown.
  *
- * The projects are fetched the first time the submenu opens, not on row mount:
- * a list of 50 rows must not fire a project read nobody asked for.
+ * The projects are fetched the first time the menu opens, not on mount: a list
+ * of 50 rows must not fire a project read nobody asked for.
  *
- * Creating a project is offered from inside the submenu — it is the only way
- * out of the empty state, and the newly created project immediately receives
- * this delivery instead of navigating the user away from their list.
+ * Creating a project is offered from inside the menu — it is the only way out
+ * of the empty state, and the newly created project immediately receives the
+ * delivery instead of navigating the user away from their list.
  *
  * The caller owns the write (and its toast); this hook only decides what the
  * menu offers.
  */
-export const useAcceptanceProjectMenuItem = ({
+export const useAcceptanceProjectMenu = ({
   currentProjectId,
   onSelect,
-}: AcceptanceProjectMenuItemParams): DropdownItem => {
+  showRemove = Boolean(currentProjectId),
+}: AcceptanceProjectMenuParams): AcceptanceProjectMenu => {
   const { t } = useTranslation('verify');
   const [requested, setRequested] = useState(false);
 
@@ -104,19 +118,28 @@ export const useAcceptanceProjectMenuItem = ({
   };
 
   return {
-    children: [
-      ...listItems,
-      { type: 'divider' },
-      createItem,
-      ...(currentProjectId ? [removeItem] : []),
-    ],
+    items: [...listItems, { type: 'divider' }, createItem, ...(showRemove ? [removeItem] : [])],
+    onOpenChange: (open) => {
+      if (open) setRequested(true);
+    },
+  };
+};
+
+/** The per-row "file under a project" submenu item, built on the shared menu. */
+export const useAcceptanceProjectMenuItem = ({
+  currentProjectId,
+  onSelect,
+}: Omit<AcceptanceProjectMenuParams, 'showRemove'>): DropdownItem => {
+  const { t } = useTranslation('verify');
+  const { items, onOpenChange } = useAcceptanceProjectMenu({ currentProjectId, onSelect });
+
+  return {
+    children: items,
     icon: <Icon icon={FolderInput} />,
     key: 'project',
     label: currentProjectId
       ? t('acceptance.workspace.project.move')
       : t('acceptance.workspace.project.add'),
-    onOpenChange: (open) => {
-      if (open) setRequested(true);
-    },
+    onOpenChange,
   };
 };

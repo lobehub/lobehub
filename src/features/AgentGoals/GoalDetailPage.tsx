@@ -4,7 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import { Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { PauseIcon, PlayIcon } from 'lucide-react';
-import { memo, type ReactNode, useEffect, useMemo } from 'react';
+import { memo, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NotFound from '@/components/404';
@@ -13,6 +13,7 @@ import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import { PortalContent } from '@/features/Portal/router';
+import { usePortalPanelWidth } from '@/features/Portal/usePortalPanelWidth';
 import RightPanel from '@/features/RightPanel';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useActivityTime } from '@/hooks/useActivityTime';
@@ -22,6 +23,7 @@ import { chatPortalSelectors } from '@/store/chat/selectors';
 import { type GoalMetricKind } from '@/store/chat/slices/portal/initialState';
 import { goalSelectors, useGoalStore } from '@/store/goal';
 
+import GoalChat from './GoalChat';
 import GoalDetailActions from './GoalDetailActions';
 import { formatSpan, goalStatusKey } from './goalPresentation';
 import GoalRequirement from './GoalRequirement';
@@ -30,7 +32,7 @@ import ProcessControl from './ProcessControl';
 
 /**
  * The goal detail page. A goal is a Goal Graph — it owns its own decomposition
- * and dispatches Work Tasks — so the page reads the graph snapshot directly and
+ * and dispatches its own Tasks — so the page reads the graph snapshot directly and
  * the route is keyed by the `goals` row id.
  *
  * Every header metric is a drill-down entry: clicking one opens its detail in
@@ -110,8 +112,18 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const resumeGoal = useGoalStore((s) => s.resumeGoal);
 
   const showPortal = useChatStore(chatPortalSelectors.showPortal);
+  const currentViewType = useChatStore(chatPortalSelectors.currentViewType);
+  const [chatOpen, setChatOpen] = useState(true);
   const openGoalMetric = useChatStore((s) => s.openGoalMetric);
   const clearPortalStack = useChatStore((s) => s.clearPortalStack);
+
+  // While the exploration map runs fullscreen its overlay carries the portal
+  // panel; ours unmounts so exactly one PortalContent is alive at a time.
+  const [graphFullscreen, setGraphFullscreen] = useState(false);
+
+  // Same per-view width grammar as the conversation portal, but remembered
+  // under the 'goal' scope: resizing here never affects the chat surface.
+  const { maxWidth, minWidth, updateWidth, width } = usePortalPanelWidth(currentViewType, 'goal');
 
   // The portal stack belongs to this goal's inspection session — leaving the
   // page (or switching goals) must not leak it into the conversation surface.
@@ -266,24 +278,36 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
               )}
             </Flexbox>
 
-            <ProcessControl goalId={goal.id} />
+            <ProcessControl
+              goalId={goal.id}
+              graphFullscreen={graphFullscreen}
+              onGraphFullscreenChange={setGraphFullscreen}
+            />
           </WideScreenContainer>
         </Flexbox>
       </Flexbox>
 
       {/* Same Portal the conversation surface uses — the drill-down chain
           (metric / node → task detail → topic) rides its view stack, and the
-          header's back arrow and close come for free. */}
+          header's back arrow and close come for free. When no drill-down is
+          open, the panel hosts the conversation with the goal's responsible
+          agent so a user can just ask about progress. */}
       <RightPanel
-        defaultWidth={440}
-        expand={showPortal}
-        maxWidth={720}
-        minWidth={360}
+        expand={(showPortal || (chatOpen && !!agentId)) && !graphFullscreen}
+        maxWidth={maxWidth}
+        minWidth={minWidth}
+        width={width}
+        onSizeChange={(size) => updateWidth(size?.width)}
         onExpandChange={(next) => {
           if (!next) clearPortalStack();
+          setChatOpen(next);
         }}
       >
-        <PortalContent />
+        {graphFullscreen ? null : showPortal ? (
+          <PortalContent />
+        ) : agentId ? (
+          <GoalChat agentId={agentId} goalId={goalId} onCollapse={() => setChatOpen(false)} />
+        ) : null}
       </RightPanel>
     </Flexbox>
   );

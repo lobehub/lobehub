@@ -25,6 +25,8 @@ class GoalService {
     config?: GoalConfig;
     /** Set by the `/goal` tool so the seeded graph is authored by the agent. */
     createdByAgentId?: string;
+    /** Structured acceptance criteria — persisted rows that gate the terminal acceptance. */
+    criteria?: Array<{ description?: string; instruction?: string; title: string }>;
     maxRounds?: number;
     maxTotalCost?: number;
     /** The user's ask in their own words — shown on the seeded problem node. */
@@ -37,6 +39,10 @@ class GoalService {
     const { data } = await lambdaClient.goal.create.mutate(params);
     return data;
   };
+
+  /** Rebind which persisted verify criteria gate this goal's terminal acceptance. */
+  setAcceptanceCriteria = async (id: string, criteriaIds: string[]) =>
+    lambdaClient.goal.setAcceptanceCriteria.mutate({ criteriaIds, id });
 
   /** Delete a goal and its graph. The dispatched Work Tasks are left in place. */
   delete = async (id: string) => lambdaClient.goal.delete.mutate({ id });

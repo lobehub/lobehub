@@ -12,7 +12,6 @@ import { resolveWorkspaceCommunityProfileRedirect } from '../workspace/features/
 import { OrganizationDetailProvider } from './features/DetailProvider';
 import OrganizationHeader from './features/Header';
 import OrganizationContent from './features/OrganizationContent';
-import Loading from './loading';
 
 interface OrganizationDetailPageProps {
   mobile?: boolean;
@@ -26,7 +25,7 @@ const OrganizationDetailPage = memo<OrganizationDetailPageProps>(({ mobile }) =>
   const { isWorkspaceScope } = useCommunityWorkspaceProfile();
 
   const useUserProfile = useDiscoverStore((s) => s.useUserProfile);
-  const { data, isLoading } = useUserProfile({ username });
+  const { data } = useUserProfile({ username });
 
   useEffect(() => {
     const redirectTo = resolveWorkspaceCommunityProfileRedirect({
@@ -54,8 +53,6 @@ const OrganizationDetailPage = memo<OrganizationDetailPageProps>(({ mobile }) =>
       user,
     };
   }, [data, mobile]);
-
-  if (isLoading) return <Loading />;
   if (!contextConfig) return <NotFound />;
 
   return (

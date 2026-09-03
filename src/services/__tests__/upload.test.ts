@@ -4,7 +4,8 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fileEnv } from '@/envs/file';
 import { lambdaClient } from '@/libs/trpc/client';
 
-import { hashFile, UPLOAD_NETWORK_ERROR, uploadService } from '../upload';
+import { hashFile } from '../hashFile';
+import { UPLOAD_NETWORK_ERROR, uploadService } from '../upload';
 
 const { mockHashHex, mockHashUpdate } = vi.hoisted(() => ({
   mockHashHex: vi.fn(() => 'streamed-hash'),

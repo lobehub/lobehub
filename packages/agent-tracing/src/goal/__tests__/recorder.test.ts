@@ -96,7 +96,7 @@ describe('appendAdvanceToPartial', () => {
       trigger: 'create',
     });
 
-    // A work node added from the UI, with no advance in between.
+    // A task node added from the UI, with no advance in between.
     const withExtra = graph({ nodes: [node('a'), node('b')] });
     const next = (
       await appendAdvanceToPartial(store, 'goal_1', {

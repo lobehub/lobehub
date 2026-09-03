@@ -36,7 +36,6 @@ const CaseDetail = memo(() => {
   const {
     data: resultsData,
     error: resultsError,
-    isLoading: resultsLoading,
     mutate: mutateResults,
   } = useFetchRunResults(runId!, pollingConfig);
 
@@ -100,7 +99,6 @@ const CaseDetail = memo(() => {
       error={resultsError}
       errorVariant={'page'}
       isEmpty={!caseResult}
-      isLoading={resultsLoading}
       onRetry={() => mutateResults()}
     >
       {caseResult && (

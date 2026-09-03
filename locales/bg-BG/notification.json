@@ -37,6 +37,8 @@
   "document_comment_activity": "{{actorLabel}} коментира вашия документ \"{{documentTitle}}\".",
   "document_comment_activity_replied": "{{actorLabel}} отговори на вашия коментар в \"{{documentTitle}}\".",
   "document_comment_activity_replied_title": "Нов отговор на вашия коментар",
+  "document_comment_activity_thread": "{{actorLabel}} отговори в нишка с коментари, в която участвате, в \"{{documentTitle}}\".",
+  "document_comment_activity_thread_title": "Нов отговор в нишката с вашите коментари",
   "document_comment_activity_title": "Нов коментар във вашия документ",
   "document_comment_mentioned": "{{actorLabel}} ви спомена в коментар на \"{{documentTitle}}\".",
   "document_comment_mentioned_title": "Бяхте споменати в коментар на документ",

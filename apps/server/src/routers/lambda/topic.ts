@@ -53,6 +53,10 @@ import {
   resolveContext,
   resolveContextWithAgentId,
 } from './_helpers/resolveContext';
+import {
+  assertCreatorMessageTargets,
+  assertCreatorTopicTargets,
+} from './_helpers/shareVisitorTargetGuard';
 import { basicContextSchema } from './_schema/context';
 
 /** Ctx slice consumed by the conversation General-access guards. */
@@ -172,12 +176,19 @@ const assertCanManageTopicShare = async (
   topicId: string,
   targetVisibility?: 'link' | 'private',
 ) => {
-  if (!ctx.workspaceId) return;
-
-  const topic = await ctx.topicModel.findById(topicId);
+  // `findOwnTopicById`: an agent-share visitor topic is stored under the
+  // creator's userId, and publishing a public link for one would expose the
+  // visitor's conversation. It is never a shareable topic — fail closed, and
+  // do so BEFORE the personal-mode short-circuit below: visitor topics exist
+  // in personal mode too, so the exclusion cannot depend on a workspace.
+  const topic = await ctx.topicModel.findOwnTopicById(topicId);
   if (!topic) {
     throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic not found' });
   }
+
+  // Outside a workspace the remaining checks (agent publish policy, workspace
+  // ownership) have no subject — personal-mode ownership is the whole story.
+  if (!ctx.workspaceId) return;
 
   // Publishing under a restricted agent overrides even topic ownership —
   // that is the whole point of the policy. Resolved only on the publish path
@@ -239,7 +250,7 @@ export const topicRouter = router({
   getTopicDetail: topicProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ input, ctx }) => {
-      const topic = await ctx.topicModel.findById(input.id);
+      const topic = await ctx.topicModel.findOwnTopicById(input.id);
       if (!topic) return null;
       return topic;
     }),
@@ -254,7 +265,7 @@ export const topicRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const topic = await ctx.topicModel.findById(input.topicId);
+      const topic = await ctx.topicModel.findOwnTopicById(input.topicId);
 
       if (!topic) {
         throw new TRPCError({
@@ -279,7 +290,7 @@ export const topicRouter = router({
   getTopicContext: topicProcedure
     .input(z.object({ topicId: z.string() }))
     .query(async ({ input, ctx }) => {
-      const topic = await ctx.topicModel.findById(input.topicId);
+      const topic = await ctx.topicModel.findOwnTopicById(input.topicId);
 
       if (!topic) {
         return { content: `Topic not found: ${input.topicId}`, success: false };
@@ -350,6 +361,13 @@ export const topicRouter = router({
       await assertCanUseConversationTargets(
         guardCtx(ctx),
         resolvedTopics.map((item) => ({ agentId: item.agentId, groupId: item.groupId })),
+      );
+      // `messages` are REPARENTED onto the new topic by ownership only. A
+      // visitor message (creator-owned row under a `senderId` topic) moved to
+      // a creator topic would escape `notShareVisitorMessage()` for good.
+      await assertCreatorMessageTargets(
+        guardCtx(ctx),
+        resolvedTopics.flatMap((item) => item.messages ?? []),
       );
 
       const data = await ctx.topicModel.batchCreate(resolvedTopics as any);
@@ -432,6 +450,11 @@ export const topicRouter = router({
       // Moving needs `use` on both the source conversations and the target agent.
       await assertCanUseTopicTargets(guardCtx(ctx), input.topicIds);
       await assertCanUseConversationTargets(guardCtx(ctx), [{ agentId: input.targetAgentId }]);
+      // Moving a visitor topic re-parents it off the share and strands the
+      // visitor outside the senderId scope the share depends on — see
+      // `assertCreatorTopicTargets` for why this guard sits at the RPC
+      // boundary rather than in the model defaults.
+      await assertCreatorTopicTargets(guardCtx(ctx), input.topicIds);
 
       return ctx.topicModel.batchMoveToAgent(input.topicIds, input.targetAgentId);
     }),
@@ -441,6 +464,9 @@ export const topicRouter = router({
     .input(z.object({ id: z.string(), newTitle: z.string().optional() }))
     .mutation(async ({ input, ctx }) => {
       await assertCanUseTopicTargets(guardCtx(ctx), [input.id]);
+      // Duplicating a visitor topic would copy its content into creator scope
+      // (see `assertCreatorTopicTargets` on `batchMoveTopics` above).
+      await assertCreatorTopicTargets(guardCtx(ctx), [input.id]);
       const data = await ctx.topicModel.duplicate(input.id, input.newTitle);
 
       return data.topic.id;
@@ -490,6 +516,8 @@ export const topicRouter = router({
       await assertCanUseConversationTargets(guardCtx(ctx), [
         { agentId: resolved.agentId, groupId: rest.groupId },
       ]);
+      // See batchCreateTopics — reparenting a visitor message would leak it.
+      await assertCreatorMessageTargets(guardCtx(ctx), rest.messages ?? []);
 
       const data = await ctx.topicModel.create({
         ...rest,
@@ -900,10 +928,17 @@ export const topicRouter = router({
     .use(withScopedPermission('topic:delete'))
     .input(z.object({ id: z.string(), removeFiles: z.boolean().optional() }))
     .mutation(async ({ input, ctx }) => {
-      const topic = await ctx.topicModel.findById(input.id);
+      // `findOwnTopicById` (not `findById`): an agent-share visitor topic is
+      // stored under the creator's `userId`, and `TopicModel.delete` refuses to
+      // remove it. Resolving through the visitor-excluding lookup keeps the
+      // file cleanup below from destroying a visitor conversation's attachments
+      // (DB rows + S3 objects) while the topic itself survives.
+      const topic = await ctx.topicModel.findOwnTopicById(input.id);
       if (topic) assertWorkspaceRowManageable(ctx, topic.userId, 'topic');
 
-      if (!input.removeFiles) return ctx.topicModel.delete(input.id);
+      // No creator-visible topic behind this id: run the (no-op) delete for the
+      // unchanged return shape, but never touch any files.
+      if (!input.removeFiles || !topic) return ctx.topicModel.delete(input.id);
 
       // Collect the topic's deletable attachments BEFORE deleting it — the lookup
       // joins messages, which are cascade-deleted along with the topic. Files
@@ -1015,6 +1050,7 @@ export const topicRouter = router({
       // Co-editing still requires `use`-level General access on the agent —
       // view-only members are read-only.
       await assertCanUseTopicTargets(guardCtx(ctx), [input.id]);
+      await assertCreatorTopicTargets(guardCtx(ctx), [input.id]);
       const { agentId, ...restValue } = input.value;
       if (agentId) await assertCanUseConversationTargets(guardCtx(ctx), [{ agentId }]);
 
@@ -1047,6 +1083,7 @@ export const topicRouter = router({
       // runningOperation on shared topics); only delete/transfer is gated.
       // Co-editing still requires `use`-level General access on the agent.
       await assertCanUseTopicTargets(guardCtx(ctx), [input.id]);
+      await assertCreatorTopicTargets(guardCtx(ctx), [input.id]);
 
       return ctx.topicModel.updateMetadata(input.id, input.metadata);
     }),
@@ -1062,6 +1099,8 @@ export const topicRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       await assertCanUseTopicTargets(guardCtx(ctx), [input.id]);
+      // Same visitor guard as `batchMoveTopics`/`cloneTopic` above.
+      await assertCreatorTopicTargets(guardCtx(ctx), [input.id]);
 
       return ctx.topicModel.settleRunningOperation(input.id, input.operationId, input.status);
     }),

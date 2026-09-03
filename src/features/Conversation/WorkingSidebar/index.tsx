@@ -1,7 +1,7 @@
 import type { SFSymbol } from '@lobechat/electron-client-ipc';
 import { nanoid } from '@lobechat/utils';
-import { Flexbox, Icon, type IconProps, Skeleton } from '@lobehub/ui';
-import { ActionIcon, type DropdownItem, DropdownMenu } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, type IconProps } from '@lobehub/ui';
+import { ActionIcon, type DropdownItem, DropdownMenu, Skeleton } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
@@ -1005,23 +1005,16 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                 {paramsAvailable && activeTab === 'params' && (
                   <Flexbox className={styles.pane}>
                     <Suspense
-                      fallback={
-                        <Skeleton
-                          active
-                          className={styles.paramsLoading}
-                          paragraph={{ rows: 6 }}
-                          title={false}
-                        />
-                      }
+                      fallback={<Skeleton.Text className={styles.paramsLoading} rows={6} />}
                     >
                       <ParamsSection />
                     </Suspense>
                   </Flexbox>
                 )}
-                {reviewAvailable && (
-                  <Flexbox className={activeTab === 'review' ? styles.pane : styles.paneHidden}>
+                {reviewAvailable && showRightPanel && fits && activeTab === 'review' && (
+                  <Flexbox className={styles.pane}>
                     <Review
-                      active={activeTab === 'review'}
+                      active
                       composerTarget={composerTarget}
                       deviceId={remoteDeviceId}
                       showTree={showReviewTree}

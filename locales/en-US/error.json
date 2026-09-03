@@ -126,6 +126,7 @@
   "transfer.ownerOnly": "Only workspace owners can transfer resources created by other members.",
   "transfer.resourceNotFound": "This resource no longer exists or you no longer have access. Refresh and try again.",
   "transfer.sameWorkspace": "This resource is already in the selected workspace. Choose another target.",
+  "transfer.sharedTransferBlocked": "This agent has a share link, so its owner cannot be changed.",
   "transfer.targetIsCurrentOwner": "This agent already belongs to that member. Pick someone else.",
   "transfer.targetNoWriteAccess": "You need Member or Owner access to move resources into the target workspace.",
   "transfer.targetNotWorkspaceMember": "The selected recipient is not an active member of this workspace. Refresh the member list and try again.",

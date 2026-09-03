@@ -78,6 +78,8 @@ export const lobeHubOnlineModelDescriptions = {
     'Gemini 3.6 Flash balances speed with intelligence for strong agentic, coding, and multimodal performance with improved token efficiency.',
   'lobehub.gemini-3.7-flash.description':
     "Gemini 3.7 Flash is Google's most capable Flash model, built for complex coding, agentic workflows, and reliable multi-step execution.",
+  'lobehub.gemini-3.8-flash.description':
+    "Google's most intelligent Flash model, tuned for long-horizon coding and autonomous agents — faster first token and less verbose than 3.7 Flash at the same price.",
   'lobehub.glm-5.1.description':
     "Zai's latest flagship model, aligned with Claude Opus 4.6 on overall and coding capabilities. Excels at long-horizon tasks with autonomous work up to 8 hours, an ideal foundation for Autonomous Agents and long-horizon Coding Agents.",
   'lobehub.glm-5.2.description':
@@ -182,6 +184,8 @@ export const lobeHubOnlineModelDescriptions = {
     "Qwen3.7-Max is Alibaba Cloud's flagship agent-era model for complex coding, reasoning, office automation, and long-horizon autonomous workflows.",
   'lobehub.qwen3.7-plus.description':
     'Qwen3.7-Plus is a cost-effective multimodal model in the Qwen3.7 series, combining strong text capabilities with upgraded vision-language understanding for coding, tool use, GUI tasks, and productivity workflows.',
+  'lobehub.qwen3.8-max-0902.description':
+    'A free coding upgrade over Qwen3.8 Max at the same price — TerminalBench 3.0 more than doubles (11.3 → 29.0), tops the front-end CodeArena leaderboard, and beats Opus 5 on repo-level code understanding.',
   'lobehub.qwen3.8-max-preview.description':
     "Qwen3.8-Max-Preview is a preview of Alibaba's next-generation 2.4T-parameter flagship model, with major gains over Qwen3.7-Max in coding and professional productivity, and leading performance on complex long-horizon tasks such as full-stack development and data analysis.",
   'lobehub.qwen3.8-max.description':

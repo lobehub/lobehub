@@ -107,7 +107,7 @@ const DatasetDetail = memo(() => {
   const refreshTestCases = useEvalStore((s) => s.refreshTestCases);
   const refreshDatasetDetail = useEvalStore((s) => s.refreshDatasetDetail);
 
-  const { data: dataset, error, isLoading, mutate } = useFetchDatasetDetail(datasetId);
+  const { data: dataset, error, mutate } = useFetchDatasetDetail(datasetId);
   // Nullable: a dataset accumulated from captured cases belongs to no benchmark.
   const benchmarkId: string | null =
     (dataset as { benchmarkId?: string | null })?.benchmarkId ?? null;
@@ -209,7 +209,6 @@ const DatasetDetail = memo(() => {
       error={error}
       errorVariant={'page'}
       isEmpty={!dataset}
-      isLoading={isLoading}
       onRetry={() => mutate()}
     >
       {dataset && (

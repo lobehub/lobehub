@@ -123,11 +123,22 @@ export const goalRouter = router({
           .optional(),
         maxRounds: z.number().int().positive().optional(),
         maxTotalCost: z.number().positive().optional(),
+        /** Structured acceptance criteria — persisted rows that gate the terminal acceptance. */
+        criteria: z
+          .array(
+            z.object({
+              description: z.string().optional(),
+              instruction: z.string().optional(),
+              title: z.string().min(1),
+            }),
+          )
+          .optional(),
         problemDescription: z.string().optional(),
         projectId: z.string().optional(),
         requirement: z.string().optional(),
         title: z.string().min(1),
-        work: z
+        /** Seed task nodes, in dependency-free order. */
+        tasks: z
           .array(
             z.union([
               z.string().min(1),
@@ -170,7 +181,7 @@ export const goalRouter = router({
           input.optionId,
           input.resolution,
         );
-        // Answering the gate is what unblocks the Work; carry on from here.
+        // Answering the gate is what unblocks the Task; carry on from here.
         await scheduleGoalAdvance({
           goalId: input.id,
           trigger: 'decide',
@@ -206,7 +217,7 @@ export const goalRouter = router({
 
   /**
    * Delete a goal and, by FK cascade, its whole graph. Anything still running
-   * is stopped first; the Work Tasks themselves are deliberately left in place
+   * is stopped first; the graph Tasks themselves are deliberately left in place
    * — they are ordinary tasks with their own history and acceptance.
    */
   delete: goalWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
@@ -234,7 +245,7 @@ export const goalRouter = router({
   }),
 
   /**
-   * List goals with their graph roll-up: how much Work is done, how many
+   * List goals with their graph roll-up: how many Tasks are done, how many
    * decision gates wait on a human, and what the exploration has cost.
    */
   list: goalProcedure
@@ -271,6 +282,18 @@ export const goalRouter = router({
       mapGoalError(error, 'resume');
     }
   }),
+
+  /** Rebind which persisted verify criteria gate this goal's terminal acceptance. */
+  setAcceptanceCriteria: goalWriteProcedure
+    .input(idInput.extend({ criteriaIds: z.array(z.string()) }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await ctx.goalService.setAcceptanceCriteria(input.id, input.criteriaIds);
+        return { success: true };
+      } catch (error) {
+        mapGoalError(error, 'setAcceptanceCriteria');
+      }
+    }),
 
   setBudget: goalWriteProcedure
     .input(

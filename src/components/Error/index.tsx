@@ -1,12 +1,14 @@
 'use client';
 
-import { Accordion, AccordionItem, Block, Flexbox, FluentEmoji, Highlighter } from '@lobehub/ui';
+import { Accordion, AccordionItem, Block, Flexbox, FluentEmoji } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import type { Key } from 'react';
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { MAX_WIDTH } from '@/const/layoutTokens';
+
+const Highlighter = lazy(() => import('@lobehub/ui/es/Highlighter/index'));
 
 export type ErrorType = Error & { digest?: string };
 
@@ -66,9 +68,11 @@ const ErrorCapture = ({ error, resetPath = '/' }: ErrorCaptureProps) => {
             onExpandedChange={setExpandedKeys}
           >
             <AccordionItem indicatorPlacement={'start'} itemKey={'stack'} title={t('error.stack')}>
-              <Highlighter language={'plaintext'} padding={12} variant={'borderless'}>
-                {error.stack!}
-              </Highlighter>
+              <Suspense fallback={null}>
+                <Highlighter language={'plaintext'} padding={12} variant={'borderless'}>
+                  {error.stack!}
+                </Highlighter>
+              </Suspense>
             </AccordionItem>
           </Accordion>
         </Block>

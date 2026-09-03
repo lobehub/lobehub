@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { notShareVisitorMessage } from '@/database/utils/shareVisitor';
 import * as ModelRuntimeModule from '@/server/modules/ModelRuntime';
 
 import { FollowUpActionService } from './index';
@@ -37,6 +38,33 @@ describe('FollowUpActionService.extract', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('excludes agent-share visitor messages from the assistant lookup', async () => {
+    queryFindFirstSpy.mockResolvedValue(undefined);
+    await svc.extract({ modelConfig: MODEL_CONFIG, topicId: TEST_TOPIC });
+
+    const { where } = queryFindFirstSpy.mock.calls[0][0];
+    const operators = {
+      and: (...conditions: unknown[]) => conditions,
+      eq: (column: unknown, value: unknown) => ({ column, op: 'eq', value }),
+      isNotNull: (column: unknown) => ({ column, op: 'isNotNull' }),
+      isNull: (column: unknown) => ({ column, op: 'isNull' }),
+      ne: (column: unknown, value: unknown) => ({ column, op: 'ne', value }),
+    };
+    const conditions = where(
+      {
+        content: 'content',
+        role: 'role',
+        threadId: 'threadId',
+        topicId: 'topicId',
+        userId: 'userId',
+        workspaceId: 'workspaceId',
+      },
+      operators,
+    ) as unknown[];
+
+    expect(conditions).toContainEqual(notShareVisitorMessage());
   });
 
   it('returns empty (with empty messageId) when no eligible assistant message found', async () => {

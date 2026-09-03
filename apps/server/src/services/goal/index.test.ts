@@ -29,8 +29,11 @@ import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRunt
 
 import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
+import { VerifyPlanGeneratorService } from '../verify/planGenerator';
 import { GoalCriteriaGeneratorService } from './criteriaGenerator';
+import { LEASE_EXPIRED_ERROR, VERIFICATION_FAILED_ERROR } from './decideNextMove';
 import { GoalService } from './index';
+import { VERIFY_SETTLE_GRACE_MS } from './recoveryPolicy';
 import type { GoalTickObservation } from './traceObservation';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -59,9 +62,67 @@ afterEach(async () => {
 });
 
 describe('GoalService', () => {
-  it('creates only one responsible task when ticks race on the same work node', async () => {
+  it('persists structured criteria on create and records their ids on the goal config', async () => {
     const service = new GoalService(serverDB, userId);
-    const graph = await service.create({ title: 'Concurrent goal', work: ['Single owner work'] });
+    const graph = await service.create({
+      criteria: [
+        { description: 'Runs end to end locally', title: 'Local run works' },
+        { instruction: 'Check README covers install and run', title: 'Docs are complete' },
+      ],
+      title: 'Structured goal',
+      tasks: ['Only task'],
+    });
+
+    const criteriaIds = graph.goal.config?.acceptance?.criteriaIds ?? [];
+    expect(criteriaIds).toHaveLength(2);
+
+    const rows = await serverDB.query.verifyCriteria.findMany();
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    expect(byId.get(criteriaIds[0])?.title).toBe('Local run works');
+    expect(byId.get(criteriaIds[1])?.title).toBe('Docs are complete');
+    // the how-to-judge instruction landed in a linked document
+    expect(byId.get(criteriaIds[1])?.documentId).toBeTruthy();
+  });
+
+  it('rebinding criteria also updates the dispatched terminal acceptance task', async () => {
+    // Editing the standard after the terminal Goal-acceptance Task exists must
+    // not leave that Task's Acceptance gating on the stale id list.
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({
+      criteria: [{ title: 'Original criterion' }],
+      requirement: 'Deliver with evidence',
+      title: 'Rebind criteria goal',
+      tasks: ['Only task'],
+    });
+
+    const created = await service.tick(graph.goal.id);
+    await taskModel.updateStatus(created.taskId!, 'completed');
+    await service.tick(graph.goal.id); // synthesize finding
+    await service.tick(graph.goal.id); // create acceptance task
+    const acceptanceTaskCreated = await service.tick(graph.goal.id); // dispatch it
+    expect(acceptanceTaskCreated.taskId).toBeDefined();
+
+    const [replacementId] = await new VerifyPlanGeneratorService(
+      serverDB,
+      userId,
+    ).createCriteriaFromDrafts([
+      { onFail: 'manual', required: true, title: 'Replacement criterion', verifierType: 'agent' },
+    ]);
+    await service.setAcceptanceCriteria(graph.goal.id, [replacementId]);
+
+    const goal = (await service.graph(graph.goal.id)).goal;
+    expect(goal.config?.acceptance?.criteriaIds).toEqual([replacementId]);
+    const acceptance = await new AcceptanceModel(serverDB, userId).findBySubject(
+      'task',
+      acceptanceTaskCreated.taskId!,
+    );
+    expect(acceptance?.config?.verifyCriteriaIds).toEqual([replacementId]);
+  });
+
+  it('creates only one responsible task when ticks race on the same task node', async () => {
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ tasks: ['Single owner task'], title: 'Concurrent goal' });
 
     const results = await Promise.all([service.tick(graph.goal.id), service.tick(graph.goal.id)]);
     const current = await service.graph(graph.goal.id);
@@ -73,15 +134,15 @@ describe('GoalService', () => {
     expect(current.workVersions).toHaveLength(1);
   });
 
-  it('starts the bound Work once when advances race on dispatch', async () => {
+  it('starts the bound Task once when advances race on dispatch', async () => {
     // Overlapping advances (an event hook, a manual nudge, the sweep) both read
     // the task as backlog; without an atomic claim both would call runTask and
-    // the user would pay for the same Work twice.
+    // the user would pay for the same Task twice.
     const runSpy = vi
       .spyOn(TaskRunnerService.prototype, 'runTask')
       .mockImplementation(async ({ taskId }) => ({ taskId }) as never);
     const service = new GoalService(serverDB, userId);
-    const graph = await service.create({ title: 'Raced dispatch', work: ['Only run once'] });
+    const graph = await service.create({ tasks: ['Only run once'], title: 'Raced dispatch' });
     await service.tick(graph.goal.id);
 
     const results = await Promise.all([service.tick(graph.goal.id), service.tick(graph.goal.id)]);
@@ -91,7 +152,7 @@ describe('GoalService', () => {
   });
 
   it('retries a failed verification once when advances race on recovery', async () => {
-    // The dispatch claim only covers starting a backlog Work; the automatic
+    // The dispatch claim only covers starting a backlog Task; the automatic
     // retry path spawns its own run, so without the same claim two overlapping
     // advances would each pay for an attempt.
     const runSpy = vi
@@ -102,7 +163,7 @@ describe('GoalService', () => {
     const graph = await service.create({
       config: { recovery: { maxAttemptsPerTask: 3 } },
       title: 'Raced recovery',
-      work: ['Retry me once'],
+      tasks: ['Retry me once'],
     });
     const created = await service.tick(graph.goal.id);
     await taskModel.update(created.taskId!, { totalTopics: 1 });
@@ -116,6 +177,31 @@ describe('GoalService', () => {
     expect(runSpy).toHaveBeenCalledTimes(1);
   });
 
+  it.each([LEASE_EXPIRED_ERROR, VERIFICATION_FAILED_ERROR])(
+    'does not dispatch recovery for an overdue goal with %s',
+    async (error) => {
+      const runSpy = vi
+        .spyOn(TaskRunnerService.prototype, 'runTask')
+        .mockResolvedValue({} as never);
+      const service = new GoalService(serverDB, userId);
+      const taskModel = new TaskModel(serverDB, userId);
+      const graph = await service.create({
+        config: { schedule: { deadline: new Date(Date.now() - 1000).toISOString() } },
+        title: `Overdue recovery ${error}`,
+        tasks: ['Do not retry'],
+      });
+      const created = await service.tick(graph.goal.id);
+      await taskModel.updateStatus(created.taskId!, 'paused', { error });
+      runSpy.mockClear();
+
+      const stopped = await service.tick(graph.goal.id);
+
+      expect(runSpy).not.toHaveBeenCalled();
+      expect(stopped).toMatchObject({ outcome: 'no_progress' });
+      expect(stopped.message).toContain('Deadline passed');
+    },
+  );
+
   it('hands back a dispatch claim whose worker died before the run existed', async () => {
     // The claim is taken just before `runTask` creates the topic. If the worker
     // dies in that sliver the task is `running` with no operation to reclaim,
@@ -125,7 +211,7 @@ describe('GoalService', () => {
       .mockRejectedValue(new Error('worker died'));
     const service = new GoalService(serverDB, userId);
     const taskModel = new TaskModel(serverDB, userId);
-    const graph = await service.create({ title: 'Orphaned claim', work: ['Start me'] });
+    const graph = await service.create({ tasks: ['Start me'], title: 'Orphaned claim' });
     const created = await service.tick(graph.goal.id);
 
     // The claim survives the crash: put the row back where a dead worker left it.
@@ -143,12 +229,126 @@ describe('GoalService', () => {
     runSpy.mockRestore();
   });
 
+  it('does not re-dispatch a delivered Task while verification is still judging', async () => {
+    // A verify-bound Task keeps its task `running` with a completed topic until
+    // the verify run settles, and that judgment routinely outlives the
+    // operation lease. Treating the window as a dead claim released the task
+    // back to backlog, and the next advance paid for a ghost attempt that the
+    // verify settle path then canceled.
+    const runSpy = vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({} as never);
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({
+      config: { recovery: { operationLeaseTimeoutMs: 60_000 } },
+      title: 'Deliveries wait for verification',
+      tasks: ['Deliver and wait'],
+    });
+    const created = await service.tick(graph.goal.id);
+    await serverDB.insert(taskTopics).values({
+      operationId: 'op-delivered',
+      seq: 1,
+      status: 'completed',
+      taskId: created.taskId!,
+      userId,
+    });
+    await taskModel.updateStatus(created.taskId!, 'running');
+    await serverDB
+      .update(tasks)
+      .set({ updatedAt: new Date(Date.now() - 10 * 60 * 1000) })
+      .where(eq(tasks.id, created.taskId!));
+
+    const waiting = await service.tick(graph.goal.id);
+
+    expect(waiting).toMatchObject({
+      message: expect.stringContaining('waiting for verification'),
+      outcome: 'waiting_external',
+      taskId: created.taskId,
+    });
+    expect((await taskModel.findById(created.taskId!))?.status).toBe('running');
+    expect(runSpy).not.toHaveBeenCalled();
+  });
+
+  it('reclaims a delivered Task once the verification grace window lapses', async () => {
+    // The hold-off above cannot be unconditional: a verify run that died
+    // silently would otherwise strand the goal forever, which is exactly the
+    // failure mode the sweep exists to break.
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({
+      config: { recovery: { operationLeaseTimeoutMs: 60_000 } },
+      title: 'Dead verification is reclaimed',
+      tasks: ['Deliver into silence'],
+    });
+    const created = await service.tick(graph.goal.id);
+    await serverDB.insert(taskTopics).values({
+      createdAt: new Date(Date.now() - VERIFY_SETTLE_GRACE_MS - 60_000),
+      operationId: 'op-delivered-stale',
+      seq: 1,
+      status: 'completed',
+      taskId: created.taskId!,
+      userId,
+    });
+    await taskModel.updateStatus(created.taskId!, 'running');
+    await serverDB
+      .update(tasks)
+      .set({ updatedAt: new Date(Date.now() - 10 * 60 * 1000) })
+      .where(eq(tasks.id, created.taskId!));
+
+    const released = await service.tick(graph.goal.id);
+
+    expect(released.outcome).toBe('advanced');
+    expect((await taskModel.findById(created.taskId!))?.status).toBe('backlog');
+  });
+
+  it('synthesizes the finding from the delivered topic, not a canceled retry', async () => {
+    // When verification accepts a delivery, the settle path cancels the ghost
+    // retry it superseded — leaving the canceled, handoff-less topic as the
+    // newest row. Reading blindly by seq produced findings titled
+    // "Completed: <task>" with no description.
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({ tasks: ['Deliver me'], title: 'Consume the delivery' });
+    const created = await service.tick(graph.goal.id);
+    await serverDB.insert(taskTopics).values([
+      {
+        handoff: {
+          content: 'Delivered content with the full run summary.',
+          summary: 'Delivered summary',
+          title: 'Delivered title',
+        },
+        operationId: 'op-delivered',
+        seq: 1,
+        status: 'completed',
+        taskId: created.taskId!,
+        userId,
+      },
+      {
+        operationId: 'op-ghost-retry',
+        seq: 2,
+        status: 'canceled',
+        taskId: created.taskId!,
+        userId,
+      },
+    ]);
+    await taskModel.updateStatus(created.taskId!, 'completed');
+
+    await service.tick(graph.goal.id);
+
+    const finding = (await service.graph(graph.goal.id)).nodes.find(
+      (node) => node.kind === 'finding',
+    );
+    expect(finding).toMatchObject({
+      description: 'Delivered content with the full run summary.',
+      title: 'Delivered title',
+    });
+  });
+
   it('leaves a fresh dispatch claim alone', async () => {
     // The same shape a moment after the claim is just a run about to start.
     vi.spyOn(TaskRunnerService.prototype, 'runTask').mockRejectedValue(new Error('worker died'));
     const service = new GoalService(serverDB, userId);
     const taskModel = new TaskModel(serverDB, userId);
-    const graph = await service.create({ title: 'Fresh claim', work: ['Start me'] });
+    const graph = await service.create({ tasks: ['Start me'], title: 'Fresh claim' });
     const created = await service.tick(graph.goal.id);
     await expect(service.tick(graph.goal.id)).rejects.toThrow('worker died');
     await taskModel.updateStatus(created.taskId!, 'running');
@@ -166,7 +366,7 @@ describe('GoalService', () => {
     const graph = await service.create({
       maxRounds: 1,
       title: 'Budget stopped',
-      work: ['Costs a round'],
+      tasks: ['Costs a round'],
     });
     const created = await service.tick(graph.goal.id);
     await serverDB.insert(topics).values({ id: 'tpc_budget', userId });
@@ -186,7 +386,11 @@ describe('GoalService', () => {
 
   it('edits the standing requirement in place', async () => {
     const service = new GoalService(serverDB, userId);
-    const graph = await service.create({ requirement: '初版验收', title: 'Editable', work: ['A'] });
+    const graph = await service.create({
+      requirement: '初版验收',
+      tasks: ['A'],
+      title: 'Editable',
+    });
 
     const updated = await service.updateRequirement(graph.goal.id, '改过的验收标准');
 
@@ -199,7 +403,7 @@ describe('GoalService', () => {
     // Nothing distinguishes a user pause from a budget pause on the row, so the
     // reopen is limited to goals whose budget was actually binding.
     const service = new GoalService(serverDB, userId);
-    const graph = await service.create({ title: 'User paused', work: ['Wait'] });
+    const graph = await service.create({ tasks: ['Wait'], title: 'User paused' });
     await service.pause(graph.goal.id);
 
     const updated = await service.setBudget(graph.goal.id, { maxTotalCost: 50 });
@@ -207,12 +411,12 @@ describe('GoalService', () => {
     expect(updated?.status).toBe('paused');
   });
 
-  it('refuses to delete a goal whose running work cannot be stopped', async () => {
+  it('refuses to delete a goal whose running Task cannot be stopped', async () => {
     // Deleting anyway would remove the only surface that can stop an operation
     // which keeps spending.
     vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({} as never);
     const service = new GoalService(serverDB, userId);
-    const graph = await service.create({ title: 'Unstoppable', work: ['Runs on'] });
+    const graph = await service.create({ tasks: ['Runs on'], title: 'Unstoppable' });
     const created = await service.tick(graph.goal.id);
     await serverDB.insert(topics).values({ id: 'tpc_stuck', userId });
     await new TaskTopicModel(serverDB, userId).add(created.taskId!, 'tpc_stuck', { seq: 1 });
@@ -227,10 +431,10 @@ describe('GoalService', () => {
     expect(await service.graph(graph.goal.id)).toBeDefined();
   });
 
-  it('plans the decomposition when a goal has no work yet', async () => {
+  it('plans the decomposition when a goal has no tasks yet', async () => {
     vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
       problemStatement: '核心问题的一句话陈述',
-      works: [
+      tasks: [
         { dependsOn: [], instruction: '收集原始材料', title: '方向A:收集' },
         { dependsOn: [0], instruction: '分析并综合结论', title: '方向B:分析' },
         // Self and forward references are planner hallucinations — dropped.
@@ -288,7 +492,7 @@ describe('GoalService', () => {
       await gate;
       return {
         problemStatement: '并发规划',
-        works: [
+        tasks: [
           { dependsOn: [], instruction: '收集', title: '方向A' },
           { dependsOn: [0], instruction: '分析', title: '方向B' },
         ],
@@ -312,7 +516,7 @@ describe('GoalService', () => {
     expect(after.edges.filter((e) => e.kind === 'depends_on')).toHaveLength(1);
   });
 
-  it('falls back to a single work when the planner fails, instead of stalling', async () => {
+  it('falls back to a single Task when the planner fails, instead of stalling', async () => {
     vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockRejectedValue(
       new Error('model unavailable'),
     );
@@ -328,11 +532,11 @@ describe('GoalService', () => {
   });
 
   it('parks a goal nothing can move so the sweep stops re-picking it', async () => {
-    // Every remaining Work is blocked and nothing runs to unblock it. Left
+    // Every remaining Task is blocked and nothing runs to unblock it. Left
     // `running` it is selected by every newest-first scan forever, and enough
     // of them starve every other stalled goal out of the sweep's window.
     const service = new GoalService(serverDB, userId);
-    const graph = await service.create({ title: 'Deadlocked', work: ['A', 'B'] });
+    const graph = await service.create({ tasks: ['A', 'B'], title: 'Deadlocked' });
     const [a, b] = graph.nodes.filter((n) => n.kind === 'task');
     const graphModel = new GoalGraphModel(serverDB, userId);
     await graphModel.createEdge(graph.goal.id, a.id, b.id, 'depends_on');
@@ -352,7 +556,7 @@ describe('GoalService', () => {
     // transitions used to be recorded — `entity_type='goal'` events existed in
     // the schema with no writer, so the lifecycle timeline was unreconstructable.
     const service = new GoalService(serverDB, userId);
-    const graph = await service.create({ title: 'Lifecycle trail', work: ['A', 'B'] });
+    const graph = await service.create({ tasks: ['A', 'B'], title: 'Lifecycle trail' });
     const [a, b] = graph.nodes.filter((n) => n.kind === 'task');
     const graphModel = new GoalGraphModel(serverDB, userId);
     await graphModel.createEdge(graph.goal.id, a.id, b.id, 'depends_on');
@@ -371,7 +575,7 @@ describe('GoalService', () => {
       expect.objectContaining({
         actorType: 'system',
         eventType: 'updated',
-        reason: 'no eligible work to advance',
+        reason: 'no eligible task to advance',
       }),
     );
     expect(lifecycle).toContainEqual(
@@ -387,7 +591,7 @@ describe('GoalService', () => {
     const graph = await service.create({
       config: { schedule: { deadline: new Date(Date.now() - 1000).toISOString() } },
       title: 'Overdue',
-      work: ['Too late to start'],
+      tasks: ['Too late to start'],
     });
 
     await service.tick(graph.goal.id); // creates the responsible task
@@ -403,9 +607,9 @@ describe('GoalService', () => {
     expect(extended?.config?.schedule?.deadline).toBeTruthy();
   });
 
-  it('dispatches work when the goal has no deadline', async () => {
+  it('dispatches a Task when the goal has no deadline', async () => {
     const service = new GoalService(serverDB, userId);
-    const graph = await service.create({ title: 'No deadline', work: ['Just work'] });
+    const graph = await service.create({ tasks: ['Just task'], title: 'No deadline' });
 
     const result = await service.tick(graph.goal.id);
 
@@ -424,7 +628,7 @@ describe('GoalService', () => {
       agentId: 'agt_goal_author',
       createdByAgentId: 'agt_goal_author',
       title: 'Agent-authored goal',
-      work: ['Do the thing'],
+      tasks: ['Do the thing'],
     });
 
     const seeded = graph.events.filter((event) => ['created', 'linked'].includes(event.eventType));
@@ -442,7 +646,7 @@ describe('GoalService', () => {
     const graph = await service.create({
       agentId: 'agt_assignee',
       title: 'User-authored goal',
-      work: ['Do the thing'],
+      tasks: ['Do the thing'],
     });
 
     const seeded = graph.events.filter((event) => ['created', 'linked'].includes(event.eventType));
@@ -454,32 +658,32 @@ describe('GoalService', () => {
     // The audit trail recorded every transition as the goal's owner, so "what did
     // the system decide on its own" could not be answered from product data.
     const service = new GoalService(serverDB, userId);
-    const graph = await service.create({ title: 'Attributed goal', work: ['Do the thing'] });
+    const graph = await service.create({ tasks: ['Do the thing'], title: 'Attributed goal' });
 
-    // Seeding is the user's ask; claiming the Work and binding its task is not.
+    // Seeding is the user's ask; claiming the Task and binding its runner is not.
     await service.tick(graph.goal.id);
 
     const { events, nodes } = await service.graph(graph.goal.id);
-    const work = nodes.find((node) => node.kind === 'task')!;
+    const task = nodes.find((node) => node.kind === 'task')!;
     const actorsFor = (eventType: string, entityId: string) =>
       events
         .filter((event) => event.eventType === eventType && event.entityId === entityId)
         .map((event) => ({ actorId: event.actorId, actorType: event.actorType }));
 
-    expect(actorsFor('created', work.id)).toEqual([{ actorId: userId, actorType: 'user' }]);
-    expect(actorsFor('activated', work.id)).toEqual([
+    expect(actorsFor('created', task.id)).toEqual([{ actorId: userId, actorType: 'user' }]);
+    expect(actorsFor('activated', task.id)).toEqual([
       { actorId: GOAL_COORDINATOR_ACTOR_ID, actorType: 'system' },
     ]);
     expect(events.some((event) => event.actorType === 'system')).toBe(true);
   });
 
-  it('keeps the overall requirement as background while making the current work authoritative', async () => {
+  it('keeps the overall requirement as background while making the current Task authoritative', async () => {
     const service = new GoalService(serverDB, userId);
     const requirement = `Generate verified training data. ${'Detailed acceptance evidence. '.repeat(20)}`;
     const graph = await service.create({
       requirement,
       title: 'Long requirement goal',
-      work: ['Generate training data'],
+      tasks: ['Generate training data'],
     });
 
     const created = await service.tick(graph.goal.id);
@@ -489,7 +693,7 @@ describe('GoalService', () => {
     expect(task?.description).toBe('Generate training data');
     expect(task?.instruction).toContain(requirement);
     expect(task?.instruction).toContain(
-      'Current Work contract (authoritative execution scope): Generate training data',
+      'Current Task contract (authoritative execution scope): Generate training data',
     );
     expect(task?.instruction).toContain('Do not implement, validate, or pre-empt any sibling');
     expect(task?.instruction).toContain(
@@ -500,7 +704,7 @@ describe('GoalService', () => {
     );
   });
 
-  it('gates every responsible task with a work-scoped Acceptance requirement', async () => {
+  it('gates every responsible task with a Task-scoped Acceptance requirement', async () => {
     const service = new GoalService(serverDB, userId);
     const agentId = 'goal-work-verifier-agent';
     await serverDB.insert(agents).values({ id: agentId, title: 'Goal worker', userId });
@@ -508,7 +712,7 @@ describe('GoalService', () => {
       agentId,
       requirement: 'Generate data, then train and evaluate a model.',
       title: 'Two-stage experiment',
-      work: ['Generate isolated data'],
+      tasks: ['Generate isolated data'],
     });
 
     const created = await service.tick(graph.goal.id);
@@ -523,19 +727,19 @@ describe('GoalService', () => {
     expect(task?.config).not.toHaveProperty('verify');
     expect(acceptance).toMatchObject({ config: { enabled: true } });
     expect(acceptance?.config).not.toHaveProperty('verifierAgentId');
-    expect(acceptance?.requirement).toContain('Verify only this Work: Generate isolated data.');
+    expect(acceptance?.requirement).toContain('Verify only this Task: Generate isolated data.');
     expect(acceptance?.requirement).toContain(
-      'Ignore sibling and downstream Work deliverables; they are verified by their own Tasks.',
+      'Ignore sibling and downstream Task deliverables; they are verified by their own acceptance runs.',
     );
   });
 
-  it('requires a Goal-level Acceptance Work before marking the complete goal achieved', async () => {
+  it('requires a Goal-level Acceptance Task before marking the complete goal achieved', async () => {
     const service = new GoalService(serverDB, userId);
     const taskModel = new TaskModel(serverDB, userId);
     const graph = await service.create({
       requirement: 'A runnable minimal training loop with evidence',
       title: 'Reproduce Ornith training',
-      work: ['Implement minimal training loop'],
+      tasks: ['Implement minimal training loop'],
     });
 
     const created = await service.tick(graph.goal.id);
@@ -562,7 +766,7 @@ describe('GoalService', () => {
 
     const goalAcceptanceCreated = await service.tick(graph.goal.id);
     expect(goalAcceptanceCreated).toMatchObject({
-      message: 'Created Goal-level acceptance Work for the remaining contract',
+      message: 'Created Goal-level acceptance Task for the remaining contract',
       outcome: 'advanced',
     });
     const acceptanceWork = (await service.graph(graph.goal.id)).nodes.find(
@@ -595,16 +799,22 @@ describe('GoalService', () => {
       message: 'Goal-level acceptance passed',
       outcome: 'achieved',
     });
-    expect((await service.graph(graph.goal.id)).goal.status).toBe('achieved');
+    const finalGraph = await service.graph(graph.goal.id);
+    expect(finalGraph.goal.status).toBe('achieved');
+    // The verdict closes the map too: the seeded problem node has no other
+    // resolution path, and must not read "active" on an achieved goal.
+    expect(finalGraph.nodes.find((node) => node.kind === 'problem')).toMatchObject({
+      status: 'resolved',
+    });
   });
 
-  it('does not mark a required goal achieved when only its initial Work is complete', async () => {
+  it('does not mark a required goal achieved when only its initial Task is complete', async () => {
     const service = new GoalService(serverDB, userId);
     const taskModel = new TaskModel(serverDB, userId);
     const graph = await service.create({
       requirement: 'Return a supplier list with fixed prices.',
       title: 'Find BW150 suppliers and fixed prices',
-      work: ['Verify the BW150 product identity'],
+      tasks: ['Verify the BW150 product identity'],
     });
 
     const created = await service.tick(graph.goal.id);
@@ -625,13 +835,13 @@ describe('GoalService', () => {
     );
   });
 
-  it('creates only one Goal-level Acceptance Work when terminal ticks race', async () => {
+  it('creates only one Goal-level Acceptance Task when terminal ticks race', async () => {
     const service = new GoalService(serverDB, userId);
     const taskModel = new TaskModel(serverDB, userId);
     const graph = await service.create({
       requirement: 'Return three verified supplier quotes.',
       title: 'Find supplier quotes',
-      work: ['Research suppliers'],
+      tasks: ['Research suppliers'],
     });
     const created = await service.tick(graph.goal.id);
     await taskModel.updateStatus(created.taskId!, 'completed');
@@ -651,10 +861,10 @@ describe('GoalService', () => {
     ).toHaveLength(1);
   });
 
-  it('evolves a failed work task into a durable decision gate', async () => {
+  it('evolves a failed task into a durable decision gate', async () => {
     const service = new GoalService(serverDB, userId);
     const taskModel = new TaskModel(serverDB, userId);
-    const graph = await service.create({ title: 'Failure recovery', work: ['Risky work'] });
+    const graph = await service.create({ tasks: ['Risky task'], title: 'Failure recovery' });
     const created = await service.tick(graph.goal.id);
 
     await taskModel.updateStatus(created.taskId!, 'paused', { error: 'Verifier rejected output' });
@@ -678,7 +888,7 @@ describe('GoalService', () => {
     // catches it; a synthetic observation always agrees with itself.
     const service = new GoalService(serverDB, userId);
     const taskModel = new TaskModel(serverDB, userId);
-    const graph = await service.create({ title: 'Effect reporting', work: ['Risky task'] });
+    const graph = await service.create({ tasks: ['Risky task'], title: 'Effect reporting' });
 
     const created = await service.tick(graph.goal.id);
     await taskModel.updateStatus(created.taskId!, 'paused', { error: 'Verifier rejected output' });
@@ -721,7 +931,7 @@ describe('GoalService', () => {
     const graph = await service.create({
       config: { maxConcurrentTasks: 1 },
       title: 'Capped goal',
-      work: ['First', 'Second'],
+      tasks: ['First', 'Second'],
     });
 
     // Fill the single slot.
@@ -737,7 +947,7 @@ describe('GoalService', () => {
     expect(runSpy).not.toHaveBeenCalled();
   });
 
-  it('automatically retries failed Work verification within policy budget', async () => {
+  it('automatically retries failed Task verification within policy budget', async () => {
     const runSpy = vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({
       agentId: 'agent-recovery',
       assistantMessageId: 'message-assistant',
@@ -758,7 +968,7 @@ describe('GoalService', () => {
     const graph = await service.create({
       config: { recovery: { maxAttemptsPerTask: 3, maxStepsPerRun: 500 } },
       title: 'Recover BW 150 research',
-      work: ['Verify Micron BW 150 suppliers'],
+      tasks: ['Verify Micron BW 150 suppliers'],
     });
     const created = await service.tick(graph.goal.id);
     await taskModel.update(created.taskId!, { totalTopics: 1 });
@@ -777,7 +987,7 @@ describe('GoalService', () => {
     expect((await service.graph(graph.goal.id)).decisions).toHaveLength(0);
   });
 
-  it('reclaims a stale running Work operation and starts the next attempt', async () => {
+  it('reclaims a stale running Task operation and starts the next attempt', async () => {
     const runSpy = vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({
       agentId: 'agent-recovery',
       assistantMessageId: 'message-assistant',
@@ -810,7 +1020,7 @@ describe('GoalService', () => {
         recovery: { maxAttemptsPerTask: 3, operationLeaseTimeoutMs: 60_000 },
       },
       title: 'Recover interrupted work',
-      work: ['Run a durable experiment'],
+      tasks: ['Run a durable experiment'],
     });
     const created = await service.tick(graph.goal.id);
     await taskModel.update(created.taskId!, { totalTopics: 1 });
@@ -832,7 +1042,7 @@ describe('GoalService', () => {
     });
   });
 
-  it('charges stale Work usage before checking the replacement budget', async () => {
+  it('charges stale Task usage before checking the replacement budget', async () => {
     const runSpy = vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({} as never);
     vi.spyOn(TaskTopicModel.prototype, 'findRunningByTaskIds').mockResolvedValue([
       { operationId: 'op-stale-cost', topicId: 'topic-stale-cost' } as never,
@@ -852,7 +1062,7 @@ describe('GoalService', () => {
       config: { recovery: { maxAttemptsPerTask: 3, operationLeaseTimeoutMs: 60_000 } },
       maxTotalCost: 0.5,
       title: 'Respect abandoned Work cost',
-      work: ['Run an expensive experiment'],
+      tasks: ['Run an expensive experiment'],
     });
     const created = await service.tick(graph.goal.id);
     await taskModel.update(created.taskId!, { totalTopics: 1 });
@@ -878,7 +1088,7 @@ describe('GoalService', () => {
     );
   });
 
-  it('does not reclaim a running Work operation without a persisted topic id', async () => {
+  it('does not reclaim a running Task operation without a persisted topic id', async () => {
     vi.spyOn(TaskTopicModel.prototype, 'findRunningByTaskIds').mockResolvedValue([
       { operationId: 'op-without-topic', topicId: null } as never,
     ]);
@@ -889,7 +1099,7 @@ describe('GoalService', () => {
     const graph = await service.create({
       config: { recovery: { operationLeaseTimeoutMs: 60_000 } },
       title: 'Wait for topic persistence',
-      work: ['Run a durable experiment'],
+      tasks: ['Run a durable experiment'],
     });
     const created = await service.tick(graph.goal.id);
     await taskModel.updateStatus(created.taskId!, 'running');
@@ -904,13 +1114,13 @@ describe('GoalService', () => {
     });
   });
 
-  it('starts ready sibling Work even when a running Task row is older than the operation lease', async () => {
+  it('starts a ready sibling Task even when a running Task row is older than the operation lease', async () => {
     const service = new GoalService(serverDB, userId);
     const taskModel = new TaskModel(serverDB, userId);
     const graph = await service.create({
       config: { recovery: { operationLeaseTimeoutMs: 60_000 } },
       title: 'Keep parallel work moving',
-      work: ['Long-running experiment', 'Independent analysis'],
+      tasks: ['Long-running experiment', 'Independent analysis'],
     });
     const running = await service.tick(graph.goal.id);
     await taskModel.updateStatus(running.taskId!, 'running');
@@ -939,7 +1149,7 @@ describe('GoalService', () => {
     const graph = await service.create({
       config: { recovery: { operationLeaseTimeoutMs: 60_000 } },
       title: 'Atomic abandoned recovery',
-      work: ['Run a durable experiment'],
+      tasks: ['Run a durable experiment'],
     });
     const created = await service.tick(graph.goal.id);
     await taskModel.updateStatus(created.taskId!, 'running');
@@ -976,12 +1186,12 @@ describe('GoalService', () => {
     const graph = await service.create({
       config: { recovery: { maxAttemptsPerTask: 3 } },
       title: 'Resume abandoned recovery',
-      work: ['Run a durable experiment'],
+      tasks: ['Run a durable experiment'],
     });
     const created = await service.tick(graph.goal.id);
     await taskModel.update(created.taskId!, { totalTopics: 1 });
     await taskModel.updateStatus(created.taskId!, 'paused', {
-      error: 'Goal Work operation lease expired.',
+      error: 'Goal Task operation lease expired.',
     });
 
     const recovered = await service.tick(graph.goal.id);
@@ -993,13 +1203,13 @@ describe('GoalService', () => {
     });
   });
 
-  it('opens the decision gate only after the Work attempt budget is exhausted', async () => {
+  it('opens the decision gate only after the Task attempt budget is exhausted', async () => {
     const service = new GoalService(serverDB, userId);
     const taskModel = new TaskModel(serverDB, userId);
     const graph = await service.create({
       config: { recovery: { maxAttemptsPerTask: 1 } },
       title: 'Bounded recovery',
-      work: ['Verify Micron BW 150 suppliers'],
+      tasks: ['Verify Micron BW 150 suppliers'],
     });
     const created = await service.tick(graph.goal.id);
     await taskModel.update(created.taskId!, { totalTopics: 1 });
@@ -1020,7 +1230,7 @@ describe('GoalService', () => {
       config: { recovery: { maxAttemptsPerTask: 1 } },
       requirement: 'Return three verified supplier quotes.',
       title: 'Bounded terminal acceptance',
-      work: ['Complete full Goal acceptance'],
+      tasks: ['Complete full Goal acceptance'],
     });
     const created = await service.tick(graph.goal.id);
     await taskModel.update(created.taskId!, { totalTopics: 1 });
@@ -1040,7 +1250,7 @@ describe('GoalService', () => {
   it('respects a manually paused responsible task without rerunning it', async () => {
     const service = new GoalService(serverDB, userId);
     const taskModel = new TaskModel(serverDB, userId);
-    const graph = await service.create({ title: 'Paused work', work: ['Wait for review'] });
+    const graph = await service.create({ tasks: ['Wait for review'], title: 'Paused task' });
     const created = await service.tick(graph.goal.id);
 
     await taskModel.updateStatus(created.taskId!, 'paused', { error: null });
@@ -1053,7 +1263,7 @@ describe('GoalService', () => {
     expect((await service.graph(graph.goal.id)).decisions).toHaveLength(0);
   });
 
-  it('only selects work whose explicit dependencies are resolved', async () => {
+  it('only selects Tasks whose explicit dependencies are resolved', async () => {
     const service = new GoalService(serverDB, userId);
     const graph = await service.create({ title: 'Dependency-aware goal' });
     const prerequisite = await service.addNode(graph.goal.id, {

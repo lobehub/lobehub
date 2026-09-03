@@ -252,6 +252,40 @@ completion whose `content` is parsed as the object. A text-only evidence check i
 Assert the round from three places together: the toast copy (a MutationObserver on
 `document.body`), the rows' `status`/`action`/`created_at`, and the card count.
 
+#### Structured generation crashes on the deepseek provider path — stub via openai instead
+
+**Situation:** driving a server-side `generateObject` scenario (e.g. `verify_plan_gen`)
+through `llm-stub.mjs` when the resolved model config is `deepseek` (the OSS default).
+
+**Doesn't work:** pointing the deepseek provider's keyVaults at the stub. The chat
+turn streams fine, but `generateObject` fails with `TypeError: Cannot read properties
+of undefined (reading '0')` (visible in `llm_generation_tracing.error_detail`), and
+the caller silently falls back (verify plan gen → holistic single check), which reads
+as "my feature didn't run".
+
+**Works:** route the generation through the openai protocol path — e.g. point the
+resolver's agent (for verify: `update agents set model='gpt-5.6-luna', provider='openai'
+where slug='verify-agent'`) at the stubbed openai provider. The server-side openai
+provider calls `/v1/responses`, which the stub answers correctly for `stream:false`
+structured generation (`llm_generation_tracing.success=t` is the confirmation probe).
+
+#### Forcing the goal frontier 失联 state needs >15 min, not the server's 5
+
+**Situation:** A/B-forcing the goal page's 失联 (lost-heartbeat) banner by backdating
+`goal_nodes.updated_at` / `agent_operations.updated_at` with SQL.
+
+**Doesn't work:** backdating by ~10 minutes because the server reclaim default
+(`resolveOperationLeaseTimeout`) is 5 minutes. The frontier still shows 运行中: the
+client view model has its own `DEFAULT_LEASE_TIMEOUT_MS = 15 min` and only honors
+`goal.config.recovery.operationLeaseTimeoutMs` when the goal sets one.
+
+**Works:** backdate past the client's window (25 min is comfortable), or create the
+goal with an explicit `--operation-lease-timeout-ms`. Liveness = the newer of the
+node row and `runHeartbeats` (the running operation's `updated_at` served by
+`goal.graph`), so the A/B is: node stale + op fresh → 运行中; both stale → 失联.
+Restore the forced rows (node/task/task_topics/operation status + timestamps) after
+capturing.
+
 #### A CLI-created topic has no trigger/status and is filtered out of the Agent paged view
 
 **Situation:** building a topic fixture with `lh topic create`, writing fields such as
@@ -479,6 +513,34 @@ there the auto-attach to the current conversation is exactly what you want.
 
 ### Driving the UI
 
+#### Driving a 资源库 upload with agent-browser: use the Add-menu input, and a same-build A/B for the hashing thread
+
+**Situation:** uploading a multi-GB fixture through the resource library (`/resource`)
+to verify the upload/hash pipeline without a real drag-and-drop.
+
+**Doesn't work:** `agent-browser upload` on the first `input[type=file][multiple]` the
+page exposes. That input belongs to another surface; `dockUploadFileList` stays empty
+and nothing errors, which reads as "the upload never started".
+
+**Works:** open the header `Add` menu first (`find role button click --name "Add"`),
+then upload into the antd input it mounts:
+`agent-browser upload '.ant-upload input[type=file][multiple]' <file>`. Poll
+`window.__LOBE_STORES.file().dockUploadFileList` for `status` / `uploadState.progress`;
+the hash phase is `pending` with a climbing `progress`, upload is `uploading`, and the
+row auto-clears \~3 s after `success`, so screenshot on the first `success` sample.
+Note the `eval` output is a JSON-encoded string — `\"status\":\"success\"` — so a
+`rg` trigger must not assume bare quotes (`'status.{2,6}success'`).
+
+To prove the hash left the main thread without checking out old code, run the same
+file twice in the same build: once after `window.Worker = undefined` (the shared
+`hashFile` then falls back to its inline streaming path, byte-for-byte the pre-worker
+behaviour) and once untouched. A 16 ms `setInterval` sampler's longest gap is the
+stall metric (measured: 16.4 s vs 61 ms for 1.1 GB); wrap `window.Worker` to record
+the constructed script URL and `window.fetch` to timestamp `file.checkFileHash`, which
+marks the end of hashing. A re-upload of the same file still hashes and then dedups
+(only `checkFileHash` + `createFile`), so it is a cheap way to re-capture the progress
+UI without another transfer.
+
 #### The composer's slash menu needs real key events — `keyboard type` never opens it
 
 **Situation:** driving the chat composer's `/` slash menu (or anything else gated on
@@ -593,6 +655,39 @@ items present with only the list area shimmering is ordinary data loading. Do NO
 identify the fallback by a row count — it is shaped per navKey now
 (`NAV_SKELETON_SHAPES`), so memory/discover render header plus a nav list and no body
 at all, while settings renders a search box plus four accordion groups.
+
+#### Hold a route's Suspense fallback by parking its data request
+
+**Situation:** the route skeleton is now held by data (`SWRConfig{ suspense: true }`
+at the layout), not only by the lazy module, so parking the chunk no longer keeps it
+on screen once the module is cached. The fallback lasts a few hundred ms.
+
+**Works:** park the route's own tRPC call with raw CDP `Fetch.enable` — the skeleton
+stays up until the request is released, so it can be measured and screenshotted at
+leisure. `.agents/acceptance/scripts/park-request.cjs <browser-ws> <urlPattern> <holdMs>`
+does this against an `agent-browser` session:
+
+```bash
+node .agents/acceptance/scripts/park-request.cjs \
+  "$(agent-browser --session lobehub-dev get cdp-url)" '*trpc/lambda/aiProvider*' 25000
+```
+
+Name the route's **own** query in the pattern (`aiProvider*` for the provider page).
+A broad `*trpc*` parks the shell's queries too and the route never mounts, which reads
+as a product hang. For the error state, prefer `agent-browser network route <pattern> --abort` — an aborted request settles, so the boundary renders instead of hanging.
+
+#### `SWRConfig` reaches hooks below it, never the component that renders it
+
+**Situation:** opting one page out of a subtree's suspense (a page whose sections are
+gated independently and must keep their own Retry).
+
+**Doesn't work:** wrapping that page's own JSX in `<SWRConfig value={{ suspense: false }}>`.
+The page's hooks run in its component body, which is _above_ the element it returns, so
+they still read the subtree's config and the page keeps suspending. The symptom is a
+whole route thrown to the error boundary the first time one section's fetch fails.
+
+**Works:** move the hooks into a child component and wrap that child. Verify by failing
+one section's request and confirming the rest of the page still renders.
 
 #### Park a route's lazy chunk to hold its pending sidebar on screen
 
@@ -1966,6 +2061,31 @@ followed by `Error converting image to base64`. Production uses a real object-st
 domain and is unaffected, so this is purely a local verification-environment gate and
 not a product defect — do not report it as a bug, and do not work around it by
 switching to inline base64, which would verify a path the product never takes.
+
+#### Real web-search evidence needs local SearXNG — the on-disk search1api keys are dead
+
+**Situation:** a check needs the product's real web-search pipeline (builtin
+`lobe-web-browsing____search` executing an actual HTTP search and rendering result
+cards), e.g. "ask the agent a weather question".
+
+**Doesn't work:** `SEARCH_PROVIDERS=search1api` with any `SEARCH1API_SEARCH_API_KEY`
+found in sibling repo `.env` files — they all return 401 (verify with a direct
+`curl api.search1api.com/search` before blaming the product). Keyless fallbacks
+don't exist: with no `SEARCH_PROVIDERS` the impl list is empty and every search
+returns "all configured providers returned errors"; public SearXNG instances
+rate-limit (429) or ship JSON-disabled (HTML back).
+
+**Works:** run a local SearXNG:
+`docker run -d -p 8888:8080 -v <dir>:/etc/searxng searxng/searxng` with a
+`settings.yml` of `use_default_settings: true`, `server.limiter: false`, and
+`search.formats: [html, json]`, then start the dev server with
+`SEARCH_PROVIDERS=searxng SEARXNG_URL=http://localhost:8888`. It aggregates real
+engines, so the whole product path (server search impl → result cards → tool
+message persistence) is genuine. English queries return results more reliably
+than Chinese ones. One trap when the model is a tool_call-emitting stub AND a
+synthetic context injector is active (e.g. `getGoalContext`): "last message is a
+tool result → answer" fires on the injected pair and skips the search — key the
+stub's answer-mode off the NAME of the last `function_call` instead.
 
 ## Detailed references
 

@@ -2,8 +2,8 @@
 
 import { isDesktop } from '@lobechat/const';
 import { type FormGroupItemType, type FormItemProps } from '@lobehub/ui';
-import { Flexbox, Form, Skeleton, Tooltip } from '@lobehub/ui';
-import { Alert, Switch, Tag } from '@lobehub/ui/base-ui';
+import { Flexbox, Form, Tooltip } from '@lobehub/ui';
+import { Alert, Skeleton, Switch, Tag } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { FlaskConicalIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -63,7 +63,7 @@ const LabsForm = memo(() => {
           onRetry={() => refreshUserState()}
         />
       );
-    return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
+    return <Skeleton.Text rows={5} />;
   }
 
   const checkedByFlag = Object.fromEntries(

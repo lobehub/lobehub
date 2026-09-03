@@ -564,13 +564,69 @@ describe('AgentOperationModel', () => {
     });
   });
 
+  describe('findOwnOperationById', () => {
+    beforeEach(async () => {
+      await serverDB.insert(topics).values([
+        { id: 'own-tpc', userId },
+        // Agent-share visitor topic: creator's userId + a visitor senderId.
+        { id: 'own-tpc-visitor', senderId: 'visitor-user-x', userId },
+      ]);
+      await serverDB.insert(agentOperations).values([
+        { id: 'op-own', status: 'done', topicId: 'own-tpc', userId },
+        { id: 'op-own-visitor', status: 'done', topicId: 'own-tpc-visitor', userId },
+        { id: 'op-own-topicless', status: 'done', userId },
+      ]);
+    });
+
+    it('hides an operation recorded inside an agent-share visitor topic', async () => {
+      // Visitor runs execute under the creator's identity, so the row passes
+      // ownership — the creator-facing trace lookup must still read it as absent.
+      const model = new AgentOperationModel(serverDB, userId);
+
+      expect(await model.findOwnOperationById('op-own-visitor')).toBeNull();
+      // The runtime lookup keeps working: it drives the visitor's own run.
+      expect(await model.findById('op-own-visitor')).toMatchObject({ id: 'op-own-visitor' });
+    });
+
+    it('returns the creator own operations, topic-bound or not', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+
+      expect(await model.findOwnOperationById('op-own')).toMatchObject({ id: 'op-own' });
+      expect(await model.findOwnOperationById('op-own-topicless')).toMatchObject({
+        id: 'op-own-topicless',
+      });
+    });
+
+    it('does not cross the ownership boundary', async () => {
+      const model = new AgentOperationModel(serverDB, otherUserId);
+
+      expect(await model.findOwnOperationById('op-own')).toBeNull();
+    });
+  });
+
   describe('listByTopic', () => {
     beforeEach(async () => {
       await serverDB.insert(topics).values([
         { id: 'tpc-a', userId },
         { id: 'tpc-b', userId },
         { id: 'tpc-foreign', userId: otherUserId },
+        // Agent-share visitor topic: creator's userId + a visitor senderId.
+        { id: 'tpc-visitor', senderId: 'visitor-user-x', userId },
       ]);
+    });
+
+    it('excludes operations recorded inside an agent-share visitor topic', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+
+      // Visitor runs execute under the creator's identity, so their operation
+      // rows pass the ownership filter — the trace panel must still not expose
+      // a visitor conversation's trajectory.
+      await serverDB
+        .insert(agentOperations)
+        .values([{ id: 'op-visitor', status: 'done', topicId: 'tpc-visitor', userId }]);
+
+      const rows = await model.listByTopic('tpc-visitor');
+      expect(rows).toEqual([]);
     });
 
     it('returns the topic operations newest first, owner-scoped', async () => {

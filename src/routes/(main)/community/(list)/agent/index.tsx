@@ -13,12 +13,11 @@ import { DiscoverTab } from '@/types/discover';
 import AssistantEmpty from '../../features/AssistantEmpty';
 import Pagination from '../features/Pagination';
 import List from './features/List';
-import Loading from './loading';
 
 const AssistantPage = memo(() => {
   const query = useQuery() as AssistantQueryParams;
   const useAssistantList = useDiscoverStore((s) => s.useAssistantList);
-  const { data, isLoading, error, mutate } = useAssistantList(buildAssistantListQuery(query));
+  const { data, error, mutate } = useAssistantList(buildAssistantListQuery(query));
 
   const items = data?.items ?? [];
 
@@ -29,8 +28,6 @@ const AssistantPage = memo(() => {
       error={error}
       errorVariant={'page'}
       isEmpty={items.length === 0}
-      isLoading={isLoading}
-      loading={<Loading />}
       onRetry={() => mutate()}
     >
       {data && (

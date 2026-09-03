@@ -37,6 +37,8 @@
   "document_comment_activity": "{{actorLabel}} 评论了你的文档「{{documentTitle}}」。",
   "document_comment_activity_replied": "{{actorLabel}} 在「{{documentTitle}}」中回复了你的评论。",
   "document_comment_activity_replied_title": "你的评论有新回复",
+  "document_comment_activity_thread": "{{actorLabel}} 在「{{documentTitle}}」中你参与的评论线程里发表了回复。",
+  "document_comment_activity_thread_title": "你参与的评论线程有新回复",
   "document_comment_activity_title": "你的文档有新评论",
   "document_comment_mentioned": "{{actorLabel}} 在文档「{{documentTitle}}」的评论中提到了你。",
   "document_comment_mentioned_title": "你在文档评论中被提及",

@@ -37,6 +37,8 @@
   "document_comment_activity": "{{actorLabel}} belgeniz \"{{documentTitle}}\" üzerinde yorum yaptı.",
   "document_comment_activity_replied": "{{actorLabel}} \"{{documentTitle}}\" içindeki yorumunuza yanıt verdi.",
   "document_comment_activity_replied_title": "Yorumunuza yeni bir yanıt",
+  "document_comment_activity_thread": "{{actorLabel}}, \"{{documentTitle}}\" adlı belgede bulunduğunuz bir yorum dizisinde yanıt verdi.",
+  "document_comment_activity_thread_title": "Yorum dizinizde yeni bir yanıt",
   "document_comment_activity_title": "Belgenizde yeni bir yorum",
   "document_comment_mentioned": "{{actorLabel}} \"{{documentTitle}}\" üzerindeki bir yorumda sizi bahsetti.",
   "document_comment_mentioned_title": "Bir belge yorumunda bahsedildiniz",

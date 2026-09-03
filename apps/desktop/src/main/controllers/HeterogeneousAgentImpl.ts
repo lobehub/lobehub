@@ -33,7 +33,6 @@ import type {
   McpToolResult,
 } from '@lobechat/heterogeneous-agents/builtinMcp';
 import { listHeterogeneousAgentModels } from '@lobechat/heterogeneous-agents/models';
-import { isLoginShellTimeoutStatus } from '@lobechat/heterogeneous-agents/resolveCliCommand';
 import type { HeteroExecImageRef } from '@lobechat/heterogeneous-agents/protocol';
 import {
   buildHeteroExecStdinPayload,
@@ -46,6 +45,7 @@ import {
   QuotaSnapshotCache,
   readClaudeCodeIdentity,
 } from '@lobechat/heterogeneous-agents/quota-sampler';
+import { isLoginShellTimeoutStatus } from '@lobechat/heterogeneous-agents/resolveCliCommand';
 import type { AgentStreamEvent, UsageData } from '@lobechat/heterogeneous-agents/spawn';
 import {
   AcpRpcResponseError,
@@ -791,7 +791,11 @@ export default class HeterogeneousAgentCtr {
     const command = this.resolveSessionCommand(session);
     const status =
       command === defaultCommand
-        ? await this.app.binaryManager?.detect?.(defaultCommand, true)
+        ? // Normal launches must reuse the successful binary/PATH detection.
+          // Forcing here invalidates the login-shell PATH cache on every message,
+          // putting a slow interactive shell back on the critical path. Explicit
+          // Rescan actions remain responsible for force-refreshing the cache.
+          await this.app.binaryManager?.detect?.(defaultCommand)
         : await detectHeterogeneousCliCommand(session.agentType, command);
 
     if (!status || status.available) {

@@ -12,6 +12,9 @@ the decisions and landmines, not copies of the code:
 - **`apps/workbench`** (`/verify`, `/acceptance`) — all code in this repo, builds and deploys from OSS CI.
 - **`apps/share`** (`/share/t/:id`, `/share/page/:id`) — renders Cloud-only surfaces, so it
   builds and deploys from **lobehub-cloud** CI. See §1b before touching it.
+- **`apps/auth`** (`/signin`, `/signup`, …) — the SSG variant: `ssr: false` + `prerender`, so
+  the worker carries no React at all (7KB). 18 locales x 4 routes of prerendered documents.
+  Also renders Cloud-only surfaces (§1b). See §3b.
 
 ## Hosting
 
@@ -124,6 +127,11 @@ own last successful run's `share-build-inputs` (first run always builds).
 through tsconfig `paths` (`@/business/*` → `./src/business/*` then `./lobehub/src/business/*`;
 `@/*` → `./src/*` then `./lobehub/src/*`). Split by **ownership**, not by which repo is handy:
 
+`apps/auth` is the cheap case: because `ssr: false` ships no render graph, the Cloud overlay
+(BusinessAuthProvider → Turnstile + referral) added **one chunk and 0 extra SSR stubs** —
+measured at 585.7KB gz eager vs 587.3KB for the open-source build, with byte-identical markup.
+Do not assume that; `apps/share` needed 8.2MB of stubbing. Measure per app.
+
 | Code                                                                      | Where it goes                                                                                                         |
 | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | Routes, shell, SSR pipeline, worker, CDN deploy, SSR stubs of OSS modules | OSS `apps/<name>` — Docker serves the same app                                                                        |
@@ -232,6 +240,86 @@ gateway routes API to `app` instead), and redirect `/` + unknown paths to `WORKB
   untranslated boundary prints raw keys (`error.title`…). Cost for share: +6.3KB gzip/document.
 - **Prefilling a virtualized list**: `virtua` caches measured sizes by index, so a _truncated_
   prefill that later grows misaligns every row. Prefill the whole list or none of it.
+
+## 3b. Prerendering instead of SSR (`ssr: false`)
+
+When every page is config-free at render time, `ssr: false` + `prerender` drops the whole SSR
+bundle-weight battle: no stubs, no client gates, and the worker is a static picker.
+`apps/auth`'s is \~7KB — it resolves the locale, fetches one document out of the assets binding,
+and swaps a `window.__SERVER_CONFIG__` placeholder for the deployment's config.
+
+- **Runtime config cannot be baked.** The build has no deployment's env, so the document is
+  prerendered config-free and the worker injects it. Anything that reads it must be hydration-
+  gated (`useIsHydrated`), or the first client render diverges from the document.
+- **Audit what actually needs to travel that way — most of it does not.** The hydration gate
+  applies to the _whole_ injected object, so every value routed through it is a value missing
+  from the prerendered HTML. In `apps/auth` the config carried 11 fields; the pages read 6, and
+  the most visible one was in the wrong layer entirely: `enableBusinessFeatures` is a
+  **build-time constant** (`@lobechat/business-const`, `false` open-source / `true` in Cloud via
+  a pnpm override) that was being round-tripped through the server, and with it the SSO provider
+  list — itself a hardcoded array in the Cloud overlay. Reading the constant directly instead
+  put Google/GitHub/Apple into the static document. `featureFlags`, `enableMarketTrustedClient`,
+  `telemetry` and `aiProvider` had zero consumers and were dropped from the endpoint, which is
+  public and unauthenticated. Do this audit before accepting "config-dependent UI pops in after
+  hydration" as the cost of prerendering.
+- **Prerendering turns every `localStorage` read during render into a hydration bug.** A
+  returning user's stored state (`useState(readStored)`) makes the first client render disagree
+  with a document that was built without it — `apps/auth` hit this twice, on the terms checkbox
+  and on the "last used" provider badge, both of which also reorder the buttons. Move them to
+  `useState(empty)` + `useEffect`. A fresh browser will not reproduce it; seed the keys and
+  reload.
+- **The config needs an endpoint.** A worker has no access to the app's env; `apps/auth` reads
+  `GET /webapi/auth/spa-config` (public, `s-maxage`) through the API base and tolerates failure
+  by leaving the placeholder in place.
+- **Landmine — one document per locale must live at the canonical path.** Prerendering
+  `/:locale/signin` and serving it at `/signin` looks like it works and silently breaks
+  hydration: React Router matches the plain route, finds no context for the prefixed route id,
+  and React re-renders the whole document — leaving **two copies of the page in the DOM**, with
+  no console warning. Only the second one is visible, so a screenshot looks fine; count
+  `document.querySelectorAll('form')` to catch it. The fix is one build pass per locale
+  (`AUTH_PRERENDER_LOCALE` → `environments.ssr.define`), each prerendering the same canonical
+  paths, with the non-default passes' documents folded into `build/client/__i18n/<locale>/`.
+  Keep the locale out of the **client** define so every pass emits byte-identical assets —
+  `scripts/build.mjs` asserts that by resolving each copied document's asset refs against the
+  default build.
+- **The matrix costs build time, not bytes — and it parallelizes.** `apps/auth` runs all 18
+  locales for 73 documents and 17.8MB in `build/client`, with **no change to first load**
+  (640.8KB gz over the same 34 eager files: the per-locale dictionary chunks are lazy and each
+  document carries only its own). The non-default passes share nothing and write to their own
+  `build-<locale>`, so they fan out: **3m05s sequential → 44s at 6 concurrent** on 16 cores.
+  Each pass costs about two cores; past \~6 it stops paying (9 concurrent measured 42s, with
+  per-pass time rising 12s → 16s). `AUTH_BUILD_CONCURRENCY` overrides the
+  `min(6, availableParallelism() - 2)` default, which lands on 2 for a 4-vCPU CI runner —
+  budget \~2min there, and mind that `NODE_OPTIONS=--max-old-space-size` applies per child.
+  If that is still too slow, the remaining move is one build plus N renders against
+  `build/server/index.js` with the locale threaded through `entry.server.tsx` — that trades the
+  build-time define for request state, so it needs `AsyncLocalStorage` or strict sequencing.
+  Verify RTL locales (`ar`, `fa-IR`) in a browser — they exercise the antd direction path that
+  no LTR document touches.
+- **The prerender list is loaded by plain Node** (`react-router.config.ts`), so it cannot import
+  anything alias-resolved and has to be a literal array. Guard it against the dictionaries on
+  disk in the build script, or a newly translated locale silently prerenders as English.
+- **i18n must be synchronous for the served locale.** A resources-to-backend fetch renders
+  English first and swaps a tick later, which is a hydration mismatch against a prerendered
+  zh-CN document. Bundling every locale into the client instead costs a lot (auth: 63KB gz of
+  dictionaries, eagerly modulepreloaded on every route), so `apps/auth` inlines **only the
+  served locale** into the document as `<script type="application/json">` and keeps the others
+  behind an on-demand backend for the language switcher. Weigh it: that moved 44KB gz off the
+  JS path but put 22KB gz onto the document, which is the one thing first paint waits for, and
+  the dictionary is now re-sent per document instead of cached once. A per-locale hashed JS
+  file loaded by a blocking script would beat both; nobody has built it yet.
+- **The client build must stay locale-agnostic** for the one-pass-per-locale scheme to share
+  assets, so anything that reads the dictionaries needs a server/client twin: the prerender
+  module holds every bundle, the `.client` twin reads the document's inlined JSON, and
+  `vite.config.shared.mts` swaps them per environment. `meta()` runs on both sides — it goes
+  through the same twin, not a second copy of the strings.
+- **`resolve.noExternal: true` on the ssr env, build only.** The prerender pass runs the built
+  server bundle through plain Node, which rejects the extensionless directory imports some
+  published `es/` bundles ship (`@lobehub/fluent-emoji`). Setting it for `serve` too breaks the
+  dev module runner on inlined CJS (`module is not defined`, then `require is not defined`) —
+  and leaving it off leaves `react-router dev` 500ing on that same directory import. **Known
+  gap:** `apps/auth`'s dev server does not run; the working local loop is
+  `bun run build && wrangler dev`.
 
 RR v8 gotchas (docs/templates still say v7):
 

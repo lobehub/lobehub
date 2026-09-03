@@ -1,7 +1,7 @@
 import type { GoalGraphEdge, GoalGraphNode } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { layoutGraph } from './layout';
+import { hideKinds, layoutGraph } from './layout';
 
 const node = (id: string, kind: GoalGraphNode['kind'] = 'task'): GoalGraphNode => ({
   confidence: null,
@@ -76,5 +76,71 @@ describe('layoutGraph', () => {
     );
 
     expect(Object.keys(boxes)).toHaveLength(2);
+  });
+});
+
+describe('hideKinds', () => {
+  const chain = {
+    edges: [edge('p1', 'w1', 'decomposes'), edge('w1', 'f1', 'produces')],
+    nodes: [node('p1', 'problem'), node('w1'), node('f1', 'finding')],
+  };
+
+  it('keeps everything and bridges nothing when no kind is hidden', () => {
+    const { bridges, visibleIds } = hideKinds(chain.nodes, chain.edges, new Set());
+
+    expect([...visibleIds].sort()).toEqual(['f1', 'p1', 'w1']);
+    expect(bridges).toEqual([]);
+  });
+
+  it('bridges the problem to the finding when the task between them is hidden', () => {
+    const { bridges, visibleIds } = hideKinds(chain.nodes, chain.edges, new Set(['task']));
+
+    expect(visibleIds.has('w1')).toBe(false);
+    expect(bridges).toEqual([{ sourceNodeId: 'p1', targetNodeId: 'f1' }]);
+  });
+
+  it('keeps a bridged finding ranked below the problem', () => {
+    const { bridges, visibleIds } = hideKinds(chain.nodes, chain.edges, new Set(['task']));
+    const boxes = layoutGraph(
+      chain.nodes.filter((n) => visibleIds.has(n.id)),
+      bridges.map((bridge) => ({ ...bridge, kind: 'leads_to' as const })),
+    );
+
+    expect(boxes.f1.y).toBeGreaterThan(boxes.p1.y);
+  });
+
+  it('bridges through consecutive hidden hops', () => {
+    const { bridges } = hideKinds(
+      [node('p1', 'problem'), node('w1'), node('w2'), node('f1', 'finding')],
+      [edge('p1', 'w1', 'decomposes'), edge('w1', 'w2', 'leads_to'), edge('w2', 'f1', 'produces')],
+      new Set(['task']),
+    );
+
+    expect(bridges).toEqual([{ sourceNodeId: 'p1', targetNodeId: 'f1' }]);
+  });
+
+  it('does not add a bridge that duplicates a surviving direct edge', () => {
+    const { bridges } = hideKinds(
+      [node('p1', 'problem'), node('w1'), node('f1', 'finding')],
+      [edge('p1', 'w1', 'decomposes'), edge('w1', 'f1', 'produces'), edge('p1', 'f1', 'leads_to')],
+      new Set(['task']),
+    );
+
+    expect(bridges).toEqual([]);
+  });
+
+  it('survives a cycle among hidden nodes', () => {
+    const { bridges } = hideKinds(
+      [node('p1', 'problem'), node('w1'), node('w2'), node('f1', 'finding')],
+      [
+        edge('p1', 'w1', 'decomposes'),
+        edge('w1', 'w2', 'leads_to'),
+        edge('w2', 'w1', 'leads_to'),
+        edge('w2', 'f1', 'produces'),
+      ],
+      new Set(['task']),
+    );
+
+    expect(bridges).toEqual([{ sourceNodeId: 'p1', targetNodeId: 'f1' }]);
   });
 });

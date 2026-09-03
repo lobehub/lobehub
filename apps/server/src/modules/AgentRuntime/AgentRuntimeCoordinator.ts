@@ -92,8 +92,10 @@ export class AgentRuntimeCoordinator {
     operationId: string,
     data: {
       agentConfig?: any;
+      visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
       mirrorToOperationId?: string;
       modelRuntimeConfig?: any;
+      streamOwnerUserId?: string;
       userId?: string;
       workspaceId?: string;
     },

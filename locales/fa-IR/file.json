@@ -100,6 +100,8 @@
   "pageEditor.comments.author.former": "عضو سابق",
   "pageEditor.comments.cancel": "لغو",
   "pageEditor.comments.createFailed": "انتشار نظر ناموفق بود. پیش‌نویس شما هنوز موجود است.",
+  "pageEditor.comments.deepLinkLoadFailed": "بارگذاری نظر مرتبط انجام نشد. دوباره تلاش کنید.",
+  "pageEditor.comments.deepLinkMissing": "این نظر دیگر در دسترس نیست.",
   "pageEditor.comments.delete": "حذف",
   "pageEditor.comments.deleteConfirm.content": "آیا این نظر حذف شود؟ پاسخ‌ها همچنان قابل مشاهده خواهند بود اگر این نظر دارای رشته‌ای باشد.",
   "pageEditor.comments.deleteConfirm.title": "حذف نظر",

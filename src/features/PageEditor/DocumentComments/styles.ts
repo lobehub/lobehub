@@ -24,7 +24,16 @@ export const styles = createStaticStyles(({ css }) => ({
     line-height: 1.7;
   `,
   card: css`
+    margin-inline: -12px;
     padding-block: 20px 12px;
+    padding-inline: 12px;
+    border-radius: ${cssVar.borderRadiusLG};
+
+    transition: background-color 600ms ${cssVar.motionEaseOut};
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
   `,
   commentContent: css`
     /* Published comments render images as left-aligned thumbnails: the
@@ -106,6 +115,10 @@ export const styles = createStaticStyles(({ css }) => ({
   `,
   header: css`
     min-height: 32px;
+  `,
+  /* Applied briefly when a notification deep link lands on the card. */
+  highlighted: css`
+    background-color: ${cssVar.colorPrimaryBg};
   `,
   meta: css`
     color: ${cssVar.colorTextTertiary};

@@ -100,6 +100,8 @@
   "pageEditor.comments.author.former": "Miembro anterior",
   "pageEditor.comments.cancel": "Cancelar",
   "pageEditor.comments.createFailed": "No se pudo publicar el comentario. Tu borrador sigue aquí.",
+  "pageEditor.comments.deepLinkLoadFailed": "No se pudo cargar el comentario vinculado. Inténtalo de nuevo.",
+  "pageEditor.comments.deepLinkMissing": "Este comentario ya no está disponible.",
   "pageEditor.comments.delete": "Eliminar",
   "pageEditor.comments.deleteConfirm.content": "¿Eliminar este comentario? Las respuestas seguirán siendo visibles si este comentario tiene un hilo.",
   "pageEditor.comments.deleteConfirm.title": "Eliminar comentario",

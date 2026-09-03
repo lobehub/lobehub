@@ -1724,3 +1724,70 @@ describe('AgentRuntimeService.executeStep - pre-snapshot file-Work registration'
     expect(registerSpy).not.toHaveBeenCalled();
   });
 });
+
+describe('AgentRuntimeService.executeStep - Agent Share authorization revoked mid-run', () => {
+  it('persists the terminal status through the completion lifecycle when the share is revoked', async () => {
+    vi.mocked(createRuntimeExecutors).mockClear();
+
+    const operationId = 'op-share-revoked';
+    const verifyShareRunStillAuthorized = vi.fn().mockResolvedValue(false);
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      delegate: { verifyShareRunStillAuthorized } as any,
+      queueService: null,
+    });
+
+    const agentState = {
+      lastModified: new Date().toISOString(),
+      metadata: { agentShareVisitor: { agentId: 'agent-1', shareId: 'share-1' } },
+      status: 'running',
+      stepCount: 3,
+    };
+    const coordinator = (service as any).coordinator;
+    coordinator.loadAgentState = vi.fn().mockResolvedValue(agentState);
+    coordinator.saveAgentState = vi.fn().mockResolvedValue(undefined);
+
+    const completionLifecycle = (service as any).completionLifecycle;
+    const emitSignalEvents = vi
+      .spyOn(completionLifecycle, 'emitSignalEvents')
+      .mockResolvedValue([]);
+    const dispatchHooks = vi
+      .spyOn(completionLifecycle, 'dispatchHooks')
+      .mockResolvedValue(undefined);
+
+    const result = await service.executeStep({
+      context: { phase: 'user_input' } as any,
+      operationId,
+      stepIndex: 4,
+    });
+
+    expect(verifyShareRunStillAuthorized).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      shareId: 'share-1',
+    });
+    expect(coordinator.saveAgentState).toHaveBeenCalledWith(
+      operationId,
+      expect.objectContaining({ status: 'interrupted' }),
+    );
+    expect(emitSignalEvents).toHaveBeenCalledWith(
+      operationId,
+      expect.objectContaining({ status: 'interrupted' }),
+      'interrupted',
+    );
+    expect(dispatchHooks).toHaveBeenCalledWith(
+      operationId,
+      expect.objectContaining({ status: 'interrupted' }),
+      'interrupted',
+    );
+    // The run must abort before any model/tool work happens
+    expect(createRuntimeExecutors).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      nextStepScheduled: false,
+      state: { status: 'interrupted' },
+      stepResult: null,
+      success: false,
+    });
+
+    emitSignalEvents.mockRestore();
+    dispatchHooks.mockRestore();
+  });
+});

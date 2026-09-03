@@ -54,6 +54,7 @@ export default {
   'acceptance.checks.viewTrace': 'View verification run',
   'acceptance.checks.finalRoundHint':
     'The final result and evidence come from this round — click to locate it.',
+  'acceptance.checks.holisticTitle': 'Task delivery acceptance',
   'acceptance.checks.introduced': 'Added in round {{round}}',
   'acceptance.checks.introducedHint':
     'This check first appeared in that round — click to locate it.',
@@ -309,7 +310,11 @@ export default {
   'acceptance.workspace.batch.enter': 'Select multiple',
   'acceptance.workspace.batch.error': 'The batch action failed. Try again.',
   'acceptance.workspace.batch.exit': 'Done',
+  'acceptance.workspace.batch.move': 'Move to',
   'acceptance.workspace.batch.partial': '{{count}} updated, {{failed}} unchanged',
+  'acceptance.workspace.batch.projectRemoveSuccess':
+    '{{count}} acceptance(s) removed from their projects',
+  'acceptance.workspace.batch.projectSuccess': '{{count}} acceptance(s) moved to the project',
   'acceptance.workspace.batch.selectAll': 'Select all',
   'acceptance.workspace.batch.selected': '{{count}} selected',
   'acceptance.workspace.batch.statusSuccess': '{{count}} acceptance(s) updated',

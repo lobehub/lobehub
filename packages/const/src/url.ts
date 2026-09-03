@@ -4,6 +4,16 @@ export const OFFICIAL_URL = 'https://app.lobehub.com';
 export const OFFICIAL_SITE = 'https://lobehub.com';
 export const OFFICIAL_DOMAIN = 'lobehub.com';
 
+export const isOfficialCloudServer = (url?: string): boolean => {
+  if (!url) return false;
+  try {
+    const { hostname } = new URL(url);
+    return hostname === OFFICIAL_DOMAIN || hostname.endsWith(`.${OFFICIAL_DOMAIN}`);
+  } catch {
+    return false;
+  }
+};
+
 export const OFFICIAL_DEVICE_GATEWAY_URL = 'https://device-gateway.lobehub.com';
 export const OFFICIAL_AGENT_GATEWAY_URL = 'https://agent-gateway.lobehub.com';
 

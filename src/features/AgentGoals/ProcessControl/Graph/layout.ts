@@ -1,4 +1,4 @@
-import type { GoalGraphEdge, GoalGraphNode } from '@lobechat/types';
+import type { GoalGraphEdge, GoalGraphNode, GoalNodeKind } from '@lobechat/types';
 
 /**
  * Layered DAG layout for the exploration graph.
@@ -15,12 +15,15 @@ export const NODE_HEIGHT = { decision: 76, finding: 76, problem: 76, task: 112 }
 const RANK_GAP = 56;
 const COLUMN_GAP = 32;
 
+/** The fields layout actually reads — lets callers pass synthetic bridge edges. */
+export type LayoutEdge = Pick<GoalGraphEdge, 'kind' | 'sourceNodeId' | 'targetNodeId'>;
+
 /**
  * Which way an edge points on screen. `supports` / `contradicts` link a finding
  * back to the problem it answers, so they are drawn but never rank a node —
  * using them would fight the produce chain that put the finding there.
  */
-const rankDirection = (edge: GoalGraphEdge): [string, string] | undefined => {
+const rankDirection = (edge: LayoutEdge): [string, string] | undefined => {
   switch (edge.kind) {
     case 'decomposes':
     case 'investigates':
@@ -45,9 +48,67 @@ export interface LayoutBox {
   y: number;
 }
 
+/** A synthetic edge standing in for a ranked chain that runs through hidden nodes. */
+export interface GraphBridge {
+  sourceNodeId: string;
+  targetNodeId: string;
+}
+
+/**
+ * Drop every node of a hidden kind, bridging the ranked chains that ran
+ * through them (problem → hidden task → finding reads problem → finding), so
+ * the survivors keep their depth instead of collapsing into one orphan row.
+ */
+export const hideKinds = (
+  nodes: GoalGraphNode[],
+  edges: LayoutEdge[],
+  hidden: ReadonlySet<GoalNodeKind>,
+): { bridges: GraphBridge[]; visibleIds: Set<string> } => {
+  const visibleIds = new Set<string>();
+  const hiddenIds = new Set<string>();
+  for (const node of nodes) (hidden.has(node.kind) ? hiddenIds : visibleIds).add(node.id);
+
+  const bridges: GraphBridge[] = [];
+  if (hiddenIds.size === 0) return { bridges, visibleIds };
+
+  const out = new Map<string, string[]>();
+  // A bridge that mirrors a surviving direct edge would draw twice — seed the
+  // dedupe set with the ranked pairs that stay on the map.
+  const seen = new Set<string>();
+  for (const edge of edges) {
+    const link = rankDirection(edge);
+    if (!link) continue;
+    const inScope = (id: string) => visibleIds.has(id) || hiddenIds.has(id);
+    if (!inScope(link[0]) || !inScope(link[1])) continue;
+    out.set(link[0], [...(out.get(link[0]) ?? []), link[1]]);
+    if (visibleIds.has(link[0]) && visibleIds.has(link[1])) seen.add(`${link[0]}→${link[1]}`);
+  }
+
+  for (const start of visibleIds) {
+    const stack = (out.get(start) ?? []).filter((id) => hiddenIds.has(id));
+    const visited = new Set(stack);
+    while (stack.length > 0) {
+      const current = stack.pop()!;
+      for (const next of out.get(current) ?? []) {
+        if (visibleIds.has(next)) {
+          const key = `${start}→${next}`;
+          if (next !== start && !seen.has(key)) {
+            seen.add(key);
+            bridges.push({ sourceNodeId: start, targetNodeId: next });
+          }
+        } else if (!visited.has(next)) {
+          visited.add(next);
+          stack.push(next);
+        }
+      }
+    }
+  }
+  return { bridges, visibleIds };
+};
+
 export const layoutGraph = (
   nodes: GoalGraphNode[],
-  edges: GoalGraphEdge[],
+  edges: LayoutEdge[],
 ): Record<string, LayoutBox> => {
   const index = new Map(nodes.map((node, i) => [node.id, i]));
   const links = edges.map(rankDirection).filter((link): link is [string, string] => {

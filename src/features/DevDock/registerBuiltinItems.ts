@@ -1,4 +1,5 @@
 import {
+  Activity,
   AppWindow,
   ArrowUpDown,
   Bot,
@@ -73,6 +74,15 @@ export const registerBuiltinDevDockItems = () => {
       id: 'fps',
       label: 'FPS',
       load: () => import('./widgets/FpsWidget'),
+      slot: 'right',
+      type: 'readout',
+    },
+    {
+      defaultPinned: true,
+      icon: Activity,
+      id: 'cls',
+      label: 'CLS',
+      load: () => import('./widgets/ClsWidget'),
       slot: 'right',
       type: 'readout',
     },

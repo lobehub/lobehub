@@ -1,6 +1,6 @@
 import { DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS } from '@lobechat/const';
 import type { ModelRuntime } from '@lobechat/model-runtime';
-import { RequestTrigger } from '@lobechat/types';
+import { RequestTrigger, type SpendOrigin } from '@lobechat/types';
 
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { trimBasedOnBatchProbe } from '@/utils/chunkers';
@@ -39,6 +39,13 @@ export interface EmbedUserMemoryTextsParams {
    * Stable call-site label used for trim diagnostics.
    */
   source: string;
+  /**
+   * Origin attribution for the embedding spend. A shared-agent visitor run
+   * supplies it so the embedding is billed to the shared agent instead of
+   * disappearing into the creator's plain memory usage; its `trigger`
+   * overrides the default {@link RequestTrigger.Memory}.
+   */
+  spendOrigin?: SpendOrigin;
   /**
    * User id passed to runtime billing/tracing metadata.
    */
@@ -108,7 +115,13 @@ export const embedUserMemoryTexts = async (
       input: requests.map((item) => item.text),
       model: params.model,
     },
-    { metadata: { trigger: RequestTrigger.Memory }, user: params.userId },
+    {
+      metadata: {
+        ...params.spendOrigin,
+        trigger: params.spendOrigin?.trigger ?? RequestTrigger.Memory,
+      },
+      user: params.userId,
+    },
   );
 
   for (const [requestIndex, embeddingVector] of (embeddings ?? []).entries()) {

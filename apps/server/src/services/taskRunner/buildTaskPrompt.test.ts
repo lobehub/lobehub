@@ -28,7 +28,7 @@ afterEach(async () => {
 });
 
 describe('buildTaskPrompt Goal loop context', () => {
-  it('uses the per-Work attempt budget for a Goal Graph Work Task', async () => {
+  it('uses the per-Task attempt budget for a Goal Graph Task', async () => {
     const taskModel = new TaskModel(db, userId);
     const task = await taskModel.create({
       instruction: 'Close the remaining acceptance gap.',

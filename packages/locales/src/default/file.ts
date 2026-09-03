@@ -112,6 +112,8 @@ export default {
   'pageEditor.comments.attachments.chooseLibrary': 'Choose from Library',
   'pageEditor.comments.cancel': 'Cancel',
   'pageEditor.comments.createFailed': 'Failed to publish comment. Your draft is still here.',
+  'pageEditor.comments.deepLinkLoadFailed': 'Failed to load the linked comment. Try again.',
+  'pageEditor.comments.deepLinkMissing': 'This comment is no longer available.',
   'pageEditor.comments.delete': 'Delete',
   'pageEditor.comments.deleteConfirm.content':
     'Delete this comment? Replies will remain visible if this comment has a thread.',

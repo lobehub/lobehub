@@ -100,6 +100,8 @@
   "pageEditor.comments.author.former": "이전 멤버",
   "pageEditor.comments.cancel": "취소",
   "pageEditor.comments.createFailed": "댓글 게시에 실패했습니다. 작성 중인 초안은 여전히 남아 있습니다.",
+  "pageEditor.comments.deepLinkLoadFailed": "연결된 댓글을 불러오지 못했습니다. 다시 시도해 주세요.",
+  "pageEditor.comments.deepLinkMissing": "이 댓글은 더 이상 사용할 수 없습니다.",
   "pageEditor.comments.delete": "삭제",
   "pageEditor.comments.deleteConfirm.content": "이 댓글을 삭제하시겠습니까? 댓글에 스레드가 있는 경우 답글은 계속 표시됩니다.",
   "pageEditor.comments.deleteConfirm.title": "댓글 삭제",

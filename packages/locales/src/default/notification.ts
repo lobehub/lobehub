@@ -93,6 +93,9 @@ export default {
     '{{actorLabel}} replied to your comment in "{{documentTitle}}".',
   'document_comment_activity_replied_title': 'New reply to your comment',
   'document_comment_activity_title': 'New comment on your document',
+  'document_comment_activity_thread':
+    '{{actorLabel}} replied in a comment thread you\'re part of in "{{documentTitle}}".',
+  'document_comment_activity_thread_title': 'New reply in your comment thread',
   'document_comment_mentioned': '{{actorLabel}} mentioned you in a comment on "{{documentTitle}}".',
   'document_comment_mentioned_title': 'You were mentioned in a document comment',
   'document_liked': '{{actorLabel}} liked your document "{{documentTitle}}".',

@@ -1,6 +1,7 @@
 import { type AgentState } from '@lobechat/agent-runtime';
 import { type BotPlatformContext } from '@lobechat/context-engine';
 import {
+  type AgentShareVisitorContext,
   type ExecSubAgentParams,
   type ExecSubAgentResult,
   type ExecVirtualSubAgentParams,
@@ -27,6 +28,15 @@ export interface RuntimeExecutorContext {
    */
   abortSignal?: AbortSignal;
   agentConfig?: any;
+  /**
+   * Shared-agent visitor marker, read back from
+   * `state.metadata.agentShareVisitor`. Present ONLY for a share-visitor run;
+   * its presence alone is the signal every per-step consumer keys off. Forwarded
+   * into `ToolExecutionContext.agentShareVisitor` so
+   * `BuiltinToolsExecutor.execute` can re-check the visitor's grants right
+   * before dispatch — see `isShareBlockedDataToolCall` in `shareGate.ts`.
+   */
+  agentShareVisitor?: AgentShareVisitorContext;
   /**
    * Allows call_llm to publish visible_output_end immediately after a no-tool
    * LLM stream_end. Only the default GeneralChatAgent treats no-tool llm_result

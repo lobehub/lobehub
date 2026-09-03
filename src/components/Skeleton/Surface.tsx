@@ -2,7 +2,9 @@
 
 import { Flexbox, FormGroup, Grid } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import type { ReactElement } from 'react';
+import type { ComponentType } from 'react';
+
+import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
 
 import SkeletonBar from './Bar';
 
@@ -163,14 +165,16 @@ const SurfaceSkeleton = ({ header = true, variant = 'list' }: SurfaceSkeletonPro
   </Flexbox>
 );
 
-const surfaceSkeletonCache = new Map<string, () => ReactElement>();
+const surfaceSkeletonCache = new Map<string, ComponentType<RouteSkeletonProps>>();
 
 export const createSurfaceSkeleton = (variant: SurfaceSkeletonVariant, header = true) => {
   const key = `${variant}:${header}`;
   const cached = surfaceSkeletonCache.get(key);
   if (cached) return cached;
 
-  const Component = () => <SurfaceSkeleton header={header} variant={variant} />;
+  const Component = ({ chrome = 'page' }: RouteSkeletonProps) => (
+    <SurfaceSkeleton header={header && chrome !== 'body'} variant={variant} />
+  );
   Component.displayName = `SurfaceSkeleton(${key})`;
   surfaceSkeletonCache.set(key, Component);
   return Component;

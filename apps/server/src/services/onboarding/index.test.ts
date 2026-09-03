@@ -76,6 +76,7 @@ describe('OnboardingService', () => {
   let mockTopicModel: {
     create: ReturnType<typeof vi.fn>;
     findById: ReturnType<typeof vi.fn>;
+    findOwnTopicById: ReturnType<typeof vi.fn>;
     updateMetadata: ReturnType<typeof vi.fn>;
   };
   let persistedUserState: any;
@@ -174,6 +175,12 @@ describe('OnboardingService', () => {
         return topic;
       }),
       findById: vi.fn(async (id: string) => persistedTopics[id]),
+      findOwnTopicById: vi.fn(async (id: string) => {
+        const topic = persistedTopics[id];
+        // Mirror the real predicate: creator-facing lookup hides share-visitor topics.
+        if (!topic || topic.senderId) return undefined;
+        return topic;
+      }),
       updateMetadata: vi.fn(async (id: string, metadata: any) => {
         const existing = persistedTopics[id] ?? { id, metadata: undefined };
         const nextTopic = {
@@ -626,6 +633,34 @@ describe('OnboardingService', () => {
       success: true,
       topicId: 'topic-1',
     });
+  });
+
+  it('does not transfer a visitor topic pointed at by activeTopicId', async () => {
+    // Regression: `updateAgentOnboarding` lets a creator set any topic id as
+    // `activeTopicId`. If that id is a share-visitor topic (creator's userId
+    // but non-null senderId), finishing onboarding must NOT re-parent it into
+    // the creator's inbox.
+    const visitorTopicId = 'visitor-topic';
+    persistedUserState.agentOnboarding = {
+      activeTopicId: visitorTopicId,
+      version: CURRENT_ONBOARDING_VERSION,
+    };
+    persistedTopics[visitorTopicId] = {
+      agentId: 'shared-agent-1',
+      id: visitorTopicId,
+      metadata: {},
+      senderId: 'visitor-user-1',
+    };
+
+    const service = new OnboardingService(mockDb, userId);
+    const result = await service.finishOnboarding();
+
+    expect(result.success).toBe(true);
+    // The transfer transaction must not have fired for the visitor topic.
+    expect(mockDb.transaction).not.toHaveBeenCalled();
+    expect(transactionUpdateCalls).toHaveLength(0);
+    // Topic is untouched — agentId still the visitor-facing shared agent.
+    expect(persistedTopics[visitorTopicId]?.agentId).toBe('shared-agent-1');
   });
 
   it('writes onboarding milestones only once as phase advances', async () => {

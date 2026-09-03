@@ -139,8 +139,13 @@ export const agentNotifyRouter = router({
       content.slice(0, 80),
     );
 
-    // 1. Verify the topic exists and get its agentId + running operationId
-    const topic = await ctx.topicModel.findById(topicId);
+    // 1. Verify the topic exists and get its agentId + running operationId.
+    // `findOwnTopicById` excludes agent-share visitor topics: they live under
+    // the creator's userId, and no legitimate visitor run reaches this
+    // callback (heterogeneous providers, sub-agent dispatch and the sandbox
+    // `lh` CLI are all refused for share runs), so a visitor topic id here can
+    // only be a creator-side caller trying to write into a private transcript.
+    const topic = await ctx.topicModel.findOwnTopicById(topicId);
     if (!topic) {
       throw new TRPCError({
         code: 'NOT_FOUND',

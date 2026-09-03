@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import {
   type AcceptanceCheck,
+  checkDisplayTitle,
   checkHeadMeta,
   CriterionList,
   CriterionRow,
@@ -86,6 +87,7 @@ interface CompactCheckRowProps {
 }
 
 const CompactCheckRow = memo<CompactCheckRowProps>(({ check, onOpen }) => {
+  const { t } = useTranslation('verify');
   const meta = checkHeadMeta(check);
 
   return (
@@ -93,7 +95,7 @@ const CompactCheckRow = memo<CompactCheckRowProps>(({ check, onOpen }) => {
       data-task-acceptance-check={check.id}
       icon={<Icon color={meta.color} icon={meta.icon} size={16} style={{ flex: 'none' }} />}
       seq={check.seq}
-      title={check.title}
+      title={checkDisplayTitle(check.title, t('acceptance.checks.holisticTitle'))}
       onOpen={onOpen}
     />
   );

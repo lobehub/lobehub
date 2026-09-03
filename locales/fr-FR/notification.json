@@ -37,6 +37,8 @@
   "document_comment_activity": "{{actorLabel}} a commenté votre document \"{{documentTitle}}\".",
   "document_comment_activity_replied": "{{actorLabel}} a répondu à votre commentaire dans \"{{documentTitle}}\".",
   "document_comment_activity_replied_title": "Nouvelle réponse à votre commentaire",
+  "document_comment_activity_thread": "{{actorLabel}} a répondu dans un fil de commentaires auquel vous participez dans \"{{documentTitle}}\".",
+  "document_comment_activity_thread_title": "Nouvelle réponse dans votre fil de commentaires",
   "document_comment_activity_title": "Nouveau commentaire sur votre document",
   "document_comment_mentioned": "{{actorLabel}} vous a mentionné dans un commentaire sur \"{{documentTitle}}\".",
   "document_comment_mentioned_title": "Vous avez été mentionné dans un commentaire de document",

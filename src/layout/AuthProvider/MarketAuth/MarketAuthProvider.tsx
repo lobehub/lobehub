@@ -2,7 +2,7 @@
 
 import { toast } from '@lobehub/ui/base-ui';
 import { type ReactNode } from 'react';
-import { createContext, use, useCallback, useEffect, useState } from 'react';
+import { createContext, lazy, Suspense, use, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { mutate as globalMutate } from 'swr';
 
@@ -19,7 +19,6 @@ import { MarketAuthError } from './errors';
 import { marketAuthEvents } from './events';
 import MarketAuthConfirmModal from './MarketAuthConfirmModal';
 import { MarketOIDC } from './oidc';
-import ProfileSetupModal from './ProfileSetupModal';
 import type { MarketAuthScene } from './scenes';
 import { createSingleFlight } from './singleFlight';
 import {
@@ -31,6 +30,8 @@ import {
 } from './types';
 import { useMarketUserProfile } from './useMarketUserProfile';
 import { type ClaimableResources } from './useSocialConnect';
+
+const ProfileSetupModal = lazy(() => import('./ProfileSetupModal'));
 
 const MarketAuthContext = createContext<MarketAuthContextType | null>(null);
 
@@ -833,16 +834,20 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
         onCancel={handleCancelAuth}
         onConfirm={handleConfirmAuth}
       />
-      <ProfileSetupModal
-        accessToken={session?.accessToken ?? null}
-        defaultDisplayName={userProfile?.displayName || ''}
-        isFirstTimeSetup={isFirstTimeSetup}
-        open={showProfileSetupModal}
-        userProfile={userProfile}
-        onClose={handleCloseProfileSetup}
-        onShowClaimResources={handleShowClaimResources}
-        onSuccess={handleProfileSuccess}
-      />
+      {showProfileSetupModal && (
+        <Suspense fallback={null}>
+          <ProfileSetupModal
+            open
+            accessToken={session?.accessToken ?? null}
+            defaultDisplayName={userProfile?.displayName || ''}
+            isFirstTimeSetup={isFirstTimeSetup}
+            userProfile={userProfile}
+            onClose={handleCloseProfileSetup}
+            onShowClaimResources={handleShowClaimResources}
+            onSuccess={handleProfileSuccess}
+          />
+        </Suspense>
+      )}
       {claimableResources && (
         <ClaimResourcesModal
           open={showClaimModal}

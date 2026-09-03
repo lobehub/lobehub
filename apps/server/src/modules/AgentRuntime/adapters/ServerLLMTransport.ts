@@ -17,6 +17,7 @@ import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import {
   type ChatStreamPayload,
   consumeStreamUntilDone,
+  ModelEmptyError,
   type ModelRuntime,
 } from '@lobechat/model-runtime';
 import {
@@ -31,6 +32,7 @@ import {
   chatSpanName,
   tracer as agentRuntimeTracer,
 } from '@lobechat/observability-otel/modules/agent-runtime';
+import { toAgentShareVisitorIds } from '@lobechat/types';
 
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
@@ -53,15 +55,61 @@ const SERVER_LLM_RETRY_POLICY = {
   noRetryProviders: [BRANDING_PROVIDER],
 };
 
+const NETWORK_EMPTY_COMPLETION_MAX_RETRIES = 3;
+const NETWORK_EMPTY_COMPLETION_MAX_ATTEMPTS = NETWORK_EMPTY_COMPLETION_MAX_RETRIES + 1;
+
+/**
+ * A stream that died on the transport before the model produced anything: no
+ * content, no reasoning, no image, no tool call and — decisively — neither cost
+ * nor output tokens, so the attempt billed nothing.
+ *
+ * `ModelEmptyCompletion` is non-retryable by spec precisely because "a retry is
+ * a new, potentially billable provider request". That reasoning is what these
+ * diagnostics rule out, which is why this narrow shape may retry while every
+ * other empty completion still surfaces immediately.
+ *
+ * Deliberately provider-independent: the zero-output, zero-cost diagnostics
+ * carry the whole safety argument on their own. A BYOK stream dropping
+ * mid-flight is the same failure, and nothing about a first-party route makes
+ * an unbilled network drop more retryable than a third-party one.
+ */
+const isRetryableNetworkEmptyCompletion = (error: unknown) => {
+  if (!(error instanceof ModelEmptyError)) return false;
+
+  const diagnostics = error.diagnostics;
+  return (
+    diagnostics?.finishReason === 'network_error' &&
+    diagnostics.contentLength === 0 &&
+    diagnostics.reasoningLength === 0 &&
+    diagnostics.imageCount === 0 &&
+    diagnostics.toolCallCount === 0 &&
+    diagnostics.cost === undefined &&
+    diagnostics.outputTokens === undefined
+  );
+};
+
 class ServerLLMRetryPolicy implements LLMRetryPolicy {
   constructor(private readonly ctx: RuntimeExecutorContext) {}
 
   classifyError(error: unknown) {
-    return classifyLLMError(error);
+    const classified = classifyLLMError(error);
+    return isRetryableNetworkEmptyCompletion(error)
+      ? { ...classified, kind: 'retry' as const }
+      : classified;
   }
 
+  /**
+   * The executor fixes the attempt ceiling before any error exists, so it has to
+   * leave room for the error-driven network-empty budget below. Providers that
+   * already allow more keep their own ceiling; only a no-retry provider is
+   * lifted, and `resolveRetryBudget` still refuses every other error of theirs
+   * at the first attempt.
+   */
   maxAttempts(provider: string) {
-    return resolveLLMMaxAttempts(provider, SERVER_LLM_RETRY_POLICY);
+    return Math.max(
+      resolveLLMMaxAttempts(provider, SERVER_LLM_RETRY_POLICY),
+      NETWORK_EMPTY_COMPLETION_MAX_ATTEMPTS,
+    );
   }
 
   onError({ error }: LLMCallErrorInput) {
@@ -83,7 +131,8 @@ class ServerLLMRetryPolicy implements LLMRetryPolicy {
     );
   }
 
-  resolveRetryBudget(provider: string) {
+  resolveRetryBudget(provider: string, error: unknown) {
+    if (isRetryableNetworkEmptyCompletion(error)) return NETWORK_EMPTY_COMPLETION_MAX_RETRIES;
     return resolveLLMRetryBudget(provider, SERVER_LLM_RETRY_POLICY);
   }
 
@@ -283,6 +332,12 @@ export class ServerLLMTransport implements LLMTransport {
       // state.metadata into the attempt so the LLM-call metadata can surface them
       // for auditing and spend attribution.
       clientIp: input.state.metadata?.clientIp,
+      // Projected, not spread: `state.metadata.agentShareVisitor` also carries
+      // the run's tool/memory restrictions, which have no place in billing
+      // metadata. Only the three attribution ids travel.
+      agentShareVisitorIds: input.state.metadata?.agentShareVisitor
+        ? toAgentShareVisitorIds(input.state.metadata.agentShareVisitor)
+        : undefined,
       topicId: input.state.metadata?.topicId,
       trigger: input.state.metadata?.trigger,
       userAgent: input.state.metadata?.userAgent,

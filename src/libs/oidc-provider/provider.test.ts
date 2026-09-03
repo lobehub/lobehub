@@ -148,54 +148,6 @@ describe('OIDC Provider - Market Client Integration', () => {
     }, 10000);
   });
 
-  describe('resolveAppOrigin', () => {
-    const importWithAppUrl = async (APP_URL: string) => {
-      vi.doMock('@/envs/app', () => ({ appEnv: { APP_URL, MARKET_BASE_URL: undefined } }));
-      const module = await import('./config');
-      vi.doUnmock('@/envs/app');
-      return module;
-    };
-
-    it('should keep the apex origin the browser is using', async () => {
-      const { resolveAppOrigin } = await importWithAppUrl('https://app.lobehub.com');
-
-      expect(
-        resolveAppOrigin(new Headers({ 'host': 'lobehub.com', 'x-forwarded-proto': 'https' })),
-      ).toBe('https://lobehub.com');
-      expect(resolveAppOrigin(new Headers({ 'x-forwarded-host': 'app.lobehub.com' }))).toBe(
-        'https://app.lobehub.com',
-      );
-    });
-
-    it('should fall back to APP_URL for unknown or missing hosts', async () => {
-      const { resolveAppOrigin } = await importWithAppUrl('https://app.lobehub.com');
-
-      expect(resolveAppOrigin(new Headers({ host: 'evil.example.com' }))).toBe(
-        'https://app.lobehub.com',
-      );
-      expect(resolveAppOrigin(new Headers())).toBe('https://app.lobehub.com');
-      expect(resolveAppOrigin(new Headers({ host: 'not a host' }))).toBe('https://app.lobehub.com');
-    });
-
-    it('should normalize host casing and ignore an empty forwarded host', async () => {
-      const { resolveAppOrigin } = await importWithAppUrl('https://app.lobehub.com');
-
-      expect(resolveAppOrigin(new Headers({ host: 'LobeHub.com' }))).toBe('https://lobehub.com');
-      expect(resolveAppOrigin(new Headers({ 'host': 'lobehub.com', 'x-forwarded-host': '' }))).toBe(
-        'https://lobehub.com',
-      );
-    });
-
-    it('should only allow the configured origin for self-hosted deployments', async () => {
-      const { resolveAppOrigin } = await importWithAppUrl('http://localhost:3210');
-
-      expect(
-        resolveAppOrigin(new Headers({ 'host': 'localhost:3210', 'x-forwarded-proto': 'http' })),
-      ).toBe('http://localhost:3210');
-      expect(resolveAppOrigin(new Headers({ host: 'lobehub.com' }))).toBe('http://localhost:3210');
-    });
-  });
-
   describe('Name Resolution Priority', () => {
     it('should prioritize fullName over firstName+lastName', () => {
       const priorities = ['fullName', 'firstName + lastName', 'username', 'id'];

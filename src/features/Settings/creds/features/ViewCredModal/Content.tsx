@@ -4,11 +4,13 @@ import { type UserCredSummary } from '@lobechat/types';
 import { CopyButton, Flexbox } from '@lobehub/ui';
 import { Alert } from '@lobehub/ui/base-ui';
 import { useQuery } from '@tanstack/react-query';
-import { Descriptions, Skeleton, Typography } from 'antd';
+import { Descriptions, Typography } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { Eye, EyeOff } from 'lucide-react';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { ArticleSkeleton } from '@/components/Skeleton';
 
 import { type CredsApi } from '../useCredsApi';
 
@@ -152,7 +154,7 @@ const ViewCredModalContent: FC<ViewCredModalContentProps> = ({ cred, credsApi })
   const valueEntries = Object.entries(values);
 
   if (isLoading) {
-    return <Skeleton active paragraph={{ rows: 3 }} />;
+    return <ArticleSkeleton rows={3} />;
   }
 
   if (error) {

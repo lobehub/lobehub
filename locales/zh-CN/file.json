@@ -100,6 +100,8 @@
   "pageEditor.comments.author.former": "前成员",
   "pageEditor.comments.cancel": "取消",
   "pageEditor.comments.createFailed": "评论发布失败，草稿已为你保留",
+  "pageEditor.comments.deepLinkLoadFailed": "链接的评论加载失败，请重试",
+  "pageEditor.comments.deepLinkMissing": "这条评论已不存在",
   "pageEditor.comments.delete": "删除",
   "pageEditor.comments.deleteConfirm.content": "确定删除这条评论吗？如果评论下有回复，回复仍会保留。",
   "pageEditor.comments.deleteConfirm.title": "删除评论",

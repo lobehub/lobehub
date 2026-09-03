@@ -100,6 +100,8 @@
   "pageEditor.comments.author.former": "Ex membro",
   "pageEditor.comments.cancel": "Annulla",
   "pageEditor.comments.createFailed": "Impossibile pubblicare il commento. La tua bozza è ancora qui.",
+  "pageEditor.comments.deepLinkLoadFailed": "Impossibile caricare il commento collegato. Riprova.",
+  "pageEditor.comments.deepLinkMissing": "Questo commento non è più disponibile.",
   "pageEditor.comments.delete": "Elimina",
   "pageEditor.comments.deleteConfirm.content": "Eliminare questo commento? Le risposte rimarranno visibili se questo commento ha un thread.",
   "pageEditor.comments.deleteConfirm.title": "Elimina commento",

@@ -1,6 +1,7 @@
 import { type LobeToolManifest } from '@lobechat/context-engine';
 import { type LobeChatDatabase } from '@lobechat/database';
 import {
+  type AgentShareVisitorContext,
   type ChatToolPayload,
   type ClientSecretPayload,
   type ExecSubAgentParams,
@@ -155,6 +156,26 @@ export interface ToolExecutionContext {
    * result; the member barrier backfills + resumes/finishes the parked supervisor.
    */
   agentMember?: ServerAgentMemberRunner;
+  /**
+   * Shared-agent visitor marker, forwarded from
+   * `RuntimeExecutorContext.agentShareVisitor` (see
+   * `modules/AgentRuntime/context.ts`). Present ONLY for a share-visitor run.
+   * `BuiltinToolsExecutor.execute` re-checks every builtin dispatch against
+   * `isShareBlockedBuiltinDispatch` with these permissions — the unbypassable
+   * counterpart of the assembly-time tool-set trim, which only shapes what the
+   * model is OFFERED, not what the executor will run. That gate is strictly
+   * wider than a plain data-tool check: master default-deny allowlist, the
+   * owner's `toolGrants` picker, and humanIntervention policy, and it
+   * internally delegates to `isShareBlockedDataToolCall` for the per-API
+   * data-tool rules.
+   *
+   * Tool runtimes that trigger their own billed work (e.g. image generation)
+   * project it with `toAgentShareVisitorIds` into a `spendOrigin` payload so
+   * the resulting spend log is attributed to the shared agent, exactly like the
+   * LLM path. Only those ids may be projected; never forward this object as a
+   * whole, since its permission fields have no place in billing metadata.
+   */
+  agentShareVisitor?: AgentShareVisitorContext;
   /**
    * Visibility of the agent executing this tool call. Resolved once per tool
    * call in the runtime executor. Tool runtimes that persist agent side-effects

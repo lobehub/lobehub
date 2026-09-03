@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-builder';
 import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
 import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation';
@@ -872,6 +873,104 @@ describe('createServerAgentToolsEngine', () => {
       });
 
       expect(result.enabledToolIds).not.toContain(LocalSystemManifest.identifier);
+    });
+  });
+
+  describe('CloudSandbox tool enable rules', () => {
+    it('should enable CloudSandbox when executionTarget is sandbox', () => {
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { agencyConfig: { executionTarget: 'sandbox' } },
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).toContain(CloudSandboxManifest.identifier);
+    });
+
+    it('should disable CloudSandbox when executionTarget is none', () => {
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { agencyConfig: { executionTarget: 'none' } },
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).not.toContain(CloudSandboxManifest.identifier);
+    });
+
+    it('should disable CloudSandbox when executionTarget is device (explicit device selection)', () => {
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { agencyConfig: { executionTarget: 'device' } },
+        canUseDevice: true,
+        deviceContext: { gatewayConfigured: true, deviceOnline: true },
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).not.toContain(CloudSandboxManifest.identifier);
+    });
+
+    // Regression: auto mode lets the model choose per call whether to run in
+    // the cloud sandbox or on the auto-routed device — `injectCredsToSandbox`
+    // has no device branch and always targets the sandbox regardless of
+    // routing — so CloudSandbox must stay offered even once a device has
+    // been auto-activated, not only while none has.
+    it('should enable CloudSandbox when executionTarget is auto and no device is auto-activated', () => {
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { agencyConfig: { executionTarget: 'auto' } },
+        canUseDevice: true,
+        deviceContext: { gatewayConfigured: true },
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).toContain(CloudSandboxManifest.identifier);
+    });
+
+    it('should still enable CloudSandbox when executionTarget is auto and a device HAS been auto-activated', () => {
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { agencyConfig: { executionTarget: 'auto' } },
+        canUseDevice: true,
+        deviceContext: { gatewayConfigured: true, deviceOnline: true, autoActivated: true },
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).toContain(CloudSandboxManifest.identifier);
     });
   });
 

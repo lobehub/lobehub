@@ -1,10 +1,11 @@
 'use client';
 
-import { copyToClipboard, Flexbox, Skeleton } from '@lobehub/ui';
+import { copyToClipboard, Flexbox } from '@lobehub/ui';
 import {
   ActionIcon,
   Avatar,
   DropdownMenu,
+  Skeleton,
   Text,
   toast,
   useModalContext,
@@ -72,11 +73,7 @@ const DocumentModalHeader = memo(() => {
       <Flexbox allowShrink horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
         {emoji && <Avatar avatar={emoji} shape={'square'} size={24} />}
         {isDocumentLoading && !title ? (
-          <Skeleton.Button
-            active
-            size={'small'}
-            style={{ height: 14, minWidth: 120, width: 120 }}
-          />
+          <Skeleton style={{ height: 14, minWidth: 120, width: 120 }} />
         ) : (
           <Text ellipsis style={{ minWidth: 0 }} weight={500}>
             {title || t('pageEditor.titlePlaceholder')}

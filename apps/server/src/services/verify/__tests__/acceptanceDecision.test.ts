@@ -6,6 +6,7 @@ import { AcceptanceService } from '../acceptanceService';
 const mocks = vi.hoisted(() => ({
   attachToAcceptance: vi.fn(),
   findById: vi.fn(),
+  findOwnTopicById: vi.fn(),
   findPolicyById: vi.fn(),
   findReportByRun: vi.fn(),
   findRunById: vi.fn(),
@@ -42,7 +43,9 @@ vi.mock('@/database/models/verifyReport', () => ({
 vi.mock('@/database/models/task', () => ({
   TaskModel: vi.fn(() => ({ resolve: mocks.taskResolve })),
 }));
-vi.mock('@/database/models/topic', () => ({ TopicModel: vi.fn() }));
+vi.mock('@/database/models/topic', () => ({
+  TopicModel: vi.fn(() => ({ findOwnTopicById: mocks.findOwnTopicById })),
+}));
 vi.mock('@/database/models/document', () => ({ DocumentModel: vi.fn() }));
 vi.mock('@/server/services/task', () => ({ TaskService: vi.fn() }));
 
@@ -76,6 +79,18 @@ describe('AcceptanceService decision gating', () => {
       projectId: null,
       requirement: 'The external delivery works',
     });
+  });
+
+  it('treats an agent-share visitor topic as a non-existent subject', async () => {
+    // findOwnTopicById excludes visitor topics, so it resolves null here even
+    // though the id exists as a raw row — the creator must not be able to
+    // attach an acceptance to a visitor's conversation.
+    mocks.findOwnTopicById.mockResolvedValue(undefined);
+
+    await expect(
+      service().ensureForSubject('topic', 'tpc-visitor-1', { requirement: 'The topic works' }),
+    ).rejects.toThrow('topic "tpc-visitor-1" not found in the current workspace');
+    expect(mocks.ensureForSubject).not.toHaveBeenCalled();
   });
 
   it.each(['pending', 'planned', 'verifying', 'repairing'])(

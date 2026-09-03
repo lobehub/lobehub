@@ -69,10 +69,10 @@ export interface GoalPlanDraft {
 
 const decompositionSchema = z.object({
   problemStatement: z.string().min(1),
-  works: z
+  tasks: z
     .array(
       z.object({
-        /** 0-based indices of earlier works this one consumes; drives `depends_on` edges. */
+        /** 0-based indices of earlier tasks this one consumes; drives `depends_on` edges. */
         dependsOn: z.array(z.number().int().nonnegative()).optional(),
         instruction: z.string().min(1),
         title: z.string().min(1).max(80),
@@ -140,10 +140,10 @@ export class GoalCriteriaGeneratorService {
   }
 
   /**
-   * Plan the opening exploration structure for a goal that has no work yet:
+   * Plan the opening exploration structure for a goal that has no tasks yet:
    * the core question plus 1–5 independent directions. Returns undefined on
    * any model/schema failure so the coordinator can fall back to a single
-   * work seeded from the raw requirement instead of stalling the goal.
+   * task seeded from the raw requirement instead of stalling the goal.
    */
   async decompose(params: { requirement: string }): Promise<GoalDecompositionDraft | undefined> {
     const modelConfig = await resolveGoalModelConfig(this.db, this.userId);

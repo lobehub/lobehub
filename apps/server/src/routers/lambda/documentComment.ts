@@ -1,4 +1,7 @@
-import type { DocumentCommentItem as DocumentCommentDTO } from '@lobechat/types';
+import type {
+  DocumentCommentDetail,
+  DocumentCommentItem as DocumentCommentDTO,
+} from '@lobechat/types';
 import { toRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
@@ -385,19 +388,23 @@ export const documentCommentRouter = router({
         const mentionedUserIds = await validateMentionedUserIds(ctx, input.editorData);
         const result = await ctx.documentCommentModel.create({ ...input, mentionedUserIds });
         if (!result.isDuplicate) {
+          // Later entries win, so the order encodes precedence:
+          // thread participant < direct target / document author < mention.
           const recipientsByUserId = new Map<string, NotifyDocumentCommentActivityParams['kind']>();
-          const recipientUserId = input.parentCommentId
-            ? result.parentAuthorUserId
-            : result.documentAuthorUserId;
-          if (recipientUserId && recipientUserId !== ctx.userId) {
-            recipientsByUserId.set(
-              recipientUserId,
-              input.parentCommentId ? 'replied' : 'commented',
-            );
+          if (input.parentCommentId) {
+            for (const userId of result.threadParticipantUserIds) {
+              recipientsByUserId.set(userId, 'thread');
+            }
+            if (result.parentAuthorUserId) {
+              recipientsByUserId.set(result.parentAuthorUserId, 'replied');
+            }
+          } else if (result.documentAuthorUserId) {
+            recipientsByUserId.set(result.documentAuthorUserId, 'commented');
           }
           for (const userId of result.addedMentionUserIds) {
             recipientsByUserId.set(userId, 'mentioned');
           }
+          recipientsByUserId.delete(ctx.userId);
 
           notifyActivitiesBestEffort(
             ctx,
@@ -451,7 +458,12 @@ export const documentCommentRouter = router({
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Document comment not found' });
     }
     await assertDocumentView(ctx, comment.documentId, grantedPermissions);
-    return (await enrich(ctx, [comment]))[0];
+    // Roots carry their live reply count so a deep link can render the thread on its own.
+    const [enriched, replyCount] = await Promise.all([
+      enrich(ctx, [comment]),
+      comment.parentCommentId ? 0 : ctx.documentCommentModel.countLiveReplies(comment.id),
+    ]);
+    return { ...enriched[0], replyCount } satisfies DocumentCommentDetail;
   }),
 
   listReplies: documentCommentProcedure

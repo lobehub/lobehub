@@ -8,7 +8,11 @@ import { buildExpertiseContextSnapshot, SkillEngine } from '@lobechat/context-en
 import type { LobeChatDatabase } from '@lobechat/database';
 import { buildTaskManagerDefaultsPrompt, resourcesTreePrompt } from '@lobechat/prompts';
 import type { LobeAgentAgencyConfig, WorkingDirConfig, WorkspaceInitResult } from '@lobechat/types';
-import { getActivePluginIds, getWorkingDirEffectivePath } from '@lobechat/types';
+import {
+  buildGoalOverviewContext,
+  getActivePluginIds,
+  getWorkingDirEffectivePath,
+} from '@lobechat/types';
 import debug from 'debug';
 
 import type { AgentModel } from '@/database/models/agent';
@@ -16,6 +20,7 @@ import { AgentSkillModel } from '@/database/models/agentSkill';
 import { AiModelModel } from '@/database/models/aiModel';
 import { DeviceModel } from '@/database/models/device';
 import { ExpertiseModel } from '@/database/models/expertise';
+import { GoalGraphModel } from '@/database/models/goalGraph';
 import type { MessageModel } from '@/database/models/message';
 import type { TopicModel } from '@/database/models/topic';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
@@ -28,6 +33,7 @@ import { FileService } from '@/server/services/file';
 
 import { pruneRegeneratedBranch } from '../pruneRegeneratedBranch';
 import { resolveDeviceWorkingDirectoryConfig } from '../resolveDeviceWorkingDirectory';
+import { applyShareGateToToolSet, filterPluginsByShareGate } from '../shareGate';
 import type { ExecRunContext, InternalExecAgentParams, ResolvedWorkspaceInit } from '../types';
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from '../workspaceInitCache';
 import type { ToolDiscoveryResult } from './toolDiscovery';
@@ -50,7 +56,13 @@ export interface HistoryLoaderInput {
  * cached so the run pays the query at most once.
  */
 export const createHistoryMessagesLoader = (
-  deps: { db: LobeChatDatabase; messageModel: MessageModel; userId: string; workspaceId?: string },
+  deps: {
+    db: LobeChatDatabase;
+    isShareVisitorRun: boolean;
+    messageModel: MessageModel;
+    userId: string;
+    workspaceId?: string;
+  },
   input: HistoryLoaderInput,
 ): (() => Promise<any[]>) => {
   const {
@@ -67,6 +79,17 @@ export const createHistoryMessagesLoader = (
   const postProcessUrl = (path: string | null, file: { id?: string | null }) =>
     fileService.getFileAccessUrl({ id: file.id, url: path });
   let historyMessagesCache: any[] | undefined;
+  // The run's own topic was resolved and authorized upstream (a share visitor
+  // run reaches here through `findVisitorTopicOrThrow`), and it executes under
+  // the CREATOR's identity — so an AUTHORIZED share run must opt out of
+  // `query()`'s creator-facing agent-share exclusion or the agent loses its
+  // history. A non-share run must NOT get this opt-out: `turnSetup`'s
+  // visitor-topic guard rejects a non-share run whose `appContext.topicId`
+  // resolves to a visitor topic, but this loader is cheap defense-in-depth in
+  // case that guard is ever bypassed or a future call site skips it — without
+  // it, a non-share run pointed at a leaked visitor topicId would still load
+  // the visitor's transcript into the owner's model context.
+  const historyQueryOptions = { allowShareVisitor: deps.isShareVisitorRun, postProcessUrl };
 
   return async () => {
     if (historyMessagesCache) return historyMessagesCache;
@@ -78,7 +101,7 @@ export const createHistoryMessagesLoader = (
           threadId: appContext?.threadId,
           topicId: appContext?.topicId ?? undefined,
         },
-        { postProcessUrl },
+        historyQueryOptions,
       );
       const idSet = new Set(existingMessageIds);
       historyMessagesCache = messages.filter((msg) => idSet.has(msg.id));
@@ -93,7 +116,7 @@ export const createHistoryMessagesLoader = (
           threadId: appContext?.threadId,
           topicId: appContext?.topicId,
         },
-        { postProcessUrl },
+        historyQueryOptions,
       );
       historyMessagesCache = messages.filter((msg) => !selfMessageIds.has(msg.id));
     } else {
@@ -320,6 +343,7 @@ export const prepareOperation = async (
     prompt,
     provider,
     resolvedAgentId,
+    shareGate,
     topicId,
     userMessageId,
   } = ctx;
@@ -643,6 +667,31 @@ export const prepareOperation = async (
         }).enabledToolIds
       : [];
 
+  // Final share-gate allowlist enforcement — run once here, after every
+  // manifest/default/dynamic-activation source (installed plugins, LobeHub
+  // Skills, Composio, real-MCP connectors, always-on builtin defaults) has
+  // been merged into `toolManifestMap` / `toolsResult.enabledToolIds` /
+  // `tools` / `activatableToolIds` by `toolDiscovery` and the historical
+  // re-activation pass above. `filterPluginsByShareGate` in `toolDiscovery`
+  // only trimmed the initial candidate id list — it does not stop
+  // `lobe-activator` from dynamically activating (and `ToolExecutionService`
+  // from executing, with the CREATOR's credentials) a creator-connected tool
+  // that was never in `shareConfig.toolGrants`. Mutates the discovery maps
+  // in place, so the `toolSet` handed to `createOperation` is the pruned one.
+  if (shareGate) {
+    applyShareGateToToolSet(
+      {
+        activatableToolIds,
+        enabledToolIds: toolsResult.enabledToolIds,
+        executorMap: discovery.toolExecutorMap,
+        manifestMap: discovery.toolManifestMap,
+        sourceMap: discovery.toolSourceMap,
+        tools,
+      },
+      shareGate,
+    );
+  }
+
   log('execAgent: prepared evalContext for executor');
 
   await throwIfExecutionAborted('operation preparation');
@@ -718,6 +767,27 @@ export const prepareOperation = async (
         },
       },
     };
+  }
+
+  // Goal-page side conversation: mirror the client executor's injection so
+  // server-run agents also answer progress questions from the live graph.
+  if (appContext?.viewedGoal?.goalId) {
+    try {
+      const snapshot = await new GoalGraphModel(deps.db, deps.userId, deps.workspaceId).getGraph(
+        appContext.viewedGoal.goalId,
+      );
+      if (snapshot) {
+        initialContext = {
+          ...initialContext,
+          initialContext: {
+            ...initialContext.initialContext,
+            goalOverview: buildGoalOverviewContext(snapshot),
+          },
+        };
+      }
+    } catch (error) {
+      log('execAgent: failed to build goal overview context: %O', error);
+    }
   }
 
   // Persist the @-mentioned agents into the runtime initialContext so the
@@ -883,10 +953,28 @@ export const prepareOperation = async (
     // against, so a disabled identifier absent here is neither listed nor
     // activatable — mirrors the tool-manifest treatment above (installedPlugins/
     // additionalManifests), which this array had never received.
+    //
+    // Shared runs only see skills allowed by the share configuration. The
+    // candidate pool must be trimmed here rather than left to
+    // `SkillEngine.generate`, which annotates activation state on its input
+    // rather than shrinking it. Reuse `filterPluginsByShareGate` (id-list
+    // intersection, not tool-specific) to keep this pool the single
+    // enforcement point — an empty/missing allowlist collapses it to nothing.
+    const shareAllowedSkillIds = shareGate
+      ? new Set(
+          filterPluginsByShareGate(
+            [...projectMetas, ...dbMetas, ...agentSkillMetas, ...builtinMetas].map(
+              (skill) => skill.identifier,
+            ),
+            shareGate,
+          ),
+        )
+      : undefined;
     const seenNames = new Set<string>();
     const skills = [...projectMetas, ...dbMetas, ...agentSkillMetas, ...builtinMetas].filter(
       (skill) => {
         if (disabledPluginIds.includes(skill.identifier)) return false;
+        if (shareAllowedSkillIds && !shareAllowedSkillIds.has(skill.identifier)) return false;
         if (seenNames.has(skill.name)) return false;
         seenNames.add(skill.name);
         return true;

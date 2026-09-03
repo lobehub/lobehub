@@ -100,6 +100,8 @@
   "pageEditor.comments.author.former": "Były członek",
   "pageEditor.comments.cancel": "Anuluj",
   "pageEditor.comments.createFailed": "Nie udało się opublikować komentarza. Twój szkic nadal tutaj jest.",
+  "pageEditor.comments.deepLinkLoadFailed": "Nie udało się załadować powiązanego komentarza. Spróbuj ponownie.",
+  "pageEditor.comments.deepLinkMissing": "Ten komentarz nie jest już dostępny.",
   "pageEditor.comments.delete": "Usuń",
   "pageEditor.comments.deleteConfirm.content": "Usunąć ten komentarz? Odpowiedzi pozostaną widoczne, jeśli ten komentarz ma wątek.",
   "pageEditor.comments.deleteConfirm.title": "Usuń komentarz",

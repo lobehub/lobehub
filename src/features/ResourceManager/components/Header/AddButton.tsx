@@ -20,6 +20,7 @@ import { useTopLevelFileUpload } from '@/features/ResourceManager/hooks/useTopLe
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { usePermission } from '@/hooks/usePermission';
 import { useFileStore } from '@/store/file';
+import { useTreeStore } from '@/store/tree';
 import { FilesTabs } from '@/types/files';
 
 import useNotionImport from './hooks/useNotionImport';
@@ -51,9 +52,16 @@ interface AddButtonProps {
    * labelled primary button used in the Explorer header.
    */
   iconOnly?: boolean;
+  /**
+   * Create and upload at the library's top level instead of the folder the
+   * URL is currently in. The sidebar toolbar sits beside the library name, so
+   * its entries read as library-level; creating inside a specific folder is
+   * what that folder row's own "+" (`FolderAddButton`) is for.
+   */
+  rootLevel?: boolean;
 }
 
-const AddButton = ({ iconOnly }: AddButtonProps = {}) => {
+const AddButton = ({ iconOnly, rootLevel }: AddButtonProps = {}) => {
   const { t } = useTranslation('file');
   // Several instances can be mounted at once (Explorer header, sidebar toolbar,
   // empty state); a fixed id would make every "Upload folder" label open the
@@ -62,23 +70,40 @@ const AddButton = ({ iconOnly }: AddButtonProps = {}) => {
   const uploadFolderWithStructure = useFileStore((s) => s.uploadFolderWithStructure);
   const createResourceAndSync = useFileStore((s) => s.createResourceAndSync);
   const [menuOpen, setMenuOpen] = useState(false);
-  const currentFolderId = useCurrentFolderId();
+  const urlFolderId = useCurrentFolderId();
+  const currentFolderId = rootLevel ? null : urlFolderId;
   const { allowed: canCreate, reason } = usePermission('create_content');
-  const uploadTopLevel = useTopLevelFileUpload();
+  const uploadTopLevel = useTopLevelFileUpload({ rootLevel });
 
   // TODO: Migrate Notion import to use createResource
   // Keep old functions temporarily for components not yet migrated
   const createDocument = useFileStore((s) => s.createDocument);
 
-  const [libraryId, category, setCategory, setCurrentViewItemId, setMode, setPendingRenameItemId] =
-    useResourceManagerStore((s) => [
-      s.libraryId,
-      s.category,
-      s.setCategory,
-      s.setCurrentViewItemId,
-      s.setMode,
-      s.setPendingRenameItemId,
-    ]);
+  const [
+    libraryId,
+    category,
+    setCategory,
+    setCurrentViewItemId,
+    setMode,
+    setPendingRenameItemId,
+    setPendingTreeRenameItemId,
+  ] = useResourceManagerStore((s) => [
+    s.libraryId,
+    s.category,
+    s.setCategory,
+    s.setCurrentViewItemId,
+    s.setMode,
+    s.setPendingRenameItemId,
+    s.setPendingTreeRenameItemId,
+  ]);
+
+  // The sidebar tree only mirrors the folder the Explorer is showing, so a
+  // root-level create made while a folder is open has to refresh the root
+  // itself for the new row to appear.
+  const revealRoot = useCallback(() => {
+    if (!rootLevel) return;
+    void useTreeStore.getState().revalidate('');
+  }, [rootLevel]);
 
   const handleOpenPageEditor = useCallback(async () => {
     // Navigate to "All" category first if not already there. The home
@@ -97,6 +122,7 @@ const AddButton = ({ iconOnly }: AddButtonProps = {}) => {
       sourceType: DERIVED_DOCUMENT_SOURCE_TYPE,
       title: untitledTitle,
     });
+    revealRoot();
 
     // Switch to page view mode with real ID
     setCurrentViewItemId(realId);
@@ -106,6 +132,7 @@ const AddButton = ({ iconOnly }: AddButtonProps = {}) => {
     createResourceAndSync,
     currentFolderId,
     libraryId,
+    revealRoot,
     setCategory,
     setCurrentViewItemId,
     setMode,
@@ -120,19 +147,24 @@ const AddButton = ({ iconOnly }: AddButtonProps = {}) => {
 
     // Create folder and wait for sync to complete before triggering rename
     try {
-      // Get current resource list to check for duplicate folder names
-      const resourceList = useFileStore.getState().resourceList || [];
-
-      // Filter for folders at the same level
-      const foldersAtSameLevel = resourceList.filter(
-        (item) =>
-          item.fileType === CUSTOM_FOLDER_FILE_TYPE &&
-          (item.parentId ?? null) === (currentFolderId ?? null),
-      );
+      // Unique "Untitled N" among the sibling folders. At the root the tree's
+      // own root cache is the reliable sibling list — the Explorer may be
+      // showing a different folder entirely.
+      const siblingFolderNames = rootLevel
+        ? (useTreeStore.getState().children[''] ?? [])
+            .filter((item) => item.isFolder)
+            .map((item) => item.name)
+        : (useFileStore.getState().resourceList || [])
+            .filter(
+              (item) =>
+                item.fileType === CUSTOM_FOLDER_FILE_TYPE &&
+                (item.parentId ?? null) === (currentFolderId ?? null),
+            )
+            .map((folder) => folder.name);
 
       // Generate unique folder name
       const baseName = t('pageList.untitled');
-      const existingNames = new Set(foldersAtSameLevel.map((folder) => folder.name));
+      const existingNames = new Set(siblingFolderNames);
 
       let uniqueName = baseName;
       let counter = 1;
@@ -152,8 +184,15 @@ const AddButton = ({ iconOnly }: AddButtonProps = {}) => {
         title: uniqueName,
       });
 
-      // Trigger auto-rename with the real ID (after sync completes)
-      setPendingRenameItemId(realId);
+      // Trigger auto-rename with the real ID (after sync completes). The
+      // sidebar's create renames inline in the tree row, where the user
+      // clicked; the Explorer's create renames in its own list.
+      if (rootLevel) {
+        revealRoot();
+        setPendingTreeRenameItemId(realId);
+      } else {
+        setPendingRenameItemId(realId);
+      }
     } catch (error) {
       toast.error(t('header.actions.createFolderError'));
       console.error('Failed to create folder:', error);
@@ -163,8 +202,11 @@ const AddButton = ({ iconOnly }: AddButtonProps = {}) => {
     createResourceAndSync,
     currentFolderId,
     libraryId,
+    revealRoot,
+    rootLevel,
     setCategory,
     setPendingRenameItemId,
+    setPendingTreeRenameItemId,
     t,
   ]);
 
@@ -172,12 +214,14 @@ const AddButton = ({ iconOnly }: AddButtonProps = {}) => {
     createDocument,
     currentFolderId,
     libraryId,
+    refetchResources: rootLevel ? async () => revealRoot() : undefined,
     t,
   });
 
   const { handleFolderUpload } = useUploadFolder({
     currentFolderId,
     libraryId,
+    onUploaded: revealRoot,
     t,
     uploadFolderWithStructure,
   });
@@ -222,6 +266,7 @@ const AddButton = ({ iconOnly }: AddButtonProps = {}) => {
             beforeUpload={async (file) => {
               setMenuOpen(false);
               await uploadTopLevel([file]);
+              revealRoot();
               return false;
             }}
           >
@@ -260,6 +305,7 @@ const AddButton = ({ iconOnly }: AddButtonProps = {}) => {
       handleOpenPageEditor,
       handleOpenNotionGuide,
       libraryId,
+      revealRoot,
       uploadTopLevel,
       t,
     ],

@@ -46,23 +46,33 @@ export const resolveGoalScheduleConfig = (
  * done" as one authoritative text, which the coordinator folds into every
  * Work's acceptance contract — so the drafted criteria are rendered into it
  * rather than persisted as separate verify criteria rows.
+ *
+ * The text doubles as the goal page's editable "what counts as done" document,
+ * which renders markdown — so the composition is structured markdown, not bare
+ * lines: criterion titles bold, the how-to-judge note on its own sub-line.
  */
 export const buildGoalRequirement = (
   name: string,
   criteria: GoalCriterionInput[],
   instruction?: string,
-): string =>
-  [
-    name,
-    instruction ? `Scope: ${instruction}` : undefined,
-    'Acceptance criteria — every one must be satisfied with concrete evidence:',
-    ...criteria.map((item, index) =>
+): string => {
+  const list = criteria
+    .map((item, index) =>
       [
-        `${index + 1}. ${item.title}`,
+        `${index + 1}. **${item.title}**`,
         item.description ? ` — ${item.description}` : '',
-        item.instruction ? ` (how to judge: ${item.instruction})` : '',
+        // Hard break (trailing two spaces) + indented continuation keeps the
+        // judge note inside the SAME list item — a nested bullet would steal
+        // the next ordinal from the editor's list numbering (1/3/5).
+        item.instruction ? `  \n   *How to judge:* ${item.instruction}` : '',
       ].join(''),
-    ),
+    )
+    .join('\n');
+  return [
+    `## ${name}`,
+    instruction ? `**Scope:** ${instruction}` : undefined,
+    `**Acceptance criteria** — every one must be satisfied with concrete evidence:\n\n${list}`,
   ]
     .filter(Boolean)
-    .join('\n');
+    .join('\n\n');
+};

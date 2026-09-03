@@ -88,7 +88,7 @@ const ServerVersionOutdatedAlert = () => {
   const { t } = useTranslation('common');
   const [dismissed, setDismissed] = useState(false);
   const isServerVersionOutdated = useGlobalStore((s) => s.isServerVersionOutdated);
-  const storageMode = useElectronStore(electronSyncSelectors.storageMode);
+  const isOfficialServer = useElectronStore(electronSyncSelectors.isOfficialServer);
 
   const cssVariables = useMemo<Record<string, string>>(
     () => ({
@@ -98,9 +98,7 @@ const ServerVersionOutdatedAlert = () => {
     [theme.yellowBorder, theme.yellowBg],
   );
 
-  // Only show alert when using self-hosted server, not cloud
-  if (storageMode !== 'selfHost') return null;
-  if (!isServerVersionOutdated || dismissed) return null;
+  if (isOfficialServer || !isServerVersionOutdated || dismissed) return null;
 
   return (
     <div className={styles.container}>

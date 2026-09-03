@@ -10,6 +10,7 @@ export * from './compressContext';
 export * from './discordContext';
 export * from './files';
 export * from './fileSystem';
+export * from './goal';
 export * from './groupChat';
 export * from './knowledgeBaseQA';
 export * from './messagesToText';

@@ -51,7 +51,7 @@ describe('advanceGoal', () => {
   });
 
   it('hands off at waiting_external instead of polling a running task', async () => {
-    // The Work Task's own settle queues the next advance. Polling here would
+    // The Task's own settle queues the next advance. Polling here would
     // hold a worker open for the whole execution and duplicate that event.
     mocks.tick
       .mockResolvedValueOnce(tickResult('advanced'))

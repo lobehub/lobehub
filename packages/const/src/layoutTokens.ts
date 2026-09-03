@@ -12,6 +12,8 @@ export const CONVERSATION_MIN_WIDTH = 960;
 export const CHAT_PORTAL_WIDTH = 400;
 export const CHAT_PORTAL_MAX_WIDTH = 1280;
 export const CHAT_PORTAL_TOOL_UI_WIDTH = 600;
+/** Opening width for task / goal-node detail panes — one column of status + activity. */
+export const CHAT_PORTAL_TASK_WIDTH = 640;
 /** For portal views that read as a document (acceptance report, evidence, screenshots) */
 export const CHAT_PORTAL_WIDE_WIDTH = 840;
 /**

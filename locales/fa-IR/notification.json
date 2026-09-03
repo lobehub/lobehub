@@ -37,6 +37,8 @@
   "document_comment_activity": "{{actorLabel}} روی سند شما \"{{documentTitle}}\" نظر داد.",
   "document_comment_activity_replied": "{{actorLabel}} به نظر شما در \"{{documentTitle}}\" پاسخ داد.",
   "document_comment_activity_replied_title": "پاسخ جدید به نظر شما",
+  "document_comment_activity_thread": "{{actorLabel}} در یک رشته نظر که شما بخشی از آن هستید در \"{{documentTitle}}\" پاسخ داد.",
+  "document_comment_activity_thread_title": "پاسخ جدید در رشته نظر شما",
   "document_comment_activity_title": "نظر جدید روی سند شما",
   "document_comment_mentioned": "{{actorLabel}} شما را در نظری روی \"{{documentTitle}}\" ذکر کرد.",
   "document_comment_mentioned_title": "شما در یک نظر سند ذکر شدید",

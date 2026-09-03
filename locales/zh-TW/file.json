@@ -100,6 +100,8 @@
   "pageEditor.comments.author.former": "前成員",
   "pageEditor.comments.cancel": "取消",
   "pageEditor.comments.createFailed": "發佈評論失敗。您的草稿仍然保留。",
+  "pageEditor.comments.deepLinkLoadFailed": "無法載入連結的評論。請再試一次。",
+  "pageEditor.comments.deepLinkMissing": "此評論已不再可用。",
   "pageEditor.comments.delete": "刪除",
   "pageEditor.comments.deleteConfirm.content": "確定要刪除此評論嗎？如果此評論有回覆，回覆仍會顯示。",
   "pageEditor.comments.deleteConfirm.title": "刪除評論",

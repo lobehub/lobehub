@@ -36,8 +36,16 @@ export interface IAgentStateManager {
     operationId: string,
     data: {
       agentConfig?: any;
+      visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
       mirrorToOperationId?: string;
       modelRuntimeConfig?: any;
+      /**
+       * Agent Share visitor runs only: the visitor's id, under which the
+       * gateway WS channel is registered (the op itself executes as the
+       * creator, `userId`). Its presence also marks the op as a share run for
+       * a queue worker that never saw `publishAgentRuntimeInit`.
+       */
+      streamOwnerUserId?: string;
       userId?: string;
       workspaceId?: string;
     },

@@ -174,6 +174,12 @@ export interface ExecAgentAppContext {
   threadId?: string | null;
   /** Topic ID */
   topicId?: string | null;
+  /**
+   * Goal detail page the conversation is happening on. The server builds
+   * `RuntimeInitialContext.goalOverview` from the goal graph so the agent can
+   * answer progress questions without tool calls.
+   */
+  viewedGoal?: { goalId: string };
 }
 
 /**
