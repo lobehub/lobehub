@@ -13,6 +13,7 @@ import type { UIChatMessage } from '@lobechat/types';
  */
 export const HETEROGENEOUS_AGENT_STATUS_GUIDE_ERROR_CODES = new Set<string>([
   HeterogeneousAgentSessionErrorCode.AuthRequired,
+  HeterogeneousAgentSessionErrorCode.CliDetectionTimeout,
   HeterogeneousAgentSessionErrorCode.CliNotFound,
   HeterogeneousAgentSessionErrorCode.Overloaded,
   HeterogeneousAgentSessionErrorCode.RateLimit,

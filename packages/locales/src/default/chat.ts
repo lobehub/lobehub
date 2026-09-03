@@ -868,6 +868,14 @@ export default {
   'cliAuthGuide.errorDetails': 'Error details',
   'cliAuthGuide.runCommand': 'Run this in Terminal',
   'cliAuthGuide.title': 'Sign in to {{name}}',
+  'cliDetectionTimeoutGuide.actions.openSystemTools': 'Open System Tools',
+  'cliDetectionTimeoutGuide.actions.retry': 'Detect again',
+  'cliDetectionTimeoutGuide.desc':
+    'LobeHub took too long to locate `{{command}}` from your login shell environment.',
+  'cliDetectionTimeoutGuide.errorDetails': 'Technical details',
+  'cliDetectionTimeoutGuide.hint':
+    'This is often caused by a slow shell startup script. Try again, or open System Tools to check the detected command path.',
+  'cliDetectionTimeoutGuide.title': 'Detection timed out for {{name}}',
   'cliOverloadedGuide.actions.retry': 'Retry',
   'cliOverloadedGuide.autoRetry.actions.cancel': 'Stop auto-retry',
   'cliOverloadedGuide.autoRetry.actions.retryNow': 'Retry now',

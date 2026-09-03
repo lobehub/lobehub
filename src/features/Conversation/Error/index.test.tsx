@@ -440,6 +440,29 @@ describe('ErrorMessageExtra', () => {
     expect(screen.getByText('guide:claude-code:auth_required')).toBeInTheDocument();
   });
 
+  it('renders the CLI detection timeout guide instead of the generic JSON error', () => {
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.AgentRuntimeError' }}
+        data={{
+          error: {
+            body: {
+              agentType: 'codex',
+              code: HeterogeneousAgentSessionErrorCode.CliDetectionTimeout,
+              command: 'codex',
+              message: 'Timed out looking for `codex` while reading PATH from your login shell.',
+            },
+            type: AgentRuntimeErrorType.AgentRuntimeError,
+          } as any,
+          id: 'msg-cli-detection-timeout',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('guide:codex:cli_detection_timeout')).toBeInTheDocument();
+    expect(screen.queryByText(/Timed out looking for/)).not.toBeInTheDocument();
+  });
+
   it('renders the rate-limit guide when the refreshed error carries rate_limit code', () => {
     render(
       <ErrorMessageExtra
