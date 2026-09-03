@@ -65,14 +65,17 @@ export async function readLocalFile({
     return buildErrorResult(filePath, 'This is a directory and cannot be read as plain text.');
   }
 
-  if (stats.size > MAX_FILE_SIZE_BYTES) {
+  const extension = path.extname(filePath).toLowerCase().replace('.', '');
+
+  // PDFs are parsed into text by pdfjs and remain bounded by the output caps below.
+  // Their source size is often dominated by embedded images and does not reflect text volume.
+  if (extension !== 'pdf' && stats.size > MAX_FILE_SIZE_BYTES) {
     return buildErrorResult(
       filePath,
       `Error: File is too large to read (${stats.size} bytes, limit ${MAX_FILE_SIZE_BYTES}). Use grep / shell tools to inspect specific parts.`,
     );
   }
 
-  const extension = path.extname(filePath).toLowerCase().replace('.', '');
   if (extension && !isReadableFileType(extension)) {
     return buildErrorResult(
       filePath,
