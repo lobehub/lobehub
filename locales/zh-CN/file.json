@@ -58,7 +58,7 @@
   "library.import.failed": "导入知识库失败。",
   "library.import.success": "知识库已导入到{{name}}。",
   "library.import.tooltip": "将此知识库分叉到工作区中。文件通过引用共享；原始文件保留在您的个人空间中。",
-  "library.list.confirmRemoveLibrary": "将删除该资源库（其中的文件不会删除，会移入「全部文件」）。删除后不可恢复，建议确认无误再继续",
+  "library.list.confirmRemoveLibrary": "删除该资源库会永久删除仅属于该资源库的文件；同时属于其他资源库的文件会保留。此操作无法撤销。",
   "library.list.copyDescription": "您可以拷贝到有权限创建知识库的个人账户或工作区。",
   "library.list.copyFailed": "复制库失败",
   "library.list.copySuccess": "库已复制",

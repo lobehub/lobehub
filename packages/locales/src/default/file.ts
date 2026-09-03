@@ -66,7 +66,7 @@ export default {
     'Fork this library into a workspace. Files are shared by reference; the original stays in your personal space.',
   'library.privateEmpty': 'Create a private library',
   'library.list.confirmRemoveLibrary':
-    'You are about to delete this library. The files within it will not be deleted but moved to All Files. This action cannot be undone, so please proceed with caution.',
+    'Deleting this library permanently deletes files used only by it. Files that also belong to other libraries remain there. This action cannot be undone.',
   'library.list.copyDescription':
     'You can copy to personal or workspaces that have permission to create a knowledge base.',
   'library.list.copyFailed': 'Failed to copy library',

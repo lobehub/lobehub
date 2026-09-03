@@ -174,7 +174,7 @@ describe('knowledgeBaseRouter', () => {
 
   describe('addFilesToKnowledgeBase', () => {
     it("lets a member add another creator's visible resource", async () => {
-      mockFileModelFindByIds.mockResolvedValue([{ id: 'file-1' }]);
+      mockFileModelFindByIds.mockResolvedValue([{ id: 'file-1', visibility: 'public' }]);
       mockDocumentModelFindByIds.mockResolvedValue([]);
       mockKnowledgeBaseModelAddFiles.mockResolvedValue([{ fileId: 'file-1' }]);
 
@@ -183,8 +183,19 @@ describe('knowledgeBaseRouter', () => {
       expect(mockKnowledgeBaseModelAddFiles).toHaveBeenCalledWith('kb-1', ['file-1']);
     });
 
+    it('rejects assigning a resource to a library with different visibility', async () => {
+      mockFileModelFindByIds.mockResolvedValue([{ id: 'file-1', visibility: 'private' }]);
+      mockDocumentModelFindByIds.mockResolvedValue([]);
+
+      await expect(
+        caller.addFilesToKnowledgeBase({ ids: ['file-1'], knowledgeBaseId: 'kb-1' }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+      expect(mockKnowledgeBaseModelAddFiles).not.toHaveBeenCalled();
+    });
+
     it('fails the whole batch when any resource is inaccessible', async () => {
-      mockFileModelFindByIds.mockResolvedValue([{ id: 'file-1' }]);
+      mockFileModelFindByIds.mockResolvedValue([{ id: 'file-1', visibility: 'public' }]);
       mockDocumentModelFindByIds.mockResolvedValue([]);
 
       await expect(
