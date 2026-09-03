@@ -131,6 +131,7 @@ export default {
   'inbox.news.title': 'Daily brief',
   'inbox.news.titleDay': 'Brief · {{date}}',
   'inbox.news.titleYesterday': "Yesterday's brief",
+  'inbox.news.viewChat': 'View chat',
   'inbox.running.title': '{{count}} task running',
   'inbox.running.title_plural': '{{count}} tasks running',
   'inbox.scope.mine': 'Mine',

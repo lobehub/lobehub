@@ -127,6 +127,7 @@
   "inbox.news.title": "Dagelijks overzicht",
   "inbox.news.titleDay": "Samenvatting · {{date}}",
   "inbox.news.titleYesterday": "Samenvatting van gisteren",
+  "inbox.news.viewChat": "Gesprek bekijken",
   "inbox.running.title": "{{count}} taak actief",
   "inbox.running.title_plural": "{{count}} taken actief",
   "inbox.scope.mine": "Mijn",

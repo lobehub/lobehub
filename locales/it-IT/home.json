@@ -127,6 +127,7 @@
   "inbox.news.title": "Riepilogo quotidiano",
   "inbox.news.titleDay": "Riepilogo · {{date}}",
   "inbox.news.titleYesterday": "Riepilogo di ieri",
+  "inbox.news.viewChat": "Vedi chat",
   "inbox.running.title": "{{count}} attività in corso",
   "inbox.running.title_plural": "{{count}} attività in corso",
   "inbox.scope.mine": "Mio",

@@ -128,6 +128,9 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief, showTime }) => {
     setActiveTaskId(brief.taskId ?? undefined);
     openTopicDrawer(brief.topicId, {
       agentId,
+      // The drawer opens with conversational intent — mount the reply
+      // composer expanded and focused (review feedback C2).
+      autoFocus: true,
       title: brief.taskName ?? brief.title,
     });
   }, [

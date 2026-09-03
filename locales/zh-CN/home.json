@@ -127,6 +127,7 @@
   "inbox.news.title": "今日简报",
   "inbox.news.titleDay": "{{date}}简报",
   "inbox.news.titleYesterday": "昨日简报",
+  "inbox.news.viewChat": "查看对话",
   "inbox.running.title": "{{count}} 个任务正在执行",
   "inbox.running.title_plural": "{{count}} 个任务正在执行",
   "inbox.scope.mine": "我的",

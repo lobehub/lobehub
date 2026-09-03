@@ -127,6 +127,7 @@
   "inbox.news.title": "Tóm tắt hàng ngày",
   "inbox.news.titleDay": "Bản tin · {{date}}",
   "inbox.news.titleYesterday": "Bản tin ngày hôm qua",
+  "inbox.news.viewChat": "Xem trò chuyện",
   "inbox.running.title": "{{count}} nhiệm vụ đang chạy",
   "inbox.running.title_plural": "{{count}} nhiệm vụ đang chạy",
   "inbox.scope.mine": "Của tôi",

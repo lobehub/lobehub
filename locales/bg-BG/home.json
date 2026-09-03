@@ -127,6 +127,7 @@
   "inbox.news.title": "Ежедневен бюлетин",
   "inbox.news.titleDay": "Новини · {{date}}",
   "inbox.news.titleYesterday": "Новини от вчера",
+  "inbox.news.viewChat": "Прегледай чата",
   "inbox.running.title": "{{count}} задача в процес",
   "inbox.running.title_plural": "{{count}} задачи в процес",
   "inbox.scope.mine": "Моите",

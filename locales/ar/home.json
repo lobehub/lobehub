@@ -127,6 +127,7 @@
   "inbox.news.title": "الملخص اليومي",
   "inbox.news.titleDay": "الملخص · {{date}}",
   "inbox.news.titleYesterday": "ملخص الأمس",
+  "inbox.news.viewChat": "عرض المحادثة",
   "inbox.running.title": "{{count}} مهمة قيد التشغيل",
   "inbox.running.title_plural": "{{count}} مهام قيد التشغيل",
   "inbox.scope.mine": "خاصتي",

@@ -127,6 +127,7 @@
   "inbox.news.title": "Ежедневная сводка",
   "inbox.news.titleDay": "Сводка · {{date}}",
   "inbox.news.titleYesterday": "Сводка за вчера",
+  "inbox.news.viewChat": "Открыть чат",
   "inbox.running.title": "{{count}} задача выполняется",
   "inbox.running.title_plural": "{{count}} задач выполняется",
   "inbox.scope.mine": "Мои",

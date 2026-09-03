@@ -127,6 +127,7 @@
   "inbox.news.title": "خلاصه روزانه",
   "inbox.news.titleDay": "خلاصه · {{date}}",
   "inbox.news.titleYesterday": "خلاصه دیروز",
+  "inbox.news.viewChat": "مشاهده گفتگو",
   "inbox.running.title": "{{count}} وظیفه در حال اجرا",
   "inbox.running.title_plural": "{{count}} وظیفه در حال اجرا",
   "inbox.scope.mine": "مال من",

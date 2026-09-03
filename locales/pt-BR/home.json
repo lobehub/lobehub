@@ -127,6 +127,7 @@
   "inbox.news.title": "Resumo diário",
   "inbox.news.titleDay": "Resumo · {{date}}",
   "inbox.news.titleYesterday": "Resumo de ontem",
+  "inbox.news.viewChat": "Ver conversa",
   "inbox.running.title": "{{count}} tarefa em execução",
   "inbox.running.title_plural": "{{count}} tarefas em execução",
   "inbox.scope.mine": "Meu",

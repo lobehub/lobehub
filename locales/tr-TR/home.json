@@ -127,6 +127,7 @@
   "inbox.news.title": "Günlük özet",
   "inbox.news.titleDay": "Özet · {{date}}",
   "inbox.news.titleYesterday": "Dünkü özet",
+  "inbox.news.viewChat": "Sohbeti gör",
   "inbox.running.title": "{{count}} görev çalışıyor",
   "inbox.running.title_plural": "{{count}} görev çalışıyor",
   "inbox.scope.mine": "Benim",

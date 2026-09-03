@@ -127,6 +127,7 @@
   "inbox.news.title": "Codzienny przegląd",
   "inbox.news.titleDay": "Podsumowanie · {{date}}",
   "inbox.news.titleYesterday": "Wczorajsze podsumowanie",
+  "inbox.news.viewChat": "Pokaż czat",
   "inbox.running.title": "{{count}} zadanie w toku",
   "inbox.running.title_plural": "{{count}} zadań w toku",
   "inbox.scope.mine": "Moje",

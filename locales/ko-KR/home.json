@@ -127,6 +127,7 @@
   "inbox.news.title": "일일 요약",
   "inbox.news.titleDay": "요약 · {{date}}",
   "inbox.news.titleYesterday": "어제의 요약",
+  "inbox.news.viewChat": "대화 보기",
   "inbox.running.title": "{{count}}개의 작업 실행 중",
   "inbox.running.title_plural": "{{count}}개의 작업 실행 중",
   "inbox.scope.mine": "내 것",
