@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   findGitBash,
   getShellConfig,
+  markWindowsShellUnhealthy,
   normalizeEnvVarRefs,
   resetShellDetectionCache,
   setWindowsShellPreference,
@@ -157,6 +158,26 @@ describe('getShellConfig', () => {
     expect(callsAfterFirst).toBeGreaterThan(0);
     // Second call must not touch the filesystem again.
     expect(lstatSpy.mock.calls.length).toBe(callsAfterFirst);
+  });
+
+  it('should skip a shell marked unhealthy and detect the next candidate', async () => {
+    setPlatform('win32');
+    const pwshDir = '/fake/tools/pwsh';
+    const pwshPath = path.join(pwshDir, 'pwsh.exe');
+    const powershellPath = path.join(
+      'C:\\Windows',
+      'System32',
+      'WindowsPowerShell',
+      'v1.0',
+      'powershell.exe',
+    );
+    process.env.PATH = pwshDir;
+    process.env.SystemRoot = 'C:\\Windows';
+    mockExisting(pwshPath, powershellPath);
+
+    expect((await getShellConfig('echo one')).cmd).toBe(pwshPath);
+    markWindowsShellUnhealthy(pwshPath);
+    expect((await getShellConfig('echo two')).cmd).toBe(powershellPath);
   });
 
   it('should share a single detection run between concurrent first calls', async () => {

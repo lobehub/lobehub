@@ -120,11 +120,20 @@ const executableExists = async (candidate: string): Promise<boolean> => {
   }
 };
 
+/**
+ * Shell executables that existed during detection but failed before a user
+ * command could start. Keep them out of the fallback chain for the lifetime of
+ * this process; desktop restart is the natural point at which a repaired Store
+ * alias / PowerShell installation should be reconsidered.
+ */
+const unhealthyWindowsShells = new Set<string>();
+
 /** Return the first candidate that exists, preserving the list's priority order. */
 const firstExisting = async (candidates: string[]): Promise<string | undefined> => {
-  const results = await Promise.all(candidates.map((candidate) => executableExists(candidate)));
+  const eligible = candidates.filter((candidate) => !unhealthyWindowsShells.has(candidate));
+  const results = await Promise.all(eligible.map((candidate) => executableExists(candidate)));
   const index = results.indexOf(true);
-  return index === -1 ? undefined : candidates[index];
+  return index === -1 ? undefined : eligible[index];
 };
 
 /**
@@ -236,6 +245,18 @@ let windowsShellPreference: WindowsShellPreference = 'auto';
  * @internal for tests only — production code should rely on the cache.
  */
 export const resetShellDetectionCache = (): void => {
+  cachedWindowsShell = undefined;
+  unhealthyWindowsShells.clear();
+};
+
+/**
+ * Remove a Windows shell from future detection after a proven launch failure.
+ * This is deliberately narrower than reacting to an arbitrary non-zero command
+ * exit: only the runner, which can distinguish spawn / process-init failures,
+ * should call it.
+ */
+export const markWindowsShellUnhealthy = (shellPath: string): void => {
+  unhealthyWindowsShells.add(shellPath);
   cachedWindowsShell = undefined;
 };
 

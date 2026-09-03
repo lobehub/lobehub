@@ -1,11 +1,17 @@
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
 
 import type { SandboxPolicy } from '@lobechat/device-sandbox';
 
 import type { RunCommandParams, RunCommandResult } from '../types';
 import type { ShellOutputFiles, ShellProcess, ShellProcessManager } from './process-manager';
 import { DEFAULT_OBSERVATION_TIMEOUT_MS } from './process-manager';
-import { detectWindowsShell, getShellConfig, normalizeEnvVarRefs } from './utils';
+import {
+  detectWindowsShell,
+  getShellConfig,
+  markWindowsShellUnhealthy,
+  normalizeEnvVarRefs,
+} from './utils';
 
 export interface RunCommandOptions {
   logger?: {
@@ -28,7 +34,14 @@ export interface RunCommandOptions {
   onSandboxUnavailable?: (error: Error) => void;
   processManager: ShellProcessManager;
   sandboxPolicy?: SandboxPolicy;
+  /** @internal Prevents a launch fallback from recursively retrying forever. */
+  shellFallbackAttempted?: boolean;
 }
+
+const WINDOWS_DLL_INIT_FAILED = 0xc000_0142;
+
+const isWindowsShellSpawnFailure = (result: RunCommandResult): boolean =>
+  result.error !== undefined && /\b(?:EACCES|ENOENT)\b/.test(result.error);
 
 export async function runCommand(
   {
@@ -39,10 +52,32 @@ export async function runCommand(
     run_in_background,
     timeout = DEFAULT_OBSERVATION_TIMEOUT_MS,
   }: RunCommandParams,
-  { processManager, logger, onSandboxUnavailable, sandboxPolicy }: RunCommandOptions,
+  {
+    processManager,
+    logger,
+    onSandboxUnavailable,
+    sandboxPolicy,
+    shellFallbackAttempted = false,
+  }: RunCommandOptions,
 ): Promise<RunCommandResult> {
   if (!command) {
     return { error: 'command is required', success: false };
+  }
+
+  // Node reports a missing working directory as a spawn ENOENT for the shell
+  // executable, which sends users looking for a PowerShell installation issue
+  // that does not exist. Fail before shell detection with the actual cause.
+  if (cwd) {
+    try {
+      const cwdStat = await fs.promises.stat(cwd);
+      if (!cwdStat.isDirectory()) {
+        return { error: `Working directory is not a directory: ${cwd}`, success: false };
+      }
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      const suffix = code ? ` (${code})` : '';
+      return { error: `Working directory is not accessible: ${cwd}${suffix}`, success: false };
+    }
   }
 
   const logPrefix = `[runCommand: ${description || command.slice(0, 50)}]`;
@@ -124,6 +159,13 @@ export async function runCommand(
 
     childProcess.on('error', (error) => {
       logger?.error(`${logPrefix} Command failed:`, error);
+      if (
+        process.platform === 'win32' &&
+        !sandboxPolicy &&
+        /\b(?:EACCES|ENOENT)\b/.test(error.message)
+      ) {
+        markWindowsShellUnhealthy(shellConfig.cmd);
+      }
       const cwdContext = cwd ? ` (working directory: ${cwd})` : '';
       shellProcess.spawnError = new Error(
         `Failed to start command${cwdContext}: ${error.message}`,
@@ -155,11 +197,51 @@ export async function runCommand(
       timeout,
     });
 
-    return {
+    const result: RunCommandResult = {
       ...observation,
       sandboxed,
       shell_id: shellId,
     };
+
+    // A stale Store alias or removed PowerShell installation fails at spawn, so
+    // the user script definitely did not start. Quarantine that executable and
+    // retry exactly once with the next shell in the detection chain.
+    if (
+      process.platform === 'win32' &&
+      !run_in_background &&
+      !sandboxPolicy &&
+      !shellFallbackAttempted &&
+      isWindowsShellSpawnFailure(result)
+    ) {
+      markWindowsShellUnhealthy(shellConfig.cmd);
+      logger?.info?.(`${logPrefix} Retrying with the next available Windows shell`, {
+        failedShell: shellConfig.cmd,
+      });
+      return runCommand(
+        { command, cwd, description, env: extraEnv, run_in_background, timeout },
+        {
+          logger,
+          onSandboxUnavailable,
+          processManager,
+          sandboxPolicy,
+          shellFallbackAttempted: true,
+        },
+      );
+    }
+
+    // 0xC0000142 normally means PowerShell itself could not initialise its
+    // DLLs. Do not replay the current command, though: a user program can also
+    // return that native status after earlier statements produced side effects.
+    // Quarantining the shell makes the *next* agent retry use the fallback.
+    if (
+      process.platform === 'win32' &&
+      !sandboxPolicy &&
+      result.exit_code === WINDOWS_DLL_INIT_FAILED
+    ) {
+      markWindowsShellUnhealthy(shellConfig.cmd);
+    }
+
+    return result;
   } catch (error) {
     releaseSandbox?.();
     if (outputFiles) processManager.closeOutputFiles(outputFiles);
