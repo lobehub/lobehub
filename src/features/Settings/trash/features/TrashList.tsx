@@ -29,6 +29,7 @@ import { trashBucketKey, trashScopeKey } from '@/store/trash/keys';
 
 import {
   getDeletedByLabel,
+  getEmptyTrashActionState,
   getPurgeFeedback,
   getRestoreFeedback,
   toggleTrashSelection,
@@ -111,10 +112,25 @@ const TrashList = ({ cacheScope }: TrashListProps) => {
   const items = bucket?.items ?? [];
   const nextCursor = bucket?.nextCursor ?? null;
   const context = { resourceType: activeType, scopeId };
-  const total = Object.values(countByType).reduce((sum, count) => sum + (count ?? 0), 0);
 
   const { error, isLoading, mutate: retry } = useFetchTrash(true, activeType, scopeId);
-  useFetchTrashCount(true, scopeId);
+  const {
+    data: fetchedCountByType,
+    error: countError,
+    isLoading: isCountLoading,
+    mutate: retryCount,
+  } = useFetchTrashCount(true, scopeId);
+  const resolvedCountByType = fetchedCountByType ?? countByType;
+  const {
+    count: currentCount,
+    ready: countReady,
+    total,
+  } = getEmptyTrashActionState({
+    activeType,
+    countByType: resolvedCountByType,
+    countError,
+    hasCountData: fetchedCountByType !== undefined,
+  });
 
   const visibleIdSet = new Set(items.map((item) => item.id));
   const effectiveSelectedIds = selectedIds.filter((id) => visibleIdSet.has(id));
@@ -171,10 +187,10 @@ const TrashList = ({ cacheScope }: TrashListProps) => {
   };
 
   const handleEmpty = () => {
-    const count = activeType ? (countByType[activeType] ?? items.length) : total;
+    if (!countReady) return;
     confirmModal({
       cancelText: tc('cancel'),
-      content: t('trash.emptyConfirm.content', { count }),
+      content: t('trash.emptyConfirm.content', { count: currentCount }),
       okButtonProps: { danger: true },
       okText: activeType
         ? t('trash.actions.emptyType', { type: typeLabel(activeType) })
@@ -317,8 +333,8 @@ const TrashList = ({ cacheScope }: TrashListProps) => {
 
   const typeOptions = [
     { label: `${t('trash.filter.all')}${total ? ` · ${total}` : ''}`, value: 'all' },
-    ...TRASH_TYPE_ORDER.filter((type) => countByType[type]).map((type) => ({
-      label: `${typeLabel(type)} · ${countByType[type]}`,
+    ...TRASH_TYPE_ORDER.filter((type) => resolvedCountByType[type]).map((type) => ({
+      label: `${typeLabel(type)} · ${resolvedCountByType[type]}`,
       value: type,
     })),
   ];
@@ -347,6 +363,13 @@ const TrashList = ({ cacheScope }: TrashListProps) => {
           )}
         </Flexbox>
         <Flexbox horizontal gap={8}>
+          {countError && (
+            <Tooltip title={t('trash.error.desc')}>
+              <Button size={'small'} type={'text'} onClick={() => retryCount()}>
+                {tc('retry')}
+              </Button>
+            </Tooltip>
+          )}
           {effectiveSelectedIds.length > 0 && (
             <>
               <Button
@@ -367,11 +390,16 @@ const TrashList = ({ cacheScope }: TrashListProps) => {
               </Tooltip>
             </>
           )}
-          <Tooltip title={canPurge ? undefined : purgePermissionReason}>
+          <Tooltip
+            title={
+              canPurge ? (countError ? t('trash.error.desc') : undefined) : purgePermissionReason
+            }
+          >
             <Button
               danger
-              disabled={!canPurge || items.length === 0}
+              disabled={!canPurge || !countReady || currentCount === 0}
               icon={Trash2Icon}
+              loading={isCountLoading && items.length > 0}
               size={mobile ? 'small' : undefined}
               onClick={handleEmpty}
             >

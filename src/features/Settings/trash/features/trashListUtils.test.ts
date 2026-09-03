@@ -2,12 +2,32 @@ import { describe, expect, it } from 'vitest';
 
 import {
   getDeletedByLabel,
+  getEmptyTrashActionState,
   getPurgeFeedback,
   getRestoreFeedback,
   toggleTrashSelection,
 } from './trashListUtils';
 
 describe('trashListUtils', () => {
+  it('blocks emptying until the server count succeeds', () => {
+    expect(
+      getEmptyTrashActionState({
+        countByType: {},
+        countError: new Error('count failed'),
+        hasCountData: false,
+      }),
+    ).toEqual({ count: 0, ready: false, total: 0 });
+
+    expect(
+      getEmptyTrashActionState({
+        activeType: 'document',
+        countByType: { document: 7, file: 2 },
+        countError: undefined,
+        hasCountData: true,
+      }),
+    ).toEqual({ count: 7, ready: true, total: 9 });
+  });
+
   it('reports partial restore and purge outcomes with explicit counts', () => {
     expect(getRestoreFeedback({ failed: [{ code: 'parentTrashed' }], restored: [{}] })).toEqual({
       key: 'trash.restore.partial',

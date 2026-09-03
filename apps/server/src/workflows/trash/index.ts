@@ -86,7 +86,7 @@ type TrashPurgeSchedulerGlobal = typeof globalThis & {
 
 /** Start hourly retention sweeps on persistent, self-hosted Node processes. */
 export const startLocalTrashPurgeSchedule = () => {
-  if (process.env.QSTASH_TOKEN) return;
+  if (process.env.QSTASH_TOKEN || !process.env.DATABASE_URL) return;
   const schedulerGlobal = globalThis as TrashPurgeSchedulerGlobal;
   if (schedulerGlobal.__lobeTrashPurgeInterval) return;
 

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { qstashClient } from '@/libs/qstash';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
-import { runLocalTrashPurge, triggerTrashPurge } from './index';
+import { runLocalTrashPurge, startLocalTrashPurgeSchedule, triggerTrashPurge } from './index';
 
 vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: 'https://example.com' } }));
 vi.mock('@/libs/qstash', () => ({ qstashClient: { publishJSON: vi.fn() } }));
@@ -72,5 +72,22 @@ describe('runLocalTrashPurge', () => {
       {},
       expect.objectContaining({ cursor: { expiresAt: '2026-09-01', id: '7' }, limit: 50 }),
     );
+  });
+});
+
+describe('startLocalTrashPurgeSchedule', () => {
+  beforeEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('does not start without a database connection', () => {
+    vi.stubEnv('DATABASE_URL', '');
+    vi.stubEnv('QSTASH_TOKEN', '');
+    const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
+
+    startLocalTrashPurgeSchedule();
+
+    expect(setIntervalSpy).not.toHaveBeenCalled();
+    setIntervalSpy.mockRestore();
   });
 });

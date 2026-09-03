@@ -1,4 +1,4 @@
-import type { TrashItem } from '@lobechat/types';
+import type { TrashCountByType, TrashItem, TrashResourceType } from '@lobechat/types';
 
 export interface TrashActionFeedback {
   key:
@@ -11,6 +11,26 @@ export interface TrashActionFeedback {
   level: 'error' | 'success' | 'warning';
   params?: Record<string, number>;
 }
+
+export const getEmptyTrashActionState = ({
+  activeType,
+  countByType,
+  countError,
+  hasCountData,
+}: {
+  activeType?: TrashResourceType;
+  countByType: TrashCountByType;
+  countError: unknown;
+  hasCountData: boolean;
+}) => {
+  const total = Object.values(countByType).reduce((sum, count) => sum + (count ?? 0), 0);
+
+  return {
+    count: activeType ? (countByType[activeType] ?? 0) : total,
+    ready: hasCountData && !countError,
+    total,
+  };
+};
 
 export const getRestoreFeedback = (outcome: {
   failed: { code: 'notFound' | 'parentTrashed' }[];
