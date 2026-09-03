@@ -52,7 +52,12 @@ vi.mock('swr', async () => {
         error: swr.state.error,
         isLoading: false,
         mutate: async (input?: any) => {
-          if (input === undefined) return swr.state.data;
+          // Bare `mutate()` revalidates: re-read through the (mocked) fetcher.
+          if (input === undefined) {
+            const fresh = await service.getShareStatus();
+            if (fresh !== undefined) swr.set(fresh);
+            return swr.state.data;
+          }
           swr.set(typeof input === 'function' ? input(swr.state.data) : input);
           return swr.state.data;
         },
@@ -397,6 +402,42 @@ describe('useAgentShare · updateConfig', () => {
 
     expect(service.updateShareConfig).toHaveBeenCalledTimes(1);
     expect(service.updateShareConfig.mock.calls[0][1]).toEqual({ maxTurnsPerTopic: 30 });
+  });
+
+  it('re-reads the server after a later queued write fails so a discarded earlier response is not lost', async () => {
+    // Disable succeeds but its response is discarded because a slug write is
+    // already queued behind it; the slug write then fails. The cache must end
+    // up showing the server truth (disabled), not the pre-disable row.
+    let completeDisable: () => void = () => {};
+    service.disableShare.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          completeDisable = () => resolve({ ...buildShare(), visibility: 'private' });
+        }),
+    );
+    service.updateSlug.mockRejectedValueOnce(new Error('slug taken'));
+    service.getShareStatus.mockResolvedValue({ ...buildShare(), visibility: 'private' });
+
+    const { result } = renderHook(() => useAgentShare('agent-1'));
+
+    let disabling: Promise<unknown> = Promise.resolve();
+    await act(async () => {
+      disabling = result.current.disable();
+    });
+    await waitFor(() => expect(service.disableShare).toHaveBeenCalledTimes(1));
+
+    let saving: Promise<unknown> = Promise.resolve();
+    await act(async () => {
+      saving = result.current.updateSlug('new-slug').catch(() => undefined);
+    });
+
+    await act(async () => {
+      completeDisable();
+      await disabling;
+      await saving;
+    });
+
+    await waitFor(() => expect(result.current.share?.visibility).toBe('private'));
   });
 
   it('still writes when a disable failed outright', async () => {

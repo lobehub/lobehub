@@ -190,14 +190,26 @@ export const useAgentShare = (agentId: string) => {
   const runWrite = useCallback(
     <T>(task: () => Promise<T>): Promise<T> => {
       pendingWritesRef.current += 1;
-      return enqueue(task).finally(() => {
-        // The reset on identity change already zeroed this counter for the
-        // NEW agent; a write issued under the OLD agent must not decrement it
-        // again once it settles late.
-        if (identityRef.current === agentId) pendingWritesRef.current -= 1;
-      });
+      return enqueue(task)
+        .finally(() => {
+          // The reset on identity change already zeroed this counter for the
+          // NEW agent; a write issued under the OLD agent must not decrement it
+          // again once it settles late.
+          if (identityRef.current === agentId) pendingWritesRef.current -= 1;
+        })
+        .catch((error) => {
+          // A failed write may have been the LAST one queued, in which case
+          // `commitIfCurrent` already discarded every earlier write's response
+          // on the assumption that this one would carry their combined effect.
+          // Nothing else will refresh the cache (focus revalidation is off), so
+          // re-read the server truth here; the idle re-sync effect re-seeds
+          // `latestConfigRef` once the queue drains. Skipped once `agentId`
+          // has moved on — that `mutate` belongs to a different agent.
+          if (identityRef.current === agentId) void mutate();
+          throw error;
+        });
     },
-    [agentId, enqueue],
+    [agentId, enqueue, mutate],
   );
 
   const enable = useCallback(
@@ -270,16 +282,13 @@ export const useAgentShare = (agentId: string) => {
           // request was in flight, in which case `sendConfigRef` now belongs
           // to a different agent and must be left alone.
           if (identityRef.current === agentId) sendConfigRef.current = sendBase;
-          // Drop the optimistic projection and re-read the server truth; the
-          // effect above re-seeds `latestConfigRef` once the queue drains.
-          // Skipped once `agentId` has moved on — that re-read effect now
-          // belongs to a different agent's `mutate`/`share` pair.
-          if (identityRef.current === agentId) void mutate();
+          // The optimistic projection is dropped by the server re-read that
+          // `runWrite` issues for every failed write.
           throw error;
         }
       });
     },
-    [agentId, commitIfCurrent, mutate, runWrite],
+    [agentId, commitIfCurrent, runWrite],
   );
 
   /**
