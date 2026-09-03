@@ -1,4 +1,5 @@
 import { INBOX_SESSION_ID } from '@lobechat/const';
+import { MessageGroupType } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -14,6 +15,7 @@ import {
   embeddings,
   fileChunks,
   files,
+  messageGroups,
   messageQueries,
   messageQueryChunks,
   messages,
@@ -26,7 +28,7 @@ import {
   users,
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
-import { MessageModel } from '../../message';
+import { MessageModel, toVisitorMessage } from '../../message';
 import { codeEmbedding } from '../fixtures/embedding';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -1603,6 +1605,150 @@ describe('MessageModel Query Tests', () => {
         topicId: visitorTopicId,
       });
       expect(optedInCount).toBe(1);
+    });
+
+    it('hides synthetic message-group nodes when the creator reads a visitor topic', async () => {
+      // Regression for `queryMessageGroupNodes`: a creator's default
+      // `query({ topicId })` on a visitor topic returned no messages but
+      // still emitted the group's `compressedGroup` node (with its `content`
+      // summary) or `compareGroup` node, leaking the visitor's conversation
+      // shape.
+      await serverDB.insert(messageGroups).values([
+        {
+          content: 'visitor compression summary',
+          createdAt: new Date('2024-01-01T10:00:00Z'),
+          id: 'visitor-group-compress',
+          topicId: visitorTopicId,
+          type: MessageGroupType.Compression,
+          userId,
+        },
+        {
+          createdAt: new Date('2024-01-01T10:01:00Z'),
+          id: 'visitor-group-compare',
+          topicId: visitorTopicId,
+          type: MessageGroupType.Parallel,
+          userId,
+        },
+      ]);
+
+      const creatorResult = await messageModel.query({ topicId: visitorTopicId });
+      expect(creatorResult).toHaveLength(0);
+
+      const shareRuntimeModel = new MessageModel(serverDB, userId, undefined, undefined, {
+        includeShareVisitor: true,
+      });
+      const runtimeResult = await shareRuntimeModel.query({ topicId: visitorTopicId });
+      const visitorResult = await messageModel.queryForVisitor({ topicId: visitorTopicId });
+
+      // Both visitor-facing paths still see the group nodes — this fix
+      // scopes the leak to the CREATOR's default read.
+      const runtimeIds = new Set(runtimeResult.map((m) => m.id));
+      expect(runtimeIds.has('visitor-group-compress')).toBe(true);
+      expect(runtimeIds.has('visitor-group-compare')).toBe(true);
+
+      const visitorIds = new Set(visitorResult.map((m) => m.id));
+      expect(visitorIds.has('visitor-group-compress')).toBe(true);
+      expect(visitorIds.has('visitor-group-compare')).toBe(true);
+    });
+  });
+
+  describe('toVisitorMessage', () => {
+    it('recursively sanitizes assistantGroup children in a compressedGroup node', async () => {
+      // Regression: `children` on an assistantGroup node inside
+      // `compressedMessages` carries full AssistantContentBlock data
+      // (`usage`, `error`, `tools`, `metadata`, `performance`, plus nested
+      // `council` messages with `sender`). The previous narrow snapshot
+      // sanitize only cleared `model`/`provider`, letting the rest leak.
+      const compressedGroupNode = {
+        compressedMessages: [
+          {
+            children: [
+              {
+                content: 'assistant reply',
+                error: {
+                  message: 'raw provider payload',
+                  type: 'ProviderBizError',
+                } as any,
+                id: 'assistant-child-1',
+                metadata: { usage: { totalTokens: 42 } } as any,
+                model: 'gpt-4o',
+                performance: { latency: 100 } as any,
+                provider: 'openai',
+                sender: { fullName: 'Creator', id: 'creator-user-id' } as any,
+                tools: [{ id: 't1', identifier: 'search' }] as any,
+                usage: { totalTokens: 42 } as any,
+                council: [
+                  {
+                    content: 'member reply',
+                    id: 'council-member-1',
+                    model: 'gpt-4o',
+                    provider: 'openai',
+                    role: 'assistant',
+                    sender: { fullName: 'Member', id: 'member-user-id' } as any,
+                    usage: { totalTokens: 7 } as any,
+                  },
+                ] as any,
+              } as any,
+            ],
+            content: '',
+            id: 'assistant-group-1',
+            role: 'assistantGroup',
+          } as any,
+        ],
+        content: 'summary',
+        id: 'compressed-group-1',
+        role: 'compressedGroup',
+      } as any;
+
+      const stripped = toVisitorMessage(compressedGroupNode);
+      const child = (stripped.compressedMessages as any[])[0].children[0];
+
+      expect(child.sender).toBeNull();
+      expect(child.usage).toBeUndefined();
+      expect(child.model).toBeUndefined();
+      expect(child.provider).toBeUndefined();
+      expect(child.metadata?.usage).toBeUndefined();
+      expect(child.error.type).not.toBe('ProviderBizError');
+      // council members must be recursed, not passed through verbatim
+      expect(child.council).toHaveLength(1);
+      expect(child.council[0].sender).toBeNull();
+      expect(child.council[0].usage).toBeUndefined();
+      expect(child.council[0].model).toBeUndefined();
+
+      // With `showModelInfo` the model snapshot survives on both the child
+      // and the recursed council members, and children stay attached.
+      const kept = toVisitorMessage(compressedGroupNode, { showModelInfo: true });
+      const keptChild = (kept.compressedMessages as any[])[0].children[0];
+      expect(keptChild.model).toBe('gpt-4o');
+      expect(keptChild.usage).toEqual({ totalTokens: 42 });
+      expect(keptChild.council[0].model).toBe('gpt-4o');
+      expect(keptChild.council[0].usage).toEqual({ totalTokens: 7 });
+    });
+
+    it('keeps the narrow snapshot for compareGroup children in both modes', async () => {
+      const compareGroupNode = {
+        children: [
+          {
+            content: 'variant',
+            createdAt: new Date('2024-01-01T10:00:00Z'),
+            id: 'variant-1',
+            model: 'gpt-4o',
+            provider: 'openai',
+            role: 'assistant',
+          },
+        ],
+        id: 'compare-group-1',
+        role: 'compareGroup',
+      } as any;
+
+      const stripped = toVisitorMessage(compareGroupNode);
+      expect((stripped.children as any[])[0].model).toBeNull();
+      expect((stripped.children as any[])[0].provider).toBeNull();
+      expect((stripped.children as any[])[0].content).toBe('variant');
+
+      const kept = toVisitorMessage(compareGroupNode, { showModelInfo: true });
+      expect((kept.children as any[])[0].model).toBe('gpt-4o');
+      expect((kept.children as any[])[0].provider).toBe('openai');
     });
   });
 

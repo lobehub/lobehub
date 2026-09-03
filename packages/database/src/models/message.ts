@@ -95,7 +95,7 @@ import { notCopiedTranscript } from '../utils/copiedTranscript';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
 import { inJsonStringArray } from '../utils/inJsonStringArray';
-import { notShareVisitorMessage } from '../utils/shareVisitor';
+import { notShareVisitorMessage, notShareVisitorTopicRef } from '../utils/shareVisitor';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { recomputeTopicUsage } from './topicUsage';
 import { WorkModel } from './work';
@@ -591,11 +591,17 @@ const sanitizeVisitorExtra = (extra: ChatMessageExtra | undefined): ChatMessageE
 
 /**
  * Shape shared by `pinnedMessages` entries and `compareGroup.children` entries
- * (`queryMessageGroupNodes` builds `children` with this exact narrow
- * projection, then casts the whole node `as unknown as UIChatMessage`, so
- * `UIChatMessage['children']`'s declared `AssistantContentBlock[]` type does
- * not describe it at runtime). Neither carries `sender`/`usage`, only the
- * model snapshot needs stripping.
+ * (`queryMessageGroupNodes` builds them with this exact narrow projection,
+ * then casts the whole node `as unknown as UIChatMessage`, so
+ * `UIChatMessage['pinnedMessages']` / `UIChatMessage['children']`'s declared
+ * types do not describe them at runtime). Neither carries `sender`/`usage`,
+ * only the model snapshot needs stripping.
+ *
+ * NOTE: on a `compressedGroup` node, `children` is NOT this narrow shape — it
+ * lives inside `compressedMessages[].children` (an `AssistantContentBlock[]`
+ * produced by `FlatListBuilder`) and carries `usage`, `error`, `tools`,
+ * `metadata`, `performance`, and possibly nested `council` messages with
+ * `sender`. See `toVisitorMessage` for the recursion that sanitizes those.
  */
 interface VisitorGroupSnapshotProjection {
   content: string | null;
@@ -854,20 +860,51 @@ export const toVisitorMessage = (
     ...(message.members && {
       members: message.members.map((nested) => toVisitorMessage(nested, options)),
     }),
-    ...(message.pinnedMessages &&
-      stripModelInfo && {
-        pinnedMessages: sanitizeVisitorGroupSnapshots(
-          message.pinnedMessages as unknown as VisitorGroupSnapshotProjection[],
-        ) as unknown as UIChatMessage['pinnedMessages'],
-      }),
-    // `compareGroup` nodes carry the same bare model/provider snapshot under
-    // `children` (see `queryMessageGroupNodes`).
-    ...(message.children &&
-      stripModelInfo && {
-        children: sanitizeVisitorGroupSnapshots(
-          message.children as unknown as VisitorGroupSnapshotProjection[],
-        ) as unknown as UIChatMessage['children'],
-      }),
+    // `pinnedMessages` is only ever the narrow group-node projection (see
+    // `queryMessageGroupNodes` in the Compression branch). Emit it in both
+    // modes — sanitized when the model snapshot is not shared, otherwise
+    // untouched.
+    ...(message.pinnedMessages && {
+      pinnedMessages: stripModelInfo
+        ? (sanitizeVisitorGroupSnapshots(
+            message.pinnedMessages as unknown as VisitorGroupSnapshotProjection[],
+          ) as unknown as UIChatMessage['pinnedMessages'])
+        : message.pinnedMessages,
+    }),
+    // `children` is polymorphic: a `compareGroup` node carries the same bare
+    // {id, role, model, provider, content, createdAt} snapshot as
+    // `pinnedMessages`; an `assistantGroup` node (produced inside
+    // `compressedMessages` by `FlatListBuilder`) carries full
+    // `AssistantContentBlock[]` with `usage`, `tools`, `error`, `metadata`,
+    // `performance`, and possibly nested `council` messages with `sender` —
+    // so a compareGroup-only narrow sanitize would let all of those through
+    // for an assistantGroup child. Route by the PARENT `role` and recurse
+    // assistantGroup children through `toVisitorMessage` itself so the
+    // allowlist / error projection / usage & metadata stripping / council
+    // recursion all apply.
+    ...(message.children && {
+      children:
+        message.role === 'compareGroup'
+          ? stripModelInfo
+            ? (sanitizeVisitorGroupSnapshots(
+                message.children as unknown as VisitorGroupSnapshotProjection[],
+              ) as unknown as UIChatMessage['children'])
+            : message.children
+          : ((message.children as unknown as UIChatMessage[]).map((child) =>
+              toVisitorMessage(child, options),
+            ) as unknown as UIChatMessage['children']),
+    }),
+    // `AssistantContentBlock.council` on a nested assistantGroup child is a
+    // `Message[]` of the supervisor's broadcast members, each carrying its
+    // own `sender` / model / usage. `pickAllowedKeys` drops `council`
+    // outright (fail closed), so re-attach a recursively sanitized copy
+    // whenever the source carried one.
+    ...((message as unknown as { council?: unknown }).council !== undefined &&
+      ({
+        council: ((message as unknown as { council?: UIChatMessage[] }).council ?? []).map(
+          (member) => toVisitorMessage(member, options),
+        ),
+      } as unknown as Partial<UIChatMessage>)),
   } as UIChatMessage;
 };
 
@@ -1416,6 +1453,7 @@ export class MessageModel {
     const messageIds = result.map((message) => message.id as string);
 
     const messageGroupNodesPromise = this.queryMessageGroupNodesForPage({
+      allowShareVisitor: allowShareVisitor || this.includeShareVisitor,
       current,
       postProcessUrl,
       result,
@@ -1589,12 +1627,23 @@ export class MessageModel {
   };
 
   private queryMessageGroupNodesForPage = async ({
+    allowShareVisitor,
     current,
     postProcessUrl,
     result,
     timing,
     topicId,
   }: {
+    /**
+     * Effective visitor gate resolved by the caller (per-call
+     * `allowShareVisitor` OR the instance's `includeShareVisitor`). Threaded
+     * through so the underlying `messageGroups` where-clause fails closed on
+     * a creator's default read of a visitor topic — otherwise a bare
+     * workspace/topicId filter would still surface the group's synthetic
+     * `compressedGroup`/`compareGroup` nodes (with content summaries) even
+     * though the row query returned nothing.
+     */
+    allowShareVisitor?: boolean;
     current: number;
     postProcessUrl?: (
       path: string | null,
@@ -1612,7 +1661,10 @@ export class MessageModel {
       return runTimedStage(
         timing,
         'db.message.queryWithWhere.messageGroups',
-        () => this.queryMessageGroupNodes(topicId, undefined, postProcessUrl, timing),
+        () =>
+          this.queryMessageGroupNodes(topicId, undefined, postProcessUrl, timing, {
+            allowShareVisitor,
+          }),
         { current, hasMessages: false, topicId },
       );
     }
@@ -1621,7 +1673,10 @@ export class MessageModel {
       return runTimedStage(
         timing,
         'db.message.queryWithWhere.messageGroups',
-        () => this.queryMessageGroupNodes(topicId, undefined, postProcessUrl, timing),
+        () =>
+          this.queryMessageGroupNodes(topicId, undefined, postProcessUrl, timing, {
+            allowShareVisitor,
+          }),
         { current, hasMessages: true, topicId },
       );
     }
@@ -1641,6 +1696,7 @@ export class MessageModel {
           },
           postProcessUrl,
           timing,
+          { allowShareVisitor },
         ),
       { current, hasMessages: true, topicId },
     );
@@ -2244,11 +2300,20 @@ export class MessageModel {
       file: { fileType: string; id?: string | null },
     ) => Promise<string>,
     timing?: ModelTimingContext,
+    options: { allowShareVisitor?: boolean } = {},
   ): Promise<UIChatMessage[]> => {
+    // Effective visitor gate — see `queryMessageGroupNodesForPage`. Absent
+    // this predicate, a creator's default `query({ topicId })` on a visitor
+    // topic returns no messages but still returns the group's synthetic
+    // `compressedGroup` node (with its `content` summary) or `compareGroup`
+    // node, leaking the visitor conversation shape.
+    const includeVisitor = options.allowShareVisitor || this.includeShareVisitor;
+
     // 1. Query MessageGroups for this topic, optionally filtered by time range
     const whereConditions = [
       buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messageGroups),
       eq(messageGroups.topicId, topicId),
+      ...(includeVisitor ? [] : [notShareVisitorTopicRef(messageGroups.topicId)]),
     ];
 
     // Add time range filter if provided (for pagination)
