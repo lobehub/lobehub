@@ -49,10 +49,6 @@ import type {
   ExecGroupMemberResult,
   GroupActionMemberBridgeParams,
 } from '@/server/services/agentRuntime/types';
-import {
-  createAiInfraRepos,
-  listServableChatProviders,
-} from '@/server/services/aiInfra/servableModels';
 import { ComposioService } from '@/server/services/composio';
 import { MarketService } from '@/server/services/market';
 import { markdownToTxt } from '@/utils/markdownToTxt';
