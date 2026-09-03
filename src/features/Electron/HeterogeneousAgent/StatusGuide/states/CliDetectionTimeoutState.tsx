@@ -1,5 +1,6 @@
 import { Flexbox, Highlighter } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
+import { cssVar } from 'antd-style';
 import { ClockAlert } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -19,7 +20,7 @@ const CliDetectionTimeoutState = ({
 
   return (
     <GuideShell
-      icon={<ClockAlert size={24} />}
+      icon={<ClockAlert color={cssVar.colorWarning} size={20} />}
       title={t('cliDetectionTimeoutGuide.title', { name: config.title })}
       variant={variant}
       actions={
@@ -50,7 +51,7 @@ const CliDetectionTimeoutState = ({
             wrap
             actionIconSize={'small'}
             language={'log'}
-            padding={12}
+            padding={8}
             style={{ maxHeight: 160, overflow: 'auto' }}
             variant={'outlined'}
           >
