@@ -767,7 +767,7 @@ export default {
     'The following {{count}} messages were forwarded from another conversation. Please use them as context and continue:',
   'messageForward.topic.context': 'Topic context',
   'messageForward.topic.description':
-    'The user and assistant messages in this topic will be sent as context. Tool messages are excluded.',
+    'The selected Agent will receive an instruction to read this topic with the LobeHub CLI and continue the work.',
   'messageForward.topic.header':
     'The following topic was forwarded from another conversation. Please use it as context and continue:',
   'messageForward.topic.loadFailed': 'Could not load this topic for forwarding',
@@ -898,6 +898,7 @@ export default {
   'cliOverloadedGuide.title': '{{name}} is temporarily overloaded',
   'cliRateLimitGuide.actions.openSystemTools': 'Open System Tools',
   'cliRateLimitGuide.actions.retry': 'Retry message',
+  'cliRateLimitGuide.actions.transfer': 'Transfer to another Agent',
   'cliRateLimitGuide.afterReset':
     'This account has reached its current usage limit. You can continue after {{resetAt}}.',
   'cliRateLimitGuide.afterResetWithLimitType':

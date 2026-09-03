@@ -2,7 +2,6 @@ import type { UIChatMessage } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentService } from '@/services/agent';
-import { messageService } from '@/services/message';
 import { useAgentStore } from '@/store/agent';
 
 import { ChatForwardActionImpl } from './action';
@@ -90,22 +89,32 @@ describe('ChatForwardAction', () => {
     expect(result.failed[0].agentId).toBe('missing-agent');
   });
 
-  it('loads topic messages before forwarding them', async () => {
-    vi.spyOn(messageService, 'getMessages').mockResolvedValue([message('user', 'from topic')]);
-    const sendMessage = vi.fn().mockResolvedValue({ createdTopicId: 'new-topic' });
+  it('asks the target agent to load the source topic through the LobeHub CLI', async () => {
+    const onTopicCreated = vi.fn();
+    const sendMessage = vi.fn().mockImplementation(async ({ onTopicCreated: notify }) => {
+      notify('new-topic');
+      return { createdTopicId: 'new-topic' };
+    });
     const action = new ChatForwardActionImpl(vi.fn() as never, () => ({ sendMessage }) as never);
 
     const result = await action.forwardTopic({
       header: 'Forwarded topic',
+      note: 'Finish the review',
+      onTopicCreated,
       roleLabel: (role) => role,
       sourceAgentId: 'source-agent',
       targets: [{ id: 'target-agent' }],
       topicId: 'source-topic',
     });
 
-    expect(messageService.getMessages).toHaveBeenCalledWith({
-      agentId: 'source-agent',
-      topicId: 'source-topic',
+    expect(onTopicCreated).toHaveBeenCalledWith({ id: 'target-agent' }, 'new-topic');
+    expect(sendMessage.mock.calls[0][0].message).toContain('lh topic view source-topic -L 500');
+    expect(sendMessage.mock.calls[0][0].message).toContain('Finish the review');
+    expect(sendMessage.mock.calls[0][0].context).toEqual({
+      agentId: 'target-agent',
+      isNew: true,
+      isolatedTopic: true,
+      scope: 'main',
     });
     expect(result.succeeded).toEqual([{ agentId: 'target-agent', topicId: 'new-topic' }]);
   });

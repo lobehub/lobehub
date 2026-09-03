@@ -15,7 +15,12 @@ import useBusinessErrorContent from '@/business/client/hooks/useBusinessErrorCon
 import useRenderBusinessChatErrorMessageExtra from '@/business/client/hooks/useRenderBusinessChatErrorMessageExtra';
 import ErrorContent from '@/features/Conversation/ChatItem/components/ErrorContent';
 import { useConversationResourceAccess } from '@/features/Conversation/hooks/useConversationResourceAccess';
-import { dataSelectors, useConversationStore } from '@/features/Conversation/store';
+import { createTopicForwardModal } from '@/features/Conversation/MessageForward/TopicForwardModal';
+import {
+  contextSelectors,
+  dataSelectors,
+  useConversationStore,
+} from '@/features/Conversation/store';
 import HeterogeneousAgentStatusGuide from '@/features/Electron/HeterogeneousAgent/StatusGuide';
 import type { HeterogeneousAgentScheduleState } from '@/features/Electron/HeterogeneousAgent/StatusGuide/types';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -283,6 +288,8 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     // access on top of the workspace-role capability.
     const { canUseResource } = useConversationResourceAccess();
     const canCreate = canCreateContent && canUseResource;
+    const conversationAgentId = useConversationStore(contextSelectors.agentId);
+    const conversationTopicId = useConversationStore(contextSelectors.topicId);
     const sessionErrorBody = error?.body;
     const rawErrorMessage = getRawErrorMessage(error);
     const errorDetails = getErrorDetails(error);
@@ -387,6 +394,9 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
       (s) => topicSelectors.currentActiveTopic(s)?.status === 'scheduled',
     );
     const activeAgentId = useChatStore((s) => s.activeAgentId);
+    const conversationTopicTitle = useChatStore((s) =>
+      conversationTopicId ? topicSelectors.getTopicById(conversationTopicId)(s)?.title : undefined,
+    );
     const scheduledResetsAt = useChatStore((s) => {
       const scheduledRun = topicSelectors.currentActiveTopic(s)?.metadata?.scheduledRun;
       return scheduledRun?.kind === 'resume_after_rate_limit'
@@ -438,6 +448,16 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
                   ? `/agent/${activeAgentId}/profile`
                   : '/settings/credential',
             )
+          }
+          onTransfer={
+            isRateLimitError && conversationAgentId && conversationTopicId
+              ? () =>
+                  createTopicForwardModal({
+                    sourceAgentId: conversationAgentId,
+                    topicId: conversationTopicId,
+                    topicTitle: conversationTopicTitle || '',
+                  })
+              : undefined
           }
         />
       );

@@ -21,6 +21,14 @@ const detectHeterogeneousAgentCommandMock = vi.hoisted(() => vi.fn());
 // displayMessage hanging off a user turn — the condition that decides whether a
 // self-contained retry can actually do anything.
 const displayMessageMock = vi.hoisted(() => new Map<string, { parentId?: string }>());
+const conversationContextMock = vi.hoisted(
+  () =>
+    ({ agentId: undefined, topicId: undefined }) as {
+      agentId?: string;
+      topicId?: string;
+    },
+);
+const createTopicForwardModalMock = vi.hoisted(() => vi.fn());
 // Stands in for whatever card a downstream build installs into the business slot.
 const businessSlot = vi.hoisted(() => ({ render: false }));
 const missingTranslationKeys = vi.hoisted(() => new Set<string>());
@@ -110,16 +118,19 @@ vi.mock('@/features/Electron/HeterogeneousAgent/StatusGuide', () => ({
     error,
     onDismiss,
     onRetry,
+    onTransfer,
   }: {
     agentType?: string;
     error?: { code?: string };
     onDismiss?: () => void;
     onRetry?: () => void;
+    onTransfer?: () => void;
   }) => (
     <div>
       {`guide:${agentType}:${error?.code}`}
       {onDismiss && <button onClick={onDismiss}>dismiss</button>}
       {onRetry && <button onClick={onRetry}>guide-retry</button>}
+      {onTransfer && <button onClick={onTransfer}>transfer</button>}
     </div>
   ),
 }));
@@ -128,6 +139,10 @@ vi.mock('@/services/electron/binary', () => ({
   binaryService: {
     detectHeterogeneousAgentCommand: detectHeterogeneousAgentCommandMock,
   },
+}));
+
+vi.mock('@/features/Conversation/MessageForward/TopicForwardModal', () => ({
+  createTopicForwardModal: createTopicForwardModalMock,
 }));
 
 vi.mock('@/hooks/useProviderName', () => ({
@@ -155,11 +170,16 @@ vi.mock('@/store/serverConfig', () => ({
 }));
 
 vi.mock('@/features/Conversation/store', () => ({
+  contextSelectors: {
+    agentId: (state: { context: typeof conversationContextMock }) => state.context.agentId,
+    topicId: (state: { context: typeof conversationContextMock }) => state.context.topicId,
+  },
   dataSelectors: {
     getDisplayMessageById: (id: string) => () => displayMessageMock.get(id),
   },
   useConversationStore: (selector: (state: unknown) => unknown) =>
     selector({
+      context: conversationContextMock,
       delAndRegenerateMessage: delAndRegenerateMessageMock,
       deleteMessage: vi.fn(),
       heteroOverloadRetryAttempts: {},
@@ -195,6 +215,9 @@ describe('ErrorMessageExtra', () => {
     updateMessageErrorMock.mockClear();
     delAndRegenerateMessageMock.mockClear();
     displayMessageMock.clear();
+    conversationContextMock.agentId = undefined;
+    conversationContextMock.topicId = undefined;
+    createTopicForwardModalMock.mockClear();
   });
 
   // Regression: the standalone surfaces (Assistant / Task / AgentCouncil) render
@@ -518,6 +541,8 @@ describe('ErrorMessageExtra', () => {
   });
 
   it('renders the rate-limit guide when the refreshed error carries rate_limit code', () => {
+    conversationContextMock.agentId = 'source-agent';
+    conversationContextMock.topicId = 'source-topic';
     render(
       <ErrorMessageExtra
         error={{ message: 'response.undefined' }}
@@ -536,6 +561,12 @@ describe('ErrorMessageExtra', () => {
     );
 
     expect(screen.getByText('guide:claude-code:rate_limit')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('transfer'));
+    expect(createTopicForwardModalMock).toHaveBeenCalledWith({
+      sourceAgentId: 'source-agent',
+      topicId: 'source-topic',
+      topicTitle: '',
+    });
   });
 
   it('renders the working-directory guide instead of the CLI install guide', () => {
