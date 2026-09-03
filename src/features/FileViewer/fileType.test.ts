@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isPdfFile } from './fileType';
+import { isDocxFile, isPdfFile, isPptxFile, isXlsxFile } from './fileType';
 
 describe('isPdfFile', () => {
   it('detects PDF files by MIME type', () => {
@@ -50,4 +50,28 @@ describe('isPdfFile', () => {
     expect(isPdfFile({ fileType: 'custom/document' })).toBe(false);
     expect(isPdfFile({})).toBe(false);
   });
+});
+
+describe('Office file detection', () => {
+  it.each([
+    [
+      isDocxFile,
+      'report.DOCX',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ],
+    [
+      isPptxFile,
+      'deck.PPTX',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    ],
+    [isXlsxFile, 'model.XLSX', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+  ])(
+    'detects modern Office files by extension, signed path, and MIME type',
+    (detect, fileName, fileType) => {
+      expect(detect({ fileName })).toBe(true);
+      expect(detect({ path: `/files/${fileName}?signature=test` })).toBe(true);
+      expect(detect({ fileType: `${fileType}; charset=binary` })).toBe(true);
+      expect(detect({ fileName: 'legacy.doc', fileType: 'application/octet-stream' })).toBe(false);
+    },
+  );
 });
