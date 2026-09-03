@@ -137,10 +137,12 @@ jobs:
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PREVIEW_API_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR: ${{ github.event.pull_request.number }}
         run: |
           if [ "$SAME_REPO" = 'true' ]; then
-            set -- --preview-alias "pr${PR}" --message "PR-${PR}"
+            set -- --preview-alias "pr${PR}" --tag "${HEAD_SHA::7}" \
+              --message "PR-${PR} ${GITHUB_ACTOR} ${GITHUB_REPOSITORY}@${HEAD_SHA::7} run ${GITHUB_RUN_ID}"
           else
             set -- --dry-run
           fi
