@@ -196,53 +196,79 @@ export class TrashModel {
    * of failing the unique index, so a retried request converges.
    */
   register = async (params: TrashRegisterParams, trx?: Transaction): Promise<TrashItemRow> => {
-    const run = async (tx: Transaction | LobeChatDatabase) => {
-      const expiresAt =
-        params.expiresAt ?? new Date(params.deletedAt.getTime() + TRASH_RETENTION_MS);
-      const scope = { userId: this.userId, workspaceId: this.workspaceId ?? null };
+    const [root] = await this.registerMany([params], trx);
+    return root;
+  };
 
-      const [root] = await tx
-        .insert(trashItems)
-        .values({
-          ...scope,
-          userId: params.root.meta?.creatorUserId ?? scope.userId,
-          deletedAt: params.deletedAt,
-          deletedByUserId: this.userId,
-          expiresAt,
-          meta: params.root.meta ?? null,
-          resourceId: params.root.resourceId,
-          resourceType: params.root.resourceType,
-          rootId: null,
-          title: params.root.title ?? null,
-        })
-        .onConflictDoUpdate({
-          set: {
+  /** Register independent roots and all of their children in bounded bulk inserts. */
+  registerMany = async (
+    paramsList: TrashRegisterParams[],
+    trx?: Transaction,
+  ): Promise<TrashItemRow[]> => {
+    if (paramsList.length === 0) return [];
+
+    const run = async (tx: Transaction | LobeChatDatabase) => {
+      const scope = { userId: this.userId, workspaceId: this.workspaceId ?? null };
+      const rootValues: NewTrashItemRow[] = paramsList.map((params) => ({
+        ...scope,
+        userId: params.root.meta?.creatorUserId ?? scope.userId,
+        deletedAt: params.deletedAt,
+        deletedByUserId: this.userId,
+        expiresAt: params.expiresAt ?? new Date(params.deletedAt.getTime() + TRASH_RETENTION_MS),
+        meta: params.root.meta ?? null,
+        resourceId: params.root.resourceId,
+        resourceType: params.root.resourceType,
+        rootId: null,
+        title: params.root.title ?? null,
+      }));
+      const insertedRoots: TrashItemRow[] = [];
+
+      for (let index = 0; index < rootValues.length; index += 500) {
+        const roots = await tx
+          .insert(trashItems)
+          .values(rootValues.slice(index, index + 500))
+          .onConflictDoUpdate({
+            set: {
+              deletedAt: sql`excluded.deleted_at`,
+              deletedByUserId: sql`excluded.deleted_by_user_id`,
+              expiresAt: sql`excluded.expires_at`,
+              meta: sql`excluded.meta`,
+              rootId: null,
+              title: sql`excluded.title`,
+            },
+            target: [trashItems.resourceType, trashItems.resourceId],
+          })
+          .returning();
+        insertedRoots.push(...roots);
+      }
+
+      const rootsByResource = new Map(
+        insertedRoots.map((root) => [`${root.resourceType}:${root.resourceId}`, root]),
+      );
+      const values: NewTrashItemRow[] = [];
+      for (const params of paramsList) {
+        const root = rootsByResource.get(`${params.root.resourceType}:${params.root.resourceId}`);
+        if (!root) throw new Error('Failed to register trash root');
+        const expiresAt =
+          params.expiresAt ?? new Date(params.deletedAt.getTime() + TRASH_RETENTION_MS);
+
+        for (const child of params.children ?? []) {
+          values.push({
+            ...scope,
+            userId: child.meta?.creatorUserId ?? scope.userId,
             deletedAt: params.deletedAt,
             deletedByUserId: this.userId,
             expiresAt,
-            meta: params.root.meta ?? null,
-            rootId: null,
-            title: params.root.title ?? null,
-          },
-          target: [trashItems.resourceType, trashItems.resourceId],
-        })
-        .returning();
+            meta: child.meta ?? null,
+            resourceId: child.resourceId,
+            resourceType: child.resourceType,
+            rootId: root.id,
+            title: child.title ?? null,
+          });
+        }
+      }
 
-      const children = params.children ?? [];
-      if (children.length > 0) {
-        const values: NewTrashItemRow[] = children.map((child) => ({
-          ...scope,
-          userId: child.meta?.creatorUserId ?? scope.userId,
-          deletedAt: params.deletedAt,
-          deletedByUserId: this.userId,
-          expiresAt,
-          meta: child.meta ?? null,
-          resourceId: child.resourceId,
-          resourceType: child.resourceType,
-          rootId: root.id,
-          title: child.title ?? null,
-        }));
-
+      if (values.length > 0) {
         // A child that already has its own registry row (trashed earlier on
         // its own) keeps it: it was in the bin before the root and must stay
         // there after the root is restored. `DO NOTHING` preserves that.
@@ -254,7 +280,9 @@ export class TrashModel {
         }
       }
 
-      return root;
+      return paramsList.map((params) =>
+        rootsByResource.get(`${params.root.resourceType}:${params.root.resourceId}`)!,
+      );
     };
 
     return trx ? run(trx) : run(this.db);

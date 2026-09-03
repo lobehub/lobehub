@@ -6,7 +6,7 @@ import type { SoftDeleteOptions } from '@/database/utils/softDelete';
 
 import { purgeFiles } from './purgeFiles';
 import { documentEntry, fileEntry } from './resourceEntries';
-import { softDeleteResourceClosure } from './softDeleteResourceClosure';
+import { softDeleteResourceClosures } from './softDeleteResourceClosure';
 import {
   type TrashCascade,
   type TrashHandler,
@@ -19,36 +19,30 @@ export const softDeleteDocuments = async (
   ids: string[],
   options: SoftDeleteOptions,
 ): Promise<TrashCascade[]> => {
-  const cascades: TrashCascade[] = [];
+  const closures = await softDeleteResourceClosures(ctx, { documentIds: ids }, options);
 
-  for (const id of new Set(ids)) {
-    const { detachedEdges, documents, files } = await softDeleteResourceClosure(
-      ctx,
-      { documentIds: [id] },
-      options,
-    );
-    const root = documents.find((document) => document.id === id);
-    if (!root) continue;
-
+  return closures.flatMap(({ detachedEdges, documents, files, root: closureRoot }) => {
+    const root = documents.find((document) => document.id === closureRoot.id);
+    if (!root) return [];
     const rootEntry = documentEntry(root);
-    cascades.push({
-      children: [
-        ...documents
-          .filter((document) => document.id !== root.id)
-          .map((document) => documentEntry(document)),
-        ...files.map((file) => fileEntry(file)),
-      ],
-      root: {
-        ...rootEntry,
-        meta: {
-          ...rootEntry.meta,
-          detachedEdges,
+    return [
+      {
+        children: [
+          ...documents
+            .filter((document) => document.id !== root.id)
+            .map((document) => documentEntry(document)),
+          ...files.map((file) => fileEntry(file)),
+        ],
+        root: {
+          ...rootEntry,
+          meta: {
+            ...rootEntry.meta,
+            detachedEdges,
+          },
         },
       },
-    });
-  }
-
-  return cascades;
+    ];
+  });
 };
 
 export const documentHandler: TrashHandler = {

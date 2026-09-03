@@ -323,6 +323,85 @@ describe('TrashService', () => {
       expect(notificationMocks.notifyResourceTrashMutation).not.toHaveBeenCalled();
     });
 
+    it('keeps independent bulk roots separate and collapses overlapping document trees', async () => {
+      const firstFile = await fileModel.create({
+        fileType: 'text/plain',
+        name: 'first.txt',
+        size: 1,
+        url: 'files/first.txt',
+      });
+      const secondFile = await fileModel.create({
+        fileType: 'text/plain',
+        name: 'second.txt',
+        size: 1,
+        url: 'files/second.txt',
+      });
+
+      const fileRoots = await service.trashFiles([firstFile.id, secondFile.id]);
+      expect(fileRoots.map((root) => root.resourceId)).toEqual([firstFile.id, secondFile.id]);
+      await service.restore(fileRoots.map((root) => root.id));
+
+      const firstMirror = await documentModel.create({
+        fileId: firstFile.id,
+        fileType: 'text/plain',
+        source: 'files/first.txt',
+        sourceType: 'file',
+        title: 'First mirror',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+      await documentModel.create({
+        fileId: secondFile.id,
+        fileType: 'text/plain',
+        parentId: firstMirror.id,
+        source: 'files/second.txt',
+        sourceType: 'file',
+        title: 'Second mirror',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+
+      const [connectedRoot, extraConnectedRoot] = await service.trashFiles([
+        secondFile.id,
+        firstFile.id,
+      ]);
+      expect(extraConnectedRoot).toBeUndefined();
+      expect(connectedRoot.resourceId).toBe(secondFile.id);
+      expect(
+        (await trashModel.findChildren(connectedRoot.id)).map((item) => item.resourceId),
+      ).toEqual(expect.arrayContaining([firstFile.id, firstMirror.id]));
+      await service.restore([connectedRoot.id]);
+
+      const folder = await documentModel.create({
+        fileType: 'custom/folder',
+        source: '',
+        sourceType: 'api',
+        title: 'Bulk folder',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+      const child = await documentModel.create({
+        fileType: 'custom/page',
+        parentId: folder.id,
+        source: '',
+        sourceType: 'api',
+        title: 'Bulk child',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+
+      const [documentRoot, duplicateRoot] = await service.trashDocuments([child.id, folder.id]);
+      expect(duplicateRoot).toBeUndefined();
+      expect(documentRoot.resourceId).toBe(folder.id);
+      expect(await trashModel.findChildren(documentRoot.id)).toEqual([
+        expect.objectContaining({ resourceId: child.id, rootId: documentRoot.id }),
+      ]);
+      await expect(service.restore([documentRoot.id])).resolves.toMatchObject({ failed: [] });
+      await expect(documentModel.findById(child.id)).resolves.toMatchObject({
+        parentId: folder.id,
+      });
+    });
+
     it('hides restricted libraries and their linked resources from list and counts', async () => {
       const workspaceId = 'trash-restricted-workspace';
       await serverDB

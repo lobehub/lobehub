@@ -149,17 +149,38 @@ export class TrashService {
         Boolean,
       );
       const registry = new TrashModel(db, this.userId, this.workspaceId);
-      const roots: TrashItemRow[] = [];
-      for (const cascade of cascades) {
-        const root = await registry.register(
-          { children: cascade.children, deletedAt, root: cascade.root },
+      const roots = await registry.registerMany(
+        cascades.map((cascade) => ({
+          children: cascade.children,
+          deletedAt,
+          root: cascade.root,
+        })),
+        tx,
+      );
+      const workspaceId = this.workspaceId;
+      if (workspaceId) {
+        await new WorkspaceAuditLogModel(db).createMany(
+          roots
+            .filter((root) => isWorkspaceResourceType(root.resourceType))
+            .map((root) => ({
+              action: 'resource.deleted',
+              metadata: {
+                actorUserId: this.userId,
+                batchOperationId,
+                creatorUserId: root.meta?.creatorUserId ?? root.userId,
+                knowledgeBaseId: root.meta?.knowledgeBaseId ?? null,
+                occurredAt: deletedAt.toISOString(),
+                parentId: root.meta?.parentId ?? null,
+                resourceTitle: root.title,
+                trashItemId: root.id,
+              },
+              resourceId: root.resourceId,
+              resourceType: root.resourceType,
+              userId: this.userId,
+              workspaceId,
+            })),
           tx,
         );
-        await this.recordResourceAudit(db, tx, root, 'resource.deleted', {
-          batchOperationId,
-          occurredAt: deletedAt,
-        });
-        roots.push(root);
       }
       log(
         'trashed %d root(s): %o',

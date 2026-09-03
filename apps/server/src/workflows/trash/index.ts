@@ -1,5 +1,8 @@
+import type { LobeChatDatabase } from '@/database/type';
 import { appEnv } from '@/envs/app';
 import { qstashClient } from '@/libs/qstash';
+import type { TrashSweepCursor, TrashSweepOutcome } from '@/server/services/trash';
+import { after } from '@/server/utils/scheduleAfterResponse';
 
 export const TRASH_PURGE_WORKFLOW_PATH = '/api/workflows/trash/purge';
 
@@ -9,12 +12,64 @@ export interface TrashPurgeWorkflowPayload {
   remainingBatches?: number;
 }
 
-/** Queue one bounded retention-sweep request when QStash is configured. */
+const LOCAL_BATCH_SIZE = 25;
+const LOCAL_BATCH_BUDGET = 8;
+const MAX_BATCH_SIZE = 50;
+const LOCAL_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
+
+interface LocalTrashPurgeDependencies {
+  getDb?: () => Promise<LobeChatDatabase>;
+  sweepExpired?: (
+    db: LobeChatDatabase,
+    options: { cursor?: TrashSweepCursor; limit: number },
+  ) => Promise<TrashSweepOutcome>;
+}
+
+/** Run a bounded retention burst without requiring an external queue. */
+export const runLocalTrashPurge = async (
+  payload: TrashPurgeWorkflowPayload = {},
+  dependencies: LocalTrashPurgeDependencies = {},
+) => {
+  const getDb =
+    dependencies.getDb ??
+    (async () => {
+      const { getServerDB } = await import('@/database/server');
+      return getServerDB();
+    });
+  const sweepExpired =
+    dependencies.sweepExpired ??
+    (async (db, options) => {
+      const { TrashService } = await import('@/server/services/trash');
+      return TrashService.sweepExpired(db, options);
+    });
+  const db = await getDb();
+  const limit = Math.min(Math.max(payload.limit ?? LOCAL_BATCH_SIZE, 1), MAX_BATCH_SIZE);
+  const batchBudget = Math.min(
+    Math.max(payload.remainingBatches ?? LOCAL_BATCH_BUDGET, 1),
+    LOCAL_BATCH_BUDGET,
+  );
+  let cursor = payload.cursor;
+  let batches = 0;
+
+  while (batches < batchBudget) {
+    const outcome = await sweepExpired(db, { cursor, limit });
+    batches += 1;
+    if (outcome.scanned < limit || !outcome.nextCursor) break;
+    cursor = outcome.nextCursor;
+  }
+
+  return { batches, cursor };
+};
+
+/** Queue one bounded retention-sweep request, with an in-process fallback. */
 export const triggerTrashPurge = async (
   payload: TrashPurgeWorkflowPayload = {},
   options?: { delay?: number },
 ) => {
-  if (!process.env.QSTASH_TOKEN) return false;
+  if (!process.env.QSTASH_TOKEN) {
+    after(() => runLocalTrashPurge(payload));
+    return true;
+  }
 
   const baseUrl = appEnv.INTERNAL_APP_URL || appEnv.APP_URL;
   await qstashClient.publishJSON({
@@ -23,4 +78,24 @@ export const triggerTrashPurge = async (
     url: new URL(TRASH_PURGE_WORKFLOW_PATH, baseUrl).toString(),
   });
   return true;
+};
+
+type TrashPurgeSchedulerGlobal = typeof globalThis & {
+  __lobeTrashPurgeInterval?: ReturnType<typeof setInterval>;
+};
+
+/** Start hourly retention sweeps on persistent, self-hosted Node processes. */
+export const startLocalTrashPurgeSchedule = () => {
+  if (process.env.QSTASH_TOKEN) return;
+  const schedulerGlobal = globalThis as TrashPurgeSchedulerGlobal;
+  if (schedulerGlobal.__lobeTrashPurgeInterval) return;
+
+  const sweep = () => {
+    void runLocalTrashPurge().catch((error) => {
+      console.error('[trash/purge] Local retention sweep failed:', error);
+    });
+  };
+  sweep();
+  schedulerGlobal.__lobeTrashPurgeInterval = setInterval(sweep, LOCAL_SWEEP_INTERVAL_MS);
+  schedulerGlobal.__lobeTrashPurgeInterval.unref?.();
 };

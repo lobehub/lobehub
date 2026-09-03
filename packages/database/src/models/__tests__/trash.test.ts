@@ -91,6 +91,30 @@ describe('TrashModel', () => {
       const children = await model.findChildren(folderRoot.id);
       expect(children.map((c) => c.resourceId)).toEqual(['file_new']);
     });
+
+    it('registers multiple independent cascades in one bulk operation', async () => {
+      const deletedAt = at('2026-08-12T00:00:00Z');
+      const roots = await model.registerMany([
+        {
+          children: [{ resourceId: 'bulk_child_1', resourceType: 'document' }],
+          deletedAt,
+          root: { resourceId: 'bulk_root_1', resourceType: 'document', title: 'One' },
+        },
+        {
+          children: [{ resourceId: 'bulk_child_2', resourceType: 'file' }],
+          deletedAt,
+          root: { resourceId: 'bulk_root_2', resourceType: 'file', title: 'Two' },
+        },
+      ]);
+
+      expect(roots.map((root) => root.resourceId)).toEqual(['bulk_root_1', 'bulk_root_2']);
+      await expect(model.findChildren(roots[0].id)).resolves.toEqual([
+        expect.objectContaining({ resourceId: 'bulk_child_1', rootId: roots[0].id }),
+      ]);
+      await expect(model.findChildren(roots[1].id)).resolves.toEqual([
+        expect.objectContaining({ resourceId: 'bulk_child_2', rootId: roots[1].id }),
+      ]);
+    });
   });
 
   describe('list / countByType', () => {

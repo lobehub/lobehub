@@ -5,7 +5,7 @@ import type { SoftDeleteOptions } from '@/database/utils/softDelete';
 
 import { purgeFiles } from './purgeFiles';
 import { documentEntry, fileEntry } from './resourceEntries';
-import { softDeleteResourceClosure } from './softDeleteResourceClosure';
+import { softDeleteResourceClosures } from './softDeleteResourceClosure';
 import {
   type TrashCascade,
   type TrashHandler,
@@ -18,30 +18,25 @@ export const softDeleteFiles = async (
   ids: string[],
   options: SoftDeleteOptions,
 ): Promise<TrashCascade[]> => {
-  const cascades: TrashCascade[] = [];
-  for (const id of new Set(ids)) {
-    const { detachedEdges, documents, files } = await softDeleteResourceClosure(
-      ctx,
-      { fileIds: [id] },
-      options,
-    );
-    const root = files.find((file) => file.id === id);
-    if (!root) continue;
+  const closures = await softDeleteResourceClosures(ctx, { fileIds: ids }, options);
 
+  return closures.flatMap(({ detachedEdges, documents, files, root: closureRoot }) => {
+    const root = files.find((file) => file.id === closureRoot.id);
+    if (!root) return [];
     const rootEntry = fileEntry(root);
-    cascades.push({
-      children: [
-        ...documents.map((document) => documentEntry(document)),
-        ...files.filter((file) => file.id !== root.id).map((file) => fileEntry(file)),
-      ],
-      root: {
-        ...rootEntry,
-        meta: { ...rootEntry.meta, detachedEdges },
+    return [
+      {
+        children: [
+          ...documents.map((document) => documentEntry(document)),
+          ...files.filter((file) => file.id !== root.id).map((file) => fileEntry(file)),
+        ],
+        root: {
+          ...rootEntry,
+          meta: { ...rootEntry.meta, detachedEdges },
+        },
       },
-    });
-  }
-
-  return cascades;
+    ];
+  });
 };
 
 export const fileHandler: TrashHandler = {

@@ -216,7 +216,7 @@ export const documentRouter = router({
 
   deleteDocuments: documentProcedure
     .use(withScopedPermission('document:delete'))
-    .input(z.object({ ids: z.array(z.string()) }))
+    .input(z.object({ ids: z.array(z.string()).max(200) }))
     .mutation(async ({ ctx, input }) => {
       const documents = await ctx.documentModel.findByIds(input.ids);
       const accessibleIds = new Set(documents.map((document) => document.id));

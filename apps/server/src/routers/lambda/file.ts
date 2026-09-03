@@ -49,6 +49,7 @@ const fileTransferEntityTypeSchema = z.enum(['document', 'file', 'folder']);
 const deleteKnowledgeItemsByQuerySchema = QueryFileListSchema.extend({
   excludedIds: z.array(z.string()).optional(),
 });
+const TRASH_DELETE_BATCH_SIZE = 200;
 const markdownPreviewTypes = new Set<string>(MARKDOWN_MIME_TYPES);
 
 const isMarkdownFile = (item: { fileType: string; name: string }) =>
@@ -680,11 +681,17 @@ export const fileRouter = router({
             message: 'No permission to delete documents',
           });
         }
-        await ctx.trashService.trashDocuments(documentIds);
+        for (let index = 0; index < documentIds.length; index += TRASH_DELETE_BATCH_SIZE) {
+          await ctx.trashService.trashDocuments(
+            documentIds.slice(index, index + TRASH_DELETE_BATCH_SIZE),
+          );
+        }
       }
 
       if (fileIds.length > 0) {
-        await ctx.trashService.trashFiles(fileIds);
+        for (let index = 0; index < fileIds.length; index += TRASH_DELETE_BATCH_SIZE) {
+          await ctx.trashService.trashFiles(fileIds.slice(index, index + TRASH_DELETE_BATCH_SIZE));
+        }
       }
 
       return { count: fileIds.length + documentIds.length };
@@ -819,7 +826,7 @@ export const fileRouter = router({
 
   removeFiles: fileProcedure
     .use(withScopedPermission('file:delete'))
-    .input(z.object({ ids: z.array(z.string()) }))
+    .input(z.object({ ids: z.array(z.string()).max(TRASH_DELETE_BATCH_SIZE) }))
     .mutation(async ({ input, ctx }) => {
       const targets = await ctx.fileModel.findByIds(input.ids);
       assertAllFilesAccessible(input.ids, targets);

@@ -325,8 +325,20 @@ export class DocumentModel {
     rootId: string,
     options: SoftDeleteOptions,
   ): Promise<{ detachedEdges: TrashDetachedEdge[]; documents: DocumentItem[] }> => {
+    return this.softDeleteSubtrees([rootId], options);
+  };
+
+  /**
+   * Soft-delete several document trees under one hierarchy lock. Descendants
+   * shared by overlapping roots are collected and stamped only once.
+   */
+  softDeleteSubtrees = async (
+    rootIds: string[],
+    options: SoftDeleteOptions,
+  ): Promise<{ detachedEdges: TrashDetachedEdge[]; documents: DocumentItem[] }> => {
+    if (rootIds.length === 0) return { detachedEdges: [], documents: [] };
     await lockDocumentHierarchy(this.db, this.userId, this.workspaceId);
-    const subtree = await this.collectSubtree(rootId);
+    const subtree = await this.collectSubtrees(rootIds);
     if (subtree.length === 0) return { detachedEdges: [], documents: [] };
     const ids = subtree
       .filter((document) => !options.restrictToCreator || document.userId === this.userId)
@@ -566,24 +578,36 @@ export class DocumentModel {
     rootId: string,
     runner: LobeChatDatabase = this.db,
   ): Promise<DocumentItem[]> => {
-    const root = await runner.query.documents.findFirst({
-      where: and(this.ownership(), eq(documents.id, rootId)),
-    });
-    if (!root) return [];
+    return this.collectSubtrees([rootId], runner);
+  };
 
-    const collected: DocumentItem[] = [root];
-    let frontier: string[] = [root.id];
+  /** Collect several document trees with one query per depth, not per root. */
+  collectSubtrees = async (
+    rootIds: string[],
+    runner: LobeChatDatabase = this.db,
+  ): Promise<DocumentItem[]> => {
+    const uniqueRootIds = [...new Set(rootIds)];
+    if (uniqueRootIds.length === 0) return [];
+
+    const roots = await runner.query.documents.findMany({
+      where: and(this.ownership(), inArray(documents.id, uniqueRootIds)),
+    });
+    if (roots.length === 0) return [];
+
+    const collected = new Map(roots.map((root) => [root.id, root]));
+    let frontier = roots.map((root) => root.id);
 
     while (frontier.length > 0) {
       const children = await runner.query.documents.findMany({
         where: and(this.ownership(), inArray(documents.parentId, frontier)),
       });
-      if (children.length === 0) break;
-      collected.push(...children);
-      frontier = children.map((c) => c.id);
+      const unseen = children.filter((child) => !collected.has(child.id));
+      if (unseen.length === 0) break;
+      for (const child of unseen) collected.set(child.id, child);
+      frontier = unseen.map((child) => child.id);
     }
 
-    return collected;
+    return [...collected.values()];
   };
 
   countFileUsageInSubtree = async (

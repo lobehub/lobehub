@@ -1151,6 +1151,24 @@ describe('fileRouter', () => {
       });
       expect(mockTrashFiles).toHaveBeenCalledWith(['member-file']);
     });
+
+    it('splits a large query deletion into bounded trash transactions', async () => {
+      mockKnowledgeRepoQuery.mockResolvedValue(
+        Array.from({ length: 201 }, (_, index) => ({
+          documentId: null,
+          fileId: `file-${index}`,
+          fileType: 'text/plain',
+          id: `file-${index}`,
+          sourceType: 'file',
+        })),
+      );
+
+      await expect(caller.deleteKnowledgeItemsByQuery({})).resolves.toEqual({ count: 201 });
+
+      expect(mockTrashFiles).toHaveBeenCalledTimes(2);
+      expect(mockTrashFiles.mock.calls[0][0]).toHaveLength(200);
+      expect(mockTrashFiles.mock.calls[1][0]).toEqual(['file-200']);
+    });
   });
 
   describe('resolveKnowledgeItemIds', () => {
