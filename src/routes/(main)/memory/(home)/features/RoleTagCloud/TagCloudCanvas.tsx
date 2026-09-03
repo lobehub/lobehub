@@ -267,7 +267,7 @@ const ConnectionLine = memo<ConnectionLineProps>(
   },
 );
 
-const CenterAvatar = () => {
+const CenterAvatar = memo(() => {
   return (
     <Html
       center
@@ -280,7 +280,9 @@ const CenterAvatar = () => {
       <UserAvatar shape={'circle'} size={80} />
     </Html>
   );
-};
+});
+
+CenterAvatar.displayName = 'CenterAvatar';
 
 interface CloudProps {
   radius?: number;
@@ -425,7 +427,11 @@ const Cloud = memo<CloudProps>(({ tags, radius = 20 }) => {
           }
         }
 
-        return active;
+        // The filter above always allocates, so returning it unconditionally would
+        // schedule a state update on every 0.1s tick even when the set is
+        // unchanged — re-rendering the cloud, and the DOM avatar drei mounts
+        // inside it, ~10 times a second for as long as the page is open.
+        return active.length === prev.length ? prev : active;
       });
     }
 
