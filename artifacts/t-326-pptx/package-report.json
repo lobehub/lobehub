@@ -1,0 +1,19 @@
+{
+  "after": {
+    "allEntriesPassCrc32": true,
+    "chartParts": 1,
+    "entryCount": 59,
+    "mediaParts": 2,
+    "slideCount": 3,
+    "textPreserved": true
+  },
+  "before": {
+    "allEntriesPassCrc32": true,
+    "chartParts": 0,
+    "entryCount": 54,
+    "mediaParts": 0,
+    "slideCount": 2,
+    "textPreserved": false
+  },
+  "pageDelta": 1
+}

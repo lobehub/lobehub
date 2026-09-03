@@ -1,0 +1,149 @@
+/* This file aims to remove web L&F in favor of a native L&F.
+	It is conceptually a reset of html4.css.
+/* Favor DIV and SPAN instead of custom elements for this reason. (avoiding html4.css)*/
+
+html, body, div, span, iframe, ul, li{
+	/* Resetting the layout metrics, excepts for native widgets.*/
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+body{
+	font: 11px 'Lucida Grande', Arial, sans-serif;
+	cursor: default; /* No I-beam over text content ! */
+	-webkit-user-select: none; /* On a native app you cannot select the app's text... */
+	overflow: hidden;
+}
+
+input, textarea, pre{
+	-webkit-user-select: initial; /* ...Except in text inputs and pre */
+	cursor: initial;
+}
+
+*{
+	-webkit-box-sizing: border-box; /* Height includes padding + border - Makes more sense, and matches IE box-model.*/
+}
+
+
+/**********  General  ****************************************************************************/
+.TabView{
+	position:absolute; /* will be the origin for TabContent - Implies no position:relative on TabViewItem */
+	bottom:0;
+	left:0;
+	right:0;
+	white-space:nowrap;
+	overflow:hidden;
+	text-align:left;	
+}
+.TabViewItem{ /* Horizontal stacking */
+	display:inline-block;
+}
+  
+
+/**********  iTunes  ****************************************************************************/
+.TabView.iTunes{
+	padding:0px 5px 5px;
+	background: #DDDDDD url('cid:80FC4237-72F5-49A5-90C6-2FE87D0AB483/darkShadow_1only_.png') repeat-x 0 0px;
+	background-size:1px 10px;
+}
+.TabView.iTunes .TabViewItem{
+	line-height: 15px;
+	margin-left:-7px;
+	background-color: transparent;
+}
+.TabView.iTunes .TabViewItem:first-child{
+	margin-left:0;
+}
+.TabView.iTunes .TabHeader,
+.TabView.iTunes .TabViewOverflowMask{
+	-webkit-border-bottom-left-radius:4px;
+	-webkit-border-bottom-right-radius:4px;
+	-webkit-box-shadow: 0px 0px 4px rgba(0, 0, 0, 1);
+	border-top: 1px solid transparent;
+	font-weight: bold;
+	color:white;
+	background: #7B8AA8 url('cid:80FC4237-72F5-49A5-90C6-2FE87D0AB483/darkShadow_1only_.png') repeat-x 0 0px;
+	background-size:1px 10px;
+	-webkit-background-origin: border;
+	padding:2px 15px;
+	position:relative;		
+}
+.TabView.iTunes .TabViewOverflowMask{
+	position: absolute;
+	z-index:400 !important; /* !important so as to override the .selected tab */
+	margin-bottom:10px;
+}
+
+.TabView.iTunes .TabViewItem:active .TabHeader{
+	text-shadow: rgba(0, 0, 0, 0.4) 1px 1px 0;
+	background-color: #667596;
+}
+.TabView.iTunes .TabViewItem.selected .TabHeader,
+.TabView.iTunes .TabViewOverflowMask.selected{
+	background: white none;
+	color:#333;
+	border-top: 1px solid #E5E5E5;
+	z-index:300 !important; /* !important so as to override the inline z-index */
+	text-shadow:none;
+}
+
+
+/* Overflow popup*/
+.TabViewOverflowMask{
+	position:absolute;
+	top:0;
+	right:0;
+	-webkit-box-shadow: none;
+	-webkit-border-radius:0px !important;
+	height: 20px;
+	padding-left:5px !important;
+	padding-right:3px !important;
+}
+
+.TabViewOverflowPopUp{
+	-webkit-appearance: none;
+	-webkit-border-radius:0;
+	border:0;
+	margin-top:4px;
+	text-indent: 200px;
+	width: 100%;
+	height: 9px;
+	background: url('cid:E08DDE88-5901-43CC-810A-9F5D3D026CC2/ClipIndicator_1only_.png') no-repeat left 0;
+	background-size:14px 18px;
+	margin-right:0px;
+}
+.TabViewOverflowMask.selected .TabViewOverflowPopUp{
+	background: url('cid:E08DDE88-5901-43CC-810A-9F5D3D026CC2/ClipIndicator_1only_.png') no-repeat left -9px;
+	background-size:14px 18px;
+	opacity:0.8;/* Because image is too dark*/
+}
+.TabViewOverflowPopUp:focus{
+	outline:0;
+}
+
+
+/* Window inactive */
+body.inactive .TabView.iTunes .TabViewItem.selected .TabHeader{
+	color: rgb(128,128,128);
+}
+
+
+/* Empty TabView (with no subviews, ie. no child nor textNodes) */
+.TabView:empty:before{
+	content: "No subviews";
+	font-size: 18px;
+	color: gray;
+	display: block;
+	margin-top: 20px;
+}
+.TabView:empty:after{
+	content: "Click '+' to add subviews";
+	font-size: 12px;
+	color: #B3B3B3;
+	display: block;
+	margin-bottom: 20px;
+}
+
+
+

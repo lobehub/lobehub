@@ -1,0 +1,39 @@
+{
+  "work": "T-326 PPT 编辑链路与版式保真",
+  "export": {
+    "file": "after.pptx",
+    "sha256": "02b8457c2dce5866e46eacff66638f7428ab9afc150b36a14410b7ff4f13830d",
+    "zipIntegrity": "No errors detected in compressed data",
+    "slideCountBefore": 2,
+    "slideCountAfter": 3,
+    "chartParts": 1,
+    "mediaParts": 2,
+    "allEntriesPassCrc32": true
+  },
+  "capabilities": {
+    "text": "addText + setText + formatText; assertions cover edited content, 28pt, bold, #C2410C, centered alignment",
+    "image": "addImage; exported 192x192 PNG is visible in browser preview and Keynote",
+    "shape": "addShape + deleteElement; deleted shape absent from final slide XML",
+    "chart": "addChart + setChartData; native chart remains editable and synchronized PNG fallback preserves rendering in Keynote",
+    "moveAndResize": "setFrame; assertions cover exact x/y/cx/cy for text and synchronized chart/fallback frames",
+    "slideOrder": "duplicateSlide + moveSlide; ordered slide paths change to slide3, slide1, slide2",
+    "layout": "setSlideLayout; slide relationship is updated and inherited placeholder geometry is materialized",
+    "saveAndReopen": "IndexedDB round-trip restores byte-identical ArrayBuffer for the same fileId/sourceUrl",
+    "undoRedo": "restoreHistory moves current bytes between bounded undo/redo stacks and persists the restored bytes",
+    "deleteSafety": "deleteSlide refuses to remove the final slide and the remaining package reopens with CRC validation"
+  },
+  "visualEvidence": {
+    "editorPreview": "after.png",
+    "keynoteSlides": [
+      "keynote-slide-1.png",
+      "keynote-slide-2.png",
+      "keynote-slide-3.png"
+    ],
+    "keynoteObserved": "Window title after; navigator shows Slide 1 Page1, Slide 2 Page1, Slide 3 Page2; slide 1 exposes PPT editing fidelity, round rectangle, Chart Fallback 176, Picture 178, Page1 and Hello",
+    "result": "Keynote opened without an error dialog and rendered all three pages plus text, shape, image, and chart fallback at the same intended positions as the browser preview"
+  },
+  "verification": {
+    "command": "bun run check src/features/FileViewer/Renderer/PPTX/index.tsx src/features/FileViewer/Renderer/PPTX/pptxOperations.ts src/features/FileViewer/Renderer/PPTX/pptxOperations.test.ts src/features/FileViewer/Renderer/PPTX/draftStorage.ts src/features/FileViewer/Renderer/PPTX/draftStorage.test.ts scripts/generate-pptx-browser-evidence.ts scripts/render-pptx-editor-evidence.ts",
+    "result": "7 files, lint clean, tests 5 passed"
+  }
+}

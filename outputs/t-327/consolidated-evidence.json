@@ -1,0 +1,880 @@
+{
+  "sheetLifecycle": {
+    "initial": [
+      "Sales",
+      "Assumptions"
+    ],
+    "before": [
+      "Sales",
+      "Assumptions"
+    ],
+    "added": [
+      "Sales",
+      "Assumptions",
+      "Notes"
+    ],
+    "renamed": [
+      "Sales",
+      "Assumptions",
+      "Archive"
+    ],
+    "moved": [
+      "Archive",
+      "Sales",
+      "Assumptions"
+    ]
+  },
+  "rowLifecycle": {
+    "insertedBlank": [
+      {
+        "address": "A3",
+        "formula": null,
+        "text": "",
+        "value": null
+      },
+      {
+        "address": "B3",
+        "formula": null,
+        "text": "",
+        "value": null
+      },
+      {
+        "address": "C3",
+        "formula": null,
+        "text": "",
+        "value": null
+      },
+      {
+        "address": "D3",
+        "formula": null,
+        "text": "",
+        "value": null
+      },
+      {
+        "address": "E3",
+        "formula": null,
+        "text": "",
+        "value": null
+      },
+      {
+        "address": "F3",
+        "formula": null,
+        "text": "",
+        "value": null
+      }
+    ],
+    "shifted": [
+      {
+        "address": "A4",
+        "formula": null,
+        "text": "Beta",
+        "value": "Beta"
+      },
+      {
+        "address": "B4",
+        "formula": null,
+        "text": "3",
+        "value": 3
+      },
+      {
+        "address": "C4",
+        "formula": null,
+        "text": "5",
+        "value": 5
+      },
+      {
+        "address": "D4",
+        "formula": "B4*C4",
+        "text": "15",
+        "value": 15
+      },
+      {
+        "address": "E4",
+        "formula": "'Assumptions'!A2*D4",
+        "text": "1.5",
+        "value": 1.5
+      },
+      {
+        "address": "F4",
+        "formula": null,
+        "text": "0.2",
+        "value": 0.2
+      }
+    ],
+    "restored": [
+      {
+        "address": "A3",
+        "formula": null,
+        "text": "Beta",
+        "value": "Beta"
+      },
+      {
+        "address": "B3",
+        "formula": null,
+        "text": "3",
+        "value": 3
+      },
+      {
+        "address": "C3",
+        "formula": null,
+        "text": "5",
+        "value": 5
+      },
+      {
+        "address": "D3",
+        "formula": "B3*C3",
+        "text": "15",
+        "value": 15
+      },
+      {
+        "address": "E3",
+        "formula": "'Assumptions'!A2*D3",
+        "text": "1.5",
+        "value": 1.5
+      },
+      {
+        "address": "F3",
+        "formula": null,
+        "text": "0.2",
+        "value": 0.2
+      }
+    ]
+  },
+  "columnLifecycle": {
+    "inserted": [
+      {
+        "address": "A2",
+        "formula": null,
+        "text": "Alpha",
+        "value": "Alpha"
+      },
+      {
+        "address": "B2",
+        "formula": null,
+        "text": "",
+        "value": null
+      },
+      {
+        "address": "C2",
+        "formula": null,
+        "text": "4",
+        "value": 4
+      },
+      {
+        "address": "D2",
+        "formula": null,
+        "text": "12.5",
+        "value": 12.5
+      },
+      {
+        "address": "E2",
+        "formula": "C2*D2",
+        "text": "50",
+        "value": 50
+      },
+      {
+        "address": "F2",
+        "formula": "'Assumptions'!A2*E2",
+        "text": "5",
+        "value": 5
+      },
+      {
+        "address": "G2",
+        "formula": null,
+        "text": "0.25",
+        "value": 0.25
+      }
+    ],
+    "restored": [
+      {
+        "address": "A2",
+        "formula": null,
+        "text": "Alpha",
+        "value": "Alpha"
+      },
+      {
+        "address": "B2",
+        "formula": null,
+        "text": "4",
+        "value": 4
+      },
+      {
+        "address": "C2",
+        "formula": null,
+        "text": "12.5",
+        "value": 12.5
+      },
+      {
+        "address": "D2",
+        "formula": "B2*C2",
+        "text": "50",
+        "value": 50
+      },
+      {
+        "address": "E2",
+        "formula": "'Assumptions'!A2*D2",
+        "text": "5",
+        "value": 5
+      },
+      {
+        "address": "F2",
+        "formula": null,
+        "text": "0.25",
+        "value": 0.25
+      }
+    ]
+  },
+  "formulaChecks": [
+    {
+      "actual": 50,
+      "expected": 50,
+      "expression": "B2*C2",
+      "inputs": {
+        "B2": 4,
+        "C2": 12.5
+      }
+    },
+    {
+      "actual": 5,
+      "expected": 5,
+      "expression": "'Assumptions'!A2*D2",
+      "inputs": {
+        "'Assumptions'!A2": 0.1,
+        "D2": 50
+      }
+    },
+    {
+      "actual": 65,
+      "expected": 65,
+      "expression": "SUM(D2:D3)",
+      "inputs": {
+        "D2": 50,
+        "D3": 15
+      }
+    }
+  ],
+  "formatChecks": {
+    "currency": {
+      "address": "D2",
+      "displayed": "50",
+      "numberFormat": "$#,##0.00"
+    },
+    "percent": {
+      "address": "F2",
+      "displayed": "0.25",
+      "numberFormat": "0.0%"
+    },
+    "style": {
+      "alignment": {
+        "horizontal": "right"
+      },
+      "fill": {
+        "type": "pattern",
+        "pattern": "solid",
+        "fgColor": {
+          "argb": "FFF2CC"
+        }
+      },
+      "font": {
+        "bold": true,
+        "color": {
+          "theme": 1
+        },
+        "family": 2,
+        "scheme": "minor",
+        "size": 11,
+        "name": "Calibri"
+      }
+    }
+  },
+  "beforeDiskSave": {
+    "formatChecks": {
+      "currency": {
+        "address": "D2",
+        "displayed": "50",
+        "numberFormat": "$#,##0.00"
+      },
+      "percent": {
+        "address": "F2",
+        "displayed": "0.25",
+        "numberFormat": "0.0%"
+      },
+      "style": {
+        "alignment": {
+          "horizontal": "right"
+        },
+        "fill": {
+          "type": "pattern",
+          "pattern": "solid",
+          "fgColor": {
+            "argb": "FFF2CC"
+          }
+        },
+        "font": {
+          "bold": true,
+          "color": {
+            "theme": 1
+          },
+          "family": 2,
+          "scheme": "minor",
+          "size": 11,
+          "name": "Calibri"
+        }
+      }
+    },
+    "formulaChecks": [
+      {
+        "actual": 50,
+        "expected": 50,
+        "expression": "B2*C2",
+        "inputs": {
+          "B2": 4,
+          "C2": 12.5
+        }
+      },
+      {
+        "actual": 5,
+        "expected": 5,
+        "expression": "'Assumptions'!A2*D2",
+        "inputs": {
+          "'Assumptions'!A2": 0.1,
+          "D2": 50
+        }
+      },
+      {
+        "actual": 65,
+        "expected": 65,
+        "expression": "SUM(D2:D3)",
+        "inputs": {
+          "D2": 50,
+          "D3": 15
+        }
+      }
+    ],
+    "snapshot": {
+      "sales": [
+        [
+          {
+            "address": "A1",
+            "formula": null,
+            "text": "Item",
+            "value": "Item"
+          },
+          {
+            "address": "B1",
+            "formula": null,
+            "text": "Qty",
+            "value": "Qty"
+          },
+          {
+            "address": "C1",
+            "formula": null,
+            "text": "Price",
+            "value": "Price"
+          },
+          {
+            "address": "D1",
+            "formula": null,
+            "text": "Total",
+            "value": "Total"
+          },
+          {
+            "address": "E1",
+            "formula": null,
+            "text": "Taxed total",
+            "value": "Taxed total"
+          },
+          {
+            "address": "F1",
+            "formula": null,
+            "text": "Margin",
+            "value": "Margin"
+          }
+        ],
+        [
+          {
+            "address": "A2",
+            "formula": null,
+            "text": "Alpha",
+            "value": "Alpha"
+          },
+          {
+            "address": "B2",
+            "formula": null,
+            "text": "4",
+            "value": 4
+          },
+          {
+            "address": "C2",
+            "formula": null,
+            "text": "12.5",
+            "value": 12.5
+          },
+          {
+            "address": "D2",
+            "formula": "B2*C2",
+            "text": "50",
+            "value": 50
+          },
+          {
+            "address": "E2",
+            "formula": "'Assumptions'!A2*D2",
+            "text": "5",
+            "value": 5
+          },
+          {
+            "address": "F2",
+            "formula": null,
+            "text": "0.25",
+            "value": 0.25
+          }
+        ],
+        [
+          {
+            "address": "A3",
+            "formula": null,
+            "text": "Beta",
+            "value": "Beta"
+          },
+          {
+            "address": "B3",
+            "formula": null,
+            "text": "3",
+            "value": 3
+          },
+          {
+            "address": "C3",
+            "formula": null,
+            "text": "5",
+            "value": 5
+          },
+          {
+            "address": "D3",
+            "formula": "B3*C3",
+            "text": "15",
+            "value": 15
+          },
+          {
+            "address": "E3",
+            "formula": "'Assumptions'!A2*D3",
+            "text": "1.5",
+            "value": 1.5
+          },
+          {
+            "address": "F3",
+            "formula": null,
+            "text": "0.2",
+            "value": 0.2
+          }
+        ],
+        [
+          {
+            "address": "A4",
+            "formula": null,
+            "text": "Grand total",
+            "value": "Grand total"
+          },
+          {
+            "address": "B4",
+            "formula": null,
+            "text": "",
+            "value": null
+          },
+          {
+            "address": "C4",
+            "formula": null,
+            "text": "",
+            "value": null
+          },
+          {
+            "address": "D4",
+            "formula": "SUM(D2:D3)",
+            "text": "65",
+            "value": 65
+          },
+          {
+            "address": "E4",
+            "formula": "SUM(E2:E3)",
+            "text": "6.5",
+            "value": 6.5
+          },
+          {
+            "address": "F4",
+            "formula": null,
+            "text": "",
+            "value": null
+          }
+        ],
+        [
+          {
+            "address": "A5",
+            "formula": null,
+            "text": "Alpha",
+            "value": "Alpha"
+          },
+          {
+            "address": "B5",
+            "formula": null,
+            "text": "4",
+            "value": 4
+          },
+          {
+            "address": "C5",
+            "formula": null,
+            "text": "12.5",
+            "value": 12.5
+          },
+          {
+            "address": "D5",
+            "formula": "B2*C2",
+            "text": "50",
+            "value": 50
+          },
+          {
+            "address": "E5",
+            "formula": "'Assumptions'!A2*D2",
+            "text": "5",
+            "value": 5
+          },
+          {
+            "address": "F5",
+            "formula": null,
+            "text": "0.25",
+            "value": 0.25
+          }
+        ],
+        [
+          {
+            "address": "A6",
+            "formula": null,
+            "text": "",
+            "value": null
+          },
+          {
+            "address": "B6",
+            "formula": null,
+            "text": "",
+            "value": null
+          },
+          {
+            "address": "C6",
+            "formula": null,
+            "text": "",
+            "value": null
+          },
+          {
+            "address": "D6",
+            "formula": null,
+            "text": "",
+            "value": null
+          },
+          {
+            "address": "E6",
+            "formula": null,
+            "text": "",
+            "value": null
+          },
+          {
+            "address": "F6",
+            "formula": null,
+            "text": "",
+            "value": null
+          }
+        ]
+      ],
+      "sheets": [
+        "Archive",
+        "Sales",
+        "Assumptions"
+      ]
+    }
+  },
+  "afterDiskReopen": {
+    "formatChecks": {
+      "currency": {
+        "address": "D2",
+        "numberFormat": "$#,##0.00"
+      },
+      "percent": {
+        "address": "F2",
+        "numberFormat": "0.0%"
+      },
+      "style": {
+        "alignment": {
+          "horizontal": "right"
+        },
+        "fill": {
+          "type": "pattern",
+          "pattern": "solid",
+          "fgColor": {
+            "argb": "FFF2CC"
+          }
+        },
+        "font": {
+          "bold": true,
+          "color": {
+            "theme": 1
+          },
+          "family": 2,
+          "scheme": "minor",
+          "size": 11,
+          "name": "Calibri"
+        }
+      }
+    },
+    "formulaChecks": [
+      {
+        "address": "D2",
+        "formula": "B2*C2",
+        "value": 50
+      },
+      {
+        "address": "E2",
+        "formula": "'Assumptions'!A2*D2",
+        "value": 5
+      },
+      {
+        "address": "D4",
+        "formula": "SUM(D2:D3)",
+        "value": 65
+      }
+    ],
+    "snapshot": {
+      "sales": [
+        [
+          {
+            "address": "A1",
+            "formula": null,
+            "text": "Item",
+            "value": "Item"
+          },
+          {
+            "address": "B1",
+            "formula": null,
+            "text": "Qty",
+            "value": "Qty"
+          },
+          {
+            "address": "C1",
+            "formula": null,
+            "text": "Price",
+            "value": "Price"
+          },
+          {
+            "address": "D1",
+            "formula": null,
+            "text": "Total",
+            "value": "Total"
+          },
+          {
+            "address": "E1",
+            "formula": null,
+            "text": "Taxed total",
+            "value": "Taxed total"
+          },
+          {
+            "address": "F1",
+            "formula": null,
+            "text": "Margin",
+            "value": "Margin"
+          }
+        ],
+        [
+          {
+            "address": "A2",
+            "formula": null,
+            "text": "Alpha",
+            "value": "Alpha"
+          },
+          {
+            "address": "B2",
+            "formula": null,
+            "text": "4",
+            "value": 4
+          },
+          {
+            "address": "C2",
+            "formula": null,
+            "text": "12.5",
+            "value": 12.5
+          },
+          {
+            "address": "D2",
+            "formula": "B2*C2",
+            "text": "50",
+            "value": 50
+          },
+          {
+            "address": "E2",
+            "formula": "'Assumptions'!A2*D2",
+            "text": "5",
+            "value": 5
+          },
+          {
+            "address": "F2",
+            "formula": null,
+            "text": "0.25",
+            "value": 0.25
+          }
+        ],
+        [
+          {
+            "address": "A3",
+            "formula": null,
+            "text": "Beta",
+            "value": "Beta"
+          },
+          {
+            "address": "B3",
+            "formula": null,
+            "text": "3",
+            "value": 3
+          },
+          {
+            "address": "C3",
+            "formula": null,
+            "text": "5",
+            "value": 5
+          },
+          {
+            "address": "D3",
+            "formula": "B3*C3",
+            "text": "15",
+            "value": 15
+          },
+          {
+            "address": "E3",
+            "formula": "'Assumptions'!A2*D3",
+            "text": "1.5",
+            "value": 1.5
+          },
+          {
+            "address": "F3",
+            "formula": null,
+            "text": "0.2",
+            "value": 0.2
+          }
+        ],
+        [
+          {
+            "address": "A4",
+            "formula": null,
+            "text": "Grand total",
+            "value": "Grand total"
+          },
+          {
+            "address": "B4",
+            "formula": null,
+            "text": "",
+            "value": null
+          },
+          {
+            "address": "C4",
+            "formula": null,
+            "text": "",
+            "value": null
+          },
+          {
+            "address": "D4",
+            "formula": "SUM(D2:D3)",
+            "text": "65",
+            "value": 65
+          },
+          {
+            "address": "E4",
+            "formula": "SUM(E2:E3)",
+            "text": "6.5",
+            "value": 6.5
+          },
+          {
+            "address": "F4",
+            "formula": null,
+            "text": "",
+            "value": null
+          }
+        ],
+        [
+          {
+            "address": "A5",
+            "formula": null,
+            "text": "Alpha",
+            "value": "Alpha"
+          },
+          {
+            "address": "B5",
+            "formula": null,
+            "text": "4",
+            "value": 4
+          },
+          {
+            "address": "C5",
+            "formula": null,
+            "text": "12.5",
+            "value": 12.5
+          },
+          {
+            "address": "D5",
+            "formula": "B2*C2",
+            "text": "50",
+            "value": 50
+          },
+          {
+            "address": "E5",
+            "formula": "'Assumptions'!A2*D2",
+            "text": "5",
+            "value": 5
+          },
+          {
+            "address": "F5",
+            "formula": null,
+            "text": "0.25",
+            "value": 0.25
+          }
+        ],
+        [
+          {
+            "address": "A6",
+            "formula": null,
+            "text": "",
+            "value": null
+          },
+          {
+            "address": "B6",
+            "formula": null,
+            "text": "",
+            "value": null
+          },
+          {
+            "address": "C6",
+            "formula": null,
+            "text": "",
+            "value": null
+          },
+          {
+            "address": "D6",
+            "formula": null,
+            "text": "",
+            "value": null
+          },
+          {
+            "address": "E6",
+            "formula": null,
+            "text": "",
+            "value": null
+          },
+          {
+            "address": "F6",
+            "formula": null,
+            "text": "",
+            "value": null
+          }
+        ]
+      ],
+      "sheets": [
+        "Archive",
+        "Sales",
+        "Assumptions"
+      ]
+    }
+  }
+}

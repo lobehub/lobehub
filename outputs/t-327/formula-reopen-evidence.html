@@ -1,0 +1,21 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  body { margin: 28px; color: #172033; font: 15px system-ui; background: #fff; }
+  h1 { margin: 0 0 22px; font-size: 24px; }
+  h2 { margin: 22px 0 8px; font-size: 17px; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { padding: 9px 12px; border: 1px solid #b7c4d3; text-align: left; }
+  th { color: #fff; background: #163f68; }
+  .styled { background: #fff2cc; font-weight: 700; text-align: right; }
+  .ok { color: #146c43; font-weight: 700; }
+  code { font-weight: 650; }
+</style>
+<h1>T-327 公式、格式与保存重开一致性</h1>
+<h2>公式计算与独立期望值</h2>
+<table><tr><th>单元格</th><th>公式</th><th>输入 / 引用</th><th>期望值</th><th>实际值</th></tr><tr><td>D2</td><td><code>B2*C2</code></td><td>4 × 12.5</td><td>50</td><td class="ok">50</td></tr><tr><td>E2</td><td><code>'Assumptions'!A2*D2</code></td><td>0.1 × 50</td><td>5</td><td class="ok">5</td></tr><tr><td>D4</td><td><code>SUM(D2:D3)</code></td><td>50 + 15</td><td>65</td><td class="ok">65</td></tr></table>
+<h2>数字格式与基础样式</h2>
+<table><tr><th>单元格</th><th>数字格式</th><th>显示结果</th><th>样式</th></tr><tr><td>D2</td><td><code>$#,##0.00</code></td><td class="styled">$50.00</td><td>淡黄填充 · 粗体 · 右对齐</td></tr><tr><td>F2</td><td><code>0.0%</code></td><td class="styled">25.0%</td><td>淡黄填充 · 右对齐</td></tr></table>
+<h2>写盘前 → 从磁盘重新打开</h2>
+<table><tr><th>项目</th><th>写盘前</th><th>重开后</th></tr><tr><td>工作表顺序</td><td>Archive, Sales, Assumptions</td><td class="ok">Archive, Sales, Assumptions</td></tr><tr><td>D2</td><td>B2*C2 = 50 · $#,##0.00</td><td class="ok">B2*C2 = 50 · $#,##0.00</td></tr><tr><td>E2</td><td>'Assumptions'!A2*D2 = 5</td><td class="ok">'Assumptions'!A2*D2 = 5</td></tr><tr><td>D4</td><td>SUM(D2:D3) = 65</td><td class="ok">SUM(D2:D3) = 65</td></tr><tr><td>D2 样式</td><td>FFF2CC · bold · right</td><td class="ok">FFF2CC · bold · right</td></tr></table>
+<p class="ok">外部 OpenXML 解析成功；压缩包全部条目 OK，无损坏或警告。</p>

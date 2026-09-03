@@ -1,0 +1,25 @@
+body {
+    font-family: Arial;
+    font-size: 10;
+}
+
+td {
+    white-space: pre;
+    font-family: Arial;
+    font-size: 10;
+}
+
+p {
+    margin:0;
+}
+
+table.worksheet {
+    border-collapse:collapse;
+    table-layout: fixed;
+}
+
+@media screen {
+    .showGridlines, .showGridlines td, .showGridlines th {
+        border: thin solid #d2d2df;
+    }
+}

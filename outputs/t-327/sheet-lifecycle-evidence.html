@@ -1,0 +1,37 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  body { margin: 28px; color: #172033; font: 15px system-ui; background: #fff; }
+  h1 { margin: 0 0 24px; font-size: 24px; }
+  h2 { margin: 0 0 10px; font-size: 15px; }
+  .step { margin: 0 0 22px; padding: 16px; border: 1px solid #c9d4df; border-radius: 8px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+  .tab { padding: 8px 18px; border: 1px solid #8aa2ba; border-radius: 6px 6px 0 0; background: #edf3f8; font-weight: 650; }
+  .active { color: #fff; background: #163f68; }
+  .note { color: #526579; }
+  .ok { color: #146c43; font-weight: 650; }
+  table { border-collapse: collapse; width: 620px; }
+  th, td { padding: 7px 10px; border: 1px solid #b7c4d3; text-align: left; }
+  th { color: white; background: #163f68; }
+</style>
+<h1>T-327 多工作表创建与管理生命周期</h1>
+<section class="step">
+  <h2>1. 导入 / 创建完成（2 个工作表）</h2>
+  <div class="tabs"><div class="tab active">Sales</div><div class="tab">Assumptions</div></div>
+  <table><tr><th>Sales</th><th>代表内容</th></tr><tr><td>Alpha</td><td>Qty 2 · Price $10.00 · Total $20.00</td></tr><tr><td>Assumptions</td><td>Tax rate = 10%</td></tr></table>
+</section>
+<section class="step">
+  <h2>2. 新增工作表</h2>
+  <div class="tabs"><div class="tab active">Sales</div><div class="tab">Assumptions</div><div class="tab">Notes</div></div>
+  <div class="note">操作：ADD SHEET “Notes”</div>
+</section>
+<section class="step">
+  <h2>3. 重命名工作表</h2>
+  <div class="tabs"><div class="tab active">Sales</div><div class="tab">Assumptions</div><div class="tab">Archive</div></div>
+  <div class="note">操作：RENAME “Notes” → “Archive”</div>
+</section>
+<section class="step">
+  <h2>4. 排序工作表</h2>
+  <div class="tabs"><div class="tab active">Archive</div><div class="tab">Sales</div><div class="tab">Assumptions</div></div>
+  <div class="ok">最终顺序：Archive → Sales → Assumptions；Sales 与 Assumptions 代表内容保持完好</div>
+</section>
