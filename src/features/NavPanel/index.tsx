@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useSyncExternalStore } from 'react';
+import { memo, useMemo, useSyncExternalStore } from 'react';
 
 import { NavPanelDraggable } from './components/NavPanelDraggable';
 import {
@@ -23,10 +23,17 @@ const NavPanel = memo(() => {
     getNavPanelRegistrySnapshot,
     getNavPanelRegistrySnapshot,
   );
-  const registeredContent = registry.get(activeNavKey);
-  const activeContent = registeredContent
-    ? { key: activeNavKey, node: registeredContent.node }
-    : { key: `pending:${activeNavKey}`, node: <NavPanelFallback navKey={activeNavKey} /> };
+  // The registry snapshot changes as each panel registers during boot. Rebuilding
+  // this object every time would defeat `NavPanelDraggable`'s memo and re-render
+  // the whole panel — including the resizable chrome — on every registration.
+  const registeredNode = registry.get(activeNavKey)?.node;
+  const activeContent = useMemo(
+    () =>
+      registeredNode
+        ? { key: activeNavKey, node: registeredNode }
+        : { key: `pending:${activeNavKey}`, node: <NavPanelFallback navKey={activeNavKey} /> },
+    [activeNavKey, registeredNode],
+  );
 
   return (
     <>
