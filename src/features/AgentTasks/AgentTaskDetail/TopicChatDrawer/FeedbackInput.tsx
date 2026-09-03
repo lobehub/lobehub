@@ -18,6 +18,10 @@ import {
 import { useEnterToSend } from '@/hooks/useEnterToSend';
 
 interface FeedbackInputProps {
+  /** Expand and focus the composer right when the host surface mounts — the
+      floating drawer opened by "Continue chat" wants the input hot, while a
+      read-first surface keeps the compact, opt-in default. */
+  autoFocus?: boolean;
   /** Acceptance's in-flow topic rail starts with the composer visible. The
       floating Topic drawer keeps its compact, opt-in default. */
   defaultExpanded?: boolean;
@@ -27,14 +31,14 @@ interface FeedbackInputProps {
 }
 
 const FeedbackInput = memo<FeedbackInputProps>(
-  ({ defaultExpanded = false, disableCollapse = false }) => {
+  ({ autoFocus = false, defaultExpanded = false, disableCollapse = false }) => {
     const { t } = useTranslation('chat');
     const editor = useEditor();
     const sendMessage = useConversationStore((s) => s.sendMessage);
     const [submitting, setSubmitting] = useState(false);
     const [hasContent, setHasContent] = useState(false);
     const [hasAttachments, setHasAttachments] = useState(false);
-    const [expanded, setExpanded] = useState(defaultExpanded);
+    const [expanded, setExpanded] = useState(defaultExpanded || autoFocus);
     const shouldSendOnEnter = useEnterToSend();
     // Task follow-ups send into the shared agent's topic — view-only members
     // can watch the run but get no reply composer.

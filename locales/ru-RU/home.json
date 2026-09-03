@@ -115,6 +115,7 @@
   "inbox.goals.showAll": "Показать все {{count}}",
   "inbox.goals.title": "Цели",
   "inbox.needsYou.title": "Нуждается в вас",
+  "inbox.news.askAgent": "Спросить агента",
   "inbox.news.continueChat": "Продолжить чат",
   "inbox.news.emptyDay": "Нет сводок за этот день.",
   "inbox.news.emptyToday": "Сегодня пока ничего нового.",

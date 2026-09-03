@@ -115,6 +115,7 @@
   "inbox.goals.showAll": "查看全部 {{count}} 个",
   "inbox.goals.title": "目标",
   "inbox.needsYou.title": "需要你处理",
+  "inbox.news.askAgent": "询问 Agent",
   "inbox.news.continueChat": "继续对话",
   "inbox.news.emptyDay": "这一天没有简报",
   "inbox.news.emptyToday": "今天还没有简报",

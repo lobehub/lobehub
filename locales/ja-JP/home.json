@@ -115,6 +115,7 @@
   "inbox.goals.showAll": "すべて表示 {{count}}",
   "inbox.goals.title": "目標",
   "inbox.needsYou.title": "あなたが必要です",
+  "inbox.news.askAgent": "エージェントに尋ねる",
   "inbox.news.continueChat": "会話を続ける",
   "inbox.news.emptyDay": "この日の概要はありません。",
   "inbox.news.emptyToday": "今日の新しい情報はまだありません。",

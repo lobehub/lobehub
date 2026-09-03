@@ -115,6 +115,7 @@
   "inbox.goals.showAll": "Mostrar todas {{count}}",
   "inbox.goals.title": "Objetivos",
   "inbox.needsYou.title": "Te necesita",
+  "inbox.news.askAgent": "Preguntar al agente",
   "inbox.news.continueChat": "Continuar conversación",
   "inbox.news.emptyDay": "No hay resúmenes este día.",
   "inbox.news.emptyToday": "Aún no hay nada nuevo hoy.",

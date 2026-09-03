@@ -115,6 +115,7 @@
   "inbox.goals.showAll": "Покажи всички {{count}}",
   "inbox.goals.title": "Цели",
   "inbox.needsYou.title": "Има нужда от вас",
+  "inbox.news.askAgent": "Попитай агента",
   "inbox.news.continueChat": "Продължи чата",
   "inbox.news.emptyDay": "Няма новини за този ден.",
   "inbox.news.emptyToday": "Все още няма нищо ново днес.",

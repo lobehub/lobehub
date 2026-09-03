@@ -10,6 +10,9 @@ export interface TaskDetailSliceState {
    * `taskDetailMap` entry to read the agent / title from.
    */
   activeTopicDrawerAgentId?: string;
+  /** Whether the drawer was opened with conversational intent — the body then
+      mounts its reply composer expanded and focused. */
+  activeTopicDrawerAutoFocus?: boolean;
   activeTopicDrawerTitle?: string;
   activeTopicDrawerTopicId?: string;
   isCreatingTask: boolean;

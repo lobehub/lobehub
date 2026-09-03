@@ -116,6 +116,8 @@ const taskSaveStatus = (s: TaskStoreState): SaveStatus =>
 
 const activeTopicDrawerTopicId = (s: TaskStoreState) => s.activeTopicDrawerTopicId;
 
+const topicDrawerAutoFocus = (s: TaskStoreState) => s.activeTopicDrawerAutoFocus;
+
 /**
  * Which agent the open run drawer talks to. A run opened from a task detail
  * inherits the task's agent; one opened from the home inbox carries its own,
@@ -166,5 +168,6 @@ export const taskDetailSelectors = {
   taskDetailById,
   taskSaveStatus,
   topicDrawerAgentId,
+  topicDrawerAutoFocus,
   topicDrawerTitle,
 };

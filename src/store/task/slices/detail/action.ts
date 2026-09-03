@@ -269,6 +269,7 @@ export class TaskDetailSliceActionImpl {
       {
         activeTaskId: taskId,
         activeTopicDrawerAgentId: undefined,
+        activeTopicDrawerAutoFocus: undefined,
         activeTopicDrawerTitle: undefined,
         activeTopicDrawerTopicId: undefined,
       },
@@ -280,13 +281,24 @@ export class TaskDetailSliceActionImpl {
   /**
    * `topic` carries the agent and title for a run opened outside a task detail
    * (the home inbox lists plain topics too) — the drawer falls back to it when
-   * no task detail is loaded to read them from.
+   * no task detail is loaded to read them from. `autoFocus` marks openings made
+   * with conversational intent (the brief's "Continue chat"), so the body
+   * mounts its reply composer expanded and focused.
    */
-  openTopicDrawer = (topicId: string, topic?: { agentId?: string; title?: string }): void => {
-    if (this.#get().activeTopicDrawerTopicId === topicId) return;
+  openTopicDrawer = (
+    topicId: string,
+    topic?: { agentId?: string; autoFocus?: boolean; title?: string },
+  ): void => {
+    const current = this.#get();
+    if (
+      current.activeTopicDrawerTopicId === topicId &&
+      current.activeTopicDrawerAutoFocus === topic?.autoFocus
+    )
+      return;
     this.#set(
       {
         activeTopicDrawerAgentId: topic?.agentId,
+        activeTopicDrawerAutoFocus: topic?.autoFocus,
         activeTopicDrawerTitle: topic?.title,
         activeTopicDrawerTopicId: topicId,
       },
@@ -300,6 +312,7 @@ export class TaskDetailSliceActionImpl {
     this.#set(
       {
         activeTopicDrawerAgentId: undefined,
+        activeTopicDrawerAutoFocus: undefined,
         activeTopicDrawerTitle: undefined,
         activeTopicDrawerTopicId: undefined,
       },

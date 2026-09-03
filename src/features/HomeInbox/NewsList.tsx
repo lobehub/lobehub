@@ -3,7 +3,7 @@ import { agentDisplayName } from '@lobechat/types';
 import { Flexbox, Icon, Markdown } from '@lobehub/ui';
 import { Avatar, Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { ChevronDownIcon, ChevronRightIcon, MessageSquarePlus } from 'lucide-react';
+import { ChevronDownIcon, ChevronRightIcon, MessageSquarePlus, Workflow } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
@@ -111,37 +111,43 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief, showTime }) => {
     });
   }, [brief.id, markBriefRead, read]);
 
-  // A brief is "conversable" whenever it names an agent: a run-owned brief
-  // opens its topic's chat drawer (same thread the agent worked in), while a
-  // bare insight brief without a topic falls back to the agent's chat page so
-  // a new conversation can start there.
+  // A run-owned brief (it names both an agent and a topic) can reopen the very
+  // conversation the agent worked in; a brief without a topic can only start a
+  // fresh one on the agent's chat page. Review feedback split these into two
+  // actions: "View chat" opens the existing thread in place, while the primary
+  // "Continue chat" stays the single call to action for both paths.
   const agentId = brief.agentId ?? brief.agent?.id;
+  const hasTopicChat = Boolean(agentId && brief.topicId);
   const canContinueChat = Boolean(agentId);
 
-  const handleContinueChat = useCallback(() => {
-    if (!agentId) return;
-    if (brief.topicId) {
-      // setActiveTaskId hydrates the drawer's task context when the brief owns
-      // a task, and clears any prior drawer/task state; openTopicDrawer must
-      // come after so its topic survives the reset.
-      setActiveTaskId(brief.taskId ?? undefined);
-      openTopicDrawer(brief.topicId, {
-        agentId,
-        title: brief.taskName ?? brief.title,
-      });
-      return;
-    }
-    navigate(AGENT_CHAT_URL(agentId));
+  const openTopicChat = useCallback(() => {
+    if (!agentId || !brief.topicId) return;
+    // setActiveTaskId hydrates the drawer's task context when the brief owns
+    // a task, and clears any prior drawer/task state; openTopicDrawer must
+    // come after so its topic survives the reset.
+    setActiveTaskId(brief.taskId ?? undefined);
+    openTopicDrawer(brief.topicId, {
+      agentId,
+      title: brief.taskName ?? brief.title,
+    });
   }, [
     agentId,
     brief.taskId,
     brief.taskName,
     brief.title,
     brief.topicId,
-    navigate,
     openTopicDrawer,
     setActiveTaskId,
   ]);
+
+  const handleContinueChat = useCallback(() => {
+    if (!agentId) return;
+    if (brief.topicId) {
+      openTopicChat();
+      return;
+    }
+    navigate(AGENT_CHAT_URL(agentId));
+  }, [agentId, brief.topicId, navigate, openTopicChat]);
 
   return (
     <Flexbox className={bare ? undefined : styles.section}>
@@ -191,14 +197,25 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief, showTime }) => {
           )}
           <BriefCardArtifacts artifacts={brief.artifacts} />
           {canContinueChat && (
-            <Flexbox horizontal justify={'flex-end'}>
+            <Flexbox horizontal align={'center'} gap={4} justify={'flex-end'}>
+              {hasTopicChat && (
+                <Button
+                  icon={Workflow}
+                  size={'small'}
+                  style={{ color: cssVar.colorTextSecondary }}
+                  type={'text'}
+                  onClick={openTopicChat}
+                >
+                  {t('inbox.news.viewChat')}
+                </Button>
+              )}
               <Button
                 icon={MessageSquarePlus}
                 size={'small'}
-                type={'text'}
+                type={'fill'}
                 onClick={handleContinueChat}
               >
-                {t('inbox.news.continueChat')}
+                {hasTopicChat ? t('inbox.news.continueChat') : t('inbox.news.askAgent')}
               </Button>
             </Flexbox>
           )}

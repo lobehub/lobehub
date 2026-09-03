@@ -115,6 +115,7 @@
   "inbox.goals.showAll": "عرض الكل {{count}}",
   "inbox.goals.title": "الأهداف",
   "inbox.needsYou.title": "يحتاج إليك",
+  "inbox.news.askAgent": "اسأل الوكيل",
   "inbox.news.continueChat": "متابعة المحادثة",
   "inbox.news.emptyDay": "لا توجد ملخصات في هذا اليوم.",
   "inbox.news.emptyToday": "لا يوجد جديد حتى الآن اليوم.",
