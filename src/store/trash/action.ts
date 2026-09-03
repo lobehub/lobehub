@@ -10,7 +10,7 @@ import type { StateCreator } from 'zustand/vanilla';
 import type { trashService as trashServiceInstance } from '@/services/trash';
 
 import { mutateTrash, useTrashDataSWR } from './hooks';
-import { trashKeys } from './keys';
+import { trashBucketKey, trashKeys, trashScopeKey } from './keys';
 import type { TrashStore } from './store';
 
 type TrashService = typeof trashServiceInstance;
@@ -18,6 +18,11 @@ type EmptyTrashOutcome = Awaited<ReturnType<TrashService['emptyTrash']>>;
 type PurgeOutcome = Awaited<ReturnType<TrashService['purge']>>;
 type RestoreOutcome = Awaited<ReturnType<TrashService['restore']>>;
 type TrashSlice = StateCreator<TrashStore, [['zustand/devtools', never]], [], TrashAction>;
+
+export interface TrashBucketContext {
+  resourceType?: TrashResourceType;
+  scopeId: string | null;
+}
 
 const getTrashService = async () => (await import('@/services/trash')).trashService;
 
@@ -36,32 +41,56 @@ const RESTORE_AFFECTED_KEY_PREFIXES = [
 ];
 
 /**
- * Recycle-bin store. Rows are removed optimistically on restore / purge and
- * the list + counts are revalidated afterwards so a failed call self-corrects.
+ * Recycle-bin store. Server data is bucketed by workspace + filter so two
+ * concurrently mounted settings surfaces never overwrite each other's rows.
  */
 export const trashSlice: TrashSlice = (set, get) => {
-  let activeResourceType: TrashResourceType | undefined;
-  let activeScopeId: string | null = null;
-
-  const refresh = async () => {
+  const refresh = async ({ scopeId }: TrashBucketContext) => {
+    const scopeKey = trashScopeKey(scopeId);
     const results = await Promise.allSettled([
-      mutateTrash(trashKeys.list(activeScopeId, get().activeType)),
-      mutateTrash(trashKeys.countByType(activeScopeId)),
+      mutateTrash(
+        (key: unknown) => Array.isArray(key) && key[0] === 'trash:list' && key[1] === scopeKey,
+      ),
+      mutateTrash(trashKeys.countByType(scopeId)),
     ]);
     for (const result of results) {
       if (result.status === 'rejected') console.error('[trash:refresh]', result.reason);
     }
   };
 
-  const withLoading = async (ids: string[], run: () => Promise<void>) => {
+  const withLoading = async (
+    ids: string[],
+    context: TrashBucketContext,
+    run: () => Promise<void>,
+  ) => {
     set({ loadingIds: [...get().loadingIds, ...ids] }, false, 'loading/start');
     try {
       await run();
     } finally {
       const done = new Set(ids);
       set({ loadingIds: get().loadingIds.filter((id) => !done.has(id)) }, false, 'loading/end');
-      await refresh();
+      await refresh(context);
     }
+  };
+
+  const updateBucketItems = (
+    context: TrashBucketContext,
+    updater: (items: TrashItem[]) => TrashItem[],
+    action: string,
+  ) => {
+    const bucketKey = trashBucketKey(context.scopeId, context.resourceType);
+    const bucket = get().listByBucket[bucketKey];
+    if (!bucket) return;
+    set(
+      {
+        listByBucket: {
+          ...get().listByBucket,
+          [bucketKey]: { ...bucket, items: updater(bucket.items) },
+        },
+      },
+      false,
+      action,
+    );
   };
 
   const revalidateRestoredScopes = async () => {
@@ -78,70 +107,83 @@ export const trashSlice: TrashSlice = (set, get) => {
   };
 
   return {
-    setActiveType: (activeType?: TrashResourceType) => {
-      activeResourceType = activeType;
-      set({ activeType, isTrashInit: false, items: [], nextCursor: null }, false, 'setActiveType');
-    },
     refresh,
     revalidateRestoredScopes,
-    loadMore: async () => {
-      const { activeType, itemsScopeId, nextCursor } = get();
-      if (!nextCursor) return;
-      const requestResourceType = activeType;
-      const requestScopeId = activeScopeId;
-      if (itemsScopeId !== requestScopeId) return;
+    loadMore: async (context: TrashBucketContext) => {
+      const bucketKey = trashBucketKey(context.scopeId, context.resourceType);
+      const bucket = get().listByBucket[bucketKey];
+      if (!bucket?.nextCursor) return;
+      const requestCursor = bucket.nextCursor;
       const trashService = await getTrashService();
-      const page = await trashService.list({ cursor: nextCursor, resourceType: activeType });
-      const state = get();
-      if (
-        activeScopeId !== requestScopeId ||
-        activeResourceType !== requestResourceType ||
-        state.activeType !== requestResourceType ||
-        state.itemsScopeId !== requestScopeId ||
-        state.nextCursor !== nextCursor
-      )
-        return;
+      const page = await trashService.list({
+        cursor: requestCursor,
+        resourceType: context.resourceType,
+      });
+      const currentBucket = get().listByBucket[bucketKey];
+      if (currentBucket?.nextCursor !== requestCursor) return;
       set(
-        { items: [...state.items, ...page.items], nextCursor: page.nextCursor },
+        {
+          listByBucket: {
+            ...get().listByBucket,
+            [bucketKey]: {
+              ...currentBucket,
+              items: [...currentBucket.items, ...page.items],
+              nextCursor: page.nextCursor,
+            },
+          },
+        },
         false,
         'loadMore',
       );
     },
-    restore: async (ids: string[]) => {
+    restore: async (ids: string[], context: TrashBucketContext) => {
       let outcome: RestoreOutcome = { failed: [], restored: [] };
-      await withLoading(ids, async () => {
+      await withLoading(ids, context, async () => {
         const trashService = await getTrashService();
         outcome = await trashService.restore(ids);
         const gone = new Set(outcome.restored.map((item) => item.id));
         for (const failure of outcome.failed) if (failure.code === 'notFound') gone.add(failure.id);
-        set({ items: get().items.filter((item) => !gone.has(item.id)) }, false, 'restore');
+        updateBucketItems(
+          context,
+          (items) => items.filter((item) => !gone.has(item.id)),
+          'restore',
+        );
       });
       if (outcome.restored.length > 0) void revalidateRestoredScopes();
       return outcome;
     },
-    purge: async (ids: string[]) => {
-      let outcome: PurgeOutcome = {
-        failed: [],
-        purged: 0,
-        purgedIds: [],
-      };
-      await withLoading(ids, async () => {
+    purge: async (ids: string[], context: TrashBucketContext) => {
+      let outcome: PurgeOutcome = { failed: [], purged: 0, purgedIds: [] };
+      await withLoading(ids, context, async () => {
         const trashService = await getTrashService();
         outcome = await trashService.purge(ids);
         const gone = new Set(outcome.purgedIds);
-        set({ items: get().items.filter((item) => !gone.has(item.id)) }, false, 'purge');
+        updateBucketItems(context, (items) => items.filter((item) => !gone.has(item.id)), 'purge');
       });
       return outcome;
     },
-    emptyTrash: async () => {
-      const { activeType, items } = get();
+    emptyTrash: async (context: TrashBucketContext) => {
+      const bucketKey = trashBucketKey(context.scopeId, context.resourceType);
+      const items = get().listByBucket[bucketKey]?.items ?? [];
       let outcome: EmptyTrashOutcome = { scheduled: 0 };
       await withLoading(
         items.map((item) => item.id),
+        context,
         async () => {
           const trashService = await getTrashService();
-          outcome = await trashService.emptyTrash(activeType);
-          set({ items: [], nextCursor: null }, false, 'emptyTrash');
+          outcome = await trashService.emptyTrash(context.resourceType);
+          const bucket = get().listByBucket[bucketKey];
+          if (!bucket) return;
+          set(
+            {
+              listByBucket: {
+                ...get().listByBucket,
+                [bucketKey]: { ...bucket, items: [], nextCursor: null },
+              },
+            },
+            false,
+            'emptyTrash',
+          );
         },
       );
       return outcome;
@@ -151,25 +193,22 @@ export const trashSlice: TrashSlice = (set, get) => {
       resourceType?: TrashResourceType,
       scopeId: string | null = null,
     ): SWRResponse<TrashListResult> => {
-      activeScopeId = scopeId;
-      activeResourceType = resourceType;
+      const bucketKey = trashBucketKey(scopeId, resourceType);
       return useTrashDataSWR<TrashListResult>(
         enabled ? trashKeys.list(scopeId, resourceType) : null,
         async () => (await getTrashService()).list({ resourceType }),
         {
           onSuccess: (data) => {
-            if (
-              activeScopeId !== scopeId ||
-              activeResourceType !== resourceType ||
-              get().activeType !== resourceType
-            )
-              return;
             set(
               {
-                isTrashInit: true,
-                items: data.items,
-                itemsScopeId: scopeId,
-                nextCursor: data.nextCursor,
+                listByBucket: {
+                  ...get().listByBucket,
+                  [bucketKey]: {
+                    isTrashInit: true,
+                    items: data.items,
+                    nextCursor: data.nextCursor,
+                  },
+                },
               },
               false,
               'fetchTrash',
@@ -182,14 +221,17 @@ export const trashSlice: TrashSlice = (set, get) => {
       enabled: boolean,
       scopeId: string | null = null,
     ): SWRResponse<TrashCountByType> => {
-      activeScopeId = scopeId;
+      const scopeKey = trashScopeKey(scopeId);
       return useTrashDataSWR<TrashCountByType>(
         enabled ? trashKeys.countByType(scopeId) : null,
         async () => (await getTrashService()).countByType(),
         {
           onSuccess: (data) => {
-            if (activeScopeId !== scopeId) return;
-            set({ countByType: data, countScopeId: scopeId }, false, 'fetchTrashCount');
+            set(
+              { countByScope: { ...get().countByScope, [scopeKey]: data } },
+              false,
+              'fetchTrashCount',
+            );
           },
         },
       );
@@ -198,13 +240,12 @@ export const trashSlice: TrashSlice = (set, get) => {
 };
 
 export interface TrashAction {
-  emptyTrash: () => Promise<EmptyTrashOutcome>;
-  loadMore: () => Promise<void>;
-  purge: (ids: string[]) => Promise<PurgeOutcome>;
-  refresh: () => Promise<void>;
-  restore: (ids: string[]) => Promise<RestoreOutcome>;
+  emptyTrash: (context: TrashBucketContext) => Promise<EmptyTrashOutcome>;
+  loadMore: (context: TrashBucketContext) => Promise<void>;
+  purge: (ids: string[], context: TrashBucketContext) => Promise<PurgeOutcome>;
+  refresh: (context: TrashBucketContext) => Promise<void>;
+  restore: (ids: string[], context: TrashBucketContext) => Promise<RestoreOutcome>;
   revalidateRestoredScopes: () => Promise<void>;
-  setActiveType: (activeType?: TrashResourceType) => void;
   useFetchTrash: (
     enabled: boolean,
     resourceType?: TrashResourceType,

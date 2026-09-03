@@ -25,6 +25,7 @@ import LiteTable, { type LiteTableColumn } from '@/components/LiteTable';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { usePermission } from '@/hooks/usePermission';
 import { useTrashStore } from '@/store/trash';
+import { trashBucketKey, trashScopeKey } from '@/store/trash/keys';
 
 import {
   getDeletedByLabel,
@@ -81,16 +82,15 @@ const TrashList = ({ cacheScope }: TrashListProps) => {
   const { allowed: canPurge, reason: purgePermissionReason } = usePermission('manage_settings');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [activeType, setActiveType] = useState<TrashResourceType>();
+  const scopeId = cacheScope;
+  const bucketKey = trashBucketKey(scopeId, activeType);
+  const scopeKey = trashScopeKey(scopeId);
 
   const [
-    storedItems,
-    storedNextCursor,
-    activeType,
-    storedCountByType,
-    itemsScopeId,
-    countScopeId,
+    bucket,
+    countByType,
     loadingIds,
-    setActiveType,
     restore,
     purge,
     emptyTrash,
@@ -98,14 +98,9 @@ const TrashList = ({ cacheScope }: TrashListProps) => {
     useFetchTrash,
     useFetchTrashCount,
   ] = useTrashStore((s) => [
-    s.items,
-    s.nextCursor,
-    s.activeType,
-    s.countByType,
-    s.itemsScopeId,
-    s.countScopeId,
+    s.listByBucket[bucketKey],
+    s.countByScope[scopeKey] ?? {},
     s.loadingIds,
-    s.setActiveType,
     s.restore,
     s.purge,
     s.emptyTrash,
@@ -113,10 +108,9 @@ const TrashList = ({ cacheScope }: TrashListProps) => {
     s.useFetchTrash,
     s.useFetchTrashCount,
   ]);
-  const scopeId = cacheScope;
-  const items = itemsScopeId === scopeId ? storedItems : [];
-  const nextCursor = itemsScopeId === scopeId ? storedNextCursor : null;
-  const countByType = countScopeId === scopeId ? storedCountByType : {};
+  const items = bucket?.items ?? [];
+  const nextCursor = bucket?.nextCursor ?? null;
+  const context = { resourceType: activeType, scopeId };
   const total = Object.values(countByType).reduce((sum, count) => sum + (count ?? 0), 0);
 
   const { error, isLoading, mutate: retry } = useFetchTrash(true, activeType, scopeId);
@@ -132,7 +126,10 @@ const TrashList = ({ cacheScope }: TrashListProps) => {
 
   const handleRestore = async (targets: TrashItem[]) => {
     try {
-      const outcome = await restore(targets.map((item) => item.id));
+      const outcome = await restore(
+        targets.map((item) => item.id),
+        context,
+      );
       setSelectedIds((current) =>
         current.filter((id) => !outcome.restored.some((item) => item.id === id)),
       );
@@ -157,7 +154,10 @@ const TrashList = ({ cacheScope }: TrashListProps) => {
       okText: t('trash.actions.purge'),
       onOk: async () => {
         try {
-          const outcome = await purge(targets.map((item) => item.id));
+          const outcome = await purge(
+            targets.map((item) => item.id),
+            context,
+          );
           setSelectedIds((current) => current.filter((id) => !outcome.purgedIds.includes(id)));
           const feedback = getPurgeFeedback(outcome);
           toast[feedback.level](t(feedback.key, feedback.params));
@@ -181,7 +181,7 @@ const TrashList = ({ cacheScope }: TrashListProps) => {
         : t('trash.actions.empty'),
       onOk: async () => {
         try {
-          const outcome = await emptyTrash();
+          const outcome = await emptyTrash(context);
           setSelectedIds([]);
           toast.success(t('trash.empty.scheduled', { count: outcome.scheduled }));
         } catch (cause) {
@@ -423,7 +423,7 @@ const TrashList = ({ cacheScope }: TrashListProps) => {
             onClick={async () => {
               setIsLoadingMore(true);
               try {
-                await loadMore();
+                await loadMore(context);
               } catch (cause) {
                 console.error(cause);
                 toast.error(t('trash.loadMore.failed'));

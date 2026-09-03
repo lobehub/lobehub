@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { trashService } from '@/services/trash';
 
 import { mutateTrash, useTrashDataSWR } from './hooks';
+import { trashBucketKey, trashScopeKey } from './keys';
 import { trashSelectors } from './selectors';
 import { useTrashStore } from './store';
 
@@ -27,23 +28,24 @@ const buildItem = (overrides: Partial<TrashItem> = {}): TrashItem => ({
   ...overrides,
 });
 
+const personalContext = { scopeId: null };
+const personalBucketKey = trashBucketKey(null);
+const getPersonalItems = () => useTrashStore.getState().listByBucket[personalBucketKey]!.items;
+
 describe('TrashAction', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    const action = useTrashStore.getState();
-    action.setActiveType(undefined);
-    action.useFetchTrash(false, undefined, null);
-    vi.clearAllMocks();
     vi.mocked(mutateTrash).mockResolvedValue(undefined as never);
     useTrashStore.setState({
-      activeType: undefined,
-      countByType: { document: 1, file: 2 },
-      countScopeId: null,
-      isTrashInit: true,
-      items: [buildItem(), buildItem({ id: 'trash_2', resourceId: 'file_2' })],
-      itemsScopeId: null,
+      countByScope: { [trashScopeKey(null)]: { document: 1, file: 2 } },
+      listByBucket: {
+        [personalBucketKey]: {
+          isTrashInit: true,
+          items: [buildItem(), buildItem({ id: 'trash_2', resourceId: 'file_2' })],
+          nextCursor: null,
+        },
+      },
       loadingIds: [],
-      nextCursor: null,
     });
   });
 
@@ -58,17 +60,22 @@ describe('TrashAction', () => {
         restored: [buildItem()],
       });
 
-      const outcome = await useTrashStore.getState().restore(['trash_1', 'trash_2']);
+      const outcome = await useTrashStore
+        .getState()
+        .restore(['trash_1', 'trash_2'], personalContext);
 
       expect(outcome.failed).toEqual([{ code: 'parentTrashed', id: 'trash_2' }]);
-      expect(useTrashStore.getState().items.map((i) => i.id)).toEqual(['trash_2']);
+      expect(getPersonalItems().map((i) => i.id)).toEqual(['trash_2']);
       expect(useTrashStore.getState().loadingIds).toEqual([]);
       // recycle-bin list + counts, plus a filter-based sweep of the affected namespaces
-      expect(mutateTrash).toHaveBeenCalledWith(['trash:list', 'personal', 'all']);
+      expect(mutateTrash).toHaveBeenCalledWith(expect.any(Function));
       expect(mutateTrash).toHaveBeenCalledWith(['trash:countByType', 'personal']);
       const filterCall = vi
         .mocked(mutateTrash)
-        .mock.calls.find(([key]) => typeof key === 'function');
+        .mock.calls.find(
+          ([key]) =>
+            typeof key === 'function' && (key as (key: unknown) => boolean)(['file:list', 'x']),
+        );
       expect(filterCall).toBeTruthy();
       const filter = filterCall![0] as (key: unknown) => boolean;
       expect(filter(['file:list', 'x', {}])).toBe(true);
@@ -85,12 +92,15 @@ describe('TrashAction', () => {
         failed: [{ code: 'notFound', id: 'trash_1' }],
         restored: [],
       });
-      await useTrashStore.getState().restore(['trash_1']);
-      expect(useTrashStore.getState().items.map((i) => i.id)).toEqual(['trash_2']);
-      // nothing came back — no cross-store revalidation
-      expect(vi.mocked(mutateTrash).mock.calls.some(([key]) => typeof key === 'function')).toBe(
-        false,
-      );
+      await useTrashStore.getState().restore(['trash_1'], personalContext);
+      expect(getPersonalItems().map((i) => i.id)).toEqual(['trash_2']);
+      // Nothing came back — only Trash itself is refreshed, with no restored-resource sweep.
+      const predicates = vi
+        .mocked(mutateTrash)
+        .mock.calls.filter(([key]) => typeof key === 'function')
+        .map(([key]) => key as (key: unknown) => boolean);
+      expect(predicates).toHaveLength(1);
+      expect(predicates[0](['file:list', 'x'])).toBe(false);
     });
 
     it('marks rows as loading while the call is in flight', async () => {
@@ -100,7 +110,7 @@ describe('TrashAction', () => {
           resolve = () => r({ failed: [], restored: [] });
         }),
       );
-      const pending = useTrashStore.getState().restore(['trash_1']);
+      const pending = useTrashStore.getState().restore(['trash_1'], personalContext);
       expect(trashSelectors.isLoading('trash_1')(useTrashStore.getState())).toBe(true);
       resolve();
       await pending;
@@ -115,9 +125,9 @@ describe('TrashAction', () => {
         purged: 1,
         purgedIds: ['trash_1'],
       });
-      await useTrashStore.getState().purge(['trash_1']);
+      await useTrashStore.getState().purge(['trash_1'], personalContext);
       expect(trashService.purge).toHaveBeenCalledWith(['trash_1']);
-      expect(useTrashStore.getState().items.map((i) => i.id)).toEqual(['trash_2']);
+      expect(getPersonalItems().map((i) => i.id)).toEqual(['trash_2']);
     });
 
     it('preserves a successful purge outcome when follow-up refresh fails', async () => {
@@ -129,103 +139,136 @@ describe('TrashAction', () => {
       });
       vi.mocked(mutateTrash).mockRejectedValue(new Error('refresh unavailable'));
 
-      await expect(useTrashStore.getState().purge(['trash_1'])).resolves.toMatchObject({
+      await expect(
+        useTrashStore.getState().purge(['trash_1'], personalContext),
+      ).resolves.toMatchObject({
         purged: 1,
       });
-      expect(useTrashStore.getState().items.map((item) => item.id)).toEqual(['trash_2']);
+      expect(getPersonalItems().map((item) => item.id)).toEqual(['trash_2']);
       expect(useTrashStore.getState().loadingIds).toEqual([]);
       expect(consoleError).toHaveBeenCalledWith('[trash:refresh]', expect.any(Error));
     });
 
     it('emptyTrash honours the active type filter and clears the list', async () => {
       vi.spyOn(trashService, 'emptyTrash').mockResolvedValue({ scheduled: 2 });
-      useTrashStore.setState({ activeType: 'file' });
-      await expect(useTrashStore.getState().emptyTrash()).resolves.toEqual({ scheduled: 2 });
+      const context = { resourceType: 'file' as const, scopeId: null };
+      const bucketKey = trashBucketKey(null, 'file');
+      useTrashStore.setState({
+        listByBucket: {
+          ...useTrashStore.getState().listByBucket,
+          [bucketKey]: {
+            isTrashInit: true,
+            items: [...getPersonalItems()],
+            nextCursor: null,
+          },
+        },
+      });
+      await expect(useTrashStore.getState().emptyTrash(context)).resolves.toEqual({ scheduled: 2 });
       expect(trashService.emptyTrash).toHaveBeenCalledWith('file');
-      expect(useTrashStore.getState().items).toEqual([]);
-      expect(mutateTrash).toHaveBeenCalledWith(['trash:list', 'personal', 'file']);
+      expect(useTrashStore.getState().listByBucket[bucketKey]!.items).toEqual([]);
+      expect(mutateTrash).toHaveBeenCalledWith(expect.any(Function));
     });
 
     it('keeps the local list truthful when emptyTrash scheduling fails', async () => {
       vi.spyOn(trashService, 'emptyTrash').mockRejectedValue(new Error('queue unavailable'));
 
-      await expect(useTrashStore.getState().emptyTrash()).rejects.toThrow('queue unavailable');
+      await expect(useTrashStore.getState().emptyTrash(personalContext)).rejects.toThrow(
+        'queue unavailable',
+      );
 
-      expect(useTrashStore.getState().items.map((item) => item.id)).toEqual(['trash_1', 'trash_2']);
+      expect(getPersonalItems().map((item) => item.id)).toEqual(['trash_1', 'trash_2']);
       expect(useTrashStore.getState().loadingIds).toEqual([]);
     });
   });
 
   describe('paging / filter', () => {
-    it('setActiveType resets the list so the new filter starts from a fresh first page', () => {
-      useTrashStore.setState({ nextCursor: 'abc' });
-      useTrashStore.getState().setActiveType('knowledgeBase');
-      expect(useTrashStore.getState()).toMatchObject({
-        activeType: 'knowledgeBase',
-        isTrashInit: false,
-        items: [],
-        nextCursor: null,
-      });
-    });
-
     it('loadMore appends the next page', async () => {
-      useTrashStore.setState({ nextCursor: 'cursor-1' });
+      useTrashStore.setState({
+        listByBucket: {
+          ...useTrashStore.getState().listByBucket,
+          [personalBucketKey]: {
+            ...useTrashStore.getState().listByBucket[personalBucketKey]!,
+            nextCursor: 'cursor-1',
+          },
+        },
+      });
       vi.spyOn(trashService, 'list').mockResolvedValue({
         items: [buildItem({ id: 'trash_3', resourceId: 'file_3' })],
         nextCursor: null,
       });
-      await useTrashStore.getState().loadMore();
+      await useTrashStore.getState().loadMore(personalContext);
       expect(trashService.list).toHaveBeenCalledWith({
         cursor: 'cursor-1',
         resourceType: undefined,
       });
-      expect(useTrashStore.getState().items.map((i) => i.id)).toEqual([
-        'trash_1',
-        'trash_2',
-        'trash_3',
-      ]);
-      expect(useTrashStore.getState().nextCursor).toBeNull();
+      expect(getPersonalItems().map((i) => i.id)).toEqual(['trash_1', 'trash_2', 'trash_3']);
+      expect(useTrashStore.getState().listByBucket[personalBucketKey]!.nextCursor).toBeNull();
     });
 
-    it('keys data by workspace and ignores a stale response from the previous scope', () => {
+    it('keeps simultaneously mounted workspace, filter, and count consumers independent', async () => {
       const action = useTrashStore.getState();
       action.useFetchTrash(true, undefined, 'workspace-a');
-      const firstSuccess = vi.mocked(useTrashDataSWR).mock.calls.at(-1)?.[2]?.onSuccess;
-      action.useFetchTrash(true, undefined, 'workspace-b');
-      const secondSuccess = vi.mocked(useTrashDataSWR).mock.calls.at(-1)?.[2]?.onSuccess;
+      const workspaceAListSuccess = vi.mocked(useTrashDataSWR).mock.calls.at(-1)?.[2]?.onSuccess;
+      action.useFetchTrash(true, 'file', 'workspace-b');
+      const workspaceBListSuccess = vi.mocked(useTrashDataSWR).mock.calls.at(-1)?.[2]?.onSuccess;
+      action.useFetchTrashCount(true, 'workspace-a');
+      const workspaceACountSuccess = vi.mocked(useTrashDataSWR).mock.calls.at(-1)?.[2]?.onSuccess;
+      action.useFetchTrashCount(true, 'workspace-b');
+      const workspaceBCountSuccess = vi.mocked(useTrashDataSWR).mock.calls.at(-1)?.[2]?.onSuccess;
 
-      firstSuccess?.(
-        { items: [buildItem({ title: 'Workspace A' })], nextCursor: null },
+      workspaceAListSuccess?.(
+        {
+          items: [buildItem({ id: 'trash_a', title: 'Workspace A' })],
+          nextCursor: 'cursor-a',
+        },
         '',
         undefined as never,
       );
-      expect(useTrashStore.getState().itemsScopeId).toBeNull();
-
-      secondSuccess?.(
+      workspaceBListSuccess?.(
         {
-          items: [buildItem({ title: 'Workspace B', workspaceId: 'workspace-b' })],
+          items: [buildItem({ id: 'trash_b', title: 'Workspace B', workspaceId: 'workspace-b' })],
           nextCursor: null,
         },
         '',
         undefined as never,
       );
-      expect(useTrashStore.getState()).toMatchObject({
-        items: [expect.objectContaining({ title: 'Workspace B' })],
-        itemsScopeId: 'workspace-b',
+      workspaceACountSuccess?.({ document: 1 }, '', undefined as never);
+      workspaceBCountSuccess?.({ file: 1 }, '', undefined as never);
+
+      vi.spyOn(trashService, 'list').mockResolvedValue({
+        items: [buildItem({ id: 'trash_a_2', title: 'Workspace A page 2' })],
+        nextCursor: null,
+      });
+      await action.loadMore({ scopeId: 'workspace-a' });
+
+      vi.spyOn(trashService, 'restore').mockResolvedValue({
+        failed: [],
+        restored: [buildItem({ id: 'trash_a' })],
+      });
+      await action.restore(['trash_a'], { scopeId: 'workspace-a' });
+
+      expect(useTrashStore.getState().listByBucket[trashBucketKey('workspace-a')]!.items).toEqual([
+        expect.objectContaining({ title: 'Workspace A page 2' }),
+      ]);
+      expect(
+        useTrashStore.getState().listByBucket[trashBucketKey('workspace-b', 'file')]!.items,
+      ).toEqual([expect.objectContaining({ title: 'Workspace B' })]);
+      expect(useTrashStore.getState().countByScope).toMatchObject({
+        'workspace-a': { document: 1 },
+        'workspace-b': { file: 1 },
       });
       expect(vi.mocked(useTrashDataSWR).mock.calls.map(([key]) => key)).toEqual([
         ['trash:list', 'workspace-a', 'all'],
-        ['trash:list', 'workspace-b', 'all'],
+        ['trash:list', 'workspace-b', 'file'],
+        ['trash:countByType', 'workspace-a'],
+        ['trash:countByType', 'workspace-b'],
       ]);
     });
 
-    it('ignores a stale first page from the previous resource type', () => {
+    it('keeps separate first pages for multiple filters in the same workspace', () => {
       const action = useTrashStore.getState();
-      action.setActiveType(undefined);
       action.useFetchTrash(true, undefined, 'workspace-a');
       const allSuccess = vi.mocked(useTrashDataSWR).mock.calls.at(-1)?.[2]?.onSuccess;
-
-      action.setActiveType('file');
       action.useFetchTrash(true, 'file', 'workspace-a');
       const fileSuccess = vi.mocked(useTrashDataSWR).mock.calls.at(-1)?.[2]?.onSuccess;
 
@@ -234,25 +277,33 @@ describe('TrashAction', () => {
         '',
         undefined as never,
       );
-      expect(useTrashStore.getState().items).toEqual([]);
-
       fileSuccess?.(
         { items: [buildItem({ title: 'Current files' })], nextCursor: null },
         '',
         undefined as never,
       );
-      expect(useTrashStore.getState().items).toEqual([
-        expect.objectContaining({ title: 'Current files' }),
+      expect(useTrashStore.getState().listByBucket[trashBucketKey('workspace-a')]!.items).toEqual([
+        expect.objectContaining({ resourceType: 'document' }),
       ]);
+      expect(
+        useTrashStore.getState().listByBucket[trashBucketKey('workspace-a', 'file')]!.items,
+      ).toEqual([expect.objectContaining({ title: 'Current files' })]);
     });
 
-    it('ignores a stale next page after switching workspaces', async () => {
+    it('ignores a stale next page after its own bucket receives a newer first page', async () => {
       const action = useTrashStore.getState();
       action.useFetchTrash(true, undefined, 'workspace-a');
+      const firstPageSuccess = vi.mocked(useTrashDataSWR).mock.calls.at(-1)?.[2]?.onSuccess;
+      const bucketKey = trashBucketKey('workspace-a');
       useTrashStore.setState({
-        items: [buildItem({ title: 'Workspace A', workspaceId: 'workspace-a' })],
-        itemsScopeId: 'workspace-a',
-        nextCursor: 'workspace-a-cursor',
+        listByBucket: {
+          ...useTrashStore.getState().listByBucket,
+          [bucketKey]: {
+            isTrashInit: true,
+            items: [buildItem({ title: 'Workspace A', workspaceId: 'workspace-a' })],
+            nextCursor: 'workspace-a-cursor',
+          },
+        },
       });
       let resolvePage!: (page: { items: TrashItem[]; nextCursor: string | null }) => void;
       vi.spyOn(trashService, 'list').mockReturnValue(
@@ -261,12 +312,10 @@ describe('TrashAction', () => {
         }),
       );
 
-      const pending = action.loadMore();
-      action.useFetchTrash(true, undefined, 'workspace-b');
-      const workspaceBSuccess = vi.mocked(useTrashDataSWR).mock.calls.at(-1)?.[2]?.onSuccess;
-      workspaceBSuccess?.(
+      const pending = action.loadMore({ scopeId: 'workspace-a' });
+      firstPageSuccess?.(
         {
-          items: [buildItem({ title: 'Workspace B', workspaceId: 'workspace-b' })],
+          items: [buildItem({ title: 'New Workspace A' })],
           nextCursor: null,
         },
         '',
@@ -278,9 +327,8 @@ describe('TrashAction', () => {
       });
       await pending;
 
-      expect(useTrashStore.getState()).toMatchObject({
-        items: [expect.objectContaining({ title: 'Workspace B' })],
-        itemsScopeId: 'workspace-b',
+      expect(useTrashStore.getState().listByBucket[bucketKey]).toMatchObject({
+        items: [expect.objectContaining({ title: 'New Workspace A' })],
         nextCursor: null,
       });
     });
@@ -288,7 +336,7 @@ describe('TrashAction', () => {
 
   describe('selectors', () => {
     it('totalCount sums the per-type counts', () => {
-      expect(trashSelectors.totalCount(useTrashStore.getState())).toBe(3);
+      expect(trashSelectors.totalCount(null)(useTrashStore.getState())).toBe(3);
     });
   });
 });

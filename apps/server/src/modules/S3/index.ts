@@ -1,3 +1,4 @@
+import type { _Error as S3DeleteError } from '@aws-sdk/client-s3';
 import {
   AbortMultipartUploadCommand,
   CompleteMultipartUploadCommand,
@@ -99,12 +100,23 @@ export class S3 {
             keys.slice(index * S3_DELETE_OBJECTS_LIMIT, (index + 1) * S3_DELETE_OBJECTS_LIMIT),
           );
     let response;
+    const errors: S3DeleteError[] = [];
     for (const batch of batches) {
       const command = new DeleteObjectsCommand({
         Bucket: this.bucket,
         Delete: { Objects: batch.map((key) => ({ Key: key })) },
       });
       response = await this.client.send(command);
+      if (response.Errors?.length) errors.push(...response.Errors);
+    }
+
+    if (errors.length > 0) {
+      const failedKeys = errors.flatMap((error) => (error.Key ? [error.Key] : []));
+      throw new Error(
+        `Failed to delete ${errors.length} S3 object(s)${
+          failedKeys.length > 0 ? `: ${failedKeys.join(', ')}` : ''
+        }`,
+      );
     }
 
     return response;

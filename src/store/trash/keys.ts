@@ -13,3 +13,10 @@ export const trashKeys = {
     resourceType ?? 'all',
   ],
 };
+
+export const trashScopeKey = (workspaceId?: string | null) => workspaceId ?? 'personal';
+
+export const trashBucketKey = (
+  workspaceId?: string | null,
+  resourceType?: TrashResourceType | null,
+) => `${trashScopeKey(workspaceId)}\0${resourceType ?? 'all'}`;

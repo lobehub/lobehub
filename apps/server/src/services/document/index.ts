@@ -912,7 +912,7 @@ export class DocumentService {
           pages: fileDocument.pages,
           parentId: file.parentId,
           source: file.url,
-          sourceType: 'file',
+          sourceType: 'file' as const,
           title,
           totalCharCount: fileDocument.totalCharCount,
           totalLineCount: fileDocument.totalLineCount,

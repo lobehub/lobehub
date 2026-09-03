@@ -266,6 +266,33 @@ describe('FileS3', () => {
       });
       expect(mockS3ClientSend).toHaveBeenCalledTimes(2);
     });
+
+    it('rejects when S3 reports per-object failures in a successful response', async () => {
+      const s3 = new FileS3();
+      mockS3ClientSend.mockResolvedValue({
+        Errors: [
+          { Code: 'AccessDenied', Key: 'file2.txt', Message: 'Access denied' },
+          { Code: 'InternalError', Key: 'file3.txt', Message: 'Retry later' },
+        ],
+      });
+
+      await expect(s3.deleteFiles(['file1.txt', 'file2.txt', 'file3.txt'])).rejects.toThrow(
+        'Failed to delete 2 S3 object(s): file2.txt, file3.txt',
+      );
+    });
+
+    it('collects per-object failures across delete batches', async () => {
+      const s3 = new FileS3();
+      const keys = Array.from({ length: 1001 }, (_, index) => `file-${index}.txt`);
+      mockS3ClientSend
+        .mockResolvedValueOnce({ Errors: [{ Code: 'AccessDenied', Key: keys[1] }] })
+        .mockResolvedValueOnce({ Errors: [{ Code: 'InternalError', Key: keys[1000] }] });
+
+      await expect(s3.deleteFiles(keys)).rejects.toThrow(
+        `Failed to delete 2 S3 object(s): ${keys[1]}, ${keys[1000]}`,
+      );
+      expect(mockS3ClientSend).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe('getFileContent', () => {
