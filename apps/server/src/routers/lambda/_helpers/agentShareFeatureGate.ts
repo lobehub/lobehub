@@ -44,8 +44,8 @@ const createAgentShareGate =
  * 1. `ENABLE_BUSINESS_FEATURES` — compile-time business-slot constant, false
  *    in OSS builds. Self-hosted deployments cannot flip it with env vars, so
  *    agent sharing is structurally cloud-only end to end.
- * 2. The `enableAgentShare` feature flag — the grayscale whitelist (user IDs
- *    or emails) published by admins, evaluated per user. It fails closed on
+ * 2. The `enableAgentShare` feature flag — the grayscale whitelist (user IDs)
+ *    published by admins, evaluated per user. It fails closed on
  *    anything other than `true` (including `undefined`, i.e. unconfigured),
  *    so a deployment must explicitly opt a user in.
  *
