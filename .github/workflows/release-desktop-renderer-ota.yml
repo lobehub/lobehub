@@ -19,6 +19,19 @@ on:
         description: 'Update channel'
         required: true
         type: string
+    outputs:
+      published:
+        description: 'Whether a renderer patch was uploaded'
+        value: ${{ jobs.publish-renderer-patch.outputs.published }}
+      reason:
+        description: 'Renderer OTA publication or skip reason'
+        value: ${{ jobs.publish-renderer-patch.outputs.reason }}
+      requires_full_release:
+        description: 'Whether the caller must publish a full desktop release'
+        value: ${{ jobs.publish-renderer-patch.outputs.requires_full_release }}
+      version:
+        description: 'Published renderer patch version'
+        value: ${{ jobs.publish-renderer-patch.outputs.version }}
   workflow_dispatch:
     inputs:
       channel:
@@ -44,6 +57,11 @@ jobs:
   publish-renderer-patch:
     name: Publish Renderer Patch (${{ inputs.channel }})
     runs-on: ubuntu-latest
+    outputs:
+      published: ${{ steps.result.outputs.published }}
+      reason: ${{ steps.result.outputs.reason }}
+      requires_full_release: ${{ steps.result.outputs.requires_full_release }}
+      version: ${{ steps.result.outputs.version }}
     steps:
       - uses: actions/checkout@v6
 
@@ -68,12 +86,14 @@ jobs:
           if [ -z "$BASE" ]; then
             echo "::warning::no renderer OTA base metadata found; run a full release first"
             echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "reason=base-missing" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           if [ "$(jq -r '.rendererProtocol // 0' <<< "$BASE")" != "2" ]; then
             echo "::warning::renderer OTA base is not V2; run a full release first"
             echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "reason=unsupported-base" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -117,6 +137,7 @@ jobs:
           if [ "$MAIN_HASH" != "$BASE_MAIN_HASH" ]; then
             echo "::warning::main changed since last full release — renderer patch is not allowed, run a full release instead"
             echo "allowed=false" >> "$GITHUB_OUTPUT"
+            echo "reason=main-changed" >> "$GITHUB_OUTPUT"
           else
             echo "allowed=true" >> "$GITHUB_OUTPUT"
           fi
@@ -166,6 +187,7 @@ jobs:
             --feed-url="$UPDATE_SERVER_BASE_URL/$CHANNEL/$APP_VERSION/renderer/v2"
 
       - name: Upload to S3
+        id: publish
         if: steps.gate.outputs.allowed == 'true'
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
@@ -197,3 +219,52 @@ jobs:
             --cache-control no-store "${ENDPOINT_ARGS[@]}"
 
           echo "✅ Published renderer patch ${{ steps.version.outputs.version }} for $CHANNEL/$APP_VERSION"
+
+      - name: Report renderer OTA result
+        id: result
+        if: always()
+        env:
+          APP_VERSION: ${{ steps.base.outputs.app_version }}
+          BASE_FOUND: ${{ steps.base.outputs.found }}
+          BASE_REASON: ${{ steps.base.outputs.reason }}
+          GATE_ALLOWED: ${{ steps.gate.outputs.allowed }}
+          GATE_REASON: ${{ steps.gate.outputs.reason }}
+          PATCH_VERSION: ${{ steps.version.outputs.version }}
+          PUBLISH_OUTCOME: ${{ steps.publish.outcome }}
+        run: |
+          published=false
+          requires_full_release=false
+          version=""
+
+          if [ "$BASE_FOUND" != "true" ]; then
+            reason="${BASE_REASON:-base-unavailable}"
+            requires_full_release=true
+          elif [ "$GATE_ALLOWED" != "true" ]; then
+            reason="${GATE_REASON:-gate-failed}"
+            requires_full_release=true
+          elif [ "$PUBLISH_OUTCOME" = "success" ]; then
+            published=true
+            reason=published
+            version="$PATCH_VERSION"
+          else
+            reason=publish-failed
+          fi
+
+          {
+            echo "published=$published"
+            echo "reason=$reason"
+            echo "requires_full_release=$requires_full_release"
+            echo "version=$version"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Renderer OTA"
+            echo
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Published | \`$published\` |"
+            echo "| Version | \`${version:-(none)}\` |"
+            echo "| Reason | \`$reason\` |"
+            echo "| Requires full release | \`$requires_full_release\` |"
+            echo "| App version | \`${APP_VERSION:-(none)}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"

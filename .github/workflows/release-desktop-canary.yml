@@ -4,11 +4,12 @@ name: Release Desktop Canary
 # Canary 自动发版工作流
 # ============================================
 # 触发条件:
-#   1. canary 分支有 push (合入 PR) 且 commit 前缀为 style/feat/fix/perf/refactor/release (支持 gitmoji)
+#   1. canary 分支有 push (合入 PR) 且 commit type 为 style/feat/fix/perf/refactor/release
+#      (可带任意 gitmoji)
 #   2. 手动触发 (workflow_dispatch)
 #
 # 并发策略:
-#   同一 workflow 仅保留最新一次运行，自动取消排队中的旧 build
+#   运行中的发布不会被后续 push 取消；等待队列仅保留最新一次运行
 #
 # 版本策略:
 #   基于最新 stable tag 的 patch+1, postfix 为递增序号
@@ -30,7 +31,8 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}
-  cancel-in-progress: true
+  # ponytail: this also protects short OTA-only runs; split the full release only if they queue.
+  cancel-in-progress: false
 
 permissions: read-all
 
@@ -39,23 +41,19 @@ env:
 
 jobs:
   # ============================================
-  # 检查 commit 前缀并计算版本号
+  # 检查 commit type
   # ============================================
-  calculate-version:
-    name: Calculate Canary Version
+  check-trigger:
+    name: Check Canary Trigger
     runs-on: ubuntu-latest
     outputs:
-      cloud_ref: ${{ steps.cloud-ref.outputs.cloud_ref }}
-      release_notes: ${{ steps.release-notes.outputs.release_notes }}
-      version: ${{ steps.version.outputs.version }}
-      tag: ${{ steps.version.outputs.tag }}
       should_build: ${{ steps.check.outputs.should_build }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Check commit message prefix
+      - name: Check commit type
         id: check
         run: |
           # 手动触发 + force 时跳过检查
@@ -76,17 +74,43 @@ jobs:
           commit_msg=$(git log -1 --pretty=%s HEAD)
           echo "📝 Head commit: $commit_msg"
 
-          # 检查是否匹配 style/feat/fix/perf/refactor/release 前缀 (支持 gitmoji 前缀)
-          if echo "$commit_msg" | grep -qiE '^(💄\s*)?style(\(.+\))?:|^(✨\s*)?feat(\(.+\))?:|^(🐛\s*)?fix(\(.+\))?:|^(⚡️\s*)?perf(\(.+\))?:|^(♻️\s*)?refactor(\(.+\))?:|^(🚀\s*)?release(\(.+\))?:'; then
+          # 只检查 Conventional Commit type；前置 gitmoji 不参与 type 匹配。
+          if node scripts/desktopCanaryTrigger.cjs "$commit_msg"; then
             echo "should_build=true" >> $GITHUB_OUTPUT
             echo "✅ Commit matches canary build trigger: $commit_msg"
           else
             echo "should_build=false" >> $GITHUB_OUTPUT
-            echo "⏭️ Commit does not match style/feat/fix/perf/refactor/release prefix, skipping: $commit_msg"
+            echo "⏭️ Commit type is not style/feat/fix/perf/refactor/release, skipping: $commit_msg"
           fi
 
+  renderer-ota:
+    name: Publish Renderer OTA
+    needs: [check-trigger]
+    if: needs.check-trigger.outputs.should_build == 'true'
+    uses: ./.github/workflows/release-desktop-renderer-ota.yml
+    with:
+      channel: canary
+    secrets: inherit
+
+  # ============================================
+  # OTA 无法覆盖当前 main 时，计算完整发布版本
+  # ============================================
+  calculate-version:
+    name: Calculate Canary Version
+    needs: [check-trigger, renderer-ota]
+    if: needs.check-trigger.outputs.should_build == 'true' && (github.event_name == 'workflow_dispatch' || needs.renderer-ota.outputs.requires_full_release == 'true')
+    runs-on: ubuntu-latest
+    outputs:
+      cloud_ref: ${{ steps.cloud-ref.outputs.cloud_ref }}
+      release_notes: ${{ steps.release-notes.outputs.release_notes }}
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
       - name: Calculate canary version
-        if: steps.check.outputs.should_build == 'true'
         id: version
         run: |
           # 获取最新的 stable tag (排除 nightly/canary/beta 等)
@@ -125,7 +149,6 @@ jobs:
 
       - name: Resolve Cloud revision
         id: cloud-ref
-        if: steps.check.outputs.should_build == 'true'
         env:
           CLOUD_REPOSITORY: ${{ vars.OVERLAY_REPOSITORY }}
           CLOUD_TOKEN: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
@@ -141,7 +164,6 @@ jobs:
           echo "cloud_ref=$cloud_ref" >> "$GITHUB_OUTPUT"
 
       - name: Generate canary release notes
-        if: steps.check.outputs.should_build == 'true'
         id: release-notes
         env:
           TAG: ${{ steps.version.outputs.tag }}
@@ -200,22 +222,12 @@ jobs:
             echo "EOF"
           } >> $GITHUB_OUTPUT
 
-  renderer-ota:
-    name: Publish Renderer OTA
-    needs: [calculate-version]
-    if: needs.calculate-version.outputs.should_build == 'true'
-    uses: ./.github/workflows/release-desktop-renderer-ota.yml
-    with:
-      channel: canary
-    secrets: inherit
-
   # ============================================
   # 代码质量检查
   # ============================================
   test:
     name: Code quality check
     needs: [calculate-version]
-    if: needs.calculate-version.outputs.should_build == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout base
@@ -237,7 +249,6 @@ jobs:
   # ============================================
   build:
     needs: [calculate-version, test]
-    if: needs.calculate-version.outputs.should_build == 'true'
     name: Build Desktop App
     runs-on: ${{ matrix.os }}
     strategy:
