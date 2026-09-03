@@ -51,7 +51,7 @@ const CliDetectionTimeoutState = ({
             wrap
             actionIconSize={'small'}
             language={'log'}
-            padding={8}
+            padding={0}
             style={{ maxHeight: 160, overflow: 'auto' }}
             variant={'outlined'}
           >
