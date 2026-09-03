@@ -31,6 +31,9 @@ describe('triggerTrashPurge', () => {
 
   it('hands a full local burst off to a new request lifecycle', async () => {
     vi.stubEnv('QSTASH_TOKEN', '');
+    vi.stubEnv('QSTASH_CURRENT_SIGNING_KEY', 'signing-key');
+    vi.stubEnv('KEY_VAULTS_SECRET', 'local-continuation-secret');
+    vi.stubEnv('VERCEL_AUTOMATION_BYPASS_SECRET', 'vercel-bypass-secret');
     vi.mocked(getServerDB).mockResolvedValue({} as never);
     vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 202 }));
     vi.mocked(TrashService.sweepExpired).mockImplementation(async (_db, options) => ({
@@ -50,12 +53,39 @@ describe('triggerTrashPurge', () => {
     expect(TrashService.sweepExpired).toHaveBeenCalledTimes(8);
     expect(after).toHaveBeenCalledOnce();
     expect(fetch).toHaveBeenCalledWith(
-      new URL('https://example.com/api/workflows/trash/purge'),
+      new URL('https://example.com/api/workflows/trash/purge/local'),
       expect.objectContaining({
         body: JSON.stringify({ cursor: { expiresAt: '2026-09-01', id: '8' } }),
+        headers: {
+          'authorization': 'Bearer local-continuation-secret',
+          'content-type': 'application/json',
+          'x-vercel-protection-bypass': 'vercel-bypass-secret',
+        },
         method: 'POST',
       }),
     );
+  });
+
+  it('fails closed when the local continuation secret is not configured', async () => {
+    vi.stubEnv('QSTASH_TOKEN', '');
+    vi.stubEnv('KEY_VAULTS_SECRET', '');
+    vi.mocked(getServerDB).mockResolvedValue({} as never);
+    vi.mocked(TrashService.sweepExpired).mockImplementation(async (_db, options) => ({
+      failed: 0,
+      nextCursor: {
+        expiresAt: '2026-09-01',
+        id: String(Number(options?.cursor?.id ?? 0) + 1),
+      },
+      pruned: 0,
+      purged: 25,
+      scanned: 25,
+    }));
+
+    await triggerTrashPurge();
+    await expect(vi.mocked(after).mock.calls[0][0]()).rejects.toThrow(
+      'KEY_VAULTS_SECRET is required for local trash purge continuation',
+    );
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it('propagates a rejected publish', async () => {
@@ -111,7 +141,9 @@ describe('runLocalTrashPurge', () => {
 
 describe('startLocalTrashPurgeSchedule', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.unstubAllEnvs();
+    vi.stubGlobal('fetch', vi.fn());
     delete (globalThis as typeof globalThis & { __lobeTrashPurgeInterval?: unknown })
       .__lobeTrashPurgeInterval;
   });
@@ -130,6 +162,7 @@ describe('startLocalTrashPurgeSchedule', () => {
   it('hands a full scheduled burst off to the next cursor', async () => {
     vi.stubEnv('DATABASE_URL', 'postgres://configured');
     vi.stubEnv('QSTASH_TOKEN', '');
+    vi.stubEnv('KEY_VAULTS_SECRET', 'local-continuation-secret');
     vi.mocked(getServerDB).mockResolvedValue({} as never);
     vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 202 }));
     vi.mocked(TrashService.sweepExpired).mockImplementation(async (_db, options) => ({
@@ -152,9 +185,12 @@ describe('startLocalTrashPurgeSchedule', () => {
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
     expect(TrashService.sweepExpired).toHaveBeenCalledTimes(8);
     expect(fetch).toHaveBeenCalledWith(
-      new URL('https://example.com/api/workflows/trash/purge'),
+      new URL('https://example.com/api/workflows/trash/purge/local'),
       expect.objectContaining({
         body: JSON.stringify({ cursor: { expiresAt: '2026-09-01', id: '8' } }),
+        headers: expect.objectContaining({
+          authorization: 'Bearer local-continuation-secret',
+        }),
         method: 'POST',
       }),
     );

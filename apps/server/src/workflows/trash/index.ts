@@ -5,6 +5,7 @@ import type { TrashSweepCursor, TrashSweepOutcome } from '@/server/services/tras
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 export const TRASH_PURGE_WORKFLOW_PATH = '/api/workflows/trash/purge';
+export const TRASH_PURGE_LOCAL_CONTINUATION_PATH = '/api/workflows/trash/purge/local';
 
 export interface TrashPurgeWorkflowPayload {
   cursor?: { expiresAt: string; id: string };
@@ -18,10 +19,21 @@ const MAX_BATCH_SIZE = 50;
 const LOCAL_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 
 const publishLocalTrashContinuation = async (payload: TrashPurgeWorkflowPayload) => {
+  const secret = process.env.KEY_VAULTS_SECRET;
+  if (!secret) throw new Error('KEY_VAULTS_SECRET is required for local trash purge continuation');
+
   const baseUrl = appEnv.INTERNAL_APP_URL || appEnv.APP_URL;
-  const response = await fetch(new URL(TRASH_PURGE_WORKFLOW_PATH, baseUrl), {
+  const headers: Record<string, string> = {
+    'authorization': `Bearer ${secret}`,
+    'content-type': 'application/json',
+  };
+  if (process.env.VERCEL_AUTOMATION_BYPASS_SECRET) {
+    headers['x-vercel-protection-bypass'] = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+  }
+
+  const response = await fetch(new URL(TRASH_PURGE_LOCAL_CONTINUATION_PATH, baseUrl), {
     body: JSON.stringify(payload),
-    headers: { 'content-type': 'application/json' },
+    headers,
     method: 'POST',
   });
   if (!response.ok) {
