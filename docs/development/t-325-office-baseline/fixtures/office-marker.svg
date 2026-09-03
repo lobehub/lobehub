@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" role="img" aria-labelledby="title desc">
+  <title id="title">T-325 office round-trip marker</title>
+  <desc id="desc">A deterministic blue and orange marker used to verify image position and scaling.</desc>
+  <rect width="800" height="450" rx="36" fill="#eaf2ff"/>
+  <rect x="54" y="54" width="692" height="342" rx="28" fill="#ffffff" stroke="#2563eb" stroke-width="12"/>
+  <circle cx="170" cy="225" r="82" fill="#f97316"/>
+  <path d="M300 150h360v34H300zm0 74h280v34H300zm0 74h320v34H300z" fill="#2563eb"/>
+  <text x="170" y="242" text-anchor="middle" font-family="Arial, sans-serif" font-size="40" font-weight="700" fill="#ffffff">T-325</text>
+</svg>

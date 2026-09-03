@@ -1,0 +1,12 @@
+{
+  "regionalUntaxedTotals": {
+    "华东": 1765,
+    "华南": 1350
+  },
+  "requiredFormulaErrors": [],
+  "requiredMarker": "T-325-R1",
+  "sheetOrder": ["参数表", "明细", "汇总"],
+  "taxRate": 0.13,
+  "taxedTotal": 3519.95,
+  "untaxedTotal": 3115
+}

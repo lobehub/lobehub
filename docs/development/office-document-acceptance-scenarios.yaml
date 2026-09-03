@@ -1,0 +1,204 @@
+schemaVersion: 1
+suite: T-324-office-document-roundtrip
+snapshotDate: 2026-09-03
+fixtureSpec: ./office-document-fixture-spec.md
+
+environmentRecord:
+  required:
+    - product
+    - buildOrCommit
+    - surface
+    - operatingSystem
+    - browserOrDesktopVersion
+    - officeValidatorVersions
+    - accountPlan
+    - enabledSkillsAppsAndConnectors
+    - networkMode
+    - timestamp
+
+resultVocabulary:
+  - PASS
+  - FAIL
+  - BLOCKED_ENVIRONMENT
+  - N/A_ENVIRONMENT
+
+globalHardFailures:
+  - exported_file_missing_or_zero_bytes
+  - office_or_libreoffice_repair_prompt
+  - sentinel_content_missing_or_duplicated
+  - wrong_slide_sheet_or_required_structure_count
+  - formula_error_or_wrong_expected_result
+  - save_reports_success_but_reopen_loses_change
+  - unsupported_feature_is_silently_dropped
+  - destructive_action_has_no_undo_or_recovery_path
+
+scenarios:
+  - id: SHARED-01
+    title: Consistent lifecycle and state certainty
+    appliesTo: [pptx, xlsx, docx]
+    precondition: Open the canonical original fixture.
+    actions:
+      - Make one visible content edit.
+      - Observe dirty, saving, and saved states.
+      - Close and reopen the same document/version.
+      - Trigger an offline or injected save failure, make another edit, and retry.
+    assertions:
+      - State transitions are explicit and do not claim Saved before persistence succeeds.
+      - Closing with unsaved changes warns or preserves a recoverable draft.
+      - Reopen contains the saved edit.
+      - Failed save retains local edits and offers retry plus recovery download.
+    evidence: [state_screenshots, revision_identifier, reopened_semantic_inspection, failure_log]
+
+  - id: SHARED-02
+    title: Undo and redo contract
+    appliesTo: [pptx, xlsx, docx]
+    precondition: Open the canonical original fixture.
+    actions:
+      - Perform content, formatting, structural, and delete operations defined by the fixture edit script.
+      - Undo each operation in reverse order.
+      - Redo each operation.
+    assertions:
+      - Every listed operation is reversible before save.
+      - Undo restores semantic value and visible formatting/geometry.
+      - Redo restores the edited value without duplication.
+    evidence: [before_after_inspection_json, screenshots, undo_redo_event_log]
+
+  - id: SHARED-03
+    title: Compatibility warning and non-destructive fallback
+    appliesTo: [pptx, xlsx, docx]
+    precondition: Import one fixture augmented with a documented compatibility-risk feature.
+    actions:
+      - Open and make an unrelated supported edit.
+      - Save and export.
+    assertions:
+      - Unsupported features are identified before destructive conversion.
+      - The user can cancel, keep a read-only copy, or export a recovery copy.
+      - Untouched unknown parts are preserved when the editor claims round-trip preservation.
+    evidence: [warning_screenshot, original_and_export_package_inventory, relationship_diff]
+
+  - id: PPT-01
+    title: Create and complete common presentation editing
+    appliesTo: [pptx]
+    precondition: Create a blank 16:9 deck or generate one from the fixture specification.
+    actions:
+      - Create four slides matching the fixture structures.
+      - Add/edit/delete text, image, shape, table, and chart.
+      - Move, resize, align, and layer slide objects.
+      - Duplicate, delete, reorder, and change slide layout.
+      - Execute the canonical fixture edit script.
+    assertions:
+      - Direct manipulation and toolbar operations produce immediate visible results.
+      - Final order is S1, S3, S4, S2-COPY and final slide count is 4.
+      - Chart values are 12, 23, 15 and all other semantic assertions pass.
+    evidence: [interaction_video_or_step_screenshots, pptx_inspection_json]
+
+  - id: PPT-02
+    title: PPTX save, reopen, and export fidelity
+    appliesTo: [pptx]
+    precondition: PPT-01 completed and saved.
+    actions:
+      - Close the editor and reopen the saved Work/file.
+      - Export PPTX and PDF.
+      - Open PPTX in Microsoft PowerPoint or LibreOffice Impress.
+      - Render editor, reopened file, PPTX, and PDF.
+    assertions:
+      - Content, positions, sizes, z-order, styles, theme, layouts, and count survive reopen.
+      - Export opens without repair.
+      - No required object is missing, clipped, or outside slide bounds.
+      - Golden image differences are within the calibrated tolerance.
+    evidence: [package_integrity_output, semantic_diff_json, rendered_slides, image_diff_report]
+
+  - id: XLS-01
+    title: Create and complete common workbook editing
+    appliesTo: [xlsx]
+    precondition: Create or import the canonical workbook fixture.
+    actions:
+      - Edit individual cells and rectangular ranges.
+      - Copy, paste, fill, clear, insert, delete, and resize rows/columns.
+      - Execute the canonical fixture edit script including sheet rename/reorder.
+      - Edit formulas and chart source data.
+      - Apply number formats, alignment, border, fill, and conditional formatting.
+    assertions:
+      - Values remain typed and leading-zero identifiers remain text.
+      - Formula references update after sheet rename and recalculate correctly.
+      - Final sheets are Inputs, Transactions, Summary.
+      - No formula error tokens exist and manifest totals reconcile.
+    evidence: [xlsx_values_formulas_inspection, style_inspection, chart_source_inspection]
+
+  - id: XLS-02
+    title: XLSX save, reopen, and export reliability
+    appliesTo: [xlsx]
+    precondition: XLS-01 completed and saved.
+    actions:
+      - Close and reopen the saved workbook.
+      - Recalculate in Microsoft Excel or LibreOffice Calc.
+      - Export XLSX and the chosen Transactions sheet as CSV.
+    assertions:
+      - Values, formulas, cached results, styles, chart, filters, freeze panes, and sheet order survive.
+      - Workbook opens without repair and recalculated expected values match the manifest.
+      - CSV contains exactly the selected sheet data and the product ID 0017 remains four characters.
+      - Whole-workbook CSV export presents a clear loss warning.
+    evidence: [formula_scan_raw_output, recalculated_values_json, csv_diff, openability_record]
+
+  - id: DOC-01
+    title: Create and complete common document editing
+    appliesTo: [docx]
+    precondition: Create or import the canonical document fixture.
+    actions:
+      - Edit and paste text.
+      - Apply title, heading, and body styles plus font, alignment, and spacing.
+      - Edit numbered and bulleted lists.
+      - Edit table content and geometry.
+      - Replace/resize image and edit hyperlink display text.
+      - Execute the canonical fixture edit script.
+    assertions:
+      - Heading structure, run formatting, list semantics, table values, image alt text, and link target match the fixture expectations.
+      - CJK and emoji text remain intact.
+    evidence: [docx_structure_json, relationship_inventory, screenshots]
+
+  - id: DOC-02
+    title: DOCX save, reopen, and export fidelity
+    appliesTo: [docx]
+    precondition: DOC-01 completed and saved.
+    actions:
+      - Close and reopen the saved document.
+      - Export DOCX and PDF.
+      - Open DOCX in Microsoft Word or LibreOffice Writer.
+      - Render every page.
+    assertions:
+      - Body text, hierarchy, runs, lists, table, image, caption, link, footer, and page field survive.
+      - Files open without repair.
+      - No clipped text, broken table, missing image, or material pagination regression exists.
+    evidence: [package_integrity_output, structure_diff_json, rendered_pages, pdf_text_and_image_inventory]
+
+  - id: PERF-01
+    title: Stress responsiveness and recovery
+    appliesTo: [pptx, xlsx, docx]
+    precondition: Open each stress fixture on the recorded reference machine.
+    actions:
+      - Navigate from beginning to end and back.
+      - Search for the final sentinel.
+      - Make one edit near the end and save.
+      - Start another save/export and cancel if supported.
+      - Force-close after a dirty edit and relaunch.
+    assertions:
+      - UI remains responsive and exposes progress for long work.
+      - Search finds the expected sentinel.
+      - Saved edit survives reopen.
+      - Cancellation does not corrupt the last saved revision.
+      - Recovery behavior is explicit after force-close.
+    evidence: [timing_trace, memory_peak, progress_screenshots, recovery_result]
+
+  - id: COMPARE-01
+    title: Side-by-side comparison with accessible ChatGPT or Codex
+    appliesTo: [pptx, xlsx, docx]
+    precondition: Record both environments and make the same fixture available to each product.
+    actions:
+      - Run the relevant create/import, edit, save/refine, reopen, and export scenarios in both products.
+      - Record unsupported or unavailable operations without changing the test.
+    assertions:
+      - Compare task completion, correctness, fidelity, feedback, recovery, elapsed time, and manual interventions.
+      - Mark plan/policy/connector limitations N/A_ENVIRONMENT with evidence.
+      - LobeHub has no P0 operation unavailable when the comparison product completes it.
+      - LobeHub has no additional semantic/fidelity hard failure.
+    evidence: [side_by_side_result_matrix, product_versions, raw_artifacts, screenshots_or_video]
