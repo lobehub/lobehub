@@ -169,17 +169,11 @@ export function registerGoalCommand(program: Command) {
       "The ask in the user's own words, shown on the problem node",
     )
     .option('-t, --task <title...>', 'Initial task node titles (omit to let the planner decompose)')
-    // Pre-rename name of `--task`, kept so existing scripts keep running.
-    .option('-w, --work <title...>', 'Deprecated alias of --task')
     .option('--agent <id>', 'Responsible agent ID')
     .option('--project <id>', 'Project ID')
     .option('--max-rounds <n>', 'Maximum goal rounds')
     .option('--max-cost <usd>', 'Maximum total cost in USD')
     .option('--max-attempts-per-task <n>', 'Attempts per Task before opening a decision gate')
-    // Pre-rename name. It never reached the request — the action has always
-    // read `maxAttemptsPerTask`, which this flag does not produce — so the
-    // alias both preserves the old spelling and makes it work for the first time.
-    .option('--max-attempts-per-work <n>', 'Deprecated alias of --max-attempts-per-task')
     .option(
       '--max-concurrent-tasks <n>',
       "How many of this goal's tasks may run at once (default 3)",
@@ -198,7 +192,6 @@ export function registerGoalCommand(program: Command) {
         agentId: options.agent,
         config:
           options.maxAttemptsPerTask ||
-          options.maxAttemptsPerWork ||
           options.maxStepsPerRun ||
           options.operationLeaseTimeoutMs ||
           options.maxConcurrentTasks
@@ -207,13 +200,9 @@ export function registerGoalCommand(program: Command) {
                   ? Number.parseInt(options.maxConcurrentTasks, 10)
                   : undefined,
                 recovery: {
-                  maxAttemptsPerTask:
-                    options.maxAttemptsPerTask || options.maxAttemptsPerWork
-                      ? Number.parseInt(
-                          options.maxAttemptsPerTask ?? options.maxAttemptsPerWork,
-                          10,
-                        )
-                      : undefined,
+                  maxAttemptsPerTask: options.maxAttemptsPerTask
+                    ? Number.parseInt(options.maxAttemptsPerTask, 10)
+                    : undefined,
                   maxStepsPerRun: options.maxStepsPerRun
                     ? Number.parseInt(options.maxStepsPerRun, 10)
                     : undefined,
@@ -229,7 +218,7 @@ export function registerGoalCommand(program: Command) {
         projectId: options.project,
         requirement: options.requirement,
         title,
-        tasks: options.task ?? options.work,
+        tasks: options.task,
       });
       // `goal.create` returns the whole graph snapshot, so the id is on its
       // goal — `result.data.id` is undefined, and the CLI cannot resolve the
@@ -263,9 +252,7 @@ export function registerGoalCommand(program: Command) {
         result.goals.map((item) => [
           item.goal.status,
           truncate(item.goal.title, 44),
-          // `taskDone` is absent when this CLI outruns the deployed server,
-          // which still answers with the pre-rename keys only.
-          `${item.taskDone ?? item.workDone}/${item.taskTotal ?? item.workTotal}`,
+          `${item.taskDone}/${item.taskTotal}`,
           String(item.findingCount),
           item.pendingDecisions > 0 ? pc.yellow(String(item.pendingDecisions)) : '-',
           `$${item.totalRunCost.toFixed(2)}`,

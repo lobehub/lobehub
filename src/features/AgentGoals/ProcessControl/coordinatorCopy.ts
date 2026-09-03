@@ -89,10 +89,7 @@ const REASON_PATTERNS: Array<{
   },
   {
     key: 'goalProcess.gate.reason.attemptBudgetExhausted',
-    // `Work` is the pre-rename wording. Goal events are an append-only audit
-    // trail, so every gate opened before the rename keeps it forever — matching
-    // only the current wording would drop those rows back to raw English.
-    pattern: /^(?:Task|Work) attempt budget was exhausted( after an operation was abandoned)?$/,
+    pattern: /^Task attempt budget was exhausted( after an operation was abandoned)?$/,
   },
   {
     key: 'goalProcess.gate.reason.costBudgetExhausted',

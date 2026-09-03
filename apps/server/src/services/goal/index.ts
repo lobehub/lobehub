@@ -99,11 +99,6 @@ export interface CreateGoalGraphInput {
    */
   tasks?: Array<CreateGoalTaskInput | string>;
   title: string;
-  /**
-   * @deprecated Legacy name of {@link tasks}, kept so pre-rename CLIs and API
-   * callers keep seeding goals. `tasks` wins when both are present.
-   */
-  work?: Array<CreateGoalTaskInput | string>;
 }
 
 export interface CreateGoalNodeInput {
@@ -237,7 +232,7 @@ export class GoalService {
       });
       if (!problem) throw new Error('Failed to seed goal problem');
 
-      for (const seed of input.tasks ?? input.work ?? []) {
+      for (const seed of input.tasks ?? []) {
         const { description, title } = typeof seed === 'string' ? { title: seed } : seed;
         const taskNode = await authorGraph.createNode(goal.id, {
           createdByAgentId: input.createdByAgentId,

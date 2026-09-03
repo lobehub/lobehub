@@ -363,38 +363,4 @@ describe('goal create command', () => {
       }),
     );
   });
-
-  it('keeps the deprecated Work flags as aliases', async () => {
-    mockClient.goal.create.mutate.mockResolvedValue({
-      data: {
-        decisions: [],
-        edges: [],
-        events: [],
-        goal: { id: 'goal-1', requirement: null, status: 'planning', title: 'Fix bugs' },
-        nodes: [],
-        workVersions: [],
-      },
-    });
-
-    await createProgram().parseAsync([
-      'node',
-      'test',
-      'goal',
-      'create',
-      'Fix bugs',
-      '--work',
-      'Legacy seed',
-      '--max-attempts-per-work',
-      '2',
-    ]);
-
-    expect(mockClient.goal.create.mutate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        config: expect.objectContaining({
-          recovery: expect.objectContaining({ maxAttemptsPerTask: 2 }),
-        }),
-        tasks: ['Legacy seed'],
-      }),
-    );
-  });
 });

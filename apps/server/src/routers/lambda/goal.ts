@@ -146,19 +146,6 @@ export const goalRouter = router({
             ]),
           )
           .optional(),
-        /**
-         * @deprecated Legacy name of `tasks` from before the graph-node
-         * "Work" → "Task" wording rename; pre-rename CLIs still send it.
-         * `tasks` wins when both are present.
-         */
-        work: z
-          .array(
-            z.union([
-              z.string().min(1),
-              z.object({ description: z.string().optional(), title: z.string().min(1) }),
-            ]),
-          )
-          .optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -271,22 +258,7 @@ export const goalRouter = router({
         statuses: z.array(z.enum(goalStatuses)).optional(),
       }),
     )
-    .query(async ({ input, ctx }) => {
-      const result = await ctx.goalModel.list(input);
-      return {
-        ...result,
-        goals: result.goals.map((item) => ({
-          ...item,
-          /**
-           * @deprecated Duplicates of `taskDone` / `taskTotal` under their
-           * pre-rename names — deployed `lh` CLIs still read `workDone` /
-           * `workTotal`. Drop once those clients are off the old keys.
-           */
-          workDone: item.taskDone,
-          workTotal: item.taskTotal,
-        })),
-      };
-    }),
+    .query(async ({ input, ctx }) => ctx.goalModel.list(input)),
 
   pause: goalWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
     try {

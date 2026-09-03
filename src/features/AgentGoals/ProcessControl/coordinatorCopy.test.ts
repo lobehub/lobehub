@@ -69,11 +69,6 @@ describe('coordinatorReasonCopy', () => {
     expect(coordinatorReasonCopy('Task attempt budget was exhausted')).toEqual({
       key: 'goalProcess.gate.reason.attemptBudgetExhausted',
     });
-    // Gates opened before the graph-node "Work" → "Task" rename keep the old
-    // reason in the append-only audit trail, so both wordings must localize.
-    expect(coordinatorReasonCopy('Work attempt budget was exhausted')).toEqual({
-      key: 'goalProcess.gate.reason.attemptBudgetExhausted',
-    });
     expect(
       coordinatorReasonCopy('Goal cost budget was exhausted after an operation was abandoned'),
     ).toEqual({ key: 'goalProcess.gate.reason.costBudgetExhausted' });

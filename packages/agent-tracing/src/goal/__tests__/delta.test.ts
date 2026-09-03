@@ -145,18 +145,4 @@ describe('buildGraphShape', () => {
       tasksCompleted: 1,
     });
   });
-
-  it('still counts legacy trajectories whose executable nodes carry kind `work`', () => {
-    // Trajectories recorded before the node-kind rename are immutable; the
-    // shape metrics must keep reading them.
-    const state = graph({
-      nodes: [node('a', { kind: 'work', status: 'resolved' }), node('b', { kind: 'work' })],
-    });
-
-    expect(buildGraphShape(state)).toMatchObject({
-      tasksOpen: 1,
-      tasksReady: 1,
-      tasksCompleted: 1,
-    });
-  });
 });

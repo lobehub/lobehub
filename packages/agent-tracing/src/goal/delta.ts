@@ -149,19 +149,12 @@ export const reconstructFinalGraph = (trajectory: GoalTrajectory): GoalGraphStat
 
 const TERMINAL_NODE_STATUSES = new Set(['resolved', 'rejected', 'retired']);
 
-/**
- * Executable graph nodes. `task` is the current kind literal; `work` is what
- * trajectories recorded before the node-kind rename carry, and those traces
- * are immutable — dropping the legacy literal would zero their task metrics.
- */
-export const EXECUTABLE_NODE_KINDS = new Set(['task', 'work']);
-
 /** Cheap shape metrics for one graph state. */
 export const buildGraphShape = (state: GoalGraphState): GoalGraphShape => {
   const resolvedNodeIds = new Set(
     state.nodes.filter((node) => node.status === 'resolved').map((node) => node.id),
   );
-  const taskNodes = state.nodes.filter((node) => EXECUTABLE_NODE_KINDS.has(node.kind));
+  const taskNodes = state.nodes.filter((node) => node.kind === 'task');
   const open = taskNodes.filter((node) => !TERMINAL_NODE_STATUSES.has(node.status));
 
   const ready = open.filter((node) =>

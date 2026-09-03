@@ -303,11 +303,5 @@ export interface InitialGoalOverviewContext {
     title: string;
   };
   pendingDecisions: GoalOverviewDecision[];
-  tasks?: GoalOverviewTaskItem[];
-  /**
-   * @deprecated Legacy name of {@link tasks} from before the graph-node
-   * "Work" → "Task" wording rename. Only read as a fallback for payloads built
-   * by pre-rename clients; new producers must write `tasks`.
-   */
-  work?: GoalOverviewTaskItem[];
+  tasks: GoalOverviewTaskItem[];
 }

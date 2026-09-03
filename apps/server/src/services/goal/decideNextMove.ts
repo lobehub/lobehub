@@ -11,15 +11,7 @@ export { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
 
 /** Reason strings the recovery paths key off, written by the settle path. */
 export const LEASE_EXPIRED_ERROR = 'Goal Task operation lease expired.';
-/**
- * Value written before the graph-node "Work" → "Task" wording rename. Task rows
- * paused before that deploy still carry it, so every comparison accepts both.
- */
-export const LEGACY_LEASE_EXPIRED_ERROR = 'Goal Work operation lease expired.';
 export const VERIFICATION_FAILED_ERROR = 'Delivery did not pass verification.';
-
-const isLeaseExpiredError = (error: TaskItem['error']): boolean =>
-  error === LEASE_EXPIRED_ERROR || error === LEGACY_LEASE_EXPIRED_ERROR;
 
 export const TERMINAL_NODE_STATUSES = new Set(['resolved', 'rejected', 'retired']);
 
@@ -90,7 +82,7 @@ export const needsBudget = (task?: TaskItem | null): boolean => {
   if (task === null) return false;
   // A failure the coordinator can retry spends money too.
   if (task.status === 'paused') {
-    return isLeaseExpiredError(task.error) || task.error === VERIFICATION_FAILED_ERROR;
+    return task.error === LEASE_EXPIRED_ERROR || task.error === VERIFICATION_FAILED_ERROR;
   }
   return !['completed', 'failed', 'canceled', 'running', 'scheduled'].includes(task.status);
 };
@@ -400,7 +392,7 @@ const decideForTask = (
     if (
       budget?.deadlinePassed &&
       task.status === 'paused' &&
-      (isLeaseExpiredError(task.error) || task.error === VERIFICATION_FAILED_ERROR)
+      (task.error === LEASE_EXPIRED_ERROR || task.error === VERIFICATION_FAILED_ERROR)
     ) {
       return {
         ...base,
@@ -409,7 +401,7 @@ const decideForTask = (
         outcome: 'no_progress',
       };
     }
-    if (task.status === 'paused' && isLeaseExpiredError(task.error)) {
+    if (task.status === 'paused' && task.error === LEASE_EXPIRED_ERROR) {
       if (!capacity) return 'needs-capacity';
       return {
         ...base,

@@ -14,10 +14,7 @@ export type BuildGoalOverviewPromptInput = InitialGoalOverviewContext;
  * Goal overview prompt for the goal-page conversational reference.
  */
 export const buildGoalOverviewPrompt = (input: BuildGoalOverviewPromptInput): string => {
-  const { findings, goal, pendingDecisions } = input;
-  // `work` is the pre-rename key: a payload built by an older client may still
-  // carry it, and dropping those rows would silently blind the agent.
-  const tasks = input.tasks ?? input.work ?? [];
+  const { findings, goal, pendingDecisions, tasks } = input;
 
   const lines: string[] = [
     '<goal_overview>',
