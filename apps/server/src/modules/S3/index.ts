@@ -99,10 +99,12 @@ export class S3 {
     return this.client.send(command);
   }
 
-  public async getFileContent(key: string): Promise<string> {
+  public async getFileContent(key: string, byteLength?: number): Promise<string> {
+    const boundedLength = byteLength ? Math.max(1, Math.floor(byteLength)) : undefined;
     const command = new GetObjectCommand({
       Bucket: this.bucket,
       Key: key,
+      ...(boundedLength ? { Range: `bytes=0-${boundedLength - 1}` } : {}),
     });
 
     const response = await this.client.send(command);
