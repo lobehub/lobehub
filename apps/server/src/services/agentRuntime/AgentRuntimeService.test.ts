@@ -1088,6 +1088,46 @@ describe('AgentRuntimeService', () => {
       );
     });
 
+    it('should abort a long step when an old worker writes only interrupted state', async () => {
+      vi.useFakeTimers();
+      const mockStepResult = {
+        events: [],
+        newState: { ...mockState, status: 'running', stepCount: 2 },
+        nextContext: mockParams.context,
+      };
+
+      try {
+        vi.spyOn(service as any, 'createAgentRuntime').mockImplementation(
+          ({ abortSignal }: { abortSignal: AbortSignal }) => ({
+            runtime: {
+              step: vi.fn(
+                () =>
+                  new Promise((resolve) => {
+                    abortSignal.addEventListener('abort', () => resolve(mockStepResult), {
+                      once: true,
+                    });
+                  }),
+              ),
+            },
+          }),
+        );
+        mockCoordinator.loadAgentState
+          .mockResolvedValueOnce(mockState)
+          .mockResolvedValue({ ...mockState, status: 'interrupted' });
+        mockCoordinator.isInterrupted.mockResolvedValue(false);
+
+        const execution = service.executeStep(mockParams);
+        await vi.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(30_000);
+        const result = await execution;
+
+        expect(result.state).toEqual(expect.objectContaining({ status: 'interrupted' }));
+        expect(result.nextStepScheduled).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('should resolve pending client tools when interruption races the parked result', async () => {
       const completedTool = {
         apiName: 'calculate',
@@ -1701,6 +1741,19 @@ describe('AgentRuntimeService', () => {
       await expect(service.startExecution(mockParams)).rejects.toThrow(
         'Operation test-operation-1 is in error state',
       );
+    });
+
+    it('should reject restarting an interrupted operation', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        ...mockState,
+        status: 'interrupted',
+      });
+
+      await expect(service.startExecution(mockParams)).rejects.toThrow(
+        'Operation test-operation-1 is interrupted',
+      );
+      expect(mockCoordinator.saveAgentState).not.toHaveBeenCalled();
+      expect(mockQueueService.scheduleMessage).not.toHaveBeenCalled();
     });
   });
 

@@ -145,6 +145,13 @@ const STEP_LOCK_TTL_SECONDS = 120;
  * is the only way a running tool learns it should stop.
  */
 const STEP_ABORT_POLL_INTERVAL_MS = 2_000;
+/**
+ * Temporary compatibility cadence for interrupts written by pre-sentinel
+ * workers during a rolling deployment. Remove after every worker writes the
+ * sentinel; keeping this much slower than the sentinel poll preserves most of
+ * the Redis bandwidth reduction in the meantime.
+ */
+const LEGACY_INTERRUPT_STATE_POLL_INTERVAL_MS = 30_000;
 /** Cap on the exponential backoff multiplier after consecutive poll failures. */
 const STEP_ABORT_POLL_MAX_BACKOFF = 8;
 const STEP_LOCK_HEARTBEAT_MS = 30_000;
@@ -1768,11 +1775,23 @@ export class AgentRuntimeService {
         // spikes exactly when the store is already struggling. Each read is
         // scheduled only after the previous one settles, and failures back off.
         let abortPollFailures = 0;
+        let lastLegacyInterruptStatePollAt = Date.now();
         const pollForAbort = async () => {
           try {
-            // Sentinel key only: the full state blob runs to hundreds of KB
-            // and re-downloading it every interval dominated Redis bandwidth.
-            const interrupted = await this.coordinator.isInterrupted(operationId);
+            // Prefer the sentinel. During the first rolling deployment, an old
+            // worker can still write only the authoritative state, so sample
+            // that large blob at a much lower cadence until all writers have
+            // sentinel support.
+            let interrupted = await this.coordinator.isInterrupted(operationId);
+            const now = Date.now();
+            if (
+              !interrupted &&
+              now - lastLegacyInterruptStatePollAt >= LEGACY_INTERRUPT_STATE_POLL_INTERVAL_MS
+            ) {
+              lastLegacyInterruptStatePollAt = now;
+              interrupted =
+                (await this.coordinator.loadAgentState(operationId))?.status === 'interrupted';
+            }
             abortPollFailures = 0;
             if (interrupted) {
               stepAbortController.abort();
@@ -2645,6 +2664,10 @@ export class AgentRuntimeService {
 
       if (currentState.status === 'error') {
         throw new Error(`Operation ${operationId} is in error state`);
+      }
+
+      if (currentState.status === 'interrupted') {
+        throw new Error(`Operation ${operationId} is interrupted`);
       }
 
       // Build execution context
