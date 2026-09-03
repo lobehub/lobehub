@@ -2136,10 +2136,12 @@ export class AgentModel {
       // THAT owner's scope. Handing the agent over would either silently
       // republish the previous owner's grants under a new identity, or leave
       // the visitor threads dangling under a user that no longer owns them.
-      // The owner must turn sharing off and delete the share row first; a
-      // same-owner personal ↔ workspace move keeps the row (it is paused via
-      // the workspaceId join in `isRunStillAuthorized`). Fail the whole
-      // batch, consistent with the guards above.
+      // Disabling sharing keeps the row as `private`, so this is a hard stop
+      // until the row is removed (`AgentShareModel.deleteByAgentId`, which has
+      // no product entry point yet — a deliberate follow-up). A same-owner
+      // personal ↔ workspace move keeps the row (it is paused via the
+      // workspaceId join in `isRunStillAuthorized`). Fail the whole batch,
+      // consistent with the guards above.
       const sharedAgentIds = foundAgents
         .filter((agent) => agent.userId !== targetUserId)
         .map((agent) => agent.id);

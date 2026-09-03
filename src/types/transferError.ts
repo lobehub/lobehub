@@ -20,8 +20,8 @@ export const TransferErrorCode = {
   /**
    * The agent still carries an `agent_shares` row, and changing its owner
    * would republish the previous owner's grants / spend cap and orphan the
-   * visitor threads. The owner must disable sharing and delete the share row
-   * before the agent can change hands.
+   * visitor threads. Disabling sharing keeps the row, so the block lifts only
+   * once the share row itself is removed.
    */
   SharedTransferBlocked: 'AGENT_SHARED_TRANSFER_BLOCKED',
   /** Member transfer: the picked recipient already owns the resource (or is the initiator). */

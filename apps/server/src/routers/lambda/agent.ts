@@ -1179,8 +1179,7 @@ export const agentRouter = router({
           throw new TRPCError({
             cause: { data: { code: TransferErrorCode.SharedTransferBlocked } },
             code: 'PRECONDITION_FAILED',
-            message:
-              'This agent is currently shared. Disable sharing and delete the share link before changing its owner.',
+            message: 'This agent has a share link, so its owner cannot be changed.',
           });
         }
         throw error;
@@ -1362,8 +1361,7 @@ export const agentRouter = router({
           throw new TRPCError({
             cause: { data: { code: TransferErrorCode.SharedTransferBlocked } },
             code: 'PRECONDITION_FAILED',
-            message:
-              'One of these agents is currently shared. Disable sharing and delete the share link before changing its owner.',
+            message: 'One of these agents has a share link, so its owner cannot be changed.',
           });
         }
         throw error;

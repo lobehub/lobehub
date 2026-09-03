@@ -526,6 +526,107 @@ describe('useAgentShare · agent identity change', () => {
     });
     expect(result.current.share?.shareConfig.maxTurnsPerTopic).toBe(100);
   });
+
+  // Comparing the bare `agentId` string is not enough: after an A → B → A
+  // round trip the hook tracks `agent-A` again, so a write issued under the
+  // FIRST visit would pass an id-only check, decrement the second visit's
+  // pending-write counter, and adopt its stale response over edits issued
+  // after the return. Each write must be pinned to an identity generation.
+  it("drops agent A's write from a previous visit after navigating A → B → A", async () => {
+    const shareA = buildShare({ maxTurnsPerTopic: 20 });
+    const shareB = buildShare({ maxTurnsPerTopic: 99 });
+    swr.seed(shareA);
+
+    let releaseFirst: () => void = () => {};
+    service.updateShareConfig.mockImplementationOnce(
+      (_agentId: string, patch: any) =>
+        new Promise((resolve) => {
+          releaseFirst = () =>
+            resolve({ ...shareA, shareConfig: { ...shareA.shareConfig, ...patch } });
+        }),
+    );
+
+    const { result, rerender } = renderHook(({ agentId }) => useAgentShare(agentId), {
+      initialProps: { agentId: 'agent-A' },
+    });
+
+    // First visit to A: an edit that stays in flight across the round trip.
+    let firstEdit: Promise<unknown> = Promise.resolve();
+    await act(async () => {
+      firstEdit = result.current.updateConfig({ maxTurnsPerTopic: 5 });
+    });
+    await waitFor(() => expect(service.updateShareConfig).toHaveBeenCalledTimes(1));
+
+    // A → B → A without unmount; SWR resolves each key switch to its row.
+    act(() => {
+      rerender({ agentId: 'agent-B' });
+    });
+    act(() => {
+      swr.set(shareB);
+    });
+    act(() => {
+      rerender({ agentId: 'agent-A' });
+    });
+    act(() => {
+      swr.set(shareA);
+    });
+    expect(result.current.share?.shareConfig.maxTurnsPerTopic).toBe(20);
+
+    // Second visit to A: a new edit whose request also stays in flight, so the
+    // first visit's late response has a pending write to race against.
+    let releaseSecond: () => void = () => {};
+    service.updateShareConfig.mockImplementationOnce(
+      (_agentId: string, patch: any) =>
+        new Promise((resolve) => {
+          releaseSecond = () =>
+            resolve({ ...shareA, shareConfig: { ...shareA.shareConfig, ...patch } });
+        }),
+    );
+    let secondEdit: Promise<unknown> = Promise.resolve();
+    await act(async () => {
+      secondEdit = result.current.updateConfig({ maxTurnsPerTopic: 8 });
+    });
+    await waitFor(() => expect(service.updateShareConfig).toHaveBeenCalledTimes(2));
+    expect(service.updateShareConfig).toHaveBeenNthCalledWith(2, 'agent-A', {
+      maxTurnsPerTopic: 8,
+    });
+    expect(result.current.share?.shareConfig.maxTurnsPerTopic).toBe(8);
+
+    // The FIRST visit's response lands while the second edit is still
+    // pending. It must be dropped: the optimistic 8 stays, not the stale 5.
+    await act(async () => {
+      releaseFirst();
+      await firstEdit;
+    });
+    expect(result.current.share?.shareConfig.maxTurnsPerTopic).toBe(8);
+
+    // The second edit's own response is still adopted normally — proving the
+    // pending-write counter was not corrupted by the late first response.
+    await act(async () => {
+      releaseSecond();
+      await secondEdit;
+    });
+    expect(result.current.share?.shareConfig.maxTurnsPerTopic).toBe(8);
+
+    // With the queue drained, a server re-seed is adopted again (idle path):
+    // the counter is back at zero rather than negative or stuck.
+    act(() => {
+      swr.set(buildShare({ maxTurnsPerTopic: 42 }));
+    });
+    expect(result.current.share?.shareConfig.maxTurnsPerTopic).toBe(42);
+    service.updateShareConfig.mockImplementationOnce(async (_agentId: string, patch: any) => ({
+      ...shareA,
+      shareConfig: { ...shareA.shareConfig, ...patch },
+    }));
+    await act(async () => {
+      await result.current.updateConfig((current) => ({
+        maxTurnsPerTopic: (current.maxTurnsPerTopic ?? 0) + 1,
+      }));
+    });
+    expect(service.updateShareConfig).toHaveBeenNthCalledWith(3, 'agent-A', {
+      maxTurnsPerTopic: 43,
+    });
+  });
 });
 
 describe('useAgentShare · getShareStatus failure', () => {

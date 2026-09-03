@@ -88,6 +88,18 @@ export const useAgentShare = (agentId: string) => {
    */
   const identityRef = useRef(agentId);
   /**
+   * Monotonic counter bumped on every `agentId` change. Comparing the bare
+   * `agentId` string is not enough to tell a stale write from a current one:
+   * after an A → B → A round trip `identityRef` reads `A` again, so a write
+   * issued under the FIRST A (still in flight, its counter already zeroed by
+   * the reset below) would pass an id-only check and decrement the second
+   * A's `pendingWritesRef` — possibly below zero — and `commitIfCurrent`
+   * would adopt its stale response over edits issued after the return. Each
+   * write captures the generation it was issued under and compares against
+   * this instead, so the two A's are distinct.
+   */
+  const generationRef = useRef(0);
+  /**
    * Every mutation replaces the whole row in the SWR cache, so two writes that
    * resolve out of order would let the older response win — see `enqueue`
    * below. Declared here (rather than next to `enqueue`) so the identity-change
@@ -112,6 +124,7 @@ export const useAgentShare = (agentId: string) => {
   // below), so nothing is lost — the request already landed server-side.
   if (identityRef.current !== agentId) {
     identityRef.current = agentId;
+    generationRef.current += 1;
     latestConfigRef.current = undefined;
     sendConfigRef.current = undefined;
     pendingWritesRef.current = 0;
@@ -130,8 +143,8 @@ export const useAgentShare = (agentId: string) => {
   }, [share]);
 
   /**
-   * Apply a write's server response to the shared refs only if `agentId`
-   * hasn't changed since the write was issued. A write started for agent A
+   * Apply a write's server response to the shared refs only if the identity
+   * generation hasn't moved since the write was issued. A write started for agent A
    * can still resolve after navigating to agent B (this hook instance is
    * reused, not remounted) — its resolved value must be dropped instead of
    * clobbering `latestConfigRef`/the SWR cache entry B's edits now derive
@@ -156,8 +169,8 @@ export const useAgentShare = (agentId: string) => {
    * sent), so only it is allowed to update the shared refs / SWR cache.
    */
   const commitIfCurrent = useCallback(
-    async (writeIdentity: string, updated: AgentShareInfo) => {
-      if (identityRef.current !== writeIdentity) return;
+    async (writeGeneration: number, updated: AgentShareInfo) => {
+      if (generationRef.current !== writeGeneration) return;
       if (pendingWritesRef.current > 1) return;
       latestConfigRef.current = updated?.shareConfig ?? null;
       // The server response reflects every write processed so far, so it is
@@ -186,16 +199,20 @@ export const useAgentShare = (agentId: string) => {
    * comment above. Increments as soon as the write is issued (covers time
    * spent queued behind an earlier write, not just its own network round
    * trip) and decrements once it settles either way.
+   *
+   * The task receives the identity generation it was issued under, so it can
+   * hand that to `commitIfCurrent` / its own late identity checks.
    */
   const runWrite = useCallback(
-    <T>(task: () => Promise<T>): Promise<T> => {
+    <T>(task: (generation: number) => Promise<T>): Promise<T> => {
+      const generation = generationRef.current;
       pendingWritesRef.current += 1;
-      return enqueue(task)
+      return enqueue(() => task(generation))
         .finally(() => {
           // The reset on identity change already zeroed this counter for the
-          // NEW agent; a write issued under the OLD agent must not decrement it
-          // again once it settles late.
-          if (identityRef.current === agentId) pendingWritesRef.current -= 1;
+          // NEW generation; a write issued under an OLD one must not decrement
+          // it again once it settles late.
+          if (generationRef.current === generation) pendingWritesRef.current -= 1;
         })
         .catch((error) => {
           // A failed write may have been the LAST one queued, in which case
@@ -203,18 +220,19 @@ export const useAgentShare = (agentId: string) => {
           // on the assumption that this one would carry their combined effect.
           // Nothing else will refresh the cache (focus revalidation is off), so
           // re-read the server truth here; the idle re-sync effect re-seeds
-          // `latestConfigRef` once the queue drains. Skipped once `agentId`
-          // has moved on — that `mutate` belongs to a different agent.
-          if (identityRef.current === agentId) void mutate();
+          // `latestConfigRef` once the queue drains. Skipped once the identity
+          // generation has moved on — that `mutate` belongs to another agent
+          // (or an earlier visit to this one).
+          if (generationRef.current === generation) void mutate();
           throw error;
         });
     },
-    [agentId, enqueue, mutate],
+    [enqueue, mutate],
   );
 
   const enable = useCallback(
     () =>
-      runWrite(async () => {
+      runWrite(async (generation) => {
         // `create` returns any pre-existing row untouched, so a legacy
         // `private` row still needs the explicit flip to `link`.
         const created = await agentShareService.enableShare(agentId, 'link');
@@ -222,7 +240,7 @@ export const useAgentShare = (agentId: string) => {
           created.visibility === 'link'
             ? created
             : await agentShareService.updateVisibility(agentId, 'link');
-        await commitIfCurrent(agentId, updated);
+        await commitIfCurrent(generation, updated);
       }),
     [agentId, commitIfCurrent, runWrite],
   );
@@ -249,7 +267,7 @@ export const useAgentShare = (agentId: string) => {
         },
       );
 
-      return runWrite(async () => {
+      return runWrite(async (generation) => {
         // Resolve the OUTGOING payload now, not at call time: `enqueue`
         // guarantees no earlier queued write's task body is still running by
         // the time this one starts, so `sendConfigRef` already reflects every
@@ -257,12 +275,13 @@ export const useAgentShare = (agentId: string) => {
         // failure) instead of the optimistic UI projection above, which
         // cannot un-bake a since-failed edit once composed into it.
         //
-        // Skip touching the shared ref once `agentId` has moved on (this task
-        // belongs to an abandoned identity, per `commitIfCurrent`'s doc): fall
+        // Skip touching the shared ref once the identity generation has moved
+        // on (this task belongs to an abandoned identity, per
+        // `commitIfCurrent`'s doc): fall
         // back to the call-time `base` this closure already captured, which
         // reproduces the pre-fix behavior for that edge case instead of
         // reading/mutating a ref that now belongs to a different agent.
-        const forCurrentIdentity = identityRef.current === agentId;
+        const forCurrentIdentity = generationRef.current === generation;
         // `sendConfigRef.current` is only ever `null`/`undefined` in lockstep
         // with `latestConfigRef` (see both refs' reset points above), and
         // `base` already proved non-null via the guard at the top of this
@@ -274,14 +293,14 @@ export const useAgentShare = (agentId: string) => {
 
         try {
           const updated = await agentShareService.updateShareConfig(agentId, resolved);
-          await commitIfCurrent(agentId, updated);
+          await commitIfCurrent(generation, updated);
         } catch (error) {
           // Roll back this write's contribution so the NEXT queued write's
           // send-time resolution does not see it. Re-check identity rather
           // than reusing `forCurrentIdentity`: it may have changed while the
           // request was in flight, in which case `sendConfigRef` now belongs
           // to a different agent and must be left alone.
-          if (identityRef.current === agentId) sendConfigRef.current = sendBase;
+          if (generationRef.current === generation) sendConfigRef.current = sendBase;
           // The optimistic projection is dropped by the server re-read that
           // `runWrite` issues for every failed write.
           throw error;
@@ -299,18 +318,18 @@ export const useAgentShare = (agentId: string) => {
    */
   const disable = useCallback(
     () =>
-      runWrite(async () => {
+      runWrite(async (generation) => {
         const disabled = await agentShareService.disableShare(agentId);
-        await commitIfCurrent(agentId, disabled);
+        await commitIfCurrent(generation, disabled);
       }),
     [agentId, commitIfCurrent, runWrite],
   );
 
   const updateSlug = useCallback(
     (slug: string | null) =>
-      runWrite(async () => {
+      runWrite(async (generation) => {
         const updated = await agentShareService.updateSlug(agentId, slug);
-        await commitIfCurrent(agentId, updated);
+        await commitIfCurrent(generation, updated);
       }),
     [agentId, commitIfCurrent, runWrite],
   );

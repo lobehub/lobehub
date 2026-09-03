@@ -82,8 +82,8 @@ describe('AgentModel.transferAgentOwnership', () => {
     ).rejects.toThrow(AGENT_SHARED_TRANSFER_BLOCKED);
 
     // Guard fires before any mutation: the agent stays with the previous
-    // owner and the share row is untouched. The owner must disable sharing
-    // and delete the share row before handing the agent over.
+    // owner and the share row is untouched. The block lifts only once the
+    // share row itself is removed (no product entry point yet).
     const [row] = await serverDB.select().from(agents).where(eq(agents.id, agent.id));
     expect(row.userId).toBe(ownerId);
     const rows = await serverDB.select().from(agentShares).where(eq(agentShares.agentId, agent.id));

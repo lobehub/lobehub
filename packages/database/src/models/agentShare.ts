@@ -389,8 +389,9 @@ export class AgentShareModel {
    * `agents.userId` while this row exists (`AGENT_SHARED_TRANSFER_BLOCKED`)
    * — the share carries the previous owner's grants and spend cap, and
    * visitor conversations reached through the link live under (agentId,
-   * senderId) within that owner's scope, so the owner must disable sharing
-   * and delete this row before the agent can change hands.
+   * senderId) within that owner's scope. Disabling sharing keeps the row
+   * (`private`), so the block lifts only once the row itself is removed;
+   * a product entry point for that is a follow-up, not part of this model.
    *
    * Deliberately cheap (one indexed lookup + a primary-key join): it runs once
    * per runtime step. Returns `false` — never throws — for an ordinary
