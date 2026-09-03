@@ -385,9 +385,12 @@ export class AgentShareModel {
    * after the share was effectively paused. Same-owner personal ↔ workspace
    * moves preserve the row deliberately, so returning the agent to personal
    * scope resumes the same link. An OWNERSHIP TRANSFER is different:
-   * `AgentModel.transferAgents` now hard-deletes the row when
-   * `agents.userId` changes, since the share carries the previous owner's
-   * grants and spend cap — the new owner must publish explicitly.
+   * `AgentModel.transferAgents` / `transferAgentOwnership` REFUSE to change
+   * `agents.userId` while this row exists (`AGENT_SHARED_TRANSFER_BLOCKED`)
+   * — the share carries the previous owner's grants and spend cap, and
+   * visitor conversations reached through the link live under (agentId,
+   * senderId) within that owner's scope, so the owner must disable sharing
+   * and delete this row before the agent can change hands.
    *
    * Deliberately cheap (one indexed lookup + a primary-key join): it runs once
    * per runtime step. Returns `false` — never throws — for an ordinary

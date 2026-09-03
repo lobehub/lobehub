@@ -13,7 +13,11 @@ import {
 import { notifyResourceTransfer } from '@/business/server/resource-transfer/notify';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
-import { AgentModel, AgentOwnedByGroupError } from '@/database/models/agent';
+import {
+  AGENT_SHARED_TRANSFER_BLOCKED,
+  AgentModel,
+  AgentOwnedByGroupError,
+} from '@/database/models/agent';
 import { AGENT_COPY_IN_PROGRESS } from '@/database/models/agentCopyJob';
 import { AgentShareModel } from '@/database/models/agentShare';
 import {
@@ -1171,6 +1175,14 @@ export const agentRouter = router({
             message: 'A previous transfer of this agent is still migrating its history',
           });
         }
+        if (error instanceof Error && error.message === AGENT_SHARED_TRANSFER_BLOCKED) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.SharedTransferBlocked } },
+            code: 'PRECONDITION_FAILED',
+            message:
+              'This agent is currently shared. Disable sharing and delete the share link before changing its owner.',
+          });
+        }
         throw error;
       }
 
@@ -1344,6 +1356,14 @@ export const agentRouter = router({
             cause: { data: { code: TransferErrorCode.TransferInProgress } },
             code: 'CONFLICT',
             message: 'A previous transfer of these agents is still migrating their history',
+          });
+        }
+        if (error instanceof Error && error.message === AGENT_SHARED_TRANSFER_BLOCKED) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.SharedTransferBlocked } },
+            code: 'PRECONDITION_FAILED',
+            message:
+              'One of these agents is currently shared. Disable sharing and delete the share link before changing its owner.',
           });
         }
         throw error;

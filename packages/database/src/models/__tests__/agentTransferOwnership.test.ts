@@ -35,7 +35,7 @@ import {
   workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { AGENT_OWNERSHIP_STALE, AgentModel } from '../agent';
+import { AGENT_OWNERSHIP_STALE, AGENT_SHARED_TRANSFER_BLOCKED, AgentModel } from '../agent';
 import { AGENT_TRANSFER_IN_PROGRESS, AgentTransferJobModel } from '../agentTransferJob';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -71,16 +71,23 @@ afterEach(async () => {
 });
 
 describe('AgentModel.transferAgentOwnership', () => {
-  it('revokes the previous owner’s agent share on handover', async () => {
+  it('rejects the handover while the agent still carries a share row', async () => {
     const agent = await ownerModel.create({ slug: 'shared-handover', title: 'Shared Handover' });
     await serverDB
       .insert(agentShares)
       .values({ agentId: agent.id, shareConfig: { monthlySpendLimit: 5 }, visibility: 'link' });
 
-    await handover({ agentId: agent.id, fromUserId: ownerId, toUserId: recipientId });
+    await expect(
+      handover({ agentId: agent.id, fromUserId: ownerId, toUserId: recipientId }),
+    ).rejects.toThrow(AGENT_SHARED_TRANSFER_BLOCKED);
 
+    // Guard fires before any mutation: the agent stays with the previous
+    // owner and the share row is untouched. The owner must disable sharing
+    // and delete the share row before handing the agent over.
+    const [row] = await serverDB.select().from(agents).where(eq(agents.id, agent.id));
+    expect(row.userId).toBe(ownerId);
     const rows = await serverDB.select().from(agentShares).where(eq(agentShares.agentId, agent.id));
-    expect(rows).toHaveLength(0);
+    expect(rows).toHaveLength(1);
   });
 
   it('flips only the agent owner; scope, slug and visibility stay put', async () => {
