@@ -107,7 +107,6 @@
   "response.RemoteServerTimeout": "La connessione al server è scaduta. Questo di solito indica un problema con la rete locale — controlla la qualità della rete, il proxy o le impostazioni VPN e riprova.",
   "response.RemoteServerUnreachable": "Non è stato possibile raggiungere il server. Questo di solito indica un problema con la rete locale — controlla la connessione a Internet, il proxy o le impostazioni VPN e riprova.",
   "response.ServerAgentRuntimeError": "Spiacenti, il servizio Agent non è disponibile. Riprova più tardi o contattaci via email.",
-  "response.SubscriptionKeyMismatch": "Ci scusiamo per l'inconveniente. A causa di un malfunzionamento temporaneo, il tuo abbonamento è inattivo. Clicca sul pulsante per ripristinarlo o contattaci via email.",
   "response.SubscriptionPlanLimit": "Hai esaurito i punti del tuo abbonamento e non puoi usare questa funzione. Passa a un piano superiore o configura una API personalizzata.",
   "response.SubscriptionPlanLimitUltimate": "Hai esaurito i punti del tuo abbonamento e non puoi usare questa funzione. Ricarica i crediti o configura una API personalizzata.",
   "response.SystemTimeNotMatchError": "Spiacenti, l'orario del tuo sistema non corrisponde a quello del server. Verifica l'orologio e riprova.",

@@ -6,62 +6,15 @@ import type {
   AgentState,
   InstructionExecutor,
 } from '../types';
+import { publishPersistError, settleAbortedToolRows } from './abortedToolRows';
 
 const BLOCKED_TOOL_CONTENT = 'Blocked by security/privacy.';
 const BLOCKED_TOOL_ERROR = 'blocked_by_security_privacy';
-const ABORTED_TOOL_CONTENT = 'Tool execution was aborted by user.';
 const USER_ABORTED_REASON = 'user_aborted';
 const USER_ABORTED_REASON_DETAIL = 'User aborted operation with pending tool calls';
-const TOOL_MESSAGE_PERSIST_PHASE = 'tool_message_persist';
 
 type RuntimeSessionWithEventCount = NonNullable<AgentRuntimeContext['session']> & {
   eventCount?: number;
-};
-
-const getErrorType = (error: unknown): string | undefined => {
-  if (!error || typeof error !== 'object') return;
-
-  const value = (error as { errorType?: unknown; name?: unknown; type?: unknown }).errorType;
-  if (typeof value === 'string' || typeof value === 'number') return String(value);
-
-  const type = (error as { type?: unknown }).type;
-  if (typeof type === 'string' || typeof type === 'number') return String(type);
-
-  const name = error instanceof Error ? error.name : undefined;
-  return name || undefined;
-};
-
-const getErrorMessage = (error: unknown): string => {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === 'string' && error) return error;
-  if (error && typeof error === 'object') {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === 'string' && message) return message;
-  }
-  return 'Unknown error';
-};
-
-const publishPersistError = async (host: AgentRuntimeHost, error: unknown) => {
-  const { stepIndex } = host.operation;
-
-  if (host.transports.stream.publishError) {
-    await host.transports.stream.publishError({
-      error,
-      phase: TOOL_MESSAGE_PERSIST_PHASE,
-      stepIndex,
-    });
-    return;
-  }
-
-  await host.transports.stream.publishEvent({
-    data: {
-      error: getErrorMessage(error),
-      errorType: getErrorType(error),
-      phase: TOOL_MESSAGE_PERSIST_PHASE,
-    },
-    stepIndex,
-    type: 'error',
-  });
 };
 
 const createSession = (state: AgentState, operationId: string): RuntimeSessionWithEventCount => ({
@@ -123,6 +76,7 @@ export const resolveBlockedTools =
         type: 'tool_end',
       });
 
+      let toolMessageId: string;
       try {
         const toolMessage = await transports.messages.createToolMessage({
           agentId,
@@ -142,14 +96,17 @@ export const resolveBlockedTools =
           tool_call_id: toolPayload.id,
           topicId,
         });
-        toolMessageIds.push(toolMessage.id);
+        toolMessageId = toolMessage.id;
+        toolMessageIds.push(toolMessageId);
       } catch (error) {
         await publishPersistError(host, error);
         throw error;
       }
 
+      /** Keep the persisted id so the next gateway step can resolve media refs. */
       newState.messages.push({
         content: result.content,
+        id: toolMessageId,
         role: 'tool',
         tool_call_id: toolPayload.id,
       });
@@ -186,17 +143,9 @@ export const resolveAbortedTools =
   async (instruction, state) => {
     const { payload } = instruction as Extract<AgentInstruction, { type: 'resolve_aborted_tools' }>;
     const { operation, transports } = host;
-    const agentId = operation.agentId ?? state.metadata?.agentId;
-    const groupId = operation.groupId ?? state.metadata?.groupId;
-    const threadId = operation.threadId ?? state.metadata?.threadId;
-    const topicId = operation.topicId ?? state.metadata?.topicId;
+    // Message ownership (agentId / groupId / threadId / topicId) is resolved by
+    // `settleAbortedToolRows`, which owns the row writes for every abort source.
     const events: AgentEvent[] = [];
-
-    if (!agentId) {
-      throw new Error(
-        `[resolve_aborted_tools] Missing agentId for tool messages (op=${operation.operationId})`,
-      );
-    }
 
     await transports.stream.publishEvent({
       data: {
@@ -210,47 +159,14 @@ export const resolveAbortedTools =
 
     const newState = structuredClone(state);
 
-    const existingToolMessageIds = payload.existingToolMessageIds ?? {};
-
-    for (const toolPayload of payload.toolsCalling) {
-      const existingMessageId = existingToolMessageIds[toolPayload.id];
-      try {
-        if (existingMessageId) {
-          // The approval pause already wrote a row for this call. Settle THAT
-          // row: inserting a second one would duplicate the tool in the turn
-          // and leave the original `pending`, so the approval card survives the
-          // Stop that was supposed to clear it.
-          await transports.messages.updateToolMessage(existingMessageId, {
-            content: ABORTED_TOOL_CONTENT,
-          });
-          await transports.messages.updateToolIntervention(existingMessageId, {
-            status: 'aborted',
-          });
-        } else {
-          await transports.messages.createToolMessage({
-            agentId,
-            content: ABORTED_TOOL_CONTENT,
-            groupId,
-            parentId: payload.parentMessageId,
-            plugin: toolPayload as any,
-            pluginIntervention: { status: 'aborted' },
-            role: 'tool',
-            threadId,
-            tool_call_id: toolPayload.id,
-            topicId,
-          });
-        }
-      } catch (error) {
-        await publishPersistError(host, error);
-        throw error;
-      }
-
-      newState.messages.push({
-        content: ABORTED_TOOL_CONTENT,
-        role: 'tool',
-        tool_call_id: toolPayload.id,
-      });
-    }
+    const { messages } = await settleAbortedToolRows({
+      existingToolMessageIds: payload.existingToolMessageIds,
+      host,
+      parentMessageId: payload.parentMessageId,
+      state,
+      toolsCalling: payload.toolsCalling,
+    });
+    newState.messages.push(...messages);
 
     newState.lastModified = new Date().toISOString();
     newState.status = 'done';

@@ -358,6 +358,26 @@ function renderMessageList(lines: string[], messages: any[], maxContentLen: numb
   }
 }
 
+/**
+ * `total (device Xms + transport Yms)` for a device-dispatched call.
+ *
+ * The split is the whole point of recording both clocks: it says how much of a
+ * device tool call was actual work and how much was getting there and back.
+ * Falls back to the total alone when the device reported nothing.
+ */
+function renderToolTiming(tool: NonNullable<StepSnapshot['toolsResult']>[number]): string {
+  const { deviceExecutionTimeMs, executionTimeMs } = tool;
+  if (executionTimeMs === undefined) return '';
+  if (deviceExecutionTimeMs === undefined) return dim(`  ${formatMs(executionTimeMs)}`);
+
+  const transport = Math.max(0, executionTimeMs - deviceExecutionTimeMs);
+
+  return dim(
+    `  ${formatMs(executionTimeMs)}` +
+      ` (device ${formatMs(deviceExecutionTimeMs)} + transport ${formatMs(transport)})`,
+  );
+}
+
 function renderToolStep(lines: string[], step: StepSnapshot, prefix: string): void {
   if (step.toolsResult) {
     for (let i = 0; i < step.toolsResult.length; i++) {
@@ -366,7 +386,7 @@ function renderToolStep(lines: string[], step: StepSnapshot, prefix: string): vo
       const connector = isLast ? '└─' : '├─';
       const status = tool.isSuccess === false ? red('✗') : green('✓');
       const name = tool.identifier || tool.apiName;
-      lines.push(`${prefix}${dim(connector)} Tool  ${name}  ${status}`);
+      lines.push(`${prefix}${dim(connector)} Tool  ${name}  ${status}${renderToolTiming(tool)}`);
     }
   }
 }

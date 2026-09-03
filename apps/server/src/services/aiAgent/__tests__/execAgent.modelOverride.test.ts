@@ -302,7 +302,11 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     expect(callArgs.agentConfig.chatConfig.enableAgentMode).toBe(false);
   });
 
-  it('ignores member overrides for the Agent author and uses the shared model and target', async () => {
+  // Model / mode overrides stay member-only, but the caller's own DEVICE
+  // override applies to the author too: a `local` pick binds their personal
+  // desktop, which the shared row must never reference (the server rejects
+  // it), so the author's pick lives in the same override slot members use.
+  it("ignores member model/mode overrides for the Agent author but applies the author's own device override", async () => {
     mockGetAgentConfig.mockResolvedValue({
       ...defaultAgentConfig,
       agencyConfig: {
@@ -330,7 +334,7 @@ describe('AiAgentService.execAgent - model/provider override', () => {
 
     const callArgs = mockCreateOperation.mock.calls[0][0];
     expect(callArgs.agentConfig).toMatchObject({
-      agencyConfig: { executionTarget: 'sandbox' },
+      agencyConfig: { boundDeviceId: 'member-device', executionTarget: 'local' },
       chatConfig: { enableAgentMode: true },
       model: 'gpt-4',
       provider: 'openai',
@@ -418,11 +422,11 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     expect(callArgs.agentConfig.provider).toBe('openai');
   });
 
-  it('ignores member device policy and overrides while the workspace Agent is private', async () => {
+  it("applies the owner's own device override while the workspace Agent is private, stripping the policy", async () => {
     mockGetAgentConfig.mockResolvedValue({
       ...defaultAgentConfig,
       agencyConfig: {
-        boundDeviceId: 'owner-device',
+        boundDeviceId: 'shared-device',
         executionTarget: 'device',
         executionTargetSelectionPolicy: 'fixed',
       },
@@ -430,7 +434,7 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     });
     mockGetPreference.mockResolvedValue({
       agentDeviceOverrides: {
-        'agent-1': { boundDeviceId: 'stale-member-device', executionTarget: 'local' },
+        'agent-1': { boundDeviceId: 'owner-desktop', executionTarget: 'local' },
       },
     });
     service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
@@ -439,8 +443,8 @@ describe('AiAgentService.execAgent - model/provider override', () => {
 
     const callArgs = mockCreateOperation.mock.calls[0][0];
     expect(callArgs.agentConfig.agencyConfig).toEqual({
-      boundDeviceId: 'owner-device',
-      executionTarget: 'device',
+      boundDeviceId: 'owner-desktop',
+      executionTarget: 'local',
     });
   });
 

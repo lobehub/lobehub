@@ -1,7 +1,8 @@
 'use client';
 
 import { type UISignalCallbacksBlock } from '@lobechat/types';
-import { Accordion, AccordionItem, Block, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
+import { Accordion, AccordionItem, Block, Flexbox, Icon, Markdown } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Radio } from 'lucide-react';
 import { memo, useState } from 'react';

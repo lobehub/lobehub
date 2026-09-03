@@ -7,6 +7,7 @@ import { AgentMigrationRepo } from '@/database/repositories/agentMigration';
 import { HomeRepository } from '@/database/repositories/home';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 import { type HomeBriefData, HomeService } from '@/server/services/home';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { after } from '@/server/utils/scheduleAfterResponse';
@@ -21,6 +22,23 @@ const homeProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => 
       agentModel: new AgentModel(ctx.serverDB, ctx.userId, workspaceId),
       homeRepository: new HomeRepository(ctx.serverDB, ctx.userId, workspaceId),
       homeService: new HomeService(ctx.userId),
+    },
+  });
+});
+
+const homeSearchProcedure = homeProcedure.use(async (opts) => {
+  const { ctx } = opts;
+  const workspaceId = ctx.workspaceId ?? undefined;
+  const ftsSearchRepo = await createFtsSearchRepo({
+    db: ctx.serverDB,
+    userId: ctx.userId,
+    usage: 'home_search',
+    workspaceId,
+  });
+
+  return opts.next({
+    ctx: {
+      homeRepository: new HomeRepository(ctx.serverDB, ctx.userId, workspaceId, ftsSearchRepo),
     },
   });
 });
@@ -74,7 +92,7 @@ export const homeRouter = router({
     return result;
   }),
 
-  searchAgents: homeProcedure
+  searchAgents: homeSearchProcedure
     .input(z.object({ keyword: z.string() }))
     .query(async ({ input, ctx }) => {
       return ctx.homeRepository.searchAgents(input.keyword);

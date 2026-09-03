@@ -834,6 +834,46 @@ describe('DocumentService', () => {
       expect(result.historyAppended).toBe(true);
     });
 
+    it('rejects the save with CONFLICT when expectedUpdatedAt no longer matches the stored row', async () => {
+      const storedUpdatedAt = new Date('2026-04-11T00:00:05.000Z');
+      mockDocumentModel.findById.mockResolvedValue(createCurrentDocument());
+      (mockDb as any).select = vi.fn(() => ({
+        from: () => ({
+          where: () => ({ for: vi.fn().mockResolvedValue([{ updatedAt: storedUpdatedAt }]) }),
+        }),
+      }));
+
+      await expect(
+        service.updateDocument('doc-1', {
+          content: 'stale retry payload',
+          expectedUpdatedAt: new Date('2026-04-11T00:00:00.000Z'),
+        }),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+      expect(mockDocumentModel.update).not.toHaveBeenCalled();
+    });
+
+    it('accepts the save when expectedUpdatedAt matches the stored row', async () => {
+      const storedUpdatedAt = new Date('2026-04-11T00:00:00.000Z');
+      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.findById.mockResolvedValue(createCurrentDocument());
+      (mockDb as any).select = vi.fn(() => ({
+        from: () => ({
+          where: () => ({ for: vi.fn().mockResolvedValue([{ updatedAt: storedUpdatedAt }]) }),
+        }),
+      }));
+
+      const result = await service.updateDocument('doc-1', {
+        content: 'retry payload',
+        expectedUpdatedAt: new Date('2026-04-11T00:00:00.000Z'),
+      });
+
+      expect(mockDocumentModel.update).toHaveBeenCalledWith(
+        'doc-1',
+        expect.objectContaining({ content: 'retry payload' }),
+      );
+      expect(result).toEqual({ historyAppended: false, id: 'doc-1' });
+    });
+
     it('should skip history when editorData is unchanged', async () => {
       const editorData = { blocks: [] };
       mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
@@ -1519,6 +1559,29 @@ describe('DocumentService', () => {
   });
 
   describe('trySaveCurrentDocumentHistory', () => {
+    it('should save an explicit repaired editor state instead of the persisted stale state', async () => {
+      const staleEditorData = {
+        root: { children: [{ children: [], type: 'paragraph' }], type: 'root' },
+      };
+      const repairedEditorData = {
+        root: { children: [{ children: [], id: 'repaired', type: 'paragraph' }], type: 'root' },
+      };
+      mockDocumentModel.findById.mockResolvedValue({
+        editorData: staleEditorData,
+        id: 'doc-1',
+      });
+      mockDocumentHistoryService.createHistory.mockResolvedValue({
+        id: 'history-1',
+        savedAt: new Date(),
+      });
+
+      await service.trySaveCurrentDocumentHistory('doc-1', 'llm_call', repairedEditorData);
+
+      expect(mockDocumentHistoryService.createHistory).toHaveBeenCalledWith(
+        expect.objectContaining({ editorData: repairedEditorData }),
+      );
+    });
+
     it('should create a history entry from the current document editor data', async () => {
       const editorData = {
         root: { children: [{ children: [], type: 'paragraph' }], type: 'root' },

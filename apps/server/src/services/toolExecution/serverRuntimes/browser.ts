@@ -2,6 +2,7 @@ import { BrowserIdentifier, BrowserManifest } from '@lobechat/builtin-tool-brows
 
 import { deviceGateway } from '@/server/services/deviceGateway';
 
+import { buildNoActiveDeviceResult, REMOTE_DEVICE_TOOL_IDENTIFIER } from './noActiveDevice';
 import { resolveRunWorkspaceId } from './resolveWorkspaceScope';
 import { type ServerRuntimeRegistration } from './types';
 
@@ -24,8 +25,25 @@ export const browserRuntime: ServerRuntimeRegistration = {
     if (!context.userId) {
       throw new Error('userId is required for Browser device proxy execution');
     }
+    // No active device: `activeDeviceId` is legitimately empty in device-capable
+    // runs (never bound yet, or the device dropped offline mid-run and the plan
+    // re-resolved to `device-unrouted`). Historically this guard threw a bare
+    // error string with no recovery path — the model kept stalling on it (see
+    // agent vent reports). Return a structured, actionable result per API call
+    // instead: the model is told exactly how to recover (activate a device, or
+    // ask the user to reconnect) rather than hitting an opaque failure.
     if (!context.activeDeviceId) {
-      throw new Error('activeDeviceId is required for Browser device proxy execution');
+      const noDevice = buildNoActiveDeviceResult('Browser device proxy', {
+        remoteDeviceToolAvailable: context.toolManifestMap
+          ? REMOTE_DEVICE_TOOL_IDENTIFIER in context.toolManifestMap
+          : true,
+      });
+
+      const proxy: Record<string, (args: any) => Promise<any>> = {};
+      for (const api of BrowserManifest.api) {
+        proxy[api.name] = async () => noDevice;
+      }
+      return proxy;
     }
     if (!context.agentId) {
       throw new Error('agentId is required for Browser device proxy execution');

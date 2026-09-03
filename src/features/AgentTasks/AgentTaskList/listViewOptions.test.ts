@@ -7,6 +7,9 @@ import {
   collapseSubTasks,
   compareTaskItems,
   DEFAULT_TASK_LIST_VIEW_OPTIONS,
+  getVisibleTaskStatuses,
+  groupTaskItems,
+  HIDDEN_WHEN_COMPLETED_STATUSES,
   normalizeTaskListViewOptions,
 } from './listViewOptions';
 
@@ -47,6 +50,55 @@ describe('normalizeTaskListViewOptions', () => {
 
     expect(options.showSubTasks).toBe(true);
     expect(options.nestedSubTasks).toBe(false);
+  });
+});
+
+describe('automation mode grouping', () => {
+  it('groups scheduled and heartbeat tasks separately with schedule first', () => {
+    const schedule = task('schedule', { automationMode: 'schedule' });
+    const heartbeat = task('heartbeat', { automationMode: 'heartbeat' });
+    expect(
+      groupTaskItems([heartbeat, schedule], 'automationMode').map(([group, items]) => [
+        group.automationMode,
+        items.map((item) => item.id),
+      ]),
+    ).toEqual([
+      ['schedule', ['schedule']],
+      ['heartbeat', ['heartbeat']],
+    ]);
+  });
+
+  it('does not create an empty automation group', () => {
+    const heartbeat = task('heartbeat', { automationMode: 'heartbeat' });
+    const groups = groupTaskItems([heartbeat], 'automationMode');
+
+    expect(groups.map(([group]) => group.key)).toEqual(['automationMode:heartbeat']);
+  });
+});
+
+describe('assignment grouping', () => {
+  it('groups agent and member assignments independently', () => {
+    const dualAssigned = task('dual', {
+      assigneeAgentId: 'agent-1',
+      assigneeUserId: 'user-1',
+    });
+    const memberOnly = task('member-only', { assigneeUserId: 'user-1' });
+
+    expect(
+      groupTaskItems([dualAssigned, memberOnly], 'assignee').map(([group, items]) => [
+        group.key,
+        items.map((item) => item.id),
+      ]),
+    ).toEqual([
+      ['assignee:agent-1', ['dual']],
+      ['assignee:unassigned', ['member-only']],
+    ]);
+    expect(
+      groupTaskItems([dualAssigned, memberOnly], 'member').map(([group, items]) => [
+        group.key,
+        items.map((item) => item.id),
+      ]),
+    ).toEqual([['member:user-1', ['dual', 'member-only']]]);
   });
 });
 
@@ -177,5 +229,19 @@ describe('buildTaskRows', () => {
     });
 
     expect(rows.map((row) => row.task.id)).toEqual(['parent', 'alpha', 'beta']);
+  });
+});
+
+describe('getVisibleTaskStatuses', () => {
+  it('translates hideCompleted into the server status filter, before pagination', () => {
+    const statuses = getVisibleTaskStatuses({ hideCompleted: true });
+    expect(statuses).toBeDefined();
+    for (const hidden of HIDDEN_WHEN_COMPLETED_STATUSES) expect(statuses).not.toContain(hidden);
+    expect(statuses).toContain('backlog');
+    expect(statuses).toContain('running');
+  });
+
+  it('applies no narrowing when completed tasks are shown', () => {
+    expect(getVisibleTaskStatuses({ hideCompleted: false })).toBeUndefined();
   });
 });

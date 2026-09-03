@@ -6,27 +6,22 @@ import { ConnectorDataService } from './index';
 
 const mocks = vi.hoisted(() => ({
   composioConnectedAccountGet: vi.fn(),
-  createGitHubComposioClient: vi.fn(),
-  createGitHubOAuthClient: vi.fn(),
+  createGitHubMarketClient: vi.fn(),
   createGmailClient: vi.fn(),
   createNotionClient: vi.fn(),
   createTwitterClient: vi.fn(),
-  ensureFreshConnectorToken: vi.fn(),
-  findById: vi.fn(),
   getAccount: vi.fn(),
   getComposioClient: vi.fn(),
-  initWithEnvKey: vi.fn(),
   isComposioLookupNotFound: vi.fn(),
   markComposioUnavailable: vi.fn(),
   marketCallTool: vi.fn(),
   marketGetStatus: vi.fn(),
+  marketProxyOAuthRequest: vi.fn(),
   queryComposioReferences: vi.fn(),
-  queryReferences: vi.fn(),
 }));
 
 vi.mock('@lobechat/connector-data/github', () => ({
-  createGitHubComposioConnectorClient: mocks.createGitHubComposioClient,
-  createGitHubOAuthConnectorClient: mocks.createGitHubOAuthClient,
+  createGitHubMarketConnectorClient: mocks.createGitHubMarketClient,
 }));
 
 vi.mock('@lobechat/connector-data/gmail', () => ({
@@ -45,22 +40,14 @@ vi.mock('@lobechat/connector-data/twitter', () => ({
 
 vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn(() => ({
-    findById: mocks.findById,
     markComposioConnectionUnavailable: mocks.markComposioUnavailable,
     queryComposioReferencesByIdentifiers: mocks.queryComposioReferences,
-    queryReferencesByIdentifiers: mocks.queryReferences,
   })),
 }));
 
 vi.mock('@/libs/composio', () => ({
   getComposioClient: mocks.getComposioClient,
   isComposioConnectedAccountLookupNotFoundError: mocks.isComposioLookupNotFound,
-}));
-vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
-  KeyVaultsGateKeeper: { initWithEnvKey: mocks.initWithEnvKey },
-}));
-vi.mock('@/server/services/connector/tokens', () => ({
-  ensureFreshConnectorToken: mocks.ensureFreshConnectorToken,
 }));
 vi.mock('@/server/services/market', () => ({
   MarketService: vi.fn(() => ({
@@ -70,6 +57,7 @@ vi.mock('@/server/services/market', () => ({
         getStatus: mocks.marketGetStatus,
       },
     },
+    proxyOAuthRequest: mocks.marketProxyOAuthRequest,
   })),
 }));
 
@@ -94,13 +82,11 @@ describe('ConnectorDataService', () => {
       connectedAccounts: { get: mocks.composioConnectedAccountGet },
       kind: 'composio',
     });
-    mocks.initWithEnvKey.mockResolvedValue({ kind: 'gatekeeper' });
     mocks.isComposioLookupNotFound.mockImplementation(
       (error: unknown) =>
         typeof error === 'object' && error !== null && 'status' in error && error.status === 404,
     );
-    mocks.createGitHubComposioClient.mockReturnValue({ kind: 'github-composio-client' });
-    mocks.createGitHubOAuthClient.mockReturnValue({ kind: 'github-client' });
+    mocks.createGitHubMarketClient.mockReturnValue({ kind: 'github-market-client' });
     mocks.markComposioUnavailable.mockResolvedValue(false);
     mocks.marketCallTool.mockResolvedValue({ data: { data: [] }, success: true });
     mocks.marketGetStatus.mockResolvedValue({ connected: true, success: true });
@@ -108,223 +94,28 @@ describe('ConnectorDataService', () => {
     mocks.createGmailClient.mockReturnValue({ getAccount: mocks.getAccount, kind: 'gmail-client' });
     mocks.createNotionClient.mockReturnValue({ kind: 'notion-client' });
     mocks.createTwitterClient.mockReturnValue({ kind: 'twitter-client' });
-    mocks.queryReferences.mockResolvedValue([]);
     mocks.queryComposioReferences.mockResolvedValue([]);
   });
 
-  it('selects the first stable active GitHub connector and refreshes its OAuth token', async () => {
-    mocks.queryReferences.mockResolvedValue([
-      { id: 'connector-z', isEnabled: true, status: 'connected' },
-      { id: 'connector-a', isEnabled: true, status: 'connected' },
-    ]);
-    mocks.findById.mockResolvedValue({
-      credentials: { accessToken: 'old-token', type: 'oauth2' },
-      id: 'connector-a',
-      identifier: 'github',
-      isEnabled: true,
-      status: 'connected',
-    });
-    mocks.ensureFreshConnectorToken.mockResolvedValue({
-      credentials: { accessToken: 'fresh-token', type: 'oauth2' },
-      id: 'connector-a',
-      identifier: 'github',
-      isEnabled: true,
-      status: 'connected',
-    });
-
+  /** @example A connected Market GitHub provider resolves through the OAuth proxy adapter. */
+  it('creates GitHub from the active Market connector', async () => {
     const client = await new ConnectorDataService(authDb([]), 'user-1').getGitHubClient();
 
-    expect(client).toEqual({ kind: 'github-client' });
-    expect(mocks.findById).toHaveBeenCalledWith('connector-a');
-    expect(mocks.ensureFreshConnectorToken).toHaveBeenCalledOnce();
-    expect(mocks.createGitHubOAuthClient).toHaveBeenCalledWith({ accessToken: 'fresh-token' });
-  });
-
-  it('falls back to a personal GitHub auth account without initializing KeyVault', async () => {
-    const client = await new ConnectorDataService(
-      authDb([{ accessToken: 'account-token', id: 'account-a' }]),
-      'user-1',
-    ).getGitHubClient();
-
-    expect(client).toEqual({ kind: 'github-client' });
-    expect(mocks.initWithEnvKey).not.toHaveBeenCalled();
-    expect(mocks.createGitHubOAuthClient).toHaveBeenCalledWith({ accessToken: 'account-token' });
-  });
-
-  it('skips an expired refreshed connector and falls back to a valid auth account', async () => {
-    mocks.queryReferences.mockResolvedValue([
-      { id: 'connector-a', isEnabled: true, status: 'connected' },
-    ]);
-    mocks.findById.mockResolvedValue({
-      credentials: { accessToken: 'old-token', type: 'oauth2' },
-      id: 'connector-a',
-      identifier: 'github',
-      isEnabled: true,
-      status: 'connected',
-    });
-    mocks.ensureFreshConnectorToken.mockResolvedValue({
-      credentials: { accessToken: 'expired-token', expiresAt: 1, type: 'oauth2' },
-      id: 'connector-a',
-      identifier: 'github',
-      isEnabled: true,
-      status: 'connected',
-    });
-
-    await new ConnectorDataService(
-      authDb([
-        {
-          accessToken: 'account-token',
-          accessTokenExpiresAt: new Date('2099-01-01T00:00:00.000Z'),
-          id: 'account-a',
-        },
-      ]),
-      'user-1',
-    ).getGitHubClient();
-
-    expect(mocks.createGitHubOAuthClient).toHaveBeenCalledOnce();
-    expect(mocks.createGitHubOAuthClient).toHaveBeenCalledWith({ accessToken: 'account-token' });
-  });
-
-  /** @example A failed connector database read rejects instead of selecting a fallback account. */
-  it('propagates GitHub connector lookup failures', async () => {
-    // ROOT CAUSE:
-    //
-    // A broad catch around connector token resolution also swallowed database failures. Falling back
-    // made Understanding persist a source selection based on incomplete availability information.
-    // We now reserve fallback for successfully resolved connectors that simply lack usable credentials.
-    const databaseError = new Error('database unavailable');
-    mocks.queryReferences.mockResolvedValue([
-      { id: 'connector-a', isEnabled: true, status: 'connected' },
-    ]);
-    mocks.findById.mockRejectedValue(databaseError);
-
-    await expect(
-      new ConnectorDataService(
-        authDb([{ accessToken: 'account-token', id: 'account-a' }]),
-        'user-1',
-      ).getGitHubClient(),
-    ).rejects.toBe(databaseError);
-
-    expect(mocks.createGitHubOAuthClient).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    { accessTokenExpiresAt: new Date('2000-01-01T00:00:00.000Z'), label: 'expired' },
-    { accessTokenExpiresAt: new Date(Date.now() + 30_000), label: 'inside the safety window' },
-  ])('skips $label auth accounts', async ({ accessTokenExpiresAt }) => {
-    const { ConnectorDataError } = await import('@lobechat/connector-data');
-    const service = new ConnectorDataService(
-      authDb([
-        {
-          accessToken: 'expired-account-token',
-          accessTokenExpiresAt,
-          id: 'account-a',
-        },
-      ]),
-      'user-1',
-    );
-
-    await expect(service.getGitHubClient()).rejects.toBeInstanceOf(ConnectorDataError);
-    expect(mocks.createGitHubOAuthClient).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    { accessTokenExpiresAt: null, label: 'null expiry' },
-    { accessTokenExpiresAt: new Date('2099-01-01T00:00:00.000Z'), label: 'valid expiry' },
-  ])('accepts an auth account with $label', async ({ accessTokenExpiresAt }) => {
-    await new ConnectorDataService(
-      authDb([{ accessToken: 'account-token', accessTokenExpiresAt, id: 'account-a' }]),
-      'user-1',
-    ).getGitHubClient();
-
-    expect(mocks.createGitHubOAuthClient).toHaveBeenCalledWith({ accessToken: 'account-token' });
-  });
-
-  it('creates GitHub through Composio while preserving the shared connector interface', async () => {
-    /** @example An ACTIVE server-resolved Composio account is preferred over OAuth fallback. */
-    mocks.queryComposioReferences.mockResolvedValue([
-      {
-        composio: {
-          appSlug: 'github',
-          connectedAccountId: 'github-account',
-          ownerUserId: 'github-owner',
-          status: 'ACTIVE',
-        },
-        id: 'github-a',
-        isEnabled: true,
-        status: 'connected',
-      },
-    ]);
-
-    const client = await new ConnectorDataService(authDb([]), 'user-1').getGitHubClient();
-
-    expect(client).toEqual({ kind: 'github-composio-client' });
-    expect(mocks.composioConnectedAccountGet).toHaveBeenCalledWith('github-account');
-    expect(mocks.createGitHubComposioClient).toHaveBeenCalledWith({
-      composio: expect.objectContaining({ kind: 'composio' }),
-      connectedAccountId: 'github-account',
+    expect(client).toEqual({ kind: 'github-market-client' });
+    expect(mocks.marketGetStatus).toHaveBeenCalledWith('github');
+    expect(mocks.createGitHubMarketClient).toHaveBeenCalledWith({
+      market: expect.objectContaining({ proxyOAuthRequest: mocks.marketProxyOAuthRequest }),
     });
   });
 
-  it('delegates a stale GitHub Composio 404 to ConnectorModel and falls back to OAuth', async () => {
-    /** @example A deleted Composio account is persisted as unavailable before fallback. */
-    const notFound = Object.assign(new Error('not found'), { status: 404 });
-    mocks.queryComposioReferences.mockResolvedValue([
-      {
-        composio: {
-          appSlug: 'github',
-          connectedAccountId: 'deleted-account',
-          ownerUserId: 'github-owner',
-          status: 'ACTIVE',
-        },
-        id: 'github-stale',
-        isEnabled: true,
-        status: 'connected',
-      },
-    ]);
-    mocks.composioConnectedAccountGet.mockRejectedValue(notFound);
-    mocks.markComposioUnavailable.mockResolvedValue(true);
-
-    const client = await new ConnectorDataService(
-      authDb([{ accessToken: 'account-token', id: 'account-a' }]),
-      'user-1',
-    ).getGitHubClient();
-
-    expect(client).toEqual({ kind: 'github-client' });
-    expect(mocks.markComposioUnavailable).toHaveBeenCalledWith('github-stale', 'deleted-account');
-    expect(mocks.createGitHubOAuthClient).toHaveBeenCalledWith({ accessToken: 'account-token' });
-  });
-
-  /** @example A remote FAILED account is not returned from a stale ACTIVE projection. */
-  it('rejects a GitHub Composio account whose remote status is not ACTIVE', async () => {
-    // ROOT CAUSE:
-    //
-    // The connector projection can remain ACTIVE after the remote account becomes inactive.
-    // The lookup response was discarded, so GitHub was advertised until its first proxy call failed.
-    //
-    // Before: any successful connectedAccounts.get returned a GitHub client.
-    // We fixed this by requiring the remote response status to be ACTIVE.
-    mocks.queryComposioReferences.mockResolvedValue([
-      {
-        composio: {
-          appSlug: 'github',
-          connectedAccountId: 'inactive-account',
-          ownerUserId: 'github-owner',
-          status: 'ACTIVE',
-        },
-        id: 'github-inactive',
-        isEnabled: true,
-        status: 'connected',
-      },
-    ]);
-    mocks.composioConnectedAccountGet.mockResolvedValue({ status: 'EXPIRED' });
+  /** @example A disconnected Market GitHub provider is excluded from Understanding. */
+  it('rejects GitHub when the Market connector is not connected', async () => {
+    mocks.marketGetStatus.mockResolvedValue({ connected: false, success: true });
 
     await expect(
       new ConnectorDataService(authDb([]), 'user-1').getGitHubClient(),
     ).rejects.toMatchObject({ code: 'github_authorization_unavailable' });
-
-    expect(mocks.createGitHubComposioClient).not.toHaveBeenCalled();
-    expect(mocks.markComposioUnavailable).not.toHaveBeenCalled();
+    expect(mocks.createGitHubMarketClient).not.toHaveBeenCalled();
   });
 
   it('creates Gmail from the first active connector and validates account ownership', async () => {
@@ -465,11 +256,8 @@ describe('ConnectorDataService', () => {
   });
 
   it('lists only providers whose connector client can currently be resolved', async () => {
-    /** @example A stale Gmail connection is excluded while GitHub OAuth remains available. */
-    const service = new ConnectorDataService(
-      authDb([{ accessToken: 'account-token', id: 'account-a' }]),
-      'user-1',
-    );
+    /** @example A stale Gmail connection is excluded while Market GitHub remains available. */
+    const service = new ConnectorDataService(authDb([]), 'user-1');
 
     await expect(service.listAvailableProviderIds(['github', 'gmail', 'notion'])).resolves.toEqual([
       'github',

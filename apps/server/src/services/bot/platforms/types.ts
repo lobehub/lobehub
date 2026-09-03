@@ -126,6 +126,23 @@ export interface BotMessageAttachment {
   fetchUrl?: string;
   mimeType?: string;
   name?: string;
+  /**
+   * Size of the underlying bytes, when the caller knows it (e.g. from the
+   * files table). Lets the send path apply platform size budgets without
+   * downloading URL-sourced attachments first.
+   */
+  size?: number;
+  /**
+   * Set ONLY when the server itself produced `fetchUrl` from a record the
+   * caller was checked to own (see `sendMessengerPush`). It relaxes the
+   * outbound SSRF guard to accept our own configured origins even when they
+   * resolve privately, which self-hosted storage and local dev need.
+   *
+   * Never set it from request input: a caller-supplied URL that merely lands
+   * on a configured origin is not owned, and trusting it would turn the
+   * relaxation into the bypass it exists to avoid.
+   */
+  trustedUrl?: boolean;
   type: 'image' | 'file' | 'video' | 'audio';
 }
 
@@ -297,10 +314,10 @@ export interface PlatformClient {
    */
   formatReply?: (body: string, stats?: UsageStats) => string;
 
-  // --- Runtime Operations ---
-
   /** Get a messenger for a specific thread (outbound messaging). */
   getMessenger: (platformThreadId: string) => PlatformMessenger;
+
+  // --- Runtime Operations ---
 
   readonly id: string;
 
@@ -326,6 +343,18 @@ export interface PlatformClient {
 
   /** Parse a composite message ID into the platform-native format. */
   parseMessageId: (compositeId: string) => string | number;
+
+  /**
+   * Re-register the platform webhook with the current credentials.
+   *
+   * `BotMessageRouter` calls this (rate-limited per bot) when the adapter
+   * rejects an inbound webhook as unverified (401) — the platform is still
+   * delivering to a registration made with missing or stale verification
+   * material. Implementations must be idempotent and safe to call while the
+   * bot keeps serving traffic. Webhook-mode platforms whose registration we
+   * own (Telegram) implement it; others omit it.
+   */
+  reconcileWebhook?: () => Promise<void>;
 
   /**
    * Register bot commands with the platform (e.g., Telegram setMyCommands).

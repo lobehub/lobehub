@@ -7,6 +7,7 @@ import { isTrpcErrorCode } from '@/utils/trpcError';
 
 interface RunningOperation {
   assistantMessageId: string;
+  heteroType?: string | null;
   operationId: string;
   scope?: string;
   threadId?: string | null;
@@ -48,6 +49,7 @@ export const useGatewayReconnect = (
       await useChatStore.getState().reconnectToGatewayOperation({
         agentId,
         assistantMessageId: runningOperation.assistantMessageId,
+        heteroType: runningOperation.heteroType,
         operationId: runningOperation.operationId,
         scope: runningOperation.scope,
         threadId: runningOperation.threadId,

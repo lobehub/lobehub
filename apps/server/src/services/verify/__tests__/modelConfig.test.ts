@@ -33,6 +33,7 @@ describe('resolveVerifyModelConfig', () => {
     expect(isHeterogeneousVerifyProvider('claude-code')).toBe(true);
     expect(isHeterogeneousVerifyProvider('codex')).toBe(true);
     expect(isHeterogeneousVerifyProvider('cursor')).toBe(true);
+    expect(isHeterogeneousVerifyProvider('droid')).toBe(true);
     expect(isHeterogeneousVerifyProvider('openai')).toBe(false);
     expect(isHeterogeneousVerifyProvider(null)).toBe(false);
   });

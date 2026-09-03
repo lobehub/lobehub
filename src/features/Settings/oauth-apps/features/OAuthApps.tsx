@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Skeleton, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -58,8 +59,8 @@ const OAuthApps: FC<OAuthAppsProps> = ({ canEdit }) => {
     if (isLoading)
       return (
         <Flexbox gap={12} padding={12}>
-          <Skeleton paragraph={{ rows: 2 }} title={false} />
-          <Skeleton paragraph={{ rows: 2 }} title={false} />
+          <Skeleton.Text rows={2} />
+          <Skeleton.Text rows={2} />
         </Flexbox>
       );
 

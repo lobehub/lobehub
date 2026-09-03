@@ -1,6 +1,7 @@
+import { REVIEW_PREDICT_PROMPT_VERSION } from '@lobechat/prompts';
 import { describe, expect, it } from 'vitest';
 
-import { shouldSurfaceProposal } from '../reviewPredictor';
+import { isCurrentReviewPrediction, shouldSurfaceProposal } from '../reviewPredictor';
 
 /**
  * Regression: a dismissed proposal came back on every reload.
@@ -64,5 +65,37 @@ describe('shouldSurfaceProposal', () => {
     const currentReject = { action: 'reject', stale: false };
     const settled = Boolean(currentReject && !currentReject.stale);
     expect(shouldSurfaceProposal({ action: 'reject' }, settled)).toBe(false);
+  });
+});
+
+/**
+ * Regression: the bundle took the newest row across ALL models. After the
+ * pinned model changed, a stale row from the old one satisfied "the batch
+ * finished" the instant the current model's row was cleared for re-judging.
+ */
+describe('isCurrentReviewPrediction', () => {
+  const current = { model: 'gemini-3.6-flash', provider: 'google' };
+
+  it('accepts a row from the pinned model on the current prompt version', () => {
+    expect(
+      isCurrentReviewPrediction(
+        { ...current, promptVersion: REVIEW_PREDICT_PROMPT_VERSION },
+        current,
+      ),
+    ).toBe(true);
+  });
+
+  it('rejects rows from another model, provider, or prompt version', () => {
+    expect(
+      isCurrentReviewPrediction(
+        {
+          model: 'deepseek-v4-pro',
+          promptVersion: REVIEW_PREDICT_PROMPT_VERSION,
+          provider: 'lobehub',
+        },
+        current,
+      ),
+    ).toBe(false);
+    expect(isCurrentReviewPrediction({ ...current, promptVersion: 'v0' }, current)).toBe(false);
   });
 });

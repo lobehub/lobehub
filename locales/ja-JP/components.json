@@ -119,6 +119,7 @@
   "KeyValueEditor.keyPlaceholder": "キー",
   "KeyValueEditor.valuePlaceholder": "値",
   "LocalFile.action.open": "開く",
+  "LocalFile.action.preview": "プレビュー",
   "LocalFile.action.showInFolder": "フォルダーで表示",
   "MaxTokenSlider.unlimited": "無制限",
   "ModelSelect.featureTag.audio": "このモデルは音声入力認識をサポートしています。",

@@ -305,7 +305,12 @@ export const createServerAgentToolsEngine = (
     // Always-on builtin tools
     ...Object.fromEntries(alwaysOnToolIds.map((id) => [id, true])),
     // System-level rules (may override user selection for specific tools)
-    [CloudSandboxManifest.identifier]: runtimeMode === 'cloud',
+    // Auto mode lets the model choose per call whether to run in the cloud
+    // sandbox or on the auto-routed device — `injectCredsToSandbox` has no
+    // device branch and always targets the sandbox regardless of routing —
+    // so the dedicated Cloud Sandbox tool is offered here too, not only when
+    // the target is literally 'sandbox'.
+    [CloudSandboxManifest.identifier]: runtimeMode === 'cloud' || executionTarget === 'auto',
     [KnowledgeBaseManifest.identifier]: hasEnabledKnowledgeBases,
     // Local-system: the user must have opted into local runtime
     // (`runtimeMode === 'local'`) AND have an online, auto-activated device
@@ -387,7 +392,7 @@ export const createServerAgentToolsEngine = (
     // isSubAgent), e.g. hiding lobe-agent's callSubAgent in sub-agent / group runs.
     manifestContext,
     enableChecker: createEnableChecker({
-      // Allow lobe-activator to dynamically enable tools at runtime (e.g., lobe-creds, lobe-cron).
+      // Allow lobe-activator to dynamically enable tools at runtime (e.g., lobe-creds, lobe-task).
       // Only in agent mode; chat/custom modes can't let the activator bypass their fixed set.
       allowExplicitActivation: toolMode === 'agent',
       rules: isCustomMode ? customModeRules : isChatMode ? chatModeRules : agentModeRules,

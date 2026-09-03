@@ -14,7 +14,6 @@ import { DetailProvider } from './features/DetailProvider';
 import Details from './features/Details';
 import Header from './features/Header';
 import StatusPage from './features/StatusPage';
-import Loading from './loading';
 
 interface AssistantDetailPageProps {
   mobile?: boolean;
@@ -26,9 +25,7 @@ const AssistantDetailPage = memo<AssistantDetailPageProps>(({ mobile }) => {
   const { version, source } = useQuery() as { source?: AssistantMarketSource; version?: string };
 
   const useAssistantDetail = useDiscoverStore((s) => s.useAssistantDetail);
-  const { data, isLoading } = useAssistantDetail({ identifier, source, version });
-
-  if (isLoading) return <Loading />;
+  const { data } = useAssistantDetail({ identifier, source, version });
   if (!data) return <NotFound />;
 
   // Check assistant status

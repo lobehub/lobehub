@@ -325,16 +325,30 @@ export class EditorActionImpl {
       // Preserve diff nodes (pending review) through the save path.
       // Normalization only happens when the user explicitly clicks Accept/Reject
       // in DiffAllToolbar, which mutates editor state before calling performSave.
-      const result = await documentService.updateDocument({
-        content: currentContent,
-        editorData: JSON.stringify(currentEditorData),
-        id,
-        lockOwnerId: doc.lockOwnerId,
-        metadata: metadata?.emoji ? { emoji: metadata.emoji } : undefined,
-        restoreFromHistoryId: options?.restoreFromHistoryId,
-        saveSource: options?.saveSource,
-        title: metadata?.title,
-      });
+      const requestSave = (expectedUpdatedAt?: Date) =>
+        documentService.updateDocument({
+          content: currentContent,
+          editorData: JSON.stringify(currentEditorData),
+          expectedUpdatedAt,
+          id,
+          lockOwnerId: doc.lockOwnerId,
+          metadata: metadata?.emoji ? { emoji: metadata.emoji } : undefined,
+          restoreFromHistoryId: options?.restoreFromHistoryId,
+          saveSource: options?.saveSource,
+          title: metadata?.title,
+        });
+
+      let result: Awaited<ReturnType<typeof requestSave>>;
+      try {
+        result = await requestSave();
+      } catch (error) {
+        // Self-heal only plain content saves: a save carrying title/emoji or a
+        // history restore replays fields the recovery's content+editorData
+        // comparison cannot vouch for (a collaborator's metadata-only change
+        // would be silently overwritten), so those keep the plain CONFLICT flow.
+        if (hasMetadataChanges || options?.restoreFromHistoryId) throw error;
+        result = await this.retrySaveAfterLockReclaim(id, doc, error, requestSave);
+      }
 
       // Mark as clean and update save status
       internal_dispatchDocument({
@@ -370,6 +384,81 @@ export class EditorActionImpl {
         type: 'updateDocument',
         value: { saveBlockedByLock: lockBlocked || undefined, saveStatus: 'idle' },
       });
+    }
+  };
+
+  /**
+   * A CONFLICT save is usually a *self* conflict rather than another member
+   * editing: the debounced autosave racing the lazy first lock acquire, a ghost
+   * lease left behind when a refresh aborted the release request, or another
+   * window of the same user having reclaimed the lease under its own ownerId.
+   * Re-acquiring with our ownerId resolves all of those — the server claims a
+   * missing lease and legitimately reclaims a same-user one — so the save can
+   * be retried once. A lease genuinely held by ANOTHER member comes back as
+   * `lockedByOther`, and the original CONFLICT is rethrown so the existing
+   * `saveBlockedByLock` read-only flow stays intact. Before reclaiming, the
+   * server copy is compared against this session's last-known content so a
+   * collaborator's just-saved-then-released version can never be overwritten
+   * by the retry.
+   */
+  private retrySaveAfterLockReclaim = async <T>(
+    id: string,
+    baseDoc: {
+      lastSavedContent?: string;
+      lastSavedEditorData?: unknown;
+      lockOwnerId?: string;
+    },
+    error: unknown,
+    requestSave: (expectedUpdatedAt?: Date) => Promise<T>,
+  ): Promise<T> => {
+    const errorCode = (error as { data?: { code?: string } })?.data?.code;
+    const lockOwnerId = baseDoc.lockOwnerId;
+    if (errorCode !== 'CONFLICT' || !lockOwnerId) throw error;
+
+    // The rejected lease may have belonged to ANOTHER member who saved and
+    // released it between our failed save and this recovery — reclaiming a
+    // now-free lease alone cannot tell that apart from a self conflict. Only
+    // retry when the server's stored version (content AND editorData) is still
+    // exactly the version THIS request was based on — `baseDoc` is the
+    // immutable store snapshot captured when the failed save started, not the
+    // live store, so an overlapping newer save from this same tab fails the
+    // check instead of being replayed over. The retried save is then pinned to
+    // that verified version via `expectedUpdatedAt`, which the server
+    // re-checks atomically inside the write transaction — a save landing at
+    // any point after this fetch fails the retry instead of being overwritten.
+    // Any mismatch keeps the original CONFLICT flow (read-only + rehydrate,
+    // unsaved content kept for copy-out).
+    let latest: Awaited<ReturnType<typeof documentService.getDocumentById>>;
+    try {
+      latest = await documentService.getDocumentById(id);
+    } catch {
+      throw error;
+    }
+    if (!latest?.updatedAt) throw error;
+    const isKnownVersion =
+      (latest.content ?? '') === (baseDoc.lastSavedContent ?? '') &&
+      isEqual(latest.editorData ?? null, baseDoc.lastSavedEditorData ?? null);
+    if (!isKnownVersion) throw error;
+
+    let lockedByOther: boolean;
+    try {
+      ({ lockedByOther } = await documentService.acquireDocumentLock(id, lockOwnerId));
+    } catch {
+      throw error;
+    }
+    if (lockedByOther) throw error;
+
+    try {
+      return await requestSave(latest.updatedAt);
+    } catch (retryError) {
+      // The reclaim above transferred the lease to this session for a retry
+      // that then failed (e.g. the server-side version predicate caught an
+      // interleaved collaborator save). Keeping the stolen lease would make
+      // the lock recovery read this tab as the legitimate holder and clear
+      // the save block over a stale editor — release it so the lease goes
+      // back to whoever is actually editing.
+      void documentService.releaseDocumentLock(id, lockOwnerId).catch(() => {});
+      throw retryError;
     }
   };
 

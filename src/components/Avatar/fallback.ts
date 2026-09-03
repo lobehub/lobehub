@@ -1,5 +1,3 @@
-import { primaryColorsSwatches } from '@lobehub/ui';
-
 /**
  * Characters that already read as a whole word on their own — one of them is
  * enough for an avatar, two would be unreadable at 16px.
@@ -29,29 +27,10 @@ export const getAvatarInitials = (name?: string | null): string => {
 };
 
 /**
- * Deterministic FNV-1a so the same name always lands on the same swatch — an
- * agent keeps its color across sessions, devices and list positions.
- */
-const hash = (seed: string): number => {
-  let value = 0x81_1c_9d_c5;
-  for (let i = 0; i < seed.length; i++) {
-    value ^= seed.codePointAt(i)!;
-    value = Math.imul(value, 0x01_00_01_93);
-  }
-  return Math.abs(value);
-};
-
-export const getAvatarBackground = (seed?: string | null): string | undefined => {
-  const text = seed?.trim();
-  if (!text) return undefined;
-
-  return primaryColorsSwatches[hash(text) % primaryColorsSwatches.length];
-};
-
-/**
  * Selectors hand a literal `'transparent'` (or `rgba(0,0,0,0)`) down as "no
  * color chosen". Behind a real image that is correct; behind fallback initials
- * it renders unreadable text on the page background, so it counts as absent.
+ * it renders unreadable text on the page background, so it counts as absent —
+ * dropping it lets the Avatar fall back to its neutral `colorBorder` tile.
  */
 const BLANK_BACKGROUNDS = new Set(['transparent', 'rgba(0,0,0,0)', 'none']);
 
@@ -79,8 +58,9 @@ interface ResolveAvatarParams<T> {
 
 /**
  * Decide what the Avatar actually renders. A missing or broken image falls back
- * to the name's initials over a hashed background, so the avatar still carries
- * the identity instead of collapsing into an anonymous grey box.
+ * to the name's initials, so the avatar still carries the identity. The tile
+ * itself stays neutral unless a background was explicitly chosen — a color
+ * derived from the name reads as meaningful when it isn't.
  */
 export const resolveAvatar = <T>({
   avatar,
@@ -97,7 +77,8 @@ export const resolveAvatar = <T>({
     // Only a real name makes initials; a URL would render as its own first
     // character ("/"), which says even less than an empty tile.
     avatar: getAvatarInitials(label),
-    background:
-      usableBackground(background) || getAvatarBackground(label || remoteAvatarSrc(avatar)),
+    // No explicit color means no color: the Avatar paints its own `colorBorder`
+    // tile, the same neutral grey every unconfigured avatar gets.
+    background: usableBackground(background),
   };
 };

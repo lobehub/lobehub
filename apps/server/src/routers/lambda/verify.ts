@@ -21,6 +21,7 @@ import {
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { DocumentModel } from '@/database/models/document';
 import { LlmGenerationTracingModel } from '@/database/models/llmGenerationTracing';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyCriterionModel } from '@/database/models/verifyCriterion';
@@ -39,6 +40,7 @@ import { isUuid } from '@/database/utils/uuid';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { markSilentTRPCErrorLog } from '@/libs/trpc/utils/errorLogger';
+import { GoalCriteriaGeneratorService } from '@/server/services/goal/criteriaGenerator';
 import {
   AcceptanceService,
   createEvidenceFileResolver,
@@ -269,10 +271,16 @@ const verifyProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =
   return opts.next({
     ctx: {
       criterionModel: new VerifyCriterionModel(ctx.serverDB, ctx.userId, workspaceId),
+      documentModel: new DocumentModel(ctx.serverDB, ctx.userId, workspaceId),
       evidenceModel: new VerifyEvidenceModel(ctx.serverDB, ctx.userId, workspaceId),
       executorService: new VerifyExecutorService(ctx.serverDB, ctx.userId, workspaceId),
       tracingModel: new LlmGenerationTracingModel(ctx.serverDB, ctx.userId, workspaceId),
       feedbackService: new VerifyFeedbackService(ctx.serverDB, ctx.userId, workspaceId),
+      goalCriteriaGenerator: new GoalCriteriaGeneratorService(
+        ctx.serverDB,
+        ctx.userId,
+        workspaceId,
+      ),
       operationModel: new AgentOperationModel(ctx.serverDB, ctx.userId, workspaceId),
       planGenerator: new VerifyPlanGeneratorService(ctx.serverDB, ctx.userId, workspaceId),
       reportModel: new VerifyReportModel(ctx.serverDB, ctx.userId, workspaceId),
@@ -353,6 +361,36 @@ export const verifyRouter = router({
   forkRubricCriteria: verifyWriteProcedure
     .input(z.object({ ids: z.array(z.string()) }))
     .mutation(async ({ ctx, input }) => ctx.criterionModel.forkRubricCriteria(input.ids)),
+
+  /**
+   * Resolve a specific criteria id list (e.g. the ones bound to a goal), in
+   * input order. Each row carries `instruction` resolved from its linked
+   * document — the judge rule must be inspectable and editable where the
+   * criteria are shown, not an invisible value edits would silently replace.
+   */
+  getCriteria: verifyProcedure
+    .input(z.object({ ids: z.array(z.string()) }))
+    .query(async ({ ctx, input }) => {
+      if (input.ids.length === 0) return [];
+      const rows = await ctx.criterionModel.findByIds(input.ids);
+      const documentIds = [
+        ...new Set(rows.flatMap((row) => (row.documentId ? [row.documentId] : []))),
+      ];
+      const documents = await Promise.all(documentIds.map((id) => ctx.documentModel.findById(id)));
+      const contentByDocId = new Map(
+        documents.flatMap((doc) => (doc ? [[doc.id, doc.content ?? undefined] as const] : [])),
+      );
+      const byId = new Map(
+        rows.map((row) => [
+          row.id,
+          {
+            ...row,
+            instruction: row.documentId ? contentByDocId.get(row.documentId) : undefined,
+          },
+        ]),
+      );
+      return input.ids.map((id) => byId.get(id)).filter(Boolean);
+    }),
 
   listCriteria: verifyProcedure.query(async ({ ctx }) => ctx.criterionModel.query()),
 
@@ -512,6 +550,62 @@ export const verifyRouter = router({
       }
     }),
 
+  /** Draft the standing acceptance contract for the create-goal flow. */
+  generateGoalCriteria: verifyWriteProcedure
+    .input(
+      z.object({
+        context: z.string().optional(),
+        goal: z.string().min(1),
+        maxCriteria: z.number().int().min(1).max(8).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ctx.goalCriteriaGenerator.generate(input);
+      } catch (error) {
+        const errorType = (error as { errorType?: unknown } | null)?.errorType;
+        if (errorType === AgentRuntimeErrorType.InvalidProviderAPIKey) {
+          const trpcError = new TRPCError({
+            cause: error,
+            code: 'PRECONDITION_FAILED',
+            message: AgentRuntimeErrorType.InvalidProviderAPIKey,
+          });
+          markSilentTRPCErrorLog(trpcError.cause);
+          throw trpcError;
+        }
+
+        throw error;
+      }
+    }),
+
+  /** Draft the generated goal title, instruction, and standing acceptance contract. */
+  generateGoalPlan: verifyWriteProcedure
+    .input(
+      z.object({
+        context: z.string().optional(),
+        goal: z.string().min(1),
+        maxCriteria: z.number().int().min(1).max(8).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ctx.goalCriteriaGenerator.generatePlan(input);
+      } catch (error) {
+        const errorType = (error as { errorType?: unknown } | null)?.errorType;
+        if (errorType === AgentRuntimeErrorType.InvalidProviderAPIKey) {
+          const trpcError = new TRPCError({
+            cause: error,
+            code: 'PRECONDITION_FAILED',
+            message: AgentRuntimeErrorType.InvalidProviderAPIKey,
+          });
+          markSilentTRPCErrorLog(trpcError.cause);
+          throw trpcError;
+        }
+
+        throw error;
+      }
+    }),
+
   /** Persist (user-edited) drafts as standalone criteria; returns their ids in order. */
   createCriteria: verifyWriteProcedure
     .input(
@@ -580,6 +674,9 @@ export const verifyRouter = router({
       ),
       identifier: skill.identifier,
       name: skill.name,
+      // The skill's own declared version, so an installer can compare a copy
+      // already on disk against the latest bundle.
+      version: skill.version,
     };
   }),
 

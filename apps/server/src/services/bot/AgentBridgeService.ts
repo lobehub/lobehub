@@ -23,6 +23,7 @@ import type { BotReplyLocale, PlatformClient } from './platforms';
 import {
   getBotReplyLocale,
   getStepReactionEmoji,
+  platformFromThreadId,
   platformRegistry,
   RECEIVED_REACTION_EMOJI,
   THINKING_REACTION_EMOJI,
@@ -836,7 +837,8 @@ export class AgentBridgeService {
     // gateway typing makes ack redundant as user feedback.
     // For platforms without typing support (no triggerTyping on messenger), the
     // gateway typing is invisible, so we still send an ack message as user feedback.
-    const gwClient = getMessageGatewayClient();
+    const botPlatform = platformFromThreadId(botContext?.platformThreadId);
+    const gwClient = getMessageGatewayClient(botPlatform);
     const platformSupportsTyping =
       client && botContext?.platformThreadId
         ? !!client.getMessenger(botContext.platformThreadId).triggerTyping
@@ -854,7 +856,7 @@ export class AgentBridgeService {
       // Start gateway typing immediately so the alarm keeps it alive through
       // the entire AI generation (platform typing expires after ~10s).
       if (botContext?.platformThreadId && botContext?.applicationId) {
-        const platform = botContext.platformThreadId.split(':')[0];
+        const platform = platformFromThreadId(botContext.platformThreadId);
         try {
           if (botContext.messengerInstallationKey) {
             // Messenger run: shard typing by `(platform, lobeUserId)` so each
@@ -1227,7 +1229,7 @@ export class AgentBridgeService {
 
     const stopGatewayTyping = () => {
       if (gatewayConnectionId && botContext?.platformThreadId) {
-        const gwClient = getMessageGatewayClient();
+        const gwClient = getMessageGatewayClient(platformFromThreadId(botContext.platformThreadId));
         gwClient.stopTyping(gatewayConnectionId, botContext.platformThreadId).catch((err) => {
           log('executeWithCallback[local]: gateway stopTyping failed: %O', err);
         });

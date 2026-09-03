@@ -1,6 +1,7 @@
 'use client';
 
-import { ActionIcon, Block, Icon, Text } from '@lobehub/ui';
+import { Block, Icon } from '@lobehub/ui';
+import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import type { LucideIcon } from 'lucide-react';
 import { PanelRight, PanelRightClose } from 'lucide-react';
@@ -9,7 +10,9 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
+import AssigneeUserAvatar from '@/features/AgentTasks/features/AssigneeUserAvatar';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
+import { useUserDisplayMeta } from '@/features/AgentTasks/shared/useUserDisplayMeta';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
@@ -234,5 +237,20 @@ export const AssigneeInline = memo<{ agentId: string }>(({ agentId }) => {
 });
 
 AssigneeInline.displayName = 'AssigneeInline';
+
+/** A workspace member avatar + display name — the human twin of `AssigneeInline`. */
+export const MemberAssigneeInline = memo<{ userId: string }>(({ userId }) => {
+  const meta = useUserDisplayMeta(userId);
+  const displayName = meta?.title || userId;
+
+  return (
+    <span className={styles.assignee} title={displayName}>
+      <AssigneeUserAvatar size={18} userId={userId} />
+      <span className={styles.assigneeName}>{displayName}</span>
+    </span>
+  );
+});
+
+MemberAssigneeInline.displayName = 'MemberAssigneeInline';
 
 export const monoChipClassName = styles.mono;

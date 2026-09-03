@@ -134,10 +134,7 @@ const ScreenCaptureOverlay = memo(() => {
         ),
       );
     };
-    window.electron?.ipcRenderer?.on?.('overlayCaptureUploadStatus', listener);
-    return () => {
-      window.electron?.ipcRenderer?.removeListener?.('overlayCaptureUploadStatus', listener);
-    };
+    return window.electron?.ipcRenderer?.on?.('overlayCaptureUploadStatus', listener);
   }, []);
 
   const previewWindow = useCallback(

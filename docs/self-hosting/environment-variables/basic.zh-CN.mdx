@@ -242,11 +242,19 @@ SSRF_ALLOW_IP_ADDRESS_LIST=192.168.1.100,10.0.0.50
 - 默认值：-
 - 示例：`gemini-2.5-flash` 或你的本地多模态模型 ID
 
+### `MULTIMODAL_UNDERSTANDING_IMAGE_FORMATS`
+
+- 类型：可选
+- 描述：兜底多模态理解模型支持的图片格式，使用英文逗号分隔。可填写 `jpeg`、`png`、`webp` 或对应的 MIME 类型。系统优先根据 URL 后缀判断格式；不支持的格式会在发送给模型前转换为列表中的第一个格式。URL 没有可识别的后缀时，系统会下载图片后识别格式。
+- 默认值：`jpeg,png`
+- 示例：`png,jpeg,webp`
+
 配置示例：
 
 ```bash
 MULTIMODAL_UNDERSTANDING_PROVIDER=google
 MULTIMODAL_UNDERSTANDING_MODEL=gemini-2.5-flash
+MULTIMODAL_UNDERSTANDING_IMAGE_FORMATS=png,jpeg,webp
 ```
 
 为兼容迁移，旧环境变量 `VISUAL_UNDERSTANDING_PROVIDER` 和 `VISUAL_UNDERSTANDING_MODEL` 仍可继续使用。同时配置新旧变量时，`MULTIMODAL_UNDERSTANDING_*` 优先。

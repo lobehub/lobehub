@@ -612,6 +612,50 @@ describe('spawnAgent', () => {
     }
   });
 
+  it('runs Factory Droid through its fixed safe ACP invocation', async () => {
+    const fake = createFakeAcpProc();
+    nextFakeProc = fake.proc;
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    try {
+      const { spawnAgent } = await import('./spawnAgent');
+      const handle = await spawnAgent({
+        agentType: 'droid',
+        extraArgs: ['--tag', 'lobe'],
+        initialModel: 'gpt-5.4',
+        operationId: 'op-droid',
+        prompt: 'do a thing',
+      });
+
+      const events: any[] = [];
+      for await (const event of handle.events) events.push(event);
+
+      await expect(handle.exit).resolves.toEqual({ code: 0, signal: null });
+      expect(spawnCalls[0]).toMatchObject({
+        args: ['exec', '--output-format', 'acp', '--tag', 'lobe'],
+        command: 'droid',
+      });
+      expect(fake.requests.map((request) => request.method)).toEqual([
+        'initialize',
+        'session/new',
+        'session/set_config_option',
+        'session/prompt',
+      ]);
+      expect(handle.sessionId).toBe('trae-session-1');
+      expect(
+        events.some(
+          (event) =>
+            event.type === 'stream_chunk' &&
+            event.data?.chunkType === 'text' &&
+            event.data?.content === 'TRAE response',
+        ),
+      ).toBe(true);
+      expect(events.find((event) => event.type === 'stream_start')?.data?.provider).toBe('droid');
+    } finally {
+      killSpy.mockRestore();
+    }
+  });
+
   it('preserves SIGKILL when force-stopping a TRAE ACP run', async () => {
     const fake = createFakeAcpProc({ promptAutoComplete: false });
     nextFakeProc = fake.proc;

@@ -140,6 +140,7 @@
   "updater.downloadNewVersion": "Nieuwe versie downloaden",
   "updater.downloadingUpdate": "Update wordt gedownload",
   "updater.downloadingUpdateDesc": "De update wordt gedownload, even geduld...",
+  "updater.ignore": "Negeren",
   "updater.installLater": "Bij volgende start bijwerken",
   "updater.isLatestVersion": "U gebruikt de nieuwste versie",
   "updater.isLatestVersionDesc": "Goed nieuws! De versie {{version}} die u gebruikt is de meest recente.",

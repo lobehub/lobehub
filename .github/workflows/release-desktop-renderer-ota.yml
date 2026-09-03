@@ -1,0 +1,199 @@
+name: Release Desktop Renderer OTA
+
+# ============================================
+# Renderer 热更 patch 发布
+# ============================================
+# 前提: <channel>/base.json 由全量发版流程写入 (desktop-publish-s3)。
+# 门禁: HEAD 的 mainHash 必须等于该 marker —— main 变了只能走全量发版,
+#       此工作流会直接跳过。
+# 产物: <channel>/<appVersion>/renderer/v2/latest.json (签名 manifest)
+#       <channel>/<appVersion>/renderer/v2/versions/rN.json (签名快照)
+#       <channel>/<appVersion>/renderer/v2/packs/<sha256>.zip (聚合 full/delta pack)
+# delta: r0 + 最近 2 个 rN，客户端一次只下载一份对得上的 pack
+# ============================================
+
+on:
+  workflow_call:
+    inputs:
+      channel:
+        description: 'Update channel'
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Update channel'
+        required: true
+        type: choice
+        options:
+          - canary
+          - stable
+          - beta
+        default: canary
+
+concurrency:
+  group: desktop-renderer-ota-${{ inputs.channel }}
+  cancel-in-progress: true
+
+permissions: read-all
+
+env:
+  NODE_VERSION: '24.11.1'
+
+jobs:
+  publish-renderer-patch:
+    name: Publish Renderer Patch (${{ inputs.channel }})
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Resolve update server base URL
+        env:
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+        run: |
+          set -euo pipefail
+          UPDATE_SERVER_BASE_URL="${UPDATE_SERVER_URL%/}"
+          case "$UPDATE_SERVER_BASE_URL" in
+            */stable|*/nightly|*/canary|*/beta) UPDATE_SERVER_BASE_URL="${UPDATE_SERVER_BASE_URL%/*}" ;;
+          esac
+          echo "UPDATE_SERVER_BASE_URL=$UPDATE_SERVER_BASE_URL" >> "$GITHUB_ENV"
+
+      - name: Load shipped base
+        id: base
+        env:
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          set -euo pipefail
+          BASE=$(curl -sf "$UPDATE_SERVER_BASE_URL/$CHANNEL/base.json" || true)
+          if [ -z "$BASE" ]; then
+            echo "::warning::no renderer OTA base metadata found; run a full release first"
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$(jq -r '.rendererProtocol // 0' <<< "$BASE")" != "2" ]; then
+            echo "::warning::renderer OTA base is not V2; run a full release first"
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          MAIN_HASH=$(jq -er '.mainHash | select(type == "string" and test("^[0-9a-f]{64}$"))' <<< "$BASE")
+          CLOUD_REF=$(jq -er '.cloudRef | select(type == "string" and test("^[0-9a-f]{40}$"))' <<< "$BASE")
+          APP_VERSION=$(jq -er '.version | select(type == "string" and test("^[0-9A-Za-z.+-]+$"))' <<< "$BASE")
+          {
+            echo "app_version=$APP_VERSION"
+            echo "cloud_ref=$CLOUD_REF"
+            echo "found=true"
+            echo "main_hash=$MAIN_HASH"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Setup build environment
+        if: steps.base.outputs.found == 'true'
+        uses: ./.github/actions/desktop-build-setup
+        with:
+          cloud-ref: ${{ steps.base.outputs.cloud_ref }}
+          cloud-repository: ${{ vars.OVERLAY_REPOSITORY }}
+          cloud-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Set package version
+        if: steps.base.outputs.found == 'true'
+        run: npm run workflow:set-desktop-version ${{ steps.base.outputs.app_version }} ${{ inputs.channel }}
+
+      - name: Gate on mainHash
+        id: gate
+        if: steps.base.outputs.found == 'true'
+        env:
+          BASE_MAIN_HASH: ${{ steps.base.outputs.main_hash }}
+          RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          UPDATE_CHANNEL: ${{ inputs.channel }}
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+        run: |
+          MAIN_HASH=$(node apps/desktop/scripts/mainHash.mjs)
+          echo "main_hash=$MAIN_HASH" >> "$GITHUB_OUTPUT"
+          echo "HEAD mainHash: $MAIN_HASH"
+          echo "Shipped base mainHash: $BASE_MAIN_HASH"
+
+          if [ "$MAIN_HASH" != "$BASE_MAIN_HASH" ]; then
+            echo "::warning::main changed since last full release — renderer patch is not allowed, run a full release instead"
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Determine patch version
+        id: version
+        if: steps.gate.outputs.allowed == 'true'
+        env:
+          APP_VERSION: ${{ steps.base.outputs.app_version }}
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          CURRENT=$(curl -sf "$UPDATE_SERVER_BASE_URL/$CHANNEL/$APP_VERSION/renderer/v2/latest.json" | node -e "
+            let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
+              try { console.log(JSON.parse(d).version) } catch { console.log('r0') }
+            })" || echo "r0")
+          NEXT="r$(( ${CURRENT#r} + 1 ))"
+          echo "Current patch: $CURRENT -> next: $NEXT"
+          echo "version=$NEXT" >> "$GITHUB_OUTPUT"
+
+      - name: Build renderer
+        if: steps.gate.outputs.allowed == 'true'
+        run: npm run build:renderer --prefix=./apps/desktop
+        env:
+          UPDATE_CHANNEL: ${{ inputs.channel }}
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          APP_URL: http://localhost:3015
+          DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
+          KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
+          NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ inputs.channel == 'stable' && secrets.UMAMI_STABLE_DESKTOP_PROJECT_ID || secrets.UMAMI_BETA_DESKTOP_PROJECT_ID }}
+          NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ inputs.channel == 'stable' && secrets.UMAMI_STABLE_DESKTOP_BASE_URL || secrets.UMAMI_BETA_DESKTOP_BASE_URL }}
+
+      - name: Build and sign manifest
+        if: steps.gate.outputs.allowed == 'true'
+        env:
+          RENDERER_OTA_PRIVATE_KEY: ${{ secrets.RENDERER_OTA_PRIVATE_KEY }}
+          APP_VERSION: ${{ steps.base.outputs.app_version }}
+          CHANNEL: ${{ inputs.channel }}
+          MAIN_HASH: ${{ steps.gate.outputs.main_hash }}
+        run: |
+          set -euo pipefail
+          node apps/desktop/scripts/buildRendererManifest.mjs \
+            --renderer=apps/desktop/dist/renderer \
+            --out=renderer-ota-out \
+            --channel=${{ inputs.channel }} \
+            --version=${{ steps.version.outputs.version }} \
+            --mainHash=${{ steps.gate.outputs.main_hash }} \
+            --feed-url="$UPDATE_SERVER_BASE_URL/$CHANNEL/$APP_VERSION/renderer/v2"
+
+      - name: Upload to S3
+        if: steps.gate.outputs.allowed == 'true'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.UPDATE_AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.UPDATE_S3_REGION }}
+          S3_BUCKET: ${{ secrets.UPDATE_S3_BUCKET }}
+          S3_ENDPOINT: ${{ secrets.UPDATE_S3_ENDPOINT }}
+          APP_VERSION: ${{ steps.base.outputs.app_version }}
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          ENDPOINT_ARGS=()
+          if [ -n "$S3_ENDPOINT" ]; then
+            ENDPOINT_ARGS=(--endpoint-url "$S3_ENDPOINT")
+          fi
+
+          # Immutable packs first, then the version snapshot, latest.json last.
+          RENDERER_ROOT="renderer-ota-out/$CHANNEL/$APP_VERSION/renderer/v2"
+          S3_RENDERER_ROOT="s3://$S3_BUCKET/$CHANNEL/$APP_VERSION/renderer/v2"
+          aws s3 sync "$RENDERER_ROOT/packs" "$S3_RENDERER_ROOT/packs" \
+            --size-only \
+            --content-type application/zip \
+            --cache-control public,max-age=31536000,immutable \
+            "${ENDPOINT_ARGS[@]}"
+          aws s3 cp "$RENDERER_ROOT/versions/${{ steps.version.outputs.version }}.json" \
+            "$S3_RENDERER_ROOT/versions/${{ steps.version.outputs.version }}.json" \
+            --cache-control no-store "${ENDPOINT_ARGS[@]}"
+          aws s3 cp "$RENDERER_ROOT/latest.json" \
+            "$S3_RENDERER_ROOT/latest.json" \
+            --cache-control no-store "${ENDPOINT_ARGS[@]}"
+
+          echo "✅ Published renderer patch ${{ steps.version.outputs.version }} for $CHANNEL/$APP_VERSION"

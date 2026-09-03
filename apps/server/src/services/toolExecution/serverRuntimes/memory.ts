@@ -38,6 +38,8 @@ import type { z } from 'zod';
 import {
   type IdentityEntryBasePayload,
   type IdentityEntryPayload,
+  normalizeUserMemorySearchQueries,
+  shouldRunUserMemoryLexicalSearch,
   UserMemoryModel,
 } from '@/database/models/userMemory';
 import { userSettings } from '@/database/schemas';
@@ -51,6 +53,8 @@ import {
   resolveToolOutcomeScope,
 } from '@/server/services/agentSignal/procedure';
 import { redisPolicyStateStore } from '@/server/services/agentSignal/store/adapters/redis/policyStateStore';
+import { createFtsSearchRepo } from '@/server/services/ftsSearch';
+import { recordUserMemoryLexicalSearchDecision } from '@/server/services/ftsSearch/observability';
 import type { UserMemoryEmbeddingRuntime } from '@/server/services/memory/userMemory/embedding';
 import { embedUserMemoryTexts } from '@/server/services/memory/userMemory/embedding';
 import { normalizeSearchMemoryParams } from '@/server/services/memory/userMemory/searchParams';
@@ -226,9 +230,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
           defaultEmbeddingConfig.provider,
           this.workspaceId,
         );
-    const normalizedQueries = [
-      ...new Set((normalizedParams.queries ?? []).map((query) => query.trim()).filter(Boolean)),
-    ];
+    const normalizedQueries = normalizeUserMemorySearchQueries(normalizedParams.queries);
 
     const queryEmbeddings =
       normalizedQueries.length > 0
@@ -242,6 +244,12 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
             })
           ).filter((embedding): embedding is number[] => Boolean(embedding))
         : [];
+    const lexicalSearch = shouldRunUserMemoryLexicalSearch(normalizedQueries, queryEmbeddings);
+    recordUserMemoryLexicalSearchDecision({
+      decision: lexicalSearch ? 'executed' : 'skipped_long_context',
+      queryCharacters: Array.from(normalizedQueries.join(' ')).length,
+      source: 'tool',
+    });
 
     const effectiveEffort = normalizeMemoryEffort(normalizedParams.effort ?? this.memoryEffort);
     const effortDefaults = MEMORY_SEARCH_TOP_K_LIMITS[effectiveEffort];
@@ -877,7 +885,12 @@ export const memoryRuntime: ServerRuntimeRegistration = {
       // fallback to medium
     }
 
-    const memoryModel = new UserMemoryModel(context.serverDB, context.userId);
+    const ftsSearchRepo = await createFtsSearchRepo({
+      db: context.serverDB,
+      userId: context.userId,
+      usage: 'memory_tool',
+    });
+    const memoryModel = new UserMemoryModel(context.serverDB, context.userId, ftsSearchRepo);
 
     const service = new MemoryServerRuntimeService({
       agentId: context.agentId,

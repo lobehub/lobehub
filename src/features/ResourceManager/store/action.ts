@@ -186,7 +186,14 @@ export class ResourceManagerStoreActionImpl {
   };
 
   setLibraryId = (libraryId?: string): void => {
-    this.#set({ libraryId });
+    if (this.#get().libraryId === libraryId) return;
+    // A sidebar search is scoped to one library; carrying it over to the next
+    // library would show results the user never asked for.
+    this.#set({ libraryId, librarySearchQuery: '' });
+  };
+
+  setLibrarySearchQuery = (librarySearchQuery: string): void => {
+    this.#set({ librarySearchQuery });
   };
 
   setListVisibility = (
@@ -246,6 +253,10 @@ export class ResourceManagerStoreActionImpl {
 
   setPendingRenameItemId = (pendingRenameItemId: string | null): void => {
     this.#set({ pendingRenameItemId });
+  };
+
+  setPendingTreeRenameItemId = (pendingTreeRenameItemId: string | null): void => {
+    this.#set({ pendingTreeRenameItemId });
   };
 
   setSearchQuery = (searchQuery: string | null): void => {

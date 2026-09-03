@@ -4,6 +4,9 @@ export default {
   'features.agentGraphConfig.desc':
     'Show graph runtime configuration in an agent profile advanced settings.',
   'features.agentGraphConfig.title': 'Agent Graph Runtime Configuration',
+  'features.agentProviderBinding.desc':
+    'Let supported local agents run on API instead of their subscription — through the LobeHub default provider or a configured API provider and model. Available for select agents on Desktop local execution.',
+  'features.agentProviderBinding.title': 'Agent Provider Binding',
   'features.agentSelfIteration.desc':
     'Allow the agent to reflect, build self-awareness, and continuously iterate through ongoing attempts and interactions.',
   'features.agentSelfIteration.title': 'Agent Self-iteration',
@@ -13,9 +16,6 @@ export default {
   'features.assistantMessageGroup.desc':
     'Group agent messages and their tool call results together for display',
   'features.assistantMessageGroup.title': 'Agent Message Grouping',
-  'features.claudeCodeApiMode.desc':
-    'Let Claude Code use a configured API provider and model on this desktop instead of a Claude subscription. Desktop local execution only.',
-  'features.claudeCodeApiMode.title': 'Claude Code API Provider',
   'features.claudeCodeSdk.desc':
     'Run Claude Code sessions through the Claude Agent SDK instead of spawning the CLI. Enables richer streaming and session control.',
   'features.claudeCodeSdk.title': 'Claude Code SDK Runtime',
@@ -27,6 +27,9 @@ export default {
   'features.desktopSplitView.title': 'Split Tab View',
   'features.heteroSessionImport.desc':
     'Add an "Import Local Agent Sessions" entry to the topic list menu: scan local Claude Code / Codex CLI transcripts and import them as topics, with incremental sync on re-import.',
+  'features.evalCapture.desc':
+    'Adds a message action that captures a conversation turn — its prior context, input and the answer it produced — as an evaluation test case.',
+  'features.evalCapture.title': 'Save a turn as an eval case',
   'features.heteroSessionImport.title': 'Local Agent Session Import',
   'features.imessage.desc':
     'Connect agents to iMessage through the local LobeHub Desktop BlueBubbles bridge.',

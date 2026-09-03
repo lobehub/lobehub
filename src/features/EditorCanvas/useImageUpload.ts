@@ -4,6 +4,7 @@ import { useFileStore } from '@/store/file';
 import type { FileUploadState, FileUploadStatus } from '@/types/files/upload';
 
 import { registerAttachment } from './attachmentRegistry';
+import { getExistingEditorAttachment } from './editorAttachments';
 
 export type EditorAttachmentUploadProgress = (
   status: FileUploadStatus,
@@ -26,6 +27,12 @@ const useEditorAttachmentUpload = (skipCheckFileType: boolean) => {
 
   return useCallback(
     async (file: File, onProgress?: EditorAttachmentUploadProgress): Promise<{ url: string }> => {
+      const existingAttachment = getExistingEditorAttachment(file);
+      if (existingAttachment) {
+        registerAttachment(existingAttachment.url, existingAttachment.fileId);
+        return { url: existingAttachment.url };
+      }
+
       const result = await uploadWithProgress({
         file,
         onStatusUpdate: (data) => {

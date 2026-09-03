@@ -38,6 +38,8 @@ Preserve essential code snippets, commands, or technical syntax
 
 ### MUST
 - Output in the SAME LANGUAGE as the conversation
+- Treat the most recent user instruction as the active contract; never replace it with an older objective
+- Mark completed, abandoned, rejected, or superseded tasks as historical context, never as active Action Items
 - Preserve ALL technical terms, code identifiers, file paths, and proper nouns exactly
 - Maintain factual accuracy - never invent or assume information
 - Keep code snippets that are essential for context

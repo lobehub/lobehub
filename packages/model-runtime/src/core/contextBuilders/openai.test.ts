@@ -428,6 +428,47 @@ describe('convertOpenAIMessages', () => {
     expect((result[0] as any).reasoning).toBeUndefined();
   });
 
+  describe('reasoning passback for thinking families', () => {
+    // Upstream rejects a thinking-mode turn that carries tool_calls without the
+    // historical reasoning: "If thinking mode and tool_calls, `reasoning_content`
+    // must be passed back to the API."
+    const assistantTurn = {
+      content: 'Calling a tool',
+      reasoning: { content: 'step-by-step thinking' },
+      role: 'assistant',
+      tool_calls: [
+        { function: { arguments: '{}', name: 'search' }, id: 'call-1', type: 'function' },
+      ],
+    } as any;
+
+    it.each([['deepseek-v4-pro'], ['glm-5.3'], ['kimi-k3']])(
+      'echoes structured reasoning back for %s',
+      async (model) => {
+        const result = await convertOpenAIMessages([assistantTurn], { model });
+
+        expect((result[0] as any).reasoning_content).toBe('step-by-step thinking');
+      },
+    );
+
+    it('leaves unrelated models untouched', async () => {
+      const result = await convertOpenAIMessages([assistantTurn], { model: 'gpt-5.6-sol' });
+
+      expect((result[0] as any).reasoning_content).toBeUndefined();
+    });
+
+    it('keeps the empty placeholder scoped to DeepSeek thinking models', async () => {
+      const withoutReasoning = { ...assistantTurn, reasoning: undefined };
+
+      const deepseek = await convertOpenAIMessages([withoutReasoning], {
+        model: 'deepseek-v4-pro',
+      });
+      const glm = await convertOpenAIMessages([withoutReasoning], { model: 'glm-5.3' });
+
+      expect((deepseek[0] as any).reasoning_content).toBe('');
+      expect((glm[0] as any).reasoning_content).toBeUndefined();
+    });
+  });
+
   it('should preserve reasoning_content field from messages (for DeepSeek compatibility)', async () => {
     const messages = [
       {

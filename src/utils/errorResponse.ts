@@ -1,9 +1,7 @@
 import { AUTH_REQUIRED_HEADER } from '@lobechat/desktop-bridge';
-import {
-  AgentRuntimeErrorType,
-  type ILobeAgentRuntimeErrorType,
-} from '@lobechat/model-runtime/types/error';
-import { type ErrorResponse, type ErrorType } from '@lobechat/types';
+import { getErrorCodeSpec } from '@lobechat/model-runtime/errors';
+import type { ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime/types/error';
+import type { ErrorResponse, ErrorType } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
 
 /**
@@ -13,84 +11,54 @@ import { ChatErrorType } from '@lobechat/types';
  */
 const AUTH_REQUIRED_ERROR_TYPES = new Set<ErrorType>([ChatErrorType.Unauthorized]);
 
+/**
+ * Resolves canonical runtime specs before app-only fallbacks so codes such as
+ * InvalidRequestFormat keep their declared 400 instead of the legacy Invalid* 401.
+ */
 const getStatus = (errorType: ILobeAgentRuntimeErrorType | ErrorType) => {
+  const spec = getErrorCodeSpec(typeof errorType === 'string' ? errorType : undefined);
+  if (spec) return spec.httpStatus;
+
   // InvalidAccessCode / InvalidAzureAPIKey / InvalidOpenAIAPIKey / InvalidZhipuAPIKey ....
   if (errorType.toString().includes('Invalid')) return 401;
 
   switch (errorType) {
+    case ChatErrorType.NoOpenAIAPIKey: {
+      return 401;
+    }
+
     case ChatErrorType.SubscriptionPlanLimit:
-    case ChatErrorType.FreePlanLimit:
-    case ChatErrorType.InsufficientBudgetForModel:
     case ChatErrorType.WorkspaceFrozenByAdmin:
     case ChatErrorType.WorkspaceFrozenByRiskControl:
     case ChatErrorType.WorkspaceSubscriptionInactive: {
       return 403;
     }
 
-    // TODO: Need to refactor to Invalid OpenAI API Key
-    case AgentRuntimeErrorType.InvalidProviderAPIKey:
-    case AgentRuntimeErrorType.NoOpenAIAPIKey: {
-      return 401;
-    }
-
-    case AgentRuntimeErrorType.ExceededContextWindow:
-    case AgentRuntimeErrorType.ExceededToolLimit:
-    case ChatErrorType.SubscriptionKeyMismatch:
-    case ChatErrorType.SystemTimeNotMatchError:
-    case ChatErrorType.LobeHubModelDeprecated: {
+    case ChatErrorType.SystemTimeNotMatchError: {
       return 400;
-    }
-
-    case AgentRuntimeErrorType.LocationNotSupportError: {
-      return 403;
-    }
-
-    case AgentRuntimeErrorType.ModelNotFound: {
-      return 404;
-    }
-
-    case AgentRuntimeErrorType.AccountDeactivated: {
-      return 403;
-    }
-
-    case AgentRuntimeErrorType.InsufficientQuota:
-    case AgentRuntimeErrorType.QuotaLimitReached: {
-      return 429;
-    }
-
-    // define the 471~480 as provider error
-    case AgentRuntimeErrorType.AgentRuntimeError: {
-      return 470;
-    }
-
-    case AgentRuntimeErrorType.ProviderBizError:
-    case AgentRuntimeErrorType.ProviderContentPolicyViolation: {
-      return 471;
-    }
-
-    // all local provider connection error
-    case AgentRuntimeErrorType.OllamaServiceUnavailable:
-    case ChatErrorType.OllamaServiceUnavailable:
-    case AgentRuntimeErrorType.OllamaBizError: {
-      return 472;
     }
   }
 
-  return errorType as number;
+  return typeof errorType === 'number' ? errorType : undefined;
 };
 
 export const createErrorResponse = (
   errorType: ErrorType | ILobeAgentRuntimeErrorType,
   body?: any,
 ) => {
-  const statusCode = getStatus(errorType);
+  const resolvedStatusCode = getStatus(errorType);
+  const isValidStatusCode =
+    typeof resolvedStatusCode === 'number' &&
+    resolvedStatusCode >= 200 &&
+    resolvedStatusCode <= 599;
+  const statusCode = isValidStatusCode ? resolvedStatusCode : 500;
 
   const data: ErrorResponse = { body, errorType };
 
-  if (typeof statusCode !== 'number' || statusCode < 200 || statusCode > 599) {
+  if (!isValidStatusCode) {
     console.error(
-      `current StatusCode: \`${statusCode}\` .`,
-      'Please go to `./src/app/api/errorResponse.ts` to defined the statusCode.',
+      `Unknown error type: \`${errorType}\`.`,
+      'Falling back to HTTP 500. Define the status in the shared error code specs or app mapping.',
     );
   }
 

@@ -77,8 +77,8 @@ const renderMenuItems = (items: MockDropdownItem[]) =>
 
 const getLatestExportedBlob = () => vi.mocked(URL.createObjectURL).mock.calls.at(-1)?.[0] as Blob;
 
-vi.mock('@lobehub/ui', () => ({
-  ActionIcon: () => <button aria-label="more" type="button" />,
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   DropdownMenu: ({
     children,
     items = [],
@@ -90,13 +90,6 @@ vi.mock('@lobehub/ui', () => ({
       <div data-testid="agent-profile-menu">{renderMenuItems(items)}</div>
     </div>
   ),
-  Flexbox: ({ children }: PropsWithChildren) => <div>{children}</div>,
-  Icon: () => <span />,
-}));
-
-vi.mock('@lobehub/ui/base-ui', () => ({
-  confirmModal: vi.fn(),
-  toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
 }));
 
 vi.mock('antd', async (importOriginal) => {
@@ -130,12 +123,6 @@ vi.mock('lucide-react', async (importOriginal) => ({
   MoreHorizontal: () => null,
   Settings2Icon: () => null,
   Trash: () => null,
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
 }));
 
 vi.mock('react-router', () => ({

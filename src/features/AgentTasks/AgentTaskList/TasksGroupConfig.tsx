@@ -1,6 +1,6 @@
 import { type FormItemProps } from '@lobehub/ui';
-import { ActionIcon, Flexbox, Form, Icon, Popover } from '@lobehub/ui';
-import { Select, Switch, Tabs } from '@lobehub/ui/base-ui';
+import { Flexbox, Form, Icon, Popover } from '@lobehub/ui';
+import { ActionIcon, Select, Switch, Tabs } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import {
   ArrowDownWideNarrow,
@@ -45,9 +45,14 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
       { label: t('taskList.groupBy.none'), value: 'none' },
       { label: t('taskList.groupBy.status'), value: 'status' },
       { label: t('taskList.groupBy.assignee'), value: 'assignee' },
+      { label: t('taskList.groupBy.member'), value: 'member' },
       { label: t('taskList.groupBy.priority'), value: 'priority' },
     ],
     [t],
+  );
+  const boardGroupingOptions = useMemo(
+    () => groupingOptions.filter((item) => item.value !== 'none'),
+    [groupingOptions],
   );
   const orderOptions = useMemo<Array<{ label: string; value: TaskOrderBy }>>(
     () => [
@@ -66,26 +71,45 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
     [groupingOptions, options.groupBy],
   );
   const isSubGroupingEnabled = options.groupBy !== 'none';
+  const groupingSelectOptions = viewMode === 'kanban' ? boardGroupingOptions : groupingOptions;
+  const groupingValue =
+    viewMode === 'kanban' && options.groupBy === 'none' ? 'status' : options.groupBy;
+
+  const groupingFormItem = {
+    children: (
+      <Select
+        options={groupingSelectOptions}
+        size={'small'}
+        style={{ width: 150 }}
+        value={groupingValue}
+        onChange={(value: TaskGroupBy) => {
+          setOptions((prev) => ({
+            ...prev,
+            groupBy: value,
+            subGroupBy: prev.subGroupBy === value ? 'none' : prev.subGroupBy,
+          }));
+        }}
+      />
+    ),
+    label: viewMode === 'kanban' ? t('taskList.form.columns') : t('taskList.form.grouping'),
+  } satisfies FormItemProps;
+
+  const showCompletedFormItem = {
+    children: (
+      <Switch
+        checked={!options.hideCompleted}
+        size={'small'}
+        onChange={(checked) => {
+          setOptions((prev) => ({ ...prev, hideCompleted: !checked }));
+        }}
+      />
+    ),
+    minWidth: undefined,
+    label: t('taskList.form.showCompleted'),
+  } satisfies FormItemProps;
 
   const formItems: FormItemProps[] = [
-    {
-      children: (
-        <Select
-          options={groupingOptions}
-          size={'small'}
-          style={{ width: 150 }}
-          value={options.groupBy}
-          onChange={(value: TaskGroupBy) => {
-            setOptions((prev) => ({
-              ...prev,
-              groupBy: value,
-              subGroupBy: prev.subGroupBy === value ? 'none' : prev.subGroupBy,
-            }));
-          }}
-        />
-      ),
-      label: t('taskList.form.grouping'),
-    },
+    groupingFormItem,
     ...(isSubGroupingEnabled
       ? [
           {
@@ -143,19 +167,7 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
       minWidth: undefined,
       label: t('taskList.form.orderCompletedByRecency'),
     },
-    {
-      children: (
-        <Switch
-          checked={!options.hideCompleted}
-          size={'small'}
-          onChange={(checked) => {
-            setOptions((prev) => ({ ...prev, hideCompleted: !checked }));
-          }}
-        />
-      ),
-      minWidth: undefined,
-      label: t('taskList.form.showCompleted'),
-    },
+    showCompletedFormItem,
     {
       children: (
         <Switch
@@ -189,6 +201,7 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
         ]
       : []),
   ];
+  const boardFormItems = [groupingFormItem, showCompletedFormItem];
 
   const panelContent = (
     <Flexbox gap={12} width={280}>
@@ -210,18 +223,16 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
           updateSystemStatus({ taskListViewMode: key as TaskViewMode }, 'updateTaskListViewMode')
         }
       />
-      {viewMode === 'list' && (
-        <Form
-          className={styles.form}
-          items={formItems}
-          itemsType={'flat'}
-          size={'small'}
-          variant={'borderless'}
-          styles={{
-            item: { padding: 0 },
-          }}
-        />
-      )}
+      <Form
+        className={styles.form}
+        items={viewMode === 'kanban' ? boardFormItems : formItems}
+        itemsType={'flat'}
+        size={'small'}
+        variant={'borderless'}
+        styles={{
+          item: { padding: 0 },
+        }}
+      />
     </Flexbox>
   );
 

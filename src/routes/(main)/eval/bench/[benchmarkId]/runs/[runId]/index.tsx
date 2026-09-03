@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button, confirmModal, Text } from '@lobehub/ui/base-ui';
 import { Progress } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Play, RotateCcw } from 'lucide-react';
@@ -78,7 +78,7 @@ const RunDetail = memo(() => {
 
   const pollingConfig = { refreshInterval: isActive ? POLLING_INTERVAL : 0 };
 
-  const { error, isLoading, mutate } = useFetchRunDetail(runId!, pollingConfig);
+  const { error, mutate } = useFetchRunDetail(runId!, pollingConfig);
   useFetchRunResults(runId!, pollingConfig);
 
   const hasResults = !!runResults?.results?.length;
@@ -109,7 +109,6 @@ const RunDetail = memo(() => {
       error={error}
       errorVariant={'page'}
       isEmpty={!runDetail}
-      isLoading={isLoading}
       onRetry={() => mutate()}
     >
       {runDetail && (

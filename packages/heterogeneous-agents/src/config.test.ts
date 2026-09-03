@@ -19,6 +19,7 @@ describe('heterogeneous agent config', () => {
       'codebuddy',
       'codex',
       'cursor',
+      'droid',
       'grok-build',
       'kimi-code',
       'opencode',
@@ -53,6 +54,18 @@ describe('heterogeneous agent config', () => {
       install: { commands: ['curl https://cursor.com/install -fsS | bash'] },
       title: 'Cursor',
       type: 'cursor',
+    });
+    expect(getHeterogeneousAgentConfig('droid')).toMatchObject({
+      auth: { signInCommand: 'droid' },
+      defaultCommand: 'droid',
+      install: {
+        commands: [
+          'curl -fsSL https://app.factory.ai/cli | sh',
+          'irm https://app.factory.ai/cli/windows | iex',
+        ],
+      },
+      title: 'Factory Droid',
+      type: 'droid',
     });
     expect(getHeterogeneousAgentConfig('amp')).toMatchObject({
       defaultCommand: 'amp',
@@ -128,6 +141,13 @@ describe('heterogeneous agent config', () => {
       docsUrl: 'https://cursor.com/docs/cli/installation',
       message: 'Cursor could not authenticate. Run `agent login`, then retry.',
     });
+    expect(isHeterogeneousAgentAuthRequired('droid', 'Authentication required')).toBe(true);
+    expect(buildHeterogeneousAgentAuthRequiredError({ agentType: 'droid' })).toMatchObject({
+      command: 'droid',
+      docsUrl: 'https://docs.factory.ai/cli/getting-started/quickstart',
+      message:
+        'Factory Droid could not authenticate. Run `droid` to sign in or configure FACTORY_API_KEY, then retry.',
+    });
   });
 
   it('builds TRAE CLI installation guidance without duplicating the CLI suffix', () => {
@@ -146,6 +166,7 @@ describe('heterogeneous agent config', () => {
       'codebuddy': 'CodeBuddy',
       'codex': 'Codex',
       'cursor': 'Cursor',
+      'droid': 'Factory Droid',
       'grok-build': 'Grok Build',
       'hermes': 'Hermes',
       'kimi-code': 'Kimi Code',
@@ -169,6 +190,7 @@ describe('heterogeneous agent config', () => {
   it('classifies local CLIs separately from remote platforms', () => {
     expect(isRemoteHeterogeneousType('amp')).toBe(false);
     expect(isRemoteHeterogeneousType('codebuddy')).toBe(false);
+    expect(isRemoteHeterogeneousType('droid')).toBe(false);
     expect(isRemoteHeterogeneousType('opencode')).toBe(false);
     expect(isRemoteHeterogeneousType('pi')).toBe(false);
     expect(isRemoteHeterogeneousType('qoder')).toBe(false);

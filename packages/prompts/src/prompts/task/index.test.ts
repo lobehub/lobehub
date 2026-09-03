@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   buildTaskRunPrompt,
   formatTaskCreated,
+  formatTaskDetail,
   formatTasksCreated,
+  formatWorkspaceMembers,
   taskDetailHref,
   taskRef,
 } from './index';
@@ -453,7 +455,9 @@ describe('buildTaskRunPrompt', () => {
     expect(result).toContain('login page renders (required)');
     expect(result).toContain('· evidence: screenshot — full page');
     expect(result).toContain('console is clean');
-    expect(result).toContain('lh acceptance run result submit');
+    expect(result).toContain('include artifact paths, commands, and observed results');
+    expect(result).toContain('an independent verifier decides whether this Task is complete');
+    expect(result).not.toContain('lh acceptance run result submit');
   });
 
   it('should omit the verify section when verify is disabled', () => {
@@ -718,5 +722,79 @@ describe('buildTaskRunPrompt', () => {
     // …the oldest stays title-only.
     expect(result).not.toContain('summary-one');
     expect(result).toContain('round 1');
+  });
+});
+
+describe('human assignee formatting', () => {
+  it('formatTaskCreated surfaces the member assignee when present', () => {
+    const base = { identifier: 'T-1', instruction: 'do it', name: 'Task', status: 'backlog' };
+    expect(formatTaskCreated({ ...base, assigneeLabel: 'Alice (usr_2)' })).toContain(
+      '  Assignee: Alice (usr_2)',
+    );
+    expect(formatTaskCreated(base)).not.toContain('Assignee:');
+  });
+
+  it('formatTaskDetail lists the member assignee (detail.userId) next to the agent', () => {
+    const out = formatTaskDetail({
+      agentId: null,
+      identifier: 'T-1',
+      instruction: 'do it',
+      status: 'backlog',
+      userId: 'usr_2',
+    });
+    expect(out).toContain('Assignee (member): usr_2');
+    expect(out).not.toContain('Agent:');
+  });
+
+  it('formatWorkspaceMembers renders one line per member with the id to pass back', () => {
+    const out = formatWorkspaceMembers([
+      { id: 'usr_1', isSelf: true, name: 'Me', role: 'owner', username: 'me' },
+      { id: 'usr_2', name: 'Alice Chen', role: 'member', username: 'alice' },
+      { id: 'usr_3', username: 'bob' },
+    ]);
+    expect(out).toContain('Workspace members that can be assigned tasks (3)');
+    expect(out).toContain('- Me  @me  role=owner  (you)  id=usr_1');
+    expect(out).toContain('- Alice Chen  @alice  role=member  id=usr_2');
+    // No display name → the username stands in, and is not repeated as @handle.
+    expect(out).toContain('- bob  id=usr_3');
+  });
+
+  it('formatWorkspaceMembers surfaces email and linked IM identities for exact matching', () => {
+    const out = formatWorkspaceMembers([
+      {
+        email: 'alice@lobehub.com',
+        id: 'usr_2',
+        imAccounts: ['discord:@Neko(4521)', 'slack:U123'],
+        name: 'Alice Chen',
+        role: 'member',
+        username: 'alice',
+      },
+    ]);
+    expect(out).toContain(
+      '- Alice Chen  @alice  alice@lobehub.com  role=member  im=discord:@Neko(4521),slack:U123  id=usr_2',
+    );
+  });
+
+  it('formatWorkspaceMembers announces a capped or filtered directory', () => {
+    const alice = { id: 'usr_2', name: 'Alice Chen', role: 'member', username: 'alice' };
+    expect(formatWorkspaceMembers([alice], { inWorkspace: true, total: 3 })).toContain(
+      'Workspace members that can be assigned tasks (1 of 3 — pass query to narrow).',
+    );
+    expect(
+      formatWorkspaceMembers([alice], { inWorkspace: true, query: 'ali', total: 1 }),
+    ).toContain('Workspace members that can be assigned tasks matching "ali" (1).');
+    expect(formatWorkspaceMembers([], { inWorkspace: true, query: 'zed', total: 0 })).toBe(
+      'No workspace members match "zed". Try a different name, @handle, email or platform id.',
+    );
+  });
+
+  it('formatWorkspaceMembers explains personal mode and empty results', () => {
+    expect(
+      formatWorkspaceMembers([{ id: 'usr_1', isSelf: true, name: 'Me' }], { inWorkspace: false }),
+    ).toContain('Not in a workspace — the only person a task can be assigned to is you:');
+    expect(formatWorkspaceMembers([], { inWorkspace: false })).toContain(
+      'tasks can only be assigned to agents here',
+    );
+    expect(formatWorkspaceMembers([])).toBe('No workspace members can be assigned tasks.');
   });
 });

@@ -1,10 +1,10 @@
 'use client';
 
 import { useEditor } from '@lobehub/editor/react';
-import { ActionIcon, Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button, toast, useModalContext } from '@lobehub/ui/base-ui';
+import { Block, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Button, Text, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { Minimize2, Paperclip, UserCircle2, X } from 'lucide-react';
+import { Minimize2, Paperclip, X } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,14 +17,20 @@ import {
 import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
 import { useTaskStore } from '@/store/task';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import AssigneeAgentSelector from '../features/AssigneeAgentSelector';
 import AssigneeAvatar from '../features/AssigneeAvatar';
+import AssigneeMemberSelector from '../features/AssigneeMemberSelector';
+import AssigneeUserAvatar from '../features/AssigneeUserAvatar';
 import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskVisibilityChipLabel from '../features/TaskVisibilityChipLabel';
 import TaskVisibilityTag from '../features/TaskVisibilityTag';
+import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 import { useAgentVisibility } from '../shared/useAgentVisibility';
+import { useUserDisplayMeta } from '../shared/useUserDisplayMeta';
 
 export interface CreateTaskContentProps {
   agentId?: string;
@@ -57,23 +63,42 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
     const [title, setTitle] = useState('');
     const [priority, setPriority] = useState(0);
     const [assigneeAgentId, setAssigneeAgentId] = useState<string | undefined>(agentId);
-    // Default to private in workspace mode so the user has to opt in to share.
-    // In personal mode the field is irrelevant and the chip is hidden anyway.
-    const [visibility, setVisibility] = useState<'private' | 'public'>('private');
+    const [assigneeUserId, setAssigneeUserId] = useState<string | undefined>();
+    // Default to workspace-visible: workspace tasks are team work by default,
+    // and going private stays one click away. In personal mode the field is
+    // irrelevant and the chip is hidden anyway.
+    const [visibility, setVisibility] = useState<'private' | 'public'>('public');
 
-    // A private agent can only run a private task. When the selected agent
-    // is private we force visibility back to private and lock the chip so
-    // the user can't pick Workspace.
     const assigneeVisibility = useAgentVisibility(assigneeAgentId);
     const isPrivateAgent = assigneeVisibility === 'private';
+    const selfUserId = useUserStore(userProfileSelectors.userId);
+    const isOtherMemberAssignee = Boolean(assigneeUserId) && assigneeUserId !== selfUserId;
+
+    // Resolve the two visibility constraints in one place so an old draft or an
+    // externally privatized agent cannot make separate effects toggle forever.
+    // A private agent is the stronger constraint, so drop an incompatible member.
     useEffect(() => {
-      if (isPrivateAgent && visibility === 'public') setVisibility('private');
-    }, [isPrivateAgent, visibility]);
+      if (isPrivateAgent) {
+        if (isOtherMemberAssignee) setAssigneeUserId(undefined);
+        if (visibility === 'public') setVisibility('private');
+        return;
+      }
+
+      if (isOtherMemberAssignee && visibility === 'private') setVisibility('public');
+    }, [isOtherMemberAssignee, isPrivateAgent, visibility]);
 
     const editor = useEditor();
     const instructionRef = useRef('');
 
     const assigneeMeta = useAgentDisplayMeta(assigneeAgentId);
+    const memberMeta = useUserDisplayMeta(assigneeUserId);
+
+    const handleAgentChange = useCallback((nextAgentId: string | null) => {
+      setAssigneeAgentId(nextAgentId ?? undefined);
+    }, []);
+    const handleMemberChange = useCallback((nextUserId: string | null) => {
+      setAssigneeUserId(nextUserId ?? undefined);
+    }, []);
 
     const handleInline = useCallback(() => {
       updateSystemStatus({ taskCreateInlineCollapsed: false }, 'expandTaskCreateInline');
@@ -103,6 +128,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
       try {
         const result = await createTask({
           assigneeAgentId,
+          assigneeUserId,
           editorData: editorJson,
           instruction: instruction || title.trim(),
           name: title.trim() || undefined,
@@ -125,6 +151,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
     }, [
       activeWorkspaceId,
       assigneeAgentId,
+      assigneeUserId,
       canCreateTask,
       close,
       createTask,
@@ -222,12 +249,60 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
               </Block>
             </TaskPriorityTag>
 
-            {(() => {
-              const assigneeChip = (
+            {activeWorkspaceId && (
+              <AssigneeMemberSelector
+                currentUserId={assigneeUserId}
+                taskVisibility={visibility}
+                onChange={handleMemberChange}
+              >
                 <Block
+                  clickable
                   horizontal
                   align="center"
-                  clickable={!lockAssignee}
+                  gap={6}
+                  paddingBlock={4}
+                  paddingInline={8}
+                  variant={'borderless'}
+                >
+                  {assigneeUserId ? (
+                    <>
+                      <AssigneeUserAvatar size={18} userId={assigneeUserId} />
+                      <Text fontSize={12}>{memberMeta?.title}</Text>
+                    </>
+                  ) : (
+                    <>
+                      <UnassignedAssigneeIcon kind={'human'} size={14} />
+                      <Text color={cssVar.colorTextDescription} fontSize={12}>
+                        {t('createTask.member')}
+                      </Text>
+                    </>
+                  )}
+                </Block>
+              </AssigneeMemberSelector>
+            )}
+
+            {lockAssignee ? (
+              <Block
+                horizontal
+                align="center"
+                gap={6}
+                paddingBlock={4}
+                paddingInline={8}
+                variant={'borderless'}
+              >
+                <AssigneeAvatar agentId={assigneeAgentId} size={18} />
+                <Text fontSize={12}>{assigneeMeta?.title}</Text>
+              </Block>
+            ) : (
+              <AssigneeAgentSelector
+                currentAgentId={assigneeAgentId}
+                taskVisibility={isOtherMemberAssignee ? 'public' : undefined}
+                onChange={handleAgentChange}
+              >
+                <Block
+                  clickable
+                  horizontal
+                  align="center"
                   gap={6}
                   paddingBlock={4}
                   paddingInline={8}
@@ -240,26 +315,15 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
                     </>
                   ) : (
                     <>
-                      <Icon color={cssVar.colorTextDescription} icon={UserCircle2} size={14} />
+                      <UnassignedAssigneeIcon kind={'agent'} size={14} />
                       <Text color={cssVar.colorTextDescription} fontSize={12}>
                         {t('createTask.assignee')}
                       </Text>
                     </>
                   )}
                 </Block>
-              );
-
-              return lockAssignee ? (
-                assigneeChip
-              ) : (
-                <AssigneeAgentSelector
-                  currentAgentId={assigneeAgentId}
-                  onChange={setAssigneeAgentId}
-                >
-                  {assigneeChip}
-                </AssigneeAgentSelector>
-              );
-            })()}
+              </AssigneeAgentSelector>
+            )}
 
             {activeWorkspaceId && (
               <TaskVisibilityTag
@@ -269,7 +333,12 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
                     ? t('createTask.visibility.privateAgentLocked', {
                         defaultValue: 'Private agents can only run private tasks.',
                       })
-                    : undefined
+                    : isOtherMemberAssignee
+                      ? t('createTask.visibility.memberAssigneeLocked', {
+                          defaultValue:
+                            'A task assigned to a member stays visible to the workspace.',
+                        })
+                      : undefined
                 }
                 onChange={setVisibility}
               >

@@ -1,3 +1,4 @@
+import { MAX_UPLOAD_FILE_SIZE, UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -612,6 +613,31 @@ describe('fileRouter', () => {
       );
     });
 
+    it('should reject actual storage objects larger than the database size range', async () => {
+      mockFileModelCheckHash.mockResolvedValue({ isExist: false });
+      mockFileServiceGetFileMetadata.mockResolvedValue({
+        contentLength: MAX_UPLOAD_FILE_SIZE + 1,
+        contentType: 'application/octet-stream',
+      });
+
+      await expect(
+        caller.createFile({
+          hash: 'test-hash',
+          fileType: 'application/octet-stream',
+          metadata: {},
+          name: 'huge.bin',
+          size: 100,
+          url: 'files/huge.bin',
+        }),
+      ).rejects.toMatchObject({
+        code: 'PAYLOAD_TOO_LARGE',
+        message: UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE,
+      });
+
+      expect(mockFileModelCreate).not.toHaveBeenCalled();
+      expect(routerMocks.businessFileUploadCheck).not.toHaveBeenCalled();
+    });
+
     it('should fallback to input size when getFileMetadata fails', async () => {
       mockFileModelCheckHash.mockResolvedValue({ isExist: false });
       mockFileModelCreate.mockResolvedValue({ id: 'new-file-id' });
@@ -1085,6 +1111,9 @@ describe('fileRouter', () => {
         null,
         'test-user',
         undefined,
+        {
+          forbidForeignRows: true,
+        },
       );
       expect(mockFileModelFindById).not.toHaveBeenCalled();
     });

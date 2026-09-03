@@ -51,15 +51,8 @@ vi.mock('@lobehub/analytics', () => ({
   }),
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({ onClick }: { onClick?: () => void }) => (
-    <button aria-label="icon action" type="button" onClick={onClick} />
-  ),
-  Block: ({ children, onClick }: { children?: ReactNode; onClick?: () => void }) => (
-    <button type="button" onClick={onClick}>
-      {children}
-    </button>
-  ),
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   Button: ({
     children,
     disabled,
@@ -83,8 +76,6 @@ vi.mock('@lobehub/ui', () => ({
       {children}
     </button>
   ),
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 
 vi.mock('@/services/marketApi', () => ({
@@ -99,7 +90,8 @@ vi.mock('@/services/skill', () => ({
   },
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   Button: ({
     children,
     disabled,
@@ -124,17 +116,6 @@ vi.mock('@lobehub/ui/base-ui', () => ({
     </button>
   ),
   createModal: vi.fn(),
-}));
-
-vi.mock('antd-style', () => ({
-  cssVar: {
-    borderRadiusLG: 8,
-    colorError: '#f00',
-    colorSuccess: '#0a0',
-    colorTextDescription: '#666',
-    colorTextSecondary: '#666',
-    colorTextTertiary: '#999',
-  },
 }));
 
 vi.mock('react-i18next', () => ({

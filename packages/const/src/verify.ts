@@ -59,6 +59,7 @@ export type VerifyUserDecision = (typeof verifyUserDecisions)[number];
 export const verifyRunStatuses = [
   'unverified',
   'planned',
+  'collecting_evidence',
   'verifying',
   'passed',
   'failed',
@@ -161,6 +162,14 @@ const PROGRAMMATIC_TEST_PATTERNS: RegExp[] = [
   // Chinese
   /单元测试|单测|集成测试|回归测试|类型检查|类型校验|测试覆盖率|代码覆盖率|静态检查|测试用例全部通过/,
 ];
+
+/**
+ * Stored title of the synthesized holistic fallback check (one broad agent
+ * verify over the whole deliverable, used when a task opted into verify without
+ * decomposing into criteria). The server persists this fixed English string;
+ * clients match against it to render a localized display title instead.
+ */
+export const HOLISTIC_CHECK_TITLE = 'Task delivery acceptance';
 
 /**
  * Whether a proposed acceptance check is really one of the repo's programmatic
@@ -323,6 +332,7 @@ export type VerifyEvidenceType = (typeof verifyEvidenceTypes)[number];
 
 /** Who / what captured an evidence artifact (provenance). */
 export const verifyEvidenceCapturedBy = [
+  'agent',
   'agent-browser',
   'cdp',
   'cli',
@@ -363,3 +373,37 @@ export interface VerifyRunOrigin {
   /** The topic to reopen to continue from this report. */
   topicId?: string;
 }
+
+/**
+ * GOMS-KLM interaction cost — the standard model for pricing a verification
+ * round's *user-equivalent* interaction cost.
+ *
+ * The seam is deliberate: a UI driver (the acceptance skill's agent-browser
+ * wrapper) only emits raw **operator counts** per action into a JSONL trace; the
+ * platform turns counts into seconds with the timing model below. Keeping the
+ * timing here rather than in the driver means every report is priced by one
+ * model, and any published `interactionCost` can be recomputed from its trace.
+ */
+export const GOMS_KLM_MODEL = 'goms-klm@lobe-v1';
+
+/** Schema tag every trace atom carries; a foreign tag is not summed. */
+export const GOMS_KLM_TRACE_SCHEMA = 'lobehub.agentBrowserKlmTrace@1';
+
+/**
+ * Conventional trace filename inside a report directory. `acceptance run ingest`
+ * picks it up automatically — absent means the round simply has no interaction
+ * cost (a CLI-only run, or a machine without agent-browser), never an error.
+ */
+export const GOMS_KLM_TRACE_FILE = 'interaction-trace.jsonl';
+
+/**
+ * Seconds per KLM operator (Card, Moran & Newell), tuned for pointer-driven web
+ * UI. `T_char` prices one typed character; `R_ms` is measured wait, not modeled.
+ */
+export const GOMS_KLM_TIMING_SECONDS = {
+  H: 0.4,
+  K: 0.2,
+  M: 1.35,
+  P: 1.1,
+  T_char: 0.2,
+} as const;

@@ -201,6 +201,42 @@ describe('DeviceGateway', () => {
       ]);
     });
 
+    it('absorbs a transient failure instead of reporting an empty pool', async () => {
+      // The online set decides which devices a run may reach, so one dropped
+      // connection must not read as "every device is offline".
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+      const connectedAt = Date.parse('2025-01-15T10:30:00Z');
+      mockClient.queryDeviceList
+        .mockRejectedValueOnce(new Error('fetch failed'))
+        .mockResolvedValueOnce([
+          { connectedAt, deviceId: 'dev-1', hostname: 'my-laptop', platform: 'darwin' },
+        ]);
+
+      const result = await new DeviceGateway().queryDeviceList('user-1');
+
+      expect(mockClient.queryDeviceList).toHaveBeenCalledTimes(2);
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({ deviceId: 'dev-1', online: true });
+    });
+
+    it('reports the fallback out loud when the gateway stays unreachable', async () => {
+      // The old bare `catch {}` made this failure invisible: a device-bound run
+      // degraded to the cloud sandbox with no breadcrumb in any log.
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+      mockClient.queryDeviceList.mockRejectedValue(new Error('fetch failed'));
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const result = await new DeviceGateway().queryDeviceList('user-1', 'ws-1');
+
+      expect(result).toEqual([]);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('queryDeviceList'),
+        expect.objectContaining({ error: 'fetch failed', userId: 'user-1', workspaceId: 'ws-1' }),
+      );
+    });
+
     it('should return empty array on error', async () => {
       mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
       mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';

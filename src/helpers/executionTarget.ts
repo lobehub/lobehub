@@ -81,7 +81,7 @@ export interface ResolveExecutionTargetOptions {
   isHetero?: boolean;
   /**
    * Whether this heterogeneous provider can execute in the server cloud
-   * sandbox. Defaults to `false` for Amp, CodeBuddy, OpenCode, Pi, and Qoder
+   * sandbox. Defaults to `false` for Amp, CodeBuddy, Droid, OpenCode, Pi, and Qoder
    * (which currently
    * require a local or connected device) and `true` otherwise. Callers that only
    * know the provider through a legacy model discriminator can override the
@@ -117,6 +117,7 @@ export const isHeterogeneousSandboxExecutionAvailable = (type: string | undefine
   type !== 'amp' &&
   type !== 'codebuddy' &&
   type !== 'cursor' &&
+  type !== 'droid' &&
   type !== 'kimi-code' &&
   type !== 'hermes' &&
   type !== 'opencode' &&
@@ -249,6 +250,24 @@ export const isLocalSandboxEnabled = (
 ): boolean => effectiveTarget === 'local' && agencyConfig?.localSandbox === true;
 
 /**
+ * Whether a run resolved to `target` executes somewhere that can read absolute
+ * paths on THIS machine — the gate for inserting `<localFile>` path references
+ * (drag-drop) instead of uploading the file. Only `local` (in-process on this
+ * desktop) or a `device` target whose bound device IS this machine qualifies.
+ * `sandbox` runs in a cloud container where the user's filesystem does not
+ * exist, and `auto` / a foreign `device` may land on another machine — a path
+ * reference dragged from here would be unreadable there, so those runs must
+ * fall back to attachment upload.
+ */
+export const canExecutionTargetReadLocalPaths = (
+  target: DeviceExecutionTarget,
+  agencyConfig: LobeAgentAgencyConfig | undefined,
+  currentDeviceId: string | undefined,
+): boolean =>
+  target === 'local' ||
+  (target === 'device' && !!currentDeviceId && agencyConfig?.boundDeviceId === currentDeviceId);
+
+/**
  * Derive the `runtimeMode` tool gate from the unified execution target:
  * `local` → local-system tools, `sandbox` → cloud sandbox, `device`/`auto` →
  * gateway routing, `none` → no run tools (plain chat). `device`/`auto`/`none`
@@ -325,6 +344,23 @@ export type ExecutionPlan = { target: DeviceExecutionTarget } &
     /** ephemeral cloud sandbox */
     | { kind: 'sandbox' }
   );
+
+export type ExecutionManifestEnvironment = ExecutionPlan['kind'] | 'local';
+
+/**
+ * Preserve the desktop-local capability signal after the server resolves that
+ * target to the caller's registered desktop. A per-request device override can
+ * keep `target: local` while routing to another machine, so the device IDs must
+ * match before the manifest advertises desktop-only image reads. Unrouted local
+ * targets keep their plan kind so manifests describe the sandbox degradation.
+ */
+export const executionPlanToManifestExecutionEnv = (
+  plan: ExecutionPlan,
+  localDeviceId?: string,
+): ExecutionManifestEnvironment =>
+  plan.kind === 'device' && plan.target === 'local' && plan.deviceId === localDeviceId
+    ? 'local'
+    : plan.kind;
 
 /** Device tools (local-system / remote-device proxy) only exist in device-capable sessions. */
 export const isDeviceCapablePlan = (plan: ExecutionPlan): boolean =>

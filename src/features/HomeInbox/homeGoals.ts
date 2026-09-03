@@ -1,4 +1,4 @@
-import { getGoalPresentation } from '@/features/AgentGoals/goalPresentation';
+import { goalStatusKey } from '@/features/AgentGoals/goalPresentation';
 import type { GoalListItem } from '@/store/goal/initialState';
 
 /** Past this the rail card stops being a card and starts being a page. */
@@ -9,13 +9,15 @@ export type HomeGoalBucket = 'review' | 'running';
 export interface HomeGoalEntry {
   agentId: string | null;
   bucket: HomeGoalBucket;
+  /** The `goals` row id — what the detail route is keyed by. */
   id: string;
-  identifier: string;
-  maxRounds: number | null;
-  rounds: number;
+  /** Decision gates waiting on the user right now. */
+  pendingDecisions: number;
   /** Key in the `chat` namespace — the same label the goal pages use. */
   statusKey: GoalStatusKey;
   title: string;
+  workDone: number;
+  workTotal: number;
 }
 
 /**
@@ -41,51 +43,22 @@ const isOpenGoalStatus = (statusKey: string): statusKey is GoalStatusKey =>
 /** Actionable first: a delivered goal is blocked on the user, a running one isn't. */
 const BUCKET_ORDER: HomeGoalBucket[] = ['review', 'running'];
 
-/**
- * Acceptance status per goal task, from the one batched read the home rail
- * makes. One acceptance per subject is a scope invariant, so this is a plain
- * index — no recency tie-break to get wrong.
- */
-export const indexAcceptanceStatuses = (
-  acceptances: Array<{ status: string; subjectId: string }> = [],
-): Record<string, string> =>
-  Object.fromEntries(acceptances.map(({ status, subjectId }) => [subjectId, status]));
-
-const goalTitle = (goal: GoalListItem) =>
-  goal.name?.trim() || goal.instruction.trim() || goal.identifier;
-
-/**
- * The rail's goal rows, bucketed and ordered.
- *
- * A goal with no acceptance row at all falls back to its task status, which is
- * the right reading: nothing has judged it yet.
- */
-export const buildHomeGoalEntries = (
-  goals: GoalListItem[],
-  acceptanceStatusByTaskId: Record<string, string> = {},
-): HomeGoalEntry[] => {
-  const entries = goals.flatMap<HomeGoalEntry>((goal) => {
-    const maxRounds = goal.goal?.maxRounds ?? null;
-    const rounds = goal.totalTopics ?? 0;
-    const { statusKey } = getGoalPresentation({
-      acceptanceStatus: acceptanceStatusByTaskId[goal.id],
-      goalStatus: goal.goal?.status,
-      maxRounds,
-      rounds,
-      taskStatus: goal.status,
-    });
+/** The rail's goal rows, bucketed and ordered. */
+export const buildHomeGoalEntries = (goals: GoalListItem[]): HomeGoalEntry[] => {
+  const entries = goals.flatMap<HomeGoalEntry>((item) => {
+    const statusKey = goalStatusKey(item.goal.status);
     if (!isOpenGoalStatus(statusKey)) return [];
 
     return [
       {
-        agentId: goal.assigneeAgentId ?? null,
+        agentId: item.goal.agentId ?? null,
         bucket: BUCKET_BY_STATUS_KEY[statusKey],
-        id: goal.id,
-        identifier: goal.identifier,
-        maxRounds,
-        rounds,
+        id: item.goal.id,
+        pendingDecisions: item.pendingDecisions,
         statusKey,
-        title: goalTitle(goal),
+        title: item.goal.title,
+        workDone: item.workDone,
+        workTotal: item.workTotal,
       },
     ];
   });
@@ -128,4 +101,4 @@ export const resolveHomeGoalView = (
 
 /** Where a goal row goes: its own detail page under the agent that owns it. */
 export const homeGoalHref = (entry: HomeGoalEntry): string | undefined =>
-  entry.agentId ? `/agent/${entry.agentId}/goal/${entry.identifier}` : undefined;
+  entry.agentId ? `/agent/${entry.agentId}/goal/${entry.id}` : undefined;

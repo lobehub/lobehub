@@ -30,7 +30,6 @@ vi.mock('@/libs/swr', async () => {
   };
 });
 
-vi.mock('zustand/traditional');
 // Mock topicService 和 messageService
 vi.mock('@/services/topic', () => ({
   topicService: {
@@ -58,14 +57,6 @@ vi.mock('@/services/message', () => ({
     removeMessages: vi.fn(),
     removeMessagesByAssistant: vi.fn(),
     getMessages: vi.fn(),
-  },
-}));
-
-vi.mock('@lobehub/ui/base-ui', () => ({
-  toast: {
-    error: vi.fn(),
-    loading: vi.fn(() => ({ close: vi.fn() })),
-    success: vi.fn(),
   },
 }));
 

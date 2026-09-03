@@ -1,5 +1,7 @@
 import { unzip } from 'fflate';
 
+import { MAX_FILE_PARSE_SIZE } from '@/const/file';
+
 /**
  * Determines the MIME type based on file extension
  */
@@ -78,42 +80,59 @@ const getFileType = (fileName: string): string => {
  * @returns Promise that resolves to an array of extracted Files
  */
 export const unzipFile = async (zipFile: File): Promise<File[]> => {
+  if (zipFile.size > MAX_FILE_PARSE_SIZE) {
+    throw new Error('ZIP file is too large to extract in memory');
+  }
+
   return new Promise((resolve, reject) => {
     zipFile
       .arrayBuffer()
       .then((arrayBuffer) => {
         const uint8Array = new Uint8Array(arrayBuffer);
+        let expandedSize = 0;
 
-        unzip(uint8Array, (error, unzipped) => {
-          if (error) {
-            reject(error);
-            return;
-          }
-
-          const extractedFiles: File[] = [];
-
-          for (const [path, data] of Object.entries(unzipped)) {
-            // Skip directories and hidden files
-            if (path.endsWith('/') || path.includes('__MACOSX') || path.startsWith('.')) {
-              continue;
+        unzip(
+          uint8Array,
+          {
+            filter: ({ originalSize }) => {
+              expandedSize += originalSize;
+              if (expandedSize > MAX_FILE_PARSE_SIZE) {
+                throw new Error('ZIP contents are too large to extract in memory');
+              }
+              return true;
+            },
+          },
+          (error, unzipped) => {
+            if (error) {
+              reject(error);
+              return;
             }
 
-            // Get the filename from the path
-            const fileName = path.split('/').pop() || path;
+            const extractedFiles: File[] = [];
 
-            // Create a File object from the extracted data
-            const blob = new Blob([new Uint8Array(data)], {
-              type: getFileType(fileName),
-            });
-            const file = new File([blob], fileName, {
-              type: getFileType(fileName),
-            });
+            for (const [path, data] of Object.entries(unzipped)) {
+              // Skip directories and hidden files
+              if (path.endsWith('/') || path.includes('__MACOSX') || path.startsWith('.')) {
+                continue;
+              }
 
-            extractedFiles.push(file);
-          }
+              // Get the filename from the path
+              const fileName = path.split('/').pop() || path;
 
-          resolve(extractedFiles);
-        });
+              // Create a File object from the extracted data
+              const blob = new Blob([new Uint8Array(data)], {
+                type: getFileType(fileName),
+              });
+              const file = new File([blob], fileName, {
+                type: getFileType(fileName),
+              });
+
+              extractedFiles.push(file);
+            }
+
+            resolve(extractedFiles);
+          },
+        );
       })
       .catch(() => {
         reject(new Error('Failed to read ZIP file'));

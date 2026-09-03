@@ -9,15 +9,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { executeToolCall } from './index';
 import * as isolatedWorker from './isolatedWorker';
 
-vi.mock('../utils/logger', () => ({
-  log: {
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  },
-}));
-
 describe('executeToolCall', () => {
   const tmpDir = path.join(os.tmpdir(), 'cli-tool-dispatch-test-' + process.pid);
 
@@ -197,8 +188,9 @@ describe('executeToolCall', () => {
       JSON.stringify({ shell_id: 'nonexistent' }),
     );
 
-    // The runtime envelopes a failed lookup as success:true with the failure in state
-    expect(result.success).toBe(true);
+    // A lookup against an unknown shell is a failed call, and `success` is what
+    // the tool_end event and `usage.tools.byTool[].errors` read.
+    expect(result.success).toBe(false);
     expect((result.state as { success: boolean }).success).toBe(false);
   });
 
@@ -220,7 +212,7 @@ describe('executeToolCall', () => {
       JSON.stringify({ shell_id: 'nonexistent' }),
     );
 
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
     expect((result.state as { success: boolean }).success).toBe(false);
   });
 });

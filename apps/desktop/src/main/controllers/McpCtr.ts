@@ -3,7 +3,11 @@ import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
-import superjson from 'superjson';
+import {
+  deserializeMcpIpcPayload,
+  type McpIpcPayload,
+  serializeMcpIpcPayload,
+} from '@lobechat/utils/mcpIpcPayload';
 
 import FileService from '@/services/fileSrv';
 import { createLogger } from '@/utils/logger';
@@ -106,24 +110,11 @@ export interface CallToolInput {
   toolName: string;
 }
 
-interface SuperJSONSerialized<T = unknown> {
-  json: T;
-  meta?: any;
-}
+type SuperJSONSerialized<T = unknown> = McpIpcPayload<T>;
 
-const isSuperJSONSerialized = (value: unknown): value is SuperJSONSerialized => {
-  if (!value || typeof value !== 'object') return false;
-  return 'json' in value;
-};
+const deserializePayload = deserializeMcpIpcPayload;
 
-const deserializePayload = <T>(payload: unknown): T => {
-  // Keep backward compatibility for older renderer builds that might not serialize yet
-  if (isSuperJSONSerialized(payload)) return superjson.deserialize(payload as any) as T;
-  return payload as T;
-};
-
-const serializePayload = <T>(payload: T): SuperJSONSerialized =>
-  superjson.serialize(payload) as any;
+const serializePayload = serializeMcpIpcPayload;
 
 const safeParseToRecord = (value: unknown): Record<string, unknown> => {
   if (value && typeof value === 'object' && !Array.isArray(value))

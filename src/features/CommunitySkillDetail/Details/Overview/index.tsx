@@ -1,7 +1,7 @@
 'use client';
 
-import { Block, Collapse, Flexbox, Icon, Markdown, ScrollShadow, Tag, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Block, Collapse, Flexbox, Icon, Markdown, ScrollShadow } from '@lobehub/ui';
+import { Button, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, responsive } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
 import qs from 'query-string';

@@ -15,16 +15,6 @@ let mockIsGenerating = false;
 let mockDbMessages: { createdAt?: Date | number | string | null; id: string }[] = [];
 let mockOperations: { metadata: Record<string, unknown>; status: string }[] = [];
 
-vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-}));
-
-vi.mock('antd-style', () => ({
-  createStaticStyles: () => ({
-    container: 'group-container',
-  }),
-}));
-
 vi.mock('@/store/chat', () => ({
   useChatStore: (selector: (state: unknown) => unknown) => selector({}),
 }));

@@ -3,16 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ProxyDispatcherManager } from '../dispatcher';
 
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  }),
-}));
-
 // Mock undici
 vi.mock('undici', () => ({
   Agent: vi.fn(),

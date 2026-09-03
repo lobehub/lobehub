@@ -142,6 +142,7 @@ export default {
   'updater.downloadingUpdate': 'Downloading update',
   'updater.downloadingUpdateDesc': 'The update is downloading, please wait...',
   'updater.installLater': 'Update on next launch',
+  'updater.ignore': 'Ignore',
   'updater.isLatestVersion': 'You are using the latest version',
   'updater.isLatestVersionDesc':
     'Great! The version {{version}} you are using is the latest available.',

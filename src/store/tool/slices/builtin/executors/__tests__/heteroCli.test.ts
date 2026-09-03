@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   claudeCodeExecutor,
   codexExecutor,
+  droidExecutor,
   grokBuildExecutor,
   kimiCodeExecutor,
   openCodeExecutor,
@@ -38,6 +39,7 @@ describe('heteroCli executors', () => {
   it('registers the CLI adapter identifiers and exposes no invokable APIs', () => {
     expect(claudeCodeExecutor.identifier).toBe('claude-code');
     expect(codexExecutor.identifier).toBe('codex');
+    expect(droidExecutor.identifier).toBe('droid');
     expect(grokBuildExecutor.identifier).toBe('grok-build');
     expect(kimiCodeExecutor.identifier).toBe('kimi-code');
     expect(openCodeExecutor.identifier).toBe('opencode');
@@ -49,6 +51,7 @@ describe('heteroCli executors', () => {
     expect(claudeCodeExecutor.getApiNames()).toEqual([]);
     expect(grokBuildExecutor.hasApi('execute')).toBe(false);
     expect(grokBuildExecutor.getApiNames()).toEqual([]);
+    expect(droidExecutor.getApiNames()).toEqual([]);
   });
 
   it('records the worktree for a successful shell call, keyed by the run topic', async () => {

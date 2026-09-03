@@ -1,6 +1,7 @@
 import { CategoryBar, useThemeColorRange } from '@lobehub/charts';
 import { ModelIcon, ProviderIcon } from '@lobehub/icons';
-import { Avatar, Collapse, Flexbox, Skeleton, Tag } from '@lobehub/ui';
+import { Collapse, Flexbox } from '@lobehub/ui';
+import { Avatar, Skeleton, Tag } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -139,7 +140,7 @@ const ModelTable = memo<UsageChartProps>(({ data, isLoading, groupBy, resolveUse
   };
 
   return isLoading ? (
-    <Skeleton active paragraph={{ rows: 8 }} title={false} />
+    <Skeleton.Text rows={8} />
   ) : (
     <Collapse
       defaultActiveKey={formattedData.map((item) => item.id)}

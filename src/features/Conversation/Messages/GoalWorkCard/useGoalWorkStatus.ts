@@ -1,50 +1,38 @@
-import { useAcceptanceBundle, useAcceptanceBySubject } from '@/features/Verify';
-import { useTaskStore } from '@/store/task';
+import { goalSelectors, useGoalStore } from '@/store/goal';
 
 import { getGoalWorkProgress } from './goalWorkProgress';
 
-interface GoalWorkStatusInput {
-  criteriaCount?: number;
-  goalKnown?: boolean;
-  identifier?: string;
-  maxRounds?: number;
-  taskId?: string;
-}
-
 /**
- * Live Goal status for one task pointer (identifier + taskId): task detail +
- * acceptance aggregate → phase / round / checks coverage. Shared by the
- * running tracker card and the merged task-callback header — both only hold
- * the pointer, so everything else is fetched here. Callback cards wait for
- * task detail to classify the task before starting acceptance polling.
+ * Live Goal status for one `goals` row: the graph snapshot → phase and how much
+ * of its Work is closed. The card only holds the goal id, so everything else is
+ * fetched here.
  */
 export const useGoalWorkStatus = ({
   criteriaCount = 0,
-  goalKnown = false,
-  identifier,
-  maxRounds,
-  taskId,
-}: GoalWorkStatusInput) => {
-  const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
-  useFetchTaskDetail(identifier);
-  const task = useTaskStore((s) => (identifier ? s.taskDetailMap[identifier] : undefined));
-  const isGoal = goalKnown || !!task?.goal;
-  const { data: acceptance } = useAcceptanceBySubject('task', isGoal ? (taskId ?? null) : null);
-  const { data: bundle } = useAcceptanceBundle(acceptance?.id ?? null);
+  goalId,
+}: {
+  criteriaCount?: number;
+  goalId?: string;
+}) => {
+  const useFetchGoalGraph = useGoalStore((s) => s.useFetchGoalGraph);
+  useFetchGoalGraph(goalId);
+  const snapshot = useGoalStore(goalSelectors.goalGraph(goalId));
 
-  const progress = getGoalWorkProgress({
-    acceptanceStatus: acceptance?.status,
-    checks: bundle?.checks,
-    criteriaCount,
-    maxRounds: task?.goal?.maxRounds ?? maxRounds,
-    rounds: task?.topicCount ?? 0,
-    taskStatus: task?.status,
-  });
+  const taskNodes = snapshot?.nodes.filter((node) => node.kind === 'task') ?? [];
 
   return {
-    isGoal,
-    progress,
-    startedAt: task?.startedAt,
-    taskName: task?.name ?? undefined,
+    agentId: snapshot?.goal.agentId ?? undefined,
+    progress: getGoalWorkProgress({
+      criteriaCount,
+      pendingDecisions:
+        snapshot?.decisions.filter((decision) => decision.status === 'pending').length ?? 0,
+      status: snapshot?.goal.status,
+      workDone: taskNodes.filter((node) =>
+        ['rejected', 'resolved', 'retired'].includes(node.status),
+      ).length,
+      workTotal: taskNodes.length,
+    }),
+    startedAt: snapshot?.goal.startedAt ?? undefined,
+    title: snapshot?.goal.title,
   };
 };

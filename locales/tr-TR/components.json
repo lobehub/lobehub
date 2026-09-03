@@ -119,6 +119,7 @@
   "KeyValueEditor.keyPlaceholder": "Anahtar",
   "KeyValueEditor.valuePlaceholder": "Değer",
   "LocalFile.action.open": "Aç",
+  "LocalFile.action.preview": "Önizleme",
   "LocalFile.action.showInFolder": "Klasörde Göster",
   "MaxTokenSlider.unlimited": "Sınırsız",
   "ModelSelect.featureTag.audio": "Bu model ses girişi tanımayı destekler.",

@@ -18,10 +18,10 @@ import {
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { buildSelectorSubmenu } from './buildSelectorSubmenu';
+import { buildSelectorSubmenu } from '../../components/buildSelectorSubmenu';
+import Trigger from '../../components/SelectorTrigger';
 import { ModelCatalogSelector } from './ModelCatalogSelector';
 import { buildSelectorView, resolveModelSwitchSelection } from './selectorView';
-import Trigger from './Trigger';
 
 interface SelectorMenuProps {
   agentId?: string;

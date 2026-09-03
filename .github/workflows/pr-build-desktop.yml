@@ -106,6 +106,7 @@ jobs:
       - name: Setup build environment
         uses: ./.github/actions/desktop-build-setup
         with:
+          cloud-repository: ${{ vars.OVERLAY_REPOSITORY }}
           cloud-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
           node-version: 24.11.1
 
@@ -250,7 +251,7 @@ jobs:
           pattern: asar-size-*
           merge-multiple: true
 
-      # 基线:release-desktop-canary 最近一次成功 run 上传的 asar-size-baseline-* artifacts
+      # 基线:被测 merge SHA 祖先中最近一次成功的 release-desktop-canary run
       - name: Find latest canary baseline run
         id: baseline_run
         uses: actions/github-script@v8
@@ -259,7 +260,13 @@ jobs:
           result-encoding: string
           script: |
             const finder = require('${{ github.workspace }}/.github/scripts/find-size-baseline.cjs');
-            return await finder({ github, context, workflowId: 'release-desktop-canary.yml', artifactPrefix: 'asar-size-baseline-' });
+            return await finder({
+              github,
+              context,
+              workflowId: 'release-desktop-canary.yml',
+              artifactPrefix: 'asar-size-baseline-',
+              targetSha: context.sha,
+            });
 
       - name: Download ASAR size baselines
         if: steps.baseline_run.outputs.result != ''

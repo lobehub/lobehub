@@ -45,7 +45,7 @@ export const userAuthMiddleware = async (c: Context, next: Next) => {
   if (bearerToken) {
     log('Bearer token received: %s...', bearerToken.slice(0, 10));
 
-    // Check if bearerToken matches API Key format (sk-lh-{16 alphanumeric chars})
+    // Check if bearerToken matches API Key format (prefix + 16 alphanumeric chars)
     const isApiKeyFormat = validateApiKeyFormat(bearerToken);
     log('API Key format validation result: %s', isApiKeyFormat);
 
@@ -102,6 +102,9 @@ export const userAuthMiddleware = async (c: Context, next: Next) => {
       try {
         // Use direct JWT validation instead of OIDCService
         const tokenInfo = await validateOIDCJWT(bearerToken);
+        if (tokenInfo.tokenData?.purpose === 'hetero-operation') {
+          throw new Error('Operation tokens are only accepted by heterogeneous model endpoints');
+        }
         const db = await getServerDB();
         await assertOIDCUserActive(db, tokenInfo.userId);
 

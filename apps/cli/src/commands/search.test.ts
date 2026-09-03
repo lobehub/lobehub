@@ -28,11 +28,6 @@ vi.mock('../api/client', () => ({
   getToolsTrpcClient: mockGetToolsTrpcClient,
   getTrpcClient: mockGetTrpcClient,
 }));
-vi.mock('../utils/logger', () => ({
-  log: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
-  setVerbose: vi.fn(),
-}));
-
 describe('search command', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
   let consoleSpy: ReturnType<typeof vi.spyOn>;

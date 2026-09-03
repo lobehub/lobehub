@@ -5,6 +5,7 @@ import { createStaticStyles, cssVar } from 'antd-style';
 
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
+import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
 
 import SkeletonBar from './Bar';
 
@@ -16,13 +17,9 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-interface GoalSkeletonProps {
-  showHeader?: boolean;
-}
-
-const GoalSkeleton = ({ showHeader = true }: GoalSkeletonProps) => (
+const GoalSkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => (
   <Flexbox aria-busy flex={1} height={'100%'}>
-    {showHeader && <NavHeader />}
+    {chrome !== 'body' && <NavHeader />}
     <WideScreenContainer
       flex={1}
       gap={20}

@@ -270,9 +270,7 @@ export class GlobalGeneralActionImpl {
 
   useCheckServerVersion = (): SWRResponse<string | null> => {
     return useOnlyFetchOnceSWR(
-      isDesktop &&
-        // only check server version for self-hosted remote server
-        electronSyncSelectors.storageMode(getElectronStoreState()) !== 'cloud'
+      isDesktop && !electronSyncSelectors.isOfficialServer(getElectronStoreState())
         ? globalKeys.serverVersion()
         : null,
       async () => globalService.getServerVersion(),

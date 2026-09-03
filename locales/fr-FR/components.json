@@ -119,6 +119,7 @@
   "KeyValueEditor.keyPlaceholder": "Clé",
   "KeyValueEditor.valuePlaceholder": "Valeur",
   "LocalFile.action.open": "Ouvrir",
+  "LocalFile.action.preview": "Aperçu",
   "LocalFile.action.showInFolder": "Afficher dans le dossier",
   "MaxTokenSlider.unlimited": "Illimité",
   "ModelSelect.featureTag.audio": "Ce modèle prend en charge la reconnaissance des entrées audio.",

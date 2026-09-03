@@ -1,7 +1,8 @@
-import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { LockIcon } from 'lucide-react';
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 
 import KnowledgeIcon from '@/components/KnowledgeIcon';
 import { type KnowledgeItem } from '@/types/knowledgeBase';
@@ -43,8 +44,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const MasonryItem = memo<KnowledgeItem>(
-  ({ id, fileType, name, type, description, enabled, memberRestricted, visibility }) => {
+interface MasonryItemProps extends KnowledgeItem {
+  action?: ReactNode;
+}
+
+const MasonryItem = memo<MasonryItemProps>(
+  ({ action, id, fileType, name, type, description, enabled, memberRestricted, visibility }) => {
     return (
       <div className={styles.card}>
         <Flexbox gap={12} style={{ position: 'relative' }}>
@@ -73,7 +78,7 @@ const MasonryItem = memo<KnowledgeItem>(
             </Text>
           )}
           <Flexbox align={'center'} justify={'flex-end'}>
-            <Actions enabled={enabled} id={id} type={type} />
+            {action === undefined ? <Actions enabled={enabled} id={id} type={type} /> : action}
           </Flexbox>
         </Flexbox>
       </div>

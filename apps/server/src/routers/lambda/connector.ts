@@ -1,3 +1,4 @@
+import { getComposioAppByIdentifier } from '@lobechat/const';
 import { upsertPluginMode } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -962,6 +963,12 @@ export const connectorRouter = router({
       // returning null tells the caller "no connector row produced" and the
       // "Configure" button opens CustomConnectorModal in migration mode.
       if (plugin.type === 'customPlugin' && plugin.customParams?.mcp) {
+        return { connectorId: null, toolCount: 0 };
+      }
+
+      // Legacy plugin rows can outlive a provider's removal from the Composio catalog. Do not
+      // project those rows back into user_connectors when the detail panel performs its sync.
+      if (plugin.customParams?.composio && !getComposioAppByIdentifier(input.identifier)) {
         return { connectorId: null, toolCount: 0 };
       }
 

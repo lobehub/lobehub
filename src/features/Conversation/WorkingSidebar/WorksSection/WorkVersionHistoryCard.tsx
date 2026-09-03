@@ -1,5 +1,6 @@
 import type { TaskStatus, WorkListItem } from '@lobechat/types';
-import { Flexbox, Tag, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ChevronDownIcon, ChevronRightIcon, Trash2Icon } from 'lucide-react';
 import { memo, useState } from 'react';

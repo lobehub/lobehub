@@ -1,33 +1,27 @@
-import { Accordion, AccordionItem, Block, Center, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Accordion, AccordionItem, Block, Center, Empty, Flexbox } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
-import { ClipboardCheckIcon, UserRound } from 'lucide-react';
+import { ClipboardCheckIcon } from 'lucide-react';
 import { Fragment, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
+import type { TaskListItem } from '@/store/task/slices/list/initialState';
 
 import type { TaskItemRouteScope } from '../features/AgentTaskItem';
 import AgentTaskItem from '../features/AgentTaskItem';
-import AssigneeAvatar from '../features/AssigneeAvatar';
-import PriorityHighIcon from '../features/icons/PriorityHighIcon';
-import PriorityLowIcon from '../features/icons/PriorityLowIcon';
-import PriorityMediumIcon from '../features/icons/PriorityMediumIcon';
-import PriorityNoneIcon from '../features/icons/PriorityNoneIcon';
-import PriorityUrgentIcon from '../features/icons/PriorityUrgentIcon';
-import TaskStatusIcon from '../features/TaskStatusIcon';
-import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 import type { TaskGroupBy, TaskGroupMeta, TaskListViewOptions, TaskRow } from './listViewOptions';
 import {
   buildTaskRows,
   collapseSubTasks,
   compareTaskItems,
-  getTaskGroupMeta,
+  groupTaskItems,
   HIDDEN_WHEN_COMPLETED_STATUSES,
-  sortGroupEntries,
 } from './listViewOptions';
+import TaskGroupLabel from './TaskGroupLabel';
 import TaskItemSkeleton from './TaskItemSkeleton';
 import TaskRowIndent from './TaskRowIndent';
 
@@ -39,10 +33,13 @@ interface TaskListProps {
    * on a scope/visibility switch and never disagrees with the empty signal.
    */
   data?: unknown;
+  emptyDescription?: string;
   /** Thrown error from the list SWR — surfaced as a failure state, not a skeleton. */
   error?: unknown;
   /** First-load / retry in flight (SWR `isLoading`). */
   isLoading?: boolean;
+  /** Optional list source for alternate task collections such as scheduled tasks. */
+  items?: TaskListItem[];
   onRetry?: () => void;
   onShowHiddenCompleted?: () => void;
   options: TaskListViewOptions;
@@ -73,63 +70,23 @@ const renderTaskListBlock = (rows: TaskRow[], sub?: boolean, routeScope?: TaskIt
   </Block>
 );
 
-const PRIORITY_ICON_MAP = {
-  0: PriorityNoneIcon,
-  1: PriorityUrgentIcon,
-  2: PriorityHighIcon,
-  3: PriorityMediumIcon,
-  4: PriorityLowIcon,
-} as const;
-
-const TASK_GROUP_BY_VALUES = new Set<TaskGroupBy>(['assignee', 'none', 'priority', 'status']);
+const TASK_GROUP_BY_VALUES = new Set<TaskGroupBy>([
+  'assignee',
+  'automationMode',
+  'member',
+  'none',
+  'priority',
+  'status',
+]);
 
 const normalizeGroupBy = (value: TaskGroupBy | string | undefined, fallback: TaskGroupBy) => {
   if (!value) return fallback;
   return TASK_GROUP_BY_VALUES.has(value as TaskGroupBy) ? (value as TaskGroupBy) : fallback;
 };
 
-const AssigneeLabel = memo<{ agentId: string }>(({ agentId }) => {
-  const displayMeta = useAgentDisplayMeta(agentId);
-  return <>{displayMeta?.title}</>;
-});
-
-const renderGroupPrefix = (group: TaskGroupMeta) => {
-  if (group.groupBy === 'assignee') {
-    if (group.assigneeId) {
-      return <AssigneeAvatar agentId={group.assigneeId} size={18} />;
-    }
-    return <Icon icon={UserRound} size={14} />;
-  }
-
-  if (group.groupBy === 'priority') {
-    const priority = group.priority ?? 0;
-    const PriorityIcon =
-      PRIORITY_ICON_MAP[priority as keyof typeof PRIORITY_ICON_MAP] || PriorityNoneIcon;
-    return (
-      <PriorityIcon
-        color={priority === 1 ? cssVar.orange : cssVar.colorTextDescription}
-        size={16}
-      />
-    );
-  }
-
-  if (group.groupBy === 'status') {
-    const status = group.status ?? 'backlog';
-
-    return <TaskStatusIcon size={16} status={status} />;
-  }
-
-  return null;
-};
-
 const renderGroupTitle = (group: TaskGroupMeta, count: number, sub?: boolean) => (
   <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
-    <Flexbox horizontal align={'center'} flex={'none'} gap={6} style={{ overflow: 'hidden' }}>
-      {renderGroupPrefix(group)}
-      <Text ellipsis weight={500}>
-        {group.assigneeId ? <AssigneeLabel agentId={group.assigneeId} /> : group.label}
-      </Text>
-    </Flexbox>
+    <TaskGroupLabel group={group} />
     <Text fontSize={12} type={'secondary'}>
       {count}
     </Text>
@@ -142,9 +99,11 @@ const renderGroupTitle = (group: TaskGroupMeta, count: number, sub?: boolean) =>
 );
 
 const TaskList = memo<TaskListProps>((props) => {
-  const { data, error, isLoading, onRetry, onShowHiddenCompleted, options, routeScope } = props;
+  const { data, error, isLoading, items, onRetry, onShowHiddenCompleted, options, routeScope } =
+    props;
   const { t } = useTranslation('chat');
-  const tasks = useTaskStore(taskListSelectors.taskList);
+  const storeTasks = useTaskStore(taskListSelectors.taskList);
+  const tasks = items ?? storeTasks;
   const groupBy = normalizeGroupBy(options.groupBy, 'status');
   const subGroupBy = normalizeGroupBy(options.subGroupBy, 'none');
   const effectiveSubGroupBy = groupBy === 'none' ? 'none' : subGroupBy;
@@ -179,24 +138,7 @@ const TaskList = memo<TaskListProps>((props) => {
     const subGroupOrderDirection =
       options.orderBy === effectiveSubGroupBy ? options.orderDirection : undefined;
 
-    const primaryGroupMap = new Map<string, { items: typeof visibleTasks; meta: TaskGroupMeta }>();
-    for (const task of sortedTasks) {
-      const primaryGroup = getTaskGroupMeta(task, groupBy);
-      if (!primaryGroup?.key) continue;
-      const bucket = primaryGroupMap.get(primaryGroup.key);
-
-      if (bucket) {
-        bucket.items.push(task);
-      } else {
-        primaryGroupMap.set(primaryGroup.key, { items: [task], meta: primaryGroup });
-      }
-    }
-
-    const primaryGroups = sortGroupEntries(
-      [...primaryGroupMap.values()].map((group) => [group.meta, group.items]),
-      groupBy,
-      primaryGroupOrderDirection,
-    );
+    const primaryGroups = groupTaskItems(sortedTasks, groupBy, primaryGroupOrderDirection);
 
     return primaryGroups.map(([meta, groupedTasks]) => {
       if (effectiveSubGroupBy === 'none') {
@@ -208,32 +150,17 @@ const TaskList = memo<TaskListProps>((props) => {
         };
       }
 
-      const subGroupMap = new Map<string, { items: typeof visibleTasks; meta: TaskGroupMeta }>();
-      for (const task of groupedTasks) {
-        const subGroup = getTaskGroupMeta(task, effectiveSubGroupBy);
-        if (!subGroup?.key) continue;
-        const bucket = subGroupMap.get(subGroup.key);
-
-        if (bucket) {
-          bucket.items.push(task);
-        } else {
-          subGroupMap.set(subGroup.key, { items: [task], meta: subGroup });
-        }
-      }
-
       return {
         count: groupedTasks.length,
         meta,
         rows: toRows(groupedTasks),
-        subGroups: sortGroupEntries(
-          [...subGroupMap.values()].map((group) => [group.meta, group.items]),
-          effectiveSubGroupBy,
-          subGroupOrderDirection,
-        ).map(([subMeta, subItems]) => ({
-          count: subItems.length,
-          meta: subMeta,
-          rows: toRows(subItems),
-        })),
+        subGroups: groupTaskItems(groupedTasks, effectiveSubGroupBy, subGroupOrderDirection).map(
+          ([subMeta, subItems]) => ({
+            count: subItems.length,
+            meta: subMeta,
+            rows: toRows(subItems),
+          }),
+        ),
       };
     });
   }, [effectiveSubGroupBy, groupBy, nested, options, taskById, visibleTasks]);
@@ -251,7 +178,10 @@ const TaskList = memo<TaskListProps>((props) => {
 
   const emptyState = (
     <Center height={'80vh'} width={'100%'}>
-      <Empty description={t('taskList.empty')} icon={ClipboardCheckIcon} />
+      <Empty
+        description={props.emptyDescription ?? t('taskList.empty')}
+        icon={ClipboardCheckIcon}
+      />
     </Center>
   );
 

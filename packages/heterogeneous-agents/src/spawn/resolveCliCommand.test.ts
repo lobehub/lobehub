@@ -50,6 +50,8 @@ const existingFiles = (files: Record<string, string | true>) => {
 };
 
 const noErr = null;
+const DROID_ACP_HELP = `Usage: droid exec [options] [prompt]
+  --output-format <format>  Output format. ACP modes use bidirectional JSON-RPC.`;
 const TRAE_ACP_HELP = `Start the ACP server
 
 Usage:
@@ -90,7 +92,11 @@ const rejectUnqueuedExecFile = () => {
 const importModule = () => import('./resolveCliCommand');
 
 describe('resolveCliCommand', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    // The login-shell PATH is cached for the life of the module now, which in a
+    // real app means "for the life of the process". A suite shares one module,
+    // so without this a later case reads the PATH an earlier one queued.
+    (await importModule()).invalidateLoginShellPathCache();
     execFileMock.mockReset();
     execMock.mockReset();
     accessMock.mockReset();
@@ -309,6 +315,34 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
       expect(execFileMock.mock.calls[2]![1]).toEqual(['acp', 'serve', '--help']);
     });
 
+    it('accepts Factory Droid only when droid exec exposes ACP output', async () => {
+      callExecFile('/usr/local/bin/droid\n');
+      callExecFile('0.206.0');
+      callExecFile(DROID_ACP_HELP);
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('droid', 'droid');
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/usr/local/bin/droid',
+        version: '0.206.0',
+      });
+      expect(execFileMock.mock.calls[2]![1]).toEqual(['exec', '--help']);
+    });
+
+    it('rejects a droid binary without ACP output support', async () => {
+      callExecFile('/usr/local/bin/droid\n');
+      callExecFile('0.206.0');
+      callExecFile('Usage: droid exec [options]\n--output-format text|jsonl');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+
+      await expect(detectHeterogeneousCliCommand('droid', 'droid')).resolves.toMatchObject({
+        available: false,
+      });
+    });
+
     it('accepts the TRAE Enterprise CLI bare-semver banner', async () => {
       callExecFile('/usr/local/bin/traecli\n');
       callExecFile('1.4.0');
@@ -353,7 +387,7 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
       const { detectHeterogeneousCliCommand } = await importModule();
       const status = await detectHeterogeneousCliCommand('trae', 'traecli-renamed');
 
-      expect(status).toEqual({ available: false });
+      expect(status.available).toBe(false);
       expect(execFileMock.mock.calls[2]![1]).toEqual(['acp', 'serve', '--help']);
     });
 
@@ -379,6 +413,190 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
         process.env.PATH = originalPath;
         if (originalShell === undefined) delete process.env.SHELL;
         else process.env.SHELL = originalShell;
+      }
+    });
+
+    it('prefers the login-PATH command over an inherited absolute fallback', async () => {
+      const originalPath = process.env.PATH;
+      const originalShell = process.env.SHELL;
+      process.env.PATH = '/usr/bin:/bin';
+      process.env.SHELL = '/bin/zsh';
+      const loginPath = '/login/bin:/usr/bin:/bin';
+      const loginCommand = '/login/bin/opencode';
+      const fallbackPath = '/fallback/bin/opencode';
+
+      execFileMock.mockImplementation(((file: string, args: any, opts: any, cb: any) => {
+        const callback = typeof opts === 'function' ? opts : cb;
+        if (file === '/bin/zsh') {
+          callback(noErr, { stderr: '', stdout: loginPath });
+        } else if (file === 'which' && opts.env?.PATH === loginPath) {
+          callback(noErr, { stderr: '', stdout: `${loginCommand}\n` });
+        } else if (file === 'which') {
+          callback(new Error('not found'), { stderr: '', stdout: '' });
+        } else if (file === loginCommand || file === fallbackPath) {
+          callback(noErr, { stderr: '', stdout: '1.18.3' });
+        } else {
+          callback(new Error(`unexpected execFile: ${file}`), { stderr: '', stdout: '' });
+        }
+        return {} as any;
+      }) as any);
+
+      try {
+        const { detectValidatedCommandCandidates } = await importModule();
+        const status = await detectValidatedCommandCandidates(['opencode', fallbackPath], {
+          validatePattern: /^v?\d+\.\d+\.\d+$/,
+        });
+
+        expect(status).toMatchObject({
+          available: true,
+          path: loginCommand,
+          resolvedPathEnv: loginPath,
+        });
+        expect(execFileMock.mock.calls.map(([file]) => file)).not.toContain(fallbackPath);
+      } finally {
+        process.env.PATH = originalPath;
+        process.env.SHELL = originalShell;
+      }
+    });
+
+    it('keeps an inherited fallback available when the recovered environment would break it', async () => {
+      const originalPath = process.env.PATH;
+      const originalShell = process.env.SHELL;
+      process.env.PATH = '/usr/bin:/bin';
+      process.env.SHELL = '/bin/zsh';
+      const loginPath = '/broken/bin:/usr/bin:/bin';
+      const fallbackPath = '/fallback/bin/opencode';
+
+      execFileMock.mockImplementation(((file: string, args: any, opts: any, cb: any) => {
+        const callback = typeof opts === 'function' ? opts : cb;
+        if (file === '/bin/zsh') {
+          callback(noErr, { stderr: '', stdout: loginPath });
+        } else if (file === 'which') {
+          callback(new Error('not found'), { stderr: '', stdout: '' });
+        } else if (file === fallbackPath && opts.env?.PATH !== loginPath) {
+          callback(noErr, { stderr: '', stdout: '1.18.3' });
+        } else {
+          callback(new Error('broken recovered environment'), { stderr: '', stdout: '' });
+        }
+        return {} as any;
+      }) as any);
+
+      try {
+        const { detectValidatedCommandCandidates } = await importModule();
+        const status = await detectValidatedCommandCandidates(['opencode', fallbackPath], {
+          validatePattern: /^v?\d+\.\d+\.\d+$/,
+        });
+
+        expect(status).toMatchObject({ available: true, path: fallbackPath });
+        expect(status.resolvedPathEnv).toBeUndefined();
+      } finally {
+        process.env.PATH = originalPath;
+        process.env.SHELL = originalShell;
+      }
+    });
+
+    it('carries the recovered login PATH into an absolute fallback launcher', async () => {
+      const originalPath = process.env.PATH;
+      const originalShell = process.env.SHELL;
+      process.env.PATH = '/usr/bin:/bin';
+      process.env.SHELL = '/bin/zsh';
+      const loginPath = '/opt/homebrew/bin:/usr/bin:/bin';
+      const fallbackPath = path.join(os.homedir(), '.opencode', 'bin', 'opencode');
+
+      try {
+        callExecFileError(new Error('not found')); // which opencode (inherited PATH)
+        callExecFile(loginPath); // login shell PATH contains node, not opencode
+        callExecFileError(new Error('not found')); // which opencode (login PATH)
+        callExecFileError(new Error('node not found')); // fallback under inherited PATH
+        callExecFile('1.18.3'); // ~/.opencode/bin/opencode --version
+
+        const { detectValidatedCommandCandidates } = await importModule();
+        const status = await detectValidatedCommandCandidates(['opencode', fallbackPath], {
+          validatePattern: /^v?\d+\.\d+\.\d+$/,
+        });
+
+        expect(status).toMatchObject({
+          available: true,
+          path: fallbackPath,
+          resolvedPathEnv: loginPath,
+          version: '1.18.3',
+        });
+        expect((execFileMock.mock.calls[4]![2] as { env: NodeJS.ProcessEnv }).env.PATH).toBe(
+          loginPath,
+        );
+      } finally {
+        process.env.PATH = originalPath;
+        process.env.SHELL = originalShell;
+      }
+    });
+
+    it('retries an explicit env-based launcher with the recovered login PATH', async () => {
+      const originalPath = process.env.PATH;
+      const originalShell = process.env.SHELL;
+      process.env.PATH = '/usr/bin:/bin';
+      process.env.SHELL = '/bin/zsh';
+      const commandPath = '/Users/x/.local/bin/opencode';
+      const loginPath = '/opt/homebrew/bin:/usr/bin:/bin';
+
+      try {
+        callExecFileError(new Error('node not found')); // inherited PATH
+        callExecFile(loginPath); // login shell exposes node
+        callExecFile('1.18.3'); // exact same launcher under recovered PATH
+
+        const { detectValidatedCommand } = await importModule();
+        const status = await detectValidatedCommand(commandPath, {
+          validatePattern: /^v?\d+\.\d+\.\d+$/,
+        });
+
+        expect(status).toMatchObject({
+          available: true,
+          path: commandPath,
+          resolvedPathEnv: loginPath,
+          version: '1.18.3',
+        });
+        expect((execFileMock.mock.calls[2]![2] as { env: NodeJS.ProcessEnv }).env.PATH).toBe(
+          loginPath,
+        );
+      } finally {
+        process.env.PATH = originalPath;
+        process.env.SHELL = originalShell;
+      }
+    });
+
+    it('recovers the login PATH after an inherited command fails validation', async () => {
+      const originalPath = process.env.PATH;
+      const originalShell = process.env.SHELL;
+      process.env.PATH = '/usr/local/bin:/usr/bin:/bin';
+      process.env.SHELL = '/bin/zsh';
+      const loginPath = '/opt/homebrew/bin:/usr/bin:/bin:/usr/local/bin';
+      const fallbackPath = path.join(os.homedir(), '.opencode', 'bin', 'opencode');
+
+      try {
+        callExecFile('/usr/local/bin/opencode\n'); // inherited PATH finds a stale launcher
+        callExecFileError(new Error('stale launcher')); // inherited launcher validation
+        callExecFile('/opt/homebrew/bin:/usr/bin:/bin'); // login shell PATH
+        callExecFile('/usr/local/bin/opencode\n'); // retry under the merged PATH
+        callExecFileError(new Error('stale launcher')); // recovered lookup still resolves stale copy
+        callExecFileError(new Error('node not found')); // fallback under inherited PATH
+        callExecFile('1.18.3'); // ~/.opencode/bin/opencode --version
+
+        const { detectValidatedCommandCandidates } = await importModule();
+        const status = await detectValidatedCommandCandidates(['opencode', fallbackPath], {
+          validatePattern: /^v?\d+\.\d+\.\d+$/,
+        });
+
+        expect(status).toMatchObject({
+          available: true,
+          path: fallbackPath,
+          resolvedPathEnv: loginPath,
+          version: '1.18.3',
+        });
+        expect((execFileMock.mock.calls[6]![2] as { env: NodeJS.ProcessEnv }).env.PATH).toBe(
+          loginPath,
+        );
+      } finally {
+        process.env.PATH = originalPath;
+        process.env.SHELL = originalShell;
       }
     });
 
@@ -500,13 +718,56 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
         callExecFile('/Users/x/.local/share/mise/shims/codex\n'); // which codex (login PATH)
         callExecFile('codex-cli 0.142.5');
 
-        const { detectHeterogeneousCliCommand } = await importModule();
-        const status = await detectHeterogeneousCliCommand('codex', 'codex');
+        const { detectValidatedCommand } = await importModule();
+        const status = await detectValidatedCommand('codex', { validateKeywords: ['codex'] });
 
         expect(status.available).toBe(true);
         expect(status.path).toBe('/Users/x/.local/share/mise/shims/codex');
         expect(status.resolvedPathEnv).toBe(
           '/opt/homebrew/bin:/Users/x/.local/share/mise/shims:/usr/bin:/bin',
+        );
+      } finally {
+        process.env.PATH = originalPath;
+        process.env.SHELL = originalShell;
+      }
+    });
+
+    it("sees an installer's PATH edit once the cache is invalidated", async () => {
+      // The scan used to re-read the login shell every time, which is what made
+      // this work — and put a second-long, timeout-prone probe on the critical
+      // path of every spawn. The freshness is now explicit: Rescan invalidates,
+      // and the next scan reads the shell again.
+      const originalPath = process.env.PATH;
+      const originalShell = process.env.SHELL;
+      process.env.PATH = '/usr/bin:/bin';
+      process.env.SHELL = '/bin/zsh';
+
+      try {
+        const { detectValidatedCommand, invalidateLoginShellPathCache } = await importModule();
+        invalidateLoginShellPathCache();
+        const options = { validateKeywords: ['new-agent'] };
+
+        callExecFileError(new Error('not found')); // which new-agent
+        callExecFile('/usr/bin:/bin'); // login shell before installation
+        expect((await detectValidatedCommand('new-agent', options)).available).toBe(false);
+
+        // Without this the pre-installation PATH stays cached, which is the
+        // whole point of the cache — the user pressing Rescan is what clears it.
+        invalidateLoginShellPathCache();
+
+        callExecFileError(new Error('not found')); // inherited PATH is still stale
+        callExecFile('/Users/x/.local/bin:/usr/bin:/bin'); // shell PATH after installation
+        callExecFile('/Users/x/.local/bin/new-agent\n');
+        callExecFile('new-agent 1.2.3');
+
+        await expect(detectValidatedCommand('new-agent', options)).resolves.toMatchObject({
+          available: true,
+          path: '/Users/x/.local/bin/new-agent',
+          resolvedPathEnv: '/Users/x/.local/bin:/usr/bin:/bin',
+          version: '1.2.3',
+        });
+        expect(execFileMock.mock.calls.filter(([command]) => command === '/bin/zsh')).toHaveLength(
+          2,
         );
       } finally {
         process.env.PATH = originalPath;
@@ -721,6 +982,49 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
         const status = await detectValidatedCommand('qodercli', options);
 
         expect(status).toMatchObject({ available: true, path: `${qoderBin}\\qodercli.exe` });
+      } finally {
+        process.env.PATH = originalPath;
+      }
+    });
+
+    it('prefers a registry-PATH command over an inherited absolute fallback', async () => {
+      const originalPath = process.env.PATH;
+      process.env.PATH = 'C:\\Windows';
+      const registryBin = 'C:\\registry\\bin';
+      const registryCommand = `${registryBin}\\codex.exe`;
+      const fallbackPath = 'C:\\fallback\\codex.exe';
+      existingFiles({ [fallbackPath]: true, [registryCommand]: true });
+
+      execFileMock.mockImplementation(((file: string, args: any, opts: any, cb: any) => {
+        const callback = typeof opts === 'function' ? opts : cb;
+        if (file === 'where' && opts.env?.PATH && opts.env.PATH !== process.env.PATH) {
+          callback(noErr, { stderr: '', stdout: `${registryCommand}\r\n` });
+        } else if (file === 'where') {
+          callback(new Error('not found'), { stderr: '', stdout: '' });
+        } else if (file === 'reg' && String(args[1]).includes('HKCU')) {
+          callback(noErr, {
+            stderr: '',
+            stdout: `\r\nHKEY_CURRENT_USER\\Environment\r\n    Path    REG_SZ    ${registryBin}\r\n`,
+          });
+        } else if (file === 'reg') {
+          callback(new Error('no value'), { stderr: '', stdout: '' });
+        } else if (file === registryCommand || file === fallbackPath) {
+          callback(noErr, { stderr: '', stdout: 'codex-cli 0.147.0' });
+        } else {
+          callback(new Error(`unexpected execFile: ${file}`), { stderr: '', stdout: '' });
+        }
+        return {} as any;
+      }) as any);
+
+      try {
+        const { detectValidatedCommandCandidates } = await importModule();
+        const status = await detectValidatedCommandCandidates(['codex', fallbackPath], {
+          validateKeywords: ['codex'],
+        });
+
+        expect(status).toMatchObject({ available: true, path: registryCommand });
+        expect(status.resolvedPathEnv).toContain(registryBin);
+        expect(execFileMock.mock.calls.map(([file]) => file)).not.toContain(fallbackPath);
       } finally {
         process.env.PATH = originalPath;
       }
@@ -1046,5 +1350,153 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
     expect(status.available).toBe(false);
     // Sanity: keep `path` unused-import-free.
     expect(path.sep).toBeTruthy();
+  });
+});
+
+describe('login-shell PATH probe', () => {
+  beforeEach(() => {
+    execFileMock.mockReset();
+    execMock.mockReset();
+    rejectUnqueuedExecFile();
+    vi.mocked(os.platform).mockReturnValue('darwin');
+    process.env.SHELL = '/bin/zsh';
+  });
+
+  /** `which` misses, then the login shell answers. */
+  const queueMissThenShell = (shellPath: string) => {
+    callExecFileError(new Error('command not found'));
+    callExecFile(shellPath);
+  };
+
+  it('resolves the login-shell PATH once and reuses it for later probes', async () => {
+    // It used to be discarded the moment it settled, so every spawn re-paid a
+    // second-long subprocess on the critical path.
+    const module = await importModule();
+    module.invalidateLoginShellPathCache();
+
+    queueMissThenShell('/opt/tools/bin:/usr/bin');
+    callExecFileError(new Error('still not found'));
+    await module.detectHeterogeneousCliCommand('kimi-code', 'kimi');
+
+    const shellCallsAfterFirst = execFileMock.mock.calls.filter(
+      ([file, args]) => file === '/bin/zsh' && Array.isArray(args) && args[0] === '-ilc',
+    ).length;
+    expect(shellCallsAfterFirst).toBe(1);
+
+    execFileMock.mockReset();
+    rejectUnqueuedExecFile();
+    callExecFileError(new Error('command not found'));
+    callExecFileError(new Error('still not found'));
+    await module.detectHeterogeneousCliCommand('kimi-code', 'kimi');
+
+    expect(
+      execFileMock.mock.calls.filter(
+        ([file, args]) => file === '/bin/zsh' && Array.isArray(args) && args[0] === '-ilc',
+      ),
+    ).toHaveLength(0);
+  });
+
+  it('re-reads the PATH after an explicit invalidation', async () => {
+    // Rescan has to see a PATH an installer edited while the app was running.
+    const module = await importModule();
+    module.invalidateLoginShellPathCache();
+
+    queueMissThenShell('/opt/tools/bin:/usr/bin');
+    callExecFileError(new Error('still not found'));
+    await module.detectHeterogeneousCliCommand('kimi-code', 'kimi');
+
+    module.invalidateLoginShellPathCache();
+    execFileMock.mockReset();
+    rejectUnqueuedExecFile();
+    queueMissThenShell('/opt/tools/bin:/new/place:/usr/bin');
+    callExecFileError(new Error('still not found'));
+    await module.detectHeterogeneousCliCommand('kimi-code', 'kimi');
+
+    expect(
+      execFileMock.mock.calls.filter(
+        ([file, args]) => file === '/bin/zsh' && Array.isArray(args) && args[0] === '-ilc',
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('reports a timed-out probe as its own failure, not as a missing CLI', async () => {
+    // The bug this replaces: a busy machine blew the probe's budget and the
+    // user was told to install a CLI that was present and had just run.
+    const module = await importModule();
+    module.invalidateLoginShellPathCache();
+
+    callExecFileError(new Error('command not found'));
+    const timedOut = Object.assign(new Error('spawn timed out'), { killed: true });
+    callExecFileError(timedOut);
+
+    const status = await module.detectHeterogeneousCliCommand('kimi-code', 'kimi');
+
+    expect(status.available).toBe(false);
+    expect(module.isLoginShellTimeoutStatus(status)).toBe(true);
+  });
+
+  it('still reads as a plain miss when the shell simply has nothing', async () => {
+    const module = await importModule();
+    module.invalidateLoginShellPathCache();
+
+    callExecFileError(new Error('command not found'));
+    callExecFileError(new Error('shell exploded'));
+
+    const status = await module.detectHeterogeneousCliCommand('kimi-code', 'kimi');
+
+    expect(status.available).toBe(false);
+    expect(module.isLoginShellTimeoutStatus(status)).toBe(false);
+  });
+});
+
+describe('login-shell PATH invalidation races', () => {
+  beforeEach(async () => {
+    (await importModule()).invalidateLoginShellPathCache();
+    execFileMock.mockReset();
+    execMock.mockReset();
+    rejectUnqueuedExecFile();
+    vi.mocked(os.platform).mockReturnValue('darwin');
+    process.env.SHELL = '/bin/zsh';
+  });
+
+  it('refuses the cache to a probe that started before an invalidation', async () => {
+    // A Rescan during the (now ten-second) probe would otherwise have the older
+    // probe write the pre-Rescan PATH back moments later — hiding the very edit
+    // the user pressed Rescan to see.
+    const module = await importModule();
+
+    let releaseShell: (() => void) | undefined;
+    // `which` misses, then the shell probe is held open.
+    callExecFileError(new Error('command not found'));
+    execFileMock.mockImplementationOnce(((file: string, args: any, opts: any, cb: any) => {
+      const callback = typeof opts === 'function' ? opts : cb;
+      releaseShell = () => callback(noErr, { stderr: '', stdout: '/stale/bin:/usr/bin' });
+      return {} as any;
+    }) as any);
+
+    const inFlight = module.detectHeterogeneousCliCommand('kimi-code', 'kimi');
+    // Let the detector reach the held shell probe before the Rescan lands.
+    await vi.waitFor(() => expect(releaseShell).toBeTypeOf('function'));
+
+    module.invalidateLoginShellPathCache();
+
+    callExecFileError(new Error('still not found'));
+    releaseShell!();
+    await inFlight;
+
+    // The disowned probe must not have populated the cache, so the next lookup
+    // goes back to the shell.
+    execFileMock.mockReset();
+    rejectUnqueuedExecFile();
+    callExecFileError(new Error('command not found'));
+    callExecFile('/fresh/bin:/usr/bin');
+    callExecFileError(new Error('still not found'));
+    await module.detectHeterogeneousCliCommand('kimi-code', 'kimi');
+
+    expect(
+      execFileMock.mock.calls.filter(
+        ([file, args]) => file === '/bin/zsh' && Array.isArray(args) && args[0] === '-ilc',
+      ),
+    ).toHaveLength(1);
   });
 });

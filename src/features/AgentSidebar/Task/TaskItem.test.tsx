@@ -12,10 +12,6 @@ const mocks = vi.hoisted(() => ({
   params: {} as { aid?: string },
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-}));
-
 vi.mock('@/features/NavPanel/components/NavItem', () => ({
   default: ({
     active,

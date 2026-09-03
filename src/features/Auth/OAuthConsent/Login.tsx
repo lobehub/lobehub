@@ -1,7 +1,7 @@
 'use client';
 
-import { Avatar, Block, Flexbox, Skeleton, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Block, Flexbox } from '@lobehub/ui';
+import { Avatar, Button, Skeleton, Text } from '@lobehub/ui/base-ui';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -77,8 +77,8 @@ const LoginConfirmClient = memo<LoginConfirmProps>(({ uid, clientMetadata }) => 
             </Flexbox>
           ) : (
             <Flexbox horizontal gap={16}>
-              <Skeleton.Avatar active shape={'square'} size={40} />
-              <Skeleton.Button active />
+              <Skeleton.Avatar shape={'square'} size={40} />
+              <Skeleton height={36} />
             </Flexbox>
           )}
         </Block>

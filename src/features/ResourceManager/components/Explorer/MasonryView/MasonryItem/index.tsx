@@ -388,10 +388,12 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
     }, [isMarkdown, isPage, url, isInView, markdownContent, id]);
 
     const { menuItems } = useFileItemDropdown({
+      fileId,
       fileType,
       filename: name,
       id,
       libraryId: knowledgeBaseId,
+      size,
       sourceType,
       url,
       userId,

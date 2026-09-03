@@ -1,24 +1,22 @@
 'use client';
 
+import { Center, ContextMenuTrigger, Empty, Flexbox, Icon, SearchBar, Tooltip } from '@lobehub/ui';
 import {
   ActionIcon,
-  Center,
-  ContextMenuTrigger,
-  Empty,
-  Flexbox,
-  Icon,
-  SearchBar,
+  Button,
+  confirmModal,
+  type DropdownItem,
+  DropdownMenu,
   Text,
-  Tooltip,
-} from '@lobehub/ui';
-import { Button, confirmModal, type DropdownItem, DropdownMenu, toast } from '@lobehub/ui/base-ui';
+  toast,
+} from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
 import {
+  FolderClosedIcon,
   MoreHorizontalIcon,
   PlusIcon,
   SearchXIcon,
-  SquareKanbanIcon,
   TrashIcon,
 } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
@@ -232,7 +230,7 @@ const ProjectListPage = memo(() => {
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
           />
-          <Button icon={PlusIcon} onClick={openCreateProjectModal}>
+          <Button icon={PlusIcon} onClick={() => openCreateProjectModal()}>
             {t('create.action')}
           </Button>
         </Flexbox>
@@ -244,7 +242,7 @@ const ProjectListPage = memo(() => {
           <Center flex={1} padding={48}>
             <Empty
               description={keyword.trim() ? t('list.searchEmpty') : t('list.emptyDescription')}
-              icon={keyword.trim() ? SearchXIcon : SquareKanbanIcon}
+              icon={keyword.trim() ? SearchXIcon : FolderClosedIcon}
             />
           </Center>
         ) : (

@@ -1,6 +1,7 @@
 import { useToolRenderCapabilities } from '@lobechat/shared-tool-ui';
 import type { ChatMessagePluginError } from '@lobechat/types';
-import { Block, Empty, Flexbox, Skeleton } from '@lobehub/ui';
+import { Block, Empty, Flexbox } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui/base-ui';
 import { SearchIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,10 +22,10 @@ const SearchFiles = memo<SearchFilesProps>(({ searchResults = [], messageId }) =
   if (loading) {
     return (
       <Flexbox gap={4}>
-        <Skeleton.Button active block style={{ height: 16 }} />
-        <Skeleton.Button active block style={{ height: 16 }} />
-        <Skeleton.Button active block style={{ height: 16 }} />
-        <Skeleton.Button active block style={{ height: 16 }} />
+        <Skeleton height={16} />
+        <Skeleton height={16} />
+        <Skeleton height={16} />
+        <Skeleton height={16} />
       </Flexbox>
     );
   }

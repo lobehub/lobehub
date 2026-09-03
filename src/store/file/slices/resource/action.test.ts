@@ -2,14 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { initialState } from '@/store/file/initialState';
 import { useFileStore } from '@/store/file/store';
-import type { ResourceItem } from '@/types/resource';
+import type { CreateDocumentParams, ResourceItem } from '@/types/resource';
 
-const { mockMoveResource } = vi.hoisted(() => ({
+const { mockCreateResource, mockMoveResource } = vi.hoisted(() => ({
+  mockCreateResource: vi.fn(),
   mockMoveResource: vi.fn(),
 }));
 
 vi.mock('@/services/resource', () => ({
   resourceService: {
+    createResource: mockCreateResource,
     moveResource: mockMoveResource,
   },
 }));
@@ -137,5 +139,70 @@ describe('resource actions', () => {
       chunkCount: 10,
       embeddingStatus: 'success',
     });
+  });
+});
+
+describe('createResourceAndSync list placement', () => {
+  const createParams = (parentId: string | null | undefined): CreateDocumentParams => ({
+    content: '',
+    fileType: 'custom/document',
+    knowledgeBaseId: 'kb-1',
+    parentId: parentId ?? undefined,
+    sourceType: 'document',
+    title: 'Untitled',
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useFileStore.setState(initialState);
+  });
+
+  it('keeps a root-level create out of the list while a folder is open', async () => {
+    const folderRow = createResource({ id: 'doc-in-folder', parentId: 'folder-a' });
+    useFileStore.setState({
+      queryParams: { libraryId: 'kb-1', parentId: 'folder-a-slug' },
+      resourceList: [folderRow],
+      resourceMap: new Map([[folderRow.id, folderRow]]),
+    });
+    mockCreateResource.mockResolvedValue(
+      createResource({ id: 'doc-root', knowledgeBaseId: 'kb-1', parentId: null }),
+    );
+
+    const id = await useFileStore.getState().createResourceAndSync(createParams(null));
+
+    expect(id).toBe('doc-root');
+    expect(useFileStore.getState().resourceList.map((item) => item.id)).toEqual(['doc-in-folder']);
+    expect(useFileStore.getState().resourceMap.has('doc-root')).toBe(true);
+  });
+
+  it('keeps a create inside a folder out of the list while the root is open', async () => {
+    const rootRow = createResource({ id: 'doc-root', parentId: null });
+    useFileStore.setState({
+      queryParams: { libraryId: 'kb-1', parentId: null },
+      resourceList: [rootRow],
+      resourceMap: new Map([[rootRow.id, rootRow]]),
+    });
+    mockCreateResource.mockResolvedValue(
+      createResource({ id: 'doc-nested', knowledgeBaseId: 'kb-1', parentId: 'folder-a' }),
+    );
+
+    await useFileStore.getState().createResourceAndSync(createParams('folder-a'));
+
+    expect(useFileStore.getState().resourceList.map((item) => item.id)).toEqual(['doc-root']);
+  });
+
+  it('still lists a create in the open folder when that folder is addressed by slug and not cached', async () => {
+    useFileStore.setState({
+      queryParams: { libraryId: 'kb-1', parentId: 'folder-a-slug' },
+      resourceList: [],
+      resourceMap: new Map(),
+    });
+    mockCreateResource.mockResolvedValue(
+      createResource({ id: 'doc-new', knowledgeBaseId: 'kb-1', parentId: 'folder-a' }),
+    );
+
+    await useFileStore.getState().createResourceAndSync(createParams('folder-a'));
+
+    expect(useFileStore.getState().resourceList.map((item) => item.id)).toEqual(['doc-new']);
   });
 });

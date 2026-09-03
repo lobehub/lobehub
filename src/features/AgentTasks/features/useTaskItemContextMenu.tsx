@@ -41,6 +41,7 @@ interface TaskItemContextMenu {
 
 export interface TaskContextMenuTarget {
   assigneeAgentId?: string | null;
+  assigneeUserId?: string | null;
   identifier: string;
   priority?: number | null;
   status: string;
@@ -153,7 +154,7 @@ export const useTaskContextMenuActions = (
                 onClick: async ({ domEvent }: MenuInfo) => {
                   domEvent.stopPropagation();
                   if (!canEditTask) return;
-                  if (!task.assigneeAgentId && inboxAgentId) {
+                  if (!task.assigneeAgentId && !task.assigneeUserId && inboxAgentId) {
                     await updateTask(task.identifier, { assigneeAgentId: inboxAgentId });
                   }
                   await runTask(task.identifier);

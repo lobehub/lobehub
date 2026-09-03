@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getAvatarBackground, getAvatarInitials, remoteAvatarSrc, resolveAvatar } from './fallback';
+import { getAvatarInitials, remoteAvatarSrc, resolveAvatar } from './fallback';
 
 describe('getAvatarInitials', () => {
   it('returns nothing for a missing name', () => {
@@ -32,25 +32,6 @@ describe('getAvatarInitials', () => {
   });
 });
 
-describe('getAvatarBackground', () => {
-  it('returns nothing without a seed', () => {
-    expect(getAvatarBackground()).toBeUndefined();
-    expect(getAvatarBackground('  ')).toBeUndefined();
-  });
-
-  it('is stable for the same seed', () => {
-    expect(getAvatarBackground('贺素青')).toBe(getAvatarBackground('贺素青'));
-    expect(getAvatarBackground('Claude Code')).toBe(getAvatarBackground('Claude Code'));
-  });
-
-  it('spreads different seeds across the palette', () => {
-    const seeds = ['贺素青', 'Claude Code', 'lobehub', 'agent-default', 'Verify', 'Inbox'];
-    const colors = new Set(seeds.map((seed) => getAvatarBackground(seed)));
-
-    expect(colors.size).toBeGreaterThan(1);
-  });
-});
-
 describe('resolveAvatar', () => {
   it('keeps a working avatar and its background untouched', () => {
     expect(
@@ -66,7 +47,16 @@ describe('resolveAvatar', () => {
     });
 
     expect(avatar).toBe('贺');
-    expect(background).toBe(getAvatarBackground('贺素青'));
+    // The name picks the glyphs, never the color — the tile stays the Avatar's
+    // own neutral grey so a random hue never reads as status.
+    expect(background).toBeUndefined();
+  });
+
+  it('gives every unconfigured name the same neutral tile', () => {
+    const seeds = ['贺素青', 'Claude Code', 'lobehub', 'agent-default', 'Verify', 'Inbox'];
+    const backgrounds = new Set(seeds.map((name) => resolveAvatar({ name }).background));
+
+    expect(backgrounds).toEqual(new Set([undefined]));
   });
 
   it('falls back when there is no avatar at all', () => {
@@ -78,8 +68,7 @@ describe('resolveAvatar', () => {
 
     const broken = resolveAvatar({ avatar: '/avatars/agent-default.png', isBroken: true });
     expect(broken.avatar).toBe('');
-    // The URL still seeds a color, so unnamed avatars aren't all the same grey.
-    expect(broken.background).toBe(getAvatarBackground('/avatars/agent-default.png'));
+    expect(broken.background).toBeUndefined();
   });
 
   it('keeps an explicitly chosen background even when the image is broken', () => {
@@ -114,13 +103,15 @@ describe('resolveAvatar background sentinels', () => {
       name: '林知微',
     });
 
-    expect(background).toBe(getAvatarBackground('林知微'));
+    // Dropped rather than forwarded, so the Avatar paints `colorBorder` behind
+    // the initials instead of leaving them on the page background.
+    expect(background).toBeUndefined();
   });
 
   it('also ignores rgba(0, 0, 0, 0)', () => {
-    expect(resolveAvatar({ background: 'rgba(0, 0, 0, 0)', name: 'Verify' }).background).toBe(
-      getAvatarBackground('Verify'),
-    );
+    expect(
+      resolveAvatar({ background: 'rgba(0, 0, 0, 0)', name: 'Verify' }).background,
+    ).toBeUndefined();
   });
 
   it('keeps a transparent background behind a working image', () => {

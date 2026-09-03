@@ -1,7 +1,11 @@
+import { AcceptanceEvidenceManifest } from '@lobechat/builtin-tool-acceptance-evidence';
 import { LobeActivatorManifest } from '@lobechat/builtin-tool-activator';
 import { AgentBuilderManifest } from '@lobechat/builtin-tool-agent-builder';
 import { AgentDocumentsManifest } from '@lobechat/builtin-tool-agent-documents';
-import { AgentManagementManifest } from '@lobechat/builtin-tool-agent-management';
+import {
+  AgentManagementManifest,
+  resolveAgentManagementManifest,
+} from '@lobechat/builtin-tool-agent-management';
 import {
   agentSignalFeedbackIntentManifest,
   agentSignalReflectionManifest,
@@ -19,7 +23,10 @@ import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management
 import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LobeAgentManifest, resolveLobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
-import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import {
+  LocalSystemManifest,
+  resolveLocalSystemManifest,
+} from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest, resolveMessageManifest } from '@lobechat/builtin-tool-message';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
@@ -166,6 +173,13 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
   {
     discoverable: false,
     hidden: true,
+    identifier: AcceptanceEvidenceManifest.identifier,
+    manifest: AcceptanceEvidenceManifest,
+    type: 'builtin',
+  },
+  {
+    discoverable: false,
+    hidden: true,
     identifier: VerifyToolManifest.identifier,
     manifest: VerifyToolManifest,
     type: 'builtin',
@@ -248,6 +262,7 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     hidden: true,
     identifier: LocalSystemManifest.identifier,
     manifest: LocalSystemManifest,
+    resolveManifest: resolveLocalSystemManifest,
     type: 'builtin',
   },
   {
@@ -323,6 +338,8 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     hidden: true,
     identifier: AgentManagementManifest.identifier,
     manifest: AgentManagementManifest,
+    // Context-aware: hides the `callAgent` API inside sub-agent runs.
+    resolveManifest: resolveAgentManagementManifest,
     type: 'builtin',
   },
   {

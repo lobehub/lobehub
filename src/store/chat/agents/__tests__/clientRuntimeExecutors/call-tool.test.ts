@@ -888,7 +888,12 @@ describe('call_tool executor', () => {
       // Then - tool execution should be skipped
       expect(mockStore.internal_invokeDifferentTypePlugin).not.toHaveBeenCalled();
       expect(result.events).toHaveLength(0);
-      expect(result.newState).toEqual(state);
+      // ...but the call still has to be closed out. Returning the state
+      // untouched used to leave this tool_call_id with no row at all, which the
+      // assistant that requested it makes invalid for the next LLM call.
+      expect(result.newState.messages).toContainEqual(
+        expect.objectContaining({ content: 'Tool execution was aborted by user.', role: 'tool' }),
+      );
     });
 
     it('should check parent abortController signal after message creation', async () => {
@@ -961,8 +966,11 @@ describe('call_tool executor', () => {
 
       // Then
       expect(result.events).toHaveLength(0);
-      expect(result.newState).toEqual(state);
       expect(result.newState.stepCount).toBe(5); // Unchanged
+      // The cancelled call is settled rather than stranded — see above.
+      expect(result.newState.messages).toContainEqual(
+        expect.objectContaining({ content: 'Tool execution was aborted by user.', role: 'tool' }),
+      );
     });
 
     it('should not create executeToolCall operation if parent cancelled', async () => {

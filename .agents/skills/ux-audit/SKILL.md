@@ -26,11 +26,11 @@ page as the product grows; that's the "continuous" part.
 An audit is not one activity. A finding is only trustworthy from a layer that can actually
 _see_ it. Each layer has its own procedure file; run the ones the surface needs.
 
-| Layer          | File                                                | What it does                                                   | Catches                                                                                                                                                              | Cost                             |
-| -------------- | --------------------------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
-| **L1 Static**  | [layer-1-static.md](references/layer-1-static.md)   | Read the code                                                  | Missing states/branches (empty/error/retry), no draft persist, absent patterns, structural issues                                                                    | cheap, offline, **every audit**  |
-| **L2 Visual**  | [layer-2-visual.md](references/layer-2-visual.md)   | Screenshots of the rendered surface                            | Real visual hierarchy & dominant control, spacing/contrast/alignment, truncation/overflow, how empty/loading/error actually look, responsive breakpoints, dark/light | medium; needs a render           |
-| **L3 Dynamic** | [layer-3-dynamic.md](references/layer-3-dynamic.md) | Drive the real user journey via **agent-testing** + instrument | In-progress/locked states, forced error/empty states, does step N lead to N+1, focus/keyboard, **quantified CLS / LCP / INP / long-tasks**                           | high; needs a running env + auth |
+| Layer          | File                                                | What it does                                                | Catches                                                                                                                                                              | Cost                             |
+| -------------- | --------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| **L1 Static**  | [layer-1-static.md](references/layer-1-static.md)   | Read the code                                               | Missing states/branches (empty/error/retry), no draft persist, absent patterns, structural issues                                                                    | cheap, offline, **every audit**  |
+| **L2 Visual**  | [layer-2-visual.md](references/layer-2-visual.md)   | Screenshots of the rendered surface                         | Real visual hierarchy & dominant control, spacing/contrast/alignment, truncation/overflow, how empty/loading/error actually look, responsive breakpoints, dark/light | medium; needs a render           |
+| **L3 Dynamic** | [layer-3-dynamic.md](references/layer-3-dynamic.md) | Drive the real user journey via **acceptance** + instrument | In-progress/locked states, forced error/empty states, does step N lead to N+1, focus/keyboard, **quantified CLS / LCP / INP / long-tasks**                           | high; needs a running env + auth |
 
 ### Coverage matrix — which layer can conclude what
 
@@ -260,7 +260,7 @@ An audit is not finished when the findings are written — it is finished when t
 
 - **[ux](../ux/SKILL.md)** — the execution checklists this audit measures against, and where
   generalizable findings get landed.
-- **agent-testing** — the automation framework L3 drives (agent-browser CDP: snapshot / eval
+- **acceptance** — the automation framework L3 drives (agent-browser CDP: snapshot / eval
   / screenshot / GIF). L3 assumes its Step 0 env + auth are green.
 - **deep-review** — code-level review; this skill is its design-level sibling (deep-review's `ux` dimension checks flows inside a code review; this skill audits a whole surface).
 - **skills-audit** — the same "periodic, evidence-based audit" shape, applied to the skill

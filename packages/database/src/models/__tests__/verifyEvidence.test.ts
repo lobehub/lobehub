@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../core/getTestDB';
 import {
   agentOperations,
+  documents,
   files,
   users,
   verifyCheckResults,
@@ -23,6 +24,7 @@ const userId = 'verify-evidence-test-user';
 const operationId = 'verify-evidence-test-op';
 
 let checkResultId: string;
+let documentId: string;
 let fileId: string;
 
 beforeEach(async () => {
@@ -37,6 +39,19 @@ beforeEach(async () => {
     verifyRunId: run.id,
   });
   checkResultId = result.id;
+  const [document] = await serverDB
+    .insert(documents)
+    .values({
+      content: '# Supplier evidence',
+      fileType: 'text/markdown',
+      source: 'acceptance-test',
+      sourceType: 'api',
+      totalCharCount: 19,
+      totalLineCount: 1,
+      userId,
+    })
+    .returning();
+  documentId = document.id;
   const [file] = await serverDB
     .insert(files)
     .values({
@@ -52,6 +67,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await serverDB.delete(verifyEvidence);
+  await serverDB.delete(documents);
   await serverDB.delete(files);
   await serverDB.delete(verifyCheckResults);
   await serverDB.delete(verifyRuns);
@@ -94,6 +110,21 @@ describe('VerifyEvidenceModel', () => {
     const found = await model.findById(created.id);
     expect(found?.content).toBe('console: 0 errors');
     expect(found?.fileId).toBeNull();
+  });
+
+  it('creates document-backed evidence using documents.id', async () => {
+    const model = new VerifyEvidenceModel(serverDB, userId);
+    const created = await model.create({
+      capturedBy: 'agent',
+      checkResultId,
+      documentId,
+      type: 'markdown',
+    });
+
+    const found = await model.findById(created.id);
+    expect(found?.documentId).toBe(documentId);
+    expect(found?.fileId).toBeNull();
+    expect(found?.content).toBeNull();
   });
 
   it('createMany returns an empty array without inserting when given no rows', async () => {
@@ -184,6 +215,17 @@ describe('VerifyEvidenceModel', () => {
     const found = await model.findById(created.id);
     expect(found?.id).toBe(created.id);
     expect(found?.fileId).toBeNull();
+  });
+
+  it('nulls document_id when the underlying document is removed, keeping the evidence row', async () => {
+    const model = new VerifyEvidenceModel(serverDB, userId);
+    const created = await model.create({ checkResultId, documentId, type: 'markdown' });
+
+    await serverDB.delete(documents);
+
+    const found = await model.findById(created.id);
+    expect(found?.id).toBe(created.id);
+    expect(found?.documentId).toBeNull();
   });
 
   it('cascades when its check result is removed', async () => {

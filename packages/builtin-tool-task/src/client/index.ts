@@ -8,6 +8,7 @@ export {
   DeleteTaskInspector,
   EditTaskInspector,
   ListTasksInspector,
+  ListWorkspaceMembersInspector,
   RunTaskInspector,
   RunTasksInspector,
   TaskInspectors,

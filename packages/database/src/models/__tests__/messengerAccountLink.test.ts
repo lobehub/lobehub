@@ -44,6 +44,32 @@ afterEach(async () => {
 });
 
 describe('MessengerAccountLinkModel', () => {
+  describe('findByUserIds', () => {
+    it('returns only the identities active under the requested scope', async () => {
+      await serverDB.insert(messengerAccountLinks).values([
+        { platform: 'discord', platformUserId: 'd-a', userId: userA, workspaceId: workspaceA },
+        { platform: 'telegram', platformUserId: 't-a', userId: userA, workspaceId: null },
+        { platform: 'slack', platformUserId: 's-b', userId: userB, workspaceId: workspaceA },
+      ]);
+
+      const inWorkspace = await MessengerAccountLinkModel.findByUserIds(serverDB, [userA, userB], {
+        workspaceId: workspaceA,
+      });
+      expect(inWorkspace.map((l) => l.platformUserId).sort()).toEqual(['d-a', 's-b']);
+      // A workspace directory never sees a member's personal-scope identity.
+      expect(inWorkspace.some((l) => 'credentials' in l)).toBe(false);
+
+      const personal = await MessengerAccountLinkModel.findByUserIds(serverDB, [userA, userB], {
+        workspaceId: null,
+      });
+      expect(personal.map((l) => l.platformUserId)).toEqual(['t-a']);
+
+      expect(
+        await MessengerAccountLinkModel.findByUserIds(serverDB, [], { workspaceId: workspaceA }),
+      ).toEqual([]);
+    });
+  });
+
   describe('upsertForPlatform', () => {
     it('inserts a Telegram row with empty tenant_id (global-bot semantics)', async () => {
       const model = new MessengerAccountLinkModel(serverDB, userA);

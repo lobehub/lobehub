@@ -1,8 +1,8 @@
 'use client';
 
 import type { ProjectCompletionDecision, ProjectStatus } from '@lobechat/types';
-import { Block, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui/base-ui';
+import { Block, Empty, Flexbox, Icon } from '@lobehub/ui';
+import { Button, Text, toast } from '@lobehub/ui/base-ui';
 import { BadgeCheckIcon, Clock3Icon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

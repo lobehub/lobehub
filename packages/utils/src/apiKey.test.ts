@@ -1,17 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
-import { generateApiKey, isApiKeyExpired, validateApiKeyFormat } from './apiKey';
+import { API_KEY_PREFIX, generateApiKey, isApiKeyExpired, validateApiKeyFormat } from './apiKey';
 
 describe('apiKey', () => {
   describe('generateApiKey', () => {
     it('should generate API key with correct format', () => {
       const apiKey = generateApiKey();
-      expect(apiKey).toMatch(/^sk-lh-[\da-z]{16}$/);
+      expect(apiKey.startsWith(API_KEY_PREFIX)).toBe(true);
+      expect(apiKey.slice(API_KEY_PREFIX.length)).toMatch(/^[\da-z]{16}$/);
     });
 
     it('should generate API key with correct length', () => {
       const apiKey = generateApiKey();
-      expect(apiKey).toHaveLength(22); // 'sk-lh-' (6) + 16 characters
+      expect(apiKey).toHaveLength(API_KEY_PREFIX.length + 16);
     });
 
     it('should generate unique API keys', () => {
@@ -25,12 +26,12 @@ describe('apiKey', () => {
 
     it('should start with lb- prefix', () => {
       const apiKey = generateApiKey();
-      expect(apiKey.startsWith('sk-lh-')).toBe(true);
+      expect(apiKey.startsWith(API_KEY_PREFIX)).toBe(true);
     });
 
     it('should only contain lowercase alphanumeric characters after prefix', () => {
       const apiKey = generateApiKey();
-      const randomPart = apiKey.slice(6); // Remove 'sk-lh-' prefix
+      const randomPart = apiKey.slice(API_KEY_PREFIX.length);
       expect(randomPart).toMatch(/^[\da-z]+$/);
     });
   });
@@ -67,26 +68,26 @@ describe('apiKey', () => {
 
   describe('validateApiKeyFormat', () => {
     it('should validate correct API key format', () => {
-      const validKey = 'sk-lh-1234567890abcdef';
+      const validKey = `${API_KEY_PREFIX}1234567890abcdef`;
       expect(validateApiKeyFormat(validKey)).toBe(true);
     });
 
     it('should accept keys with only numbers', () => {
-      const validKey = 'sk-lh-1234567890123456';
+      const validKey = `${API_KEY_PREFIX}1234567890123456`;
       expect(validateApiKeyFormat(validKey)).toBe(true);
     });
 
     it('should accept keys with only lowercase letters', () => {
-      const validKey = 'sk-lh-abcdefabcdefabcd';
+      const validKey = `${API_KEY_PREFIX}abcdefabcdefabcd`;
       expect(validateApiKeyFormat(validKey)).toBe(true);
     });
 
     it('should accept keys with mixed alphanumeric characters', () => {
-      const validKey = 'sk-lh-abc123def456789a';
+      const validKey = `${API_KEY_PREFIX}abc123def456789a`;
       expect(validateApiKeyFormat(validKey)).toBe(true);
     });
 
-    it('should reject keys without sk-lh- prefix', () => {
+    it('should reject keys without the configured prefix', () => {
       const invalidKey = '1234567890abcdef';
       expect(validateApiKeyFormat(invalidKey)).toBe(false);
     });
@@ -97,22 +98,22 @@ describe('apiKey', () => {
     });
 
     it('should reject keys that are too short', () => {
-      const invalidKey = 'sk-lh-123456789abcde';
+      const invalidKey = `${API_KEY_PREFIX}123456789abcde`;
       expect(validateApiKeyFormat(invalidKey)).toBe(false);
     });
 
     it('should reject keys that are too long', () => {
-      const invalidKey = 'sk-lh-1234567890abcdef0';
+      const invalidKey = `${API_KEY_PREFIX}1234567890abcdef0`;
       expect(validateApiKeyFormat(invalidKey)).toBe(false);
     });
 
     it('should reject keys with uppercase letters', () => {
-      const invalidKey = 'sk-lh-1234567890ABCDEF';
+      const invalidKey = `${API_KEY_PREFIX}1234567890ABCDEF`;
       expect(validateApiKeyFormat(invalidKey)).toBe(false);
     });
 
     it('should reject keys with special characters', () => {
-      const invalidKey = 'sk-lh-1234567890abcd-f';
+      const invalidKey = `${API_KEY_PREFIX}1234567890abcd-f`;
       expect(validateApiKeyFormat(invalidKey)).toBe(false);
     });
 
@@ -121,7 +122,7 @@ describe('apiKey', () => {
     });
 
     it('should reject keys with spaces', () => {
-      const invalidKey = 'sk-lh-1234567890abcd f';
+      const invalidKey = `${API_KEY_PREFIX}1234567890abcd f`;
       expect(validateApiKeyFormat(invalidKey)).toBe(false);
     });
 

@@ -1,7 +1,8 @@
 'use client';
 
 import type { VerifyCodingScope } from '@lobechat/types';
-import { Avatar, Flexbox, Icon, Popover, Skeleton, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Popover } from '@lobehub/ui';
+import { Avatar, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import type { TFunction } from 'i18next';
 import {
@@ -14,6 +15,7 @@ import {
 import { memo, type PropsWithChildren, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ArticleSkeleton } from '@/components/Skeleton';
 import { useClientDataSWR } from '@/libs/swr';
 import { agentService } from '@/services/agent';
 import { documentService } from '@/services/document';
@@ -222,7 +224,7 @@ export const InternalEntityPreview = memo<InternalEntityPreviewProps>(
 
     const content = isLoading ? (
       <div className={styles.content}>
-        <Skeleton active avatar paragraph={{ rows: 2 }} />
+        <ArticleSkeleton avatar rows={2} />
       </div>
     ) : (
       <Flexbox className={styles.content} gap={12}>

@@ -864,6 +864,9 @@ export const messengerRouter = router({
             .max(10)
             .optional(),
           content: z.string().trim().max(MESSENGER_PUSH_CONTENT_MAX_LENGTH).optional(),
+          // What to do with an image the platform will not take at full size.
+          // Absent means `compress` — the behavior before the choice existed.
+          oversizeImageStrategy: z.enum(['compress', 'link']).optional(),
           platform: z.enum(MESSENGER_PUSH_PLATFORMS),
           tenantId: z.string().optional(),
         })
@@ -897,8 +900,16 @@ export const messengerRouter = router({
 
             return {
               fetchUrl: await fileService.getFileAccessUrl({ id: file.id, url: file.url }),
+              // Built here from a row this caller was checked to own, so the
+              // outbound guard may accept our own configured origins for it —
+              // which self-hosted storage and dev (localhost storage URL) need.
+              trustedUrl: true,
               mimeType: file.fileType,
               name: file.name,
+              // Byte size from the owned row — the send path uses it to apply
+              // per-platform budgets (compress / degrade-to-link) without
+              // having to download URL-sourced attachments first.
+              size: file.size,
               type: attachment.type,
             };
           }),
@@ -908,6 +919,7 @@ export const messengerRouter = router({
       return sendMessengerPush({
         attachments,
         content: input.content,
+        oversizeImageStrategy: input.oversizeImageStrategy,
         platform: input.platform,
         serverDB: ctx.serverDB,
         tenantId: input.tenantId,

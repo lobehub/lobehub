@@ -666,6 +666,8 @@ describe('GenerationModel', () => {
         } as ImageGenerationAsset,
         accessedAt: new Date(),
         createdAt: new Date(),
+        deletedAt: null,
+        isDeleted: null,
         updatedAt: new Date(),
         asyncTask: {
           id: '550e8400-e29b-41d4-a716-446655440000',

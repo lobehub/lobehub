@@ -19,16 +19,6 @@ vi.mock('@lobechat/local-file-shell/file-search', () => {
   };
 });
 
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  }),
-}));
-
 describe('FileSearchService', () => {
   let fileSearchService: FileSearchService;
   let mockApp: App;

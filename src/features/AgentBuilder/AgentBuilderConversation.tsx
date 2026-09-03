@@ -15,8 +15,8 @@ import TopicSelector from './TopicSelector';
 interface AgentBuilderConversationProps {
   agentId: string;
 }
-const actions: ActionKeys[] = ['model'];
-const rightActions: ActionKeys[] = [];
+const actions: ActionKeys[] = [];
+const rightActions: ActionKeys[] = ['model'];
 
 /**
  * Agent Builder Conversation Component

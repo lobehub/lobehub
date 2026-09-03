@@ -1,5 +1,6 @@
 import { toast } from '@lobehub/ui/base-ui';
 import { act, renderHook } from '@testing-library/react';
+import { fileTypeFromBlob } from 'file-type';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { handleFileUploadError } from '@/business/client/handleFileUploadError';
@@ -10,11 +11,10 @@ import { getImageDimensions } from '@/utils/client/imageDimensions';
 
 import { useFileStore as useStore } from '../../store';
 
-vi.mock('zustand/traditional');
-
 // Mock necessary modules
-vi.mock('@lobehub/ui/base-ui', () => ({
-  toast: { info: vi.fn() },
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...(await import('~base-ui-stubs')).baseUiStubs,
 }));
 
 vi.mock('@/business/client/handleFileUploadError', () => ({
@@ -31,20 +31,32 @@ vi.mock('@/utils/client/imageDimensions', () => ({
 
 // Mock for sha256
 vi.mock('js-sha256', () => ({
-  sha256: vi.fn(() => 'mock-hash-value'),
+  sha256: {
+    create: vi.fn(() => ({
+      hex: vi.fn(() => 'mock-hash-value'),
+      update: vi.fn(),
+    })),
+  },
 }));
 
 // Mock file-type module (dynamic import)
 vi.mock('file-type', () => ({
-  fileTypeFromBuffer: vi.fn(),
+  fileTypeFromBlob: vi.fn(),
 }));
 
-// Mock File.arrayBuffer method
+// jsdom's File does not expose the browser stream API used by the upload path.
 beforeAll(() => {
-  Object.defineProperty(File.prototype, 'arrayBuffer', {
+  Object.defineProperty(File.prototype, 'stream', {
     configurable: true,
     value: function () {
-      return Promise.resolve(new ArrayBuffer(8));
+      return new ReadableStream<Uint8Array>({
+        type: 'bytes',
+        start(controller) {
+          const byteController = controller as ReadableByteStreamController;
+          byteController.enqueue(new Uint8Array([1, 2, 3]));
+          byteController.close();
+        },
+      });
     },
     writable: true,
   });
@@ -53,6 +65,7 @@ beforeAll(() => {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(handleFileUploadError).mockReturnValue(false);
+  vi.mocked(fileTypeFromBlob).mockResolvedValue(undefined);
   vi.mocked(getAudioDuration).mockResolvedValue(undefined);
 });
 
@@ -361,6 +374,7 @@ describe('FileUploadAction', () => {
           id: mockFile.name,
           type: 'updateFile',
           value: {
+            dimensions: mockDimensions,
             fileUrl: mockFileResponse.url,
             id: mockFileResponse.id,
             status: 'success',
@@ -560,7 +574,7 @@ describe('FileUploadAction', () => {
         );
       });
 
-      it('should correct image file type from bytes when file.type is wrong', async () => {
+      it('should correct image file type from the Blob when file.type is wrong', async () => {
         const { result } = renderHook(() => useStore());
 
         const pngBytes = new Uint8Array([
@@ -581,10 +595,7 @@ describe('FileUploadAction', () => {
           id: 'file-id-mislabelled',
           url: 'https://example.com/mislabelled.jpg',
         };
-        const { fileTypeFromBuffer } = await import('file-type');
-
-        vi.spyOn(mockFile, 'arrayBuffer').mockResolvedValue(pngBytes.buffer);
-        vi.mocked(fileTypeFromBuffer).mockResolvedValue({ ext: 'png', mime: 'image/png' } as any);
+        vi.mocked(fileTypeFromBlob).mockResolvedValue({ ext: 'png', mime: 'image/png' });
         vi.mocked(getImageDimensions).mockResolvedValue(undefined);
         vi.spyOn(fileService, 'checkFileHash').mockResolvedValue(mockCheckResult);
         const uploadSpy = vi
@@ -613,7 +624,7 @@ describe('FileUploadAction', () => {
         );
       });
 
-      it('should detect file type from buffer when file.type is empty', async () => {
+      it('should detect file type from the Blob when file.type is empty', async () => {
         const { result } = renderHook(() => useStore());
 
         const mockFile = new File(['test content'], 'noType.png', { type: '' });
@@ -632,9 +643,7 @@ describe('FileUploadAction', () => {
         vi.spyOn(uploadService, 'uploadFileToS3').mockResolvedValue(mockUploadResult);
         vi.spyOn(fileService, 'createFile').mockResolvedValue(mockFileResponse);
 
-        // Mock dynamic import of fileTypeFromBuffer
-        const { fileTypeFromBuffer } = await import('file-type');
-        vi.mocked(fileTypeFromBuffer).mockResolvedValue({ ext: 'png', mime: 'image/png' } as any);
+        vi.mocked(fileTypeFromBlob).mockResolvedValue({ ext: 'png', mime: 'image/png' });
 
         await act(async () => {
           await result.current.uploadWithProgress({
@@ -642,7 +651,7 @@ describe('FileUploadAction', () => {
           });
         });
 
-        expect(fileTypeFromBuffer).toHaveBeenCalled();
+        expect(fileTypeFromBlob).toHaveBeenCalledWith(mockFile);
         expect(fileService.createFile).toHaveBeenCalledWith(
           expect.objectContaining({
             fileType: 'image/png',
@@ -670,9 +679,7 @@ describe('FileUploadAction', () => {
         vi.spyOn(uploadService, 'uploadFileToS3').mockResolvedValue(mockUploadResult);
         vi.spyOn(fileService, 'createFile').mockResolvedValue(mockFileResponse);
 
-        // Mock dynamic import to return undefined
-        const { fileTypeFromBuffer } = await import('file-type');
-        vi.mocked(fileTypeFromBuffer).mockResolvedValue(undefined);
+        vi.mocked(fileTypeFromBlob).mockResolvedValue(undefined);
 
         await act(async () => {
           await result.current.uploadWithProgress({
@@ -711,8 +718,7 @@ describe('FileUploadAction', () => {
           url: 'https://example.com/voice.m4a',
         });
 
-        const { fileTypeFromBuffer } = await import('file-type');
-        vi.mocked(fileTypeFromBuffer).mockResolvedValue({ ext: 'mp4', mime: 'video/mp4' } as any);
+        vi.mocked(fileTypeFromBlob).mockResolvedValue({ ext: 'mp4', mime: 'video/mp4' });
 
         await act(async () => {
           await result.current.uploadWithProgress({ file: mockFile });
@@ -924,15 +930,28 @@ describe('FileUploadAction', () => {
         vi.spyOn(fileService, 'checkFileHash').mockResolvedValue(mockCheckResult);
         vi.spyOn(uploadService, 'uploadFileToS3').mockResolvedValue(mockUploadResult);
         vi.spyOn(fileService, 'createFile').mockResolvedValue(mockFileResponse);
+        const onStatusUpdate = vi.fn();
 
         const uploadResult = await act(async () => {
           return await result.current.uploadWithProgress({
             file: mockFile,
+            onStatusUpdate,
           });
         });
 
         expect(getImageDimensions).toHaveBeenCalledWith(mockFile);
         expect(uploadResult?.dimensions).toEqual(mockDimensions);
+        expect(onStatusUpdate).toHaveBeenLastCalledWith({
+          id: mockFile.name,
+          type: 'updateFile',
+          value: {
+            dimensions: mockDimensions,
+            fileUrl: mockFileResponse.url,
+            id: mockFileResponse.id,
+            status: 'success',
+            uploadState: { progress: 100, restTime: 0, speed: 0 },
+          },
+        });
       });
 
       it('should return undefined dimensions for non-image files', async () => {

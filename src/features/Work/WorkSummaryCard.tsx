@@ -1,7 +1,8 @@
 'use client';
 
 import type { WorkSummaryItem } from '@lobechat/types';
-import { Flexbox, Tag, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
@@ -20,7 +21,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block: 12px;
     padding-inline: 12px;
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 8px;
+    border-radius: ${cssVar.borderRadiusLG};
 
     background: ${cssVar.colorBgElevated};
   `,
@@ -99,7 +100,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   title: css`
     min-width: 0;
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 500;
   `,
 }));
@@ -228,7 +229,7 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
         <Flexbox align={'center'} className={styles.icon} justify={'center'}>
           <Icon size={18} />
         </Flexbox>
-        <Flexbox flex={1} gap={6} style={{ minWidth: 0 }}>
+        <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
           <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
             <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
               <Text ellipsis className={styles.title}>
@@ -257,7 +258,7 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
             )}
           </Flexbox>
           {description && (
-            <Text ellipsis className={styles.description} fontSize={13}>
+            <Text ellipsis className={styles.description} fontSize={12}>
               {description}
             </Text>
           )}
