@@ -1333,6 +1333,48 @@ describe('TrashService', () => {
       expect(await documentModel.findById(child.id)).toMatchObject({ parentId: folder.id });
     });
 
+    it('orders a child after the selected closure that restores its parent', async () => {
+      const grandparent = await documentModel.create({
+        fileType: 'custom/folder',
+        source: '',
+        sourceType: 'api',
+        title: 'Grandparent',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+      const parent = await documentModel.create({
+        fileType: 'custom/folder',
+        parentId: grandparent.id,
+        source: '',
+        sourceType: 'api',
+        title: 'Closure-owned parent',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+      const child = await documentModel.create({
+        fileType: 'custom/page',
+        parentId: parent.id,
+        source: '',
+        sourceType: 'api',
+        title: 'Independent child',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+      const [childRoot] = await service.trashDocuments([child.id]);
+      const [grandparentRoot] = await service.trashDocuments([grandparent.id]);
+      expect(
+        (await trashModel.findChildren(grandparentRoot.id)).map((item) => item.resourceId),
+      ).toContain(parent.id);
+
+      const outcome = await service.restore([childRoot.id, grandparentRoot.id]);
+
+      expect(outcome.failed).toEqual([]);
+      expect(outcome.restored.map((item) => item.id)).toEqual([grandparentRoot.id, childRoot.id]);
+      expect(await documentModel.findById(grandparent.id)).toBeDefined();
+      expect(await documentModel.findById(parent.id)).toMatchObject({ parentId: grandparent.id });
+      expect(await documentModel.findById(child.id)).toMatchObject({ parentId: parent.id });
+    });
+
     it("refuses to restore a public document beneath another creator's private trashed parent", async () => {
       const workspaceId = 'trash-private-parent-document-workspace';
       await serverDB.insert(workspaces).values({

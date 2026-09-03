@@ -371,18 +371,28 @@ export class TrashService {
       if (!known.has(id)) outcome.failed.push({ code: 'notFound', id });
     }
 
-    const documentRootsByResourceId = new Map(
-      roots
-        .filter((root) => !root.rootId && root.resourceType === 'document')
+    const selectedRoots = roots.filter((root) => !root.rootId);
+    const rootsById = new Map(selectedRoots.map((root) => [root.id, root]));
+    const closureChildren = await this.trashModel.findChildrenByRootIds(
+      selectedRoots.map((root) => root.id),
+    );
+    const restoringDocumentOwners = new Map(
+      selectedRoots
+        .filter((root) => root.resourceType === 'document')
         .map((root) => [root.resourceId, root]),
     );
+    for (const child of closureChildren) {
+      if (child.resourceType !== 'document' || !child.rootId) continue;
+      const owner = rootsById.get(child.rootId);
+      if (owner) restoringDocumentOwners.set(child.resourceId, owner);
+    }
     const restoreDepth = (root: TrashItemRow, visited = new Set<string>()): number => {
       if (visited.has(root.id)) return 0;
       const parentId = root.meta?.parentId;
-      const parent = parentId ? documentRootsByResourceId.get(parentId) : undefined;
-      if (!parent) return 0;
+      const parentOwner = parentId ? restoringDocumentOwners.get(parentId) : undefined;
+      if (!parentOwner || parentOwner.id === root.id) return 0;
       const nextVisited = new Set(visited).add(root.id);
-      return restoreDepth(parent, nextVisited) + 1;
+      return restoreDepth(parentOwner, nextVisited) + 1;
     };
     const orderedRoots = roots
       .map((root, index) => ({ depth: restoreDepth(root), index, root }))

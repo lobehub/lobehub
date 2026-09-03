@@ -597,8 +597,14 @@ export class TrashModel {
 
   /** Registry rows cascaded under a root (any type). */
   findChildren = async (rootId: string, trx?: Transaction): Promise<TrashItemRow[]> => {
+    return this.findChildrenByRootIds([rootId], trx);
+  };
+
+  /** Registry rows cascaded under any of the supplied roots (any type). */
+  findChildrenByRootIds = async (rootIds: string[], trx?: Transaction): Promise<TrashItemRow[]> => {
+    if (rootIds.length === 0) return [];
     const db = trx ?? this.db;
-    return db.select().from(trashItems).where(eq(trashItems.rootId, rootId));
+    return db.select().from(trashItems).where(inArray(trashItems.rootId, rootIds));
   };
 
   // ─────────────────────────── sweep (global, not user-scoped) ───────────────────────────
