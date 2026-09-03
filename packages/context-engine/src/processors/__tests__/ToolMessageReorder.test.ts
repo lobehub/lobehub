@@ -222,7 +222,7 @@ describe('ToolMessageReorder', () => {
         ],
       },
       {
-        content: '{"error":"Tool call failed","success":false,"synthetic":true}',
+        content: '{"error":"Tool call failed","reason":"tool_result_missing","success":false,"synthetic":true,"tool":"test-plugin____testApi"}',
         name: 'test-plugin____testApi',
         role: 'tool',
         tool_call_id: 'call_missing',
@@ -361,8 +361,46 @@ describe('ToolMessageReorder', () => {
 
     const result = await proc.process(ctx);
 
-    const failure = JSON.stringify({ error: 'Tool call failed', success: false, synthetic: true });
+    const failure = JSON.stringify({
+      error: 'Tool call failed',
+      reason: 'tool_result_unusable',
+      success: false,
+      synthetic: true,
+      tool: 'readFile',
+    });
     expect(result.messages[1].content).toBe(failure);
     expect(result.messages[2].content).toBe(failure);
+  });
+
+  it('should mark a missing tool result with the tool name and the missing reason', async () => {
+    const proc = new ToolMessageReorder();
+    const ctx = createContext([
+      {
+        id: 'a1',
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          { function: { arguments: '{}', name: 'lobe-local-system____runCommand' }, id: 'call_1', type: 'function' },
+        ],
+      },
+      // No tool message at all — e.g. the result was lost to a gateway 503/504
+      // while the tool may well have executed on the device.
+    ]);
+
+    const result = await proc.process(ctx);
+
+    const failure = result.messages[1].content;
+    expect(typeof failure).toBe('string');
+
+    const parsed = JSON.parse(failure);
+    expect(parsed).toEqual({
+      error: 'Tool call failed',
+      reason: 'tool_result_missing',
+      success: false,
+      synthetic: true,
+      tool: 'lobe-local-system____runCommand',
+    });
+    // Structured fields must stay machine-readable, not flattened into prose.
+    expect(parsed.reason).toBeDefined();
   });
 });

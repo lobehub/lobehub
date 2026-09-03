@@ -15,11 +15,22 @@ declare module '../types' {
 
 const log = debug('context-engine:processor:ToolMessageReorder');
 
-const DEFAULT_TOOL_FAILURE_CONTENT = JSON.stringify({
-  error: 'Tool call failed',
-  success: false,
-  synthetic: true,
-});
+/**
+ * Why a synthetic failure payload was injected. The model sees this field, so
+ * the wording doubles as a diagnosis: it can tell whether the tool may still
+ * have executed (result lost in transport) versus ran and produced nothing
+ * usable — instead of guessing from an opaque "Tool call failed".
+ */
+type SyntheticToolFailureReason = 'tool_result_missing' | 'tool_result_unusable';
+
+const syntheticToolFailureContent = (reason: SyntheticToolFailureReason, tool?: string) =>
+  JSON.stringify({
+    error: 'Tool call failed',
+    reason,
+    success: false,
+    synthetic: true,
+    ...(tool ? { tool } : {}),
+  });
 
 /**
  * Whether a tool result still carries something the model can read.
@@ -30,7 +41,7 @@ const DEFAULT_TOOL_FAILURE_CONTENT = JSON.stringify({
  * 'image_url' }]` — whenever the model supports vision. A bare
  * `typeof content === 'string'` guard therefore rejects exactly the results
  * that carry an image: this pass would drop the parts and hand the model
- * {@link DEFAULT_TOOL_FAILURE_CONTENT} instead, so a successful screenshot read
+ * {@link syntheticToolFailureContent} instead, so a successful screenshot read
  * arrived as "Tool call failed" and the image never reached the request at all.
  */
 const hasUsableToolContent = (content: unknown, pluginErrorMessage?: string): boolean => {
@@ -172,18 +183,24 @@ export class ToolMessageReorder extends BaseProcessor {
               ? matchedToolMessage.pluginError.message
               : undefined;
 
+          const toolName = toolCall.function?.name;
+
           reorderedMessages.push({
             ...matchedToolMessage,
             content: hasUsableToolContent(matchedToolMessage.content, pluginErrorMessage)
               ? matchedToolMessage.content
-              : pluginErrorMessage || DEFAULT_TOOL_FAILURE_CONTENT,
+              : pluginErrorMessage || syntheticToolFailureContent('tool_result_unusable', toolName),
           });
           toolMessages.delete(toolCall.id);
           continue;
         }
 
         reorderedMessages.push({
-          content: DEFAULT_TOOL_FAILURE_CONTENT,
+          // The tool result never arrived (transport loss, gateway error,
+          // crash). Flag it explicitly so the model can tell this apart from a
+          // tool that ran and returned something unusable — and so retry
+          // decisions are not made blind.
+          content: syntheticToolFailureContent('tool_result_missing', toolCall.function?.name),
           ...(toolCall.function?.name && { name: toolCall.function.name }),
           role: 'tool',
           tool_call_id: toolCall.id,
