@@ -86,6 +86,7 @@ import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../
 import { resolveGroupMembershipType } from '../utils/groupMembership';
 import { normalizeInboxAgentMeta } from '../utils/inboxAgent';
 import { sanitizeAgentApiConfig } from '../utils/sanitizeAgentApiConfig';
+import { notShareVisitorTopic } from '../utils/shareVisitor';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { AGENT_COPY_IN_PROGRESS, AgentCopyJobModel } from './agentCopyJob';
 import {
@@ -268,6 +269,14 @@ export class AgentModel {
    * Rank the user's agents by topic count (agent usage ranking). Counts topics
    * directly via `topics.agentId`, so it is agent-native — no sessionId. Mirrors
    * the recents filter: real agents plus the inbox, excluding other virtual agents.
+   *
+   * Share-visitor topics are excluded from the count: they carry the creator's
+   * `userId` (so the plain join would count them) but reflect visitor usage,
+   * not the creator's own — same rule as `TopicModel.rank` and every other
+   * creator-facing aggregate (see `notShareVisitorTopic`). Applied in the join
+   * condition rather than `where` so agents whose ONLY topics are visitor ones
+   * still drop out via the `count > 0` guard instead of being filtered away
+   * before grouping.
    */
   rank = async (limit: number = 10): Promise<AgentRankItem[]> => {
     const rows = await this.db
@@ -281,7 +290,7 @@ export class AgentModel {
         title: agents.title,
       })
       .from(agents)
-      .leftJoin(topics, eq(topics.agentId, agents.id))
+      .leftJoin(topics, and(eq(topics.agentId, agents.id), notShareVisitorTopic()))
       .where(and(this.ownership(), or(eq(agents.slug, INBOX_SESSION_ID), ne(agents.virtual, true))))
       .groupBy(agents.id)
       .having(({ count }) => gt(count, 0))
