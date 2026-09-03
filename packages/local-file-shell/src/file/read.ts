@@ -13,6 +13,8 @@ import { resolveAgainstCwd } from './expandTilde';
 
 /** Hard cap on file size we will read into memory at all (10MB). */
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+/** PDFs are commonly image-heavy, but pdfjs still loads the entire source into memory. */
+const MAX_PDF_FILE_SIZE_BYTES = 50 * 1024 * 1024;
 /** Cap on the total chars returned to the agent. */
 const MAX_OUTPUT_CHARS = 500_000;
 /** Cap on chars per line. Keeps a single 27KB base64 line from blowing up the response. */
@@ -67,12 +69,15 @@ export async function readLocalFile({
 
   const extension = path.extname(filePath).toLowerCase().replace('.', '');
 
-  // PDFs are parsed into text by pdfjs and remain bounded by the output caps below.
-  // Their source size is often dominated by embedded images and does not reflect text volume.
-  if (extension !== 'pdf' && stats.size > MAX_FILE_SIZE_BYTES) {
+  const maxFileSize = extension === 'pdf' ? MAX_PDF_FILE_SIZE_BYTES : MAX_FILE_SIZE_BYTES;
+  if (stats.size > maxFileSize) {
+    const suggestion =
+      extension === 'pdf'
+        ? 'Use a smaller PDF or split it into multiple documents.'
+        : 'Use grep / shell tools to inspect specific parts.';
     return buildErrorResult(
       filePath,
-      `Error: File is too large to read (${stats.size} bytes, limit ${MAX_FILE_SIZE_BYTES}). Use grep / shell tools to inspect specific parts.`,
+      `Error: File is too large to read (${stats.size} bytes, limit ${maxFileSize}). ${suggestion}`,
     );
   }
 

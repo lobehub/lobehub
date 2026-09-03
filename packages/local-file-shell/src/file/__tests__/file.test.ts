@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, truncate, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -194,6 +194,19 @@ describe('file operations', () => {
 
       expect(result.content).toContain('Large PDF works');
       expect(result.content).not.toContain('too large');
+    });
+
+    it('should reject PDFs larger than the PDF size cap before parsing', async () => {
+      const filePath = path.join(tmpDir, 'oversized.pdf');
+      await writeFile(filePath, 'not actually a PDF');
+      await truncate(filePath, 50 * 1024 * 1024 + 1);
+
+      const result = await readLocalFile({ path: filePath });
+
+      expect(result.content).toContain('too large');
+      expect(result.content).toContain(`limit ${50 * 1024 * 1024}`);
+      expect(result.content).toContain('split it into multiple documents');
+      expect(result.charCount).toBe(0);
     });
 
     it('should still read normal source files of allowed extensions', async () => {
