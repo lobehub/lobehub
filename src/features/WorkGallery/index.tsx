@@ -8,13 +8,13 @@ import { PackageOpenIcon, TriangleAlertIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ArticleSkeleton } from '@/components/Skeleton';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
 
 import type { WorkGalleryKey } from './const';
 import { useWorkspaceWorksInfinite } from './hooks';
+import WorkGallerySkeleton, { WorkGalleryCardsSkeleton } from './Skeleton';
 import { useOpenWork } from './useOpenWork';
 import WorkPreviewCard from './WorkPreviewCard';
 
@@ -125,14 +125,6 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block: 8px 24px;
     padding-inline: 24px;
   `,
-  skeletonCard: css`
-    aspect-ratio: 0.9;
-    padding: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 16px;
-
-    background: ${cssVar.colorBgContainer};
-  `,
 }));
 
 interface AgentFilterProps {
@@ -167,18 +159,6 @@ const AgentFilter = memo<AgentFilterProps>(({ active, agentId, onSelect }) => {
 });
 
 AgentFilter.displayName = 'AgentFilter';
-
-const SkeletonCards = memo<{ count: number }>(({ count }) => (
-  <div className={styles.cardList}>
-    {Array.from({ length: count }).map((_, index) => (
-      <div className={styles.skeletonCard} key={index}>
-        <ArticleSkeleton rows={6} />
-      </div>
-    ))}
-  </div>
-));
-
-SkeletonCards.displayName = 'SkeletonCards';
 
 interface WorkGalleryProps {
   galleryKey: WorkGalleryKey;
@@ -268,8 +248,6 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
         </Center>
       );
 
-    if (isLoadingInitial && items.length === 0) return <SkeletonCards count={8} />;
-
     if (items.length === 0)
       return (
         <Center className={styles.emptyState}>
@@ -315,7 +293,7 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
         <div aria-hidden ref={sentinelRef} style={{ height: 1 }} />
         {isLoadingMore ? (
           <Flexbox style={{ marginBlockStart: 12 }}>
-            <SkeletonCards count={4} />
+            <WorkGalleryCardsSkeleton count={4} />
           </Flexbox>
         ) : error ? (
           <div className={styles.loadMoreError}>
@@ -329,7 +307,9 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
     );
   };
 
-  return (
+  return isLoadingInitial && items.length === 0 ? (
+    <WorkGallerySkeleton />
+  ) : (
     <Flexbox className={styles.container}>
       {agentIds.length > 0 && (
         <Flexbox horizontal align={'center'} className={styles.filterBar} gap={4}>

@@ -36,7 +36,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const HeaderSkeleton = () => (
+export const SurfaceHeaderSkeleton = () => (
   <Flexbox
     horizontal
     align={'center'}
@@ -154,7 +154,7 @@ const EditorSkeleton = () => (
 
 const SurfaceSkeleton = ({ header = true, variant = 'list' }: SurfaceSkeletonProps) => (
   <Flexbox aria-busy flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
-    {header && <HeaderSkeleton />}
+    {header && <SurfaceHeaderSkeleton />}
     <Flexbox flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
       {variant === 'list' && <ListSkeleton />}
       {variant === 'form' && <FormSkeleton />}

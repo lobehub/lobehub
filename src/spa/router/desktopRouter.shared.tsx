@@ -44,6 +44,7 @@ import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { agentsRouteMeta } from '@/features/AgentViewAll/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
 import { projectsRouteMeta } from '@/features/Projects/routeMeta';
+import ResourceCategorySkeleton from '@/features/ResourceHome/Skeleton';
 import { settingsRouteMeta } from '@/features/Settings/features/routeMeta';
 import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
 import WorkspaceProviderRedirect from '@/features/WorkspaceSetting/ProviderRedirect';
@@ -664,6 +665,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
           'Desktop > Resource > Home > Layout',
           { preloadId: 'resource' },
         ),
+        handle: { meta: routeMeta({ Skeleton: ResourceCategorySkeleton }) },
       },
       // Library routes (knowledge base detail)
       {
