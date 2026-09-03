@@ -62,6 +62,10 @@ export const TEXT_READABLE_FILE_TYPES = [
   'groovy',
   'gradle',
 
+  // Hardware Description Languages
+  'v',
+  'sv',
+
   // LaTeX & Academic
   'tex',
   'sty',

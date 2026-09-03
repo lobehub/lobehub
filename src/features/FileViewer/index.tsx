@@ -60,6 +60,9 @@ const CODE_EXTENSIONS = [
   '.cc',
   '.hpp',
   '.hxx',
+  // Hardware description languages
+  '.v',
+  '.sv',
   // Other compiled languages
   '.cs',
   '.go',
@@ -137,6 +140,11 @@ const CODE_MIME_TYPES = new Set([
   'csharp',
   'go',
   'rust',
+  // Hardware description languages (bare tokens + text/x-* mimes)
+  'v',
+  'sv',
+  'text/x-verilog',
+  'text/x-systemverilog',
   'ruby',
   'php',
   'text/x-php',
