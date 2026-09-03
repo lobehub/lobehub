@@ -1,5 +1,6 @@
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
+import { lockDocumentHierarchy } from '@/database/utils/documentHierarchy';
 import type { SoftDeleteOptions } from '@/database/utils/softDelete';
 
 import { purgeFiles } from './purgeFiles';
@@ -43,6 +44,7 @@ export const fileHandler: TrashHandler = {
     await new DocumentModel(ctx.db, ctx.userId, ctx.workspaceId).purge(documentIds);
   },
   restore: async (ctx, root, children) => {
+    await lockDocumentHierarchy(ctx.db, ctx.userId, ctx.workspaceId);
     const fileModel = new FileModel(ctx.db, ctx.userId, ctx.workspaceId);
     const [file] = await fileModel.findTrashedByIds([root.resourceId]);
     if (!file) throw new TrashRestoreError('notFound');

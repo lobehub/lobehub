@@ -85,6 +85,107 @@ afterEach(async () => {
 
 describe('TrashService', () => {
   describe('resources', () => {
+    it('serializes parent-targeting document and file writes with subtree trashing', async () => {
+      const folder = await documentModel.create({
+        fileType: 'custom/folder',
+        source: '',
+        sourceType: 'api',
+        title: 'Concurrent parent',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+      const movableDocument = await documentModel.create({
+        fileType: 'custom/page',
+        source: '',
+        sourceType: 'api',
+        title: 'Movable document',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+      const movableFile = await fileModel.create({
+        fileType: 'text/plain',
+        name: 'movable.txt',
+        size: 1,
+        url: 'files/movable.txt',
+      });
+
+      let enterCollection!: () => void;
+      const collectionEntered = new Promise<void>((resolve) => {
+        enterCollection = resolve;
+      });
+      let releaseCollection!: () => void;
+      const collectionRelease = new Promise<void>((resolve) => {
+        releaseCollection = resolve;
+      });
+      const trashPromise = serverDB.transaction(async (tx) => {
+        const result = await new DocumentModel(
+          tx as unknown as LobeChatDatabase,
+          userId,
+        ).softDeleteSubtree(folder.id, { deletedAt: new Date() });
+        enterCollection();
+        await collectionRelease;
+        return result;
+      });
+      await collectionEntered;
+
+      let settled = 0;
+      const capture = async (promise: Promise<unknown>) =>
+        promise.then(
+          (value) => {
+            settled += 1;
+            return { value };
+          },
+          (error: unknown) => {
+            settled += 1;
+            return { error };
+          },
+        );
+      const writes = [
+        capture(
+          documentModel.create({
+            fileType: 'custom/page',
+            parentId: folder.id,
+            source: '',
+            sourceType: 'api',
+            title: 'Racing child',
+            totalCharCount: 0,
+            totalLineCount: 0,
+          }),
+        ),
+        capture(documentModel.update(movableDocument.id, { parentId: folder.id })),
+        capture(
+          fileModel.create({
+            fileType: 'text/plain',
+            name: 'racing.txt',
+            parentId: folder.id,
+            size: 1,
+            url: 'files/racing.txt',
+          }),
+        ),
+        capture(fileModel.update(movableFile.id, { parentId: folder.id })),
+      ];
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(settled).toBe(0);
+
+      releaseCollection();
+      await trashPromise;
+      const outcomes = await Promise.all(writes);
+
+      expect(outcomes).toEqual(Array.from({ length: 4 }, () => ({ error: expect.any(Error) })));
+      for (const outcome of outcomes) {
+        expect(String('error' in outcome ? outcome.error : '')).toContain(
+          'Parent document not found',
+        );
+      }
+      expect(await documentModel.findById(movableDocument.id)).toMatchObject({ parentId: null });
+      expect(await fileModel.findById(movableFile.id)).toMatchObject({ parentId: null });
+      expect(
+        await serverDB.select().from(documents).where(eq(documents.title, 'Racing child')),
+      ).toEqual([]);
+      expect(await serverDB.select().from(files).where(eq(files.name, 'racing.txt'))).toEqual([]);
+    });
+
     it('serializes restore behind an in-flight permanent purge claim', async () => {
       await fileModel.createGlobalFile({
         creator: userId,

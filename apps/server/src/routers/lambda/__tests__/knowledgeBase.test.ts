@@ -7,6 +7,7 @@ const routerMocks = vi.hoisted(() => ({
   assertContentsNotInRestrictedKnowledgeBase: vi.fn(),
   assertKnowledgeBaseBrowsable: vi.fn(),
   businessFileTransferStorageCheck: vi.fn(),
+  getRestrictedKnowledgeBasePolicy: vi.fn(),
   hasWorkspaceScopedPermission: vi.fn(),
 }));
 
@@ -35,6 +36,7 @@ vi.mock('@/server/routers/lambda/_helpers/knowledgeBaseAccess', () => ({
     routerMocks.assertContentsNotInRestrictedKnowledgeBase,
   assertKnowledgeBaseBrowsable: routerMocks.assertKnowledgeBaseBrowsable,
   filterRestrictedKnowledgeBases: vi.fn(async (_ctx, items) => items),
+  getRestrictedKnowledgeBasePolicy: routerMocks.getRestrictedKnowledgeBasePolicy,
   getUseLevelKnowledgeBaseIds: vi.fn().mockResolvedValue([]),
 }));
 
@@ -87,6 +89,11 @@ describe('knowledgeBaseRouter', () => {
     routerMocks.assertContentsNotInRestrictedKnowledgeBase.mockResolvedValue(undefined);
     routerMocks.assertKnowledgeBaseBrowsable.mockResolvedValue(undefined);
     routerMocks.businessFileTransferStorageCheck.mockResolvedValue(undefined);
+    routerMocks.getRestrictedKnowledgeBasePolicy.mockResolvedValue({
+      allRestrictedKnowledgeBaseIds: [],
+      liveRestrictedKnowledgeBaseIds: [],
+      trashedRestrictedKnowledgeBaseIds: [],
+    });
     routerMocks.hasWorkspaceScopedPermission.mockResolvedValue(true);
     mockKnowledgeBaseModelCopyToWorkspace.mockResolvedValue({ id: 'kb-copy' });
     mockKnowledgeBaseModelCountFileUsage.mockResolvedValue(4096);
@@ -111,6 +118,23 @@ describe('knowledgeBaseRouter', () => {
       await caller.removeAllKnowledgeBases();
 
       expect(mockTrashKnowledgeBases).toHaveBeenCalledWith(['kb-own', 'kb-shared']);
+    });
+
+    it('excludes caller-restricted workspace libraries from the bulk removal', async () => {
+      mockKnowledgeBaseModelQuery.mockResolvedValue([
+        { id: 'kb-own', userId: 'test-user' },
+        { id: 'kb-open', userId: 'another-member' },
+        { id: 'kb-restricted', userId: 'another-member' },
+      ]);
+      routerMocks.getRestrictedKnowledgeBasePolicy.mockResolvedValue({
+        allRestrictedKnowledgeBaseIds: ['kb-restricted'],
+        liveRestrictedKnowledgeBaseIds: ['kb-restricted'],
+        trashedRestrictedKnowledgeBaseIds: [],
+      });
+
+      await caller.removeAllKnowledgeBases();
+
+      expect(mockTrashKnowledgeBases).toHaveBeenCalledWith(['kb-own', 'kb-open']);
     });
   });
 

@@ -485,7 +485,7 @@ export class TrashModel {
           isNull(trashItems.rootId),
           this.active(),
           sql`COALESCE(${trashItems.meta}->'purgeBlocked', 'false'::jsonb) <> 'true'::jsonb`,
-          sql`${trashItems.meta}->'purgeClaim' IS NULL`,
+          sql`NOT COALESCE(jsonb_exists(${trashItems.meta}, 'purgeClaim'), false)`,
         ),
       )
       .for('update');
@@ -503,7 +503,7 @@ export class TrashModel {
           this.ownership(),
           this.active(),
           sql`COALESCE(${trashItems.meta}->'purgeBlocked', 'false'::jsonb) <> 'true'::jsonb`,
-          sql`${trashItems.meta}->'purgeClaim' IS NULL`,
+          sql`NOT COALESCE(jsonb_exists(${trashItems.meta}, 'purgeClaim'), false)`,
         ),
       );
   };

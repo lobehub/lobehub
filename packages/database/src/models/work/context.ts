@@ -62,8 +62,17 @@ const taskVisibilityGuard = (ctx: WorkContext): SQL =>
 const documentVisibilityGuard = (ctx: WorkContext): SQL =>
   or(
     ne(works.resourceType, 'document'),
-    eq(works.userId, ctx.userId),
-    sql`exists (select 1 from ${documents} where ${documents.id} = ${works.resourceId} and (${documents.visibility} = 'public' or ${documents.userId} = ${ctx.userId}))`,
+    and(
+      // Soft-deleted documents retain their rows for restore, so the usual
+      // registrant shortcut must not expose their Work snapshots. Preserve
+      // the shortcut only for true orphans (a backing row hard-deleted outside
+      // the tool path), matching the pre-trash behavior documented above.
+      sql`not exists (select 1 from ${documents} where ${documents.id} = ${works.resourceId} and ${documents.isDeleted} is true)`,
+      or(
+        eq(works.userId, ctx.userId),
+        sql`exists (select 1 from ${documents} where ${documents.id} = ${works.resourceId} and ${documents.isDeleted} is not true and (${documents.visibility} = 'public' or ${documents.userId} = ${ctx.userId}))`,
+      ),
+    ),
   ) as SQL;
 
 export const workOwnership = (ctx: WorkContext) =>

@@ -27,6 +27,7 @@ import {
   assertContentsNotInRestrictedKnowledgeBase,
   assertKnowledgeBaseBrowsable,
   filterRestrictedKnowledgeBases,
+  getRestrictedKnowledgeBasePolicy,
   getUseLevelKnowledgeBaseIds,
 } from './_helpers/knowledgeBaseAccess';
 
@@ -315,7 +316,12 @@ export const knowledgeBaseRouter = router({
     .use(withScopedPermission('knowledge_base:delete'))
     .mutation(async ({ ctx }) => {
       const knowledgeBases = await ctx.knowledgeBaseModel.query();
-      const ids = knowledgeBases.map((knowledgeBase) => knowledgeBase.id);
+      const restrictedIds = ctx.workspaceId
+        ? new Set((await getRestrictedKnowledgeBasePolicy(ctx)).liveRestrictedKnowledgeBaseIds)
+        : new Set<string>();
+      const ids = knowledgeBases
+        .filter((knowledgeBase) => !restrictedIds.has(knowledgeBase.id))
+        .map((knowledgeBase) => knowledgeBase.id);
       await ctx.trashService.trashKnowledgeBases(ids);
     }),
 

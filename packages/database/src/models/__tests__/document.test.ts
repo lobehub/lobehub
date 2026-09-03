@@ -607,6 +607,7 @@ describe('DocumentModel', () => {
 
       const { id: firstId } = await documentModel.create({
         content: 'First document',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
         fileId: file.id,
         fileType: 'text/plain',
         source: file.url,
@@ -617,6 +618,7 @@ describe('DocumentModel', () => {
 
       await documentModel.create({
         content: 'Second document',
+        createdAt: new Date('2026-01-02T00:00:00.000Z'),
         fileId: file.id,
         fileType: 'text/plain',
         source: file.url,

@@ -13,6 +13,7 @@ import isEqual from 'fast-deep-equal';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
+import type { Transaction } from '@/database/type';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { isValidEditorData } from '@/libs/editor/isValidEditorData';
 import { normalizeEditorDataDiffNodes } from '@/libs/editor/normalizeDiffNodes';
@@ -166,13 +167,17 @@ export class DocumentService {
     }
     if (!resolvedVisibility && this.workspaceId) resolvedVisibility = 'private';
 
-    let fileId: string | null = null;
+    const createRows = async (db: LobeChatDatabase, trx?: Transaction) => {
+      const fileModel = trx ? new FileModel(db, this.userId, this.workspaceId) : this.fileModel;
+      const documentModel = trx
+        ? new DocumentModel(db, this.userId, this.workspaceId, this.callerAgentVisibility)
+        : this.documentModel;
+      let fileId: string | null = null;
 
-    // If creating in a knowledge base, create a corresponding file record
-    // BUT skip for folders - folders should only exist in the documents table
-    if (knowledgeBaseId && fileType !== CUSTOM_FOLDER_FILE_TYPE) {
-      const file = await this.fileModel.create(
-        {
+      // If creating in a knowledge base, create a corresponding file record
+      // BUT skip for folders - folders should only exist in the documents table
+      if (knowledgeBaseId && fileType !== CUSTOM_FOLDER_FILE_TYPE) {
+        const fileParams = {
           fileType,
           knowledgeBaseId,
           metadata,
@@ -181,38 +186,42 @@ export class DocumentService {
           size: totalCharCount,
           url: `internal://document/placeholder`, // Placeholder URL
           ...(resolvedVisibility ? { visibility: resolvedVisibility } : {}),
-        },
-        false, // Do not insert to global files
-      );
-      fileId = file.id;
-    }
+        };
+        const file = await fileModel.create(fileParams, false);
+        fileId = file.id;
+      }
 
-    // Store knowledgeBaseId in metadata for folders (which don't have fileId)
-    const finalMetadata =
-      knowledgeBaseId && fileType === CUSTOM_FOLDER_FILE_TYPE
-        ? { ...metadata, knowledgeBaseId }
-        : metadata;
+      // Store knowledgeBaseId in metadata for folders (which don't have fileId)
+      const finalMetadata =
+        knowledgeBaseId && fileType === CUSTOM_FOLDER_FILE_TYPE
+          ? { ...metadata, knowledgeBaseId }
+          : metadata;
 
-    const document = await this.documentModel.create({
-      content,
-      editorData,
-      fileId,
-      fileType,
-      filename: title,
-      knowledgeBaseId, // Set knowledge_base_id column for all document types
-      metadata: finalMetadata,
-      pages: undefined,
-      parentId,
-      slug,
-      source: 'document',
-      sourceType: 'api',
-      title,
-      totalCharCount,
-      totalLineCount,
-      ...(resolvedVisibility ? { visibility: resolvedVisibility } : {}),
-    });
+      const documentParams = {
+        content,
+        editorData,
+        fileId,
+        fileType,
+        filename: title,
+        knowledgeBaseId, // Set knowledge_base_id column for all document types
+        metadata: finalMetadata,
+        pages: undefined,
+        parentId,
+        slug,
+        source: 'document' as const,
+        sourceType: 'api' as const,
+        title,
+        totalCharCount,
+        totalLineCount,
+        ...(resolvedVisibility ? { visibility: resolvedVisibility } : {}),
+      };
+      return documentModel.create(documentParams);
+    };
 
-    return document;
+    if (!parentId) return createRows(this.db);
+    return this.db.transaction((tx) =>
+      createRows(tx as unknown as LobeChatDatabase, tx as unknown as Transaction),
+    );
   }
 
   /**
@@ -894,7 +903,7 @@ export class DocumentService {
         const raced = await transactionDocumentModel.findByFileId(fileId);
         if (raced) return raced;
 
-        return transactionDocumentModel.create({
+        const documentParams = {
           content: fileDocument.content,
           fileId,
           fileType: CUSTOM_DOCUMENT_FILE_TYPE, // Use custom/document for all parsed files
@@ -907,7 +916,8 @@ export class DocumentService {
           title,
           totalCharCount: fileDocument.totalCharCount,
           totalLineCount: fileDocument.totalLineCount,
-        });
+        };
+        return transactionDocumentModel.create(documentParams);
       });
 
       return document as LobeDocument;

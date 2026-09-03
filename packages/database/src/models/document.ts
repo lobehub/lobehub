@@ -10,9 +10,16 @@ import {
   files,
   works,
 } from '../schemas';
-import type { LobeChatDatabase } from '../type';
+import type { LobeChatDatabase, Transaction } from '../type';
+import { lockDocumentHierarchy } from '../utils/documentHierarchy';
 import { excludeRestrictedDocument } from '../utils/restrictedKnowledgeBase';
-import { isTrashed, restoreStamp, type SoftDeleteOptions, trashStamp } from '../utils/softDelete';
+import {
+  isTrashed,
+  notTrashed,
+  restoreStamp,
+  type SoftDeleteOptions,
+  trashStamp,
+} from '../utils/softDelete';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export interface QueryDocumentParams {
@@ -32,6 +39,7 @@ export interface QueryDocumentParams {
 
 export const DOCUMENT_TRANSFER_FOREIGN_ROWS =
   'Document subtree contains content created by other users';
+export const DOCUMENT_PARENT_NOT_FOUND = 'Parent document not found';
 
 export class DocumentModel {
   private userId: string;
@@ -96,7 +104,10 @@ export class DocumentModel {
     });
   };
 
-  create = async (params: Omit<NewDocument, 'userId'>): Promise<DocumentItem> => {
+  create = async (
+    params: Omit<NewDocument, 'userId'>,
+    trx?: Transaction,
+  ): Promise<DocumentItem> => {
     // Workspace-mode default for visibility:
     //   - explicit visibility wins
     //   - user-authored Pages (`sourceType: 'api'`) default to
@@ -112,17 +123,31 @@ export class DocumentModel {
       visibility = 'private';
     }
 
-    const result = (await this.db
-      .insert(documents)
-      .values(
-        buildWorkspacePayload(
-          { userId: this.userId, workspaceId: this.workspaceId },
-          { ...params, ...(visibility ? { visibility } : {}) },
-        ),
-      )
-      .returning()) as DocumentItem[];
+    const insert = async (db: LobeChatDatabase): Promise<DocumentItem> => {
+      if (params.parentId) {
+        await lockDocumentHierarchy(db, this.userId, this.workspaceId);
+        const parent = await db.query.documents.findFirst({
+          where: and(eq(documents.id, params.parentId), notTrashed(documents.isDeleted)),
+        });
+        if (!parent) throw new Error(DOCUMENT_PARENT_NOT_FOUND);
+      }
 
-    return result[0]!;
+      const result = (await db
+        .insert(documents)
+        .values(
+          buildWorkspacePayload(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            { ...params, ...(visibility ? { visibility } : {}) },
+          ),
+        )
+        .returning()) as DocumentItem[];
+
+      return result[0]!;
+    };
+
+    if (trx) return insert(trx as unknown as LobeChatDatabase);
+    if (!params.parentId) return insert(this.db);
+    return this.db.transaction((tx) => insert(tx as unknown as LobeChatDatabase));
   };
 
   delete = async (id: string) => {
@@ -300,6 +325,7 @@ export class DocumentModel {
     rootId: string,
     options: SoftDeleteOptions,
   ): Promise<{ detachedEdges: TrashDetachedEdge[]; documents: DocumentItem[] }> => {
+    await lockDocumentHierarchy(this.db, this.userId, this.workspaceId);
     const subtree = await this.collectSubtree(rootId);
     if (subtree.length === 0) return { detachedEdges: [], documents: [] };
     const ids = subtree
@@ -447,16 +473,40 @@ export class DocumentModel {
     });
   };
 
-  update = async (id: string, value: Partial<DocumentItem>) => {
+  update = async (id: string, value: Partial<DocumentItem>, trx?: Transaction) => {
     // visibility is intentionally not updatable via this path. The only legal
     // transition is `private → public` via `publishToWorkspace`; strip any
     // incoming value so callers can't sneak around the one-way rule.
     const { visibility: _ignored, ...patch } = value;
 
-    return this.db
-      .update(documents)
-      .set({ ...patch, updatedAt: new Date() })
-      .where(and(this.ownership(), eq(documents.id, id)));
+    const update = async (db: LobeChatDatabase) => {
+      if (value.parentId !== undefined) {
+        await lockDocumentHierarchy(db, this.userId, this.workspaceId);
+        const scopedModel = new DocumentModel(
+          db,
+          this.userId,
+          this.workspaceId,
+          this.callerAgentVisibility,
+        );
+        const current = await scopedModel.findById(id);
+        if (!current) throw new Error('Document not found');
+        if (value.parentId) {
+          const parent = await db.query.documents.findFirst({
+            where: and(eq(documents.id, value.parentId), notTrashed(documents.isDeleted)),
+          });
+          if (!parent) throw new Error(DOCUMENT_PARENT_NOT_FOUND);
+        }
+      }
+
+      return db
+        .update(documents)
+        .set({ ...patch, updatedAt: new Date() })
+        .where(and(this.ownership(), eq(documents.id, id)));
+    };
+
+    if (trx) return update(trx as unknown as LobeChatDatabase);
+    if (value.parentId === undefined) return update(this.db);
+    return this.db.transaction((tx) => update(tx as unknown as LobeChatDatabase));
   };
 
   /**
@@ -631,6 +681,7 @@ export class DocumentModel {
     },
   ): Promise<{ documentIds: string[] }> => {
     return this.db.transaction(async (trx) => {
+      await lockDocumentHierarchy(trx as LobeChatDatabase, this.userId, this.workspaceId);
       const scopedTrx = new DocumentModel(trx as LobeChatDatabase, this.userId, this.workspaceId);
       const subtree = await scopedTrx.collectSubtree(documentId, trx as LobeChatDatabase);
       if (subtree.length === 0) throw new Error('Document not found');
@@ -743,6 +794,7 @@ export class DocumentModel {
     targetVisibility?: 'private' | 'public',
   ): Promise<{ rootId: string }> => {
     return this.db.transaction(async (trx) => {
+      await lockDocumentHierarchy(trx as LobeChatDatabase, this.userId, this.workspaceId);
       const scopedTrx = new DocumentModel(trx as LobeChatDatabase, this.userId, this.workspaceId);
       const subtree = await scopedTrx.collectSubtree(documentId, trx as LobeChatDatabase);
       if (subtree.length === 0) throw new Error('Document not found');

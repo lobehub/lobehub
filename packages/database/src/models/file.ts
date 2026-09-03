@@ -38,6 +38,7 @@ import {
   users,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
+import { lockDocumentHierarchy } from '../utils/documentHierarchy';
 import { buildFileCategoryFilter } from '../utils/fileTypeCategory';
 import { excludeRestrictedFile } from '../utils/restrictedKnowledgeBase';
 import {
@@ -267,6 +268,17 @@ export class FileModel {
     trx?: Transaction,
   ): Promise<{ id: string }> => {
     const executeInTransaction = async (tx: Transaction): Promise<FileItem> => {
+      if (params.parentId) {
+        const db = tx as unknown as LobeChatDatabase;
+        await lockDocumentHierarchy(db, this.userId, this.workspaceId);
+        const [parent] = await db
+          .select({ id: documents.id })
+          .from(documents)
+          .where(and(eq(documents.id, params.parentId), notTrashed(documents.isDeleted)))
+          .limit(1);
+        if (!parent) throw new Error('Parent document not found');
+      }
+
       if (insertToGlobalFiles) {
         await tx
           .insert(globalFiles)
@@ -824,11 +836,38 @@ export class FileModel {
     return result[0].count;
   };
 
-  update = async (id: string, value: Partial<FileItem>) =>
-    this.db
-      .update(files)
-      .set({ ...value, updatedAt: new Date() })
-      .where(and(eq(files.id, id), this.ownership()));
+  update = async (id: string, value: Partial<FileItem>, trx?: Transaction) => {
+    const update = async (tx: Transaction) => {
+      const db = tx as unknown as LobeChatDatabase;
+      await lockDocumentHierarchy(db, this.userId, this.workspaceId);
+      const current = await db.query.files.findFirst({
+        where: and(eq(files.id, id), this.ownership()),
+      });
+      if (!current) throw new Error('File not found');
+      if (value.parentId) {
+        const [parent] = await db
+          .select({ id: documents.id })
+          .from(documents)
+          .where(and(eq(documents.id, value.parentId), notTrashed(documents.isDeleted)))
+          .limit(1);
+        if (!parent) throw new Error('Parent document not found');
+      }
+
+      return db
+        .update(files)
+        .set({ ...value, updatedAt: new Date() })
+        .where(and(eq(files.id, id), this.ownership()));
+    };
+
+    if (value.parentId === undefined) {
+      return this.db
+        .update(files)
+        .set({ ...value, updatedAt: new Date() })
+        .where(and(eq(files.id, id), this.ownership()));
+    }
+    if (trx) return update(trx);
+    return this.db.transaction(update);
+  };
 
   /**
    * Publish a private file into the workspace. Thin wrapper around
