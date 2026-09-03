@@ -875,6 +875,124 @@ describe('TrashService', () => {
       expect(await serverDB.select().from(files).where(eq(files.id, fileId))).toHaveLength(0);
     });
 
+    it('serializes concurrent knowledge-base purges that share their last file', async () => {
+      const firstKnowledgeBase = await knowledgeBaseModel.create({ name: 'First library' });
+      const secondKnowledgeBase = await knowledgeBaseModel.create({ name: 'Second library' });
+      await fileModel.createGlobalFile({
+        creator: userId,
+        fileType: 'text/plain',
+        hashId: 'shared-kb-purge-hash',
+        size: 9,
+        url: 'files/shared-kb-purge.txt',
+      });
+      const { id: fileId } = await fileModel.create({
+        fileHash: 'shared-kb-purge-hash',
+        fileType: 'text/plain',
+        knowledgeBaseId: firstKnowledgeBase.id,
+        name: 'shared.txt',
+        size: 9,
+        url: 'files/shared-kb-purge.txt',
+      });
+      await serverDB.insert(knowledgeBaseFiles).values({
+        fileId,
+        knowledgeBaseId: secondKnowledgeBase.id,
+        userId,
+      });
+      const [firstRoot] = await service.trashKnowledgeBases([firstKnowledgeBase.id]);
+      const [secondRoot] = await service.trashKnowledgeBases([secondKnowledgeBase.id]);
+
+      let fileLockReady!: () => void;
+      const fileLock = new Promise<void>((resolve) => {
+        fileLockReady = resolve;
+      });
+      let releaseFileLock!: () => void;
+      const fileLockRelease = new Promise<void>((resolve) => {
+        releaseFileLock = resolve;
+      });
+      const blockingTransaction = serverDB.transaction(async (tx) => {
+        const model = new KnowledgeBaseModel(tx as unknown as LobeChatDatabase, userId);
+        await model.lockLinkedFiles(firstKnowledgeBase.id);
+        fileLockReady();
+        await fileLockRelease;
+      });
+      await fileLock;
+
+      const firstPurge = service.purge([firstRoot.id]);
+      const secondPurge = service.purge([secondRoot.id]);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      releaseFileLock();
+      await blockingTransaction;
+
+      await expect(Promise.all([firstPurge, secondPurge])).resolves.toEqual([
+        { failed: [], purged: 1, purgedIds: [firstRoot.id] },
+        { failed: [], purged: 1, purgedIds: [secondRoot.id] },
+      ]);
+      expect(await serverDB.select().from(knowledgeBaseFiles)).toEqual([]);
+      expect(await serverDB.select().from(knowledgeBases)).toEqual([]);
+      expect(await serverDB.select().from(files).where(eq(files.id, fileId))).toEqual([]);
+      expect(
+        await serverDB
+          .select()
+          .from(globalFiles)
+          .where(eq(globalFiles.hashId, 'shared-kb-purge-hash')),
+      ).toEqual([]);
+      expect(
+        await serverDB
+          .select()
+          .from(trashItems)
+          .where(inArray(trashItems.id, [firstRoot.id, secondRoot.id])),
+      ).toEqual([]);
+      expect(fileServiceMocks.deleteFiles).toHaveBeenCalledOnce();
+      expect(fileServiceMocks.deleteFiles).toHaveBeenCalledWith(['files/shared-kb-purge.txt']);
+    });
+
+    it('retries knowledge-base storage cleanup after its database purge commits', async () => {
+      const knowledgeBase = await knowledgeBaseModel.create({ name: 'Retry library' });
+      await fileModel.createGlobalFile({
+        creator: userId,
+        fileType: 'text/plain',
+        hashId: 'kb-retry-hash',
+        size: 7,
+        url: 'files/kb-retry.txt',
+      });
+      const { id: fileId } = await fileModel.create({
+        fileHash: 'kb-retry-hash',
+        fileType: 'text/plain',
+        knowledgeBaseId: knowledgeBase.id,
+        name: 'kb-retry.txt',
+        size: 7,
+        url: 'files/kb-retry.txt',
+      });
+      const [root] = await service.trashKnowledgeBases([knowledgeBase.id]);
+      fileServiceMocks.deleteFiles.mockRejectedValueOnce(new Error('storage unavailable'));
+
+      await expect(service.purge([root.id])).resolves.toEqual({
+        failed: [{ code: 'purgeFailed', id: root.id }],
+        purged: 0,
+        purgedIds: [],
+      });
+      expect(
+        await serverDB.select().from(knowledgeBases).where(eq(knowledgeBases.id, knowledgeBase.id)),
+      ).toEqual([]);
+      expect(await serverDB.select().from(files).where(eq(files.id, fileId))).toEqual([]);
+      expect(await trashModel.findByIdIncludingQueued(root.id)).toMatchObject({
+        meta: expect.objectContaining({
+          storageCleanup: {
+            files: [{ fileHash: 'kb-retry-hash', url: 'files/kb-retry.txt' }],
+            pending: true,
+          },
+        }),
+      });
+
+      await expect(service.purge([root.id])).resolves.toEqual({
+        failed: [],
+        purged: 1,
+        purgedIds: [root.id],
+      });
+      expect(fileServiceMocks.deleteFiles).toHaveBeenCalledTimes(2);
+      expect(await trashModel.findByIdIncludingQueued(root.id)).toBeUndefined();
+    });
+
     it('removes mirror-document ACL rows when purging a workspace knowledge base', async () => {
       const workspaceId = 'trash-kb-mirror-acl-workspace';
       await serverDB.insert(workspaces).values({

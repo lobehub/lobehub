@@ -1,5 +1,5 @@
 import type { KnowledgeBaseItem } from '@lobechat/types';
-import { and, count, desc, eq, inArray, ne, or, sum } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, ne, or, sum } from 'drizzle-orm';
 
 import type {
   KnowledgeBaseItem as KnowledgeBaseRecord,
@@ -785,6 +785,36 @@ export class KnowledgeBaseModel {
       .groupBy(knowledgeBaseFiles.fileId);
 
     return sharedFiles.filter((f) => Number(f.kbCount) === 1).map((f) => f.fileId);
+  };
+
+  /**
+   * Serialize permanent deletion for KB roots that share files. Callers must
+   * keep the lock, the exclusivity check, and membership removal in the same
+   * transaction. Sorting prevents two multi-file roots from locking rows in
+   * opposite orders.
+   */
+  lockLinkedFiles = async (knowledgeBaseId: string): Promise<void> => {
+    const links = await this.db
+      .select({ fileId: knowledgeBaseFiles.fileId })
+      .from(knowledgeBaseFiles)
+      .where(
+        and(
+          eq(knowledgeBaseFiles.knowledgeBaseId, knowledgeBaseId),
+          buildWorkspaceWhere(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            knowledgeBaseFiles,
+          ),
+        ),
+      );
+    const fileIds = [...new Set(links.map(({ fileId }) => fileId))];
+    if (fileIds.length === 0) return;
+
+    await this.db
+      .select({ id: files.id })
+      .from(files)
+      .where(inArray(files.id, fileIds))
+      .orderBy(asc(files.id))
+      .for('update');
   };
 
   deleteWithFiles = async (

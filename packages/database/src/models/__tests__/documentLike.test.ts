@@ -76,6 +76,21 @@ describe('DocumentLikeModel', () => {
     );
   });
 
+  it('rejects every interaction with a trashed document', async () => {
+    await memberModel.like(documentId);
+    await serverDB
+      .update(documents)
+      .set({ deletedAt: new Date(), isDeleted: true })
+      .where(eq(documents.id, documentId));
+
+    await expect(memberModel.like(documentId)).rejects.toThrow(DOCUMENT_LIKE_DOCUMENT_NOT_FOUND);
+    await expect(memberModel.summary(documentId)).rejects.toThrow(DOCUMENT_LIKE_DOCUMENT_NOT_FOUND);
+    await expect(memberModel.unlike(documentId)).rejects.toThrow(DOCUMENT_LIKE_DOCUMENT_NOT_FOUND);
+    await expect(
+      serverDB.select().from(documentLikes).where(eq(documentLikes.documentId, documentId)),
+    ).resolves.toHaveLength(1);
+  });
+
   it('likes idempotently, reports the document author, and stamps the workspace', async () => {
     await expect(memberModel.like(documentId)).resolves.toMatchObject({
       created: true,

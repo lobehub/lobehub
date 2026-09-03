@@ -1,8 +1,9 @@
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
+import type { LobeChatDatabase } from '@/database/type';
 import type { SoftDeleteOptions } from '@/database/utils/softDelete';
 
-import { purgeFiles } from './purgeFiles';
+import { purgeFileRecords, purgeFiles } from './purgeFiles';
 import { knowledgeBaseEntry } from './resourceEntries';
 import {
   type TrashCascade,
@@ -29,18 +30,30 @@ export const softDeleteKnowledgeBases = async (
 
 export const knowledgeBaseHandler: TrashHandler = {
   purge: async (ctx, root) => {
-    const knowledgeBaseModel = new KnowledgeBaseModel(ctx.db, ctx.userId, ctx.workspaceId);
-    const exclusiveFileIds = await knowledgeBaseModel.findExclusiveFileIds(root.resourceId);
-    if (exclusiveFileIds.length > 0) {
-      await purgeFiles(ctx, exclusiveFileIds, { root });
-    }
-    await knowledgeBaseModel.purge([root.resourceId]);
-    if (ctx.workspaceId) {
-      await new ResourcePermissionModel(ctx.db, ctx.workspaceId).removeAll(
-        'knowledgeBase',
-        root.resourceId,
-      );
-    }
+    await ctx.db.transaction(async (tx) => {
+      const db = tx as LobeChatDatabase;
+      const transactionCtx = { ...ctx, db };
+      const knowledgeBaseModel = new KnowledgeBaseModel(db, ctx.userId, ctx.workspaceId);
+
+      await knowledgeBaseModel.lockLinkedFiles(root.resourceId);
+      const exclusiveFileIds = await knowledgeBaseModel.findExclusiveFileIds(root.resourceId);
+      if (exclusiveFileIds.length > 0) {
+        // Delete database rows and persist the S3 retry hand-off while the
+        // shared-file lock is held. External storage cleanup runs after commit.
+        await purgeFileRecords(transactionCtx, exclusiveFileIds, { root });
+      }
+      await knowledgeBaseModel.purge([root.resourceId]);
+      if (ctx.workspaceId) {
+        await new ResourcePermissionModel(db, ctx.workspaceId).removeAll(
+          'knowledgeBase',
+          root.resourceId,
+        );
+      }
+    });
+
+    // Re-read the durable hand-off written above; this is also the retry path
+    // when the KB rows were already committed but a previous S3 call failed.
+    await purgeFiles(ctx, [], { root });
   },
   restore: async (ctx, root) => {
     const model = new KnowledgeBaseModel(ctx.db, ctx.userId, ctx.workspaceId);

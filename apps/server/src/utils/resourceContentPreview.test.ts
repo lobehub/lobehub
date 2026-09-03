@@ -40,6 +40,19 @@ describe('createResourceContentPreview', () => {
   });
 
   it.each([
+    ['# Planetary notes', 'Planetary notes'],
+    ['Planetary notes', 'Planetary notes'],
+  ])('does not remove a non-matching or non-heading title prefix from %s', (content, expected) => {
+    expect(
+      createResourceContentPreview({
+        content,
+        fileType: 'custom/document',
+        title: 'Plan',
+      }),
+    ).toBe(expected);
+  });
+
+  it.each([
     ['scalar', '---\nIntroduction\n---\nImportant body', 'Introduction Important body'],
     ['array', '---\n- first\n- second\n---\nImportant body', '- first - second Important body'],
     ['empty', '---\n---\nImportant body', 'Important body'],

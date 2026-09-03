@@ -93,6 +93,20 @@ describe('DocumentCommentModel', () => {
     expect(duplicate).toMatchObject({ isDuplicate: true, comment: { id: first.comment.id } });
   });
 
+  it('rejects creating a comment on a trashed document', async () => {
+    await serverDB
+      .update(documents)
+      .set({ deletedAt: new Date(), isDeleted: true })
+      .where(eq(documents.id, documentId));
+
+    await expect(
+      memberModel.create({ clientId: 'trashed', content: 'no', documentId }),
+    ).rejects.toThrow(DOCUMENT_COMMENT_DOCUMENT_NOT_FOUND);
+    await expect(
+      serverDB.select().from(documentComments).where(eq(documentComments.documentId, documentId)),
+    ).resolves.toEqual([]);
+  });
+
   it('rejects foreign parents and flattens replies to replies into the root thread', async () => {
     await expect(
       authorModel.create({ clientId: 'foreign', content: 'no', documentId: foreignDocumentId }),

@@ -22,6 +22,22 @@ const stripMetadataFrontmatter = (content: string) => {
   }
 };
 
+const stripDuplicatedTitleHeading = (content: string, fileType: string, title: string) => {
+  if (fileType !== CUSTOM_DOCUMENT_FILE_TYPE) return content;
+
+  const newlineIndex = content.indexOf('\n');
+  const firstLine = (newlineIndex === -1 ? content : content.slice(0, newlineIndex)).trim();
+  if (!firstLine.startsWith('# ')) return content;
+
+  const headingTitle = firstLine
+    .slice(2)
+    .replace(/\s+#+$/, '')
+    .trim();
+  if (headingTitle !== title.trim()) return content;
+
+  return newlineIndex === -1 ? '' : content.slice(newlineIndex + 1);
+};
+
 /**
  * Turn the bounded content prefix selected by `KnowledgeRepo` into the final
  * plain-text list preview. This belongs on the server so clients never receive
@@ -34,7 +50,7 @@ export const createResourceContentPreview = ({
 }: CreateResourceContentPreviewOptions): string | null => {
   if (!content) return null;
 
-  let text = stripMetadataFrontmatter(content)
+  let text = stripDuplicatedTitleHeading(stripMetadataFrontmatter(content), fileType, title)
     .replaceAll(/!\[[^\]]*\]\([^)]*\)/g, '')
     .replaceAll(/\[([^\]]*)\]\([^)]*\)/g, '$1');
 
@@ -54,12 +70,6 @@ export const createResourceContentPreview = ({
     .replaceAll(/[()[\]]{2,}/g, ' ')
     .replaceAll(/\s+/g, ' ')
     .trim();
-
-  // Page markdown commonly starts with the same H1 already rendered as the
-  // card title. Remove that duplicate before applying the response bound.
-  if (fileType === CUSTOM_DOCUMENT_FILE_TYPE && text.startsWith(title)) {
-    text = text.slice(title.length).trim();
-  }
 
   if (!text) return null;
 
