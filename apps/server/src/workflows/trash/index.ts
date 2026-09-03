@@ -17,6 +17,18 @@ const LOCAL_BATCH_BUDGET = 8;
 const MAX_BATCH_SIZE = 50;
 const LOCAL_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 
+const publishLocalTrashContinuation = async (payload: TrashPurgeWorkflowPayload) => {
+  const baseUrl = appEnv.INTERNAL_APP_URL || appEnv.APP_URL;
+  const response = await fetch(new URL(TRASH_PURGE_WORKFLOW_PATH, baseUrl), {
+    body: JSON.stringify(payload),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
+  if (!response.ok) {
+    throw new Error(`Local trash purge continuation returned ${response.status}`);
+  }
+};
+
 interface LocalTrashPurgeDependencies {
   getDb?: () => Promise<LobeChatDatabase>;
   sweepExpired?: (
@@ -71,7 +83,7 @@ export const triggerTrashPurge = async (
       const outcome = await runLocalTrashPurge(payload);
       if (!outcome.cursor) return;
 
-      await triggerTrashPurge({ ...payload, cursor: outcome.cursor });
+      await publishLocalTrashContinuation({ ...payload, cursor: outcome.cursor });
     });
     return true;
   }

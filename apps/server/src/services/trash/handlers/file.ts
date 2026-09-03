@@ -3,6 +3,7 @@ import { FileModel } from '@/database/models/file';
 import { lockDocumentHierarchy } from '@/database/utils/documentHierarchy';
 import type { SoftDeleteOptions } from '@/database/utils/softDelete';
 
+import { assertRestorableParents } from './assertRestorableParents';
 import { purgeFiles } from './purgeFiles';
 import { documentEntry, fileEntry } from './resourceEntries';
 import { softDeleteResourceClosures } from './softDeleteResourceClosure';
@@ -56,21 +57,27 @@ export const fileHandler: TrashHandler = {
     await lockDocumentHierarchy(ctx.db, ctx.userId, ctx.workspaceId);
     const fileModel = new FileModel(ctx.db, ctx.userId, ctx.workspaceId);
     const documentModel = new DocumentModel(ctx.db, ctx.userId, ctx.workspaceId);
-    const [file] = await fileModel.findTrashedByIds([root.resourceId]);
-    if (!file) throw new TrashRestoreError('notFound');
-
-    if (file.parentId && (await documentModel.isTrashedParent(file.parentId))) {
-      throw new TrashRestoreError('parentTrashed');
-    }
-
     const fileIds = [
       root.resourceId,
       ...children.filter((child) => child.resourceType === 'file').map((child) => child.resourceId),
     ];
-    await fileModel.restore(fileIds);
     const documentIds = children
       .filter((child) => child.resourceType === 'document')
       .map((child) => child.resourceId);
+    const [trashedFiles, trashedDocuments] = await Promise.all([
+      fileModel.findTrashedByIds(fileIds),
+      documentModel.findTrashedByIds(documentIds),
+    ]);
+    if (!trashedFiles.some((file) => file.id === root.resourceId)) {
+      throw new TrashRestoreError('notFound');
+    }
+    await assertRestorableParents(
+      documentModel,
+      [...trashedFiles, ...trashedDocuments],
+      documentIds,
+    );
+
+    await fileModel.restore(fileIds);
     await documentModel.restore(documentIds);
     const detachedEdges = root.meta?.detachedEdges ?? [];
     await documentModel.restoreDetachedParents(detachedEdges);

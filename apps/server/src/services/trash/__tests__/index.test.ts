@@ -622,6 +622,60 @@ describe('TrashService', () => {
       ).toHaveLength(1);
     });
 
+    it('refuses to restore file mirrors beneath a parent trashed after the file closure', async () => {
+      const firstFolder = await documentModel.create({
+        fileType: 'custom/folder',
+        source: '',
+        sourceType: 'api',
+        title: 'First folder',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+      const secondFolder = await documentModel.create({
+        fileType: 'custom/folder',
+        source: '',
+        sourceType: 'api',
+        title: 'Second folder',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+      const file = await fileModel.create({
+        fileType: 'text/plain',
+        name: 'mirrored.txt',
+        size: 1,
+        url: 'files/mirrored.txt',
+      });
+      const firstMirror = await documentModel.create({
+        fileId: file.id,
+        fileType: 'text/plain',
+        parentId: firstFolder.id,
+        source: 'files/mirrored.txt',
+        sourceType: 'file',
+        title: 'First mirror',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+      const secondMirror = await documentModel.create({
+        fileId: file.id,
+        fileType: 'text/plain',
+        parentId: secondFolder.id,
+        source: 'files/mirrored.txt',
+        sourceType: 'file',
+        title: 'Second mirror',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+
+      const [fileRoot] = await service.trashFiles([file.id]);
+      await service.trashDocuments([secondFolder.id]);
+      const outcome = await service.restore([fileRoot.id]);
+
+      expect(outcome.failed).toEqual([{ code: 'parentTrashed', id: fileRoot.id }]);
+      expect(await fileModel.findById(file.id)).toBeUndefined();
+      expect(await documentModel.findById(firstMirror.id)).toBeUndefined();
+      expect(await documentModel.findById(secondMirror.id)).toBeUndefined();
+    });
+
     it('restores and purges the transitive document/file mirror closure', async () => {
       const { id: sourceFileId } = await fileModel.create({
         fileType: 'text/plain',
@@ -722,6 +776,51 @@ describe('TrashService', () => {
           .from(files)
           .where(inArray(files.id, [sourceFileId, anchoredFileId])),
       ).toEqual([]);
+    });
+
+    it('refuses to restore a document closure beneath a parent trashed afterward', async () => {
+      const externalFolder = await documentModel.create({
+        fileType: 'custom/folder',
+        source: '',
+        sourceType: 'api',
+        title: 'External folder',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+      const sourceFile = await fileModel.create({
+        fileType: 'text/plain',
+        name: 'source.txt',
+        size: 1,
+        url: 'files/source-parent-check.txt',
+      });
+      const rootDocument = await documentModel.create({
+        fileId: sourceFile.id,
+        fileType: 'text/plain',
+        source: 'files/source-parent-check.txt',
+        sourceType: 'file',
+        title: 'Root mirror',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+      const siblingMirror = await documentModel.create({
+        fileId: sourceFile.id,
+        fileType: 'text/plain',
+        parentId: externalFolder.id,
+        source: 'files/source-parent-check.txt',
+        sourceType: 'file',
+        title: 'Nested mirror',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+
+      const [documentRoot] = await service.trashDocuments([rootDocument.id]);
+      await service.trashDocuments([externalFolder.id]);
+      const outcome = await service.restore([documentRoot.id]);
+
+      expect(outcome.failed).toEqual([{ code: 'parentTrashed', id: documentRoot.id }]);
+      expect(await documentModel.findById(rootDocument.id)).toBeUndefined();
+      expect(await documentModel.findById(siblingMirror.id)).toBeUndefined();
+      expect(await fileModel.findById(sourceFile.id)).toBeUndefined();
     });
 
     it('restores a folder subtree and every anchored file without changing parent links', async () => {

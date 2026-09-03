@@ -18,6 +18,7 @@ describe('triggerTrashPurge', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.unstubAllEnvs();
+    vi.stubGlobal('fetch', vi.fn());
   });
 
   it('schedules an in-process bounded sweep when QStash is not configured', async () => {
@@ -28,9 +29,10 @@ describe('triggerTrashPurge', () => {
     expect(after).toHaveBeenCalledOnce();
   });
 
-  it('schedules another bounded burst when the local queue has more roots', async () => {
+  it('hands a full local burst off to a new request lifecycle', async () => {
     vi.stubEnv('QSTASH_TOKEN', '');
     vi.mocked(getServerDB).mockResolvedValue({} as never);
+    vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 202 }));
     vi.mocked(TrashService.sweepExpired).mockImplementation(async (_db, { cursor }) => ({
       failed: 0,
       nextCursor: { expiresAt: '2026-09-01', id: String(Number(cursor?.id ?? 0) + 1) },
@@ -43,22 +45,14 @@ describe('triggerTrashPurge', () => {
     await vi.mocked(after).mock.calls[0][0]();
 
     expect(TrashService.sweepExpired).toHaveBeenCalledTimes(8);
-    expect(after).toHaveBeenCalledTimes(2);
-
-    vi.mocked(TrashService.sweepExpired).mockResolvedValue({
-      failed: 0,
-      nextCursor: null,
-      pruned: 0,
-      purged: 1,
-      scanned: 1,
-    });
-    await vi.mocked(after).mock.calls[1][0]();
-
-    expect(TrashService.sweepExpired).toHaveBeenLastCalledWith(
-      {},
-      { cursor: { expiresAt: '2026-09-01', id: '8' }, limit: 25 },
+    expect(after).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenCalledWith(
+      new URL('https://example.com/api/workflows/trash/purge'),
+      expect.objectContaining({
+        body: JSON.stringify({ cursor: { expiresAt: '2026-09-01', id: '8' } }),
+        method: 'POST',
+      }),
     );
-    expect(after).toHaveBeenCalledTimes(2);
   });
 
   it('propagates a rejected publish', async () => {

@@ -4,6 +4,7 @@ import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { lockDocumentHierarchy } from '@/database/utils/documentHierarchy';
 import type { SoftDeleteOptions } from '@/database/utils/softDelete';
 
+import { assertRestorableParents } from './assertRestorableParents';
 import { purgeFiles } from './purgeFiles';
 import { documentEntry, fileEntry } from './resourceEntries';
 import { softDeleteResourceClosures } from './softDeleteResourceClosure';
@@ -69,13 +70,6 @@ export const documentHandler: TrashHandler = {
   restore: async (ctx, root, children) => {
     await lockDocumentHierarchy(ctx.db, ctx.userId, ctx.workspaceId);
     const documentModel = new DocumentModel(ctx.db, ctx.userId, ctx.workspaceId);
-    const [document] = await documentModel.findTrashedByIds([root.resourceId]);
-    if (!document) throw new TrashRestoreError('notFound');
-
-    if (document.parentId && (await documentModel.isTrashedParent(document.parentId))) {
-      throw new TrashRestoreError('parentTrashed');
-    }
-
     const documentIds = [
       root.resourceId,
       ...children
@@ -85,8 +79,21 @@ export const documentHandler: TrashHandler = {
     const fileIds = children
       .filter((child) => child.resourceType === 'file')
       .map((child) => child.resourceId);
-    await documentModel.restore(documentIds);
     const fileModel = new FileModel(ctx.db, ctx.userId, ctx.workspaceId);
+    const [trashedDocuments, trashedFiles] = await Promise.all([
+      documentModel.findTrashedByIds(documentIds),
+      fileModel.findTrashedByIds(fileIds),
+    ]);
+    if (!trashedDocuments.some((document) => document.id === root.resourceId)) {
+      throw new TrashRestoreError('notFound');
+    }
+    await assertRestorableParents(
+      documentModel,
+      [...trashedDocuments, ...trashedFiles],
+      documentIds,
+    );
+
+    await documentModel.restore(documentIds);
     await fileModel.restore(fileIds);
     const detachedEdges = root.meta?.detachedEdges ?? [];
     await documentModel.restoreDetachedParents(detachedEdges);

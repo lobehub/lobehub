@@ -281,12 +281,17 @@ export class DocumentModel {
    * returns only a boolean and must not be used to authorize or expose the parent.
    */
   isTrashedParent = async (id: string): Promise<boolean> => {
+    return this.hasTrashedParents([id]);
+  };
+
+  hasTrashedParents = async (ids: string[]): Promise<boolean> => {
+    if (ids.length === 0) return false;
     const [row] = await this.db
       .select({ id: documents.id })
       .from(documents)
       .where(
         and(
-          eq(documents.id, id),
+          inArray(documents.id, ids),
           isTrashed(documents.isDeleted),
           this.workspaceId
             ? eq(documents.workspaceId, this.workspaceId)
