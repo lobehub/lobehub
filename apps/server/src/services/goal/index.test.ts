@@ -795,7 +795,13 @@ describe('GoalService', () => {
       message: 'Goal-level acceptance passed',
       outcome: 'achieved',
     });
-    expect((await service.graph(graph.goal.id)).goal.status).toBe('achieved');
+    const finalGraph = await service.graph(graph.goal.id);
+    expect(finalGraph.goal.status).toBe('achieved');
+    // The verdict closes the map too: the seeded problem node has no other
+    // resolution path, and must not read "active" on an achieved goal.
+    expect(finalGraph.nodes.find((node) => node.kind === 'problem')).toMatchObject({
+      status: 'resolved',
+    });
   });
 
   it('does not mark a required goal achieved when only its initial Work is complete', async () => {

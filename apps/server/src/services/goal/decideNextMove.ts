@@ -13,7 +13,7 @@ export { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
 export const LEASE_EXPIRED_ERROR = 'Goal Work operation lease expired.';
 export const VERIFICATION_FAILED_ERROR = 'Delivery did not pass verification.';
 
-const TERMINAL_NODE_STATUSES = new Set(['resolved', 'rejected', 'retired']);
+export const TERMINAL_NODE_STATUSES = new Set(['resolved', 'rejected', 'retired']);
 
 export interface FrontierSelection {
   /** Every eligible task node, best first — the trace-shaped view. */

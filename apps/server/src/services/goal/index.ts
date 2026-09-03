@@ -39,6 +39,7 @@ import {
   GOAL_ACCEPTANCE_TASK_TITLE,
   type GoalMove,
   selectFrontier,
+  TERMINAL_NODE_STATUSES,
 } from './decideNextMove';
 import {
   resolveMaxConcurrentTasks,
@@ -782,6 +783,14 @@ export class GoalService {
     const goalId = graph.goal.id;
 
     if (move.outcome === 'achieved') {
+      // The map must agree with the verdict: only task nodes get resolved as
+      // Work completes, so without this the seeded problem nodes would read
+      // "active / unanswered" forever on an achieved goal.
+      for (const node of graph.nodes) {
+        if (node.kind !== 'problem' || TERMINAL_NODE_STATUSES.has(node.status)) continue;
+        await this.coordinatorGraph.updateNodeStatus(goalId, node.id, 'resolved', 'Goal achieved');
+        effects.push({ detail: 'resolved', nodeId: node.id, type: 'node_status' });
+      }
       await this.transitionStatus(graph.goal, 'achieved', 'Goal-level acceptance passed');
       effects.push({ type: 'goal_status', detail: 'achieved' });
       return { goalId, message: move.message, outcome: 'achieved' };
