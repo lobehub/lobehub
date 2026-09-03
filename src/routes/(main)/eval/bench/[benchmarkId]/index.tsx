@@ -19,9 +19,9 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
+import { BenchmarkDetailLoading } from '@/features/Eval';
 import { runSelectors, useEvalStore } from '@/store/eval';
 
-import BenchmarkDetailLoading from './features/BenchmarkDetailLoading';
 import BenchmarkHeader from './features/BenchmarkHeader';
 import DatasetsTab from './features/DatasetsTab';
 import RunsTab from './features/RunsTab';
