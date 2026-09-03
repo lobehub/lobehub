@@ -1,7 +1,7 @@
 ---
 name: split-micro-app
-description: 'Use when splitting a monorepo surface into a standalone micro app (React Router SSR on Cloudflare Workers), splitting a surface whose rendering code lives in the lobehub-cloud business overlay, fighting SSR bundle bloat from main-src imports, deploying its assets to CDN/R2, adding SEO/OG meta to an SSR page, adding a target and route rules for it in the lobehub gateway (torii), wiring it into the OSS Docker image, or deciding whether Cloud Next should still build or rewrite it.'
-user-invocable: false
+description: Split a monorepo surface into a standalone React Router SSR micro app on Cloudflare Workers.
+disable-model-invocation: true
 ---
 
 # Micro App: Split, SSR, SEO, Gateway
