@@ -1014,9 +1014,10 @@ export class StreamingExecutorActionImpl {
       log('[%s] Created thread %s, userMessage %s', logId, threadId, userMessageId);
 
       // Register the freshly-created isolation thread in the client thread list
-      // so the tool Render can locate it (the "View Detail" button) and it shows
-      // in the sidebar without waiting for a topic switch to re-fetch threads.
-      void this.#get().refreshThreads();
+      // (so the tool Render's "View Detail" button and the sidebar pick it up)
+      // and surface it in the portal right away. The action refreshes threads
+      // internally before resolving the thread by its spawn anchor.
+      void this.#get().internal_autoOpenSubAgentThread(toolMessageId);
 
       // 2. Build the sub-agent ConversationContext (threadId provides isolation)
       const workspaceSlug = parentOperationId

@@ -12,6 +12,7 @@ import { type ThreadItem } from '@/types/topic';
 import { ThreadStatus, ThreadType } from '@/types/topic';
 
 import { useChatStore } from '../../store';
+import { PortalViewType } from '../portal/initialState';
 
 // Mock @/libs/swr mutate
 vi.mock('@/libs/swr', async () => {
@@ -324,6 +325,110 @@ describe('thread action', () => {
         threadId: 'thread-id',
         startMessageId: 'source-message-id',
       });
+    });
+  });
+
+  describe('internal_autoOpenSubAgentThread', () => {
+    const isolationThread = (id: string, sourceMessageId: string): ThreadItem => ({
+      createdAt: new Date(),
+      id,
+      lastActiveAt: new Date(),
+      sourceMessageId,
+      status: ThreadStatus.Processing,
+      title: 'Sub-agent run',
+      topicId: 'test-topic-id',
+      type: ThreadType.Isolation,
+      updatedAt: new Date(),
+      userId: 'user-1',
+    });
+
+    it('should refresh threads then open the isolation thread matching the spawn anchor', async () => {
+      const { result } = renderHook(() => useChatStore());
+      act(() => {
+        useChatStore.setState({
+          portalStack: [],
+          showPortal: false,
+          threadMaps: { 'test-topic-id': [isolationThread('sub-thread-1', 'anchor-1')] },
+        });
+      });
+      const refreshThreadsSpy = vi.spyOn(result.current, 'refreshThreads');
+
+      await act(async () => {
+        await result.current.internal_autoOpenSubAgentThread('anchor-1');
+      });
+
+      expect(refreshThreadsSpy).toHaveBeenCalled();
+      expect(result.current.portalThreadId).toBe('sub-thread-1');
+      expect(result.current.showPortal).toBe(true);
+      expect(result.current.portalStack.at(-1)).toEqual({
+        type: PortalViewType.Thread,
+        threadId: 'sub-thread-1',
+        startMessageId: 'anchor-1',
+      });
+    });
+
+    it('should not cover a portal showing a non-Thread view', async () => {
+      const { result } = renderHook(() => useChatStore());
+      act(() => {
+        useChatStore.setState({
+          portalStack: [{ type: PortalViewType.Artifact } as any],
+          showPortal: true,
+          threadMaps: { 'test-topic-id': [isolationThread('sub-thread-2', 'anchor-2')] },
+        });
+      });
+
+      await act(async () => {
+        await result.current.internal_autoOpenSubAgentThread('anchor-2');
+      });
+
+      expect(result.current.portalThreadId).toBeUndefined();
+      expect(result.current.portalStack.at(-1)).toEqual({ type: PortalViewType.Artifact });
+    });
+
+    it('should open at most once per anchor so a closed portal stays closed on replay', async () => {
+      const { result } = renderHook(() => useChatStore());
+      act(() => {
+        useChatStore.setState({
+          portalStack: [],
+          showPortal: false,
+          threadMaps: { 'test-topic-id': [isolationThread('sub-thread-3', 'anchor-3')] },
+        });
+      });
+
+      await act(async () => {
+        await result.current.internal_autoOpenSubAgentThread('anchor-3');
+      });
+      act(() => {
+        result.current.closeThreadPortal();
+      });
+      await act(async () => {
+        await result.current.internal_autoOpenSubAgentThread('anchor-3');
+      });
+
+      expect(result.current.portalThreadId).toBeUndefined();
+      expect(result.current.showPortal).toBe(false);
+    });
+
+    it('should no-op when no isolation thread matches the anchor', async () => {
+      const { result } = renderHook(() => useChatStore());
+      act(() => {
+        useChatStore.setState({
+          portalStack: [],
+          showPortal: false,
+          threadMaps: {
+            'test-topic-id': [
+              { ...isolationThread('sub-thread-4', 'anchor-4'), type: ThreadType.Continuation },
+            ],
+          },
+        });
+      });
+
+      await act(async () => {
+        await result.current.internal_autoOpenSubAgentThread('anchor-4');
+      });
+
+      expect(result.current.portalThreadId).toBeUndefined();
+      expect(result.current.showPortal).toBe(false);
     });
   });
 

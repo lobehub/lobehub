@@ -56,17 +56,21 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
  */
 export const CallSubAgentRender = memo<
   BuiltinRenderProps<CallSubAgentParams, CallSubAgentState, string>
->(({ args, content, pluginState }) => {
+>(({ args, content, messageId, pluginState }) => {
   const { t } = useTranslation('plugin');
   const { t: tChat } = useTranslation('chat');
   const prompt = args?.instruction?.trim();
   const result = typeof content === 'string' ? content.trim() : '';
   const threadId = pluginState?.threadId;
 
+  // `pluginState.threadId` is only backfilled when the child finishes; while it
+  // is still running the isolation thread is found through its spawn anchor —
+  // it points back at this tool message via `sourceMessageId`. Without the
+  // fallback the "View Detail" button stays hidden for the whole run.
   const subagentThread = useChatStore((s) =>
     threadId
       ? (threadSelectors.currentTopicThreads(s) ?? []).find((thread) => thread.id === threadId)
-      : undefined,
+      : threadSelectors.getIsolationThreadBySourceMsgId(messageId)(s),
   );
   const openThreadInPortal = useChatStore((s) => s.openThreadInPortal);
   const closeThreadPortal = useChatStore((s) => s.closeThreadPortal);

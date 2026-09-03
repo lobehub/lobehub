@@ -11,6 +11,7 @@ import type {
   ToolStartData,
   ToolStateChunkData,
 } from '@lobechat/agent-gateway-client';
+import { LobeAgentApiName, LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
 import type {
   BuiltinToolResult,
   ChatMessageError,
@@ -871,6 +872,27 @@ export const createGatewayEventHandler = (
             // it and dispatch onto a message the store doesn't have yet.
             if ((data as any).toolMessageIds) {
               await fetchAndReplaceMessages(get, context, { skipWorks: true }).catch(console.error);
+
+              // A deferred `callSubAgent` in this batch means a sub-agent just
+              // spawned server-side: its placeholder row (mapped in
+              // `toolMessageIds`) and isolation thread both exist by the time
+              // this chunk is published, so the thread can be surfaced in the
+              // portal right away instead of waiting for the run to finish.
+              const toolMessageIds = (data as any).toolMessageIds as Record<string, string>;
+              for (const tool of data.toolsCalling ?? []) {
+                if (
+                  tool?.identifier !== LobeAgentIdentifier ||
+                  tool?.apiName !== LobeAgentApiName.callSubAgent
+                )
+                  continue;
+                const subAgentAnchorId =
+                  typeof tool.id === 'string' ? toolMessageIds[tool.id] : undefined;
+                if (subAgentAnchorId) {
+                  await get()
+                    .internal_autoOpenSubAgentThread(subAgentAnchorId)
+                    .catch(console.error);
+                }
+              }
             }
           }
         });
