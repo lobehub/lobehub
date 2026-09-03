@@ -1,6 +1,6 @@
 ---
 name: split-micro-app
-description: 'Use when splitting a monorepo surface into a standalone micro app (React Router SSR on Cloudflare Workers), splitting a surface whose rendering code lives in the lobehub-cloud business overlay, fighting SSR bundle bloat from main-src imports, deploying its assets to CDN/R2, adding SEO/OG meta to an SSR page, adding a target and route rules for it in the lobehub gateway (torii), wiring it into the OSS Docker image, or deciding whether Cloud Next should still build or rewrite it.'
+description: 'Use when splitting a monorepo surface into a standalone micro app (React Router SSR on Cloudflare Workers), splitting a surface whose rendering code lives in the lobehub-cloud business overlay, fighting SSR bundle bloat from main-src imports, deploying its assets to CDN/R2, adding SEO/OG meta to an SSR page, adding a target and route rules for it in the lobehub gateway (torii), setting up PR preview uploads on a sibling -preview Worker so the production script keeps its Cloudflare rollback window, wiring it into the OSS Docker image, or deciding whether Cloud Next should still build or rewrite it.'
 user-invocable: false
 ---
 
@@ -112,8 +112,20 @@ non-deployed preview **version** (`wrangler versions upload --preview-alias`, dr
 secrets are absent), enforces the 8MB-gzip guard, and comments the preview URL behind an HTML
 marker (never `--edit-last` — other workflows comment as the same bot). Workbench: one repo,
 one `verify-workbench.yml`. Share: **both** repos, because either side's change flows into the
-deployed worker — OSS `verify-share.yml` + cloud `verify-share.yml`. Alias namespaces must not
-collide on the shared worker: OSS uses `pr<N>`, cloud uses `cloudpr<N>`. Manifest source
+deployed worker — OSS `verify-share.yml` + cloud `verify-share.yml`.
+
+**Previews upload to a sibling Worker, never to the production script.** Cloudflare only rolls
+back to the **100 most recently uploaded versions** of a script, and preview uploads count: at
+share's PR rate (10 uploads in under an hour on a busy day) every real deployment left the
+window within a day, which broke the gateway admin's (鳥居番) rollback list. So every verify
+passes `--name lobehub-<name>-preview`, and the production script's version list holds only
+deployments. Two consequences: the preview Worker must exist before the first upload
+(`wrangler versions upload` refuses a never-deployed script — bootstrap it once with
+`wrangler deploy --name lobehub-<name>-preview` from any stub; the next upload replaces it),
+and the preview API token must be allowed to edit the `-preview` name. Preview URLs are then
+`https://<alias>-lobehub-<name>-preview.lobeobjects-tg.workers.dev`, and `VITE_CDN_BASE` must
+point at that same origin. Alias namespaces must not collide on the shared preview worker: OSS
+uses `pr<N>`, cloud uses `cloudpr<N>`. Manifest source
 differs by what the repo can read: cloud verify borrows the deploy's `share-deploy-state`
 artifact (same repo); OSS verify cannot read cloud artifacts, so it self-bootstraps from its
 own last successful run's `share-build-inputs` (first run always builds).
@@ -273,6 +285,10 @@ To add a micro app:
    drift), run the invariant suite, and re-run `verify --env staging`.
 6. Verify with staging debug headers: `x-torii-target` / `x-torii-decision` per request, and
    test document + `.data` + unaffected routes.
+7. Rollback lives in 鳥居番's **Deploys** page: every Worker target the gateway binds
+   (`bindings.ts` in the gateway repo) is listed with its Cloudflare deployments, and a row is
+   only rollbackable while its version is within Cloudflare's 100-upload window — which is the
+   reason previews stay off the production script (§1).
 
 Landmine (fixed 2026-08, stay aware): the lobehub-com `react-router-data` plugin owns `.data`
 protocol affinity for the landing pair; it consults `resolveRule` and lets other targets'
@@ -287,7 +303,8 @@ protocol affinity for the landing pair; it consults `resolveRule` and lets other
    in the overlay repo too, if there is one.
 4. Wire CDN deploy (`deploy.ts`, stable `_<name>/` prefix) + wrangler vars + redirects, plus a
    PR-time verify workflow in **every repo whose changes reach the artifact** (§1 PR-time
-   verify — preview version, size guard, non-colliding alias namespace).
+   verify — preview version on the bootstrapped `lobehub-<name>-preview` Worker, size guard,
+   non-colliding alias namespace).
 5. Loader data + SWR fallback + meta builder + i18n narrowing (+ `error`); verify with
    `/trpc`-blocked browser run (content must survive) and view-source (SSR content + meta present).
 6. Deploy worker; verify workers.dev standalone (API proxy, `/` redirect).
