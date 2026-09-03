@@ -47,7 +47,7 @@ export class RemoteDeviceExecutionRuntime {
         // end — repeated blind activateDevice retries against the same stale
         // id are the observed failure mode (agent vent reports).
         return {
-          content: `Device "${args.deviceId}" is not online or does not exist. Call listOnlineDevices to refresh the device list and activate a device from the fresh result. If no device is online, tell the user to open the desktop application and connect.`,
+          content: `Device "${args.deviceId}" is not online or does not exist. Call listOnlineDevices to refresh the device list and activate a device from the fresh result. If no device is online, tell the user to connect the desktop application or cli.`,
           success: false,
         };
       }

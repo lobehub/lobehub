@@ -60,7 +60,7 @@ describe('RemoteDeviceExecutionRuntime', () => {
       expect(result.success).toBe(false);
       expect(result.content).toContain('not online or does not exist');
       expect(result.content).toContain('listOnlineDevices');
-      expect(result.content).toContain('desktop application');
+      expect(result.content).toContain('desktop application or cli');
     });
 
     it('returns the same recovery hint for an unknown device id', async () => {
