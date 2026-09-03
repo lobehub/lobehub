@@ -1,6 +1,7 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { type SharedAgentData, type SharedTopicData } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import debug from 'debug';
 import { z } from 'zod';
 
 import { AgentShareModel } from '@/database/models/agentShare';
@@ -9,6 +10,8 @@ import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
 import { assertAgentShareVisitorEnabled } from './_helpers/agentShareFeatureGate';
+
+const log = debug('lobe-server:router:share');
 
 export const shareRouter = router({
   /**
@@ -54,8 +57,14 @@ export const shareRouter = router({
         await assertAgentShareVisitorEnabled(ctx.userId);
 
         // Owner previews are not counted: userViewCount tracks visitor page
-        // views (PV, not deduplicated visitors).
-        await AgentShareModel.incrementUserViewCount(ctx.serverDB, share.shareId);
+        // views (PV, not deduplicated visitors). The counter is analytics
+        // only, so it is best-effort: a failed increment must never turn an
+        // otherwise valid share page into an error for the visitor.
+        try {
+          await AgentShareModel.incrementUserViewCount(ctx.serverDB, share.shareId);
+        } catch (error) {
+          log('failed to increment view count for share %s: %O', share.shareId, error);
+        }
       }
 
       return {

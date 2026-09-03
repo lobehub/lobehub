@@ -165,6 +165,16 @@ describe('shareRouter', () => {
       });
     });
 
+    it('still resolves the share when the view counter fails', async () => {
+      vi.mocked(AgentShareModel.incrementUserViewCount).mockRejectedValue(new Error('db down'));
+      const caller = shareRouter.createCaller(await createContextInner({ userId: 'visitor-user' }));
+
+      await expect(caller.getSharedAgent({ slugOrId: 'shared-agent' })).resolves.toMatchObject({
+        isOwner: false,
+        shareId: 'agent-share-1',
+      });
+    });
+
     it('returns NOT_FOUND without counting a view when the slug/id does not resolve', async () => {
       vi.mocked(AgentShareModel.findBySlugOrId).mockResolvedValue(null);
       const caller = shareRouter.createCaller(await createContextInner({ userId: 'visitor-user' }));
