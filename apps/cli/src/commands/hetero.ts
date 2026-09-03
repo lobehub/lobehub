@@ -467,6 +467,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     uploadImage = createFileStoreImageUploader(async () => {
       const lambda = await getTrpcClient();
       return {
+        abortS3Upload: (input) => lambda.upload.abortS3Upload.mutate(input),
         checkFileHash: (input) => lambda.file.checkFileHash.mutate(input),
         createFile: (input) => lambda.file.createFile.mutate(input),
         createS3PreSignedUrl: (input) => lambda.upload.createS3PreSignedUrl.mutate(input),

@@ -7,6 +7,7 @@ const PNG_BASE64 = Buffer.from('fake-png-bytes').toString('base64');
 const PNG_HASH = '3c6ed5fc41c950bf0db531eb22f945467fb8d999f80d82ba27dcc9fd90add54d';
 
 const createPort = (overrides: Partial<FileStorePort> = {}): FileStorePort => ({
+  abortS3Upload: vi.fn().mockResolvedValue({ success: true }),
   checkFileHash: vi.fn().mockResolvedValue({ isExist: false }),
   createFile: vi.fn().mockResolvedValue({ id: 'file_1', url: 'https://cdn/x.png' }),
   createS3PreSignedUrl: vi.fn().mockResolvedValue('https://s3/presigned'),
@@ -101,6 +102,9 @@ describe('createFileStoreImageUploader', () => {
     await expect(upload({ data: PNG_BASE64, mediaType: 'image/png' })).rejects.toThrow(
       'Upload failed: 403 Forbidden',
     );
+    expect(port.abortS3Upload).toHaveBeenCalledWith({
+      pathname: expect.stringMatching(/^files\//),
+    });
     expect(port.createFile).not.toHaveBeenCalled();
   });
 });

@@ -26,6 +26,9 @@ vi.mock('@/libs/trpc/client', () => ({
       abortS3MultipartUpload: {
         mutate: vi.fn(),
       },
+      abortS3Upload: {
+        mutate: vi.fn(),
+      },
       completeS3MultipartUpload: {
         mutate: vi.fn(),
       },
@@ -359,6 +362,9 @@ describe('UploadService', () => {
       });
 
       await expect(uploadService.uploadToServerS3(mockFile, {})).rejects.toBe(UPLOAD_NETWORK_ERROR);
+      expect(lambdaClient.upload.abortS3Upload.mutate).toHaveBeenCalledWith({
+        pathname: expect.stringContaining('mock-uuid.png'),
+      });
     });
 
     it('should handle upload error', async () => {
@@ -422,6 +428,7 @@ describe('UploadService', () => {
       Object.defineProperty(largeFile, 'arrayBuffer', { value: arrayBuffer });
 
       vi.mocked(lambdaClient.upload.createS3MultipartUpload.mutate).mockResolvedValue({
+        partSize: 40 * 1024 * 1024,
         uploadId: 'upload-1',
       });
       vi.mocked(lambdaClient.upload.createS3MultipartUploadPartUrl.mutate).mockResolvedValue(
@@ -442,16 +449,15 @@ describe('UploadService', () => {
       await uploadService.uploadToServerS3(largeFile, {});
 
       expect(lambdaClient.upload.createS3PreSignedUrl.mutate).not.toHaveBeenCalled();
-      expect(lambdaClient.upload.createS3MultipartUploadPartUrl.mutate).toHaveBeenCalledTimes(3);
-      expect(slice).toHaveBeenCalledTimes(3);
-      expect(xhr.send).toHaveBeenCalledTimes(3);
+      expect(lambdaClient.upload.createS3MultipartUploadPartUrl.mutate).toHaveBeenCalledTimes(2);
+      expect(slice).toHaveBeenCalledTimes(2);
+      expect(xhr.send).toHaveBeenCalledTimes(2);
       expect(arrayBuffer).not.toHaveBeenCalled();
       expect(lambdaClient.upload.completeS3MultipartUpload.mutate).toHaveBeenCalledWith({
-        partCount: 3,
+        partCount: 2,
         parts: [
           { etag: 'etag-value', partNumber: 1 },
           { etag: 'etag-value', partNumber: 2 },
-          { etag: 'etag-value', partNumber: 3 },
         ],
         pathname: expect.stringContaining('mock-uuid.bin'),
         uploadId: 'upload-1',

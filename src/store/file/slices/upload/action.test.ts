@@ -67,6 +67,7 @@ beforeEach(() => {
   vi.mocked(handleFileUploadError).mockReturnValue(false);
   vi.mocked(fileTypeFromBlob).mockResolvedValue(undefined);
   vi.mocked(getAudioDuration).mockResolvedValue(undefined);
+  vi.spyOn(uploadService, 'releaseUpload').mockResolvedValue();
 });
 
 afterEach(() => {

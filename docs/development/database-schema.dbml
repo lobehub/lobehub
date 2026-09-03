@@ -1547,6 +1547,30 @@ table documents {
   }
 }
 
+table file_uploads {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  workspace_id text
+  pathname text [not null]
+  size integer [not null]
+  status text [not null, default: 'active']
+  multipart_upload_id text
+  multipart_part_size integer
+  completed_at "timestamp with time zone"
+  file_id text
+  expires_at "timestamp with time zone" [not null]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (user_id, workspace_id, status) [name: 'file_uploads_user_scope_status_idx']
+    (workspace_id, status) [name: 'file_uploads_workspace_status_idx']
+    (status, expires_at) [name: 'file_uploads_status_expires_at_idx']
+    (status, updated_at, id) [name: 'file_uploads_status_updated_at_id_idx']
+    pathname [name: 'file_uploads_live_pathname_unique', unique]
+  }
+}
+
 table files {
   id text [pk, not null]
   user_id text [not null]

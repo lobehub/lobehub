@@ -17,6 +17,7 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentEvalRunService } from '@/server/services/agentEvalRun';
 import { FileService } from '@/server/services/file';
+import { FileUploadService } from '@/server/services/fileUpload';
 import { AgentEvalRunWorkflow } from '@/server/workflows/agentEvalRun';
 
 import { evalRunInputConfigSchema } from './evalRunConfig.schema';
@@ -145,6 +146,7 @@ const agentEvalProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts
       runTopicModel: new AgentEvalRunTopicModel(ctx.serverDB, ctx.userId, wsId),
       testCaseModel: new AgentEvalTestCaseModel(ctx.serverDB, ctx.userId, wsId),
       fileService: new FileService(ctx.serverDB, ctx.userId, wsId),
+      fileUploadService: new FileUploadService(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
@@ -462,15 +464,15 @@ export const agentEvalRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      const upload = await ctx.fileUploadService.assertActiveOrLegacy(input.pathname);
       const format = input.format || 'auto';
       const resolvedFilename = input.filename || input.pathname;
       const isXlsx = format === 'xlsx' || resolvedFilename?.match(/\.xlsx?$/i);
 
-      const content = isXlsx
-        ? await ctx.fileService.getFileByteArray(input.pathname)
-        : await ctx.fileService.getFileContent(input.pathname);
-
       try {
+        const content = isXlsx
+          ? await ctx.fileService.getFileByteArray(input.pathname)
+          : await ctx.fileService.getFileContent(input.pathname);
         const result = parseDataset(content, {
           filename: resolvedFilename,
           format: format === 'auto' ? undefined : format,
@@ -484,6 +486,7 @@ export const agentEvalRouter = router({
           format: result.format,
         };
       } catch (error: any) {
+        if (upload) await ctx.fileUploadService.releaseBestEffort(input.pathname);
         throw new TRPCError({
           code: 'BAD_REQUEST',
           message: `Failed to parse file: ${error.message}`,
@@ -510,21 +513,22 @@ export const agentEvalRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      const upload = await ctx.fileUploadService.assertActiveOrLegacy(input.pathname);
       const format = input.format || 'auto';
       const resolvedFilename = input.filename || input.pathname;
       const isXlsx = format === 'xlsx' || resolvedFilename?.match(/\.xlsx?$/i);
 
-      const content = isXlsx
-        ? await ctx.fileService.getFileByteArray(input.pathname)
-        : await ctx.fileService.getFileContent(input.pathname);
-
       let parsed;
       try {
+        const content = isXlsx
+          ? await ctx.fileService.getFileByteArray(input.pathname)
+          : await ctx.fileService.getFileContent(input.pathname);
         parsed = parseDataset(content, {
           filename: resolvedFilename,
           format: format === 'auto' ? undefined : format,
         });
       } catch (error: any) {
+        if (upload) await ctx.fileUploadService.releaseBestEffort(input.pathname);
         throw new TRPCError({
           code: 'BAD_REQUEST',
           message: `Failed to parse file: ${error.message}`,
@@ -600,7 +604,16 @@ export const agentEvalRouter = router({
         };
       });
 
-      const result = await ctx.testCaseModel.batchCreate(testCases);
+      let result;
+      try {
+        result = await ctx.testCaseModel.batchCreate(testCases);
+      } catch (error) {
+        if (upload) await ctx.fileUploadService.releaseBestEffort(input.pathname);
+        throw error;
+      }
+      if (upload) await ctx.fileUploadService.releaseBestEffort(input.pathname);
+      else await ctx.fileService.deleteFile(input.pathname);
+
       return { count: result.length, data: result };
     }),
 

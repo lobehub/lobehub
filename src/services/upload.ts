@@ -59,6 +59,14 @@ interface UploadFileToS3Options {
 }
 
 class UploadService {
+  releaseUpload = async (pathname: string) => {
+    try {
+      await lambdaClient.upload.abortS3Upload.mutate({ pathname });
+    } catch (error) {
+      console.error('Failed to clean S3 upload:', error);
+    }
+  };
+
   /**
    * uniform upload method for both server and client
    */
@@ -181,6 +189,7 @@ class UploadService {
         );
       }
     } catch (error) {
+      await this.releaseUpload(uploadPathname);
       if (abortController?.signal.aborted) {
         onProgress?.('cancelled', { progress: 0, restTime: 0, speed: 0 });
       }
@@ -251,14 +260,16 @@ class UploadService {
     signal: AbortSignal | undefined,
     onProgress: (loaded: number) => void,
   ): Promise<void> => {
-    const partSize = Math.max(MULTIPART_PART_SIZE, Math.ceil(file.size / MAX_MULTIPART_PARTS));
-    const partCount = Math.ceil(file.size / partSize);
     const parts: Array<{ etag: string; partNumber: number }> = [];
-    const { uploadId } = await lambdaClient.upload.createS3MultipartUpload.mutate({
+    const upload = await lambdaClient.upload.createS3MultipartUpload.mutate({
       contentType: file.type || undefined,
       pathname,
       size: file.size,
     });
+    const partSize =
+      upload.partSize ?? Math.max(MULTIPART_PART_SIZE, Math.ceil(file.size / MAX_MULTIPART_PARTS));
+    const partCount = Math.ceil(file.size / partSize);
+    const { uploadId } = upload;
 
     try {
       for (let partNumber = 1; partNumber <= partCount; partNumber++) {

@@ -29,6 +29,7 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { createAsyncCaller } from '@/server/routers/async';
 import { FileService } from '@/server/services/file';
+import { FileUploadService } from '@/server/services/fileUpload';
 
 const ragEvalProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -38,6 +39,7 @@ const ragEvalProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
     ctx: {
       datasetModel: new EvalDatasetModel(ctx.serverDB, ctx.userId, wsId),
       fileModel: new FileModel(ctx.serverDB, ctx.userId, wsId),
+      fileUploadService: new FileUploadService(ctx.serverDB, ctx.userId, wsId),
       datasetRecordModel: new EvalDatasetRecordModel(ctx.serverDB, ctx.userId, wsId),
       evaluationModel: new EvalEvaluationModel(ctx.serverDB, ctx.userId, wsId),
       evaluationRecordModel: new EvaluationRecordModel(ctx.serverDB, ctx.userId, wsId),
@@ -144,33 +146,40 @@ export const ragEvalRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const dataStr = await ctx.fileService.getFileContent(input.pathname);
-      const items = JSONL.parse<InsertEvalDatasetRecord>(dataStr);
+      const upload = await ctx.fileUploadService.assertActiveOrLegacy(input.pathname);
+      try {
+        const dataStr = await ctx.fileService.getFileContent(input.pathname);
+        const items = JSONL.parse<InsertEvalDatasetRecord>(dataStr);
 
-      insertEvalDatasetRecordSchema.array().parse(items);
+        insertEvalDatasetRecordSchema.array().parse(items);
 
-      const data = await Promise.all(
-        items.map(async ({ referenceFiles, question, ideal }) => {
-          const files = typeof referenceFiles === 'string' ? [referenceFiles] : referenceFiles;
+        const data = await Promise.all(
+          items.map(async ({ referenceFiles, question, ideal }) => {
+            const files = typeof referenceFiles === 'string' ? [referenceFiles] : referenceFiles;
 
-          let fileIds: string[] | undefined = undefined;
+            let fileIds: string[] | undefined = undefined;
 
-          if (files) {
-            const items = await ctx.fileModel.findByNames(files);
+            if (files) {
+              const items = await ctx.fileModel.findByNames(files);
 
-            fileIds = items.map((item) => item.id);
-          }
+              fileIds = items.map((item) => item.id);
+            }
 
-          return {
-            question,
-            ideal,
-            referenceFiles: fileIds,
-            datasetId: input.datasetId,
-          };
-        }),
-      );
+            return {
+              question,
+              ideal,
+              referenceFiles: fileIds,
+              datasetId: input.datasetId,
+            };
+          }),
+        );
 
-      return ctx.datasetRecordModel.batchCreate(data);
+        const result = await ctx.datasetRecordModel.batchCreate(data);
+        if (!upload) await ctx.fileService.deleteFile(input.pathname);
+        return result;
+      } finally {
+        if (upload) await ctx.fileUploadService.releaseBestEffort(input.pathname);
+      }
     }),
 
   // Evaluation operations

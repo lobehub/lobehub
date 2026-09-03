@@ -113,11 +113,13 @@ export class FileUploadActionImpl {
   uploadBase64FileWithProgress = async (
     base64: string,
   ): Promise<UploadWithProgressResult | undefined> => {
+    let uploadedPathname: string | undefined;
     try {
       // Extract image dimensions from base64 data
       const dimensions = await getImageDimensions(base64);
 
       const { metadata, fileType, size, hash } = await uploadService.uploadBase64ToS3(base64);
+      uploadedPathname = metadata.path;
 
       const res = await fileService.createFile({
         fileType,
@@ -127,8 +129,10 @@ export class FileUploadActionImpl {
         size,
         url: metadata.path,
       });
+      uploadedPathname = undefined;
       return { ...res, dimensions, filename: metadata.filename };
     } catch (error) {
+      if (uploadedPathname) await uploadService.releaseUpload(uploadedPathname);
       if (handleFileUploadError(error)) return;
 
       throw error;
@@ -148,6 +152,7 @@ export class FileUploadActionImpl {
     fileMetadata,
   }: UploadWithProgressParams): Promise<UploadWithProgressResult | undefined> => {
     const statusId = uploadId ?? file.name;
+    let uploadedPathname: string | undefined;
 
     try {
       const { detectedMimeType, file: normalizedFile } = await normalizeUploadedFileType(file);
@@ -208,6 +213,7 @@ export class FileUploadActionImpl {
         if (!success) return;
 
         metadata = { ...data };
+        uploadedPathname = data.path;
       }
 
       // 4. use more powerful file type detector to get file type
@@ -246,6 +252,7 @@ export class FileUploadActionImpl {
         },
         knowledgeBaseId,
       );
+      uploadedPathname = undefined;
 
       onStatusUpdate?.({
         id: statusId,
@@ -261,6 +268,7 @@ export class FileUploadActionImpl {
 
       return { ...data, dimensions, filename: normalizedFile.name };
     } catch (error) {
+      if (uploadedPathname) await uploadService.releaseUpload(uploadedPathname);
       if (abortController?.signal.aborted) {
         onStatusUpdate?.({
           id: statusId,
