@@ -251,6 +251,19 @@ export const discoverTools = async (
           ]),
         ];
 
+  // Share allowlist runs EARLY, before connector resolution / credential
+  // decryption / stale-tool refresh scheduling — otherwise an ungranted HTTP
+  // connector pinned on the creator's agent would still be resolved and its
+  // OAuth credentials touched for a visitor turn (issuing background MCP
+  // traffic and refresh jobs on behalf of the creator). The later pass right
+  // before manifest discovery (~line 618) stays as defense in depth: internal
+  // additions like the topic-reference / bot message / multimodal
+  // understanding tool are appended after this point and must run through the
+  // same allowlist.
+  if (shareGate) {
+    agentPlugins = filterPluginsByShareGate(agentPlugins, shareGate);
+  }
+
   // Model metadata is needed both for tool support checks and agent-management context.
   const { loadModels } = await import('@/business/client/model-bank/loadModels');
   const builtinModels = await loadModels();
@@ -614,6 +627,14 @@ export const discoverTools = async (
     // step from `SkillEngine.generate` and is not scoped by the plugin id list
     // on its own. The operationToolSet snapshot then carries the restricted
     // surface into every later step.
+    //
+    // Defense in depth: the same filter also runs at the top of
+    // `discoverTools` (before connector resolution) so that ungranted
+    // connectors never reach `resolveByIdentifiers` /
+    // `scheduleStaleConnectorToolsRefresh`. Keep this second pass — the
+    // internal additions above (topic reference, bot message tool,
+    // multimodal understanding) are appended after the first pass and would
+    // otherwise slip through.
     if (shareGate) {
       agentPlugins = filterPluginsByShareGate(agentPlugins, shareGate);
     }
