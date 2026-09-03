@@ -70,8 +70,28 @@ export const commandExecutionTargets = ['local', 'device', 'sandbox'] as const;
 export type CommandExecutionTargetDB = (typeof commandExecutionTargets)[number];
 
 /**
- * One row per governed command-execution tool call — an audit trail of every
- * command a user's agent attempted to run, whether it was allowed or blocked.
+ * Which `user_execution_policies` field a blocked file-access attempt
+ * matched. Only set on file-operation rows (`apiName` is `writeFile` /
+ * `editFile` / etc, not `runCommand`) — see `pathPolicy.ts`.
+ */
+export const commandExecutionLogPolicyFields = ['deniedWriteRoots', 'deniedReadRoots'] as const;
+export type CommandExecutionLogPolicyField = (typeof commandExecutionLogPolicyFields)[number];
+
+/**
+ * One row per governed command-execution OR file-access tool call — an audit
+ * trail of every command/file operation a user's agent attempted, whether it
+ * was allowed or blocked.
+ *
+ * Two disjoint shapes share this table (see `pathPolicy.ts`'s `checkPath` vs
+ * `policyGate.ts`'s `checkCommand`), distinguished by whether `apiName` is a
+ * command-execution API (`runCommand`/`execScript`) or a file-operation API
+ * (`writeFile`/`editFile`/`readFile`/...):
+ * - command rows: `commandText` set, `matchedRuleId` may be set, `path`/
+ *   `policyField` both null.
+ * - file-operation rows: `path`/`policyField` set (when blocked),
+ *   `commandText`/`matchedRuleId` both null (there is no "command text" for a
+ *   file operation, and the match came from `user_execution_policies`, not
+ *   `command_governance_rules`).
  */
 export const commandExecutionLogs = pgTable(
   'command_execution_logs',
@@ -87,12 +107,18 @@ export const commandExecutionLogs = pgTable(
 
     toolIdentifier: text('tool_identifier').notNull(),
     apiName: text('api_name').notNull(),
-    commandText: text('command_text').notNull(),
+    /** Null for file-operation rows — see the table doc comment. */
+    commandText: text('command_text'),
 
     blocked: boolean('blocked').notNull(),
     matchedRuleId: uuid('matched_rule_id').references(() => commandGovernanceRules.id, {
       onDelete: 'set null',
     }),
+
+    /** File-operation rows only — the target path that was checked. */
+    path: text('path'),
+    /** File-operation rows only — which `user_execution_policies` field matched a block. */
+    policyField: text('policy_field', { enum: commandExecutionLogPolicyFields }),
 
     /** Null when the command was blocked before it ever ran. */
     success: boolean('success'),

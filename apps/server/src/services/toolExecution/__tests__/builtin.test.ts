@@ -7,6 +7,7 @@ import type { ToolExecutionContext } from '../types';
 const mocks = vi.hoisted(() => ({
   apiHandler: vi.fn(),
   checkCommand: vi.fn().mockResolvedValue({ allowed: true }),
+  checkPath: vi.fn().mockResolvedValue({ allowed: true }),
   executeLobehubSkill: vi.fn(),
   logCommandExecution: vi.fn().mockResolvedValue(undefined),
 }));
@@ -32,8 +33,11 @@ vi.mock('@/server/services/market', () => ({
 // `services/governance/__tests__/policyGate.test.ts`.
 vi.mock('@/server/services/governance', () => ({
   checkCommand: mocks.checkCommand,
+  checkPath: mocks.checkPath,
   COMMAND_BLOCKED_MESSAGE:
     'This command was blocked by an administrator-configured command governance rule for this user. Do not attempt this action again in any form.',
+  FILE_BLOCKED_MESSAGE:
+    'This file operation was blocked by an administrator-configured execution policy for this user. Do not attempt to read or write this path again in any form.',
   logCommandExecution: mocks.logCommandExecution,
 }));
 
@@ -588,5 +592,303 @@ describe('BuiltinToolsExecutor command governance hook', () => {
       expect.objectContaining({ blocked: false, errorMessage: 'spawn failed', success: false }),
       expect.anything(),
     );
+  });
+});
+
+describe('BuiltinToolsExecutor file governance hook', () => {
+  const executor = new BuiltinToolsExecutor({} as any, 'user-1');
+
+  const filePayload: ChatToolPayload = {
+    apiName: 'writeFile',
+    arguments: '{"path":"/home/alice/.ssh/config","content":"evil"}',
+    id: 'tool-call-file',
+    identifier: 'lobe-local-system',
+    type: 'default' as any,
+  };
+
+  beforeEach(() => {
+    mocks.checkPath.mockReset().mockResolvedValue({ allowed: true });
+    mocks.checkCommand.mockReset().mockResolvedValue({ allowed: true });
+    mocks.logCommandExecution.mockReset().mockResolvedValue(undefined);
+  });
+
+  it('never touches file governance for a non-file-shaped tool call', async () => {
+    mockApiHandler.mockReset().mockResolvedValueOnce({ content: 'ok', success: true });
+
+    await executor.execute(buildPayload('{}'), context);
+
+    expect(mocks.checkPath).not.toHaveBeenCalled();
+  });
+
+  it('never touches file governance for a cloud-sandbox writeFile call', async () => {
+    const { getServerRuntime } = await import('../serverRuntimes');
+    const writeFileMock = vi.fn().mockResolvedValue({ content: 'done', success: true });
+    vi.mocked(getServerRuntime).mockResolvedValueOnce({ writeFile: writeFileMock } as any);
+
+    await executor.execute({ ...filePayload, identifier: 'lobe-cloud-sandbox' }, context);
+
+    expect(mocks.checkPath).not.toHaveBeenCalled();
+    expect(writeFileMock).toHaveBeenCalled();
+  });
+
+  it('checks the path, dispatches to the runtime, and logs a success outcome when allowed', async () => {
+    const { getServerRuntime } = await import('../serverRuntimes');
+    const writeFileMock = vi.fn().mockResolvedValue({ content: 'done', success: true });
+    vi.mocked(getServerRuntime).mockResolvedValueOnce({ writeFile: writeFileMock } as any);
+
+    const result = await executor.execute(filePayload, { ...context, activeDeviceId: 'device-1' });
+
+    expect(mocks.checkPath).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiName: 'writeFile',
+        deviceId: 'device-1',
+        executionTarget: 'device',
+        path: '/home/alice/.ssh/config',
+        toolIdentifier: 'lobe-local-system',
+        userId: 'user-1',
+      }),
+      expect.anything(),
+    );
+    expect(writeFileMock).toHaveBeenCalled();
+    expect(result.success).toBe(true);
+    expect(mocks.logCommandExecution).toHaveBeenCalledWith(
+      expect.objectContaining({ path: '/home/alice/.ssh/config' }),
+      expect.objectContaining({ blocked: false, success: true }),
+      expect.anything(),
+    );
+  });
+
+  it('resolves a relative path against context.workingDirectory before checking', async () => {
+    const { getServerRuntime } = await import('../serverRuntimes');
+    const writeFileMock = vi.fn().mockResolvedValue({ content: 'done', success: true });
+    vi.mocked(getServerRuntime).mockResolvedValueOnce({ writeFile: writeFileMock } as any);
+
+    await executor.execute(
+      { ...filePayload, arguments: '{"path":"notes.txt","content":"hi"}' },
+      { ...context, workingDirectory: '/home/alice/project' },
+    );
+
+    expect(mocks.checkPath).toHaveBeenCalledWith(
+      expect.objectContaining({ path: '/home/alice/project/notes.txt' }),
+      expect.anything(),
+    );
+  });
+
+  it('does not prepend workingDirectory to an already-absolute path', async () => {
+    const { getServerRuntime } = await import('../serverRuntimes');
+    const writeFileMock = vi.fn().mockResolvedValue({ content: 'done', success: true });
+    vi.mocked(getServerRuntime).mockResolvedValueOnce({ writeFile: writeFileMock } as any);
+
+    await executor.execute(filePayload, { ...context, workingDirectory: '/home/alice/project' });
+
+    expect(mocks.checkPath).toHaveBeenCalledWith(
+      expect.objectContaining({ path: '/home/alice/.ssh/config' }),
+      expect.anything(),
+    );
+  });
+
+  it('returns a structured FILE_ACCESS_BLOCKED error and never calls the runtime when denied', async () => {
+    mocks.checkPath.mockReset().mockResolvedValueOnce({
+      allowed: false,
+      matchedField: 'deniedWriteRoots',
+    });
+    const { getServerRuntime } = await import('../serverRuntimes');
+    const writeFileMock = vi.fn();
+    vi.mocked(getServerRuntime).mockResolvedValueOnce({ writeFile: writeFileMock } as any);
+
+    const result = await executor.execute(filePayload, context);
+
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe('FILE_ACCESS_BLOCKED');
+    expect(writeFileMock).not.toHaveBeenCalled();
+    expect(mocks.logCommandExecution).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ blocked: true, matchedField: 'deniedWriteRoots' }),
+      expect.anything(),
+    );
+  });
+
+  it('checks readFile against deniedReadRoots via the same chokepoint', async () => {
+    const { getServerRuntime } = await import('../serverRuntimes');
+    const readFileMock = vi.fn().mockResolvedValue({ content: 'secret', success: true });
+    vi.mocked(getServerRuntime).mockResolvedValueOnce({ readFile: readFileMock } as any);
+
+    await executor.execute(
+      {
+        ...filePayload,
+        apiName: 'readFile',
+        arguments: '{"path":"/home/alice/.ssh/config"}',
+      },
+      context,
+    );
+
+    expect(mocks.checkPath).toHaveBeenCalledWith(
+      expect.objectContaining({ apiName: 'readFile' }),
+      expect.anything(),
+    );
+  });
+
+  it('checks searchFiles against its scope (not path) arg', async () => {
+    const { getServerRuntime } = await import('../serverRuntimes');
+    const searchMock = vi.fn().mockResolvedValue([]);
+    vi.mocked(getServerRuntime).mockResolvedValueOnce({ searchFiles: searchMock } as any);
+
+    await executor.execute(
+      {
+        ...filePayload,
+        apiName: 'searchFiles',
+        arguments: '{"keywords":"todo","scope":"/home/alice/.ssh"}',
+      },
+      context,
+    );
+
+    expect(mocks.checkPath).toHaveBeenCalledWith(
+      expect.objectContaining({ apiName: 'searchFiles', path: '/home/alice/.ssh' }),
+      expect.anything(),
+    );
+  });
+
+  it('checks editFile against its file_path (not path) arg — the manifest field name, not the IPC one', async () => {
+    const { getServerRuntime } = await import('../serverRuntimes');
+    const editMock = vi.fn().mockResolvedValue({ replacements: 1, success: true });
+    vi.mocked(getServerRuntime).mockResolvedValueOnce({ editFile: editMock } as any);
+
+    await executor.execute(
+      {
+        ...filePayload,
+        apiName: 'editFile',
+        arguments: JSON.stringify({
+          file_path: '/home/alice/.ssh/config',
+          new_string: 'b',
+          old_string: 'a',
+        }),
+      },
+      context,
+    );
+
+    expect(mocks.checkPath).toHaveBeenCalledWith(
+      expect.objectContaining({ apiName: 'editFile', path: '/home/alice/.ssh/config' }),
+      expect.anything(),
+    );
+  });
+
+  it('checks globFiles against its scope (not path) arg', async () => {
+    const { getServerRuntime } = await import('../serverRuntimes');
+    const globMock = vi.fn().mockResolvedValue({ files: [], success: true, total_files: 0 });
+    vi.mocked(getServerRuntime).mockResolvedValueOnce({ globFiles: globMock } as any);
+
+    await executor.execute(
+      {
+        ...filePayload,
+        apiName: 'globFiles',
+        arguments: '{"pattern":"*.pem","scope":"/home/alice/.ssh"}',
+      },
+      context,
+    );
+
+    expect(mocks.checkPath).toHaveBeenCalledWith(
+      expect.objectContaining({ apiName: 'globFiles', path: '/home/alice/.ssh' }),
+      expect.anything(),
+    );
+  });
+
+  it('checks every item of a moveFiles batch — both oldPath and newPath — not just the first', async () => {
+    mocks.checkPath.mockReset().mockImplementation(async (ctx: any) => ({
+      allowed: ctx.path !== '/home/alice/.ssh/authorized_keys',
+      matchedField:
+        ctx.path === '/home/alice/.ssh/authorized_keys' ? 'deniedWriteRoots' : undefined,
+    }));
+    const { getServerRuntime } = await import('../serverRuntimes');
+    const moveMock = vi.fn().mockResolvedValue([]);
+    vi.mocked(getServerRuntime).mockResolvedValueOnce({ moveFiles: moveMock } as any);
+
+    // First item is innocuous; the SECOND item's newPath is the denied one —
+    // a check that only looked at items[0] would miss this entirely.
+    const result = await executor.execute(
+      {
+        ...filePayload,
+        apiName: 'moveFiles',
+        arguments: JSON.stringify({
+          items: [
+            { newPath: '/home/alice/Desktop/notes.txt', oldPath: '/home/alice/Desktop/draft.txt' },
+            {
+              newPath: '/home/alice/.ssh/authorized_keys',
+              oldPath: '/tmp/payload.txt',
+            },
+          ],
+        }),
+      },
+      context,
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe('FILE_ACCESS_BLOCKED');
+    expect(moveMock).not.toHaveBeenCalled();
+    expect(mocks.checkPath).toHaveBeenCalledWith(
+      expect.objectContaining({ path: '/home/alice/Desktop/draft.txt' }),
+      expect.anything(),
+    );
+    expect(mocks.checkPath).toHaveBeenCalledWith(
+      expect.objectContaining({ path: '/home/alice/.ssh/authorized_keys' }),
+      expect.anything(),
+    );
+  });
+
+  it('allows a moveFiles batch through and dispatches once every item passes', async () => {
+    const { getServerRuntime } = await import('../serverRuntimes');
+    const moveMock = vi.fn().mockResolvedValue([]);
+    vi.mocked(getServerRuntime).mockResolvedValueOnce({ moveFiles: moveMock } as any);
+
+    const result = await executor.execute(
+      {
+        ...filePayload,
+        apiName: 'moveFiles',
+        arguments: JSON.stringify({
+          items: [{ newPath: '/home/alice/Desktop/b.txt', oldPath: '/home/alice/Desktop/a.txt' }],
+        }),
+      },
+      context,
+    );
+
+    expect(result.success).not.toBe(false);
+    expect(moveMock).toHaveBeenCalled();
+  });
+
+  it('still returns the real tool result when logCommandExecution rejects', async () => {
+    mocks.logCommandExecution.mockReset().mockRejectedValue(new Error('audit db down'));
+    const { getServerRuntime } = await import('../serverRuntimes');
+    const writeFileMock = vi.fn().mockResolvedValue({ content: 'done', success: true });
+    vi.mocked(getServerRuntime).mockResolvedValueOnce({ writeFile: writeFileMock } as any);
+
+    const result = await executor.execute(filePayload, context);
+
+    expect(result.success).toBe(true);
+    expect(result.content).toBe('done');
+  });
+
+  it('logs a failure outcome (not a masked result) when the runtime call throws', async () => {
+    const { getServerRuntime } = await import('../serverRuntimes');
+    const writeFileMock = vi.fn().mockRejectedValue(new Error('disk full'));
+    vi.mocked(getServerRuntime).mockResolvedValueOnce({ writeFile: writeFileMock } as any);
+
+    const result = await executor.execute(filePayload, context);
+
+    expect(result.success).toBe(false);
+    expect(result.content).toBe('disk full');
+    expect(mocks.logCommandExecution).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ blocked: false, errorMessage: 'disk full', success: false }),
+      expect.anything(),
+    );
+  });
+
+  it('does not trigger command governance for a file-shaped call, and vice versa', async () => {
+    const { getServerRuntime } = await import('../serverRuntimes');
+    const writeFileMock = vi.fn().mockResolvedValue({ content: 'done', success: true });
+    vi.mocked(getServerRuntime).mockResolvedValueOnce({ writeFile: writeFileMock } as any);
+
+    await executor.execute(filePayload, context);
+
+    expect(mocks.checkCommand).not.toHaveBeenCalled();
   });
 });

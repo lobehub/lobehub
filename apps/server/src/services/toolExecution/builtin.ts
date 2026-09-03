@@ -15,10 +15,13 @@ import { UserModel } from '@/database/models/user';
 import { ComposioService } from '@/server/services/composio';
 import {
   checkCommand,
+  checkPath,
   COMMAND_BLOCKED_MESSAGE,
   type CommandExecutionTarget,
   type CommandGovernanceContext,
+  FILE_BLOCKED_MESSAGE,
   logCommandExecution,
+  type PathGovernanceContext,
 } from '@/server/services/governance';
 import { MarketService } from '@/server/services/market';
 
@@ -46,6 +49,29 @@ const COMMAND_EXECUTION_IDENTIFIERS = new Set<string>([
 const COMMAND_EXECUTION_API_NAMES = new Set<string>([
   LocalSystemApiName.runCommand,
   CloudSandboxApiName.runCommand,
+]);
+
+/**
+ * File-operation APIs gated by `checkPath` (user_execution_policies'
+ * `deniedWriteRoots`/`deniedReadRoots`) — see
+ * `docs/文件操作治理-实施指南-20260902.md`. Deliberately `LocalSystemIdentifier`
+ * only: this covers the `device` execution target (a `lh connect`-linked
+ * device, proxied through `serverRuntimes/localSystem.ts` and this
+ * chokepoint). The `local` target (the user's own desktop) bypasses this
+ * server entirely for file operations — see `apps/desktop`'s `LocalFileCtr.ts`
+ * for that half of the fix. Cloud sandbox is intentionally excluded, same as
+ * command governance's sandbox scope: it's a one-shot isolated environment,
+ * only a command-text blacklist applies to it.
+ */
+const FILE_GOVERNANCE_API_NAMES = new Set<string>([
+  LocalSystemApiName.writeFile,
+  LocalSystemApiName.editFile,
+  LocalSystemApiName.moveFiles,
+  LocalSystemApiName.readFile,
+  LocalSystemApiName.listFiles,
+  LocalSystemApiName.searchFiles,
+  LocalSystemApiName.grepContent,
+  LocalSystemApiName.globFiles,
 ]);
 
 /**
@@ -96,6 +122,107 @@ const buildCommandGovernanceContext = (
     toolIdentifier: identifier,
     userId,
   };
+};
+
+/**
+ * Which arg(s) carry the path(s) to check, per file-governance API name —
+ * these are NOT uniform, and are the exact field names the MODEL sends (the
+ * manifest's declared parameters — see `packages/builtin-tool-local-system/src/manifest.ts`
+ * — not necessarily the same names the internal Electron IPC param types
+ * use, e.g. `editFile`'s manifest param is `file_path`, but
+ * `EditLocalFileParams.file_path` and `LocalSearchFilesParams.scope` differ
+ * from what other APIs call the same concept):
+ * - `writeFile`/`readFile`/`listFiles`: single `path`.
+ * - `editFile`: single `file_path`.
+ * - `moveFiles`: `items[]` of `{ oldPath, newPath }` — every item's BOTH
+ *   paths are governed, not just the first; a batch move must not let one
+ *   item's destination evade the check because another item in the same
+ *   call happened to pass.
+ * - `searchFiles`/`globFiles`: single `scope`.
+ * - `grepContent`: `scope`, with `path` as a legacy alias for the same thing
+ *   (checked too, in case an older caller still sends it) — see
+ *   `packages/electron-client-ipc/src/types/localSystem.ts`.
+ *
+ * Mirrors (does not reuse) `serverRuntimes/localSystem.ts`'s `WORKING_DIR_ARG`
+ * map, which distinguishes the same `cwd`- vs `scope`-injected API families.
+ */
+const resolveFileGovernancePaths = (apiName: string, args: Record<string, any>): string[] => {
+  switch (apiName) {
+    case LocalSystemApiName.editFile: {
+      return typeof args?.file_path === 'string' ? [args.file_path] : [];
+    }
+    case LocalSystemApiName.moveFiles: {
+      if (!Array.isArray(args?.items)) return [];
+      return args.items.flatMap((item: any) =>
+        [item?.oldPath, item?.newPath].filter(
+          (value: unknown): value is string => typeof value === 'string',
+        ),
+      );
+    }
+    case LocalSystemApiName.searchFiles:
+    case LocalSystemApiName.globFiles: {
+      return typeof args?.scope === 'string' ? [args.scope] : [];
+    }
+    case LocalSystemApiName.grepContent: {
+      return [args?.scope, args?.path].filter(
+        (value): value is string => typeof value === 'string',
+      );
+    }
+    default: {
+      // writeFile / readFile / listFiles
+      return typeof args?.path === 'string' ? [args.path] : [];
+    }
+  }
+};
+
+/**
+ * A relative path is resolved against `context.workingDirectory` before
+ * matching — `~/.ssh` never appears as a literal substring of a bare relative
+ * arg like `.ssh/config`, so skipping this would let a relative path evade a
+ * root that would otherwise match. This mirrors (but does not reuse — that
+ * resolution happens client/device-side) how `serverRuntimes/localSystem.ts`
+ * injects `context.workingDirectory` as `cwd` for these same APIs.
+ */
+const resolveAgainstWorkingDirectory = (
+  rawPath: string,
+  workingDirectory: string | undefined,
+): string => {
+  const isAbsolute =
+    rawPath.startsWith('/') || rawPath.startsWith('~') || /^[A-Z]:[/\\]/i.test(rawPath);
+  const trimmedCwd = workingDirectory?.replace(/[/\\]+$/, '');
+  return isAbsolute || !trimmedCwd ? rawPath : `${trimmedCwd}/${rawPath}`;
+};
+
+/**
+ * Resolve every {@link PathGovernanceContext} a tool call needs checked
+ * (usually one, `moveFiles` can be several), or an empty array when it isn't
+ * a governable file operation. Mirrors `buildCommandGovernanceContext` for
+ * `checkPath` instead of `checkCommand`.
+ */
+const buildFileGovernanceContexts = (
+  identifier: string,
+  apiName: string,
+  args: Record<string, any>,
+  context: ToolExecutionContext,
+  userId: string,
+): PathGovernanceContext[] => {
+  if (identifier !== LocalSystemIdentifier || !FILE_GOVERNANCE_API_NAMES.has(apiName)) {
+    return [];
+  }
+
+  const rawPaths = resolveFileGovernancePaths(apiName, args);
+  if (rawPaths.length === 0) return [];
+
+  const executionTarget = resolveCommandExecutionTarget(identifier, context);
+
+  return rawPaths.map((rawPath) => ({
+    apiName,
+    deviceId: context.activeDeviceId,
+    executionTarget,
+    path: resolveAgainstWorkingDirectory(rawPath, context.workingDirectory),
+    toolIdentifier: identifier,
+    userId,
+  }));
 };
 
 /**
@@ -338,7 +465,62 @@ export class BuiltinToolsExecutor implements IToolExecutor {
       }
     }
 
+    // File-path governance: gate file-operation calls only (see
+    // `buildFileGovernanceContexts`). Parallel to, and independent of,
+    // command governance above — an API name is never in both
+    // `COMMAND_EXECUTION_API_NAMES` and `FILE_GOVERNANCE_API_NAMES`, so a call
+    // can trigger at most one of the two checks.
+    //
+    // A call can carry more than one path to check (`moveFiles`'s `items[]`) —
+    // every one of them is checked before any is allowed through, so a batch
+    // call can never let one item's path evade the check because a sibling
+    // item in the same call already passed.
+    const fileGovernanceContexts = buildFileGovernanceContexts(
+      identifier,
+      apiName,
+      args,
+      context,
+      this.userId,
+    );
+
+    for (const candidate of fileGovernanceContexts) {
+      const decision = await checkPath(candidate, this.db);
+
+      if (!decision.allowed) {
+        log(
+          'Blocked file access for %s:%s (field %s): %s',
+          identifier,
+          apiName,
+          decision.matchedField,
+          candidate.path,
+        );
+
+        try {
+          await logCommandExecution(
+            candidate,
+            { blocked: true, matchedField: decision.matchedField },
+            this.db,
+          );
+        } catch (auditError) {
+          log('Failed to record blocked-file-access audit log: %O', auditError);
+        }
+
+        return {
+          content: FILE_BLOCKED_MESSAGE,
+          error: { code: 'FILE_ACCESS_BLOCKED', message: FILE_BLOCKED_MESSAGE },
+          success: false,
+        };
+      }
+    }
+    // Every candidate path passed — the first one stands in for the whole
+    // call in the success/failure audit row below (mirrors the "one row per
+    // governed tool call" shape `command_execution_logs` already has; a
+    // multi-path call's other paths were still individually checked above,
+    // just not each individually logged).
+    const fileGovernance = fileGovernanceContexts[0];
+
     const commandGovernanceStartedAt = commandGovernance ? Date.now() : undefined;
+    const fileGovernanceStartedAt = fileGovernance ? Date.now() : undefined;
 
     try {
       // Install a sink for runtimes whose Work registration is a side-effect
@@ -364,6 +546,22 @@ export class BuiltinToolsExecutor implements IToolExecutor {
           );
         } catch (auditError) {
           log('Failed to record command execution audit log: %O', auditError);
+        }
+      }
+
+      if (fileGovernance) {
+        try {
+          await logCommandExecution(
+            fileGovernance,
+            {
+              blocked: false,
+              durationMs: Date.now() - fileGovernanceStartedAt!,
+              success: result.success,
+            },
+            this.db,
+          );
+        } catch (auditError) {
+          log('Failed to record file access audit log: %O', auditError);
         }
       }
 
@@ -410,6 +608,23 @@ export class BuiltinToolsExecutor implements IToolExecutor {
           );
         } catch (auditError) {
           log('Failed to record command execution audit log: %O', auditError);
+        }
+      }
+
+      if (fileGovernance) {
+        try {
+          await logCommandExecution(
+            fileGovernance,
+            {
+              blocked: false,
+              durationMs: Date.now() - fileGovernanceStartedAt!,
+              errorMessage: error.message,
+              success: false,
+            },
+            this.db,
+          );
+        } catch (auditError) {
+          log('Failed to record file access audit log: %O', auditError);
         }
       }
 

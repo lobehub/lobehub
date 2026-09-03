@@ -24,6 +24,8 @@ export const insertLog = async (db: LobeChatDatabase, params: InsertLogParams): 
     errorMessage: params.outcome.errorMessage,
     executionTarget: params.executionTarget,
     matchedRuleId: params.outcome.matchedRuleId,
+    path: params.path,
+    policyField: params.outcome.matchedField,
     success: params.outcome.success,
     toolIdentifier: params.toolIdentifier,
     userId: params.userId,

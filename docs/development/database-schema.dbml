@@ -955,9 +955,11 @@ table command_execution_logs {
   device_id text
   tool_identifier text [not null]
   api_name text [not null]
-  command_text text [not null]
+  command_text text
   blocked boolean [not null]
   matched_rule_id uuid
+  path text
+  policy_field text
   success boolean
   error_message text
   duration_ms integer
