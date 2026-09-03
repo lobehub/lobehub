@@ -11,7 +11,6 @@ import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { type FileListItem } from '@/types/files';
 
 import { isPdfFile } from './fileType';
-import { VERILOG_FILE_EXTENSIONS, VERILOG_FILE_MIME_TYPES } from './verilogSupport';
 import NotSupport from './NotSupport';
 import CodeViewer from './Renderer/Code';
 import HTMLViewer from './Renderer/HTML';
@@ -21,6 +20,7 @@ import MSDocViewer from './Renderer/MSDoc';
 import type { PDFViewerProps } from './Renderer/PDF';
 import { preloadPDFRenderer } from './Renderer/PDF/loader';
 import VideoViewer from './Renderer/Video';
+import { VERILOG_FILE_EXTENSIONS, VERILOG_FILE_MIME_TYPES } from './verilogSupport';
 
 // File type definitions
 const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'];
