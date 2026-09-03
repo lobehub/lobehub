@@ -108,6 +108,10 @@ vi.mock('./MessageContent', () => ({
 }));
 
 vi.mock('../../../store', () => ({
+  contextSelectors: {
+    agentId: () => undefined,
+    topicId: () => undefined,
+  },
   dataSelectors: {
     getDisplayMessageById: () => () => ({ parentId: 'user-1' }),
   },

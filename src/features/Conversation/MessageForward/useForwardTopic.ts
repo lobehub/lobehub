@@ -9,10 +9,11 @@ import type { ForwardTarget } from '@/store/chat/slices/forward/action';
 
 interface ForwardTopicSource {
   agentId: string;
+  onSuccess?: () => void;
   topicId: string;
 }
 
-export const useForwardTopic = ({ agentId, topicId }: ForwardTopicSource) => {
+export const useForwardTopic = ({ agentId, onSuccess, topicId }: ForwardTopicSource) => {
   const { t } = useTranslation('chat');
 
   const navigate = useWorkspaceAwareNavigate();
@@ -40,6 +41,7 @@ export const useForwardTopic = ({ agentId, topicId }: ForwardTopicSource) => {
       })
         .then((result) => {
           if (result.succeeded.length > 0) {
+            onSuccess?.();
             toast.success(
               targets.length === 1
                 ? t('messageForward.success', { title: primaryTarget.title || '' })
@@ -50,6 +52,6 @@ export const useForwardTopic = ({ agentId, topicId }: ForwardTopicSource) => {
         })
         .catch(() => toast.error(t('messageForward.topic.loadFailed')));
     },
-    [agentId, clearPortalStack, forwardTopic, navigate, t, topicId],
+    [agentId, clearPortalStack, forwardTopic, navigate, onSuccess, t, topicId],
   );
 };

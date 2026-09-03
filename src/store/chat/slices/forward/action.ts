@@ -1,6 +1,7 @@
 import type { UIChatMessage } from '@lobechat/types';
 
 import { agentService } from '@/services/agent';
+import { messageService } from '@/services/message';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import type { ChatStore } from '@/store/chat/store';
@@ -96,14 +97,17 @@ export class ChatForwardActionImpl {
   };
 
   forwardTopic = async ({
+    header,
     topicId,
     note,
     onTopicCreated,
+    roleLabel,
+    sourceAgentId,
     targets,
   }: ForwardTopicParams): Promise<ForwardResult> => {
     if (targets.length === 0) return { failed: [], succeeded: [] };
 
-    const instruction = [
+    const cliInstruction = [
       `Use the LobeHub CLI to read the full conversation history for topic ${topicId}:`,
       '',
       `lh topic view ${topicId} -L 500`,
@@ -113,17 +117,33 @@ export class ChatForwardActionImpl {
     ]
       .filter(Boolean)
       .join('\n');
+    let transcriptPromise: Promise<string> | undefined;
+    const getTranscript = () => {
+      transcriptPromise ??= messageService
+        .getMessages({ agentId: sourceAgentId, topicId })
+        .then((messages) => {
+          const transcript = buildForwardedContent(messages, { header, roleLabel });
+          return note?.trim() ? `${transcript}\n\n${note.trim()}` : transcript;
+        });
+      return transcriptPromise;
+    };
     const settled = await Promise.allSettled(
       targets.map(async (target) => {
-        if (!agentSelectors.getAgentConfigById(target.id)(getAgentStoreState())) {
-          const config = await agentService.getAgentConfigById(target.id);
-          if (!config) throw new Error(`Forwarding target agent not found: ${target.id}`);
-          getAgentStoreState().internal_dispatchAgentMap(target.id, config);
+        let config = agentSelectors.getAgentConfigById(target.id)(getAgentStoreState());
+        if (!config) {
+          const fetchedConfig = await agentService.getAgentConfigById(target.id);
+          if (!fetchedConfig) throw new Error(`Forwarding target agent not found: ${target.id}`);
+          config = fetchedConfig;
+          getAgentStoreState().internal_dispatchAgentMap(target.id, fetchedConfig);
         }
+
+        const content = config.agencyConfig?.heterogeneousProvider
+          ? cliInstruction
+          : await getTranscript();
 
         const result = await this.#get().sendMessage({
           context: { agentId: target.id, isNew: true, isolatedTopic: true, scope: 'main' },
-          message: instruction,
+          message: content,
           messages: [],
           onTopicCreated: (createdTopicId) => onTopicCreated?.(target, createdTopicId),
         });
