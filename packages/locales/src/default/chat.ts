@@ -1910,6 +1910,8 @@ export default {
   'goalProcess.graph.view.all': 'Full map',
   'goalProcess.graph.fullscreen': 'Fullscreen',
   'goalProcess.graph.exitFullscreen': 'Exit fullscreen',
+  'goalProcess.graph.legend.hide': 'Hide this kind on the map',
+  'goalProcess.graph.legend.show': 'Show this kind on the map',
   'goalProcess.edge.investigates': 'investigates',
   'goalProcess.edge.produces': 'produces',
   'goalProcess.edge.supports': 'supports',

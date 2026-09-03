@@ -560,6 +560,8 @@
   "goalProcess.gate.title.recoverTask": "决定失败任务的去向",
   "goalProcess.graph.exitFullscreen": "退出全屏",
   "goalProcess.graph.fullscreen": "全屏",
+  "goalProcess.graph.legend.hide": "在图中隐藏这类节点",
+  "goalProcess.graph.legend.show": "在图中显示这类节点",
   "goalProcess.graph.title": "探索图",
   "goalProcess.graph.view.all": "全图",
   "goalProcess.graph.view.stage": "当前阶段",

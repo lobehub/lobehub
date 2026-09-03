@@ -560,6 +560,8 @@
   "goalProcess.gate.title.recoverTask": "Decide what happens to the failed task",
   "goalProcess.graph.exitFullscreen": "Exit fullscreen",
   "goalProcess.graph.fullscreen": "Fullscreen",
+  "goalProcess.graph.legend.hide": "Hide this kind on the map",
+  "goalProcess.graph.legend.show": "Show this kind on the map",
   "goalProcess.graph.title": "Exploration map",
   "goalProcess.graph.view.all": "Full map",
   "goalProcess.graph.view.stage": "Current stage",
