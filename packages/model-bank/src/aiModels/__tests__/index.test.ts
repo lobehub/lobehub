@@ -123,6 +123,33 @@ describe('OpenAI audio models', () => {
   });
 });
 
+describe('OpenCode Go models', () => {
+  it('registers the Muse Spark Contributor series', () => {
+    const models = LOBE_DEFAULT_MODEL_LIST.filter(
+      (model) =>
+        model.providerId === ModelProvider.OpenCodeCodingPlan && model.id.startsWith('muse-spark-'),
+    );
+
+    expect(models.map(({ id }) => id)).toEqual([
+      'muse-spark-1.2-contributor',
+      'muse-spark-1.3-contributor',
+    ]);
+    expect(models.find(({ id }) => id === 'muse-spark-1.3-contributor')).toEqual(
+      expect.objectContaining({
+        abilities: expect.objectContaining({
+          functionCall: true,
+          reasoning: true,
+          structuredOutput: true,
+          vision: true,
+        }),
+        contextWindowTokens: 1_048_576,
+        enabled: true,
+        maxOutput: 131_072,
+      }),
+    );
+  });
+});
+
 describe('Moonshot models', () => {
   it('advertises Kimi K3 reasoning effort controls', () => {
     const kimiK3 = LOBE_DEFAULT_MODEL_LIST.find(

@@ -61,6 +61,7 @@ interface ModelsCache {
    */
   interleavedIds: Set<string>;
   modelsDev: Record<string, ModelsDevModel>;
+  responsesIds: Set<string>;
 }
 
 // Fallback: models that need Anthropic SDK (used when models.dev is unavailable)
@@ -81,6 +82,13 @@ const FALLBACK_INTERLEAVED_IDS: ReadonlySet<string> = new Set([
   'mimo-v2.5-pro',
 ]);
 
+// Fallback: models that require OpenAI's Responses API when models.dev is
+// unreachable. Mirrors OpenCode Go's documented endpoint matrix.
+const FALLBACK_RESPONSES_IDS: ReadonlySet<string> = new Set([
+  'muse-spark-1.2-contributor',
+  'muse-spark-1.3-contributor',
+]);
+
 let cachedModelsData: ModelsCache | null = null;
 
 // ============================================================================
@@ -90,6 +98,7 @@ let cachedModelsData: ModelsCache | null = null;
 /**
  * Fetch models.dev data and derive all per-provider fields from it:
  *   - `anthropicModels`  (models whose `provider.npm` is the Anthropic SDK)
+ *   - `responsesIds`     (models whose `provider.npm` is the OpenAI SDK)
  *   - `interleavedIds`   (models with `interleaved.field` set, needing
  *                         special reasoning_content handling)
  *   - `modelsDev`        (raw model map for enrichment)
@@ -113,19 +122,25 @@ const fetchModelsDevData = async (): Promise<ModelsCache> => {
     const anthropicModels = Object.values(models)
       .filter((m) => m.provider?.npm === '@ai-sdk/anthropic')
       .map((m) => m.id);
+    const responsesIds = new Set(
+      Object.values(models)
+        .filter((m) => m.provider?.npm === '@ai-sdk/openai')
+        .map((m) => m.id),
+    );
 
     const interleavedIds = new Set<string>();
     for (const m of Object.values(models)) {
       if (m?.interleaved?.field) interleavedIds.add(m.id);
     }
 
-    cachedModelsData = { anthropicModels, interleavedIds, modelsDev: models };
+    cachedModelsData = { anthropicModels, interleavedIds, modelsDev: models, responsesIds };
     return cachedModelsData;
   } catch {
     cachedModelsData = {
       anthropicModels: [],
       interleavedIds: new Set(),
       modelsDev: {},
+      responsesIds: new Set(),
     };
     return cachedModelsData;
   }
@@ -142,6 +157,13 @@ const getInterleavedModelIds = (): ReadonlySet<string> => {
     return cachedModelsData.interleavedIds;
   }
   return FALLBACK_INTERLEAVED_IDS;
+};
+
+const getResponsesModelIds = (): ReadonlySet<string> => {
+  if (cachedModelsData && cachedModelsData.responsesIds.size > 0) {
+    return cachedModelsData.responsesIds;
+  }
+  return FALLBACK_RESPONSES_IDS;
 };
 
 /**
@@ -307,13 +329,17 @@ export const sanitizeJsonSchema = (schema: any): any => {
 // ============================================================================
 
 /**
- * Build OpenAI-compatible payload with reasoning_content handling.
- * Applies to models with interleaved reasoning_content and Kimi K2.x models.
+ * Select Responses-only models and build OpenAI-compatible payloads with
+ * reasoning_content handling for interleaved and Kimi K2.x models.
  */
 const buildOpenAIPayload = (
   payload: ChatStreamPayload,
 ): OpenAI.ChatCompletionCreateParamsStreaming => {
   const model = payload.model;
+  if (getResponsesModelIds().has(model)) {
+    return { ...payload, apiMode: 'responses' } as OpenAI.ChatCompletionCreateParamsStreaming;
+  }
+
   const isKimi = isKimiThinkingToggleModel(model);
   const interleaved = isInterleavedModel(model);
 
