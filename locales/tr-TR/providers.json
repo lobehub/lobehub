@@ -58,7 +58,6 @@
   "qwen.description": "Qwen, Alibaba Cloud’un güçlü anlama ve üretim yeteneklerine sahip büyük ölçekli dil modelidir. Soru-cevap, yazım, görüş bildirme ve kodlama gibi birçok alanda çalışır.",
   "replicate.description": "Replicate, FLUX ve Stable Diffusion gibi açık kaynaklı görsel modelleri basit bir bulut API’si aracılığıyla çalıştırır.",
   "sambanova.description": "SambaNova Cloud, geliştiricilerin en iyi açık kaynaklı modelleri son derece hızlı çıkarım ile kullanmasına olanak tanır.",
-  "search1api.description": "Search1API, web bağlantısı seçeneğiyle birlikte DeepSeek modellerine erişim sağlar. Farklı parametre boyutlarında standart ve hızlı varyantlar sunar.",
   "sensenova.description": "SenseNova, SenseTime altyapısıyla desteklenen verimli ve kullanımı kolay tam yığın LLM hizmetleri sunar.",
   "siliconcloud.description": "SiliconCloud, güçlü açık kaynaklı temel modeller üzerine inşa edilmiş uygun maliyetli bir üretken yapay zeka bulut hizmetidir.",
   "spark.description": "iFLYTEK Spark, çok dilli güçlü yapay zeka yetenekleriyle akıllı donanım, sağlık, finans ve diğer dikey alanlarda yenilikler sağlar.",

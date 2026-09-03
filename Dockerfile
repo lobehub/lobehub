@@ -312,8 +312,8 @@ ENV \
     QWEN_API_KEY="" QWEN_MODEL_LIST="" QWEN_PROXY_URL="" \
     # SambaNova
     SAMBANOVA_API_KEY="" SAMBANOVA_MODEL_LIST="" \
-    # Search1API
-    SEARCH1API_API_KEY="" SEARCH1API_MODEL_LIST="" \
+    # Search1API search and crawler
+    SEARCH1API_API_KEY="" \
     # SenseNova
     SENSENOVA_API_KEY="" SENSENOVA_MODEL_LIST="" \
     # SiliconCloud

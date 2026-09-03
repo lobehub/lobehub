@@ -60,7 +60,6 @@ import QiniuProvider from './qiniu';
 import QwenProvider from './qwen';
 import ReplicateProvider from './replicate';
 import SambaNovaProvider from './sambanova';
-import Search1APIProvider from './search1api';
 import SenseNovaProvider from './sensenova';
 import SiliconCloudProvider from './siliconcloud';
 import SparkProvider from './spark';
@@ -136,7 +135,6 @@ export const LOBE_DEFAULT_MODEL_LIST: ChatModelCard[] = [
   InternLMProvider.chatModels,
   HigressProvider.chatModels,
   PPIOProvider.chatModels,
-  Search1APIProvider.chatModels,
   InfiniAIProvider.chatModels,
   QiniuProvider.chatModels,
   VercelAIGatewayProvider.chatModels,
@@ -210,7 +208,6 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   GiteeAIProvider,
   TaichuProvider,
   Ai360Provider,
-  Search1APIProvider,
   InfiniAIProvider,
   AkashChatProvider,
   QiniuProvider,
@@ -304,7 +301,6 @@ export { default as QiniuProviderCard } from './qiniu';
 export { default as QwenProviderCard } from './qwen';
 export { default as ReplicateProviderCard } from './replicate';
 export { default as SambaNovaProviderCard } from './sambanova';
-export { default as Search1APIProviderCard } from './search1api';
 export { default as SenseNovaProviderCard } from './sensenova';
 export { default as SiliconCloudProviderCard } from './siliconcloud';
 export { default as SparkProviderCard } from './spark';

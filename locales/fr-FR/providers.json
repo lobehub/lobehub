@@ -58,7 +58,6 @@
   "qwen.description": "Qwen est le grand modèle linguistique d'Alibaba Cloud, performant en compréhension et génération, couvrant les questions-réponses, la rédaction, l’expression d’opinions et le code dans de nombreux domaines.",
   "replicate.description": "Replicate exécute des modèles d’image open source comme FLUX et Stable Diffusion via une API cloud simple.",
   "sambanova.description": "SambaNova Cloud permet aux développeurs d’utiliser les meilleurs modèles open source avec une inférence extrêmement rapide.",
-  "search1api.description": "Search1API donne accès aux modèles DeepSeek avec connectivité web optionnelle, incluant des variantes standard et rapides de différentes tailles de paramètres.",
   "sensenova.description": "SenseNova propose des services LLM complets, efficaces et faciles à utiliser, soutenus par l’infrastructure de SenseTime.",
   "siliconcloud.description": "SiliconCloud est un service cloud GenAI économique basé sur des modèles open source robustes.",
   "spark.description": "iFLYTEK Spark propose une IA multilingue puissante dans divers domaines, favorisant l’innovation dans le matériel intelligent, la santé, la finance et d’autres secteurs.",

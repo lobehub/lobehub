@@ -58,7 +58,6 @@
   "qwen.description": "Qwen là mô hình ngôn ngữ quy mô lớn của Alibaba Cloud với khả năng hiểu và tạo nội dung mạnh mẽ, bao gồm hỏi đáp, viết, biểu đạt ý kiến và lập trình trong nhiều lĩnh vực.",
   "replicate.description": "Replicate chạy các mô hình hình ảnh mã nguồn mở như FLUX và Stable Diffusion thông qua API đám mây đơn giản.",
   "sambanova.description": "SambaNova Cloud cho phép nhà phát triển sử dụng các mô hình mã nguồn mở hàng đầu với tốc độ suy luận cực nhanh.",
-  "search1api.description": "Search1API cung cấp quyền truy cập vào các mô hình DeepSeek với tùy chọn kết nối web, bao gồm các biến thể tiêu chuẩn và nhanh với nhiều kích thước tham số.",
   "sensenova.description": "SenseNova cung cấp dịch vụ LLM toàn diện, hiệu quả và dễ sử dụng, được hỗ trợ bởi hạ tầng của SenseTime.",
   "siliconcloud.description": "SiliconCloud là dịch vụ đám mây GenAI tiết kiệm chi phí, xây dựng trên các mô hình mã nguồn mở mạnh mẽ.",
   "spark.description": "iFLYTEK Spark cung cấp AI đa ngôn ngữ mạnh mẽ trên nhiều lĩnh vực, thúc đẩy đổi mới trong phần cứng thông minh, y tế, tài chính và các ngành dọc khác.",

@@ -58,7 +58,6 @@
   "qwen.description": "Qwenは、Alibaba Cloudが開発した大規模言語モデルで、Q&A、文章生成、意見表現、コード生成など多分野にわたる理解と生成能力を備えています。",
   "replicate.description": "Replicateは、FLUXやStable Diffusionなどのオープンソース画像モデルを、シンプルなクラウドAPIで実行できます。",
   "sambanova.description": "SambaNova Cloudは、開発者が高速推論でトップクラスのオープンソースモデルを利用できるクラウドサービスです。",
-  "search1api.description": "Search1APIは、DeepSeekモデルへのアクセスを提供し、標準版と高速版を含む複数のパラメータサイズでWeb接続の有無を選択可能です。",
   "sensenova.description": "SenseNovaは、SenseTimeのインフラを基盤に、効率的で使いやすいフルスタックLLMサービスを提供します。",
   "siliconcloud.description": "SiliconCloudは、強力なオープンソースモデルを基盤とした、コスト効率の高い生成AIクラウドサービスです。",
   "spark.description": "iFLYTEK Sparkは、スマートハードウェア、医療、金融などの分野で革新を可能にする、強力な多言語AIを提供します。",

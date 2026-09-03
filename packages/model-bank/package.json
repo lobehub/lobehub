@@ -68,7 +68,6 @@
     "./qwen": "./src/aiModels/qwen.ts",
     "./replicate": "./src/aiModels/replicate.ts",
     "./sambanova": "./src/aiModels/sambanova.ts",
-    "./search1api": "./src/aiModels/search1api.ts",
     "./sensenova": "./src/aiModels/sensenova.ts",
     "./siliconcloud": "./src/aiModels/siliconcloud.ts",
     "./spark": "./src/aiModels/spark.ts",

@@ -58,7 +58,6 @@
   "qwen.description": "Qwen 是阿里云的大规模语言模型，具备强大的理解与生成能力，覆盖问答、写作、观点表达与代码等多个领域。",
   "replicate.description": "Replicate 通过简单的云 API 运行开源图像模型，如 FLUX 与 Stable Diffusion。",
   "sambanova.description": "SambaNova Cloud 让开发者以极快速度使用顶级开源模型进行推理。",
-  "search1api.description": "Search1API 提供 DeepSeek 模型访问，支持可选联网功能，涵盖多个参数规模的标准与极速版本。",
   "sensenova.description": "SenseNova 基于商汤基础设施，提供高效、易用的全栈大模型服务。",
   "siliconcloud.description": "SiliconCloud 是基于强大开源模型构建的高性价比生成式 AI 云服务。",
   "spark.description": "讯飞星火提供强大的多语言 AI 能力，广泛应用于智能硬件、医疗、金融等垂直领域，推动创新发展。",
