@@ -248,16 +248,6 @@ export class FileModel {
     });
   }
 
-  /** Internal storage cleanup may need the backing key of a trashed file. */
-  static async getFileByIdIncludingTrashed(
-    db: LobeChatDatabase,
-    id: string,
-  ): Promise<FileItem | undefined> {
-    return db.query.files.findFirst({
-      where: eq(files.id, id),
-    });
-  }
-
   create = async (
     params: Omit<NewFile, 'id' | 'userId'> & {
       id?: string;

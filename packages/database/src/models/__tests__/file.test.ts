@@ -1837,7 +1837,7 @@ describe('FileModel', () => {
       expect(result).toBeUndefined();
     });
 
-    it('hides trashed files from public lookup while internal cleanup can still resolve them', async () => {
+    it('hides trashed files from public lookup', async () => {
       const { id } = await fileModel.create({
         fileType: 'text/plain',
         name: 'trashed-file.txt',
@@ -1847,7 +1847,6 @@ describe('FileModel', () => {
       await fileModel.softDelete([id], { deletedAt: new Date() });
 
       expect(await FileModel.getFileById(serverDB, id)).toBeUndefined();
-      expect(await FileModel.getFileByIdIncludingTrashed(serverDB, id)).toMatchObject({ id });
     });
   });
 
