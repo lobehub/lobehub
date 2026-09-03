@@ -169,12 +169,30 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   // Keep the SWR handle only for `error` + `mutate` (the error/Retry state).
   // Every scope splits automated work out of the ordinary tab — it is the
   // scheduled tab's content, and listing it twice makes the split meaningless.
+  // `complete`: this tab groups and sorts client-side with no pagination, so
+  // it needs the whole list — one server page would drop every task older
+  // than the newest 50 once the workspace grows past that. The scheduled and
+  // "My tasks" tabs render their own paginated collections, so the fetch is
+  // gated to the ordinary tab; and the kanban view fetches its own server
+  // groups, so there only the single page behind the empty-hero decision runs.
+  const isListView = viewMode !== 'kanban';
   const { error, isLoading, mutate } = useFetchTaskList(
     projectId
-      ? { automated: false, projectId, visibility: 'all' }
+      ? {
+          automated: false,
+          complete: isListView,
+          enabled: isOrdinaryCollection,
+          projectId,
+          visibility: 'all',
+        }
       : agentId
-        ? { agentId, automated: false }
-        : { allAgents: true, automated: false },
+        ? { agentId, automated: false, complete: isListView, enabled: isOrdinaryCollection }
+        : {
+            allAgents: true,
+            automated: false,
+            complete: isListView,
+            enabled: isOrdinaryCollection,
+          },
   );
   // Drive the loading/empty boundary off the store's own init flag, NOT SWR's
   // per-key `data`. On a scope (agent ↔ all) or visibility switch the store

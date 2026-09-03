@@ -464,6 +464,7 @@
   "serverVersionOutdated.warning": "Sommige functies werken mogelijk niet goed of gedragen zich onverwacht. Werk je server bij voor de beste ervaring.",
   "setting": "Instellingen",
   "share": "Delen",
+  "stillLoading": "Nog steeds aan het laden...",
   "stop": "Stoppen",
   "switch": "Schakelaar",
   "sync.actions.settings": "Synchronisatie-instellingen",

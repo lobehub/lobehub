@@ -836,6 +836,7 @@
   "lobehub.gemini-3.5-flash.description": "Hız için tasarlanmış Gemini'nin en akıllı modeli, ileri düzey zeka ile üstün arama ve dayanak oluşturmayı birleştirir.",
   "lobehub.gemini-3.6-flash.description": "Gemini 3.6 Flash, hız ile zekayı dengeleyerek güçlü otonom, kodlama ve çok modlu performans sunar ve geliştirilmiş token verimliliği sağlar.",
   "lobehub.gemini-3.7-flash.description": "Gemini 3.7 Flash, Google'ın en yetenekli Flash modeli olup, karmaşık kodlama, etken iş akışları ve güvenilir çok aşamalı yürütme için tasarlanmıştır.",
+  "lobehub.gemini-3.8-flash.description": "Google'un en akıllı Flash modeli, uzun vadeli kodlama ve otonom ajanlar için optimize edilmiştir — 3.7 Flash'a göre aynı fiyata daha hızlı ilk token ve daha az ayrıntılı.",
   "lobehub.glm-5.1.description": "Zai'nin en son amiral gemisi modeli olup, genel ve kodlama yeteneklerinde Claude Opus 4.6 ile uyumludur. 8 saate kadar otonom çalışma ile uzun vadeli görevlerde mükemmeldir ve Otonom Ajanlar ve uzun vadeli Kodlama Ajanları için ideal bir temel oluşturur.",
   "lobehub.glm-5.2.description": "GLM-5.2, aynı dönemde piyasaya sürülen en son nesil Claude Opus performansına yaklaşan ilk açık kaynaklı modeldir.",
   "lobehub.glm-5.3-flash.description": "Görebilen ilk GLM-5 — GLM-5.2'den daha güçlü, Opus 4.8'e yaklaşan kodlama yeteneği, amiral gemisi fiyatının yaklaşık onda biri.",

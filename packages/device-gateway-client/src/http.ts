@@ -1,3 +1,7 @@
+import {
+  describeGatewayRequestFailure,
+  describeGatewayResponseFailure,
+} from './deviceTransportError';
 import type {
   DeviceSystemInfo,
   GatewayDevice,
@@ -37,6 +41,16 @@ export interface DeviceRpcResult<T = unknown> {
   error?: string;
   success: boolean;
 }
+
+/** Shape a described transport failure into the LLM-facing tool result. */
+const toFailedToolCallResult = (failure: {
+  content: string;
+  error: string;
+}): DeviceToolCallResult => ({
+  content: failure.content,
+  error: failure.error,
+  success: false,
+});
 
 export interface GatewayHttpClientOptions {
   gatewayUrl: string;
@@ -143,26 +157,30 @@ export class GatewayHttpClient {
       typeof params.timeout === 'number' && Number.isFinite(params.timeout)
         ? Math.max(Math.trunc(params.timeout), 0)
         : DEFAULT_GATEWAY_TOOL_CALL_TIMEOUT_MS;
-    const res = await this.post(
-      '/api/device/tool-call',
-      {
-        deviceId: params.deviceId,
-        operationId: params.operationId,
-        timeout: params.timeout,
-        toolCall,
-        userId: params.userId,
-        workspaceId: params.workspaceId,
-      },
-      { timeout: timeout + HTTP_CALL_TIMEOUT_PADDING_MS },
-    );
+    let res: Response;
+    try {
+      res = await this.post(
+        '/api/device/tool-call',
+        {
+          deviceId: params.deviceId,
+          operationId: params.operationId,
+          timeout: params.timeout,
+          toolCall,
+          userId: params.userId,
+          workspaceId: params.workspaceId,
+        },
+        { timeout: timeout + HTTP_CALL_TIMEOUT_PADDING_MS },
+      );
+    } catch (error) {
+      // A client-side deadline or an unreachable gateway host used to escape as
+      // a raw `TimeoutError` / `fetch failed`, which reads to the model as if
+      // the tool itself blew up. Describe the hop that actually failed instead.
+      return toFailedToolCallResult(describeGatewayRequestFailure(error, 'tool call'));
+    }
 
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      return {
-        content: `Device tool call failed (HTTP ${res.status})`,
-        error: text || `HTTP ${res.status}`,
-        success: false,
-      };
+      return toFailedToolCallResult(describeGatewayResponseFailure(res.status, text, 'tool call'));
     }
 
     const data = await res.json();
@@ -201,11 +219,8 @@ export class GatewayHttpClient {
 
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      return {
-        content: `Device message API call failed (HTTP ${res.status})`,
-        error: text || `HTTP ${res.status}`,
-        success: false,
-      };
+      const failure = describeGatewayResponseFailure(res.status, text, 'message API call');
+      return { content: failure.content, error: failure.error, success: false };
     }
 
     const data = await res.json();
@@ -247,7 +262,10 @@ export class GatewayHttpClient {
     const res = await this.post('/api/device/agent/run', params);
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      return { error: text || `HTTP ${res.status}`, success: false };
+      return {
+        error: describeGatewayResponseFailure(res.status, text, 'agent run').error,
+        success: false,
+      };
     }
     const data = await res.json().catch(() => null);
     if (data && (data.success === false || data.status === 'rejected')) {
@@ -290,7 +308,10 @@ export class GatewayHttpClient {
 
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      return { error: text || `HTTP ${res.status}`, success: false };
+      return {
+        error: describeGatewayResponseFailure(res.status, text, 'RPC call').error,
+        success: false,
+      };
     }
 
     const data = await res.json();

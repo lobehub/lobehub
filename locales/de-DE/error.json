@@ -126,6 +126,7 @@
   "transfer.ownerOnly": "Nur Workspace-Besitzer können Ressourcen übertragen, die von anderen Mitgliedern erstellt wurden.",
   "transfer.resourceNotFound": "Diese Ressource existiert nicht mehr oder Sie haben keinen Zugriff mehr darauf. Aktualisieren Sie die Seite und versuchen Sie es erneut.",
   "transfer.sameWorkspace": "Diese Ressource befindet sich bereits im ausgewählten Workspace. Wählen Sie ein anderes Ziel.",
+  "transfer.sharedTransferBlocked": "Dieser Agent hat einen Freigabelink, daher kann der Besitzer nicht geändert werden.",
   "transfer.targetIsCurrentOwner": "Dieser Agent gehört bereits diesem Mitglied. Wählen Sie jemand anderen aus.",
   "transfer.targetNoWriteAccess": "Sie benötigen Mitglieds- oder Besitzerzugriff, um Ressourcen in den Ziel-Workspace zu verschieben.",
   "transfer.targetNotWorkspaceMember": "Der ausgewählte Empfänger ist kein aktives Mitglied dieses Arbeitsbereichs. Aktualisieren Sie die Mitgliederliste und versuchen Sie es erneut.",

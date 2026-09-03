@@ -33,6 +33,13 @@ export interface TaskListSliceState {
    */
   listQueryAutomated?: boolean;
   /**
+   * Whether the data in `tasks` is the complete list (every page walked) or
+   * a single server page. Tracked for the same scope-reset reason as
+   * `listQueryAutomated`: flipping list ↔ kanban must not render the other
+   * variant's rows under the new variant's expectations.
+   */
+  listQueryComplete?: boolean;
+  /**
    * Status narrowing of the data in `tasks`, as an order-insensitive signature
    * (sorted, comma-joined) — undefined when the query is unnarrowed. Tracked
    * for the same scope-reset reason as `listQueryAutomated`.
@@ -53,6 +60,7 @@ export const initialTaskListSliceState: TaskListSliceState = {
   isTaskGroupListInit: false,
   isTaskListInit: false,
   listGroupBy: 'status',
+  listQueryComplete: false,
   listQueryVisibility: 'all',
   listVisibility: 'all',
   taskGroups: [],

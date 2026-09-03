@@ -12,6 +12,7 @@
   "table.columns.spend": "사용 크레딧",
   "table.columns.time": "시간",
   "table.columns.totalTokens": "토큰 사용량",
+  "table.columns.trigger.enums.agent_share": "에이전트 공유",
   "table.columns.trigger.enums.agent_signal": "에이전트 신호",
   "table.columns.trigger.enums.api": "API 호출",
   "table.columns.trigger.enums.bot": "봇 메시지",

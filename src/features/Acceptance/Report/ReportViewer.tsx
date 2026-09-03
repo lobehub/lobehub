@@ -825,7 +825,9 @@ const EvidenceItem = memo<{
           {label}
         </Text>
       )}
-      {description && !flat && (
+      {description && !flat && !isInlineProse && (
+        // Inline prose is excluded: its authored description becomes the fold
+        // row's title below, so a standalone line here would say it twice.
         <Text fontSize={13} type={'secondary'}>
           {description}
         </Text>
@@ -863,7 +865,13 @@ const EvidenceItem = memo<{
           />
         </div>
       ) : e.content && markdownTextEvidenceTypes.has(e.type) ? (
-        <CollapsibleMarkdownEvidence>{e.content}</CollapsibleMarkdownEvidence>
+        // Same dialect as the acceptance viewer: an authored alt/description
+        // becomes the fold row's title, not a supplement line below it. The
+        // raw description, not the caption filter — with no fileName the label
+        // IS the description, and the filter would null it out.
+        <CollapsibleMarkdownEvidence title={e.description ?? undefined}>
+          {e.content}
+        </CollapsibleMarkdownEvidence>
       ) : e.content ? (
         <div className={styles.evidenceText}>{e.content}</div>
       ) : (

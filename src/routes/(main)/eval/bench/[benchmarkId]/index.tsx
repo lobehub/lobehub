@@ -1,7 +1,6 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Card, Skeleton } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   Activity,
@@ -20,6 +19,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
+import { BenchmarkDetailLoading } from '@/features/Eval';
 import { runSelectors, useEvalStore } from '@/store/eval';
 
 import BenchmarkHeader from './features/BenchmarkHeader';
@@ -113,52 +113,8 @@ const BenchmarkDetail = memo(() => {
 
   if (!benchmark)
     return (
-      <Flexbox className={styles.container} gap={24} height="100%" width="100%">
-        {/* Header skeleton */}
-        <Flexbox gap={16}>
-          <Flexbox horizontal align="start" gap={12}>
-            <Skeleton.Avatar  shape="square" size={40} style={{ borderRadius: cssVar.borderRadiusLG }} />
-            <Flexbox flex={1} gap={8}>
-              <Skeleton.Input  style={{ height: 24, width: 200 }} />
-              <Skeleton.Input  size="small" style={{ height: 14, width: 320 }} />
-            </Flexbox>
-          </Flexbox>
-        </Flexbox>
-
-        {/* Stats cards skeleton */}
-        <Flexbox horizontal gap={12}>
-          {[1, 2, 3, 4].map((i) => (
-            <Card
-              key={i}
-              styles={{ body: { padding: 16 } }}
-              style={{
-                border: `1px solid ${cssVar.colorBorderSecondary}`,
-                borderRadius: cssVar.borderRadius,
-                flex: 1,
-                minWidth: 0,
-              }}
-            >
-              <Flexbox gap={12}>
-                <Flexbox horizontal align="center" gap={8}>
-                  <Skeleton.Avatar  shape="square"
-                  size={36}
-                  style={{ borderRadius: cssVar.borderRadius }} />
-                  <Skeleton.Input  size="small" style={{ height: 14, width: 80 }} />
-                </Flexbox>
-                <Flexbox gap={4}>
-                  <Skeleton.Input  style={{ height: 24, width: 60 }} />
-                  <Skeleton.Input  size="small" style={{ height: 12, width: 100 }} />
-                </Flexbox>
-              </Flexbox>
-            </Card>
-          ))}
-        </Flexbox>
-
-        {/* Section skeletons */}
-        <Skeleton.Input  style={{ height: 16, width: 80 }} />
-        <Skeleton.Input  style={{ height: 64, width: '100%' }} />
-        <Skeleton.Input  style={{ height: 16, width: 80 }} />
-        <Skeleton.Input  style={{ height: 64, width: '100%' }} />
+      <Flexbox aria-busy className={styles.container} gap={24} height="100%" width="100%">
+        <BenchmarkDetailLoading />
       </Flexbox>
     );
 

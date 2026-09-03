@@ -464,6 +464,7 @@
   "serverVersionOutdated.warning": "일부 기능이 제대로 작동하지 않거나 예기치 않게 동작할 수 있습니다. 최상의 사용을 위해 서버를 업데이트해 주세요.",
   "setting": "설정",
   "share": "공유",
+  "stillLoading": "여전히 로드 중...",
   "stop": "중지",
   "switch": "전환",
   "sync.actions.settings": "동기화 설정",

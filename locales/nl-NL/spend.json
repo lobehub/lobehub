@@ -12,6 +12,7 @@
   "table.columns.spend": "Credits",
   "table.columns.time": "Tijd",
   "table.columns.totalTokens": "Tokenverbruik",
+  "table.columns.trigger.enums.agent_share": "Agent Delen",
   "table.columns.trigger.enums.agent_signal": "Agent Signaal",
   "table.columns.trigger.enums.api": "API-oproep",
   "table.columns.trigger.enums.bot": "Botbericht",

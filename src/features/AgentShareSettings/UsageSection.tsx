@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Skeleton } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { SkeletonText, Text } from '@lobehub/ui/base-ui';
 import { Progress } from 'antd';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -54,7 +54,7 @@ const UsageSection = memo<UsageSectionProps>(({ agentId, monthlySpendLimit }) =>
   return (
     <Section desc={t('share.settings.usage.desc')} title={t('share.settings.usage.title')}>
       {isLoading ? (
-        <Skeleton active paragraph={{ rows: 2 }} title={false} />
+        <SkeletonText rows={2} />
       ) : hasLoadError ? (
         <AsyncError
           error={error}

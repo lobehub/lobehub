@@ -12,6 +12,7 @@
   "table.columns.spend": "クレジット",
   "table.columns.time": "時間",
   "table.columns.totalTokens": "トークン使用量",
+  "table.columns.trigger.enums.agent_share": "エージェント共有",
   "table.columns.trigger.enums.agent_signal": "エージェント信号",
   "table.columns.trigger.enums.api": "APIコール",
   "table.columns.trigger.enums.bot": "ボットメッセージ",

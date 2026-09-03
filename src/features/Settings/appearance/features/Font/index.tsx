@@ -2,8 +2,8 @@
 
 import { isDesktop } from '@lobechat/const';
 import type { FormGroupItemType } from '@lobehub/ui';
-import { Form, Skeleton } from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
+import { Flexbox, Form } from '@lobehub/ui';
+import { Select, Skeleton } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -23,6 +23,8 @@ const wrapperCol = {
     width: '100%',
   },
 };
+
+const loadingTextStyle = { marginBlock: 1.5 };
 
 const FontSettings = memo(() => {
   const { t } = useTranslation('setting');
@@ -50,7 +52,63 @@ const FontSettings = memo(() => {
     value: monospaceFontFamily,
   });
 
-  if (!isUserStateInit) return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
+  if (!isUserStateInit) {
+    const loadingFont: FormGroupItemType = {
+      children: [
+        ...(isDesktop
+          ? [
+              {
+                children: <Skeleton height={32} width={320} />,
+                desc: <Skeleton height={12} style={loadingTextStyle} width={240} />,
+                label: <Skeleton height={16} style={loadingTextStyle} width={96} />,
+                minWidth: undefined,
+              },
+              {
+                children: <Skeleton height={32} width={320} />,
+                desc: <Skeleton height={12} style={loadingTextStyle} width={280} />,
+                label: <Skeleton height={16} style={loadingTextStyle} width={128} />,
+                minWidth: undefined,
+              },
+            ]
+          : []),
+        {
+          children: (
+            <Flexbox gap={16} width={'100%'}>
+              <Flexbox gap={24}>
+                <Skeleton height={4} width={'100%'} />
+                <Flexbox horizontal align={'center'} justify={'space-between'}>
+                  <Skeleton height={14} width={12} />
+                  <Skeleton height={14} width={64} />
+                  <Skeleton height={14} width={12} />
+                </Flexbox>
+              </Flexbox>
+              <Flexbox justify={'center'} style={{ height: 30 }}>
+                <Skeleton height={16} style={{ maxWidth: '100%' }} width={400} />
+              </Flexbox>
+            </Flexbox>
+          ),
+          desc: <Skeleton height={12} style={loadingTextStyle} width={144} />,
+          label: <Skeleton height={16} style={loadingTextStyle} width={72} />,
+          layout: 'vertical',
+          minWidth: '100%',
+          wrapperCol,
+        },
+      ],
+      extra: <Skeleton height={16} width={136} />,
+      title: <Skeleton height={18} width={48} />,
+    };
+
+    return (
+      <Form
+        aria-busy
+        collapsible={false}
+        items={[loadingFont]}
+        itemsType={'group'}
+        variant={'filled'}
+        {...FORM_STYLE}
+      />
+    );
+  }
 
   const font: FormGroupItemType = {
     children: [
