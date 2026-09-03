@@ -3383,7 +3383,7 @@ When I am ___, I need ___
     'Configure agent metadata, model settings, plugins, and the system prompt',
   'tools.builtins.lobe-agent-builder.title': 'Agent Builder',
   'tools.builtins.lobe-agent-documents.description':
-    'Manage agent-scoped documents (list, create, read, edit, remove, rename) and load rules',
+    'Manage agent-scoped documents (list, create, read, edit, remove, rename) and load rules. Not for your uploaded files — see Knowledge Base for those.',
   'tools.builtins.lobe-agent-documents.title': 'Documents',
   'tools.builtins.lobe-agent-management.description': 'Create, manage, and orchestrate AI agents',
   'tools.builtins.lobe-agent-management.title': 'Agent Management',
@@ -3403,7 +3403,7 @@ When I am ___, I need ___
     'Orchestrate and manage multi-agent group conversations',
   'tools.builtins.lobe-group-management.title': 'Group Management',
   'tools.builtins.lobe-knowledge-base.description':
-    'Search uploaded documents and domain knowledge via semantic vector search — for persistent, reusable reference',
+    'Find, browse, and read your uploaded files, and search organized knowledge bases via semantic vector search',
   'tools.builtins.lobe-knowledge-base.title': 'Knowledge Base',
   'tools.builtins.lobe-message.description':
     'Send, read, edit, and manage messages across multiple messaging platforms with a unified interface',
