@@ -66,10 +66,12 @@ const AgentShareSettingsContent = memo<AgentShareSettingsContentProps>(({ agentI
             onEnable={enable}
             onUpdateSlug={updateSlug}
           />
-          {/* Turning sharing off keeps the row (and its config) so the link can
-              be resumed unchanged — but while it is off there is no audience to
-              configure, so only the on/off + link section stays. */}
-          {share?.visibility === 'link' && (
+          {/* Turning sharing off keeps the row (and its config) so the SAME link
+              resumes on re-enable. The config stays editable while paused on
+              purpose: re-enabling republishes whatever grants/limits are stored
+              at that instant, so an owner must be able to tighten them BEFORE
+              existing link holders regain access. */}
+          {share && (
             <>
               <UsageSection
                 agentId={agentId}
