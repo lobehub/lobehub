@@ -54,17 +54,30 @@ const SERVER_LLM_RETRY_POLICY = {
   noRetryProviders: [BRANDING_PROVIDER],
 };
 
-const BRANDING_NETWORK_EMPTY_COMPLETION_MAX_RETRIES = 3;
-const BRANDING_NETWORK_EMPTY_COMPLETION_MAX_ATTEMPTS =
-  BRANDING_NETWORK_EMPTY_COMPLETION_MAX_RETRIES + 1;
+const NETWORK_EMPTY_COMPLETION_MAX_RETRIES = 3;
+const NETWORK_EMPTY_COMPLETION_MAX_ATTEMPTS = NETWORK_EMPTY_COMPLETION_MAX_RETRIES + 1;
 
-const isRetryableBrandingNetworkEmptyCompletion = (error: unknown) => {
+/**
+ * A stream that died on the transport before the model produced anything: no
+ * content, no reasoning, no image, no tool call and — decisively — neither cost
+ * nor output tokens, so the attempt billed nothing.
+ *
+ * `ModelEmptyCompletion` is non-retryable by spec precisely because "a retry is
+ * a new, potentially billable provider request". That reasoning is what these
+ * diagnostics rule out, which is why this narrow shape may retry while every
+ * other empty completion still surfaces immediately.
+ *
+ * Deliberately provider-independent: the zero-output, zero-cost diagnostics
+ * carry the whole safety argument on their own. A BYOK stream dropping
+ * mid-flight is the same failure, and nothing about a first-party route makes
+ * an unbilled network drop more retryable than a third-party one.
+ */
+const isRetryableNetworkEmptyCompletion = (error: unknown) => {
   if (!(error instanceof ModelEmptyError)) return false;
 
   const diagnostics = error.diagnostics;
   return (
-    diagnostics?.provider === BRANDING_PROVIDER &&
-    diagnostics.finishReason === 'network_error' &&
+    diagnostics?.finishReason === 'network_error' &&
     diagnostics.contentLength === 0 &&
     diagnostics.reasoningLength === 0 &&
     diagnostics.imageCount === 0 &&
@@ -79,14 +92,23 @@ class ServerLLMRetryPolicy implements LLMRetryPolicy {
 
   classifyError(error: unknown) {
     const classified = classifyLLMError(error);
-    return isRetryableBrandingNetworkEmptyCompletion(error)
+    return isRetryableNetworkEmptyCompletion(error)
       ? { ...classified, kind: 'retry' as const }
       : classified;
   }
 
+  /**
+   * The executor fixes the attempt ceiling before any error exists, so it has to
+   * leave room for the error-driven network-empty budget below. Providers that
+   * already allow more keep their own ceiling; only a no-retry provider is
+   * lifted, and `resolveRetryBudget` still refuses every other error of theirs
+   * at the first attempt.
+   */
   maxAttempts(provider: string) {
-    if (provider === BRANDING_PROVIDER) return BRANDING_NETWORK_EMPTY_COMPLETION_MAX_ATTEMPTS;
-    return resolveLLMMaxAttempts(provider, SERVER_LLM_RETRY_POLICY);
+    return Math.max(
+      resolveLLMMaxAttempts(provider, SERVER_LLM_RETRY_POLICY),
+      NETWORK_EMPTY_COMPLETION_MAX_ATTEMPTS,
+    );
   }
 
   onError({ error }: LLMCallErrorInput) {
@@ -109,9 +131,7 @@ class ServerLLMRetryPolicy implements LLMRetryPolicy {
   }
 
   resolveRetryBudget(provider: string, error: unknown) {
-    if (isRetryableBrandingNetworkEmptyCompletion(error)) {
-      return BRANDING_NETWORK_EMPTY_COMPLETION_MAX_RETRIES;
-    }
+    if (isRetryableNetworkEmptyCompletion(error)) return NETWORK_EMPTY_COMPLETION_MAX_RETRIES;
     return resolveLLMRetryBudget(provider, SERVER_LLM_RETRY_POLICY);
   }
 

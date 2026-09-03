@@ -5481,7 +5481,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       ).toBe(false);
     });
 
-    it('should retry a no-usage branding empty completion caused by a network error once', async () => {
+    it('should retry a no-usage empty completion caused by a network error once', async () => {
       vi.useFakeTimers();
 
       const mockChat = vi
@@ -5539,7 +5539,60 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       }
     });
 
-    it('should stop after three retries when branding network empty completions continue', async () => {
+    it('should retry a third-party no-usage network empty completion too', async () => {
+      vi.useFakeTimers();
+
+      const mockChat = vi
+        .fn()
+        .mockImplementationOnce(async (_payload: any, options: any) => {
+          await options.callback.onCompletion?.({ finishReason: 'network_error', text: '' });
+          return new Response('done');
+        })
+        .mockImplementationOnce(async (_payload: any, options: any) => {
+          await options.callback.onText?.('recovered');
+          await options.callback.onCompletion?.({
+            finishReason: 'stop',
+            usage: { totalInputTokens: 10, totalOutputTokens: 2, totalTokens: 12 },
+          });
+          return new Response('done');
+        });
+
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ chat: mockChat } as any);
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      const instruction = {
+        payload: {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'gpt-5',
+          parentMessageId: 'parent-msg-123',
+          provider: 'openai',
+          tools: [],
+        },
+        type: 'call_llm' as const,
+      };
+
+      try {
+        const resultPromise = executors.call_llm!(instruction, state);
+
+        await vi.runOnlyPendingTimersAsync();
+
+        const result = await resultPromise;
+
+        // Nothing was produced and nothing was billed, so the drop is as
+        // retryable on a BYOK route as on the first-party one.
+        expect(mockChat).toHaveBeenCalledTimes(2);
+        expect(result.nextContext?.phase).toBe('llm_result');
+        expect(mockMessageModel.update).toHaveBeenCalledWith(
+          'msg-123',
+          expect.objectContaining({ content: 'recovered' }),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('should stop after three retries when network empty completions continue', async () => {
       vi.useFakeTimers();
 
       const mockChat = vi.fn().mockImplementation(async (_payload: any, options: any) => {
