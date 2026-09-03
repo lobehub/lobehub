@@ -285,14 +285,14 @@ To add a micro app:
    drift), run the invariant suite, and re-run `verify --env staging`.
 6. Verify with staging debug headers: `x-torii-target` / `x-torii-decision` per request, and
    test document + `.data` + unaffected routes.
-7. Rollback and previews live in 鳥居番's **Deploys** page, one picker per Worker the gateway
-   binds (`bindings.ts` in the gateway repo). **Releases** lists the production script's
-   Cloudflare deployments; a row is only rollbackable while its version is within Cloudflare's
-   100-upload window — which is the reason previews stay off the production script (§1).
-   **Previews** lists the `-preview` Worker's versions (PR label and actor come from the
-   `--message` stamp) with Open and **Send to staging**, which writes the preview host into the
-   staging config's `targetOverrides` for every target whose origin is that Worker. A new
-   micro app gets both tabs for free once its host is in `bindings.ts`.
+7. Rollback and previews live in 鳥居番's target detail pane, in a **Worker** card that every
+   target whose host is in the gateway repo's `bindings.ts` gets for free. **Releases** lists
+   the production script's Cloudflare deployments; a row is only rollbackable while its
+   version is within Cloudflare's 100-upload window — which is the reason previews stay off
+   the production script (§1). **Previews** lists the `-preview` Worker's versions (PR label
+   and actor come from the `--message` stamp) with Open and, under staging, **Send here**,
+   which fills the target's Override draft for the operator to Save. Adding a micro app to
+   `bindings.ts` is therefore part of wiring it into the gateway.
 
 Landmine (fixed 2026-08, stay aware): the lobehub-com `react-router-data` plugin owns `.data`
 protocol affinity for the landing pair; it consults `resolveRule` and lets other targets'
