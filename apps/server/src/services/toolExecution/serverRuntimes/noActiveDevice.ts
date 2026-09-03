@@ -26,7 +26,7 @@ import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
  *   folds back into run metadata at the next step boundary.
  * - When the picker is NOT reachable (device-locked run whose device went
  *   offline — the picker is physically stripped), the only path is the user
- *   reconnecting the desktop app, so the message says to tell the user.
+ *   reconnecting the desktop application or cli, so the message says to tell the user.
  */
 export const NO_ACTIVE_DEVICE_ERROR_CODE = 'NO_ACTIVE_DEVICE';
 
@@ -39,8 +39,8 @@ export const buildNoActiveDeviceResult = (
   } = {},
 ): { content: string; error: { code: string; message: string }; success: false } => {
   const recovery = remoteDeviceToolAvailable
-    ? `Call lobe-remote-device.listOnlineDevices to refresh the device list, then activateDevice with an online device id. The activation takes effect on the NEXT step — after it succeeds, retry this call. If no device is online, tell the user to open the desktop app and connect.`
-    : `This conversation is locked to a specific device that is currently offline — the device picker is not available. Tell the user to open the LobeHub desktop app and reconnect it, then retry.`;
+    ? `Call lobe-remote-device.listOnlineDevices to refresh the device list, then activateDevice with an online device id. The activation takes effect on the NEXT step — after it succeeds, retry this call. If no device is online, tell the user to connect the desktop application or cli.`
+    : `This conversation is locked to a specific device that is currently offline — the device picker is not available. Tell the user to reconnect the desktop application or cli, then retry.`;
 
   const message = `No active device for ${toolLabel} execution. ${recovery}`;
 

@@ -65,6 +65,7 @@ describe('localSystemRuntime', () => {
       expect(result.error).toMatchObject({ code: 'NO_ACTIVE_DEVICE' });
       expect(result.content).toContain('lobe-remote-device.listOnlineDevices');
       expect(result.content).toContain('activateDevice');
+      expect(result.content).toContain('desktop application or cli');
       // No device dispatch happened.
       expect(mockExecuteToolCall).not.toHaveBeenCalled();
     });
