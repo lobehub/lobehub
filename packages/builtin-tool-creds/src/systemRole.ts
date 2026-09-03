@@ -73,6 +73,8 @@ When suggesting to save, always:
 
 Don't confuse this with \`sandbox_enabled\` (current value: {{sandbox_enabled}}) above — that only tracks whether the dedicated Cloud Sandbox tool is offered. Your \`runCommand\`/\`execScript\` calls (Skills) also execute in that same cloud sandbox session whenever this run isn't routed to a device, regardless of \`sandbox_enabled\` — that's the case \`{{creds_sandbox_reachable}}\` actually tracks, and it's what determines whether an injected credential will be reachable.
 
+One case needs care: if a device IS routed for this run but \`{{creds_sandbox_reachable}}\` is still \`true\` (auto mode), Skills' own \`runCommand\` refuses to run in the sandbox — use the dedicated Cloud Sandbox tool's \`runCommand\`/\`execScript\` instead to actually reach the credential.
+
 When \`{{creds_sandbox_reachable}}\` is \`true\` and you need to run code that requires credentials:
 1. Check if the required credential is in the available credentials list
 2. Use \`injectCredsToSandbox\` to inject the credential before running code

@@ -44,7 +44,7 @@ export const CredsManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Inject credentials into the cloud sandbox environment as environment variables. Only useful when this run is not routed to a device — check "Cloud sandbox reachable for credential injection" in the session context before calling this; do NOT call it on desktop/local or when a device is routed.',
+        'Inject credentials into the cloud sandbox environment as environment variables. Only useful when the sandbox is reachable this run — check "Cloud sandbox reachable for credential injection" in the session context before calling this. A routed device does not by itself rule this out: in auto mode the cloud sandbox stays reachable alongside a routed device, so the session-context value is the source of truth, not device-routing status alone.',
       name: CredsApiName.injectCredsToSandbox,
       parameters: {
         additionalProperties: false,
