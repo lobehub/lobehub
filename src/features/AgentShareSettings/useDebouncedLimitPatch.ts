@@ -8,6 +8,19 @@ export type AgentShareLimitPatch = Pick<AgentShareConfigPatchInput, AgentShareLi
 const LIMIT_COMMIT_DELAY = 500;
 
 /**
+ * Which write path a flushed patch belongs to, given the identity the patch was
+ * scheduled under and the identity the component currently renders.
+ *
+ * `'previous'` means the flush was triggered BY the identity change itself, so
+ * the patch belongs to the agent that was just navigated away from and must not
+ * go through the (already re-scoped) shared write queue.
+ */
+export const resolveLimitCommitTarget = (
+  commitIdentity: string,
+  currentIdentity: string,
+): 'current' | 'previous' => (commitIdentity === currentIdentity ? 'current' : 'previous');
+
+/**
  * Debounces the numeric limit inputs into a single patch and flushes it on
  * unmount. One shared pending patch keeps one field from cancelling another,
  * and the unmount flush keeps closing the modal right after typing from
@@ -19,10 +32,16 @@ const LIMIT_COMMIT_DELAY = 500;
  * without this the refs below would carry agent A's still-pending edit into
  * agent B's `onCommit`. See {@link flush}'s call from the identity-change
  * check for how the previous identity's edit is drained before that happens.
+ *
+ * `onCommit` therefore receives the identity the patch was scheduled under as
+ * its second argument — the PREVIOUS one when the flush was triggered by an
+ * identity change. Callers must route such a patch to that identity's own
+ * write path instead of the (already re-scoped) shared one; see
+ * {@link resolveLimitCommitTarget}.
  */
 export const useDebouncedLimitPatch = (
   identityKey: string,
-  onCommit: (patch: AgentShareLimitPatch) => Promise<void> | void,
+  onCommit: (patch: AgentShareLimitPatch, commitIdentity: string) => Promise<void> | void,
   onSettled?: (patch: AgentShareLimitPatch) => void,
 ) => {
   const onCommitRef = useRef(onCommit);
@@ -40,7 +59,11 @@ export const useDebouncedLimitPatch = (
     if (Object.keys(patch).length === 0) return;
 
     const settle = onSettledRef.current;
-    void Promise.resolve(onCommitRef.current(patch))
+    // Not `identityKey`: `flush` is called from the identity-change check
+    // BEFORE `identityRef` is advanced, so this is exactly the identity the
+    // pending patch was scheduled under in every call path.
+    const commitIdentity = identityRef.current;
+    void Promise.resolve(onCommitRef.current(patch, commitIdentity))
       .catch(() => undefined)
       .finally(() => settle?.(patch));
   }, []);

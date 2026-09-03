@@ -3,12 +3,20 @@
 import { AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT } from '@lobechat/const';
 import { Flexbox } from '@lobehub/ui';
 import { InputNumber } from '@lobehub/ui/base-ui';
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSWRConfig } from 'swr';
+
+import { shareKeys } from '@/libs/swr/keys';
+import { agentShareService } from '@/services/agentShare';
 
 import { Section, SettingRow } from './SectionLayout';
 import type { AgentShareConfigPatch, AgentShareConfigState } from './useAgentShare';
-import { type AgentShareLimitPatch, useDebouncedLimitPatch } from './useDebouncedLimitPatch';
+import {
+  type AgentShareLimitPatch,
+  resolveLimitCommitTarget,
+  useDebouncedLimitPatch,
+} from './useDebouncedLimitPatch';
 
 type CountField = 'maxTopicsPerVisitor' | 'maxTurnsPerTopic';
 
@@ -25,6 +33,13 @@ interface LimitsSectionProps {
  */
 const LimitsSection = memo<LimitsSectionProps>(({ agentId, onChange, shareConfig }) => {
   const { t } = useTranslation('agent');
+  const { mutate } = useSWRConfig();
+  // Read at flush time, never closed over: `useDebouncedLimitPatch` keeps the
+  // PREVIOUS render's `commit` in a ref while it drains the identity-change
+  // flush, so that closure's captured `agentId` is still the old one. Only
+  // this ref — assigned before the hook runs — knows which agent is current.
+  const agentIdRef = useRef(agentId);
+  agentIdRef.current = agentId;
 
   // Typing must not fire a request per keystroke: the drafts hold the raw
   // input and the debounced patch commits only valid values. A draft entry is
@@ -49,7 +64,35 @@ const LimitsSection = memo<LimitsSectionProps>(({ agentId, onChange, shareConfig
     }
   }, []);
 
-  const schedule = useDebouncedLimitPatch(agentId, async (patch) => onChange(patch), settle);
+  const commit = useCallback(
+    async (patch: AgentShareLimitPatch, commitIdentity: string) => {
+      // The debounced patch was scheduled for the agent this section still
+      // renders: go through the shared queue so the optimistic projection and
+      // the SWR cache entry stay in lockstep with every other control.
+      if (resolveLimitCommitTarget(commitIdentity, agentIdRef.current) === 'current') {
+        await onChange(patch);
+        return;
+      }
+
+      // Flushed BECAUSE `agentId` just changed, so this patch belongs to the
+      // agent that was navigated away from. `onChange` would drop it: the
+      // parent `useAgentShare` already reset its refs for the new agent at
+      // render time, and `updateConfig` bails out on a missing base config.
+      // Send it straight to the service instead — this mirrors
+      // `useAgentShare`'s existing rule that a write issued for an abandoned
+      // identity is still SENT (the row it targets is unchanged), only its
+      // local bookkeeping is skipped. Revalidate that agent's own status key
+      // so its cached snapshot is not left behind the value just persisted.
+      try {
+        await agentShareService.updateShareConfig(commitIdentity, patch);
+      } finally {
+        void mutate(shareKeys.agentShareStatus(commitIdentity));
+      }
+    },
+    [mutate, onChange],
+  );
+
+  const schedule = useDebouncedLimitPatch(agentId, commit, settle);
 
   const handleCountChange = (field: CountField, value: number | null) => {
     setCountDraft((prev) => ({ ...prev, [field]: value }));
