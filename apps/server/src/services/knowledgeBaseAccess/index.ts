@@ -30,6 +30,11 @@ export interface RestrictedKnowledgeBasePolicy {
   trashedExclusiveFileIds: string[];
 }
 
+interface RestrictedKnowledgeBasePolicyOptions {
+  /** Include deleted documents for recycle-bin filtering. */
+  includeTrashedDocuments?: boolean;
+}
+
 interface RestrictedKnowledgeBaseState {
   allRestrictedKnowledgeBaseIds: string[];
   liveRestrictedKnowledgeBaseIds: string[];
@@ -192,14 +197,16 @@ const getRestrictedKnowledgeBaseState = async (
 
 export const getRestrictedKnowledgeBasePolicy = async (
   ctx: KnowledgeBaseAccessCtx,
+  options?: RestrictedKnowledgeBasePolicyOptions,
 ): Promise<RestrictedKnowledgeBasePolicy> => {
+  const workspaceId = ctx.workspaceId;
   const {
     allRestrictedKnowledgeBaseIds,
     liveRestrictedKnowledgeBaseIds,
     trashedRestrictedKnowledgeBaseIds,
   } = await getRestrictedKnowledgeBaseState(ctx);
 
-  if (trashedRestrictedKnowledgeBaseIds.length === 0) {
+  if (!workspaceId || trashedRestrictedKnowledgeBaseIds.length === 0) {
     return {
       allRestrictedKnowledgeBaseIds,
       liveRestrictedKnowledgeBaseIds,
@@ -214,6 +221,7 @@ export const getRestrictedKnowledgeBasePolicy = async (
     .where(inArray(knowledgeBaseFiles.knowledgeBaseId, trashedRestrictedKnowledgeBaseIds));
   const candidateFileIds = candidateRows.map((row) => row.fileId);
 
+  let browsableFileIds: string[] = [];
   let trashedExclusiveFileIds = candidateFileIds;
   if (candidateFileIds.length > 0) {
     const browsableRows = await ctx.serverDB
@@ -223,7 +231,7 @@ export const getRestrictedKnowledgeBasePolicy = async (
       .where(
         and(
           inArray(knowledgeBaseFiles.fileId, candidateFileIds),
-          eq(knowledgeBases.workspaceId, ctx.workspaceId),
+          eq(knowledgeBases.workspaceId, workspaceId),
           notTrashed(knowledgeBases.isDeleted),
           liveRestrictedKnowledgeBaseIds.length > 0
             ? notInArray(knowledgeBases.id, liveRestrictedKnowledgeBaseIds)
@@ -235,8 +243,9 @@ export const getRestrictedKnowledgeBasePolicy = async (
           ),
         ),
       );
-    const browsableFileIds = new Set(browsableRows.map((row) => row.fileId));
-    trashedExclusiveFileIds = candidateFileIds.filter((id) => !browsableFileIds.has(id));
+    browsableFileIds = browsableRows.map((row) => row.fileId);
+    const browsableFileIdSet = new Set(browsableFileIds);
+    trashedExclusiveFileIds = candidateFileIds.filter((id) => !browsableFileIdSet.has(id));
   }
 
   const trashedDocumentRows = await ctx.serverDB
@@ -244,10 +253,15 @@ export const getRestrictedKnowledgeBasePolicy = async (
     .from(documents)
     .where(
       and(
-        eq(documents.workspaceId, ctx.workspaceId),
-        notTrashed(documents.isDeleted),
+        eq(documents.workspaceId, workspaceId),
+        options?.includeTrashedDocuments ? undefined : notTrashed(documents.isDeleted),
         or(
-          inArray(documents.knowledgeBaseId, trashedRestrictedKnowledgeBaseIds),
+          browsableFileIds.length > 0
+            ? and(
+                inArray(documents.knowledgeBaseId, trashedRestrictedKnowledgeBaseIds),
+                or(isNull(documents.fileId), notInArray(documents.fileId, browsableFileIds)),
+              )
+            : inArray(documents.knowledgeBaseId, trashedRestrictedKnowledgeBaseIds),
           trashedExclusiveFileIds.length > 0
             ? inArray(documents.fileId, trashedExclusiveFileIds)
             : undefined,

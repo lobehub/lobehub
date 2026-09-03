@@ -5,6 +5,8 @@ import type { TrashItemRow } from '@/database/schemas';
 
 import type { TrashHandlerContext } from './types';
 
+const STORAGE_DELETE_BATCH_SIZE = 1000;
+
 const toStorageFiles = (files: { fileHash: string | null; url: string }[]) => [
   ...new Map(
     files.flatMap((file) =>
@@ -15,6 +17,12 @@ const toStorageFiles = (files: { fileHash: string | null; url: string }[]) => [
   ).values(),
 ];
 
+const deleteStorageFiles = async (ctx: TrashHandlerContext, urls: string[]) => {
+  for (let index = 0; index < urls.length; index += STORAGE_DELETE_BATCH_SIZE) {
+    await ctx.fileService.deleteFiles(urls.slice(index, index + STORAGE_DELETE_BATCH_SIZE));
+  }
+};
+
 export const purgeFiles = async (
   ctx: TrashHandlerContext,
   ids: string[],
@@ -23,7 +31,10 @@ export const purgeFiles = async (
   const trashModel = new TrashModel(ctx.db, ctx.userId, ctx.workspaceId);
   const pendingFiles = options.root.meta?.storageCleanup?.files;
   if (pendingFiles?.length) {
-    await ctx.fileService.deleteFiles(pendingFiles.map(({ url }) => url));
+    await deleteStorageFiles(
+      ctx,
+      pendingFiles.map(({ url }) => url),
+    );
     return;
   }
 
@@ -45,5 +56,5 @@ export const purgeFiles = async (
   const latestRoot = await trashModel.findByIdIncludingQueued(options.root.id);
   const filesToDelete = latestRoot?.meta?.storageCleanup?.files ?? toStorageFiles(storageFiles);
   const urls = filesToDelete.map(({ url }) => url);
-  if (urls.length > 0) await ctx.fileService.deleteFiles(urls);
+  await deleteStorageFiles(ctx, urls);
 };

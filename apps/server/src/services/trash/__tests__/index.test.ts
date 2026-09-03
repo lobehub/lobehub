@@ -10,6 +10,7 @@ import { TrashModel } from '@/database/models/trash';
 import {
   documents,
   files,
+  globalFiles,
   knowledgeBaseFiles,
   knowledgeBases,
   resourcePermissions,
@@ -23,7 +24,12 @@ import type { LobeChatDatabase } from '@/database/type';
 import { purgeFiles } from '../handlers/purgeFiles';
 import { TrashService } from '../index';
 
-const accessMocks = vi.hoisted(() => ({ restrictedKnowledgeBaseIds: [] as string[] }));
+const accessMocks = vi.hoisted(() => ({
+  liveRestrictedKnowledgeBaseIds: undefined as string[] | undefined,
+  restrictedKnowledgeBaseIds: [] as string[],
+  trashedExclusiveDocumentIds: [] as string[],
+  trashedExclusiveFileIds: [] as string[],
+}));
 const fileServiceMocks = vi.hoisted(() => ({ deleteFiles: vi.fn() }));
 const notificationMocks = vi.hoisted(() => ({ notifyResourceTrashMutation: vi.fn() }));
 const workflowMocks = vi.hoisted(() => ({ triggerTrashPurge: vi.fn() }));
@@ -31,9 +37,10 @@ const workflowMocks = vi.hoisted(() => ({ triggerTrashPurge: vi.fn() }));
 vi.mock('@/server/services/knowledgeBaseAccess', () => ({
   getRestrictedKnowledgeBasePolicy: vi.fn(async () => ({
     allRestrictedKnowledgeBaseIds: accessMocks.restrictedKnowledgeBaseIds,
-    liveRestrictedKnowledgeBaseIds: accessMocks.restrictedKnowledgeBaseIds,
-    trashedExclusiveDocumentIds: [],
-    trashedExclusiveFileIds: [],
+    liveRestrictedKnowledgeBaseIds:
+      accessMocks.liveRestrictedKnowledgeBaseIds ?? accessMocks.restrictedKnowledgeBaseIds,
+    trashedExclusiveDocumentIds: accessMocks.trashedExclusiveDocumentIds,
+    trashedExclusiveFileIds: accessMocks.trashedExclusiveFileIds,
   })),
 }));
 
@@ -60,7 +67,10 @@ let trashModel: TrashModel;
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  accessMocks.liveRestrictedKnowledgeBaseIds = undefined;
   accessMocks.restrictedKnowledgeBaseIds = [];
+  accessMocks.trashedExclusiveDocumentIds = [];
+  accessMocks.trashedExclusiveFileIds = [];
   workflowMocks.triggerTrashPurge.mockResolvedValue(true);
   await serverDB.delete(users);
   await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
@@ -288,6 +298,60 @@ describe('TrashService', () => {
       expect(await new TrashModel(serverDB, userId, workspaceId).findByIds([root.id])).toHaveLength(
         1,
       );
+    });
+
+    it('keeps a trashed shared file available through its live open knowledge base', async () => {
+      const workspaceId = 'trash-shared-open-workspace';
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Shared open library',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      const creatorKnowledgeBaseModel = new KnowledgeBaseModel(serverDB, userId, workspaceId);
+      const creatorFileModel = new FileModel(serverDB, userId, workspaceId);
+      const restricted = await creatorKnowledgeBaseModel.create({
+        name: 'Restricted library',
+        visibility: 'public',
+      });
+      const open = await creatorKnowledgeBaseModel.create({
+        name: 'Open library',
+        visibility: 'public',
+      });
+      const file = await creatorFileModel.create({
+        fileType: 'text/plain',
+        name: 'shared.txt',
+        size: 1,
+        url: 'files/shared-open.txt',
+        visibility: 'public',
+      });
+      await creatorKnowledgeBaseModel.addFilesToKnowledgeBase(restricted.id, [file.id]);
+      await creatorKnowledgeBaseModel.addFilesToKnowledgeBase(open.id, [file.id]);
+
+      const creatorService = new TrashService(serverDB, userId, workspaceId);
+      await creatorService.trashKnowledgeBases([restricted.id]);
+      const [root] = await creatorService.trashFiles([file.id]);
+      accessMocks.restrictedKnowledgeBaseIds = [restricted.id];
+      accessMocks.liveRestrictedKnowledgeBaseIds = [];
+
+      const actorService = new TrashService(serverDB, otherUserId, workspaceId);
+      expect((await actorService.list()).items.map((item) => item.resourceId)).toEqual([file.id]);
+      expect(await actorService.countByType()).toEqual({ file: 1 });
+      expect((await actorService.findByIds([root.id])).map((item) => item.resourceId)).toEqual([
+        file.id,
+      ]);
+      expect(await actorService.restore([root.id])).toMatchObject({
+        failed: [],
+        restored: [{ resourceId: file.id }],
+      });
+
+      const [secondRoot] = await creatorService.trashFiles([file.id]);
+      expect(await actorService.purge([secondRoot.id])).toEqual({
+        failed: [],
+        purged: 1,
+        purgedIds: [secondRoot.id],
+      });
+      expect(await serverDB.select().from(files).where(eq(files.id, file.id))).toEqual([]);
     });
 
     it('restores a file with its mirror document and knowledge-base association intact', async () => {
@@ -832,6 +896,82 @@ describe('TrashService', () => {
       });
       expect(await serverDB.select().from(files).where(eq(files.id, fileId))).toHaveLength(0);
       expect(fileServiceMocks.deleteFiles).toHaveBeenCalledTimes(3);
+    });
+
+    it('batches initial and retried storage cleanup at the S3 request limit', async () => {
+      const storageFiles = Array.from({ length: 1001 }, (_, index) => ({
+        fileHash: `large-purge-hash-${index}`,
+        url: `files/large-purge-${index}.txt`,
+      }));
+      const fileIds = storageFiles.map((_, index) => `large-purge-file-${index}`);
+      const globalFileRows = storageFiles.map((file) => ({
+        creator: userId,
+        fileType: 'text/plain',
+        hashId: file.fileHash,
+        size: 1,
+        url: file.url,
+      }));
+      const fileRows = storageFiles.map((file, index) => ({
+        ...file,
+        fileType: 'text/plain',
+        id: fileIds[index],
+        isDeleted: true,
+        name: `large-purge-${index}.txt`,
+        size: 1,
+        userId,
+      }));
+      for (let index = 0; index < fileRows.length; index += 250) {
+        await serverDB.insert(globalFiles).values(globalFileRows.slice(index, index + 250));
+        await serverDB.insert(files).values(fileRows.slice(index, index + 250));
+      }
+      const root = await trashModel.register({
+        deletedAt: new Date(),
+        root: { resourceId: fileIds[0], resourceType: 'file' },
+      });
+
+      await purgeFiles(
+        {
+          db: serverDB,
+          fileService: { deleteFiles: fileServiceMocks.deleteFiles } as never,
+          userId,
+        },
+        fileIds,
+        { onlyTrashed: true, root },
+      );
+      expect(fileServiceMocks.deleteFiles).toHaveBeenNthCalledWith(
+        1,
+        storageFiles.slice(0, 1000).map(({ url }) => url),
+      );
+      expect(fileServiceMocks.deleteFiles).toHaveBeenNthCalledWith(
+        2,
+        storageFiles.slice(1000).map(({ url }) => url),
+      );
+
+      fileServiceMocks.deleteFiles.mockClear();
+      const [persistedRoot] = await serverDB
+        .select()
+        .from(trashItems)
+        .where(eq(trashItems.id, root.id));
+      await purgeFiles(
+        {
+          db: serverDB,
+          fileService: { deleteFiles: fileServiceMocks.deleteFiles } as never,
+          userId,
+        },
+        [],
+        {
+          onlyTrashed: true,
+          root: persistedRoot,
+        },
+      );
+      expect(fileServiceMocks.deleteFiles).toHaveBeenNthCalledWith(
+        1,
+        storageFiles.slice(0, 1000).map(({ url }) => url),
+      );
+      expect(fileServiceMocks.deleteFiles).toHaveBeenNthCalledWith(
+        2,
+        storageFiles.slice(1000).map(({ url }) => url),
+      );
     });
 
     it('never exposes internal storage cleanup state in find or restore results', async () => {

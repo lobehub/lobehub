@@ -259,8 +259,12 @@ describe('TrashModel', () => {
         ),
       );
 
-      expect(await wsModel.countByType(['trash-restricted-kb'])).toEqual({ document: 1 });
-      const hidden = await wsModel.findRestrictedResourceRootIds(entries, ['trash-restricted-kb']);
+      const restrictedResources = {
+        knowledgeBaseIds: ['trash-restricted-kb'],
+        membershipKnowledgeBaseIds: ['trash-restricted-kb'],
+      };
+      expect(await wsModel.countByType(restrictedResources)).toEqual({ document: 1 });
+      const hidden = await wsModel.findRestrictedResourceRootIds(entries, restrictedResources);
       expect(hidden).toEqual(new Set(entries.slice(0, 4).map((entry) => entry.id)));
       expect(hidden.has(entries[4].id)).toBe(false);
     });

@@ -30,6 +30,7 @@ export type FileType = z.infer<typeof fileSchema>;
 
 const DEFAULT_S3_REGION = 'us-east-1';
 const PUBLIC_READ_ACL_HEADER = 'public-read';
+const S3_DELETE_OBJECTS_LIMIT = 1000;
 
 const encodeContentDispositionFilename = (fileName: string) =>
   encodeURIComponent(fileName || 'download').replaceAll(
@@ -91,12 +92,22 @@ export class S3 {
   }
 
   public async deleteFiles(keys: string[]) {
-    const command = new DeleteObjectsCommand({
-      Bucket: this.bucket,
-      Delete: { Objects: keys.map((key) => ({ Key: key })) },
-    });
+    const batches =
+      keys.length === 0
+        ? [[]]
+        : Array.from({ length: Math.ceil(keys.length / S3_DELETE_OBJECTS_LIMIT) }, (_, index) =>
+            keys.slice(index * S3_DELETE_OBJECTS_LIMIT, (index + 1) * S3_DELETE_OBJECTS_LIMIT),
+          );
+    let response;
+    for (const batch of batches) {
+      const command = new DeleteObjectsCommand({
+        Bucket: this.bucket,
+        Delete: { Objects: batch.map((key) => ({ Key: key })) },
+      });
+      response = await this.client.send(command);
+    }
 
-    return this.client.send(command);
+    return response;
   }
 
   public async getFileContent(key: string, byteLength?: number): Promise<string> {

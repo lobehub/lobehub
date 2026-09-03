@@ -12,7 +12,11 @@ import type {
 import debug from 'debug';
 
 import { notifyResourceTrashMutation } from '@/business/server/resource/notifyTrashMutation';
-import { toPublicTrashItem, TrashModel } from '@/database/models/trash';
+import {
+  toPublicTrashItem,
+  TrashModel,
+  type TrashRestrictedResourceFilter,
+} from '@/database/models/trash';
 import { WorkspaceAuditLogModel } from '@/database/models/workspaceAuditLog';
 import type { TrashItemRow } from '@/database/schemas';
 import type { LobeChatDatabase, Transaction } from '@/database/type';
@@ -258,6 +262,7 @@ export class TrashService {
 
     const limit = Math.min(Math.max(params.limit ?? TRASH_LIST_PAGE_SIZE, 1), 200);
     const items: TrashItem[] = [];
+    const excludeResources = await this.getRestrictedResourceFilter();
     let cursor = params.cursor;
     let nextCursor: string | null;
 
@@ -270,7 +275,7 @@ export class TrashService {
         cursor,
         limit: limit - items.length,
       });
-      items.push(...(await this.filterRestrictedResources(page.items)));
+      items.push(...(await this.filterRestrictedResources(page.items, excludeResources)));
       nextCursor = page.nextCursor;
       cursor = page.nextCursor;
     } while (items.length < limit && cursor);
@@ -281,12 +286,7 @@ export class TrashService {
   countByType = async (): Promise<TrashCountByType> => {
     if (!this.workspaceId) return this.trashModel.countByType();
 
-    const { allRestrictedKnowledgeBaseIds } = await getRestrictedKnowledgeBasePolicy({
-      serverDB: this.db,
-      userId: this.userId,
-      workspaceId: this.workspaceId,
-    });
-    return this.trashModel.countByType(allRestrictedKnowledgeBaseIds);
+    return this.trashModel.countByType(await this.getRestrictedResourceFilter());
   };
 
   findByIds = async (ids: string[]): Promise<TrashItem[]> => {
@@ -303,19 +303,34 @@ export class TrashService {
     return rows.filter((row) => visibleIds.has(row.id));
   };
 
-  private filterRestrictedResources = async (items: TrashItem[]): Promise<TrashItem[]> => {
-    if (!this.workspaceId || items.length === 0) return items;
+  private getRestrictedResourceFilter = async (): Promise<TrashRestrictedResourceFilter> => {
+    if (!this.workspaceId) return {};
 
-    const { allRestrictedKnowledgeBaseIds } = await getRestrictedKnowledgeBasePolicy({
-      serverDB: this.db,
-      userId: this.userId,
-      workspaceId: this.workspaceId,
-    });
-    if (allRestrictedKnowledgeBaseIds.length === 0) return items;
+    const policy = await getRestrictedKnowledgeBasePolicy(
+      {
+        serverDB: this.db,
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      },
+      { includeTrashedDocuments: true },
+    );
+    return {
+      documentIds: policy.trashedExclusiveDocumentIds,
+      fileIds: policy.trashedExclusiveFileIds,
+      knowledgeBaseIds: policy.allRestrictedKnowledgeBaseIds,
+      membershipKnowledgeBaseIds: policy.liveRestrictedKnowledgeBaseIds,
+    };
+  };
+
+  private filterRestrictedResources = async (
+    items: TrashItem[],
+    excludeResources?: TrashRestrictedResourceFilter,
+  ): Promise<TrashItem[]> => {
+    if (!this.workspaceId || items.length === 0) return items;
 
     const hidden = await this.trashModel.findRestrictedResourceRootIds(
       items,
-      allRestrictedKnowledgeBaseIds,
+      excludeResources ?? (await this.getRestrictedResourceFilter()),
     );
 
     return items.filter((item) => !hidden.has(item.id));
@@ -403,17 +418,9 @@ export class TrashService {
   emptyTrash = async (options?: {
     resourceType?: TrashResourceType;
   }): Promise<TrashEmptyOutcome> => {
-    const excludeKnowledgeBaseIds = this.workspaceId
-      ? (
-          await getRestrictedKnowledgeBasePolicy({
-            serverDB: this.db,
-            userId: this.userId,
-            workspaceId: this.workspaceId,
-          })
-        ).allRestrictedKnowledgeBaseIds
-      : [];
+    const excludeResources = await this.getRestrictedResourceFilter();
     const scheduledIds = await this.trashModel.expireAllRoots({
-      excludeKnowledgeBaseIds,
+      excludeResources,
       resourceType: options?.resourceType,
     });
 

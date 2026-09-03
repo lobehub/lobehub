@@ -118,19 +118,50 @@ beforeEach(async () => {
       workspaceId,
     },
   ]);
-  await serverDB.insert(documents).values({
-    fileType: 'custom/document',
-    id: 'docs-trashed-exclusive',
-    knowledgeBaseId: 'kb-trashed-restricted',
-    source: '',
-    sourceType: 'api',
-    title: 'Exclusive page',
-    totalCharCount: 0,
-    totalLineCount: 0,
-    userId: ownerId,
-    visibility: 'public',
-    workspaceId,
-  });
+  await serverDB.insert(documents).values([
+    {
+      fileType: 'custom/document',
+      id: 'docs-live-exclusive',
+      knowledgeBaseId: 'kb-trashed-restricted',
+      source: '',
+      sourceType: 'api',
+      title: 'Live exclusive page',
+      totalCharCount: 0,
+      totalLineCount: 0,
+      userId: ownerId,
+      visibility: 'public',
+      workspaceId,
+    },
+    {
+      fileType: 'custom/document',
+      id: 'docs-trashed-exclusive',
+      isDeleted: true,
+      knowledgeBaseId: 'kb-trashed-restricted',
+      source: '',
+      sourceType: 'api',
+      title: 'Exclusive page',
+      totalCharCount: 0,
+      totalLineCount: 0,
+      userId: ownerId,
+      visibility: 'public',
+      workspaceId,
+    },
+    {
+      fileId: 'file-trashed-shared',
+      fileType: 'text/plain',
+      id: 'docs-trashed-shared',
+      isDeleted: true,
+      knowledgeBaseId: 'kb-trashed-restricted',
+      source: 'files/shared.txt',
+      sourceType: 'file',
+      title: 'Shared page',
+      totalCharCount: 0,
+      totalLineCount: 0,
+      userId: ownerId,
+      visibility: 'public',
+      workspaceId,
+    },
+  ]);
 });
 
 afterEach(async () => {
@@ -146,8 +177,14 @@ describe('restricted knowledge-base policy integration', () => {
       ['kb-live-restricted', 'kb-trashed-restricted'].sort(),
     );
     expect(policy.liveRestrictedKnowledgeBaseIds).toEqual(['kb-live-restricted']);
-    expect(policy.trashedExclusiveDocumentIds).toEqual(['docs-trashed-exclusive']);
+    expect(policy.trashedExclusiveDocumentIds).toEqual(['docs-live-exclusive']);
     expect(policy.trashedExclusiveFileIds).toEqual(['file-trashed-exclusive']);
+    const trashPolicy = await getRestrictedKnowledgeBasePolicy(ctx, {
+      includeTrashedDocuments: true,
+    });
+    expect(trashPolicy.trashedExclusiveDocumentIds.sort()).toEqual(
+      ['docs-live-exclusive', 'docs-trashed-exclusive'].sort(),
+    );
     await expect(
       assertFileNotInRestrictedKnowledgeBase(ctx, 'file-trashed-exclusive'),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });

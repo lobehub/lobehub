@@ -50,6 +50,17 @@ export interface TrashExpiredCursor {
   id: string;
 }
 
+export interface TrashRestrictedResourceFilter {
+  /** Exact document ids protected only by a trashed restricted knowledge base. */
+  documentIds?: string[];
+  /** Exact file ids protected only by a trashed restricted knowledge base. */
+  fileIds?: string[];
+  /** Restricted knowledge-base roots, whether live or trashed. */
+  knowledgeBaseIds?: string[];
+  /** Live restricted knowledge bases whose current contents remain hidden. */
+  membershipKnowledgeBaseIds?: string[];
+}
+
 /**
  * Source tables for the "does the resource still exist" checks. Purge relies
  * on FK cascades for children, so a root's registry row can be orphaned only
@@ -120,46 +131,74 @@ export class TrashModel {
   /** Roots not explicitly queued by "empty trash" (`expiresAt = deletedAt`). */
   private active = () => gt(trashItems.expiresAt, trashItems.deletedAt);
 
-  private excludeRestrictedResources = (knowledgeBaseIds: string[]): SQL | undefined => {
-    if (knowledgeBaseIds.length === 0) return;
+  private excludeRestrictedResources = (filter: TrashRestrictedResourceFilter): SQL | undefined => {
+    const documentIds = filter.documentIds ?? [];
+    const fileIds = filter.fileIds ?? [];
+    const knowledgeBaseIds = filter.knowledgeBaseIds ?? [];
+    const membershipKnowledgeBaseIds = filter.membershipKnowledgeBaseIds ?? [];
+    if (
+      documentIds.length === 0 &&
+      fileIds.length === 0 &&
+      knowledgeBaseIds.length === 0 &&
+      membershipKnowledgeBaseIds.length === 0
+    ) {
+      return;
+    }
 
-    const fileInRestrictedKnowledgeBase = exists(
-      this.db
-        .select({ fileId: knowledgeBaseFiles.fileId })
-        .from(knowledgeBaseFiles)
-        .where(
-          and(
-            eq(knowledgeBaseFiles.fileId, trashItems.resourceId),
-            inArray(knowledgeBaseFiles.knowledgeBaseId, knowledgeBaseIds),
-          ),
-        ),
-    );
-    const documentInRestrictedKnowledgeBase = exists(
-      this.db
-        .select({ id: documents.id })
-        .from(documents)
-        .leftJoin(knowledgeBaseFiles, eq(documents.fileId, knowledgeBaseFiles.fileId))
-        .where(
-          and(
-            eq(documents.id, trashItems.resourceId),
-            or(
-              inArray(documents.knowledgeBaseId, knowledgeBaseIds),
-              inArray(knowledgeBaseFiles.knowledgeBaseId, knowledgeBaseIds),
-            ),
-          ),
-        ),
+    const fileInRestrictedKnowledgeBase =
+      membershipKnowledgeBaseIds.length > 0
+        ? exists(
+            this.db
+              .select({ fileId: knowledgeBaseFiles.fileId })
+              .from(knowledgeBaseFiles)
+              .where(
+                and(
+                  eq(knowledgeBaseFiles.fileId, trashItems.resourceId),
+                  inArray(knowledgeBaseFiles.knowledgeBaseId, membershipKnowledgeBaseIds),
+                ),
+              ),
+          )
+        : undefined;
+    const documentInRestrictedKnowledgeBase =
+      membershipKnowledgeBaseIds.length > 0
+        ? exists(
+            this.db
+              .select({ id: documents.id })
+              .from(documents)
+              .leftJoin(knowledgeBaseFiles, eq(documents.fileId, knowledgeBaseFiles.fileId))
+              .where(
+                and(
+                  eq(documents.id, trashItems.resourceId),
+                  or(
+                    inArray(documents.knowledgeBaseId, membershipKnowledgeBaseIds),
+                    inArray(knowledgeBaseFiles.knowledgeBaseId, membershipKnowledgeBaseIds),
+                  ),
+                ),
+              ),
+          )
+        : undefined;
+    const restricted = or(
+      knowledgeBaseIds.length > 0
+        ? and(
+            eq(trashItems.resourceType, 'knowledgeBase'),
+            inArray(trashItems.resourceId, knowledgeBaseIds),
+          )
+        : undefined,
+      documentIds.length > 0
+        ? and(eq(trashItems.resourceType, 'document'), inArray(trashItems.resourceId, documentIds))
+        : undefined,
+      fileIds.length > 0
+        ? and(eq(trashItems.resourceType, 'file'), inArray(trashItems.resourceId, fileIds))
+        : undefined,
+      fileInRestrictedKnowledgeBase
+        ? and(eq(trashItems.resourceType, 'file'), fileInRestrictedKnowledgeBase)
+        : undefined,
+      documentInRestrictedKnowledgeBase
+        ? and(eq(trashItems.resourceType, 'document'), documentInRestrictedKnowledgeBase)
+        : undefined,
     );
 
-    return not(
-      or(
-        and(
-          eq(trashItems.resourceType, 'knowledgeBase'),
-          inArray(trashItems.resourceId, knowledgeBaseIds),
-        ),
-        and(eq(trashItems.resourceType, 'file'), fileInRestrictedKnowledgeBase),
-        and(eq(trashItems.resourceType, 'document'), documentInRestrictedKnowledgeBase),
-      ) as SQL,
-    );
+    return restricted ? not(restricted) : undefined;
   };
 
   // ─────────────────────────── writes ───────────────────────────
@@ -265,7 +304,7 @@ export class TrashModel {
    * The retention sweep owns the expensive storage/database deletion work.
    */
   expireAllRoots = async (options?: {
-    excludeKnowledgeBaseIds?: string[];
+    excludeResources?: TrashRestrictedResourceFilter;
     resourceType?: TrashResourceType;
   }): Promise<string[]> => {
     const rows = await this.db
@@ -278,7 +317,7 @@ export class TrashModel {
           this.active(),
           options?.resourceType ? eq(trashItems.resourceType, options.resourceType) : undefined,
           this.visibleResource(),
-          this.excludeRestrictedResources(options?.excludeKnowledgeBaseIds ?? []),
+          this.excludeRestrictedResources(options?.excludeResources ?? {}),
         ),
       )
       .returning({ id: trashItems.id });
@@ -347,7 +386,9 @@ export class TrashModel {
     };
   };
 
-  countByType = async (excludeKnowledgeBaseIds: string[] = []): Promise<TrashCountByType> => {
+  countByType = async (
+    excludeResources: TrashRestrictedResourceFilter = {},
+  ): Promise<TrashCountByType> => {
     const rows = await this.db
       .select({ resourceType: trashItems.resourceType, total: count() })
       .from(trashItems)
@@ -357,7 +398,7 @@ export class TrashModel {
           isNull(trashItems.rootId),
           this.active(),
           this.visibleResource(),
-          this.excludeRestrictedResources(excludeKnowledgeBaseIds),
+          this.excludeRestrictedResources(excludeResources),
         ),
       )
       .groupBy(trashItems.resourceType);
@@ -389,16 +430,22 @@ export class TrashModel {
   /** Registry ids backed by a restricted knowledge base or one of its contents. */
   findRestrictedResourceRootIds = async (
     items: Pick<TrashItem, 'id' | 'resourceId' | 'resourceType'>[],
-    restrictedKnowledgeBaseIds: string[],
+    filter: TrashRestrictedResourceFilter,
   ): Promise<Set<string>> => {
-    if (items.length === 0 || restrictedKnowledgeBaseIds.length === 0) return new Set();
+    if (items.length === 0) return new Set();
+
+    const documentIds = new Set(filter.documentIds ?? []);
+    const fileIds = new Set(filter.fileIds ?? []);
+    const knowledgeBaseIds = new Set(filter.knowledgeBaseIds ?? []);
+    const membershipKnowledgeBaseIds = filter.membershipKnowledgeBaseIds ?? [];
 
     const hidden = new Set(
       items
         .filter(
           (item) =>
-            item.resourceType === 'knowledgeBase' &&
-            restrictedKnowledgeBaseIds.includes(item.resourceId),
+            (item.resourceType === 'knowledgeBase' && knowledgeBaseIds.has(item.resourceId)) ||
+            (item.resourceType === 'file' && fileIds.has(item.resourceId)) ||
+            (item.resourceType === 'document' && documentIds.has(item.resourceId)),
         )
         .map((item) => item.id),
     );
@@ -413,14 +460,14 @@ export class TrashModel {
         .map((item) => [item.resourceId, item.id]),
     );
 
-    if (filesByResourceId.size > 0) {
+    if (filesByResourceId.size > 0 && membershipKnowledgeBaseIds.length > 0) {
       const rows = await this.db
         .select({ fileId: knowledgeBaseFiles.fileId })
         .from(knowledgeBaseFiles)
         .where(
           and(
             inArray(knowledgeBaseFiles.fileId, [...filesByResourceId.keys()]),
-            inArray(knowledgeBaseFiles.knowledgeBaseId, restrictedKnowledgeBaseIds),
+            inArray(knowledgeBaseFiles.knowledgeBaseId, membershipKnowledgeBaseIds),
           ),
         );
       for (const row of rows) {
@@ -429,7 +476,7 @@ export class TrashModel {
       }
     }
 
-    if (documentsByResourceId.size > 0) {
+    if (documentsByResourceId.size > 0 && membershipKnowledgeBaseIds.length > 0) {
       const rows = await this.db
         .select({ id: documents.id })
         .from(documents)
@@ -438,8 +485,8 @@ export class TrashModel {
           and(
             inArray(documents.id, [...documentsByResourceId.keys()]),
             or(
-              inArray(documents.knowledgeBaseId, restrictedKnowledgeBaseIds),
-              inArray(knowledgeBaseFiles.knowledgeBaseId, restrictedKnowledgeBaseIds),
+              inArray(documents.knowledgeBaseId, membershipKnowledgeBaseIds),
+              inArray(knowledgeBaseFiles.knowledgeBaseId, membershipKnowledgeBaseIds),
             ),
           ),
         );

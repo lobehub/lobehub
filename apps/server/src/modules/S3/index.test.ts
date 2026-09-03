@@ -247,6 +247,25 @@ describe('FileS3', () => {
         },
       });
     });
+
+    it('should split deletes into requests of at most 1,000 keys', async () => {
+      const s3 = new FileS3();
+      mockS3ClientSend.mockResolvedValue({});
+      const keys = Array.from({ length: 1001 }, (_, index) => `file-${index}.txt`);
+
+      await s3.deleteFiles(keys);
+
+      expect(DeleteObjectsCommand).toHaveBeenCalledTimes(2);
+      expect(DeleteObjectsCommand).toHaveBeenNthCalledWith(1, {
+        Bucket: 'test-bucket',
+        Delete: { Objects: keys.slice(0, 1000).map((key) => ({ Key: key })) },
+      });
+      expect(DeleteObjectsCommand).toHaveBeenNthCalledWith(2, {
+        Bucket: 'test-bucket',
+        Delete: { Objects: [{ Key: keys[1000] }] },
+      });
+      expect(mockS3ClientSend).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe('getFileContent', () => {
