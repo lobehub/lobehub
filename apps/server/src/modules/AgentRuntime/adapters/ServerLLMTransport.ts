@@ -17,6 +17,7 @@ import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import {
   type ChatStreamPayload,
   consumeStreamUntilDone,
+  ModelEmptyError,
   type ModelRuntime,
 } from '@lobechat/model-runtime';
 import {
@@ -53,14 +54,38 @@ const SERVER_LLM_RETRY_POLICY = {
   noRetryProviders: [BRANDING_PROVIDER],
 };
 
+const BRANDING_NETWORK_EMPTY_COMPLETION_MAX_RETRIES = 3;
+const BRANDING_NETWORK_EMPTY_COMPLETION_MAX_ATTEMPTS =
+  BRANDING_NETWORK_EMPTY_COMPLETION_MAX_RETRIES + 1;
+
+const isRetryableBrandingNetworkEmptyCompletion = (error: unknown) => {
+  if (!(error instanceof ModelEmptyError)) return false;
+
+  const diagnostics = error.diagnostics;
+  return (
+    diagnostics?.provider === BRANDING_PROVIDER &&
+    diagnostics.finishReason === 'network_error' &&
+    diagnostics.contentLength === 0 &&
+    diagnostics.reasoningLength === 0 &&
+    diagnostics.imageCount === 0 &&
+    diagnostics.toolCallCount === 0 &&
+    diagnostics.cost === undefined &&
+    diagnostics.outputTokens === undefined
+  );
+};
+
 class ServerLLMRetryPolicy implements LLMRetryPolicy {
   constructor(private readonly ctx: RuntimeExecutorContext) {}
 
   classifyError(error: unknown) {
-    return classifyLLMError(error);
+    const classified = classifyLLMError(error);
+    return isRetryableBrandingNetworkEmptyCompletion(error)
+      ? { ...classified, kind: 'retry' as const }
+      : classified;
   }
 
   maxAttempts(provider: string) {
+    if (provider === BRANDING_PROVIDER) return BRANDING_NETWORK_EMPTY_COMPLETION_MAX_ATTEMPTS;
     return resolveLLMMaxAttempts(provider, SERVER_LLM_RETRY_POLICY);
   }
 
@@ -83,7 +108,10 @@ class ServerLLMRetryPolicy implements LLMRetryPolicy {
     );
   }
 
-  resolveRetryBudget(provider: string) {
+  resolveRetryBudget(provider: string, error: unknown) {
+    if (isRetryableBrandingNetworkEmptyCompletion(error)) {
+      return BRANDING_NETWORK_EMPTY_COMPLETION_MAX_RETRIES;
+    }
     return resolveLLMRetryBudget(provider, SERVER_LLM_RETRY_POLICY);
   }
 
