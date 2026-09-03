@@ -274,7 +274,7 @@ structured generation (`llm_generation_tracing.success=t` is the confirmation pr
 **Situation:** A/B-forcing the goal page's 失联 (lost-heartbeat) banner by backdating
 `goal_nodes.updated_at` / `agent_operations.updated_at` with SQL.
 
-**Doesn't work:** backdating by ~10 minutes because the server reclaim default
+**Doesn't work:** backdating by \~10 minutes because the server reclaim default
 (`resolveOperationLeaseTimeout`) is 5 minutes. The frontier still shows 运行中: the
 client view model has its own `DEFAULT_LEASE_TIMEOUT_MS = 15 min` and only honors
 `goal.config.recovery.operationLeaseTimeoutMs` when the goal sets one.
@@ -282,8 +282,8 @@ client view model has its own `DEFAULT_LEASE_TIMEOUT_MS = 15 min` and only honor
 **Works:** backdate past the client's window (25 min is comfortable), or create the
 goal with an explicit `--operation-lease-timeout-ms`. Liveness = the newer of the
 node row and `runHeartbeats` (the running operation's `updated_at` served by
-`goal.graph`), so the A/B is: node stale + op fresh → 运行中; both stale → 失联.
-Restore the forced rows (node/task/task_topics/operation status + timestamps) after
+`goal.graph`), so the A/B is: node stale + op fresh → 运行中；both stale → 失联.
+Restore the forced rows (node/task/task\_topics/operation status + timestamps) after
 capturing.
 
 #### A CLI-created topic has no trigger/status and is filtered out of the Agent paged view
@@ -304,7 +304,7 @@ UI" split is especially misleading.
 
 **Works:** right after writing the metadata, also run
 `update topics set status='active', trigger='chat'`, then `app-probe.sh goto` once
-more. Keep the assertion order from M19: confirm `app-probe.sh topic` returns the
+more. Keep the assertion order from generic M6: confirm `app-probe.sh topic` returns the
 metadata before asserting anything in the UI.
 
 #### `agent.updateAgentConfig` silently drops `agencyConfig.heterogeneousProvider`
@@ -328,7 +328,7 @@ docker exec lobehub-agent-testing-postgres psql -U postgres -d postgres -tAc \
 ```
 
 Then cold-load: a plain reload keeps serving the agent config from the tiered SWR
-cache, so the renderer still shows the pre-write value (generic M18). Clear
+cache, so the renderer still shows the pre-write value (generic M6). Clear
 `lobechat-swr-cache*` + `lobehub-local-data` through
 `Page.addScriptToEvaluateOnNewDocument` and reload (see "Cold SWR cache" above),
 then assert `agentMap[id].agencyConfig` before drawing any conclusion.
@@ -1966,7 +1966,7 @@ only tell is an unexpected diffstat / parent commit; `push <branch>` then report
 
 The same reset has a second, harder-to-spot consequence: it also retargets
 `init-dev-env.sh dev`, so the dev server and its Vite serve the MAIN checkout while
-every health signal stays green — see `common-mistakes.md` L-S17.
+every health signal stays green — see `common-mistakes.md` L-S21.
 
 **Works:** in any worktree session, prefix every git/check command with an explicit
 `cd <worktree> &&`, and read the commit output's diffstat + `git log -1` parent
@@ -2082,7 +2082,7 @@ rate-limit (429) or ship JSON-disabled (HTML back).
 `SEARCH_PROVIDERS=searxng SEARXNG_URL=http://localhost:8888`. It aggregates real
 engines, so the whole product path (server search impl → result cards → tool
 message persistence) is genuine. English queries return results more reliably
-than Chinese ones. One trap when the model is a tool_call-emitting stub AND a
+than Chinese ones. One trap when the model is a tool\_call-emitting stub AND a
 synthetic context injector is active (e.g. `getGoalContext`): "last message is a
 tool result → answer" fires on the injected pair and skips the search — key the
 stub's answer-mode off the NAME of the last `function_call` instead.
