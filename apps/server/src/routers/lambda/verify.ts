@@ -1152,6 +1152,43 @@ export const verifyRouter = router({
    * gates what only the author may see — today the origin conversation,
    * which is redacted for everyone else.
    */
+  /**
+   * Title-only twin of `getReportBundle` for surfaces that decorate a link —
+   * the chat renderer resolves every pasted verify URL into its title, so this
+   * read must stay one row, never the report/results/evidence fan-out. Same
+   * visibility rule as the bundle; unreadable or missing is `null`.
+   */
+  getRunHeader: publicVerifyReportProcedure
+    .input(verifyRunIdInputSchema)
+    .query(async ({ ctx, input }) => {
+      if (!isUuid(input.verifyRunId)) return null;
+      const found = await ctx.serverDB.query.verifyRuns.findFirst({
+        columns: {
+          id: true,
+          status: true,
+          title: true,
+          userId: true,
+          visibility: true,
+          workspaceId: true,
+        },
+        where: eq(verifyRuns.id, input.verifyRunId),
+      });
+      if (!found) return null;
+
+      const isOwner = Boolean(ctx.userId) && ctx.userId === found.userId;
+      let canRead = isOwner || found.visibility === 'public';
+      if (!canRead && ctx.userId && found.workspaceId) {
+        const member = await new WorkspaceMemberModel(ctx.serverDB, ctx.userId).getMember(
+          found.workspaceId,
+          ctx.userId,
+        );
+        canRead = Boolean(member);
+      }
+      if (!canRead) return null;
+
+      return { id: found.id, status: found.status, title: found.title };
+    }),
+
   getReportBundle: publicVerifyReportProcedure
     .input(verifyRunIdInputSchema)
     .query(async ({ ctx, input }) => {

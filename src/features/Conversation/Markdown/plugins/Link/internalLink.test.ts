@@ -168,14 +168,17 @@ describe('parseInternalLink', () => {
 });
 
 describe('isBareLinkLabel', () => {
-  it('treats pasted addresses as bare', () => {
-    expect(isBareLinkLabel('https://app.lobehub.com/acceptance/acc_1')).toBe(true);
-    expect(isBareLinkLabel('http://localhost:3010/task/tsk_1')).toBe(true);
-    expect(isBareLinkLabel('/acceptance/acc_1')).toBe(true);
+  it('treats a label that IS the address as bare', () => {
+    expect(isBareLinkLabel('/acceptance/acc_1', '/acceptance/acc_1')).toBe(true);
+    expect(
+      isBareLinkLabel('https://app.lobehub.com/task/tsk_1', 'https://app.lobehub.com/task/tsk_1'),
+    ).toBe(true);
   });
 
-  it('treats authored text as not bare', () => {
-    expect(isBareLinkLabel('验收报告')).toBe(false);
-    expect(isBareLinkLabel('Acceptance report')).toBe(false);
+  it('treats authored text as not bare, even when it looks like a URL', () => {
+    expect(isBareLinkLabel('验收报告', '/acceptance/acc_1')).toBe(false);
+    // A URL-shaped authored label must survive: the author chose it.
+    expect(isBareLinkLabel('https://docs.example', '/task/T-198')).toBe(false);
+    expect(isBareLinkLabel('/project plan', '/task/T-198')).toBe(false);
   });
 });

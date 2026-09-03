@@ -157,6 +157,12 @@ export class VerifyService {
   getAcceptanceBundle = (id: string): Promise<AcceptanceBundle> =>
     lambdaClient.acceptance.getBundle.query({ id });
 
+  /** Title-only header for decorating a link — never the bundle fan-out. */
+  getAcceptanceHeader = (id: string) => lambdaClient.acceptance.getHeader.query({ id });
+
+  /** Title-only header of a verify run, the light twin of `getReportBundle`. */
+  getRunHeader = (verifyRunId: string) => lambdaClient.verify.getRunHeader.query({ verifyRunId });
+
   /** The acceptance aggregate for a subject (topic/task/document), or null. */
   getAcceptanceBySubject = (subjectType: AcceptanceSubjectType, subjectId: string) =>
     lambdaClient.acceptance.getBySubject.query({ subjectId, subjectType });

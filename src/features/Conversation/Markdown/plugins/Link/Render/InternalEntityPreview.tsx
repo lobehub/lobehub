@@ -109,17 +109,7 @@ const getVerifyStatusLabel = (status: string | null | undefined, t: TFunction<'c
   }
 };
 
-/**
- * One cache entry per entity, shared between the hover preview and the eager
- * title resolution on the link itself — whichever fires first warms the other.
- */
-export const internalEntityPreviewKey = (reference: InternalLinkReference) => [
-  'internal-entity-preview',
-  reference.type,
-  reference.pathname,
-];
-
-export const getPreviewData = async (
+const getPreviewData = async (
   reference: InternalLinkReference,
   t: TFunction<'chat'>,
 ): Promise<PreviewData | null> => {
@@ -215,7 +205,7 @@ export const InternalEntityPreview = memo<InternalEntityPreviewProps>(
     const { t } = useTranslation('chat');
     const [open, setOpen] = useState(false);
     const { data, isLoading } = useClientDataSWR(
-      open ? internalEntityPreviewKey(reference) : null,
+      open ? ['internal-entity-preview', reference.type, reference.pathname] : null,
       () => getPreviewData(reference, t),
       { revalidateOnFocus: false },
     );
