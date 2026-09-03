@@ -32,6 +32,7 @@ import {
   Group,
   ListChecks,
   ListFilter,
+  MoreHorizontal,
   PanelLeftClose,
   Search,
   TriangleAlert,
@@ -271,12 +272,14 @@ const styles = createStaticStyles(({ css }) => ({
 interface AcceptanceListPanelProps extends ReportPanelExpand {
   headerLeading?: ReactNode;
   /**
-   * Renders the per-project action menu. Injected by the main app rather than
-   * imported here: the actions open the create-project modal and navigate to
+   * The per-project entries, as MENU ITEMS. Injected by the main app rather
+   * than imported here: they open the create-project modal and navigate to
    * `/project/:id`, neither of which exists in the standalone workbench app —
-   * and a direct import would drag the project store into its bundle.
+   * and a direct import would drag the project store into its bundle. The menu
+   * chrome stays here so the header can carry ONE overflow menu for everything
+   * it offers, the multi-select toggle included.
    */
-  renderProjectActions?: (projectId?: string) => ReactNode;
+  projectActionItems?: (projectId?: string) => DropdownItem[];
 }
 
 /**
@@ -285,7 +288,7 @@ interface AcceptanceListPanelProps extends ReportPanelExpand {
  * same persisted panel-width preference so the two surfaces read as one family.
  */
 const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
-  ({ expand, headerLeading, isNarrow, renderProjectActions, setExpand }) => {
+  ({ expand, headerLeading, isNarrow, projectActionItems, setExpand }) => {
     const { t } = useTranslation('verify');
     const navigate = useNavigate();
     const { acceptanceId } = useParams<{ acceptanceId: string }>();
@@ -627,6 +630,24 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
       },
     ];
 
+    // One overflow menu for everything the header offers. Multi-select used to
+    // sit outside as its own icon; a 260px header cannot carry a fourth control
+    // without crowding the search field, and "enter selection mode" is a rare
+    // deliberate act, not something to keep one tap away at all times. The
+    // project entries join it only when they have nowhere better to live —
+    // under project grouping each group header carries its own.
+    const overflowItems: DropdownItem[] = [
+      {
+        icon: <Icon icon={ListChecks} />,
+        key: 'select',
+        label: t('acceptance.workspace.batch.enter'),
+        onClick: () => (selecting ? leaveSelecting() : setSelecting(true)),
+      },
+      ...(showGroups || !projectActionItems
+        ? []
+        : [{ type: 'divider' as const }, ...projectActionItems()]),
+    ];
+
     const [panelWidth, updateSystemStatus] = useGlobalStore((s) => [
       systemStatusSelectors.verifyReportPanelWidth(s),
       s.updateSystemStatus,
@@ -703,15 +724,15 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                   title={t('acceptance.workspace.filters.title')}
                 />
               </DropdownMenu>
-              <ActionIcon
-                active={selecting}
-                className={styles.filterButton}
-                icon={ListChecks}
-                size={'small'}
-                title={t('acceptance.workspace.batch.enter')}
-                onClick={() => (selecting ? leaveSelecting() : setSelecting(true))}
-              />
-              {!showGroups && renderProjectActions?.()}
+              <DropdownMenu items={overflowItems} placement={'bottomRight'}>
+                <ActionIcon
+                  active={selecting}
+                  className={styles.filterButton}
+                  icon={MoreHorizontal}
+                  size={'small'}
+                  title={t('acceptance.workspace.actions.more')}
+                />
+              </DropdownMenu>
             </div>
             {selecting && (
               <div className={styles.selectionRow}>
@@ -806,9 +827,18 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                         paddingBlock={4}
                         paddingInline={8}
                         action={
-                          groupMode === 'project'
-                            ? renderProjectActions?.(group.projectName ? group.key : undefined)
-                            : undefined
+                          groupMode === 'project' && projectActionItems ? (
+                            <DropdownMenu
+                              placement={'bottomRight'}
+                              items={projectActionItems(group.projectName ? group.key : undefined)}
+                            >
+                              <ActionIcon
+                                icon={MoreHorizontal}
+                                size={'small'}
+                                title={t('acceptance.workspace.groups.actions')}
+                              />
+                            </DropdownMenu>
+                          ) : undefined
                         }
                         title={
                           <span className={styles.groupTitle}>
