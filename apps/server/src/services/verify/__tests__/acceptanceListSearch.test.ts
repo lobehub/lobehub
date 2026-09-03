@@ -21,7 +21,7 @@ vi.mock('@/database/models/task', () => ({
 }));
 vi.mock('@/database/models/topic', () => ({
   TopicModel: class {
-    findByIds = mocks.resolveTopics;
+    findOwnTopicsByIds = mocks.resolveTopics;
   },
 }));
 

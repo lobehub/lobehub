@@ -29,9 +29,10 @@ import type {
   RemoveIdentityMemoryResult,
   SearchMemoryParams,
   SearchMemoryResult,
+  SpendOrigin,
   UpdateIdentityMemoryResult,
 } from '@lobechat/types';
-import { LayersEnum } from '@lobechat/types';
+import { LayersEnum, RequestTrigger, toAgentShareVisitorIds } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import type { z } from 'zod';
 
@@ -113,6 +114,7 @@ const createEmbedder = (
   agentRuntime: UserMemoryEmbeddingRuntime,
   embeddingModel: string,
   userId: string,
+  spendOrigin?: SpendOrigin,
 ) => {
   return async (value?: string | null): Promise<number[] | undefined> => {
     if (!value || value.trim().length === 0) return undefined;
@@ -122,6 +124,7 @@ const createEmbedder = (
       model: embeddingModel,
       runtime: agentRuntime,
       source: 'toolRuntime:userMemory.tool',
+      spendOrigin,
       userId,
     });
 
@@ -141,6 +144,12 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
   private topicId?: string;
   private memoryEffort: MemoryEffort;
   private memoryEmbeddingRuntime?: ToolExecutionMemoryEmbeddingRuntime;
+  /**
+   * Origin attribution stamped on every embedding this runtime bills. Set only
+   * for a shared-agent visitor run, whose embeddings are otherwise billed to
+   * the creator as ordinary memory usage.
+   */
+  private spendOrigin?: SpendOrigin;
   private userId: string;
   private workspaceId?: string;
 
@@ -153,6 +162,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
     memoryModel: UserMemoryModel;
     operationId?: string;
     serverDB: LobeChatDatabase;
+    spendOrigin?: SpendOrigin;
     taskId?: string;
     toolCallId?: string;
     topicId?: string;
@@ -170,6 +180,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
     this.topicId = options.topicId;
     this.memoryEffort = options.memoryEffort;
     this.memoryEmbeddingRuntime = options.memoryEmbeddingRuntime;
+    this.spendOrigin = options.spendOrigin;
     this.userId = options.userId;
     this.workspaceId = options.workspaceId;
   }
@@ -240,6 +251,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
               model: embeddingModel,
               runtime: modelRuntime,
               source: 'toolRuntime:userMemory.search',
+              spendOrigin: this.spendOrigin,
               userId: this.userId,
             })
           ).filter((embedding): embedding is number[] => Boolean(embedding))
@@ -286,7 +298,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         this.userId,
         this.workspaceId,
       );
-      const embed = createEmbedder(agentRuntime, embeddingModel, this.userId);
+      const embed = createEmbedder(agentRuntime, embeddingModel, this.userId, this.spendOrigin);
 
       const summaryEmbedding = await embed(input.summary);
       const detailsEmbedding = await embed(input.details);
@@ -358,7 +370,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         this.userId,
         this.workspaceId,
       );
-      const embed = createEmbedder(agentRuntime, embeddingModel, this.userId);
+      const embed = createEmbedder(agentRuntime, embeddingModel, this.userId, this.spendOrigin);
 
       const summaryEmbedding = await embed(input.summary);
       const detailsEmbedding = await embed(input.details);
@@ -437,7 +449,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         this.userId,
         this.workspaceId,
       );
-      const embed = createEmbedder(agentRuntime, embeddingModel, this.userId);
+      const embed = createEmbedder(agentRuntime, embeddingModel, this.userId, this.spendOrigin);
 
       const summaryEmbedding = await embed(input.summary);
       const detailsEmbedding = await embed(input.details);
@@ -510,7 +522,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         this.userId,
         this.workspaceId,
       );
-      const embed = createEmbedder(agentRuntime, embeddingModel, this.userId);
+      const embed = createEmbedder(agentRuntime, embeddingModel, this.userId, this.spendOrigin);
 
       const summaryEmbedding = await embed(input.summary);
       const detailsEmbedding = await embed(input.details);
@@ -595,7 +607,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         this.userId,
         this.workspaceId,
       );
-      const embed = createEmbedder(agentRuntime, embeddingModel, this.userId);
+      const embed = createEmbedder(agentRuntime, embeddingModel, this.userId, this.spendOrigin);
 
       const summaryEmbedding = await embed(input.summary);
       const detailsEmbedding = await embed(input.details);
@@ -672,7 +684,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         this.userId,
         this.workspaceId,
       );
-      const embed = createEmbedder(agentRuntime, embeddingModel, this.userId);
+      const embed = createEmbedder(agentRuntime, embeddingModel, this.userId, this.spendOrigin);
 
       let summaryVector1024: number[] | null | undefined;
       if (input.set.summary !== undefined) {
@@ -901,6 +913,14 @@ export const memoryRuntime: ServerRuntimeRegistration = {
       memoryModel,
       operationId: context.operationId,
       serverDB: context.serverDB,
+      // Projected fields only — `context.agentShareVisitor` also carries the
+      // run's tool/memory permissions, which have no place in billing metadata.
+      spendOrigin: context.agentShareVisitor
+        ? {
+            agentShare: toAgentShareVisitorIds(context.agentShareVisitor),
+            trigger: RequestTrigger.AgentShare,
+          }
+        : undefined,
       taskId: context.taskId,
       toolCallId: context.toolCallId,
       topicId: context.topicId,

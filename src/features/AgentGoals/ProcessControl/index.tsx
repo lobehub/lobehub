@@ -68,7 +68,7 @@ const ProcessControl = memo<ProcessControlProps>(
     );
 
     // Every click funnels here: keep the map highlight (spatial continuity) and
-    // open the drill-down — a dispatched Work goes straight to its Task detail,
+    // open the drill-down — a dispatched Task goes straight to its Task detail,
     // everything else opens the node view. This is the chain the page was
     // missing: node → task → topic conversation.
     const select = useCallback(
@@ -86,8 +86,8 @@ const ProcessControl = memo<ProcessControlProps>(
     if (!graph || graph.nodes.length === 0) return null;
 
     // The coordinator is decomposing the problem into tasks. `running` with zero
-    // Works counts too: the decomposition claim flips the status before the
-    // planner returns, and a re-plan after all Works were removed is the same
+    // Task counts too: the decomposition claim flips the status before the
+    // planner returns, and a re-plan after all Tasks were removed is the same
     // state. The surfaces below promise the incoming structure instead of
     // reading as an empty goal — the graph poll fills them in as nodes land.
     const planning =
@@ -99,7 +99,7 @@ const ProcessControl = memo<ProcessControlProps>(
     const acceptanceConfig = graph.goal.config?.acceptance;
     const criteriaIds = acceptanceConfig?.criteriaIds ?? [];
     // A closed goal cannot move: the coordinator returns immediately for these,
-    // and a Work added here would sit `proposed` forever. Stop offering actions
+    // and a Task added here would sit `proposed` forever. Stop offering actions
     // that cannot land. The goal otherwise advances entirely on its own — the
     // only legitimate human control over its pace is pause/resume.
     const closed = ['achieved', 'canceled', 'failed'].includes(graph.goal.status);

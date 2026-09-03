@@ -13,8 +13,13 @@ import {
 import { notifyResourceTransfer } from '@/business/server/resource-transfer/notify';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
-import { AgentModel, AgentOwnedByGroupError } from '@/database/models/agent';
+import {
+  AGENT_SHARED_TRANSFER_BLOCKED,
+  AgentModel,
+  AgentOwnedByGroupError,
+} from '@/database/models/agent';
 import { AGENT_COPY_IN_PROGRESS } from '@/database/models/agentCopyJob';
+import { AgentShareModel } from '@/database/models/agentShare';
 import {
   AGENT_TRANSFER_IN_PROGRESS,
   AgentTransferJobModel,
@@ -111,6 +116,21 @@ const protectAgentConfig = async <T extends Record<string, any>>(
   if (access === 'none') return null;
   return access === 'profile' ? redactAgentConfig(config) : config;
 };
+
+/** What a `/agent/:slugOrId` param resolves to — see `resolveAgentRoute`. */
+export interface AgentRouteResolution {
+  /** The resolved agent id. Present for `own` and `ownShare` routes. */
+  agentId?: string;
+  /**
+   * `own`: one of the caller's agents (by id or by agent slug).
+   * `ownShare`: a share link of the caller's OWN agent — the creator opened
+   *   their own share URL, and is sent to that agent's share settings instead
+   *   of the visitor surface.
+   * `share`: someone else's agent share (access is still gated by `getSharedAgent`).
+   * `notFound`: neither — the caller sees the agent not-found surface.
+   */
+  kind: 'own' | 'ownShare' | 'share' | 'notFound';
+}
 
 const agentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -1155,6 +1175,13 @@ export const agentRouter = router({
             message: 'A previous transfer of this agent is still migrating its history',
           });
         }
+        if (error instanceof Error && error.message === AGENT_SHARED_TRANSFER_BLOCKED) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.SharedTransferBlocked } },
+            code: 'PRECONDITION_FAILED',
+            message: 'This agent has a share link, so its owner cannot be changed.',
+          });
+        }
         throw error;
       }
 
@@ -1330,6 +1357,13 @@ export const agentRouter = router({
             message: 'A previous transfer of these agents is still migrating their history',
           });
         }
+        if (error instanceof Error && error.message === AGENT_SHARED_TRANSFER_BLOCKED) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.SharedTransferBlocked } },
+            code: 'PRECONDITION_FAILED',
+            message: 'One of these agents has a share link, so its owner cannot be changed.',
+          });
+        }
         throw error;
       }
 
@@ -1427,12 +1461,57 @@ export const agentRouter = router({
    *
    * Read-only and ownership-scoped: an unknown slug and someone else's slug both
    * return `null`, so this cannot be used to probe which slugs exist.
+   *
+   * @deprecated Superseded by `resolveAgentRoute`, which answers the same
+   * question plus "is this an agent share?" in one round trip. Kept because
+   * already-shipped clients (e.g. an installed desktop bundle) still call it.
    */
   resolveAgentIdBySlug: agentProcedure
     .input(z.object({ slug: z.string() }))
     .query(async ({ input, ctx }) => {
       const agentId = await ctx.agentModel.resolveIdBySlug(input.slug);
       return { agentId };
+    }),
+
+  /**
+   * Decide what `/agent/:slugOrId` points at: one of the caller's own agents,
+   * or an agent share opened by a visitor. Both surfaces live on the same
+   * route, so the client needs a single answer before it can pick a shell.
+   *
+   * Resolution order, cheapest first:
+   * 1. an id-shaped param is always an own-agent route (no query at all);
+   * 2. an ownership-scoped agent-slug lookup;
+   * 3. an agent-share lookup by custom slug or share id.
+   *
+   * Step 3 applies the same existence rule as `assertShareAccess`: a private
+   * share is only visible to its owner, so a stranger gets `notFound` rather
+   * than `share` and cannot use this resolver to probe which custom slugs /
+   * ids exist. `share.getSharedAgent` remains the access gate for everything
+   * else (sign-in state, view counting). An own slug always wins over a share
+   * slug of the same name.
+   */
+  resolveAgentRoute: agentProcedure
+    .input(z.object({ slugOrId: z.string().trim().min(1) }))
+    .query(async ({ input, ctx }): Promise<AgentRouteResolution> => {
+      const { slugOrId } = input;
+
+      // Every generated agent id carries an underscore (`agt_…`) and no
+      // generated slug does, so the shape alone settles this case. A bogus
+      // id still routes to the own-agent shell, which owns the not-found UI.
+      if (slugOrId.includes('_')) return { agentId: slugOrId, kind: 'own' };
+
+      const agentId = await ctx.agentModel.resolveIdBySlug(slugOrId);
+      if (agentId) return { agentId, kind: 'own' };
+
+      const share = await AgentShareModel.findBySlugOrId(ctx.serverDB, slugOrId);
+      // The creator following their own share link is not a visitor: the
+      // client redirects `ownShare` to the agent's share settings.
+      if (share) {
+        if (share.ownerId === ctx.userId) return { agentId: share.agentId, kind: 'ownShare' };
+        if (share.visibility === 'link') return { kind: 'share' };
+      }
+
+      return { kind: 'notFound' };
     }),
 
   /**

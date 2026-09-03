@@ -163,8 +163,22 @@ export class MessageService {
    * so server-internal callers (e.g. agent runtime stream events) can push
    * the same payload the client would otherwise fetch.
    */
-  async queryMessages(params: QueryMessageParams): Promise<UIChatMessage[]> {
-    return this.messageModel.query(params, this.getQueryOptions());
+  async queryMessages(
+    params: QueryMessageParams,
+    options?: {
+      /**
+       * Include agent-share visitor rows. `MessageModel.query()` hides them by
+       * default (they live under the creator's account but belong to the
+       * visitor); only run-execution seams whose topic is already resolved and
+       * authorized may opt in.
+       */
+      allowShareVisitor?: boolean;
+    },
+  ): Promise<UIChatMessage[]> {
+    return this.messageModel.query(params, {
+      ...this.getQueryOptions(),
+      ...(options?.allowShareVisitor && { allowShareVisitor: true }),
+    });
   }
 
   /**

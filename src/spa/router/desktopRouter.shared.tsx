@@ -37,6 +37,9 @@ import RouteSegmentSkeleton from '@/components/Skeleton/RouteSegment';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { goalDetailRouteMeta, goalsRouteMeta } from '@/features/AgentGoals/routeMeta';
+import AgentRouteSwitch from '@/features/AgentRoute/AgentRouteSwitch';
+import AgentShareLegacyRedirect from '@/features/AgentShareVisitor/LegacyRedirect';
+import { agentShareVisitorRouteMeta } from '@/features/AgentShareVisitor/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { agentsRouteMeta } from '@/features/AgentViewAll/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
@@ -50,6 +53,7 @@ import {
   agentProfileRouteMeta,
   agentRouteMeta,
   agentSelfLearningRouteMeta,
+  agentShareRouteMeta,
   agentStatisticsRouteMeta,
   topicsRouteMeta,
 } from '@/routes/(main)/agent/features/routeMeta';
@@ -220,6 +224,14 @@ export const sharedMainAreaChildren: RouteObject[] = [
             handle: { meta: agentStatisticsRouteMeta },
             path: 'statistics',
           },
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/agent/share'),
+              'Desktop > Chat > Share',
+            ),
+            handle: { meta: agentShareRouteMeta },
+            path: 'share',
+          },
           // Legacy `/agent/:aid/stats` URLs — kept for deep-links.
           {
             element: redirectElement('../statistics'),
@@ -318,10 +330,25 @@ export const sharedMainAreaChildren: RouteObject[] = [
             path: 'task/:taskId',
           },
         ],
-        element: dynamicLayout(
-          () => import('@/routes/(main)/agent/_layout'),
-          'Desktop > Chat > Layout',
-          { preloadId: 'agent' },
+        // `/agent/:aid` serves both the creator's own agent and the agent-share
+        // visitor surface; the param decides which — see `AgentRouteSwitch`.
+        // The switch is not a `Suspense`, so `withSegmentFallback` cannot swap
+        // the branding loader for a segment skeleton here — both branches (and
+        // the switch's own resolving state) carry it explicitly instead.
+        element: (
+          <AgentRouteSwitch
+            fallback={<RouteSegmentSkeleton />}
+            ownElement={dynamicLayout(
+              () => import('@/routes/(main)/agent/_layout'),
+              'Desktop > Chat > Layout',
+              { fallback: <RouteSegmentSkeleton />, preloadId: 'agent' },
+            )}
+            shareElement={dynamicElement(
+              () => import('@/features/AgentShareVisitor/Page'),
+              'Desktop > Share > Agent',
+              { fallback: <ConversationLayoutSkeleton /> },
+            )}
+          />
         ),
         errorElement: <ErrorBoundary />,
         path: ':aid',
@@ -1505,6 +1532,14 @@ export const createSharedDesktopRoutes = ({
     }),
     errorElement: <ErrorBoundary />,
     path: '/',
+  },
+  {
+    // Legacy agent-share visitor links: the surface now lives at
+    // `/agent/:slugOrId`, next to the creator's own agent page.
+    element: <AgentShareLegacyRedirect />,
+    errorElement: <ErrorBoundary />,
+    handle: { meta: agentShareVisitorRouteMeta },
+    path: '/share/agent/:slugOrId',
   },
   ...BusinessDesktopRoutesWithoutMainLayout,
   ...platformRoutes,

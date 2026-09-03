@@ -45,11 +45,18 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => mockNavigate,
 }));
 
+// What the shared preview/title read answers for this case (null = unresolved).
+let mockEntityPreview: { title?: string } | null = null;
+
 vi.mock('@/libs/swr', () => ({
-  useClientDataSWR: () => ({
-    data: [{ documentId: 'docs_doc1', id: 'agent-document-1' }],
-    mutate: vi.fn(),
-  }),
+  useClientDataSWR: (key: unknown) => {
+    if (Array.isArray(key) && key[0] === 'internal-entity-preview')
+      return { data: mockEntityPreview, mutate: vi.fn() };
+    return {
+      data: [{ documentId: 'docs_doc1', id: 'agent-document-1' }],
+      mutate: vi.fn(),
+    };
+  },
 }));
 
 vi.mock('@/services/agentDocument', () => ({
@@ -97,6 +104,7 @@ const renderLink = (properties: Record<string, unknown>) =>
 afterEach(() => {
   mockShowIcon = true;
   mockConst.isDesktop = false;
+  mockEntityPreview = null;
   vi.restoreAllMocks();
 });
 
@@ -176,6 +184,72 @@ describe('Link Render — message link icon toggle', () => {
 });
 
 describe('Link Render — internal entities', () => {
+  it('replaces a pasted URL label with the resolved entity title', () => {
+    // A raw acceptance URL says nothing about what it points to; once the
+    // entity resolves, the link reads as its title.
+    mockEntityPreview = { title: 'Gateway 消息队列重建' };
+
+    const { container } = renderLink({
+      linkHref: '/acceptance/acceptance-1',
+      linkKind: 'generic',
+      linkLabel: '/acceptance/acceptance-1',
+    });
+
+    const anchor = container.querySelector('a')!;
+    expect(anchor.textContent).toBe('Gateway 消息队列重建');
+    expect(anchor.getAttribute('href')).toBe('/acceptance/acceptance-1');
+  });
+
+  it('keeps the pasted URL while the title has not resolved', () => {
+    mockEntityPreview = null;
+
+    const { container } = renderLink({
+      linkHref: '/acceptance/acceptance-1',
+      linkKind: 'generic',
+      linkLabel: '/acceptance/acceptance-1',
+    });
+
+    expect(container.querySelector('a')!.textContent).toBe('/acceptance/acceptance-1');
+  });
+
+  it('never replaces authored link text with the entity title', () => {
+    mockEntityPreview = { title: 'Resolved title' };
+
+    const { container } = renderLink({
+      linkHref: '/acceptance/acceptance-1',
+      linkKind: 'generic',
+      linkLabel: 'Acceptance',
+    });
+
+    expect(container.querySelector('a')!.textContent).toBe('Acceptance');
+  });
+
+  it('keeps a URL-shaped authored label — bare means label === href, not "looks like a URL"', () => {
+    mockEntityPreview = { title: 'Resolved title' };
+
+    const { container } = renderLink({
+      linkHref: '/task/T-198',
+      linkKind: 'generic',
+      linkLabel: 'https://docs.example',
+    });
+
+    expect(container.querySelector('a')!.textContent).toBe('https://docs.example');
+  });
+
+  it('does not resolve titles for workspace-qualified links', () => {
+    // The ambient client reads the ACTIVE scope; /lobe-team/task/T-198 may
+    // name a different entity there, so the URL stays.
+    mockEntityPreview = { title: 'Wrong-scope title' };
+
+    const { container } = renderLink({
+      linkHref: '/lobe-team/task/T-198',
+      linkKind: 'generic',
+      linkLabel: '/lobe-team/task/T-198',
+    });
+
+    expect(container.querySelector('a')!.textContent).toBe('/lobe-team/task/T-198');
+  });
+
   it('opens acceptance links in the conversation portal', () => {
     const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => undefined);
 

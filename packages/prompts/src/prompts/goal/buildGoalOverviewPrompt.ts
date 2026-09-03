@@ -14,7 +14,7 @@ export type BuildGoalOverviewPromptInput = InitialGoalOverviewContext;
  * Goal overview prompt for the goal-page conversational reference.
  */
 export const buildGoalOverviewPrompt = (input: BuildGoalOverviewPromptInput): string => {
-  const { findings, goal, pendingDecisions, work } = input;
+  const { findings, goal, pendingDecisions, tasks } = input;
 
   const lines: string[] = [
     '<goal_overview>',
@@ -24,9 +24,9 @@ export const buildGoalOverviewPrompt = (input: BuildGoalOverviewPromptInput): st
 
   if (goal.requirement?.trim()) lines.push(`Requirement: ${goal.requirement.trim()}`);
 
-  if (work.length > 0) {
-    lines.push('', `Work items (${work.length}):`);
-    for (const item of work) {
+  if (tasks.length > 0) {
+    lines.push('', `Tasks (${tasks.length}):`);
+    for (const item of tasks) {
       const seq = item.seq ? `#${item.seq} ` : '';
       const attempts = item.attempts && item.attempts > 1 ? `  (attempt ${item.attempts})` : '';
       lines.push(`  ${seq}[${item.status}] ${item.title}${attempts}`);

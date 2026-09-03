@@ -67,7 +67,7 @@ export const instantiateVerifyPlanOnStart = async (
     const goal = task?.instruction ?? task?.name ?? '';
 
     const planGenerator = new VerifyPlanGeneratorService(db, userId, workspaceId);
-    // Undecomposed acceptance (goal-dispatched Work, one-sentence requirement):
+    // Undecomposed acceptance (goal-dispatched Task, one-sentence requirement):
     // spend one generation call splitting the requirement into named criteria,
     // so the checklist reads as distinguishable items instead of one generic
     // "Task delivery acceptance" row.

@@ -286,7 +286,7 @@ const FrontierRow = memo<{
   item: FrontierItem;
   numbers: Map<string, number>;
   onSelect: (nodeId: string) => void;
-  /** A gate's ledger is the ledger of the Work it was opened for. */
+  /** A gate's ledger is the ledger of the Task it was opened for. */
   subject?: GoalNodeView;
 }>(({ actions, canEdit, item, numbers, onSelect, subject }) => {
   const { t } = useTranslation('chat');

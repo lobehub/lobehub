@@ -245,6 +245,7 @@ export default {
     'A previous copy of this agent is still duplicating its history. Try again once it finishes.',
   'transfer.transferInProgress':
     'A previous move of this resource is still migrating its history. Try again once it finishes.',
+  'transfer.sharedTransferBlocked': 'This agent has a share link, so its owner cannot be changed.',
   'transfer.sameWorkspace':
     'This resource is already in the selected workspace. Choose another target.',
   'transfer.targetIsCurrentOwner': 'This agent already belongs to that member. Pick someone else.',

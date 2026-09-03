@@ -126,6 +126,7 @@
   "transfer.ownerOnly": "只有工作区所有者可以转移其他成员创建的资源。",
   "transfer.resourceNotFound": "此资源已不存在或您已无法访问。请刷新后重试。",
   "transfer.sameWorkspace": "此资源已在选定的工作区中。请选择其他目标。",
+  "transfer.sharedTransferBlocked": "该 Agent 已创建过分享链接，暂不能变更所有者。",
   "transfer.targetIsCurrentOwner": "该 Agent 已属于这位成员，请选择其他人。",
   "transfer.targetNoWriteAccess": "您需要成员或所有者权限才能将资源移动到目标工作区。",
   "transfer.targetNotWorkspaceMember": "所选接收人不是该工作区的有效成员。请刷新成员列表后重试。",

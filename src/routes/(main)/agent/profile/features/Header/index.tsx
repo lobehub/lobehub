@@ -10,6 +10,7 @@ import {
   Download,
   MoreHorizontal,
   Settings2Icon,
+  Share2Icon,
   Trash,
   UserRound,
   UsersIcon,
@@ -25,6 +26,7 @@ import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorks
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import AgentProfileTabs, { AGENT_PROFILE_TABS_CENTER_STYLE } from '@/features/AgentProfileTabs';
+import { useAgentShareSupported } from '@/features/AgentShareSettings/useAgentShareSupported';
 import NavHeader from '@/features/NavHeader';
 import { formatPageEditorInfoTime } from '@/features/PageEditor/formatPageEditorInfoTime';
 import AccessLevelTag from '@/features/ResourcePermission/AccessLevelTag';
@@ -46,7 +48,10 @@ import AgentForkTag from './AgentForkTag';
 import AgentStatusTag from './AgentStatusTag';
 import AgentVersionReviewTag from './AgentVersionReviewTag';
 
-type HeaderTranslation = TFunction<readonly ['setting', 'chat', 'file', 'common'], undefined>;
+type HeaderTranslation = TFunction<
+  readonly ['setting', 'chat', 'file', 'common', 'agent'],
+  undefined
+>;
 
 const buildAgentProfileMarkdown = (params: {
   description?: string;
@@ -98,7 +103,7 @@ const buildAgentProfileMarkdown = (params: {
 };
 
 const Header = memo(() => {
-  const { i18n, t } = useTranslation(['setting', 'chat', 'file', 'common']);
+  const { i18n, t } = useTranslation(['setting', 'chat', 'file', 'common', 'agent']);
   const dateLocale = i18n?.resolvedLanguage || i18n?.language;
   const navigate = useWorkspaceAwareNavigate();
 
@@ -245,6 +250,16 @@ const Header = memo(() => {
     [],
   );
 
+  const { visible: shareVisible } = useAgentShareSupported(activeAgentId);
+  const canShareAgent = shareVisible === true && canConfigure;
+
+  // Share settings are a sibling tab of the profile group, not a popup — the
+  // shortcut just jumps to that tab.
+  const handleOpenShare = useCallback(() => {
+    if (!activeAgentId) return;
+    navigate(`/agent/${activeAgentId}/share`);
+  }, [activeAgentId, navigate]);
+
   const menuItems = useMemo(() => {
     const businessTransferMenuItems = transferMenuItems ?? [];
 
@@ -354,24 +369,9 @@ const Header = memo(() => {
   ]);
 
   return (
+    // `relative` anchors the absolutely-centered switcher below.
     <NavHeader
       style={{ position: 'relative' }}
-      right={
-        <Flexbox horizontal align={'center'} gap={4}>
-          <DropdownMenu items={menuItems}>
-            <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SMALL_SIZE} />
-          </DropdownMenu>
-          {!isHeterogeneous && isStatusInit && !lockedByOther && !lockPending && (
-            <ToggleRightPanelButton
-              expand={showAgentBuilderPanel}
-              icon={BotMessageSquareIcon}
-              showActive={true}
-              onToggle={() => toggleAgentBuilderPanel()}
-            />
-          )}
-        </Flexbox>
-      }
-      // `relative` anchors the absolutely-centered switcher below.
       left={
         <Flexbox horizontal align={'center'} gap={8}>
           {/* No section title — the Segmented beside it names the current tab. */}
@@ -383,6 +383,30 @@ const Header = memo(() => {
             resourceId={showPermissionsEntry ? (activeAgentId ?? undefined) : undefined}
             resourceType={'agent'}
           />
+        </Flexbox>
+      }
+      right={
+        <Flexbox horizontal align={'center'} gap={4}>
+          {canShareAgent && (
+            <ActionIcon
+              icon={Share2Icon}
+              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              title={t('share.entry', { ns: 'agent' })}
+              tooltipProps={{ placement: 'bottom' }}
+              onClick={handleOpenShare}
+            />
+          )}
+          <DropdownMenu items={menuItems}>
+            <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SMALL_SIZE} />
+          </DropdownMenu>
+          {!isHeterogeneous && isStatusInit && !lockedByOther && !lockPending && (
+            <ToggleRightPanelButton
+              expand={showAgentBuilderPanel}
+              icon={BotMessageSquareIcon}
+              showActive={true}
+              onToggle={() => toggleAgentBuilderPanel()}
+            />
+          )}
         </Flexbox>
       }
       styles={{

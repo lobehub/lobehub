@@ -16,7 +16,7 @@ const OVERVIEW: InitialGoalOverviewContext = {
   findings: [],
   goal: { status: 'running', title: 'Demo' },
   pendingDecisions: [],
-  work: [{ seq: 1, status: 'active', title: 'Only work' }],
+  tasks: [{ seq: 1, status: 'active', title: 'Only task' }],
 };
 // The injector owns prompt composition — callers pass structured data only.
 const OVERVIEW_PROMPT = buildGoalOverviewPrompt(OVERVIEW);

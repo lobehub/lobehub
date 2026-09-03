@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { replayGoalAgainstCurrentCoordinator } from './replayCoordinator';
 
-const work = (id: string, overrides: Partial<GoalGraphState['nodes'][number]> = {}) => ({
+const task = (id: string, overrides: Partial<GoalGraphState['nodes'][number]> = {}) => ({
   createdAt: 1000,
   id,
   kind: 'task',
@@ -51,7 +51,7 @@ const tick = (index: number, overrides: Partial<GoalTickSnapshot>): GoalTickSnap
 });
 
 /**
- * Two advances of a two-Work goal: the second Work depends on the first, so the
+ * Two advances of a two-Task goal: the second Task depends on the first, so the
  * coordinator picks `a`, then picks `b` only once `a` resolves.
  */
 const trajectory: GoalTrajectory = {
@@ -81,7 +81,7 @@ const trajectory: GoalTrajectory = {
         tick(0, {
           candidates: [{ blockedBy: [], nodeId: 'b', priority: 0, status: 'proposed', title: 'b' }],
           chosenNodeId: 'b',
-          graphDelta: { nodesUpserted: [work('a', { status: 'resolved' })] },
+          graphDelta: { nodesUpserted: [task('a', { status: 'resolved' })] },
         }),
       ],
       trigger: 'settle',
@@ -90,7 +90,7 @@ const trajectory: GoalTrajectory = {
   goalId: 'goal_1',
   graphBaseline: graphState({
     edges: [{ id: 'e1', kind: 'depends_on', sourceNodeId: 'b', targetNodeId: 'a' }],
-    nodes: [work('a'), work('b')],
+    nodes: [task('a'), task('b')],
   }),
   startedAt: 0,
   title: 'Reproduce nanoGPT',
@@ -163,7 +163,7 @@ describe('replayGoalAgainstCurrentCoordinator', () => {
       ],
       graphBaseline: graphState({
         edges: [{ id: 'e1', kind: 'depends_on', sourceNodeId: 'b', targetNodeId: 'a' }],
-        nodes: [work('a', { taskId: 'task_1' }), work('b')],
+        nodes: [task('a', { taskId: 'task_1' }), task('b')],
       }),
     };
 

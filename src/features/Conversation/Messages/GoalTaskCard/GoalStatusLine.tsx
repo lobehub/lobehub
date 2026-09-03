@@ -17,7 +17,7 @@ import {
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { GoalWorkPhase } from './goalWorkProgress';
+import type { GoalTaskPhase } from './goalTaskProgress';
 
 const PHASE_META = {
   achieved: { color: cssVar.colorSuccess, icon: CheckCircle2Icon, spin: false },
@@ -30,7 +30,7 @@ const PHASE_META = {
   verifying: { color: cssVar.colorInfo, icon: LoaderCircleIcon, spin: true },
   waiting: { color: cssVar.colorTextSecondary, icon: Clock3Icon, spin: false },
 } as const satisfies Record<
-  GoalWorkPhase,
+  GoalTaskPhase,
   { color: string; icon: typeof TargetIcon; spin: boolean }
 >;
 
@@ -61,7 +61,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 export interface GoalStatusLineProps {
   passed: number;
-  phase: GoalWorkPhase;
+  phase: GoalTaskPhase;
   progress: number;
   total: number;
 }
@@ -88,7 +88,7 @@ const GoalStatusLine = memo<GoalStatusLineProps>(({ passed, phase, progress, tot
             size={12}
             spin={meta.spin}
           />
-          <Text className={styles.status}>{t(`goalWork.status.${phase}`)}</Text>
+          <Text className={styles.status}>{t(`goalTask.status.${phase}`)}</Text>
           <Text className={styles.status}>·</Text>
         </>
       )}
@@ -97,7 +97,7 @@ const GoalStatusLine = memo<GoalStatusLineProps>(({ passed, phase, progress, tot
           <div className={styles.progress}>
             <div className={styles.progressFill} style={{ width: `${progress}%` }} />
           </div>
-          <Text className={styles.status}>{t('goalWork.workDone', { passed, total })}</Text>
+          <Text className={styles.status}>{t('goalTask.tasksDone', { passed, total })}</Text>
         </>
       )}
     </Flexbox>

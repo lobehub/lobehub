@@ -319,6 +319,21 @@ interface SharedRolldownOutputOptions {
   strictExecutionOrder?: boolean;
 }
 
+// @lobehub/ui members on the first-screen path of dist/desktop, measured with
+// bundle-size-gate --type entry-graph. lobeUiImports splits the barrel into one
+// module per member; folding the eager ones back into one chunk keeps the heavy
+// members (Markdown, Mermaid, EmojiPicker, Highlighter, Image) on lazy routes.
+const UI_CORE_MEMBER_RE =
+  /^(?:Accordion|ActionIcon|Block|Collapse|ConfigProvider|Flex|FluentEmoji|Grid|Hotkey|Icon|Img|Modal|MotionProvider|Skeleton|Text|ThemeProvider|color|styles|utils|hooks\/use(?:IsClient|NativeButton|TextOverflow)|icons\/lucideExtra|base-ui\/(?:ActionIcon|Avatar|Button|Checkbox|ContextMenu|Modal|Popover|Switch|Text|Toast|Tooltip|controlSize|focusRing|zIndex))(?:\/|\.)/;
+
+const isUiCoreModule = (id: string) => {
+  const member = id.replaceAll('\\', '/').split('/node_modules/@lobehub/ui/es/')[1];
+
+  return Boolean(member && UI_CORE_MEMBER_RE.test(member));
+};
+
+// Rolldown groups also capture their modules' dependencies; a higher priority
+// keeps the explicit groups above (and antd) from being pulled into ui-core.
 export const createSharedRolldownOutput = (options: SharedRolldownOutputOptions = {}) => ({
   chunkFileNames: sharedChunkFileNames,
   strictExecutionOrder: options.strictExecutionOrder ?? true,
@@ -326,7 +341,14 @@ export const createSharedRolldownOutput = (options: SharedRolldownOutputOptions 
     groups: [
       {
         name: (moduleId: string) => sharedManualChunks(moduleId) ?? null,
+        priority: 3,
       },
+      {
+        name: 'vendor-antd',
+        priority: 2,
+        test: /[\\/]node_modules[\\/](?:antd|@ant-design|@rc-component)[\\/]/,
+      },
+      { name: 'vendor-ui-core', priority: 1, test: isUiCoreModule },
     ],
   },
 });
@@ -433,7 +455,4 @@ export const sharedOptimizeDeps = {
 // snapshots. They must still share one LexicalComposerContext at runtime.
 export const sharedRendererDedupe = ['@lobehub/editor', 'react', 'react-dom'];
 
-export const __testing = {
-  sharedChunkFileNames,
-  sharedManualChunks,
-};
+export const __testing = { isUiCoreModule, sharedChunkFileNames, sharedManualChunks };

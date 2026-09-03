@@ -32,6 +32,7 @@ vi.mock('@/server/services/sandbox', () => ({
 vi.mock('@/server/services/toolExecution/preprocessLhCommand', () => ({
   isLhCommand: (command: string) => command.startsWith('lh'),
   preprocessLhCommand: mocks.preprocessLhCommand,
+  SHARE_VISITOR_LH_BLOCKED_MESSAGE: 'The LobeHub CLI is unavailable in shared conversations.',
 }));
 
 const buildContext = (overrides: Record<string, unknown> = {}) =>
@@ -79,6 +80,7 @@ describe('cloudSandboxRuntime', () => {
       'lh agent edit agt_1 -t x',
       'user-1',
       'ws-42',
+      false,
     );
     expect(mocks.sandboxService.callTool).toHaveBeenCalledWith(
       'runCommand',
@@ -133,6 +135,44 @@ describe('cloudSandboxRuntime', () => {
 
     expect(mocks.sandboxService.callTool).not.toHaveBeenCalled();
     expect(result.state).toMatchObject({ success: false });
+  });
+
+  // `lobe-cloud-sandbox` is allowlisted for Agent Share visitors specifically
+  // because this shim never mints the creator's JWT for them — a visitor
+  // controls the shell command, so an `lh` invocation must fail closed
+  // instead of ever reaching `preprocessLhCommand` (which would sign a
+  // creator-scoped token).
+  it('refuses an lh command outright for a share-visitor run, without preprocessing or touching the sandbox', async () => {
+    const { cloudSandboxRuntime } = await import('../cloudSandbox');
+    const runtime = await cloudSandboxRuntime.factory(
+      buildContext({ agentShareVisitor: { agentId: 'agent-1' } }),
+    );
+
+    const result = await runtime.runCommand({ command: 'lh agent list', description: 'list' });
+
+    expect(mocks.preprocessLhCommand).not.toHaveBeenCalled();
+    expect(mocks.sandboxService.callTool).not.toHaveBeenCalled();
+    expect(result.state).toMatchObject({ success: false });
+  });
+
+  // Belt-and-braces: even though the short-circuit above already stops an
+  // `lh` command before this call, every OTHER shell command in a
+  // share-visitor run still threads `shareVisitorBlocked: true` through to
+  // `preprocessLhCommand` (4th arg), so its own internal guard stays armed
+  // independent of the caller-side check.
+  it('still runs a non-lh command normally for a share-visitor run, marking it share-visitor-blocked', async () => {
+    const { cloudSandboxRuntime } = await import('../cloudSandbox');
+    const runtime = await cloudSandboxRuntime.factory(
+      buildContext({ agentShareVisitor: { agentId: 'agent-1' } }),
+    );
+
+    await runtime.runCommand({ command: 'ls -la', description: 'list files' });
+
+    expect(mocks.preprocessLhCommand).toHaveBeenCalledWith('ls -la', 'user-1', undefined, true);
+    expect(mocks.sandboxService.callTool).toHaveBeenCalledWith(
+      'runCommand',
+      expect.objectContaining({ command: 'ls -la' }),
+    );
   });
 
   it('keeps delegating exportAndUploadFile through the wrapper', async () => {

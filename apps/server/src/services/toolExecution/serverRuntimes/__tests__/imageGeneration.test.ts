@@ -2,12 +2,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { imageGenerationRuntime } from '../imageGeneration';
 
+// Narrow shape of the `callerContext` the runtime passes to every
+// `*Router.createCaller`, just enough to type-check the spend-attribution
+// assertions below without pulling in the full tRPC caller context type.
+interface ImageCallerContext {
+  spendOrigin?: {
+    agentShare: { agentId: string; shareId: string; visitorUserId: string };
+    trigger: string;
+  };
+}
+
 const callerMocks = vi.hoisted(() => ({
   aiModel: vi.fn(() => ({})),
   aiProvider: vi.fn(() => ({})),
   generation: vi.fn(() => ({})),
   generationTopic: vi.fn(() => ({})),
-  image: vi.fn(() => ({})),
+  image: vi.fn((_ctx: ImageCallerContext) => ({})),
 }));
 
 vi.mock('@/server/routers/lambda/aiModel', () => ({
@@ -54,6 +64,36 @@ describe('imageGenerationRuntime', () => {
     expect(callerMocks.generation).toHaveBeenCalledWith(callerContext);
     expect(callerMocks.generationTopic).toHaveBeenCalledWith(callerContext);
     expect(callerMocks.image).toHaveBeenCalledWith(callerContext);
+  });
+
+  it('projects share attribution onto the image caller so visitor spend stays attributed', () => {
+    imageGenerationRuntime.factory({
+      agentShareVisitor: {
+        agentId: 'agent-1',
+        allowReadMemory: true,
+        toolGrants: [{ identifier: 'lobe-image-generation' }],
+        shareId: 'share-1',
+        visitorUserId: 'visitor-1',
+      },
+      toolManifestMap: {},
+      userId: 'creator-1',
+    });
+
+    const [callerContext] = callerMocks.image.mock.calls.at(-1)!;
+    expect(callerContext.spendOrigin).toEqual({
+      agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+      trigger: 'agent_share',
+    });
+    // Permission fields of the runtime object must never leak into billing metadata.
+    expect(callerContext.spendOrigin!.agentShare).not.toHaveProperty('allowReadMemory');
+    expect(callerContext.spendOrigin!.agentShare).not.toHaveProperty('toolGrants');
+  });
+
+  it('omits spend attribution for a non-share run', () => {
+    imageGenerationRuntime.factory({ toolManifestMap: {}, userId: 'user-1' });
+
+    const [callerContext] = callerMocks.image.mock.calls.at(-1)!;
+    expect(callerContext.spendOrigin).toBeUndefined();
   });
 
   it('preserves public agent visibility for generated image topics', async () => {

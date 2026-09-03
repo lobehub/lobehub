@@ -3,7 +3,7 @@ import { type ChatToolPayload } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import { type RuntimeExecutorContext } from '../context';
-import { buildServerVirtualSubAgentRunner } from '../executorHelpers';
+import { buildServerAgentMemberRunner, buildServerVirtualSubAgentRunner } from '../executorHelpers';
 
 /**
  * The parent model a spawned `callSubAgent` follows must be the model the
@@ -79,5 +79,50 @@ describe('buildServerVirtualSubAgentRunner sub-agent model resolution', () => {
     expect(execVirtualSubAgent).toHaveBeenCalledWith(
       expect.objectContaining({ agentId: 'target-agent', model: undefined, provider: undefined }),
     );
+  });
+});
+
+// Fail-close regression for share-visitor runs: the child run spawned by
+// either runner does not inherit the parent's shareGate, so for a run with
+// `ctx.agentShareVisitor` set, no runner may be built at all.
+describe('runner builders fail closed for share-visitor runs', () => {
+  const shareCtx = {
+    agentShareVisitor: {
+      agentId: 'agent-1',
+      shareId: 'share-1',
+      visitorUserId: 'visitor-1',
+    },
+    execGroupMember: vi.fn(),
+    execVirtualSubAgent: vi.fn(),
+    messageModel: { create: vi.fn() },
+    operationId: 'parent-op',
+    topicId: 'topic-1',
+  } as unknown as RuntimeExecutorContext;
+
+  const state = {
+    metadata: { agentId: 'agent-1', groupId: 'group-1', topicId: 'topic-1' },
+    operationId: 'parent-op',
+  } as unknown as AgentState;
+
+  it('buildServerVirtualSubAgentRunner returns undefined when agentShareVisitor is set', () => {
+    expect(
+      buildServerVirtualSubAgentRunner(
+        shareCtx,
+        state,
+        { id: 'tool-call-1' } as ChatToolPayload,
+        'parent-message-1',
+      ),
+    ).toBeUndefined();
+  });
+
+  it('buildServerAgentMemberRunner returns undefined when agentShareVisitor is set', () => {
+    expect(
+      buildServerAgentMemberRunner(
+        shareCtx,
+        state,
+        { id: 'tool-call-1' } as ChatToolPayload,
+        'parent-message-1',
+      ),
+    ).toBeUndefined();
   });
 });

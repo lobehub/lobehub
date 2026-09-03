@@ -32,7 +32,7 @@ import ProcessControl from './ProcessControl';
 
 /**
  * The goal detail page. A goal is a Goal Graph — it owns its own decomposition
- * and dispatches Work Tasks — so the page reads the graph snapshot directly and
+ * and dispatches its own Tasks — so the page reads the graph snapshot directly and
  * the route is keyed by the `goals` row id.
  *
  * Every header metric is a drill-down entry: clicking one opens its detail in

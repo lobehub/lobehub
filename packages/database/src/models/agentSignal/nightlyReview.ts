@@ -17,6 +17,7 @@ import { alias } from 'drizzle-orm/pg-core';
 import { agents, messagePlugins, messages, topics, users, userSettings } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { normalizeInboxAgentTitle } from '../../utils/inboxAgent';
+import { notShareVisitorMessage } from '../../utils/shareVisitor';
 
 /** Restores the cursor timestamp inside PostgreSQL so workflow JSON never truncates its precision. */
 const cursorUsers = alias(users, 'nightly_review_cursor_users');
@@ -253,6 +254,9 @@ export class AgentSignalNightlyReviewModel {
         and(
           eq(messages.userId, userId),
           isNull(messages.workspaceId),
+          // Share-visitor traffic bills to the creator but is not the
+          // creator's own activity — keep it out of the nightly digest.
+          notShareVisitorMessage(),
           agentFilter,
           gte(messages.createdAt, options.windowStart),
           lte(messages.createdAt, options.windowEnd),

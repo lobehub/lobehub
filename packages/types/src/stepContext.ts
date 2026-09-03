@@ -277,10 +277,10 @@ export interface InitialTaskManagerContext {
   contextPrompt: string;
 }
 
-export interface GoalOverviewWorkItem {
+export interface GoalOverviewTaskItem {
   /** 1-based attempt count so far, when known. */
   attempts?: number;
-  /** 1-based Work number as shown in the UI (#1, #2 …). */
+  /** 1-based Task number as shown in the UI (#1, #2 …). */
   seq?: number;
   status: string;
   title: string;
@@ -303,5 +303,5 @@ export interface InitialGoalOverviewContext {
     title: string;
   };
   pendingDecisions: GoalOverviewDecision[];
-  work: GoalOverviewWorkItem[];
+  tasks: GoalOverviewTaskItem[];
 }

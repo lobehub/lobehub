@@ -12,10 +12,10 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import type { OperationGoal } from './deriveOperationGoals';
 import GoalElapsedTime from './GoalElapsedTime';
 import GoalStatusLine from './GoalStatusLine';
-import type { GoalWorkPhase } from './goalWorkProgress';
-import { useGoalWorkStatus } from './useGoalWorkStatus';
+import type { GoalTaskPhase } from './goalTaskProgress';
+import { useGoalTaskStatus } from './useGoalTaskStatus';
 
-const ACTIVE_PHASES = new Set<GoalWorkPhase>(['repairing', 'running', 'verifying']);
+const ACTIVE_PHASES = new Set<GoalTaskPhase>(['repairing', 'running', 'verifying']);
 
 const styles = createStaticStyles(({ css }) => ({
   card: css`
@@ -57,7 +57,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 const GoalCard = memo<{ goal: OperationGoal }>(({ goal }) => {
   const navigate = useWorkspaceAwareNavigate();
-  const { agentId, progress, startedAt, title } = useGoalWorkStatus({
+  const { agentId, progress, startedAt, title } = useGoalTaskStatus({
     criteriaCount: goal.criteriaCount,
     goalId: goal.goalId,
   });
@@ -104,9 +104,9 @@ const GoalCard = memo<{ goal: OperationGoal }>(({ goal }) => {
   );
 });
 
-GoalCard.displayName = 'GoalWorkCardItem';
+GoalCard.displayName = 'GoalTaskCardItem';
 
-const GoalWorkCard = memo<{ goals: OperationGoal[] }>(({ goals }) => {
+const GoalTaskCard = memo<{ goals: OperationGoal[] }>(({ goals }) => {
   if (goals.length === 0) return null;
 
   return (
@@ -118,6 +118,6 @@ const GoalWorkCard = memo<{ goals: OperationGoal[] }>(({ goals }) => {
   );
 });
 
-GoalWorkCard.displayName = 'GoalWorkCard';
+GoalTaskCard.displayName = 'GoalTaskCard';
 
-export default GoalWorkCard;
+export default GoalTaskCard;

@@ -31,7 +31,7 @@ export interface GoalDecisionInput {
  */
 export interface GoalDecision {
   branch: GoalTickBranch;
-  /** Every eligible work node, in the order the coordinator ranked them. */
+  /** Every eligible task node, in the order the coordinator ranked them. */
   candidates: FrontierCandidate[];
   chosenNodeId?: string;
 }

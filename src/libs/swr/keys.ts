@@ -48,6 +48,8 @@ interface LocalFilePreviewKeyParams {
 // ---- message ------------------------------------------------------------
 export interface MessageListQueryContext {
   agentId?: string | null;
+  /** Agent-share visitor surface — routes the read through `shareChat.getMessages`. */
+  agentShareId?: string;
   groupId?: string | null;
   threadId?: string | null;
   topicId?: string | null;
@@ -56,6 +58,7 @@ export interface MessageListQueryContext {
 
 export interface CanonicalMessageListContext {
   agentId: string | null;
+  agentShareId?: string;
   groupId: string | null;
   threadId: string | null;
   topicId: string | null;
@@ -76,6 +79,7 @@ export const normalizeMessageListQueryContext = (
   threadId: context.threadId ?? null,
   topicId: context.topicId ?? null,
   ...(context.topicShareId === undefined ? {} : { topicShareId: context.topicShareId }),
+  ...(context.agentShareId === undefined ? {} : { agentShareId: context.agentShareId }),
 });
 
 /** Previous persisted key schema, used only by the targeted v1 → v2 migration. */
@@ -1148,8 +1152,18 @@ export const inboxKeys = {
   ]),
 };
 
-// ---- share (shared topic / page) ----------------------------------------
+// ---- share (shared agent / topic / page) ---------------------------------
 export const shareKeys = {
+  agentInfo: def('share:agentInfo', (slugOrId: string) => ['share:agentInfo', slugOrId]),
+  // Creator-side share status keyed by agentId (visitor side uses `agentInfo`).
+  agentShareStats: def('share:agentShareStats', (agentId: string) => [
+    'share:agentShareStats',
+    agentId,
+  ]),
+  agentShareStatus: def('share:agentShareStatus', (agentId: string) => [
+    'share:agentShareStatus',
+    agentId,
+  ]),
   artifact: def('share:artifact', (id: string) => ['share:artifact', id]),
   pageDocument: def('share:pageDocument', (documentId: string) => [
     'share:pageDocument',
@@ -1157,6 +1171,8 @@ export const shareKeys = {
   ]),
   topic: def('share:topic', (id: string) => ['share:topic', id]),
   topicInfo: def('share:topicInfo', (topicId: string) => ['share:topicInfo', topicId]),
+  /** The visitor's own topics under an agent share (server-scoped by senderId). */
+  visitorTopics: def('share:visitorTopics', (shareId: string) => ['share:visitorTopics', shareId]),
 };
 
 // ---- fork source (community detail) -------------------------------------

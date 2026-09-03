@@ -24,6 +24,22 @@ export const MemoryApiName = {
 
 export type MemoryApiNameType = (typeof MemoryApiName)[keyof typeof MemoryApiName];
 
+/**
+ * APIs that mutate the user's memory store. Single source of truth shared by
+ * the Agent Share server gate (which strips them from visitor runs
+ * unconditionally) and the share settings picker (which pre-disables them),
+ * so adding a write API here keeps both sides in step.
+ */
+export const MEMORY_WRITE_API_NAMES: ReadonlySet<MemoryApiNameType> = new Set([
+  MemoryApiName.addActivityMemory,
+  MemoryApiName.addContextMemory,
+  MemoryApiName.addExperienceMemory,
+  MemoryApiName.addIdentityMemory,
+  MemoryApiName.addPreferenceMemory,
+  MemoryApiName.removeIdentityMemory,
+  MemoryApiName.updateIdentityMemory,
+]);
+
 /** @deprecated Use MemoryApiName instead */
 export const UserMemoryApiName = MemoryApiName;
 

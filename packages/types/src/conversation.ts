@@ -129,6 +129,14 @@ export interface ConversationContext {
   agentDocumentId?: string;
   agentId: string;
   /**
+   * Agent share id for the visitor view of a shared agent
+   * (`/agent/:slugOrId`). When present the conversation is mounted for a
+   * non-owner visitor: every owner-scoped read/write (agent-config fetch,
+   * message persistence, topic settle, agent-signal emission) must be skipped
+   * or routed through the share-authorized `shareChat` procedures instead.
+   */
+  agentShareId?: string;
+  /**
    * Optional default assignee candidate for task manager conversations.
    * This is a prompt hint only; task tools still require an explicit assigneeAgentId.
    */

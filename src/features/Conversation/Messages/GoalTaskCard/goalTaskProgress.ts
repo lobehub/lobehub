@@ -1,6 +1,6 @@
 import type { GoalStatus } from '@lobechat/const/goal';
 
-export type GoalWorkPhase =
+export type GoalTaskPhase =
   | 'achieved'
   | 'canceled'
   | 'error'
@@ -11,16 +11,16 @@ export type GoalWorkPhase =
   | 'verifying'
   | 'waiting';
 
-interface GoalWorkProgressInput {
+interface GoalTaskProgressInput {
   criteriaCount: number;
   /** Decision gates waiting on a human right now — they outrank the goal's own status. */
   pendingDecisions?: number;
   status?: GoalStatus;
-  workDone?: number;
-  workTotal?: number;
+  taskDone?: number;
+  taskTotal?: number;
 }
 
-const resolvePhase = (status?: GoalStatus, pendingDecisions = 0): GoalWorkPhase => {
+const resolvePhase = (status?: GoalStatus, pendingDecisions = 0): GoalTaskPhase => {
   if (pendingDecisions > 0) return 'waiting';
   switch (status) {
     case 'achieved': {
@@ -49,12 +49,12 @@ const resolvePhase = (status?: GoalStatus, pendingDecisions = 0): GoalWorkPhase 
 
 /**
  * Honest Goal progress for the conversation card: lifecycle phase plus how much
- * of the graph's Work is closed. The criteria count is only a fallback for a
+ * of the graph's Tasks are closed. The criteria count is only a fallback for a
  * goal whose graph has not been seeded yet.
  */
-export const getGoalWorkProgress = (input: GoalWorkProgressInput) => {
-  const total = input.workTotal || input.criteriaCount;
-  const passed = input.workDone ?? 0;
+export const getGoalTaskProgress = (input: GoalTaskProgressInput) => {
+  const total = input.taskTotal || input.criteriaCount;
+  const passed = input.taskDone ?? 0;
 
   return {
     passed,

@@ -41,8 +41,8 @@ import {
 } from '../Contexts/message-action-context';
 import EditedFilesCard from '../EditedFilesCard';
 import { useOperationEditedFiles } from '../EditedFilesCard/useOperationEditedFiles';
-import GoalWorkCard from '../GoalWorkCard';
-import { useOperationGoals } from '../GoalWorkCard/useOperationGoals';
+import GoalTaskCard from '../GoalTaskCard';
+import { useOperationGoals } from '../GoalTaskCard/useOperationGoals';
 import MessageWorks from '../MessageWorks';
 import SignalCallbacks from '../SignalCallbacks';
 import FileListViewer from '../User/components/FileListViewer';
@@ -291,7 +291,7 @@ const GroupMessage = memo<GroupMessageProps>(
           editedFiles.length > 0 || operationGoals.length > 0 ? (
             <Flexbox gap={8}>
               {editedFiles.length > 0 && <EditedFilesCard entries={editedFiles} />}
-              {operationGoals.length > 0 && <GoalWorkCard goals={operationGoals} />}
+              {operationGoals.length > 0 && <GoalTaskCard goals={operationGoals} />}
               {workRootOperationId && <MessageWorks rootOperationId={workRootOperationId} />}
             </Flexbox>
           ) : workRootOperationId ? (

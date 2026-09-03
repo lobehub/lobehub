@@ -18,8 +18,8 @@ describe('deriveInitialGoalCriterionTitle', () => {
 
 describe('buildGoalCreateInput', () => {
   it('never sets a graph-wide round cap', () => {
-    // The modal's only iteration field means "attempts on one Work". `maxRounds`
-    // counts runs across every Work in the graph, so deriving it from that field
+    // The modal's only iteration field means "attempts on one Task". `maxRounds`
+    // counts runs across every Task in the graph, so deriving it from that field
     // stranded the fourth task of a goal whose limit was three attempts.
     expect(buildGoalCreateInput({ instruction: 'ship it' })).not.toHaveProperty('maxRounds');
   });

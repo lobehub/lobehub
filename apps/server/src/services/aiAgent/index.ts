@@ -10,6 +10,7 @@ import type {
   ExecVirtualSubAgentParams,
   ScheduleAgentRunParams,
   ScheduleAgentRunResult,
+  UserInterventionConfig,
   WorkingDirConfig,
 } from '@lobechat/types';
 import { getWorkingDirEffectivePath, RequestTrigger } from '@lobechat/types';
@@ -23,6 +24,7 @@ import {
 } from '@/business/server/agent-run/agentInterventionIdentity';
 import { AgentModel } from '@/database/models/agent';
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { AgentShareModel } from '@/database/models/agentShare';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { DeviceModel } from '@/database/models/device';
@@ -66,6 +68,7 @@ import { resolveRunAgentConfig } from './pipeline/resolveRunAgentConfig';
 import { startOperation } from './pipeline/startOperation';
 import { discoverTools } from './pipeline/toolDiscovery';
 import { setupTurn } from './pipeline/turnSetup';
+import { applyShareGateToAgentConfig } from './shareGate';
 import type { SubAgentRunDeps } from './subAgentRuns';
 import { execAgentMember, execAgentThreadRun } from './subAgentRuns';
 import { acquireTopicStartReservation } from './topicStartReservation';
@@ -113,6 +116,14 @@ export class AiAgentService {
     db: LobeChatDatabase,
     userId: string,
     options?: {
+      /**
+       * Opt IN to agent-share visitor rows for the models this service (and
+       * the {@link AgentRuntimeService} it constructs) owns. Reserved for
+       * share-runtime entry points that drive a visitor turn under the
+       * creator's `userId` (`share.ownerId`). Defaults to false; ordinary
+       * creator-facing entry points get the visitor exclusion for free.
+       */
+      includeShareVisitor?: boolean;
       marketAccessToken?: string;
       runtimeOptions?: AgentRuntimeServiceOptions;
       withholdGatewayToken?: boolean;
@@ -124,19 +135,23 @@ export class AiAgentService {
     this.workspaceId = options?.workspaceId;
     this.withholdGatewayToken = options?.withholdGatewayToken ?? false;
     const wsId = this.workspaceId;
+    const includeShareVisitor = options?.includeShareVisitor ?? false;
+    const messageModelOptions = { includeShareVisitor };
+    const topicModelOptions = { includeShareVisitor };
     this.agentDocumentsService = new AgentDocumentsService(db, userId, wsId);
     this.agentModel = new AgentModel(db, userId, wsId);
     this.agentOperationModel = new AgentOperationModel(db, userId, wsId);
     this.agentService = new AgentService(db, userId, wsId);
-    this.messageModel = new MessageModel(db, userId, wsId);
+    this.messageModel = new MessageModel(db, userId, wsId, undefined, messageModelOptions);
     this.connectorModel = new ConnectorModel(db, userId, wsId);
     this.connectorToolModel = new ConnectorToolModel(db, userId, wsId);
     this.pluginModel = new PluginModel(db, userId, wsId);
     this.taskModel = new TaskModel(db, userId, wsId);
     this.threadModel = new ThreadModel(db, userId, wsId);
-    this.topicModel = new TopicModel(db, userId, wsId);
+    this.topicModel = new TopicModel(db, userId, wsId, undefined, topicModelOptions);
     this.agentRuntimeService = new AgentRuntimeService(db, userId, {
       ...options?.runtimeOptions,
+      includeShareVisitor,
       agentFactory: createGraphAwareAgentFactory(options?.runtimeOptions?.agentFactory),
       // ── Runtime delegate ─────────────────────────────────────────────────
       // Operations the runtime delegates back UP to this layer. The dependency
@@ -150,6 +165,7 @@ export class AiAgentService {
         execSubAgent: this.execSubAgent,
         execVirtualSubAgent: this.execVirtualSubAgent,
         execGroupMember: this.execGroupMember,
+        verifyShareRunStillAuthorized: this.verifyShareRunStillAuthorized,
       },
       workspaceId: wsId,
     });
@@ -635,7 +651,7 @@ export class AiAgentService {
       disableLocalSystem,
       initialStepCount,
       signal,
-      userInterventionConfig = { approvalMode: 'headless' },
+      userInterventionConfig: requestedUserInterventionConfig = { approvalMode: 'headless' },
       queueRetries,
       queueRetryDelay,
       parentMessageId,
@@ -647,10 +663,34 @@ export class AiAgentService {
       approvalResolutionRequestId: providedApprovalResolutionRequestId,
       approvalSourceOperationId: providedApprovalSourceOperationId,
       selectedToolIds,
+      shareGate,
       mentionedAgents,
       suppressUserMessage,
       ephemeralUserMessage,
     } = params;
+
+    // Agent Share visitor runs execute under the CREATOR's credentials (see
+    // `shareChat.ts` `execAgent` → `AiAgentService.execAgent({ shareGate })`)
+    // with no visitor-facing approval UI at all, so no approval can ever be
+    // WAITED for: `headless` is the only mode that converts an intervention
+    // into an immediate blocked tool result ('always'-policy calls become
+    // `resolve_blocked_tools`) instead of parking the run on
+    // `request_human_approve` forever. Forced unconditionally — overriding
+    // whatever the caller passed — so a future execAgent call site cannot
+    // reintroduce a waiting mode by omission.
+    //
+    // `headless` DOES auto-run overridable ('required') interventions. That is
+    // acceptable here only because of the two share-specific layers on top:
+    // `applyShareGateToInterventionRequiredApis` strips every
+    // intervention-gated API from what the model is offered, and
+    // `isShareBlockedBuiltinDispatch` re-blocks intervention-gated (and
+    // non-enabled, and data-rule-violating) builtin calls at the executor
+    // dispatch site — re-reading the UNSTRIPPED manifest, since the assembly
+    // strip removes the very intervention config the runtime would otherwise
+    // consult. No 'required' builtin API can execute through either layer.
+    const userInterventionConfig: UserInterventionConfig = shareGate
+      ? { approvalMode: 'headless' }
+      : requestedUserInterventionConfig;
 
     // Honour client-minted row ids on a FRESH send only. Resume / regeneration
     // replays reach this method too (resumeApproval, resumeToolResult,
@@ -750,6 +790,11 @@ export class AiAgentService {
         toolModeOverride,
       },
     );
+
+    // Share-visitor runs must never see the creator's files/knowledge bases.
+    // Applied to the resolved config before anything downstream (knowledge
+    // flags, tools engine, context snapshot) reads it.
+    if (shareGate) applyShareGateToAgentConfig(agentConfig);
 
     let resumeParentMessage: Awaited<ReturnType<MessageModel['findById']>>;
 
@@ -908,6 +953,7 @@ export class AiAgentService {
         resolvedAgentId,
         resume,
         runFromHistory,
+        shareGate,
         throwIfExecutionAborted,
         title,
         trigger,
@@ -942,6 +988,7 @@ export class AiAgentService {
       prompt,
       provider,
       resolvedAgentId,
+      shareGate,
       topicId,
       trigger,
       userMessageId: turn.userMessageId,
@@ -996,8 +1043,24 @@ export class AiAgentService {
 
       globalMemoryEnabled = agentMemoryEnabled ?? memorySettings?.enabled !== false;
 
-      const generalSettings = settings?.general as { timezone?: string } | undefined;
-      userTimezone = generalSettings?.timezone;
+      // Timezone drives the session-date placeholder rendered back to whoever
+      // is actually conversing. In a share-visitor run that is the VISITOR,
+      // not the creator whose settings this block otherwise reads — memory /
+      // expertise intentionally stay creator-scoped below (gated by
+      // `allowReadMemory`), but the timezone has no such gate and must not
+      // leak the creator's own setting into a visitor's turn.
+      if (shareGate) {
+        const visitorSettings = await new UserModel(
+          this.db,
+          shareGate.visitorUserId,
+        ).getUserSettings();
+        const visitorGeneralSettings = visitorSettings?.general as
+          { timezone?: string } | undefined;
+        userTimezone = visitorGeneralSettings?.timezone;
+      } else {
+        const generalSettings = settings?.general as { timezone?: string } | undefined;
+        userTimezone = generalSettings?.timezone;
+      }
     } catch (error) {
       log('execAgent: failed to fetch user settings: %O', error);
     }
@@ -1006,6 +1069,13 @@ export class AiAgentService {
       enableExpertise = preference?.lab?.enableSelfLearning === true;
     } catch (error) {
       console.error('Failed to resolve expertise injection Lab preference:', error);
+    }
+    // Share visitors only get the creator's memory (persona + learned
+    // expertise) when the share explicitly allows it — both surfaces would
+    // otherwise leak the creator's personal context into visitor turns.
+    if (shareGate && !shareGate.shareConfig.allowReadMemory) {
+      globalMemoryEnabled = false;
+      enableExpertise = false;
     }
     log(
       'execAgent: globalMemoryEnabled=%s, timezone=%s',
@@ -1018,6 +1088,7 @@ export class AiAgentService {
     const loadHistoryMessages = createHistoryMessagesLoader(
       {
         db: this.db,
+        isShareVisitorRun: !!shareGate,
         messageModel: this.messageModel,
         userId: this.userId,
         workspaceId: this.workspaceId,
@@ -1303,6 +1374,27 @@ export class AiAgentService {
       userMessageId: result.userMessageId,
     };
   }
+
+  /**
+   * `AgentRuntimeDelegate.verifyShareRunStillAuthorized` implementation — see
+   * `AgentShareModel.isRunStillAuthorized`'s JSDoc for what "authorized" means
+   * and why a per-step recheck (not only at step 0) is what actually stops a
+   * revoked share's run: nothing tears down an operation that already exists,
+   * and the visitor's own Stop button breaks the instant the share goes
+   * private, so the step loop has to re-prove authorization itself.
+   *
+   * A plain top-level `db` read (not scoped to `this.userId`/workspace):
+   * `agent_shares` has no ownership predicate applicable here — this call runs
+   * from inside the CREATOR's own runtime step, so `this.db` is already the
+   * correct connection.
+   *
+   * Arrow field (not a method) so it stays bound when handed to
+   * AgentRuntimeService.
+   */
+  verifyShareRunStillAuthorized = async (params: {
+    agentId: string;
+    shareId: string;
+  }): Promise<boolean> => AgentShareModel.isRunStillAuthorized(this.db, params);
 
   /**
    * Execute an agent in an isolated Thread context.

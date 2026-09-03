@@ -645,6 +645,44 @@ describe('UserModel', () => {
 
         expect(user).toBeUndefined();
       });
+
+      it('purges share-visitor topics and messages when the visitor is deleted', async () => {
+        // Visitor conversations live under the CREATOR's userId with
+        // topics.senderId = visitor. There is no FK from topics.senderId to
+        // users, so the users cascade cannot reach them; deleteUser must
+        // clean them up explicitly.
+        const creatorId = userId;
+        const visitorId = otherUserId;
+        const visitorTopicId = 'topic-share-visitor';
+        const creatorTopicId = 'topic-creator-own';
+
+        await serverDB.insert(topics).values([
+          { id: visitorTopicId, senderId: visitorId, title: 'visitor chat', userId: creatorId },
+          { id: creatorTopicId, title: 'creator own chat', userId: creatorId },
+        ]);
+        await serverDB.insert(messages).values([
+          {
+            content: 'hello from visitor',
+            id: 'msg-visitor-1',
+            role: 'user',
+            topicId: visitorTopicId,
+            userId: creatorId,
+          },
+        ]);
+
+        await UserModel.deleteUser(serverDB, visitorId);
+
+        const remainingTopics = await serverDB.query.topics.findMany();
+        expect(remainingTopics.map((t) => t.id).sort()).toEqual([creatorTopicId]);
+
+        const remainingMessages = await serverDB.query.messages.findMany();
+        expect(remainingMessages).toHaveLength(0);
+
+        const creator = await serverDB.query.users.findFirst({
+          where: eq(users.id, creatorId),
+        });
+        expect(creator).toBeDefined();
+      });
     });
 
     describe('findById', () => {

@@ -38,7 +38,7 @@ export const gateTitleKey = (kind: CoordinatorGateKind): string => `goalProcess.
 
 /**
  * Locale key for a coordinator-authored fixed node title (gate nodes and the
- * terminal Goal-acceptance Work), or undefined for user/agent-authored nodes.
+ * terminal Goal-acceptance Task), or undefined for user/agent-authored nodes.
  */
 export const coordinatorNodeTitleKey = (view: GoalNodeView): string | undefined => {
   const { node } = view;
@@ -89,7 +89,7 @@ const REASON_PATTERNS: Array<{
   },
   {
     key: 'goalProcess.gate.reason.attemptBudgetExhausted',
-    pattern: /^Work attempt budget was exhausted( after an operation was abandoned)?$/,
+    pattern: /^Task attempt budget was exhausted( after an operation was abandoned)?$/,
   },
   {
     key: 'goalProcess.gate.reason.costBudgetExhausted',

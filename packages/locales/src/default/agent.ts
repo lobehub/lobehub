@@ -371,6 +371,125 @@ export default {
   'channel.statusQueued': 'Queued',
   'channel.statusStarting': 'Starting',
 
+  'share.entry': 'Share this Agent',
+  'share.settings.limits.desc':
+    'Every visitor run is billed to your account, so these caps are what keep a shared link from running up your bill. They always apply — you can change the numbers, but not turn them off.',
+  'share.settings.limits.maxTopicsPerVisitor': 'Conversations per visitor',
+  'share.settings.limits.maxTopicsPerVisitorHint':
+    'How many separate conversations each signed-in visitor can start.',
+  'share.settings.limits.maxTurnsPerTopic': 'Turns per conversation',
+  'share.settings.limits.maxTurnsPerTopicHint':
+    'How many messages a visitor can send inside one conversation.',
+  'share.settings.limits.monthlySpendLimit': 'Monthly spend cap',
+  'share.settings.limits.monthlySpendLimitHint':
+    'Visitor runs stop once this month’s spend on this Agent reaches the cap.',
+  'share.settings.limits.title': 'Limits',
+  'share.settings.link.copied': 'Link copied',
+  'share.settings.link.copy': 'Copy link',
+  'share.settings.link.desc':
+    'Anyone signed in who has the link can chat with this Agent. Runs execute on your account.',
+  'share.settings.link.disableConfirmContent':
+    'Visitors lose access to the link right away. The link itself is kept, so turning sharing back on later republishes the exact same URL.',
+  'share.settings.link.disableConfirmOk': 'Turn off sharing',
+  'share.settings.link.disableConfirmTitle': 'Turn off sharing?',
+  'share.settings.link.offHint':
+    'Sharing is off. Turn it on to get a link you can hand out — turning it off again only pauses it, and the same link resumes whenever you turn it back on.',
+  'share.settings.link.publishDisabled':
+    'Sharing is not available on your account yet. You can still turn off a share you already published.',
+  'share.settings.link.slugError.invalid':
+    'Use lowercase letters, numbers and hyphens only, and don’t start or end with a hyphen.',
+  'share.settings.link.slugError.reserved': 'This word is reserved. Please pick another one.',
+  'share.settings.link.slugError.taken': 'This custom link is already taken.',
+  'share.settings.link.slugError.tooLong': 'Custom links can be at most 64 characters.',
+  'share.settings.link.slugError.tooShort': 'Custom links need at least 3 characters.',
+  'share.settings.link.slugHint':
+    '3–64 characters: lowercase letters, numbers and hyphens. Leave it empty to use the generated link.',
+  'share.settings.link.slugLabel': 'Custom link',
+  'share.settings.link.slugPlaceholder': 'my-agent',
+  'share.settings.link.slugSaved': 'Custom link updated',
+  'share.settings.link.title': 'Share link',
+  'share.settings.link.viewCount': '{{views}} views',
+  'share.settings.notice.desc':
+    'Visitors don’t just read this Agent — they run it. Every reply is generated on your account and charged to your balance, and the Agent acts with whatever access you grant below.',
+  'share.settings.notice.title': 'Visitors run this Agent on your account',
+  'share.settings.permissions.allowCreatorViewSessions': 'Let me read visitor conversations',
+  'share.settings.permissions.allowCreatorViewSessionsHint':
+    'Off by default: visitor conversations stay private to the visitor.',
+  'share.settings.permissions.allowReadMemory': 'Allow reading my memory',
+  'share.settings.permissions.allowReadMemoryHint':
+    'The Agent may draw on your long-term memory while answering a visitor.',
+  'share.settings.permissions.desc':
+    'What a visitor’s run may read, and what the visitor gets to see back.',
+  'share.settings.permissions.showErrorDetails': 'Show error details to visitors',
+  'share.settings.permissions.showErrorDetailsHint':
+    'Off by default: visitors see a generic failure notice instead of raw error text.',
+  'share.settings.permissions.showModelInfo': 'Show which model is used',
+  'share.settings.permissions.showModelInfoHint':
+    'Off by default: your model and provider choice stays hidden.',
+  'share.settings.permissions.title': 'Permissions',
+  'share.settings.title': 'Share Agent',
+  'share.settings.usage.conversations': 'Conversations',
+  'share.settings.usage.desc': 'What this share has attracted, and what it has cost you.',
+  'share.settings.usage.loadFailed': 'Usage could not be loaded',
+  'share.settings.usage.monthlySpend': 'This month’s spend',
+  'share.settings.usage.spendOfLimit': '${{spend}} of ${{limit}}',
+  'share.settings.usage.title': 'Usage',
+  'share.settings.usage.views': 'Visits',
+  'share.settings.usage.visitors': 'Visitors',
+  'share.settings.tools.desc':
+    'Only the tools you tick here can be called during a visitor run. Tools that could reach your device or local files are never offered.',
+  'share.settings.tools.apiNotAvailableToVisitors':
+    'This action can never be used in a shared run — it either needs your approval or is otherwise off-limits to visitors.',
+  'share.settings.tools.apiWritesOwnerData':
+    'Visitors can never write to your memory — this action stays off in shared runs.',
+  'share.settings.tools.availableGroup': 'Not granted · {{count}}',
+  'share.settings.tools.empty': 'This Agent has no tools that can be granted to visitors.',
+  'share.settings.tools.grantedEmpty':
+    'No tools granted yet — visitors get a plain chat. Pick from the list below to grant one.',
+  'share.settings.tools.grantedGroup': 'Granted to visitors · {{count}}',
+  'share.settings.tools.needsMemoryPermission':
+    'Also turn on “Allow reading my memory” above, or this tool stays inert for visitors.',
+  'share.settings.tools.notAvailableToVisitors':
+    'This tool can never be used in a shared run — visitor runs are blocked from your knowledge base and Agent files.',
+  'share.settings.tools.title': 'Tools visitors can use',
+  'share.settings.updateError': 'Could not save the change. Please try again.',
+  'share.visitor.access.backHome': 'Back to home',
+  'share.visitor.access.forbidden': "You don't have access to this shared agent.",
+  'share.visitor.access.notFound': 'This share link is no longer available.',
+  'share.visitor.access.signInCta': 'Sign in',
+  'share.visitor.access.signInDesc':
+    'Sign in to start chatting with this shared agent. Your conversations stay tied to your account.',
+  'share.visitor.access.signInTitle': 'Sign in to continue',
+  'share.visitor.errors.generic': 'Failed to send the message. Please try again.',
+  'share.visitor.errors.heterogeneousUnsupported':
+    "This shared agent isn't available for visitor chat yet. Please contact its owner.",
+  'share.visitor.errors.insufficientBudget':
+    'This shared agent has run out of budget. Please contact its owner.',
+  'share.visitor.errors.promptTooLong':
+    'Your message is too long. Please shorten it to {{max}} characters or fewer and try again.',
+  'share.visitor.errors.providerNotSupported':
+    'This shared agent is not available right now. Please contact its owner.',
+  'share.visitor.errors.sharingPaused':
+    'The owner has paused sharing, so new messages are turned off.',
+  'share.visitor.errors.spendLimit':
+    'This shared agent has reached its monthly usage limit set by its creator. It will be available again next month.',
+  'share.visitor.errors.stopFailed': "Couldn't stop the run. Please try again.",
+  'share.visitor.errors.topicLimit':
+    'You have reached the conversation limit on this shared agent.',
+  'share.visitor.errors.turnLimit':
+    'This conversation has reached its turn limit. Start a new conversation to continue.',
+  'share.visitor.errors.unavailable':
+    'This conversation is no longer available. Try switching to another topic or starting a new one.',
+  'share.visitor.input.placeholder': 'Message this shared agent…',
+  'share.visitor.input.send': 'Send',
+  'share.visitor.input.stop': 'Stop',
+  'share.visitor.privacyNotice':
+    'This conversation runs on the owner’s account and may be visible to them. Avoid sharing sensitive information.',
+  'share.visitor.topics.empty': 'No conversations yet',
+  'share.visitor.topics.new': 'New conversation',
+  'share.visitor.topics.title': 'Conversations',
+  'share.visitor.topics.untitled': 'Untitled conversation',
+
   'transfer.title': 'Move',
   'transfer.copyTo': 'Copy to…',
   'transfer.desc': 'Move this Agent to another Workspace or your personal account.',

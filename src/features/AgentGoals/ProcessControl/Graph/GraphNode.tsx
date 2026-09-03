@@ -302,7 +302,7 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
                 <span className={styles.human}>@</span>
               </Tooltip>
             )}
-            {/* Top-right corner: this Work carries its own verifier. Icon only —
+            {/* Top-right corner: this Task carries its own verifier. Icon only —
                 the word added nothing the hover hint doesn't say better. */}
             {isTask && node.taskId && (
               <Tooltip title={t('goalProcess.node.verifierTooltip')}>

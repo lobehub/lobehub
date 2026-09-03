@@ -10,7 +10,7 @@ import { agentTraceRouter } from './agentTrace';
 const mockServerDB = vi.hoisted(() => ({}));
 const mocks = vi.hoisted(() => ({
   createPreSignedUrlForPreview: vi.fn(),
-  findById: vi.fn(),
+  findOwnOperationById: vi.fn(),
   listByTopic: vi.fn(),
 }));
 
@@ -20,7 +20,7 @@ vi.mock('@/database/core/db-adaptor', () => ({
 
 vi.mock('@/database/models/agentOperation', () => ({
   AgentOperationModel: vi.fn().mockImplementation(() => ({
-    findById: mocks.findById,
+    findOwnOperationById: mocks.findOwnOperationById,
     listByTopic: mocks.listByTopic,
   })),
 }));
@@ -47,7 +47,7 @@ describe('agentTraceRouter', () => {
 
   describe('getSnapshotUrl', () => {
     it('signs the key recorded on the operation', async () => {
-      mocks.findById.mockResolvedValue({ id: 'op-1', traceS3Key: TRACE_KEY });
+      mocks.findOwnOperationById.mockResolvedValue({ id: 'op-1', traceS3Key: TRACE_KEY });
       mocks.createPreSignedUrlForPreview.mockResolvedValue('https://s3.example.com/obj?sig=abc');
 
       await expect(router.getSnapshotUrl({ operationId: 'op-1' })).resolves.toEqual({
@@ -62,9 +62,11 @@ describe('agentTraceRouter', () => {
     });
 
     it('refuses an operation the caller cannot see, without reaching storage', async () => {
-      // findById is ownership-scoped, so somebody else's operation reads as
-      // absent — a leaked operation id must not become a readable trace.
-      mocks.findById.mockResolvedValue(null);
+      // findOwnOperationById is ownership-scoped AND excludes agent-share
+      // visitor operations, so somebody else's operation — or a visitor
+      // conversation's — reads as absent: a leaked operation id must not
+      // become a readable trace.
+      mocks.findOwnOperationById.mockResolvedValue(null);
 
       await expect(router.getSnapshotUrl({ operationId: 'op-foreign' })).rejects.toThrow(
         expect.objectContaining({ code: 'NOT_FOUND' }) as TRPCError,
@@ -73,7 +75,7 @@ describe('agentTraceRouter', () => {
     });
 
     it('says the run recorded no trace instead of signing an empty key', async () => {
-      mocks.findById.mockResolvedValue({ id: 'op-1', traceS3Key: null });
+      mocks.findOwnOperationById.mockResolvedValue({ id: 'op-1', traceS3Key: null });
 
       await expect(router.getSnapshotUrl({ operationId: 'op-1' })).rejects.toThrow(
         /No trace was recorded/,

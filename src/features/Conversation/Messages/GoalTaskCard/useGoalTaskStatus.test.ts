@@ -2,7 +2,7 @@ import type { GoalGraphSnapshot } from '@lobechat/types';
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useGoalWorkStatus } from './useGoalWorkStatus';
+import { useGoalTaskStatus } from './useGoalTaskStatus';
 
 const mocks = vi.hoisted(() => ({
   goalGraphById: {} as Record<string, unknown>,
@@ -40,21 +40,21 @@ const snapshot = (overrides: Partial<GoalGraphSnapshot> = {}) =>
     ...overrides,
   }) as unknown as GoalGraphSnapshot;
 
-describe('useGoalWorkStatus', () => {
+describe('useGoalTaskStatus', () => {
   beforeEach(() => {
     mocks.goalGraphById = {};
     vi.clearAllMocks();
   });
 
   it('falls back to the drafted criteria count until the graph resolves', () => {
-    const { result } = renderHook(() => useGoalWorkStatus({ criteriaCount: 3, goalId: 'goal-1' }));
+    const { result } = renderHook(() => useGoalTaskStatus({ criteriaCount: 3, goalId: 'goal-1' }));
 
     expect(mocks.useFetchGoalGraph).toHaveBeenCalledWith('goal-1');
     expect(result.current.progress).toMatchObject({ phase: 'running', total: 3 });
     expect(result.current.title).toBeUndefined();
   });
 
-  it('counts every terminal Work node as closed', () => {
+  it('counts every terminal Task node as closed', () => {
     mocks.goalGraphById['goal-1'] = snapshot({
       nodes: [
         node('w1', 'task', 'resolved'),
@@ -64,7 +64,7 @@ describe('useGoalWorkStatus', () => {
       ] as never,
     });
 
-    const { result } = renderHook(() => useGoalWorkStatus({ goalId: 'goal-1' }));
+    const { result } = renderHook(() => useGoalTaskStatus({ goalId: 'goal-1' }));
 
     expect(result.current.progress).toMatchObject({ passed: 2, total: 3 });
     expect(result.current.agentId).toBe('agt-1');
@@ -77,7 +77,7 @@ describe('useGoalWorkStatus', () => {
       nodes: [node('w1', 'task', 'active')] as never,
     });
 
-    const { result } = renderHook(() => useGoalWorkStatus({ goalId: 'goal-1' }));
+    const { result } = renderHook(() => useGoalTaskStatus({ goalId: 'goal-1' }));
 
     expect(result.current.progress.phase).toBe('waiting');
   });

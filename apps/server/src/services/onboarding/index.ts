@@ -36,6 +36,7 @@ import {
   userPersonaDocuments,
 } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { notShareVisitorTopic, notShareVisitorTopicRef } from '@/database/utils/shareVisitor';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { AgentService } from '@/server/services/agent';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
@@ -195,7 +196,12 @@ export class OnboardingService {
 
   private transferToInbox = async (topicId: string): Promise<void> => {
     const inboxAgentId = await this.getInboxAgentId();
-    const topic = await this.topicModel.findById(topicId);
+    // Use the creator-scoped lookup so an `activeTopicId` pointing at an
+    // agent-share visitor topic (which lives under the creator's userId with
+    // a non-null `senderId`) resolves to nothing and turns the transfer into
+    // a no-op. The `notShareVisitor*` predicates below keep the write guarded
+    // as defense in depth even if a caller ever bypasses the lookup.
+    const topic = await this.topicModel.findOwnTopicById(topicId);
 
     if (!topic || topic.agentId === inboxAgentId) return;
 
@@ -203,17 +209,29 @@ export class OnboardingService {
       await tx
         .update(topics)
         .set({ agentId: inboxAgentId, updatedAt: topics.updatedAt })
-        .where(and(eq(topics.id, topicId), eq(topics.userId, this.userId)));
+        .where(and(eq(topics.id, topicId), eq(topics.userId, this.userId), notShareVisitorTopic()));
 
       await tx
         .update(messages)
         .set({ agentId: inboxAgentId, updatedAt: messages.updatedAt })
-        .where(and(eq(messages.topicId, topicId), eq(messages.userId, this.userId)));
+        .where(
+          and(
+            eq(messages.topicId, topicId),
+            eq(messages.userId, this.userId),
+            notShareVisitorTopicRef(messages.topicId),
+          ),
+        );
 
       await tx
         .update(threads)
         .set({ agentId: inboxAgentId, updatedAt: threads.updatedAt })
-        .where(and(eq(threads.topicId, topicId), eq(threads.userId, this.userId)));
+        .where(
+          and(
+            eq(threads.topicId, topicId),
+            eq(threads.userId, this.userId),
+            notShareVisitorTopicRef(threads.topicId),
+          ),
+        );
     });
   };
 

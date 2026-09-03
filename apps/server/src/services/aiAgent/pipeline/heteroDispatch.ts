@@ -331,7 +331,14 @@ export const dispatchHeteroAgent = async (
   let conversationHistory: ConversationHistoryEntry[] | undefined;
   if (heteroType !== 'amp') {
     try {
-      const recentMsgs = await deps.messageModel.query({ topicId, pageSize: 200 });
+      // `allowShareVisitor`: this is the RUN's own topic, already resolved
+      // and authorized upstream. An agent-share visitor run executes under
+      // the creator's identity, so without the opt-in `query()`'s
+      // creator-facing default would hand the agent an empty history.
+      const recentMsgs = await deps.messageModel.query(
+        { topicId, pageSize: 200 },
+        { allowShareVisitor: true },
+      );
       const turns = recentMsgs
         .filter(
           (m) =>
