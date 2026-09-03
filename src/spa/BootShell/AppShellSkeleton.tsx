@@ -119,7 +119,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const LoadingHint = memo(() => {
   const { t } = useTranslation('common');
 
-  return <div className={styles.hint}>{t('loading')}</div>;
+  return <div className={styles.hint}>{t('stillLoading')}</div>;
 });
 
 LoadingHint.displayName = 'AppShellLoadingHint';
@@ -173,7 +173,7 @@ const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
             <div className={styles.contentBrand}>
               <div className={styles.brand}>
                 <div className={styles.mark}>
-                  <LobeHub size={56} type={'mono'} />
+                  <LobeHub size={40} type={'text'} />
                 </div>
                 {waiting && <LoadingHint />}
               </div>

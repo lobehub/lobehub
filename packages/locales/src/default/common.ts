@@ -475,6 +475,7 @@ export default {
   'layoutInitializing': 'Loading layout...',
   'legal': 'Legal Disclaimer',
   'loading': 'Loading...',
+  'stillLoading': 'Still loading...',
   'mail.business': 'Business Cooperation',
   'mail.support': 'Email Support',
   'deleteHistoryMigrating':
