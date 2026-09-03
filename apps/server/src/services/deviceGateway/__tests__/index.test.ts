@@ -24,7 +24,11 @@ vi.mock('@/envs/gateway', () => ({
   gatewayEnv: mockEnv,
 }));
 
-vi.mock('@lobechat/device-gateway-client', () => ({
+// Partial mock: only the HTTP client is swapped. The transport-failure
+// describers are pure functions the service calls to phrase its errors, and
+// stubbing them would test nothing.
+vi.mock('@lobechat/device-gateway-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@lobechat/device-gateway-client')>()),
   GatewayHttpClient: MockGatewayHttpClient,
 }));
 
@@ -345,11 +349,11 @@ describe('DeviceGateway', () => {
       const proxy = new DeviceGateway();
       const result = await proxy.executeToolCall(params, toolCall);
 
-      expect(result).toEqual({
-        content: 'Device tool call error: connection refused',
-        error: 'connection refused',
-        success: false,
-      });
+      // `connection refused` is a network failure, so the model is told the call
+      // never ran rather than being handed the bare driver message.
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('Could not reach the device gateway');
+      expect(result.error).toBe('DEVICE_GATEWAY_UNREACHABLE: connection refused');
     });
 
     it('should handle non-Error exceptions', async () => {
@@ -360,11 +364,11 @@ describe('DeviceGateway', () => {
       const proxy = new DeviceGateway();
       const result = await proxy.executeToolCall(params, toolCall);
 
-      expect(result).toEqual({
-        content: 'Device tool call error: string error',
-        error: 'string error',
-        success: false,
-      });
+      // Unrecognised cause: describe the hop without claiming to know whether
+      // the device ran the call.
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('unclear whether the device ran it');
+      expect(result.error).toBe('DEVICE_GATEWAY_ERROR: string error');
     });
   });
 
@@ -427,11 +431,10 @@ describe('DeviceGateway', () => {
       const proxy = new DeviceGateway();
       const result = await proxy.executeMcpCall(mcpCall);
 
-      expect(result).toEqual({
-        content: 'Device MCP call error: connection refused',
-        error: 'connection refused',
-        success: false,
-      });
+      // Tunneled MCP calls ride the same relay, so they get the same phrasing.
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('Could not reach the device gateway');
+      expect(result.error).toBe('DEVICE_GATEWAY_UNREACHABLE: connection refused');
     });
   });
 

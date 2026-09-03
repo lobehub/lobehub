@@ -2,6 +2,7 @@ import path from 'node:path';
 
 import { type DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
 import {
+  describeGatewayRequestFailure,
   type DeviceMessageApiResult,
   type DeviceStatusResult,
   type DeviceSystemInfo,
@@ -1400,7 +1401,11 @@ export class DeviceGateway {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       log('executeToolCall: error — %s', message);
-      return { content: `Device tool call error: ${message}`, error: message, success: false };
+      // Backstop for anything the http client did not already describe. A raw
+      // `TimeoutError` / driver message here reads to the model as if the tool
+      // itself blew up; name the failing hop and its recovery instead.
+      const failure = describeGatewayRequestFailure(error, 'tool call');
+      return { content: failure.content, error: failure.error, success: false };
     }
   }
 
@@ -1444,7 +1449,8 @@ export class DeviceGateway {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       log('executeMcpCall: error — %s', message);
-      return { content: `Device MCP call error: ${message}`, error: message, success: false };
+      const failure = describeGatewayRequestFailure(error, 'tool call');
+      return { content: failure.content, error: failure.error, success: false };
     }
   }
 
