@@ -19,6 +19,8 @@ export {
   ExpertiseContextInjector,
 } from './ExpertiseContextInjector';
 export { ForceFinishSummaryInjector } from './ForceFinishSummaryInjector';
+export type { GoalContextSyntheticInjectorConfig } from './GoalContextSyntheticInjector';
+export { GoalContextSyntheticInjector } from './GoalContextSyntheticInjector';
 export { GroupAgentBuilderContextInjector } from './GroupAgentBuilderContextInjector';
 export { GroupContextInjector } from './GroupContextInjector';
 export { HistorySummaryProvider } from './HistorySummary';

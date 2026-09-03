@@ -3,10 +3,18 @@
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { ConversationContext } from '@lobechat/types';
 import type { DropdownItem } from '@lobehub/ui';
-import { ActionIcon, copyToClipboard, DropdownMenu, Flexbox, Freeze, Tag, Text } from '@lobehub/ui';
-import { confirmModal, FloatingPanel, toast } from '@lobehub/ui/base-ui';
+import { copyToClipboard, DropdownMenu, Flexbox, Freeze } from '@lobehub/ui';
+import { ActionIcon, confirmModal, FloatingPanel, Tag, Text, toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { Copy, ExternalLink, Maximize2, Minimize2, MoreHorizontal, Share2, Trash } from 'lucide-react';
+import {
+  Copy,
+  ExternalLink,
+  Maximize2,
+  Minimize2,
+  MoreHorizontal,
+  Share2,
+  Trash,
+} from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -77,15 +85,7 @@ export const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(
     useGatewayReconnect(topicId, runningOperation, agentId);
 
     const itemContent = useCallback(
-      (index: number, id: string) => (
-        <MessageItem
-          disableEditing
-          defaultWorkflowExpandLevel="full"
-          id={id}
-          index={index}
-          key={id}
-        />
-      ),
+      (index: number, id: string) => <MessageItem disableEditing id={id} index={index} key={id} />,
       [],
     );
 
@@ -300,7 +300,7 @@ const TopicChatDrawer = memo(() => {
         onClick={() => setExpanded((value) => !value)}
       />
       {enableTopicLinkShare && canShare ? (
-        <SharePopover topicId={topicId} onOpenModal={openShareModal}>
+        <SharePopover agentId={agentId ?? undefined} topicId={topicId} onOpenModal={openShareModal}>
           {shareIcon}
         </SharePopover>
       ) : (

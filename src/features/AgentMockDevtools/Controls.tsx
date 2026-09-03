@@ -1,5 +1,5 @@
-import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Pause, Play, Repeat, RotateCcw, SkipForward, Square } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -11,6 +11,17 @@ import { useMockCases } from './hooks/useMockCases';
 import { useAgentMockStore } from './store/agentMockStore';
 
 const styles = createStaticStyles(({ css }) => ({
+  actions: css`
+    flex-shrink: 0;
+    height: 40px;
+    padding-inline: 12px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  controls: css`
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  `,
   counter: css`
     font-size: 11px;
     font-feature-settings: 'tnum';
@@ -21,9 +32,12 @@ const styles = createStaticStyles(({ css }) => ({
     cursor: pointer;
 
     display: flex;
+    flex-shrink: 0;
     align-items: center;
 
-    height: 14px;
+    height: 28px;
+    padding-inline: 12px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     &:hover .agent-mock-progress-track {
       background: ${cssVar.colorFillTertiary};
@@ -56,6 +70,12 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   progressTrackScrubbing: css`
     background: ${cssVar.colorFillTertiary} !important;
+  `,
+  selection: css`
+    flex-shrink: 0;
+    height: 44px;
+    padding-inline: 12px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
 }));
 
@@ -153,8 +173,8 @@ export const Controls = memo(() => {
     : 0;
 
   return (
-    <Flexbox gap={12}>
-      <Flexbox horizontal align={'center'} gap={8}>
+    <div className={styles.controls}>
+      <Flexbox horizontal align={'center'} className={styles.selection} gap={8}>
         <CaseTrigger placement={'topLeft'} />
         <span style={{ flex: 1 }} />
         <span className={styles.counter}>
@@ -179,7 +199,7 @@ export const Controls = memo(() => {
           <div className={styles.progressFill} style={{ width: `${pct}%` }} />
         </div>
       </div>
-      <Flexbox horizontal align={'center'} gap={4}>
+      <Flexbox horizontal align={'center'} className={styles.actions} gap={4}>
         <ActionIcon
           disabled={disabled}
           icon={running ? Pause : Play}
@@ -220,7 +240,7 @@ export const Controls = memo(() => {
         <span style={{ flex: 1 }} />
         <span className={styles.counter}>{selected ? selected.name : 'No case selected'}</span>
       </Flexbox>
-    </Flexbox>
+    </div>
   );
 });
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { Tag } from '@lobehub/ui';
+import { Tag } from '@lobehub/ui/base-ui';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
@@ -62,7 +62,7 @@ const GroupVersionReviewTag = memo(() => {
   if (loading || !showReviewTag) return null;
 
   return (
-    <Tag bordered={false} color="orange">
+    <Tag color="orange">
       {t('marketPublish.status.underReview', { defaultValue: 'Under Review' })}
     </Tag>
   );

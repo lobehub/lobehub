@@ -5,7 +5,7 @@
  * whether a target agent is fit for a job — typically "can this agent fix a bug
  * in a real codebase?". For a normal model-backed agent the answer lives in
  * `model` / `provider` / `plugins`. For a **heterogeneous** agent (an external
- * CLI/runtime such as Claude Code, CodeBuddy, Codex, OpenCode, Pi, or Qoder)
+ * CLI/runtime such as Claude Code, CodeBuddy, Codex, Droid, OpenCode, Pi, or Qoder)
  * those fields are misleading: the agent brings its own toolset and ignores
  * the plugin list, so we must instead
  * describe what the external runtime is and what it can do.
@@ -74,6 +74,13 @@ const HETERO_PROFILES: Record<HeteroType, HeteroTypeProfile> = {
     description:
       'Cursor — an autonomous CLI coding agent with filesystem and shell access that completes software-engineering tasks autonomously.',
     displayName: 'Cursor',
+    kind: 'cli',
+  },
+  'droid': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      "Factory Droid — Factory's autonomous coding agent. It can inspect and edit a working directory, run shell commands and tests, search code, and complete multi-step software-engineering tasks through its built-in tools.",
+    displayName: 'Factory Droid',
     kind: 'cli',
   },
   'grok-build': {

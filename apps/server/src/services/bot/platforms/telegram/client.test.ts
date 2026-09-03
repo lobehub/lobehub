@@ -4,19 +4,125 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ExtractFilesResult } from '../types';
 import { TelegramApi } from './api';
 import { TelegramClientFactory } from './client';
+import { resolveTelegramSecretToken } from './helpers';
+
+const { createTelegramAdapterMock } = vi.hoisted(() => ({
+  // Typed parameter so `mock.calls[n][0]` is a config object, not `never`.
+  createTelegramAdapterMock: vi.fn((_config: Record<string, unknown>) => ({ name: 'telegram' })),
+}));
+
+vi.mock('@chat-adapter/telegram', () => ({
+  createTelegramAdapter: createTelegramAdapterMock,
+}));
+
+vi.mock('@/server/services/gateway/runtimeStatus', () => ({
+  BOT_RUNTIME_STATUSES: {
+    connected: 'connected',
+    disconnected: 'disconnected',
+    failed: 'failed',
+    starting: 'starting',
+  },
+  getRuntimeStatusErrorMessage: (e: unknown) => String(e),
+  updateBotRuntimeStatus: vi.fn().mockResolvedValue(undefined),
+}));
 
 const BOT_TOKEN = 'test-bot-token';
 
-const createClient = () =>
+const createClient = (credentials: Record<string, string> = {}) =>
   new TelegramClientFactory().createClient(
     {
       applicationId: '8654315085',
-      credentials: { botToken: BOT_TOKEN },
+      credentials: { botToken: BOT_TOKEN, ...credentials },
       platform: 'telegram',
       settings: {},
     },
-    {},
+    { appUrl: 'https://cloud.example' },
   );
+
+describe('TelegramWebhookClient.createAdapter', () => {
+  beforeEach(() => {
+    createTelegramAdapterMock.mockClear();
+  });
+
+  it('always configures a secretToken — derived when the channel has none', () => {
+    // Webhook verification is mandatory on this platform. A blank field must
+    // never reach the adapter as `undefined` / `allowUnverifiedWebhooks`.
+    createClient().createAdapter();
+
+    expect(createTelegramAdapterMock).toHaveBeenCalledTimes(1);
+    const config = createTelegramAdapterMock.mock.calls[0][0];
+    expect(config.botToken).toBe(BOT_TOKEN);
+    expect(config.secretToken).toBe(resolveTelegramSecretToken({ botToken: BOT_TOKEN }));
+    expect(config.secretToken).toMatch(/^[\w-]{43}$/);
+    expect(config).not.toHaveProperty('allowUnverifiedWebhooks');
+  });
+
+  it('treats an empty-string secretToken as not configured and derives the same value', () => {
+    createClient({ secretToken: '' }).createAdapter();
+
+    expect(createTelegramAdapterMock).toHaveBeenCalledWith({
+      botToken: BOT_TOKEN,
+      secretToken: resolveTelegramSecretToken({ botToken: BOT_TOKEN }),
+    });
+  });
+
+  it('uses the operator-provided secretToken when configured', () => {
+    createClient({ secretToken: 'my-webhook-secret' }).createAdapter();
+
+    expect(createTelegramAdapterMock).toHaveBeenCalledWith({
+      botToken: BOT_TOKEN,
+      secretToken: 'my-webhook-secret',
+    });
+  });
+});
+
+describe('TelegramWebhookClient webhook registration', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn().mockResolvedValue(new Response('{"ok":true}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  const setWebhookBody = () => {
+    const call = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/setWebhook'));
+    expect(call).toBeDefined();
+    return JSON.parse((call![1] as RequestInit).body as string);
+  };
+
+  it('start() registers the webhook with the same derived secret the adapter verifies', async () => {
+    const client = createClient();
+    await client.start();
+
+    const body = setWebhookBody();
+    expect(body.url).toBe(`https://cloud.example/api/agent/webhooks/telegram/${BOT_TOKEN}`);
+    expect(body.secret_token).toBe(resolveTelegramSecretToken({ botToken: BOT_TOKEN }));
+
+    client.createAdapter();
+    const adapterConfig = createTelegramAdapterMock.mock.calls.at(-1)![0];
+    expect(adapterConfig.secretToken).toBe(body.secret_token);
+  });
+
+  it('start() registers the operator-provided secret when configured', async () => {
+    await createClient({ secretToken: 'my-webhook-secret' }).start();
+
+    expect(setWebhookBody().secret_token).toBe('my-webhook-secret');
+  });
+
+  it('reconcileWebhook() re-runs setWebhook with the current secret', async () => {
+    const client = createClient();
+    await client.reconcileWebhook!();
+
+    const body = setWebhookBody();
+    expect(body.secret_token).toBe(resolveTelegramSecretToken({ botToken: BOT_TOKEN }));
+    expect(body.url).toBe(`https://cloud.example/api/agent/webhooks/telegram/${BOT_TOKEN}`);
+  });
+});
 
 /** Build a fake Chat SDK Message with attachments + raw payload. */
 const makeMessage = (overrides: {

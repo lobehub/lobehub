@@ -1,4 +1,5 @@
-import { ActionIcon, Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Skeleton, Text } from '@lobehub/ui/base-ui';
 import { ArrowLeft } from 'lucide-react';
 
 import { useChatStore } from '@/store/chat';
@@ -21,7 +22,7 @@ const Title = () => {
       <ActionIcon icon={ArrowLeft} size={'small'} onClick={() => closeFilePreview()} />
 
       {isLoading ? (
-        <Skeleton.Button active style={{ height: 28 }} />
+        <Skeleton height={28} />
       ) : (
         <Text className={oneLineEllipsis} style={{ fontSize: 16 }} type={'secondary'}>
           {data?.name}

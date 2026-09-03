@@ -7,6 +7,7 @@ import type {
   MessageTransport,
   StreamSink,
 } from '../transport';
+import { TOOL_CALL_REPEAT_LIMIT } from '../utils/toolCallRepeatGuard';
 import {
   finalizeCallLlmTurn,
   persistInterruptedCallLlmResult,
@@ -18,6 +19,7 @@ const createMessageTransport = (): MessageTransport => ({
   createToolMessage: vi.fn(),
   deleteMessage: vi.fn(),
   findById: vi.fn(),
+  findToolMessageIdByToolCallId: vi.fn(),
   query: vi.fn(),
   update: vi.fn().mockResolvedValue(undefined),
   updatePluginState: vi.fn(),
@@ -60,6 +62,135 @@ const createOutput = (overrides: Partial<LLMAttemptOutput> = {}): LLMAttemptOutp
 });
 
 describe('callLlmFinalizer', () => {
+  it('blocks the limit-th consecutive identical tool call before it can execute', async () => {
+    const messages = createMessageTransport();
+    const stream = createStreamSink();
+    const state = AgentRuntime.createInitialState({ operationId: 'operation-1' });
+    state.toolCallRepeatGuard = {
+      counts: {
+        '["credentials","inject","{\\"keys\\":[\\"github\\"],\\"scope\\":\\"repo\\"}"]':
+          TOOL_CALL_REPEAT_LIMIT - 1,
+      },
+    };
+    const output = createOutput({
+      content: '',
+      toolCalls: [
+        {
+          function: {
+            arguments: '{"scope":"repo","keys":["github"]}',
+            name: 'inject',
+          },
+          id: 'call-5',
+          type: 'function',
+        },
+      ],
+      toolsCalling: [
+        {
+          apiName: 'inject',
+          arguments: '{"scope":"repo","keys":["github"]}',
+          id: 'call-5',
+          identifier: 'credentials',
+          type: 'default',
+        },
+      ],
+    });
+
+    const result = await finalizeCallLlmTurn({
+      assistantMessageId: 'assistant-5',
+      events: [],
+      host: createHost(messages, stream),
+      model: 'glm',
+      output,
+      provider: 'lobehub',
+      shouldReplayAssistantReasoning: false,
+      state,
+    });
+
+    expect(result.nextContext).toMatchObject({
+      payload: {
+        hasToolsCalling: false,
+        result: {
+          content: `Stopped after the same tool call was requested ${TOOL_CALL_REPEAT_LIMIT} consecutive times.`,
+          tool_calls: [],
+        },
+        toolsCalling: [],
+      },
+      phase: 'llm_result',
+    });
+    expect(result.events).toContainEqual(
+      expect.objectContaining({
+        result: expect.objectContaining({ finishReason: 'tool_call_repeat_limit' }),
+        type: 'llm_result',
+      }),
+    );
+    expect(messages.update).toHaveBeenCalledWith(
+      'assistant-5',
+      expect.objectContaining({
+        content: `Stopped after the same tool call was requested ${TOOL_CALL_REPEAT_LIMIT} consecutive times.`,
+        tools: undefined,
+      }),
+    );
+    expect(stream.publishEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ toolsCalling: [] }),
+        type: 'stream_end',
+      }),
+    );
+  });
+
+  it('preserves user cancellation when an aborted stream emits the limit-th repeated tool call', async () => {
+    const state = AgentRuntime.createInitialState({ operationId: 'operation-1' });
+    state.toolCallRepeatGuard = {
+      counts: {
+        '["credentials","inject","{\\"keys\\":[\\"github\\"]}"]': TOOL_CALL_REPEAT_LIMIT - 1,
+      },
+    };
+    const toolCalling = {
+      apiName: 'inject',
+      arguments: '{"keys":["github"]}',
+      id: 'call-5',
+      identifier: 'credentials',
+      type: 'default' as const,
+    };
+
+    const result = await finalizeCallLlmTurn({
+      assistantMessageId: 'assistant-5',
+      events: [],
+      host: createHost(),
+      model: 'glm',
+      output: createOutput({
+        content: '',
+        finishReason: 'abort',
+        toolCalls: [
+          {
+            function: { arguments: toolCalling.arguments, name: toolCalling.apiName },
+            id: toolCalling.id,
+            type: 'function',
+          },
+        ],
+        toolsCalling: [toolCalling],
+      }),
+      provider: 'lobehub',
+      shouldReplayAssistantReasoning: false,
+      state,
+    });
+
+    expect(result.nextContext).toMatchObject({
+      payload: {
+        hasToolsCalling: true,
+        reason: 'user_cancelled',
+        toolsCalling: [toolCalling],
+      },
+      phase: 'human_abort',
+    });
+    expect(result.events).toContainEqual(
+      expect.objectContaining({
+        result: expect.objectContaining({ finishReason: 'abort' }),
+        type: 'llm_result',
+      }),
+    );
+  });
+
   it('persists, builds replay-safe state and usage, and preserves finalization order', async () => {
     const messages = createMessageTransport();
     const stream = createStreamSink();

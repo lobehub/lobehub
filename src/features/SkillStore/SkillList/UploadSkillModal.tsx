@@ -146,6 +146,5 @@ export const openUploadSkillModal = (): ModalInstance =>
     content: <UploadSkillContent />,
     footer: null,
     maskClosable: true,
-    styles: { header: { display: 'none' } },
     width: 480,
   });

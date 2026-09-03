@@ -7,6 +7,33 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
+interface MultimodalUnderstandingMediaAbilityInput {
+  enableMultimodalUnderstanding: boolean;
+  fallbackConfigured: boolean;
+  fallbackModelAbilities?: {
+    audio?: boolean;
+    video?: boolean;
+    vision?: boolean;
+  };
+  supportToolUse: boolean;
+}
+
+export const getMultimodalUnderstandingMediaAbility = ({
+  enableMultimodalUnderstanding,
+  fallbackConfigured,
+  fallbackModelAbilities,
+  supportToolUse,
+}: MultimodalUnderstandingMediaAbilityInput) => {
+  const canUseMultimodalUnderstanding =
+    enableMultimodalUnderstanding && fallbackConfigured && supportToolUse;
+
+  return {
+    audio: canUseMultimodalUnderstanding && fallbackModelAbilities?.audio !== false,
+    video: canUseMultimodalUnderstanding && fallbackModelAbilities?.video !== false,
+    vision: canUseMultimodalUnderstanding && fallbackModelAbilities?.vision !== false,
+  };
+};
+
 export const useMediaUploadAbility = (model: string, provider: string, agentId?: string) => {
   const supportVision = useModelSupportVision(model, provider);
   const supportVideo = useModelSupportVideo(model, provider);
@@ -25,10 +52,12 @@ export const useMediaUploadAbility = (model: string, provider: string, agentId?:
     ),
   );
   const fallbackConfigured = !!(multimodalUnderstanding?.model && multimodalUnderstanding.provider);
-  const fallbackSupportAudio = fallbackConfigured && fallbackModel?.abilities?.audio !== false;
-  const fallbackSupportVision = fallbackConfigured && fallbackModel?.abilities?.vision !== false;
-  const fallbackSupportVideo = fallbackConfigured && fallbackModel?.abilities?.video !== false;
-  const canUseMultimodalUnderstanding = enableMultimodalUnderstanding && supportToolUse;
+  const fallbackAbility = getMultimodalUnderstandingMediaAbility({
+    enableMultimodalUnderstanding,
+    fallbackConfigured,
+    fallbackModelAbilities: fallbackModel?.abilities,
+    supportToolUse,
+  });
 
   const heterogeneousAgentType = useAgentStore((s) =>
     agentId
@@ -59,8 +88,8 @@ export const useMediaUploadAbility = (model: string, provider: string, agentId?:
   }
 
   return {
-    canUploadAudio: supportAudio || (canUseMultimodalUnderstanding && fallbackSupportAudio),
-    canUploadImage: supportVision || (canUseMultimodalUnderstanding && fallbackSupportVision),
-    canUploadVideo: supportVideo || (canUseMultimodalUnderstanding && fallbackSupportVideo),
+    canUploadAudio: supportAudio || fallbackAbility.audio,
+    canUploadImage: supportVision || fallbackAbility.vision,
+    canUploadVideo: supportVideo || fallbackAbility.video,
   };
 };

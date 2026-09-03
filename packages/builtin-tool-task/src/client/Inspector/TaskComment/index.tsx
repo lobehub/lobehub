@@ -95,13 +95,10 @@ export const TaskCommentInspector = memo<TaskCommentInspectorProps>(
     const content = 'content' in params ? params.content : undefined;
 
     return (
-      <div
-        className={cx(
-          inspectorTextStyles.root,
-          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-        )}
-      >
-        <span>{t(selectLabelKey(apiName))}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+          {t(selectLabelKey(apiName))}
+        </span>
         {identifier && <span className={styles.chip}>{identifier}</span>}
         {commentId && <span className={styles.chip}>{commentId}</span>}
         {content && <span className={styles.contentChip}>{content}</span>}

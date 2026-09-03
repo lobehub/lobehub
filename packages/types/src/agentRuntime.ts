@@ -1,3 +1,15 @@
+/** Request-scoped pricing inputs resolved before model execution. */
+export interface ModelPricingContext {
+  plan: string;
+  scope: 'personal';
+}
+
+/** Request-scoped data available to dynamic model router resolution. */
+export interface RouterRuntimeRequestContext {
+  model?: string;
+  pricingContext?: ModelPricingContext;
+}
+
 export enum RequestTrigger {
   AgentSignal = 'agent_signal',
   Api = 'api',

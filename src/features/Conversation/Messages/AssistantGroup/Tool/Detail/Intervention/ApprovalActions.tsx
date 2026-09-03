@@ -7,8 +7,6 @@ import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useUserStore } from '@/store/user';
-
 import { useConversationResourceAccess } from '../../../../../hooks/useConversationResourceAccess';
 import { useConversationStore } from '../../../../../store';
 import { type ApprovalMode } from './index';
@@ -23,7 +21,8 @@ interface ApprovalActionsProps {
    * Callback to be called before approve action
    * Used to flush pending saves (e.g., debounced saves) from intervention components
    */
-  onBeforeApprove?: () => void | Promise<void>;
+  onBeforeApprove?: () =>
+    Promise<Record<string, unknown> | undefined> | Record<string, unknown> | undefined;
   toolCallId: string;
 }
 
@@ -183,8 +182,6 @@ const ApprovalActions = memo<ApprovalActionsProps>(
       stopPendingApprovalForCard,
       messageId,
     ]);
-    const addToolToAllowList = useUserStore((s) => s.addToolToAllowList);
-
     const handleSubmit = useCallback(async () => {
       if (loading || isMessageCreating || !canUseResource) return;
       setLoading(true);
@@ -192,17 +189,18 @@ const ApprovalActions = memo<ApprovalActionsProps>(
         if (choice === 'reject') {
           await rejectAndContinueToolCall(messageId, reason.trim() || undefined);
         } else {
-          if (onBeforeApprove) await onBeforeApprove();
-          await approveToolCall(messageId, assistantGroupId ?? '');
-          if (isAllowListMode && choice === 'approve-remember') {
-            await addToolToAllowList(`${identifier}/${apiName}`);
-          }
+          const editedArguments = await onBeforeApprove?.();
+          await approveToolCall(messageId, assistantGroupId ?? '', {
+            editedArguments,
+            ...(isAllowListMode && choice === 'approve-remember'
+              ? { rememberToolKey: `${identifier}/${apiName}` }
+              : {}),
+          });
         }
       } finally {
         setLoading(false);
       }
     }, [
-      addToolToAllowList,
       apiName,
       approveToolCall,
       assistantGroupId,

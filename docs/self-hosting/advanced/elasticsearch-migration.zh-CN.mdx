@@ -1,0 +1,270 @@
+---
+title: 从 pg_search 迁移到 Elasticsearch（3.x）
+description: 将现有 LobeHub 部署从 PostgreSQL pg_search 安全迁移到 Elasticsearch。
+tags:
+  - Elasticsearch
+  - 搜索
+  - 迁移
+  - 私有部署
+---
+
+# 从 pg\_search 迁移到 Elasticsearch
+
+本文用于在应用持续可用的情况下，把现有 LobeHub 部署从 PostgreSQL `pg_search` 迁移到
+Elasticsearch。3.x 迁移工具会把 PostgreSQL 中 14 类可搜索数据复制到新的 Elasticsearch 项目。工具会把游标、计数和逐条失败记录原子写入本地 checkpoint 文件，因此中断后使用同一个状态目录重复执行命令即可续跑。
+
+此流程要求数据库已经执行过历史 `pg_search` 迁移，并且当前使用
+`FTS_SEARCH_PROVIDER=pg_search` 提供搜索。搜索后端选择和 Elasticsearch 长期同步链路请先阅读
+[全文搜索](/zh/docs/self-hosting/advanced/full-text-search)。
+
+<Callout type="warning">
+  Neon 已于 2026 年 3 月 19 日停止为新项目提供 `pg_search`，并已通知受影响的现有客户：该扩展将在
+  2026 年 9 月 21 日从 Neon 移除，此后依赖它的查询、索引和应用都会停止工作。请在截止日期前完成本文迁移。
+  对全新数据库设置 `FTS_SEARCH_PROVIDER=elasticsearch` 并不会跳过 LobeHub 的历史 `pg_search` 迁移：
+  `bun run db:migrate` 仍会尝试创建扩展和 BM25 索引，并在数据库服务不提供它们时失败。请结合 Neon 的
+  [pg\_search 公告](https://neon.com/docs/extensions/pg_search)和
+  [扩展列表](https://neon.com/docs/extensions/pg-extensions)核对当前服务状态。
+</Callout>
+
+<Callout type="warning">
+  全量回填命令不会把产品搜索请求切到 Elasticsearch。回填和验收期间，应用必须继续使用 PostgreSQL 搜索。常规数据库迁移会创建 PostgreSQL 增量队列的基础结构和由数据库结构管理的 Memory 扇出 GIN 索引，但不会安装搜索变更采集函数和触发器。只有显式执行 `bun run db:install-fts-search-capture` 或启动 `bun run fts-search:reindex -- --apply` 后才会开始采集，即使增量消费器仍处于暂停状态也是如此。
+</Callout>
+
+## 环境变量
+
+| 变量                        | 是否必需    | 用途                                                                                                  |
+| ------------------------- | ------- | --------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`            | 是       | PostgreSQL 源数据库和增量变更队列；回填 checkpoint 不写入数据库。                                                        |
+| `ES_URL`                  | 执行时     | 接收 3.x 搜索索引的新建空 Elasticsearch 目标地址。使用 HTTPS；明文 HTTP 只允许用于回环地址，或在 `ES_ALLOW_INSECURE_HTTP=true` 时使用。 |
+| `ES_API_KEY`              | 执行时     | 用于创建索引、批量写入、刷新 / 统计索引和创建别名的 Elasticsearch 密钥，不能使用只读密钥。除 `ES_ALLOW_INSECURE_HTTP=true` 外均为必需。        |
+| `ES_ALLOW_INSECURE_HTTP`  | Compose | 仅对关闭安全认证且只能在私有容器网络内访问的 Elasticsearch 节点（例如官方 Compose 的可选服务）设为 `true`。                               |
+| `ES_INDEX_NAMESPACE`      | 是       | 当前部署长期不变的索引前缀，例如 `lobehub`；会生成 `lobehub-messages` 等别名，续跑时不能修改。                                      |
+| `FTS_SEARCH_SYNC_ENABLED` | 增量同步    | 只有全量回填就绪后才能设为 `true`，用于启用增量消费器。                                                                     |
+| `FTS_SEARCH_PROVIDER`     | 切换时     | 回填、追平和验收完成后设为 `elasticsearch`，将用户搜索请求切换到 Elasticsearch。                                             |
+
+只读的 `--status` 命令不需要 `ES_URL` 和 `ES_API_KEY`。
+如果同一个环境中保存了多套 Elasticsearch 目标，可以同时传入 `--elasticsearch-url-env=<变量名>` 和 `--elasticsearch-api-key-env=<变量名>` 显式选择其中一组。两个参数必须成对使用；还可以通过 `--expected-elasticsearch-host-prefix=<主机名前缀>` 在任何回填写入前拒绝错误目标。命令会打印并记录选中的主机名和变量名，但不会记录密钥值。
+
+远程 Elasticsearch 目标必须使用 HTTPS。只有本地开发时的 `localhost` 等回环地址可以使用明文 HTTP，避免把 API 密钥通过未加密连接发送到远程主机。唯一的显式例外是
+`ES_ALLOW_INSECURE_HTTP=true`：它允许对私有容器网络内的主机名使用无 API 密钥的明文 HTTP；即便如此，运行时、回填和同步三个客户端都会拒绝通过明文 HTTP 发送 API 密钥。
+
+## 开始前
+
+1. 在正式使用的区域创建一个新的空 Elasticsearch 项目。LobeHub 搜索分析器依赖官方
+   [`analysis-icu`](https://www.elastic.co/docs/reference/elasticsearch/plugins/analysis-icu)
+   插件。Elastic Cloud Serverless 已包含核心分析插件；Elastic Cloud Hosted 需要为部署启用官方插件；自行管理的 Elasticsearch 必须在所有节点安装插件并重启所有节点。请在首次执行 `--apply` 前完成。Docker Compose
+   部署也可以改为启用官方 Compose 文件中的可选 `elasticsearch` 服务，其镜像构建时已内置该插件，详见
+   [使用 Docker Compose 运行 Elasticsearch](/zh/docs/self-hosting/advanced/full-text-search#使用-docker-compose-运行-elasticsearch)。
+
+2. 在启用 Elasticsearch 采集前创建并验证 PostgreSQL 恢复点，再使用隔离的数据库副本和空
+   Elasticsearch 目标演练。演练至少要覆盖每个非空数据类型的一个批次、使用同一 checkpoint
+   续跑、增量追平，以及正式切换时要执行的应用搜索检查。
+
+   Neon 用户可以创建子分支进行隔离演练，并为正式根分支创建手动快照或确认时间点恢复窗口。
+   子分支只是隔离的测试副本，本身不能代替正式分支的时间点恢复。请参阅 Neon 的
+   [分支文档](https://neon.com/docs/introduction/branching)和
+   [备份与恢复文档](https://neon.com/docs/guides/backup-restore)。
+
+3. 执行同一 LobeHub 版本自带的数据库迁移：
+
+   ```bash
+   bun run db:migrate
+   ```
+
+   这一步会创建增量队列的序列、表、普通索引，以及由数据库结构管理的 Memory 扇出 GIN 索引，但不会创建 PostgreSQL 变更采集函数和触发器。只使用 PostgreSQL 搜索的部署可以停在这里：它仍会维护这个 GIN 索引，但不会承担触发器和增量队列的采集写入开销。
+
+4. 在首次回填前安装可选的 PostgreSQL 变更采集：
+
+   ```bash
+   bun run db:install-fts-search-capture
+   ```
+
+   安装器会先严格校验由数据库结构管理的 GIN 索引（不会创建这个索引），再在一个事务中原子安装并验证采集函数和 16 个触发器。完整的预期设施已经存在时可以安全重复执行；如果发现部分对象、被禁用的对象或定义异常，安装器会直接失败，不会静默修复。安装成功后，源数据变更会立即写入增量队列。`bun run fts-search:reindex -- --apply` 也会自动执行这一步；如果希望在准备 Elasticsearch 目标期间就开始采集，可以先显式执行安装命令。若不打算启用 Elasticsearch，不要执行这一步。
+
+5. 保持应用搜索后端为 PostgreSQL，并关闭 Elasticsearch 增量消费。
+
+首次正式映射版本是 `v1`。工具会创建 `lobehub-messages-v1` 这类实体索引；14 类索引全部完成且数量与断点记录一致后，再创建 `lobehub-messages` 这类稳定别名。别名只是 Elasticsearch 内部长期不变的名字，创建别名不会改变用户请求当前使用的搜索后端。
+
+如果稳定别名已经指向另一个物理索引，命令会直接失败，不会移动别名。在线升级索引版本需要另外设计受协调的双写迁移；这套首次迁移工具暂不支持该场景。
+
+## 在源码中运行
+
+包命令会先打包，再用 Node.js 运行回填任务。请使用这里记录的包命令，不要直接执行 TypeScript 入口，以确保运行前准备和临时文件清理方式一致。
+
+只查看状态，不写 Elasticsearch：
+
+```bash
+bun run fts-search:reindex -- --status
+```
+
+选择可持久保留的本地状态目录，并向空的 Elasticsearch 目标开始一次新回填：
+
+```bash
+ES_REINDEX_STATE_DIR=.elasticsearch-reindex \
+  bun run fts-search:reindex -- --apply --fresh-run --yes
+```
+
+只有第一次执行需要 `--fresh-run`。后续使用同一个状态目录续跑：
+
+```bash
+ES_REINDEX_STATE_DIR=.elasticsearch-reindex bun run fts-search:reindex -- --apply --yes
+```
+
+`--apply` 会先创建或校验所有 Elasticsearch 物理索引及其 ICU 分析设置，校验由数据库结构管理的 Memory 扇出 GIN 索引（不会创建这个索引），并以幂等方式安装可选的 PostgreSQL 变更采集设施（如果之前已经安装则复用），然后读取源数据。只读的 `--status` 不会安装或修改这些设施。读取源数据前，`--apply` 会短暂阻挡所有触发器源表的写入，等待持有较旧 Outbox 版本的事务结束；如果三秒内拿不到锁，应先让长事务结束，再重新运行命令。首次回填期间可以暂停增量消费器；PostgreSQL 仍会把变更追加到增量队列，完整快照准备好后再由消费器追平。必须显式传入 `--yes`，用于确认这个会写入数据的操作；命令不会弹出交互确认。
+
+工具还会把 run ID 写入每个物理索引的 mapping 元数据，使用另一份本地 checkpoint 时无法静默继续写入同一组物理索引。禁止在多台机器上并发运行同一份 checkpoint。
+
+checkpoint 文件只包含迁移控制状态和脱敏后的失败信息，不保存数据库或 Elasticsearch 密钥。完成验收和增量追平前必须保留整个状态目录；换机器执行时需要一起复制该目录。
+
+如果只想验证 14 类数据都能走通真实回填路径，而不在测试环境跑完整库，可以让每个非空数据类型只执行一个批次，并开启受控并发：
+
+```bash
+ES_REINDEX_STATE_DIR=.elasticsearch-reindex \
+  bun run fts-search:reindex -- --apply --yes \
+  --expected-elasticsearch-host-prefix=search-dev- \
+  --entity-concurrency=4 --bulk-concurrency=2 \
+  --batch-size=5000 --entity-batch-size=documents:1000 --bulk-max-bytes=10485760 \
+  --max-batches-per-entity=1
+```
+
+这条命令会创建 14 类索引，并向其中有源数据的索引写入真实数据。只要至少一类数据超过批次上限，任务就会保持在 `backfilling` 状态且不会创建别名；如果某个小型部署的 14 类数据都能在上限内读完，本次演练仍会正常完成并创建别名，因此必须使用隔离的空 Elasticsearch 目标。使用同一命令再次执行可以验证断点续跑；移除 `--max-batches-per-entity` 后会从当前断点继续，直到所有数据类型完成。
+
+`--entity-concurrency` 控制同时读取多少类 PostgreSQL 数据，`--bulk-concurrency` 控制每个数据类型的单批数据可同时发出多少个按字节拆分的 Elasticsearch 请求。应从较小数值开始，仅在 PostgreSQL 和 Elasticsearch 运行稳定时逐步增加。`--batch-size` 限制每次按主键翻页读取的 PostgreSQL 行数；`--bulk-max-bytes` 按编码后的字节数限制单次 `_bulk` 请求。单个文档超过限制时会被明确记为失败，不会静默跳过。可以重复传入 `--entity-batch-size=<entity>:<rows>`，只缩小超宽数据类型的 PostgreSQL 单页行数，不拖慢其他数据类型。
+
+大规模部署可以重复传入
+`--entity-range-concurrency=<documents|messages>:<workers>`，按 ID 区间并行读取这两类高容量数据。区间模式要求数据库使用逐字节排序规则（`C`、`C.UTF-8` 或 `C.utf8`），命令会在写入前检查。完成的区间只会按 ID 顺序推进持久化游标，因此任务中断后可以安全重放 Elasticsearch 已收到的后续区间。应从较小的并发任务数开始，只在持续观测 PostgreSQL 和 Elasticsearch 均稳定后增加。区间并发不能与 `--max-batches-per-entity` 同时使用。
+
+可以重复传入 `--entity=<entity>`，将一次执行限制到选定的数据类型，例如单独调优 `documents` 和 `messages`。只执行部分类型时不会提前创建别名；只要还有未完成类型，任务就会保持 `backfilling`。选定类型全部完成后，必须再执行一次不带 `--entity` 的续跑，让命令对完整 14 类数据进行最终对账并创建稳定别名。
+
+临时请求失败会先按指数间隔自动重试，再决定是否推进本批游标。默认最多重试 4 次，基础间隔为 500 毫秒，单次请求超时为 30 秒；需要时可通过 `--max-request-retries`、`--retry-base-delay-ms` 和 `--request-timeout-ms` 调整。
+
+每次执行或续跑都会把脱敏后的详细运行事件追加到 `<状态目录>/runs/<run-id>/events.jsonl`，并原子更新 `<状态目录>/runs/<run-id>/summary.json`。日志包含各数据类型和批量请求的耗时、字节数、文档数、重试、游标、失败与最终状态，但不会记录数据库或 Elasticsearch 地址、密钥以及文档正文。迁移或归档任务时，应把这些私有日志和 checkpoint 一起保留。
+
+只有设置 `ENABLE_TELEMETRY` 后，全量回填命令才会输出 OpenTelemetry 数据。此时必须传入
+`--telemetry-environment=<development|preview|production>`，并配置统一的
+`OTEL_EXPORTER_OTLP_ENDPOINT`，或分别配置指标和链路地址；否则应保持遥测关闭，使用本地事件和汇总文件。
+迁移命令、增量消费器和应用运行时必须显式使用同一个 `ES_INDEX_NAMESPACE`；迁移命令在开发环境也不会为缺失的前缀提供默认值。
+
+## 使用 Docker 镜像运行
+
+官方镜像内置 `/app/fts-search-elasticsearch-reindex.cjs`：
+
+```bash
+mkdir -m 700 -p .elasticsearch-reindex
+docker run --rm --user "$(id -u):$(id -g)" --env-file .env \
+  -e ES_REINDEX_STATE_DIR=/data/elasticsearch-reindex \
+  -v "$PWD/.elasticsearch-reindex:/data/elasticsearch-reindex" \
+  lobehub/lobehub:latest /app/fts-search-elasticsearch-reindex.cjs --status
+docker run --rm --user "$(id -u):$(id -g)" --env-file .env \
+  -e ES_REINDEX_STATE_DIR=/data/elasticsearch-reindex \
+  -v "$PWD/.elasticsearch-reindex:/data/elasticsearch-reindex" \
+  lobehub/lobehub:latest /app/fts-search-elasticsearch-reindex.cjs --apply --fresh-run --yes
+```
+
+使用 `--rm` 时必须挂载状态目录，否则容器退出后无法续跑。命令使用宿主机当前用户的 ID 运行，使进程可以写入挂载目录，同时不会修改目录所有者。
+
+## 使用 Docker Compose 运行
+
+官方 `docker-compose/deploy/docker-compose.yml` 已将同一条命令定义为 `fts-search-reindex`
+服务，并接入 Compose 内的 PostgreSQL、可选的内部网络 `elasticsearch` 服务，以及保存 checkpoint 的命名卷
+`fts-search-reindex-state`：
+
+```bash
+docker compose run --rm fts-search-reindex --status
+docker compose run --rm fts-search-reindex --apply --fresh-run --yes
+```
+
+额外参数会原样传入，因此上文的演练、`--entity`、`--skip-failure` 和续跑命令都可以直接使用。该服务读取 `.env` 中的
+`ES_URL`、`ES_ALLOW_INSECURE_HTTP` 和 `ES_INDEX_NAMESPACE`；如果目标是外部 Elastic Cloud，请改为在其中设置
+`ES_URL` 和 `ES_API_KEY`，不要设置 `ES_ALLOW_INSECURE_HTTP`，也不要在 `COMPOSE_PROFILES` 中启用 `elasticsearch`
+profile；该服务只依赖 PostgreSQL，因此不会构建或启动内置节点。包含启用节点和同步任务的完整 Compose 流程见
+[使用 Docker Compose 运行 Elasticsearch](/zh/docs/self-hosting/advanced/full-text-search#使用-docker-compose-运行-elasticsearch)。
+
+## 启动增量同步
+
+全量回填状态变为 `ready_for_incremental_sync` 后，设置
+`FTS_SEARCH_SYNC_ENABLED=true`，再运行有明确上限的增量消费器：
+
+```bash
+bun run fts-search:sync -- --max-steps=8 --yes
+```
+
+每次最多执行 8 轮消费后退出。最终 JSON 中出现 `hasMore: true` 只表示本次达到上限，可以安全再次执行。应使用 cron、容器任务或其他进程管理器持续调度同一条命令，Elasticsearch 承担搜索期间不能停止。消费器会在领取任务前校验 PostgreSQL 采集定义和全部 Elasticsearch 写入别名；采集设施缺失或过期、别名异常、可重试写入失败或死信都会返回非零退出码。消费器不会自动安装触发器，也不会自动删除失败任务。
+省略 `--max-steps` 时只执行一轮；可用范围为 1 到 100。
+
+如果不想依赖外部调度器，可以加上 `--interval-seconds=<1-3600>` 让命令作为长期任务运行：它会重复执行同样的有界消费，`hasMore`
+为 true 时立即继续，否则等待指定秒数，并在收到 `SIGINT` / `SIGTERM` 时完成当前正在进行的那一步消费（而不是整个上限）后正常停止，因此进程管理器的停止超时只需覆盖一步。留下失败或死信任务的那一轮仍会以非零状态退出，因此进程管理器的重启策略和日志能够暴露问题。Compose
+中的 `fts-search-sync` 服务（profile `elasticsearch-sync`）使用的就是这种模式。
+
+官方镜像内置 `/app/fts-search-elasticsearch-sync.cjs`，执行的是同一套有界消费逻辑：
+
+```bash
+docker run --rm --env-file .env \
+  -e FTS_SEARCH_SYNC_ENABLED=true \
+  -e MIGRATION_DB=1 \
+  lobehub/lobehub:latest /app/fts-search-elasticsearch-sync.cjs --max-steps=8 --yes
+```
+
+保持持续调度，并反复运行 `bun run fts-search:reindex -- --status`，直到 `pending`、`ready`、`retrying`、`inFlight`、`dead` 和 `revisionLag` 全部为 0。切换查询前必须再检查一次。确认追平后，把 `FTS_SEARCH_PROVIDER` 设为 `elasticsearch` 并重新部署。追平前必须保持 `FTS_SEARCH_PROVIDER=pg_search`。Elasticsearch 出错时会直接暴露给调用方，搜索路径不会静默回退到 PostgreSQL 或 `ilike`。
+
+部署后，在约定好的观察窗口内保留旧 BM25 索引和 `pg_search` 扩展。需要确认成功的后端请求都归属于
+`elasticsearch`、没有新增 `pg_search` 请求、增量队列可以反复回到零延迟且没有死信，并完成当前部署实际使用的产品搜索检查。在旧数据库对象仍保留时，回滚只需恢复
+`FTS_SEARCH_PROVIDER=pg_search` 并重新部署；排查 Elasticsearch 期间可以继续运行增量消费任务。如果安装采集后停止消费器，源数据变更会继续在增量队列中累积，直到消费器恢复。
+
+## 续跑与验收
+
+- 进程崩溃或 Elasticsearch 临时失败后，使用同一个状态目录重新执行 `--apply --yes`，但不要再传 `--fresh-run`。已完成的数据类型会被跳过，未完成的数据类型从本地游标后继续。只要可选的采集设施仍在，暂停期间的变更就会保留在增量队列中，因此可以安全续跑。
+- 整个请求失败时不会推进游标；如果同一批中的部分并发请求成功、另一部分失败，续跑时会安全重放整个数据库批次。逐条写入失败会写入本地 checkpoint，并在该数据类型完成前重试。
+- 任何数据类型或逐条失败尚未完成时，工具都会拒绝创建别名。
+- 最终状态为 `ready_for_incremental_sync`。此时全量快照、别名和增量队列的追平边界已经就绪，但用户查询仍必须留在 PostgreSQL。
+
+这个修订号只用于观察增量追平进度，不是数据库已经提交的快照边界。增量消费器必须处理队列里的每一条记录，不能仅因修订号小于或等于该值就丢弃记录。
+
+启动上面说明的增量消费器前，运行 `--status`，确认 14 类数据全部为 `completed`、所有 `failedCount` 都是 `0`，且增量队列的 `dead` 为 `0`。增量消费器暂停时，队列中有待处理记录是预期现象；这不代表源数据变更采集已暂停。状态会列出未解决记录的文档标识、是否可重试和尝试次数，不会保存或输出可能包含原文的 Elasticsearch 错误原因。
+
+修正被拒绝的源数据或映射后，再执行 `--apply --yes` 即可重试。如果运维人员明确接受某一条不可重试的数据暂时不进入初始 Elasticsearch 快照，可以显式解除阻塞，然后继续回填：
+
+```bash
+ES_REINDEX_STATE_DIR=.elasticsearch-reindex \
+  bun run fts-search:reindex -- --skip-failure=agents:document-id --yes
+ES_REINDEX_STATE_DIR=.elasticsearch-reindex bun run fts-search:reindex -- --apply --yes
+```
+
+只有不可重试的失败可以跳过，且跳过不会把该文档计为写入成功。只有在检查源记录，并接受它需要等后续数据变更或增量修复后才能被搜索到时，才能使用这个命令。
+
+回填期间如需暂停写入 Elasticsearch，请使用部署环境提供的增量消费器开关。这只会暂停消费增量队列，不会停止已经安装的 PostgreSQL 采集触发器；源数据变更会继续进入增量队列，消费器重新开启后即可追平。回填进行期间不要禁用或删除触发器，也不要清空增量队列。
+
+<Callout type="info">
+  全量回填命令不会代替持续运行的增量消费器，也不会自行宣称应用已经可以切换搜索后端。只要 Elasticsearch 仍在承担搜索，就必须持续调度 `fts-search:sync`。
+</Callout>
+
+## 在 Neon 截止日期前卸载 pg\_search
+
+Elasticsearch 稳定运行并经过观察窗口，且 PostgreSQL 已有当前恢复点后，先查看剩余的 LobeHub 管理对象：
+
+```bash
+bun run scripts/pgSearchCleanup/index.ts --status
+```
+
+确认后通过脚本完成清理，不需要从文档复制 SQL：
+
+```bash
+bun run scripts/pgSearchCleanup/index.ts --apply --yes
+```
+
+请使用直连 `DATABASE_URL`，不要使用事务池地址。只有
+`FTS_SEARCH_PROVIDER=elasticsearch` 时脚本才允许执行；遇到无法识别的 BM25 索引会拒绝继续。脚本会并发删除
+LobeHub 管理的旧索引，再以不带 `CASCADE` 的方式卸载扩展；中断后可以安全重跑。它不会删除 Elasticsearch
+依赖的增量队列、采集触发器或消费任务。
+
+官方镜像内置 `/app/fts-search-pg-search-cleanup.cjs`：
+
+```bash
+docker run --rm --env-file .env \
+  lobehub/lobehub:latest /app/fts-search-pg-search-cleanup.cjs --status
+docker run --rm --env-file .env \
+  lobehub/lobehub:latest /app/fts-search-pg-search-cleanup.cjs --apply --yes
+```
+
+受影响的 Neon 部署必须在 2026 年 9 月 21 日前完成此步骤。其他 PostgreSQL 服务可以保留
+`pg_search`，但删除已停用的对象可以避免继续维护不再使用的 BM25 索引。

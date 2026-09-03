@@ -39,17 +39,31 @@ describe('chainExpertiseDomainDraft', () => {
 });
 
 describe('chainExpertiseTopicIngestion', () => {
+  it('names the reference field so it cannot be read as "the existing code"', () => {
+    const observation =
+      EXPERTISE_TOPIC_INGESTION_JSON_SCHEMA.schema.properties.domains.items.properties.observations
+        .items;
+
+    expect(Object.keys(observation.properties)).toContain('existingLessonCode');
+    expect(Object.keys(observation.properties)).not.toContain('existingCode');
+    expect(observation.required).toContain('existingLessonCode');
+  });
+
   it('keeps filtering policy, input serialization, schema, and version together', () => {
     const result = chainExpertiseTopicIngestion({
       context: '[user] 帮我修改这段比喻',
       domains: [{ domainFilter: '比喻写作', id: 'domain-1' }],
     });
 
-    expect(EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION).toBe('v1');
+    expect(EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION).toBe('v2');
     expect(EXPERTISE_TOPIC_INGESTION_JSON_SCHEMA.name).toBe('expertise_topic_ingestion');
     expect(result.messages[0].content).toContain('domainFilter and outOfScope');
     expect(result.messages[0].content).toContain('matches=false');
     expect(result.messages[0].content).toContain('one-off fact');
+    expect(result.messages[0].content).toContain('Attaching to an existing lesson is the default');
+    expect(result.messages[0].content).toContain(
+      'existingLessonCode holds a lesson code and nothing else',
+    );
     expect(result.messages[1].content).toContain('"id":"domain-1"');
     expect(result.messages[1].content).toContain('[user] 帮我修改这段比喻');
   });

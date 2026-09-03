@@ -17,15 +17,6 @@ vi.mock('@/utils/platform', () => ({
   linux: vi.fn(() => true),
 }));
 
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 vi.mock('electron', () => ({
   app: {
     getVersion: vi.fn(() => '1.2.3'),

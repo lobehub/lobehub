@@ -1,7 +1,8 @@
 'use client';
 
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { Avatar, Button, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Avatar, Button, Text } from '@lobehub/ui/base-ui';
 import { cx } from 'antd-style';
 import type { KeyboardEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
@@ -21,7 +22,7 @@ import { styles } from './style';
 const EMPTY_TEMPLATES: AgentTemplate[] = [];
 
 const PickAgentsIntervention = memo<BuiltinInterventionProps<ShowAgentMarketplaceArgs>>(
-  ({ args, interactionMode, onInteractionAction }) => {
+  ({ args, disabled = false, interactionMode, onInteractionAction }) => {
     const { t } = useTranslation('ui');
     const { t: tTool } = useTranslation('tool');
     const isCustom = interactionMode === 'custom';
@@ -80,17 +81,21 @@ const PickAgentsIntervention = memo<BuiltinInterventionProps<ShowAgentMarketplac
     const [selected, setSelected] = useState<Set<string>>(() => new Set());
     const [submitting, setSubmitting] = useState(false);
 
-    const toggle = useCallback((id: string) => {
-      setSelected((prev) => {
-        const next = new Set(prev);
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        return next;
-      });
-    }, []);
+    const toggle = useCallback(
+      (id: string) => {
+        if (disabled) return;
+        setSelected((prev) => {
+          const next = new Set(prev);
+          if (next.has(id)) next.delete(id);
+          else next.add(id);
+          return next;
+        });
+      },
+      [disabled],
+    );
 
     const handleSubmit = useCallback(async () => {
-      if (!onInteractionAction || selected.size === 0) return;
+      if (!onInteractionAction || selected.size === 0 || disabled) return;
       setSubmitting(true);
       try {
         await onInteractionAction({
@@ -102,24 +107,25 @@ const PickAgentsIntervention = memo<BuiltinInterventionProps<ShowAgentMarketplac
       } finally {
         setSubmitting(false);
       }
-    }, [args.requestId, categoryHints, onInteractionAction, selected]);
+    }, [args.requestId, categoryHints, disabled, onInteractionAction, selected]);
 
     const handleSkip = useCallback(async () => {
-      if (!onInteractionAction) return;
+      if (!onInteractionAction || disabled) return;
       await onInteractionAction({
         payload: { categoryHints, requestId: args.requestId },
         type: 'skip',
       });
-    }, [args.requestId, categoryHints, onInteractionAction]);
+    }, [args.requestId, categoryHints, disabled, onInteractionAction]);
 
     const handleCardKeyDown = useCallback(
       (event: KeyboardEvent<HTMLDivElement>, id: string) => {
+        if (disabled) return;
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           toggle(id);
         }
       },
-      [toggle],
+      [disabled, toggle],
     );
 
     if (!isCustom) {
@@ -172,6 +178,7 @@ const PickAgentsIntervention = memo<BuiltinInterventionProps<ShowAgentMarketplac
                   <button
                     aria-selected={isActive}
                     className={cx(styles.categoryItem, isActive && styles.categoryItemActive)}
+                    disabled={disabled}
                     key={category}
                     role="tab"
                     type="button"
@@ -193,11 +200,12 @@ const PickAgentsIntervention = memo<BuiltinInterventionProps<ShowAgentMarketplac
                     const avatar = tpl.avatar;
                     return (
                       <div
+                        aria-disabled={disabled}
                         aria-pressed={isSelected}
                         className={cx(styles.card, isSelected && styles.cardSelected)}
                         key={tpl.id}
                         role="button"
-                        tabIndex={0}
+                        tabIndex={disabled ? -1 : 0}
                         onClick={() => toggle(tpl.id)}
                         onKeyDown={(event) => handleCardKeyDown(event, tpl.id)}
                       >
@@ -218,11 +226,15 @@ const PickAgentsIntervention = memo<BuiltinInterventionProps<ShowAgentMarketplac
         )}
 
         <div className={styles.footer}>
-          <Text className={styles.skipLink} type="secondary" onClick={handleSkip}>
+          <Text
+            className={styles.skipLink}
+            type="secondary"
+            onClick={disabled ? undefined : handleSkip}
+          >
             {t('form.skip')}
           </Text>
           <Button
-            disabled={selected.size === 0}
+            disabled={disabled || selected.size === 0}
             loading={submitting}
             type="primary"
             onClick={handleSubmit}

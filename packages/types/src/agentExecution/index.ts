@@ -1,4 +1,5 @@
 import type { LobeAgentChatConfig } from '../agent/chatConfig';
+import type { CreateThreadWithMessageParams } from '../aiChat';
 import type { WorkingDirConfig } from '../device';
 import type { TaskDetail, UIChatMessage } from '../message';
 import type { ChatTopic } from '../topic';
@@ -124,6 +125,19 @@ export interface ExecAgentAppContext {
    */
   isSubAgent?: boolean;
   /**
+   * Branch this run into a NEW thread (subtopic) under `topicId`, persisting the
+   * turn there instead of on the topic's main spine.
+   *
+   * Same intent the non-gateway send path expresses as `newThread` on
+   * `aiChat.sendMessageInServer`. The gateway path skips that call entirely, so
+   * without carrying it here the subtopic silently collapses back into the main
+   * conversation and no thread row is ever created.
+   *
+   * Ignored when `threadId` is already set — that is a follow-up inside an
+   * existing thread, which needs no new row.
+   */
+  newThread?: CreateThreadWithMessageParams;
+  /**
    * Orchestration role of the agent for this group run. `'supervisor'` for the
    * group's coordinating agent (execGroupAgent), `'member'` for delegated members
    * (execAgentMember). Stamped onto the assistant message's
@@ -160,6 +174,12 @@ export interface ExecAgentAppContext {
   threadId?: string | null;
   /** Topic ID */
   topicId?: string | null;
+  /**
+   * Goal detail page the conversation is happening on. The server builds
+   * `RuntimeInitialContext.goalOverview` from the goal graph so the agent can
+   * answer progress questions without tool calls.
+   */
+  viewedGoal?: { goalId: string };
 }
 
 /**
@@ -295,8 +315,16 @@ export interface ExecAgentResult {
   autoStarted: boolean;
   /** Timestamp when operation was created */
   createdAt: string;
+  /** The thread created for this run when `appContext.newThread` was supplied. */
+  createdThreadId?: string;
   /** Error message if operation failed to start */
   error?: string;
+  /**
+   * External heterogeneous producer for this run. `null` explicitly denotes
+   * the normal AgentRuntime path; `undefined` is reserved for rolling clients
+   * talking to an older server that did not yet return this discriminator.
+   */
+  heteroType?: string | null;
   /** Status message */
   message: string;
   /** Queue message ID if auto-started */

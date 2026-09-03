@@ -1,5 +1,6 @@
 import { type ListItemProps } from '@lobehub/ui';
-import { Avatar, List } from '@lobehub/ui';
+import { List } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui/base-ui';
 import { useHover } from 'ahooks';
 import { createStaticStyles, cx } from 'antd-style';
 import { memo, useMemo, useRef } from 'react';
@@ -29,7 +30,7 @@ const styles = createStaticStyles(({ css, cssVar }) => {
 });
 
 const ListItem = memo<
-  ListItemProps & {
+  Omit<ListItemProps, 'avatar' | 'key'> & {
     avatar: string | { avatar: string; background?: string }[];
     avatarBackground?: string;
     type?: 'agent' | 'group' | 'inbox';
@@ -46,8 +47,10 @@ const ListItem = memo<
     }
 
     // For regular sessions, use the regular Avatar component
+    const agentAvatar = typeof avatar === 'string' ? avatar : avatar[0]?.avatar;
+
     return (
-      <Avatar animation={isHovering} avatar={avatar} background={avatarBackground} size={40} />
+      <Avatar animation={isHovering} avatar={agentAvatar} background={avatarBackground} size={40} />
     );
   }, [isHovering, avatar, avatarBackground, type]);
 

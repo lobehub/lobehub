@@ -895,6 +895,7 @@ describe('messengerRouter.sendMessengerPush', () => {
       fileType: 'application/pdf',
       id: 'file-1',
       name: 'report.pdf',
+      size: 123_456,
       url: 's3://bucket/report.pdf',
     });
   });
@@ -918,6 +919,10 @@ describe('messengerRouter.sendMessengerPush', () => {
             fetchUrl: 'https://app.lobehub.com/f/file-1',
             mimeType: 'application/pdf',
             name: 'report.pdf',
+            size: 123_456,
+            // Server-generated from a row this caller owns, which is what lets
+            // the outbound guard accept our own private origins for it.
+            trustedUrl: true,
             type: 'file',
           },
         ],

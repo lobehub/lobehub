@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SetupElectronApiFunction } from './electronApi';
 
@@ -7,6 +7,9 @@ const mockElectronAPI = { someAPI: 'mock-electron-api' };
 const mockContextBridgeExposeInMainWorld = vi.fn();
 const mockIpcRendererOn = vi.fn();
 const mockIpcRendererSendSync = vi.fn();
+const mockGetProcessMemoryInfo = vi.fn();
+
+const originalGetProcessMemoryInfo = process.getProcessMemoryInfo;
 
 vi.mock('electron', () => ({
   contextBridge: {
@@ -41,8 +44,15 @@ describe('setupElectronApi', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     vi.resetModules();
+    mockGetProcessMemoryInfo.mockReset();
+    Object.assign(process, { getProcessMemoryInfo: mockGetProcessMemoryInfo });
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     ({ setupElectronApi } = await import('./electronApi'));
+  });
+
+  afterAll(() => {
+    if (originalGetProcessMemoryInfo) process.getProcessMemoryInfo = originalGetProcessMemoryInfo;
+    else Reflect.deleteProperty(process, 'getProcessMemoryInfo');
   });
 
   it('should expose electron API to main world', () => {
@@ -74,6 +84,19 @@ describe('setupElectronApi', () => {
 
     expect(exposedAPI.getDesktopBootstrapIdentity()).toEqual(identity);
     expect(mockIpcRendererSendSync).toHaveBeenCalledWith('desktop:get-bootstrap-identity');
+  });
+
+  it('reads precise renderer process memory', async () => {
+    mockGetProcessMemoryInfo.mockResolvedValue({ private: 2_621_440, shared: 1024 });
+    setupElectronApi();
+
+    const exposedAPI = mockContextBridgeExposeInMainWorld.mock.calls[1][1];
+
+    await expect(exposedAPI.getRendererMemoryInfo()).resolves.toEqual({
+      privateBytes: 2_684_354_560,
+      sharedBytes: 1_048_576,
+    });
+    expect(mockGetProcessMemoryInfo).toHaveBeenCalledOnce();
   });
 
   it('should expose lobeEnv with darwinMajorVersion, isMacTahoe, platform and version info', () => {

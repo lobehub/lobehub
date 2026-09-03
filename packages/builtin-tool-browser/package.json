@@ -9,7 +9,8 @@
   },
   "main": "./src/index.ts",
   "dependencies": {
-    "@lobechat/electron-client-ipc": "workspace:*"
+    "@lobechat/electron-client-ipc": "workspace:*",
+    "@lobechat/shared-tool-ui": "workspace:*"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"

@@ -140,6 +140,7 @@
   "updater.downloadNewVersion": "Pobierz nową wersję",
   "updater.downloadingUpdate": "Pobieranie aktualizacji",
   "updater.downloadingUpdateDesc": "Aktualizacja jest pobierana, proszę czekać...",
+  "updater.ignore": "Ignoruj",
   "updater.installLater": "Zainstaluj przy następnym uruchomieniu",
   "updater.isLatestVersion": "Używasz najnowszej wersji",
   "updater.isLatestVersionDesc": "Świetnie! Wersja {{version}}, której używasz, jest najnowsza.",

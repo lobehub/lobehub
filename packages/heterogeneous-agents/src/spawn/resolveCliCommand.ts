@@ -32,6 +32,7 @@ export type HeterogeneousCliAgentType = LocalHeterogeneousAgentType;
  */
 export interface CliCommandStatus {
   available: boolean;
+  error?: string;
   path?: string;
   /**
    * PATH used to resolve/validate the command, surfaced only when it differs
@@ -59,6 +60,11 @@ interface ResolvedCommand {
   env?: NodeJS.ProcessEnv;
   path: string;
   resolvedPathEnv?: string;
+}
+
+interface RecoveredProbeEnvironment {
+  env: NodeJS.ProcessEnv;
+  resolvedPathEnv: string;
 }
 
 const VERSION_PATTERN = /v?(\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?)/;
@@ -116,6 +122,35 @@ const isPathLikeCommand = (command: string): boolean =>
     ? path.win32.isAbsolute(command) || /[\\/]/.test(command)
     : path.isAbsolute(command) || command.includes(path.sep);
 
+/**
+ * A login *interactive* shell has to load the user's full interactive config —
+ * oh-my-zsh, plugins, nvm — before it can print PATH. On a developer machine
+ * that is over a second when idle, and this probe runs while the machine is
+ * busy doing the very work that needed the CLI. Three seconds left barely more
+ * than twice the idle cost, and a machine under load spent it, which surfaced
+ * as "CLI not found" for a CLI that was installed and had just run.
+ */
+const LOGIN_SHELL_PATH_TIMEOUT_MS = 10_000;
+
+/**
+ * Surfaced on `CliCommandStatus.error` so callers can tell a slow machine from
+ * a missing binary. Matched by `isLoginShellTimeoutStatus`.
+ */
+export const LOGIN_SHELL_TIMEOUT_STATUS_ERROR =
+  'Timed out reading PATH from the login shell while looking for the CLI';
+
+/** Whether a detection result failed because the shell probe ran out of time. */
+export const isLoginShellTimeoutStatus = (status?: { error?: string }): boolean =>
+  status?.error === LOGIN_SHELL_TIMEOUT_STATUS_ERROR;
+
+/** Distinguishes "the probe ran out of time" from "the shell had nothing". */
+export class LoginShellPathTimeoutError extends Error {
+  constructor() {
+    super('Timed out reading PATH from the login shell');
+    this.name = 'LoginShellPathTimeoutError';
+  }
+}
+
 const getLoginShellPath = async (): Promise<string | undefined> => {
   if (isWindows()) return undefined;
 
@@ -124,7 +159,7 @@ const getLoginShellPath = async (): Promise<string | undefined> => {
 
   try {
     const { stdout } = await execFilePromise(shell, ['-ilc', 'printf "%s" "$PATH"'], {
-      timeout: 3000,
+      timeout: LOGIN_SHELL_PATH_TIMEOUT_MS,
       windowsHide: true,
     });
 
@@ -133,14 +168,65 @@ const getLoginShellPath = async (): Promise<string | undefined> => {
       .map((line) => line.trim())
       .reverse()
       .find((line) => line.includes(path.delimiter));
-  } catch {
+  } catch (error) {
+    // `execFile` kills the child on timeout and reports it as a signal, so a
+    // slow shell and a hostile one are told apart here rather than downstream.
+    if ((error as { killed?: boolean })?.killed) throw new LoginShellPathTimeoutError();
     return undefined;
   }
 };
 
-const getCachedLoginShellPath = async (): Promise<string | undefined> => {
-  shellPathPromise ??= getLoginShellPath();
+/**
+ * The login-shell PATH, resolved once per process.
+ *
+ * It used to be discarded the moment it settled, so a Rescan could observe PATH
+ * edits made by an installer while the app was running. That put a
+ * second-long, timeout-prone subprocess on the critical path of *every* spawn —
+ * and since the caller detects with `force`, every session paid it. The value
+ * is cached for the process now and `invalidateLoginShellPathCache()` gives
+ * Rescan the same freshness explicitly.
+ *
+ * A probe that *timed out* is deliberately not cached — that is the transient
+ * case, and pinning it would leave the process believing there is no login
+ * PATH until restart. A probe that completed is cached even when it found
+ * nothing, because that is a real answer rather than a missed one.
+ */
+let cachedShellPath: { value: string | undefined } | undefined;
+/**
+ * Bumped on every invalidation. A probe that started before a Rescan carries
+ * the older generation and is refused the cache when it lands — without this,
+ * a ten-second probe in flight would write the pre-Rescan PATH back moments
+ * after the user asked for a fresh one, which is precisely the edit they were
+ * trying to make visible.
+ */
+let shellPathGeneration = 0;
+
+const getCurrentLoginShellPath = async (): Promise<string | undefined> => {
+  if (cachedShellPath) return cachedShellPath.value;
+
+  if (!shellPathPromise) {
+    const generation = shellPathGeneration;
+    shellPathPromise = getLoginShellPath()
+      .then((value) => {
+        if (generation === shellPathGeneration) cachedShellPath = { value };
+        return value;
+      })
+      .finally(() => {
+        if (generation === shellPathGeneration) shellPathPromise = undefined;
+      });
+  }
   return shellPathPromise;
+};
+
+/**
+ * Drop the cached login-shell PATH so the next probe re-reads it, and disown
+ * any probe already running so its result cannot satisfy or repopulate the
+ * fresh scan.
+ */
+export const invalidateLoginShellPathCache = (): void => {
+  cachedShellPath = undefined;
+  shellPathGeneration += 1;
+  shellPathPromise = undefined;
 };
 
 // Machine-wide then per-user PATH, the two halves Windows concatenates into a
@@ -198,7 +284,7 @@ const readMergedWindowsRegistryPath = async (): Promise<string | undefined> => {
  * answer for the process lifetime would re-create the staleness it fixes: a
  * CLI installed after the first failed scan would stay "not installed" until
  * the app restarted. `reg query` is a couple of short-lived processes, and it
- * only runs when `where` already came up empty.
+ * only runs after the complete inherited-environment pass fails.
  */
 const getWindowsRegistryPath = async (): Promise<string | undefined> => {
   registryPathPromise ??= readMergedWindowsRegistryPath().finally(() => {
@@ -219,6 +305,26 @@ const mergePathValues = (...values: Array<string | undefined>): string | undefin
     });
 
   return segments.length > 0 ? segments.join(path.delimiter) : undefined;
+};
+
+const recoverProbeEnvironment = async (
+  probeEnv?: NodeJS.ProcessEnv,
+): Promise<RecoveredProbeEnvironment | undefined> => {
+  const recoveredPath = isWindows()
+    ? await getWindowsRegistryPath()
+    : await getCurrentLoginShellPath();
+  const currentPath = probeEnv?.PATH ?? process.env.PATH;
+  const resolvedPathEnv = mergePathValues(recoveredPath, currentPath);
+
+  if (!resolvedPathEnv || resolvedPathEnv === currentPath) return;
+
+  return {
+    env: {
+      ...(probeEnv ?? process.env),
+      PATH: resolvedPathEnv,
+    },
+    resolvedPathEnv,
+  };
 };
 
 const getCommandPathLines = async (
@@ -259,43 +365,14 @@ const resolveCommandCandidates = async (
   const trimmedCommand = command.trim();
   if (!trimmedCommand) return [];
 
+  const resolvedPathEnv = probeEnv?.PATH === process.env.PATH ? undefined : probeEnv?.PATH;
+
   if (isPathLikeCommand(trimmedCommand)) {
-    return [
-      {
-        env: probeEnv,
-        path: trimmedCommand,
-        resolvedPathEnv: probeEnv?.PATH === process.env.PATH ? undefined : probeEnv?.PATH,
-      },
-    ];
+    return [{ env: probeEnv, path: trimmedCommand, resolvedPathEnv }];
   }
 
   const whichCommand = isWindows() ? 'where' : 'which';
-  let lines = await getCommandPathLines(whichCommand, trimmedCommand, probeEnv);
-  let lookupEnv = probeEnv;
-  let resolvedPathEnv = probeEnv?.PATH === process.env.PATH ? undefined : probeEnv?.PATH;
-
-  if (!lines) {
-    // PATH recovery, per platform: macOS/Linux re-read the login shell's PATH,
-    // Windows re-reads the registry environment (the inherited block is a
-    // creation-time snapshot that never picks up a later install).
-    const recoveredPath = isWindows()
-      ? await getWindowsRegistryPath()
-      : await getCachedLoginShellPath();
-    const lookupPath = mergePathValues(recoveredPath, probeEnv?.PATH ?? process.env.PATH);
-
-    if (lookupPath && lookupPath !== (probeEnv?.PATH ?? process.env.PATH)) {
-      const fallbackEnv = {
-        ...(probeEnv ?? process.env),
-        PATH: lookupPath,
-      };
-      lines = await getCommandPathLines(whichCommand, trimmedCommand, fallbackEnv);
-      if (lines) {
-        lookupEnv = fallbackEnv;
-        resolvedPathEnv = lookupPath;
-      }
-    }
-  }
-
+  const lines = await getCommandPathLines(whichCommand, trimmedCommand, probeEnv);
   if (!lines) return [];
 
   // Windows `where` lists every PATHEXT match (e.g. for `codex` npm ships a
@@ -303,13 +380,13 @@ const resolveCommandCandidates = async (
   // ones we can execute, still in PATH order.
   if (isWindows()) {
     return pickWindowsRunnables(lines).map((runnablePath) => ({
-      env: lookupEnv,
+      env: probeEnv,
       path: runnablePath,
       resolvedPathEnv,
     }));
   }
 
-  return [{ env: lookupEnv, path: lines[0], resolvedPathEnv }];
+  return [{ env: probeEnv, path: lines[0], resolvedPathEnv }];
 };
 
 const quoteWindowsShellToken = (token: string): string =>
@@ -375,7 +452,7 @@ const execProbe = async (
     });
   }
 
-  const spawnPlan = await resolveCliSpawnPlan(command, args);
+  const spawnPlan = await resolveCliSpawnPlan(command, args, env);
   if (isWindows() && spawnPlan.command === command && isWindowsShimPath(command)) {
     return UNRESOLVED_SHIM;
   }
@@ -392,7 +469,7 @@ const execProbe = async (
  * matching `--version` output against a keyword or output pattern (avoids
  * collisions with an unrelated executable of the same name).
  */
-export const detectValidatedCommand = async (
+const detectValidatedCommandInEnvironment = async (
   command: string,
   options: ValidateOptions,
   probeEnv?: NodeJS.ProcessEnv,
@@ -414,7 +491,10 @@ export const detectValidatedCommand = async (
   // npm-installed shims like `claude.cmd` under %APPDATA%\npm — `execFile`
   // alone won't apply PATHEXT and can't run .cmd files directly.
   const candidates = await resolveCommandCandidates(trimmedCommand, probeEnv);
-  if (candidates.length === 0) return { available: false };
+  const resolvedPathEnv = probeEnv?.PATH === process.env.PATH ? undefined : probeEnv?.PATH;
+  if (candidates.length === 0) {
+    return resolvedPathEnv ? { available: false, resolvedPathEnv } : { available: false };
+  }
 
   const validateCandidate = async (
     { env, path: resolvedPath, resolvedPathEnv }: ResolvedCommand,
@@ -517,8 +597,72 @@ export const detectValidatedCommand = async (
     if (status !== UNRESOLVED_SHIM && status.available) return status;
   }
 
-  return { available: false };
+  return resolvedPathEnv ? { available: false, resolvedPathEnv } : { available: false };
 };
+
+const isProbeableCommand = (command: string): boolean => {
+  const trimmedCommand = command.trim();
+  return trimmedCommand.length > 0 && !(isWindows() && WINDOWS_SHELL_METAS.test(trimmedCommand));
+};
+
+/**
+ * Validate an ordered command chain with candidate precedence above environment
+ * precedence: candidate 1 inherited → candidate 1 recovered → candidate 2
+ * inherited → candidate 2 recovered. PATH recovery is attempted at most once
+ * and reused, so lookup misses and validation failures share the same edge
+ * without letting a well-known fallback outrank the user's login-PATH command.
+ */
+export const detectValidatedCommandCandidates = async (
+  commands: string[],
+  options: ValidateOptions,
+  probeEnv?: NodeJS.ProcessEnv,
+): Promise<CliCommandStatus> => {
+  let lastStatus: CliCommandStatus = { available: false };
+  let recoveryAttempted = false;
+  let recovered: RecoveredProbeEnvironment | undefined;
+
+  for (const command of commands) {
+    const inheritedStatus = await detectValidatedCommandInEnvironment(command, options, probeEnv);
+    if (inheritedStatus.available) return inheritedStatus;
+    lastStatus = inheritedStatus;
+
+    // Invalid Windows shell expressions must not trigger even the registry
+    // helper processes used for PATH recovery.
+    if (!isProbeableCommand(command)) continue;
+
+    if (!recoveryAttempted) {
+      recoveryAttempted = true;
+      try {
+        recovered = await recoverProbeEnvironment(probeEnv);
+      } catch (error) {
+        // A timed-out shell probe is not evidence the CLI is missing, and
+        // reporting it as such sends the user to reinstall software that is
+        // already there. Say what actually happened instead.
+        if (error instanceof LoginShellPathTimeoutError) {
+          return { ...lastStatus, available: false, error: LOGIN_SHELL_TIMEOUT_STATUS_ERROR };
+        }
+        throw error;
+      }
+    }
+    if (!recovered) continue;
+
+    const recoveredStatus = await detectValidatedCommandInEnvironment(
+      command,
+      options,
+      recovered.env,
+    );
+    if (recoveredStatus.available) return recoveredStatus;
+    lastStatus = recoveredStatus;
+  }
+
+  return lastStatus;
+};
+
+export const detectValidatedCommand = async (
+  command: string,
+  options: ValidateOptions,
+  probeEnv?: NodeJS.ProcessEnv,
+): Promise<CliCommandStatus> => detectValidatedCommandCandidates([command], options, probeEnv);
 
 const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
   'amp': {
@@ -539,6 +683,11 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
   'cursor': {
     validateFlag: '--help',
     validatePattern: /^Usage: agent[\s\S]*Cursor Agent/im,
+  },
+  'droid': {
+    validateHelpArgs: ['exec', '--help'],
+    validateHelpKeywords: ['--output-format', 'ACP modes'],
+    validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
   },
   'grok-build': {
     validateHelpArgs: ['agent', '--help'],
@@ -661,6 +810,19 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
         path.join(homedir(), '.local', 'bin', 'cursor-agent'),
       ];
     }
+    case 'droid': {
+      if (platform() === 'win32') {
+        return [path.join(homedir(), 'AppData', 'Roaming', 'npm', 'droid.cmd')];
+      }
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+
+      return [
+        path.join(homedir(), '.local', 'bin', 'droid'),
+        path.join(homedir(), '.bun', 'bin', 'droid'),
+        path.join(homedir(), '.npm-global', 'bin', 'droid'),
+        path.join(homedir(), 'Library', 'pnpm', 'droid'),
+      ];
+    }
     case 'grok-build': {
       if (platform() === 'win32') {
         return [path.join(homedir(), '.grok', 'bin', 'grok.exe')];
@@ -742,22 +904,17 @@ export const detectHeterogeneousCliCommand = async (
   const validator = HETEROGENEOUS_CLI_AGENT_OPTIONS[agentType];
   if (!validator) return { available: false };
 
-  const status = await detectValidatedCommand(command, validator, probeEnv);
-  if (status.available) return status;
-
   // The default command missing from PATH may still live at a well-known install
   // location (e.g. the Codex desktop app's bundled CLI). Only probe those for the
   // default command: the well-known paths hold the *default* binary, so applying
   // them to a custom command (e.g. `claude-beta`) would silently resolve it to
   // stock `claude` instead of reporting the configured command as missing.
-  if (command.trim() === DEFAULT_HETERO_COMMAND[agentType]) {
-    for (const candidate of getWellKnownCommandPaths(agentType)) {
-      const fallbackStatus = await detectValidatedCommand(candidate, validator, probeEnv);
-      if (fallbackStatus.available) return fallbackStatus;
-    }
-  }
+  const commands =
+    command.trim() === DEFAULT_HETERO_COMMAND[agentType]
+      ? [command, ...getWellKnownCommandPaths(agentType)]
+      : [command];
 
-  return status;
+  return detectValidatedCommandCandidates(commands, validator, probeEnv);
 };
 
 /**

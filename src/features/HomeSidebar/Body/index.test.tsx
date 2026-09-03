@@ -21,7 +21,8 @@ const mocks = vi.hoisted(() => ({
   updateSystemStatus: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui', () => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   Accordion: ({
     children,
     expandedKeys,
@@ -36,16 +37,9 @@ vi.mock('@lobehub/ui', () => ({
       {children}
     </div>
   ),
-  ActionIcon: () => <span />,
-  DropdownMenu: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   Flexbox: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="sidebar-body">{children}</div>
   ),
-  Icon: () => <span />,
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
 }));
 
 vi.mock('react-router', () => ({

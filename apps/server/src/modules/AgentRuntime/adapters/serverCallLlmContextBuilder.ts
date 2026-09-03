@@ -87,7 +87,8 @@ export const buildServerCallLlmContext = async ({
   }
 
   const { operationId, stepIndex } = ctx;
-  const { resolved, resolvedSkills, toolDiscoveryConfig } = tooling;
+  const { resolved, resolvedSkills, toolDiscoveryConfig, activeDeviceId, executionTarget } =
+    tooling;
   const contextHints = await resolveServerCallLlmContextHints({
     ctx,
     llmPayload,
@@ -261,6 +262,18 @@ export const buildServerCallLlmContext = async ({
   }
 
   const sandboxEnabled = String(resolved.enabledToolIds.includes('lobe-cloud-sandbox'));
+  // `sandbox_enabled` tracks whether the dedicated Cloud Sandbox tool is
+  // offered — true for target 'sandbox', and (so the model can choose sandbox
+  // vs. an auto-routed device per call) for 'auto' too, regardless of whether
+  // a device ended up routed. It's still not the full answer for
+  // `injectCredsToSandbox` reachability: `lobe-skills`' `runCommand`/
+  // `execScript` ALSO silently fall back to that same cloud sandbox session
+  // whenever no device is actively routed, for targets where the dedicated
+  // tool isn't offered at all (e.g. the common no-device 'none' web/agent
+  // session). So a credential is reachable whenever EITHER condition holds:
+  // the dedicated tool is exposed for 'auto' (independent of device routing),
+  // or no device is routed (independent of target).
+  const credsSandboxReachable = String(!activeDeviceId || executionTarget === 'auto');
   let sandboxUploadedFiles = '';
   if (sandboxEnabled === 'true' && ctx.serverDB && ctx.userId && lobehubSkillTopicId) {
     try {
@@ -597,6 +610,7 @@ export const buildServerCallLlmContext = async ({
       ...lobehubSkillVariables,
       COMPOSIO_SERVICES_LIST: composioServicesListStr,
       CREDS_LIST: credsListStr,
+      creds_sandbox_reachable: credsSandboxReachable,
       language: serverLanguage,
       // Only override the generator's 'en-US' locale fallback when the user info
       // fetch actually resolved a language — an empty string would render blank.

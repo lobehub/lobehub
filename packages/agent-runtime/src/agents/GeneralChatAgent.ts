@@ -30,6 +30,10 @@ import { shouldCompress } from '../utils/tokenCounter';
 const TOOL_NOT_ALLOWED_CONTENT =
   'Tool execution blocked because the tool is not allowed in the current execution scope.';
 const TOOL_NOT_ALLOWED_REASON = 'tool_not_allowed';
+// Leave 35% of the model window for server-side context engineering (system
+// role, knowledge, memories, skills, etc.) and the model's completion. The
+// initial 50% threshold still supplies the lower side of the hysteresis band.
+const DEFAULT_RECOMPRESSION_THRESHOLD_RATIO = 0.65;
 
 /**
  * ChatAgent - The "Brain" of the chat agent
@@ -107,31 +111,6 @@ export class GeneralChatAgent implements Agent {
     return !!config && typeof config === 'object' && !Array.isArray(config) && 'dynamic' in config;
   }
 
-  private matchesAlwaysPolicy(
-    config: HumanInterventionConfig | undefined,
-    toolArgs: Record<string, any>,
-  ): boolean {
-    if (!config) return false;
-    if (config === 'always') return true;
-    if (!Array.isArray(config)) return false;
-
-    return config.some((rule) => {
-      if (rule.policy !== 'always') return false;
-      if (!rule.match) return true;
-
-      return Object.entries(rule.match).every(([paramName, matcher]) => {
-        const paramValue = toolArgs[paramName];
-        if (paramValue === undefined) return false;
-
-        if (typeof matcher === 'string') {
-          return String(paramValue).includes(matcher) || matcher.includes('*');
-        }
-
-        return true;
-      });
-    });
-  }
-
   private resolveDynamicPolicy(
     config: ExtendedHumanInterventionConfig | undefined,
     toolArgs: Record<string, any>,
@@ -189,20 +168,28 @@ export class GeneralChatAgent implements Agent {
       }
 
       // Phase 1: Run global resolvers (e.g., security blacklist)
-      let globalBlocked = false;
-      let globalPolicy: HumanInterventionPolicy = 'always';
+      let globalPolicy: HumanInterventionPolicy | undefined;
 
-      // Default global audits are ordered so always-block rules match first
+      // Evaluate every audit and retain the strictest match. Security does not
+      // depend on registration order: a preceding `required` match must never
+      // hide a later non-bypassable `always` match.
+      const policyRank: Record<HumanInterventionPolicy, number> = {
+        always: 2,
+        never: 0,
+        required: 1,
+      };
       for (const globalResolver of globalResolvers) {
         if (await globalResolver.resolver(toolArgs, resolverMetadata)) {
-          globalBlocked = true;
-          globalPolicy = globalResolver.policy ?? 'always';
-          break;
+          const matchedPolicy = globalResolver.policy ?? 'always';
+          if (!globalPolicy || policyRank[matchedPolicy] > policyRank[globalPolicy]) {
+            globalPolicy = matchedPolicy;
+          }
         }
       }
 
-      // For non-headless modes: 'always' global block requires intervention unconditionally
-      if (globalBlocked && globalPolicy === 'always') {
+      // Global `always` is non-bypassable in every interactive mode (headless
+      // is converted to a blocked tool result by the runner).
+      if (globalPolicy === 'always') {
         toolsNeedingIntervention.push(toolCalling);
         continue;
       }
@@ -217,49 +204,45 @@ export class GeneralChatAgent implements Agent {
       const staticConfig = isDynamicConfig
         ? undefined
         : (config as HumanInterventionConfig | undefined);
+      const staticPolicy = InterventionChecker.shouldIntervene({
+        config: staticConfig,
+        // Global audits already performed the security pass above. Passing an
+        // explicit empty list reuses the canonical rule matcher without
+        // re-running the default blacklist or maintaining a divergent matcher.
+        securityBlacklist: [],
+        toolArgs,
+      });
 
       if (dynamicPolicy !== undefined) {
-        if (dynamicPolicy === 'never') {
-          toolsToExecute.push(toolCalling);
-        } else if (
-          (approvalMode === 'auto-run' || approvalMode === 'headless') &&
-          dynamicPolicy !== 'always'
-        ) {
-          toolsToExecute.push(toolCalling);
-        } else {
+        if (dynamicPolicy === 'always') {
           toolsNeedingIntervention.push(toolCalling);
+          continue;
         }
-        continue;
-      }
-
-      // Phase 3.5: Headless mode auto-runs global blocks with non-always policy
-      if (approvalMode === 'headless' && globalBlocked && globalPolicy !== 'always') {
-        toolsToExecute.push(toolCalling);
-        continue;
-      }
-
-      // Phase 3.5: Handle overridable global block (policy !== 'always')
-      if (globalBlocked && globalPolicy !== 'always') {
+      } else if (staticPolicy === 'always') {
         toolsNeedingIntervention.push(toolCalling);
         continue;
       }
 
-      // Phase 4: Check 'always' policy - overrides auto-run mode
-      if (this.matchesAlwaysPolicy(staticConfig, toolArgs)) {
+      // auto-run/headless bypass `required` policies, but never `always`
+      // (already handled above).
+      if (approvalMode === 'headless' || approvalMode === 'auto-run') {
+        toolsToExecute.push(toolCalling);
+        continue;
+      }
+
+      // A global `required` audit is stronger than a per-tool dynamic `never`.
+      // It remains mandatory in manual/allow-list modes; previously the early
+      // dynamic branch could silently execute the audited call.
+      if (globalPolicy === 'required') {
         toolsNeedingIntervention.push(toolCalling);
         continue;
       }
 
-      // Headless/CLI has no approval UI. Auto-run overridable tool-level policies,
-      // while preserving non-bypassable `always` blocks handled above.
-      if (approvalMode === 'headless') {
-        toolsToExecute.push(toolCalling);
-        continue;
-      }
-
-      // Phase 5: User config is 'auto-run', all tools execute directly
-      if (approvalMode === 'auto-run') {
-        toolsToExecute.push(toolCalling);
+      if (dynamicPolicy !== undefined) {
+        if (dynamicPolicy === 'never') toolsToExecute.push(toolCalling);
+        else if (approvalMode === 'allow-list' && allowList.includes(toolKey))
+          toolsToExecute.push(toolCalling);
+        else toolsNeedingIntervention.push(toolCalling);
         continue;
       }
 
@@ -284,13 +267,7 @@ export class GeneralChatAgent implements Agent {
       }
 
       // Phase 7: User config is 'manual' (default), use tool's own config
-      const policy = InterventionChecker.shouldIntervene({
-        config: staticConfig,
-        securityBlacklist,
-        toolArgs,
-      });
-
-      if (policy === 'never') {
+      if (staticPolicy === 'never') {
         toolsToExecute.push(toolCalling);
       } else {
         toolsNeedingIntervention.push(toolCalling);
@@ -420,6 +397,69 @@ export class GeneralChatAgent implements Agent {
   }
 
   /**
+   * Build the partial-decision parking instruction from authoritative message
+   * rows. The plain tool payload intentionally omits renderer-only intervention
+   * fields, so correlation travels beside it as a server-only supersession
+   * descriptor. A partially stamped or cross-batch set fails closed instead of
+   * creating a second independently actionable Review.
+   */
+  private buildPendingApprovalRepark(pendingToolMessages: any[]): AgentInstruction {
+    const parentIds = new Set(
+      pendingToolMessages
+        .map((message) => message.parentId)
+        .filter((parentId): parentId is string => typeof parentId === 'string' && !!parentId),
+    );
+    if (parentIds.size !== 1) {
+      throw new Error('Cannot re-park interventions without one authoritative assistant owner');
+    }
+
+    const pendingTools = pendingToolMessages
+      .map((message: any) => message.plugin)
+      .filter(Boolean) as ChatToolPayload[];
+    const previousIdentities = pendingToolMessages.map((message: any) => ({
+      batchId: message.pluginIntervention?.batchId,
+      operationId: message.pluginIntervention?.operationId,
+      toolCallId: message.tool_call_id ?? message.plugin?.id,
+    }));
+    const hasDurableIdentity = previousIdentities.some(
+      ({ batchId, operationId }) => batchId || operationId,
+    );
+    let supersedes: Extract<AgentInstruction, { type: 'request_human_approve' }>['supersedes'];
+    if (hasDurableIdentity) {
+      const first = previousIdentities[0];
+      if (
+        typeof first.batchId !== 'string' ||
+        !first.batchId ||
+        typeof first.operationId !== 'string' ||
+        !first.operationId ||
+        previousIdentities.some(
+          (identity) =>
+            identity.batchId !== first.batchId ||
+            identity.operationId !== first.operationId ||
+            typeof identity.toolCallId !== 'string' ||
+            !identity.toolCallId,
+        )
+      ) {
+        throw new Error('Cannot re-park a partial or mixed durable intervention batch');
+      }
+      supersedes = {
+        batchId: first.batchId,
+        operationId: first.operationId,
+        toolCallIds: previousIdentities.map(({ toolCallId }) => toolCallId as string),
+      };
+    }
+
+    return {
+      parentMessageId: [...parentIds][0],
+      pendingToolsCalling: pendingTools,
+      reason: 'Some tools still pending approval',
+      skipCreateToolMessage: true,
+      ...(supersedes && { supersedes }),
+      type: 'request_human_approve',
+    };
+  }
+
+  /**
    * Every pending tool message visible in `state.messages`, across BOTH shapes
    * and WITHOUT turn scoping.
    *
@@ -497,6 +537,23 @@ export class GeneralChatAgent implements Agent {
   }
 
   /**
+   * Use hysteresis after the first compression. A freshly compressed context can
+   * sit just below the ordinary threshold; applying the same threshold again
+   * makes one small tool result trigger another compression before the model can
+   * act on it. Keep the initial threshold conservative, then allow the compressed
+   * context to grow to a higher watermark before compressing it again.
+   */
+  private getCompressionThresholdRatio(messages: any[]): number | undefined {
+    const initialRatio = this.config.compressionConfig?.thresholdRatio;
+    if (!this.findExistingSummary(messages)) return initialRatio;
+
+    const configuredRecompressionRatio = this.config.compressionConfig?.recompressionThresholdRatio;
+    if (configuredRecompressionRatio !== undefined) return configuredRecompressionRatio;
+
+    return Math.max(initialRatio ?? 0, DEFAULT_RECOMPRESSION_THRESHOLD_RATIO);
+  }
+
+  /**
    * Proceed to the next LLM call, inserting compression first when needed.
    */
   private toLLMCall(
@@ -514,7 +571,7 @@ export class GeneralChatAgent implements Agent {
     // we'd burn an extra summarization pass on tool tokens that won't be sent.
     const compressionOptions = {
       maxWindowToken: this.config.compressionConfig?.maxWindowToken,
-      thresholdRatio: this.config.compressionConfig?.thresholdRatio,
+      thresholdRatio: this.getCompressionThresholdRatio(payloadWithAllowedToolNames.messages),
       tools: state.forceFinish ? undefined : payloadWithAllowedToolNames.tools,
     };
 
@@ -585,7 +642,7 @@ export class GeneralChatAgent implements Agent {
         // so they must not count against the compression budget here either.
         const compressionOptions = {
           maxWindowToken: this.config.compressionConfig?.maxWindowToken,
-          thresholdRatio: this.config.compressionConfig?.thresholdRatio,
+          thresholdRatio: this.getCompressionThresholdRatio(state.messages),
           tools: state.forceFinish ? undefined : this.getTools(state),
         };
 
@@ -765,14 +822,7 @@ export class GeneralChatAgent implements Agent {
 
         // If there are pending tools, wait for human approval
         if (pendingToolMessages.length > 0) {
-          const pendingTools = pendingToolMessages.map((m: any) => m.plugin).filter(Boolean);
-
-          return {
-            pendingToolsCalling: pendingTools,
-            reason: 'Some tools still pending approval',
-            skipCreateToolMessage: true,
-            type: 'request_human_approve',
-          };
+          return this.buildPendingApprovalRepark(pendingToolMessages);
         }
 
         if (context.stepContext?.hasQueuedMessages) {
@@ -805,14 +855,7 @@ export class GeneralChatAgent implements Agent {
 
         // If there are pending tools, wait for human approval
         if (pendingToolMessages.length > 0) {
-          const pendingTools = pendingToolMessages.map((m: any) => m.plugin).filter(Boolean);
-
-          return {
-            pendingToolsCalling: pendingTools,
-            reason: 'Some tools still pending approval',
-            skipCreateToolMessage: true,
-            type: 'request_human_approve',
-          };
+          return this.buildPendingApprovalRepark(pendingToolMessages);
         }
 
         // If there are queued user messages, finish early so the queue
@@ -911,7 +954,7 @@ export class GeneralChatAgent implements Agent {
               ? { assistantMessageId: seededAssistantMessageId }
               : // Force create new assistant message after compression
                 { createAssistantMessage: true }),
-            messages: compressionPayload.compressedMessages,
+            messages: compressionPayload.compressedMessages ?? state.messages,
             model: this.config.modelRuntimeConfig?.model,
             parentMessageId: compressionPayload.parentMessageId,
             provider: this.config.modelRuntimeConfig?.provider,

@@ -6,8 +6,6 @@ import { useChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
-// Keep zustand mock as it's needed globally
-vi.mock('zustand/traditional');
 vi.mock('@/store/chat/utils/desktopNotification', () => ({
   notifyDesktopAgentCompleted: vi.fn().mockResolvedValue(undefined),
   notifyDesktopHumanApprovalRequired: vi.fn().mockResolvedValue(undefined),

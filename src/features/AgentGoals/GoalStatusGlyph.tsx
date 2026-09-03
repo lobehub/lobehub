@@ -1,11 +1,11 @@
-import type { TaskStatus } from '@lobechat/types';
+import type { GoalStatus } from '@lobechat/const/goal';
 import { Icon } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
 
-import { goalStatusToTaskStatus } from './goalViewModel';
+import { goalStatusToTaskStatus } from './goalPresentation';
 
 /**
  * The goal surfaces' status glyph. A live goal shows the same spinning ring as
@@ -13,12 +13,10 @@ import { goalStatusToTaskStatus } from './goalViewModel';
  * across the app — while every other state keeps its canonical static glyph
  * from `ExecutionStatus`.
  */
-const GoalStatusGlyph = memo<{ size?: number; statusKey: string }>(({ statusKey, size = 13 }) => {
-  if (statusKey === 'goalList.status.running') return <RunningGlyph size={size} />;
+const GoalStatusGlyph = memo<{ size?: number; status: GoalStatus }>(({ status, size = 13 }) => {
+  if (status === 'running') return <RunningGlyph size={size} />;
 
-  const visual =
-    TASK_STATUS_VISUALS[goalStatusToTaskStatus(statusKey) as TaskStatus] ??
-    TASK_STATUS_VISUALS.backlog;
+  const visual = TASK_STATUS_VISUALS[goalStatusToTaskStatus(status)] ?? TASK_STATUS_VISUALS.backlog;
 
   return <Icon color={visual.color} icon={visual.icon} size={size} style={{ flexShrink: 0 }} />;
 });

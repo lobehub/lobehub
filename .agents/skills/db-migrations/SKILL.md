@@ -29,6 +29,18 @@ Apply these before generating any migration — they change what the schema file
 
 Classify every database change into one of these three rollout paths before generating or editing a migration.
 
+### Validate rollout assumptions on the actual Dev database
+
+Do not choose a rollout path from hypothetical claims such as “this migration might be slow” or “installing these triggers could block deployment.” Before deciding that a schema change needs a manual production step, deferred installation, or a dedicated backfill, test the relevant operation against the project's actual Dev database.
+
+- Classify the database target first using the project's approved database-access tooling; never read secret-bearing `.env` files directly.
+- Measure the real operation or the closest safe equivalent, such as creating an identically defined probe index under a temporary name or installing temporary triggers inside a transaction that is rolled back.
+- Record the tested SQL or operation, representative row count and table size, elapsed time, and cleanup verification.
+- Keep probes reversible and remove every temporary database object after the measurement.
+- Treat a single Dev result as evidence about the observed Dev scale, not proof of production behavior. State material differences in production scale, load, cache state, and lock contention explicitly, and label any resulting production claim as an inference.
+
+Rollout decisions must combine repository deployment facts with these measurements. Do not add operational tables, delayed activation paths, or manual release steps solely to guard against unmeasured performance concerns.
+
 ### 1. Regular Drizzle migration
 
 Use the normal Drizzle workflow for schema changes that are safe to execute during deployment, such as creating a small table or adding a nullable column:

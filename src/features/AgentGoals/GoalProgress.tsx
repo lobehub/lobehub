@@ -1,17 +1,24 @@
-import { Flexbox, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { getGoalPresentation } from './goalPresentation';
-import { formatGoalCost, formatGoalDuration } from './goalViewModel';
+/** `3m` · `2.1h` · `1.4d` — the coarse grain a list row can carry. */
+export const formatGoalDuration = (milliseconds: number) => {
+  if (!milliseconds || milliseconds <= 0) return '—';
+  const minutes = milliseconds / 60_000;
+  if (minutes < 60) return `${Math.max(1, Math.round(minutes))}m`;
+  const hours = minutes / 60;
+  if (hours < 24) return `${hours.toFixed(1)}h`;
+  return `${(hours / 24).toFixed(1)}d`;
+};
+
+export const formatGoalCost = (cost: number) => (cost > 0 ? `$${cost.toFixed(2)}` : '—');
 
 const styles = createStaticStyles(({ css }) => ({
   acceptance: css`
     min-width: 0;
-  `,
-  loading: css`
-    grid-column: 1 / -1;
   `,
   metric: css`
     justify-self: end;
@@ -19,12 +26,17 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   metrics: css`
     display: grid;
-    grid-template-columns: minmax(178px, 1fr) 64px 48px 64px;
+    grid-template-columns: minmax(178px, 1fr) 72px 48px 64px;
     column-gap: 12px;
     align-items: center;
 
     width: min(100%, 390px);
     min-width: 390px;
+  `,
+  needsYou: css`
+    justify-self: end;
+    color: ${cssVar.colorWarning};
+    white-space: nowrap;
   `,
   progress: css`
     overflow: hidden;
@@ -43,57 +55,55 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-interface GoalProgressProps {
-  isLoading: boolean;
-  presentation: ReturnType<typeof getGoalPresentation>;
-  totalRunCost?: number | null;
-  totalRunDuration?: number | null;
-  totalRuns?: number | null;
+export interface GoalProgressProps {
+  findingCount: number;
+  pendingDecisions: number;
+  totalRunCost: number;
+  totalRunDuration: number;
+  workDone: number;
+  workTotal: number;
 }
 
+/**
+ * The list row's roll-up: how far the graph got, what it produced, what it
+ * cost — and, taking priority over the findings count, whether anything is
+ * blocked on the user right now.
+ */
 export const GoalProgress = memo<GoalProgressProps>(
-  ({ isLoading, presentation, totalRunCost = 0, totalRunDuration = 0, totalRuns = 0 }) => {
+  ({ findingCount, pendingDecisions, totalRunCost, totalRunDuration, workDone, workTotal }) => {
     const { t } = useTranslation('chat');
-
-    if (isLoading)
-      return (
-        <div className={styles.metrics}>
-          <Text className={styles.loading} fontSize={12} type={'secondary'}>
-            {t('goalPage.loadingProgress')}
-          </Text>
-        </div>
-      );
+    const progress = workTotal > 0 ? Math.round((workDone / workTotal) * 100) : 0;
 
     return (
       <div className={styles.metrics}>
-        {presentation.total > 0 ? (
+        {workTotal > 0 ? (
           <Flexbox horizontal align={'center'} className={styles.acceptance} gap={6}>
             <div aria-hidden className={styles.progress}>
-              <div
-                className={styles.progressValue}
-                style={{ width: `${presentation.progress}%` }}
-              />
+              <div className={styles.progressValue} style={{ width: `${progress}%` }} />
             </div>
             <Text ellipsis color={cssVar.colorTextTertiary} fontSize={12}>
-              {t('goalList.acceptanceProgress', presentation)}
+              {t('goalList.workProgress', { done: workDone, total: workTotal })}
             </Text>
           </Flexbox>
         ) : (
           <Text ellipsis color={cssVar.colorTextTertiary} fontSize={12}>
-            {t('goalList.roundProgress', {
-              current: presentation.rounds,
-              total: typeof presentation.maxRounds === 'number' ? presentation.maxRounds : '∞',
-            })}
+            {t('goalList.noWork')}
+          </Text>
+        )}
+        {pendingDecisions > 0 ? (
+          <Text className={styles.needsYou} fontSize={12}>
+            {t('goalList.needsYou', { count: pendingDecisions })}
+          </Text>
+        ) : (
+          <Text className={styles.metric} color={cssVar.colorTextTertiary} fontSize={12}>
+            {t('goalList.findings', { count: findingCount })}
           </Text>
         )}
         <Text className={styles.metric} color={cssVar.colorTextTertiary} fontSize={12}>
-          {t('goalList.agentRuns', { count: totalRuns })}
+          {formatGoalDuration(totalRunDuration)}
         </Text>
         <Text className={styles.metric} color={cssVar.colorTextTertiary} fontSize={12}>
-          {formatGoalDuration(totalRunDuration ?? 0)}
-        </Text>
-        <Text className={styles.metric} color={cssVar.colorTextTertiary} fontSize={12}>
-          {formatGoalCost(totalRunCost ?? 0)}
+          {formatGoalCost(totalRunCost)}
         </Text>
       </div>
     );

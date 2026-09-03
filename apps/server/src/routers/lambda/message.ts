@@ -20,6 +20,7 @@ import { TopicDoctorRepo } from '@/database/repositories/topicDoctor';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
+import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 import { type MessageBatchOperation, MessageService } from '@/server/services/message';
 
 import {
@@ -51,6 +52,23 @@ const messageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
       messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
       messageService: new MessageService(ctx.serverDB, ctx.userId, wsId),
       topicDoctorRepo: new TopicDoctorRepo(ctx.serverDB, ctx.userId, wsId),
+    },
+  });
+});
+
+const messageSearchProcedure = messageProcedure.use(async (opts) => {
+  const { ctx } = opts;
+  const workspaceId = ctx.workspaceId ?? undefined;
+  const ftsSearchRepo = await createFtsSearchRepo({
+    db: ctx.serverDB,
+    userId: ctx.userId,
+    usage: 'message_search',
+    workspaceId,
+  });
+
+  return opts.next({
+    ctx: {
+      messageModel: new MessageModel(ctx.serverDB, ctx.userId, workspaceId, ftsSearchRepo),
     },
   });
 });
@@ -198,8 +216,8 @@ export const messageRouter = router({
 
   listAll: messageProcedure
     .input(
-      z
-        .object({
+      messageAnalyticsSchema
+        .extend({
           current: z.number().optional(),
           pageSize: z.number().optional(),
         })
@@ -523,7 +541,7 @@ export const messageRouter = router({
       return ctx.messageModel.deleteMessagesBySession(null, input.topicId, input.groupId);
     }),
 
-  searchMessages: messageProcedure
+  searchMessages: messageSearchProcedure
     .input(z.object({ keywords: z.string() }))
     .query(async ({ input, ctx }) => {
       return ctx.messageModel.queryByKeyword(input.keywords);

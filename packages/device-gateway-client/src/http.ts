@@ -6,6 +6,12 @@ import type {
 } from './types';
 
 const DEFAULT_GATEWAY_TOOL_CALL_TIMEOUT_MS = 30_000;
+/**
+ * Device *reads* are on the critical path of every routing decision, and `post`
+ * has no deadline of its own — an unanswered read would otherwise hang for as
+ * long as the socket stays open.
+ */
+const DEVICE_QUERY_TIMEOUT_MS = 10_000;
 const HTTP_CALL_TIMEOUT_PADDING_MS = 30_000;
 
 export interface DeviceStatusResult {
@@ -47,8 +53,15 @@ export class GatewayHttpClient {
   }
 
   async queryDeviceStatus(userId: string, workspaceId?: string): Promise<DeviceStatusResult> {
-    const res = await this.post('/api/device/status', { userId, workspaceId });
-    if (!res.ok) return { deviceCount: 0, online: false };
+    const res = await this.post(
+      '/api/device/status',
+      { userId, workspaceId },
+      { timeout: DEVICE_QUERY_TIMEOUT_MS },
+    );
+    // A gateway that answered with an error did not tell us "nothing is
+    // online" — it told us nothing. Reporting the two as the same value is how
+    // a transient 5xx became an authoritative "all devices offline" downstream.
+    if (!res.ok) throw new Error(`Device gateway /api/device/status responded ${res.status}`);
 
     const data = await res.json();
     return {
@@ -58,8 +71,14 @@ export class GatewayHttpClient {
   }
 
   async queryDeviceList(userId: string, workspaceId?: string): Promise<GatewayDevice[]> {
-    const res = await this.post('/api/device/devices', { userId, workspaceId });
-    if (!res.ok) return [];
+    const res = await this.post(
+      '/api/device/devices',
+      { userId, workspaceId },
+      { timeout: DEVICE_QUERY_TIMEOUT_MS },
+    );
+    // See `queryDeviceStatus`: an errored read is an UNKNOWN online set, and
+    // only the caller can decide what to do about that.
+    if (!res.ok) throw new Error(`Device gateway /api/device/devices responded ${res.status}`);
 
     const data = await res.json();
     return Array.isArray(data.devices) ? data.devices : [];

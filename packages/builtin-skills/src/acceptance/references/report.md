@@ -1,9 +1,9 @@
 # Structured Report Rounds (`lh acceptance run ingest`)
 
 Per-criterion `result submit` (SKILL.md Step 3) assumes a verify plan already
-exists. When it doesn't — a standalone delivery, a task run without
-`$LOBE_OPERATION_ID`, or any run where **you** author the checks — publish a
-**structured report round** instead: a self-contained directory that
+exists. When it doesn't — a standalone delivery, or any run where **you** author
+the checks, which is the usual case — publish a **structured report round**
+instead: a self-contained directory that
 `lh acceptance run ingest` uploads as one immutable verification round. The
 acceptance page renders itself from `result.json`: provenance, the overall
 conclusion, and the check list from `plan[]` paired with `cases[]`, each with
@@ -28,17 +28,32 @@ structured round ingest.** Never mix both for the same delivery round.
 `--operation` is optional on every command in this skill. Without one, author
 the checks and use one of these first-class paths:
 
-```bash
-REPORT_DIR=./acceptance-report
+A round is immutable, so **allocate a fresh directory before every ingest** —
+never point a second ingest at a directory you already published:
 
-# A. first external-project round — creates a standalone acceptance automatically
+```bash
+# $1 = subject key (see Directory layout), $2 = a short slug for this round.
+new_round() {
+  dir=".acceptances/$1/$(date +%Y%m%d-%H%M%S)-$2"
+  mkdir -p "$dir/assets" && printf '%s' "$dir"
+}
+```
+
+```bash
+# A. first external-project round — creates a standalone acceptance.
+# It has no subject yet, so group it under `standalone-<slug>` until the
+# returned acceptance id gives the tree its permanent name.
+REPORT_DIR=$(new_round standalone-checkout-flow first-pass)
 lh acceptance run ingest "$REPORT_DIR" \
   --requirement "<one-sentence business goal>" --json
 
-# Re-verification — append a new immutable round to the same acceptance
+# Re-verification after a fix — a NEW round on the SAME acceptance.
+REPORT_DIR=$(new_round standalone-checkout-flow repair)
 lh acceptance run ingest "$REPORT_DIR" --acceptance "$ACCEPTANCE_ID" --json
 
-# Existing LobeHub subject — group by a Task, Topic, or Document
+# Attach to a subject you were told to use — a Task, Topic, or Document.
+# Group the round under that same subject so the tree and the page agree.
+REPORT_DIR=$(new_round topic-tpc_xxx first-pass)
 lh acceptance run ingest "$REPORT_DIR" --subject topic:tpc_xxx --json
 
 # B. atomic fallback — create the round first, then submit into it with --run
@@ -73,14 +88,38 @@ lh acceptance view "$ACCEPTANCE_ID" --json
 
 ## Directory layout
 
-Any directory works — no repo convention required:
+Rounds live under `.acceptances/`, grouped by the delivery they belong to:
 
 ```
-<report-dir>/
-├── result.json     # THE report — the page renders from this
-├── report.md       # narrative tail only (verdict notes, follow-ups, score)
-└── assets/         # evidence files referenced from cases[].evidence
+.acceptances/
+├── .gitignore                     # `*` — the whole tree stays out of git
+└── <subject-key>/                 # topic-tpc_x | task-T-12 | document-doc_x
+    │                              # standalone-<slug> until an acceptance id exists
+    ├── acceptance.json            # which acceptance these rounds belong to
+    └── <YYYYMMDD-HHMMSS>-<slug>/  # ONE round — never write into an existing one
+        ├── result.json            # THE report — the page renders from this
+        ├── report.md              # narrative tail only (verdict, follow-ups, score)
+        └── assets/                # evidence referenced from cases[].evidence
 ```
+
+Three things the shape buys, none of them cosmetic:
+
+- **The subject key mirrors `--subject <type>:<id>`**, so a directory listing
+  answers what the acceptance page answers: which delivery is this, and how many
+  rounds has it had. A flat `./acceptance-report` answers neither. A standalone
+  round has no subject to key on, so group it under `standalone-<slug>` and keep
+  every later round of that delivery in the same directory.
+- **A round is immutable**, so its directory name carries the timestamp and is
+  written once. Re-verification after a fix creates the NEXT directory; reusing
+  one silently destroys the evidence a reviewer already decided against.
+- **The tree is git-invisible.** `.acceptances/.gitignore` contains `*`, which
+  ignores the whole directory including itself, so evidence binaries never land
+  as untracked noise and the project's own `.gitignore` is never rewritten.
+  `lh acceptance install` and `lh acceptance run ingest` both seed that file, so
+  the guarantee does not depend on which entry point a run came through.
+
+Writing a round somewhere else still works — `ingest` takes an explicit path —
+but then keeping it out of git is on you.
 
 ## Workflow
 
@@ -122,9 +161,10 @@ supersedes? }`.
    Describe the durable goal of the whole acceptance, not this round's narrower
    implementation scope.
 
-   Inside a LobeHub topic, the command groups the round under the current topic.
-   Outside one, it creates a standalone acceptance automatically; no Task ID is
-   required. To publish a repair into that same history, add
+   Grouping needs nothing from you: the command attaches the round to the
+   conversation it was invoked from when it can, and otherwise creates a
+   standalone acceptance. Pass `--subject` only when you were told which Task,
+   Topic, or Document owns the work. To publish a repair into that same history, add
    `--acceptance <acceptanceId>` using the ID printed by the first ingest. The
    command uploads cases + evidence + report body and prints
    `/acceptance/<acceptanceId>` plus its `?r=<roundIndex>` snapshot form. Include

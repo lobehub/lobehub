@@ -332,7 +332,8 @@ async function loadAttachmentBuffer(
   }
   if (typeof attachment.fetchData === 'function') {
     try {
-      return await attachment.fetchData();
+      // chat@4.39.0 widened fetchData to Promise<Buffer | ArrayBuffer>
+      return await blobOrBufferToBuffer(await attachment.fetchData());
     } catch (error) {
       logger?.warn?.('Attachment fetchData failed: %s', error);
     }

@@ -9,6 +9,14 @@ const fakeScheduler = {
   scheduleNextTopic: vi.fn().mockResolvedValue('msg-new'),
 };
 
+const { cascadeOnCompletion } = vi.hoisted(() => ({
+  cascadeOnCompletion: vi.fn().mockResolvedValue({ failed: [], paused: [], started: [] }),
+}));
+
+vi.mock('@/server/services/taskRunner', () => ({
+  TaskRunnerService: vi.fn(() => ({ cascadeOnCompletion })),
+}));
+
 vi.mock('@/server/services/taskScheduler', () => ({
   createTaskSchedulerModule: () => fakeScheduler,
 }));
@@ -22,9 +30,9 @@ vi.mock('@/database/models/verifyRun', () => ({
 
 // Goal-loop rounds suppress the per-topic brief; onTopicComplete asks the
 // goals table whether this task carries a goal. Default = plain task.
-const goalFindBySubject = vi.fn().mockResolvedValue(undefined);
+const goalFindByWorkTask = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/database/models/goal', () => ({
-  GoalModel: vi.fn(() => ({ findBySubject: goalFindBySubject })),
+  GoalModel: vi.fn(() => ({ findByWorkTask: goalFindByWorkTask })),
 }));
 
 // Error-brief copy is localized at the source via the server translator; mock it
@@ -67,6 +75,7 @@ const baseTask = (overrides: Partial<TaskItem> = {}): TaskItem =>
 describe('TaskLifecycleService.onTopicComplete', () => {
   let service: TaskLifecycleService;
   let updateStatus: ReturnType<typeof vi.fn>;
+  let updateStatusIfCurrent: ReturnType<typeof vi.fn>;
   let updateContext: ReturnType<typeof vi.fn>;
   let findById: ReturnType<typeof vi.fn>;
   let updateHeartbeat: ReturnType<typeof vi.fn>;
@@ -78,10 +87,12 @@ describe('TaskLifecycleService.onTopicComplete', () => {
     fakeScheduler.scheduleNextTopic.mockClear().mockResolvedValue('msg-new');
     notifyCompleted.mockReset().mockResolvedValue(undefined);
     notifyFailed.mockReset().mockResolvedValue(undefined);
+    cascadeOnCompletion.mockReset().mockResolvedValue({ failed: [], paused: [], started: [] });
 
     service = new TaskLifecycleService({} as any, 'user-1');
 
     updateStatus = vi.fn().mockResolvedValue(null);
+    updateStatusIfCurrent = vi.fn();
     updateContext = vi.fn().mockResolvedValue(null);
     findById = vi.fn();
     updateHeartbeat = vi.fn().mockResolvedValue(undefined);
@@ -92,10 +103,12 @@ describe('TaskLifecycleService.onTopicComplete', () => {
 
     const taskModel = (service as any).taskModel;
     taskModel.updateStatus = updateStatus;
+    taskModel.updateStatusIfCurrent = updateStatusIfCurrent;
     taskModel.updateContext = updateContext;
     taskModel.findById = findById;
     taskModel.updateHeartbeat = updateHeartbeat;
     taskModel.getReviewConfig = getReviewConfig;
+    taskModel.getCheckpointConfig = vi.fn().mockReturnValue({});
     // Default checkpoint behavior: pause after topic complete
     taskModel.shouldPauseOnTopicComplete = vi.fn().mockReturnValue(true);
     // Avoid generateHandoff side effects by skipping when lastAssistantContent is undefined
@@ -258,6 +271,121 @@ describe('TaskLifecycleService.onTopicComplete', () => {
       expect(updateStatus).not.toHaveBeenCalledWith('task-1', 'scheduled', expect.anything());
     });
 
+    it('finalizes a current-operation completion request after the topic completes', async () => {
+      const task = baseTask({
+        automationMode: null,
+        context: { completion: { requestedByOperationId: 'op-1' } },
+      });
+      findById.mockResolvedValue(task);
+
+      await service.onTopicComplete({
+        operationId: 'op-1',
+        reason: 'done',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(updateStatusIfCurrent).toHaveBeenCalledWith('task-1', 'running', 'completed', {
+        completedAt: expect.any(Date),
+        error: null,
+      });
+      expect(updateStatus).not.toHaveBeenCalledWith('task-1', 'paused', expect.anything());
+    });
+
+    it('successful subtask → completes and unlocks downstream tasks instead of pausing', async () => {
+      const task = baseTask({ automationMode: null, parentTaskId: 'parent-task' });
+      const parentTask = baseTask({ id: 'parent-task', identifier: 'TASK-0' });
+      updateStatusIfCurrent.mockResolvedValue(task);
+      findById
+        .mockResolvedValueOnce(task)
+        .mockResolvedValueOnce(parentTask)
+        .mockResolvedValue(task);
+      (service as any).taskModel.shouldPauseAfterComplete = vi.fn().mockReturnValue(false);
+
+      await service.onTopicComplete({
+        operationId: 'op-1',
+        reason: 'done',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(updateStatusIfCurrent).toHaveBeenCalledWith('task-1', 'running', 'completed', {
+        completedAt: expect.any(Date),
+        error: null,
+      });
+      expect(updateStatus).not.toHaveBeenCalledWith('task-1', 'paused', expect.anything());
+      expect(cascadeOnCompletion).toHaveBeenCalledWith('task-1');
+    });
+
+    it('successful subtask still honors an explicit parent after-completion checkpoint', async () => {
+      const task = baseTask({ automationMode: null, parentTaskId: 'parent-task' });
+      const parentTask = baseTask({ id: 'parent-task', identifier: 'TASK-0' });
+      updateStatusIfCurrent.mockResolvedValue(task);
+      findById
+        .mockResolvedValueOnce(task)
+        .mockResolvedValueOnce(parentTask)
+        .mockResolvedValue(task);
+      (service as any).taskModel.shouldPauseAfterComplete = vi.fn().mockReturnValue(true);
+
+      await service.onTopicComplete({
+        operationId: 'op-1',
+        reason: 'done',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(updateStatusIfCurrent).toHaveBeenCalledWith('task-1', 'running', 'completed', {
+        completedAt: expect.any(Date),
+        error: null,
+      });
+      expect(updateStatus).toHaveBeenCalledWith('parent-task', 'paused');
+      expect(cascadeOnCompletion).toHaveBeenCalledWith('task-1');
+    });
+
+    it('successful subtask with an explicit topic-after checkpoint → pauses for review', async () => {
+      const task = baseTask({ automationMode: null, parentTaskId: 'parent-task' });
+      findById.mockResolvedValue(task);
+      (service as any).taskModel.getCheckpointConfig = vi
+        .fn()
+        .mockReturnValue({ topic: { after: true } });
+
+      await service.onTopicComplete({
+        operationId: 'op-1',
+        reason: 'done',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(updateStatusIfCurrent).toHaveBeenCalledWith('task-1', 'running', 'paused', {
+        error: null,
+      });
+      expect(cascadeOnCompletion).not.toHaveBeenCalled();
+    });
+
+    it('late successful callback does not overwrite a child that is no longer running', async () => {
+      const task = baseTask({ automationMode: null, parentTaskId: 'parent-task' });
+      findById.mockResolvedValue(task);
+      updateStatusIfCurrent.mockResolvedValue(null);
+
+      await service.onTopicComplete({
+        operationId: 'op-1',
+        reason: 'done',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(updateStatusIfCurrent).toHaveBeenCalledWith('task-1', 'running', 'completed', {
+        completedAt: expect.any(Date),
+        error: null,
+      });
+      expect(cascadeOnCompletion).not.toHaveBeenCalled();
+    });
+
     it('non-automation task with shouldPauseOnTopicComplete=false → no status update', async () => {
       const task = baseTask({ automationMode: null });
       findById.mockResolvedValue(task);
@@ -272,6 +400,27 @@ describe('TaskLifecycleService.onTopicComplete', () => {
       });
 
       expect(updateStatus).not.toHaveBeenCalled();
+    });
+
+    it('goal-owned root task completes instead of remaining running', async () => {
+      const task = baseTask({ automationMode: null, parentTaskId: null });
+      findById.mockResolvedValue(task);
+      (service as any).taskModel.shouldPauseOnTopicComplete = vi.fn().mockReturnValue(false);
+
+      await service.onTopicComplete({
+        operationId: 'op-1',
+        reason: 'done',
+        runTrigger: 'goal',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(updateStatusIfCurrent).toHaveBeenCalledWith('task-1', 'running', 'completed', {
+        completedAt: expect.any(Date),
+        error: null,
+      });
+      expect(updateStatus).not.toHaveBeenCalledWith('task-1', 'paused', expect.anything());
     });
   });
 

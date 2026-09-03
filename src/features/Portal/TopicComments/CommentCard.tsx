@@ -1,7 +1,15 @@
 import type { TopicCommentItem } from '@lobechat/types';
-import { ActionIcon, Avatar, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Markdown } from '@lobehub/ui';
 import type { DropdownItem } from '@lobehub/ui/base-ui';
-import { Button, confirmModal, DropdownMenu, toast } from '@lobehub/ui/base-ui';
+import {
+  ActionIcon,
+  Avatar,
+  Button,
+  confirmModal,
+  DropdownMenu,
+  Text,
+  toast,
+} from '@lobehub/ui/base-ui';
 import { MessageCircle, MoreHorizontal, Pencil, Trash } from 'lucide-react';
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

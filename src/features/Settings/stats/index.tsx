@@ -9,6 +9,7 @@ import dayjs from 'dayjs';
 import { Brain, UserIcon } from 'lucide-react';
 import { memo, type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { SWRConfig } from 'swr';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import SettingHeader from '@/features/Settings/features/SettingHeader';
@@ -50,7 +51,7 @@ interface StatsSettingProps {
   showSettingHeader?: boolean;
 }
 
-const StatsSetting = memo<StatsSettingProps>(
+const StatsContent = memo<StatsSettingProps>(
   ({ mobile, headerNode, enableUserDimension, resolveUser, showSettingHeader = true }) => {
     const { t, i18n } = useTranslation('auth');
     dayjs.locale(i18n.language);
@@ -174,5 +175,20 @@ const StatsSetting = memo<StatsSettingProps>(
     );
   },
 );
+
+/**
+ * Every metric on this page fetches independently and gates itself with its own
+ * `AsyncBoundary` + Retry — a failed token count must not take the healthy
+ * message count down with it, and `errorVariant='metric'` exists so a failure
+ * never reads as a confident zero. Route-wide `suspense` would turn all of that
+ * into dead code by throwing to the route boundary instead, so the page opts
+ * out. The opt-out has to sit *above* the hooks it covers, hence the wrapper
+ * rather than an `SWRConfig` inside `StatsContent`.
+ */
+const StatsSetting = memo<StatsSettingProps>((props) => (
+  <SWRConfig value={{ suspense: false }}>
+    <StatsContent {...props} />
+  </SWRConfig>
+));
 
 export default StatsSetting;

@@ -2,9 +2,11 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { MAX_UPLOAD_FILE_SIZE, UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE } from '@lobechat/const';
 import { resolveMimeType } from '@lobechat/utils/mimeType';
 
 import type { TrpcClient } from '../api/client';
+import { rasterDimensions } from './rasterDimensions';
 
 export interface UploadLocalFileOptions {
   knowledgeBaseId?: string;
@@ -26,16 +28,19 @@ export interface UploadFileBufferInput {
  *
  * @returns the created file record (`{ id, url, ... }`)
  */
-const uploadFileBuffer = async (
+export const uploadFileBuffer = async (
   client: TrpcClient,
   { buffer, fileName, fileType }: UploadFileBufferInput,
   options: UploadLocalFileOptions = {},
 ) => {
+  if (buffer.length > MAX_UPLOAD_FILE_SIZE) throw new Error(UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE);
+
   // Compute SHA-256 hash for deduplication
   const hash = crypto.createHash('sha256').update(buffer).digest('hex');
 
   const ext = path.extname(fileName).toLowerCase().slice(1);
   const date = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+  const dimensions = fileType.startsWith('image/') ? rasterDimensions(buffer) : undefined;
 
   // 1. Dedup: if the same bytes are already stored (and the object still
   // exists), skip the S3 upload entirely and reuse the existing url.
@@ -50,7 +55,10 @@ const uploadFileBuffer = async (
   } else {
     // 2. Get a pre-signed upload URL and PUT the bytes to S3
     pathname = ext ? `files/${date}/${hash}.${ext}` : `files/${date}/${hash}`;
-    const presigned = await client.upload.createS3PreSignedUrl.mutate({ pathname });
+    const presigned = await client.upload.createS3PreSignedUrl.mutate({
+      pathname,
+      size: buffer.length,
+    });
 
     const presignedUrl = typeof presigned === 'string' ? presigned : (presigned as any).url;
     const uploadRes = await fetch(presignedUrl, {
@@ -73,6 +81,7 @@ const uploadFileBuffer = async (
       dirname: '',
       filename: fileName,
       path: pathname,
+      ...dimensions,
     },
     name: fileName,
     parentId: options.parentId,
@@ -102,6 +111,7 @@ export const uploadLocalFile = async (
   if (!stat.isFile()) {
     throw new Error(`Not a file: ${resolved}`);
   }
+  if (stat.size > MAX_UPLOAD_FILE_SIZE) throw new Error(UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE);
 
   const fileName = path.basename(resolved);
   const fileBuffer = fs.readFileSync(resolved);

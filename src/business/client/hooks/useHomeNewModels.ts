@@ -2,6 +2,8 @@ export type HomeNewModelType = 'chat' | 'image' | 'video';
 
 export interface HomeNewModelItem {
   iconModel?: string;
+  /** Optional image URL rendered instead of the model icon mapping. */
+  iconUrl?: string;
   model: string;
   provider?: string;
   title: string;

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import {
@@ -1819,6 +1819,86 @@ describe('TopicModel - Query', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('agent-topic');
+    });
+  });
+
+  describe('queryByKeyword with external candidates', () => {
+    it('hydrates title and message legs through the requested topic scope', async () => {
+      await serverDB.insert(topics).values([
+        {
+          id: 'candidate-topic-title',
+          sessionId,
+          title: 'Title match',
+          updatedAt: new Date('2026-08-20T00:00:00.000Z'),
+          userId,
+        },
+        {
+          id: 'candidate-topic-message',
+          sessionId,
+          title: 'Message match',
+          updatedAt: new Date('2026-08-25T00:00:00.000Z'),
+          userId,
+        },
+        { id: 'candidate-topic-wrong-scope', title: 'Wrong scope', userId },
+        { id: 'candidate-topic-other', title: 'Other user', userId: userId2 },
+      ]);
+      await serverDB.insert(messages).values([
+        {
+          content: 'Own matching message',
+          id: 'candidate-topic-message-hit',
+          role: 'user',
+          topicId: 'candidate-topic-message',
+          userId,
+        },
+        {
+          content: 'Other matching message',
+          id: 'candidate-topic-message-other',
+          role: 'user',
+          topicId: 'candidate-topic-other',
+          userId: userId2,
+        },
+      ]);
+      const ftsSearchCandidates = vi.fn().mockImplementation(({ entity }) =>
+        Promise.resolve({
+          candidates:
+            entity === 'topics'
+              ? [
+                  { id: 'candidate-topic-other', score: 12 },
+                  { id: 'candidate-topic-wrong-scope', score: 10 },
+                  { id: 'candidate-topic-deleted', score: 8 },
+                  { id: 'candidate-topic-title', score: 6 },
+                ]
+              : [
+                  { id: 'candidate-topic-message-other', score: 12 },
+                  { id: 'candidate-message-deleted', score: 10 },
+                  { id: 'candidate-topic-message-hit', score: 8 },
+                ],
+          total: 4,
+        }),
+      );
+      const model = new TopicModel(serverDB, userId, undefined, {
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates,
+      });
+
+      const result = await model.queryByKeyword('candidate', sessionId);
+
+      expect(result.map(({ id }) => id)).toEqual([
+        'candidate-topic-message',
+        'candidate-topic-title',
+      ]);
+      expect(ftsSearchCandidates).toHaveBeenCalledWith({
+        entity: 'topics',
+        filters: { topicScope: { containerId: sessionId } },
+        pagination: {},
+        query: { fields: ['title'], text: 'candidate' },
+      });
+      expect(ftsSearchCandidates).toHaveBeenCalledWith({
+        entity: 'messages',
+        filters: { topicScope: { containerId: sessionId } },
+        pagination: {},
+        query: { fields: ['content'], text: 'candidate' },
+      });
     });
   });
 

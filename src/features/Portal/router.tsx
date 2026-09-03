@@ -13,6 +13,8 @@ import { Artifacts } from './Artifacts';
 import Header from './components/Header';
 import { Document } from './Document';
 import { FilePreview } from './FilePreview';
+import { GoalMetric } from './GoalMetric';
+import { GoalNode } from './GoalNode';
 import { GroupThread } from './GroupThread';
 import { HomeBody, HomeTitle } from './Home';
 import { LocalFile } from './LocalFile';
@@ -40,6 +42,8 @@ const VIEW_COMPONENTS: Record<PortalViewType, PortalImpl> = {
   [PortalViewType.Document]: Document,
   [PortalViewType.Notebook]: Notebook,
   [PortalViewType.FilePreview]: FilePreview,
+  [PortalViewType.GoalMetric]: GoalMetric,
+  [PortalViewType.GoalNode]: GoalNode,
   [PortalViewType.LocalFile]: LocalFile,
   [PortalViewType.MessageDetail]: MessageDetail,
   [PortalViewType.ToolUI]: Plugins,

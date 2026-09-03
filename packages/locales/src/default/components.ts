@@ -139,6 +139,7 @@ export default {
   'KeyValueEditor.keyPlaceholder': 'Key',
   'KeyValueEditor.valuePlaceholder': 'Value',
   'LocalFile.action.open': 'Open',
+  'LocalFile.action.preview': 'Preview',
   'LocalFile.action.showInFolder': 'Show in Folder',
   'MaxTokenSlider.unlimited': 'Unlimited',
   'ModelSelect.featureTag.audio': 'This model supports audio input recognition.',

@@ -4,7 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import { ChatHeader } from '@lobehub/ui/mobile';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useMatch, useParams } from 'react-router';
+import { useMatch, useParams, useSearchParams } from 'react-router';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useShowMobileWorkspace } from '@/hooks/useShowMobileWorkspace';
@@ -40,16 +40,26 @@ const Header = memo(() => {
   const showMobileWorkspace = useShowMobileWorkspace();
   const navigate = useWorkspaceAwareNavigate();
   const params = useParams<{ providerId?: string; tab?: string }>();
+  const [searchParams] = useSearchParams();
   const workspaceSettingsMatch = useMatch('/:workspaceSlug/settings/:workspaceTab/*');
 
   const isSessionActive = useSessionStore((s) => !!s.activeId);
-  const isProvider = params.providerId && params.providerId !== 'all';
+  // Personal provider details carry the id in the path; the workspace provider
+  // page canonicalizes it into the `provider` query param instead.
+  const queryProvider = searchParams.get('provider');
+  const providerId =
+    params.providerId ?? (queryProvider && queryProvider !== 'all' ? queryProvider : undefined);
+  const isProvider = providerId && providerId !== 'all';
 
   const handleBackClick = () => {
     if (isSessionActive && showMobileWorkspace) {
       navigate('/agent');
-    } else if (isProvider) {
+    } else if (params.providerId && params.providerId !== 'all') {
       navigate('/settings/provider/all', { escape: true });
+    } else if (isProvider) {
+      // Query-selected provider (workspace form): back to the workspace
+      // provider list instead of escaping to personal settings.
+      navigate('/settings/provider');
     } else {
       navigate('/me/settings', { escape: true });
     }
@@ -73,7 +83,7 @@ const Header = memo(() => {
         <ChatHeader.Title
           title={
             <Flexbox horizontal align={'center'} gap={8}>
-              <span style={{ lineHeight: 1.2 }}>{isProvider ? params.providerId : tabTitle}</span>
+              <span style={{ lineHeight: 1.2 }}>{isProvider ? providerId : tabTitle}</span>
             </Flexbox>
           }
         />

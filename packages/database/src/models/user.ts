@@ -279,6 +279,100 @@ export class UserModel {
       });
   };
 
+  /**
+   * Atomically merge a partial humanIntervention config into the `tool` settings
+   * column in ONE SQL statement. A JS-side read-merge-write would race: two
+   * concurrent calls (e.g. one tab changing `approvalMode` while another appends
+   * to the allow list) could both read the same snapshot and the last write
+   * would silently drop the other change. Doing the merge inside the
+   * INSERT ... ON CONFLICT DO UPDATE expression serializes concurrent calls on
+   * the row, so both changes land regardless of interleaving.
+   */
+  mergeToolInterventionSetting = async (value: {
+    appendAllowList?: string[];
+    approvalMode?: 'auto-run' | 'allow-list' | 'manual';
+  }) => {
+    const appendAllowList = [...new Set(value.appendAllowList ?? [])];
+
+    const initialIntervention: Record<string, unknown> = {};
+    if (value.approvalMode) initialIntervention.approvalMode = value.approvalMode;
+    if (appendAllowList.length > 0) initialIntervention.allowList = appendAllowList;
+
+    const storedAllowList = sql`coalesce(${userSettings.tool}->'humanIntervention'->'allowList', '[]'::jsonb)`;
+
+    const approvalModePatch = value.approvalMode
+      ? sql`jsonb_build_object('approvalMode', ${value.approvalMode}::text)`
+      : sql`'{}'::jsonb`;
+
+    // Append only the entries the stored list does not already contain,
+    // preserving both the stored order and the append order.
+    const allowListPatch =
+      appendAllowList.length > 0
+        ? sql`jsonb_build_object(
+            'allowList',
+            ${storedAllowList} || (
+              SELECT coalesce(jsonb_agg(to_jsonb(t.v) ORDER BY t.ord), '[]'::jsonb)
+              FROM jsonb_array_elements_text(${JSON.stringify(appendAllowList)}::jsonb) WITH ORDINALITY AS t(v, ord)
+              WHERE NOT (${storedAllowList} ? t.v)
+            )
+          )`
+        : sql`'{}'::jsonb`;
+
+    return this.db
+      .insert(userSettings)
+      .values({ id: this.userId, tool: { humanIntervention: initialIntervention } })
+      .onConflictDoUpdate({
+        set: {
+          tool: sql`coalesce(${userSettings.tool}, '{}'::jsonb) || jsonb_build_object(
+            'humanIntervention',
+            coalesce(${userSettings.tool}->'humanIntervention', '{}'::jsonb) || ${approvalModePatch} || ${allowListPatch}
+          )`,
+        },
+        target: userSettings.id,
+      });
+  };
+
+  /**
+   * Atomically replace the uninstalled-builtin-tools list for one scope
+   * (personal, or one workspace's slot) inside the `tool` column, leaving every
+   * other key — `humanIntervention`, the other scope's lists — untouched. Same
+   * rationale as `mergeToolInterventionSetting`: a JS-side whole-column write
+   * built from a snapshot races with concurrent tool-column writers and can
+   * revert their changes (e.g. flip approvalMode back).
+   */
+  replaceUninstalledBuiltinToolsSetting = async (value: {
+    uninstalledBuiltinTools: string[];
+    workspaceId?: string | null;
+  }) => {
+    const list = JSON.stringify(value.uninstalledBuiltinTools);
+
+    const initialTool = value.workspaceId
+      ? {
+          uninstalledBuiltinToolsByWorkspace: {
+            [value.workspaceId]: value.uninstalledBuiltinTools,
+          },
+        }
+      : { uninstalledBuiltinTools: value.uninstalledBuiltinTools };
+
+    const toolPatch = value.workspaceId
+      ? sql`jsonb_build_object(
+          'uninstalledBuiltinToolsByWorkspace',
+          coalesce(${userSettings.tool}->'uninstalledBuiltinToolsByWorkspace', '{}'::jsonb)
+          || jsonb_build_object(${value.workspaceId}::text, ${list}::jsonb)
+        )`
+      : sql`jsonb_build_object('uninstalledBuiltinTools', ${list}::jsonb)`;
+
+    return this.db
+      .insert(userSettings)
+      .values({ id: this.userId, tool: initialTool })
+      .onConflictDoUpdate({
+        set: {
+          tool: sql`coalesce(${userSettings.tool}, '{}'::jsonb) || ${toolPatch}`,
+        },
+        target: userSettings.id,
+      });
+  };
+
   updatePreference = async (value: Partial<UserPreference>) => {
     const user = await this.db.query.users.findFirst({ where: eq(users.id, this.userId) });
     if (!user) return;
@@ -398,6 +492,23 @@ export class UserModel {
         id: users.id,
         username: users.username,
       })
+      .from(users)
+      .where(inArray(users.id, ids));
+  };
+
+  /**
+   * Emails for a set of users. Deliberately separate from
+   * {@link UserModel.getDisplayInfoByIds}, whose contract is display-only and
+   * must never leak email — call this only where the audience is allowed to
+   * see addresses (e.g. workspace members resolving a teammate to assign).
+   */
+  static getEmailsByIds = async (
+    db: LobeChatDatabase,
+    ids: string[],
+  ): Promise<Array<{ email: string | null; id: string }>> => {
+    if (ids.length === 0) return [];
+    return db
+      .select({ email: users.email, id: users.id })
       .from(users)
       .where(inArray(users.id, ids));
   };

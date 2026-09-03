@@ -1,18 +1,19 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { useParams } from 'react-router';
 
-import AcceptanceCheckInventory from '@/features/Verify/Acceptance/AcceptanceCheckInventory';
-import AcceptanceGoal from '@/features/Verify/Acceptance/AcceptanceGoal';
-import AcceptanceIdentity from '@/features/Verify/Acceptance/AcceptanceIdentity';
+import { extractUuid } from '@/features/Acceptance/utils';
+import AcceptanceCheckInventory from '@/features/Acceptance/Viewer/AcceptanceCheckInventory';
+import AcceptanceGoal from '@/features/Acceptance/Viewer/AcceptanceGoal';
+import AcceptanceIdentity from '@/features/Acceptance/Viewer/AcceptanceIdentity';
 import {
   AcceptanceBundleGate,
   AcceptanceScope,
-} from '@/features/Verify/Acceptance/AcceptanceScope';
-import { useAcceptanceBundle } from '@/features/Verify/Acceptance/useAcceptanceBundle';
-import { extractUuid } from '@/features/Verify/utils';
+} from '@/features/Acceptance/Viewer/AcceptanceScope';
+import { useAcceptanceBundle } from '@/features/Acceptance/Viewer/useAcceptanceBundle';
 
 import { WorkbenchHeader } from '../../shell/WorkbenchHeader';
 
@@ -43,6 +44,11 @@ const styles = createStaticStyles(({ css }) => ({
     margin-inline: auto;
     padding-block: 20px;
     padding-inline: 24px;
+
+    @media (width <= 768px) {
+      padding-block: 16px;
+      padding-inline: 12px;
+    }
   `,
 }));
 

@@ -159,6 +159,8 @@ describe('projectFileService', () => {
 
     expect(mockDeviceClient.searchProjectFiles.query).toHaveBeenCalledWith({
       deviceId: 'device-1',
+      excludeIgnored: undefined,
+      changedOnly: undefined,
       limit: 20,
       query: 'button',
       scope: '/repo',
@@ -182,6 +184,8 @@ describe('projectFileService', () => {
     });
 
     expect(mockLocalFileService.searchProjectFiles).toHaveBeenCalledWith({
+      excludeIgnored: undefined,
+      changedOnly: undefined,
       limit: 20,
       query: 'button',
       scope: '/repo',

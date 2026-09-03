@@ -57,11 +57,6 @@ vi.mock('node:fs', async (importOriginal) => {
   const actual: Record<string, unknown> = await importOriginal();
   return { ...actual, writeFileSync: mockWriteFileSync };
 });
-vi.mock('../utils/logger', () => ({
-  log: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
-  setVerbose: vi.fn(),
-}));
-
 describe('generate command', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
   let consoleSpy: ReturnType<typeof vi.spyOn>;

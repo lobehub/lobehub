@@ -52,13 +52,10 @@ export const SkillInspector = memo<BuiltinInspectorProps<SkillArgs>>(
     }
 
     return (
-      <div
-        className={cx(
-          inspectorTextStyles.root,
-          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-        )}
-      >
-        <span>{label}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+          {label}
+        </span>
         {skillName && (
           <span className={styles.chip}>
             <SkillsIcon className={styles.skillIcon} size={12} />

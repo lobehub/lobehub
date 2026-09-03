@@ -410,7 +410,7 @@ export class ChatTopicActionImpl {
    * Pin a model to a topic by writing the top-level `topics.model`/`provider`
    * columns (the config source of truth), NOT metadata. Called when the user
    * switches model while a topic is active so each topic keeps its own model
-   * (see the Model/ModelLabel controls); generation + ChatInput display read it
+   * (see the ChatInput Model control); generation + ChatInput display read it
    * back via `topicSelectors.getTopicModelById`.
    */
   updateTopicModel = async (
@@ -564,6 +564,8 @@ export class ChatTopicActionImpl {
     // Already at the target status — both the in-memory and DB writes are no-ops.
     if (topic?.status === status) return;
 
+    this.internal_pinTopicStatus(params);
+
     // "Archive" in the UI writes status:'completed'. Stamp `completedAt` on that
     // transition so bulk/stale archive records when the topic was completed,
     // matching the single-item `markTopicCompleted`. Other status transitions
@@ -571,11 +573,58 @@ export class ChatTopicActionImpl {
     const patch: Partial<ChatTopic> =
       status === 'completed' ? { completedAt: new Date(), status } : { status };
 
+    await topicService.updateTopic(topicId, patch).catch((err) => {
+      console.error('[updateTopicStatus] persist failed:', err);
+      // The DB never got the write — stop pinning it over fetched rows.
+      this.#pendingTopicStatusWrites.delete(topicId);
+    });
+  };
+
+  /**
+   * Local-only half of {@link updateTopicStatus}: registers the optimistic
+   * pending-write pin and dispatches the in-memory patch, without persisting
+   * to the server.
+   *
+   * For completion paths that already have their own ownership-guarded
+   * server write (e.g. the gateway transport's `settleRunningOperation`,
+   * compared under a row lock by operation id) and only need to mirror the
+   * outcome locally — calling `updateTopicStatus` there would add a second,
+   * unguarded `topicService.updateTopic` write that could stomp a newer run's
+   * status. Skipping the pin entirely instead (a bare `internal_dispatchTopic`)
+   * is also wrong: a topic-list refetch racing in behind this write has no
+   * signal that a fresher status just landed, and `#reconcileFetchedTopics`
+   * would happily reapply the older pending write (e.g. the 'running' pin set
+   * when the run started) right back over it, stranding the sidebar spinner
+   * again until that pin expires.
+   */
+  internal_pinTopicStatus = (params: {
+    agentId?: string;
+    groupId?: string;
+    scope?: TopicMapScope;
+    status: ChatTopicStatus;
+    topicId: string;
+  }): void => {
+    const { topicId, status, agentId, groupId, scope } = params;
+    const state = this.#get();
+    const scopedAgentId = scope ? agentId : (agentId ?? state.activeAgentId);
+    const scopedGroupId = scope ? groupId : (groupId ?? state.activeGroupId);
+    const key = topicMapKey({
+      agentId: scopedAgentId,
+      groupId: scopedGroupId,
+      scope,
+    });
+    const topic = state.topicDataMap[key]?.items?.find((t) => t.id === topicId);
+
+    if (topic?.status === status) return;
+
+    const patch: Partial<ChatTopic> =
+      status === 'completed' ? { completedAt: new Date(), status } : { status };
+
     this.#pendingTopicStatusWrites.set(topicId, { expiresAt: Date.now() + 15_000, status });
 
     // Scope on the payload routes the write to the owning bucket inside
-    // `internal_dispatchTopic`. A no-op if the bucket isn't loaded; the DB
-    // write below still ensures the status sticks across the next refetch.
+    // `internal_dispatchTopic`. A no-op if the bucket isn't loaded; the pin
+    // above still ensures the status sticks across the next refetch.
     state.internal_dispatchTopic({
       type: 'updateTopic',
       id: topicId,
@@ -583,12 +632,6 @@ export class ChatTopicActionImpl {
       agentId,
       groupId,
       scope,
-    });
-
-    await topicService.updateTopic(topicId, patch).catch((err) => {
-      console.error('[updateTopicStatus] persist failed:', err);
-      // The DB never got the write — stop pinning it over fetched rows.
-      this.#pendingTopicStatusWrites.delete(topicId);
     });
   };
 

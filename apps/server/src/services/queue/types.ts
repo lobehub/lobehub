@@ -2,6 +2,8 @@ import { type AgentRuntimeContext } from '@lobechat/agent-runtime';
 
 export interface QueueMessage {
   context?: AgentRuntimeContext;
+  /** Stable provider-side execute-once key for crash-safe enqueue retries. */
+  deduplicationId?: string;
   delay?: number;
   endpoint: string;
   operationId: string;

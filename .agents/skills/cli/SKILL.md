@@ -26,6 +26,7 @@ apps/cli/src/
 │   └── http.ts               # Raw HTTP utilities
 ├── auth/
 │   ├── credentials.ts        # Encrypted credential storage (AES-256-GCM)
+│   ├── identity.ts           # Account fingerprint for machine-local state
 │   ├── refresh.ts            # Token auto-refresh
 │   └── resolveToken.ts       # Token resolution (flag > stored)
 ├── commands/                 # All CLI commands (one file per command group)
@@ -46,7 +47,8 @@ apps/cli/src/
 │   ├── search.ts             # Global search
 │   ├── skill.ts              # Agent skill management
 │   ├── status.ts             # Gateway connectivity check
-│   └── topic.ts              # Conversation topic management
+│   ├── topic.ts              # Conversation topic management
+│   └── workspace.ts          # Workspace list/scope/members/usage/audit
 ├── daemon/
 │   └── manager.ts            # Background daemon process management
 ├── tools/
@@ -56,7 +58,7 @@ apps/cli/src/
 │   └── index.ts              # Persistent settings (~/.lobehub/)
 ├── utils/
 │   ├── logger.ts             # Logging (verbose mode)
-│   ├── format.ts             # Table output, JSON, timeAgo, truncate
+│   ├── format.ts             # Table output, JSON, timeAgo/timeUntil, truncate
 │   └── agentStream.ts        # SSE streaming for agent runs
 └── constants/
     └── urls.ts               # Official server & gateway URLs
@@ -64,27 +66,46 @@ apps/cli/src/
 
 ## Command Groups
 
-| Command       | Alias | Description                                                 |
-| ------------- | ----- | ----------------------------------------------------------- |
-| `lh login`    | -     | Authenticate via OIDC Device Code Flow                      |
-| `lh logout`   | -     | Clear stored credentials                                    |
-| `lh connect`  | -     | Device gateway connection & daemon management               |
-| `lh status`   | -     | Quick gateway connectivity check                            |
-| `lh agent`    | -     | Agent CRUD, run, status                                     |
-| `lh generate` | `gen` | Content generation (text, image, video, tts, asr, download) |
-| `lh doc`      | -     | Document CRUD, batch-create, parse, topic linking           |
-| `lh file`     | -     | File list, view, delete, recent                             |
-| `lh kb`       | -     | Knowledge base CRUD, folders, docs, upload, tree view       |
-| `lh memory`   | -     | User memory CRUD + extraction                               |
-| `lh message`  | -     | Message list, search, delete, count, heatmap                |
-| `lh topic`    | -     | Topic CRUD + search + recent                                |
-| `lh skill`    | -     | Skill CRUD + import (GitHub/URL/market)                     |
-| `lh model`    | -     | Model CRUD, toggle, batch-toggle, clear                     |
-| `lh provider` | -     | Provider CRUD, config, test, toggle                         |
-| `lh plugin`   | -     | Plugin install, uninstall, update                           |
-| `lh search`   | -     | Global search across all types                              |
-| `lh whoami`   | -     | Current user info                                           |
-| `lh usage`    | -     | Monthly/daily usage statistics                              |
+| Command        | Alias | Description                                                 |
+| -------------- | ----- | ----------------------------------------------------------- |
+| `lh login`     | -     | Authenticate via OIDC Device Code Flow                      |
+| `lh logout`    | -     | Clear stored credentials                                    |
+| `lh connect`   | -     | Device gateway connection & daemon management               |
+| `lh status`    | -     | Quick gateway connectivity check                            |
+| `lh agent`     | -     | Agent CRUD, run, status                                     |
+| `lh generate`  | `gen` | Content generation (text, image, video, tts, asr, download) |
+| `lh doc`       | -     | Document CRUD, batch-create, parse, topic linking           |
+| `lh file`      | -     | File list, view, delete, recent                             |
+| `lh kb`        | -     | Knowledge base CRUD, folders, docs, upload, tree view       |
+| `lh memory`    | -     | User memory CRUD + extraction                               |
+| `lh message`   | -     | Message list, search, delete, count, heatmap                |
+| `lh topic`     | -     | Topic CRUD + search + recent                                |
+| `lh skill`     | -     | Skill CRUD + import (GitHub/URL/market)                     |
+| `lh model`     | -     | Model CRUD, toggle, batch-toggle, clear                     |
+| `lh provider`  | -     | Provider CRUD, config, test, toggle                         |
+| `lh plugin`    | -     | Plugin install, uninstall, update                           |
+| `lh search`    | -     | Global search across all types                              |
+| `lh workspace` | `ws`  | Workspace list, scope switch, members, invites, usage       |
+| `lh whoami`    | -     | Current user info (including the resolved workspace scope)  |
+| `lh usage`     | -     | Monthly/daily usage statistics                              |
+
+### Workspace Scope
+
+Every command runs against one scope, resolved in this order:
+
+1. an explicit `--workspace <id>` on the commands that take it
+2. the `LOBEHUB_WORKSPACE_ID` env var
+3. the scope persisted by `lh workspace use <id|slug>`
+4. personal content (no workspace)
+
+The persisted scope is bound to the account and server it was chosen under. If
+either changes — a different `lh login`, a `--server` switch — it is ignored and
+reported as stale rather than attaching a workspace header the new identity has
+no membership in. `lh logout` clears it. `lh whoami` and `lh workspace current`
+both print which of the four sources is in effect.
+
+API-key auth carries no local account identity, so there is nothing to bind a
+saved scope to — those callers pass `LOBEHUB_WORKSPACE_ID` instead.
 
 ## Adding a New Command
 
@@ -177,13 +198,14 @@ if (!options.yes) {
 
 ## Storage Locations
 
-| File          | Path                          | Purpose                        |
-| ------------- | ----------------------------- | ------------------------------ |
-| Credentials   | `~/.lobehub/credentials.json` | Encrypted tokens (AES-256-GCM) |
-| Settings      | `~/.lobehub/settings.json`    | Custom server/gateway URLs     |
-| Daemon PID    | `~/.lobehub/daemon.pid`       | Background process PID         |
-| Daemon Status | `~/.lobehub/daemon.status`    | Connection status JSON         |
-| Daemon Log    | `~/.lobehub/daemon.log`       | Daemon output log              |
+| File          | Path                          | Purpose                                          |
+| ------------- | ----------------------------- | ------------------------------------------------ |
+| Credentials   | `~/.lobehub/credentials.json` | Encrypted tokens (AES-256-GCM)                   |
+| Settings      | `~/.lobehub/settings.json`    | Custom server/gateway URLs                       |
+| Workspace     | `~/.lobehub/active-workspace` | Active scope + the account/server it is bound to |
+| Daemon PID    | `~/.lobehub/daemon.pid`       | Background process PID                           |
+| Daemon Status | `~/.lobehub/daemon.status`    | Connection status JSON                           |
+| Daemon Log    | `~/.lobehub/daemon.log`       | Daemon output log                                |
 
 The base directory (`~/.lobehub/`) can be overridden with the `LOBEHUB_CLI_HOME` env var (e.g. `LOBEHUB_CLI_HOME=.lobehub-dev` for dev mode isolation).
 
@@ -293,4 +315,4 @@ See `references/` for each command group:
 - **Memory**: `references/memory.md` (memory management, extraction)
 - **Skills & Plugins**: `references/skills-plugins.md` (skill, plugin)
 - **Models & Providers**: `references/models-providers.md` (model, provider)
-- **Search & Config**: `references/search-config.md` (search, whoami, usage)
+- **Search & Config**: `references/search-config.md` (search, whoami, usage, workspace)

@@ -8,11 +8,8 @@ vi.mock('../auth/refresh', () => ({
 }));
 
 vi.mock('../settings', () => ({
+  loadActiveWorkspace: () => undefined,
   resolveServerUrl: mockResolveServerUrl,
-}));
-
-vi.mock('../utils/logger', () => ({
-  log: { error: vi.fn() },
 }));
 
 describe('api/http auth helpers', () => {

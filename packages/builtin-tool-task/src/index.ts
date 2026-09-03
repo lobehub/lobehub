@@ -4,7 +4,20 @@ export {
   normalizeListTasksParams,
   normalizeOptionalFilterValues,
 } from './listTasks';
+export {
+  DEFAULT_LIST_WORKSPACE_MEMBERS_LIMIT,
+  matchesMemberQuery,
+  normalizeListWorkspaceMembersParams,
+  normalizeMemberQuery,
+  selectAssignableMembers,
+} from './listWorkspaceMembers';
 export { TaskIdentifier, TaskManifest } from './manifest';
 export { systemPrompt } from './systemRole';
-export type { CreateGoalParams, CreateGoalState, GoalCriterionDraft } from './types';
+export type {
+  CreateGoalParams,
+  CreateGoalState,
+  GoalCriterionDraft,
+  ListWorkspaceMembersParams,
+  ListWorkspaceMembersState,
+} from './types';
 export { TaskApiName } from './types';

@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, Skeleton } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 
 interface ListSkeletonProps {
@@ -27,10 +28,10 @@ const ListSkeleton = memo<ListSkeletonProps>(({ paddingInline = 12, rows = 4 }) 
         key={index}
         style={{ paddingBlock: 12, paddingInline }}
       >
-        <Skeleton.Avatar active shape={'square'} size={48} />
+        <Skeleton.Avatar shape={'square'} size={48} />
         <Flexbox flex={1} gap={8}>
-          <Skeleton.Button active size={'small'} style={{ height: 14, width: 140 }} />
-          <Skeleton.Button active size={'small'} style={{ height: 12, width: 200 }} />
+          <Skeleton height={14} width={140} />
+          <Skeleton height={12} width={200} />
         </Flexbox>
       </Flexbox>
     ))}

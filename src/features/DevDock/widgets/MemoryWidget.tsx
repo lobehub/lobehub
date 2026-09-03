@@ -3,6 +3,13 @@
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { memo, useEffect, useState } from 'react';
 
+import { formatSize } from '@/utils/format';
+
+import { useAppProcessMetrics } from './appProcessMetrics';
+import { isMemoryHigh } from './metricUtils';
+
+const formatCompactSize = (bytes: number) => formatSize(bytes).replace(' ', '').replace('B', '');
+
 const styles = createStaticStyles(({ css }) => ({
   high: css`
     color: ${cssVar.colorError};
@@ -19,8 +26,10 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface HeapSample {
-  limit: number;
-  used: number;
+  jsHeapLimitBytes: number;
+  jsHeapUsedBytes: number;
+  privateBytes?: number;
+  sharedBytes?: number;
 }
 
 const readHeap = (): HeapSample | null => {
@@ -30,32 +39,68 @@ const readHeap = (): HeapSample | null => {
     }
   ).memory;
   if (!memory) return null;
-  return { limit: memory.jsHeapSizeLimit, used: memory.usedJSHeapSize };
+  return {
+    jsHeapLimitBytes: memory.jsHeapSizeLimit,
+    jsHeapUsedBytes: memory.usedJSHeapSize,
+  };
 };
 
 const MemoryWidget = memo(() => {
-  const [heap, setHeap] = useState<HeapSample | null>(() => readHeap());
+  const [memory, setMemory] = useState<HeapSample | null>(null);
+  const residentMB = useAppProcessMetrics()?.rendererResidentMB ?? null;
 
   useEffect(() => {
     if (!readHeap()) return;
-    const timer = setInterval(() => setHeap(readHeap()), 2000);
-    return () => clearInterval(timer);
+    const getRendererMemoryInfo = window.electronAPI?.getRendererMemoryInfo;
+
+    let disposed = false;
+    const update = async () => {
+      let privateBytes: number | undefined;
+      let sharedBytes: number | undefined;
+
+      try {
+        const info = await getRendererMemoryInfo?.();
+        privateBytes = info?.privateBytes;
+        sharedBytes = info?.sharedBytes;
+      } catch {
+        /* native process metrics unavailable — JS heap remains useful */
+      }
+
+      const heap = readHeap();
+      if (heap && !disposed) setMemory({ ...heap, privateBytes, sharedBytes });
+    };
+
+    void update();
+    const timer = setInterval(update, 2000);
+    return () => {
+      disposed = true;
+      clearInterval(timer);
+    };
   }, []);
 
-  if (!heap) return null;
+  if (!memory) return null;
 
-  const usedMB = Math.round(heap.used / 1_048_576);
-  const percent = (heap.used / heap.limit) * 100;
+  const percent = (memory.jsHeapUsedBytes / memory.jsHeapLimitBytes) * 100;
+  const high = isMemoryHigh(percent, memory.privateBytes);
+  // macOS keeps madvise(MADV_FREE_REUSABLE) pages in the resident set until it needs
+  // them, so resident minus private footprint is what the allocator already gave back.
+  const reclaimableBytes =
+    residentMB !== null && memory.privateBytes !== undefined
+      ? Math.max(0, residentMB * 1024 * 1024 - memory.privateBytes - (memory.sharedBytes ?? 0))
+      : undefined;
 
   return (
     <span
-      title={'JS heap used / limit'}
-      className={cx(
-        styles.text,
-        percent >= 90 ? styles.high : percent >= 70 ? styles.mid : undefined,
-      )}
+      className={cx(styles.text, high ? styles.high : percent >= 70 ? styles.mid : undefined)}
+      title={
+        memory.privateBytes === undefined
+          ? 'JS heap used / limit'
+          : 'R = Renderer private footprint (red at 1 GiB) · F = freed pages the OS has not reclaimed yet (plus some read-only library pages) · J = JS heap used / limit'
+      }
     >
-      {usedMB} MB · {percent.toFixed(1)}%
+      {memory.privateBytes !== undefined && `R${formatCompactSize(memory.privateBytes)} · `}
+      {reclaimableBytes !== undefined && `F${formatCompactSize(reclaimableBytes)} · `}J
+      {formatCompactSize(memory.jsHeapUsedBytes)} · {percent.toFixed(1)}%
     </span>
   );
 });

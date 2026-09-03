@@ -1,6 +1,7 @@
 'use client';
 
-import { Block, Icon, Text } from '@lobehub/ui';
+import { Block, Icon } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import {
   AlertTriangle,
@@ -16,8 +17,8 @@ import {
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAcceptanceBySubject } from '@/features/Verify';
-import { acceptanceOverviewPath } from '@/features/Verify/Acceptance/routes';
+import { useAcceptanceBySubject } from '@/features/Acceptance';
+import { acceptanceOverviewPath } from '@/features/Acceptance/Viewer/routes';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';

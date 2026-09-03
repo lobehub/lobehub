@@ -2,7 +2,8 @@ import { type ChatModelCard } from '@lobechat/types';
 import { type IconAvatarProps } from '@lobehub/icons';
 import { LobeHub, ModelIcon, ProviderIcon } from '@lobehub/icons';
 import { type FlexboxProps } from '@lobehub/ui';
-import { Avatar, Flexbox, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Avatar, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, useResponsive } from 'antd-style';
 import {
   AudioLines,
@@ -246,8 +247,9 @@ export const ModelInfoTags = memo<ModelInfoTagsProps>(
   },
 );
 
-interface ModelItemRenderProps extends ChatModelCard, Partial<Omit<FlexboxProps, 'id' | 'title'>> {
+interface ModelItemRenderProps extends ChatModelCard, Pick<FlexboxProps, 'className' | 'style'> {
   abilities?: ModelAbilities;
+  audio?: boolean;
   newBadgeLabel?: string;
   proBadgeLabel?: string;
   showInfoTag?: boolean;
@@ -257,6 +259,7 @@ export const ModelItemRender = memo<ModelItemRenderProps>(
   ({
     showInfoTag = true,
     abilities,
+    audio,
     contextWindowTokens,
     files,
     functionCall,
@@ -268,7 +271,8 @@ export const ModelItemRender = memo<ModelItemRenderProps>(
     id,
     displayName,
     releasedAt,
-    ...rest
+    className,
+    style,
   }) => {
     const { mobile } = useResponsive();
     const displayNameOrId = displayName || id;
@@ -277,14 +281,14 @@ export const ModelItemRender = memo<ModelItemRenderProps>(
       <Flexbox
         horizontal
         align={'center'}
+        className={className}
         gap={32}
         justify={'space-between'}
-        {...rest}
         style={{
           overflow: 'hidden',
           position: 'relative',
           width: '100%',
-          ...rest.style,
+          ...style,
         }}
       >
         <Flexbox
@@ -316,6 +320,7 @@ export const ModelItemRender = memo<ModelItemRenderProps>(
         </Flexbox>
         {showInfoTag && (
           <ModelInfoTags
+            audio={audio ?? abilities?.audio}
             contextWindowTokens={contextWindowTokens}
             files={files ?? abilities?.files}
             functionCall={functionCall ?? abilities?.functionCall}

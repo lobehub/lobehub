@@ -29,7 +29,7 @@ export const generateCharacterSet = async ({
       ...input,
       composition: 'fullBody',
       persist: false,
-      referenceImageUrl: avatarUrl || input.referenceImageUrl,
+      referenceImageUrl: avatarUrl,
       styleReferenceImageUrls: avatarUrl ? undefined : input.styleReferenceImageUrls,
     });
 

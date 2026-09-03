@@ -1,9 +1,9 @@
 import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
-import type { TaskStatus } from '@lobechat/types';
+import type { RecentItem, TaskStatus } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
 import type { FlexboxProps } from '@lobehub/ui';
-import { Avatar, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
-import { Segmented } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Avatar, Segmented, Skeleton, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { HashIcon } from 'lucide-react';
 import { memo, type ReactNode, useMemo, useState } from 'react';
@@ -26,7 +26,6 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useClientDataSWR } from '@/libs/swr';
 import { recentKeys } from '@/libs/swr/keys';
 import { useCacheScope } from '@/libs/swr/useCacheScope';
-import { type RecentItem } from '@/server/routers/lambda/recent';
 import { recentService } from '@/services/recent';
 import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
@@ -253,7 +252,7 @@ interface SkeletonLineProps {
  */
 const SkeletonLine = memo<SkeletonLineProps>(({ bar, flex, line, width }) => (
   <Flexbox align={'flex-start'} flex={flex} height={line} justify={'center'}>
-    <Skeleton.Block active height={bar} width={width} />
+    <Skeleton height={bar} width={width} />
   </Flexbox>
 ));
 
@@ -279,12 +278,7 @@ const LoadingRows = memo<{ avatarSize?: number; withTime?: boolean }>(
       {SKELETON_ROWS.map(({ description, title }, index) => (
         <Flexbox horizontal align={'flex-start'} className={styles.rowBox} gap={12} key={index}>
           <Flexbox flex={'none'} paddingBlock={3}>
-            <Skeleton.Avatar
-              active
-              className={styles.topicAvatar}
-              shape={'circle'}
-              size={avatarSize}
-            />
+            <Skeleton.Avatar className={styles.topicAvatar} shape={'circle'} size={avatarSize} />
           </Flexbox>
           <Flexbox className={styles.rowText} gap={3}>
             <SkeletonLine bar={14} line={22} width={title} />
@@ -417,11 +411,11 @@ const TaskContent = memo(() => {
 const ScheduledTaskContent = memo(() => {
   const { t } = useTranslation('home');
   const useFetchScheduledTaskList = useTaskStore((s) => s.useFetchScheduledTaskList);
-  const scheduledSWR = useFetchScheduledTaskList();
-  const scheduled = useTaskStore(taskListSelectors.scheduledTaskList);
-  const scheduledTotal = useTaskStore(taskListSelectors.scheduledTaskListTotal);
-  const scheduledInit = useTaskStore(taskListSelectors.isScheduledTaskListInit);
   const taskCount = useGlobalStore(systemStatusSelectors.homeTaskCount);
+  const scheduledSWR = useFetchScheduledTaskList({ limit: taskCount });
+  const scheduled = scheduledSWR.data?.data ?? [];
+  const scheduledTotal = scheduledSWR.data?.total ?? 0;
+  const scheduledInit = scheduledSWR.data !== undefined;
 
   // Automation is opt-in and most accounts have none. An empty block would be a
   // permanent reminder of a feature you did not ask for, so the section only
@@ -444,7 +438,7 @@ const ScheduledTaskContent = memo(() => {
       title={t('dashboard.scheduledTask.title')}
       action={
         !failedFirstLoad && scheduledTotal > shown.length ? (
-          <WorkspaceLink className={styles.blockAction} to={'/tasks'}>
+          <WorkspaceLink className={styles.blockAction} to={'/tasks?collection=scheduled'}>
             {t('dashboard.task.viewAll')}
           </WorkspaceLink>
         ) : undefined

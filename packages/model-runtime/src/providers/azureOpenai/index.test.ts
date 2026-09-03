@@ -341,9 +341,14 @@ describe('LobeAzureOpenAI', () => {
         temperature: 0.6,
         model: 'o1-preview',
         messages: [{ role: 'user', content: '你好' }],
+        stream: true,
       });
 
       // Assert
+      expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+        expect.objectContaining({ model: 'o1-preview', stream: false }),
+        expect.anything(),
+      );
       expect(nonStreamToStreamModule.transformResponseToStream).toHaveBeenCalled();
     });
 

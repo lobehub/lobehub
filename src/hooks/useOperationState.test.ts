@@ -7,8 +7,6 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { useOperationState } from './useOperationState';
 
-vi.mock('zustand/traditional');
-
 describe('useOperationState', () => {
   const TEST_CONTEXT = {
     agentId: 'test-agent-id',

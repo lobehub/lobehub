@@ -51,15 +51,6 @@ vi.mock('node:fs/promises', () => ({
   stat: mockStat,
 }));
 
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 describe('RendererProtocolManager + StaticRendererFallback', () => {
   beforeEach(() => {
     vi.clearAllMocks();

@@ -483,7 +483,7 @@ export class LobeBuiltinMcpServer {
             : undefined;
 
         const answer = await op.bridge.pending(
-          { arguments: args, toolCallId },
+          { arguments: args, interactionKind: 'question', toolCallId },
           {
             onProgress,
             progressIntervalMs: this.progressIntervalMs,
@@ -547,6 +547,10 @@ const formatAnswerForCC = (answer: InterventionAnswer, args: unknown) => {
     const a = answerObj[q.question];
     const formatted = Array.isArray(a) ? a.join(', ') : a == null ? '(no answer)' : String(a);
     lines.push(`- ${q.question}: ${formatted}`);
+  }
+  const supplement = answerObj['__supplement__'];
+  if (typeof supplement === 'string' && supplement.trim().length > 0) {
+    lines.push(`Additional notes: ${supplement.trim()}`);
   }
   return {
     content: [{ text: lines.join('\n'), type: 'text' as const }],

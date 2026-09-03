@@ -52,6 +52,15 @@ const createToolCall = (id = 'tool-call-1', identifier = 'web-search') => ({
 
 describe('tool executors', () => {
   let createToolMessage: ReturnType<typeof vi.fn>;
+  let findToolMessageIdByToolCallId: ReturnType<typeof vi.fn>;
+  let updateToolIntervention: ReturnType<typeof vi.fn>;
+  let updateToolMessage: ReturnType<typeof vi.fn>;
+  /**
+   * `tool_call_id → row id`, the store's view of which calls already have a row.
+   * Writes register here so a later lookup finds them — the same reason the real
+   * settle can ask instead of being told.
+   */
+  let toolRows: Map<string, { id: string; parentId: string }>;
   let publishChunk: ReturnType<typeof vi.fn>;
   let publishError: ReturnType<typeof vi.fn>;
   let publishEvent: ReturnType<typeof vi.fn>;
@@ -60,7 +69,21 @@ describe('tool executors', () => {
   let host: AgentRuntimeHost;
 
   beforeEach(() => {
-    createToolMessage = vi.fn().mockResolvedValue({ id: 'tool-msg-1' });
+    toolRows = new Map();
+    createToolMessage = vi.fn().mockImplementation(async (params: any) => {
+      if (params?.tool_call_id) {
+        toolRows.set(params.tool_call_id, { id: 'tool-msg-1', parentId: params.parentId });
+      }
+      return { id: 'tool-msg-1' };
+    });
+    findToolMessageIdByToolCallId = vi
+      .fn()
+      .mockImplementation(async (toolCallId: string, parentMessageId: string) => {
+        const row = toolRows.get(toolCallId);
+        return row && row.parentId === parentMessageId ? row.id : undefined;
+      });
+    updateToolIntervention = vi.fn().mockResolvedValue(undefined);
+    updateToolMessage = vi.fn().mockResolvedValue(undefined);
     publishChunk = vi.fn().mockResolvedValue(undefined);
     publishError = vi.fn().mockResolvedValue(undefined);
     publishEvent = vi.fn().mockResolvedValue(undefined);
@@ -86,10 +109,12 @@ describe('tool executors', () => {
           createToolMessage,
           deleteMessage: vi.fn(),
           findById: vi.fn(),
+          findToolMessageIdByToolCallId,
           query,
           update: vi.fn(),
           updatePluginState: vi.fn(),
-          updateToolMessage: vi.fn(),
+          updateToolIntervention,
+          updateToolMessage,
         },
         stream: {
           publishChunk,
@@ -144,6 +169,9 @@ describe('tool executors', () => {
     );
     expect(result.nextContext?.phase).toBe('tool_result');
     expect(result.nextContext?.payload).toMatchObject({ parentMessageId: 'tool-msg-1' });
+    expect(result.newState.messages).toContainEqual(
+      expect.objectContaining({ id: 'tool-msg-1', role: 'tool' }),
+    );
     expect(result.newState.usage.tools.totalCalls).toBe(1);
   });
 
@@ -218,7 +246,7 @@ describe('tool executors', () => {
     expect(result.nextContext?.payload).toMatchObject({ parentMessageId: 'client-tool-msg' });
   });
 
-  it('does not advance after the transport reports cancellation', async () => {
+  it('settles the existing row when the transport reports cancellation', async () => {
     runTool.mockResolvedValueOnce({
       attempts: 0,
       interrupted: true,
@@ -226,16 +254,300 @@ describe('tool executors', () => {
       resultPersisted: true,
       toolMessageId: 'cancelled-tool-msg',
     });
+    const toolCall = createToolCall();
+    toolRows.set(toolCall.id, { id: 'cancelled-tool-msg', parentId: 'assistant-msg-1' });
     const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
-      payload: { parentMessageId: 'assistant-msg-1', toolCalling: createToolCall() },
+      payload: { parentMessageId: 'assistant-msg-1', toolCalling: toolCall },
       type: 'call_tool',
     };
-    const state = createState();
 
-    const result = await callTool(host)(instruction, state);
+    const result = await callTool(host)(instruction, createState());
 
-    expect(result).toEqual({ events: [], newState: state });
+    // The transport already made a row for this call — settle THAT one rather
+    // than inserting a second one beside it.
     expect(createToolMessage).not.toHaveBeenCalled();
+    expect(updateToolMessage).toHaveBeenCalledWith('cancelled-tool-msg', {
+      content: 'Tool execution was aborted by user.',
+    });
+    expect(updateToolIntervention).toHaveBeenCalledWith('cancelled-tool-msg', {
+      status: 'aborted',
+    });
+    expect(result.newState.messages).toContainEqual(
+      expect.objectContaining({ role: 'tool', tool_call_id: toolCall.id }),
+    );
+  });
+
+  it('writes an aborted row when the operation aborts mid-run', async () => {
+    const controller = new AbortController();
+    const abortingHost = {
+      ...host,
+      operation: { ...host.operation, abortSignal: controller.signal },
+    } as typeof host;
+
+    runTool.mockImplementationOnce(
+      () =>
+        new Promise(() => {
+          // never settles — the abort is what ends the wait
+        }),
+    );
+
+    const toolCall = createToolCall();
+    const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+      payload: { parentMessageId: 'assistant-msg-1', toolCalling: toolCall },
+      type: 'call_tool',
+    };
+
+    const pending = callTool(abortingHost)(instruction, createState());
+    controller.abort();
+    const result = await pending;
+
+    // Every tool_call_id gets exactly one row, even one that never returned.
+    expect(createToolMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: 'Tool execution was aborted by user.',
+        parentId: 'assistant-msg-1',
+        pluginIntervention: { status: 'aborted' },
+        role: 'tool',
+        tool_call_id: toolCall.id,
+      }),
+    );
+    expect(result.newState.messages).toContainEqual(
+      expect.objectContaining({ role: 'tool', tool_call_id: toolCall.id }),
+    );
+    // An abort is not a tool failure: no error event, no handleError bookkeeping.
+    expect(result.events).toEqual([]);
+    expect(host.transports.tools!.handleError).not.toHaveBeenCalled();
+    // Whether the run ends is the caller's call — a user Stop persists
+    // `interrupted` on its own; this executor must not decide it.
+    expect(result.newState.status).toBe('running');
+  });
+
+  it('observes a late transport rejection after a synchronous abort', async () => {
+    const controller = new AbortController();
+    const abortingHost = {
+      ...host,
+      operation: { ...host.operation, abortSignal: controller.signal },
+    } as typeof host;
+    let rejectTransport: ((error: Error) => void) | undefined;
+    runTool.mockImplementationOnce(() => {
+      controller.abort();
+      return new Promise((_, reject) => {
+        rejectTransport = reject;
+      });
+    });
+
+    const toolCall = createToolCall();
+    const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+      payload: { parentMessageId: 'assistant-msg-1', toolCalling: toolCall },
+      type: 'call_tool',
+    };
+
+    const result = await callTool(abortingHost)(instruction, createState());
+    rejectTransport!(new Error('transport failed after abort'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(result.newState.messages).toContainEqual(
+      expect.objectContaining({ role: 'tool', tool_call_id: toolCall.id }),
+    );
+    expect(host.transports.tools!.handleError).not.toHaveBeenCalled();
+  });
+
+  it('never starts a tool when the signal is already aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const abortingHost = {
+      ...host,
+      operation: { ...host.operation, abortSignal: controller.signal },
+    } as typeof host;
+
+    const toolCall = createToolCall();
+    const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+      payload: { parentMessageId: 'assistant-msg-1', toolCalling: toolCall },
+      type: 'call_tool',
+    };
+
+    const result = await callTool(abortingHost)(instruction, createState());
+
+    // No transport ever inspects `context.abortSignal` before doing its work, so
+    // launching it here would spawn the process Stop was meant to prevent.
+    expect(runTool).not.toHaveBeenCalled();
+    expect(createToolMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: 'Tool execution was aborted by user.',
+        tool_call_id: toolCall.id,
+      }),
+    );
+    expect(result.newState.messages).toContainEqual(
+      expect.objectContaining({ role: 'tool', tool_call_id: toolCall.id }),
+    );
+  });
+
+  it('settles the pending approval row when an approved tool is aborted', async () => {
+    const controller = new AbortController();
+    const abortingHost = {
+      ...host,
+      operation: { ...host.operation, abortSignal: controller.signal },
+    } as typeof host;
+
+    runTool.mockImplementationOnce(
+      () =>
+        new Promise(() => {
+          // never settles — the abort is what ends the wait
+        }),
+    );
+
+    const toolCall = createToolCall();
+    // The approval pause wrote this row before parking.
+    toolRows.set(toolCall.id, { id: 'pending-tool-row', parentId: 'assistant-msg-1' });
+    const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+      payload: {
+        // On an approval resume this IS the pending tool row, not an assistant.
+        parentMessageId: 'pending-tool-row',
+        skipCreateToolMessage: true,
+        toolCalling: toolCall,
+      },
+      type: 'call_tool',
+    };
+
+    const pending = callTool(abortingHost)(instruction, createState());
+    controller.abort();
+    await pending;
+
+    // Creating a row here would duplicate the tool_call_id, strand the approval
+    // card as `pending`, and parent a tool row to another tool row.
+    expect(createToolMessage).not.toHaveBeenCalled();
+    expect(updateToolMessage).toHaveBeenCalledWith('pending-tool-row', {
+      content: 'Tool execution was aborted by user.',
+    });
+    expect(updateToolIntervention).toHaveBeenCalledWith('pending-tool-row', {
+      status: 'aborted',
+    });
+    expect(findToolMessageIdByToolCallId).not.toHaveBeenCalled();
+  });
+
+  it('settles a client-only call instead of parking it when already aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const abortingHost = {
+      ...host,
+      operation: { ...host.operation, abortSignal: controller.signal },
+    } as typeof host;
+
+    const toolCall = createToolCall('client-call', 'client-tool');
+    const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+      payload: { parentMessageId: 'assistant-msg-1', toolCalling: toolCall },
+      type: 'call_tool',
+    };
+
+    const result = await callTool(abortingHost)(
+      instruction,
+      createState({ toolSourceMap: { 'client-tool': 'client' as any } }),
+    );
+
+    // Nothing will come back to collect a parked call in an aborted run.
+    expect(publishChunk).not.toHaveBeenCalled();
+    expect(createToolMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: 'Tool execution was aborted by user.',
+        tool_call_id: toolCall.id,
+      }),
+    );
+    expect(result.newState.messages).toContainEqual(
+      expect.objectContaining({ role: 'tool', tool_call_id: toolCall.id }),
+    );
+  });
+
+  it('settles a client-only call when aborted while publishing the pause chunk', async () => {
+    const controller = new AbortController();
+    const abortingHost = {
+      ...host,
+      operation: { ...host.operation, abortSignal: controller.signal },
+    } as typeof host;
+    let finishPublishing: (() => void) | undefined;
+    publishChunk.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishPublishing = resolve;
+        }),
+    );
+
+    const toolCall = createToolCall('client-call', 'client-tool');
+    const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+      payload: { parentMessageId: 'assistant-msg-1', toolCalling: toolCall },
+      type: 'call_tool',
+    };
+
+    const pending = callTool(abortingHost)(
+      instruction,
+      createState({ toolSourceMap: { 'client-tool': 'client' as any } }),
+    );
+    await vi.waitFor(() => expect(finishPublishing).toBeTypeOf('function'));
+    controller.abort();
+    finishPublishing!();
+    const result = await pending;
+
+    expect(result.newState.status).toBe('running');
+    expect(result.newState.messages).toContainEqual(
+      expect.objectContaining({ role: 'tool', tool_call_id: toolCall.id }),
+    );
+    expect(createToolMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats an unrelated AbortError as a tool failure, not a user stop', async () => {
+    // The operation signal is live — this rejection is the transport's own
+    // timeout, so it must keep normal error handling and must NOT persist a row
+    // claiming the user aborted it.
+    const foreign = new Error('fetch timed out');
+    foreign.name = 'AbortError';
+    runTool.mockRejectedValueOnce(foreign);
+
+    const toolCall = createToolCall();
+    const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+      payload: { parentMessageId: 'assistant-msg-1', toolCalling: toolCall },
+      type: 'call_tool',
+    };
+
+    const result = await callTool(host)(instruction, createState());
+
+    expect(host.transports.tools!.handleError).toHaveBeenCalled();
+    expect(publishError).toHaveBeenCalled();
+    expect(result.events).toContainEqual(expect.objectContaining({ type: 'error' }));
+    expect(createToolMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'Tool execution was aborted by user.' }),
+    );
+  });
+
+  it('settles the row the transport already created when a client tool is aborted', async () => {
+    const controller = new AbortController();
+    const abortingHost = {
+      ...host,
+      operation: { ...host.operation, abortSignal: controller.signal },
+    } as typeof host;
+
+    // The client transport persists its row before executing, and only surfaces
+    // the id through a settled run — which an abort never gives us.
+    const toolCall = createToolCall();
+    runTool.mockImplementationOnce(
+      () =>
+        new Promise(() => {
+          // The client transport persists its row before executing, so by the
+          // time the abort lands the store already knows about it.
+          toolRows.set(toolCall.id, { id: 'optimistic-row', parentId: 'assistant-msg-1' });
+          controller.abort();
+        }),
+    );
+
+    const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+      payload: { parentMessageId: 'assistant-msg-1', toolCalling: toolCall },
+      type: 'call_tool',
+    };
+
+    await callTool(abortingHost)(instruction, createState());
+
+    expect(createToolMessage).not.toHaveBeenCalled();
+    expect(updateToolMessage).toHaveBeenCalledWith('optimistic-row', {
+      content: 'Tool execution was aborted by user.',
+    });
   });
 
   it('terminates removed client sub-agent stop states like other stop results', async () => {
@@ -463,6 +775,234 @@ describe('tool executors', () => {
       phase: 'tool_message_persist',
       stepIndex: 2,
     });
+  });
+
+  it('keeps finished batch results and writes aborted rows only for the rest', async () => {
+    const controller = new AbortController();
+    const abortingHost = {
+      ...host,
+      operation: { ...host.operation, abortSignal: controller.signal },
+    } as typeof host;
+
+    const settled = createToolCall('settled-call');
+    const stuck = createToolCall('stuck-call');
+
+    runTool.mockImplementation((tool: any) =>
+      tool.id === settled.id
+        ? Promise.resolve({
+            attempts: 1,
+            result: { content: 'done', executionTime: 1, success: true },
+          })
+        : new Promise(() => {
+            // never settles — abort is what ends the wait
+          }),
+    );
+
+    const instruction: Extract<AgentInstruction, { type: 'call_tools_batch' }> = {
+      payload: { parentMessageId: 'assistant-msg-1', toolsCalling: [settled, stuck] },
+      type: 'call_tools_batch',
+    };
+
+    const pending = callToolsBatch(abortingHost)(instruction, createState());
+    // Let the settled tool resolve and persist its row before the abort lands.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    controller.abort();
+    const result = await pending;
+
+    // The finished tool keeps its real result...
+    expect(result.events).toContainEqual(
+      expect.objectContaining({ id: settled.id, type: 'tool_result' }),
+    );
+    // ...and only the in-flight one gets an aborted row. Two rows total, one
+    // per tool_call_id — a partially settled batch must not lose either half.
+    expect(createToolMessage).toHaveBeenCalledTimes(2);
+    expect(createToolMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: 'Tool execution was aborted by user.',
+        tool_call_id: stuck.id,
+      }),
+    );
+  });
+
+  it('settles unstarted client tools instead of parking them when a mixed batch aborts', async () => {
+    const controller = new AbortController();
+    const abortingHost = {
+      ...host,
+      operation: { ...host.operation, abortSignal: controller.signal },
+    } as typeof host;
+
+    const serverCall = createToolCall('server-call');
+    const clientCall = createToolCall('client-call', 'client-tool');
+
+    runTool.mockImplementation(
+      () =>
+        new Promise(() => {
+          // never settles — the abort is what ends the wait
+        }),
+    );
+
+    const instruction: Extract<AgentInstruction, { type: 'call_tools_batch' }> = {
+      payload: { parentMessageId: 'assistant-msg-1', toolsCalling: [serverCall, clientCall] },
+      type: 'call_tools_batch',
+    };
+
+    const pending = callToolsBatch(abortingHost)(
+      instruction,
+      createState({ toolSourceMap: { 'client-tool': 'client' as any } }),
+    );
+    controller.abort();
+    await pending;
+
+    // The client call never started, and the pause it was waiting for would park
+    // it into a run nothing resumes — leaving its tool_call_id with no row ever.
+    const settledIds = createToolMessage.mock.calls.map((call: any) => call[0].tool_call_id);
+    expect(settledIds).toContain(serverCall.id);
+    expect(settledIds).toContain(clientCall.id);
+    expect(publishChunk).not.toHaveBeenCalledWith(
+      expect.objectContaining({ chunkType: 'tools_calling' }),
+    );
+  });
+
+  it('writes one row per tool_call_id even if a call reaches the settle twice', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const abortingHost = {
+      ...host,
+      operation: { ...host.operation, abortSignal: controller.signal },
+    } as typeof host;
+
+    const dupe = createToolCall('dupe-call');
+    const instruction: Extract<AgentInstruction, { type: 'call_tools_batch' }> = {
+      payload: { parentMessageId: 'assistant-msg-1', toolsCalling: [dupe, dupe] },
+      type: 'call_tools_batch',
+    };
+
+    await callToolsBatch(abortingHost)(instruction, createState());
+
+    // Callers merge several abort sources into one list; "exactly one row per
+    // tool_call_id" has to survive that.
+    expect(createToolMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('settles a client-only batch instead of parking it when already aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const abortingHost = {
+      ...host,
+      operation: { ...host.operation, abortSignal: controller.signal },
+    } as typeof host;
+
+    const a = createToolCall('client-a', 'client-tool');
+    const b = createToolCall('client-b', 'client-tool');
+    const instruction: Extract<AgentInstruction, { type: 'call_tools_batch' }> = {
+      payload: { parentMessageId: 'assistant-msg-1', toolsCalling: [a, b] },
+      type: 'call_tools_batch',
+    };
+
+    const result = await callToolsBatch(abortingHost)(
+      instruction,
+      createState({ toolSourceMap: { 'client-tool': 'client' as any } }),
+    );
+
+    expect(publishChunk).not.toHaveBeenCalled();
+    const settledIds = createToolMessage.mock.calls.map((call: any) => call[0].tool_call_id);
+    expect(settledIds).toEqual([a.id, b.id]);
+    expect(result.newState.messages).toHaveLength(2);
+  });
+
+  it('settles a client-only batch when aborted while publishing the pause chunk', async () => {
+    const controller = new AbortController();
+    const abortingHost = {
+      ...host,
+      operation: { ...host.operation, abortSignal: controller.signal },
+    } as typeof host;
+    let finishPublishing: (() => void) | undefined;
+    publishChunk.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishPublishing = resolve;
+        }),
+    );
+
+    const a = createToolCall('client-a', 'client-tool');
+    const b = createToolCall('client-b', 'client-tool');
+    const instruction: Extract<AgentInstruction, { type: 'call_tools_batch' }> = {
+      payload: { parentMessageId: 'assistant-msg-1', toolsCalling: [a, b] },
+      type: 'call_tools_batch',
+    };
+
+    const pending = callToolsBatch(abortingHost)(
+      instruction,
+      createState({ toolSourceMap: { 'client-tool': 'client' as any } }),
+    );
+    await vi.waitFor(() => expect(finishPublishing).toBeTypeOf('function'));
+    controller.abort();
+    finishPublishing!();
+    const result = await pending;
+
+    expect(result.newState.status).toBe('running');
+    expect(result.newState.messages).toHaveLength(2);
+    expect(createToolMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('settles approved client rows in a mixed batch rather than duplicating them', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const abortingHost = {
+      ...host,
+      operation: { ...host.operation, abortSignal: controller.signal },
+    } as typeof host;
+
+    const serverCall = createToolCall('server-call');
+    const clientCall = createToolCall('client-call', 'client-tool');
+
+    // An approved batch resume left a pending row for EVERY call, including the
+    // client ones that never enter `toolsToExecute`.
+    toolRows.set(serverCall.id, { id: 'server-row', parentId: 'assistant-msg-1' });
+    toolRows.set(clientCall.id, { id: 'client-row', parentId: 'assistant-msg-1' });
+    const instruction: Extract<AgentInstruction, { type: 'call_tools_batch' }> = {
+      payload: {
+        parentMessageId: 'assistant-msg-1',
+        toolsCalling: [serverCall, clientCall],
+      },
+      type: 'call_tools_batch',
+    };
+
+    await callToolsBatch(abortingHost)(
+      instruction,
+      createState({ toolSourceMap: { 'client-tool': 'client' as any } }),
+    );
+
+    expect(createToolMessage).not.toHaveBeenCalled();
+    expect(updateToolIntervention).toHaveBeenCalledWith('client-row', { status: 'aborted' });
+    expect(updateToolIntervention).toHaveBeenCalledWith('server-row', { status: 'aborted' });
+  });
+
+  it('ignores a reused tool_call_id that belongs to another turn', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const abortingHost = {
+      ...host,
+      operation: { ...host.operation, abortSignal: controller.signal },
+    } as typeof host;
+
+    const toolCall = createToolCall();
+    // Same id, different assistant — `tool_call_id` is provider-supplied and
+    // only indexed, so a reuse across turns is possible. Settling that row would
+    // overwrite a real historical result AND leave this call without one.
+    toolRows.set(toolCall.id, { id: 'older-turn-row', parentId: 'assistant-msg-OLD' });
+
+    const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+      payload: { parentMessageId: 'assistant-msg-1', toolCalling: toolCall },
+      type: 'call_tool',
+    };
+
+    await callTool(abortingHost)(instruction, createState());
+
+    expect(updateToolMessage).not.toHaveBeenCalledWith('older-turn-row', expect.anything());
+    expect(createToolMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ parentId: 'assistant-msg-1', tool_call_id: toolCall.id }),
+    );
   });
 
   describe('parallel batch parent chain', () => {

@@ -23,12 +23,6 @@ const mocks = vi.hoisted(() => ({
   canViewBilling: true,
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
-
 const permissionFlags: Record<string, () => boolean> = {
   create_content: () => mocks.canCreateContent,
   view_billing: () => mocks.canViewBilling,

@@ -15,13 +15,10 @@ const CreateGoalInspector = memo<BuiltinInspectorProps<CreateGoalParams, CreateG
     const name = args?.name || partialArgs?.name || pluginState?.name;
 
     return (
-      <div
-        className={cx(
-          inspectorTextStyles.root,
-          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-        )}
-      >
-        <span>{t('builtins.lobe-goal.apiName.createGoal')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+          {t('builtins.lobe-goal.apiName.createGoal')}
+        </span>
         {name && <span> · {name}</span>}
       </div>
     );

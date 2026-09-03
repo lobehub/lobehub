@@ -6,11 +6,11 @@ import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPer
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { FREE_DOCUMENT_HISTORY_WINDOW_DAYS } from '@/const/documentHistory';
 import { ChunkModel } from '@/database/models/chunk';
-import { DocumentModel } from '@/database/models/document';
+import { DOCUMENT_TRANSFER_FOREIGN_ROWS, DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
-import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
+import { DEFAULT_RESOURCE_ACCESS_LEVELS, DOCUMENT_FOLDER_TYPE } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DocumentService } from '@/server/services/document';
@@ -27,6 +27,7 @@ import { TransferErrorCode } from '@/types/transferError';
 import { isWorkspaceNonOwner } from './_helpers/assertWorkspaceRowManageable';
 import {
   assertContentsNotInRestrictedKnowledgeBase,
+  assertKnowledgeBaseBrowsable,
   getRestrictedKnowledgeBaseIds,
 } from './_helpers/knowledgeBaseAccess';
 import {
@@ -42,9 +43,23 @@ import {
  * parent must not be able to insert under it. Parents outside the current
  * workspace (personal docs, foreign ids) fall through; the model's ownership
  * WHERE keeps those unreachable anyway.
+ *
+ * Knowledge-base folders are the exception: they are navigation-only rows that
+ * do not pass visibility or ACL to children (see `DocumentService.createDocument`),
+ * while every document row defaults to the `view` access level — gating on the
+ * folder's own ACL would lock every non-creator member out of another member's
+ * folder inside a shared KB. The KB's browse permission (effective level `edit`,
+ * the same grade that lets a member manage the KB file list) is the authority
+ * for inserts there; a restricted KB (`use` level) still denies.
+ *
+ * Only rows whose file type is the folder type take that path: pages inside a
+ * KB carry the same `knowledgeBaseId`, and `parentId` accepts any document row,
+ * so without the type gate a member could nest under another member's
+ * view-only page while skipping its ACL.
  */
 const assertCanCreateUnderParent = async (
   ctx: {
+    documentModel: DocumentModel;
     serverDB: Parameters<typeof getResourceMeta>[0];
     userId: string;
     workspaceId?: string | null;
@@ -54,6 +69,24 @@ const assertCanCreateUnderParent = async (
   if (!ctx.workspaceId || !parentId) return;
   const meta = await getResourceMeta(ctx.serverDB, 'document', parentId);
   if (!meta || meta.workspaceId !== ctx.workspaceId) return;
+
+  // Another member's private folder stays creator-only regardless of KB scope.
+  const isForeignPrivate = meta.visibility === 'private' && meta.userId !== ctx.userId;
+  if (!isForeignPrivate) {
+    // `findById` is ownership-scoped, but the foreign-private branch above is
+    // the only shape it would hide — everything else is public or the caller's.
+    const parentDoc = await ctx.documentModel.findById(parentId);
+    if (parentDoc?.fileType === DOCUMENT_FOLDER_TYPE) {
+      // Old folders carried the KB id only in metadata, newer rows set the column.
+      const knowledgeBaseId =
+        parentDoc.knowledgeBaseId ?? (parentDoc.metadata as any)?.knowledgeBaseId;
+      if (knowledgeBaseId && typeof knowledgeBaseId === 'string') {
+        await assertKnowledgeBaseBrowsable(ctx, knowledgeBaseId);
+        return;
+      }
+    }
+  }
+
   await assertCanEditResource({
     db: ctx.serverDB,
     resourceId: parentId,
@@ -536,20 +569,6 @@ export const documentRouter = router({
         }
       }
 
-      // The transfer rehomes every descendant document and anchored file. A
-      // non-owner member may transfer their own root only when the entire
-      // subtree is theirs; workspace owners retain the administrative override.
-      if (
-        isWorkspaceNonOwner(ctx) &&
-        (await ctx.documentModel.subtreeHasForeignRows(input.documentId))
-      ) {
-        throw new TRPCError({
-          cause: { data: { code: TransferErrorCode.OwnerOnly } },
-          code: 'FORBIDDEN',
-          message: "Only workspace owners can transfer a document tree containing others' content",
-        });
-      }
-
       const additionalSize = await ctx.documentModel.countFileUsageInSubtree(input.documentId);
       await businessFileTransferStorageCheck({
         additionalSize,
@@ -557,12 +576,32 @@ export const documentRouter = router({
         targetWorkspaceId: input.targetWorkspaceId,
       });
 
-      const result = await ctx.documentModel.transferTo(
-        input.documentId,
-        input.targetWorkspaceId,
-        ctx.userId,
-        input.targetVisibility,
-      );
+      // The transfer rehomes every descendant document, anchored file, comment,
+      // and like. A non-owner member may transfer their own root only when the
+      // entire subtree is theirs; workspace owners retain the administrative
+      // override. The check runs INSIDE the transfer transaction (after the
+      // subtree rows are locked) so content committed between any preflight and
+      // the transfer cannot slip past the guard.
+      let result: Awaited<ReturnType<typeof ctx.documentModel.transferTo>>;
+      try {
+        result = await ctx.documentModel.transferTo(
+          input.documentId,
+          input.targetWorkspaceId,
+          ctx.userId,
+          input.targetVisibility,
+          { forbidForeignRows: isWorkspaceNonOwner(ctx) },
+        );
+      } catch (error) {
+        if (error instanceof Error && error.message === DOCUMENT_TRANSFER_FOREIGN_ROWS) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.OwnerOnly } },
+            code: 'FORBIDDEN',
+            message:
+              "Only workspace owners can transfer a document tree containing others' content",
+          });
+        }
+        throw error;
+      }
       if (ctx.workspaceId) {
         const sourcePermissionModel = new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId);
         await Promise.all(

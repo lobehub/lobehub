@@ -5,7 +5,6 @@ import { memo, useCallback } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 
 import { SkillDetailView, SkillNavKey } from '@/features/CommunitySkillDetail';
-import Loading from '@/features/CommunitySkillDetail/Loading';
 import { useQuery } from '@/hooks/useQuery';
 import { useDiscoverStore } from '@/store/discover';
 
@@ -49,9 +48,7 @@ const SkillDetailPage = memo<SkillDetailPageProps>(({ mobile }) => {
   );
 
   const useSkillDetail = useDiscoverStore((s) => s.useFetchSkillDetail);
-  const { data, isLoading } = useSkillDetail({ identifier, version });
-
-  if (isLoading) return <Loading />;
+  const { data } = useSkillDetail({ identifier, version });
   if (!data) return <NotFound />;
 
   return (

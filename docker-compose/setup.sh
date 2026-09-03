@@ -488,6 +488,7 @@ FILES=(
     "$SUB_DIR/docker-compose.yml"
     "$SUB_DIR/searxng-settings.yml"
     "$SUB_DIR/bucket.config.json"
+    "$SUB_DIR/elasticsearch/Dockerfile"
 )
 ENV_EXAMPLES=(
     "$SUB_DIR/.env.zh-CN.example"
@@ -526,6 +527,9 @@ section_download_files(){
     download_file "$SOURCE_URL/${FILES[0]}" "docker-compose.yml"
     download_file "$SOURCE_URL/${FILES[1]}" "searxng-settings.yml"
     download_file "$SOURCE_URL/${FILES[2]}" "bucket.config.json"
+    # Build context of the optional Elasticsearch service (only built when its profile is enabled)
+    mkdir -p elasticsearch
+    download_file "$SOURCE_URL/${FILES[3]}" "elasticsearch/Dockerfile"
     # Download .env.example with the specified language
     if [ "$LANGUAGE" = "zh_CN" ]; then
         download_file "$SOURCE_URL/${ENV_EXAMPLES[0]}" ".env"
@@ -558,8 +562,10 @@ section_configurate_host() {
         ask "(y/n)" "y"
         if [[ "$ask_result" == "y" ]]; then
             PROTOCOL="https"
-            # Replace all http with https
-            sed "${SED_INPLACE_ARGS[@]}" "s#http://#https://#" .env
+            # Replace http with https on variable assignments only (commented ones
+            # included), so explanatory comments keep their wording, and skip the
+            # in-network Elasticsearch endpoint, which is plain HTTP by design.
+            sed "${SED_INPLACE_ARGS[@]}" '/^#\{0,1\} \{0,1\}[A-Za-z0-9_]*=/{/ES_URL=/!s|http://|https://|;}' .env
         fi
     fi
     

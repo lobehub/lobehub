@@ -140,6 +140,7 @@
   "updater.downloadNewVersion": "Tải phiên bản mới",
   "updater.downloadingUpdate": "Đang tải bản cập nhật",
   "updater.downloadingUpdateDesc": "Bản cập nhật đang được tải xuống, vui lòng chờ...",
+  "updater.ignore": "Bỏ qua",
   "updater.installLater": "Cập nhật khi khởi động lần sau",
   "updater.isLatestVersion": "Bạn đang sử dụng phiên bản mới nhất",
   "updater.isLatestVersionDesc": "Tuyệt vời! Phiên bản {{version}} bạn đang sử dụng là phiên bản mới nhất.",

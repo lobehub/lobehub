@@ -1,4 +1,9 @@
-import { CUSTOM_FOLDER_FILE_TYPE, DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
+import {
+  CUSTOM_FOLDER_FILE_TYPE,
+  DERIVED_DOCUMENT_SOURCE_TYPE,
+  MAX_UPLOAD_FILE_SIZE,
+  UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE,
+} from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -12,7 +17,7 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { serverDBEnv } from '@/config/db';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { ChunkModel } from '@/database/models/chunk';
-import { DocumentModel } from '@/database/models/document';
+import { DOCUMENT_TRANSFER_FOREIGN_ROWS, DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { KnowledgeRepo } from '@/database/repositories/knowledge';
@@ -241,6 +246,13 @@ export const fileRouter = router({
           workspaceId: ctx.workspaceId,
         });
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'File size cannot be negative' });
+      }
+
+      if (actualSize > MAX_UPLOAD_FILE_SIZE) {
+        throw new TRPCError({
+          code: 'PAYLOAD_TOO_LARGE',
+          message: UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE,
+        });
       }
 
       const { id } = await ctx.serverDB.transaction(async (trx) => {
@@ -909,27 +921,35 @@ export const fileRouter = router({
             workspaceId: ctx.workspaceId,
           });
         }
-        // The transfer rehomes the entire subtree — a non-owner member must
-        // not move teammates' documents/files along with their own folder.
-        if (isWorkspaceNonOwner(ctx) && (await ctx.documentModel.subtreeHasForeignRows(input.id))) {
-          throw new TRPCError({
-            cause: { data: { code: TransferErrorCode.OwnerOnly } },
-            code: 'FORBIDDEN',
-            message: "Only workspace owners can transfer a folder containing others' content",
-          });
-        }
         const additionalSize = await ctx.documentModel.countFileUsageInSubtree(input.id);
         await businessFileTransferStorageCheck({
           additionalSize,
           targetUserId: ctx.userId,
           targetWorkspaceId: input.targetWorkspaceId,
         });
-        return ctx.documentModel.transferTo(
-          input.id,
-          input.targetWorkspaceId,
-          ctx.userId,
-          input.targetVisibility,
-        );
+        // The transfer rehomes the entire subtree — a non-owner member must
+        // not move teammates' documents/files/likes along with their own
+        // folder. The guard runs INSIDE the transfer transaction (after the
+        // subtree rows are locked) so content committed between any preflight
+        // and the transfer cannot slip past it; see `document.transferDocument`.
+        try {
+          return await ctx.documentModel.transferTo(
+            input.id,
+            input.targetWorkspaceId,
+            ctx.userId,
+            input.targetVisibility,
+            { forbidForeignRows: isWorkspaceNonOwner(ctx) },
+          );
+        } catch (error) {
+          if (error instanceof Error && error.message === DOCUMENT_TRANSFER_FOREIGN_ROWS) {
+            throw new TRPCError({
+              cause: { data: { code: TransferErrorCode.OwnerOnly } },
+              code: 'FORBIDDEN',
+              message: "Only workspace owners can transfer a folder containing others' content",
+            });
+          }
+          throw error;
+        }
       }
 
       const file = await ctx.fileModel.findById(input.id);

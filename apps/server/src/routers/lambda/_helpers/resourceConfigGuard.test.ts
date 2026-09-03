@@ -148,6 +148,7 @@ describe('config redaction', () => {
         executionTargetSelectionPolicy: 'fixed',
         heterogeneousProvider: { env: { SECRET: 'value' }, type: 'codex' },
         modelSelectionPolicy: 'fixed',
+        topicSharePolicy: 'restricted',
       },
       avatar: 'avatar.png',
       chatConfig: { enableAgentMode: false, runtimeEnv: { SECRET: 'value' } },
@@ -170,6 +171,9 @@ describe('config redaction', () => {
         executionTargetSelectionPolicy: 'fixed',
         heterogeneousProvider: { type: 'codex' },
         modelSelectionPolicy: 'fixed',
+        // Authorization metadata: without it a use-level member's share button
+        // would offer a link the server then refuses.
+        topicSharePolicy: 'restricted',
       },
       avatar: 'avatar.png',
       chatConfig: { enableAgentMode: false },

@@ -16,6 +16,13 @@ describe('ChatInput store actions', () => {
     vi.restoreAllMocks();
   });
 
+  it('keeps action lists usable when a host omits them', () => {
+    const store = createStore({ leftActions: undefined, rightActions: undefined });
+
+    expect(store.getState().leftActions).toEqual([]);
+    expect(store.getState().rightActions).toEqual([]);
+  });
+
   it('clears the autocomplete breaker when dismissing its error', () => {
     const store = createStore();
 

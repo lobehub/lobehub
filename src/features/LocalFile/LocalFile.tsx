@@ -1,12 +1,13 @@
 import { Flexbox, Popover } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ExternalLink, FolderOpen } from 'lucide-react';
+import { ExternalLink, EyeIcon, FolderOpen } from 'lucide-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
-import { localFileService } from '@/services/electron/localFileService';
+
+import { useLocalFileActions } from './useLocalFileActions';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
@@ -21,6 +22,11 @@ const styles = createStaticStyles(({ css }) => ({
     :hover {
       color: ${cssVar.colorText};
       background: ${cssVar.colorFillTertiary};
+    }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimaryBorder};
+      outline-offset: 1px;
     }
   `,
   title: css`
@@ -52,16 +58,8 @@ export const LocalFile = ({
   readonly = false,
 }: LocalFileProps) => {
   const { t } = useTranslation('components');
-
-  const handleOpenFile = () => {
-    if (!path) return;
-    localFileService.openLocalFileOrFolder(path, isDirectory);
-  };
-
-  const handleOpenFolder = () => {
-    if (!path) return;
-    localFileService.openFileFolder(path);
-  };
+  const { canPreview, handleClick, handleOpenFile, handleOpenFolder, handlePreview } =
+    useLocalFileActions({ isDirectory, path, readonly });
 
   const fileContent = (
     <Flexbox
@@ -69,8 +67,21 @@ export const LocalFile = ({
       align={'center'}
       className={styles.container}
       gap={4}
+      // Inline chip, not a <button> (block layout inside markdown prose) — so
+      // give the clickable state complete button semantics by hand.
+      role={handleClick ? 'button' : undefined}
       style={{ display: 'inline-flex', verticalAlign: 'middle' }}
-      onClick={isDirectory ? handleOpenFile : undefined}
+      tabIndex={handleClick ? 0 : undefined}
+      onClick={handleClick}
+      onKeyDown={
+        handleClick
+          ? (event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return;
+              event.preventDefault();
+              handleClick();
+            }
+          : undefined
+      }
     >
       <FileIcon fileName={name} isDirectory={isDirectory} size={22} variant={'raw'} />
       <Flexbox horizontal align={'baseline'} gap={4} style={{ overflow: 'hidden', width: '100%' }}>
@@ -84,9 +95,19 @@ export const LocalFile = ({
     return fileContent;
   }
 
-  // File: show popover with two actions
+  // File: show popover with actions
   const popoverContent = (
     <Flexbox horizontal gap={4} padding={4}>
+      {canPreview && (
+        <Button
+          icon={EyeIcon}
+          size="small"
+          title={t('LocalFile.action.preview')}
+          onClick={handlePreview}
+        >
+          {t('LocalFile.action.preview')}
+        </Button>
+      )}
       <Button
         icon={ExternalLink}
         size="small"

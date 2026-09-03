@@ -1,5 +1,12 @@
-import { Accordion, AccordionItem, Flexbox, Text } from '@lobehub/ui';
-import { Button, createModal, ScrollArea, useModalContext } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import {
+  Accordion,
+  Button,
+  createModal,
+  ScrollArea,
+  Text,
+  useModalContext,
+} from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 import { useTranslation } from 'react-i18next';
 
@@ -50,59 +57,64 @@ const PublishHtmlArtifactConfirmContent = ({
       <Flexbox gap={8} style={{ paddingBlock: 12, paddingInline: 16 }}>
         <Text>{t('workingPanel.localFile.publish.privacy')}</Text>
         {showDetails && (
-          <Accordion defaultExpandedKeys={[]} gap={0} variant={'borderless'}>
-            <AccordionItem
-              defaultExpand={false}
-              indicatorPlacement={'start'}
-              itemKey={'details'}
-              paddingBlock={4}
-              paddingInline={0}
-              title={
-                <Text fontSize={12} type={'secondary'} weight={500}>
-                  {t('workingPanel.localFile.publish.details')}
-                </Text>
-              }
-            >
-              <Flexbox gap={8} paddingBlock={'4px 0'}>
-                {inlinedPaths.length > 0 && (
-                  <>
-                    <Text>
-                      {t('workingPanel.localFile.publish.inline', {
-                        count: inlinedPaths.length,
-                        limit: inlineLimit,
-                      })}
-                    </Text>
-                    <PathList items={inlinedPaths} />
-                  </>
-                )}
-                {uploadedPaths.length > 0 && (
-                  <>
-                    <Text>
-                      {t('workingPanel.localFile.publish.upload', { count: uploadedPaths.length })}
-                    </Text>
-                    <PathList items={uploadedPaths} />
-                  </>
-                )}
-                {missing.length > 0 && (
-                  <Text type={'secondary'}>
-                    {t('workingPanel.localFile.publish.missing', { list: missing.join(', ') })}
+          <Accordion
+            indicatorPlacement={'start'}
+            variant={'borderless'}
+            items={[
+              {
+                children: (
+                  <Flexbox gap={8} paddingBlock={'4px 0'}>
+                    {inlinedPaths.length > 0 && (
+                      <>
+                        <Text>
+                          {t('workingPanel.localFile.publish.inline', {
+                            count: inlinedPaths.length,
+                            limit: inlineLimit,
+                          })}
+                        </Text>
+                        <PathList items={inlinedPaths} />
+                      </>
+                    )}
+                    {uploadedPaths.length > 0 && (
+                      <>
+                        <Text>
+                          {t('workingPanel.localFile.publish.upload', {
+                            count: uploadedPaths.length,
+                          })}
+                        </Text>
+                        <PathList items={uploadedPaths} />
+                      </>
+                    )}
+                    {missing.length > 0 && (
+                      <Text type={'secondary'}>
+                        {t('workingPanel.localFile.publish.missing', { list: missing.join(', ') })}
+                      </Text>
+                    )}
+                    {oversized.length > 0 && (
+                      <Text type={'secondary'}>
+                        {t('workingPanel.localFile.publish.oversized', {
+                          list: oversized.join(', '),
+                        })}
+                      </Text>
+                    )}
+                    {remotes.length > 0 && (
+                      <>
+                        <Text>{t('workingPanel.localFile.publish.remotes')}</Text>
+                        <PathList items={remotes} />
+                      </>
+                    )}
+                    <Text type={'secondary'}>{t('workingPanel.localFile.publish.dynamic')}</Text>
+                  </Flexbox>
+                ),
+                key: 'details',
+                title: (
+                  <Text fontSize={12} type={'secondary'} weight={500}>
+                    {t('workingPanel.localFile.publish.details')}
                   </Text>
-                )}
-                {oversized.length > 0 && (
-                  <Text type={'secondary'}>
-                    {t('workingPanel.localFile.publish.oversized', { list: oversized.join(', ') })}
-                  </Text>
-                )}
-                {remotes.length > 0 && (
-                  <>
-                    <Text>{t('workingPanel.localFile.publish.remotes')}</Text>
-                    <PathList items={remotes} />
-                  </>
-                )}
-                <Text type={'secondary'}>{t('workingPanel.localFile.publish.dynamic')}</Text>
-              </Flexbox>
-            </AccordionItem>
-          </Accordion>
+                ),
+              },
+            ]}
+          />
         )}
         <Text type={'secondary'}>{t('workingPanel.localFile.publish.note')}</Text>
       </Flexbox>

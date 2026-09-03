@@ -85,8 +85,48 @@ const assertPathsWithinWorkspace = (
 
 export type { DeviceAttachment, DeviceStatusResult, DeviceSystemInfo };
 
+/** One extra attempt for a device read; see `readDevices`. */
+const DEVICE_READ_ATTEMPTS = 2;
+const DEVICE_READ_RETRY_DELAY_MS = 250;
+
 export class DeviceGateway {
   private client: GatewayHttpClient | null = null;
+
+  /**
+   * Run a device READ, retrying once and reporting the fallback out loud.
+   *
+   * These reads decide which devices a run may reach, and the fallback value is
+   * indistinguishable from a legitimately empty pool: a single dropped
+   * connection therefore reads as "every device is offline", which sends a
+   * device-bound run to the cloud sandbox instead. Retrying absorbs the blip,
+   * and the warning leaves the breadcrumb that was missing entirely — the old
+   * bare `catch {}` made this failure invisible in every log.
+   */
+  private async readDevices<T>(
+    label: string,
+    context: { userId: string; workspaceId?: string },
+    read: () => Promise<T>,
+    fallback: T,
+  ): Promise<T> {
+    for (let attempt = 1; attempt <= DEVICE_READ_ATTEMPTS; attempt++) {
+      try {
+        return await read();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (attempt < DEVICE_READ_ATTEMPTS) {
+          await new Promise((resolve) => setTimeout(resolve, DEVICE_READ_RETRY_DELAY_MS));
+          continue;
+        }
+        console.warn(`[DeviceGateway] ${label} failed; treating the online set as empty`, {
+          attempts: attempt,
+          error: message,
+          userId: context.userId,
+          workspaceId: context.workspaceId,
+        });
+      }
+    }
+    return fallback;
+  }
 
   get isConfigured(): boolean {
     return !!gatewayEnv.DEVICE_GATEWAY_URL;
@@ -96,11 +136,12 @@ export class DeviceGateway {
     const client = this.getClient();
     if (!client) return { deviceCount: 0, online: false };
 
-    try {
-      return await client.queryDeviceStatus(userId, workspaceId);
-    } catch {
-      return { deviceCount: 0, online: false };
-    }
+    return this.readDevices(
+      'queryDeviceStatus',
+      { userId, workspaceId },
+      () => client.queryDeviceStatus(userId, workspaceId),
+      { deviceCount: 0, online: false },
+    );
   }
 
   // Pass a `workspaceId` to address a workspace-owned device pool (the gateway
@@ -109,40 +150,43 @@ export class DeviceGateway {
     const client = this.getClient();
     if (!client) return [];
 
-    try {
-      const devices = await client.queryDeviceList(userId, workspaceId);
-      // The gateway already dedupes to one entry per physical device, with its
-      // live connections nested as `channels`. Map to the runtime shape; every
-      // returned device has at least one channel, so it's online.
-      return devices.map((d) => ({
-        // `channels` may be absent if the gateway worker deploy lags behind the
-        // server (separate Cloudflare deploy); tolerate the legacy flat shape.
-        //
-        // Sorted newest-first because every consumer reads `channels[0]` as
-        // "this device's current connection" — the settings row's
-        // "Connected {time}", a ghost row's `lastSeen`, its hostname/platform
-        // fallback — while `sortDevicesByActivity` ranks by the FRESHEST
-        // channel. The gateway promises no order, so leaving it raw lets a
-        // multi-channel device rank by one connection and get labelled with
-        // another. Normalising here (the single entry point both `listDevices`
-        // and `getScopedOnlineDevices` pull channels through) makes
-        // `channels[0]` mean the same thing everywhere.
-        channels: (d.channels ?? [])
-          .map((c) => ({
-            channel: c.channel,
-            connectedAt: new Date(c.connectedAt).toISOString(),
-            connectionId: c.connectionId,
-          }))
-          .sort((a, b) => Date.parse(b.connectedAt) - Date.parse(a.connectedAt)),
-        deviceId: d.deviceId,
-        hostname: d.hostname,
-        lastSeen: new Date(d.connectedAt).toISOString(),
-        online: true,
-        platform: d.platform,
-      }));
-    } catch {
-      return [];
-    }
+    return this.readDevices(
+      'queryDeviceList',
+      { userId, workspaceId },
+      async () => {
+        const devices = await client.queryDeviceList(userId, workspaceId);
+        // The gateway already dedupes to one entry per physical device, with its
+        // live connections nested as `channels`. Map to the runtime shape; every
+        // returned device has at least one channel, so it's online.
+        return devices.map((d) => ({
+          // `channels` may be absent if the gateway worker deploy lags behind the
+          // server (separate Cloudflare deploy); tolerate the legacy flat shape.
+          //
+          // Sorted newest-first because every consumer reads `channels[0]` as
+          // "this device's current connection" — the settings row's
+          // "Connected {time}", a ghost row's `lastSeen`, its hostname/platform
+          // fallback — while `sortDevicesByActivity` ranks by the FRESHEST
+          // channel. The gateway promises no order, so leaving it raw lets a
+          // multi-channel device rank by one connection and get labelled with
+          // another. Normalising here (the single entry point both `listDevices`
+          // and `getScopedOnlineDevices` pull channels through) makes
+          // `channels[0]` mean the same thing everywhere.
+          channels: (d.channels ?? [])
+            .map((c) => ({
+              channel: c.channel,
+              connectedAt: new Date(c.connectedAt).toISOString(),
+              connectionId: c.connectionId,
+            }))
+            .sort((a, b) => Date.parse(b.connectedAt) - Date.parse(a.connectedAt)),
+          deviceId: d.deviceId,
+          hostname: d.hostname,
+          lastSeen: new Date(d.connectedAt).toISOString(),
+          online: true,
+          platform: d.platform,
+        }));
+      },
+      [],
+    );
   }
 
   async queryDeviceSystemInfo(
@@ -466,7 +510,7 @@ export class DeviceGateway {
     deviceId: string;
     env?: Record<string, string>;
     timeout?: number;
-    type: 'codebuddy' | 'cursor' | 'grok-build' | 'opencode' | 'pi' | 'qoder' | 'trae';
+    type: 'codebuddy' | 'cursor' | 'droid' | 'grok-build' | 'opencode' | 'pi' | 'qoder' | 'trae';
     userId: string;
     workspaceId?: string;
   }): Promise<HeterogeneousAgentModelCatalog> {
@@ -932,7 +976,9 @@ export class DeviceGateway {
    * compact tree subset with ancestor directories.
    */
   async searchProjectFiles(params: {
+    changedOnly?: boolean;
     deviceId: string;
+    excludeIgnored?: boolean;
     limit?: number;
     query: string;
     scope: string;
@@ -940,14 +986,27 @@ export class DeviceGateway {
     userId: string;
     workspaceId?: string;
   }): Promise<DeviceProjectFileSearchResult | undefined> {
-    const { userId, deviceId, limit, query, scope, timeout = 30_000, workspaceId } = params;
+    const {
+      changedOnly,
+      userId,
+      deviceId,
+      excludeIgnored,
+      limit,
+      query,
+      scope,
+      timeout = 30_000,
+      workspaceId,
+    } = params;
     const client = this.getClient();
     if (!client) return undefined;
 
     try {
       const result = await client.invokeRpc<DeviceProjectFileSearchResult>(
         { deviceId, timeout, userId, workspaceId },
-        { method: 'searchProjectFiles', params: { limit, query, scope } },
+        {
+          method: 'searchProjectFiles',
+          params: { changedOnly, excludeIgnored, limit, query, scope },
+        },
       );
 
       if (!result.success || !result.data) {

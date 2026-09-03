@@ -8,8 +8,6 @@ import { useUserStore } from '@/store/user';
 
 import { initialOnboardingState } from './initialState';
 
-vi.mock('zustand/traditional');
-
 vi.mock('@/services/user', () => ({
   userService: {
     updateOnboarding: vi.fn(),

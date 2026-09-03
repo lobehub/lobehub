@@ -9,6 +9,18 @@ const apiHeteroProvider = {
   command: 'claude',
   type: 'claude-code' as const,
 };
+const serverDefaultApiHeteroProvider = {
+  apiConfig: { model: 'claude-sonnet', source: 'server-default' as const },
+  authMode: 'api' as const,
+  command: 'claude',
+  type: 'claude-code' as const,
+};
+const codexApiHeteroProvider = {
+  apiConfig: { model: 'gpt-test', providerId: 'openai' },
+  authMode: 'api' as const,
+  command: 'codex',
+  type: 'codex' as const,
+};
 const remoteHeteroProvider = { type: 'openclaw' as const };
 const remoteHeteroProviderHermes = { type: 'hermes' as const };
 
@@ -115,6 +127,65 @@ describe('selectRuntimeType', () => {
             isGatewayMode: false,
           },
           { isDesktop: false },
+        ),
+      ).toThrow(/Desktop local execution/);
+    });
+
+    it('allows the deployment-default API source only for Desktop local execution', () => {
+      expect(
+        selectRuntimeType(
+          {
+            executionTarget: 'local',
+            heterogeneousProvider: serverDefaultApiHeteroProvider,
+            isGatewayMode: false,
+          },
+          { isDesktop: true },
+        ),
+      ).toBe('hetero');
+
+      expect(() =>
+        selectRuntimeType(
+          {
+            executionTarget: 'sandbox',
+            heterogeneousProvider: serverDefaultApiHeteroProvider,
+            isGatewayMode: false,
+          },
+          { isDesktop: true },
+        ),
+      ).toThrow(/Desktop local execution/);
+
+      expect(() =>
+        selectRuntimeType(
+          {
+            executionTarget: 'local',
+            heterogeneousProvider: serverDefaultApiHeteroProvider,
+            isGatewayMode: false,
+          },
+          { isDesktop: false },
+        ),
+      ).toThrow(/Desktop local execution/);
+    });
+
+    it('applies the same Desktop-local guard to Codex provider binding', () => {
+      expect(
+        selectRuntimeType(
+          {
+            executionTarget: 'local',
+            heterogeneousProvider: codexApiHeteroProvider,
+            isGatewayMode: false,
+          },
+          { isDesktop: true },
+        ),
+      ).toBe('hetero');
+
+      expect(() =>
+        selectRuntimeType(
+          {
+            executionTarget: 'sandbox',
+            heterogeneousProvider: codexApiHeteroProvider,
+            isGatewayMode: false,
+          },
+          { isDesktop: true },
         ),
       ).toThrow(/Desktop local execution/);
     });
@@ -254,8 +325,79 @@ describe('selectRuntimeType', () => {
     });
   });
 
-  describe('isWorkspaceAgent — workspace agents never spawn in-process on the member desktop', () => {
-    it('routes desktop local / unset targets to gateway for workspace agents', () => {
+  describe('workspaceScoped — unmerged shared configs never spawn in-process on the member desktop', () => {
+    it('routes desktop local / unset targets to gateway for workspace-scoped configs', () => {
+      expect(
+        selectRuntimeType(
+          {
+            executionTarget: 'local',
+            heterogeneousProvider: heteroProvider,
+            isGatewayMode: false,
+            workspaceScoped: true,
+          },
+          { isDesktop: true },
+        ),
+      ).toBe('gateway');
+      expect(
+        selectRuntimeType(
+          { heterogeneousProvider: heteroProvider, isGatewayMode: false, workspaceScoped: true },
+          { isDesktop: true },
+        ),
+      ).toBe('gateway');
+    });
+  });
+
+  describe('isWorkspaceAgent — provider binding resolves credentials in the personal scope only', () => {
+    // Regression: the author of a workspace agent (or a member with an explicit
+    // local override) has workspaceScoped=false and CAN spawn in-process, but
+    // their binding was configured against workspace-scoped providers while
+    // Desktop main resolves the reference in the personal scope. A colliding
+    // personal provider id would silently supply different credentials, so the
+    // run must be rejected before IPC.
+    it('rejects API mode for workspace agents even when the author could run locally', () => {
+      expect(() =>
+        selectRuntimeType(
+          {
+            executionTarget: 'local',
+            heterogeneousProvider: apiHeteroProvider,
+            isGatewayMode: false,
+            isWorkspaceAgent: true,
+            workspaceScoped: false,
+          },
+          { isDesktop: true },
+        ),
+      ).toThrow(/not supported for workspace agents/);
+
+      expect(() =>
+        selectRuntimeType(
+          {
+            executionTarget: 'local',
+            heterogeneousProvider: codexApiHeteroProvider,
+            isGatewayMode: false,
+            isWorkspaceAgent: true,
+            workspaceScoped: false,
+          },
+          { isDesktop: true },
+        ),
+      ).toThrow(/not supported for workspace agents/);
+    });
+
+    it('keeps deployment-default API workspace agents spawnable by their author', () => {
+      expect(
+        selectRuntimeType(
+          {
+            executionTarget: 'local',
+            heterogeneousProvider: serverDefaultApiHeteroProvider,
+            isGatewayMode: false,
+            isWorkspaceAgent: true,
+            workspaceScoped: false,
+          },
+          { isDesktop: true },
+        ),
+      ).toBe('hetero');
+    });
+
+    it('keeps subscription-auth workspace agents spawnable by their author', () => {
       expect(
         selectRuntimeType(
           {
@@ -263,16 +405,25 @@ describe('selectRuntimeType', () => {
             heterogeneousProvider: heteroProvider,
             isGatewayMode: false,
             isWorkspaceAgent: true,
+            workspaceScoped: false,
           },
           { isDesktop: true },
         ),
-      ).toBe('gateway');
+      ).toBe('hetero');
+    });
+
+    it('keeps API mode working for personal agents', () => {
       expect(
         selectRuntimeType(
-          { heterogeneousProvider: heteroProvider, isGatewayMode: false, isWorkspaceAgent: true },
+          {
+            executionTarget: 'local',
+            heterogeneousProvider: apiHeteroProvider,
+            isGatewayMode: false,
+            isWorkspaceAgent: false,
+          },
           { isDesktop: true },
         ),
-      ).toBe('gateway');
+      ).toBe('hetero');
     });
   });
 

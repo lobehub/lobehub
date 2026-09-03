@@ -1,7 +1,26 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as PublicUrlFetchModule from '@/server/services/bot/platforms/publicUrlFetch';
+
 import type { InstallationCredentials } from './installations/types';
+
+// Attachments in these fixtures carry no `size`, so the budget pass probes the
+// URL for one. These tests are about delivery mechanics, not budgeting — answer
+// the probe with a small, in-budget length. The probe's own behaviour is
+// covered in attachmentBudget.test.ts.
+vi.mock('@/server/services/bot/platforms/publicUrlFetch', async () => ({
+  // Spread the real module: a full mock silently drops every export it
+  // does not name, so adding one to publicUrlFetch breaks suites that
+  // never cared about it.
+  ...(await vi.importActual<typeof PublicUrlFetchModule>(
+    '@/server/services/bot/platforms/publicUrlFetch',
+  )),
+  fetchPublicUrl: async () => ({
+    dispose: async () => undefined,
+    response: { headers: new Headers({ 'content-length': '1024' }), ok: true, status: 200 },
+  }),
+}));
 
 const mocks = vi.hoisted(() => ({
   batchDiscordFiles: vi.fn(),
@@ -232,6 +251,69 @@ describe('sendOutboundDirectMessage', () => {
       });
 
       expect(mocks.postMessage).toHaveBeenCalledWith('U-slack', 'files');
+    });
+  });
+
+  describe('size budgets', () => {
+    const oversizedFile = {
+      fetchUrl: 'https://example.com/f/big.mp4',
+      name: 'big.mp4',
+      size: 100 * 1024 * 1024,
+      type: 'video' as const,
+    };
+
+    it('degrades an over-budget Telegram file to a download-link message', async () => {
+      await sendOutboundDirectMessage({
+        attachments: [oversizedFile],
+        content: 'see attached',
+        credentials: creds('telegram'),
+        platformUserId: '12345',
+      });
+
+      // No attachment survives the budget pass, so the sender is never called.
+      expect(mocks.sendTelegramAttachments).not.toHaveBeenCalled();
+      expect(mocks.sendTelegramMessage).toHaveBeenNthCalledWith(1, '12345', 'see attached');
+      expect(mocks.sendTelegramMessage).toHaveBeenNthCalledWith(
+        2,
+        '12345',
+        expect.stringContaining('https://example.com/f/big.mp4'),
+      );
+    });
+
+    it('delivers a link-only message when an attachment-only push is over budget', async () => {
+      await sendOutboundDirectMessage({
+        attachments: [oversizedFile],
+        credentials: creds('telegram'),
+        platformUserId: '12345',
+      });
+
+      expect(mocks.sendTelegramMessage).toHaveBeenCalledTimes(1);
+      expect(mocks.sendTelegramMessage).toHaveBeenCalledWith(
+        '12345',
+        expect.stringContaining('big.mp4'),
+      );
+    });
+
+    it('sends Discord in-budget files and over-budget links in the same push', async () => {
+      const rawFiles = [{ name: 'report.pdf' }];
+      mocks.materializeAttachmentsForDiscord.mockResolvedValueOnce(rawFiles);
+      mocks.batchDiscordFiles.mockReturnValueOnce([rawFiles]);
+
+      await sendOutboundDirectMessage({
+        attachments: [fileAttachment, oversizedFile],
+        content: 'files',
+        credentials: creds('discord'),
+        platformUserId: 'U-discord',
+      });
+
+      // Only the in-budget attachment reaches the materializer.
+      expect(mocks.materializeAttachmentsForDiscord).toHaveBeenCalledWith([fileAttachment]);
+      expect(mocks.createMessage).toHaveBeenNthCalledWith(1, 'dm-channel-1', 'files', rawFiles);
+      expect(mocks.createMessage).toHaveBeenNthCalledWith(
+        2,
+        'dm-channel-1',
+        expect.stringContaining('https://example.com/f/big.mp4'),
+      );
     });
   });
 });

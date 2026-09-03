@@ -33,13 +33,10 @@ export const ViewTaskInspector = memo<BuiltinInspectorProps<ViewTaskParams, View
     const identifier = args?.identifier || partialArgs?.identifier || pluginState?.identifier;
 
     return (
-      <div
-        className={cx(
-          inspectorTextStyles.root,
-          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-        )}
-      >
-        <span>{t('builtins.lobe-task.apiName.viewTask')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+          {t('builtins.lobe-task.apiName.viewTask')}
+        </span>
         {identifier && <span className={styles.identifierChip}>{identifier}</span>}
       </div>
     );

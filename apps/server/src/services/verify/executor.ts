@@ -206,14 +206,18 @@ export class VerifyExecutorService {
   /** Load a run's evidence rows grouped by the plan item id they back. */
   private async loadEvidence(verifyRunId: string): Promise<EvidenceByItem> {
     const rows = await this.evidenceModel.listByRun(verifyRunId);
+    const documentIds = [
+      ...new Set(rows.flatMap((row) => (row.documentId ? [row.documentId] : []))),
+    ];
+    const documents = await this.documentModel.findByIds(documentIds);
+    const documentContent = new Map(documents.map((document) => [document.id, document.content]));
     const byItem: EvidenceByItem = new Map();
     for (const row of rows) {
       const list = byItem.get(row.checkItemId) ?? [];
-      // Keep `fileId` so the planner can route file-only text to an agent and
-      // agent verifiers can attach the actual artifact.
       list.push({
-        content: row.content,
+        content: row.documentId ? documentContent.get(row.documentId) : row.content,
         description: row.description,
+        documentId: row.documentId,
         fileId: row.fileId,
         type: row.type,
       });

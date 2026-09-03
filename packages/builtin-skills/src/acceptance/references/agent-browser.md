@@ -88,6 +88,15 @@ agent-browser wait --text "Welcome"   # Wait for text to appear
 agent-browser wait --fn "!document.body.innerText.includes('Loading...')"  # Wait for condition
 agent-browser wait "#spinner" --state hidden  # Wait for element to disappear
 
+# Downloads
+agent-browser download @e1 ./file.pdf          # Click an element to trigger a download
+agent-browser wait --download ./output.zip     # Wait for a download to finish
+
+# Diff (compare page states)
+agent-browser diff snapshot                          # Current vs the last snapshot
+agent-browser diff screenshot --baseline before.png  # Visual pixel diff
+agent-browser diff url <url1> <url2>                 # Compare two pages
+
 # Network (key for full-stack evidence)
 agent-browser network requests                 # Inspect tracked requests
 agent-browser network requests --type xhr,fetch  # Filter by resource type

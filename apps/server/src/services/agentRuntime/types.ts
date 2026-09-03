@@ -9,13 +9,17 @@ import type {
 } from '@lobechat/context-engine';
 import type {
   ChatTopicBotContext,
+  EvalToolForwardingConfig,
   ExpertiseContextSnapshot,
   UserInterventionConfig,
 } from '@lobechat/types';
 import type { SearchDecision } from 'model-bank';
 
 import type { ExecutionPlan } from '@/helpers/executionTarget';
-import { type ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
+import type {
+  EvalContext,
+  ServerUserMemoryConfig,
+} from '@/server/modules/Mecha/ContextEngineering/types';
 import type { AgentSignalOperationMarker } from '@/server/services/agentSignal/operationMarker';
 import type { DeviceAccessReason } from '@/server/services/aiAgent/deviceAccessPolicy';
 
@@ -154,6 +158,13 @@ export interface AgentExecutionParams {
    */
   groupMemberTimeout?: GroupMemberTimeoutParams;
   humanInput?: any;
+  /**
+   * 1-based attempt number carried by a re-delivery that a previous attempt
+   * re-queued after losing the operation lock. Lets the bounded backoff stop
+   * after a fixed number of tries instead of re-queueing forever. Absent
+   * (treated as attempt 0) on the original delivery.
+   */
+  lockRetryAttempt?: number;
   operationId: string;
   /**
    * Whether a rejection should resume execution by treating the rejected tool
@@ -192,6 +203,13 @@ export interface AgentExecutionResult {
    * this response retryable so fresh deliveries can run after the lock clears.
    */
   locked?: boolean;
+  /**
+   * Set alongside `locked` when this delivery re-queued itself for a later
+   * attempt. The caller should ACK (2xx) rather than returning a retryable
+   * status: the redelivery is already scheduled, so letting the queue retry on
+   * top of it only amplifies the conflict and burns the retry budget.
+   */
+  lockRescheduled?: boolean;
   nextStepScheduled: boolean;
   state: any;
   stepResult?: any;
@@ -365,6 +383,8 @@ export interface OperationCreationParams {
      */
     orchestrationRole?: 'supervisor' | 'member';
     scope?: string | null;
+    /** Conversation/session locator used to rebuild an authenticated Review route. */
+    sessionId?: string;
     /** Source user message ID used for same-turn Agent Signal procedure suppression. */
     sourceMessageId?: string;
     /**
@@ -413,7 +433,10 @@ export interface OperationCreationParams {
   discordContext?: any;
   /** Whether ContextEngine may inject the operation expertise snapshot. */
   enableExpertise?: boolean;
-  evalContext?: any;
+  /** Evaluation prompt data consumed by Context Engine. */
+  evalContext?: EvalContext;
+  /** Evaluation execution controls consumed by Agent Runtime. */
+  evalRuntime?: EvalRuntimeContext;
   /**
    * Resolved execution plan for the run (see `resolveExecutionPlan`).
    * Forwarded into `state.metadata.executionPlan` so step-level layers (the
@@ -432,8 +455,21 @@ export interface OperationCreationParams {
   initialMessages?: any[];
   /** Initial step count offset for resumed operations (accumulated from previous runs) */
   initialStepCount?: number;
+  /**
+   * Server-authored provenance for a continuation created from a durable human
+   * intervention claim. It is persisted in both agent_operations.metadata and
+   * runtime state so a retry can distinguish this exact continuation from an
+   * unrelated operation that happens to reuse an id. Never client-passable.
+   */
+  interventionResolution?: {
+    resolutionRequestId: string;
+    sourceOperationId: string;
+    sourceToolMessageIds: string[];
+  };
   maxSteps?: number;
   modelRuntimeConfig?: any;
+  /** Marks the source claim non-rollbackable once deterministic runtime state is durable. */
+  onInterventionPrepared?: () => void;
   operationId: string;
   /** Operation-level skill set for SkillResolver */
   operationSkillSet?: OperationSkillSet;
@@ -543,4 +579,8 @@ export interface StartExecutionResult {
   operationId: string;
   scheduled: boolean;
   success: boolean;
+}
+export interface EvalRuntimeContext {
+  caseId?: string;
+  toolForwarding?: EvalToolForwardingConfig;
 }

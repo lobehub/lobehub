@@ -69,4 +69,5 @@ ModelSwitchPanel.displayName = 'ModelSwitchPanel';
 
 export default ModelSwitchPanel;
 
+export { ModelSwitchSubmenuPopup } from './SubmenuPopup';
 export { type ModelSwitchPanelProps } from './types';

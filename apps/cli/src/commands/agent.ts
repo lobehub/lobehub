@@ -17,6 +17,7 @@ import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import { log, setVerbose } from '../utils/logger';
 import { resolveAgentId } from './agent/resolveAgentId';
 import { registerAgentSpaceFsCommand } from './agent/spaceFs';
+import { resolveAppUrlBuilder } from './task/url';
 
 const readGraphConfig = async (graphFile: string): Promise<unknown> => {
   const content = await readFile(graphFile, 'utf8');
@@ -157,6 +158,7 @@ export function registerAgentCommand(program: Command) {
         title?: string;
       }) => {
         const client = await getTrpcClient();
+        const buildUrl = await resolveAppUrlBuilder(client);
 
         const config: Record<string, any> = {};
         if (options.title) config.title = options.title;
@@ -170,8 +172,11 @@ export function registerAgentCommand(program: Command) {
 
         const result = await client.agent.createAgent.mutate(input as any);
         const r = result as any;
-        console.log(`${pc.green('✓')} Created agent ${pc.bold(r.agentId || r.id)}`);
+        const agentId = r.agentId || r.id;
+        const url = buildUrl(`/agent/${encodeURIComponent(agentId)}`);
+        console.log(`${pc.green('✓')} Created agent ${pc.bold(agentId)}`);
         if (r.sessionId) console.log(`  Session: ${r.sessionId}`);
+        console.log(`${pc.bold('agent')}: ${url}`);
       },
     );
 

@@ -1,4 +1,6 @@
+import type * as BaseUI from '@lobehub/ui/base-ui';
 import { fireEvent, render, screen } from '@testing-library/react';
+import type { ComponentProps } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import TerminalPanelToggle from './index';
@@ -8,15 +10,18 @@ const mocks = vi.hoisted(() => ({
   toggleTerminalPanel: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({ active, onClick }: { active?: boolean; onClick?: () => void }) => (
-    <button data-active={String(active)} data-testid="terminal-panel-toggle" onClick={onClick} />
-  ),
-}));
+const actionIconPropsSpy = vi.hoisted(() => vi.fn());
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof BaseUI>();
+  return {
+    ...actual,
+    ActionIcon: (props: ComponentProps<typeof actual.ActionIcon>) => {
+      actionIconPropsSpy(props);
+      return <actual.ActionIcon {...props} />;
+    },
+  };
+});
 
 vi.mock('@/const/version', () => ({ isDesktop: true }));
 
@@ -54,20 +59,22 @@ describe('TerminalPanelToggle', () => {
   beforeEach(() => {
     mocks.showTerminalPanel = false;
     mocks.toggleTerminalPanel.mockReset();
+    actionIconPropsSpy.mockClear();
   });
 
   it('toggles the panel and reflects its active state', () => {
     const { rerender } = render(<TerminalPanelToggle />);
 
-    expect(screen.getByTestId('terminal-panel-toggle')).toHaveAttribute('data-active', 'false');
+    expect(actionIconPropsSpy).toHaveBeenCalledWith(expect.objectContaining({ active: false }));
 
-    fireEvent.click(screen.getByTestId('terminal-panel-toggle'));
+    fireEvent.click(screen.getByRole('button'));
     expect(mocks.toggleTerminalPanel).toHaveBeenCalledTimes(1);
     expect(mocks.toggleTerminalPanel).toHaveBeenCalledWith();
 
     mocks.showTerminalPanel = true;
+    actionIconPropsSpy.mockClear();
     rerender(<TerminalPanelToggle key="open" />);
 
-    expect(screen.getByTestId('terminal-panel-toggle')).toHaveAttribute('data-active', 'true');
+    expect(actionIconPropsSpy).toHaveBeenCalledWith(expect.objectContaining({ active: true }));
   });
 });

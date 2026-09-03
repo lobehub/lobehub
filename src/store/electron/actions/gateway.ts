@@ -1,3 +1,4 @@
+import { isDesktop } from '@lobechat/const';
 import type { GatewayConnectionStatus } from '@lobechat/electron-client-ipc';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
@@ -55,7 +56,10 @@ export class ElectronGatewayActionImpl {
 
   useFetchGatewayDeviceInfo = (): SWRResponse<GatewayDeviceInfo> => {
     return useSWR<GatewayDeviceInfo>(
-      electronKeys.gatewayDeviceInfo(),
+      // Desktop-only IPC: on web there is no electronAPI, and under a
+      // suspense-mode SWRConfig a rejected fetch throws into the route
+      // boundary instead of staying in `error` — so never fetch off-desktop.
+      isDesktop ? electronKeys.gatewayDeviceInfo() : null,
       async () => gatewayConnectionService.getDeviceInfo() as Promise<GatewayDeviceInfo>,
       {
         onSuccess: (data) => {
@@ -67,7 +71,7 @@ export class ElectronGatewayActionImpl {
 
   useFetchGatewayStatus = (): SWRResponse<{ status: GatewayConnectionStatus }> => {
     return useSWR<{ status: GatewayConnectionStatus }>(
-      'electron:getGatewayConnectionStatus',
+      isDesktop ? 'electron:getGatewayConnectionStatus' : null,
       async () => gatewayConnectionService.getConnectionStatus(),
       {
         onSuccess: (data) => {

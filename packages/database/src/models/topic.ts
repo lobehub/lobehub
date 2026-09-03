@@ -32,6 +32,7 @@ import {
   sql,
 } from 'drizzle-orm';
 
+import type { FtsSearchCandidateSource } from '../repositories/ftsSearch';
 import type { TopicItem } from '../schemas';
 import {
   agentOperations,
@@ -48,6 +49,7 @@ import { COPIED_TOPIC_USAGE_RESET } from '../utils/copiedTranscript';
 import { markCopiedMessageMetadata } from '../utils/copyMessagesInDatabase';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
+import { inJsonStringArray } from '../utils/inJsonStringArray';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { recomputeTopicUsage } from './topicUsage';
 
@@ -64,6 +66,32 @@ type TopicMetadataPatch = Omit<Partial<ChatTopicMetadata>, 'onboardingSession'> 
  */
 const LAST_MESSAGE_PREVIEW_LENGTH = 2000;
 const TASK_CALLBACK_RESERVATION_TTL_MS = 5 * 60 * 1000;
+/**
+ * How long an operation that still claims `running` / `idle` may hold the topic
+ * against a background start before it is treated as abandoned.
+ *
+ * Only a backstop for the case the operation row cannot describe: a process
+ * killed mid-run leaves its row at `running` forever, and every marker clear
+ * site is best-effort (`ServerOperationStore.clearRunningMark` swallows
+ * failures; the gateway client clears it from `onSessionComplete`, which never
+ * runs if the tab closed). Runs parked on a human or an async tool are exempt —
+ * those legitimately last days — so this only has to be longer than a plausible
+ * uninterrupted generation. The real reaper remains the gateway watchdog's
+ * `finalize-abandoned` call.
+ */
+const ABANDONED_OPERATION_TTL_MS = 6 * 60 * 60 * 1000;
+/**
+ * Operation statuses that mean "this run is still the topic's owner". Parked
+ * states are included on purpose: a run waiting for approval is not stuck.
+ */
+const LIVE_OPERATION_STATUSES = new Set([
+  'idle',
+  'running',
+  'waiting_for_human',
+  'waiting_for_async_tool',
+]);
+/** Parked states are exempt from the abandoned-age backstop — see above. */
+const UNBOUNDED_OPERATION_STATUSES = new Set(['waiting_for_human', 'waiting_for_async_tool']);
 
 export interface TopicListItem extends TopicItem {
   /** The topic's last non-empty assistant reply, truncated with a trailing `…`. Only set when `queryTopics` is called with `withLastMessage`. */
@@ -263,12 +291,19 @@ const buildTopicOrderBy = (topicActivityAt: SQL, sortBy?: TopicQuerySortBy): SQL
 export class TopicModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private ftsSearchCandidateSource?: FtsSearchCandidateSource;
   private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    ftsSearchCandidateSource?: FtsSearchCandidateSource,
+  ) {
     this.userId = userId;
     this.db = db;
     this.workspaceId = workspaceId;
+    this.ftsSearchCandidateSource = ftsSearchCandidateSource;
   }
 
   private ownership = () =>
@@ -619,6 +654,13 @@ export class TopicModel {
     });
   };
 
+  findByIds = async (ids: string[]): Promise<TopicItem[]> => {
+    if (ids.length === 0) return [];
+    return this.db.query.topics.findMany({
+      where: and(inArray(topics.id, ids), this.ownership()),
+    });
+  };
+
   /**
    * Minimal creator projection for router-level workspace row checks on
    * batch-by-ids operations (batch delete / move).
@@ -811,6 +853,24 @@ export class TopicModel {
     const scopeCondition = this.matchKeywordScope(scopeOptions);
 
     const bm25Query = sanitizeBm25Query(keyword);
+    const candidateResults = this.ftsSearchCandidateSource?.ftsSearchCandidateEnabled
+      ? await Promise.all([
+          this.ftsSearchCandidateSource.ftsSearchCandidates({
+            entity: 'topics',
+            filters: { topicScope: scopeOptions },
+            pagination: {},
+            query: { fields: ['title'], text: keyword },
+          }),
+          this.ftsSearchCandidateSource.ftsSearchCandidates({
+            entity: 'messages',
+            filters: { topicScope: scopeOptions },
+            pagination: {},
+            query: { fields: ['content'], text: keyword },
+          }),
+        ])
+      : undefined;
+    const topicCandidateIds = candidateResults?.[0].candidates.map(({ id }) => id);
+    const messageCandidateIds = candidateResults?.[1].candidates.map(({ id }) => id);
 
     // Run title and message content searches in parallel
     const [topicsByTitle, topicIdsByMessages] = await Promise.all([
@@ -818,7 +878,15 @@ export class TopicModel {
       this.db
         .select()
         .from(topics)
-        .where(and(this.ownership(), scopeCondition, sql`${topics.title} @@@ ${bm25Query}`))
+        .where(
+          and(
+            this.ownership(),
+            scopeCondition,
+            topicCandidateIds
+              ? inJsonStringArray(topics.id, topicCandidateIds)
+              : sql`${topics.title} @@@ ${bm25Query}`,
+          ),
+        )
         .orderBy(desc(topics.updatedAt)),
       // Query topic IDs matching by message content (BM25)
       this.db
@@ -828,7 +896,9 @@ export class TopicModel {
         .where(
           and(
             this.messageOwnership(),
-            sql`${messages.content} @@@ ${bm25Query}`,
+            messageCandidateIds
+              ? inJsonStringArray(messages.id, messageCandidateIds)
+              : sql`${messages.content} @@@ ${bm25Query}`,
             this.ownership(),
             scopeCondition,
           ),
@@ -1309,7 +1379,11 @@ export class TopicModel {
    * already cleared their marker, while a callback that observes a newer
    * operation must stop before dispatching lifecycle hooks for the wrong run.
    */
-  settleRunningOperation = async (id: string, operationId: string) => {
+  settleRunningOperation = async (
+    id: string,
+    operationId: string,
+    status: TopicItem['status'] = 'unread',
+  ) => {
     return this.db.transaction(async (tx) => {
       const [existing] = await tx
         .select({ metadata: topics.metadata, status: topics.status })
@@ -1320,6 +1394,23 @@ export class TopicModel {
       const runningOperation = existing?.metadata?.runningOperation;
       if (!runningOperation) {
         const currentMessage = existing?.metadata?.heteroCurrentMsgId;
+        if (
+          existing?.metadata?.lastSettledOperationId === operationId &&
+          existing.status === 'unread' &&
+          status === 'active'
+        ) {
+          await tx
+            .update(topics)
+            .set({ status: 'active', updatedAt: new Date() })
+            .where(and(eq(topics.id, id), this.ownership()));
+
+          return {
+            assistantMessageId:
+              currentMessage?.operationId === operationId ? currentMessage.msgId : undefined,
+            status: 'corrected' as const,
+          };
+        }
+
         return {
           assistantMessageId:
             currentMessage?.operationId === operationId ? currentMessage.msgId : undefined,
@@ -1336,6 +1427,7 @@ export class TopicModel {
 
       const metadata = {
         ...existing.metadata,
+        ...(isRoot ? { lastSettledOperationId: operationId } : {}),
         runningOperation: isRoot
           ? null
           : {
@@ -1350,7 +1442,7 @@ export class TopicModel {
         .update(topics)
         .set({
           metadata,
-          ...(isRoot && existing.status === 'running' ? { status: 'unread' as const } : {}),
+          ...(isRoot && existing.status === 'running' ? { status } : {}),
           updatedAt: new Date(),
         })
         .where(and(eq(topics.id, id), this.ownership()));
@@ -1647,6 +1739,49 @@ export class TopicModel {
     });
 
   /**
+   * Whether the run a `runningOperation` marker points at is still the topic's
+   * legitimate owner.
+   *
+   * The marker itself cannot answer this — it carries no heartbeat and is
+   * cleared best-effort — so the authority is the operation row, which both the
+   * in-process runtime (`createOperation`) and the heterogeneous path
+   * (`CompletionLifecycle.recordStart`) write before publishing the marker.
+   *
+   * Falls back to the marker's own `startedAt` only when no row exists: hetero's
+   * `recordStart` is deliberately non-fatal, so a DB hiccup can leave a live run
+   * with a marker and no row. A marker with neither a row nor a stamp cannot be
+   * proven live and must not keep an already-stuck topic stuck.
+   */
+  private isRunningOperationAlive = async (
+    tx: Pick<LobeChatDatabase, 'select'>,
+    runningOperation: NonNullable<ChatTopicMetadata['runningOperation']>,
+  ): Promise<boolean> => {
+    const [operation] = await tx
+      .select({ createdAt: agentOperations.createdAt, status: agentOperations.status })
+      .from(agentOperations)
+      .where(eq(agentOperations.id, runningOperation.operationId))
+      .limit(1);
+
+    if (!operation) {
+      const markerStartedAt = runningOperation.startedAt
+        ? Date.parse(runningOperation.startedAt)
+        : Number.NaN;
+      return (
+        Number.isFinite(markerStartedAt) &&
+        Date.now() - markerStartedAt < ABANDONED_OPERATION_TTL_MS
+      );
+    }
+
+    if (!LIVE_OPERATION_STATUSES.has(operation.status)) return false;
+    if (UNBOUNDED_OPERATION_STATUSES.has(operation.status)) return true;
+
+    // Claims `running`/`idle`, but a killed process never writes a terminal
+    // status — age it out so the topic is not held forever.
+    const startedAt = operation.createdAt ? new Date(operation.createdAt).getTime() : Number.NaN;
+    return !Number.isFinite(startedAt) || Date.now() - startedAt < ABANDONED_OPERATION_TTL_MS;
+  };
+
+  /**
    * Atomically reserve an idle topic for one task-callback delivery.
    *
    * The topic row lock closes the check/set race between callback workers:
@@ -1658,8 +1793,33 @@ export class TopicModel {
   tryReserveTaskCallback = async (
     id: string,
     messageId: string,
-    allowRunningOperationId?: string,
-    replacesOperationId?: string,
+    options?: {
+      /**
+       * Permit a start that runs *under* this marker (a group member starting
+       * beneath its supervisor). A pure permission check — it never takes the
+       * reservation.
+       */
+      allowRunningOperationId?: string;
+      /**
+       * A deterministic intervention reservation is an initializer fence, not
+       * a reentrant mutex. Its concurrent same-id caller must wait until the
+       * owner releases (or the lease expires) instead of entering preparation
+       * and overwriting an already-running continuation state.
+       */
+      allowSameReservationReentry?: boolean;
+      /**
+       * Skip the `runningOperation` check entirely and serialize only on the
+       * short reservation. Set by interactive sends: "don't run two foreground
+       * turns at once" is a UX policy the client already owns end to end (queue
+       * tray, "Send now", FIFO drain), and it is the only layer that can show
+       * the user anything. A second, blind copy of that policy here can only
+       * fail worse — it used to destroy the message before it was ever
+       * persisted. Background starts (task callbacks, cron, bots) have no such
+       * queue and keep the check.
+       */
+      ignoreRunningOperation?: boolean;
+      replacesOperationId?: string;
+    },
   ): Promise<boolean | null> =>
     this.db.transaction(async (tx) => {
       const [existing] = await tx
@@ -1677,14 +1837,35 @@ export class TopicModel {
         Number.isFinite(reservedAt) &&
         Date.now() - reservedAt < TASK_CALLBACK_RESERVATION_TTL_MS;
 
-      if (reservation?.messageId === messageId && hasLiveReservation) return true;
+      if (
+        reservation?.messageId === messageId &&
+        hasLiveReservation &&
+        options?.allowSameReservationReentry !== false
+      ) {
+        return true;
+      }
+
       const runningOperation = existing.metadata?.runningOperation;
       const ownedRunningOperation =
-        !!allowRunningOperationId && runningOperation?.operationId === allowRunningOperationId;
-      if (allowRunningOperationId) return ownedRunningOperation;
+        !!options?.allowRunningOperationId &&
+        runningOperation?.operationId === options.allowRunningOperationId;
+      if (options?.allowRunningOperationId) return ownedRunningOperation;
+
       const canReplaceRunningOperation =
-        !!replacesOperationId && runningOperation?.operationId === replacesOperationId;
-      if ((runningOperation && !canReplaceRunningOperation) || hasLiveReservation) return false;
+        !!options?.replacesOperationId &&
+        runningOperation?.operationId === options.replacesOperationId;
+
+      // Only a run that can prove it is still alive may hold the topic. Ask the
+      // operation row rather than the marker's age: the marker is never
+      // refreshed, so age alone declares a legitimately long run (an approval
+      // wait can last days) dead and lets a competing continuation start.
+      const hasLiveRunningOperation =
+        !!runningOperation &&
+        !canReplaceRunningOperation &&
+        !options?.ignoreRunningOperation &&
+        (await this.isRunningOperationAlive(tx, runningOperation));
+
+      if (hasLiveRunningOperation || hasLiveReservation) return false;
 
       await tx
         .update(topics)
@@ -1704,18 +1885,99 @@ export class TopicModel {
     });
 
   /**
+   * Repair the reconnect anchor after an intervention queue ACK. The same row
+   * lock also releases only this continuation's reservation, closing the crash
+   * window between provider ACK and execAgent's ordinary running-marker write.
+   */
+  repairAgentInterventionContinuation = async (params: {
+    active: boolean;
+    assistantMessageId: string;
+    continuationOperationId: string;
+    reservationId: string;
+    scope?: string | null;
+    sourceOperationId: string;
+    startedAt: string;
+    threadId?: string | null;
+    topicId: string;
+  }): Promise<'conflict' | 'repaired' | 'terminal'> =>
+    this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: topics.metadata })
+        .from(topics)
+        .where(and(eq(topics.id, params.topicId), this.ownership()))
+        .for('update');
+      if (!existing) return 'conflict';
+
+      const current = existing.metadata?.runningOperation;
+      const reservation = existing.metadata?.taskCallbackReservation;
+      const reservedAt = reservation ? Date.parse(reservation.reservedAt) : 0;
+      const hasLiveReservation =
+        !!reservation &&
+        Number.isFinite(reservedAt) &&
+        Date.now() - reservedAt < TASK_CALLBACK_RESERVATION_TTL_MS;
+      const ownsCurrent =
+        !current ||
+        current.operationId === params.sourceOperationId ||
+        current.operationId === params.continuationOperationId;
+      const ownsReservation = reservation?.messageId === params.reservationId;
+      if (hasLiveReservation && !ownsReservation) return 'conflict';
+      if (!ownsCurrent) {
+        if (ownsReservation) {
+          await tx
+            .update(topics)
+            .set({
+              metadata: { ...existing.metadata, taskCallbackReservation: null },
+              updatedAt: new Date(),
+            })
+            .where(and(eq(topics.id, params.topicId), this.ownership()));
+        }
+        return 'conflict';
+      }
+
+      const runningOperation = params.active
+        ? {
+            ...(current?.operationId === params.continuationOperationId ? current : {}),
+            assistantMessageId: params.assistantMessageId,
+            heteroType: null,
+            operationId: params.continuationOperationId,
+            scope: params.scope ?? undefined,
+            startedAt: params.startedAt,
+            threadId: params.threadId ?? undefined,
+          }
+        : null;
+      await tx
+        .update(topics)
+        .set({
+          metadata: {
+            ...existing.metadata,
+            runningOperation,
+            ...(ownsReservation || !hasLiveReservation ? { taskCallbackReservation: null } : {}),
+          },
+          updatedAt: new Date(),
+        })
+        .where(and(eq(topics.id, params.topicId), this.ownership()));
+
+      return params.active ? 'repaired' : 'terminal';
+    });
+
+  /**
    * Release only the caller's reservation. The ownership check prevents a
    * delayed finally block from clearing a newer callback's claim.
    */
-  releaseTaskCallbackReservation = async (id: string, messageId: string): Promise<void> => {
-    await this.db.transaction(async (tx) => {
+  releaseTaskCallbackReservation = async (
+    id: string,
+    messageId: string,
+  ): Promise<'absent' | 'foreign' | 'released'> =>
+    this.db.transaction(async (tx) => {
       const [existing] = await tx
         .select({ metadata: topics.metadata })
         .from(topics)
         .where(and(eq(topics.id, id), this.ownership()))
         .for('update');
 
-      if (existing?.metadata?.taskCallbackReservation?.messageId !== messageId) return;
+      const reservation = existing?.metadata?.taskCallbackReservation;
+      if (!reservation) return 'absent';
+      if (reservation.messageId !== messageId) return 'foreign';
 
       await tx
         .update(topics)
@@ -1726,8 +1988,8 @@ export class TopicModel {
           },
         })
         .where(and(eq(topics.id, id), this.ownership()));
+      return 'released';
     });
-  };
 
   /**
    * Arm a scheduled run on an owned topic: writes `metadata.scheduledRun` and
@@ -1895,6 +2157,32 @@ export class TopicModel {
       );
 
     return result[0]?.total ?? 0;
+  };
+
+  /**
+   * Resets the memory-extraction state of all the caller's topics back to
+   * `pending`, clearing any previous run summary. Used by "purge all
+   * memories": after memories are deleted, topics keep `userMemoryExtractStatus =
+   * 'completed'`, so `isTopicExtracted()` skips them forever and nothing can
+   * ever be re-extracted. Resetting to `pending` makes the next memory
+   * analysis re-process them. Fixes #18498.
+   *
+   * Scoped by `userId` only (not `mine()`): `deleteAll` removes every memory
+   * belonging to the caller regardless of workspace scope, so the reset must
+   * cover topics across personal and all workspace scopes alike, otherwise
+   * topics in the other scope keep `completed` and stay stuck behind the
+   * extraction skip gate.
+   */
+  resetMemoryExtractStatus = async () => {
+    return this.db
+      .update(topics)
+      .set({
+        metadata: sql`jsonb_set(
+          jsonb_set(${topics.metadata}, '{userMemoryExtractStatus}', to_jsonb('pending'::text), true),
+          '{userMemoryExtractRunState}', '{}'::jsonb, true
+        )`,
+      })
+      .where(eq(topics.userId, this.userId));
   };
 
   // **************** Scheduled run (backend cron) *************** //
