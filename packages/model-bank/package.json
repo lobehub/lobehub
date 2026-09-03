@@ -67,6 +67,7 @@
     "./qiniu": "./src/aiModels/qiniu.ts",
     "./qwen": "./src/aiModels/qwen.ts",
     "./replicate": "./src/aiModels/replicate.ts",
+    "./sagg": "./src/aiModels/sagg.ts",
     "./sambanova": "./src/aiModels/sambanova.ts",
     "./search1api": "./src/aiModels/search1api.ts",
     "./sensenova": "./src/aiModels/sensenova.ts",

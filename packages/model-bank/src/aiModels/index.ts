@@ -58,6 +58,7 @@ import { default as ppio } from './ppio';
 import { default as qiniu } from './qiniu';
 import { default as qwen } from './qwen';
 import { default as replicate } from './replicate';
+import { default as sagg } from './sagg';
 import { default as sambanova } from './sambanova';
 import { default as search1api } from './search1api';
 import { default as sensenova } from './sensenova';
@@ -168,6 +169,7 @@ const staticModelMap: ModelsMap = {
   qiniu,
   qwen,
   replicate,
+  sagg,
   sambanova,
   search1api,
   sensenova,
@@ -284,6 +286,7 @@ export { default as ppio } from './ppio';
 export { default as qiniu } from './qiniu';
 export { default as qwen } from './qwen';
 export { default as replicate } from './replicate';
+export { default as sagg } from './sagg';
 export { default as sambanova } from './sambanova';
 export { default as search1api } from './search1api';
 export { default as sensenova } from './sensenova';
