@@ -17,19 +17,19 @@ export type GoalStatus =
 
 /**
  * The execution carrier a goal is optionally bound to. Goals are standalone
- * today: the Goal Graph owns execution and dispatches its own Work Tasks, so
+ * today: the Goal Graph owns execution and dispatches its own Tasks, so
  * nothing binds a goal to a single carrier row. The column stays because
  * existing rows still carry the earlier `task` value.
  */
 export type GoalSubjectType = 'task' | 'topic' | 'standalone';
 
-/** Automatic recovery policy for Goal Graph Work. */
+/** Automatic recovery policy for Goal Graph Tasks. */
 export interface GoalRecoveryPolicy {
-  /** Maximum execution attempts for one Work before escalating to a decision gate. */
+  /** Maximum execution attempts for one Task before escalating to a decision gate. */
   maxAttemptsPerTask?: number;
   /** Per-operation agent step limit. Null/undefined leaves the runtime uncapped. */
   maxStepsPerRun?: number | null;
-  /** Time without a durable runtime lease refresh before a running Work is reclaimed. */
+  /** Time without a durable runtime lease refresh before a running Task is reclaimed. */
   operationLeaseTimeoutMs?: number;
 }
 
@@ -41,7 +41,7 @@ export interface GoalRecoveryPolicy {
  */
 export interface GoalSchedulePolicy {
   /**
-   * ISO-8601 instant. Past it the coordinator stops dispatching new Work and
+   * ISO-8601 instant. Past it the coordinator stops dispatching new Tasks and
    * pauses the goal — the temporal twin of `budget_exhausted`.
    */
   deadline?: string | null;
@@ -50,7 +50,7 @@ export interface GoalSchedulePolicy {
 /**
  * The goal's structured acceptance standard. The drafted criteria persist as
  * `verify_criteria` rows (viewable and editable on the goal page); this block
- * records their ids so the terminal Goal-acceptance Work verifies against
+ * records their ids so the terminal Goal-acceptance Task verifies against
  * exactly these checks instead of re-deriving them from the requirement prose.
  */
 export interface GoalAcceptancePolicy {
@@ -241,7 +241,7 @@ export interface GoalGraphSnapshot {
 export const buildGoalOverviewContext = (
   snapshot: GoalGraphSnapshot,
 ): InitialGoalOverviewContext => {
-  let workSeq = 0;
+  let taskSeq = 0;
   return {
     findings: snapshot.nodes.filter((node) => node.kind === 'finding').map((node) => node.title),
     goal: {
@@ -252,9 +252,9 @@ export const buildGoalOverviewContext = (
     pendingDecisions: snapshot.decisions
       .filter((decision) => decision.status === 'pending')
       .map((decision) => ({ question: decision.question })),
-    work: snapshot.nodes
+    tasks: snapshot.nodes
       .filter((node) => node.kind === 'task')
-      .map((node) => ({ seq: ++workSeq, status: node.status, title: node.title })),
+      .map((node) => ({ seq: ++taskSeq, status: node.status, title: node.title })),
   };
 };
 

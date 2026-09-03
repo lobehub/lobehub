@@ -25,13 +25,13 @@ export type GoalTickBranch =
   | 'goal_terminal'
   /** A gate is open; the goal is parked on a person. */
   | 'pending_decision'
-  /** No work node is eligible: none exists, or all remaining ones are blocked. */
+  /** No task node is eligible: none exists, or all remaining ones are blocked. */
   | 'no_frontier'
-  /** The graph has no work yet — decompose the goal into explorable directions first. */
+  /** The graph has no tasks yet — decompose the goal into explorable directions first. */
   | 'plan_decomposition'
-  /** Every work node finished; the goal-level acceptance contract is next. */
+  /** Every task node finished; the goal-level acceptance contract is next. */
   | 'terminal_acceptance'
-  /** The chosen work has no responsible task yet. */
+  /** The chosen task node has no responsible task yet. */
   | 'create_task'
   /** Its task row is gone. */
   | 'missing_task'
@@ -45,9 +45,9 @@ export type GoalTickBranch =
   /** Task is parked or already in flight. */
   | 'task_paused'
   | 'task_running'
-  /** Budget stopped the goal before this work could be dispatched. */
+  /** Budget stopped the goal before this task could be dispatched. */
   | 'budget_exhausted'
-  /** Start a run for the chosen work. */
+  /** Start a run for the chosen task. */
   | 'dispatch_task';
 
 export type GoalTickOutcome =
@@ -116,7 +116,7 @@ export interface GoalGraphDelta {
 // ==================== Decision input surface ====================
 
 /**
- * A work node that was eligible this tick. Losers are recorded too — without
+ * A task node that was eligible this tick. Losers are recorded too — without
  * them a trace cannot answer "why not that node", which is the whole point of
  * keeping the input surface rather than the result.
  */

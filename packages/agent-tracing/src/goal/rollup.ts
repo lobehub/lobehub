@@ -1,4 +1,9 @@
-import { applyGraphDelta, buildGraphShape, reconstructFinalGraph } from './delta';
+import {
+  applyGraphDelta,
+  buildGraphShape,
+  EXECUTABLE_NODE_KINDS,
+  reconstructFinalGraph,
+} from './delta';
 import type { GoalGraphShape, GoalTrajectory } from './types';
 
 /**
@@ -132,8 +137,10 @@ export const buildGoalTraceRollup = (trajectory: GoalTrajectory): GoalTraceRollu
     ticksTotal,
     operationsTotal: operationIds.size,
     tasksCompleted: shape.tasksCompleted,
+    // Legacy trajectories recorded the executable kind as `work`; see
+    // EXECUTABLE_NODE_KINDS.
     tasksRetired: finalGraph.nodes.filter(
-      (node) => node.kind === 'work' && node.status === 'retired',
+      (node) => EXECUTABLE_NODE_KINDS.has(node.kind) && node.status === 'retired',
     ).length,
   };
 };

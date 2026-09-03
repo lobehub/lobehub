@@ -92,7 +92,7 @@ const snapshot = (partial: Partial<GoalGraphSnapshot>): GoalGraphSnapshot => ({
 });
 
 describe('buildGoalGraphView', () => {
-  it('mirrors the coordinator frontier: unblocked work is ready, blocked work folds', () => {
+  it('mirrors the coordinator frontier: unblocked tasks are ready, blocked tasks fold', () => {
     const view = buildGoalGraphView(
       snapshot({
         edges: [edge('w2', 'w1', 'depends_on')],
@@ -105,7 +105,7 @@ describe('buildGoalGraphView', () => {
     expect(view.blocked.map((item) => item.node.id)).toEqual(['w2']);
   });
 
-  it('numbers work nodes by graph creation order so dependency refs stay stable', () => {
+  it('numbers task nodes by graph creation order so dependency refs stay stable', () => {
     const view = buildGoalGraphView(
       snapshot({ nodes: [node('w1'), node('p1', { kind: 'problem' }), node('w2')] }),
       NOW,
@@ -121,7 +121,7 @@ describe('buildGoalGraphView', () => {
       snapshot({
         events: [
           event('w1', 'activated', 5),
-          event('w1', 'updated', 20, 'Work attempt budget was exhausted'),
+          event('w1', 'updated', 20, 'Task attempt budget was exhausted'),
           event('w1', 'activated', 25, 'retry with the missing directory created first'),
           event('w1', 'resolved', 40, 'Responsible task completed'),
         ],
@@ -131,7 +131,7 @@ describe('buildGoalGraphView', () => {
     );
 
     expect(view.byId.w1.attempts).toMatchObject([
-      { index: 1, outcome: 'failed', reason: 'Work attempt budget was exhausted' },
+      { index: 1, outcome: 'failed', reason: 'Task attempt budget was exhausted' },
       { index: 2, outcome: 'passed', reason: 'Responsible task completed' },
     ]);
   });
@@ -156,7 +156,7 @@ describe('buildGoalGraphView', () => {
     expect(view.frontier[0]).toMatchObject({ kind: 'running' });
   });
 
-  it('marks an active work stale once it outlives the operation lease', () => {
+  it('marks an active task stale once it outlives the operation lease', () => {
     const view = buildGoalGraphView(
       snapshot({
         events: [event('w1', 'activated', 30)],
@@ -170,7 +170,7 @@ describe('buildGoalGraphView', () => {
     expect(view.needsYou).toBe(1);
   });
 
-  it('keeps a work running when the run operation heartbeat is fresh despite a quiet node row', () => {
+  it('keeps a task running when the run operation heartbeat is fresh despite a quiet node row', () => {
     // The node row only moves on observations / status changes; a long tool
     // call or the verify stage keeps the operation lease fresh while the row
     // goes quiet. That must not read as "lost".
@@ -188,7 +188,7 @@ describe('buildGoalGraphView', () => {
     expect(view.frontier[0]).toMatchObject({ kind: 'running' });
   });
 
-  it('keeps a fresh active work running, with the current attempt start for the clock', () => {
+  it('keeps a fresh active task running, with the current attempt start for the clock', () => {
     const view = buildGoalGraphView(
       snapshot({
         events: [event('w1', 'activated', 115)],
@@ -201,15 +201,15 @@ describe('buildGoalGraphView', () => {
     expect(view.byId.w1.startedAt).toEqual(at(115));
   });
 
-  it('closes the parked attempt of a Work waiting at a gate', () => {
+  it('closes the parked attempt of a Task waiting at a gate', () => {
     // The gate is written as an `updated` event, which is not an attempt
-    // boundary — without the node-state fallback the parked Work kept
+    // boundary — without the node-state fallback the parked Task kept
     // reporting a running attempt, and the gate case read as still executing.
     const view = buildGoalGraphView(
       snapshot({
         events: [
           event('w1', 'activated', 5),
-          event('w1', 'updated', 40, 'Work attempt budget was exhausted'),
+          event('w1', 'updated', 40, 'Task attempt budget was exhausted'),
         ],
         nodes: [node('w1', { status: 'waiting', taskId: 'task-1', updatedAt: at(40) })],
       }),
@@ -217,12 +217,12 @@ describe('buildGoalGraphView', () => {
     );
 
     expect(view.byId.w1.attempts).toMatchObject([
-      { endedAt: at(40), index: 1, outcome: 'failed', reason: 'Work attempt budget was exhausted' },
+      { endedAt: at(40), index: 1, outcome: 'failed', reason: 'Task attempt budget was exhausted' },
     ]);
     expect(view.byId.w1.startedAt).toBeUndefined();
   });
 
-  it('surfaces a pending gate and hides the waiting work it was opened for', () => {
+  it('surfaces a pending gate and hides the waiting task it was opened for', () => {
     const decision: GoalGraphDecision = {
       authority: 'user',
       canceledAt: null,
@@ -230,8 +230,8 @@ describe('buildGoalGraphView', () => {
       id: 'dec-1',
       nodeId: 'd1',
       options: [
-        { id: 'retry', label: 'Retry work' },
-        { id: 'retire', label: 'Retire work' },
+        { id: 'retry', label: 'Retry task' },
+        { id: 'retire', label: 'Retire task' },
       ],
       question: 'Retry or retire?',
       recommendedOptionId: 'retry',
@@ -259,11 +259,11 @@ describe('buildGoalGraphView', () => {
 
     expect(view.frontier.map((item) => [item.view.node.id, item.kind])).toEqual([['d1', 'gate']]);
     expect(view.byId.d1.decision?.id).toBe('dec-1');
-    // The gate's case is the failed Work's ledger, not the decision node's own.
+    // The gate's case is the failed Task's ledger, not the decision node's own.
     expect(view.byId.d1.gateSubjectId).toBe('w1');
   });
 
-  it('links a finding to the work that produced it and the problem it answers', () => {
+  it('links a finding to the task that produced it and the problem it answers', () => {
     const view = buildGoalGraphView(
       snapshot({
         edges: [edge('w1', 'f1', 'produces'), edge('f1', 'p1', 'supports')],
@@ -281,7 +281,7 @@ describe('buildGoalGraphView', () => {
     expect(view.byId.w1.findings.map((n) => n.id)).toEqual(['f1']);
   });
 
-  it('keeps only the most recent finished tasks, shown in work numbering ahead of live rows', () => {
+  it('keeps only the most recent finished tasks, shown in task numbering ahead of live rows', () => {
     // w2 finished AFTER w3: recency picks which rows stay (w1 drops), but the
     // list still reads #2 then #3 — not "most recently finished first".
     const view = buildGoalGraphView(

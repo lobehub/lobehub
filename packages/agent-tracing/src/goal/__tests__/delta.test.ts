@@ -113,7 +113,7 @@ describe('reconstructGraphAt', () => {
 });
 
 describe('buildGraphShape', () => {
-  it('splits open work into ready and blocked by unresolved dependencies', () => {
+  it('splits open tasks into ready and blocked by unresolved dependencies', () => {
     const state = graph({
       edges: [edge('e1', 'b', 'a')],
       nodes: [
@@ -133,7 +133,7 @@ describe('buildGraphShape', () => {
     });
   });
 
-  it('counts work ready once its dependency resolves', () => {
+  it('counts a task ready once its dependency resolves', () => {
     const state = graph({
       edges: [edge('e1', 'b', 'a')],
       nodes: [node('a', { status: 'resolved' }), node('b')],
@@ -141,6 +141,20 @@ describe('buildGraphShape', () => {
 
     expect(buildGraphShape(state)).toMatchObject({
       tasksBlocked: 0,
+      tasksReady: 1,
+      tasksCompleted: 1,
+    });
+  });
+
+  it('still counts legacy trajectories whose executable nodes carry kind `work`', () => {
+    // Trajectories recorded before the node-kind rename are immutable; the
+    // shape metrics must keep reading them.
+    const state = graph({
+      nodes: [node('a', { kind: 'work', status: 'resolved' }), node('b', { kind: 'work' })],
+    });
+
+    expect(buildGraphShape(state)).toMatchObject({
+      tasksOpen: 1,
       tasksReady: 1,
       tasksCompleted: 1,
     });

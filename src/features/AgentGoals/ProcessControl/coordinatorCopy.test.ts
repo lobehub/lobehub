@@ -18,7 +18,7 @@ describe('coordinatorGateKind', () => {
 });
 
 describe('coordinatorNodeTitleKey', () => {
-  it('maps the terminal acceptance work and coordinator gates to locale keys', async () => {
+  it('maps the terminal acceptance task and coordinator gates to locale keys', async () => {
     const { coordinatorNodeTitleKey } = await import('./coordinatorCopy');
     const view = (node: any, dec?: any) => ({ decision: dec, humanTouches: [], node }) as any;
 
@@ -66,6 +66,11 @@ describe('coordinatorReasonCopy', () => {
       key: 'goalProcess.gate.reason.verifyFailed',
       params: { id: 'T-932' },
     });
+    expect(coordinatorReasonCopy('Task attempt budget was exhausted')).toEqual({
+      key: 'goalProcess.gate.reason.attemptBudgetExhausted',
+    });
+    // Gates opened before the graph-node "Work" → "Task" rename keep the old
+    // reason in the append-only audit trail, so both wordings must localize.
     expect(coordinatorReasonCopy('Work attempt budget was exhausted')).toEqual({
       key: 'goalProcess.gate.reason.attemptBudgetExhausted',
     });

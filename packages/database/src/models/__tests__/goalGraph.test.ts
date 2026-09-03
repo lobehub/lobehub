@@ -157,7 +157,7 @@ describe('GoalGraphModel', () => {
     expect(graph?.decisions[0].resolvedOptionId).toBe(results.find(Boolean)!.resolvedOptionId);
   });
 
-  it('allows only one task binding for a work node', async () => {
+  it('allows only one task binding for a task node', async () => {
     const goal = await goalModel.create({ subjectType: 'standalone', title: 'Task binding race' });
     const node = await graphModel.createNode(goal.id, { kind: 'task', title: 'Run once' });
     const taskModel = new TaskModel(serverDB, userId);

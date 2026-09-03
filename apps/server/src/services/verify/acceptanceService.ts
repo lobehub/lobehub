@@ -776,7 +776,7 @@ export class AcceptanceService {
    * agent-bound rounds via the repair pipeline, for ingested rounds via the
    * next `lh verify ingest-report`.)
    *
-   * A Goal Work Task is no exception: its next attempt is started by the Goal
+   * A Goal Task is no exception: its next attempt is started by the Goal
    * coordinator on the following tick, which reads the rejected round's
    * decision detail through the prompt builder.
    */

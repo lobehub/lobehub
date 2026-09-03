@@ -93,7 +93,7 @@ describe('selectFrontier', () => {
     expect(selection.chosen?.id).toBe('a');
   });
 
-  it('drops terminal work from the frontier', () => {
+  it('drops terminal Tasks from the frontier', () => {
     const snapshot = graph({
       nodes: [node('done', { status: 'resolved' }), node('gone', { status: 'retired' })],
     });
@@ -103,7 +103,7 @@ describe('selectFrontier', () => {
 });
 
 describe('decideNextMove', () => {
-  it('stops on a paused or terminal goal before looking at work', () => {
+  it('stops on a paused or terminal goal before looking at Tasks', () => {
     const nodes = [node('a')];
     expect(decide(graph({ goal: { ...graph().goal, status: 'paused' }, nodes })).branch).toBe(
       'goal_paused',
@@ -116,7 +116,7 @@ describe('decideNextMove', () => {
     );
   });
 
-  it('parks on an open gate ahead of any ready work', () => {
+  it('parks on an open gate ahead of any ready Task', () => {
     const move = decide(
       graph({
         decisions: [
@@ -134,7 +134,7 @@ describe('decideNextMove', () => {
     });
   });
 
-  it('asks for a responsible task when the chosen work has none', () => {
+  it('asks for a responsible runner when the chosen Task has none', () => {
     expect(decide(graph({ nodes: [node('a')] }))).toMatchObject({
       branch: 'create_task',
       chosenNodeId: 'a',
@@ -255,9 +255,9 @@ describe('decideNextMove', () => {
     });
   });
 
-  describe('with no ready work', () => {
+  describe('with no ready Tasks', () => {
     it('plans the decomposition for an empty graph, parks a fully blocked one', () => {
-      // A goal with no work has not been planned yet — that is the planner's
+      // A goal with no tasks has not been planned yet — that is the planner's
       // cue, not a dead end.
       expect(decide(graph())).toMatchObject({
         branch: 'plan_decomposition',
@@ -276,7 +276,7 @@ describe('decideNextMove', () => {
       });
     });
 
-    it('moves to the terminal acceptance contract once every Work is done', () => {
+    it('moves to the terminal acceptance contract once every Task is done', () => {
       const snapshot = graph({
         goal: { ...graph().goal, requirement: 'Prove it' },
         nodes: [node('a', { status: 'resolved' })],
@@ -288,7 +288,7 @@ describe('decideNextMove', () => {
       });
     });
 
-    it('holds the goal open while its acceptance Work has not passed', () => {
+    it('holds the goal open while its acceptance Task has not passed', () => {
       const snapshot = graph({
         goal: { ...graph().goal, requirement: 'Prove it' },
         nodes: [
@@ -376,7 +376,7 @@ describe('decideNextMove concurrency', () => {
     expect(move.outcome).toBe('advanced');
   });
 
-  it('does not let a paused task block independent work', () => {
+  it('does not let a paused task block an independent Task', () => {
     const snapshot = graph({ nodes: [node('a', { taskId: 'task_1' }), node('b')] });
 
     expect(decide(snapshot, { tasks: [task({ id: 'task_1', status: 'paused' })] })).toMatchObject({

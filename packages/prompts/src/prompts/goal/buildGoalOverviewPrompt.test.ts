@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { buildGoalOverviewPrompt } from './buildGoalOverviewPrompt';
 
 describe('buildGoalOverviewPrompt', () => {
-  it('renders goal, work items, findings and pending decisions', () => {
+  it('renders goal, tasks, findings and pending decisions', () => {
     const prompt = buildGoalOverviewPrompt({
       findings: ['Local run boots end to end'],
       goal: {
@@ -12,7 +12,7 @@ describe('buildGoalOverviewPrompt', () => {
         title: 'WikiSkill 本地完整复现',
       },
       pendingDecisions: [{ question: 'Use the small model for the ablation?' }],
-      work: [
+      tasks: [
         { seq: 1, status: 'resolved', title: '项目骨架与本地运行基座' },
         { attempts: 2, seq: 2, status: 'active', title: '经验编译与技能演化闭环' },
       ],
@@ -33,7 +33,7 @@ describe('buildGoalOverviewPrompt', () => {
       findings: [],
       goal: { status: 'pending', title: 'Goal' },
       pendingDecisions: [],
-      work: [],
+      tasks: [],
     });
 
     expect(prompt).not.toContain('Findings');

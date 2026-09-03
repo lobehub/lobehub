@@ -118,15 +118,15 @@ const GoalRow = memo<GoalRowProps>(({ bare, entry }) => {
           {entry.title}
         </Text>
         <GoalAgentAvatar agentId={entry.agentId} />
-        {/* A goal is measured in the work it has closed, not in time — how far
+        {/* A goal is measured in the tasks it has closed, not in time — how far
             through its own decomposition it is says more at a glance. */}
         <span className={cx(homeType.meta, styles.rounds)}>
           {entry.pendingDecisions > 0
             ? t('goalList.needsYou', { count: entry.pendingDecisions, ns: 'chat' })
-            : t('goalList.workProgress', {
-                done: entry.workDone,
+            : t('goalList.taskProgress', {
+                done: entry.taskDone,
                 ns: 'chat',
-                total: entry.workTotal,
+                total: entry.taskTotal,
               })}
         </span>
         <Icon color={cssVar.colorTextQuaternary} icon={ChevronRightIcon} size={14} />

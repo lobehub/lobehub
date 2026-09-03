@@ -57,14 +57,14 @@ describe('GoalModel', () => {
     });
   });
 
-  describe('findByWorkTask', () => {
-    it('finds the goal whose graph owns a Work Task', async () => {
+  describe('findByGraphTask', () => {
+    it('finds the goal whose graph owns a Task', async () => {
       const task = await new TaskModel(serverDB, userId).create({ instruction: 'do the work' });
       const goal = await goalModel.create({ subjectType: 'standalone', title: 'Owner' });
       const node = await graphModel.createNode(goal.id, { kind: 'task', title: 'W1' });
       await serverDB.update(goalNodes).set({ taskId: task.id }).where(eq(goalNodes.id, node!.id));
 
-      expect((await goalModel.findByWorkTask(task.id))?.id).toBe(goal.id);
+      expect((await goalModel.findByGraphTask(task.id))?.id).toBe(goal.id);
     });
 
     it('does not cross user boundaries', async () => {
@@ -75,7 +75,7 @@ describe('GoalModel', () => {
       const node = await otherGraph.createNode(goal.id, { kind: 'task', title: 'W1' });
       await serverDB.update(goalNodes).set({ taskId: task.id }).where(eq(goalNodes.id, node!.id));
 
-      expect(await goalModel.findByWorkTask(task.id)).toBeUndefined();
+      expect(await goalModel.findByGraphTask(task.id)).toBeUndefined();
     });
   });
 
@@ -95,8 +95,8 @@ describe('GoalModel', () => {
       expect(goals[0]).toMatchObject({
         findingCount: 1,
         pendingDecisions: 0,
-        workDone: 1,
-        workTotal: 2,
+        taskDone: 1,
+        taskTotal: 2,
       });
       expect(goals[0].goal.id).toBe(goal.id);
     });
@@ -157,7 +157,7 @@ describe('GoalModel', () => {
 
     it('leaves out a goal that never got a graph', async () => {
       // Rows from the earlier task-carried flow have no `goal_nodes`. Listing
-      // them renders a goal page with no work, no frontier and no way forward.
+      // them renders a goal page with no tasks, no frontier and no way forward.
       const legacy = await goalModel.create({ subjectType: 'task', title: 'Carrier-bound' });
       const graphed = await goalModel.create({ subjectType: 'standalone', title: 'Has a graph' });
       await graphModel.createNode(graphed.id, { kind: 'task', title: 'W1' });
@@ -204,7 +204,7 @@ describe('GoalModel', () => {
       expect(stalled.map(({ id }) => id)).not.toContain(goal.id);
     });
 
-    it('leaves a goal alone while one of its Work Tasks is freshly active', async () => {
+    it('leaves a goal alone while one of its Tasks is freshly active', async () => {
       const goal = await goalModel.create({ subjectType: 'standalone', title: 'Working' });
       await goalModel.updateStatus(goal.id, 'running');
       const node = await graphModel.createNode(goal.id, { kind: 'task', title: 'W1' });
@@ -214,7 +214,7 @@ describe('GoalModel', () => {
       expect(stalled.map(({ id }) => id)).not.toContain(goal.id);
     });
 
-    it('reclaims a Work that outlived its operation lease', async () => {
+    it('reclaims a Task that outlived its operation lease', async () => {
       const goal = await goalModel.create({ subjectType: 'standalone', title: 'Lost' });
       await goalModel.updateStatus(goal.id, 'running');
       const node = await graphModel.createNode(goal.id, { kind: 'task', title: 'W1' });

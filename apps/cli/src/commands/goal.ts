@@ -168,21 +168,27 @@ export function registerGoalCommand(program: Command) {
       '-i, --instruction <text>',
       "The ask in the user's own words, shown on the problem node",
     )
-    .option('-w, --work <title...>', 'Initial work node titles (omit to let the planner decompose)')
+    .option('-t, --task <title...>', 'Initial task node titles (omit to let the planner decompose)')
+    // Pre-rename name of `--task`, kept so existing scripts keep running.
+    .option('-w, --work <title...>', 'Deprecated alias of --task')
     .option('--agent <id>', 'Responsible agent ID')
     .option('--project <id>', 'Project ID')
     .option('--max-rounds <n>', 'Maximum goal rounds')
     .option('--max-cost <usd>', 'Maximum total cost in USD')
-    .option('--max-attempts-per-work <n>', 'Attempts per Work before opening a decision gate')
+    .option('--max-attempts-per-task <n>', 'Attempts per Task before opening a decision gate')
+    // Pre-rename name. It never reached the request — the action has always
+    // read `maxAttemptsPerTask`, which this flag does not produce — so the
+    // alias both preserves the old spelling and makes it work for the first time.
+    .option('--max-attempts-per-work <n>', 'Deprecated alias of --max-attempts-per-task')
     .option(
       '--max-concurrent-tasks <n>',
       "How many of this goal's tasks may run at once (default 3)",
     )
 
-    .option('--max-steps-per-run <n>', 'Optional agent step cap per Work run (for example 500)')
+    .option('--max-steps-per-run <n>', 'Optional agent step cap per Task run (for example 500)')
     .option(
       '--operation-lease-timeout-ms <n>',
-      'Reclaim a Work operation after this idle time (minimum: 60000)',
+      'Reclaim a Task operation after this idle time (minimum: 60000)',
     )
     .option('--json [fields]', 'Output JSON')
     .action(async (title: string, options) => {
@@ -192,6 +198,7 @@ export function registerGoalCommand(program: Command) {
         agentId: options.agent,
         config:
           options.maxAttemptsPerTask ||
+          options.maxAttemptsPerWork ||
           options.maxStepsPerRun ||
           options.operationLeaseTimeoutMs ||
           options.maxConcurrentTasks
@@ -200,9 +207,13 @@ export function registerGoalCommand(program: Command) {
                   ? Number.parseInt(options.maxConcurrentTasks, 10)
                   : undefined,
                 recovery: {
-                  maxAttemptsPerTask: options.maxAttemptsPerTask
-                    ? Number.parseInt(options.maxAttemptsPerTask, 10)
-                    : undefined,
+                  maxAttemptsPerTask:
+                    options.maxAttemptsPerTask || options.maxAttemptsPerWork
+                      ? Number.parseInt(
+                          options.maxAttemptsPerTask ?? options.maxAttemptsPerWork,
+                          10,
+                        )
+                      : undefined,
                   maxStepsPerRun: options.maxStepsPerRun
                     ? Number.parseInt(options.maxStepsPerRun, 10)
                     : undefined,
@@ -218,7 +229,7 @@ export function registerGoalCommand(program: Command) {
         projectId: options.project,
         requirement: options.requirement,
         title,
-        work: options.work,
+        tasks: options.task ?? options.work,
       });
       // `goal.create` returns the whole graph snapshot, so the id is on its
       // goal — `result.data.id` is undefined, and the CLI cannot resolve the
@@ -252,13 +263,15 @@ export function registerGoalCommand(program: Command) {
         result.goals.map((item) => [
           item.goal.status,
           truncate(item.goal.title, 44),
-          `${item.workDone}/${item.workTotal}`,
+          // `taskDone` is absent when this CLI outruns the deployed server,
+          // which still answers with the pre-rename keys only.
+          `${item.taskDone ?? item.workDone}/${item.taskTotal ?? item.workTotal}`,
           String(item.findingCount),
           item.pendingDecisions > 0 ? pc.yellow(String(item.pendingDecisions)) : '-',
           `$${item.totalRunCost.toFixed(2)}`,
           item.goal.id,
         ]),
-        ['STATUS', 'TITLE', 'WORK', 'FINDINGS', 'NEEDS YOU', 'COST', 'GOAL ID'],
+        ['STATUS', 'TITLE', 'TASKS', 'FINDINGS', 'NEEDS YOU', 'COST', 'GOAL ID'],
       );
     });
 
@@ -315,7 +328,7 @@ export function registerGoalCommand(program: Command) {
         const retryWindowMs = Number.parseInt(options.retryWindowMs, 10);
         // Only ticks that CHANGED something count against the budget. Polling an
         // unchanged `waiting_external` state is the coordinator idling while a
-        // Work runs — a Work that legitimately takes an hour would otherwise
+        // Task runs — a Task that legitimately takes an hour would otherwise
         // burn the whole allowance on no-ops and stop a healthy goal half-way.
         let advancingTicks = 0;
         let exhaustedBudget = false;
@@ -438,7 +451,7 @@ export function registerGoalCommand(program: Command) {
 
   goal
     .command('add-node <id> <kind> <title>')
-    .description('Add a problem, work, finding, or decision node')
+    .description('Add a problem, task, finding, or decision node')
     .option('-d, --description <text>')
     .option('-p, --priority <n>')
     .action(

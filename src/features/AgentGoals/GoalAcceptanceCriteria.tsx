@@ -40,7 +40,7 @@ const emptyForm: CriterionFormValue = { description: '', instruction: '', title:
 
 /**
  * The goal's structured acceptance standard: the persisted verify criteria the
- * terminal Goal-acceptance Work is gated on. Rendered as its own section so the
+ * terminal Goal-acceptance Task is gated on. Rendered as its own section so the
  * standard is inspectable and editable instead of living only inside the
  * requirement prose.
  *
