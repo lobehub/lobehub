@@ -2,7 +2,7 @@ import {
   isWorkspaceSlugFormatValid,
   WORKSPACE_SLUG_MAX,
   WORKSPACE_SLUG_MIN,
-} from '@lobechat/business-const';
+} from '@lobechat/const';
 import type { WorkspaceItem } from '@lobechat/database/schemas';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
