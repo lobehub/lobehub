@@ -81,6 +81,7 @@ const styles = createStaticStyles(({ css }) => ({
     overflow: auto;
     flex: 1;
 
+    height: 100%;
     min-height: 0;
     padding-block: 12px;
     padding-inline: 16px;
@@ -167,63 +168,86 @@ export const evidenceTitleFromMarkdown = (content: string): string => {
 };
 
 /**
+ * The fold decision, shared by the component and its tests: an authored title
+ * (the evidence's alt/description) both wins the label and forces the fold —
+ * the caller is saying this row has a real label worth reading at list level.
+ * Without one, a couple of plain lines carry no structure worth hiding and
+ * folding them would trade one click for nothing.
+ */
+export const resolveMarkdownEvidenceFold = (content: string, authoredTitle?: string) => {
+  const derivedTitle = evidenceTitleFromMarkdown(content);
+  const foldTitle = authoredTitle?.trim() || derivedTitle;
+  const trimmed = content.trim();
+  const inlineEligible = !trimmed.includes('\n') && trimmed.length <= INLINE_RENDER_MAX_CHARS;
+  const fold = Boolean(foldTitle) && (Boolean(authoredTitle?.trim()) || !inlineEligible);
+  return { fold, foldTitle };
+};
+
+/**
  * Inline prose evidence, folded to ONE titled row by default — the first line
  * of the document is the label, the click is the disclosure. Expanding renders
  * the full text in place, typographically subordinated (small header scale) so
  * the evidence's own headings never compete with the page's hierarchy.
+ *
+ * `title` lets a caller hand the row a better label — the evidence's authored
+ * alt/description. It outranks the document's first line and its presence
+ * forces the fold: the label IS the point, and the caller stops rendering the
+ * description as a supplement below the row (it now reads as the row itself).
  *
  * Replaces the earlier first-180px preview fold: agent-authored evidence opens
  * with headings and environment metadata, so a height-cropped preview spent a
  * card of space showing the least informative part of the document — and read
  * as noise. Need it → expand; don't → one quiet line.
  */
-export const CollapsibleMarkdownEvidence = memo<{ children: string }>(({ children }) => {
-  const { t } = useTranslation('verify');
-  const [expanded, setExpanded] = useState(false);
-  const title = useMemo(() => evidenceTitleFromMarkdown(children), [children]);
-
-  // A couple of plain lines carry no structure worth hiding — folding them
-  // would trade one click for nothing.
-  const trimmed = children.trim();
-  if (!title || (!trimmed.includes('\n') && trimmed.length <= INLINE_RENDER_MAX_CHARS)) {
-    return (
-      <Markdown fontSize={13} variant={'chat'}>
-        {children}
-      </Markdown>
+export const CollapsibleMarkdownEvidence = memo<{ children: string; title?: string }>(
+  ({ children, title }) => {
+    const { t } = useTranslation('verify');
+    const [expanded, setExpanded] = useState(false);
+    const { fold, foldTitle } = useMemo(
+      () => resolveMarkdownEvidenceFold(children, title),
+      [children, title],
     );
-  }
 
-  return (
-    <Flexbox className={styles.foldCard}>
-      <button
-        aria-expanded={expanded}
-        className={styles.foldHeader}
-        title={t(expanded ? 'report.evidence.collapse' : 'report.evidence.expand')}
-        type={'button'}
-        onClick={() => setExpanded(!expanded)}
-      >
-        <Icon
-          className={cx(styles.foldChevron, expanded && styles.foldChevronOpen)}
-          icon={ChevronRight}
-          size={14}
-        />
-        <span className={styles.fileCardIcon}>
-          <Icon icon={FileText} size={13} />
-        </span>
-        <span data-fold-title className={styles.foldTitle}>
-          {title}
-        </span>
-      </button>
-      {expanded && (
-        <div className={styles.foldBody}>
-          <Markdown fontSize={13} headerMultiple={0.1} variant={'chat'}>
-            {children}
-          </Markdown>
-        </div>
-      )}
-    </Flexbox>
-  );
-});
+    if (!fold) {
+      return (
+        <Markdown fontSize={13} variant={'chat'}>
+          {children}
+        </Markdown>
+      );
+    }
+
+    return (
+      <Flexbox className={styles.foldCard}>
+        <button
+          aria-expanded={expanded}
+          className={styles.foldHeader}
+          title={t(expanded ? 'report.evidence.collapse' : 'report.evidence.expand')}
+          type={'button'}
+          onClick={() => setExpanded(!expanded)}
+        >
+          <Icon
+            className={cx(styles.foldChevron, expanded && styles.foldChevronOpen)}
+            icon={ChevronRight}
+            size={14}
+          />
+          <span className={styles.fileCardIcon}>
+            <Icon icon={FileText} size={13} />
+          </span>
+          <span data-fold-title className={styles.foldTitle}>
+            {foldTitle}
+          </span>
+        </button>
+        {expanded && (
+          <div className={styles.foldBody}>
+            <Markdown fontSize={13} headerMultiple={0.1} variant={'chat'}>
+              {children}
+            </Markdown>
+          </div>
+        )}
+      </Flexbox>
+    );
+  },
+);
 
 CollapsibleMarkdownEvidence.displayName = 'CollapsibleMarkdownEvidence';
 
