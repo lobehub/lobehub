@@ -1102,7 +1102,36 @@ describe('fileRouter', () => {
         code: 'NOT_FOUND',
       });
 
-      expect(mockFileModelDeleteMany).not.toHaveBeenCalled();
+      expect(mockTrashFiles).not.toHaveBeenCalled();
+    });
+
+    it('accepts a legacy bulk request and processes it in bounded batches', async () => {
+      const ids = Array.from({ length: 401 }, (_, index) => `file-${index}`);
+      mockFileModelFindByIds.mockImplementation(async (batch: string[]) =>
+        batch.map((id) => ({ id })),
+      );
+
+      await caller.removeFiles({ ids });
+
+      expect(mockFileModelFindByIds.mock.calls.map(([batch]) => batch.length)).toEqual([
+        200, 200, 1,
+      ]);
+      expect(mockTrashFiles.mock.calls.map(([batch]) => batch.length)).toEqual([200, 200, 1]);
+    });
+
+    it('validates every batch before trashing any file', async () => {
+      const ids = Array.from({ length: 401 }, (_, index) => `file-${index}`);
+      mockFileModelFindByIds
+        .mockImplementationOnce(async (batch: string[]) => batch.map((id) => ({ id })))
+        .mockImplementationOnce(async (batch: string[]) =>
+          batch.slice(0, -1).map((id) => ({ id })),
+        );
+
+      await expect(caller.removeFiles({ ids })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+
+      expect(mockTrashFiles).not.toHaveBeenCalled();
     });
   });
 

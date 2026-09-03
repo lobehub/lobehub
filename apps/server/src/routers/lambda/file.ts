@@ -834,15 +834,24 @@ export const fileRouter = router({
 
   removeFiles: fileProcedure
     .use(withScopedPermission('file:delete'))
-    .input(z.object({ ids: z.array(z.string()).max(TRASH_MUTATION_BATCH_SIZE) }))
+    .input(z.object({ ids: z.array(z.string()) }))
     .mutation(async ({ input, ctx }) => {
-      const targets = await ctx.fileModel.findByIds(input.ids);
-      assertAllFilesAccessible(input.ids, targets);
-      await Promise.all(
-        targets.map((target) => assertFileNotInRestrictedKnowledgeBase(ctx, target.id)),
-      );
+      const ids = [...new Set(input.ids)];
+      const batches: string[][] = [];
+      for (let index = 0; index < ids.length; index += TRASH_MUTATION_BATCH_SIZE) {
+        batches.push(ids.slice(index, index + TRASH_MUTATION_BATCH_SIZE));
+      }
 
-      await ctx.trashService.trashFiles(input.ids);
+      // Validate the complete legacy request before mutating any batch.
+      for (const batch of batches) {
+        const targets = await ctx.fileModel.findByIds(batch);
+        assertAllFilesAccessible(batch, targets);
+        await Promise.all(
+          targets.map((target) => assertFileNotInRestrictedKnowledgeBase(ctx, target.id)),
+        );
+      }
+
+      for (const batch of batches) await ctx.trashService.trashFiles(batch);
     }),
 
   updateFile: fileProcedure

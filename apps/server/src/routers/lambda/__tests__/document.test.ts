@@ -206,6 +206,45 @@ describe('documentRouter transferDocument', () => {
   });
 });
 
+describe('documentRouter deleteDocuments', () => {
+  const caller = () =>
+    documentRouter.createCaller({
+      serverDB: {},
+      userId: 'member-1',
+      workspaceId: 'ws-1',
+      workspaceRole: 'member',
+    } as any);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.assertContentsNotInRestrictedKnowledgeBase.mockResolvedValue(undefined);
+  });
+
+  it('accepts a legacy bulk request and processes it in bounded batches', async () => {
+    const ids = Array.from({ length: 401 }, (_, index) => `doc-${index}`);
+    mocks.findByIds.mockImplementation(async (batch: string[]) => batch.map((id) => ({ id })));
+    mocks.trashDocuments.mockImplementation(async (batch: string[]) => batch.map((id) => ({ id })));
+
+    await expect(caller().deleteDocuments({ ids })).resolves.toHaveLength(401);
+
+    expect(mocks.findByIds.mock.calls.map(([batch]) => batch.length)).toEqual([200, 200, 1]);
+    expect(mocks.trashDocuments.mock.calls.map(([batch]) => batch.length)).toEqual([200, 200, 1]);
+  });
+
+  it('validates every batch before trashing any document', async () => {
+    const ids = Array.from({ length: 401 }, (_, index) => `doc-${index}`);
+    mocks.findByIds
+      .mockImplementationOnce(async (batch: string[]) => batch.map((id) => ({ id })))
+      .mockImplementationOnce(async (batch: string[]) => batch.slice(0, -1).map((id) => ({ id })));
+
+    await expect(caller().deleteDocuments({ ids })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+
+    expect(mocks.trashDocuments).not.toHaveBeenCalled();
+  });
+});
+
 describe('documentRouter createDocument under a workspace parent', () => {
   const caller = () =>
     documentRouter.createCaller({

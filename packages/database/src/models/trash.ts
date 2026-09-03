@@ -408,6 +408,7 @@ export class TrashModel {
     await this.db
       .update(trashItems)
       .set({
+        expiresAt: sql`${trashItems.deletedAt}`,
         meta: sql<TrashItemRowMeta>`jsonb_set(COALESCE(${trashItems.meta}, '{}'::jsonb) - 'purgeClaim', '{purgeBlocked}', 'true'::jsonb, true)`,
       })
       .where(

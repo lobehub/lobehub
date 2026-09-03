@@ -217,19 +217,30 @@ export const documentRouter = router({
 
   deleteDocuments: documentProcedure
     .use(withScopedPermission('document:delete'))
-    .input(z.object({ ids: z.array(z.string()).max(TRASH_MUTATION_BATCH_SIZE) }))
+    .input(z.object({ ids: z.array(z.string()) }))
     .mutation(async ({ ctx, input }) => {
-      const documents = await ctx.documentModel.findByIds(input.ids);
-      const accessibleIds = new Set(documents.map((document) => document.id));
-      if ([...new Set(input.ids)].some((id) => !accessibleIds.has(id))) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'One or more documents were not found or are not accessible',
-        });
+      const ids = [...new Set(input.ids)];
+      const batches: string[][] = [];
+      for (let index = 0; index < ids.length; index += TRASH_MUTATION_BATCH_SIZE) {
+        batches.push(ids.slice(index, index + TRASH_MUTATION_BATCH_SIZE));
       }
-      await assertContentsNotInRestrictedKnowledgeBase(ctx, input.ids);
 
-      return ctx.trashService.trashDocuments(input.ids);
+      // Validate the complete legacy request before mutating any batch.
+      for (const batch of batches) {
+        const documents = await ctx.documentModel.findByIds(batch);
+        const accessibleIds = new Set(documents.map((document) => document.id));
+        if (batch.some((id) => !accessibleIds.has(id))) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'One or more documents were not found or are not accessible',
+          });
+        }
+        await assertContentsNotInRestrictedKnowledgeBase(ctx, batch);
+      }
+
+      const roots = [];
+      for (const batch of batches) roots.push(...(await ctx.trashService.trashDocuments(batch)));
+      return roots;
     }),
 
   getDocumentById: documentProcedure

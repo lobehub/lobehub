@@ -385,6 +385,14 @@ describe('TrashModel', () => {
       await model.releasePurgeClaim(root.id, 'claim-stale-retry');
       const released = await model.findByIdIncludingQueued(root.id);
       expect(released?.meta).toMatchObject({ purgeBlocked: true });
+      expect(await model.list()).toEqual({ items: [], nextCursor: null });
+      expect(await model.countByType()).toEqual({});
+      expect(await model.findById(root.id)).toBeUndefined();
+      expect(await model.findByIds([root.id])).toEqual([]);
+      expect(await model.findByResource('file', 'file_claimed')).toBeUndefined();
+      expect(await TrashModel.listExpiredRoots(serverDB, { limit: 10, now: claimedAt })).toEqual([
+        expect.objectContaining({ id: root.id }),
+      ]);
       await expect(
         serverDB.transaction((trx) => model.findActiveRootForUpdate(root.id, trx)),
       ).resolves.toBeUndefined();
