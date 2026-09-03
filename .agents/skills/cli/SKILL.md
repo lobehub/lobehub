@@ -104,6 +104,9 @@ reported as stale rather than attaching a workspace header the new identity has
 no membership in. `lh logout` clears it. `lh whoami` and `lh workspace current`
 both print which of the four sources is in effect.
 
+API-key auth carries no local account identity, so there is nothing to bind a
+saved scope to — those callers pass `LOBEHUB_WORKSPACE_ID` instead.
+
 ## Adding a New Command
 
 ### 1. Create Command File

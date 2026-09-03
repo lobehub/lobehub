@@ -97,7 +97,34 @@ describe('api/workspace scope resolution', () => {
       expect(withWorkspaceHeader({ 'Oidc-Auth': 'token' })).toEqual({ 'Oidc-Auth': 'token' });
     });
 
-    it('says why the saved scope was ignored, once per process', () => {
+    // The reason is the whole value of the warning: "different account" and
+    // "no account at all" need different fixes.
+    it.each([
+      [
+        'names the other account',
+        () => mockResolveIdentityFingerprint.mockReturnValue('user:u2'),
+        'a different account',
+      ],
+      [
+        'points API-key callers at the env var',
+        () => mockResolveIdentityFingerprint.mockReturnValue(undefined),
+        'LOBEHUB_WORKSPACE_ID',
+      ],
+      [
+        'names the other server',
+        () => mockResolveServerUrl.mockReturnValue('https://self-hosted.example.com'),
+        'https://app.lobehub.com',
+      ],
+    ])('%s', (_label, arrange, expected) => {
+      mockLoadActiveWorkspace.mockReturnValue(stored());
+      arrange();
+
+      resolveWorkspaceScope();
+
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining(expected));
+    });
+
+    it('warns at most once per process', () => {
       mockLoadActiveWorkspace.mockReturnValue(stored());
       mockResolveIdentityFingerprint.mockReturnValue('user:u2');
 

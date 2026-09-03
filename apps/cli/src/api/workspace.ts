@@ -25,15 +25,19 @@ function resolvePersistedScope(): WorkspaceScope | undefined {
   if (!stored) return undefined;
 
   const identity = resolveIdentityFingerprint();
-  if (stored.serverUrl === resolveServerUrl() && identity && identity === stored.identity) {
-    return { source: 'settings', workspaceId: stored.workspaceId };
-  }
+  const reason = !identity
+    ? "the current credentials don't identify an account — set LOBEHUB_WORKSPACE_ID instead"
+    : identity !== stored.identity
+      ? `it was set under a different account. Run 'workspace use' again to re-select it`
+      : stored.serverUrl !== resolveServerUrl()
+        ? `it was set for ${stored.serverUrl}`
+        : undefined;
+
+  if (!reason) return { source: 'settings', workspaceId: stored.workspaceId };
 
   if (!warnedAboutStaleScope) {
     warnedAboutStaleScope = true;
-    log.warn(
-      `Ignoring the saved workspace scope (${stored.workspaceId}): it was set under a different account or server. Run 'workspace use' again to re-select it.`,
-    );
+    log.warn(`Ignoring the saved workspace scope (${stored.workspaceId}): ${reason}.`);
   }
 
   return { source: 'stale' };

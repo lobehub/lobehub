@@ -2,30 +2,31 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveIdentityFingerprint } from './identity';
 
-const { mockLoadCredentials, mockReadCliApiKeyEnv } = vi.hoisted(() => ({
+const { mockLoadCredentials } = vi.hoisted(() => ({
   mockLoadCredentials: vi.fn<() => { accessToken: string } | null>(),
-  mockReadCliApiKeyEnv: vi.fn<() => string | undefined>(),
 }));
 
 vi.mock('./credentials', () => ({ loadCredentials: mockLoadCredentials }));
-vi.mock('../constants/auth', () => ({ readCliApiKeyEnv: mockReadCliApiKeyEnv }));
 
 const jwtWithSub = (sub: string) =>
   `header.${Buffer.from(JSON.stringify({ sub })).toString('base64url')}.signature`;
 
 describe('resolveIdentityFingerprint', () => {
   const originalJwt = process.env.LOBEHUB_JWT;
+  const originalApiKey = process.env.LOBEHUB_CLI_API_KEY;
 
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.LOBEHUB_JWT;
     mockLoadCredentials.mockReturnValue(null);
-    mockReadCliApiKeyEnv.mockReturnValue(undefined);
+    delete process.env.LOBEHUB_CLI_API_KEY;
   });
 
   afterEach(() => {
     if (originalJwt === undefined) delete process.env.LOBEHUB_JWT;
     else process.env.LOBEHUB_JWT = originalJwt;
+    if (originalApiKey === undefined) delete process.env.LOBEHUB_CLI_API_KEY;
+    else process.env.LOBEHUB_CLI_API_KEY = originalApiKey;
   });
 
   it('returns undefined when there is nothing to authenticate with', () => {
@@ -54,15 +55,21 @@ describe('resolveIdentityFingerprint', () => {
     expect(resolveIdentityFingerprint()).toBe('user:user_env');
   });
 
-  // An API key has no readable subject, so it is hashed — stable per key, and
-  // the key itself never lands in a file the scope record is written to.
-  it('fingerprints an API key without storing it', () => {
-    mockReadCliApiKeyEnv.mockReturnValue('sk-lh-secret');
+  // An API key has no readable subject. Digesting the key to make one would put
+  // a secret-derived artifact on disk, so this mode has no identity at all.
+  it('has no identity for API-key credentials', () => {
+    process.env.LOBEHUB_CLI_API_KEY = 'sk-lh-secret';
 
-    const fingerprint = resolveIdentityFingerprint();
+    expect(resolveIdentityFingerprint()).toBeUndefined();
+  });
 
-    expect(fingerprint).toMatch(/^apiKey:[\da-f]{16}$/);
-    expect(fingerprint).not.toContain('secret');
+  // The request authenticates as the API key's owner, so reading past it to the
+  // stored login would bind the scope to a different account than the caller.
+  it('does not fall back to the stored login when an API key is set', () => {
+    process.env.LOBEHUB_CLI_API_KEY = 'sk-lh-secret';
+    mockLoadCredentials.mockReturnValue({ accessToken: jwtWithSub('user_1') });
+
+    expect(resolveIdentityFingerprint()).toBeUndefined();
   });
 
   it('returns undefined for a token with no parseable subject', () => {

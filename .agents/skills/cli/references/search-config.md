@@ -86,8 +86,9 @@ Resolution order is `--workspace` → `LOBEHUB_WORKSPACE_ID` → the persisted s
 prints a warning, because the env var still wins.
 
 The persisted scope lives in `~/.lobehub/active-workspace` together with the
-account fingerprint and server URL it was chosen under. Switching account or
-server invalidates it; `lh logout` deletes it.
+account (`sub` claim) and server URL it was chosen under. Switching account or
+server invalidates it; `lh logout` deletes it. API-key auth has no local account
+identity, so `workspace use` refuses to save under it — use the env var.
 
 ### Reads
 

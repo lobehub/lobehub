@@ -24,7 +24,7 @@ const SCOPE_HINTS: Record<WorkspaceScope['source'], string> = {
   explicit: '--workspace',
   personal: 'personal (no workspace scope)',
   settings: `${CLI_PRIMARY_BIN} workspace use`,
-  stale: 'personal (saved scope ignored — set under another account or server)',
+  stale: 'personal (saved scope ignored — see the warning above)',
 };
 
 const describeScope = (scope: WorkspaceScope): string =>
@@ -69,7 +69,11 @@ const warnIfEnvOverridesPersistedScope = (): void => {
 const persistScope = (workspaceId: string): void => {
   const identity = resolveIdentityFingerprint();
   if (!identity) {
-    log.error(`Not logged in. Run '${CLI_PRIMARY_BIN} login' first.`);
+    // API-key mode has no local account identity to bind to, so there is no way
+    // to tell later whether the saved scope still belongs to the caller.
+    log.error(
+      `Cannot save a scope for these credentials. Run '${CLI_PRIMARY_BIN} login', or set LOBEHUB_WORKSPACE_ID for this session.`,
+    );
     process.exit(1);
   }
 
