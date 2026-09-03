@@ -134,6 +134,9 @@ const updateSchema = z.object({
 });
 
 const listSchema = z.object({
+  // Keyset cursor — rows strictly after this `(orderBy timestamp, seq)` position
+  // in newest-first order. Stable under concurrent inserts/deletes, unlike `offset`.
+  after: z.object({ at: z.coerce.date(), seq: z.number().int() }).optional(),
   assigneeAgentId: z.string().optional(),
   // true → only tasks whose schedule or heartbeat can still fire (a terminal or
   // misconfigured one cannot), false → its exact complement. Omitted leaves the

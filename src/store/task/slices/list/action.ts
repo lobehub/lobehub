@@ -114,30 +114,30 @@ export class TaskListSliceActionImpl {
     taskService.list(params);
 
   /**
-   * Every page of a list, merged. The first page reveals `total`; the rest are
-   * requested in parallel up to `COMPLETE_TASK_LIST_MAX_ITEMS`. Rows are
-   * de-duplicated by id because a task created or removed between two page
-   * requests shifts the offsets, which would otherwise list a row twice.
+   * Every page of a list, merged, walked with a keyset cursor: each request
+   * asks for the rows after the last row it already holds, so a task created
+   * or deleted while the walk is in flight shifts nothing — offset pages would
+   * repeat or skip a row at the boundary. Stops at a short page or at
+   * `COMPLETE_TASK_LIST_MAX_ITEMS`; `total` is the first page's live count.
    */
   fetchCompleteTaskList = async (
-    params: Omit<Parameters<typeof taskService.list>[0], 'limit' | 'offset'>,
+    params: Omit<Parameters<typeof taskService.list>[0], 'after' | 'limit' | 'offset'>,
   ) => {
     const limit = COMPLETE_TASK_LIST_PAGE_SIZE;
-    const first = await this.fetchTaskList({ ...params, limit, offset: 0 });
-    const target = Math.min(first.total, COMPLETE_TASK_LIST_MAX_ITEMS);
-    if (first.data.length >= target) return first;
-
-    const offsets: number[] = [];
-    for (let offset = limit; offset < target; offset += limit) offsets.push(offset);
-    const rest = await Promise.all(
-      offsets.map((offset) => this.fetchTaskList({ ...params, limit, offset })),
-    );
+    const orderBy = params.orderBy ?? 'createdAt';
+    const first = await this.fetchTaskList({ ...params, limit });
 
     const byId = new Map<string, (typeof first.data)[number]>();
-    for (const page of [first, ...rest]) {
-      for (const task of page.data) {
-        if (!byId.has(task.id)) byId.set(task.id, task);
-      }
+    let page = first;
+    for (;;) {
+      for (const task of page.data) byId.set(task.id, task);
+      const last = page.data.at(-1);
+      if (!last || page.data.length < limit || byId.size >= COMPLETE_TASK_LIST_MAX_ITEMS) break;
+      page = await this.fetchTaskList({
+        ...params,
+        after: { at: last[orderBy], seq: last.seq },
+        limit,
+      });
     }
 
     return { ...first, data: [...byId.values()] };

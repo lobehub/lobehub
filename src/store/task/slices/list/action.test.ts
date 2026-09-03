@@ -430,122 +430,111 @@ describe('TaskListSliceAction', () => {
   // workspace grew past that — e.g. a private task assigned to the viewer
   // showing under "Private" (few rows) but not under "All" (LOBE-13779).
   describe('useFetchTaskList complete mode', () => {
-    const page = (offset: number, size: number, total: number) =>
-      ({
-        data: Array.from({ length: size }, (_, i) => ({ id: `t${offset + i}` })),
-        success: true,
-        total,
-      }) as any;
-
-    it('fetches every page and merges them when the list exceeds one page', async () => {
+    interface Row {
+      createdAt: Date;
+      id: string;
+      seq: number;
+    }
+    // Newest-first, like the server: seq N is the newest row.
+    const dataset = (size: number): Row[] =>
+      Array.from({ length: size }, (_, i) => ({
+        createdAt: new Date(2026, 0, 1, 0, 0, 0, size - i),
+        id: `t${size - i}`,
+        seq: size - i,
+      }));
+    // A keyset server: rows strictly after the `(createdAt, seq)` cursor.
+    const serve = (rows: () => Row[]) =>
+      vi.mocked(taskServiceList).mockImplementation(async ({ after, limit = 50 }: any) => {
+        const all = rows();
+        const start = after ? all.findIndex((r) => r.seq === after.seq) + 1 : 0;
+        return { data: all.slice(start, start + limit), success: true, total: all.length } as any;
+      });
+    let taskServiceList: (...args: any[]) => any;
+    const runFetcher = async (options: Record<string, unknown>) => {
       const { useClientDataSWR } = await import('@/libs/swr');
-      const { taskService } = await import('@/services/task');
-      vi.mocked(taskService.list).mockImplementation(async ({ offset = 0 }: any) =>
-        page(offset, Math.min(100, 230 - offset), 230),
-      );
-
-      useTaskStore
-        .getState()
-        .useFetchTaskList({ allAgents: true, complete: true, visibility: 'all' });
-
+      useTaskStore.getState().useFetchTaskList({ allAgents: true, visibility: 'all', ...options });
       const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as (
         key: unknown[],
-      ) => Promise<{ data: unknown[]; total: number }>;
-      const result = await fetcher(['task:list', '__all__', 'all', 'createdAt']);
+      ) => Promise<{ data: Row[]; total: number }>;
+      return fetcher(['task:list', '__all__', 'all', 'createdAt']);
+    };
 
-      expect(taskService.list).toHaveBeenCalledTimes(3);
-      expect(taskService.list).toHaveBeenNthCalledWith(
+    beforeEach(async () => {
+      taskServiceList = (await import('@/services/task')).taskService.list;
+    });
+
+    it('walks every page with a keyset cursor and merges them', async () => {
+      const rows = dataset(230);
+      serve(() => rows);
+
+      const result = await runFetcher({ complete: true });
+
+      expect(taskServiceList).toHaveBeenCalledTimes(3);
+      expect(taskServiceList).toHaveBeenNthCalledWith(
         1,
-        expect.objectContaining({ limit: 100, offset: 0 }),
+        expect.not.objectContaining({ after: expect.anything() }),
       );
-      expect(taskService.list).toHaveBeenNthCalledWith(
+      expect(taskServiceList).toHaveBeenNthCalledWith(
         2,
-        expect.objectContaining({ limit: 100, offset: 100 }),
+        expect.objectContaining({
+          after: { at: rows[99].createdAt, seq: rows[99].seq },
+          limit: 100,
+        }),
       );
-      expect(taskService.list).toHaveBeenNthCalledWith(
+      expect(taskServiceList).toHaveBeenNthCalledWith(
         3,
-        expect.objectContaining({ limit: 100, offset: 200 }),
+        expect.objectContaining({ after: { at: rows[199].createdAt, seq: rows[199].seq } }),
       );
       expect(result.data).toHaveLength(230);
       expect(result.total).toBe(230);
     });
 
     it('issues a single request when the first page already holds everything', async () => {
-      const { useClientDataSWR } = await import('@/libs/swr');
-      const { taskService } = await import('@/services/task');
-      vi.mocked(taskService.list).mockResolvedValue(page(0, 12, 12) as any);
+      serve(() => dataset(12));
 
-      useTaskStore
-        .getState()
-        .useFetchTaskList({ allAgents: true, complete: true, visibility: 'all' });
+      const result = await runFetcher({ complete: true });
 
-      const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as (
-        key: unknown[],
-      ) => Promise<{ data: unknown[]; total: number }>;
-      const result = await fetcher(['task:list', '__all__', 'all', 'createdAt']);
-
-      expect(taskService.list).toHaveBeenCalledTimes(1);
+      expect(taskServiceList).toHaveBeenCalledTimes(1);
       expect(result.data).toHaveLength(12);
     });
 
-    it('drops rows that shifted between pages instead of listing them twice', async () => {
-      const { useClientDataSWR } = await import('@/libs/swr');
-      const { taskService } = await import('@/services/task');
-      vi.mocked(taskService.list).mockImplementation(async ({ offset = 0 }: any) =>
-        // A task created between the two requests pushes `t99` onto page 2.
-        offset === 0
-          ? page(0, 100, 101)
-          : { ...page(99, 2, 101), data: [{ id: 't99' }, { id: 't100' }] },
-      );
+    // An offset walk would re-read the row that slid into page one's slot and
+    // never see the last live row; the cursor keeps walking from the last row
+    // it holds, so nothing live is skipped.
+    it('does not skip a row when a task is deleted between two pages', async () => {
+      let rows = dataset(101);
+      serve(() => rows);
+      vi.mocked(taskServiceList).mockImplementationOnce(async (params: any) => {
+        const page = rows.slice(0, params.limit);
+        rows = rows.filter((r) => r.seq !== 50); // deleted after page one was read
+        return { data: page, success: true, total: 101 } as any;
+      });
 
-      useTaskStore
-        .getState()
-        .useFetchTaskList({ allAgents: true, complete: true, visibility: 'all' });
+      const result = await runFetcher({ complete: true });
 
-      const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as (
-        key: unknown[],
-      ) => Promise<{ data: Array<{ id: string }>; total: number }>;
-      const result = await fetcher(['task:list', '__all__', 'all', 'createdAt']);
-
-      expect(result.data.map((t) => t.id).filter((id) => id === 't99')).toHaveLength(1);
-      expect(result.data).toHaveLength(101);
+      const ids = result.data.map((r) => r.id);
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(ids).toContain('t1'); // the last live row, which an offset walk drops
+      expect(result.total).toBe(101);
     });
 
-    it('stops at the page cap and keeps the real total so the UI can say so', async () => {
-      const { useClientDataSWR } = await import('@/libs/swr');
-      const { taskService } = await import('@/services/task');
-      vi.mocked(taskService.list).mockImplementation(async ({ offset = 0 }: any) =>
-        page(offset, 100, 1500),
-      );
+    it('stops at the row ceiling and keeps the real total so the UI can say so', async () => {
+      serve(() => dataset(1500));
 
-      useTaskStore
-        .getState()
-        .useFetchTaskList({ allAgents: true, complete: true, visibility: 'all' });
+      const result = await runFetcher({ complete: true });
 
-      const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as (
-        key: unknown[],
-      ) => Promise<{ data: unknown[]; total: number }>;
-      const result = await fetcher(['task:list', '__all__', 'all', 'createdAt']);
-
-      expect(taskService.list).toHaveBeenCalledTimes(10);
+      expect(taskServiceList).toHaveBeenCalledTimes(10);
       expect(result.data).toHaveLength(1000);
       expect(result.total).toBe(1500);
     });
 
     it('keeps the single-page request for callers that do not opt in', async () => {
-      const { useClientDataSWR } = await import('@/libs/swr');
-      const { taskService } = await import('@/services/task');
-      vi.mocked(taskService.list).mockResolvedValue(page(0, 50, 230) as any);
+      serve(() => dataset(230));
 
-      useTaskStore.getState().useFetchTaskList({ allAgents: true, visibility: 'all' });
+      await runFetcher({});
 
-      const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as (
-        key: unknown[],
-      ) => Promise<unknown>;
-      await fetcher(['task:list', '__all__', 'all', 'createdAt']);
-
-      expect(taskService.list).toHaveBeenCalledTimes(1);
-      expect(taskService.list).toHaveBeenCalledWith(
+      expect(taskServiceList).toHaveBeenCalledTimes(1);
+      expect(taskServiceList).toHaveBeenCalledWith(
         expect.not.objectContaining({ limit: expect.anything() }),
       );
     });
