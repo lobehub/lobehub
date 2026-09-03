@@ -8,6 +8,7 @@ import {
   UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE,
 } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import {
@@ -51,6 +52,7 @@ const deleteKnowledgeItemsByQuerySchema = QueryFileListSchema.extend({
   excludedIds: z.array(z.string()).optional(),
 });
 const markdownPreviewTypes = new Set<string>(MARKDOWN_MIME_TYPES);
+const KNOWLEDGE_ITEM_RESOLUTION_CONCURRENCY = 8;
 
 const isMarkdownFile = (item: { fileType: string; name: string }) =>
   markdownPreviewTypes.has(item.fileType) || /\.md(?:arkdown)?$/i.test(item.name);
@@ -484,11 +486,12 @@ export const fileRouter = router({
     const fileItems = filteredItems.filter((item) => item.sourceType === 'file');
     const statusMap = await getKnowledgeItemStatusMap(ctx, fileItems);
 
-    // Resolve file access URLs in parallel: in local dev each call goes through
-    // Redis + a possible S3 presign, so a serial loop stacks up N RTTs on
-    // larger result sets (visible when switching from Private to Workspace).
-    const resultItems = await Promise.all(
-      filteredItems.map(async (item) => {
+    // Resolve file access URLs and raw Markdown previews with bounded concurrency:
+    // each item may perform Redis/S3 I/O, so serial work is slow while an unbounded
+    // Promise.all lets a caller fan out arbitrary object-storage reads.
+    const resultItems = await pMap(
+      filteredItems,
+      async (item) => {
         let contentPreviewSource = item.contentPreviewSource;
         if (
           includeContentPreview &&
@@ -569,7 +572,8 @@ export const fileRouter = router({
           userId: item.userId,
           visibility: item.visibility,
         } as FileListItem;
-      }),
+      },
+      { concurrency: KNOWLEDGE_ITEM_RESOLUTION_CONCURRENCY },
     );
 
     return {

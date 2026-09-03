@@ -916,6 +916,52 @@ describe('fileRouter', () => {
       expect(result.items[0]).not.toHaveProperty('contentPreviewSource');
     });
 
+    it('bounds raw Markdown preview reads without truncating or reordering results', async () => {
+      const itemCount = 12;
+      const knowledgeItems = Array.from({ length: itemCount }, (_, index) => ({
+        ...mockFile,
+        documentId: null,
+        fileType: 'text/markdown',
+        id: `file-${index}`,
+        name: `notes-${index}.md`,
+        sourceType: 'file' as const,
+        url: `files/notes-${index}.md`,
+      }));
+      mockKnowledgeRepoQuery.mockResolvedValue(knowledgeItems);
+
+      let activeReads = 0;
+      let peakReads = 0;
+      const releases: Array<() => void> = [];
+      mockFileServiceGetFileContent.mockImplementation(async () => {
+        activeReads += 1;
+        peakReads = Math.max(peakReads, activeReads);
+        await new Promise<void>((resolve) => releases.push(resolve));
+        activeReads -= 1;
+        return '# Preview';
+      });
+
+      const resultPromise = caller.getKnowledgeItems({
+        includeContentPreview: true,
+        limit: itemCount,
+      });
+
+      await vi.waitFor(() => expect(mockFileServiceGetFileContent).toHaveBeenCalledTimes(8));
+      expect(peakReads).toBe(8);
+      releases.splice(0).forEach((release) => release());
+
+      await vi.waitFor(() =>
+        expect(mockFileServiceGetFileContent).toHaveBeenCalledTimes(itemCount),
+      );
+      expect(peakReads).toBe(8);
+      releases.splice(0).forEach((release) => release());
+
+      const result = await resultPromise;
+      expect(result.items).toHaveLength(itemCount);
+      expect(result.items.map((item: { id: string }) => item.id)).toEqual(
+        knowledgeItems.map((item) => item.id),
+      );
+    });
+
     it('uses derived Markdown content without reading object storage again', async () => {
       mockKnowledgeRepoQuery.mockResolvedValue([
         {
