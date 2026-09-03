@@ -1061,6 +1061,33 @@ describe('AgentRuntimeService', () => {
       );
     });
 
+    it('should detect an interruption written by an old worker without a sentinel', async () => {
+      const mockStepResult = {
+        events: [],
+        newState: { ...mockState, status: 'running', stepCount: 2 },
+        nextContext: mockParams.context,
+      };
+
+      const mockRuntime = { step: vi.fn().mockResolvedValue(mockStepResult) };
+      vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
+      mockCoordinator.loadAgentState
+        .mockResolvedValueOnce(mockState)
+        .mockResolvedValueOnce({ ...mockState, status: 'interrupted' });
+      mockCoordinator.isInterrupted.mockResolvedValueOnce(false);
+
+      const result = await service.executeStep(mockParams);
+
+      expect(result.state).toEqual(expect.objectContaining({ status: 'interrupted' }));
+      expect(result.nextStepScheduled).toBe(false);
+      expect(mockCoordinator.loadAgentState).toHaveBeenCalledTimes(2);
+      expect(mockCoordinator.saveStepResult).toHaveBeenCalledWith(
+        'test-operation-1',
+        expect.objectContaining({
+          newState: expect.objectContaining({ status: 'interrupted' }),
+        }),
+      );
+    });
+
     it('should resolve pending client tools when interruption races the parked result', async () => {
       const completedTool = {
         apiName: 'calculate',

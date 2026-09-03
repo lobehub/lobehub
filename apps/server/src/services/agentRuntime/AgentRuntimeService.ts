@@ -1916,10 +1916,14 @@ export class AgentRuntimeService {
         }));
 
         // Check if the operation was interrupted while the step was executing
-        // (e.g., user clicked abort during a long LLM call). Sentinel key
-        // only — the boolean is all this branch needs and the state blob is
-        // large.
-        const wasInterrupted = await this.coordinator.isInterrupted(operationId);
+        // (e.g., user clicked abort during a long LLM call). Prefer the tiny
+        // sentinel, but fall back to the state once at the step boundary while
+        // old workers that only write `status: 'interrupted'` may still be
+        // running during a rolling deployment.
+        const sentinelInterrupted = await this.coordinator.isInterrupted(operationId);
+        const wasInterrupted = sentinelInterrupted
+          ? true
+          : (await this.coordinator.loadAgentState(operationId))?.status === 'interrupted';
         logToolCallPc(operationId, stepIndex, 'post.latest_state_loaded', () => ({
           interrupted: wasInterrupted,
         }));
