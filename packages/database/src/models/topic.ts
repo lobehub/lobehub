@@ -365,48 +365,90 @@ const buildTopicOrderBy = (topicActivityAt: SQL, sortBy?: TopicQuerySortBy): SQL
  * tick from the day it shipped, so rate-limit continuations never once resumed).
  * `jsonbNullTest.test.ts` is the source-shape guard that holds the line.
  */
+export interface TopicModelOptions {
+  /**
+   * Opt IN to agent-share visitor topics. Visitor conversations persist under
+   * the CREATOR's `userId` (only `topics.senderId` marks them), so every
+   * creator-facing read/write is default-scoped to exclude them. Only the
+   * share-runtime surfaces (share-scoped tRPC routers, share abuse guards,
+   * and the agent runtime paths that persist or clean up a visitor turn
+   * under the creator's identity) should set this to `true`.
+   */
+  includeShareVisitor?: boolean;
+}
+
 export class TopicModel {
   private userId: string;
   private db: LobeChatDatabase;
   private ftsSearchCandidateSource?: FtsSearchCandidateSource;
   private workspaceId?: string;
+  /**
+   * When true, {@link ownership} (and by extension every creator-scoped read
+   * path below) stops ANDing {@link notShareVisitorTopic}. Reserved for
+   * surfaces that are share-runtime by design (agent-share visitor router,
+   * share-scoped abuse guards) and for the agent runtime paths that persist
+   * or clean up a visitor turn under the CREATOR's identity. Defaults to
+   * false so every ordinary creator-facing caller fails closed instead of
+   * relying on a per-callsite `notShareVisitorTopic()` AND.
+   */
+  private includeShareVisitor: boolean;
 
   constructor(
     db: LobeChatDatabase,
     userId: string,
     workspaceId?: string,
     ftsSearchCandidateSource?: FtsSearchCandidateSource,
+    options: TopicModelOptions = {},
   ) {
     this.userId = userId;
     this.db = db;
     this.workspaceId = workspaceId;
     this.ftsSearchCandidateSource = ftsSearchCandidateSource;
+    this.includeShareVisitor = options.includeShareVisitor ?? false;
   }
 
-  private ownership = () =>
+  /**
+   * Raw workspace/user scope, WITHOUT the visitor exclusion. Backing store for
+   * both {@link ownership} and {@link mine}, and the escape hatch for methods
+   * that must see visitor rows independent of the instance flag
+   * ({@link queryBySender} / {@link countBySender} / {@link countVisitors}).
+   */
+  private workspaceScope = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics);
+
+  private ownership = () => and(this.workspaceScope(), this.notShareVisitor());
 
   /**
    * In workspace mode `ownership()` matches every member's topics, so a bulk
    * "clear all" would wipe teammates' conversations. Destructive sweeps must
    * additionally pin `user_id` to the caller (personal mode is unchanged —
    * ownership already scopes to the user there).
+   *
+   * `mine()` deliberately does NOT AND {@link notShareVisitor} — it is the
+   * per-user variant of {@link workspaceScope} and the share-scoped methods
+   * ({@link queryBySender} / {@link countBySender} / {@link countVisitors})
+   * layer their own `senderId` predicate on top of it. Creator-facing
+   * destructive sweeps that reach for `mine()` still get the visitor
+   * exclusion by AND-ing {@link notShareVisitor} themselves.
    */
-  private mine = () => and(this.ownership(), eq(topics.userId, this.userId));
+  private mine = () => and(this.workspaceScope(), eq(topics.userId, this.userId));
 
   private messageOwnership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages);
 
   /**
-   * See `notShareVisitorTopic` in `../utils/shareVisitor` — shared with the
-   * repositories/models that query `topics` outside this class. Every
-   * creator-facing listing/count/aggregation over `topics` must AND this in,
-   * or a visitor's conversations silently show up in the creator's own topic
-   * sidebar and stats. The visitor-scoped counterparts ({@link queryBySender},
-   * {@link countBySender}) intentionally do the opposite — they match on
-   * `senderId`, not exclude it — and must never call this helper.
+   * The default visitor exclusion applied by {@link ownership}: `topics.senderId IS NULL`,
+   * shared with the repositories/models that query `topics` outside this
+   * class (see `notShareVisitorTopic` in `../utils/shareVisitor`). Returns
+   * `undefined` when the instance was constructed with `includeShareVisitor:
+   * true`, so the share runtime opts in explicitly and every other caller
+   * gets the visitor guard for free.
+   *
+   * The visitor-scoped counterparts ({@link queryBySender}, {@link countBySender})
+   * intentionally do the opposite — they match on `senderId`, not exclude
+   * it — and use {@link mine} (which skips this helper).
    */
-  private notShareVisitor = () => notShareVisitorTopic();
+  private notShareVisitor = () => (this.includeShareVisitor ? undefined : notShareVisitorTopic());
   // **************** Query *************** //
 
   query = async ({
@@ -740,11 +782,11 @@ export class TopicModel {
   };
 
   /**
-   * Raw ownership-scoped lookup. Agent-share visitor topics carry the CREATOR's
-   * `userId`, so this DOES return them — required by the share runtime, which
-   * resolves a visitor topic through the creator-scoped model and then verifies
-   * `senderId` itself (`findVisitorTopicOrThrow`). Creator-facing read entry
-   * points must use {@link TopicModel.findOwnTopicById} instead.
+   * Ownership-scoped lookup. Agent-share visitor topics carry the CREATOR's
+   * `userId` and are excluded by default; the share runtime opts in by
+   * constructing the model with `{ includeShareVisitor: true }`.
+   * `findVisitorTopicOrThrow` in `apps/server/src/routers/lambda/shareChat.ts`
+   * relies on that opt-in and then verifies `senderId` itself.
    */
   findById = async (id: string) => {
     return this.db.query.topics.findFirst({
@@ -753,15 +795,12 @@ export class TopicModel {
   };
 
   /**
-   * Creator-facing twin of {@link TopicModel.findById}: excludes agent-share
-   * visitor topics, so a creator handed a raw visitor `topicId` gets nothing
-   * back instead of reading a conversation `allowCreatorViewSessions=false`
-   * is meant to hide.
+   * Kept for readability at creator-facing router call sites; the default
+   * scope already excludes agent-share visitor topics, so this is a thin
+   * alias of {@link TopicModel.findById}.
    */
   findOwnTopicById = async (id: string) => {
-    return this.db.query.topics.findFirst({
-      where: and(eq(topics.id, id), this.ownership(), notShareVisitorTopic()),
-    });
+    return this.findById(id);
   };
 
   /**
@@ -780,7 +819,10 @@ export class TopicModel {
     const rows = await this.db
       .select({ id: topics.id })
       .from(topics)
-      .where(and(inArray(topics.id, ids), this.ownership(), not(this.notShareVisitor())));
+      // Explicitly scoped visitor-inclusive: this method's whole job is to
+      // return visitor ids so the router-level `assertCreatorTopicTargets`
+      // can reject them, so it must bypass the instance's visitor exclusion.
+      .where(and(inArray(topics.id, ids), this.workspaceScope(), isNotNull(topics.senderId)));
 
     return rows.map((row) => row.id);
   };
@@ -793,16 +835,12 @@ export class TopicModel {
   };
 
   /**
-   * Creator-facing twin of {@link TopicModel.findByIds}: excludes agent-share
-   * visitor topics, so a creator handed raw visitor `topicId`s gets nothing
-   * back for those ids instead of reading conversations
-   * `allowCreatorViewSessions=false` is meant to hide.
+   * Kept for readability at creator-facing router call sites; the default
+   * scope already excludes agent-share visitor topics, so this is a thin
+   * alias of {@link TopicModel.findByIds}.
    */
   findOwnTopicsByIds = async (ids: string[]): Promise<TopicItem[]> => {
-    if (ids.length === 0) return [];
-    return this.db.query.topics.findMany({
-      where: and(inArray(topics.id, ids), this.ownership(), notShareVisitorTopic()),
-    });
+    return this.findByIds(ids);
   };
 
   /**

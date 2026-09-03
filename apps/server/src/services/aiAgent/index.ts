@@ -116,6 +116,14 @@ export class AiAgentService {
     db: LobeChatDatabase,
     userId: string,
     options?: {
+      /**
+       * Opt IN to agent-share visitor rows for the models this service (and
+       * the {@link AgentRuntimeService} it constructs) owns. Reserved for
+       * share-runtime entry points that drive a visitor turn under the
+       * creator's `userId` (`share.ownerId`). Defaults to false; ordinary
+       * creator-facing entry points get the visitor exclusion for free.
+       */
+      includeShareVisitor?: boolean;
       marketAccessToken?: string;
       runtimeOptions?: AgentRuntimeServiceOptions;
       withholdGatewayToken?: boolean;
@@ -127,19 +135,23 @@ export class AiAgentService {
     this.workspaceId = options?.workspaceId;
     this.withholdGatewayToken = options?.withholdGatewayToken ?? false;
     const wsId = this.workspaceId;
+    const includeShareVisitor = options?.includeShareVisitor ?? false;
+    const messageModelOptions = { includeShareVisitor };
+    const topicModelOptions = { includeShareVisitor };
     this.agentDocumentsService = new AgentDocumentsService(db, userId, wsId);
     this.agentModel = new AgentModel(db, userId, wsId);
     this.agentOperationModel = new AgentOperationModel(db, userId, wsId);
     this.agentService = new AgentService(db, userId, wsId);
-    this.messageModel = new MessageModel(db, userId, wsId);
+    this.messageModel = new MessageModel(db, userId, wsId, undefined, messageModelOptions);
     this.connectorModel = new ConnectorModel(db, userId, wsId);
     this.connectorToolModel = new ConnectorToolModel(db, userId, wsId);
     this.pluginModel = new PluginModel(db, userId, wsId);
     this.taskModel = new TaskModel(db, userId, wsId);
     this.threadModel = new ThreadModel(db, userId, wsId);
-    this.topicModel = new TopicModel(db, userId, wsId);
+    this.topicModel = new TopicModel(db, userId, wsId, undefined, topicModelOptions);
     this.agentRuntimeService = new AgentRuntimeService(db, userId, {
       ...options?.runtimeOptions,
+      includeShareVisitor,
       agentFactory: createGraphAwareAgentFactory(options?.runtimeOptions?.agentFactory),
       // ── Runtime delegate ─────────────────────────────────────────────────
       // Operations the runtime delegates back UP to this layer. The dependency

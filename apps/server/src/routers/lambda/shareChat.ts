@@ -212,8 +212,12 @@ export const shareChatRouter = router({
         share.shareConfig.maxTopicsPerVisitor ?? AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR;
       const maxTurnsPerTopic =
         share.shareConfig.maxTurnsPerTopic ?? AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC;
-      const topicModel = new TopicModel(ctx.serverDB, share.ownerId);
-      const messageModel = new MessageModel(ctx.serverDB, share.ownerId);
+      const topicModel = new TopicModel(ctx.serverDB, share.ownerId, undefined, undefined, {
+        includeShareVisitor: true,
+      });
+      const messageModel = new MessageModel(ctx.serverDB, share.ownerId, undefined, undefined, {
+        includeShareVisitor: true,
+      });
 
       // Fast, UX-only pre-check for both caps: reject an obviously-over-cap
       // request BEFORE paying for agent-config/tool resolution, instead of only
@@ -278,6 +282,11 @@ export const shareChatRouter = router({
       }
 
       const aiAgentService = new AiAgentService(ctx.serverDB, share.ownerId, {
+        // Share visitor turns persist under the creator's `userId` — the
+        // service's internal `messageModel`/`topicModel`/runtime must be
+        // constructed with the visitor scope so reads/writes on
+        // `topics.senderId <> NULL` rows aren't filtered out.
+        includeShareVisitor: true,
         marketAccessToken,
       });
 
@@ -354,14 +363,18 @@ export const shareChatRouter = router({
   getMessages: shareChatProcedure.input(ShareTopicScopeSchema).query(async ({ input, ctx }) => {
     const share = await resolveLinkShareOrThrow(ctx.serverDB, input.shareId, ctx.userId);
 
-    const topicModel = new TopicModel(ctx.serverDB, share.ownerId);
+    const topicModel = new TopicModel(ctx.serverDB, share.ownerId, undefined, undefined, {
+      includeShareVisitor: true,
+    });
     await findVisitorTopicOrThrow(topicModel, {
       agentId: share.agentId,
       topicId: input.topicId,
       visitorUserId: ctx.userId,
     });
 
-    const messageModel = new MessageModel(ctx.serverDB, share.ownerId);
+    const messageModel = new MessageModel(ctx.serverDB, share.ownerId, undefined, undefined, {
+      includeShareVisitor: true,
+    });
     const fileService = new FileService(ctx.serverDB, share.ownerId);
 
     // queryForVisitor strips the creator's `sender` identity, and — unless the
@@ -395,7 +408,9 @@ export const shareChatRouter = router({
       // what a visitor already created. Tying the page size to it would hide
       // those older conversations with no pagination or deep link to reach
       // them, so the model applies its own fixed, generous list bound instead.
-      const topicModel = new TopicModel(ctx.serverDB, share.ownerId);
+      const topicModel = new TopicModel(ctx.serverDB, share.ownerId, undefined, undefined, {
+        includeShareVisitor: true,
+      });
       return topicModel.queryBySender({
         agentId: share.agentId,
         senderId: ctx.userId,
@@ -422,7 +437,9 @@ export const shareChatRouter = router({
     .mutation(async ({ input, ctx }) => {
       const share = await resolveLinkShareOrThrow(ctx.serverDB, input.shareId, ctx.userId);
 
-      const topicModel = new TopicModel(ctx.serverDB, share.ownerId);
+      const topicModel = new TopicModel(ctx.serverDB, share.ownerId, undefined, undefined, {
+        includeShareVisitor: true,
+      });
       const topic = await findVisitorTopicOrThrow(topicModel, {
         agentId: share.agentId,
         topicId: input.topicId,
@@ -440,7 +457,9 @@ export const shareChatRouter = router({
       // Creator-scoped service, same as `execAgent` — the run's operation /
       // thread rows were written under the creator's identity, so the
       // underlying `interruptTask` implementation must resolve them there.
-      const aiAgentService = new AiAgentService(ctx.serverDB, share.ownerId);
+      const aiAgentService = new AiAgentService(ctx.serverDB, share.ownerId, {
+        includeShareVisitor: true,
+      });
 
       log(
         'interruptTask: share=%s visitor=%s topic=%s operation=%s',
@@ -477,7 +496,9 @@ export const shareChatRouter = router({
     .query(async ({ input, ctx }) => {
       const share = await resolveLinkShareOrThrow(ctx.serverDB, input.shareId, ctx.userId);
 
-      const topicModel = new TopicModel(ctx.serverDB, share.ownerId);
+      const topicModel = new TopicModel(ctx.serverDB, share.ownerId, undefined, undefined, {
+        includeShareVisitor: true,
+      });
       const topic = await findVisitorTopicOrThrow(topicModel, {
         agentId: share.agentId,
         topicId: input.topicId,

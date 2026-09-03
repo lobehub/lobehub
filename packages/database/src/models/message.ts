@@ -174,6 +174,16 @@ const getMessageWorkRootId = (metadata: unknown): string | undefined => {
  */
 export interface QueryMessagesOptions {
   /**
+   * Opt IN to agent-share visitor rows for this call, overriding the default
+   * `ownership()` visitor exclusion. Combined via OR with the instance's
+   * `includeShareVisitor` flag, so an instance already opted in stays opted
+   * in and a default-scoped instance can still be widened per-call (this is
+   * how {@link MessageModel.queryForVisitor} works before the share-runtime
+   * routers switch to constructing the model with `{ includeShareVisitor:
+   * true }`).
+   */
+  allowShareVisitor?: boolean;
+  /**
    * Current page number (0-indexed)
    */
   current?: number;
@@ -470,6 +480,18 @@ const computeTopicMessageStats = (counts: number[]): TopicMessageStats => {
  * drives visitor turns under the creator's identity) passes this.
  */
 export interface ShareVisitorWriteOptions {
+  includeShareVisitor?: boolean;
+}
+
+/**
+ * Constructor options for {@link MessageModel} — mirrors the twin flag on
+ * {@link import('./topic').TopicModelOptions}. When `includeShareVisitor` is
+ * true, the instance's `ownership()` predicate no longer excludes agent-share
+ * visitor messages; the escape hatch that per-call {@link ShareVisitorWriteOptions}
+ * used to be the only way to grant. Share-only surfaces should set this at
+ * construction and stop threading per-call opt-ins through their code.
+ */
+export interface MessageModelOptions {
   includeShareVisitor?: boolean;
 }
 
@@ -854,21 +876,47 @@ export class MessageModel {
   private db: LobeChatDatabase;
   private ftsSearchCandidateSource?: FtsSearchCandidateSource;
   private workspaceId?: string;
+  /**
+   * When true, {@link ownership} (and by extension every creator-scoped
+   * read/write below) stops ANDing {@link notShareVisitorMessage}. Reserved
+   * for surfaces that are share-runtime by design (agent-share visitor
+   * router, share-scoped abuse guards) and for the agent runtime paths that
+   * persist or clean up a visitor turn under the CREATOR's identity.
+   * Defaults to false so every ordinary creator-facing caller fails closed.
+   */
+  private includeShareVisitor: boolean;
 
   constructor(
     db: LobeChatDatabase,
     userId: string,
     workspaceId?: string,
     ftsSearchCandidateSource?: FtsSearchCandidateSource,
+    options: MessageModelOptions = {},
   ) {
     this.userId = userId;
     this.db = db;
     this.workspaceId = workspaceId;
     this.ftsSearchCandidateSource = ftsSearchCandidateSource;
+    this.includeShareVisitor = options.includeShareVisitor ?? false;
   }
 
-  private ownership = () =>
+  /**
+   * Raw workspace/user scope, WITHOUT the visitor exclusion. Backing store
+   * for {@link ownership} and the escape hatch for methods that resolve the
+   * effective visitor gate per-call ({@link deleteMessage},
+   * {@link deleteMessages}, {@link query} via `allowShareVisitor`, …).
+   */
+  private workspaceScope = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages);
+
+  /**
+   * Default visitor exclusion applied by {@link ownership} — see
+   * `notShareVisitorMessage` in `../utils/shareVisitor`. Returns `undefined`
+   * when the instance was constructed with `includeShareVisitor: true`.
+   */
+  private notShareVisitor = () => (this.includeShareVisitor ? undefined : notShareVisitorMessage());
+
+  private ownership = () => and(this.workspaceScope(), this.notShareVisitor());
 
   private pluginsOwnership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messagePlugins);
@@ -954,7 +1002,12 @@ export class MessageModel {
     } = {},
   ) => {
     const queryStartedAt = Date.now();
-    const shareVisitorCondition = options.allowShareVisitor ? undefined : notShareVisitorMessage();
+    // Effective visitor gate: per-call `allowShareVisitor` OR the instance's
+    // `includeShareVisitor`. Combined so `queryForVisitor(...)` still works
+    // on a default-scoped instance (its explicit param overrides), AND a
+    // share-runtime instance stops needing the param at every call site.
+    const includeVisitor = options.allowShareVisitor || this.includeShareVisitor;
+    const shareVisitorCondition = includeVisitor ? undefined : notShareVisitorMessage();
     const timing = options.timing;
     logTiming(timing, 'db.message.query:start', {
       current,
@@ -991,6 +1044,7 @@ export class MessageModel {
       // scope the complete thread to it instead of filtering those replies by the parent agent.
       const threadScopeCondition = topicId ? this.matchTopic(topicId) : agentCondition;
       const messageItems = await this.queryWithWhere({
+        allowShareVisitor: includeVisitor,
         current,
         includeFileWorks,
         pageSize,
@@ -1019,6 +1073,7 @@ export class MessageModel {
       );
 
       const messageItems = await this.queryWithWhere({
+        allowShareVisitor: includeVisitor,
         current,
         includeFileWorks,
         pageSize,
@@ -1051,6 +1106,7 @@ export class MessageModel {
     );
 
     const messageItems = await this.queryWithWhere({
+      allowShareVisitor: includeVisitor,
       current,
       includeFileWorks,
       pageSize,
@@ -1226,9 +1282,14 @@ export class MessageModel {
       skipWorks,
       topicId,
       timing,
+      allowShareVisitor,
     } = options;
     const totalStartedAt = Date.now();
     const offset = current * pageSize;
+    // See {@link QueryMessagesOptions.allowShareVisitor}. Combined with the
+    // instance's `includeShareVisitor` so either widens the scope.
+    const scope =
+      allowShareVisitor || this.includeShareVisitor ? this.workspaceScope() : this.ownership();
 
     // 1. get basic messages with joins, excluding messages that belong to MessageGroups
     const result = await runTimedStage(
@@ -1301,7 +1362,7 @@ export class MessageModel {
           .from(messages)
           .where(
             and(
-              this.ownership(),
+              scope,
               // Filter out messages that belong to MessageGroups
               isNull(messages.messageGroupId),
               where,
@@ -2399,7 +2460,10 @@ export class MessageModel {
     const rows = await this.db
       .select({ id: messages.id })
       .from(messages)
-      .where(and(inArray(messages.id, ids), this.ownership(), not(notShareVisitorMessage())));
+      // Explicitly scoped visitor-inclusive: this method's whole job is to
+      // return visitor ids so the router-level `assertCreatorMessageTargets`
+      // can reject them, so bypass the instance's visitor exclusion.
+      .where(and(inArray(messages.id, ids), this.workspaceScope(), not(notShareVisitorMessage())));
 
     return rows.map((row) => row.id);
   };
@@ -4331,14 +4395,18 @@ export class MessageModel {
    * back in with `includeShareVisitor`.
    */
   deleteMessage = async (id: string, options?: ShareVisitorWriteOptions) => {
-    const visitorGuard = options?.includeShareVisitor ? undefined : notShareVisitorMessage();
+    // Effective visitor gate: per-call `true` OR the instance flag widens the
+    // scope. Uses `workspaceScope()` (raw) so an instance-default caller can
+    // still opt in per-call without `ownership()` re-adding the exclusion.
+    const includeVisitor = options?.includeShareVisitor || this.includeShareVisitor;
+    const scope = includeVisitor ? this.workspaceScope() : this.ownership();
 
     return this.db.transaction(async (tx) => {
       // 1. Query the complete information of the message to be deleted
       const message = await tx
         .select()
         .from(messages)
-        .where(and(eq(messages.id, id), this.ownership(), visitorGuard))
+        .where(and(eq(messages.id, id), scope))
         .limit(1);
 
       // If the message to be deleted is not found, return directly
@@ -4354,7 +4422,7 @@ export class MessageModel {
       await tx
         .update(messages)
         .set({ parentId: message[0].parentId })
-        .where(and(eq(messages.parentId, id), this.ownership()));
+        .where(and(eq(messages.parentId, id), scope));
 
       // 3. Check if the message contains tools
       const toolCallIds = (message[0].tools as ChatToolPayload[])
@@ -4377,9 +4445,7 @@ export class MessageModel {
       const messageIdsToDelete = [id, ...relatedMessageIds];
 
       // 6. Delete all related messages
-      await tx
-        .delete(messages)
-        .where(and(this.ownership(), inArray(messages.id, messageIdsToDelete), visitorGuard));
+      await tx.delete(messages).where(and(scope, inArray(messages.id, messageIdsToDelete)));
 
       await this.reconcileActiveBranchSnapshots(tx, activeBranchSnapshots);
 
@@ -4398,14 +4464,15 @@ export class MessageModel {
   deleteMessages = async (ids: string[], options?: ShareVisitorWriteOptions) => {
     if (ids.length === 0) return;
 
-    const visitorGuard = options?.includeShareVisitor ? undefined : notShareVisitorMessage();
+    const includeVisitor = options?.includeShareVisitor || this.includeShareVisitor;
+    const scope = includeVisitor ? this.workspaceScope() : this.ownership();
 
     return this.db.transaction(async (tx) => {
       // 1. Query all messages to be deleted with their parentId
       const toDelete = await tx
         .select({ id: messages.id, parentId: messages.parentId, topicId: messages.topicId })
         .from(messages)
-        .where(and(this.ownership(), inArray(messages.id, ids), visitorGuard));
+        .where(and(scope, inArray(messages.id, ids)));
 
       if (toDelete.length === 0) return;
 
@@ -4454,9 +4521,7 @@ export class MessageModel {
       const children = await tx
         .select({ id: messages.id, parentId: messages.parentId })
         .from(messages)
-        .where(
-          and(this.ownership(), inArray(messages.parentId, ids), not(inArray(messages.id, ids))),
-        );
+        .where(and(scope, inArray(messages.parentId, ids), not(inArray(messages.id, ids))));
 
       // 5. Update each child's parentId to the final ancestor
       for (const child of children) {
@@ -4464,12 +4529,12 @@ export class MessageModel {
         await tx
           .update(messages)
           .set({ parentId: newParentId })
-          .where(and(eq(messages.id, child.id), this.ownership()));
+          .where(and(eq(messages.id, child.id), scope));
       }
 
       // 6. Delete the messages. Deletes the ids that survived the step-1
       // filter, not the raw input, so a mixed batch drops only the visitor rows.
-      await tx.delete(messages).where(and(this.ownership(), inArray(messages.id, [...deleteSet])));
+      await tx.delete(messages).where(and(scope, inArray(messages.id, [...deleteSet])));
 
       await this.reconcileActiveBranchSnapshots(tx, activeBranchSnapshots);
 
@@ -4548,17 +4613,17 @@ export class MessageModel {
     groupId?: string | null,
     options?: ShareVisitorWriteOptions,
   ) => {
-    const visitorGuard = options?.includeShareVisitor ? undefined : notShareVisitorMessage();
+    const includeVisitor = options?.includeShareVisitor || this.includeShareVisitor;
+    const scope = includeVisitor ? this.workspaceScope() : this.ownership();
 
     return this.db
       .delete(messages)
       .where(
         and(
-          this.ownership(),
+          scope,
           this.matchSession(sessionId),
           this.matchTopic(topicId),
           this.matchGroup(groupId),
-          visitorGuard,
         ),
       );
   };

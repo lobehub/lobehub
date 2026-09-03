@@ -28,5 +28,12 @@ export const notShareVisitorMessage = () => notShareVisitorTopicRef(messages.top
  * reference are trivially kept.
  */
 export function notShareVisitorTopicRef(topicIdColumn: AnyColumn) {
-  return sql`NOT EXISTS (SELECT 1 FROM ${topics} WHERE ${topics.id} = ${topicIdColumn} AND ${topics.senderId} IS NOT NULL)`;
+  // Drizzle's relational query builder (`db.query.<table>.findFirst/findMany`)
+  // aliases the queried table to a fixed name and then rewrites references
+  // inside `sql`` templates to that alias — so `${topics.id}` was rendering as
+  // `"messages"."id"` inside `.findFirst({ where: ... })`, which crashed the
+  // moment `ownership()` started ANDing this predicate by default. Hard-code
+  // the correlated table alias with `sql.raw` so the inner reference is
+  // immune to the outer alias rewriting.
+  return sql`NOT EXISTS (SELECT 1 FROM ${topics} WHERE ${sql.raw('"topics"."id"')} = ${topicIdColumn} AND ${sql.raw('"topics"."sender_id"')} IS NOT NULL)`;
 }

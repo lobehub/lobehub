@@ -380,7 +380,9 @@ describe('shareChatRouter', () => {
       ).resolves.toMatchObject({ operationId: 'op-1', success: true });
 
       // Service runs as the CREATOR — the run's operation/thread rows live there.
-      expect(AiAgentServiceMock).toHaveBeenCalledWith(expect.anything(), OWNER);
+      expect(AiAgentServiceMock).toHaveBeenCalledWith(expect.anything(), OWNER, {
+        includeShareVisitor: true,
+      });
       expect(mockInterruptTask).toHaveBeenCalledWith({
         operationId: 'op-1',
         topicId: 'tpc_visitor',
@@ -453,7 +455,9 @@ describe('shareChatRouter', () => {
       // topics on this agent. `agent_shares` is 1:1 per agent, so `(agentId,
       // senderId)` unambiguously identifies the share conversation without a
       // share-instance column on `topics`.
-      expect(TopicModelMock).toHaveBeenCalledWith(expect.anything(), OWNER);
+      expect(TopicModelMock).toHaveBeenCalledWith(expect.anything(), OWNER, undefined, undefined, {
+        includeShareVisitor: true,
+      });
       expect(mockQueryBySender).toHaveBeenCalledWith({
         agentId: share.agentId,
         senderId: VISITOR,

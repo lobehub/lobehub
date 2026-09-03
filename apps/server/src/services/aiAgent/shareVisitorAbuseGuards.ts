@@ -106,7 +106,12 @@ export const reserveShareVisitorTopicOrThrow = async (params: {
     // function's JSDoc for the stale-cap flood this closes.
     const { maxTopicsPerVisitor } = await AgentShareModel.readCurrentVisitorCaps(tx, agentId);
 
-    const txTopicModel = new TopicModel(tx, ownerId, workspaceId);
+    // Share-runtime scope: countBySender reads through `mine()` (visitor-
+    // inclusive by construction) so this flag is redundant here, but pass it
+    // so any later read added to this guard doesn't silently fail closed.
+    const txTopicModel = new TopicModel(tx, ownerId, workspaceId, undefined, {
+      includeShareVisitor: true,
+    });
     const currentCount = await txTopicModel.countBySender({ agentId, senderId: visitorUserId });
 
     // Fail closed: a visitor already at (or somehow past) the cap never gets
@@ -186,7 +191,12 @@ export const reserveShareVisitorTurnOrThrow = async (params: {
     // Fresh read under the lock, not a caller-supplied value.
     const { maxTurnsPerTopic } = await AgentShareModel.readCurrentVisitorCaps(tx, agentId);
 
-    const txMessageModel = new MessageModel(tx, ownerId, workspaceId);
+    // Share-runtime scope: countByTopic reads through `ownership()`, which
+    // now excludes visitor rows by default — the visitor topic's rows would
+    // never be counted without opting in.
+    const txMessageModel = new MessageModel(tx, ownerId, workspaceId, undefined, {
+      includeShareVisitor: true,
+    });
     const turnCount = await txMessageModel.countByTopic({ role: 'user', topicId });
 
     if (turnCount >= maxTurnsPerTopic) {

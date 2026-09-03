@@ -375,6 +375,13 @@ export interface AgentRuntimeServiceOptions {
    */
   delegate?: AgentRuntimeDelegate;
   /**
+   * Opt IN to agent-share visitor rows for the models this service owns.
+   * Reserved for share-runtime entry points that drive a visitor turn under
+   * the CREATOR's `userId`. Defaults to false. See
+   * {@link import('@/database/models/message').MessageModelOptions}.
+   */
+  includeShareVisitor?: boolean;
+  /**
    * Custom QueueService
    * Set to null to disable queue scheduling (for synchronous execution tests)
    */
@@ -475,9 +482,14 @@ export class AgentRuntimeService {
     this.userId = userId;
     this.workspaceId = options?.workspaceId;
     const workspaceId = this.workspaceId;
+    const includeShareVisitor = options?.includeShareVisitor ?? false;
     this.agentOperationModel = new AgentOperationModel(db, this.userId, workspaceId);
-    this.messageModel = new MessageModel(db, this.userId, workspaceId);
-    this.completionLifecycle = new CompletionLifecycle(db, userId, workspaceId);
+    this.messageModel = new MessageModel(db, this.userId, workspaceId, undefined, {
+      includeShareVisitor,
+    });
+    this.completionLifecycle = new CompletionLifecycle(db, userId, workspaceId, {
+      includeShareVisitor,
+    });
     this.humanIntervention = new HumanInterventionHandler(db, this.messageModel);
 
     // Initialize ToolExecutionService with dependencies

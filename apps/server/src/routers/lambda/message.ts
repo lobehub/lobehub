@@ -429,6 +429,10 @@ export const messageRouter = router({
         // it the ownership filter degrades to `workspace_id IS NULL` and returns
         // no messages for workspace topics.
         const shareWorkspaceId = share.workspaceId ?? undefined;
+        // Legacy `share.topicId` (chat share) is a creator topic. Agent-share
+        // visitor topics have their own router (`shareChat.ts`), and this
+        // path is only entered when a creator publishes their own conversation
+        // via the classic share link — so we do NOT opt into visitor scope.
         const messageModel = new MessageModel(ctx.serverDB, share.ownerId, shareWorkspaceId);
         const fileService = new FileService(ctx.serverDB, share.ownerId, shareWorkspaceId);
 

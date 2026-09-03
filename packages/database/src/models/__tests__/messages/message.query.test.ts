@@ -1583,12 +1583,26 @@ describe('MessageModel Query Tests', () => {
       expect(ownTranscript.items.map((item) => item.id)).toEqual(['creator-direct-msg']);
     });
 
-    it('keeps countByTopic working for the visitor turn cap', async () => {
-      // The per-topic turn cap depends on counting visitor messages — it must
-      // NOT inherit the creator-facing exclusion.
-      const count = await messageModel.countByTopic({ role: 'user', topicId: visitorTopicId });
+    it('keeps countByTopic working for the visitor turn cap when the runtime opts in', async () => {
+      // The per-topic turn cap depends on counting visitor messages, and after
+      // the ownership() flip the default scope excludes visitor rows. The
+      // share runtime (`reserveShareVisitorTurn` in
+      // `shareVisitorAbuseGuards.ts`) constructs `MessageModel` with
+      // `includeShareVisitor: true`; mirror that opt-in here.
+      const defaultCount = await messageModel.countByTopic({
+        role: 'user',
+        topicId: visitorTopicId,
+      });
+      expect(defaultCount).toBe(0);
 
-      expect(count).toBe(1);
+      const shareRuntimeMessageModel = new MessageModel(serverDB, userId, undefined, undefined, {
+        includeShareVisitor: true,
+      });
+      const optedInCount = await shareRuntimeMessageModel.countByTopic({
+        role: 'user',
+        topicId: visitorTopicId,
+      });
+      expect(optedInCount).toBe(1);
     });
   });
 

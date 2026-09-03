@@ -181,11 +181,24 @@ export class CompletionLifecycle {
     private readonly serverDB: LobeChatDatabase,
     private readonly userId: string,
     workspaceId?: string,
+    options?: {
+      /**
+       * Opt IN to agent-share visitor rows on this service's `messageModel`.
+       * Reserved for share-runtime callers driving a visitor turn under the
+       * creator's identity.
+       */
+      includeShareVisitor?: boolean;
+    },
   ) {
     this.workspaceId = workspaceId;
-    this.messageModel = new MessageModel(serverDB, userId, workspaceId);
+    this.includeShareVisitor = options?.includeShareVisitor ?? false;
+    this.messageModel = new MessageModel(serverDB, userId, workspaceId, undefined, {
+      includeShareVisitor: this.includeShareVisitor,
+    });
     this.agentOperationModel = new AgentOperationModel(serverDB, userId, workspaceId);
   }
+
+  private readonly includeShareVisitor: boolean;
 
   /**
    * Persist the initial `agent_operations` row when an operation is created.
@@ -622,7 +635,9 @@ export class CompletionLifecycle {
       const op = await new AgentOperationModel(this.serverDB, userId).findById(operationId);
       if (!op?.topicId) return;
 
-      const messageModel = new MessageModel(this.serverDB, userId);
+      const messageModel = new MessageModel(this.serverDB, userId, undefined, undefined, {
+        includeShareVisitor: this.includeShareVisitor,
+      });
       await messageModel.create({
         agentId: op.agentId ?? undefined,
         content: '',
@@ -1043,7 +1058,9 @@ export class CompletionLifecycle {
       const messageModel =
         userId === this.userId
           ? this.messageModel
-          : new MessageModel(this.serverDB, userId, this.workspaceId);
+          : new MessageModel(this.serverDB, userId, this.workspaceId, undefined, {
+              includeShareVisitor: this.includeShareVisitor,
+            });
       const row = await messageModel.findById(assistantMessageId);
       const raw = typeof row?.content === 'string' ? row.content : undefined;
       if (!raw?.trim()) return undefined;

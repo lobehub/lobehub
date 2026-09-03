@@ -132,7 +132,7 @@ describe('TopicModel', () => {
       expect(found).toBeUndefined();
     });
 
-    it('still returns an agent-share visitor topic (the share runtime needs it)', async () => {
+    it('does not return an agent-share visitor topic by default (creator-facing scope)', async () => {
       await serverDB.insert(topics).values({
         id: 'topic-visitor-find',
         senderId: 'visitor-user-x',
@@ -141,7 +141,22 @@ describe('TopicModel', () => {
       });
 
       const found = await topicModel.findById('topic-visitor-find');
-      expect(found?.id).toBe('topic-visitor-find');
+      expect(found).toBeUndefined();
+    });
+
+    it('returns an agent-share visitor topic when includeShareVisitor is opted in', async () => {
+      await serverDB.insert(topics).values({
+        id: 'topic-visitor-find-opted',
+        senderId: 'visitor-user-x',
+        title: 'visitor topic',
+        userId,
+      });
+
+      const shareRuntimeModel = new TopicModel(serverDB, userId, undefined, undefined, {
+        includeShareVisitor: true,
+      });
+      const found = await shareRuntimeModel.findById('topic-visitor-find-opted');
+      expect(found?.id).toBe('topic-visitor-find-opted');
     });
   });
 
