@@ -18,11 +18,10 @@ class TrashService {
   }
 
   async restore(ids: string[]) {
-    const outcomes = await Promise.all(
-      chunk(ids, TRASH_MUTATION_BATCH_SIZE).map((batchIds) =>
-        lambdaClient.trash.restore.mutate({ ids: batchIds }),
-      ),
-    );
+    const outcomes = [];
+    for (const batchIds of chunk(ids, TRASH_MUTATION_BATCH_SIZE)) {
+      outcomes.push(await lambdaClient.trash.restore.mutate({ ids: batchIds }));
+    }
 
     return outcomes.reduce(
       (result, outcome) => ({

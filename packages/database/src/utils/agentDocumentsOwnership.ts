@@ -12,6 +12,7 @@ import {
   topicDocuments,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
+import { notTrashed } from './softDelete';
 import { buildWorkspaceWhere } from './workspace';
 
 /**
@@ -371,7 +372,10 @@ export const moveAgentDocumentsForScopeTransfer = async (
       sourceType: documents.sourceType,
     })
     .from(agentDocuments)
-    .innerJoin(documents, eq(documents.id, agentDocuments.documentId))
+    .innerJoin(
+      documents,
+      and(eq(documents.id, agentDocuments.documentId), notTrashed(documents.isDeleted)),
+    )
     .where(inArray(agentDocuments.agentId, agentIds));
   if (rows.length === 0) return [];
 

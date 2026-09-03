@@ -22,8 +22,14 @@ describe('TrashService', () => {
   });
 
   it('splits restore requests and combines their outcomes', async () => {
+    let releaseFirst!: () => void;
     mockRestore
-      .mockResolvedValueOnce({ failed: [], restored: [{ id: 'trash-0' }] })
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            releaseFirst = () => resolve({ failed: [], restored: [{ id: 'trash-0' }] });
+          }),
+      )
       .mockResolvedValueOnce({
         failed: [{ code: 'parentTrashed', id: 'trash-200' }],
         restored: [],
@@ -31,7 +37,11 @@ describe('TrashService', () => {
       .mockResolvedValueOnce({ failed: [], restored: [{ id: 'trash-400' }] });
     const ids = Array.from({ length: 401 }, (_, index) => `trash-${index}`);
 
-    await expect(trashService.restore(ids)).resolves.toEqual({
+    const restorePromise = trashService.restore(ids);
+    expect(mockRestore).toHaveBeenCalledTimes(1);
+    releaseFirst();
+
+    await expect(restorePromise).resolves.toEqual({
       failed: [{ code: 'parentTrashed', id: 'trash-200' }],
       restored: [{ id: 'trash-0' }, { id: 'trash-400' }],
     });
