@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 
 import DirIcon from '@/features/ChatInput/ControlBar/DirIcon';
 import { openAddWorkingDirModal } from '@/features/WorkingDirectory';
+import { resolveRemoteWorkingDirectory } from '@/helpers/workingDirectoryPath';
 import { createWorkspaceLambdaClient, lambdaQuery } from '@/libs/trpc/client';
 import { deviceService } from '@/services/device';
 import { electronSystemService } from '@/services/electron/system';
@@ -157,7 +158,7 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
 
   const handleAddRecent = async () => {
     // This machine: browse natively. A remote / non-current device isn't
-    // browsable from here, so fall back to manual absolute-path entry (the same
+    // browsable from here, so fall back to manual device-local path entry (the same
     // modal the chat control bar uses), statting the path on the target device.
     if (canBrowse) {
       const result = await electronSystemService.selectFolder({
@@ -169,12 +170,12 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
 
     openAddWorkingDirModal({
       onSubmit: async (path) => {
-        const result = await deviceService.statPath(device.deviceId, path);
+        const result = await deviceService.statPath(device.deviceId, device.scope, path);
         if (result) {
           if (!result.exists) return t('device:workingDirectory.pathNotExist');
           if (!result.isDirectory) return t('device:workingDirectory.pathNotDirectory');
         }
-        addRecent({ path, repoType: result?.repoType });
+        addRecent(resolveRemoteWorkingDirectory(path, result));
         return undefined;
       },
       placeholder: device.defaultCwd || undefined,

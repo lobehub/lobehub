@@ -1,4 +1,9 @@
-import type { WorkingDirConfig, WorkingDirGitState, WorkingDirRepoType } from '@lobechat/types';
+import type {
+  DeviceStatPathResult,
+  WorkingDirConfig,
+  WorkingDirGitState,
+  WorkingDirRepoType,
+} from '@lobechat/types';
 
 import { isDesktop } from '@/const/version';
 
@@ -26,6 +31,15 @@ export const getWorkingDirectoryPathString = (path?: string | null) => {
   const value = path?.trim();
   return value || undefined;
 };
+
+/** Use the device-normalized absolute path whenever remote validation succeeds. */
+export const resolveRemoteWorkingDirectory = (
+  submittedPath: string,
+  result?: DeviceStatPathResult | null,
+): WorkingDirConfig => ({
+  path: result?.path ?? submittedPath,
+  repoType: result?.repoType,
+});
 
 // Last non-empty path segment — the folder name. Also yields the repo name for
 // a web github URL (".../owner/repo" -> "repo").
