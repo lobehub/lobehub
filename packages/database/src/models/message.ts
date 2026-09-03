@@ -87,6 +87,7 @@ import {
   messageTranslates,
   messageTTS,
   threads,
+  topics,
   users,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
@@ -955,6 +956,35 @@ export class MessageModel {
 
   private ownership = () => and(this.workspaceScope(), this.notShareVisitor());
 
+  /**
+   * One indexed lookup of a topic's `senderId` in this user/workspace scope
+   * (`buildWorkspaceWhere` on `topics`). Returned once and reused: every row
+   * that belongs to a topic shares that topic's visitor/creator identity, so
+   * once the topic itself has been classified the per-row NOT EXISTS predicate
+   * from {@link notShareVisitorMessage} is redundant for the rest of the same
+   * call. Callers pass the resolved verdict downstream (as
+   * `allowShareVisitor: true` for a verified creator topic) to swap the
+   * relevant `ownership()` sites over to plain `workspaceScope()`.
+   *
+   * Fails closed: returns `'visitor'` when the topic doesn't exist under this
+   * scope OR carries a non-null `senderId`, so an unauthorized topicId gets
+   * the same empty result as before.
+   */
+  private resolveTopicVisitorScope = async (topicId: string): Promise<'creator' | 'visitor'> => {
+    const rows = await this.db
+      .select({ senderId: topics.senderId })
+      .from(topics)
+      .where(
+        and(
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics),
+          eq(topics.id, topicId),
+        ),
+      )
+      .limit(1);
+    if (rows.length === 0) return 'visitor';
+    return rows[0].senderId === null ? 'creator' : 'visitor';
+  };
+
   private pluginsOwnership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messagePlugins);
 
@@ -1044,8 +1074,36 @@ export class MessageModel {
     // on a default-scoped instance (its explicit param overrides), AND a
     // share-runtime instance stops needing the param at every call site.
     const includeVisitor = options.allowShareVisitor || this.includeShareVisitor;
-    const shareVisitorCondition = includeVisitor ? undefined : notShareVisitorMessage();
     const timing = options.timing;
+
+    // Topic-scope shortcut: when the caller pins a `topicId` and hasn't opted
+    // in to visitor rows, resolve the topic's `senderId` ONCE and either fail
+    // closed (visitor topic) or drop the per-row NOT EXISTS predicate that
+    // `queryWithWhere` / `queryMessageGroupNodes` would otherwise re-check for
+    // every message in the topic. Every row inside a topic shares its parent
+    // topic's visitor/creator identity, so a single indexed topic lookup is
+    // strictly stronger than the correlated subquery repeated per row.
+    let topicScopeVerified = false;
+    if (topicId && !includeVisitor) {
+      const scope = await this.resolveTopicVisitorScope(topicId);
+      if (scope === 'visitor') {
+        logTiming(timing, 'db.message.query:done', {
+          messageCount: 0,
+          stageMs: getDurationMs(queryStartedAt),
+        });
+        return [];
+      }
+      topicScopeVerified = true;
+    }
+    // `queryWithWhere` already ANDs `notShareVisitorMessage()` via
+    // `ownership()`, so the previous per-branch `shareVisitorCondition` in
+    // the `where` was pure duplication — dropped. When `topicScopeVerified`
+    // is true the predicate is redundant altogether (the topic has been
+    // classified once), and we pass that verdict downstream via
+    // `allowShareVisitor: effectiveIncludeVisitor` so `queryWithWhere` swaps
+    // its scope from `ownership()` to `workspaceScope()` and skips the
+    // per-row NOT EXISTS.
+    const effectiveIncludeVisitor = includeVisitor || topicScopeVerified;
     logTiming(timing, 'db.message.query:start', {
       current,
       hasAgentId: !!agentId,
@@ -1081,7 +1139,7 @@ export class MessageModel {
       // scope the complete thread to it instead of filtering those replies by the parent agent.
       const threadScopeCondition = topicId ? this.matchTopic(topicId) : agentCondition;
       const messageItems = await this.queryWithWhere({
-        allowShareVisitor: includeVisitor,
+        allowShareVisitor: effectiveIncludeVisitor,
         current,
         includeFileWorks,
         pageSize,
@@ -1089,7 +1147,7 @@ export class MessageModel {
         skipWorks,
         timing,
         topicId: topicId ?? undefined,
-        where: and(threadScopeCondition, threadCondition, shareVisitorCondition),
+        where: and(threadScopeCondition, threadCondition),
       });
       logTiming(timing, 'db.message.query:done', {
         messageCount: messageItems.length,
@@ -1106,11 +1164,10 @@ export class MessageModel {
         eq(messages.groupId, groupId),
         this.matchTopic(topicId),
         this.matchThread(threadId),
-        shareVisitorCondition,
       );
 
       const messageItems = await this.queryWithWhere({
-        allowShareVisitor: includeVisitor,
+        allowShareVisitor: effectiveIncludeVisitor,
         current,
         includeFileWorks,
         pageSize,
@@ -1139,11 +1196,10 @@ export class MessageModel {
       conversationCondition,
       this.matchGroup(groupId),
       this.matchThread(threadId),
-      shareVisitorCondition,
     );
 
     const messageItems = await this.queryWithWhere({
-      allowShareVisitor: includeVisitor,
+      allowShareVisitor: effectiveIncludeVisitor,
       current,
       includeFileWorks,
       pageSize,
@@ -1980,6 +2036,15 @@ export class MessageModel {
   queryByIds = async (
     messageIds: string[],
     options: {
+      /**
+       * Opt IN to agent-share visitor rows. Reserved for internal callers
+       * (`queryMessageGroupNodes`) that already resolved and authorized the
+       * parent topic via {@link resolveTopicVisitorScope}; every row shares
+       * that topic's visitor/creator identity, so the per-row NOT EXISTS
+       * predicate baked into `this.ownership()` is redundant once the topic
+       * itself has been classified. External callers must leave this false.
+       */
+      allowShareVisitor?: boolean;
       postProcessUrl?: (
         path: string | null,
         file: { fileType: string; id?: string | null },
@@ -1989,6 +2054,10 @@ export class MessageModel {
     if (messageIds.length === 0) return [];
 
     const { postProcessUrl } = options;
+    const scope =
+      options.allowShareVisitor || this.includeShareVisitor
+        ? this.workspaceScope()
+        : this.ownership();
 
     // 1. Query messages with joins
     const result = await this.db
@@ -2053,7 +2122,7 @@ export class MessageModel {
         ttsVoice: messageTTS.voice,
       })
       .from(messages)
-      .where(and(this.ownership(), inArray(messages.id, messageIds)))
+      .where(and(scope, inArray(messages.id, messageIds)))
       .leftJoin(messagePlugins, eq(messagePlugins.id, messages.id))
       .leftJoin(messageTranslates, eq(messageTranslates.id, messages.id))
       .leftJoin(messageTTS, eq(messageTTS.id, messages.id))
@@ -2353,7 +2422,17 @@ export class MessageModel {
             messageGroupId: messages.messageGroupId,
           })
           .from(messages)
-          .where(and(this.ownership(), inArray(messages.messageGroupId, groupIds)))
+          .where(
+            and(
+              // The parent topic has already been classified by the caller
+              // (via `resolveTopicVisitorScope`) or the model was constructed
+              // as a share-runtime instance — either way, the per-row NOT
+              // EXISTS predicate baked into `ownership()` is redundant for
+              // messages that belong to a group inside a verified topic.
+              includeVisitor ? this.workspaceScope() : this.ownership(),
+              inArray(messages.messageGroupId, groupIds),
+            ),
+          )
           .orderBy(asc(messages.createdAt)),
       { groupCount: groupIds.length },
     );
@@ -2366,7 +2445,7 @@ export class MessageModel {
     const fullMessages = await runTimedStage(
       timing,
       'db.message.messageGroups.queryByIds',
-      () => this.queryByIds(allMessageIds, { postProcessUrl }),
+      () => this.queryByIds(allMessageIds, { allowShareVisitor: includeVisitor, postProcessUrl }),
       { messageCount: allMessageIds.length },
     );
 
