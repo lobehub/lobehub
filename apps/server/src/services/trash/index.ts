@@ -86,6 +86,61 @@ export interface TrashSweepCursor {
   id: string;
 }
 
+export const orderTrashRestoreRoots = (
+  roots: TrashItemRow[],
+  closureChildren: TrashItemRow[],
+): TrashItemRow[] => {
+  const selectedRoots = roots.filter((root) => !root.rootId);
+  const rootsById = new Map(selectedRoots.map((root) => [root.id, root]));
+  const restoringDocumentOwners = new Map(
+    selectedRoots
+      .filter((root) => root.resourceType === 'document')
+      .map((root) => [root.resourceId, root]),
+  );
+  for (const child of closureChildren) {
+    if (child.resourceType !== 'document' || !child.rootId) continue;
+    const owner = rootsById.get(child.rootId);
+    if (owner) restoringDocumentOwners.set(child.resourceId, owner);
+  }
+
+  const dependenciesByRootId = new Map(selectedRoots.map((root) => [root.id, new Set<string>()]));
+  for (const resource of [...selectedRoots, ...closureChildren]) {
+    const owner = resource.rootId ? rootsById.get(resource.rootId) : rootsById.get(resource.id);
+    const parentId = resource.meta?.parentId;
+    const parentOwner = parentId ? restoringDocumentOwners.get(parentId) : undefined;
+    if (!owner || !parentOwner || owner.id === parentOwner.id) continue;
+    dependenciesByRootId.get(owner.id)?.add(parentOwner.id);
+  }
+
+  const remainingDependencies = new Map(
+    [...dependenciesByRootId].map(([rootId, dependencies]) => [rootId, dependencies.size]),
+  );
+  const dependentsByRootId = new Map(selectedRoots.map((root) => [root.id, new Set<string>()]));
+  for (const [rootId, dependencies] of dependenciesByRootId) {
+    for (const dependencyId of dependencies) dependentsByRootId.get(dependencyId)?.add(rootId);
+  }
+
+  const ready = selectedRoots.filter((root) => remainingDependencies.get(root.id) === 0);
+  const ordered: TrashItemRow[] = [];
+  for (let index = 0; index < ready.length; index++) {
+    const root = ready[index]!;
+    ordered.push(root);
+    for (const dependentId of dependentsByRootId.get(root.id) ?? []) {
+      const remaining = (remainingDependencies.get(dependentId) ?? 0) - 1;
+      remainingDependencies.set(dependentId, remaining);
+      if (remaining === 0) ready.push(rootsById.get(dependentId)!);
+    }
+  }
+
+  // A corrupt hierarchy can contain a cycle. There is no valid topological
+  // order in that case, but retaining input order lets the normal restore
+  // validation report parentTrashed without hanging the request.
+  const orderedIds = new Set(ordered.map((root) => root.id));
+  ordered.push(...selectedRoots.filter((root) => !orderedIds.has(root.id)));
+  ordered.push(...roots.filter((root) => root.rootId));
+  return ordered;
+};
+
 /**
  * Recycle-bin orchestrator. Every user-facing "delete" of a trash-aware entity
  * funnels through `trashXxx` here: the handler stamps the rows (and their
@@ -372,43 +427,10 @@ export class TrashService {
     }
 
     const selectedRoots = roots.filter((root) => !root.rootId);
-    const rootsById = new Map(selectedRoots.map((root) => [root.id, root]));
     const closureChildren = await this.trashModel.findChildrenByRootIds(
       selectedRoots.map((root) => root.id),
     );
-    const restoringDocumentOwners = new Map(
-      selectedRoots
-        .filter((root) => root.resourceType === 'document')
-        .map((root) => [root.resourceId, root]),
-    );
-    for (const child of closureChildren) {
-      if (child.resourceType !== 'document' || !child.rootId) continue;
-      const owner = rootsById.get(child.rootId);
-      if (owner) restoringDocumentOwners.set(child.resourceId, owner);
-    }
-    const dependenciesByRootId = new Map(selectedRoots.map((root) => [root.id, new Set<string>()]));
-    for (const resource of [...selectedRoots, ...closureChildren]) {
-      const owner = resource.rootId ? rootsById.get(resource.rootId) : rootsById.get(resource.id);
-      const parentId = resource.meta?.parentId;
-      const parentOwner = parentId ? restoringDocumentOwners.get(parentId) : undefined;
-      if (!owner || !parentOwner || owner.id === parentOwner.id) continue;
-      dependenciesByRootId.get(owner.id)?.add(parentOwner.id);
-    }
-    const restoreDepth = (root: TrashItemRow, visited = new Set<string>()): number => {
-      if (visited.has(root.id)) return 0;
-      const nextVisited = new Set(visited).add(root.id);
-      return Math.max(
-        0,
-        ...[...(dependenciesByRootId.get(root.id) ?? [])].map((dependencyId) => {
-          const dependency = rootsById.get(dependencyId);
-          return dependency ? restoreDepth(dependency, nextVisited) + 1 : 0;
-        }),
-      );
-    };
-    const orderedRoots = roots
-      .map((root, index) => ({ depth: restoreDepth(root), index, root }))
-      .sort((left, right) => left.depth - right.depth || left.index - right.index)
-      .map(({ root }) => root);
+    const orderedRoots = orderTrashRestoreRoots(roots, closureChildren);
 
     for (const root of orderedRoots) {
       if (root.rootId) {

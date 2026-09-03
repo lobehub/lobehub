@@ -14,6 +14,7 @@ import {
   knowledgeBaseFiles,
   knowledgeBases,
   resourcePermissions,
+  type TrashItemRow,
   trashItems,
   users,
   workspaceAuditLogs,
@@ -22,7 +23,7 @@ import {
 import type { LobeChatDatabase } from '@/database/type';
 
 import { purgeFiles } from '../handlers/purgeFiles';
-import { TrashService } from '../index';
+import { orderTrashRestoreRoots, TrashService } from '../index';
 
 const accessMocks = vi.hoisted(() => ({
   liveRestrictedKnowledgeBaseIds: undefined as string[] | undefined,
@@ -1410,6 +1411,43 @@ describe('TrashService', () => {
       expect(await documentModel.findById(folder.id)).toBeDefined();
       expect(await fileModel.findById(file.id)).toBeDefined();
       expect(await documentModel.findById(mirror.id)).toMatchObject({ parentId: folder.id });
+    });
+
+    it('orders a 200-root branching dependency graph without enumerating dependency paths', () => {
+      const now = new Date();
+      const row = (
+        id: string,
+        resourceType: 'document' | 'file',
+        rootId: string | null,
+        parentId?: string,
+      ): TrashItemRow => ({
+        createdAt: now,
+        deletedAt: now,
+        deletedByUserId: userId,
+        expiresAt: now,
+        id,
+        meta: parentId ? { parentId } : null,
+        resourceId: resourceType === 'document' ? id : `resource-${id}`,
+        resourceType,
+        rootId,
+        title: null,
+        userId,
+        workspaceId: null,
+      });
+      const roots = Array.from({ length: 200 }, (_, index) => row(`root-${index}`, 'file', null));
+      const children = roots.flatMap((root, index) => [
+        row(`document-${index}`, 'document', root.id),
+        ...(index + 1 < roots.length
+          ? [row(`mirror-${index}-1`, 'document', root.id, `document-${index + 1}`)]
+          : []),
+        ...(index + 2 < roots.length
+          ? [row(`mirror-${index}-2`, 'document', root.id, `document-${index + 2}`)]
+          : []),
+      ]);
+
+      const ordered = orderTrashRestoreRoots(roots, children);
+
+      expect(ordered.map((root) => root.id)).toEqual(roots.map((root) => root.id).reverse());
     });
 
     it("refuses to restore a public document beneath another creator's private trashed parent", async () => {
