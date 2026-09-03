@@ -186,6 +186,59 @@ describe('TrashService', () => {
       expect(await serverDB.select().from(files).where(eq(files.name, 'racing.txt'))).toEqual([]);
     });
 
+    it('waits for an in-flight file mirror insert and includes it in the trash closure', async () => {
+      const file = await fileModel.create({
+        fileType: 'text/plain',
+        name: 'parsing.txt',
+        size: 1,
+        url: 'files/parsing.txt',
+      });
+      let parserLocked!: () => void;
+      const parserHasLock = new Promise<void>((resolve) => {
+        parserLocked = resolve;
+      });
+      let releaseParser!: () => void;
+      const parserRelease = new Promise<void>((resolve) => {
+        releaseParser = resolve;
+      });
+      const parserPromise = serverDB.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtext(${`parseFile:${file.id}`})::bigint)`,
+        );
+        parserLocked();
+        await parserRelease;
+        return documentModel.create(
+          {
+            fileId: file.id,
+            fileType: 'custom/document',
+            source: 'files/parsing.txt',
+            sourceType: 'file',
+            title: 'Parsed while trashing',
+            totalCharCount: 0,
+            totalLineCount: 0,
+          },
+          tx,
+        );
+      });
+      await parserHasLock;
+
+      let trashSettled = false;
+      const trashPromise = service.trashFiles([file.id]).finally(() => {
+        trashSettled = true;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(trashSettled).toBe(false);
+
+      releaseParser();
+      const [mirror, [root]] = await Promise.all([parserPromise, trashPromise]);
+
+      expect(await fileModel.findById(file.id)).toBeUndefined();
+      expect(await documentModel.findById(mirror.id)).toBeUndefined();
+      expect((await trashModel.findChildren(root.id)).map((item) => item.resourceId)).toContain(
+        mirror.id,
+      );
+    });
+
     it('serializes restore behind an in-flight permanent purge claim', async () => {
       await fileModel.createGlobalFile({
         creator: userId,
@@ -1250,6 +1303,34 @@ describe('TrashService', () => {
 
       expect(outcome.failed).toEqual([{ code: 'parentTrashed', id: childRoot.id }]);
       expect(await documentModel.findById(child.id)).toBeUndefined();
+    });
+
+    it('restores selected parent roots before independently trashed children', async () => {
+      const folder = await documentModel.create({
+        fileType: 'custom/folder',
+        source: '',
+        sourceType: 'api',
+        title: 'Selected parent',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+      const child = await documentModel.create({
+        fileType: 'custom/page',
+        parentId: folder.id,
+        source: '',
+        sourceType: 'api',
+        title: 'Selected child',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+      const [childRoot] = await service.trashDocuments([child.id]);
+      const [parentRoot] = await service.trashDocuments([folder.id]);
+
+      const outcome = await service.restore([childRoot.id, parentRoot.id]);
+
+      expect(outcome.failed).toEqual([]);
+      expect(outcome.restored.map((item) => item.id)).toEqual([parentRoot.id, childRoot.id]);
+      expect(await documentModel.findById(child.id)).toMatchObject({ parentId: folder.id });
     });
 
     it("refuses to restore a public document beneath another creator's private trashed parent", async () => {

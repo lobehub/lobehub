@@ -1,6 +1,10 @@
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import type { DocumentItem, FileItem, TrashDetachedEdge } from '@/database/schemas';
+import {
+  lockDocumentHierarchy,
+  lockFileDocumentRelation,
+} from '@/database/utils/documentHierarchy';
 import type { SoftDeleteOptions } from '@/database/utils/softDelete';
 
 import type { TrashHandlerContext } from './types';
@@ -132,6 +136,11 @@ export const softDeleteResourceClosures = async (
   input: ResourceClosureInput,
   options: SoftDeleteOptions,
 ): Promise<ResourceClosureResult[]> => {
+  // Relation discovery spans multiple queries. Serialize closure walks within
+  // one ownership scope, then use per-file locks shared with the parsers so a
+  // mirror cannot be inserted after its file has been collected.
+  await lockDocumentHierarchy(ctx.db, ctx.userId, ctx.workspaceId);
+
   const documentModel = new DocumentModel(ctx.db, ctx.userId, ctx.workspaceId);
   const fileModel = new FileModel(ctx.db, ctx.userId, ctx.workspaceId);
   const documentsById = new Map<string, DocumentItem>();
@@ -172,6 +181,8 @@ export const softDeleteResourceClosures = async (
     const fileIds = [...pendingFiles].filter((id) => !processedFiles.has(id));
     pendingFiles.clear();
     if (fileIds.length === 0) continue;
+    fileIds.sort();
+    for (const fileId of fileIds) await lockFileDocumentRelation(ctx.db, fileId);
     for (const id of fileIds) processedFiles.add(id);
 
     const files = await fileModel.softDelete(fileIds, options);

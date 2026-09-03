@@ -22,3 +22,16 @@ export const lockDocumentHierarchy = async (
     sql`select pg_advisory_xact_lock(hashtext('lobehub.document_hierarchy'), hashtext(${hierarchyScope(userId, workspaceId)}))`,
   );
 };
+
+/**
+ * Serialize creation and trash collection for documents backed by one file.
+ *
+ * Callers must hold this transaction-scoped lock while re-checking the file
+ * and inserting or collecting its document mirrors.
+ */
+export const lockFileDocumentRelation = async (
+  db: LobeChatDatabase,
+  fileId: string,
+): Promise<void> => {
+  await db.execute(sql`select pg_advisory_xact_lock(hashtext(${`parseFile:${fileId}`})::bigint)`);
+};

@@ -371,7 +371,25 @@ export class TrashService {
       if (!known.has(id)) outcome.failed.push({ code: 'notFound', id });
     }
 
-    for (const root of roots) {
+    const documentRootsByResourceId = new Map(
+      roots
+        .filter((root) => !root.rootId && root.resourceType === 'document')
+        .map((root) => [root.resourceId, root]),
+    );
+    const restoreDepth = (root: TrashItemRow, visited = new Set<string>()): number => {
+      if (visited.has(root.id)) return 0;
+      const parentId = root.meta?.parentId;
+      const parent = parentId ? documentRootsByResourceId.get(parentId) : undefined;
+      if (!parent) return 0;
+      const nextVisited = new Set(visited).add(root.id);
+      return restoreDepth(parent, nextVisited) + 1;
+    };
+    const orderedRoots = roots
+      .map((root, index) => ({ depth: restoreDepth(root), index, root }))
+      .sort((left, right) => left.depth - right.depth || left.index - right.index)
+      .map(({ root }) => root);
+
+    for (const root of orderedRoots) {
       if (root.rootId) {
         // Children are restored through their root, never on their own.
         outcome.failed.push({ code: 'parentTrashed', id: root.id });

@@ -7,13 +7,17 @@ import { documents, files } from '@lobechat/database/schemas';
 import { loadFile, UnsupportedFileTypeError } from '@lobechat/file-loaders';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import isEqual from 'fast-deep-equal';
 
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import type { Transaction } from '@/database/type';
+import {
+  lockDocumentHierarchy,
+  lockFileDocumentRelation,
+} from '@/database/utils/documentHierarchy';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { isValidEditorData } from '@/libs/editor/isValidEditorData';
 import { normalizeEditorDataDiffNodes } from '@/libs/editor/normalizeDiffNodes';
@@ -816,7 +820,7 @@ export class DocumentService {
         cleanContent = cleanContent.replaceAll(/<page[^>]*>([\S\s]*?)<\/page>/g, '$1').trim();
       }
 
-      const document = await this.documentModel.create({
+      const documentParams = {
         content: cleanContent,
         fileId,
         fileType: CUSTOM_DOCUMENT_FILE_TYPE,
@@ -824,10 +828,20 @@ export class DocumentService {
         metadata: fileDocument.metadata,
         parentId: file.parentId,
         source: file.url,
-        sourceType: 'file',
+        sourceType: 'file' as const,
         title,
         totalCharCount: cleanContent.length,
         totalLineCount: cleanContent.split('\n').length,
+      };
+      const document = await this.db.transaction(async (tx) => {
+        const transactionDb = tx as unknown as LobeChatDatabase;
+        await lockDocumentHierarchy(transactionDb, this.userId, this.workspaceId);
+        await lockFileDocumentRelation(transactionDb, fileId);
+        if (!(await this.fileModel.findById(fileId, tx))) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
+        }
+
+        return this.documentModel.create(documentParams, tx);
       });
 
       return document as LobeDocument;
@@ -886,11 +900,14 @@ export class DocumentService {
         // itself stays outside the transaction: it downloads and reads the whole
         // file, and holding a connection that long would turn every large upload
         // into pool pressure.
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${`parseFile:${fileId}`})::bigint)`,
-        );
-
         const transactionDb = tx as unknown as LobeChatDatabase;
+        await lockDocumentHierarchy(transactionDb, this.userId, this.workspaceId);
+        await lockFileDocumentRelation(transactionDb, fileId);
+
+        if (!(await this.fileModel.findById(fileId, tx))) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
+        }
+
         const transactionDocumentModel = new DocumentModel(
           transactionDb,
           this.userId,
@@ -917,7 +934,7 @@ export class DocumentService {
           totalCharCount: fileDocument.totalCharCount,
           totalLineCount: fileDocument.totalLineCount,
         };
-        return transactionDocumentModel.create(documentParams);
+        return transactionDocumentModel.create(documentParams, tx);
       });
 
       return document as LobeDocument;
