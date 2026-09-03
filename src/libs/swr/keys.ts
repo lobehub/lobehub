@@ -393,21 +393,26 @@ export const taskKeys = {
       // fetches everything, and a shared entry would serve one surface the
       // other's filter. Folded into one trailing slot (appended only when a
       // filter is actually set) so unfiltered keys keep their shape.
-      filters?: { automated?: boolean; statuses?: readonly string[] },
+      // `complete` marks the every-page walk the Tasks list view does; the
+      // kanban view and Home read a single page and must not be served (or
+      // serve) the walked list from a shared entry.
+      filters?: { automated?: boolean; complete?: boolean; statuses?: readonly string[] },
     ) => {
       const key = projectId
         ? ['task:list', agentKey, visibility, orderBy, projectId]
         : ['task:list', agentKey, visibility, orderBy];
       const automated = filters?.automated;
+      const complete = filters?.complete ? true : undefined;
       // Order-insensitive: the same status set must hash to the same key.
       const statuses = filters?.statuses?.length
         ? [...filters.statuses].sort().join(',')
         : undefined;
-      if (automated === undefined && statuses === undefined) return key;
+      if (automated === undefined && complete === undefined && statuses === undefined) return key;
       return [
         ...key,
         {
           ...(automated === undefined ? {} : { automated }),
+          ...(complete === undefined ? {} : { complete }),
           ...(statuses === undefined ? {} : { statuses }),
         },
       ];

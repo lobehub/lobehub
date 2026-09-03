@@ -438,17 +438,25 @@ export class TaskListSliceActionImpl {
     const listVisibility = visibility ?? this.#get().listVisibility;
     // Order-insensitive signature, only for change detection in the scope guard.
     const statusesSignature = statuses?.length ? [...statuses].sort().join(',') : undefined;
-    const { listAgentId, listQueryAutomated, listQueryStatuses, listQueryVisibility } = this.#get();
+    const {
+      listAgentId,
+      listQueryAutomated,
+      listQueryComplete,
+      listQueryStatuses,
+      listQueryVisibility,
+    } = this.#get();
 
     // `tasks` is shared by the full Tasks page and embedded overviews. Reset it
     // when any part of the effective query changes so an `all` override does
     // not temporarily inherit a previously initialized private/workspace list,
-    // nor the Tasks page a list narrowed by Home's automation/status filters.
+    // nor the Tasks page a list narrowed by Home's automation/status filters,
+    // nor the list view a single kanban page posing as the complete list.
     if (
       effectiveKey &&
       (listAgentId !== effectiveKey ||
         listQueryVisibility !== listVisibility ||
         listQueryAutomated !== automated ||
+        listQueryComplete !== complete ||
         listQueryStatuses !== statusesSignature)
     ) {
       this.#set(
@@ -456,6 +464,7 @@ export class TaskListSliceActionImpl {
           ...scopeChangeResetState,
           listAgentId: effectiveKey,
           listQueryAutomated: automated,
+          listQueryComplete: complete,
           listQueryStatuses: statusesSignature,
           listQueryVisibility: listVisibility,
         },
@@ -466,7 +475,11 @@ export class TaskListSliceActionImpl {
 
     return useClientDataSWR(
       enabled && effectiveKey
-        ? taskKeys.list(effectiveKey, listVisibility, orderBy, projectId, { automated, statuses })
+        ? taskKeys.list(effectiveKey, listVisibility, orderBy, projectId, {
+            automated,
+            complete,
+            statuses,
+          })
         : null,
       async ([, id]: [string, string]) => {
         const params = {

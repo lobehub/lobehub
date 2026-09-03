@@ -27,6 +27,7 @@ beforeEach(() => {
     listGroupBy: 'status',
     listGroupExcludeStatuses: undefined,
     listQueryAutomated: undefined,
+    listQueryComplete: false,
     listQueryVisibility: 'all',
     listVisibility: 'all',
     taskGroups: [],
@@ -254,6 +255,35 @@ describe('TaskListSliceAction', () => {
       expect(state.listQueryAutomated).toBe(false);
       expect(state.tasks).toEqual([]);
       expect(state.tasksTotal).toBe(0);
+      expect(state.isTaskListInit).toBe(false);
+    });
+
+    // The list view walks every page while the kanban view (which fetches its
+    // own server groups) only needs one page for the empty decision. Neither
+    // may be served the other's rows from a shared cache entry or the shared
+    // store field.
+    it('keys the complete walk apart from the single page and resets when it flips', async () => {
+      const { useClientDataSWR } = await import('@/libs/swr');
+      useTaskStore.setState({
+        isTaskListInit: true,
+        listAgentId: '__all__',
+        listQueryComplete: false,
+        tasks: [{ id: 'first-page-only' }] as any,
+        tasksTotal: 230,
+      });
+
+      useTaskStore
+        .getState()
+        .useFetchTaskList({ allAgents: true, complete: true, visibility: 'all' });
+
+      expect(useClientDataSWR).toHaveBeenCalledWith(
+        ['task:list', '__all__', 'all', 'createdAt', { complete: true }],
+        expect.any(Function),
+        expect.any(Object),
+      );
+      const state = useTaskStore.getState();
+      expect(state.listQueryComplete).toBe(true);
+      expect(state.tasks).toEqual([]);
       expect(state.isTaskListInit).toBe(false);
     });
 
