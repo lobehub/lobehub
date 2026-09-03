@@ -1,13 +1,17 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getServerDB } from '@/database/server';
 import { qstashClient } from '@/libs/qstash';
+import { TrashService } from '@/server/services/trash';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 import { runLocalTrashPurge, startLocalTrashPurgeSchedule, triggerTrashPurge } from './index';
 
 vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: 'https://example.com' } }));
+vi.mock('@/database/server', () => ({ getServerDB: vi.fn() }));
 vi.mock('@/libs/qstash', () => ({ qstashClient: { publishJSON: vi.fn() } }));
+vi.mock('@/server/services/trash', () => ({ TrashService: { sweepExpired: vi.fn() } }));
 vi.mock('@/server/utils/scheduleAfterResponse', () => ({ after: vi.fn() }));
 
 describe('triggerTrashPurge', () => {
@@ -22,6 +26,39 @@ describe('triggerTrashPurge', () => {
     await expect(triggerTrashPurge()).resolves.toBe(true);
     expect(qstashClient.publishJSON).not.toHaveBeenCalled();
     expect(after).toHaveBeenCalledOnce();
+  });
+
+  it('schedules another bounded burst when the local queue has more roots', async () => {
+    vi.stubEnv('QSTASH_TOKEN', '');
+    vi.mocked(getServerDB).mockResolvedValue({} as never);
+    vi.mocked(TrashService.sweepExpired).mockImplementation(async (_db, { cursor }) => ({
+      failed: 0,
+      nextCursor: { expiresAt: '2026-09-01', id: String(Number(cursor?.id ?? 0) + 1) },
+      pruned: 0,
+      purged: 25,
+      scanned: 25,
+    }));
+
+    await triggerTrashPurge();
+    await vi.mocked(after).mock.calls[0][0]();
+
+    expect(TrashService.sweepExpired).toHaveBeenCalledTimes(8);
+    expect(after).toHaveBeenCalledTimes(2);
+
+    vi.mocked(TrashService.sweepExpired).mockResolvedValue({
+      failed: 0,
+      nextCursor: null,
+      pruned: 0,
+      purged: 1,
+      scanned: 1,
+    });
+    await vi.mocked(after).mock.calls[1][0]();
+
+    expect(TrashService.sweepExpired).toHaveBeenLastCalledWith(
+      {},
+      { cursor: { expiresAt: '2026-09-01', id: '8' }, limit: 25 },
+    );
+    expect(after).toHaveBeenCalledTimes(2);
   });
 
   it('propagates a rejected publish', async () => {
@@ -42,7 +79,7 @@ describe('runLocalTrashPurge', () => {
 
     await expect(runLocalTrashPurge({}, { getDb, sweepExpired } as never)).resolves.toEqual({
       batches: 2,
-      cursor: { expiresAt: '2026-09-01', id: '25' },
+      cursor: undefined,
     });
     expect(sweepExpired).toHaveBeenNthCalledWith(
       1,

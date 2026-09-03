@@ -54,7 +54,7 @@ export const runLocalTrashPurge = async (
   while (batches < batchBudget) {
     const outcome = await sweepExpired(db, { cursor, limit });
     batches += 1;
-    if (outcome.scanned < limit || !outcome.nextCursor) break;
+    if (outcome.scanned < limit || !outcome.nextCursor) return { batches, cursor: undefined };
     cursor = outcome.nextCursor;
   }
 
@@ -67,7 +67,12 @@ export const triggerTrashPurge = async (
   options?: { delay?: number },
 ) => {
   if (!process.env.QSTASH_TOKEN) {
-    after(() => runLocalTrashPurge(payload));
+    after(async () => {
+      const outcome = await runLocalTrashPurge(payload);
+      if (!outcome.cursor) return;
+
+      await triggerTrashPurge({ ...payload, cursor: outcome.cursor });
+    });
     return true;
   }
 
