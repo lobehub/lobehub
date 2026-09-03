@@ -40,6 +40,7 @@ import {
   assertWorkspaceRowManageable,
   isWorkspaceNonOwner,
 } from './_helpers/assertWorkspaceRowManageable';
+import type { KnowledgeBaseAccessCtx } from './_helpers/knowledgeBaseAccess';
 import {
   assertContentsNotInRestrictedKnowledgeBase,
   assertFileNotInRestrictedKnowledgeBase,
@@ -65,6 +66,23 @@ const assertAllFilesAccessible = (requestedIds: string[], files: Array<{ id: str
       message: 'One or more files were not found or are not accessible',
     });
   }
+};
+
+const resolveAccessibleParentDocument = async (
+  ctx: KnowledgeBaseAccessCtx & {
+    documentModel: Pick<DocumentModel, 'findById' | 'findBySlug'>;
+  },
+  parentId: string,
+) => {
+  const parentDocument =
+    (await ctx.documentModel.findBySlug(parentId)) ?? (await ctx.documentModel.findById(parentId));
+
+  if (!parentDocument) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Parent document not found' });
+  }
+
+  await assertContentsNotInRestrictedKnowledgeBase(ctx, [parentDocument.id]);
+  return parentDocument;
 };
 
 const filterKnowledgeItems = <
@@ -211,19 +229,11 @@ export const fileRouter = router({
       const existingFile = await ctx.fileModel.checkHash(input.hash!);
       const { isExist } = existingFile;
 
-      // Resolve parentId if it's a slug
-      let resolvedParentId = input.parentId;
-      let parentVisibility: 'private' | 'public' | undefined;
-      if (input.parentId) {
-        const docBySlug = await ctx.documentModel.findBySlug(input.parentId);
-        if (docBySlug) {
-          resolvedParentId = docBySlug.id;
-          parentVisibility = docBySlug.visibility;
-        } else {
-          const docById = await ctx.documentModel.findById(input.parentId);
-          if (docById) parentVisibility = docById.visibility;
-        }
-      }
+      const parentDocument = input.parentId
+        ? await resolveAccessibleParentDocument(ctx, input.parentId)
+        : undefined;
+      const resolvedParentId = parentDocument?.id;
+      const parentVisibility = parentDocument?.visibility;
 
       let knowledgeBaseVisibility: 'private' | 'public' | undefined;
       if (ctx.workspaceId && input.knowledgeBaseId) {
@@ -855,10 +865,7 @@ export const fileRouter = router({
       // Resolve parentId if it's a slug (otherwise use as-is)
       let resolvedParentId: string | null | undefined = parentId;
       if (parentId) {
-        const docBySlug = await ctx.documentModel.findBySlug(parentId);
-        if (docBySlug) {
-          resolvedParentId = docBySlug.id;
-        }
+        resolvedParentId = (await resolveAccessibleParentDocument(ctx, parentId)).id;
       }
 
       const updates: Parameters<typeof ctx.fileModel.update>[1] = {};

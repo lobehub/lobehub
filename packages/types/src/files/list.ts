@@ -83,12 +83,14 @@ export enum ResourceSourceFilter {
   Uploaded = 'uploaded',
 }
 
+const MAX_RESOURCE_LIST_PAGE_SIZE = 100;
+
 export const QueryFileListSchema = z.object({
   category: z.string().optional(),
   /** Return a bounded server-generated plain-text preview for preview surfaces. */
   includeContentPreview: z.boolean().optional(),
   knowledgeBaseId: z.string().optional(),
-  limit: z.number().int().positive().default(50),
+  limit: z.number().int().positive().max(MAX_RESOURCE_LIST_PAGE_SIZE).default(50),
   offset: z.number().int().min(0).default(0),
   parentId: z.string().nullish(),
   q: z.string().nullish(),

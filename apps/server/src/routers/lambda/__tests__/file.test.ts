@@ -174,6 +174,7 @@ const mockFileModelDeleteMany = vi.fn();
 const mockFileModelFindById = vi.fn();
 const mockFileModelFindByIds = vi.fn();
 const mockFileModelQuery = vi.fn();
+const mockFileModelUpdate = vi.fn();
 const mockFileModelUpdateGlobalFile = vi.fn();
 const mockFileModelClear = vi.fn();
 const mockFileModelTransferTo = vi.fn();
@@ -189,6 +190,7 @@ vi.mock('@/database/models/file', () => ({
     findById: mockFileModelFindById,
     findByIds: mockFileModelFindByIds,
     query: mockFileModelQuery,
+    update: mockFileModelUpdate,
     updateGlobalFile: mockFileModelUpdateGlobalFile,
     clear: mockFileModelClear,
     copyToWorkspace: mockFileModelCopyToWorkspace,
@@ -226,6 +228,7 @@ const mockDocumentServiceDeleteDocuments = vi.fn();
 const mockDocumentModelCountFileUsageInSubtree = vi.fn();
 const mockDocumentModelCopyToWorkspace = vi.fn();
 const mockDocumentModelFindById = vi.fn();
+const mockDocumentModelFindBySlug = vi.fn();
 const mockDocumentModelTransferTo = vi.fn();
 const mockDocumentModelSubtreeHasForeignRows = vi.fn().mockResolvedValue(false);
 
@@ -240,6 +243,7 @@ vi.mock('@/database/models/document', () => ({
     countFileUsageInSubtree: mockDocumentModelCountFileUsageInSubtree,
     copyToWorkspace: mockDocumentModelCopyToWorkspace,
     findById: mockDocumentModelFindById,
+    findBySlug: mockDocumentModelFindBySlug,
     subtreeHasForeignRows: mockDocumentModelSubtreeHasForeignRows,
     transferTo: mockDocumentModelTransferTo,
   })),
@@ -268,6 +272,8 @@ describe('fileRouter', () => {
     routerMocks.businessFileTransferStorageCheck.mockResolvedValue(undefined);
     routerMocks.hasWorkspaceScopedPermission.mockResolvedValue(true);
     mockKnowledgeBaseFindById.mockResolvedValue({ id: 'kb-1', visibility: 'public' });
+    mockDocumentModelFindById.mockResolvedValue(undefined);
+    mockDocumentModelFindBySlug.mockResolvedValue(undefined);
 
     mockFile = {
       id: 'test-id',
@@ -360,6 +366,24 @@ describe('fileRouter', () => {
           metadata: {},
         }),
       ).rejects.toThrow();
+    });
+
+    it('should reject a parent document that is not accessible', async () => {
+      mockFileModelCheckHash.mockResolvedValue({ isExist: false });
+
+      await expect(
+        caller.createFile({
+          fileType: 'text',
+          hash: 'test-hash',
+          metadata: {},
+          name: 'test.txt',
+          parentId: 'foreign-folder',
+          size: 100,
+          url: 'test-url',
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect(mockFileModelCreate).not.toHaveBeenCalled();
     });
 
     it('should return proxy URL format ${APP_URL}/f/:id', async () => {
@@ -800,6 +824,15 @@ describe('fileRouter', () => {
       expect(KnowledgeRepo).toHaveBeenCalledWith(expect.anything(), 'test-user', 'workspace-1');
     });
 
+    it('should reject preview pages larger than the server limit', async () => {
+      await expect(
+        caller.getKnowledgeItems({ includeContentPreview: true, limit: 101 }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+      expect(mockKnowledgeRepoQuery).not.toHaveBeenCalled();
+      expect(mockFileServiceGetFileContent).not.toHaveBeenCalled();
+    });
+
     it('should preserve full content for legacy clients that omit the preview contract', async () => {
       const knowledgeItems = [
         {
@@ -1012,6 +1045,30 @@ describe('fileRouter', () => {
       });
 
       expect(ctx.fileService.deleteFiles).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateFile', () => {
+    it('should reject moving a file to a parent document that is not accessible', async () => {
+      mockFileModelFindById.mockResolvedValue({ id: 'file-1', userId: 'other-member' });
+
+      await expect(
+        caller.updateFile({ id: 'file-1', parentId: 'foreign-folder' }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect(mockFileModelUpdate).not.toHaveBeenCalled();
+    });
+
+    it('should resolve and validate an accessible parent before moving a file', async () => {
+      mockFileModelFindById.mockResolvedValue({ id: 'file-1', userId: 'other-member' });
+      mockDocumentModelFindBySlug.mockResolvedValue({
+        id: 'docs_parent',
+        visibility: 'public',
+      });
+
+      await caller.updateFile({ id: 'file-1', parentId: 'parent-folder' });
+
+      expect(mockFileModelUpdate).toHaveBeenCalledWith('file-1', { parentId: 'docs_parent' });
     });
   });
 
