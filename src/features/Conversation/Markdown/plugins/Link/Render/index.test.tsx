@@ -45,13 +45,13 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => mockNavigate,
 }));
 
-// What the title-only entity read answers for this case (null = unresolved).
-let mockEntityTitle: string | null = null;
+// What the shared preview/title read answers for this case (null = unresolved).
+let mockEntityPreview: { title?: string } | null = null;
 
 vi.mock('@/libs/swr', () => ({
   useClientDataSWR: (key: unknown) => {
-    if (Array.isArray(key) && key[0] === 'internal-entity-title')
-      return { data: mockEntityTitle, mutate: vi.fn() };
+    if (Array.isArray(key) && key[0] === 'internal-entity-preview')
+      return { data: mockEntityPreview, mutate: vi.fn() };
     return {
       data: [{ documentId: 'docs_doc1', id: 'agent-document-1' }],
       mutate: vi.fn(),
@@ -104,7 +104,7 @@ const renderLink = (properties: Record<string, unknown>) =>
 afterEach(() => {
   mockShowIcon = true;
   mockConst.isDesktop = false;
-  mockEntityTitle = null;
+  mockEntityPreview = null;
   vi.restoreAllMocks();
 });
 
@@ -187,7 +187,7 @@ describe('Link Render — internal entities', () => {
   it('replaces a pasted URL label with the resolved entity title', () => {
     // A raw acceptance URL says nothing about what it points to; once the
     // entity resolves, the link reads as its title.
-    mockEntityTitle = 'Gateway 消息队列重建';
+    mockEntityPreview = { title: 'Gateway 消息队列重建' };
 
     const { container } = renderLink({
       linkHref: '/acceptance/acceptance-1',
@@ -201,7 +201,7 @@ describe('Link Render — internal entities', () => {
   });
 
   it('keeps the pasted URL while the title has not resolved', () => {
-    mockEntityTitle = null;
+    mockEntityPreview = null;
 
     const { container } = renderLink({
       linkHref: '/acceptance/acceptance-1',
@@ -213,7 +213,7 @@ describe('Link Render — internal entities', () => {
   });
 
   it('never replaces authored link text with the entity title', () => {
-    mockEntityTitle = 'Resolved title';
+    mockEntityPreview = { title: 'Resolved title' };
 
     const { container } = renderLink({
       linkHref: '/acceptance/acceptance-1',
@@ -225,7 +225,7 @@ describe('Link Render — internal entities', () => {
   });
 
   it('keeps a URL-shaped authored label — bare means label === href, not "looks like a URL"', () => {
-    mockEntityTitle = 'Resolved title';
+    mockEntityPreview = { title: 'Resolved title' };
 
     const { container } = renderLink({
       linkHref: '/task/T-198',
@@ -239,7 +239,7 @@ describe('Link Render — internal entities', () => {
   it('does not resolve titles for workspace-qualified links', () => {
     // The ambient client reads the ACTIVE scope; /lobe-team/task/T-198 may
     // name a different entity there, so the URL stays.
-    mockEntityTitle = 'Wrong-scope title';
+    mockEntityPreview = { title: 'Wrong-scope title' };
 
     const { container } = renderLink({
       linkHref: '/lobe-team/task/T-198',

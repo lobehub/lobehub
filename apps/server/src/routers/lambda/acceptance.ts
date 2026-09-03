@@ -334,43 +334,6 @@ export const acceptanceRouter = router({
    * scope) workspace members. A denied read is a NOT_FOUND, never a
    * FORBIDDEN — existence must not leak through the error code.
    */
-  /**
-   * Title-only twin of `getBundle` for surfaces that decorate a link — the
-   * chat renderer resolves every pasted acceptance URL into its title, so this
-   * read must stay a couple of rows, never the rounds/evidence fan-out. Same
-   * visibility rule as the bundle; an unreadable or missing id is `null`
-   * rather than a thrown NOT_FOUND, because a decoration failing to resolve
-   * is not an error the caller can act on.
-   */
-  getHeader: publicAcceptanceProcedure
-    .input(z.object({ id: z.string() }))
-    .query(async ({ ctx, input }) => {
-      const acceptance = isUuid(input.id)
-        ? await ctx.serverDB.query.acceptances.findFirst({
-            where: eq(acceptances.id, input.id),
-          })
-        : undefined;
-      if (!acceptance) return null;
-
-      const isOwner = Boolean(ctx.userId) && ctx.userId === acceptance.userId;
-      const member =
-        !isOwner && ctx.userId && acceptance.workspaceId
-          ? await new WorkspaceMemberModel(ctx.serverDB, ctx.userId).getMember(
-              acceptance.workspaceId,
-              ctx.userId,
-            )
-          : undefined;
-      if (!(isOwner || acceptance.visibility === 'public' || Boolean(member))) return null;
-
-      const subject = await new AcceptanceService(
-        ctx.serverDB,
-        acceptance.userId,
-        acceptance.workspaceId ?? undefined,
-      ).resolveSubject(acceptance);
-
-      return { id: acceptance.id, status: acceptance.status, title: subject.title };
-    }),
-
   getBundle: publicAcceptanceProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { memo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { shouldHardNavigateToWorkbench } from '@/libs/next/workbenchNavigation';
@@ -22,8 +23,11 @@ import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 
 import { type InternalLinkReference, isBareLinkLabel } from '../internalLink';
-import { getEntityTitle, internalEntityTitleKey } from './entityTitle';
-import { InternalEntityPreview } from './InternalEntityPreview';
+import {
+  getPreviewData,
+  InternalEntityPreview,
+  internalEntityPreviewKey,
+} from './InternalEntityPreview';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   link: css`
@@ -78,6 +82,7 @@ interface InternalEntityLinkProps {
 }
 
 export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, reference }) => {
+  const { t } = useTranslation('chat');
   const navigate = useWorkspaceAwareNavigate();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const [openAcceptance, openAgentDetail, openDocument, openTaskDetail, openVerifyReport] =
@@ -89,20 +94,21 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
       s.openVerifyReport,
     ]);
   // A pasted URL says nothing about what it points to, so resolve the entity's
-  // own title and show that instead. Title-only reads, never the preview's
-  // bundle fetch — this fires for every bare link on mount, and a link-dense
-  // message must not fan out full entities. Cross-workspace links are skipped:
+  // own title and show that instead — the same read the hover preview makes,
+  // under the same key, so the eager fetch also makes the hover card instant.
+  // Bare links are sparse in real messages, which is why prefetching the full
+  // preview beats a dedicated title read. Cross-workspace links are skipped:
   // the ambient client resolves against the ACTIVE scope, where a
   // workspace-unique id like T-198 can name a different entity entirely.
   // Authored link text is never replaced; a failed read just leaves the URL.
   const shouldResolveTitle =
     reference.type !== 'route' && !reference.workspaceSlug && isBareLinkLabel(label, href);
-  const { data: entityTitle } = useClientDataSWR(
-    shouldResolveTitle ? internalEntityTitleKey(reference) : null,
-    () => getEntityTitle(reference),
+  const { data: entity } = useClientDataSWR(
+    shouldResolveTitle ? internalEntityPreviewKey(reference) : null,
+    () => getPreviewData(reference, t),
     { revalidateOnFocus: false },
   );
-  const displayLabel = (shouldResolveTitle && entityTitle) || label;
+  const displayLabel = (shouldResolveTitle && entity?.title) || label;
 
   const linkedAgentId = reference.type === 'document' ? reference.agentId : undefined;
   const shouldResolveAgentDocument = !!linkedAgentId && linkedAgentId === activeAgentId;
