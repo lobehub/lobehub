@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import * as Schema from '../../../schemas';
@@ -347,6 +347,82 @@ describe('HomeRepository', () => {
       expect(result.ungrouped[0].unreadCount).toBe(1);
     });
 
+    it('should not count agent-share visitor unread topics in agent sidebar badges', async () => {
+      // Agent-share visitor topics keep the creator's userId, but a non-null
+      // senderId marks them as visitor traffic that must not bump the
+      // creator's own unread badge.
+      const agentId = 'agent-with-visitor-unread';
+
+      await clientDB.transaction(async (tx) => {
+        await tx.insert(Schema.agents).values({
+          id: agentId,
+          pinned: false,
+          title: 'Agent With Visitor Unread',
+          userId,
+          virtual: false,
+        });
+        await tx.insert(Schema.topics).values([
+          {
+            agentId,
+            id: 'visitor-unread-topic',
+            status: 'unread',
+            senderId: 'visitor-user-x',
+            title: 'Visitor unread topic',
+            userId,
+          },
+          {
+            agentId,
+            id: 'creator-unread-topic',
+            status: 'unread',
+            title: 'Creator unread topic',
+            userId,
+          },
+        ]);
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      expect(result.ungrouped).toHaveLength(1);
+      expect(result.ungrouped[0].id).toBe(agentId);
+      expect(result.ungrouped[0].unreadCount).toBe(1);
+    });
+
+    it('should not count agent-share visitor unread topics in chat group unread badges', async () => {
+      const groupId = 'group-with-visitor-unread';
+
+      await clientDB.transaction(async (tx) => {
+        await tx.insert(Schema.chatGroups).values({
+          id: groupId,
+          userId,
+          title: 'Group With Visitor Unread',
+          pinned: false,
+        });
+        await tx.insert(Schema.topics).values([
+          {
+            groupId,
+            id: 'visitor-unread-group-topic',
+            status: 'unread',
+            senderId: 'visitor-user-x',
+            title: 'Visitor unread topic',
+            userId,
+          },
+          {
+            groupId,
+            id: 'creator-unread-group-topic',
+            status: 'unread',
+            title: 'Creator unread topic',
+            userId,
+          },
+        ]);
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      const group = result.ungrouped.find((i) => i.id === groupId);
+      expect(group).toBeDefined();
+      expect(group!.unreadCount).toBe(1);
+    });
+
     describe('backward compatibility - fallback to sessions.pinned', () => {
       it('should fallback to sessions.pinned when agents.pinned is undefined (legacy data)', async () => {
         // Simulate legacy data: agents.pinned is null, but sessions.pinned is true
@@ -655,6 +731,56 @@ describe('HomeRepository', () => {
         expect(result).toHaveLength(1);
         expect(result[0].id).toBe('priority-search');
         expect(result[0].pinned).toBe(false); // agents.pinned should take priority
+      });
+    });
+  });
+
+  describe('searchAgents with external candidates', () => {
+    it('hydrates only current-scope non-virtual agents and chat groups', async () => {
+      await clientDB.insert(Schema.agents).values([
+        { id: 'candidate-agent-own', title: 'Own agent', userId },
+        { id: 'candidate-agent-virtual', title: 'Virtual agent', userId, virtual: true },
+        { id: 'candidate-agent-other', title: 'Other agent', userId: otherUserId },
+      ]);
+      await clientDB.insert(Schema.chatGroups).values([
+        { id: 'candidate-group-own', title: 'Own group', userId },
+        { id: 'candidate-group-other', title: 'Other group', userId: otherUserId },
+      ]);
+      const ftsSearchCandidates = vi.fn().mockImplementation(({ entity }) =>
+        Promise.resolve({
+          candidates:
+            entity === 'agents'
+              ? [
+                  { id: 'candidate-agent-other', score: 12 },
+                  { id: 'candidate-agent-virtual', score: 10 },
+                  { id: 'candidate-agent-deleted', score: 8 },
+                  { id: 'candidate-agent-own', score: 6 },
+                ]
+              : [
+                  { id: 'candidate-group-other', score: 12 },
+                  { id: 'candidate-group-deleted', score: 10 },
+                  { id: 'candidate-group-own', score: 8 },
+                ],
+          total: 4,
+        }),
+      );
+      const repo = new HomeRepository(clientDB, userId, undefined, {
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates,
+      });
+
+      const result = await repo.searchAgents('candidate');
+
+      expect(result.map(({ id }) => id).sort()).toEqual([
+        'candidate-agent-own',
+        'candidate-group-own',
+      ]);
+      expect(ftsSearchCandidates).toHaveBeenCalledTimes(2);
+      expect(ftsSearchCandidates).toHaveBeenCalledWith({
+        entity: 'agents',
+        filters: { excludeVirtual: true },
+        pagination: {},
+        query: { fields: ['title', 'description'], text: 'candidate' },
       });
     });
   });

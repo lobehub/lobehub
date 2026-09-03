@@ -150,6 +150,57 @@ export const UserInterventionConfigSchema = z.object({
 });
 
 /**
+ * Provider-neutral presentation class for a pending human intervention.
+ *
+ * Keep this helper in the shared tool contract so the runtime notification
+ * producer and the Web batch-action gate cannot drift: an inline form must
+ * never be treated as a binary approve/reject card merely because both happen
+ * to use `plugin.intervention.status = pending` in message storage.
+ */
+export type ToolInterventionPresentation = {
+  interactionKind: 'custom' | 'question' | 'tool_approval';
+  surface: 'binary' | 'form';
+};
+
+const ASK_USER_QUESTION_IDENTIFIERS = new Set([
+  'claude-code',
+  'cursor',
+  'droid',
+  'lobe-agent',
+  'lobe-user-interaction',
+  'qoder',
+]);
+
+const HETEROGENEOUS_CUSTOM_INTERACTION_IDENTIFIERS = new Set([
+  'claude-code',
+  'cursor',
+  'droid',
+  'qoder',
+]);
+
+export const classifyToolInterventionPresentation = (
+  identifier: string,
+  apiName?: string,
+): ToolInterventionPresentation => {
+  if (apiName === 'askUserQuestion' && ASK_USER_QUESTION_IDENTIFIERS.has(identifier)) {
+    return { interactionKind: 'question', surface: 'form' };
+  }
+
+  if (identifier === 'lobe-web-onboarding' && apiName === 'showAgentMarketplace') {
+    return { interactionKind: 'custom', surface: 'form' };
+  }
+
+  // Claude Code / Cursor ACP / Droid ACP / Qoder expose provider-specific intervention
+  // forms (permission, plan, bespoke prompts). They are intentionally kept
+  // non-binary even when a newly added API name is not yet known to Web.
+  if (HETEROGENEOUS_CUSTOM_INTERACTION_IDENTIFIERS.has(identifier)) {
+    return { interactionKind: 'custom', surface: 'form' };
+  }
+
+  return { interactionKind: 'tool_approval', surface: 'binary' };
+};
+
+/**
  * Security Blacklist Rule
  * Used to forcefully block dangerous operations regardless of user settings
  */

@@ -1,29 +1,11 @@
 import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL } from '@lobechat/const';
-import type { TaskStatus } from '@lobechat/types';
+import type { ChatTopicMetadata, RecentItem } from '@lobechat/types';
 import { z } from 'zod';
 
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { RecentModel } from '@/database/models/recent';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import type { ChatTopicMetadata } from '@/types/topic';
-
-export interface RecentItem {
-  agentId?: string | null;
-  description?: string | null;
-  icon: string;
-  id: string;
-  lastAssistantMessage?: string | null;
-  metadata?: ChatTopicMetadata;
-  routePath: string;
-  /** Task lifecycle status when `type === 'task'`; null for topic/document. */
-  status: TaskStatus | null;
-  title: string;
-  type: 'topic' | 'document' | 'task';
-  updatedAt: Date;
-  /** The member who owns this item — for author attribution in workspace team views. */
-  userId?: string;
-}
 
 const recentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;

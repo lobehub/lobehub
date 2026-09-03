@@ -1,7 +1,8 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Avatar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Check } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -58,8 +59,10 @@ export const BatchCreateAgentsInspector = memo<
   // Initial streaming state
   if (isArgumentsStreaming && !displayInfo) {
     return (
-      <div className={cx(styles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-group-agent-builder.apiName.batchCreateAgents')}</span>
+      <div className={styles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-group-agent-builder.apiName.batchCreateAgents')}
+        </span>
       </div>
     );
   }
@@ -69,13 +72,13 @@ export const BatchCreateAgentsInspector = memo<
   const totalCount = displayInfo?.count ?? 0;
 
   return (
-    <Flexbox
-      horizontal
-      align={'center'}
-      className={cx(styles.root, (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}
-      gap={8}
-    >
-      <span className={styles.title}>
+    <Flexbox horizontal align={'center'} className={styles.root} gap={8}>
+      <span
+        className={cx(
+          styles.title,
+          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
+        )}
+      >
         {t('builtins.lobe-group-agent-builder.apiName.batchCreateAgents')}:
       </span>
       {displayInfo && (

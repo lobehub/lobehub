@@ -9,6 +9,15 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { createGatewayEventHandler } from './gatewayEventHandler';
 
+const executorMocks = vi.hoisted(() => ({
+  onAfterCall: vi.fn(),
+}));
+
+vi.mock('@/store/tool/slices/builtin/executors', () => ({
+  getExecutor: vi.fn(() => ({ onAfterCall: executorMocks.onAfterCall })),
+  registerBuiltinToolExecutors: vi.fn(),
+}));
+
 const context = {
   agentId: 'agent-1',
   topicId: 'topic-1',
@@ -52,7 +61,56 @@ const flush = async () => {
 describe('createGatewayEventHandler', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    executorMocks.onAfterCall.mockReset();
     vi.spyOn(agentSignalBridge, 'emitClientAgentSignalSourceEvent').mockResolvedValue(undefined);
+  });
+
+  it('normalizes tool_end isSuccess for Codex worktree side-effect hooks', async () => {
+    vi.spyOn(messageService, 'getMessages').mockResolvedValue([] as unknown as UIChatMessage[]);
+    const store = createStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'seed-msg',
+      context,
+      operationId: 'op-1',
+      runtimeType: 'hetero',
+    });
+
+    handler(
+      makeEvent('tool_end', {
+        isSuccess: true,
+        payload: {
+          toolCalling: {
+            apiName: 'command_execution',
+            arguments: JSON.stringify({
+              command:
+                'git worktree add -b feat/device-reconnect-button /repo-wt-device-reconnect abc123',
+            }),
+            id: 'command-1',
+            identifier: 'codex',
+            type: 'default',
+          },
+        },
+        result: { content: 'Preparing worktree (new branch feat/device-reconnect-button)' },
+        skipMessageFetch: true,
+        toolCallId: 'command-1',
+      } as any),
+    );
+    await flush();
+
+    expect(executorMocks.onAfterCall).toHaveBeenCalledWith({
+      apiName: 'command_execution',
+      identifier: 'codex',
+      params: {
+        command:
+          'git worktree add -b feat/device-reconnect-button /repo-wt-device-reconnect abc123',
+      },
+      result: {
+        content: 'Preparing worktree (new branch feat/device-reconnect-button)',
+        success: true,
+      },
+      toolCallId: 'command-1',
+      topicId: 'topic-1',
+    });
   });
 
   it('inserts the assistant shell locally when stream_start carries the message seed (new server)', async () => {
@@ -1025,5 +1083,115 @@ describe('createGatewayEventHandler', () => {
     await flush();
 
     expect(lifecycle.afterRunComplete).not.toHaveBeenCalled();
+  });
+
+  it('keeps a modern intervention resolving until the producer ACK arrives', async () => {
+    const key = messageMapKey(context);
+    const getMessages = vi
+      .spyOn(messageService, 'getMessages')
+      .mockResolvedValue([] as unknown as UIChatMessage[]);
+    const updateMessagePlugin = vi.spyOn(messageService, 'updateMessagePlugin');
+    const store = createStore({
+      [key]: [
+        {
+          content: '',
+          id: 'permission-message',
+          parentId: 'answer-msg',
+          pluginIntervention: {
+            batchId: 'batch-1',
+            operationId: 'op-1',
+            status: 'pending',
+          },
+          role: 'tool',
+          tool_call_id: 'permission-1',
+        } as UIChatMessage,
+      ],
+    });
+    store.updateTopicStatus = vi.fn().mockResolvedValue(undefined);
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'answer-msg',
+      context,
+      operationId: 'op-1',
+      runtimeType: 'hetero',
+    });
+    const resolutionRequestId = '018fbd8e-7baf-7c6d-8000-000000000001';
+
+    handler(
+      makeEvent('agent_intervention_request', {
+        apiName: 'askUserQuestion',
+        arguments: '{"questions":[]}',
+        deadline: Date.now() + 60_000,
+        identifier: 'claude-code',
+        interactionKind: 'permission',
+        provider: 'cursor',
+        toolCallId: 'permission-1',
+      }),
+    );
+    await flush();
+    expect(store.updateTopicStatus).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'waitingForHuman', topicId: 'topic-1' }),
+    );
+
+    vi.mocked(store.updateTopicStatus!).mockClear();
+    getMessages.mockClear();
+    handler(
+      makeEvent('agent_intervention_response', {
+        producerAck: false,
+        resolutionRequestId,
+        result: { approved: true },
+        toolCallId: 'permission-1',
+      }),
+    );
+    await flush();
+    expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+      {
+        id: 'permission-message',
+        type: 'updateMessage',
+        value: {
+          pluginIntervention: {
+            batchId: 'batch-1',
+            operationId: 'op-1',
+            resolving: true,
+            status: 'pending',
+          },
+        },
+      },
+      { context },
+    );
+    expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+      {
+        id: 'answer-msg',
+        tool_call_id: 'permission-1',
+        type: 'updateMessageTools',
+        value: {
+          intervention: {
+            batchId: 'batch-1',
+            operationId: 'op-1',
+            resolving: true,
+            status: 'pending',
+          },
+        },
+      },
+      { context },
+    );
+    expect(store.updateTopicStatus).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'waitingForHuman', topicId: 'topic-1' }),
+    );
+    expect(updateMessagePlugin).not.toHaveBeenCalled();
+    expect(getMessages).not.toHaveBeenCalled();
+
+    handler(
+      makeEvent('agent_intervention_response', {
+        producerAck: true,
+        resolutionRequestId,
+        result: { approved: true },
+        toolCallId: 'permission-1',
+      }),
+    );
+    await flush();
+    expect(getMessages).toHaveBeenCalledWith({ ...context, skipWorks: true });
+    expect(store.updateTopicStatus).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'running', topicId: 'topic-1' }),
+    );
   });
 });

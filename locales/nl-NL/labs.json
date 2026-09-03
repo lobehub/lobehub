@@ -16,6 +16,8 @@
   "features.codexAppServer.title": "Codex App Server Runtime",
   "features.desktopSplitView.desc": "Toon twee desktop-tabbladen naast elkaar, met onafhankelijke navigatie en een verstelbare scheidingslijn.",
   "features.desktopSplitView.title": "Gesplitste Tabweergave",
+  "features.evalCapture.desc": "Voegt een berichtactie toe die een gespreksturn vastlegt — de voorafgaande context, invoer en het antwoord dat het heeft opgeleverd — als een evaluatietestgeval.",
+  "features.evalCapture.title": "Sla een beurt op als een evaluatiegeval",
   "features.groupChat.desc": "Schakel coördinatie van groepschats met meerdere agenten in.",
   "features.groupChat.title": "Groepschat (Meerdere Agenten)",
   "features.heteroSessionImport.desc": "Voeg een \"Importeer Lokale Agent Sessies\" optie toe aan het menu van de onderwerpenlijst: scan lokale Claude Code / Codex CLI-transcripten en importeer ze als onderwerpen, met incrementele synchronisatie bij herimport.",

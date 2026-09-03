@@ -19,7 +19,7 @@ import type { LobeDocumentPage } from '@/types/document';
 import type { FileSource } from '@/types/files';
 
 import { idGenerator, randomSlug } from '../utils/idGenerator';
-import { accessedAt, createdAt, timestamps } from './_helpers';
+import { accessedAt, createdAt, softDeleteColumns, timestamps } from './_helpers';
 import { asyncTasks } from './asyncTask';
 import { users } from './user';
 import { workspaces } from './workspace';
@@ -140,6 +140,8 @@ export const documents = pgTable(
       .notNull(),
 
     // Timestamps
+    /** Recycle bin — see `schemas/trash.ts`. */
+    ...softDeleteColumns(),
     ...timestamps,
   },
   (table) => [
@@ -221,6 +223,8 @@ export const files = pgTable(
       .default('public')
       .notNull(),
 
+    /** Recycle bin — see `schemas/trash.ts`. */
+    ...softDeleteColumns(),
     ...timestamps,
   },
   (table) => {
@@ -287,6 +291,8 @@ export const knowledgeBases = pgTable(
      */
     visibility: text('visibility', { enum: KNOWLEDGE_BASE_VISIBILITY }).default('public').notNull(),
 
+    /** Recycle bin — see `schemas/trash.ts`. */
+    ...softDeleteColumns(),
     ...timestamps,
   },
   (t) => [

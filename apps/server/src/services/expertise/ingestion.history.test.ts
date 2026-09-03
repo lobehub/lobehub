@@ -134,4 +134,58 @@ describe('ExpertiseIngestionService historical topic resolution', () => {
 
     await expect(service.countHistoricalTopics('hist-agent')).resolves.toBe(0);
   });
+
+  // Agent-share visitor topics are stored under the creator's userId (billing
+  // attribution) but carry a non-null senderId. They must never surface as
+  // historical-backfill candidates, since that would feed self-learning/expertise
+  // ingestion with a visitor's conversation instead of the creator's own activity.
+  it('excludes agent-share visitor topics from historical topic candidates', async () => {
+    await serverDB.insert(topics).values([
+      // Reached through the message-agent arm.
+      {
+        agentId: 'hist-agent',
+        id: 'topic-visitor-explicit',
+        senderId: 'visitor-user-x',
+        title: 'visitor explicit',
+        userId,
+      },
+      // Reached through the legacy topic-agent arm.
+      {
+        agentId: 'hist-agent',
+        id: 'topic-visitor-legacy',
+        senderId: 'visitor-user-x',
+        title: 'visitor legacy',
+        userId,
+      },
+    ]);
+    await serverDB.insert(messages).values([
+      {
+        agentId: 'hist-agent',
+        content: 'visitor explicit',
+        createdAt: new Date('2026-01-07T00:00:00Z'),
+        id: 'msg-visitor-explicit',
+        role: 'user',
+        topicId: 'topic-visitor-explicit',
+        userId,
+      },
+      {
+        content: 'visitor legacy',
+        createdAt: new Date('2026-01-08T00:00:00Z'),
+        id: 'msg-visitor-legacy',
+        role: 'user',
+        topicId: 'topic-visitor-legacy',
+        userId,
+      },
+    ]);
+
+    const service = new ExpertiseIngestionService(serverDB, userId);
+
+    // Still 2, not 4 — the two new visitor topics never qualify as candidates.
+    await expect(service.countHistoricalTopics('hist-agent')).resolves.toBe(2);
+
+    const listed = await service.listHistoricalTopics('hist-agent', { limit: 50 });
+    expect(listed.map((t) => t.topicId)).not.toEqual(
+      expect.arrayContaining(['topic-visitor-explicit', 'topic-visitor-legacy']),
+    );
+  });
 });

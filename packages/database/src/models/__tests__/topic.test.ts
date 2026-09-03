@@ -131,6 +131,105 @@ describe('TopicModel', () => {
       const found = await topicModel.findById('topic-foreign');
       expect(found).toBeUndefined();
     });
+
+    it('does not return an agent-share visitor topic by default (creator-facing scope)', async () => {
+      await serverDB.insert(topics).values({
+        id: 'topic-visitor-find',
+        senderId: 'visitor-user-x',
+        title: 'visitor topic',
+        userId,
+      });
+
+      const found = await topicModel.findById('topic-visitor-find');
+      expect(found).toBeUndefined();
+    });
+
+    it('returns an agent-share visitor topic when includeShareVisitor is opted in', async () => {
+      await serverDB.insert(topics).values({
+        id: 'topic-visitor-find-opted',
+        senderId: 'visitor-user-x',
+        title: 'visitor topic',
+        userId,
+      });
+
+      const shareRuntimeModel = new TopicModel(serverDB, userId, undefined, undefined, {
+        includeShareVisitor: true,
+      });
+      const found = await shareRuntimeModel.findById('topic-visitor-find-opted');
+      expect(found?.id).toBe('topic-visitor-find-opted');
+    });
+  });
+
+  describe('findOwnTopicById', () => {
+    it('returns the creator’s own topic', async () => {
+      const topic = await topicModel.create({ title: 'own' });
+
+      const found = await topicModel.findOwnTopicById(topic.id);
+      expect(found?.id).toBe(topic.id);
+    });
+
+    it('excludes an agent-share visitor topic', async () => {
+      // Visitor topics carry the creator's userId, so ownership alone would let
+      // the creator read a visitor conversation from a raw topic id.
+      await serverDB.insert(topics).values({
+        id: 'topic-visitor-find-own',
+        senderId: 'visitor-user-x',
+        title: 'visitor topic',
+        userId,
+      });
+
+      const found = await topicModel.findOwnTopicById('topic-visitor-find-own');
+      expect(found).toBeUndefined();
+    });
+  });
+
+  describe('findOwnTopicsByIds', () => {
+    it('returns the creator’s own topics', async () => {
+      const topic = await topicModel.create({ title: 'own' });
+
+      const found = await topicModel.findOwnTopicsByIds([topic.id]);
+      expect(found.map((t) => t.id)).toEqual([topic.id]);
+    });
+
+    it('excludes an agent-share visitor topic from a mixed batch', async () => {
+      // Visitor topics carry the creator's userId, so ownership alone would let
+      // the creator read a visitor conversation from a raw topic id.
+      const own = await topicModel.create({ title: 'own' });
+      await serverDB.insert(topics).values({
+        id: 'topic-visitor-find-own-ids',
+        senderId: 'visitor-user-x',
+        title: 'visitor topic',
+        userId,
+      });
+
+      const found = await topicModel.findOwnTopicsByIds([own.id, 'topic-visitor-find-own-ids']);
+
+      expect(found.map((t) => t.id)).toEqual([own.id]);
+    });
+  });
+
+  describe('findShareVisitorTopicIds', () => {
+    it('reports only the visitor ids of a mixed batch', async () => {
+      // Creator-facing update RPCs diff their targets against this finder, so
+      // it must name visitor rows and stay silent about the creator's own.
+      const own = await topicModel.create({ title: 'own' });
+      await serverDB.insert(topics).values({
+        id: 'topic-visitor-ids',
+        senderId: 'visitor-user-x',
+        title: 'visitor topic',
+        userId,
+      });
+
+      const visitorIds = await topicModel.findShareVisitorTopicIds([own.id, 'topic-visitor-ids']);
+
+      expect(visitorIds).toEqual(['topic-visitor-ids']);
+    });
+
+    it('ignores ids that match no row', async () => {
+      const visitorIds = await topicModel.findShareVisitorTopicIds(['topic-missing']);
+
+      expect(visitorIds).toEqual([]);
+    });
   });
 
   describe('query', () => {
@@ -179,6 +278,34 @@ describe('TopicModel', () => {
 
       const { items } = await topicModel.query({ groupId: 'group-q' });
       expect(items.map((t) => t.id)).toEqual(['t-g1']);
+    });
+
+    it('excludes agent-share visitor topics from the agentId branch', async () => {
+      // Agent-share visitor topics keep the CREATOR's userId (so plain
+      // ownership matches them) but carry a non-null senderId. The creator's
+      // own topic sidebar (`query({ agentId })`) must never surface them —
+      // only the visitor-scoped `queryBySender` should.
+      await serverDB.insert(agents).values({ id: 'agent-share', userId });
+      await serverDB.insert(topics).values([
+        { agentId: 'agent-share', id: 't-creator', title: 'creator', userId },
+        {
+          agentId: 'agent-share',
+          id: 't-visitor',
+          senderId: 'visitor-user-x',
+          title: 'visitor',
+          userId,
+        },
+      ]);
+
+      const { items, total } = await topicModel.query({ agentId: 'agent-share' });
+      expect(items.map((t) => t.id)).toEqual(['t-creator']);
+      expect(total).toBe(1);
+
+      const visitorItems = await topicModel.queryBySender({
+        agentId: 'agent-share',
+        senderId: 'visitor-user-x',
+      });
+      expect(visitorItems.map((t) => t.id)).toEqual(['t-visitor']);
     });
 
     describe('status filtering & ordering', () => {
@@ -311,6 +438,64 @@ describe('TopicModel', () => {
     });
   });
 
+  describe('queryBySender', () => {
+    it('projects only the visitor-safe runningOperation fields, stripping the rest of metadata', async () => {
+      await serverDB.insert(agents).values({ id: 'agent-share-running', userId });
+      await serverDB.insert(topics).values({
+        agentId: 'agent-share-running',
+        id: 't-visitor-running',
+        metadata: {
+          // Creator-only fields that must never reach a visitor.
+          model: 'gpt-4',
+          runningOperation: {
+            assistantMessageId: 'ast-1',
+            deviceId: 'device-1',
+            heteroType: 'claude-code',
+            hooks: [{ event: 'onComplete', type: 'webhook', url: 'https://example.com' } as any],
+            operationId: 'op-1',
+            scope: 'main',
+            threadId: 'thd-1',
+          },
+        },
+        senderId: 'visitor-user-running',
+        title: 'running',
+        userId,
+      });
+
+      const [item] = await topicModel.queryBySender({
+        agentId: 'agent-share-running',
+        senderId: 'visitor-user-running',
+      });
+
+      expect(item.runningOperation).toEqual({
+        assistantMessageId: 'ast-1',
+        heteroType: 'claude-code',
+        operationId: 'op-1',
+        scope: 'main',
+        threadId: 'thd-1',
+      });
+      expect(item).not.toHaveProperty('metadata');
+    });
+
+    it('returns a null runningOperation when the topic has no active run', async () => {
+      await serverDB.insert(agents).values({ id: 'agent-share-idle', userId });
+      await serverDB.insert(topics).values({
+        agentId: 'agent-share-idle',
+        id: 't-visitor-idle',
+        senderId: 'visitor-user-idle',
+        title: 'idle',
+        userId,
+      });
+
+      const [item] = await topicModel.queryBySender({
+        agentId: 'agent-share-idle',
+        senderId: 'visitor-user-idle',
+      });
+
+      expect(item.runningOperation).toBeNull();
+    });
+  });
+
   describe('queryTopics', () => {
     it('filters by the given statuses and is scoped to the owner', async () => {
       await serverDB.insert(topics).values([
@@ -331,6 +516,22 @@ describe('TopicModel', () => {
 
       const result = await topicModel.queryTopics();
       expect(result.map((t) => t.id).sort()).toEqual(['t1', 't2']);
+    });
+
+    it('excludes agent-share visitor topics', async () => {
+      await serverDB.insert(topics).values([
+        { id: 'qt-creator', status: 'running', title: 'creator', userId },
+        {
+          id: 'qt-visitor',
+          senderId: 'visitor-user-x',
+          status: 'running',
+          title: 'visitor',
+          userId,
+        },
+      ]);
+
+      const result = await topicModel.queryTopics({ statuses: ['running'] });
+      expect(result.map((t) => t.id)).toEqual(['qt-creator']);
     });
 
     it('omits the last assistant message unless asked for it', async () => {
@@ -499,6 +700,15 @@ describe('TopicModel', () => {
 
       expect(await topicModel.count()).toBe(2);
       expect(await topicModel.count({ agentId: 'agent-c' })).toBe(1);
+    });
+
+    it('excludes agent-share visitor topics', async () => {
+      await serverDB.insert(topics).values([
+        { id: 'count-creator', title: 'creator', userId },
+        { id: 'count-visitor', senderId: 'visitor-user-x', title: 'visitor', userId },
+      ]);
+
+      expect(await topicModel.count()).toBe(1);
     });
   });
 

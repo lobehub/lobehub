@@ -41,7 +41,8 @@ const mockUpdateToolMessage = vi.fn();
 const mockGetMessages = vi.fn();
 
 const mockToastInfo = vi.fn();
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   toast: { info: (...args: unknown[]) => mockToastInfo(...args) },
 }));
 
@@ -72,11 +73,13 @@ vi.mock('@/services/thread', () => ({
 const mockStartSession = vi.fn();
 const mockSendPrompt = vi.fn();
 const mockStopSession = vi.fn();
+const mockCancelSession = vi.fn();
 const mockGetSessionInfo = vi.fn();
 const mockGetClaudeCodeIdentity = vi.fn(async (..._args: any[]) => null);
 
 vi.mock('@/services/electron/heterogeneousAgent', () => ({
   heterogeneousAgentService: {
+    cancelSession: (...args: unknown[]) => mockCancelSession(...args),
     getClaudeCodeIdentity: (...args: any[]) => mockGetClaudeCodeIdentity(...args),
     getSessionInfo: (...args: any[]) => mockGetSessionInfo(...args),
     sendPrompt: (...args: any[]) => mockSendPrompt(...args),
@@ -142,10 +145,12 @@ function setupIpcCapture() {
       ipcRenderer: {
         on: vi.fn((channel: string, handler: (...args: any[]) => void) => {
           listeners.set(channel, handler);
+          return () => {
+            if (listeners.get(channel) === handler) listeners.delete(channel);
+          };
         }),
-        removeListener: vi.fn((channel: string, handler: (...args: any[]) => void) => {
-          if (listeners.get(channel) === handler) listeners.delete(channel);
-        }),
+        // A separately bridged callback does not preserve the listener proxy identity.
+        removeListener: vi.fn(),
       },
     },
   };
@@ -529,6 +534,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     });
     mockSendPrompt.mockResolvedValue(undefined);
     mockStopSession.mockResolvedValue(undefined);
+    mockCancelSession.mockResolvedValue(undefined);
     // Mirror the desktop main: `getSessionInfo` returns whatever the producer
     // pipeline's adapter has extracted from the JSONL stream so far. Tests
     // that never emit an init / thread.started event get `agentSessionId:
@@ -658,6 +664,101 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     return { get, store };
   }
 
+  it('releases all IPC subscriptions after a run settles', async () => {
+    await runWithEvents([ccInit(), ccResult()]);
+
+    expect([...ipc.getListeners().keys()]).toEqual([]);
+  });
+
+  describe('cancellation coordination', () => {
+    /**
+     * @example “Send now” awaits the renderer cancellation hook before dispatching a replacement.
+     */
+    it('returns the desktop session cancellation promise from the operation cancel hook', async () => {
+      // ROOT CAUSE:
+      //
+      // The operation hook started cancelSession but returned undefined. QueueTray
+      // therefore believed cancellation had settled and resumed the same native
+      // Codex thread while the previous writer was still shutting down.
+      //
+      // Before: () => { cancelSession(...).catch(...) }
+      // After: async () => await cancelSession(...)
+      let cancelHandler: (() => Promise<void>) | undefined;
+      let resolveCancellation!: () => void;
+      let resolvePrompt!: () => void;
+      mockCancelSession.mockReturnValue(
+        new Promise<void>((resolve) => {
+          resolveCancellation = resolve;
+        }),
+      );
+      mockSendPrompt.mockReturnValue(
+        new Promise<void>((resolve) => {
+          resolvePrompt = resolve;
+        }),
+      );
+      const store = createMockStore({
+        onOperationCancel: vi.fn(
+          (_operationId: string, handler: () => Promise<void>) => (cancelHandler = handler),
+        ),
+      });
+      const get = vi.fn(() => store);
+      const executor = executeHeterogeneousAgent(get, defaultParams);
+
+      await vi.waitFor(() => expect(cancelHandler).toBeDefined());
+      let cancellationSettled = false;
+      const cancellation = cancelHandler!().then(() => {
+        cancellationSettled = true;
+      });
+      await Promise.resolve();
+
+      expect(mockCancelSession).toHaveBeenCalledWith('ipc-sess-1');
+      expect(cancellationSettled).toBe(false);
+
+      resolveCancellation();
+      await cancellation;
+      ipc.emitComplete('ipc-sess-1');
+      resolvePrompt();
+      await executor;
+    });
+
+    /**
+     * @example Desktop cannot confirm that the native process exited after interruption.
+     */
+    it('rejects the operation cancel hook when desktop cancellation fails', async () => {
+      // ROOT CAUSE:
+      //
+      // The renderer logged cancelSession failures but resolved its operation
+      // hook. The operation layer then treated a still-live native writer as a
+      // successful cancellation.
+      //
+      // Before: catch(error) logged and returned undefined.
+      // After: catch(error) logs and rethrows to the operation confirmation layer.
+      let cancelHandler: (() => Promise<void>) | undefined;
+      let resolvePrompt!: () => void;
+      const cancellationError = new Error('process did not exit after SIGKILL');
+      mockCancelSession.mockRejectedValue(cancellationError);
+      mockSendPrompt.mockReturnValue(
+        new Promise<void>((resolve) => {
+          resolvePrompt = resolve;
+        }),
+      );
+      const store = createMockStore({
+        onOperationCancel: vi.fn(
+          (_operationId: string, handler: () => Promise<void>) => (cancelHandler = handler),
+        ),
+      });
+      const get = vi.fn(() => store);
+      const executor = executeHeterogeneousAgent(get, defaultParams);
+
+      await vi.waitFor(() => expect(cancelHandler).toBeDefined());
+      await expect(cancelHandler!()).rejects.toBe(cancellationError);
+
+      ipc.emitComplete('ipc-sess-1');
+      resolvePrompt();
+      await executor;
+    });
+  });
+
   describe('Claude Code Desktop-local API binding', () => {
     let previousLab: ReturnType<typeof useUserStore.getState>['preference']['lab'];
 
@@ -762,6 +863,30 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       );
       expect(mockSelectAccountForAgent).not.toHaveBeenCalled();
       expect(mockGetClaudeCodeIdentity).not.toHaveBeenCalled();
+    });
+
+    it('passes a Kimi Code deployment-provider reference to Desktop main', async () => {
+      const kimiServerDefaultProvider = {
+        apiConfig: { model: 'kimi-k2.6', source: 'server-default' as const },
+        authMode: 'api' as const,
+        command: 'kimi',
+        type: 'kimi-code' as const,
+      } satisfies HeterogeneousProviderConfig;
+
+      await runWithEvents([], {
+        params: { heterogeneousProvider: kimiServerDefaultProvider },
+      });
+
+      expect(mockStartSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentType: 'kimi-code',
+          providerBinding: {
+            apiConfig: { model: 'kimi-k2.6', source: 'server-default' },
+            kind: 'server-default',
+            resumeBindingKey: undefined,
+          },
+        }),
+      );
     });
 
     it.each(['lobehub/claude-server', 'lobehub-default'])(
@@ -2085,6 +2210,48 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           agentType: 'trae',
           args: ['--feature=test'],
           initialModel: 'gpt-5.4',
+        }),
+      );
+    });
+
+    it('should leave TRAE model selection to the managed profile in API mode', async () => {
+      const previousLab = useUserStore.getState().preference.lab;
+      useUserStore.setState((state) => ({
+        preference: {
+          ...state.preference,
+          lab: { ...state.preference.lab, enableAgentProviderBinding: true },
+        },
+      }));
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+
+      try {
+        await executeHeterogeneousAgent(get, {
+          ...defaultParams,
+          heterogeneousProvider: {
+            apiConfig: { model: 'api-model', providerId: 'openai' },
+            args: ['--feature=test'],
+            authMode: 'api',
+            command: 'traecli',
+            model: 'stale-subscription-model',
+            type: 'trae' as const,
+          },
+        });
+      } finally {
+        useUserStore.setState((state) => ({
+          preference: { ...state.preference, lab: previousLab },
+        }));
+      }
+
+      expect(mockStartSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentType: 'trae',
+          initialModel: undefined,
+          providerBinding: {
+            apiConfig: { model: 'api-model', providerId: 'openai' },
+            kind: 'provider',
+            resumeBindingKey: undefined,
+          },
         }),
       );
     });

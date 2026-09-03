@@ -132,6 +132,34 @@ describe('imageRouter.createImage — model mapping failure reconciles billing',
     );
   });
 
+  it('stamps the task spend attribution onto the completion charge metadata', async () => {
+    // The submitting request is long gone by the time this router charges, so
+    // the attribution has to come off the task — otherwise a share visitor's
+    // image spend is billed to the creator with no trace of its origin.
+    asyncTaskModelMock.findById.mockResolvedValue({
+      metadata: {
+        precharge: { reservationKey: 'brk-1' },
+        spendOrigin: {
+          agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+          trigger: 'agent_share',
+        },
+      },
+    });
+    vi.mocked(resolveBusinessModelMapping).mockRejectedValue(new Error('mapping failed'));
+
+    const caller = imageRouter.createCaller(mockCtx);
+    await caller.createImage(createInput());
+
+    expect(chargeAfterGenerate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+          trigger: 'agent_share',
+        }),
+      }),
+    );
+  });
+
   it('threads undefined prechargeResult when the task has no precharge handle', async () => {
     asyncTaskModelMock.findById.mockResolvedValue({ metadata: undefined });
     vi.mocked(resolveBusinessModelMapping).mockRejectedValue(new Error('mapping failed'));

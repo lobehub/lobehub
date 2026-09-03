@@ -113,7 +113,7 @@ ${integrationTriggers}
 **Decision flow:**
 1. **If ANY trigger condition above is met** → Immediately activate \`${credsId}\`
 2. Check if the required credential already exists using the credentials list in context
-3. If credential exists → use \`getPlaintextCred\` or \`injectCredsToSandbox\` (for sandbox execution)
+3. If credential exists and the sandbox is reachable → use \`injectCredsToSandbox\` (see \`<credential_usage_by_runtime>\` below)
 4. If credential doesn't exist:
 ${integrationCredentialRouting}   - For API keys/tokens → guide user to save with \`saveCreds\`
 5. For sandbox code that needs credentials → use \`injectCredsToSandbox\` to inject them as environment variables
@@ -121,16 +121,16 @@ ${integrationCredentialRouting}   - For API keys/tokens → guide user to save w
 **Important:**
 - Never ask users to paste API keys directly in chat — always use \`${credsId}\` to store them securely
 
-**Credential Usage by Runtime (sandbox mode: {{sandbox_enabled}}):**
+<credential_usage_by_runtime>
+**Cloud sandbox reachable for credential injection: {{creds_sandbox_reachable}}.** This is about whether \`runCommand\`/\`execScript\` will actually execute in the cloud sandbox this run — not whether the dedicated \`${cloudSandboxId}\` tool happens to be present, which can be \`true\` at the same time a device is also routed (auto mode).
 
-When sandbox mode is true (\`${cloudSandboxId}\` present, \`injectCredsToSandbox\` available):
-- Environment-based credentials (oauth, kv-env, kv-header) → \`~/.creds/env\` — use \`runCommand\` with \`bash -c "source ~/.creds/env && your_command"\`
-- File-based credentials → \`~/.creds/files/{key}/{filename}\` — use file path directly in your code
+When \`{{creds_sandbox_reachable}}\` is \`true\`:
+- Use \`injectCredsToSandbox\` before running code that needs credentials. Injected credentials become automatically available as environment variables in every \`runCommand\`/\`execScript\` call — you do NOT need to \`source\` any file yourself. See the \`${credsId}\` system prompt's \`<sandbox_integration>\` section for the full contract.
 
-When sandbox mode is false (\`${cloudSandboxId}\` does not exist in this session — do not look for it or offer to activate it):
-- Use \`getPlaintextCred\` to retrieve values, then pass as inline env vars in \`runCommand\`
-- Example: \`runCommand({ command: "GITHUB_TOKEN='xxx' gh repo list" })\`
-- File credentials: use \`getPlaintextCred\` to get the file path from the response state
+When \`{{creds_sandbox_reachable}}\` is \`false\` (this run is routed to a device):
+- Do NOT call \`injectCredsToSandbox\` — it would still report success, but it writes into a cloud sandbox nothing in this run actually executes in.
+- There is currently no tool exposed to read a saved credential's plaintext value for inline use on a device-routed run. Tell the user this credential can't be used in this run rather than inventing a workaround.
+</credential_usage_by_runtime>
 </credentials_management>
 
 <best_practices>

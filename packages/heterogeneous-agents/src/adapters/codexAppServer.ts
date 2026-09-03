@@ -1,3 +1,5 @@
+import { formatPatch, structuredPatch } from 'diff';
+
 import type {
   AgentMessageDeltaNotification,
   CodexErrorInfo,
@@ -120,9 +122,44 @@ const toToolPayload = (item: ToolItem): ToolCallPayload => ({
   type: 'default',
 });
 
+const toGitDiffPath = (prefix: 'a' | 'b', filePath: string): string =>
+  filePath.startsWith('/') ? `${prefix}${filePath}` : `${prefix}/${filePath}`;
+
+// App-server sends raw content for add/delete and headerless hunks for update.
+// Normalize both forms to the complete single-file patch expected by PatchDiff.
+const toCompleteFileDiff = (change: FileUpdateChange): string => {
+  const sourcePath = toGitDiffPath('a', change.path);
+  const destinationPath = toGitDiffPath(
+    'b',
+    change.kind.type === 'update' && change.kind.move_path ? change.kind.move_path : change.path,
+  );
+  const gitHeader = `diff --git ${sourcePath} ${destinationPath}`;
+
+  if (change.kind.type === 'add' || change.kind.type === 'delete') {
+    const patch = structuredPatch(
+      change.kind.type === 'add' ? '/dev/null' : sourcePath,
+      change.kind.type === 'delete' ? '/dev/null' : destinationPath,
+      change.kind.type === 'delete' ? change.diff : '',
+      change.kind.type === 'add' ? change.diff : '',
+    );
+    return `${gitHeader}\n${formatPatch(patch)}`;
+  }
+
+  const movePath = change.kind.move_path;
+  const moveSuffix = movePath ? `\n\nMoved to: ${movePath}` : '';
+  const hunks =
+    moveSuffix && change.diff.endsWith(moveSuffix)
+      ? change.diff.slice(0, -moveSuffix.length)
+      : change.diff;
+
+  return [gitHeader, `--- ${sourcePath}`, `+++ ${destinationPath}`, hunks]
+    .filter(Boolean)
+    .join('\n');
+};
+
 const toFileChangeState = (changes: FileUpdateChange[]) => ({
   changes: changes.map((change) => ({
-    diffText: change.diff,
+    diffText: toCompleteFileDiff(change),
     kind: change.kind.type === 'update' && change.kind.move_path ? 'rename' : change.kind.type,
     path: change.path,
   })),

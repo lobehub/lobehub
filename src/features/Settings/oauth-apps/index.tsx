@@ -1,5 +1,4 @@
-import { Skeleton } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, Skeleton } from '@lobehub/ui/base-ui';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
@@ -55,7 +54,7 @@ const Page = () => {
     labPreferSelectors.enableOAuthApps(s),
   ]);
 
-  if (!isPreferenceInit) return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
+  if (!isPreferenceInit) return <Skeleton.Text rows={5} />;
   if (!enableOAuthApps) return <NotFound />;
 
   return (

@@ -40,6 +40,7 @@ import {
   getMessageGatewayClientForHost,
   isAnyMessageGatewayEnabled,
   type MessageGatewayCapabilities,
+  type MessageGatewayConnectionConfig,
   type MessageGatewayConnectionStatus,
   type MessageGatewayHost,
   resolveMessageGatewayHost,
@@ -169,6 +170,71 @@ const resolveBotGatewayCapabilities = (
   messageMonitoring: { enabled: extractWatchKeywordEntries(settings ?? undefined).length > 0 },
 });
 
+/**
+ * The connect payload for one bot-channel provider.
+ *
+ * Extracted because two callers build it now: the periodic reconcile, which
+ * pushes it to the gateway, and the gateway's own boot-time pull, which
+ * receives it and connects itself. A second builder would drift, and the
+ * connection the gateway ends up holding would then depend on which side
+ * established it.
+ *
+ * Payload only, deliberately no side effects. The push path also writes a
+ * runtime status from the connect result, but that belongs to whoever
+ * actually connected: on the pull path the gateway does, so its state
+ * callback is what reports the real status back. Guessing a status here would
+ * record a connection as live that nothing has established yet.
+ */
+const buildBotProviderConnectConfig = ({
+  connectionMode,
+  platform,
+  provider,
+}: DesiredGatewayConnection): MessageGatewayConnectionConfig => ({
+  applicationId: provider.applicationId,
+  capabilities: resolveBotGatewayCapabilities(provider.settings),
+  connectionId: provider.id,
+  connectionMode,
+  credentials: provider.credentials,
+  platform,
+  userId: provider.userId,
+  webhookPath: `/api/agent/webhooks/${platform}/${provider.applicationId}`,
+});
+
+/** The connect payload for one messenger polling link. Same rationale as above. */
+const buildMessengerPollingConnectConfig = ({
+  connectionId,
+  link,
+  platform,
+}: {
+  connectionId: string;
+  link: DecryptedMessengerAccountLink;
+  platform: string;
+}): MessageGatewayConnectionConfig => {
+  const credentials = link.credentials as {
+    baseUrl?: string;
+    botId?: string;
+    botToken?: string;
+  };
+
+  return {
+    applicationId: link.applicationId!,
+    // Messenger-owned connections never consume passive channel monitoring —
+    // the shared bot only reacts to DMs and explicit mentions.
+    capabilities: { messageMonitoring: { enabled: false } },
+    connectionId,
+    connectionMode: 'polling',
+    credentials: {
+      baseUrl: credentials.baseUrl,
+      botId: credentials.botId,
+      botToken: credentials.botToken,
+      webhookToken: gatewayEnv.MESSAGE_GATEWAY_SERVICE_TOKEN,
+    },
+    platform,
+    userId: link.userId,
+    webhookPath: `/api/agent/messenger/webhooks/${platform}`,
+  };
+};
+
 const isVercel = !!process.env.VERCEL_ENV;
 
 export class GatewayService {
@@ -235,17 +301,51 @@ export class GatewayService {
     const serverDB = await getServerDB();
     const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
 
-    const { desired, desiredComplete, gated } = await this.buildDesiredConnections(
-      serverDB,
-      gateKeeper,
-    );
-
     // Each configured host gets its own desired slice and its own actual
     // snapshot, then runs the full diff independently. Cross-host moves fall
     // out of the partition: a platform routed away from a host leaves its ids
     // absent from that host's desired slice → the stale pass disconnects them
     // there while the new host's connect pass builds them up.
     const hosts = getConfiguredMessageGatewayHosts();
+
+    // A platform name nothing recognises is a typo, and its only visible
+    // effect is that the migration silently does not happen — the name simply
+    // never matches, so everything stays on the default host. Say so once per
+    // round instead of leaving someone to wonder why the flip did nothing.
+    const routedNames = (gatewayEnv.MESSAGE_GATEWAY_NODE_PLATFORMS ?? '')
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+    if (routedNames.length > 0) {
+      const known = new Set([
+        ...platformRegistry.listPlatforms().map((definition) => definition.id),
+        ...messengerPlatformRegistry.listPlatforms().map((definition) => definition.id),
+      ]);
+      const unknown = routedNames.filter((name) => !known.has(name));
+      if (unknown.length > 0) {
+        log(
+          'Gateway sync: MESSAGE_GATEWAY_NODE_PLATFORMS names %o, which match no known platform — those entries do nothing',
+          unknown,
+        );
+      }
+    }
+
+    // What each host says it can serve. Routing a platform to a host it cannot
+    // serve is otherwise an outage, not a no-op: the stale pass drains the
+    // connections off their old host, and the connect that should replace them
+    // is rejected — so they end up nowhere. One request per host per round.
+    const declaredPlatforms = new Map<MessageGatewayHost, Set<string> | null>();
+    for (const host of hosts) {
+      const capabilities = await getMessageGatewayClientForHost(host).getCapabilities();
+      declaredPlatforms.set(host, capabilities ? new Set(capabilities.platforms ?? []) : null);
+    }
+
+    const { desired, desiredComplete, gated } = await this.buildDesiredConnections(
+      serverDB,
+      gateKeeper,
+      hosts,
+    );
+
     const snapshots = new Map<MessageGatewayHost, ActualConnectionsSnapshot | null>();
     for (const host of hosts) {
       snapshots.set(host, await this.fetchActualConnections(getMessageGatewayClientForHost(host)));
@@ -289,6 +389,7 @@ export class GatewayService {
       drainCounts.set(
         host,
         await this.drainHostConnections({
+          declaredPlatforms,
           desired,
           desiredComplete,
           drainedThisRound,
@@ -305,6 +406,7 @@ export class GatewayService {
       await this.connectHostConnections({
         counts: drainCounts.get(host) ?? { gatedDisconnected: 0, gatedSize: 0, stale: 0 },
         currentlyElsewhere,
+        declaredPlatforms,
         desired,
         drainedThisRound,
         host,
@@ -317,6 +419,7 @@ export class GatewayService {
       gateKeeper,
       snapshots,
       hostsReadyToReceive,
+      declaredPlatforms,
     );
 
     log(
@@ -338,6 +441,24 @@ export class GatewayService {
     );
   }
 
+  /**
+   * Whether `host` has told us it cannot serve `platform`.
+   *
+   * Only an explicit declaration counts. A gateway that does not describe
+   * itself makes no claim, and absence of information must never be read as a
+   * refusal — the Cloudflare gateway has no capabilities endpoint at all, and
+   * treating that as "refuses everything" would block the rollback path,
+   * where connections move BACK to it.
+   */
+  private hostRefusesPlatform(
+    declaredPlatforms: Map<MessageGatewayHost, Set<string> | null>,
+    host: MessageGatewayHost,
+    platform: string,
+  ): boolean {
+    const declared = declaredPlatforms.get(host);
+    return !!declared && !declared.has(platform);
+  }
+
   /** Slice of the gated set whose platforms route to `host`. */
   private hostGatedSlice(gated: Map<string, string>, host: MessageGatewayHost): Set<string> {
     return new Set(
@@ -348,12 +469,203 @@ export class GatewayService {
   }
 
   /**
+   * The connect payloads one host should currently be holding.
+   *
+   * This is the read half of restart recovery: a gateway that just came back
+   * up holds nothing, asks for this list, and builds it itself. Nothing here
+   * calls a gateway, so it wakes no connection and can be retried freely —
+   * the one write it does make is the runtime status of a paid-gated
+   * provider, which `buildDesiredConnections` records on the way past and
+   * which is true no matter who asked.
+   *
+   * `complete: false` means the desired set could not be computed in full (a
+   * platform's rows failed to load, key vault unavailable). The caller should
+   * apply what it got and ask again rather than treat a short list as the
+   * whole truth. Refusing to answer at all would be worse: it leaves the
+   * gateway holding nothing for the length of an unrelated outage.
+   *
+   * Rows that can never connect — credentials missing or undecryptable — are
+   * counted into `excluded` and left out. They must not fail the call: a
+   * single unreadable row would otherwise keep a whole gateway empty forever.
+   *
+   * Connections another host still holds are withheld and counted into
+   * `deferred`. Routing alone does not make a connection safe to build: right
+   * after a platform is routed here, the previous host is still polling it,
+   * and handing it over before that host is drained double-delivers every
+   * message until a later reconcile catches up. The periodic reconcile owns
+   * the hand-off; this call only refuses to race it.
+   */
+  async listDesiredConnectionsForHost(host: MessageGatewayHost): Promise<{
+    complete: boolean;
+    connections: { config: MessageGatewayConnectionConfig; ensure: true }[];
+    deferred: number;
+    excluded: number;
+  }> {
+    const serverDB = await getServerDB();
+    const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+
+    const connections: { config: MessageGatewayConnectionConfig; ensure: true }[] = [];
+    let excluded = 0;
+    let deferred = 0;
+
+    // What every OTHER host still holds. Read-only, and only two admin
+    // requests per host — they reach the gateway's own registry, not the
+    // individual connections, so asking wakes nothing.
+    //
+    // A host whose admin surface is unreachable is treated as holding
+    // nothing, deliberately, and matching the reconcile's own rule: a
+    // steady-state deployment has no connections on the wrong host at all, so
+    // blocking every restart recovery on an unrelated host's outage costs far
+    // more availability than the duplicate window it would avoid — and that
+    // window only opens if the outage overlaps an actual migration.
+    // What this host says it can serve. Routing a platform here does not mean
+    // it can run it, and handing over credentials for a connection it will
+    // reject is handing them over for nothing. The reconcile already refuses
+    // to move such a platform; this refuses to arm it.
+    const declared = await getMessageGatewayClientForHost(host).getCapabilities();
+    const declaredPlatforms = new Map<MessageGatewayHost, Set<string> | null>([
+      [host, declared ? new Set(declared.platforms ?? []) : null],
+    ]);
+
+    const elsewhere = new Set<string>();
+    let peersProven = true;
+    for (const other of getConfiguredMessageGatewayHosts()) {
+      if (other === host) continue;
+      const snapshot = await this.fetchActualConnections(getMessageGatewayClientForHost(other));
+
+      // Absence is only evidence when the view was complete. A snapshot we
+      // could not fetch shows nothing, and a stats-only one omits dormant
+      // registrations — in both cases an id missing from it says nothing about
+      // whether that host released it, so nothing here can be handed over.
+      // Marking the answer incomplete does not substitute: the caller applies
+      // what it receives and only then asks again, so a flag arrives after the
+      // duplicate it was supposed to prevent.
+      if (!snapshot?.complete) {
+        peersProven = false;
+        log(
+          'Gateway pull[%s]: %s host view is %s, cannot prove it released anything',
+          host,
+          other,
+          snapshot ? 'incomplete' : 'unavailable',
+        );
+      }
+
+      snapshot?.connections.forEach((_status, id) => elsewhere.add(id));
+    }
+
+    // Paid-gated providers never enter the desired set, so nothing here can
+    // hand back a connection the next reconcile round would tear down again.
+    const { desired, desiredComplete } = await this.buildDesiredConnections(serverDB, gateKeeper, [
+      host,
+    ]);
+    let complete = desiredComplete;
+
+    for (const entry of this.hostDesiredSlice(desired, host).values()) {
+      if (this.hostRefusesPlatform(declaredPlatforms, host, entry.platform)) {
+        excluded++;
+        continue;
+      }
+      if (Object.keys(entry.provider.credentials).length === 0) {
+        excluded++;
+        continue;
+      }
+      if (!peersProven || elsewhere.has(entry.provider.id)) {
+        deferred++;
+        log(
+          'Gateway pull[%s]: %s not proven released elsewhere, withholding',
+          host,
+          entry.provider.id,
+        );
+        continue;
+      }
+      connections.push({ config: buildBotProviderConnectConfig(entry), ensure: true });
+    }
+
+    for (const definition of messengerPlatformRegistry.listPlatforms()) {
+      if (definition.connectionMode !== 'polling') continue;
+      const platform = definition.id;
+      if (resolveMessageGatewayHost(platform) !== host) continue;
+      if (this.hostRefusesPlatform(declaredPlatforms, host, platform)) {
+        log(
+          'Gateway pull[%s]: host does not serve %s, withholding its credentials',
+          host,
+          platform,
+        );
+        continue;
+      }
+
+      let links: DecryptedMessengerAccountLink[];
+      try {
+        links = await MessengerAccountLinkModel.findAllByPlatformWithCredentials(
+          serverDB,
+          platform,
+          gateKeeper,
+        );
+      } catch (err) {
+        // Same rule as the desired set: a platform we could not read makes the
+        // answer incomplete, not empty.
+        complete = false;
+        log('Gateway pull[%s]: messenger link listing failed for %s: %O', host, platform, err);
+        continue;
+      }
+
+      for (const link of links) {
+        const credentials = link.credentials as { botToken?: string };
+        const connectionId = messengerConnectionIdForUser({
+          connectionMode: 'polling',
+          installationKey: `${platform}:${link.tenantId}`,
+          userId: link.userId,
+        });
+        if (!link.applicationId || !credentials.botToken) {
+          excluded++;
+          continue;
+        }
+        if (!peersProven || elsewhere.has(connectionId)) {
+          deferred++;
+          log(
+            'Gateway pull[%s]: %s not proven released elsewhere, withholding',
+            host,
+            connectionId,
+          );
+          continue;
+        }
+        connections.push({
+          config: buildMessengerPollingConnectConfig({ connectionId, link, platform }),
+          ensure: true,
+        });
+      }
+    }
+
+    // Audit surface: this is the one place that hands out a host's whole
+    // credential set, and it doubles as the signal that the host restarted.
+    // Withheld entries make this a partial answer, so the caller keeps asking
+    // instead of settling for the set it got. It will run out of attempts long
+    // before a hand-off finishes — that is fine: finishing one is the periodic
+    // reconcile's job, not this call's. Restart recovery is an optimisation
+    // over that reconcile, so when it cannot be done safely the right move is
+    // not to do it.
+    if (deferred > 0) complete = false;
+
+    log(
+      'Gateway pull[%s]: %d connection(s), excluded=%d, deferred=%d, complete=%s',
+      host,
+      connections.length,
+      excluded,
+      deferred,
+      complete,
+    );
+
+    return { complete, connections, deferred, excluded };
+  }
+
+  /**
    * Phase 1 for one host: remove what should no longer be there (paid-gated
    * connections, then stale ones). Runs for every host before any host's
    * connect pass, so a connection is always gone from its old owner before it
    * is built on its new one.
    */
   private async drainHostConnections(params: {
+    declaredPlatforms: Map<MessageGatewayHost, Set<string> | null>;
     desired: Map<string, DesiredGatewayConnection>;
     desiredComplete: boolean;
     drainedThisRound: Set<string>;
@@ -364,6 +676,7 @@ export class GatewayService {
     snapshot: ActualConnectionsSnapshot | null;
   }): Promise<HostDrainCounts> {
     const {
+      declaredPlatforms,
       desiredComplete,
       drainedThisRound,
       host,
@@ -391,6 +704,7 @@ export class GatewayService {
         host,
         hostsReadyToReceive,
         drainedThisRound,
+        declaredPlatforms,
       );
     } else if (actual) {
       log('Gateway sync: desired set incomplete, skipping stale-connection cleanup this round');
@@ -406,12 +720,20 @@ export class GatewayService {
   private async connectHostConnections(params: {
     counts: HostDrainCounts;
     currentlyElsewhere: Set<string>;
+    declaredPlatforms: Map<MessageGatewayHost, Set<string> | null>;
     desired: Map<string, DesiredGatewayConnection>;
     drainedThisRound: Set<string>;
     host: MessageGatewayHost;
     snapshot: ActualConnectionsSnapshot | null;
   }): Promise<void> {
-    const { counts, currentlyElsewhere, drainedThisRound, host, snapshot: actual } = params;
+    const {
+      counts,
+      currentlyElsewhere,
+      declaredPlatforms,
+      drainedThisRound,
+      host,
+      snapshot: actual,
+    } = params;
     const client = getMessageGatewayClientForHost(host);
     const desired = this.hostDesiredSlice(params.desired, host);
 
@@ -442,6 +764,15 @@ export class GatewayService {
       desired.values(),
       async ({ connectionMode, platform, provider }) => {
         try {
+          // Told us it cannot serve this platform. The connect would be
+          // rejected anyway; skipping keeps one clear line in the log instead
+          // of an error per connection, and pairs with the stale pass, which
+          // leaves these running wherever they already are.
+          if (this.hostRefusesPlatform(declaredPlatforms, host, platform)) {
+            skipped++;
+            return;
+          }
+
           // Credentials missing/undecryptable: the provider is still desired
           // (protected from the stale pass) but a connect attempt can only
           // fail — leave whatever connection state the gateway already holds.
@@ -504,22 +835,12 @@ export class GatewayService {
             log('Gateway sync: %s reported disconnected in stats, reconnecting', provider.id);
           }
 
-          const webhookPath = `/api/agent/webhooks/${platform}/${provider.applicationId}`;
           // `ensure` marks this as a reconcile connect: the gateway preserves
           // its park/backoff state when the config is unchanged (a parked
           // connection answers 409 → counted as failed below), instead of
           // letting every sync round reset stuck connections to fast retry.
           const result = await client.connect(
-            {
-              applicationId: provider.applicationId,
-              capabilities: resolveBotGatewayCapabilities(provider.settings),
-              connectionId: provider.id,
-              connectionMode,
-              credentials: provider.credentials,
-              platform,
-              userId: provider.userId,
-              webhookPath,
-            },
+            buildBotProviderConnectConfig({ connectionMode, platform, provider }),
             { ensure: true },
           );
 
@@ -588,6 +909,7 @@ export class GatewayService {
     gateKeeper: KeyVaultsGateKeeper,
     snapshots: Map<MessageGatewayHost, ActualConnectionsSnapshot | null>,
     hostsReadyToReceive: Set<MessageGatewayHost>,
+    declaredPlatforms: Map<MessageGatewayHost, Set<string> | null>,
   ): Promise<void> {
     for (const definition of messengerPlatformRegistry.listPlatforms()) {
       if (definition.connectionMode !== 'polling') continue;
@@ -595,6 +917,19 @@ export class GatewayService {
       const host = resolveMessageGatewayHost(platform);
       const client = getMessageGatewayClientForHost(host);
       if (!client.isEnabled) continue;
+
+      // Routed to a host that says it cannot serve this platform. Skipping the
+      // whole platform leaves every connection where it already runs — the
+      // teardown below would otherwise strip them from their current host for
+      // a destination that will reject them.
+      if (this.hostRefusesPlatform(declaredPlatforms, host, platform)) {
+        log(
+          'Gateway sync[%s]: host does not serve %s — leaving its connections where they are',
+          host,
+          platform,
+        );
+        continue;
+      }
 
       const prefix = `messenger:${platform}:`;
 
@@ -765,27 +1100,8 @@ export class GatewayService {
             return;
           }
           try {
-            const credentials = link.credentials as {
-              baseUrl?: string;
-              botId?: string;
-              botToken?: string;
-            };
             await client.connect(
-              {
-                applicationId: link.applicationId!,
-                capabilities: { messageMonitoring: { enabled: false } },
-                connectionId,
-                connectionMode: 'polling',
-                credentials: {
-                  baseUrl: credentials.baseUrl,
-                  botId: credentials.botId,
-                  botToken: credentials.botToken,
-                  webhookToken: gatewayEnv.MESSAGE_GATEWAY_SERVICE_TOKEN,
-                },
-                platform,
-                userId: link.userId,
-                webhookPath: `/api/agent/messenger/webhooks/${platform}`,
-              },
+              buildMessengerPollingConnectConfig({ connectionId, link, platform }),
               { ensure: true },
             );
             connected++;
@@ -845,6 +1161,7 @@ export class GatewayService {
   private async buildDesiredConnections(
     serverDB: Awaited<ReturnType<typeof getServerDB>>,
     gateKeeper: KeyVaultsGateKeeper,
+    hosts: MessageGatewayHost[],
   ): Promise<{
     desired: Map<string, DesiredGatewayConnection>;
     desiredComplete: boolean;
@@ -857,6 +1174,12 @@ export class GatewayService {
 
     for (const definition of platformRegistry.listPlatforms()) {
       const platform = definition.id;
+
+      // Only platforms owned by one of `hosts`. Loading the rest would decrypt
+      // credentials for connections this call is never going to look at — pure
+      // waste for a single-host pull, and a wider blast radius on failure.
+      if (!hosts.includes(resolveMessageGatewayHost(platform))) continue;
+
       try {
         // includeUndecryptable: rows whose credentials can't be decrypted stay
         // in the desired set (with empty credentials) so a KEY_VAULTS_SECRET
@@ -1013,6 +1336,7 @@ export class GatewayService {
     host: MessageGatewayHost,
     hostsReadyToReceive: Set<MessageGatewayHost>,
     drainedThisRound: Set<string>,
+    declaredPlatforms: Map<MessageGatewayHost, Set<string> | null>,
   ): Promise<number> {
     const allStaleIds = [...actual.keys()].filter(
       (id) => !desired.has(id) && !gated.has(id) && !isMessengerConnectionId(id),
@@ -1076,6 +1400,21 @@ export class GatewayService {
                 host,
                 id,
                 owner,
+              );
+              return;
+            }
+
+            // Routed somewhere that has told us it cannot serve this platform.
+            // Draining here would be worse than doing nothing: the connect
+            // meant to replace it gets rejected, so the connection ends up on
+            // neither host. Leave it running and let the misrouting be fixed.
+            if (this.hostRefusesPlatform(declaredPlatforms, owner, row.platform)) {
+              log(
+                'Gateway sync[%s]: %s is routed to the %s host, which does not serve %s — refusing to drain',
+                host,
+                id,
+                owner,
+                row.platform,
               );
               return;
             }

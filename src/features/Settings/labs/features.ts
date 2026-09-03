@@ -18,9 +18,9 @@ type LabFeatureI18nKey =
   | 'claudeCodeSdk'
   | 'codexAppServer'
   | 'desktopSplitView'
+  | 'evalCapture'
   | 'heteroSessionImport'
   | 'imessage'
-  | 'inAppBrowser'
   | 'inputMarkdown'
   | 'messageTextSelectionActions'
   | 'oauthApps'
@@ -69,6 +69,12 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     flag: 'enableSelfLearning',
     i18nKey: 'selfLearning',
     searchKeywords: ['self-evolving', 'self learning', 'rule base'],
+    stage: 'alpha',
+  },
+  {
+    flag: 'enableEvalCapture',
+    i18nKey: 'evalCapture',
+    searchKeywords: ['eval', 'test case', 'capture', 'regression', 'benchmark'],
     stage: 'alpha',
   },
   {
@@ -137,13 +143,6 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     flag: 'enableHeteroSessionImport',
     i18nKey: 'heteroSessionImport',
     searchKeywords: ['import session', 'claude code', 'codex'],
-    stage: 'beta',
-  },
-  {
-    desktopOnly: true,
-    flag: 'enableInAppBrowser',
-    i18nKey: 'inAppBrowser',
-    searchKeywords: ['in-app browser', 'inapp browser', 'embedded browser', 'browser tab'],
     stage: 'beta',
   },
 ];

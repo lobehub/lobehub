@@ -28,24 +28,24 @@ afterEach(async () => {
 });
 
 describe('buildTaskPrompt Goal loop context', () => {
-  it('uses the per-Work attempt budget for a Goal Graph Work Task', async () => {
+  it('uses the per-Task attempt budget for a Goal Graph Task', async () => {
     const taskModel = new TaskModel(db, userId);
     const task = await taskModel.create({
       instruction: 'Close the remaining acceptance gap.',
     });
     await taskModel.update(task.id, { totalTopics: 1 });
     const goal = await new GoalModel(db, userId).create({
-      config: { recovery: { maxAttemptsPerWork: 2 } },
+      config: { recovery: { maxAttemptsPerTask: 2 } },
       maxRounds: 20,
       subjectType: 'standalone',
       title: 'Graph-managed work budget',
     });
     const graphModel = new GoalGraphModel(db, userId);
-    const workNode = await graphModel.createNode(goal.id, {
-      kind: 'work',
+    const taskNode = await graphModel.createNode(goal.id, {
+      kind: 'task',
       title: 'Close acceptance gap',
     });
-    await graphModel.bindTask(goal.id, workNode!.id, task.id);
+    await graphModel.bindTask(goal.id, taskNode!.id, task.id);
     const currentTask = await taskModel.findById(task.id);
 
     const result = await buildTaskPrompt(currentTask!, {

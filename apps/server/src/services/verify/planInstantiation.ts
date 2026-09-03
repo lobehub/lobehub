@@ -1,11 +1,11 @@
 import debug from 'debug';
 
-import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { AcceptanceService } from './acceptanceService';
+import { resolveVerifyModelConfig } from './modelConfig';
 import { VerifyPlanGeneratorService } from './planGenerator';
 import { resolveTaskAcceptance } from './taskAcceptance';
 
@@ -22,9 +22,12 @@ export interface InstantiateVerifyPlanParams {
  *
  * Without this, a task's Acceptance policy (rubric / criteria) is never turned
  * into a plan, so verify silently no-ops. We resolve the Task's Acceptance and
- * materialize the rubric + ad-hoc criteria into a
- * plan (no AI generation — the task already picked its criteria), and confirm it
- * immediately (task scenario doesn't show a "confirm plan" step).
+ * materialize the rubric + ad-hoc criteria into a plan (no AI generation there
+ * — the task already picked its criteria), and confirm it immediately (task
+ * scenario doesn't show a "confirm plan" step). Only the undecomposed path
+ * spends an AI call: the acceptance requirement is split into named criteria so
+ * the checklist shows distinguishable items, with the single holistic check as
+ * the fallback when generation fails.
  *
  * Fire-and-forget + idempotent: never throws (verify must not affect the run),
  * and skips when a plan already exists (recordStart can re-fire).
@@ -37,25 +40,6 @@ export const instantiateVerifyPlanOnStart = async (
 ): Promise<void> => {
   try {
     const taskModel = new TaskModel(db, userId, workspaceId);
-
-    // A goal task entering a run round is `running` — the single transition
-    // point shared by round 1, reject-spawned rounds and manual restarts.
-    // Terminal decisions stay terminal: an accepted (`achieved`) or canceled
-    // goal is never silently re-opened by a stray run.
-    try {
-      const goalModel = new GoalModel(db, userId, workspaceId);
-      const goal = await goalModel.findBySubject('task', params.taskId);
-      if (
-        goal &&
-        goal.status !== 'running' &&
-        goal.status !== 'achieved' &&
-        goal.status !== 'canceled'
-      ) {
-        await goalModel.updateStatus(goal.id, 'running');
-      }
-    } catch (error) {
-      log('goal running transition failed for task %s (non-fatal): %O', params.taskId, error);
-    }
 
     const resolvedAcceptance = await resolveTaskAcceptance(db, userId, params.taskId, workspaceId);
     if (!resolvedAcceptance) return;
@@ -83,12 +67,28 @@ export const instantiateVerifyPlanOnStart = async (
     const goal = task?.instruction ?? task?.name ?? '';
 
     const planGenerator = new VerifyPlanGeneratorService(db, userId, workspaceId);
+    // Undecomposed acceptance (goal-dispatched Task, one-sentence requirement):
+    // spend one generation call splitting the requirement into named criteria,
+    // so the checklist reads as distinguishable items instead of one generic
+    // "Task delivery acceptance" row.
+    const modelConfig = holistic
+      ? await resolveVerifyModelConfig(
+          db,
+          userId,
+          { verifierAgentId: verifyConfig.verifierAgentId },
+          workspaceId,
+        )
+      : undefined;
     await planGenerator.generateDraftPlan({
-      // No AI proposal — the task's configured rubric/criteria are the plan.
-      enableAiGeneration: false,
+      // Ground the generated criteria in the acceptance text, not just the title.
+      context: requirement,
+      // Configured rubric/criteria ARE the plan — no AI proposal on that path.
+      enableAiGeneration: holistic,
       goal,
-      // Fall back to a single agent-type holistic check when nothing decomposed.
+      // Still fall back to the single agent-type holistic check when the
+      // generation fails or returns nothing, so verify runs either way.
       holisticFallback: holistic,
+      modelConfig,
       operationId: params.operationId,
       requirement,
       verifyCriteriaIds: verifyConfig.verifyCriteriaIds,

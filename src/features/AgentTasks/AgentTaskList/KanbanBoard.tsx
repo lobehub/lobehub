@@ -72,9 +72,9 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, options, projectId, route
   // Keep the SWR handle only for `error` + `mutate` (the error/Retry state).
   const { error, isLoading, isQueryScopeCurrent, mutate } = useFetchTaskGroupList(
     projectId
-      ? { excludeStatuses, groupBy, projectId }
+      ? { automated: false, excludeStatuses, groupBy, projectId }
       : agentId
-        ? { agentId, excludeStatuses, groupBy }
+        ? { agentId, automated: false, excludeStatuses, groupBy }
         : { allAgents: true, automated: false, excludeStatuses, groupBy },
   );
   // Drive the loading/empty boundary off the store's own init flag, NOT SWR's
@@ -136,9 +136,11 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, options, projectId, route
       const patch = getKanbanTaskPatch(groupBy, column);
       if (!patch) return;
       const assigneeUpdate =
-        groupBy === 'assignee' ? getKanbanAssigneeUpdate(task, patch) : undefined;
+        groupBy === 'assignee' || groupBy === 'member'
+          ? getKanbanAssigneeUpdate(task, patch)
+          : undefined;
       if (groupBy === 'status' && task.status === patch.status) return;
-      if (groupBy === 'assignee' && !assigneeUpdate) return;
+      if ((groupBy === 'assignee' || groupBy === 'member') && !assigneeUpdate) return;
       if (groupBy === 'priority' && (task.priority ?? 0) === (patch.priority ?? 0)) return;
 
       const prevGroups = useTaskStore.getState().taskGroups;
@@ -148,7 +150,7 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, options, projectId, route
       try {
         if (groupBy === 'status' && column.targetStatus) {
           await updateTaskStatus(task.identifier, column.targetStatus);
-        } else if (groupBy === 'assignee' && assigneeUpdate) {
+        } else if ((groupBy === 'assignee' || groupBy === 'member') && assigneeUpdate) {
           await updateTask(task.identifier, assigneeUpdate);
         } else if (groupBy === 'priority') {
           await updateTask(task.identifier, { priority: patch.priority ?? 0 });

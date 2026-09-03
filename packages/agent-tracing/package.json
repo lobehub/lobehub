@@ -5,7 +5,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./store": "./src/store/types.ts",
-    "./recorder": "./src/recorder/index.ts"
+    "./recorder": "./src/recorder/index.ts",
+    "./replay": "./src/replay/index.ts"
   },
   "main": "./src/index.ts",
   "bin": {
@@ -16,6 +17,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@lobechat/eval-rubric": "workspace:*",
     "commander": "^13.1.0",
     "gpt-tokenizer": "^3.4.0",
     "model-bank": "workspace:*"

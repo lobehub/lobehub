@@ -124,16 +124,27 @@ jobs:
         id: cloud-ref
         if: steps.check.outputs.is_stable == 'true'
         env:
+          CLOUD_REPOSITORY: ${{ vars.OVERLAY_REPOSITORY }}
           CLOUD_TOKEN: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
         run: |
           set -euo pipefail
+          : "${CLOUD_REPOSITORY:?OVERLAY_REPOSITORY repository variable is not set}"
           # checkout persist-credentials extraheader would send GITHUB_TOKEN and 404 the private cloud repo
-          cloud_ref=$(git -c http.https://github.com/.extraheader= ls-remote "https://x-access-token:${CLOUD_TOKEN}@github.com/lobehub/lobehub-cloud.git" HEAD | cut -f1)
+          cloud_ref=$(git -c http.https://github.com/.extraheader= ls-remote "https://x-access-token:${CLOUD_TOKEN}@github.com/${CLOUD_REPOSITORY}.git" HEAD | cut -f1)
           if [[ ! "$cloud_ref" =~ ^[0-9a-f]{40}$ ]]; then
             echo "Unable to resolve Cloud revision"
             exit 1
           fi
           echo "cloud_ref=$cloud_ref" >> "$GITHUB_OUTPUT"
+
+  renderer-ota:
+    name: Publish Renderer OTA
+    needs: [check-stable]
+    if: ${{ needs.check-stable.outputs.is_stable == 'true' && (github.event_name != 'workflow_dispatch' || !inputs.skip_s3_upload) }}
+    uses: ./.github/workflows/release-desktop-renderer-ota.yml
+    with:
+      channel: stable
+    secrets: inherit
 
   # ============================================
   # 配置构建矩阵 (检查自托管 Runner)
@@ -197,6 +208,7 @@ jobs:
         uses: ./.github/actions/desktop-build-setup
         with:
           cloud-ref: ${{ needs.check-stable.outputs.cloud_ref }}
+          cloud-repository: ${{ vars.OVERLAY_REPOSITORY }}
           cloud-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
           node-version: ${{ env.NODE_VERSION }}
 
@@ -264,10 +276,7 @@ jobs:
       # Linux 构建
       - name: Build artifact on Linux
         if: runner.os == 'Linux'
-        run: |
-          npm run desktop:package:app
-          test -d apps/desktop/dist/renderer
-          tar -czf apps/desktop/release/lobehub-renderer.tar.gz -C apps/desktop/dist/renderer .
+        run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: stable
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
@@ -283,7 +292,9 @@ jobs:
         uses: ./.github/actions/desktop-upload-artifacts
         with:
           artifact-name: release-${{ matrix.name }}
+          renderer-ota-private-key: ${{ secrets.RENDERER_OTA_PRIVATE_KEY }}
           renderer-ota-public-key: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          update-channel: stable
 
   # ============================================
   # 合并 macOS 多架构文件

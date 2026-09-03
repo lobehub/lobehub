@@ -28,7 +28,10 @@ export interface FileStoreCreateFileInput {
 export interface FileStorePort {
   checkFileHash: (input: { hash: string }) => Promise<{ isExist?: boolean; url?: string }>;
   createFile: (input: FileStoreCreateFileInput) => Promise<{ id: string; url: string }>;
-  createS3PreSignedUrl: (input: { pathname: string }) => Promise<string | { url: string }>;
+  createS3PreSignedUrl: (input: {
+    pathname: string;
+    size: number;
+  }) => Promise<string | { url: string }>;
 }
 
 /**
@@ -60,7 +63,7 @@ export const createFileStoreImageUploader =
       pathname = existing.url;
     } else {
       pathname = `files/${date}/${hash}.${ext}`;
-      const presigned = await port.createS3PreSignedUrl({ pathname });
+      const presigned = await port.createS3PreSignedUrl({ pathname, size: buffer.length });
       const presignedUrl = typeof presigned === 'string' ? presigned : presigned.url;
 
       const uploadRes = await fetch(presignedUrl, {

@@ -44,6 +44,7 @@ export interface HeterogeneousProviderBindingResolution {
   apiConfig: HeterogeneousProviderApiConfig;
   /** Credential-free endpoint used by the target CLI. */
   endpoint?: string;
+  modelMetadata?: EnabledProviderBindingModelRef;
   protocol: HeterogeneousProviderBindingProtocol;
   providerId: string;
   runtimeConfig: AiProviderRuntimeConfig;
@@ -61,7 +62,14 @@ export type HeterogeneousProviderBindingError =
   | { code: 'providerUnavailable'; providerId: string };
 
 export interface EnabledProviderBindingModelRef {
+  abilities?: {
+    reasoning?: boolean;
+    vision?: boolean;
+  };
+  contextWindowTokens?: number;
+  displayName?: string;
   id: string;
+  maxOutput?: number;
   providerId: string;
   type: string;
 }

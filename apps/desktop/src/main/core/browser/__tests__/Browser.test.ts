@@ -113,16 +113,6 @@ vi.mock('electron', () => ({
   shell: mockShell,
 }));
 
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 // Mock constants
 vi.mock('@/const/dir', () => ({
   buildDir: '/mock/build',

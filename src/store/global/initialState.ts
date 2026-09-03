@@ -342,6 +342,8 @@ export interface SystemStatus {
   showVerifyReportPanel?: boolean;
   showVideoPanel?: boolean;
   showVideoTopicPanel?: boolean;
+  /** Visibility of the lightweight chat overview card. Independent from the workspace panel. */
+  showWorkingOverview?: boolean;
   /**
    * Flat ordered list of sidebar items.
    */
@@ -373,14 +375,14 @@ export interface SystemStatus {
    */
   taskListViewMode?: TaskViewMode;
   taskListViewOptions?: {
-    groupBy: 'assignee' | 'none' | 'priority' | 'status';
+    groupBy: 'assignee' | 'member' | 'none' | 'priority' | 'status';
     hideCompleted: boolean;
     nestedSubTasks: boolean;
     orderBy: 'assignee' | 'createdAt' | 'priority' | 'status' | 'title' | 'updatedAt';
     orderCompletedByRecency: boolean;
     orderDirection: 'asc' | 'desc';
     showSubTasks: boolean;
-    subGroupBy: 'assignee' | 'none' | 'priority' | 'status';
+    subGroupBy: 'assignee' | 'member' | 'none' | 'priority' | 'status';
   };
   /**
    * Height of the chat bottom terminal panel. Persisted so resizing survives remounts.

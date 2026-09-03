@@ -47,6 +47,30 @@ const setup = (args: AskUserQuestionArgs, persistedDraft?: unknown) => {
 };
 
 describe('useAskUserForm select-to-submit', () => {
+  it('displays labels but submits stable option ids', () => {
+    const args: AskUserQuestionArgs = {
+      questions: [
+        {
+          header: 'Permission',
+          options: [
+            { id: 'allow-once', label: 'Continue' },
+            { id: 'reject-once', label: 'Continue' },
+          ],
+          question: 'Edit README?',
+        },
+      ],
+    };
+    const { hook, onInteractionAction } = setup(args);
+
+    act(() => hook.result.current.handleToggle(args.questions[0], 'reject-once'));
+    act(() => hook.result.current.handleSubmit());
+
+    expect(onInteractionAction).toHaveBeenCalledExactlyOnceWith({
+      payload: { 'Edit README?': 'reject-once' },
+      type: 'submit',
+    });
+  });
+
   it('submits immediately when a keyboard single-select pick completes the form', () => {
     const { hook, onInteractionAction } = setup(singleQuestionArgs);
 
@@ -152,6 +176,27 @@ describe('useAskUserForm select-to-submit', () => {
       payload: { 'How broad?': ['Narrow'] },
       type: 'submit',
     });
+  });
+
+  it('keeps a resolving form visible but disables edits and resubmission', () => {
+    const onInteractionAction = vi.fn();
+    const hook = renderHook(() =>
+      useAskUserForm({
+        args: singleQuestionArgs,
+        disabled: true,
+        onInteractionAction,
+        persistedDraft: undefined,
+        writeDraft: vi.fn(),
+      }),
+    );
+
+    act(() => hook.result.current.handleToggle(singleQuestionArgs.questions[0], 'Full'));
+    act(() => hook.result.current.handleSubmit());
+
+    expect(hook.result.current.picks).toEqual({});
+    expect(hook.result.current.isSubmitDisabled).toBe(true);
+    expect(hook.result.current.submitting).toBe(true);
+    expect(onInteractionAction).not.toHaveBeenCalled();
   });
 });
 
@@ -321,6 +366,38 @@ describe('useAskUserForm additional notes', () => {
       type: 'submit',
     });
 
+    hook.unmount();
+    vi.useRealTimers();
+  });
+
+  it('never selects the first provider-owned option when the countdown expires', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-22T00:00:00Z'));
+    const onInteractionAction = vi.fn().mockResolvedValue(undefined);
+    const hook = renderHook(() =>
+      useAskUserForm({
+        args: {
+          questions: [
+            {
+              header: 'Permission',
+              options: [
+                { id: 'allow-once', label: 'Allow' },
+                { id: 'deny', label: 'Deny' },
+              ],
+              question: 'Run command?',
+            },
+          ],
+        },
+        countdownMs: 1000,
+        onInteractionAction,
+        persistedDraft: undefined,
+        writeDraft: vi.fn(),
+      }),
+    );
+
+    act(() => vi.advanceTimersByTime(1000));
+
+    expect(onInteractionAction).not.toHaveBeenCalled();
     hook.unmount();
     vi.useRealTimers();
   });

@@ -48,20 +48,23 @@ describe('gatherWorkspaceHtmlArtifact', () => {
     expect(result.blocked).toBeUndefined();
   });
 
-  it('lists missing and oversized refs without blocking the rest', async () => {
+  it('blocks publishing when any referenced asset exceeds the hard site limit', async () => {
     const result = await gatherWorkspaceHtmlArtifact({
       htmlContent:
         '<html><link rel="stylesheet" href="app.css"><img src="gone.png"><img src="huge.png"></html>',
       htmlFilePath: '/project/index.html',
       readAsset: async (absolutePath) => {
         if (absolutePath.endsWith('app.css')) return textAsset('body{}', 'text/css');
-        if (absolutePath.endsWith('huge.png')) return { ok: false, reason: 'oversized' };
+        if (absolutePath.endsWith('huge.png')) {
+          return { ok: false, reason: 'oversized', sizeBytes: 51 * 1024 * 1024 };
+        }
         return { ok: false, reason: 'missing' };
       },
       workingDirectory: '/project',
     });
 
-    expect(result.files.map((file) => file.path).sort()).toEqual(['app.css', 'index.html']);
+    expect(result.blocked).toBe('too-large');
+    expect(result.files).toEqual([]);
     expect(result.missing).toEqual(['gone.png']);
     expect(result.oversized).toEqual(['huge.png']);
   });
@@ -217,7 +220,7 @@ describe('gatherWorkspaceHtmlArtifact', () => {
     });
 
     expect(result.blocked).toBe('too-large');
-    expect(reads).toBe(5);
+    expect(reads).toBe(10);
   });
 
   it('reads a file once when it is referenced through several spellings', async () => {

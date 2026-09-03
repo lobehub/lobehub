@@ -2,6 +2,7 @@ import type { Command } from 'commander';
 
 import { clearCredentials } from '../auth/credentials';
 import { stopDaemon } from '../daemon/manager';
+import { saveActiveWorkspace } from '../settings';
 import { log } from '../utils/logger';
 
 export function registerLogoutCommand(program: Command) {
@@ -16,6 +17,11 @@ export function registerLogoutCommand(program: Command) {
       if (stopped) {
         log.info('Disconnected device daemon.');
       }
+
+      // The workspace scope belongs to the account that set it. Leaving it behind
+      // means the next login — possibly a different account — starts out claiming
+      // a workspace it may have no membership in.
+      saveActiveWorkspace(null);
 
       const removed = clearCredentials();
       if (removed) {

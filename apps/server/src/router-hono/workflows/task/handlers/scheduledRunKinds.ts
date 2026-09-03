@@ -42,7 +42,14 @@ const runResumeAfterRateLimit: ScheduledRunHandlers['resume_after_rate_limit'] =
   run,
   { claimId, db, topic, workspaceId },
 ) => {
-  const messageModel = new MessageModel(db, topic.userId, workspaceId);
+  // Scheduled runs execute under the creator (`topic.userId` is billing
+  // owner). When the topic is an agent-share visitor conversation this ends
+  // up mutating visitor rows, so opt into the visitor scope for reads too —
+  // the existing per-call `includeShareVisitor: true` on the delete already
+  // acknowledges this.
+  const messageModel = new MessageModel(db, topic.userId, workspaceId, undefined, {
+    includeShareVisitor: true,
+  });
   const failedMessage = await messageModel.findById(run.failedAssistantMessageId);
 
   let parentMessageId = run.userMessageId;
@@ -55,6 +62,9 @@ const runResumeAfterRateLimit: ScheduledRunHandlers['resume_after_rate_limit'] =
       await messageModel.update(failedMessage.id, { error: null });
       parentMessageId = failedMessage.id;
     } else {
+      // Scheduled-run retry cleanup runs as the runtime, not as the creator.
+      // Instance already opts into visitor scope (see MessageModel above), so the
+      // per-call `includeShareVisitor` override is redundant here.
       await messageModel.deleteMessage(failedMessage.id);
       parentMessageId = failedMessage.parentId ?? run.userMessageId;
     }
@@ -102,7 +112,14 @@ const runDelayedStart: ScheduledRunHandlers['delayed_start'] = async (
   run,
   { db, topic, workspaceId },
 ) => {
-  const messageModel = new MessageModel(db, topic.userId, workspaceId);
+  // Scheduled runs execute under the creator (`topic.userId` is billing
+  // owner). When the topic is an agent-share visitor conversation this ends
+  // up mutating visitor rows, so opt into the visitor scope for reads too —
+  // the existing per-call `includeShareVisitor: true` on the delete already
+  // acknowledges this.
+  const messageModel = new MessageModel(db, topic.userId, workspaceId, undefined, {
+    includeShareVisitor: true,
+  });
   const userMessage = await messageModel.findById(run.userMessageId);
   if (!userMessage) throw new Error('Scheduled user message no longer exists');
 

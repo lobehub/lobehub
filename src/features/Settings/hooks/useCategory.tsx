@@ -1,6 +1,6 @@
 import { SETTINGS_HIDDEN_TABS } from '@lobechat/business-const';
 import { isDesktop } from '@lobechat/const';
-import { Avatar } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import {
   AppWindowIcon,

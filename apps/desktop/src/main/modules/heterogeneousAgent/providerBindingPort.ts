@@ -1,6 +1,7 @@
 import type {
   HeterogeneousProviderBindingReference,
   HeterogeneousProviderBindingRuntime,
+  ServerDefaultHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
 
 import {
@@ -43,7 +44,7 @@ const getAuthenticatedServer = async (auth: RemoteServerAuth) => {
 export const beginServerDefaultOperation = async (
   auth: RemoteServerAuth,
   input: {
-    agentType: 'claude-code' | 'codex';
+    agentType: ServerDefaultHeterogeneousAgentType;
     agentId?: string;
     model: string;
     operationId: string;

@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Skeleton, Text } from '@lobehub/ui/base-ui';
 import { cx } from 'antd-style';
 
 import { useClientDataSWR } from '@/libs/swr';
@@ -36,7 +37,7 @@ const Header = () => {
         width={'100%'}
       >
         <Flexbox flex={1}>
-          <Skeleton.Button active size={'small'} style={{ height: 16, width: 180 }} />
+          <Skeleton height={16} width={180} />
         </Flexbox>
       </Flexbox>
     );

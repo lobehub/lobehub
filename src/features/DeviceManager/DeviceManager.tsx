@@ -3,8 +3,8 @@
 import { CLI_CONNECT_ENABLED, DESKTOP_APP_ENABLED } from '@lobechat/business-const';
 import { isDesktop } from '@lobechat/const';
 import type { DeviceScope, DeviceVisibility } from '@lobechat/types';
-import { ActionIcon, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Button, Skeleton, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   ChevronRightIcon,
@@ -253,7 +253,7 @@ const ListSkeleton = memo<{ withHeader?: boolean }>(({ withHeader }) => (
   <Flexbox className={styles.listCol} flex={1}>
     {withHeader && (
       <Flexbox horizontal align={'center'} className={styles.listHeader}>
-        <Skeleton.Button active size={'small'} style={{ height: 16, minWidth: 80, width: 80 }} />
+        <Skeleton style={{ height: 16, minWidth: 80, width: 80 }} />
       </Flexbox>
     )}
     <Flexbox padding={4}>

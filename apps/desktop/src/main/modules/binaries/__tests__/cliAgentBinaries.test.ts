@@ -50,6 +50,8 @@ const npmShim = (packagePath: string) =>
   `@ECHO off\r\n"%dp0%\\node.exe"  "%dp0%\\${packagePath}" %*\r\n`;
 
 const noErr = null;
+const DROID_ACP_HELP = `Usage: droid exec [options]
+  --output-format <format>  Output format (ACP modes)`;
 const TRAE_ACP_HELP = `Start the ACP server
 Usage: trae-cli acp serve [flags]
   -y, --yolo   Enable YOLO mode`;
@@ -325,6 +327,19 @@ describe('cliAgentBinaries', () => {
         available: true,
         path: '/Users/test/.local/bin/qodercli',
         version: '1.1.15',
+      });
+    });
+
+    it('detects Factory Droid by its ACP capability', async () => {
+      callExecFile('/Users/test/.local/bin/droid\n');
+      callExecFile('0.206.0');
+      callExecFile(DROID_ACP_HELP);
+
+      const { droidBinary } = await import('../cliAgentBinaries');
+      await expect(droidBinary.detect()).resolves.toMatchObject({
+        available: true,
+        path: '/Users/test/.local/bin/droid',
+        version: '0.206.0',
       });
     });
 

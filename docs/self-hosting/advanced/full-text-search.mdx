@@ -1,0 +1,269 @@
+---
+title: Full-Text Search
+description: Choose and operate the pg_search or Elasticsearch backend for LobeHub product search.
+tags:
+  - Full-Text Search
+  - Elasticsearch
+  - pg_search
+  - Self-hosting
+---
+
+# Full-Text Search
+
+LobeHub uses full-text search for product data such as agents, topics, messages, files, knowledge
+bases, chat groups, and memories. This is separate from the web-search tools that an agent can call.
+
+LobeHub supports two product-search backends:
+
+| Backend         | Best fit                                                                                                          | Additional operations                                                                                                                                                                                                    |
+| --------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pg_search`     | A deployment that already runs PostgreSQL with the ParadeDB `pg_search` extension and wants the simplest topology | PostgreSQL maintains the BM25 indexes; no separate search-sync worker is required                                                                                                                                        |
+| `elasticsearch` | A deployment that wants a dedicated, independently scalable search service or must leave `pg_search`              | Requires an Elasticsearch service (external, or the optional single-node service in the official Docker Compose file), an initial backfill, PostgreSQL change capture, and a continuously scheduled incremental consumer |
+
+`FTS_SEARCH_PROVIDER` selects one backend for the whole deployment. The accepted values are
+`pg_search` and `elasticsearch`; the default is `pg_search`. LobeHub does not silently fall back to
+the other backend when the selected provider is unavailable.
+
+<Callout type="warning">
+  `FTS_SEARCH_PROVIDER=elasticsearch` does not make historical database migrations skip
+  `pg_search`. The current Elasticsearch migration workflow is intended for an existing LobeHub
+  database that has already applied the `pg_search` migrations. A fresh database on a service that
+  cannot install `pg_search` is not currently supported merely by selecting Elasticsearch:
+  `bun run db:migrate` still reaches migrations that create the extension and BM25 indexes, and
+  fails when the database service does not provide them.
+</Callout>
+
+## Choose a backend
+
+### Keep `pg_search`
+
+Keep the default provider when your PostgreSQL service supports `pg_search`, its BM25 indexes fit
+comfortably with the rest of the database workload, and you prefer not to operate a separate search
+service.
+
+For a self-managed database, the LobeHub Docker examples use the
+`paradedb/paradedb:latest-pg17` image and preload `pg_search`. Apply the normal LobeHub database
+migrations to install the extension and the LobeHub-managed BM25 indexes, then keep:
+
+```bash
+FTS_SEARCH_PROVIDER=pg_search
+```
+
+### Use Elasticsearch
+
+Choose Elasticsearch when search needs independent capacity, when you want to separate search
+storage from transactional PostgreSQL, or when your PostgreSQL provider is ending `pg_search`
+support.
+
+Neon stopped offering `pg_search` to new projects on March 19, 2026. Neon has notified affected
+existing customers that the extension will be removed on September 21, 2026; queries, indexes, and
+applications that still depend on it will stop working after removal. Existing LobeHub deployments
+on Neon should complete the
+[pg\_search to Elasticsearch migration guide](/docs/self-hosting/advanced/elasticsearch-migration)
+before that deadline. Check Neon's
+[current pg\_search notice](https://neon.com/docs/extensions/pg_search) and
+[extension catalog](https://neon.com/docs/extensions/pg-extensions) before acting.
+
+There are two supported ways to run Elasticsearch. Both use the same backfill and incremental
+sync commands and the same `ES_INDEX_NAMESPACE`; they differ only in how LobeHub reaches the
+cluster.
+
+#### External Elasticsearch (Elastic Cloud or a managed cluster)
+
+- an Elasticsearch project reachable from the LobeHub server over HTTPS;
+- the official ICU analysis plugin, which is bundled in Elastic Cloud Serverless and must be
+  installed on every node of a self-managed cluster;
+- `ES_URL`, `ES_API_KEY`, and a stable `ES_INDEX_NAMESPACE`;
+- a full backfill followed by continuous Outbox synchronization;
+- `FTS_SEARCH_PROVIDER=elasticsearch` only after the backfill and incremental queue are complete.
+
+Plain HTTP is accepted only for loopback addresses during local development. LobeHub refuses to
+send an API key to any other host over plaintext HTTP.
+
+#### Docker Compose single-node Elasticsearch
+
+The official `docker-compose/deploy/docker-compose.yml` ships an optional, disabled-by-default
+`elasticsearch` service plus the backfill and sync commands built from the official LobeHub image.
+It is intended for a single-host deployment that wants Elasticsearch without an external account.
+Elasticsearch runs with security disabled and is reachable only inside the Compose network, so the
+plaintext, no-API-key connection must be enabled explicitly with `ES_ALLOW_INSECURE_HTTP=true`. See
+[Run Elasticsearch with Docker Compose](#run-elasticsearch-with-docker-compose) below.
+
+#### Database requirement for both options
+
+Selecting Elasticsearch does not remove the historical `pg_search` migrations. Until that
+follow-up ships, every LobeHub database, including a fresh Docker Compose install, must still run on
+a PostgreSQL image that can install `pg_search`, such as the bundled `paradedb/paradedb:latest-pg17`.
+Elasticsearch then takes over search traffic after the backfill; the `pg_search` objects can be
+removed later with the supported cleanup command.
+
+See [Migrate from pg\_search to Elasticsearch](/docs/self-hosting/advanced/elasticsearch-migration)
+for the complete rehearsal, backfill, cutover, and rollback procedure.
+
+## How Elasticsearch synchronization works
+
+PostgreSQL remains the source of truth. Enabling the Elasticsearch path installs change-capture
+triggers that coalesce source changes into a durable Outbox. The recurring consumer writes those
+changes to Elasticsearch. Search requests retrieve candidate identifiers from Elasticsearch, then
+LobeHub hydrates and authorizes the results against PostgreSQL before returning them.
+
+The operating sequence is therefore:
+
+```text
+PostgreSQL write
+  -> capture trigger
+  -> FTS Outbox
+  -> recurring fts-search:sync consumer
+  -> Elasticsearch index
+  -> candidate search
+  -> PostgreSQL permission check and hydration
+```
+
+The full reindex is only the initial snapshot. It does not replace the recurring consumer. Keep
+`fts-search:sync` scheduled for as long as Elasticsearch serves search traffic.
+
+## Run Elasticsearch with Docker Compose
+
+The optional services in `docker-compose/deploy/docker-compose.yml` are gated by Compose profiles,
+so a default `docker compose up` neither downloads nor starts them:
+
+| Service              | Profile                 | Role                                                                                                                                          |
+| -------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `elasticsearch`      | `elasticsearch`         | Single node built locally from the pinned official image plus `analysis-icu`, with a named data volume, a health check, and no published port |
+| `fts-search-reindex` | `elasticsearch-reindex` | One-off backfill / status command from the `lobehub/lobehub` image; its checkpoint lives in the `fts-search-reindex-state` volume             |
+| `fts-search-sync`    | `elasticsearch-sync`    | Long-running incremental consumer from the `lobehub/lobehub` image; restarts and logs when it hits failed or dead-letter work                 |
+
+Resource notes: the node uses a 1 GB JVM heap by default (`ES_JAVA_OPTS`); keep the heap at or
+below half of the memory available to the container and plan for at least 2 GB of RAM for
+Elasticsearch alone. Linux hosts must set `vm.max_map_count=262144`. The first `docker compose up`
+with the profile enabled builds the image once from the pinned official image and installs
+`analysis-icu`, so that build needs outbound access to `docker.elastic.co` and
+`artifacts.elastic.co`; later container recreations work offline. The build context is the
+`elasticsearch/Dockerfile` next to the Compose file, which `setup.sh` downloads as well. To upgrade
+Elasticsearch, change the version in both `image` and `build.args` of the `elasticsearch` service
+and run `docker compose up -d --build`.
+
+1. **Enable the node.** In `.env`, uncomment the Elasticsearch block and keep `pg_search` serving
+   requests:
+
+   ```bash
+   COMPOSE_PROFILES=elasticsearch
+   ES_URL=http://elasticsearch:9200
+   ES_ALLOW_INSECURE_HTTP=true
+   ES_INDEX_NAMESPACE=lobehub
+   # FTS_SEARCH_PROVIDER stays pg_search (the default) until the last step
+   ```
+
+   Then start the stack and wait for every service, including the new node, to become healthy;
+   the database migrations of the same release create the Outbox schema:
+
+   ```bash
+   docker compose up -d --wait
+   ```
+
+2. **Backfill.** Inspect the state, then run the one-off backfill. `--apply` installs the PostgreSQL
+   change capture, creates the 14 indexes with the ICU mapping, copies the data, and creates the
+   aliases:
+
+   ```bash
+   docker compose run --rm fts-search-reindex --status
+   docker compose run --rm fts-search-reindex --apply --fresh-run --yes
+   ```
+
+   Only the first run uses `--fresh-run`. If it is interrupted, run the same command without
+   `--fresh-run` to resume from the checkpoint volume. Repeat `--status` until the run is
+   `ready_for_incremental_sync`, every entity is `completed`, and every `failedCount` is `0`.
+
+3. **Start continuous sync.** Add the sync profile and recreate the stack:
+
+   ```bash
+   COMPOSE_PROFILES=elasticsearch,elasticsearch-sync
+   ```
+
+   ```bash
+   docker compose up -d
+   docker compose logs -f fts-search-sync
+   ```
+
+   The worker runs `fts-search-elasticsearch-sync.cjs --max-steps=8 --interval-seconds=15 --yes`
+   in a loop (`FTS_SEARCH_SYNC_INTERVAL_SECONDS` changes the pause between empty drains). It exits
+   non-zero on failed or dead-letter work; Compose restarts it, so a container that keeps restarting
+   means the queue needs attention. Keep it running for as long as Elasticsearch serves search.
+
+4. **Switch explicitly.** When `docker compose run --rm fts-search-reindex --status` shows `pending`,
+   `ready`, `retrying`, `inFlight`, `dead`, and `revisionLag` all at `0`, set
+   `FTS_SEARCH_PROVIDER=elasticsearch` in `.env` and recreate the application container:
+
+   ```bash
+   docker compose up -d lobe
+   ```
+
+   Nothing switches the provider automatically. Rolling back means restoring
+   `FTS_SEARCH_PROVIDER=pg_search` and recreating `lobe`; the sync worker may keep running.
+
+External target: the `fts-search-reindex` and `fts-search-sync` services depend only on
+PostgreSQL, not on the bundled node. To run them against Elastic Cloud instead, leave the
+`elasticsearch` profile out of `COMPOSE_PROFILES`, set `ES_URL` and `ES_API_KEY` in `.env`, and do
+not set `ES_ALLOW_INSECURE_HTTP`; steps 2 to 4 are otherwise identical.
+
+Security boundary of this mode: `ES_ALLOW_INSECURE_HTTP=true` permits plaintext HTTP to a
+non-loopback host and lets `ES_API_KEY` be omitted. It never permits sending an API key over
+plaintext HTTP, so do not combine it with `ES_API_KEY` and an `http://` URL. The Elasticsearch
+service publishes no port; never add one, because the node accepts unauthenticated requests. The
+Elastic Cloud path is unchanged: without this variable LobeHub still requires HTTPS and an API key.
+
+## Configuration reference
+
+| Variable                  | Purpose                                                                                                                                                       |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FTS_SEARCH_PROVIDER`     | Deployment-wide provider: `pg_search` or `elasticsearch`                                                                                                      |
+| `ES_URL`                  | Elasticsearch endpoint. HTTPS, or plaintext HTTP only for loopback or, with `ES_ALLOW_INSECURE_HTTP=true`, a private Compose hostname such as `elasticsearch` |
+| `ES_API_KEY`              | Elasticsearch API key with index creation, bulk write, refresh, count, alias, and search permissions. Required unless `ES_ALLOW_INSECURE_HTTP=true`           |
+| `ES_ALLOW_INSECURE_HTTP`  | `true` opts in to plaintext HTTP without an API key for an Elasticsearch node reachable only inside a private container network. Never sends a key over HTTP  |
+| `ES_INDEX_NAMESPACE`      | Stable deployment-owned prefix for physical indexes and aliases                                                                                               |
+| `FTS_SEARCH_SYNC_ENABLED` | Enables the incremental consumer; set to `true` only after the initial backfill is ready. The Compose sync service sets it itself                             |
+
+Compose-only variables read by `docker-compose/deploy/docker-compose.yml`:
+
+| Variable                           | Purpose                                                                                         |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `COMPOSE_PROFILES`                 | `elasticsearch` starts the node; `elasticsearch,elasticsearch-sync` also starts the sync worker |
+| `ES_JAVA_OPTS`                     | JVM heap of the Elasticsearch container, default `-Xms1g -Xmx1g`                                |
+| `FTS_SEARCH_SYNC_INTERVAL_SECONDS` | Seconds the sync worker sleeps after a drain that found no more work, default `15`              |
+
+Do not reuse one namespace for unrelated LobeHub deployments. Do not change the namespace while a
+migration or incremental consumer is active.
+
+## Monitor Elasticsearch search
+
+LobeHub exports bounded OpenTelemetry metrics and traces without recording raw queries, user IDs,
+document IDs, or indexed text. The main metric families are:
+
+| Metric                                           | What it answers                                                        |
+| ------------------------------------------------ | ---------------------------------------------------------------------- |
+| `fts_search_backend_operations_total`            | Request volume and failures by provider, entity, operation, and result |
+| `fts_search_backend_operation_duration`          | End-to-end backend latency                                             |
+| `fts_search_backend_result_count`                | Requested, candidate, and PostgreSQL-hydrated result counts            |
+| `fts_search_elasticsearch_requests_total`        | Actual Elasticsearch request volume and result                         |
+| `fts_search_elasticsearch_request_duration`      | Elasticsearch request duration including response parsing              |
+| `fts_search_elasticsearch_request_size`          | Serialized request-body size                                           |
+| `fts_search_elasticsearch_response_decoded_size` | Decoded response-body size                                             |
+| `fts_search_elasticsearch_response_hits`         | Hits returned per Elasticsearch request                                |
+| `fts_search_elasticsearch_server_took`           | Processing time reported by Elasticsearch                              |
+
+Traces use spans named `fts.search.backend.<operation>`. Use request counts, bytes, hits, server
+time, and indexed storage together when investigating Elasticsearch cost; any single signal alone
+is insufficient. See [Grafana Observability](/docs/self-hosting/advanced/observability/grafana) for
+the self-hosted OpenTelemetry stack.
+
+## Operating rules
+
+- Back up PostgreSQL and rehearse on an isolated database copy and Elasticsearch target before a
+  production migration.
+- Keep the same durable checkpoint directory for every resume of one backfill. Never run two
+  workers against the same checkpoint and physical indexes.
+- Keep `pg_search` serving requests until every entity is complete, failures are zero, and the
+  incremental queue has caught up.
+- Use the supported cleanup command after cutover; users do not need to copy database-object SQL.
+- Keep the Elasticsearch Outbox, capture triggers, and recurring consumer. They are required by the
+  active Elasticsearch backend and are unrelated to Neon's removal of `pg_search`.

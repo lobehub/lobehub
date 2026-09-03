@@ -1,5 +1,5 @@
-import { ActionIcon, Block, Flexbox, Text } from '@lobehub/ui';
-import { Button, createModal, type ModalInstance } from '@lobehub/ui/base-ui';
+import { Block, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Button, createModal, type ModalInstance, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { Blocks, CheckCircle2, Lightbulb, PencilLineIcon, RefreshCw, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -29,7 +29,7 @@ import {
   trackCreateAgentModalSkillSuggestionAction,
 } from './createAgentModalAnalytics';
 
-const LEFT_ACTIONS: ActionKeys[] = ['model'];
+const RIGHT_ACTIONS: ActionKeys[] = ['model'];
 const CREATE_MODAL_WIDTH = 'min(90vw, 760px)';
 const INSTALLED_SKILL_MODAL_WIDTH = 'min(90vw, 560px)';
 
@@ -563,7 +563,7 @@ export const CreateAgentModal = memo<CreateAgentModalProps>(
             <ChatInputProvider
               agentId={agentId}
               allowExpand={false}
-              leftActions={LEFT_ACTIONS}
+              rightActions={RIGHT_ACTIONS}
               sendButtonProps={sendButtonProps}
               chatInputEditorRef={(instance) => {
                 if (instance) editorRef.current = instance;

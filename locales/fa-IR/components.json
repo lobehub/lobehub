@@ -119,6 +119,7 @@
   "KeyValueEditor.keyPlaceholder": "کلید",
   "KeyValueEditor.valuePlaceholder": "مقدار",
   "LocalFile.action.open": "باز کردن",
+  "LocalFile.action.preview": "پیش‌نمایش",
   "LocalFile.action.showInFolder": "نمایش در پوشه",
   "MaxTokenSlider.unlimited": "نامحدود",
   "ModelSelect.featureTag.audio": "این مدل از تشخیص ورودی صوتی پشتیبانی می‌کند.",

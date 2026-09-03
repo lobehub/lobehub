@@ -1,8 +1,9 @@
 'use client';
 
-import { Flexbox, FormGroup, Skeleton } from '@lobehub/ui';
+import { Flexbox, FormGroup } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 
+import { ArticleSkeleton } from '@/components/Skeleton';
 import SettingHeader from '@/features/Settings/features/SettingHeader';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
@@ -26,7 +27,7 @@ const Page = ({ showSettingHeader = true }: PageProps) => {
       {showSettingHeader && <SettingHeader title={t('tab.storage')} />}
       <Flexbox style={{ display: isLoading ? 'flex' : 'none' }}>
         <FormGroup collapsible={false} title={t('storage.actions.title')} variant="filled">
-          <Skeleton active paragraph={{ rows: 4 }} />
+          <ArticleSkeleton rows={4} />
         </FormGroup>
       </Flexbox>
       <Flexbox style={{ display: isLoading ? 'none' : 'flex' }}>

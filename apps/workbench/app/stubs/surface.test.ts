@@ -91,7 +91,7 @@ describe('workbench stub surface', () => {
       reportStubSurfaceGaps(
         [
           {
-            rel: 'src/features/Verify/Acceptance/attachments.tsx',
+            rel: 'src/features/Acceptance/Viewer/attachments.tsx',
             source: `import { useFileStore } from '@/store/file';
                      const removeFile = useFileStore((s) => s.removeFile);`,
           },
@@ -104,7 +104,7 @@ describe('workbench stub surface', () => {
         ],
       ),
     ).toEqual([
-      '  src/features/Verify/Acceptance/attachments.tsx\n    @/store/file: useFileStore.removeFile',
+      '  src/features/Acceptance/Viewer/attachments.tsx\n    @/store/file: useFileStore.removeFile',
     ]);
   });
 });

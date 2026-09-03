@@ -259,6 +259,38 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
       });
     });
 
+    it('advertises local manifest capabilities only for the caller desktop', async () => {
+      const { deviceGateway } = await import('@/server/services/deviceGateway');
+      vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
+      mockQueryDeviceList.mockResolvedValue([
+        { deviceId: 'desktop-device', hostname: 'Desktop', online: true, platform: 'darwin' },
+        { deviceId: 'remote-cli', hostname: 'CLI', online: true, platform: 'linux' },
+      ]);
+      mockGetAgentConfig.mockResolvedValue(
+        createBaseAgentConfig({ agencyConfig: { executionTarget: 'local' } }),
+      );
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        deviceId: 'desktop-device',
+        localDeviceId: 'desktop-device',
+        prompt: 'Hello',
+      });
+      expect(mockCreateServerAgentToolsEngine.mock.calls.at(-1)?.[1].manifestContext).toEqual(
+        expect.objectContaining({ executionEnv: 'local' }),
+      );
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        deviceId: 'remote-cli',
+        localDeviceId: 'desktop-device',
+        prompt: 'Hello',
+      });
+      expect(mockCreateServerAgentToolsEngine.mock.calls.at(-1)?.[1].manifestContext).toEqual(
+        expect.objectContaining({ executionEnv: 'device' }),
+      );
+    });
+
     it('should not pass deviceContext when gateway is not configured', async () => {
       const { deviceGateway } = await import('@/server/services/deviceGateway');
       vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(false);

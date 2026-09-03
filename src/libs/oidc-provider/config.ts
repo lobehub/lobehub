@@ -4,6 +4,11 @@ import urlJoin from 'url-join';
 
 import { appEnv } from '@/envs/app';
 
+const cloudAppOrigins = ['https://app.lobehub.com', 'https://lobehub.com'];
+const appUrl = appEnv.APP_URL!;
+const desktopAppOrigins = cloudAppOrigins.includes(new URL(appUrl).origin)
+  ? cloudAppOrigins
+  : [appUrl];
 const marketBaseUrl = new URL(appEnv.MARKET_BASE_URL ?? 'https://market.lobehub.com').origin;
 
 /**
@@ -52,15 +57,14 @@ export const defaultClients: ClientMetadata[] = [
     grant_types: ['authorization_code', 'refresh_token'],
 
     post_logout_redirect_uris: [
-      // Dynamically construct web page callback URL
-      urlJoin(appEnv.APP_URL!, '/oauth/logout'),
+      // Keep the legacy subdomain working while Cloud moves to the apex domain.
+      ...desktopAppOrigins.map((origin) => urlJoin(origin, '/oauth/logout')),
       'http://localhost:3210/oauth/logout',
     ],
 
     // Desktop authorization callback - changed to web page path
     redirect_uris: [
-      // Dynamically construct web page callback URL
-      urlJoin(appEnv.APP_URL!, '/oidc/callback/desktop'),
+      ...desktopAppOrigins.map((origin) => urlJoin(origin, '/oidc/callback/desktop')),
       'http://localhost:3210/oidc/callback/desktop',
     ],
 

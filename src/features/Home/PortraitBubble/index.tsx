@@ -1,4 +1,5 @@
 import { createStaticStyles } from 'antd-style';
+import type { ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -65,7 +66,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const PortraitBubble = memo(() => {
+interface PortraitBubbleProps {
+  promo?: ReactNode;
+}
+
+const PortraitBubble = memo<PortraitBubbleProps>(({ promo }) => {
   const { t } = useTranslation('home');
   const { currentPair } = useHomeDailyBrief();
 
@@ -73,9 +78,11 @@ const PortraitBubble = memo(() => {
 
   return (
     <div className={styles.bubble}>
-      <div className={styles.line}>
-        {parsed?.plain ? <GreetingLine parsed={parsed} /> : t('dashboard.greeting.subtitle')}
-      </div>
+      {promo ?? (
+        <div className={styles.line}>
+          {parsed?.plain ? <GreetingLine parsed={parsed} /> : t('dashboard.greeting.subtitle')}
+        </div>
+      )}
     </div>
   );
 });

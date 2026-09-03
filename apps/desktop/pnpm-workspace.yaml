@@ -1,9 +1,11 @@
 packages:
   - '../cli'
   - '../../packages/agent-gateway-client'
+  - '../../packages/agent-tracing'
   - '../../packages/chat-adapter-imessage'
   - '../../packages/heterogeneous-agents'
   - '../../packages/const'
+  - '../../packages/eval-rubric'
   - '../../packages/electron-server-ipc'
   - '../../packages/electron-client-ipc'
   - '../../packages/electron-mac-notifications'

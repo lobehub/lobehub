@@ -55,7 +55,11 @@ const resolved = {
 const createAttempt = (
   runCallbacks: (options: ChatMethodOptions) => Promise<void>,
   blobStore?: BlobStore,
-  attemptOverrides?: { clientIp?: string; userAgent?: string },
+  attemptOverrides?: {
+    clientIp?: string;
+    agentShareVisitorIds?: { agentId: string; shareId: string; visitorUserId: string };
+    userAgent?: string;
+  },
 ) => {
   const publishStreamChunk = vi.fn().mockResolvedValue('event-1');
   const streamManager = {
@@ -194,6 +198,36 @@ describe('ServerCallLlmAttempt', () => {
           topicId: 'topic-1',
           trigger: 'user',
           userAgent: 'Mozilla/5.0 (Test)',
+        }),
+      }),
+    );
+  });
+
+  // A share run is billed to the CREATOR's account, so without this the spend
+  // row is indistinguishable from the creator's own usage.
+  it('forwards share attribution into the chat call metadata', async () => {
+    const { attempt, chat } = createAttempt(
+      async ({ callback }) => {
+        await callback?.onText?.('Answer');
+        await callback?.onCompletion?.({ text: '', usage: { totalOutputTokens: 1 } });
+      },
+      undefined,
+      {
+        agentShareVisitorIds: {
+          agentId: 'agt_shared',
+          shareId: 'share-1',
+          visitorUserId: 'visitor-1',
+        },
+      },
+    );
+
+    await attempt.execute();
+
+    expect(chat).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          agentShare: { agentId: 'agt_shared', shareId: 'share-1', visitorUserId: 'visitor-1' },
         }),
       }),
     );

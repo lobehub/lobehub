@@ -43,6 +43,7 @@ useFileStore.subscribe((state) => {
         id: item.id,
         metadata: item.metadata,
         name: item.name,
+        parentId: item.parentId,
         size: item.size,
         slug: item.slug,
         sourceType: item.sourceType,

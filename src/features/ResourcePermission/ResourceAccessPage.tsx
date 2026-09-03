@@ -1,8 +1,8 @@
 'use client';
 
 import type { FormGroupItemType } from '@lobehub/ui';
-import { Flexbox, Form, Icon, Text } from '@lobehub/ui';
-import { Alert, toast } from '@lobehub/ui/base-ui';
+import { Flexbox, Form, Icon } from '@lobehub/ui';
+import { Alert, Text, toast } from '@lobehub/ui/base-ui';
 import { Breadcrumb as AntBreadcrumb } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ChevronRight, InfoIcon, UsersIcon } from 'lucide-react';

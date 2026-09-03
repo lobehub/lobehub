@@ -1,8 +1,8 @@
 'use client';
 
-import { Block, Flexbox, Form, FormGroup, FormItem, Icon, Tag, Text } from '@lobehub/ui';
+import { Block, Flexbox, Form, FormGroup, FormItem, Icon } from '@lobehub/ui';
 import type { SelectOption } from '@lobehub/ui/base-ui';
-import { Button, Select, Switch } from '@lobehub/ui/base-ui';
+import { Button, Select, Switch, Tag, Text } from '@lobehub/ui/base-ui';
 import { Form as AntdForm, type FormInstance, InputNumber, Popconfirm } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import {

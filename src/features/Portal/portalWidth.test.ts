@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   CHAT_PORTAL_MAX_WIDTH,
+  CHAT_PORTAL_TASK_WIDTH,
   CHAT_PORTAL_TOOL_UI_WIDTH,
   CHAT_PORTAL_WIDE_WIDTH,
   CHAT_PORTAL_WIDTH,
@@ -23,6 +24,8 @@ describe('getPortalViewMinWidth', () => {
       PortalViewType.AcceptanceCheck,
       PortalViewType.AgentDetail,
       PortalViewType.Artifact,
+      PortalViewType.GoalMetric,
+      PortalViewType.GoalNode,
       PortalViewType.TaskDetail,
       PortalViewType.Thread,
       PortalViewType.ToolUI,
@@ -39,6 +42,14 @@ describe('getPortalViewWidth', () => {
     ).toBe(CHAT_PORTAL_WIDE_WIDTH);
   });
 
+  it('opens task and goal-node detail at the task width even when the legacy width is narrow', () => {
+    for (const viewType of [PortalViewType.TaskDetail, PortalViewType.GoalNode]) {
+      expect(getPortalViewWidth({ legacyWidth: CHAT_PORTAL_WIDTH, viewType })).toBe(
+        CHAT_PORTAL_TASK_WIDTH,
+      );
+    }
+  });
+
   it('remembers the width per view instead of sharing one value', () => {
     const widths = { [PortalViewType.Acceptance]: 1000, [PortalViewType.TaskDetail]: 620 };
 
@@ -48,6 +59,23 @@ describe('getPortalViewWidth', () => {
     expect(
       getPortalViewWidth({ legacyWidth: 480, viewType: PortalViewType.Document, widths }),
     ).toBe(480);
+  });
+
+  it('keeps scoped surfaces (goal page) separate from the chat widths', () => {
+    const widths = { 'goal:taskDetail': 1000, [PortalViewType.TaskDetail]: 700 };
+
+    expect(getPortalViewWidth({ viewType: PortalViewType.TaskDetail, widths })).toBe(700);
+    expect(getPortalViewWidth({ scope: 'goal', viewType: PortalViewType.TaskDetail, widths })).toBe(
+      1000,
+    );
+    // a scoped surface with no memory of its own ignores the chat memory
+    expect(
+      getPortalViewWidth({
+        scope: 'goal',
+        viewType: PortalViewType.TaskDetail,
+        widths: { [PortalViewType.TaskDetail]: 700 },
+      }),
+    ).toBe(CHAT_PORTAL_TASK_WIDTH);
   });
 
   it('falls back to the legacy width for views without an explicit default', () => {

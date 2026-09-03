@@ -180,6 +180,36 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
   },
   {
     auth: {
+      docsUrl: 'https://docs.factory.ai/cli/getting-started/quickstart',
+      errorMessage:
+        'Factory Droid could not authenticate. Run `droid` to sign in or configure FACTORY_API_KEY, then retry.',
+      patterns: [
+        ...COMMON_AUTH_REQUIRED_PATTERNS,
+        'authentication required',
+        'factory_api_key',
+        'device pairing',
+      ],
+      signInCommand: 'droid',
+    },
+    defaultCommand: 'droid',
+    defaultTopicGroupMode: 'byProject',
+    iconId: 'Droid',
+    install: {
+      commands: [
+        'curl -fsSL https://app.factory.ai/cli | sh',
+        'irm https://app.factory.ai/cli/windows | iex',
+      ],
+      docsUrl: 'https://docs.factory.ai/cli/getting-started/quickstart',
+    },
+    kind: 'local-cli',
+    menuKey: 'newDroidAgent',
+    menuLabelKey: 'newDroidAgent',
+    resume: { supported: true },
+    title: 'Factory Droid',
+    type: 'droid',
+  },
+  {
+    auth: {
       docsUrl: 'https://docs.x.ai/build/overview',
       errorMessage: 'Grok Build could not authenticate. Run `grok login`, then retry.',
       patterns: [

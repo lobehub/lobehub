@@ -551,6 +551,120 @@ describe('topicSelectors', () => {
       ]);
       expect(topicSelectors.displayTopicsForSidebar(20, 'updatedAt', true)(state)).toHaveLength(2);
     });
+
+    it('keeps the active topic visible when it falls outside the configured page', () => {
+      const state = merge(initialStore, {
+        activeAgentId: 'agent-1',
+        activeTopicId: 'older-active',
+        topicDataMap: {
+          [topicMapKey({ agentId: 'agent-1' })]: {
+            currentPage: 0,
+            hasMore: true,
+            items: [
+              { id: 'newest', updatedAt: 3 },
+              { id: 'newer', updatedAt: 2 },
+              { id: 'older-active', updatedAt: 1 },
+            ],
+            pageSize: 2,
+            total: 3,
+          },
+        },
+      });
+
+      expect(
+        topicSelectors
+          .displayTopicsForSidebar(
+            2,
+            'updatedAt',
+            false,
+          )(state)
+          ?.map(({ id }) => id),
+      ).toEqual(['newest', 'newer', 'older-active']);
+    });
+
+    it('keeps an active completed topic from the detail cache visible', () => {
+      const state = merge(initialStore, {
+        activeAgentId: 'agent-1',
+        activeTopicId: 'archived-active',
+        topicDataMap: {
+          [topicMapKey({ agentId: 'agent-1' })]: {
+            currentPage: 0,
+            hasMore: true,
+            items: [{ id: 'visible', status: 'active', updatedAt: 2 }],
+            pageSize: 20,
+            total: 2,
+          },
+        },
+        topicDetailMap: {
+          'archived-active': { id: 'archived-active', status: 'completed', updatedAt: 1 },
+        },
+      });
+
+      expect(
+        topicSelectors
+          .displayTopicsForSidebar(
+            20,
+            'updatedAt',
+            false,
+          )(state)
+          ?.map(({ id }) => id),
+      ).toEqual(['visible', 'archived-active']);
+    });
+
+    it('keeps an injected active favorite before regular topics', () => {
+      const state = merge(initialStore, {
+        activeAgentId: 'agent-1',
+        activeTopicId: 'archived-favorite',
+        topicDataMap: {
+          [topicMapKey({ agentId: 'agent-1' })]: {
+            currentPage: 0,
+            hasMore: true,
+            items: [
+              { favorite: true, id: 'visible-favorite', updatedAt: 3 },
+              { id: 'regular', updatedAt: 2 },
+            ],
+            pageSize: 20,
+            total: 3,
+          },
+        },
+        topicDetailMap: {
+          'archived-favorite': {
+            favorite: true,
+            id: 'archived-favorite',
+            status: 'completed',
+            updatedAt: 1,
+          },
+        },
+      });
+
+      expect(
+        topicSelectors
+          .displayTopicsForSidebar(
+            20,
+            'updatedAt',
+            false,
+          )(state)
+          ?.map(({ id }) => id),
+      ).toEqual(['visible-favorite', 'archived-favorite', 'regular']);
+    });
+
+    it('does not duplicate an active topic already in the visible page', () => {
+      const state = merge(initialStore, {
+        activeAgentId: 'agent-1',
+        activeTopicId: 'active',
+        topicDataMap: {
+          [topicMapKey({ agentId: 'agent-1' })]: {
+            currentPage: 0,
+            hasMore: false,
+            items: [{ id: 'active', updatedAt: 1 }],
+            pageSize: 20,
+            total: 1,
+          },
+        },
+      });
+
+      expect(topicSelectors.displayTopicsForSidebar(20)(state)).toHaveLength(1);
+    });
   });
 
   describe('groupedTopicsForSidebar', () => {

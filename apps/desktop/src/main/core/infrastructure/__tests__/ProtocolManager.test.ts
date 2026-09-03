@@ -25,16 +25,6 @@ vi.mock('electron', () => ({
   app: mockApp,
 }));
 
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 // Mock protocol utils
 vi.mock('@/utils/protocol', () => ({
   getProtocolScheme: mockGetProtocolScheme,

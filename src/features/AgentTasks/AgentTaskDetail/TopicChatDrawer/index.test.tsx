@@ -59,7 +59,31 @@ const mocks = vi.hoisted(() => ({
 const serializeSize = (size: unknown) =>
   size === undefined ? '' : typeof size === 'string' ? size : JSON.stringify(size);
 
-vi.mock('@lobehub/ui', () => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  copyToClipboard: vi.fn(),
+  DropdownMenu: ({
+    children,
+    items,
+  }: {
+    children?: ReactNode;
+    items?: { key: string; label?: ReactNode; onClick?: () => void; type?: string }[];
+  }) => (
+    <>
+      {children}
+      {items?.map((item) =>
+        item.type === 'divider' ? null : (
+          <button key={item.key} onClick={item.onClick}>
+            {item.label}
+          </button>
+        ),
+      )}
+    </>
+  ),
+}));
+
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   ActionIcon: ({
     disabled,
     icon,
@@ -84,41 +108,6 @@ vi.mock('@lobehub/ui', () => ({
       {title}
     </button>
   ),
-  copyToClipboard: vi.fn(),
-  DropdownMenu: ({
-    children,
-    items,
-  }: {
-    children?: ReactNode;
-    items?: { key: string; label?: ReactNode; onClick?: () => void; type?: string }[];
-  }) => (
-    <>
-      {children}
-      {items?.map((item) =>
-        item.type === 'divider' ? null : (
-          <button key={item.key} onClick={item.onClick}>
-            {item.label}
-          </button>
-        ),
-      )}
-    </>
-  ),
-  Flexbox: ({
-    children,
-    flex,
-    style,
-  }: {
-    children?: ReactNode;
-    flex?: CSSProperties['flex'];
-    style?: CSSProperties;
-  }) => <div style={{ flex, ...style }}>{children}</div>,
-  Freeze: ({ children }: { children?: ReactNode; frozen?: boolean }) => <>{children}</>,
-  Text: ({ children, style }: { children?: ReactNode; style?: CSSProperties }) => (
-    <span style={style}>{children}</span>
-  ),
-}));
-
-vi.mock('@lobehub/ui/base-ui', () => ({
   FloatingPanel: ({
     actions,
     children,
@@ -173,12 +162,6 @@ vi.mock('next/dynamic', () => ({
     function DynamicComponent({ children }: { children?: ReactNode }) {
       return <>{children}</>;
     },
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
 }));
 
 vi.mock('@/features/Conversation/ChatList', () => ({
@@ -292,7 +275,11 @@ describe('TopicChatDrawer', () => {
   it('reconnects a running topic against the drawer agent', () => {
     mocks.taskState.taskDetailMap['T-1'].activities[0] = {
       id: 'topic-1',
-      runningOperation: { assistantMessageId: 'ast-1', operationId: 'op-1' },
+      runningOperation: {
+        assistantMessageId: 'ast-1',
+        heteroType: 'claude-code',
+        operationId: 'op-1',
+      },
       status: 'running',
       time: '2026-04-29T00:00:00.000Z',
       title: 'Topic 1',
@@ -303,7 +290,7 @@ describe('TopicChatDrawer', () => {
 
     expect(useGatewayReconnect).toHaveBeenCalledWith(
       'topic-1',
-      expect.objectContaining({ operationId: 'op-1' }),
+      expect.objectContaining({ heteroType: 'claude-code', operationId: 'op-1' }),
       'agt_assignee',
     );
   });

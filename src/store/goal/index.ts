@@ -19,4 +19,6 @@ export const useGoalStore = createWithEqualityFn<GoalStore>()(
   shallow,
 );
 
+export const getGoalStoreState = () => useGoalStore.getState();
+
 export { goalSelectors } from './selectors';

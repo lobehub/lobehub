@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { MouseEvent, ReactNode } from 'react';
+import type { CSSProperties, MouseEvent, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
@@ -18,6 +18,7 @@ interface CapturedRightPanelProps {
   expand?: boolean;
   maxWidth?: number | string;
   onSizeChange?: (size?: { height?: number | string; width?: number | string }) => void;
+  style?: CSSProperties;
   width?: number | string;
 }
 
@@ -96,6 +97,7 @@ const chatStore = vi.hoisted(() => ({
 }));
 
 const globalStore = vi.hoisted(() => ({
+  openWorkingSidebar: vi.fn(),
   updateSystemStatus: vi.fn(),
   toggleRightPanel: vi.fn(),
   toggleTerminalPanel: vi.fn(),
@@ -104,6 +106,7 @@ const globalStore = vi.hoisted(() => ({
     portalWidth: 400 as number | undefined,
     portalWidths: undefined as Record<string, number> | undefined,
     showRightPanel: true,
+    showWorkingOverview: true as boolean | undefined,
     workingSidebarTab: 'params' as string | undefined,
     workingSidebarTabRequest: undefined as { nonce: number; tab: string } | undefined,
     workingSidebarWidth: 360 as number | undefined,
@@ -113,7 +116,11 @@ const globalStore = vi.hoisted(() => ({
 vi.mock('@/features/RightPanel', () => ({
   default: (props: CapturedRightPanelProps) => {
     rightPanel.current = props;
-    return <div data-testid="right-panel">{props.children}</div>;
+    return (
+      <div data-testid="right-panel" style={props.style}>
+        {props.children}
+      </div>
+    );
   },
 }));
 
@@ -128,7 +135,7 @@ vi.mock('../Files', () => ({
 vi.mock('../Review', () => ({
   default: (props: { composerTarget: ComposerTarget }) => {
     renderedReview.current = props;
-    return <div />;
+    return <div data-testid="review" />;
   },
 }));
 vi.mock('../ProgressSection', () => ({ default: () => <div /> }));
@@ -261,28 +268,23 @@ vi.mock('@/const/version', () => ({
     return platform.isDesktop;
   },
 }));
-vi.mock('@/store/user', () => ({ useUserStore: () => true }));
-vi.mock('@/store/user/selectors', () => ({
-  labPreferSelectors: { enableInAppBrowser: () => true },
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
-vi.mock('@lobehub/ui', () => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
     <button aria-label={title} type="button" onClick={onClick} />
   ),
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Icon: () => <span />,
   Skeleton: () => <div data-testid="params-loading" />,
 }));
 
-vi.mock('@lobehub/ui/base-ui', async () => {
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
   const { useState } = await import('react');
+  const actual = (await importOriginal()) as Record<string, unknown>;
 
   return {
+    ...actual,
+    ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
+      <button aria-label={title} type="button" onClick={onClick} />
+    ),
     ContextMenuTrigger: ({ children, items }: { children: ReactNode; items: any[] }) => {
       const [open, setOpen] = useState(false);
       const menuItems = items.filter((item) => item && item.type !== 'divider');
@@ -331,12 +333,19 @@ vi.mock('@lobehub/ui/base-ui', async () => {
         </div>
       );
     },
+    Skeleton: {
+      Text: () => <div data-testid="params-loading" />,
+    },
   };
 });
 
-vi.mock('antd-style', () => ({
-  createStaticStyles: () => () => ({}),
-}));
+vi.mock('antd-style', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+    createStaticStyles: () => () => ({}),
+  };
+});
 
 beforeEach(() => {
   vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
@@ -373,9 +382,11 @@ beforeEach(() => {
   dropdownMenuState.items = [];
   globalStore.status.workingSidebarWidth = 360;
   globalStore.status.showRightPanel = true;
+  globalStore.status.showWorkingOverview = true;
   globalStore.status.workingSidebarTab = 'params';
   globalStore.status.workingSidebarTabRequest = undefined;
   globalStore.updateSystemStatus.mockReset();
+  globalStore.openWorkingSidebar.mockReset();
   globalStore.toggleRightPanel.mockReset();
   globalStore.toggleTerminalPanel.mockReset();
   globalStore.setWorkingSidebarTab.mockReset();
@@ -424,6 +435,7 @@ describe('AgentWorkingSidebar — controlled panel width', () => {
 
     unmount();
     globalStore.status.workingSidebarTab = 'params';
+    localStorageState.openTabsByContext = { 'draft:agent:C:\\repo': ['params'] };
     render(<AgentWorkingSidebar />);
     expect(rightPanel.current?.width).toBe(360);
   });
@@ -485,6 +497,28 @@ describe('AgentWorkingSidebar — controlled panel width', () => {
 
     // 600 - 420 = 180 < the 300 minimum — nothing to clamp to, so it hides
     expect(rightPanel.current?.expand).toBe(false);
+  });
+
+  it('also yields the Overview card when the conversation width budget is too small', () => {
+    globalStore.status.showRightPanel = false;
+
+    render(<AgentWorkingSidebar availableWidth={600} />);
+
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+  });
+
+  it('uses the Overview minimum width even when Review previously needed two panes', () => {
+    agentStore.activeAgentId = 'agent';
+    reviewState.repoType = 'git';
+    reviewState.workingDirectory = '/repo';
+    reviewState.showTree = true;
+    localStorageState.openTabsByContext = { 'draft:agent:/repo': ['review'] };
+    globalStore.status.workingSidebarTab = 'review';
+    globalStore.status.showRightPanel = false;
+
+    render(<AgentWorkingSidebar availableWidth={850} />);
+
+    expect(screen.getByRole('complementary')).toBeInTheDocument();
   });
 
   it('keeps a fitting stored width untouched on a measured row', () => {
@@ -556,7 +590,7 @@ describe('AgentWorkingSidebar — controlled panel width', () => {
     effectiveConfig.agencyConfig = { executionTarget: 'local' };
     reviewState.repoType = 'git';
     reviewState.workingDirectory = '/Users/me/project';
-    globalStore.status.workingSidebarTab = 'overview';
+    globalStore.status.workingSidebarTab = 'works';
 
     render(<AgentWorkingSidebar />);
 
@@ -674,23 +708,18 @@ describe('AgentWorkingSidebar — tab strip', () => {
       .map((button) => button.textContent)
       .filter(Boolean);
 
-    expect(labels).toEqual([
-      'workingPanel.overview.title',
-      'settingModel.params.panel.tab',
-      'workingPanel.deployments.tab',
-    ]);
+    expect(labels).toEqual(['settingModel.params.panel.tab', 'workingPanel.deployments.tab']);
   });
 
-  it('keeps Overview fixed and hides unopened workspace tabs', () => {
+  it('renders Overview as an independent reserved panel and hides unopened workspace tabs', () => {
     localStorageState.openTabsByContext = {};
+    globalStore.status.showRightPanel = false;
     globalStore.status.workingSidebarTab = undefined;
 
     render(<AgentWorkingSidebar />);
 
-    expect(screen.getByRole('button', { name: 'workingPanel.overview.title' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    expect(screen.getByRole('complementary')).toHaveTextContent('workingPanel.overview.title');
+    expect(screen.getByTestId('right-panel')).not.toBeVisible();
     expect(
       screen.queryByRole('button', { name: 'workingPanel.resources.filter.skills' }),
     ).not.toBeInTheDocument();
@@ -699,14 +728,16 @@ describe('AgentWorkingSidebar — tab strip', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('places Overview in the same horizontal scroll container as on-demand tabs', () => {
+  it('keeps the reserved Overview panel separate from the on-demand tab strip', () => {
+    globalStore.status.showRightPanel = false;
+    globalStore.status.workingSidebarTab = 'overview';
     render(<AgentWorkingSidebar />);
-    const overviewTab = screen.getByRole('button', { name: 'workingPanel.overview.title' });
-    const paramsTab = screen.getByRole('button', { name: 'settingModel.params.panel.tab' });
 
-    expect(overviewTab.parentElement?.parentElement?.parentElement).toBe(
-      paramsTab.parentElement?.parentElement?.parentElement,
-    );
+    expect(screen.getByRole('complementary')).toBeVisible();
+    expect(screen.getByTestId('right-panel')).not.toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'workingPanel.openMenu.title' }),
+    ).not.toBeInTheDocument();
   });
 
   it('keeps the working panel chrome visible while the Params pane is suspended', () => {
@@ -714,19 +745,22 @@ describe('AgentWorkingSidebar — tab strip', () => {
 
     render(<AgentWorkingSidebar />);
 
-    expect(screen.getByRole('button', { name: 'workingPanel.overview.title' })).toBeInTheDocument();
+    expect(screen.getByRole('complementary')).toHaveTextContent('workingPanel.overview.title');
     expect(screen.getByRole('button', { name: 'workingPanel.openMenu.title' })).toBeInTheDocument();
     expect(screen.getByTestId('params-loading')).toBeInTheDocument();
   });
 
   it('restores pinned tabs only for the agent that owns them', () => {
     agentStore.activeAgentId = 'agent-a';
-    localStorageState.openTabsByContext = {};
+    localStorageState.openTabsByContext = { 'draft:agent-a:none': [], 'draft:agent-b:none': [] };
     localStorageState.pinnedTabsByAgent = { 'agent-a': ['works'] };
-    globalStore.status.workingSidebarTab = 'overview';
+    globalStore.status.workingSidebarTab = 'works';
 
     const { unmount } = render(<AgentWorkingSidebar />);
-    const pinnedWorksTab = screen.getByRole('button', { name: 'workingPanel.works.title' });
+    const pinnedWorksTab = screen.getByRole('button', {
+      hidden: true,
+      name: 'workingPanel.works.title',
+    });
 
     expect(pinnedWorksTab.parentElement).toHaveAttribute('data-pinned', 'true');
     expect(
@@ -781,6 +815,39 @@ describe('AgentWorkingSidebar — tab strip', () => {
     expect(globalStore.setWorkingSidebarTab).toHaveBeenCalledWith('overview');
   });
 
+  it('preserves the other implicit default tabs when one default tab closes', () => {
+    localStorageState.openTabsByContext = {};
+    globalStore.status.workingSidebarTab = 'skills';
+
+    render(<AgentWorkingSidebar />);
+    const skillsTab = screen.getByRole('button', {
+      name: 'workingPanel.resources.filter.skills',
+    });
+    fireEvent.click(skillsTab.parentElement!.querySelector('[data-tab-close="true"]')!);
+
+    expect(
+      screen.queryByRole('button', { name: 'workingPanel.resources.filter.skills' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'workingPanel.resources.filter.documents' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    expect(globalStore.toggleRightPanel).not.toHaveBeenCalled();
+  });
+
+  it('keeps the panel open and selects a surviving pinned tab when the active tab closes', () => {
+    agentStore.activeAgentId = 'agent';
+    localStorageState.openTabsByContext = { 'draft:agent:none': ['works', 'params'] };
+    localStorageState.pinnedTabsByAgent = { agent: ['works'] };
+    globalStore.status.workingSidebarTab = 'params';
+
+    render(<AgentWorkingSidebar />);
+    const paramsTab = screen.getByRole('button', { name: 'settingModel.params.panel.tab' });
+    fireEvent.click(paramsTab.parentElement!.querySelector('[data-tab-close="true"]')!);
+
+    expect(globalStore.setWorkingSidebarTab).toHaveBeenCalledWith('works');
+    expect(globalStore.toggleRightPanel).not.toHaveBeenCalled();
+  });
+
   it('preserves agent-pinned tabs when closing other tabs', () => {
     agentStore.activeAgentId = 'agent';
     localStorageState.openTabsByContext = {
@@ -806,22 +873,64 @@ describe('AgentWorkingSidebar — tab strip', () => {
     agentStore.activeAgentId = 'agent';
     reviewState.repoType = 'git';
     reviewState.workingDirectory = '/repo';
-    localStorageState.openTabsByContext = {};
-    globalStore.status.workingSidebarTab = 'overview';
+    localStorageState.openTabsByContext = { 'draft:agent:/repo': ['params'] };
+    globalStore.status.workingSidebarTab = 'params';
 
     render(<AgentWorkingSidebar />);
 
     fireEvent.click(screen.getByRole('button', { name: 'workingPanel.openMenu.title' }));
     fireEvent.click(screen.getByRole('button', { name: 'workingPanel.review.title' }));
-    fireEvent.click(screen.getByRole('button', { name: 'workingPanel.openMenu.title' }));
 
-    expect(screen.getAllByRole('button', { name: 'workingPanel.review.title' })).toHaveLength(1);
-    expect(globalStore.setWorkingSidebarTab).toHaveBeenCalledWith('review');
+    expect(document.querySelectorAll('button[data-tab-key="review"]')).toHaveLength(1);
+    expect(globalStore.openWorkingSidebar).toHaveBeenCalledWith('review');
+  });
+
+  it('mounts Review only while its visible tab is active', () => {
+    agentStore.activeAgentId = 'agent';
+    reviewState.repoType = 'git';
+    reviewState.workingDirectory = '/repo';
+    localStorageState.openTabsByContext = { 'draft:agent:/repo': ['params', 'review'] };
+    globalStore.status.workingSidebarTab = 'params';
+
+    render(<AgentWorkingSidebar />);
+
+    expect(screen.queryByTestId('review')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'workingPanel.review.title' }));
+    expect(screen.getByTestId('review')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'settingModel.params.panel.tab' }));
+    expect(screen.queryByTestId('review')).not.toBeInTheDocument();
+  });
+
+  it('opens Skills and Documents by default for a new workspace context', () => {
+    localStorageState.openTabsByContext = {};
+    globalStore.status.workingSidebarTab = 'overview';
+
+    render(<AgentWorkingSidebar />);
+
+    const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('button[data-tab-key]'));
+    expect(tabs.map((tab) => tab.dataset.tabKey)).toEqual(['skills', 'documents']);
+    expect(tabs[0]).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('puts Files before Skills and Documents when a filesystem environment is available', () => {
+    agentStore.activeAgentId = 'agent';
+    effectiveConfig.agencyConfig = { executionTarget: 'local' };
+    reviewState.workingDirectory = '/repo';
+    localStorageState.openTabsByContext = {};
+    globalStore.status.workingSidebarTab = 'overview';
+
+    render(<AgentWorkingSidebar />);
+
+    const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('button[data-tab-key]'));
+    expect(tabs.map((tab) => tab.dataset.tabKey)).toEqual(['files', 'skills', 'documents']);
+    expect(tabs[0]).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('creates an independent browser tab every time Browser is chosen', async () => {
-    localStorageState.openTabsByContext = {};
-    globalStore.status.workingSidebarTab = 'overview';
+    localStorageState.openTabsByContext = { 'draft:default:none': ['params'] };
+    globalStore.status.workingSidebarTab = 'params';
 
     const { container } = render(<AgentWorkingSidebar />);
     fireEvent.click(screen.getByRole('button', { name: 'workingPanel.openMenu.title' }));
@@ -832,7 +941,7 @@ describe('AgentWorkingSidebar — tab strip', () => {
     fireEvent.click(
       screen
         .getAllByRole('button', { name: 'workingPanel.browser.title' })
-        .find((button) => !button.hasAttribute('aria-pressed'))!,
+        .find((button) => !button.dataset.tabKey)!,
     );
 
     await waitFor(() => {
@@ -869,6 +978,9 @@ describe('AgentWorkingSidebar — tab strip', () => {
       contextKey: expectedKey,
       writable: true,
     });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Review from Overview' }));
+    await waitFor(() => expect(screen.getByTestId('review')).toBeInTheDocument());
     expect(renderedReview.current?.composerTarget).toEqual({
       contextKey: expectedKey,
       writable: true,
@@ -897,6 +1009,9 @@ describe('AgentWorkingSidebar — tab strip', () => {
       reason: 'read-only',
       writable: false,
     });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Review from Overview' }));
+    await waitFor(() => expect(screen.getByTestId('review')).toBeInTheDocument());
     expect(renderedReview.current?.composerTarget).toEqual({
       reason: 'read-only',
       writable: false,
@@ -935,8 +1050,11 @@ describe('AgentWorkingSidebar — tab strip', () => {
   });
 
   it('moves focus to a tab opened from the grouped menu', async () => {
-    localStorageState.openTabsByContext = {};
-    globalStore.status.workingSidebarTab = 'overview';
+    agentStore.activeAgentId = 'agent';
+    reviewState.repoType = 'git';
+    reviewState.workingDirectory = '/repo';
+    localStorageState.openTabsByContext = { 'draft:agent:/repo': ['review'] };
+    globalStore.status.workingSidebarTab = 'review';
     globalStore.setWorkingSidebarTab.mockImplementation((tab: string) => {
       globalStore.status.workingSidebarTab = tab;
     });
@@ -969,6 +1087,42 @@ describe('AgentWorkingSidebar — tab strip', () => {
     expect(globalStore.setWorkingSidebarTab).toHaveBeenCalledWith('overview');
   });
 
+  it('still exposes empty workspace chrome after all tabs close and the panel reopens', () => {
+    agentStore.activeAgentId = 'agent';
+    reviewState.repoType = 'git';
+    reviewState.workingDirectory = '/repo';
+    localStorageState.openTabsByContext = { 'draft:agent:/repo': [] };
+    globalStore.status.workingSidebarTab = 'overview';
+    globalStore.status.showWorkingOverview = false;
+
+    render(<AgentWorkingSidebar />);
+
+    expect(rightPanel.current?.expand).toBe(true);
+    expect(screen.getByRole('button', { name: 'workingPanel.openMenu.title' })).toBeInTheDocument();
+  });
+
+  it('clears an optimistic active tab when the topic context changes', async () => {
+    chatStore.activeTopicId = 'topic-a';
+    localStorageState.openTabsByContext = {
+      'topic:topic-a': ['skills', 'params'],
+      'topic:topic-b': ['skills'],
+    };
+    globalStore.status.workingSidebarTab = 'skills';
+
+    const { rerender } = render(<AgentWorkingSidebar availableWidth={1000} />);
+    fireEvent.click(screen.getByRole('button', { name: 'settingModel.params.panel.tab' }));
+
+    chatStore.activeTopicId = 'topic-b';
+    globalStore.status.workingSidebarTab = 'skills';
+    rerender(<AgentWorkingSidebar availableWidth={1001} />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'workingPanel.resources.filter.skills' }),
+      ).toHaveAttribute('aria-pressed', 'true');
+    });
+  });
+
   it('collapses the panel when the last remaining tab is closed', () => {
     agentStore.activeAgentId = 'agent';
     reviewState.repoType = 'git';
@@ -977,28 +1131,32 @@ describe('AgentWorkingSidebar — tab strip', () => {
     globalStore.status.workingSidebarTab = 'review';
 
     render(<AgentWorkingSidebar />);
-    expect(
-      screen.queryByRole('button', { name: 'workingPanel.tabs.closePanel' }),
-    ).not.toBeInTheDocument();
-
     fireEvent.click(screen.getByRole('button', { name: 'workingPanel.tabs.close' }));
-    fireEvent.click(screen.getByRole('button', { name: 'workingPanel.tabs.closePanel' }));
 
     expect(globalStore.toggleRightPanel).toHaveBeenCalledWith(false);
   });
 
-  it('keeps the last tab closable from its context menu', () => {
+  it('keeps the independent Overview panel closable', () => {
     localStorageState.openTabsByContext = {};
     globalStore.status.workingSidebarTab = 'overview';
 
     render(<AgentWorkingSidebar />);
-    fireEvent.contextMenu(screen.getByRole('button', { name: 'workingPanel.overview.title' }));
-    fireEvent.click(screen.getByText('workingPanel.tabs.closePanel'));
+    fireEvent.click(screen.getByRole('button', { name: 'workingPanel.tabs.closePanel' }));
 
-    expect(globalStore.toggleRightPanel).toHaveBeenCalledWith(false);
+    expect(globalStore.updateSystemStatus).toHaveBeenCalledWith({ showWorkingOverview: false });
   });
 
-  it('leaves a pinned tab standing instead of collapsing the panel', () => {
+  it('does not show Overview beside a legacy persisted open workspace panel', () => {
+    globalStore.status.showRightPanel = true;
+    globalStore.status.showWorkingOverview = undefined;
+
+    render(<AgentWorkingSidebar />);
+
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+    expect(rightPanel.current?.expand).toBe(true);
+  });
+
+  it('lets the independent Overview close without removing pinned tabs', () => {
     agentStore.activeAgentId = 'agent';
     localStorageState.openTabsByContext = {};
     localStorageState.pinnedTabsByAgent = { agent: ['works'] };
@@ -1006,9 +1164,10 @@ describe('AgentWorkingSidebar — tab strip', () => {
 
     render(<AgentWorkingSidebar />);
 
-    expect(
-      screen.queryByRole('button', { name: 'workingPanel.tabs.closePanel' }),
-    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'workingPanel.tabs.closePanel' }));
+
+    expect(globalStore.updateSystemStatus).toHaveBeenCalledWith({ showWorkingOverview: false });
+    expect(localStorageState.pinnedTabsByAgent).toEqual({ agent: ['works'] });
   });
 
   it('reopens a closed tab when the same external target is requested again', async () => {
@@ -1026,24 +1185,24 @@ describe('AgentWorkingSidebar — tab strip', () => {
     globalStore.status.workingSidebarTabRequest = { nonce: 1, tab: 'review' };
     act(() => reviewState.setRepoType?.('git'));
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'workingPanel.review.title' })).toBeInTheDocument();
+      expect(document.querySelector('button[data-tab-key="review"]')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'workingPanel.tabs.close' }));
-    expect(
-      screen.queryByRole('button', { name: 'workingPanel.review.title' }),
-    ).not.toBeInTheDocument();
+    fireEvent.click(document.querySelector('button[data-tab-key="review"]')!.nextElementSibling!);
+    expect(document.querySelector('button[data-tab-key="review"]')).not.toBeInTheDocument();
 
     globalStore.status.workingSidebarTabRequest = { nonce: 2, tab: 'review' };
     act(() => reviewState.setRepoType?.('github'));
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'workingPanel.review.title' })).toBeInTheDocument();
+      expect(document.querySelector('button[data-tab-key="review"]')).toBeInTheDocument();
     });
   });
 
   it('offers Comments for a workspace topic and opens it in this panel', () => {
     workspace.id = 'workspace-1';
     chatStore.activeTopicId = 'topic-1';
+    localStorageState.openTabsByContext = { 'topic:topic-1': ['params'] };
+    globalStore.status.workingSidebarTab = 'params';
 
     render(<AgentWorkingSidebar />);
     fireEvent.click(screen.getByRole('button', { name: 'workingPanel.openMenu.title' }));
@@ -1055,6 +1214,9 @@ describe('AgentWorkingSidebar — tab strip', () => {
   });
 
   it('hides Comments when there is no workspace topic', () => {
+    localStorageState.openTabsByContext = { 'draft:default:none': ['params'] };
+    globalStore.status.workingSidebarTab = 'params';
+
     render(<AgentWorkingSidebar />);
     fireEvent.click(screen.getByRole('button', { name: 'workingPanel.openMenu.title' }));
 

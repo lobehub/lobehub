@@ -8,6 +8,8 @@
  * Consumed by both `default/models.ts` (Node) and `default/models.vite.ts` (Vite SPA).
  */
 export const lobeHubOnlineModelDescriptions = {
+  'lobehub.claude-fable-5-1.description':
+    'Stronger than Fable 5 on long-running coding and research — 55.8% on Terminal-Bench 4.0 versus 42.0%, at the same $10/$50 with cache reads at a quarter of the cost.',
   'lobehub.claude-fable-5.description':
     "Claude Fable 5 is the world's strongest model for demanding reasoning, long-horizon agentic work, and complex coding. It is also the most expensive model.",
   'lobehub.claude-haiku-4-5-20251001.description':
@@ -76,10 +78,14 @@ export const lobeHubOnlineModelDescriptions = {
     'Gemini 3.6 Flash balances speed with intelligence for strong agentic, coding, and multimodal performance with improved token efficiency.',
   'lobehub.gemini-3.7-flash.description':
     "Gemini 3.7 Flash is Google's most capable Flash model, built for complex coding, agentic workflows, and reliable multi-step execution.",
+  'lobehub.gemini-3.8-flash.description':
+    "Google's most intelligent Flash model, tuned for long-horizon coding and autonomous agents — faster first token and less verbose than 3.7 Flash at the same price.",
   'lobehub.glm-5.1.description':
     "Zai's latest flagship model, aligned with Claude Opus 4.6 on overall and coding capabilities. Excels at long-horizon tasks with autonomous work up to 8 hours, an ideal foundation for Autonomous Agents and long-horizon Coding Agents.",
   'lobehub.glm-5.2.description':
     'GLM-5.2 is the first open-source model to approach the performance of the latest-generation Claude Opus released in the same period.',
+  'lobehub.glm-5.3-flash.description':
+    'The first GLM-5 that can see — stronger than GLM-5.2, coding that approaches Opus 4.8, at about one-tenth the flagship price.',
   'lobehub.glm-5.3.description':
     "Z.ai's latest flagship. Same base as GLM-5.2 with scaled post-training — 50% stronger coding, open-source SOTA on Terminal Bench 3.0, and a large jump in cyber capability. Thinking is always on.",
   'lobehub.gpt-4-turbo.description':
@@ -172,10 +178,14 @@ export const lobeHubOnlineModelDescriptions = {
     'o3 is a strong all-round model that sets a new bar for math, science, programming, and visual reasoning. It excels at technical writing and instruction following, and can analyze text, code, and images for multi-step problems.',
   'lobehub.o4-mini.description':
     'o4-mini is the latest small o-series model, optimized for fast, effective reasoning with high efficiency in coding and vision tasks.',
+  'lobehub.ox-alpha.description':
+    'Ox Alpha has been revealed as GLM-5.3-Flash. Requests are automatically redirected to GLM-5.3-Flash.',
   'lobehub.qwen3.7-max.description':
     "Qwen3.7-Max is Alibaba Cloud's flagship agent-era model for complex coding, reasoning, office automation, and long-horizon autonomous workflows.",
   'lobehub.qwen3.7-plus.description':
     'Qwen3.7-Plus is a cost-effective multimodal model in the Qwen3.7 series, combining strong text capabilities with upgraded vision-language understanding for coding, tool use, GUI tasks, and productivity workflows.',
+  'lobehub.qwen3.8-max-0902.description':
+    'A free coding upgrade over Qwen3.8 Max at the same price — TerminalBench 3.0 more than doubles (11.3 → 29.0), tops the front-end CodeArena leaderboard, and beats Opus 5 on repo-level code understanding.',
   'lobehub.qwen3.8-max-preview.description':
     "Qwen3.8-Max-Preview is a preview of Alibaba's next-generation 2.4T-parameter flagship model, with major gains over Qwen3.7-Max in coding and professional productivity, and leading performance on complex long-horizon tasks such as full-stack development and data analysis.",
   'lobehub.qwen3.8-max.description':

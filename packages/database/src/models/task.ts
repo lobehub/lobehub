@@ -2,6 +2,7 @@ import type {
   CheckpointConfig,
   NewTask,
   TaskItem,
+  TaskSubtaskProgress,
   TaskVerifyConfig,
   WorkspaceData,
   WorkspaceDocNode,
@@ -28,13 +29,12 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { merge } from '@/utils/merge';
 
 import { documents } from '../schemas/file';
-import { goals } from '../schemas/goal';
 import type { NewTaskComment, TaskCommentItem } from '../schemas/task';
 import { taskComments, taskDependencies, taskDocuments, tasks, taskTopics } from '../schemas/task';
 import { topics } from '../schemas/topic';
 import { acceptances } from '../schemas/verify';
 import { works } from '../schemas/work';
-import type { LobeChatDatabase, Transaction } from '../type';
+import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
 export const isTaskIdentifierUniqueViolation = (error: unknown): boolean => {
@@ -103,20 +103,13 @@ const RUNNABLE_AUTOMATION = and(
   ),
 )!;
 
-/**
- * A goal task is one carrying a `goals` row as its execution subject. Ownership
- * is not re-checked inside the EXISTS — the outer query already scopes `tasks`,
- * and a goal always belongs to its carrier's owner.
- */
-const HAS_GOAL = sql`EXISTS (
-  SELECT 1 FROM ${goals}
-  WHERE ${goals.subjectType} = 'task' AND ${goals.subjectId} = ${tasks.id}
-)`;
-
 interface TaskListFilterOptions {
   assigneeAgentId?: string;
+  /** Only tasks assigned to this workspace member. */
+  assigneeUserId?: string;
   automated?: boolean;
-  hasGoal?: boolean;
+  /** Only tasks created by this user. */
+  createdByUserId?: string;
   parentTaskId?: string | null;
   projectId?: string;
   visibility?: 'private' | 'public';
@@ -134,6 +127,12 @@ interface TaskRunStats extends Record<string, unknown> {
   root_id: string;
   total_run_cost: number;
   total_run_duration: number;
+}
+
+interface TaskSubtaskProgressRow extends Record<string, unknown> {
+  completed: number;
+  root_id: string;
+  total: number;
 }
 
 export class TaskModel {
@@ -205,8 +204,9 @@ export class TaskModel {
 
   private buildListConditions = ({
     assigneeAgentId,
+    assigneeUserId,
     automated,
-    hasGoal,
+    createdByUserId,
     parentTaskId,
     projectId,
     visibility,
@@ -214,12 +214,12 @@ export class TaskModel {
     const conditions = [this.ownership()];
 
     if (assigneeAgentId) conditions.push(eq(tasks.assigneeAgentId, assigneeAgentId));
+    if (assigneeUserId) conditions.push(eq(tasks.assigneeUserId, assigneeUserId));
+    if (createdByUserId) conditions.push(eq(tasks.createdByUserId, createdByUserId));
     if (automated === true) conditions.push(RUNNABLE_AUTOMATION);
     // `IS NOT TRUE`, not `NOT (…)`: nullable automation fields make the
     // runnable expression NULL for manual tasks, and WHERE would drop them.
     if (automated === false) conditions.push(sql`${RUNNABLE_AUTOMATION} IS NOT TRUE`);
-    if (hasGoal === true) conditions.push(HAS_GOAL);
-    if (hasGoal === false) conditions.push(sql`NOT ${HAS_GOAL}`);
     if (projectId) conditions.push(eq(tasks.projectId, projectId));
     if (visibility) conditions.push(eq(tasks.visibility, visibility));
 
@@ -322,6 +322,20 @@ export class TaskModel {
       .where(and(inArray(tasks.id, ids), this.ownership()));
   }
 
+  async resolveMany(idsOrIdentifiers: string[]): Promise<TaskItem[]> {
+    if (idsOrIdentifiers.length === 0) return [];
+    const identifiers = idsOrIdentifiers.map((value) => value.toUpperCase());
+    return this.db
+      .select()
+      .from(tasks)
+      .where(
+        and(
+          or(inArray(tasks.id, idsOrIdentifiers), inArray(tasks.identifier, identifiers)),
+          this.ownership(),
+        ),
+      );
+  }
+
   // Resolve id or identifier (e.g. 'T-1') to a task
   async resolve(idOrIdentifier: string): Promise<TaskItem | null> {
     if (idOrIdentifier.startsWith('task_')) return this.findById(idOrIdentifier);
@@ -360,39 +374,12 @@ export class TaskModel {
    * to render as "resource deleted" from its version snapshot. See.
    */
   async delete(id: string): Promise<boolean> {
-    // The goal carried by this task has no FK on the polymorphic subject link,
-    // so its row must be swept explicitly — in the same transaction, or a
-    // failure between the two statements would orphan it.
-    return this.db.transaction(async (tx) => {
-      const deleted = await tx
-        .delete(tasks)
-        .where(and(eq(tasks.id, id), this.ownership()))
-        .returning({ id: tasks.id });
+    const deleted = await this.db
+      .delete(tasks)
+      .where(and(eq(tasks.id, id), this.ownership()))
+      .returning({ id: tasks.id });
 
-      if (deleted.length > 0) await this.deleteGoalsOfTasks([id], tx);
-
-      return deleted.length > 0;
-    });
-  }
-
-  /** Sweep the goals bound to the given (already deleted) tasks. */
-  private async deleteGoalsOfTasks(
-    taskIds: string[],
-    tx: LobeChatDatabase | Transaction = this.db,
-  ) {
-    if (taskIds.length === 0) return;
-    await tx
-      .delete(goals)
-      .where(
-        and(
-          eq(goals.subjectType, 'task'),
-          inArray(goals.subjectId, taskIds),
-          buildWorkspaceWhere(
-            { userId: this.userId, workspaceId: this.workspaceId },
-            { userId: goals.userId, workspaceId: goals.workspaceId },
-          ),
-        ),
-      );
+    return deleted.length > 0;
   }
 
   /**
@@ -560,16 +547,8 @@ export class TaskModel {
       ? and(this.ownership(), eq(tasks.createdByUserId, this.userId))
       : this.ownership();
 
-    // One transaction so the FK-less goals rows can never outlive their
-    // swept carriers (see deleteGoalsOfTasks).
-    return this.db.transaction(async (tx) => {
-      const result = await tx.delete(tasks).where(where).returning({ id: tasks.id });
-      await this.deleteGoalsOfTasks(
-        result.map(({ id }) => id),
-        tx,
-      );
-      return result.length;
-    });
+    const result = await this.db.delete(tasks).where(where).returning({ id: tasks.id });
+    return result.length;
   }
 
   /** Delete a task and every descendant in one transaction. */
@@ -590,7 +569,6 @@ export class TaskModel {
             ),
           ),
         );
-      await this.deleteGoalsOfTasks(taskIds, tx);
       const result = await tx
         .delete(tasks)
         .where(and(inArray(tasks.id, taskIds), this.ownership()))
@@ -605,7 +583,7 @@ export class TaskModel {
   async groupList(
     options: TaskListFilterOptions & {
       excludeStatuses?: string[];
-      groupBy?: 'assignee' | 'priority';
+      groupBy?: 'agent' | 'assignee' | 'member' | 'priority';
       groups?: Array<{
         key: string;
         limit?: number;
@@ -696,10 +674,10 @@ export class TaskModel {
         tasksByAssignee.set(groupKey, groupTasks);
       }
 
-      // Keep an empty Unassigned column as a stable drop target even when every
-      // current task already has an owner. Other assignees are data-derived;
-      // showing every agent as an empty column would make large workspaces
-      // unusable without a separate "show empty columns" control.
+      // `assignee` is the released hybrid grouping contract: agents take
+      // precedence, member-only tasks get their own user group, and only tasks
+      // with neither assignee are unassigned. New clients use `agent` for the
+      // agent-only board instead of changing this existing API in place.
       if (!assigneeAgentId && !assigneeCounts.has('assignee:unassigned')) {
         assigneeCounts.set('assignee:unassigned', 0);
       }
@@ -723,6 +701,81 @@ export class TaskModel {
           : isUnassigned
             ? [and(isNull(tasks.assigneeAgentId), isNull(tasks.assigneeUserId))!]
             : [eq(tasks.assigneeAgentId, groupAssigneeAgentId!)];
+
+        return {
+          assigneeAgentId: groupAssigneeAgentId,
+          assigneeUserId: groupAssigneeUserId,
+          conditions,
+          key,
+          limit,
+          offset: 0,
+          prefetchedTasks: tasksByAssignee.get(key) ?? [],
+          total,
+        };
+      });
+    } else if (groupBy === 'agent' || groupBy === 'member') {
+      const limit = 50;
+      const groupColumn = groupBy === 'agent' ? tasks.assigneeAgentId : tasks.assigneeUserId;
+      const groupPrefix = groupBy === 'agent' ? 'assignee:' : 'member:';
+      const unassignedKey = `${groupPrefix}unassigned`;
+      const assigneeGroupKey = sql<string>`case
+        when ${groupColumn} is not null then ${groupPrefix} || ${groupColumn}
+        else ${unassignedKey}
+      end`;
+      const rankedTasks = this.db
+        .select({
+          ...getTableColumns(tasks),
+          assigneeGroupKey: assigneeGroupKey.as('assignee_group_key'),
+          groupRank:
+            sql<number>`row_number() over (partition by ${assigneeGroupKey} order by ${tasks.createdAt} desc)`.as(
+              'group_rank',
+            ),
+        })
+        .from(tasks)
+        .where(and(...baseConditions))
+        .as('ranked_assignee_tasks');
+      const [countResult, rankedTaskRows] = await Promise.all([
+        this.db
+          .select({
+            assigneeId: groupColumn,
+            count: sql<number>`count(*)`,
+          })
+          .from(tasks)
+          .where(and(...baseConditions))
+          .groupBy(groupColumn),
+        this.db
+          .select()
+          .from(rankedTasks)
+          .where(sql`${rankedTasks.groupRank} <= ${limit}`)
+          .orderBy(rankedTasks.assigneeGroupKey, rankedTasks.groupRank),
+      ]);
+      const assigneeCounts = new Map(
+        countResult.map((row) => [
+          row.assigneeId ? `${groupPrefix}${row.assigneeId}` : unassignedKey,
+          Number(row.count),
+        ]),
+      );
+      const tasksByAssignee = new Map<string, TaskItem[]>();
+      for (const row of rankedTaskRows) {
+        const { assigneeGroupKey: groupKey, groupRank: _groupRank, ...task } = row;
+        const groupTasks = tasksByAssignee.get(groupKey) ?? [];
+        groupTasks.push(task);
+        tasksByAssignee.set(groupKey, groupTasks);
+      }
+
+      // Keep an empty Unassigned column as a stable drop target. Agent-scoped
+      // boards omit the Agent-unassigned column because their base filter
+      // guarantees one assignee, while Member grouping remains independent.
+      if ((groupBy === 'member' || !assigneeAgentId) && !assigneeCounts.has(unassignedKey)) {
+        assigneeCounts.set(unassignedKey, 0);
+      }
+
+      groupQueries = [...assigneeCounts.entries()].map(([key, total]) => {
+        const isUnassigned = key === unassignedKey;
+        const assigneeId = isUnassigned ? null : key.slice(groupPrefix.length);
+        const groupAssigneeAgentId = groupBy === 'agent' ? assigneeId : undefined;
+        const groupAssigneeUserId = groupBy === 'member' ? assigneeId : undefined;
+        const conditions = [isUnassigned ? isNull(groupColumn) : eq(groupColumn, assigneeId!)];
 
         return {
           assigneeAgentId: groupAssigneeAgentId,
@@ -860,9 +913,9 @@ export class TaskModel {
     const taskIds = Array.from(
       new Set(results.flatMap((group) => group.tasks.map(({ id }) => id))),
     );
-    const [runStats, goalByTaskId] = await Promise.all([
+    const [runStats, subtaskProgressByTaskId] = await Promise.all([
       this.runStatsByTaskIds(taskIds),
-      this.goalsByTaskIds(taskIds),
+      this.subtaskProgressByTaskIds(taskIds),
     ]);
     const runStatsByTaskId = new Map(
       runStats.map((stats) => [
@@ -878,23 +931,11 @@ export class TaskModel {
       ...group,
       tasks: group.tasks.map((task) => ({
         ...task,
-        goal: goalByTaskId.get(task.id) ?? null,
+        subtaskProgress: subtaskProgressByTaskId.get(task.id),
         totalRunCost: runStatsByTaskId.get(task.id)?.totalRunCost ?? 0,
         totalRunDuration: runStatsByTaskId.get(task.id)?.totalRunDuration ?? 0,
       })),
     }));
-  }
-
-  /** The goal entities carried by the given tasks, keyed by task id. */
-  private async goalsByTaskIds(taskIds: string[]) {
-    if (taskIds.length === 0) return new Map<string, typeof goals.$inferSelect>();
-
-    const rows = await this.db
-      .select()
-      .from(goals)
-      .where(and(eq(goals.subjectType, 'task'), inArray(goals.subjectId, taskIds)));
-
-    return new Map(rows.map((row) => [row.subjectId!, row]));
   }
 
   private async runStatsByTaskIds(taskIds: string[]): Promise<TaskRunStats[]> {
@@ -928,6 +969,40 @@ export class TaskModel {
     return result.rows;
   }
 
+  private async subtaskProgressByTaskIds(
+    taskIds: string[],
+  ): Promise<Map<string, TaskSubtaskProgress>> {
+    if (taskIds.length === 0) return new Map();
+
+    const result = await this.db.execute<TaskSubtaskProgressRow>(sql`
+      WITH RECURSIVE task_tree AS (
+        SELECT ${tasks.id} AS root_id, ${tasks.id} AS task_id, ${tasks.status} AS status
+        FROM ${tasks}
+        WHERE ${inArray(tasks.id, taskIds)} AND ${this.ownership()}
+        UNION ALL
+        SELECT task_tree.root_id, child.id, child.status
+        FROM ${tasks} child
+        JOIN task_tree ON child.parent_task_id = task_tree.task_id
+        WHERE ${this.ownershipSql('child')}
+      )
+      SELECT
+        task_tree.root_id,
+        count(*) filter (
+          where task_tree.task_id <> task_tree.root_id and task_tree.status = 'completed'
+        ) AS completed,
+        count(*) filter (where task_tree.task_id <> task_tree.root_id) AS total
+      FROM task_tree
+      GROUP BY task_tree.root_id
+    `);
+
+    return new Map(
+      result.rows.map((progress) => [
+        progress.root_id,
+        { completed: Number(progress.completed), total: Number(progress.total) },
+      ]),
+    );
+  }
+
   async list(options: TaskListOptions = {}): Promise<{ tasks: TaskItem[]; total: number }> {
     const { statuses, priorities, limit = 50, offset = 0, orderBy = 'createdAt' } = options;
 
@@ -951,8 +1026,17 @@ export class TaskModel {
       .limit(limit)
       .offset(offset);
     const [countResult, taskList] = await Promise.all([countQuery, taskListQuery]);
+    const subtaskProgressByTaskId = await this.subtaskProgressByTaskIds(
+      taskList.map(({ id }) => id),
+    );
 
-    return { tasks: taskList, total: Number(countResult[0].count) };
+    return {
+      tasks: taskList.map((task) => ({
+        ...task,
+        subtaskProgress: subtaskProgressByTaskId.get(task.id),
+      })),
+      total: Number(countResult[0].count),
+    };
   }
 
   /**
@@ -1633,6 +1717,15 @@ export class TaskModel {
       .insert(taskComments)
       .values({ ...data, visibility, workspaceId: this.workspaceId ?? null })
       .returning();
+    return comment;
+  }
+
+  async findCommentById(id: string): Promise<TaskCommentItem | undefined> {
+    const [comment] = await this.db
+      .select()
+      .from(taskComments)
+      .where(and(eq(taskComments.id, id), this.commentsOwnership()))
+      .limit(1);
     return comment;
   }
 

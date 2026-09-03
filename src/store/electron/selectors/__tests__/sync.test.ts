@@ -1,11 +1,16 @@
 import { OFFICIAL_URL } from '@lobechat/const';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import type { ElectronState } from '../../initialState';
+import { type ElectronState, initialState } from '../../initialState';
 import { electronSyncSelectors } from '../sync';
 
 const stateWith = (dataSyncConfig: ElectronState['dataSyncConfig']) =>
   ({ dataSyncConfig }) as ElectronState;
+
+const withConfig = (dataSyncConfig: ElectronState['dataSyncConfig']): ElectronState => ({
+  ...initialState,
+  dataSyncConfig,
+});
 
 const originalCloudServer = process.env.OFFICIAL_CLOUD_SERVER;
 
@@ -47,5 +52,31 @@ describe('electronSyncSelectors.remoteServerUrl', () => {
 
   it('returns an empty string for self-host with nothing configured', () => {
     expect(electronSyncSelectors.remoteServerUrl(stateWith({ storageMode: 'selfHost' }))).toBe('');
+  });
+});
+
+describe('electronSyncSelectors.isOfficialServer', () => {
+  it('is official in cloud mode regardless of remoteServerUrl', () => {
+    expect(
+      electronSyncSelectors.isOfficialServer(
+        withConfig({ remoteServerUrl: 'http://localhost:3210', storageMode: 'cloud' }),
+      ),
+    ).toBe(true);
+  });
+
+  it('is official when self-hosting on a lobehub.com origin', () => {
+    expect(
+      electronSyncSelectors.isOfficialServer(
+        withConfig({ remoteServerUrl: 'https://lobehub.com', storageMode: 'selfHost' }),
+      ),
+    ).toBe(true);
+  });
+
+  it('is not official for a third-party self-hosted server', () => {
+    expect(
+      electronSyncSelectors.isOfficialServer(
+        withConfig({ remoteServerUrl: 'https://chat.example.com', storageMode: 'selfHost' }),
+      ),
+    ).toBe(false);
   });
 });

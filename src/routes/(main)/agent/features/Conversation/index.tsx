@@ -1,20 +1,13 @@
-import { isDesktop } from '@lobechat/const';
 import { Flexbox, TooltipGroup } from '@lobehub/ui';
-import React, { memo, Suspense, useCallback } from 'react';
+import React, { memo, Suspense } from 'react';
 
-import DragUploadZone, { type DroppedLocalPath, useUploadFiles } from '@/components/DragUploadZone';
+import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
 import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
-import { insertLocalPathTags } from '@/features/ChatInput/InputEditor/insertLocalFileTags';
 import { useAgentContext } from '@/features/Conversation/useAgentContext';
+import { useLocalPathReference } from '@/features/Conversation/useLocalPathReference';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
-import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useAgentStore } from '@/store/agent';
-import {
-  agentByIdSelectors,
-  builtinAgentSelectors,
-  chatConfigByIdSelectors,
-} from '@/store/agent/selectors';
-import { useChatStore } from '@/store/chat';
+import { agentByIdSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 
 import ConversationArea from './ConversationArea';
 
@@ -29,10 +22,6 @@ const ChatConversation = memo(() => {
   const { agentId, topicId } = useAgentContext();
   const model = useAgentStore(agentByIdSelectors.getAgentModelById(agentId));
   const provider = useAgentStore(agentByIdSelectors.getAgentModelProviderById(agentId));
-  const isHeterogeneous = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
-  const isLocalSystemEnabled = useAgentStore(
-    chatConfigByIdSelectors.isLocalSystemEnabledById(agentId),
-  );
 
   // Drag-drop upload bypasses the (view-only-disabled) input editor, so the
   // drop zone itself follows the same per-resource General-access rules as the
@@ -46,16 +35,7 @@ const ChatConversation = memo(() => {
   const { canUseResource } = useResourceAccess('agent', gatedResourceId);
 
   const { handleUploadFiles } = useUploadFiles({ agentId, model, provider });
-  const workingDirectory = useEffectiveWorkingDirectory(agentId, { topicId });
-
-  const enableLocalPathReference =
-    isDesktop && !!workingDirectory && (isHeterogeneous || isLocalSystemEnabled);
-
-  const handleLocalPaths = useCallback((paths: DroppedLocalPath[]) => {
-    const editor = useChatStore.getState().mainInputEditor?.instance;
-    if (!editor) return;
-    insertLocalPathTags(editor, paths);
-  }, []);
+  const { enableLocalPathReference, handleLocalPaths } = useLocalPathReference(agentId, topicId);
 
   const content = (
     <Flexbox flex={1} height={'100%'} style={{ minWidth: 0 }}>

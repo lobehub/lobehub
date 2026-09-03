@@ -3,9 +3,12 @@
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import { Outlet } from 'react-router';
+import { SWRConfig } from 'swr';
 
+import SuspenseRouteBoundary from '@/components/SuspenseRouteBoundary';
 import Footer from '@/features/Setting/Footer';
 import WideScreenContainer from '@/features/WideScreenContainer';
+import { RouteSkeletonChromeProvider } from '@/spa/router/routeSkeletonChrome';
 
 import { MAX_WIDTH, SCROLL_PARENT_ID } from '../../features/const';
 import Header from './Header';
@@ -35,7 +38,13 @@ const DesktopDiscoverDetailLayout = memo(() => {
             position: 'relative',
           }}
         >
-          <Outlet />
+          <SWRConfig value={{ suspense: true }}>
+            <SuspenseRouteBoundary>
+              <RouteSkeletonChromeProvider>
+                <Outlet />
+              </RouteSkeletonChromeProvider>
+            </SuspenseRouteBoundary>
+          </SWRConfig>
           <div className={styles.spacer} />
           <Footer />
         </WideScreenContainer>

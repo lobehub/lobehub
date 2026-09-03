@@ -10,6 +10,12 @@ import { createEditorFileUploadTracker } from './editorFileUploadTracker';
 import InternalEditor from './InternalEditor';
 import { LinearFileCard } from './LinearFilePlugin';
 
+vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
+    <button aria-label={title} type="button" onClick={onClick} />
+  ),
+}));
+
 const editorProps = vi.hoisted(() => ({
   last: undefined as any,
 }));

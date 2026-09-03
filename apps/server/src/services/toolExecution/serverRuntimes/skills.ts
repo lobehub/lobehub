@@ -182,6 +182,9 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   ): Promise<{ command: string; error?: string }> => {
     const workspaceId =
       this.workspaceId ?? (isLhCommand(command) ? await this.resolveWorkspaceId() : undefined);
+    // No `shareVisitorBlocked` guard needed here: `lobe-skills` is absent from
+    // `AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS`, so this runtime is never
+    // constructed for an Agent Share visitor's run in the first place.
     const result = await preprocessLhCommand(command, this.userId, workspaceId);
 
     return { command: result.command, error: result.error };

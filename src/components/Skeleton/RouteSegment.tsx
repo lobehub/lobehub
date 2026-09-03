@@ -2,6 +2,7 @@
 
 import { useLocation } from 'react-router';
 
+import { useRouteSkeletonChrome } from '@/spa/router/routeSkeletonChrome';
 import { useRouteSkeleton } from '@/spa/router/useRouteSkeleton';
 
 import AppsSkeleton from './Apps';
@@ -37,16 +38,18 @@ const isConversationPath = (pathname: string) => {
 
 const RouteSegmentSkeleton = () => {
   const Skeleton = useRouteSkeleton();
+  const chrome = useRouteSkeletonChrome();
   const { pathname } = useLocation();
   const segments = pathname.split('/').filter(Boolean);
 
-  if (Skeleton) return <Skeleton />;
-  if (pathname.startsWith('/settings/')) return <SettingsPageSkeleton />;
+  if (Skeleton) return <Skeleton chrome={chrome} />;
+  // `settings` at any depth: workspace settings live at /:slug/settings/*
+  if (segments.includes('settings')) return <SettingsPageSkeleton chrome={chrome} />;
   if (segments[0] === 'apps') return <AppsSkeleton />;
   if (isConversationPath(pathname)) return <ConversationLayoutSkeleton />;
-  if (segments[0] === 'memory' && segments.length === 1) return <MemorySkeleton />;
+  if (segments[0] === 'memory' && segments.length === 1) return <MemorySkeleton chrome={chrome} />;
 
-  return <SurfaceSkeleton variant={getSurfaceVariant(pathname)} />;
+  return <SurfaceSkeleton header={chrome !== 'body'} variant={getSurfaceVariant(pathname)} />;
 };
 
 export default RouteSegmentSkeleton;

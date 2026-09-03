@@ -53,7 +53,7 @@ export async function finalizeAbandoned(c: Context): Promise<Response> {
     // being swallowed behind a 200: a 200 here would falsely report the parent
     // as handled while it stays parked forever.
     if (result.subAgentResume) {
-      const { parentOperationId, threadId, toolMessageId, userId, workspaceId } =
+      const { parentOperationId, streamOwnerUserId, threadId, toolMessageId, userId, workspaceId } =
         result.subAgentResume;
       // Child reached a terminal failure (watchdog kill) → the bridge backfills
       // the parent's tool slot with an error note rather than a stub answer.
@@ -74,7 +74,14 @@ export async function finalizeAbandoned(c: Context): Promise<Response> {
         // No durable queue configured: run the CAS-guarded, idempotent bridge
         // inline through AiAgentService so the runtime's models stay
         // workspace-scoped.
-        const aiAgentService = new AiAgentService(serverDB, userId, { workspaceId });
+        // Mirror the queue-mode `subagent-callback`: opt into visitor rows only
+        // when the parent op is a shared-agent visitor run (surfaced via
+        // `streamOwnerUserId`). Ordinary creator runs keep the default
+        // exclusion.
+        const aiAgentService = new AiAgentService(serverDB, userId, {
+          includeShareVisitor: Boolean(streamOwnerUserId),
+          workspaceId,
+        });
         const won = await aiAgentService.completeSubAgentBridge(bridgeBody);
         log(
           '[%s] resumed parent %s inline (local mode, won=%s)',

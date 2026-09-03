@@ -306,4 +306,63 @@ describe('ToolMessageReorder', () => {
       },
     ]);
   });
+
+  // Regression: MessageContentProcessor turns a tool result that produced an
+  // image into multimodal parts for vision models. The old string-only guard
+  // here replaced those parts with the synthetic "Tool call failed" payload, so
+  // a successful `readFile` on a screenshot reached the model as a failure and
+  // the image was dropped from the request.
+  it('should keep multimodal tool result parts produced for vision models', async () => {
+    const proc = new ToolMessageReorder();
+    const multimodalContent = [
+      { text: '[Image: screenshot.png]', type: 'text' },
+      {
+        image_url: { detail: 'auto', url: 'https://app.lobehub.com/f/file_abc' },
+        type: 'image_url',
+      },
+    ];
+    const ctx = createContext([
+      {
+        id: 'a1',
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          { function: { arguments: '{}', name: 'readFile' }, id: 'call_1', type: 'function' },
+        ],
+      },
+      {
+        id: 't1',
+        role: 'tool',
+        content: multimodalContent,
+        tool_call_id: 'call_1',
+      },
+    ]);
+
+    const result = await proc.process(ctx);
+
+    expect(result.messages[1].content).toEqual(multimodalContent);
+  });
+
+  it('should fall back to the synthetic failure when tool content is empty or unusable', async () => {
+    const proc = new ToolMessageReorder();
+    const ctx = createContext([
+      {
+        id: 'a1',
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          { function: { arguments: '{}', name: 'readFile' }, id: 'call_1', type: 'function' },
+          { function: { arguments: '{}', name: 'readFile' }, id: 'call_2', type: 'function' },
+        ],
+      },
+      { id: 't1', role: 'tool', content: [], tool_call_id: 'call_1' },
+      { id: 't2', role: 'tool', content: undefined, tool_call_id: 'call_2' },
+    ]);
+
+    const result = await proc.process(ctx);
+
+    const failure = JSON.stringify({ error: 'Tool call failed', success: false, synthetic: true });
+    expect(result.messages[1].content).toBe(failure);
+    expect(result.messages[2].content).toBe(failure);
+  });
 });

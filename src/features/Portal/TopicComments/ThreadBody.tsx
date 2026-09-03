@@ -1,5 +1,5 @@
-import { Center, Empty, Flexbox, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Center, Empty, Flexbox } from '@lobehub/ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
 import { MessageCircle } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -74,7 +74,11 @@ const ThreadBody = memo(() => {
     ).find((element) => element.dataset.topicCommentId === view.focusCommentId);
     if (!target) return;
 
-    requestAnimationFrame(() => target.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+    // Honor reduced motion: jump to the comment instead of gliding.
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    requestAnimationFrame(() =>
+      target.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' }),
+    );
   }, [focusedReply.data, replies.items, root.data, view?.focusCommentId]);
 
   if (!view) return null;

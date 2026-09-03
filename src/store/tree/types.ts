@@ -12,6 +12,12 @@ export interface TreeItem {
   isFolder: boolean;
   metadata?: Record<string, any>;
   name: string;
+  /**
+   * Parent folder id when the source row knows it (optimistic creates, rows the
+   * server returns with a parent). Lets `reconcile` drop a row the Explorer is
+   * holding for another folder; `undefined` means unknown and is kept.
+   */
+  parentId?: string | null;
   /** Byte size for file nodes — drives the push modal's oversize pre-warning. */
   size?: number;
   slug?: string | null;

@@ -259,7 +259,20 @@ export const aiProviderRouter = router({
           state.enabledAiModels.filter((model) => model.providerId === input.id),
           userEmail,
         )
-      ).map(({ id, providerId, type }) => ({ id, providerId, type }));
+      ).map(
+        ({ abilities, contextWindowTokens, displayName, id, maxOutput, providerId, type }) => ({
+          abilities: {
+            reasoning: abilities.reasoning,
+            vision: abilities.vision,
+          },
+          contextWindowTokens,
+          displayName,
+          id,
+          maxOutput,
+          providerId,
+          type,
+        }),
+      );
 
       if (ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes)) {
         return {

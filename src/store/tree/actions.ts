@@ -1,11 +1,29 @@
 import { CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
+import { mutate } from 'swr';
 
+import { resourceKeys } from '@/libs/swr/keys';
 import { fileService } from '@/services/file';
 import { resourceService } from '@/services/resource';
 import type { StoreSetter } from '@/store/types';
 import { OptimisticEngine } from '@/store/utils/optimisticEngine';
 
 import type { TreeDataState, TreeItem, TreeState, TreeStoreHandle } from './types';
+
+/**
+ * The library sidebar swaps the tree for a flat search list while a query is
+ * typed; its rows reuse the tree's rename/move/delete actions. Those actions
+ * only know the affected folder, so every tree revalidation also refreshes the
+ * hierarchy-scoped search caches or a renamed/deleted hit would linger there.
+ */
+export const revalidateHierarchySearch = () =>
+  mutate(
+    (key) =>
+      Array.isArray(key) &&
+      key[0] === resourceKeys.search.root &&
+      (key[1] as { scope?: string } | undefined)?.scope === 'hierarchy',
+    async (currentData) => currentData,
+    { revalidate: true },
+  );
 
 export const sortTreeItems = <T extends TreeItem>(items: T[]): T[] => {
   return [...items].sort((a, b) => {
@@ -21,6 +39,7 @@ export const toTreeItem = (item: {
   id: string;
   metadata?: Record<string, any> | null;
   name: string;
+  parentId?: string | null;
   size?: number | null;
   slug?: string | null;
   sourceType?: string;
@@ -34,6 +53,7 @@ export const toTreeItem = (item: {
   isFolder: item.fileType === CUSTOM_FOLDER_FILE_TYPE,
   metadata: item.metadata ?? undefined,
   name: item.name,
+  parentId: item.parentId,
   size: item.size ?? undefined,
   slug: item.slug,
   sourceType: item.sourceType,
@@ -68,7 +88,46 @@ export class TreeActionImpl {
     return this.#engine;
   };
 
+  /**
+   * Folders whose refresh was requested while a fetch for them was already in
+   * flight. That fetch captured its snapshot before the change the caller is
+   * revealing (a create from the sidebar "+" during the initial root load, a
+   * move landing while the destination is still loading), so dropping the
+   * request would leave the new row out of the tree until something else
+   * refreshed it. One follow-up runs once the in-flight fetch settles; repeated
+   * requests collapse into that one.
+   */
+  #queuedRevalidate = new Set<string>();
+
+  #runQueuedRevalidate = (folderId: string) => {
+    if (!this.#queuedRevalidate.delete(folderId)) return;
+    void this.revalidate(folderId);
+  };
+
+  /**
+   * `children` is keyed by folder id, but the explorer addresses the current
+   * folder by whatever the URL carries — usually the folder slug (see
+   * `useFileStore.queryParams.parentId`). Writing under the slug leaves the
+   * sidebar (which walks by id) blind to the update, so map a slug back to the
+   * id of the already-loaded folder node. Unknown keys pass through unchanged.
+   *
+   * The loaded node wins over an existing `children[key]` entry: the explorer's
+   * first list for a deep-linked folder arrives before its ancestors are
+   * loaded and lands under the slug, and that stale entry must not keep every
+   * later update pinned to the slug once the folder node is known.
+   */
+  #resolveFolderKey = (key: string): string => {
+    if (!key) return '';
+    const { children } = this.#get();
+    for (const items of Object.values(children)) {
+      const match = items.find((item) => item.isFolder && (item.id === key || item.slug === key));
+      if (match) return match.id;
+    }
+    return key;
+  };
+
   init = (knowledgeBaseId: string) => {
+    this.#queuedRevalidate.clear();
     this.#set(
       {
         children: {},
@@ -85,6 +144,7 @@ export class TreeActionImpl {
   };
 
   reset = () => {
+    this.#queuedRevalidate.clear();
     this.#set(
       {
         children: {},
@@ -142,6 +202,7 @@ export class TreeActionImpl {
         false,
         'tree/loadChildren/success',
       );
+      this.#runQueuedRevalidate(folderId);
     } catch (error) {
       if (this.#get().epoch !== epoch) return;
       console.error(`Failed to load children for ${folderId}:`, error);
@@ -156,12 +217,19 @@ export class TreeActionImpl {
         false,
         'tree/loadChildren/error',
       );
+      this.#runQueuedRevalidate(folderId);
     }
   };
 
-  revalidate = async (folderId: string) => {
+  revalidate = async (folderKey: string) => {
+    void revalidateHierarchySearch();
+
+    const folderId = this.#resolveFolderKey(folderKey);
     const { epoch, knowledgeBaseId, status } = this.#get();
-    if (status[folderId] === 'loading') return;
+    if (status[folderId] === 'loading' || status[folderId] === 'revalidating') {
+      this.#queuedRevalidate.add(folderId);
+      return;
+    }
 
     this.#set(
       { status: { ...this.#get().status, [folderId]: 'revalidating' } },
@@ -189,6 +257,7 @@ export class TreeActionImpl {
         false,
         'tree/revalidate/success',
       );
+      this.#runQueuedRevalidate(folderId);
     } catch {
       if (this.#get().epoch !== epoch) return;
       this.#set(
@@ -196,13 +265,22 @@ export class TreeActionImpl {
         false,
         'tree/revalidate/error',
       );
+      this.#runQueuedRevalidate(folderId);
     }
   };
 
-  reconcile = (folderId: string, items: TreeItem[]) => {
+  reconcile = (folderKey: string, items: TreeItem[]) => {
+    const folderId = this.#resolveFolderKey(folderKey);
+    // The explorer list can hold a row just created for ANOTHER folder (a folder
+    // row's "+" while a different folder is open): it cannot tell without the
+    // open folder's id, but the row's own parentId can. Rows with no parentId
+    // are the server's and are kept as they are.
+    const scoped = items.filter(
+      (item) => item.parentId == null || item.parentId === (folderId || null),
+    );
     this.#set(
       {
-        children: { ...this.#get().children, [folderId]: sortTreeItems(items) },
+        children: { ...this.#get().children, [folderId]: sortTreeItems(scoped) },
         status: { ...this.#get().status, [folderId]: 'idle' },
       },
       false,
@@ -223,6 +301,21 @@ export class TreeActionImpl {
     );
 
     if (this.#get().epoch !== epoch) return;
+  };
+
+  /**
+   * Refresh the touched folders from the server once every queued mutation has
+   * settled, so a revalidation never overwrites another move's optimistic rows.
+   *
+   * Must run AFTER `tx.commit()` resolves, never inside `tx.onSuccess`: the
+   * engine only marks a mutation done after its onSuccess returns, so a
+   * `flush()` awaited there waits for itself. The transaction then never
+   * settled, the sidebar never revalidated, and every later mutation touching
+   * the same folders queued behind the stuck one without reaching the server.
+   */
+  #revalidateSettled = async (folderKeys: string[]) => {
+    await this.#getEngine().flush();
+    void Promise.all(folderKeys.map((key) => this.revalidate(key)));
   };
 
   moveItem = async (itemId: string, fromParent: string, toParent: string): Promise<void> => {
@@ -251,7 +344,13 @@ export class TreeActionImpl {
       draft.children[fromParent] = (draft.children[fromParent] ?? []).filter(
         (i) => i.id !== itemId,
       );
-      draft.children[toParent] = sortTreeItems([...(draft.children[toParent] ?? []), item]);
+      // Only a loaded destination gets the row. Seeding an unloaded folder with
+      // just the moved item would make its first expand skip the fetch and show
+      // that lone row as the whole folder; the post-commit revalidate fills it.
+      const target = draft.children[toParent];
+      if (target) {
+        draft.children[toParent] = sortTreeItems([...target.filter((i) => i.id !== itemId), item]);
+      }
     });
 
     tx.mutation = async () => {
@@ -268,12 +367,8 @@ export class TreeActionImpl {
       }
     };
 
-    tx.onSuccess = async () => {
-      await engine.flush();
-      void Promise.all([this.revalidate(fromParent), this.revalidate(toParent)]);
-    };
-
     await tx.commit();
+    await this.#revalidateSettled([fromParent, toParent]);
   };
 
   moveItems = async (itemIds: string[], fromParent: string, toParent: string): Promise<void> => {
@@ -289,7 +384,13 @@ export class TreeActionImpl {
       draft.children[fromParent] = (draft.children[fromParent] ?? []).filter(
         (i) => !idsSet.has(i.id),
       );
-      draft.children[toParent] = sortTreeItems([...(draft.children[toParent] ?? []), ...items]);
+      const target = draft.children[toParent];
+      if (target) {
+        draft.children[toParent] = sortTreeItems([
+          ...target.filter((i) => !idsSet.has(i.id)),
+          ...items,
+        ]);
+      }
     });
 
     tx.mutation = async () => {
@@ -319,12 +420,8 @@ export class TreeActionImpl {
       }
     };
 
-    tx.onSuccess = async () => {
-      await engine.flush();
-      void Promise.all([this.revalidate(fromParent), this.revalidate(toParent)]);
-    };
-
     await tx.commit();
+    await this.#revalidateSettled([fromParent, toParent]);
   };
 
   renameItem = async (itemId: string, parentId: string, newName: string): Promise<void> => {
@@ -344,12 +441,8 @@ export class TreeActionImpl {
       await useFileStore.getState().refreshFileList();
     };
 
-    tx.onSuccess = async () => {
-      await engine.flush();
-      void this.revalidate(parentId);
-    };
-
     await tx.commit();
+    await this.#revalidateSettled([parentId]);
   };
 
   removeItems = async (itemIds: string[], parentId: string): Promise<void> => {
@@ -367,18 +460,15 @@ export class TreeActionImpl {
       await useFileStore.getState().refreshFileList();
     };
 
-    tx.onSuccess = async () => {
-      await engine.flush();
-      const expanded = { ...this.#get().expanded };
-      const children = { ...this.#get().children };
-      for (const id of itemIds) {
-        delete expanded[id];
-        delete children[id];
-      }
-      this.#set({ children, expanded }, false, 'tree/removeItems/cleanup');
-      void this.revalidate(parentId);
-    };
-
     await tx.commit();
+
+    const expanded = { ...this.#get().expanded };
+    const children = { ...this.#get().children };
+    for (const id of itemIds) {
+      delete expanded[id];
+      delete children[id];
+    }
+    this.#set({ children, expanded }, false, 'tree/removeItems/cleanup');
+    await this.#revalidateSettled([parentId]);
   };
 }

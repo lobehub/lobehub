@@ -128,6 +128,7 @@ CLAUDE.local.md
 docker-compose/dev/data/
 
 # Migration scripts data
+.elasticsearch-reindex/
 scripts/clerk-to-betterauth/test/*.csv
 scripts/clerk-to-betterauth/test/*.json
 scripts/clerk-to-betterauth/prod/*.csv

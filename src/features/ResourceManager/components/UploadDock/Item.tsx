@@ -1,4 +1,5 @@
-import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { RotateCwIcon, XIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
@@ -76,6 +77,7 @@ const UploadItem = memo<UploadItemProps>(({ error, errorCode, id, file, status, 
         return (
           <Text style={{ fontSize: 12 }} type={'secondary'}>
             {formatSize(size)} · {t('uploadDock.body.item.pending')}
+            {uploadState?.progress ? ` ${uploadState.progress}%` : ''}
           </Text>
         );
       }

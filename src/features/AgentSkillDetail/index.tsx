@@ -2,14 +2,15 @@
 
 import { type SkillResourceTreeNode } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
-import { ActionIcon, Flexbox, Icon } from '@lobehub/ui';
-import { Skeleton } from 'antd';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { DotIcon, ExternalLinkIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PublishedTime from '@/components/PublishedTime';
+import { ArticleSkeleton } from '@/components/Skeleton';
 import SkillAvatar from '@/components/SkillAvatar';
 import FileTree, { FileTreeSkeleton } from '@/features/FileTree';
 import { useToolStore } from '@/store/tool';
@@ -89,7 +90,7 @@ const AgentSkillDetail = memo<AgentSkillDetailProps>(({ skillId }) => {
     return (
       <Flexbox style={{ height: '100%', overflow: 'hidden' }}>
         <div className={styles.meta}>
-          <Skeleton active paragraph={{ rows: 1 }} style={{ margin: 0 }} title={{ width: 220 }} />
+          <ArticleSkeleton rows={1} style={{ margin: 0 }} title={220} />
         </div>
         <Flexbox horizontal style={{ flex: 1, overflow: 'hidden' }}>
           <div className={styles.left}>
@@ -97,7 +98,7 @@ const AgentSkillDetail = memo<AgentSkillDetailProps>(({ skillId }) => {
           </div>
           <div className={styles.divider} />
           <div className={styles.right}>
-            <Skeleton active paragraph={{ rows: 8 }} style={{ padding: 16 }} />
+            <ArticleSkeleton rows={8} style={{ padding: 16 }} />
           </div>
         </Flexbox>
       </Flexbox>

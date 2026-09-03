@@ -57,7 +57,7 @@ execAgent({ hooks })
 | `apps/server/src/services/agentRuntime/hooks/HookDispatcher.ts` | Registration, dispatch, dispatchBeforeToolCall         |
 | `apps/server/src/modules/AgentRuntime/RuntimeExecutors.ts`      | Tool/Compact/HumanIntervention hook dispatch           |
 | `apps/server/src/services/agentRuntime/AgentRuntimeService.ts`  | Step hooks + HumanIntervention resume/reject           |
-| `apps/server/src/services/aiAgent/index.ts`                     | CallAgent hook dispatch                                |
+| `apps/server/src/services/aiAgent/subAgentRuns.ts`              | CallAgent hook dispatch                                |
 
 ## Registration Flow
 

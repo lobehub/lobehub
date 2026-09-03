@@ -6,10 +6,9 @@ import { toast } from '@lobehub/ui/base-ui';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { resolveAgentBackground } from '@/features/AgentProfileArtwork/utils';
 import { ArtworkStudioContent, styleReferencesForArtworkStyle } from '@/features/ArtworkStudio';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
-import { cutOutFullBodyArtwork } from '@/services/artworkGeneration';
+import { cutOutFullBodyArtwork, resolveArtworkReferenceSource } from '@/services/artworkGeneration';
 import { useAgentStore } from '@/store/agent';
 import { agentArtworkSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useFileStore } from '@/store/file';
@@ -56,6 +55,7 @@ const AgentArtworkStudioContent = memo<AgentArtworkStudioContentProps>(({ agentI
   const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId));
   const fullBody = useAgentStore(agentSelectors.getAgentFullBodyArtworkById(agentId));
   const profile = useAgentStore(agentSelectors.getAgentProfileById(agentId));
+  /** Excludes the display-only default avatar from character references. */
   const storedAvatar = useAgentStore(agentSelectors.getAgentStoredAvatarById(agentId));
   const systemRole = useAgentStore(
     (s) => agentSelectors.getAgentConfigById(agentId)(s)?.systemRole,
@@ -92,13 +92,17 @@ const AgentArtworkStudioContent = memo<AgentArtworkStudioContentProps>(({ agentI
       // "borrow this look, invent a character"), and a model given both blends
       // them into neither.
       const customReference = useReference ? profile?.artworkReferenceImage : undefined;
+      const avatarSource = resolveArtworkReferenceSource(storedAvatar, appOrigin);
+      const backgroundSource = resolveArtworkReferenceSource(meta.backgroundColor, appOrigin);
       const commonInput = {
+        avatarIdentity: avatarSource.text,
+        backgroundIdentity: backgroundSource.text,
         description: meta.description,
         id: agentId,
         kind: 'avatar',
         name: meta.name,
         direction,
-        referenceImageUrl: resolveAgentBackground(meta.backgroundColor),
+        referenceImageUrl: backgroundSource.imageUrl,
         style: nextStyle,
         styleReferenceImageUrls: customReference
           ? [customReference]
@@ -112,7 +116,7 @@ const AgentArtworkStudioContent = memo<AgentArtworkStudioContentProps>(({ agentI
       try {
         const result = await generateCharacterSet({
           composition,
-          currentAvatarUrl: meta.avatar,
+          currentAvatarUrl: avatarSource.imageUrl,
           generate: generateAgentArtwork,
           input: commonInput,
         });
@@ -135,11 +139,11 @@ const AgentArtworkStudioContent = memo<AgentArtworkStudioContentProps>(({ agentI
       generateAgentArtwork,
       meta.backgroundColor,
       meta.description,
-      meta.avatar,
       meta.name,
       meta.title,
       profile?.artworkReferenceImage,
       saveProfile,
+      storedAvatar,
       systemRole,
       toTransparentFullBody,
     ],

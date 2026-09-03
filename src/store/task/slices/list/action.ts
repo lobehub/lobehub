@@ -2,7 +2,7 @@ import type { TaskStatus } from '@lobechat/types';
 import { useEffect } from 'react';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
-import { isScheduledTaskListKey, isTaskListKey, taskKeys } from '@/libs/swr/keys';
+import { isMyTaskListKey, isScheduledTaskListKey, isTaskListKey, taskKeys } from '@/libs/swr/keys';
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
 
@@ -132,6 +132,8 @@ export class TaskListSliceActionImpl {
       // A schedule can be attached, changed or removed from any task edit, so
       // the automated roll-up has to be revalidated alongside the main list.
       mutate(isScheduledTaskListKey),
+      // Assigning or creating moves a task in or out of "My tasks".
+      mutate(isMyTaskListKey),
     ]);
   };
 
@@ -246,7 +248,6 @@ export class TaskListSliceActionImpl {
           ...(automated === undefined ? {} : { automated }),
           excludeStatuses: excludeStatuses?.length ? [...excludeStatuses] : undefined,
           ...(groupBy === 'status' ? { groups: DEFAULT_KANBAN_GROUPS } : { groupBy }),
-          hasGoal: false,
           projectId,
           visibility: filterToServerVisibility(listVisibility),
         });
@@ -278,24 +279,63 @@ export class TaskListSliceActionImpl {
   };
 
   /**
-   * The automated-task roll-up behind Home's "Scheduled" section. Each caller
-   * consumes its own SWR result because Home and the paginated Tasks page can
-   * coexist in Electron with different limits and offsets.
+   * The automated-task roll-up behind Home's "Scheduled" section and the Tasks
+   * page's scheduled tab. Each caller consumes its own SWR result because Home
+   * and the paginated Tasks page can coexist in Electron with different limits
+   * and offsets. `agentId`/`projectId` narrow the roll-up to the scoped Tasks
+   * page; they are part of the key so an agent's schedules never render under
+   * another scope.
    */
   useFetchScheduledTaskList = (
-    options: { enabled?: boolean; limit?: number; offset?: number } = {},
+    options: {
+      agentId?: string;
+      enabled?: boolean;
+      limit?: number;
+      offset?: number;
+      projectId?: string;
+    } = {},
   ) => {
-    const { enabled = true, limit, offset } = options;
+    const { agentId, enabled = true, limit, offset, projectId } = options;
+    const scopeKey = projectId
+      ? `${PROJECT_LIST_KEY_PREFIX}${projectId}`
+      : (agentId ?? ALL_AGENTS_LIST_KEY);
     return useClientDataSWR(
-      enabled ? taskKeys.scheduledList(ALL_AGENTS_LIST_KEY, 'all', limit, offset) : null,
+      enabled ? taskKeys.scheduledList(scopeKey, 'all', limit, offset) : null,
       async () =>
         this.fetchTaskList({
+          ...(projectId ? { projectId } : agentId ? { assigneeAgentId: agentId } : {}),
           automated: true,
-          hasGoal: false,
           limit,
           offset,
           orderBy: 'updatedAt',
         }),
+      { revalidateOnFocus: false },
+    );
+  };
+
+  /**
+   * The Tasks page's "My tasks" tab — the caller's own slice of the workspace
+   * (`assigned` to them as a member, or `created` by them). Consumed like the
+   * scheduled roll-up: its own SWR result, never the shared `tasks` field, so
+   * flipping the tab cannot leak one collection into the other.
+   */
+  useFetchMyTaskList = (options: {
+    enabled?: boolean;
+    limit?: number;
+    offset?: number;
+    scope: 'assigned' | 'created';
+    /**
+     * Server-side status narrowing (the `hideCompleted` display option
+     * translated by `getVisibleTaskStatuses`). Applied before `limit` /
+     * `offset` so a page can never come back empty while older unfinished
+     * tasks exist; part of the cache key for the same reason as `scope`.
+     */
+    statuses?: TaskStatus[];
+  }) => {
+    const { enabled = true, limit, offset, scope, statuses } = options;
+    return useClientDataSWR(
+      enabled ? taskKeys.myList(scope, statuses, limit, offset) : null,
+      async () => this.fetchTaskList({ limit, offset, orderBy: 'updatedAt', scope, statuses }),
       { revalidateOnFocus: false },
     );
   };
@@ -384,7 +424,6 @@ export class TaskListSliceActionImpl {
         return this.fetchTaskList({
           ...(allAgents || projectId ? {} : { assigneeAgentId: id }),
           automated,
-          hasGoal: false,
           orderBy,
           projectId,
           statuses: statuses?.length ? [...statuses] : undefined,

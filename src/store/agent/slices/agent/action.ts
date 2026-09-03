@@ -14,6 +14,7 @@ import { produce } from 'immer';
 import type { SWRResponse } from 'swr';
 import type { PartialDeep } from 'type-fest';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
 import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
 import { agentConfigKeys } from '@/libs/swr/keys';
@@ -160,9 +161,9 @@ export class AgentSliceActionImpl {
     // resolves on the client (`auto` follows the browser). A caller that already
     // carries a name — e.g. a market agent — keeps it.
     //
-    // A heterogeneous agent never draws a personal name: it is the user's
-    // external tool, not one of our own agents, so its default reads as whose
-    // tool it is — "{owner}'s {product}" (e.g. "Max 的 Claude Code").
+    // A heterogeneous agent never draws a random personal name. In personal or
+    // workspace-private scope its name is the product title; a shared workspace
+    // agent adds the creator so members can distinguish identical tools.
     const heteroProvider = params.config?.agencyConfig?.heterogeneousProvider;
     const locale = globalGeneralSelectors.currentLanguage(useGlobalStore.getState());
     const config = {
@@ -170,9 +171,11 @@ export class AgentSliceActionImpl {
       name:
         params.config?.name ||
         (heteroProvider
-          ? heteroAgentDefaultName(
-              params.config?.title || getHeterogeneousTypeLabel(heteroProvider.type),
-            )
+          ? heteroAgentDefaultName({
+              productTitle: params.config?.title || getHeterogeneousTypeLabel(heteroProvider.type),
+              visibility: params.visibility,
+              workspaceId: getActiveWorkspaceId(),
+            })
           : randomAgentName(locale)),
     };
 

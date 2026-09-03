@@ -1,7 +1,8 @@
 'use client';
 
 import { ModelTag, ProviderIcon } from '@lobehub/icons';
-import { Flexbox, Tag } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Tag } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';

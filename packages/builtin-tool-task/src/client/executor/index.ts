@@ -1,3 +1,5 @@
+import { canWorkspaceRoleBeTaskAssignee } from '@lobechat/const/rbac';
+import type { TaskAssignableMember } from '@lobechat/prompts';
 import {
   formatDependencyAdded,
   formatDependencyRemoved,
@@ -7,6 +9,7 @@ import {
   formatTaskEdited,
   formatTaskList,
   formatTasksCreated,
+  formatWorkspaceMembers,
   priorityLabel,
 } from '@lobechat/prompts';
 import type {
@@ -20,19 +23,23 @@ import { BaseExecutor } from '@lobechat/types';
 import debug from 'debug';
 
 import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { getWorkspaceMembers } from '@/business/client/hooks/useWorkspaceMembers';
 import { taskService } from '@/services/task';
-import { verifyService } from '@/services/verify';
 import { getChatStoreState } from '@/store/chat';
 import { getTaskStoreState } from '@/store/task';
 import { findSubtaskParentId } from '@/store/task/slices/detail/reducer';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import { normalizeListTasksParams } from '../../listTasks';
+import { selectAssignableMembers } from '../../listWorkspaceMembers';
 import { TaskIdentifier } from '../../manifest';
 import type {
   AddTaskCommentParams,
   CreateTaskParams,
   CreateTasksItemResult,
   DeleteTaskCommentParams,
+  ListWorkspaceMembersParams,
   RunTasksItemResult,
   UpdateTaskCommentParams,
 } from '../../types';
@@ -59,7 +66,6 @@ const LIST_MUTATING_APIS = new Set<string>([
   TaskApiName.runTasks,
   TaskApiName.setTaskSchedule,
   TaskApiName.updateTaskStatus,
-  TaskApiName.createGoal,
 ]);
 
 const DETAIL_MUTATING_APIS = new Set<string>([
@@ -72,8 +78,15 @@ const DETAIL_MUTATING_APIS = new Set<string>([
   TaskApiName.updateTaskComment,
   TaskApiName.updateTaskStatus,
   TaskApiName.viewTask,
-  TaskApiName.createGoal,
 ]);
+
+// "Alice (usr_1)" for tool output; falls back to the bare id when the member
+// directory has no profile for it (personal mode, or a stale store).
+const memberLabel = (userId: string): string => {
+  const member = getWorkspaceMembers().find((m) => m.userId === userId);
+  const name = member?.user?.fullName?.trim() || member?.user?.username?.trim();
+  return name ? `${name} (${userId})` : userId;
+};
 
 const extractIdentifier = (params: unknown, result: BuiltinToolResult): string | undefined => {
   const fromState = (result.state as { identifier?: unknown } | undefined)?.identifier;
@@ -187,13 +200,8 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     params: {
       instruction: string;
       assigneeAgentId?: string;
+      assigneeUserId?: string;
       // Bind a goal entity to the created task (see TaskService.createTask).
-      goal?: {
-        maxRounds?: number | null;
-        maxTotalCost?: number | null;
-        requirement?: string | null;
-        title?: string;
-      };
       name: string;
       parentIdentifier?: string;
       priority?: number;
@@ -205,11 +213,14 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       log('[TaskExecutor] createTask - params:', params);
       const parentIdentifier = params.parentIdentifier?.trim() || undefined;
 
+      // Executing agent and human owner are independent, coexisting sides (the
+      // member owns the outcome, the agent executes) — a member owner does not
+      // suppress the usual current-agent default.
       const task = await getTaskStoreState().createTask({
         assigneeAgentId:
           params.assigneeAgentId ?? (ctx?.scope === 'task' ? undefined : ctx?.agentId),
+        assigneeUserId: params.assigneeUserId,
         createdByAgentId: ctx?.agentId,
-        goal: params.goal,
         instruction: params.instruction,
         name: params.name,
         parentTaskId: parentIdentifier,
@@ -226,6 +237,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
 
       return {
         content: formatTaskCreated({
+          assigneeLabel: task.assigneeUserId ? memberLabel(task.assigneeUserId) : undefined,
           baseUrl: taskLinkBaseUrl(),
           identifier: task.identifier,
           instruction: params.instruction,
@@ -267,6 +279,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     params: {
       instruction: string;
       assigneeAgentId?: string;
+      assigneeUserId?: string;
       name: string;
       parentIdentifier?: string;
       priority?: number;
@@ -274,116 +287,6 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     },
     ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => this.#createTask(params, ctx);
-
-  createGoal = async (
-    params: {
-      criteria: Array<{
-        description?: string;
-        instruction?: string;
-        onFail?: 'auto_repair' | 'manual';
-        required?: boolean;
-        title: string;
-        verifierConfig?: Record<string, unknown>;
-        verifierType?: 'agent' | 'llm' | 'program';
-      }>;
-      instruction: string;
-      maxIterations?: number | null;
-      maxTotalCost?: number | null;
-      name: string;
-    },
-    ctx?: BuiltinToolContext,
-  ): Promise<BuiltinToolResult> => {
-    if (!ctx?.agentId) {
-      return {
-        content: 'A goal needs the current agent as its assignee.',
-        error: { message: 'agentId is required', type: 'MissingAgent' },
-        success: false,
-      };
-    }
-
-    const criteria = (params.criteria ?? []).filter((item) => item.title?.trim());
-    if (criteria.length === 0) {
-      return {
-        content: 'A goal needs at least one acceptance criterion.',
-        error: { message: 'criteria array is empty', type: 'EmptyCriteria' },
-        success: false,
-      };
-    }
-
-    const created = await this.#createTask(
-      {
-        assigneeAgentId: ctx.agentId,
-        // The goals row is created together with the task, so the "is a goal"
-        // marker can never race the verify-config write below.
-        goal: {
-          maxRounds: params.maxIterations,
-          maxTotalCost: params.maxTotalCost ?? null,
-          requirement: params.name,
-          title: params.name,
-        },
-        instruction: params.instruction,
-        name: params.name,
-      },
-      ctx,
-    );
-    const identifier = (created.state as { identifier?: string } | undefined)?.identifier;
-    const taskId = (created.state as { taskId?: string } | undefined)?.taskId;
-    if (!created.success || !identifier) return created;
-
-    try {
-      const verifyCriteriaIds = await verifyService.createCriteria(
-        criteria.map((item) => ({
-          description: item.description,
-          instruction: item.verifierType === 'program' ? undefined : item.instruction,
-          onFail: item.onFail ?? 'auto_repair',
-          required: item.required ?? true,
-          title: item.title,
-          verifierConfig: item.verifierConfig,
-          verifierType: item.verifierType ?? 'agent',
-        })),
-      );
-      const maxIterations = Math.min(10, Math.max(2, params.maxIterations ?? 3));
-
-      await taskService.updateVerifyConfig({
-        id: identifier,
-        verify: {
-          enabled: true,
-          maxIterations,
-          requirement: params.name,
-          verifyCriteriaIds,
-        },
-      });
-
-      const started = await this.runTask({ identifier }, ctx);
-      if (!started.success) return started;
-      const state = started.state as {
-        operationId?: string;
-        topicId?: string;
-      };
-
-      return {
-        content: `Goal task ${identifier} created and started with ${criteria.length} acceptance criteria. Execution continues in its separate task topic; do not perform or reproduce the task in this conversation.`,
-        state: {
-          identifier,
-          name: params.name,
-          operationId: state.operationId,
-          startedAt: new Date().toISOString(),
-          success: true,
-          taskId,
-          topicId: state.topicId,
-        },
-        success: true,
-      };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to start goal';
-      return {
-        content: `Goal task ${identifier} was created but could not be started: ${message}`,
-        error: { message, type: 'CreateGoalFailed' },
-        state: { identifier, name: params.name, success: false },
-        success: false,
-      };
-    }
-  };
 
   createTasks = async (
     params: { tasks: CreateTaskParams[] },
@@ -486,6 +389,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     params: {
       addDependencies?: string[];
       assigneeAgentId?: string | null;
+      assigneeUserId?: string | null;
       description?: string;
       identifier: string;
       instruction?: string;
@@ -507,6 +411,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       const updateData: {
         description?: string;
         assigneeAgentId?: string | null;
+        assigneeUserId?: string | null;
         instruction?: string;
         name?: string;
         parentTaskId?: string | null;
@@ -522,6 +427,16 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
           params.assigneeAgentId
             ? `assignee agent → ${params.assigneeAgentId}`
             : 'assignee cleared',
+        );
+      }
+      // Independent of the agent side: the member is the human owner and the
+      // two assignees coexist, so touching one never clears the other.
+      if (params.assigneeUserId !== undefined) {
+        updateData.assigneeUserId = params.assigneeUserId;
+        changes.push(
+          params.assigneeUserId
+            ? `assignee member → ${memberLabel(params.assigneeUserId)}`
+            : 'assignee member cleared',
         );
       }
       if (params.instruction !== undefined) {
@@ -786,6 +701,55 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       return {
         content: `Failed to set task verify config: ${message}`,
         error: { message, type: 'SetTaskVerifyFailed' },
+        success: false,
+      };
+    }
+  };
+
+  listWorkspaceMembers = async (
+    params: ListWorkspaceMembersParams = {},
+  ): Promise<BuiltinToolResult> => {
+    try {
+      const selfId = userProfileSelectors.userId(useUserStore.getState());
+      const inWorkspace = !!getActiveWorkspaceSlug();
+
+      // Personal mode: the caller is the only human a task can be assigned to
+      // (the server enforces the same rule). The client directory carries
+      // profile fields only — linked IM identities are a server-runtime extra.
+      const directory: TaskAssignableMember[] = inWorkspace
+        ? getWorkspaceMembers()
+            .filter((m) => canWorkspaceRoleBeTaskAssignee(m.role))
+            .map((m) => ({
+              email: m.user?.email,
+              id: m.userId,
+              isSelf: m.userId === selfId,
+              name: m.user?.fullName,
+              role: m.role,
+              username: m.user?.username,
+            }))
+        : selfId
+          ? [
+              {
+                id: selfId,
+                isSelf: true,
+                name: userProfileSelectors.displayUserName(useUserStore.getState()),
+              },
+            ]
+          : [];
+      // Same bounded `query` / `limit` contract as the server runtime.
+      const { members, query, total } = selectAssignableMembers(directory, params);
+
+      return {
+        content: formatWorkspaceMembers(members, { inWorkspace, query, total }),
+        state: { count: members.length, query, success: true, total },
+        success: true,
+      };
+    } catch (error) {
+      log('[TaskExecutor] listWorkspaceMembers - error:', error);
+      const message = error instanceof Error ? error.message : 'Failed to list members';
+      return {
+        content: `Failed to list workspace members: ${message}`,
+        error: { message, type: 'ListWorkspaceMembersFailed' },
         success: false,
       };
     }

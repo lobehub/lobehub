@@ -69,8 +69,10 @@ export const ScheduleWakeupInspector = memo<BuiltinInspectorProps<ScheduleWakeup
     }
 
     return (
-      <div className={cx(inspectorTextStyles.root, isShiny && shinyTextStyles.shinyText)}>
-        <span>{reason || typeof delay === 'number' ? `${label}:` : label}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={cx(isShiny && shinyTextStyles.shinyText)}>
+          {reason || typeof delay === 'number' ? `${label}:` : label}
+        </span>
         {reason && <span className={styles.chip}>{reason}</span>}
         {typeof delay === 'number' && <span className={styles.delay}>· {formatDelay(delay)}</span>}
       </div>

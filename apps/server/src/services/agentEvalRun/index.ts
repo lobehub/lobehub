@@ -312,7 +312,7 @@ export class AgentEvalRunService {
         preparedCases.map(({ testCase, topicId }) => ({
           agentId: targetAgentId ?? null,
           id: topicId,
-          title: `[Eval Case #${(testCase.sortOrder ?? 0) + 1}] ${testCase.content.input.slice(0, 50) || 'Test Case'}...`,
+          title: `[${(testCase.sortOrder ?? 0) + 1}] ${testCase.content.input.slice(0, 50) || 'Topic'}...`,
           trigger: 'eval' as const,
           userId: this.userId,
           workspaceId: this.workspaceId ?? null,
@@ -1885,8 +1885,13 @@ export class AgentEvalRunService {
     const dataset = await this.datasetModel.findById(run.datasetId);
     if (!dataset) return { ...baseMeta, error: 'Dataset not found', passed: false, score: 0 };
 
-    const benchmark = await this.benchmarkModel.findById(dataset.benchmarkId);
-    if (!benchmark) return { ...baseMeta, error: 'Benchmark not found', passed: false, score: 0 };
+    // A dataset need not belong to a benchmark; such a dataset simply
+    // contributes no benchmark-level rubrics, and scoring falls back to the
+    // per-case / per-dataset evalMode. Bailing here would leave every case in a
+    // captured dataset permanently unscored.
+    const benchmark = dataset.benchmarkId
+      ? await this.benchmarkModel.findById(dataset.benchmarkId)
+      : null;
 
     const testCase = await this.testCaseModel.findById(testCaseId);
     if (!testCase) return { ...baseMeta, error: 'Test case not found', passed: false, score: 0 };
@@ -1935,7 +1940,7 @@ export class AgentEvalRunService {
         },
       ];
     } else {
-      effectiveRubrics = benchmark.rubrics ?? [];
+      effectiveRubrics = benchmark?.rubrics ?? [];
     }
 
     // Run evaluation
@@ -2486,11 +2491,12 @@ export class AgentEvalRunService {
     const dataset = await this.datasetModel.findById(run.datasetId);
     if (!dataset) return;
 
-    const benchmark = await this.benchmarkModel.findById(dataset.benchmarkId);
-    if (!benchmark) return;
+    const benchmark = dataset.benchmarkId
+      ? await this.benchmarkModel.findById(dataset.benchmarkId)
+      : null;
 
     const passThreshold = (run.config?.passThreshold as number) ?? 0.6;
-    const benchmarkRubrics = benchmark.rubrics;
+    const benchmarkRubrics = benchmark?.rubrics ?? [];
 
     // Get messages for this topic
     const messages = await this.messageModel.query({ topicId: runTopic.topicId });

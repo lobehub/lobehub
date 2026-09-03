@@ -186,8 +186,6 @@ export default {
     'The server could not be reached. This usually indicates a local network problem — please check your internet connection, proxy, or VPN settings and try again.',
   'response.ServerAgentRuntimeError':
     'Sorry, the Agent service is currently unavailable. Please try again later or contact us via email for support.',
-  'response.SubscriptionKeyMismatch':
-    'We apologize for the inconvenience. Due to a temporary system malfunction, your current subscription usage is inactive. Please click the button below to restore your subscription, or contact us via email for support.',
   'response.SubscriptionPlanLimit':
     'Your subscription points have been exhausted, and you cannot use this feature. Please upgrade to a higher plan or configure a custom model API to continue using it.',
   'response.SubscriptionPlanLimitUltimate':
@@ -247,6 +245,7 @@ export default {
     'A previous copy of this agent is still duplicating its history. Try again once it finishes.',
   'transfer.transferInProgress':
     'A previous move of this resource is still migrating its history. Try again once it finishes.',
+  'transfer.sharedTransferBlocked': 'This agent has a share link, so its owner cannot be changed.',
   'transfer.sameWorkspace':
     'This resource is already in the selected workspace. Choose another target.',
   'transfer.targetIsCurrentOwner': 'This agent already belongs to that member. Pick someone else.',

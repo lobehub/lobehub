@@ -33,7 +33,8 @@ vi.mock('react-router', () => ({
   useSearchParams: () => [{ get: mockSearchParamsGet }],
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   toast: { error: mockMessageError, success: mockMessageSuccess },
 }));
 
@@ -123,7 +124,7 @@ describe('useSignIn', () => {
     mockBusinessSignin.preSocialSigninCheck.mockResolvedValue(true);
     Object.defineProperty(window, 'location', {
       configurable: true,
-      value: { ...originalLocation, href: '' },
+      value: { ...originalLocation, href: '', origin: originalLocation.origin },
       writable: true,
     });
   });
@@ -261,6 +262,7 @@ describe('useSignIn', () => {
 
       expect(mockSignInEmail).toHaveBeenCalledWith(
         expect.objectContaining({
+          callbackURL: `${originalLocation.origin}/`,
           email: 'user@example.com',
           password: 'password123',
         }),
@@ -353,6 +355,32 @@ describe('useSignIn', () => {
   });
 
   describe('handleSocialSignIn', () => {
+    it('should bind relative OAuth callbacks to the current auth origin', async () => {
+      const authOrigin = 'https://auth.example.com';
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: { ...originalLocation, href: `${authOrigin}/signin`, origin: authOrigin },
+        writable: true,
+      });
+      mockSearchParamsGet.mockImplementation((key: string) =>
+        key === 'callbackUrl' ? '/workspace?tab=members' : null,
+      );
+      mockSignInSocial.mockResolvedValue({ url: 'https://google.com/auth' });
+
+      const { result } = renderHook(() => useSignIn());
+
+      await act(async () => {
+        await result.current.handleSocialSignIn('google');
+      });
+
+      expect(mockSignInSocial).toHaveBeenCalledWith(
+        expect.objectContaining({
+          callbackURL: `${authOrigin}/workspace?tab=members`,
+          newUserCallbackURL: `${authOrigin}/onboarding?callbackUrl=%2Fworkspace%3Ftab%3Dmembers`,
+        }),
+      );
+    });
+
     it('should call signIn.social for builtin providers', async () => {
       mockSignInSocial.mockResolvedValue({ url: 'https://google.com/auth' });
 
@@ -363,7 +391,10 @@ describe('useSignIn', () => {
       });
 
       expect(mockSignInSocial).toHaveBeenCalledWith(
-        expect.objectContaining({ newUserCallbackURL: '/onboarding', provider: 'google' }),
+        expect.objectContaining({
+          newUserCallbackURL: `${originalLocation.origin}/onboarding`,
+          provider: 'google',
+        }),
       );
       expect(mockMessageError).not.toHaveBeenCalled();
     });
@@ -378,7 +409,28 @@ describe('useSignIn', () => {
       });
 
       expect(mockSignInOauth2).toHaveBeenCalledWith(
-        expect.objectContaining({ newUserCallbackURL: '/onboarding', providerId: 'custom-oidc' }),
+        expect.objectContaining({
+          newUserCallbackURL: `${originalLocation.origin}/onboarding`,
+          providerId: 'custom-oidc',
+        }),
+      );
+    });
+
+    it('should preserve a mobile app callback scheme', async () => {
+      const mobileCallbackUrl = 'com.lobehub.app:///auth/callback';
+      mockSearchParamsGet.mockImplementation((key: string) =>
+        key === 'callbackUrl' ? mobileCallbackUrl : null,
+      );
+      mockSignInSocial.mockResolvedValue({ url: 'https://google.com/auth' });
+
+      const { result } = renderHook(() => useSignIn());
+
+      await act(async () => {
+        await result.current.handleSocialSignIn('google');
+      });
+
+      expect(mockSignInSocial).toHaveBeenCalledWith(
+        expect.objectContaining({ callbackURL: mobileCallbackUrl }),
       );
     });
 
@@ -504,7 +556,10 @@ describe('useSignIn', () => {
       });
 
       expect(mockRequestPasswordReset).toHaveBeenCalledWith(
-        expect.objectContaining({ email: 'user@example.com' }),
+        expect.objectContaining({
+          email: 'user@example.com',
+          redirectTo: `${originalLocation.origin}/reset-password?email=user%40example.com`,
+        }),
       );
       // Success is a persistent landing state, not a fleeting toast
       expect(result.current.step).toBe('emailSent');
@@ -592,6 +647,12 @@ describe('useSignIn', () => {
       });
 
       expect(mockSignInMagicLink).toHaveBeenCalledTimes(1);
+      expect(mockSignInMagicLink).toHaveBeenCalledWith(
+        expect.objectContaining({
+          callbackURL: `${originalLocation.origin}/`,
+          newUserCallbackURL: `${originalLocation.origin}/onboarding`,
+        }),
+      );
       expect(result.current.step).toBe('emailSent');
       expect(result.current.sentInfo).toEqual(
         expect.objectContaining({ email: 'user@example.com', type: 'magicLink' }),

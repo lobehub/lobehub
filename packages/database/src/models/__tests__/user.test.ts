@@ -347,6 +347,156 @@ describe('UserModel', () => {
     });
   });
 
+  describe('mergeToolInterventionSetting', () => {
+    it('should create the settings row when none exists', async () => {
+      await userModel.mergeToolInterventionSetting({ approvalMode: 'allow-list' });
+
+      const settings = await serverDB.query.userSettings.findFirst({
+        where: eq(userSettings.id, userId),
+      });
+
+      expect(settings?.tool).toEqual({ humanIntervention: { approvalMode: 'allow-list' } });
+    });
+
+    it('should merge approvalMode while preserving sibling tool keys', async () => {
+      await serverDB.insert(userSettings).values({
+        id: userId,
+        tool: {
+          humanIntervention: { allowList: ['bash/bash'], approvalMode: 'manual' },
+          uninstalledBuiltinTools: ['dalle'],
+        },
+      });
+
+      await userModel.mergeToolInterventionSetting({ approvalMode: 'auto-run' });
+
+      const settings = await serverDB.query.userSettings.findFirst({
+        where: eq(userSettings.id, userId),
+      });
+
+      expect(settings?.tool).toEqual({
+        humanIntervention: { allowList: ['bash/bash'], approvalMode: 'auto-run' },
+        uninstalledBuiltinTools: ['dalle'],
+      });
+    });
+
+    it('should union appendAllowList with the stored list, preserving approvalMode', async () => {
+      await serverDB.insert(userSettings).values({
+        id: userId,
+        tool: { humanIntervention: { allowList: ['bash/bash'], approvalMode: 'auto-run' } },
+      });
+
+      await userModel.mergeToolInterventionSetting({
+        appendAllowList: ['bash/bash', 'search/search', 'search/search'],
+      });
+
+      const settings = await serverDB.query.userSettings.findFirst({
+        where: eq(userSettings.id, userId),
+      });
+
+      expect(settings?.tool).toEqual({
+        humanIntervention: {
+          allowList: ['bash/bash', 'search/search'],
+          approvalMode: 'auto-run',
+        },
+      });
+    });
+
+    it('should not drop either change when two merges overlap (multi-tab race)', async () => {
+      await serverDB.insert(userSettings).values({
+        id: userId,
+        tool: { humanIntervention: { allowList: ['bash/bash'], approvalMode: 'manual' } },
+      });
+
+      // The regression this guards: a JS-side read-merge-write lets both calls
+      // read the same snapshot so the last write drops the other change. The
+      // atomic SQL merge must land both regardless of interleaving.
+      await Promise.all([
+        userModel.mergeToolInterventionSetting({ approvalMode: 'auto-run' }),
+        userModel.mergeToolInterventionSetting({
+          appendAllowList: ['web-browsing/crawlSinglePage'],
+        }),
+      ]);
+
+      const settings = await serverDB.query.userSettings.findFirst({
+        where: eq(userSettings.id, userId),
+      });
+
+      expect(settings?.tool).toEqual({
+        humanIntervention: {
+          allowList: ['bash/bash', 'web-browsing/crawlSinglePage'],
+          approvalMode: 'auto-run',
+        },
+      });
+    });
+  });
+
+  describe('replaceUninstalledBuiltinToolsSetting', () => {
+    it('should create the settings row for the personal scope when none exists', async () => {
+      await userModel.replaceUninstalledBuiltinToolsSetting({
+        uninstalledBuiltinTools: ['dalle'],
+      });
+
+      const settings = await serverDB.query.userSettings.findFirst({
+        where: eq(userSettings.id, userId),
+      });
+
+      expect(settings?.tool).toEqual({ uninstalledBuiltinTools: ['dalle'] });
+    });
+
+    it('should replace only the workspace slot, preserving other slots and humanIntervention', async () => {
+      await serverDB.insert(userSettings).values({
+        id: userId,
+        tool: {
+          humanIntervention: { approvalMode: 'auto-run' },
+          uninstalledBuiltinTools: ['dalle'],
+          uninstalledBuiltinToolsByWorkspace: { ws_other: ['calculator'] },
+        },
+      });
+
+      await userModel.replaceUninstalledBuiltinToolsSetting({
+        uninstalledBuiltinTools: ['web-browsing'],
+        workspaceId: 'ws_1',
+      });
+
+      const settings = await serverDB.query.userSettings.findFirst({
+        where: eq(userSettings.id, userId),
+      });
+
+      expect(settings?.tool).toEqual({
+        humanIntervention: { approvalMode: 'auto-run' },
+        uninstalledBuiltinTools: ['dalle'],
+        uninstalledBuiltinToolsByWorkspace: {
+          ws_1: ['web-browsing'],
+          ws_other: ['calculator'],
+        },
+      });
+    });
+
+    it('should not drop an approvalMode change when an uninstall write overlaps it', async () => {
+      await serverDB.insert(userSettings).values({
+        id: userId,
+        tool: { humanIntervention: { approvalMode: 'manual' } },
+      });
+
+      // The interleaving from the review: an install/uninstall snapshot-write
+      // committing after an approvalMode change used to restore the stale mode.
+      // Both writers patch their own key atomically now, so both must land.
+      await Promise.all([
+        userModel.mergeToolInterventionSetting({ approvalMode: 'auto-run' }),
+        userModel.replaceUninstalledBuiltinToolsSetting({ uninstalledBuiltinTools: ['dalle'] }),
+      ]);
+
+      const settings = await serverDB.query.userSettings.findFirst({
+        where: eq(userSettings.id, userId),
+      });
+
+      expect(settings?.tool).toEqual({
+        humanIntervention: { approvalMode: 'auto-run' },
+        uninstalledBuiltinTools: ['dalle'],
+      });
+    });
+  });
+
   describe('updatePreference', () => {
     it('should update user preference', async () => {
       await userModel.updatePreference({
@@ -495,6 +645,44 @@ describe('UserModel', () => {
 
         expect(user).toBeUndefined();
       });
+
+      it('purges share-visitor topics and messages when the visitor is deleted', async () => {
+        // Visitor conversations live under the CREATOR's userId with
+        // topics.senderId = visitor. There is no FK from topics.senderId to
+        // users, so the users cascade cannot reach them; deleteUser must
+        // clean them up explicitly.
+        const creatorId = userId;
+        const visitorId = otherUserId;
+        const visitorTopicId = 'topic-share-visitor';
+        const creatorTopicId = 'topic-creator-own';
+
+        await serverDB.insert(topics).values([
+          { id: visitorTopicId, senderId: visitorId, title: 'visitor chat', userId: creatorId },
+          { id: creatorTopicId, title: 'creator own chat', userId: creatorId },
+        ]);
+        await serverDB.insert(messages).values([
+          {
+            content: 'hello from visitor',
+            id: 'msg-visitor-1',
+            role: 'user',
+            topicId: visitorTopicId,
+            userId: creatorId,
+          },
+        ]);
+
+        await UserModel.deleteUser(serverDB, visitorId);
+
+        const remainingTopics = await serverDB.query.topics.findMany();
+        expect(remainingTopics.map((t) => t.id).sort()).toEqual([creatorTopicId]);
+
+        const remainingMessages = await serverDB.query.messages.findMany();
+        expect(remainingMessages).toHaveLength(0);
+
+        const creator = await serverDB.query.users.findFirst({
+          where: eq(users.id, creatorId),
+        });
+        expect(creator).toBeDefined();
+      });
     });
 
     describe('findById', () => {
@@ -594,6 +782,19 @@ describe('UserModel', () => {
       it('should skip ids that do not exist', async () => {
         const result = await UserModel.getDisplayInfoByIds(serverDB, [userId, 'ghost']);
         expect(result.map((r) => r.id)).toEqual([userId]);
+      });
+    });
+
+    describe('getEmailsByIds', () => {
+      it('should return empty array for empty ids without querying', async () => {
+        expect(await UserModel.getEmailsByIds(serverDB, [])).toEqual([]);
+      });
+
+      it('should return id + email pairs only', async () => {
+        const result = await UserModel.getEmailsByIds(serverDB, [userId]);
+        expect(result).toHaveLength(1);
+        expect(Object.keys(result[0]).sort()).toEqual(['email', 'id']);
+        expect(result[0].id).toBe(userId);
       });
     });
 

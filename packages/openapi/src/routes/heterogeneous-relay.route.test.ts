@@ -11,14 +11,20 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
   resolveServerDefaultHeterogeneousModel: vi.fn(),
 }));
 vi.mock('../middleware/hetero-operation-auth', () => {
-  const requireHeteroModelInvocation: MiddlewareHandler = async (c, next) => {
-    c.set(
-      'heteroOperationClaims' as never,
-      { model: 'deepseek-v4-pro', provider_id: 'lobehub' } as never,
-    );
-    c.set('userId' as never, 'user-1' as never);
-    await next();
-  };
+  const requireHeteroModelInvocation =
+    (ingress: 'anthropic-messages' | 'openai-responses'): MiddlewareHandler =>
+    async (c, next) => {
+      c.set(
+        'heteroOperationClaims' as never,
+        { model: 'deepseek-v4-pro', provider_id: 'lobehub' } as never,
+      );
+      c.set(
+        'heteroAgentType' as never,
+        (ingress === 'anthropic-messages' ? 'kimi-code' : 'grok-build') as never,
+      );
+      c.set('userId' as never, 'user-1' as never);
+      await next();
+    };
 
   return { requireHeteroModelInvocation };
 });
@@ -65,6 +71,9 @@ describe('heterogeneous relay route failures', () => {
       error: { message: failureMessage, type: 'api_error' },
       type: 'error',
     });
+    expect(invokeServerDefaultModel).toHaveBeenCalledWith(
+      expect.objectContaining({ agentType: 'kimi-code' }),
+    );
   });
 
   it('returns an OpenAI error envelope when model invocation rejects', async () => {
@@ -82,5 +91,8 @@ describe('heterogeneous relay route failures', () => {
     await expect(response.json()).resolves.toEqual({
       error: { message: failureMessage, type: 'api_error' },
     });
+    expect(invokeServerDefaultModel).toHaveBeenCalledWith(
+      expect.objectContaining({ agentType: 'grok-build' }),
+    );
   });
 });

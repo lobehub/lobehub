@@ -15,6 +15,8 @@ import { pickString } from '@lobechat/utils';
 import { installMarketplaceAgents } from '@/services/installMarketplaceAgents';
 import { topicService } from '@/services/topic';
 
+const CURSOR_IDENTIFIER = 'cursor';
+const DROID_IDENTIFIER = 'droid';
 const QODER_IDENTIFIER = 'qoder';
 
 interface SubmitToolInteractionOptions {
@@ -40,7 +42,7 @@ type CustomInteractionSubmitHandler = (
   context?: CustomInteractionContext,
 ) => Promise<CustomInteractionSubmitResult | undefined>;
 
-const isAgentMarketplaceCall = (identifier: string, apiName?: string) =>
+export const isAgentMarketplaceCall = (identifier: string, apiName?: string) =>
   identifier === WebOnboardingIdentifier && apiName === WebOnboardingApiName.showAgentMarketplace;
 
 const isLobeAgentAskUserQuestion = (identifier: string, apiName?: string) =>
@@ -165,6 +167,8 @@ const findCustomInteractionSubmitHandler = (identifier: string, apiName?: string
  */
 const HETERO_CUSTOM_INTERACTION_IDENTIFIERS = new Set<string>([
   ClaudeCodeIdentifier,
+  CURSOR_IDENTIFIER,
+  DROID_IDENTIFIER,
   QODER_IDENTIFIER,
 ]);
 

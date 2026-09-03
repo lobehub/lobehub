@@ -12,10 +12,12 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
+import { HOME_NEW_MODELS_BANNER_ID, NewModelShortcuts } from '../NewModelShortcuts';
 import type { HomeMode } from '../types';
 import { HOME_INPUT_RESERVED_HEIGHT } from './constants';
 import { EditorSlot } from './EditorSlot';
 import { stripMarkdownLinks } from './hintFormat';
+import { InputBannerQueue, InputBannerSegment } from './InputBanner';
 import InputDragUpload from './InputDragUpload';
 import MessengerBanner, { MESSENGER_BANNER_ID } from './MessengerBanner';
 import { useSend } from './useSend';
@@ -32,9 +34,16 @@ interface InputAreaProps {
   mode: HomeMode;
   onInputValueChange: (value: string) => void;
   onModeChange: (mode: HomeMode) => void;
+  showNewModelShortcuts?: boolean;
 }
 
-const InputArea = ({ inputValue, mode, onInputValueChange, onModeChange }: InputAreaProps) => {
+const InputArea = ({
+  inputValue,
+  mode,
+  onInputValueChange,
+  onModeChange,
+  showNewModelShortcuts,
+}: InputAreaProps) => {
   const { t } = useTranslation('home');
   const { agentId, contextSelectionKey, loading, send } = useSend(mode);
   // Subscribe to the SWR key so `internal_refreshAgentConfig`'s `mutate(...)`
@@ -48,20 +57,12 @@ const InputArea = ({ inputValue, mode, onInputValueChange, onModeChange }: Input
   const isAgentConfigLoading = useAgentStore((s) =>
     agentByIdSelectors.isAgentConfigLoadingById(agentId ?? '')(s),
   );
-  const isMessengerBannerDismissed = useGlobalStore(
-    systemStatusSelectors.isBannerDismissed(MESSENGER_BANNER_ID),
-  );
   // Wait for the persisted status to hydrate so users who already dismissed
   // the banner never see it flash on mount.
   const isStatusInit = useGlobalStore(systemStatusSelectors.isStatusInit);
   const chatInputRef = useRef<HTMLDivElement>(null);
 
-  // The banner advertises talking to the assistant from Discord / Slack /
-  // Telegram / WeChat, which is the same set of external integrations gated
-  // elsewhere — offering it where none are configured sends users to set up a
-  // channel that cannot connect.
-  const showMessengerBanner =
-    EXTERNAL_INTEGRATIONS_ENABLED && mode === 'chat' && isStatusInit && !isMessengerBannerDismissed;
+  const showInputBanners = mode === 'chat' && isStatusInit;
 
   // Get agent's model info for vision support check. Falls back to an empty
   // id while the agent id resolves; the selectors return DEFAULT_MODEL /
@@ -100,11 +101,7 @@ const InputArea = ({ inputValue, mode, onInputValueChange, onModeChange }: Input
 
   return (
     <Flexbox>
-      <Flexbox
-        ref={chatInputRef}
-        style={{ paddingBottom: showMessengerBanner ? 32 : 0, position: 'relative' }}
-      >
-        {showMessengerBanner && <MessengerBanner />}
+      <Flexbox ref={chatInputRef}>
         {mode === 'chat' ? (
           <InputDragUpload
             radius={20}
@@ -115,6 +112,25 @@ const InputArea = ({ inputValue, mode, onInputValueChange, onModeChange }: Input
           </InputDragUpload>
         ) : (
           editorSlot
+        )}
+        {showInputBanners && (
+          <InputBannerQueue>
+            {showNewModelShortcuts && (
+              <InputBannerSegment dismissId={HOME_NEW_MODELS_BANNER_ID}>
+                <NewModelShortcuts />
+              </InputBannerSegment>
+            )}
+            {/* The banner advertises talking to the assistant from Discord /
+                Slack / Telegram / WeChat, which is the same set of external
+                integrations gated elsewhere — offering it where none are
+                configured sends users to set up a channel that cannot
+                connect. */}
+            {EXTERNAL_INTEGRATIONS_ENABLED && (
+              <InputBannerSegment dismissId={MESSENGER_BANNER_ID}>
+                <MessengerBanner />
+              </InputBannerSegment>
+            )}
+          </InputBannerQueue>
         )}
       </Flexbox>
     </Flexbox>

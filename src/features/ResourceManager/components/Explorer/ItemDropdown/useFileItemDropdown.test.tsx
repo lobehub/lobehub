@@ -13,9 +13,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/features/Messenger/PushResourceModal/useSendToMessengerMenuItem', () => ({
   useSendToMessengerMenuItem: mocks.useSendToMessengerMenuItem,
 }));
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock('@/hooks/useAppOrigin', () => ({ useAppOrigin: () => 'https://app.example.com' }));
-vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ allowed: true }) }));
 vi.mock('@/hooks/useResourceManageable', () => ({ useResourceManageable: () => true }));
 vi.mock('@/features/ResourceManager/components/KnowledgeBaseListProvider', () => ({
   useKnowledgeBaseListContext: () => [],

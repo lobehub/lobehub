@@ -62,7 +62,13 @@ export interface PrepareServerDefaultBindingContext {
 
 export interface ProviderBindingPlan {
   args: string[];
+  /** Release transient resources created while preparing the binding. */
+  cleanup?: () => Promise<void>;
+  /** Best-effort synchronous release for app shutdown. */
+  cleanupSync?: () => void;
   env: Record<string, string>;
+  /** Environment variable that receives the per-prompt server operation token. */
+  operationTokenEnvKey?: string;
   profileFiles?: ProviderBindingFilePlan[];
   runFiles?: ProviderBindingFilePlan[];
 }

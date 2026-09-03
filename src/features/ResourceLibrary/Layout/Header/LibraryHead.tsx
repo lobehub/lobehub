@@ -1,8 +1,8 @@
 'use client';
 
-import { ActionIcon, Block, Center, Skeleton, stopPropagation, Text } from '@lobehub/ui';
+import { Block, Center, stopPropagation } from '@lobehub/ui';
 import type { DropdownItem } from '@lobehub/ui/base-ui';
-import { DropdownMenu } from '@lobehub/ui/base-ui';
+import { ActionIcon, DropdownMenu, Skeleton, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { ChevronsUpDownIcon } from 'lucide-react';
 import type { DragEvent } from 'react';
@@ -143,7 +143,7 @@ const Head = memo<{ id: string }>(({ id }) => {
         />
       </Center>
       {!name ? (
-        <Skeleton active paragraph={false} title={{ style: { marginBottom: 0 }, width: 80 }} />
+        <Skeleton.Text width={80} />
       ) : (
         <DropdownMenu items={menuItems} placement="bottomRight">
           <Center

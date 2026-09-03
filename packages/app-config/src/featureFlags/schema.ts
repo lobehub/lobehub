@@ -2,6 +2,13 @@ import type { IFeatureFlagsState } from '@lobechat/types';
 import { z } from 'zod';
 
 // Define a union type for feature flag values: either boolean or array of user IDs
+//
+// NOTE: `agent_share` additionally accepts raw EMAIL addresses in that array
+// (see `evaluateFeatureFlag`). Such arrays live in the published runtime config
+// (Redis) and in env vars, which therefore hold user email addresses — a data
+// category that was previously absent from flag storage. Keep that in mind when
+// logging, exporting, or replicating the runtime config, and prefer user IDs
+// when an ID is already at hand.
 const FeatureFlagValue = z.union([z.boolean(), z.array(z.string())]);
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -17,6 +24,20 @@ export const FeatureFlagsSchema = z.object({
   // profile
   api_key_manage: FeatureFlagValue.optional(),
   edit_agent: FeatureFlagValue.optional(),
+
+  /**
+   * Cloud-only grayscale gate for Agent Share, covering BOTH capabilities the
+   * feature has: PUBLISHING a share (creator side) and OPENING/chatting on a
+   * shared agent (visitor side). A user matched by this flag can do both;
+   * everyone else can do neither. Array values are user IDs or emails (see
+   * `evaluateFeatureFlag`), so admins can grant a rollout by email without
+   * resolving a user ID first. The share OWNER previewing their own share is
+   * never subject to the visitor check — only other visitors are. Self-hosted
+   * builds are additionally hard-blocked server-side by
+   * `ENABLE_BUSINESS_FEATURES` (see `_helpers/agentShareFeatureGate.ts`), so
+   * this flag alone can never enable the feature outside Cloud.
+   */
+  agent_share: FeatureFlagValue.optional(),
 
   ai_image: FeatureFlagValue.optional(),
   speech_to_text: FeatureFlagValue.optional(),
@@ -53,19 +74,25 @@ export const FeatureFlagsSchema = z.object({
 export type IFeatureFlags = z.infer<typeof FeatureFlagsSchema>;
 
 /**
- * Evaluate a feature flag value against a user ID
- * @param flagValue - The feature flag value (boolean or array of user IDs)
+ * Evaluate a feature flag value against a user ID (and optionally their email)
+ * @param flagValue - The feature flag value (boolean or array of user IDs/emails)
  * @param userId - The current user ID
+ * @param userEmail - The current user's email; array entries match either
+ *   identifier, so an admin can whitelist a rollout by email without
+ *   resolving user IDs first
  * @returns boolean indicating if the feature is enabled for the user
  */
 export const evaluateFeatureFlag = (
   flagValue: boolean | string[] | undefined,
   userId?: string,
+  userEmail?: string,
 ): boolean | undefined => {
   if (typeof flagValue === 'boolean') return flagValue;
 
   if (Array.isArray(flagValue)) {
-    return userId ? flagValue.includes(userId) : false;
+    if (userId && flagValue.includes(userId)) return true;
+    if (userEmail && flagValue.includes(userEmail)) return true;
+    return false;
   }
 };
 
@@ -77,6 +104,12 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
 
   api_key_manage: false,
   edit_agent: true,
+
+  // Cloud-only grayscale: off everywhere until an admin publishes a whitelist
+  // (array of user IDs/emails) or flips it to true. Self-hosted deployments
+  // are additionally hard-blocked by ENABLE_BUSINESS_FEATURES on the server
+  // gate, so setting this env-side does not enable the feature there.
+  agent_share: false,
 
   ai_image: true,
 
@@ -114,9 +147,14 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
 export const mapFeatureFlagsEnvToState = (
   config: IFeatureFlags,
   userId?: string,
+  userEmail?: string,
 ): IFeatureFlagsState => {
   return {
     isAgentEditable: evaluateFeatureFlag(config.edit_agent, userId),
+
+    // The only email-aware flag: its grayscale whitelist is maintained by
+    // admins as raw emails (see evaluateFeatureFlag).
+    enableAgentShare: evaluateFeatureFlag(config.agent_share, userId, userEmail),
     showProvider: evaluateFeatureFlag(config.provider_settings, userId),
 
     showOpenAIApiKey: evaluateFeatureFlag(config.openai_api_key, userId),

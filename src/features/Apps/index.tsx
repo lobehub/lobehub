@@ -2,8 +2,7 @@
 
 import { APP_SHOWCASE_ENABLED, CLI_INSTALL_COMMAND } from '@lobechat/business-const';
 import { isDesktop } from '@lobechat/const';
-import { Tag, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, Tag, Text } from '@lobehub/ui/base-ui';
 import { Check, Copy } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

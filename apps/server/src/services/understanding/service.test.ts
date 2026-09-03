@@ -113,7 +113,7 @@ const createHarness = (initialSession?: OnboardingUnderstandingSession) => {
   }));
   providers.set('github', {
     collect: githubCollect,
-    connectionSource: 'composio',
+    connectionSource: 'lobehub',
     id: 'github',
   });
   providers.set('gmail', {
@@ -706,7 +706,7 @@ describe('UnderstandingService', () => {
       collect: vi.fn(async () => {
         throw upstreamError;
       }),
-      connectionSource: 'composio',
+      connectionSource: 'lobehub',
       id: 'github',
     });
 

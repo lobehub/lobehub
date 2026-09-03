@@ -46,7 +46,7 @@ const Content = memo<ContentProps>(({ id }) => {
 
   const allModels = useAiInfraStore(aiModelSelectors.filteredAiProviderModelList, isEqual);
 
-  const { isLoading, error, mutate } = useFetchAiProviderModels(id);
+  const { error, mutate } = useFetchAiProviderModels(id);
 
   // Count models by type (for all models, not just enabled)
   const modelCounts = useMemo(() => {
@@ -127,8 +127,6 @@ const Content = memo<ContentProps>(({ id }) => {
   // Ensure active tab is available, fallback to 'all' if current tab is hidden
   const availableTabKeys = tabs.map((tab) => tab.key);
   const currentActiveTab = availableTabKeys.includes(activeTab) ? activeTab : 'all';
-
-  if (isLoading) return <SkeletonList />;
 
   // Error before empty: a failed model-list fetch must not render as
   // "no models yet" (EmptyModels) — surface the reason + Retry (ux Read §1.1).

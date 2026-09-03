@@ -24,6 +24,7 @@ import {
 import { type ToolsEngine } from '@lobechat/context-engine';
 import { buildTaskDetailPrompt, buildTaskListPrompt } from '@lobechat/prompts';
 import {
+  buildGoalOverviewContext,
   type ConversationContext,
   type LobeAgentChatConfig,
   type MessageMetadata,
@@ -56,6 +57,7 @@ import { type ChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { getElectronStoreState } from '@/store/electron';
+import { getGoalStoreState } from '@/store/goal';
 import { getServerConfigStoreState, serverConfigSelectors } from '@/store/serverConfig';
 import { getTaskStoreState } from '@/store/task';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/pageAgentRuntime';
@@ -272,9 +274,9 @@ export class StreamingExecutorActionImpl {
       // no function tools are sent. `platformFilter` still gates availability.
       mergedToolIds,
       // Context-aware builtin manifests: lobe-agent hides callSubAgent in group /
-      // sub-agent runs. Replaces the former dropSubAgentInGroup + applyPluginFilters
-      // isSubAgent hard-coding.
-      { isSubAgent, scope },
+      // sub-agent runs. Desktop client runs also need the local environment so
+      // local-system can advertise IPC-only capabilities such as direct image reads.
+      { executionEnv: isDesktop ? 'local' : undefined, isSubAgent, scope },
     );
     // When skillActivateMode is 'manual':
     // Exclude only discovery tools (activator, skill-store) so runtime-managed defaults
@@ -443,6 +445,22 @@ export class StreamingExecutorActionImpl {
         }
       } catch (error) {
         log('[internal_createAgentState] Failed to build task manager context: %o', error);
+      }
+    }
+
+    const viewedGoal = operation?.context.viewedGoal;
+    if (viewedGoal) {
+      try {
+        const snapshot = getGoalStoreState().goalGraphById[viewedGoal.goalId];
+        if (snapshot) {
+          runtimeInitialContext = {
+            ...runtimeInitialContext,
+            goalOverview: buildGoalOverviewContext(snapshot),
+          };
+          log('[internal_createAgentState] injected goal overview context (%s)', viewedGoal.goalId);
+        }
+      } catch (error) {
+        log('[internal_createAgentState] Failed to build goal overview context: %o', error);
       }
     }
 

@@ -326,13 +326,6 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     tab: SettingsTabs.Appearance,
   },
   {
-    anchor: 'appearance-font-size',
-    descKey: 'settingChatAppearance.fontSize.desc',
-    keywords: ['font', 'size', 'text'],
-    labelKey: 'settingChatAppearance.fontSize.title',
-    tab: SettingsTabs.Appearance,
-  },
-  {
     anchor: 'appearance-app-tray',
     keywords: ['tray', 'menu bar', 'menubar'],
     labelKey: 'settingAppearance.appTray.title',
@@ -340,12 +333,27 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     visible: (ctx) => ctx.isDesktop,
   },
   {
-    anchor: 'appearance-terminal-font',
-    descKey: 'settingAppearance.terminal.fontFamily.desc',
-    keywords: ['terminal font', 'monospace', 'font family'],
-    labelKey: 'settingAppearance.terminal.fontFamily.title',
+    anchor: 'appearance-font-family',
+    descKey: 'settingAppearance.font.fontFamily.desc',
+    keywords: ['font', 'font family', 'typeface', 'interface font'],
+    labelKey: 'settingAppearance.font.fontFamily.title',
     tab: SettingsTabs.Appearance,
     visible: (ctx) => ctx.isDesktop,
+  },
+  {
+    anchor: 'appearance-monospace-font',
+    descKey: 'settingAppearance.font.monospace.desc',
+    keywords: ['terminal font', 'monospace', 'code font', 'font family'],
+    labelKey: 'settingAppearance.font.monospace.title',
+    tab: SettingsTabs.Appearance,
+    visible: (ctx) => ctx.isDesktop,
+  },
+  {
+    anchor: 'appearance-font-size',
+    descKey: 'settingChatAppearance.fontSize.desc',
+    keywords: ['font', 'size', 'text'],
+    labelKey: 'settingChatAppearance.fontSize.title',
+    tab: SettingsTabs.Appearance,
   },
   // System Tools
   {

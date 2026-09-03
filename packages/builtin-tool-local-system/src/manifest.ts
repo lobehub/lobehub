@@ -3,13 +3,18 @@ import { type BuiltinToolManifest } from '@lobechat/types';
 import { systemPrompt } from './systemRole';
 import { LocalSystemApiName, LocalSystemIdentifier } from './types';
 
+export const READ_FILE_DESCRIPTION =
+  'Read the content of a text or document file (txt/md/json/source code/pdf/docx/etc.). Binary files (.bin/.exe/.zip/.b64/encoded blobs) are rejected with a structured error — use runCommand with file/hexdump/strings to inspect those instead. Output is capped at 500K chars total and 8K chars per line; for larger files, use a narrower line range or grepContent.';
+
+export const IMAGE_CAPABLE_READ_FILE_DESCRIPTION =
+  'Read text and document files (txt/md/json/source code/pdf/docx/etc.) or local image files (PNG/JPEG/GIF/WebP). For a local image path, call readFile directly so the image is uploaded as a visual tool result. Never use shell commands to convert images to base64/data URI text or copy encoded image data between tools. Other binary files (.bin/.exe/.zip/.b64/encoded blobs) are rejected with a structured error — use runCommand with file/hexdump/strings to inspect those instead. Text output is capped at 500K chars total and 8K chars per line; for larger files, use a narrower line range or grepContent.';
+
 export const LocalSystemManifest: BuiltinToolManifest = {
   executors: ['client', 'server'],
   api: [
     {
       defaultTimeoutMs: 30_000,
-      description:
-        'Read the content of a text or document file (txt/md/json/source code/pdf/docx/etc.). Binary files (.bin/.exe/.zip/.b64/encoded blobs) are rejected with a structured error — use runCommand with file/hexdump/strings to inspect those instead. Output is capped at 500K chars total and 8K chars per line; for larger files, use a narrower line range or grepContent.',
+      description: READ_FILE_DESCRIPTION,
       humanIntervention: {
         dynamic: {
           default: 'never',
@@ -224,9 +229,9 @@ export const LocalSystemManifest: BuiltinToolManifest = {
       },
     },
     {
-      defaultTimeoutMs: 30_000,
+      defaultTimeoutMs: 60_000,
       description:
-        'Start a terminal session to execute a shell command and return console output collected during the wait window (up to 30 seconds by default). If the command is still running after the wait window, the result includes `shell_id` for later observation or termination.',
+        'Start a terminal session to execute a shell command and return console output collected during the wait window (up to 60 seconds by default). If the command is still running after the wait window, the result includes `shell_id` for later observation or termination.',
       humanIntervention: 'required',
       name: LocalSystemApiName.runCommand,
       parameters: {
@@ -257,9 +262,9 @@ export const LocalSystemManifest: BuiltinToolManifest = {
       },
     },
     {
-      defaultTimeoutMs: 30_000,
+      defaultTimeoutMs: 60_000,
       description:
-        'Retrieve output from a running or completed background shell command. Waits for one output window (up to 30 seconds by default).',
+        'Retrieve output from a running or completed background shell command. Waits for one output window (up to 60 seconds by default).',
       name: LocalSystemApiName.getCommandOutput,
       parameters: {
         properties: {

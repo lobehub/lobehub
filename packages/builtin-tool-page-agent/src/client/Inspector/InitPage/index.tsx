@@ -2,8 +2,9 @@
 
 import type { InitDocumentArgs } from '@lobechat/editor-runtime';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Icon, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Icon } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { Plus } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -37,8 +38,10 @@ export const InitPageInspector = memo<BuiltinInspectorProps<InitDocumentArgs, In
     if (isArgumentsStreaming) {
       if (!hasContent)
         return (
-          <div className={cx(oneLineEllipsis, shinyTextStyles.shinyText)}>
-            <span>{t('builtins.lobe-page-agent.apiName.initPage')}</span>
+          <div className={oneLineEllipsis}>
+            <span className={shinyTextStyles.shinyText}>
+              {t('builtins.lobe-page-agent.apiName.initPage')}
+            </span>
           </div>
         );
 

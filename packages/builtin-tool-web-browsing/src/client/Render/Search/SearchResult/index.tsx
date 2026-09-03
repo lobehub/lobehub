@@ -1,5 +1,6 @@
 import type { SearchQuery, UniformSearchResponse } from '@lobechat/types';
-import { Block, Button, Empty, Flexbox, Icon, ScrollShadow, Skeleton } from '@lobehub/ui';
+import { Block, Empty, Flexbox, Icon, ScrollShadow } from '@lobehub/ui';
+import { Button, Skeleton } from '@lobehub/ui/base-ui';
 import { uniq } from 'es-toolkit/compat';
 import { Edit2Icon, SearchIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -37,7 +38,7 @@ const SearchResult = memo<SearchResultProps>(
       return (
         <Flexbox horizontal gap={8}>
           {['1', '2', '3', '4', '5'].map((id) => (
-            <Skeleton.Block active height={ITEM_HEIGHT} key={id} width={ITEM_WIDTH} />
+            <Skeleton height={ITEM_HEIGHT} key={id} width={ITEM_WIDTH} />
           ))}
         </Flexbox>
       );
@@ -48,10 +49,9 @@ const SearchResult = memo<SearchResultProps>(
           <Empty description={t('search.emptyResult')} icon={SearchIcon}>
             {!editing && (
               <Button
-                color={'default'}
                 icon={<Icon icon={Edit2Icon} />}
                 size={'small'}
-                variant={'filled'}
+                type={'fill'}
                 onClick={() => {
                   setEditing(true);
                 }}

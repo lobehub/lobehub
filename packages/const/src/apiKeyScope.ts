@@ -179,8 +179,17 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   agentLabel: rw('agent:read', 'agent:write'),
   agentNotify: rw('agent:read', 'agent:write'),
   agentQuota: rw('agent:read', null),
+  // share management toggles a public entry point and monthly spend caps
+  // charged to the owner; restricted API keys must not flip it (full-access
+  // keys still can)
+  agentShare: 'blocked',
   agentSignal: rw('agent:read', 'agent:write'),
   agentSkills: rw('agent:read', 'agent:write'),
+  // a trace snapshot is the whole inside of a run — system role, injected user
+  // memory, tool results — and `getSnapshotUrl` hands back a presigned URL that
+  // needs no further auth, so a restricted key holding one would read past its
+  // own scope. Same call as `llmGenerationTracing`.
+  agentTrace: 'blocked',
   aiAgent: rw('agent:read', 'agent:write'),
   aiChat: { any: 'model:invoke' },
   aiModel: rw('model:read', 'model:write'),
@@ -201,6 +210,8 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   connector: 'blocked',
   device: 'blocked',
   document: rw('knowledge:read', 'knowledge:write'),
+  documentComment: rw('knowledge:read', 'knowledge:write'),
+  documentLike: rw('knowledge:read', 'knowledge:write'),
   expertise: rw('agent:read', 'agent:write'),
   // whole-account backup dump (settings incl. market tokens, providers, agents)
   exporter: 'blocked',
@@ -246,6 +257,10 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   session: rw('chat:read', 'chat:write'),
   sessionGroup: rw('chat:read', 'chat:write'),
   share: rw('chat:read', 'chat:write'),
+  // visitor-side chat endpoints execute under the CREATOR's identity/budget via
+  // share authorization, not the caller's key scope; never reachable with a
+  // restricted key
+  shareChat: 'blocked',
   spend: 'blocked',
   storageOverage: 'blocked',
   subscription: 'blocked',

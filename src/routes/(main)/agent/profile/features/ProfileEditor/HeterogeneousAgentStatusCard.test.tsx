@@ -23,46 +23,40 @@ vi.mock('@lobechat/heterogeneous-agents/client', () => ({
           icon: () => <span>Claude Code Icon</span>,
           title: 'Claude Code',
         }
-      : type === 'kimi-code'
+      : type === 'droid'
         ? {
-            defaultCommand: 'kimi',
-            icon: () => <span>Kimi Code Icon</span>,
-            title: 'Kimi Code',
+            defaultCommand: 'droid',
+            icon: () => <span>Factory Droid Icon</span>,
+            title: 'Factory Droid',
           }
-        : type === 'opencode'
+        : type === 'kimi-code'
           ? {
-              defaultCommand: 'opencode',
-              icon: () => <span>OpenCode Icon</span>,
-              title: 'OpenCode',
+              defaultCommand: 'kimi',
+              icon: () => <span>Kimi Code Icon</span>,
+              title: 'Kimi Code',
             }
-          : type === 'pi'
+          : type === 'opencode'
             ? {
-                defaultCommand: 'pi',
-                icon: () => <span>Pi Icon</span>,
-                title: 'Pi',
+                defaultCommand: 'opencode',
+                icon: () => <span>OpenCode Icon</span>,
+                title: 'OpenCode',
               }
-            : {
-                defaultCommand: 'codex',
-                icon: () => <span>Codex Icon</span>,
-                title: 'Codex',
-              },
+            : type === 'pi'
+              ? {
+                  defaultCommand: 'pi',
+                  icon: () => <span>Pi Icon</span>,
+                  title: 'Pi',
+                }
+              : {
+                  defaultCommand: 'codex',
+                  icon: () => <span>Codex Icon</span>,
+                  title: 'Codex',
+                },
   isRemoteHeterogeneousType: (type: string) => ['openclaw', 'hermes'].includes(type),
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({
-    'aria-label': ariaLabel,
-    className,
-    onClick,
-  }: {
-    'aria-label'?: string;
-    'className'?: string;
-    'onClick'?: () => void;
-  }) => (
-    <button aria-label={ariaLabel} className={className} type="button" onClick={onClick}>
-      Refresh
-    </button>
-  ),
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   CopyButton: () => <button type="button">Copy</button>,
   Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Icon: () => <span>Icon</span>,
@@ -94,13 +88,25 @@ vi.mock('@lobehub/ui', () => ({
       }}
     />
   ),
-  Tag: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
   Tooltip: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   TooltipGroup: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ActionIcon: ({
+    'aria-label': ariaLabel,
+    className,
+    onClick,
+  }: {
+    'aria-label'?: string;
+    'className'?: string;
+    'onClick'?: () => void;
+  }) => (
+    <button aria-label={ariaLabel} className={className} type="button" onClick={onClick}>
+      Refresh
+    </button>
+  ),
   Button: ({ children, onClick }: { children?: ReactNode; onClick?: () => void }) => (
     <button type="button" onClick={onClick}>
       {children}
@@ -160,23 +166,8 @@ vi.mock('@lobehub/ui/base-ui', () => ({
       )}
     </select>
   ),
-}));
-
-vi.mock('antd-style', () => ({
-  createStaticStyles: () => ({
-    card: 'card',
-    label: 'label',
-    path: 'path',
-  }),
-  cssVar: new Proxy({}, { get: (_, key) => `var(--${String(key)})` }),
-}));
-
-vi.mock('lucide-react', () => ({
-  CheckCircle2: () => null,
-  Loader2Icon: () => null,
-  PencilLine: () => null,
-  RefreshCw: () => null,
-  XCircle: () => null,
+  Tag: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -287,6 +278,32 @@ describe('HeterogeneousAgentStatusCard', () => {
     expect(screen.getByText('codex Install Guide')).toBeInTheDocument();
     expect(screen.getByText('codex')).toBeInTheDocument();
     expect(screen.queryByDisplayValue('codex')).not.toBeInTheDocument();
+  });
+
+  it('detects Factory Droid and shows its install guide when unavailable', async () => {
+    detectHeterogeneousAgentCommand.mockResolvedValue({ available: false });
+
+    const provider = {
+      command: 'droid',
+      type: 'droid',
+    } satisfies HeterogeneousProviderConfig;
+
+    render(
+      <MemoryRouter>
+        <HeterogeneousAgentStatusCard provider={provider} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(detectHeterogeneousAgentCommand).toHaveBeenCalledWith({
+        agentType: 'droid',
+        command: 'droid',
+      });
+    });
+
+    expect(screen.getByText('Factory Droid CLI')).toBeInTheDocument();
+    expect(screen.getByText('Factory Droid CLI is unavailable')).toBeInTheDocument();
+    expect(screen.getByText('droid Install Guide')).toBeInTheDocument();
   });
 
   it('detects OpenCode and shows its install guide when unavailable', async () => {

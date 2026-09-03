@@ -1,10 +1,12 @@
 'use client';
 
+import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import { useParams } from 'react-router';
 import useSWR from 'swr';
 
 import ShareShell, { ShareHero } from '@/business/client/features/ShareShell';
+import { CONVERSATION_MIN_WIDTH } from '@/const/layoutTokens';
 import { shareKeys } from '@/libs/swr/keys';
 import { lambdaClient } from '@/libs/trpc/client';
 import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces';
@@ -30,12 +32,22 @@ const SharedTopicView = memo(() => {
   const marketIdentifier = data?.agentMeta?.marketIdentifier;
   const openUrl = marketIdentifier ? `/community/agent/${marketIdentifier}` : '/community/agent';
 
+  // Mirror WideScreenContainer's centered column so the pre-hydration document
+  // matches the hydrated ChatList headerSlot layout instead of hugging the left.
   const hero = data ? (
-    <ShareHero
-      avatar={<TopicAvatar data={data} size={40} />}
-      byline={buildTopicByline(data)}
-      title={data.title}
-    />
+    <Flexbox width={'100%'}>
+      <Flexbox
+        paddingInline={16}
+        style={{ alignSelf: 'center' }}
+        width={`min(${CONVERSATION_MIN_WIDTH}px, 100%)`}
+      >
+        <ShareHero
+          avatar={<TopicAvatar data={data} size={40} />}
+          byline={buildTopicByline(data)}
+          title={data.title}
+        />
+      </Flexbox>
+    </Flexbox>
   ) : null;
 
   return (

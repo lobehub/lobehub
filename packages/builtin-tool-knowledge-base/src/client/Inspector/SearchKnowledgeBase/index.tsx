@@ -1,7 +1,7 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Text } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { cssVar, cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,23 +24,29 @@ export const SearchKnowledgeBaseInspector = memo<
   if (isArgumentsStreaming) {
     if (!query)
       return (
-        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-          <span>{t('builtins.lobe-knowledge-base.apiName.searchKnowledgeBase')}</span>
+        <div className={inspectorTextStyles.root}>
+          <span className={shinyTextStyles.shinyText}>
+            {t('builtins.lobe-knowledge-base.apiName.searchKnowledgeBase')}
+          </span>
         </div>
       );
 
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-knowledge-base.apiName.searchKnowledgeBase')}: </span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-knowledge-base.apiName.searchKnowledgeBase')}:{' '}
+        </span>
         <span className={highlightTextStyles.gold}>{query}</span>
       </div>
     );
   }
 
   return (
-    <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
+    <div className={inspectorTextStyles.root}>
       <span style={{ marginInlineStart: 2 }}>
-        <span>{t('builtins.lobe-knowledge-base.apiName.searchKnowledgeBase')}: </span>
+        <span className={cx(isLoading && shinyTextStyles.shinyText)}>
+          {t('builtins.lobe-knowledge-base.apiName.searchKnowledgeBase')}:{' '}
+        </span>
         {query && <span className={highlightTextStyles.gold}>{query}</span>}
         {!isLoading &&
           pluginState?.fileResults &&

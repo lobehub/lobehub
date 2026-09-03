@@ -1,6 +1,6 @@
 import { ModelIcon } from '@lobehub/icons';
-import { Avatar, Flexbox, Skeleton, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Avatar, Button, Skeleton, Text } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { useCallback, useState } from 'react';
@@ -17,9 +17,12 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import { useResolvedHomeAgentId } from '../AgentSelect/useResolvedHomeAgentId';
+import { InputBanner } from '../InputArea/InputBanner';
 import { trackHomeModelShortcutClicked } from './analytics';
 import { getShortcutIconModelId } from './getShortcutIconModelId';
 import { useStarterModelDefaults } from './useStarterModelDefaults';
+
+export const HOME_NEW_MODELS_BANNER_ID = 'home-new-models-v1';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   active: css`
@@ -27,11 +30,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorFillSecondary};
   `,
   button: css`
-    height: 40px;
-    padding-inline: 12px;
+    height: 24px;
+    padding-inline: 8px;
     border: 0;
     border-radius: ${cssVar.borderRadius};
 
+    font-size: 13px;
     color: ${cssVar.colorTextSecondary};
 
     background: transparent;
@@ -43,8 +47,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   container: css`
-    flex-wrap: wrap;
-    min-height: 40px;
+    overflow: hidden;
+    flex: 1;
+    min-width: 0;
+    height: 24px;
   `,
   label: css`
     flex: none;
@@ -56,7 +62,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const getShortcutKey = (item: HomeNewModelItem) => `${item.type}:${item.model}`;
 const getShortcutProvider = (item: HomeNewModelItem, fallbackProvider: string) =>
   item.provider ?? fallbackProvider;
-const skeletonWidths = [112, 150, 126, 138];
+const skeletonWidths = [96, 120, 104, 112];
 
 export const NewModelShortcuts = () => {
   const { t } = useTranslation('home');
@@ -150,50 +156,53 @@ export const NewModelShortcuts = () => {
   if (!canCreateContent || (!isLoading && items.length === 0)) return null;
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.container} gap={8} justify={'center'}>
-      <Text className={styles.label}>{t('starter.newLabel')}</Text>
-      {isLoading
-        ? defaultHomeNewModels.map((item, index) => (
-            <Skeleton.Button
-              active
-              key={getShortcutKey(item)}
-              style={{
-                borderRadius: 8,
-                height: 40,
-                width: skeletonWidths[index] ?? 126,
-              }}
-            />
-          ))
-        : items.map((item) => {
-            const key = getShortcutKey(item);
-            const provider =
-              item.type === 'chat' ? getShortcutProvider(item, fallbackChatProvider) : undefined;
-            const isCurrent =
-              item.type === 'chat' && item.model === currentModel && provider === currentProvider;
-            const isSwitching = switchingKey === key;
-            const button = (
-              <Button
-                aria-pressed={item.type === 'chat' ? isCurrent : undefined}
-                className={cx(styles.button, isCurrent && styles.active)}
-                disabled={!!switchingKey && !isSwitching}
-                key={key}
-                loading={isSwitching}
-                type={'text'}
-                icon={
-                  item.iconUrl ? (
-                    <Avatar alt={''} avatar={item.iconUrl} size={18} />
-                  ) : (
-                    <ModelIcon model={getShortcutIconModelId(item)} size={18} />
-                  )
-                }
-                onClick={() => handleClick(item)}
-              >
-                {item.title}
-              </Button>
-            );
+    <InputBanner
+      dismissId={HOME_NEW_MODELS_BANNER_ID}
+      dismissTitle={t('homePromoBanner.dismiss')}
+      testId={'home-new-model-banner'}
+    >
+      <Flexbox horizontal align={'center'} className={styles.container} gap={4}>
+        <Text className={styles.label}>{t('starter.newLabel')}</Text>
+        {isLoading
+          ? defaultHomeNewModels.map((item, index) => (
+              <Skeleton
+                height={24}
+                key={getShortcutKey(item)}
+                radius={8}
+                width={skeletonWidths[index] ?? 104}
+              />
+            ))
+          : items.map((item) => {
+              const key = getShortcutKey(item);
+              const provider =
+                item.type === 'chat' ? getShortcutProvider(item, fallbackChatProvider) : undefined;
+              const isCurrent =
+                item.type === 'chat' && item.model === currentModel && provider === currentProvider;
+              const isSwitching = switchingKey === key;
+              const button = (
+                <Button
+                  aria-pressed={item.type === 'chat' ? isCurrent : undefined}
+                  className={cx(styles.button, isCurrent && styles.active)}
+                  disabled={!!switchingKey && !isSwitching}
+                  key={key}
+                  loading={isSwitching}
+                  type={'text'}
+                  icon={
+                    item.iconUrl ? (
+                      <Avatar alt={''} avatar={item.iconUrl} size={16} />
+                    ) : (
+                      <ModelIcon model={getShortcutIconModelId(item)} size={16} />
+                    )
+                  }
+                  onClick={() => handleClick(item)}
+                >
+                  {item.title}
+                </Button>
+              );
 
-            return button;
-          })}
-    </Flexbox>
+              return button;
+            })}
+      </Flexbox>
+    </InputBanner>
   );
 };

@@ -41,8 +41,13 @@ export class RemoteDeviceExecutionRuntime {
       const target = devices.find((d) => d.deviceId === args.deviceId && d.online);
 
       if (!target) {
+        // The device list can go stale between listOnlineDevices and this call
+        // (a device that showed online may have dropped in between), so point
+        // the model at refreshing the list instead of leaving it with a dead
+        // end — repeated blind activateDevice retries against the same stale
+        // id are the observed failure mode (agent vent reports).
         return {
-          content: `Device "${args.deviceId}" is not online or does not exist.`,
+          content: `Device "${args.deviceId}" is not online or does not exist. Call listOnlineDevices to refresh the device list and activate a device from the fresh result. If no device is online, tell the user to connect the desktop application or cli.`,
           success: false,
         };
       }

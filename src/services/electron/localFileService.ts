@@ -14,6 +14,7 @@ import {
   type GlobFilesResult,
   type GrepContentParams,
   type GrepContentResult,
+  type HashLocalFileParams,
   type KillCommandParams,
   type KillCommandResult,
   type ListLocalFileParams,
@@ -185,6 +186,10 @@ class LocalFileService {
 
   async readLocalFile(params: LocalReadFileParams): Promise<LocalReadFileResult> {
     return ensureElectronIpc().localSystem.readFile(params);
+  }
+
+  async hashLocalFile(params: HashLocalFileParams): Promise<string> {
+    return ensureElectronIpc().localSystem.hashLocalFile(params);
   }
 
   async readLocalFiles(params: LocalReadFilesParams): Promise<LocalReadFileResult[]> {

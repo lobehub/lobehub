@@ -12,12 +12,11 @@ import { DiscoverTab, SkillSorts } from '@/types/discover';
 import SkillEmpty from '../../features/SkillEmpty';
 import Pagination from '../features/Pagination';
 import List from './features/List';
-import Loading from './loading';
 
 const SkillPage = memo(() => {
   const { q, page, category, sort, order } = useQuery() as SkillQueryParams;
   const useSkillList = useDiscoverStore((s) => s.useFetchSkillList);
-  const { data, isLoading, error, mutate } = useSkillList({
+  const { data, error, mutate } = useSkillList({
     category,
     order,
     page,
@@ -35,8 +34,6 @@ const SkillPage = memo(() => {
       error={error}
       errorVariant={'page'}
       isEmpty={items.length === 0}
-      isLoading={isLoading}
-      loading={<Loading />}
       onRetry={() => mutate()}
     >
       {data && (

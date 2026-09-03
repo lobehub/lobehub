@@ -1,12 +1,13 @@
 import { useEditor } from '@lobehub/editor/react';
-import { type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { memo, useRef } from 'react';
 
 import ReasoningConfigLoader from './ReasoningConfigLoader';
 import { createStore, Provider } from './store';
 import { DEFAULT_CHAT_INPUT_FEATURE } from './store/initialState';
-import { type StoreUpdaterProps } from './StoreUpdater';
+import type { StoreUpdaterProps } from './StoreUpdater';
 import StoreUpdater from './StoreUpdater';
+import { useEditorRootLifecycle } from './useEditorRootLifecycle';
 
 interface ChatInputProviderProps extends StoreUpdaterProps {
   children: ReactNode;
@@ -38,6 +39,7 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
   }) => {
     const editor = useEditor();
     const slashMenuRef = useRef<HTMLDivElement>(null);
+    useEditorRootLifecycle(editor);
 
     return (
       <Provider

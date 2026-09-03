@@ -9,14 +9,8 @@ import type * as ModelSelectModule from '@/components/ModelSelect';
 
 import { MultipleProvidersModelItem } from '../MultipleProvidersModelItem';
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  Avatar: () => <span />,
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   DropdownMenuGroup: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   DropdownMenuGroupLabel: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   DropdownMenuItem: ({ children, onClick }: { children: ReactNode; onClick?: () => void }) => (
@@ -40,16 +34,15 @@ vi.mock('@lobehub/ui', () => ({
       {children}
     </div>
   ),
-  Flexbox: ({ children, ...props }: HTMLAttributes<HTMLDivElement>) => (
-    <div {...props}>{children}</div>
-  ),
-  Icon: () => <span />,
-  Tag: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
   Tooltip: ({ children, title }: { children: ReactNode; title: string }) => (
     <span data-testid={`tooltip-${title}`}>{children}</span>
   ),
-  menuSharedStyles: { item: 'item' },
+}));
+
+vi.mock('@lobehub/ui/base-ui', () => ({
+  Avatar: () => <span />,
+  Tag: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }));
 
 vi.mock('@lobehub/icons', () => ({
@@ -58,7 +51,8 @@ vi.mock('@lobehub/icons', () => ({
   ProviderIcon: () => <span />,
 }));
 
-vi.mock('antd-style', () => ({
+vi.mock('antd-style', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
   createStaticStyles: () => ({
     container: 'container',
     detailPopup: 'detailPopup',
@@ -103,6 +97,25 @@ describe('MultipleProvidersModelItem', () => {
     render(<ModelItemRender audio id="gemini-audio" />);
 
     expect(screen.getByTestId('tooltip-ModelSelect.featureTag.audio')).toBeInTheDocument();
+  });
+
+  it('keeps spread model card fields off the DOM', async () => {
+    const { ModelItemRender } = await vi.importActual<typeof ModelSelectModule>(
+      '@/components/ModelSelect',
+    );
+    const modelCardProps = {
+      id: 'deepseek-v3',
+      knowledgeCutoff: '2025-01',
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+    };
+
+    const { container } = render(<ModelItemRender {...modelCardProps} />);
+
+    for (const attr of ['reasoning', 'search', 'structuredoutput', 'knowledgecutoff']) {
+      expect(container.querySelector(`[${attr}]`)).toBeNull();
+    }
   });
 
   it('renders model detail panel even when info tags are hidden', () => {

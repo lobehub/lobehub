@@ -3,10 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createLambdaFileStorePort } from './fileStorePort';
 
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({ debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() }),
-}));
-
 const auth = {
   getAccessToken: async () => 'token-123',
   getServerUrl: async () => 'https://cloud.lobehub.com',
@@ -89,7 +85,7 @@ describe('createLambdaFileStorePort', () => {
       ...auth,
       getServerUrl: async () => 'https://cloud.lobehub.com/',
     });
-    await port!.createS3PreSignedUrl({ pathname: 'files/a/b.png' });
+    await port!.createS3PreSignedUrl({ pathname: 'files/a/b.png', size: 123 });
 
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe(
       'https://cloud.lobehub.com/trpc/lambda/upload.createS3PreSignedUrl',

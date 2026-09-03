@@ -1,17 +1,68 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { startEvidenceSubmission } from '../evidenceSubmission';
+import {
+  recordHeterogeneousDeliverableEvidence,
+  startEvidenceSubmission,
+} from '../evidenceSubmission';
 
-const { execAgent } = vi.hoisted(() => ({ execAgent: vi.fn() }));
+const { createMany, execAgent, findByOperation, upsertByCheckItem } = vi.hoisted(() => ({
+  createMany: vi.fn(),
+  execAgent: vi.fn(),
+  findByOperation: vi.fn(),
+  upsertByCheckItem: vi.fn(),
+}));
 
 vi.mock('@/server/services/aiAgent', () => ({
   AiAgentService: vi.fn(() => ({ execAgent })),
+}));
+vi.mock('@/database/models/verifyCheckResult', () => ({
+  VerifyCheckResultModel: vi.fn(() => ({ upsertByCheckItem })),
+}));
+vi.mock('@/database/models/verifyEvidence', () => ({
+  VerifyEvidenceModel: vi.fn(() => ({ createMany })),
+}));
+vi.mock('@/database/models/verifyRun', () => ({
+  VerifyRunModel: vi.fn(() => ({ findByOperation })),
 }));
 
 describe('startEvidenceSubmission', () => {
   beforeEach(() => {
     execAgent.mockReset().mockResolvedValue({ operationId: 'evidence-op' });
+    findByOperation.mockReset().mockResolvedValue({ id: 'run-1' });
+    upsertByCheckItem.mockReset().mockResolvedValue({ id: 'result-1' });
+    createMany.mockReset().mockResolvedValue(undefined);
+  });
+
+  it('records the heterogeneous builder deliverable as inline evidence for every criterion', async () => {
+    await recordHeterogeneousDeliverableEvidence({
+      db: {} as any,
+      deliverable: 'artifact path and sha-256',
+      operation: { id: 'work-op' } as any,
+      plan: [
+        {
+          id: 'criterion-1',
+          index: 0,
+          onFail: 'manual',
+          required: true,
+          title: 'Artifact exists',
+          verifierConfig: {},
+          verifierType: 'llm',
+        },
+      ],
+      userId: 'user-1',
+    });
+
+    expect(upsertByCheckItem).toHaveBeenCalledWith(
+      expect.objectContaining({ operationId: 'work-op', verifyRunId: 'run-1' }),
+    );
+    expect(createMany).toHaveBeenCalledWith([
+      expect.objectContaining({
+        capturedBy: 'agent',
+        content: 'artifact path and sha-256',
+        type: 'text',
+      }),
+    ]);
   });
 
   it('continues as the original builder in the same topic with only the evidence tool', async () => {
@@ -52,6 +103,8 @@ describe('startEvidenceSubmission', () => {
     );
     const call = execAgent.mock.calls[0][0];
     expect(call.ephemeralUserMessage).toContain('criterion-1: Model artifact exists');
+    expect(call.prompt).toBe(call.ephemeralUserMessage);
+    expect(call.prompt.trim()).not.toBe('');
     expect(call.userInterventionConfig).toEqual({ approvalMode: 'headless' });
     expect(call.hooks[0].webhook.body).toMatchObject({
       deliverable: 'artifact summary',

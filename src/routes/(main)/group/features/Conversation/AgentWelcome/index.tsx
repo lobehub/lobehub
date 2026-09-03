@@ -1,12 +1,14 @@
 'use client';
 
 import { DEFAULT_INBOX_TITLE } from '@lobechat/const';
-import { Flexbox, Markdown, Text } from '@lobehub/ui';
+import { Flexbox, Markdown } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import React, { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useConversationStore } from '@/features/Conversation';
+import ToolAuthAlert from '@/features/Conversation/AgentWelcome/ToolAuthAlert';
 import { contextSelectors } from '@/features/Conversation/store';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import SupervisorAvatar from '@/routes/(main)/group/features/GroupAvatar';
@@ -17,7 +19,6 @@ import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import OpeningQuestions from './OpeningQuestions';
-import ToolAuthAlert from './ToolAuthAlert';
 
 const InboxWelcome = memo(() => {
   const { t } = useTranslation(['welcome', 'chat']);

@@ -2,8 +2,10 @@
 
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
-import { memo } from 'react';
+import { LobeHub } from '@lobehub/ui/brand';
+import { createStaticStyles, keyframes } from 'antd-style';
+import { memo, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { isDesktop } from '@/const/version';
 import {
@@ -23,7 +25,73 @@ const CSS_VAR_CLASS = 'lobe-vars';
 
 export const APP_SHELL_FALLBACK_ID = 'app-shell-fallback';
 
-const styles = createStaticStyles(({ css }) => ({
+/**
+ * A boot that hands over inside a second reads as a transition, not a wait, so
+ * the shell stays a bare brand mark. Past that the user is waiting on something
+ * and deserves to be told so.
+ *
+ * Measured from the document, not from this component: the static HTML logo is
+ * already on screen before any bundle runs, and the shell itself only mounts
+ * `BOOT_SHELL_DELAY` after React's first commit. Timing from mount would restart
+ * the clock the user has been watching all along, and on the slow boots that
+ * need the hint most it would arrive last.
+ */
+const HINT_DELAY = 1000;
+
+const sinceDocument = () => performance.now() - (window.__LOBE_BOOT_T_HTML__ ?? 0);
+
+// The X half of the transform is the centering, not the motion — it has to be
+// restated in both frames or the keyframe overwrites it and the caption jumps
+// to the anchor's left edge.
+const slideUp = keyframes`
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+`;
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  contentBrand: css`
+    pointer-events: none;
+
+    position: absolute;
+    inset: 0;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    color: ${cssVar.colorTextQuaternary};
+  `,
+  // The mark carries the fade, not the whole stack: multiplying it into the
+  // caption too leaves quaternary text at ~0.2 alpha, which is unreadable.
+  mark: css`
+    opacity: 0.48;
+  `,
+  // Floated rather than stacked in flow: a caption that joins the column would
+  // push the brand mark off the center it shares with the app that replaces it.
+  hint: css`
+    position: absolute;
+    inset-block-start: calc(100% + 8px);
+    inset-inline-start: 50%;
+
+    font-size: 13px;
+    color: ${cssVar.colorTextTertiary};
+    white-space: nowrap;
+
+    animation: ${slideUp} 0.42s ${cssVar.motionEaseOut} both;
+  `,
+  brand: css`
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  `,
   dragRegion: css`
     pointer-events: auto;
     flex-shrink: 0;
@@ -42,12 +110,34 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
+/**
+ * Split out so `useTranslation` runs only once the hint is due. The boot shell
+ * is a sibling of `RouterProvider` and renders before the tree that initializes
+ * i18n, so calling it up front would hit react-i18next with no instance —
+ * a console warning and a first render that echoes the raw key.
+ */
+const LoadingHint = memo(() => {
+  const { t } = useTranslation('common');
+
+  return <div className={styles.hint}>{t('loading')}</div>;
+});
+
+LoadingHint.displayName = 'AppShellLoadingHint';
+
 interface AppShellSkeletonProps {
   id?: string;
 }
 
 const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
   const { isDark, navPanelBackground, navPanelWidth, showLeftPanel } = readBootShellGeometry();
+  const [waiting, setWaiting] = useState(() => sinceDocument() >= HINT_DELAY);
+
+  useEffect(() => {
+    if (waiting) return;
+
+    const timer = setTimeout(() => setWaiting(true), HINT_DELAY - sinceDocument());
+    return () => clearTimeout(timer);
+  }, [waiting]);
 
   return (
     <div aria-hidden className={`${CSS_VAR_CLASS} ${styles.root}`} id={id}>
@@ -79,7 +169,16 @@ const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
             height={'100%'}
             style={getInnerCssVariables({ isDark })}
             width={'100%'}
-          />
+          >
+            <div className={styles.contentBrand}>
+              <div className={styles.brand}>
+                <div className={styles.mark}>
+                  <LobeHub size={56} type={'mono'} />
+                </div>
+                {waiting && <LoadingHint />}
+              </div>
+            </div>
+          </Flexbox>
         </Flexbox>
       </Flexbox>
     </div>

@@ -13,7 +13,7 @@ export type TaskGroupItem = Awaited<ReturnType<typeof taskService.groupList>>['d
  * Personal mode hides the chip and treats every entry as 'all'.
  */
 export type TaskListVisibilityFilter = 'all' | 'private' | 'workspace';
-export type TaskKanbanGroupBy = 'assignee' | 'priority' | 'status';
+export type TaskKanbanGroupBy = 'assignee' | 'member' | 'priority' | 'status';
 
 export interface TaskListSliceState {
   groupListQueryAutomated?: boolean;

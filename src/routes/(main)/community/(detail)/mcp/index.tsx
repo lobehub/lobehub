@@ -13,7 +13,6 @@ import { useDiscoverStore } from '@/store/discover';
 import NotFound from '../components/NotFound';
 import { TocProvider } from '../features/Toc/useToc';
 import Details from './features/Details';
-import Loading from './loading';
 
 interface McpDetailPageProps {
   mobile?: boolean;
@@ -25,11 +24,9 @@ const McpDetailPage = memo<McpDetailPageProps>(({ mobile }) => {
 
   const { version } = useQuery() as { version?: string };
   const useMcpDetail = useDiscoverStore((s) => s.useFetchMcpDetail);
-  const { data, isLoading } = useMcpDetail({ identifier, version });
+  const { data } = useMcpDetail({ identifier, version });
 
   useFetchInstalledPlugins();
-
-  if (isLoading) return <Loading />;
   if (!data) return <NotFound />;
 
   return (

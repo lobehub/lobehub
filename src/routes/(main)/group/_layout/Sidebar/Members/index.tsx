@@ -1,6 +1,7 @@
 'use client';
 
-import { AccordionItem, ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { AccordionItem, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { ArrowUpDown, Loader2Icon, UserPlus } from 'lucide-react';
 import { type MouseEvent } from 'react';
 import { memo, useState } from 'react';

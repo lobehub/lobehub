@@ -31,17 +31,16 @@ vi.mock('@/services/git', () => ({
   },
 }));
 
-vi.mock('@lobehub/ui', () => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   Icon: ({ icon }: any) => <span data-icon={icon?.displayName ?? icon?.name} data-testid="icon" />,
-  Input: ({ value, onChange, placeholder }: any) => (
-    <input placeholder={placeholder} value={value} onChange={onChange} />
-  ),
   Tooltip: ({ children }: { children: ReactNode }) => (
     <span data-testid="worktree-tooltip">{children}</span>
   ),
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   confirmModal: confirmModalMock,
   DropdownMenuItem: ({ children, onClick }: { children: ReactNode; onClick?: () => void }) => (
     <button onClick={onClick}>{children}</button>
@@ -61,12 +60,6 @@ vi.mock('@lobehub/ui/base-ui', () => ({
     loading: toastLoadingMock,
     success: messageSuccessMock,
   },
-}));
-
-vi.mock('antd-style', () => ({
-  createStaticStyles: () => ({}),
-  cssVar: new Proxy({}, { get: () => 'var(--mock)' }),
-  cx: (...classes: string[]) => classes.filter(Boolean).join(' '),
 }));
 
 vi.mock('react-i18next', () => ({

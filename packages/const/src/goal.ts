@@ -32,3 +32,20 @@ export type GoalStatus = (typeof goalStatuses)[number];
 export const goalSubjectTypes = ['task', 'topic', 'standalone'] as const;
 
 export type GoalSubjectType = (typeof goalSubjectTypes)[number];
+
+/**
+ * `actorId` the coordinator stamps on the graph transitions it makes itself.
+ *
+ * Goal events used to record every transition as the goal's owner, because the
+ * model falls back to its `userId`. That made the coordinator's own moves
+ * indistinguishable from the user's, and "what did the system decide on its own"
+ * unanswerable — a stable id for the one non-human actor is what separates them.
+ */
+export const GOAL_COORDINATOR_ACTOR_ID = 'goal-coordinator';
+
+/**
+ * Fixed title of the terminal Goal-acceptance Work the coordinator creates
+ * once every other Work is terminal. Stored in English as data; clients
+ * recognize it and render the localized copy (`goalProcess.node.terminalAcceptance`).
+ */
+export const GOAL_ACCEPTANCE_TASK_TITLE = 'Complete full Goal acceptance';

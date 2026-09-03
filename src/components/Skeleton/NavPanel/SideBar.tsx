@@ -145,7 +145,7 @@ export const NAV_SKELETON_SHAPES: Record<string, NavSkeletonShape> = {
   'memory': { navRows: 7 },
   'page': { bodyGap: 1, groups: [12], headerVariant: 'title', navRows: 1 },
   'resource': { bodyPaddingBlock: 8, groups: [5], navRows: 6 },
-  'resourceLibrary': { bodyPaddingBlock: 8, groups: [6] },
+  'resourceLibrary': { bodyPaddingBlock: 8, groups: [6], search: true },
   'settings': { bodyGap: 4, groups: [6, 5, 8, 3], groupTitleHeight: 27, search: true },
   'video': { bodyGap: 1, groups: [4], groupTitleHeight: 40, navGap: 0, navRows: 2 },
   'workspace-settings': { groups: [5, 5, 6, 3], groupTitleHeight: 27 },

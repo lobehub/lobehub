@@ -334,7 +334,10 @@ describe('continueHeteroAfterError', () => {
     expect(mockExecuteHeterogeneousAgent).not.toHaveBeenCalled();
   });
 
-  it('ignores a retained member device override while the Workspace Agent is private', async () => {
+  // The owner's own `local` pick lives in the per-user override even on a
+  // private Workspace Agent (the shared row must never reference a personal
+  // device — the server rejects it), so it must keep applying here.
+  it("applies the owner's own local override while the Workspace Agent is private", async () => {
     mockAgentVisibility = 'private';
     mockIsWorkspaceAgent = true;
     mockSharedExecutionTarget = 'device';
@@ -353,8 +356,8 @@ describe('continueHeteroAfterError', () => {
 
     expect(mockSelectRuntimeType).toHaveBeenCalledWith(
       expect.objectContaining({
-        boundDeviceId: 'workspace-device',
-        executionTarget: 'device',
+        boundDeviceId: 'personal-device',
+        executionTarget: 'local',
         isWorkspaceAgent: true,
         workspaceScoped: false,
       }),

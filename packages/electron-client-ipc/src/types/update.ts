@@ -1,4 +1,5 @@
 export type UpdateChannel = 'stable' | 'canary';
+export type UpdateKind = 'app' | 'renderer';
 
 export interface ReleaseNoteInfo {
   /**
@@ -19,7 +20,8 @@ export interface ProgressInfo {
 }
 
 export interface UpdateInfo {
-  releaseDate: string;
+  kind: UpdateKind;
+  releaseDate?: string;
   releaseNotes?: string | ReleaseNoteInfo[];
   version: string;
 }

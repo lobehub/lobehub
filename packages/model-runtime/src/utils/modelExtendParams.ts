@@ -110,6 +110,10 @@ const MODEL_THINKING_LEVEL_DEFAULTS: Partial<
     thinkingLevel: 'medium',
     thinkingLevel3: 'medium',
   },
+  'gemini-3.8-flash': {
+    thinkingLevel: 'medium',
+    thinkingLevel3: 'medium',
+  },
   'gemini-3.5-flash': {
     thinkingLevel: 'medium',
   },
