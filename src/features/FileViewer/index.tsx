@@ -10,16 +10,19 @@ import { isHtmlFile } from '@/components/HtmlPreview';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { type FileListItem } from '@/types/files';
 
-import { isPdfFile } from './fileType';
+import { isDocxFile, isPdfFile, isPptxFile, isXlsxFile } from './fileType';
 import NotSupport from './NotSupport';
 import CodeViewer from './Renderer/Code';
+import { preloadDOCXRenderer } from './Renderer/DOCX/loader';
 import HTMLViewer from './Renderer/HTML';
 import ImageViewer from './Renderer/Image';
 import MarkdownViewer from './Renderer/Markdown';
 import MSDocViewer from './Renderer/MSDoc';
 import type { PDFViewerProps } from './Renderer/PDF';
 import { preloadPDFRenderer } from './Renderer/PDF/loader';
+import { preloadPPTXRenderer } from './Renderer/PPTX/loader';
 import VideoViewer from './Renderer/Video';
+import { preloadXLSXRenderer } from './Renderer/XLSX/loader';
 
 // File type definitions
 const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'];
@@ -252,11 +255,28 @@ interface FileViewerProps extends FileListItem {
 }
 
 type PDFRenderer = JSXElementConstructor<PDFViewerProps>;
+type PPTXRenderer = JSXElementConstructor<{ fileId: string; fileName: string; url: string }>;
+type XLSXRenderer = JSXElementConstructor<{ fileId: string; fileName: string; url: string }>;
+type DOCXRenderer = JSXElementConstructor<{ fileId: string; fileName: string; url: string }>;
 
 type PDFRendererState =
   | { status: 'idle' | 'loading' }
   | { error: unknown; status: 'error' }
   | { Renderer: PDFRenderer; status: 'ready' };
+
+type PPTXRendererState =
+  | { status: 'idle' | 'loading' }
+  | { error: unknown; status: 'error' }
+  | { Renderer: PPTXRenderer; status: 'ready' };
+
+type XLSXRendererState =
+  | { status: 'idle' | 'loading' }
+  | { error: unknown; status: 'error' }
+  | { Renderer: XLSXRenderer; status: 'ready' };
+type DOCXRendererState =
+  | { status: 'idle' | 'loading' }
+  | { error: unknown; status: 'error' }
+  | { Renderer: DOCXRenderer; status: 'ready' };
 
 const usePDFRenderer = (enabled: boolean) => {
   const [attempt, setAttempt] = useState(0);
@@ -287,12 +307,95 @@ const usePDFRenderer = (enabled: boolean) => {
   return { retry, state };
 };
 
+const usePPTXRenderer = (enabled: boolean) => {
+  const [attempt, setAttempt] = useState(0);
+  const [state, setState] = useState<PPTXRendererState>({ status: 'idle' });
+
+  useEffect(() => {
+    if (!enabled) return;
+    let active = true;
+    setState({ status: 'loading' });
+    void preloadPPTXRenderer().then(
+      ({ default: Renderer }) => active && setState({ Renderer, status: 'ready' }),
+      (error: unknown) => active && setState({ error, status: 'error' }),
+    );
+    return () => {
+      active = false;
+    };
+  }, [attempt, enabled]);
+
+  return { retry: useCallback(() => setAttempt((value) => value + 1), []), state };
+};
+
+const useXLSXRenderer = (enabled: boolean) => {
+  const [attempt, setAttempt] = useState(0);
+  const [state, setState] = useState<XLSXRendererState>({ status: 'idle' });
+  useEffect(() => {
+    if (!enabled) return;
+    let active = true;
+    setState({ status: 'loading' });
+    void preloadXLSXRenderer().then(
+      ({ default: Renderer }) => active && setState({ Renderer, status: 'ready' }),
+      (error: unknown) => active && setState({ error, status: 'error' }),
+    );
+    return () => {
+      active = false;
+    };
+  }, [attempt, enabled]);
+  return { retry: useCallback(() => setAttempt((value) => value + 1), []), state };
+};
+const useDOCXRenderer = (enabled: boolean) => {
+  const [attempt, setAttempt] = useState(0);
+  const [state, setState] = useState<DOCXRendererState>({ status: 'idle' });
+  useEffect(() => {
+    if (!enabled) return;
+    let active = true;
+    setState({ status: 'loading' });
+    void preloadDOCXRenderer().then(
+      ({ default: Renderer }) => active && setState({ Renderer, status: 'ready' }),
+      (error: unknown) => active && setState({ error, status: 'error' }),
+    );
+    return () => {
+      active = false;
+    };
+  }, [attempt, enabled]);
+  return { retry: useCallback(() => setAttempt((value) => value + 1), []), state };
+};
+
 /**
  * Preview any file type.
  */
 const FileViewer = memo<FileViewerProps>(({ id, style, fileType, url, name }) => {
   const isPDF = isPdfFile({ fileName: name, fileType, path: url });
+  const isPPTX = isPptxFile({ fileName: name, fileType, path: url });
+  const isXLSX = isXlsxFile({ fileName: name, fileType, path: url });
+  const isDOCX = isDocxFile({ fileName: name, fileType, path: url });
   const { retry: retryPDFRenderer, state: pdfRendererState } = usePDFRenderer(isPDF);
+  const { retry: retryPPTXRenderer, state: pptxRendererState } = usePPTXRenderer(isPPTX);
+  const { retry: retryXLSXRenderer, state: xlsxRendererState } = useXLSXRenderer(isXLSX);
+  const { retry: retryDOCXRenderer, state: docxRendererState } = useDOCXRenderer(isDOCX);
+
+  if (isDOCX) {
+    if (docxRendererState.status === 'error')
+      return (
+        <Center height={'100%'} width={'100%'}>
+          <AsyncError
+            error={docxRendererState.error}
+            variant={'block'}
+            onRetry={retryDOCXRenderer}
+          />
+        </Center>
+      );
+    if (docxRendererState.status === 'ready' && url) {
+      const { Renderer } = docxRendererState;
+      return <Renderer fileId={id} fileName={name} url={url} />;
+    }
+    return (
+      <Center height={'100%'} width={'100%'}>
+        <NeuralNetworkLoading size={36} />
+      </Center>
+    );
+  }
 
   // PDF files
   if (isPDF) {
@@ -308,6 +411,52 @@ const FileViewer = memo<FileViewerProps>(({ id, style, fileType, url, name }) =>
       return <Renderer fileId={id} url={url} />;
     }
 
+    return (
+      <Center height={'100%'} width={'100%'}>
+        <NeuralNetworkLoading size={36} />
+      </Center>
+    );
+  }
+
+  if (isPPTX) {
+    if (pptxRendererState.status === 'error')
+      return (
+        <Center height={'100%'} width={'100%'}>
+          <AsyncError
+            error={pptxRendererState.error}
+            variant={'block'}
+            onRetry={retryPPTXRenderer}
+          />
+        </Center>
+      );
+
+    if (pptxRendererState.status === 'ready' && url) {
+      const { Renderer } = pptxRendererState;
+      return <Renderer fileId={id} fileName={name} url={url} />;
+    }
+
+    return (
+      <Center height={'100%'} width={'100%'}>
+        <NeuralNetworkLoading size={36} />
+      </Center>
+    );
+  }
+
+  if (isXLSX) {
+    if (xlsxRendererState.status === 'error')
+      return (
+        <Center height={'100%'} width={'100%'}>
+          <AsyncError
+            error={xlsxRendererState.error}
+            variant={'block'}
+            onRetry={retryXLSXRenderer}
+          />
+        </Center>
+      );
+    if (xlsxRendererState.status === 'ready' && url) {
+      const { Renderer } = xlsxRendererState;
+      return <Renderer fileId={id} fileName={name} url={url} />;
+    }
     return (
       <Center height={'100%'} width={'100%'}>
         <NeuralNetworkLoading size={36} />
