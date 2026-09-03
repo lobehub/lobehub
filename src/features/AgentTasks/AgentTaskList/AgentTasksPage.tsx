@@ -169,12 +169,15 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   // Keep the SWR handle only for `error` + `mutate` (the error/Retry state).
   // Every scope splits automated work out of the ordinary tab — it is the
   // scheduled tab's content, and listing it twice makes the split meaningless.
+  // `complete`: this tab groups and sorts client-side with no pagination, so
+  // it needs the whole list — one server page would drop every task older
+  // than the newest 50 once the workspace grows past that.
   const { error, isLoading, mutate } = useFetchTaskList(
     projectId
-      ? { automated: false, projectId, visibility: 'all' }
+      ? { automated: false, complete: true, projectId, visibility: 'all' }
       : agentId
-        ? { agentId, automated: false }
-        : { allAgents: true, automated: false },
+        ? { agentId, automated: false, complete: true }
+        : { allAgents: true, automated: false, complete: true },
   );
   // Drive the loading/empty boundary off the store's own init flag, NOT SWR's
   // per-key `data`. On a scope (agent ↔ all) or visibility switch the store

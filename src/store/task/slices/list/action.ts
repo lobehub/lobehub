@@ -53,6 +53,15 @@ const filterToServerVisibility = (
 };
 
 /**
+ * `complete` mode paging. The server caps one `task.list` page at 100 rows, so
+ * the full list is assembled from consecutive pages; the ceiling bounds the
+ * fan-out for very large workspaces (10 requests) — past it the store keeps
+ * the real `total` so the list can say it is showing a subset.
+ */
+export const COMPLETE_TASK_LIST_PAGE_SIZE = 100;
+export const COMPLETE_TASK_LIST_MAX_ITEMS = 1000;
+
+/**
  * Cleared whenever the list scope changes (all-agents <-> a specific agent).
  * The list and group datasets are shared store fields, so without this reset
  * the previous scope's tasks would render until the new fetch resolves — e.g.
@@ -103,6 +112,36 @@ export class TaskListSliceActionImpl {
 
   fetchTaskList = async (params: Parameters<typeof taskService.list>[0]) =>
     taskService.list(params);
+
+  /**
+   * Every page of a list, merged. The first page reveals `total`; the rest are
+   * requested in parallel up to `COMPLETE_TASK_LIST_MAX_ITEMS`. Rows are
+   * de-duplicated by id because a task created or removed between two page
+   * requests shifts the offsets, which would otherwise list a row twice.
+   */
+  fetchCompleteTaskList = async (
+    params: Omit<Parameters<typeof taskService.list>[0], 'limit' | 'offset'>,
+  ) => {
+    const limit = COMPLETE_TASK_LIST_PAGE_SIZE;
+    const first = await this.fetchTaskList({ ...params, limit, offset: 0 });
+    const target = Math.min(first.total, COMPLETE_TASK_LIST_MAX_ITEMS);
+    if (first.data.length >= target) return first;
+
+    const offsets: number[] = [];
+    for (let offset = limit; offset < target; offset += limit) offsets.push(offset);
+    const rest = await Promise.all(
+      offsets.map((offset) => this.fetchTaskList({ ...params, limit, offset })),
+    );
+
+    const byId = new Map<string, (typeof first.data)[number]>();
+    for (const page of [first, ...rest]) {
+      for (const task of page.data) {
+        if (!byId.has(task.id)) byId.set(task.id, task);
+      }
+    }
+
+    return { ...first, data: [...byId.values()] };
+  };
 
   refreshTaskList = async (): Promise<void> => {
     const {
@@ -352,6 +391,14 @@ export class TaskListSliceActionImpl {
        * as `orderBy` and `visibility`.
        */
       automated?: boolean;
+      /**
+       * Fetch every page instead of the first server page. The Tasks page
+       * renders and groups the whole list client-side with no pagination, so
+       * a single page silently dropped every task older than the newest 50
+       * once a workspace outgrew that (LOBE-13779). Embedded overviews that
+       * only show a slice keep the default single page.
+       */
+      complete?: boolean;
       enabled?: boolean;
       /**
        * Newest-first by creation unless a caller asks otherwise. A block that
@@ -376,6 +423,7 @@ export class TaskListSliceActionImpl {
       agentId,
       allAgents = false,
       automated,
+      complete = false,
       enabled = true,
       orderBy,
       projectId,
@@ -421,14 +469,15 @@ export class TaskListSliceActionImpl {
         ? taskKeys.list(effectiveKey, listVisibility, orderBy, projectId, { automated, statuses })
         : null,
       async ([, id]: [string, string]) => {
-        return this.fetchTaskList({
+        const params = {
           ...(allAgents || projectId ? {} : { assigneeAgentId: id }),
           automated,
           orderBy,
           projectId,
           statuses: statuses?.length ? [...statuses] : undefined,
           visibility: filterToServerVisibility(listVisibility),
-        });
+        };
+        return complete ? this.fetchCompleteTaskList(params) : this.fetchTaskList(params);
       },
       {
         onSuccess: (data: { data: TaskListItem[]; total: number }) => {

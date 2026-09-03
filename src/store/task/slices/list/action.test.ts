@@ -424,4 +424,130 @@ describe('TaskListSliceAction', () => {
       expect(state.isTaskListInit).toBe(true);
     });
   });
+  // The Tasks page renders every task it receives, grouped client-side, and
+  // has no pagination. Without `complete` it only ever saw the first server
+  // page (50 newest by creation), so older tasks silently vanished once a
+  // workspace grew past that — e.g. a private task assigned to the viewer
+  // showing under "Private" (few rows) but not under "All" (LOBE-13779).
+  describe('useFetchTaskList complete mode', () => {
+    const page = (offset: number, size: number, total: number) =>
+      ({
+        data: Array.from({ length: size }, (_, i) => ({ id: `t${offset + i}` })),
+        success: true,
+        total,
+      }) as any;
+
+    it('fetches every page and merges them when the list exceeds one page', async () => {
+      const { useClientDataSWR } = await import('@/libs/swr');
+      const { taskService } = await import('@/services/task');
+      vi.mocked(taskService.list).mockImplementation(async ({ offset = 0 }: any) =>
+        page(offset, Math.min(100, 230 - offset), 230),
+      );
+
+      useTaskStore
+        .getState()
+        .useFetchTaskList({ allAgents: true, complete: true, visibility: 'all' });
+
+      const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as (
+        key: unknown[],
+      ) => Promise<{ data: unknown[]; total: number }>;
+      const result = await fetcher(['task:list', '__all__', 'all', 'createdAt']);
+
+      expect(taskService.list).toHaveBeenCalledTimes(3);
+      expect(taskService.list).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ limit: 100, offset: 0 }),
+      );
+      expect(taskService.list).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ limit: 100, offset: 100 }),
+      );
+      expect(taskService.list).toHaveBeenNthCalledWith(
+        3,
+        expect.objectContaining({ limit: 100, offset: 200 }),
+      );
+      expect(result.data).toHaveLength(230);
+      expect(result.total).toBe(230);
+    });
+
+    it('issues a single request when the first page already holds everything', async () => {
+      const { useClientDataSWR } = await import('@/libs/swr');
+      const { taskService } = await import('@/services/task');
+      vi.mocked(taskService.list).mockResolvedValue(page(0, 12, 12) as any);
+
+      useTaskStore
+        .getState()
+        .useFetchTaskList({ allAgents: true, complete: true, visibility: 'all' });
+
+      const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as (
+        key: unknown[],
+      ) => Promise<{ data: unknown[]; total: number }>;
+      const result = await fetcher(['task:list', '__all__', 'all', 'createdAt']);
+
+      expect(taskService.list).toHaveBeenCalledTimes(1);
+      expect(result.data).toHaveLength(12);
+    });
+
+    it('drops rows that shifted between pages instead of listing them twice', async () => {
+      const { useClientDataSWR } = await import('@/libs/swr');
+      const { taskService } = await import('@/services/task');
+      vi.mocked(taskService.list).mockImplementation(async ({ offset = 0 }: any) =>
+        // A task created between the two requests pushes `t99` onto page 2.
+        offset === 0
+          ? page(0, 100, 101)
+          : { ...page(99, 2, 101), data: [{ id: 't99' }, { id: 't100' }] },
+      );
+
+      useTaskStore
+        .getState()
+        .useFetchTaskList({ allAgents: true, complete: true, visibility: 'all' });
+
+      const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as (
+        key: unknown[],
+      ) => Promise<{ data: Array<{ id: string }>; total: number }>;
+      const result = await fetcher(['task:list', '__all__', 'all', 'createdAt']);
+
+      expect(result.data.map((t) => t.id).filter((id) => id === 't99')).toHaveLength(1);
+      expect(result.data).toHaveLength(101);
+    });
+
+    it('stops at the page cap and keeps the real total so the UI can say so', async () => {
+      const { useClientDataSWR } = await import('@/libs/swr');
+      const { taskService } = await import('@/services/task');
+      vi.mocked(taskService.list).mockImplementation(async ({ offset = 0 }: any) =>
+        page(offset, 100, 1500),
+      );
+
+      useTaskStore
+        .getState()
+        .useFetchTaskList({ allAgents: true, complete: true, visibility: 'all' });
+
+      const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as (
+        key: unknown[],
+      ) => Promise<{ data: unknown[]; total: number }>;
+      const result = await fetcher(['task:list', '__all__', 'all', 'createdAt']);
+
+      expect(taskService.list).toHaveBeenCalledTimes(10);
+      expect(result.data).toHaveLength(1000);
+      expect(result.total).toBe(1500);
+    });
+
+    it('keeps the single-page request for callers that do not opt in', async () => {
+      const { useClientDataSWR } = await import('@/libs/swr');
+      const { taskService } = await import('@/services/task');
+      vi.mocked(taskService.list).mockResolvedValue(page(0, 50, 230) as any);
+
+      useTaskStore.getState().useFetchTaskList({ allAgents: true, visibility: 'all' });
+
+      const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as (
+        key: unknown[],
+      ) => Promise<unknown>;
+      await fetcher(['task:list', '__all__', 'all', 'createdAt']);
+
+      expect(taskService.list).toHaveBeenCalledTimes(1);
+      expect(taskService.list).toHaveBeenCalledWith(
+        expect.not.objectContaining({ limit: expect.anything() }),
+      );
+    });
+  });
 });
