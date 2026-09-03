@@ -4,15 +4,28 @@ import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
 import { Center, Flexbox } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
+import { Button, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { memo, useCallback, useEffect, useState } from 'react';
+import type { Workbook as ExcelWorkbook } from 'exceljs';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
 import Loading from '@/components/Loading/CircleLoading';
 import { Document, Page, pdfjs } from '@/libs/pdfjs';
 import { localFileService } from '@/services/electron/localFileService';
+
+import {
+  applyCellFormat,
+  displayCell,
+  EXCEL_MIME_TYPE,
+  formulaInput,
+  moveWorksheet,
+  recalculateWorkbook,
+  setCellInput,
+  spliceWorksheetColumns,
+  spliceWorksheetRows,
+} from './excelWorkbook';
 
 // Same CDN assets as the FileViewer PDF renderer — cmaps / fonts are required
 // for non-latin PDFs.
@@ -90,6 +103,9 @@ const styles = createStaticStyles(({ css }) => ({
       background: ${cssVar.colorFillSecondary};
     }
   `,
+  sheetTabAdd: css`
+    min-width: 28px;
+  `,
   sheetTabs: css`
     overflow-x: auto;
     display: flex;
@@ -112,6 +128,28 @@ const styles = createStaticStyles(({ css }) => ({
     height: 100%;
     background: ${cssVar.colorBgContainer};
   `,
+  xlsxFormulaBar: css`
+    display: grid;
+    grid-template-columns: 64px minmax(160px, 1fr);
+    gap: 6px;
+
+    padding-block: 6px;
+    padding-inline: 8px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+
+    input {
+      min-width: 0;
+      padding-block: 4px;
+      padding-inline: 8px;
+      border: 1px solid ${cssVar.colorBorder};
+      border-radius: 4px;
+
+      color: ${cssVar.colorText};
+
+      background: ${cssVar.colorBgContainer};
+      outline: none;
+    }
+  `,
   xlsxTable: css`
     overflow: auto;
     flex: 1;
@@ -121,7 +159,8 @@ const styles = createStaticStyles(({ css }) => ({
       font-size: 12px;
     }
 
-    td {
+    td,
+    th {
       overflow: hidden;
 
       max-width: 320px;
@@ -132,6 +171,63 @@ const styles = createStaticStyles(({ css }) => ({
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+
+    th {
+      position: sticky;
+      z-index: 1;
+      inset-block-start: 0;
+
+      color: ${cssVar.colorTextSecondary};
+      text-align: center;
+
+      background: ${cssVar.colorFillQuaternary};
+    }
+
+    th:first-child {
+      z-index: 2;
+      inset-inline-start: 0;
+    }
+
+    td:first-child {
+      position: sticky;
+      inset-inline-start: 0;
+
+      color: ${cssVar.colorTextSecondary};
+      text-align: center;
+
+      background: ${cssVar.colorFillQuaternary};
+    }
+
+    td[data-selected='true'] {
+      padding-block: 3px;
+      padding-inline: 7px;
+      border: 2px solid ${cssVar.colorPrimary};
+    }
+
+    td input {
+      width: 100%;
+      min-width: 72px;
+      padding: 0;
+      border: none;
+
+      color: inherit;
+
+      background: transparent;
+      outline: none;
+    }
+  `,
+  xlsxToolbar: css`
+    overflow-x: auto;
+    display: flex;
+    flex: none;
+    gap: 4px;
+    align-items: center;
+
+    padding-block: 6px;
+    padding-inline: 8px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+
+    white-space: nowrap;
   `,
   pdfContainer: css`
     overflow: auto;
@@ -278,44 +374,28 @@ const DocxPane = memo<OfficePaneProps>(({ blob, onError }) => {
 
 DocxPane.displayName = 'DocxPane';
 
-/**
- * DOM tables choke on huge sheets; a preview only needs the head of the data.
- * Users open the real file (default app / download) for the full sheet.
- */
-const MAX_PREVIEW_ROWS = 500;
+const MAX_EDITOR_ROWS = 500;
+const MIN_EDITOR_ROWS = 20;
+const MIN_EDITOR_COLUMNS = 10;
 
-interface SheetGrid {
-  name: string;
-  rows: string[][];
-  truncated: boolean;
-}
-
-/** Flatten an exceljs cell value (rich text / formula / hyperlink / date …) to display text. */
-const formatCellValue = (value: unknown): string => {
-  if (value === null || value === undefined) return '';
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
-  if (typeof value === 'object') {
-    const cell = value as {
-      error?: string;
-      formula?: string;
-      hyperlink?: string;
-      result?: unknown;
-      richText?: { text: string }[];
-      text?: unknown;
-    };
-    if (cell.richText) return cell.richText.map((run) => run.text).join('');
-    if (cell.formula !== undefined) return formatCellValue(cell.result);
-    if (cell.text !== undefined) return formatCellValue(cell.text);
-    if (cell.error) return cell.error;
-    return '';
+const columnName = (index: number) => {
+  let name = '';
+  for (let value = index; value > 0; value = Math.floor((value - 1) / 26)) {
+    name = String.fromCharCode(65 + ((value - 1) % 26)) + name;
   }
-  return String(value);
+  return name;
 };
 
 const XlsxPane = memo<OfficePaneProps>(({ blob, onError }) => {
   const { t } = useTranslation('chat');
-  const [sheets, setSheets] = useState<SheetGrid[]>();
+  const workbookRef = useRef<ExcelWorkbook | undefined>(undefined);
+  const [ready, setReady] = useState(false);
   const [activeSheet, setActiveSheet] = useState(0);
+  const [selectedAddress, setSelectedAddress] = useState('A1');
+  const [formula, setFormula] = useState('');
+  const [version, setVersion] = useState(0);
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     let disposed = false;
@@ -326,23 +406,14 @@ const XlsxPane = memo<OfficePaneProps>(({ blob, onError }) => {
         const workbook = new Workbook();
         await workbook.xlsx.load(await blob.arrayBuffer());
         if (disposed) return;
-
-        const grids: SheetGrid[] = workbook.worksheets.map((sheet) => {
-          const columnCount = sheet.actualColumnCount;
-          const rows: string[][] = [];
-          // eachRow skips empty rows, keeping the preview dense; row order is preserved.
-          sheet.eachRow((row) => {
-            if (rows.length >= MAX_PREVIEW_ROWS) return;
-            const cells: string[] = [];
-            for (let index = 1; index <= columnCount; index++) {
-              cells.push(formatCellValue(row.getCell(index).value));
-            }
-            rows.push(cells);
-          });
-          return { name: sheet.name, rows, truncated: sheet.actualRowCount > MAX_PREVIEW_ROWS };
-        });
-        setSheets(grids);
+        workbookRef.current = workbook;
+        recalculateWorkbook(workbook);
         setActiveSheet(0);
+        setSelectedAddress('A1');
+        const firstSheet = workbook.worksheets[0];
+        setFormula(firstSheet ? formulaInput(firstSheet.getCell('A1')) : '');
+        setDirty(false);
+        setReady(true);
       } catch (error) {
         if (!disposed) onError(error);
       }
@@ -353,44 +424,272 @@ const XlsxPane = memo<OfficePaneProps>(({ blob, onError }) => {
     };
   }, [blob, onError]);
 
-  if (!sheets) return <Loading />;
+  if (!ready || !workbookRef.current) return <Loading />;
 
-  const sheet = sheets[activeSheet] ?? sheets[0];
+  const workbook = workbookRef.current;
+  const sheet = workbook.worksheets[activeSheet] ?? workbook.worksheets[0];
+  if (!sheet) return null;
+  const rowCount = Math.min(MAX_EDITOR_ROWS, Math.max(MIN_EDITOR_ROWS, sheet.actualRowCount));
+  const columnCount = Math.max(MIN_EDITOR_COLUMNS, sheet.actualColumnCount);
+  const refresh = () => {
+    setDirty(true);
+    setVersion((value) => value + 1);
+  };
+  const selectCell = (address: string) => {
+    setSelectedAddress(address);
+    setFormula(formulaInput(sheet.getCell(address)));
+  };
+  const commit = (address: string, value: string) => {
+    try {
+      setCellInput(workbook, sheet, address, value);
+      setFormula(formulaInput(sheet.getCell(address)));
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    }
+  };
+  const selected = sheet.getCell(selectedAddress);
+  const mutateStructure = (kind: 'column' | 'row', remove = false) => {
+    if (kind === 'row') spliceWorksheetRows(workbook, sheet, Number(selected.row), remove ? 1 : 0);
+    else spliceWorksheetColumns(workbook, sheet, Number(selected.col), remove ? 1 : 0);
+    refresh();
+  };
+  const download = async () => {
+    setSaving(true);
+    try {
+      recalculateWorkbook(workbook);
+      const bytes = await workbook.xlsx.writeBuffer();
+      const url = URL.createObjectURL(new Blob([bytes], { type: EXCEL_MIME_TYPE }));
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = 'workbook.xlsx';
+      anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      setDirty(false);
+      toast.success(t('workingPanel.localFile.document.excel.exported'));
+    } catch (error) {
+      toast.error(t('workingPanel.localFile.document.excel.exportFailed'));
+      console.error('[DocumentPreview] Excel export failed:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className={styles.xlsxContainer}>
-      {sheets.length > 1 && (
-        <div className={styles.sheetTabs}>
-          {sheets.map((item, index) => (
-            <button
-              className={styles.sheetTab}
-              data-active={index === activeSheet}
-              key={`${index}-${item.name}`}
-              type={'button'}
-              onClick={() => setActiveSheet(index)}
-            >
-              {item.name}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className={styles.xlsxToolbar}>
+        <Button disabled={!dirty || saving} size={'small'} onClick={download}>
+          {saving
+            ? t('workingPanel.localFile.document.excel.saving')
+            : t('workingPanel.localFile.document.excel.saveDownload')}
+        </Button>
+        <Button size={'small'} onClick={() => mutateStructure('row')}>
+          {t('workingPanel.localFile.document.excel.insertRow')}
+        </Button>
+        <Button size={'small'} onClick={() => mutateStructure('row', true)}>
+          {t('workingPanel.localFile.document.excel.deleteRow')}
+        </Button>
+        <Button size={'small'} onClick={() => mutateStructure('column')}>
+          {t('workingPanel.localFile.document.excel.insertColumn')}
+        </Button>
+        <Button size={'small'} onClick={() => mutateStructure('column', true)}>
+          {t('workingPanel.localFile.document.excel.deleteColumn')}
+        </Button>
+        <Button
+          size={'small'}
+          onClick={() => {
+            applyCellFormat(selected, { bold: !selected.font?.bold });
+            refresh();
+          }}
+        >
+          B
+        </Button>
+        <Button
+          size={'small'}
+          onClick={() => {
+            applyCellFormat(selected, { italic: !selected.font?.italic });
+            refresh();
+          }}
+        >
+          I
+        </Button>
+        {(['left', 'center', 'right'] as const).map((align) => (
+          <Button
+            key={align}
+            size={'small'}
+            onClick={() => {
+              applyCellFormat(selected, { align });
+              refresh();
+            }}
+          >
+            {t(`workingPanel.localFile.document.excel.align.${align}`)}
+          </Button>
+        ))}
+        {(['0.00', '$#,##0.00', '0.0%'] as const).map((numberFormat) => (
+          <Button
+            key={numberFormat}
+            size={'small'}
+            onClick={() => {
+              applyCellFormat(selected, { numberFormat });
+              refresh();
+            }}
+          >
+            {numberFormat}
+          </Button>
+        ))}
+        <input
+          aria-label={t('workingPanel.localFile.document.excel.fillColor')}
+          type={'color'}
+          onChange={(event) => {
+            applyCellFormat(selected, { fill: event.target.value });
+            refresh();
+          }}
+        />
+      </div>
+      <div className={styles.xlsxFormulaBar}>
+        <input
+          readOnly
+          aria-label={t('workingPanel.localFile.document.excel.cellAddress')}
+          value={selectedAddress}
+        />
+        <input
+          aria-label={t('workingPanel.localFile.document.excel.formula')}
+          value={formula}
+          onBlur={() => commit(selectedAddress, formula)}
+          onChange={(event) => setFormula(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') event.currentTarget.blur();
+          }}
+        />
+      </div>
       <div className={styles.xlsxTable}>
-        <table>
+        <table key={version}>
+          <thead>
+            <tr>
+              <th />
+              {Array.from({ length: columnCount }, (_, index) => (
+                <th key={index}>{columnName(index + 1)}</th>
+              ))}
+            </tr>
+          </thead>
           <tbody>
-            {sheet?.rows.map((row, rowIndex) => (
-              <tr key={rowIndex}>
-                {row.map((cell, cellIndex) => (
-                  <td key={cellIndex}>{cell}</td>
-                ))}
+            {Array.from({ length: rowCount }, (_, rowIndex) => (
+              <tr key={rowIndex + 1}>
+                <td>{rowIndex + 1}</td>
+                {Array.from({ length: columnCount }, (_, columnIndex) => {
+                  const address = `${columnName(columnIndex + 1)}${rowIndex + 1}`;
+                  const cell = sheet.getCell(address);
+                  return (
+                    <td
+                      data-selected={address === selectedAddress}
+                      key={address}
+                      style={{
+                        background:
+                          cell.fill?.type === 'pattern'
+                            ? `#${cell.fill.fgColor?.argb?.slice(-6)}`
+                            : undefined,
+                        fontStyle: cell.font?.italic ? 'italic' : undefined,
+                        fontWeight: cell.font?.bold ? 600 : undefined,
+                        textAlign: cell.alignment?.horizontal as
+                          'center' | 'left' | 'right' | undefined,
+                      }}
+                      onClick={() => selectCell(address)}
+                      onPaste={(event) => {
+                        event.preventDefault();
+                        const rows = event.clipboardData
+                          .getData('text')
+                          .replaceAll('\r', '')
+                          .split('\n');
+                        rows.forEach((line, pasteRow) =>
+                          line.split('\t').forEach((value, pasteColumn) => {
+                            const target = sheet.getCell(
+                              rowIndex + pasteRow + 1,
+                              columnIndex + pasteColumn + 1,
+                            );
+                            setCellInput(workbook, sheet, target.address, value);
+                          }),
+                        );
+                        refresh();
+                      }}
+                    >
+                      <input
+                        aria-label={address}
+                        defaultValue={displayCell(cell)}
+                        onBlur={(event) => commit(address, event.target.value)}
+                        onFocus={() => selectCell(address)}
+                      />
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>
         </table>
-        {sheet?.truncated && (
+        {sheet.actualRowCount > MAX_EDITOR_ROWS && (
           <div className={styles.truncatedNote}>
-            {t('workingPanel.localFile.document.truncatedRows', { count: MAX_PREVIEW_ROWS })}
+            {t('workingPanel.localFile.document.truncatedRows', { count: MAX_EDITOR_ROWS })}
           </div>
         )}
+      </div>
+      <div className={styles.sheetTabs}>
+        {workbook.worksheets.map((item, index) => (
+          <button
+            className={styles.sheetTab}
+            data-active={index === activeSheet}
+            key={item.id}
+            type={'button'}
+            onClick={() => {
+              setActiveSheet(index);
+              setSelectedAddress('A1');
+              setFormula(formulaInput(item.getCell('A1')));
+            }}
+            onDoubleClick={() => {
+              const name = globalThis
+                .prompt(t('workingPanel.localFile.document.excel.renameSheet'), item.name)
+                ?.trim();
+              if (name) {
+                item.name = name;
+                refresh();
+              }
+            }}
+          >
+            {item.name}
+          </button>
+        ))}
+        <Button
+          className={styles.sheetTabAdd}
+          size={'small'}
+          title={t('workingPanel.localFile.document.excel.addSheet')}
+          onClick={() => {
+            const item = workbook.addWorksheet();
+            setActiveSheet(workbook.worksheets.indexOf(item));
+            refresh();
+          }}
+        >
+          +
+        </Button>
+        <Button
+          disabled={activeSheet === 0}
+          size={'small'}
+          onClick={() => {
+            moveWorksheet(workbook, activeSheet, activeSheet - 1);
+            setActiveSheet(activeSheet - 1);
+            refresh();
+          }}
+        >
+          ←
+        </Button>
+        <Button
+          disabled={activeSheet === workbook.worksheets.length - 1}
+          size={'small'}
+          onClick={() => {
+            moveWorksheet(workbook, activeSheet, activeSheet + 1);
+            setActiveSheet(activeSheet + 1);
+            refresh();
+          }}
+        >
+          →
+        </Button>
       </div>
     </div>
   );
