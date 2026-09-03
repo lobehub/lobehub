@@ -12,6 +12,7 @@
   "table.columns.spend": "Kredi",
   "table.columns.time": "Zaman",
   "table.columns.totalTokens": "Token Kullanımı",
+  "table.columns.trigger.enums.agent_share": "Temsilci Payı",
   "table.columns.trigger.enums.agent_signal": "Ajan Sinyali",
   "table.columns.trigger.enums.api": "API Çağrısı",
   "table.columns.trigger.enums.bot": "Bot Mesajı",

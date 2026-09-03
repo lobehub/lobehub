@@ -464,6 +464,7 @@
   "serverVersionOutdated.warning": "Bazı özellikler düzgün çalışmayabilir veya beklenmedik şekilde davranabilir. En iyi deneyim için lütfen sunucunuzu güncelleyin.",
   "setting": "Ayarlar",
   "share": "Paylaş",
+  "stillLoading": "Hâlâ yükleniyor...",
   "stop": "Durdur",
   "switch": "Değiştir",
   "sync.actions.settings": "Ayarları Senkronize Et",

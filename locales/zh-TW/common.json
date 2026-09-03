@@ -464,6 +464,7 @@
   "serverVersionOutdated.warning": "某些功能可能無法正常運作或出現異常行為。請更新您的伺服器以獲得最佳體驗。",
   "setting": "設定",
   "share": "分享",
+  "stillLoading": "仍在載入中...",
   "stop": "停止",
   "switch": "切換",
   "sync.actions.settings": "同步設定",

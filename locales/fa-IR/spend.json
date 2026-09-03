@@ -12,6 +12,7 @@
   "table.columns.spend": "اعتبار مصرف‌شده",
   "table.columns.time": "زمان",
   "table.columns.totalTokens": "میزان استفاده از توکن",
+  "table.columns.trigger.enums.agent_share": "سهم نماینده",
   "table.columns.trigger.enums.agent_signal": "سیگنال عامل",
   "table.columns.trigger.enums.api": "تماس API",
   "table.columns.trigger.enums.bot": "پیام ربات",

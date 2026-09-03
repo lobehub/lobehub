@@ -126,6 +126,7 @@
   "transfer.ownerOnly": "워크스페이스 소유자만 다른 멤버가 생성한 리소스를 이동할 수 있습니다.",
   "transfer.resourceNotFound": "이 리소스는 더 이상 존재하지 않거나 접근 권한이 없습니다. 새로고침 후 다시 시도하세요.",
   "transfer.sameWorkspace": "이 리소스는 이미 선택한 워크스페이스에 있습니다. 다른 대상 워크스페이스를 선택하세요.",
+  "transfer.sharedTransferBlocked": "이 에이전트는 공유 링크를 가지고 있으므로 소유자를 변경할 수 없습니다.",
   "transfer.targetIsCurrentOwner": "이 에이전트는 이미 해당 멤버에게 속해 있습니다. 다른 사람을 선택하세요.",
   "transfer.targetNoWriteAccess": "대상 워크스페이스로 리소스를 이동하려면 멤버 또는 소유자 권한이 필요합니다.",
   "transfer.targetNotWorkspaceMember": "선택한 수신자는 이 워크스페이스의 활성 멤버가 아닙니다. 멤버 목록을 새로고침하고 다시 시도하세요.",

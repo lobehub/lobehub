@@ -836,6 +836,7 @@
   "lobehub.gemini-3.5-flash.description": "최첨단 지능과 우수한 검색 및 기반 기술을 결합하여 속도를 위해 설계된 Gemini의 가장 지능적인 모델입니다.",
   "lobehub.gemini-3.6-flash.description": "Gemini 3.6 Flash는 속도와 지능의 균형을 이루며 강력한 에이전트, 코딩, 멀티모달 성능을 제공하며 토큰 효율성이 향상되었습니다.",
   "lobehub.gemini-3.7-flash.description": "Gemini 3.7 Flash는 복잡한 코딩, 에이전트 워크플로우, 신뢰할 수 있는 다단계 실행을 위해 설계된 Google의 가장 강력한 Flash 모델입니다.",
+  "lobehub.gemini-3.8-flash.description": "Google의 가장 지능적인 Flash 모델로, 장기적인 코딩 및 자율 에이전트에 최적화되었습니다. 3.7 Flash와 동일한 가격에 첫 토큰이 더 빠르고 덜 장황합니다.",
   "lobehub.glm-5.1.description": "Zai의 최신 플래그십 모델로, 전반적인 성능과 코딩 능력에서 Claude Opus 4.6과 동등합니다. 최대 8시간의 자율 작업이 가능하며, 자율 에이전트 및 장기 코딩 에이전트의 이상적인 기반입니다.",
   "lobehub.glm-5.2.description": "GLM-5.2는 동시기에 출시된 최신 세대 Claude Opus 성능에 근접한 최초의 오픈소스 모델입니다.",
   "lobehub.glm-5.3-flash.description": "처음으로 볼 수 있는 GLM-5 — GLM-5.2보다 강력하며, Opus 4.8에 가까운 코딩 성능을 제공하면서도 플래그십 가격의 약 10분의 1 수준입니다.",

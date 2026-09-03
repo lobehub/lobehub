@@ -836,6 +836,7 @@
   "lobehub.gemini-3.5-flash.description": "Mô hình thông minh nhất của Gemini được xây dựng để đạt tốc độ, kết hợp trí tuệ tiên tiến với khả năng tìm kiếm và căn cứ vượt trội.",
   "lobehub.gemini-3.6-flash.description": "Gemini 3.6 Flash cân bằng giữa tốc độ và trí thông minh để mang lại hiệu suất mạnh mẽ trong các nhiệm vụ đại diện, lập trình và đa phương thức với hiệu quả sử dụng token được cải thiện.",
   "lobehub.gemini-3.7-flash.description": "Gemini 3.7 Flash là mô hình Flash mạnh mẽ nhất của Google, được thiết kế cho mã hóa phức tạp, quy trình làm việc tự động và thực thi nhiều bước đáng tin cậy.",
+  "lobehub.gemini-3.8-flash.description": "Mô hình Flash thông minh nhất của Google, được tối ưu hóa cho mã hóa dài hạn và các tác nhân tự động — tốc độ tạo token đầu tiên nhanh hơn và ít dài dòng hơn so với Flash 3.7 với cùng mức giá.",
   "lobehub.glm-5.1.description": "Mô hình hàng đầu mới nhất của Zai, ngang hàng với Claude Opus 4.6 về khả năng tổng thể và lập trình. Xuất sắc trong các nhiệm vụ dài hạn với khả năng làm việc tự động lên đến 8 giờ, là nền tảng lý tưởng cho các Đại diện Tự động và Đại diện Lập trình Dài hạn.",
   "lobehub.glm-5.2.description": "GLM-5.2 là mô hình mã nguồn mở đầu tiên đạt gần đến hiệu suất của Claude Opus thế hệ mới nhất được phát hành cùng thời kỳ.",
   "lobehub.glm-5.3-flash.description": "GLM-5 đầu tiên có khả năng nhìn — mạnh hơn GLM-5.2, khả năng lập trình gần đạt Opus 4.8, với mức giá chỉ bằng khoảng một phần mười so với phiên bản cao cấp.",
