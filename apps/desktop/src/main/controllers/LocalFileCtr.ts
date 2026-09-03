@@ -56,6 +56,7 @@ import type { FileResult, SearchOptions } from '@lobechat/local-file-shell/types
 import { resolveMimeType } from '@lobechat/utils/mimeType';
 import { dialog, shell } from 'electron';
 
+import { callLambdaMutation } from '@/modules/heterogeneousAgent/fileStorePort';
 import ContentSearchService from '@/services/contentSearchSrv';
 import FileSearchService from '@/services/fileSearchSrv';
 import RemoteFileUploadService from '@/services/remoteFileUploadSrv';
@@ -63,11 +64,34 @@ import { createLogger } from '@/utils/logger';
 import { netFetch } from '@/utils/net-fetch';
 
 import { ControllerModule, IpcMethod } from './index';
+import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 
 // Create logger
 const logger = createLogger('controllers:LocalFileCtr');
 
 const SAFE_PATH_PREFIXES = ['/tmp', '/var/tmp'] as const;
+
+type DeniedRootsPolicyField = 'deniedReadRoots' | 'deniedWriteRoots';
+
+/**
+ * The `local` (this desktop's own machine) half of file-access governance —
+ * see `docs/文件操作治理-实施指南-20260902.md` §3. Model-authored file
+ * operations on the user's own machine never round-trip through the CPC
+ * server at all (unlike a `device` connected via `lh connect`, which goes
+ * through `apps/server`'s `builtin.ts` chokepoint), so this desktop process
+ * has to enforce `deniedWriteRoots`/`deniedReadRoots` itself.
+ *
+ * Mirrors `pathPolicy.ts`'s `FILE_BLOCKED_MESSAGE` on the CPC server (kept as
+ * a separate literal — this app cannot import server code) — same rationale:
+ * a bare "this path is blocked" has been observed producing a retry against a
+ * nearby path instead of stopping.
+ */
+const FILE_BLOCKED_MESSAGE =
+  'This file operation was blocked by an administrator-configured execution policy for this ' +
+  'user. This is a policy decision, not a transient error — retrying this path, a nearby path ' +
+  'under the same directory, or an equivalent operation will be blocked again. Do not attempt ' +
+  'to read or write this path again in any form. Stop this line of action now and tell the ' +
+  "user the operation was blocked by their administrator's policy.";
 const PROJECT_FILE_GLOB_LIMIT = 5000;
 
 /**
@@ -307,6 +331,135 @@ export default class LocalFileCtr extends ControllerModule {
     return this.app.getService(ContentSearchService);
   }
 
+  /**
+   * Admin-configured denied-path roots for the signed-in user, memoized for
+   * the same reason as `ShellCommandCtr`'s execution-policy cache: cheap to
+   * reuse, no reason to hit the network on every file operation. Refreshed
+   * periodically rather than once per app run — an admin can edit the policy
+   * any time.
+   *
+   * `undefined` on any failure (no controller, signed out, offline, no
+   * policy configured) is always safe: this only NARROWS what the user could
+   * already do, so falling back to "no restriction" is just today's
+   * pre-existing behavior, not a security regression — mirrors
+   * `ShellCommandCtr.resolveExecutionPolicy`'s overlay fields (NOT its
+   * `commandMode`, which fails to the last known value instead — there is no
+   * equivalent "does this operate at all" gate here to protect).
+   */
+  private deniedRootsCache?: {
+    at: number;
+    roots: { deniedReadRoots?: string[]; deniedWriteRoots?: string[] } | undefined;
+  };
+
+  private async resolveDeniedRoots(): Promise<
+    { deniedReadRoots?: string[]; deniedWriteRoots?: string[] } | undefined
+  > {
+    const REFRESH_INTERVAL_MS = 10 * 60 * 1000;
+    if (this.deniedRootsCache && Date.now() - this.deniedRootsCache.at < REFRESH_INTERVAL_MS) {
+      return this.deniedRootsCache.roots;
+    }
+
+    const roots = await (async () => {
+      try {
+        const remoteServerConfigCtr = this.app.getController(RemoteServerConfigCtr);
+        const accessToken = await remoteServerConfigCtr?.getAccessToken();
+        const serverUrl = await remoteServerConfigCtr?.getRemoteServerUrl();
+        if (!accessToken || !serverUrl) return undefined;
+
+        const policy = await callLambdaMutation<{
+          deniedReadRoots?: string[];
+          deniedWriteRoots?: string[];
+        } | null>({ accessToken, serverUrl }, 'executionPolicy.get', undefined);
+
+        return policy
+          ? { deniedReadRoots: policy.deniedReadRoots, deniedWriteRoots: policy.deniedWriteRoots }
+          : undefined;
+      } catch (error) {
+        logger.debug('Execution-policy fetch failed, running without file governance:', error);
+        return undefined;
+      }
+    })();
+
+    this.deniedRootsCache = { at: Date.now(), roots };
+    return roots;
+  }
+
+  /**
+   * Best-effort: `LocalFileCtr` has no DB connection (it runs in Electron
+   * main, not the CPC server), so a blocked attempt is reported over the
+   * network via `governance.logFileAccess` instead of written directly —
+   * see that mutation's doc comment for why only blocked attempts are
+   * reported. A reporting failure must never turn an already-decided block
+   * into a silent allow, so this never throws and the caller does not await
+   * anything about its outcome beyond "best effort, fire and forget".
+   */
+  private async reportBlockedFileAccess(
+    apiName: string,
+    matchedField: DeniedRootsPolicyField,
+    targetPath: string,
+  ): Promise<void> {
+    try {
+      const remoteServerConfigCtr = this.app.getController(RemoteServerConfigCtr);
+      const accessToken = await remoteServerConfigCtr?.getAccessToken();
+      const serverUrl = await remoteServerConfigCtr?.getRemoteServerUrl();
+      if (!accessToken || !serverUrl) return;
+
+      await callLambdaMutation({ accessToken, serverUrl }, 'executionPolicy.logFileAccess', {
+        apiName,
+        matchedField,
+        path: targetPath,
+      });
+    } catch (error) {
+      logger.debug('Failed to report blocked file access:', error);
+    }
+  }
+
+  /**
+   * Checks every candidate path against the matching denied-roots field
+   * (`deniedWriteRoots` for a write, `deniedReadRoots` for a read), and
+   * throws `FILE_BLOCKED_MESSAGE` on the first match — `@IpcMethod()`
+   * converts a thrown error into a clean envelope regardless of which of
+   * this controller's many differently-shaped result types the caller
+   * expected, so every governed method can use this the same way without
+   * hand-building a type-correct "blocked" response for each one.
+   *
+   * Precise `~` expansion (unlike the CPC server's `pathPolicy.ts`, which can
+   * only do text-level suffix matching): `os.homedir()` on THIS machine is
+   * the real home directory, so `expandTilde` (already used elsewhere in
+   * this file) resolves both the target path and the policy's roots before
+   * comparing.
+   */
+  private async checkFileGovernance(
+    apiName: string,
+    direction: 'read' | 'write',
+    candidatePaths: (string | undefined)[],
+  ): Promise<void> {
+    const roots = await this.resolveDeniedRoots();
+    if (!roots) return;
+
+    const matchedField: DeniedRootsPolicyField =
+      direction === 'write' ? 'deniedWriteRoots' : 'deniedReadRoots';
+    const deniedRoots = roots[matchedField];
+    if (!deniedRoots?.length) return;
+
+    for (const rawPath of candidatePaths) {
+      if (!rawPath) continue;
+
+      const resolvedTarget = (expandTilde(rawPath) ?? rawPath).replaceAll('\\', '/');
+      const hit = deniedRoots.some((root) => {
+        const resolvedRoot = (expandTilde(root) ?? root).replaceAll('\\', '/');
+        return resolvedTarget === resolvedRoot || resolvedTarget.startsWith(`${resolvedRoot}/`);
+      });
+
+      if (hit) {
+        // Fire-and-forget — never let a reporting failure block the response
+        // the caller is already about to get (the throw below).
+        void this.reportBlockedFileAccess(apiName, matchedField, rawPath);
+        throw new Error(FILE_BLOCKED_MESSAGE);
+      }
+    }
+  }
+
   // ==================== File Operation ====================
 
   @IpcMethod()
@@ -441,6 +594,8 @@ export default class LocalFileCtr extends ControllerModule {
 
   @IpcMethod()
   async readFile(params: LocalReadFileParams): Promise<LocalReadFileResult> {
+    await this.checkFileGovernance('readFile', 'read', [params.path]);
+
     logger.debug('Starting to read file:', {
       filePath: params.path,
       fullContent: params.fullContent,
@@ -526,12 +681,20 @@ export default class LocalFileCtr extends ControllerModule {
   async listLocalFiles(
     params: ListLocalFileParams,
   ): Promise<{ files: FileResult[]; totalCount: number }> {
+    await this.checkFileGovernance('listFiles', 'read', [params.path]);
+
     logger.debug('Listing directory contents:', params);
     return listLocalFiles(params) as any;
   }
 
   @IpcMethod()
   async handleMoveFiles({ items, cwd }: MoveLocalFilesParams): Promise<LocalMoveFilesResultItem[]> {
+    await this.checkFileGovernance(
+      'moveFiles',
+      'write',
+      items?.flatMap((item) => [item.oldPath, item.newPath]),
+    );
+
     logger.debug('Starting batch file move:', { itemsCount: items?.length });
     return moveLocalFiles({ cwd, items });
   }
@@ -550,6 +713,8 @@ export default class LocalFileCtr extends ControllerModule {
 
   @IpcMethod()
   async handleWriteFile({ path: filePath, content, cwd }: WriteLocalFileParams) {
+    await this.checkFileGovernance('writeFile', 'write', [filePath]);
+
     logger.debug(`Writing file ${filePath}`, { contentLength: content?.length });
     return writeLocalFile({ content, cwd, path: filePath });
   }
@@ -859,6 +1024,8 @@ export default class LocalFileCtr extends ControllerModule {
   async handleLocalFilesSearch(params: LocalSearchFilesParams): Promise<FileResult[]> {
     const effectiveDirectory = expandTilde(params.directory ?? params.scope);
 
+    await this.checkFileGovernance('searchFiles', 'read', [effectiveDirectory]);
+
     logger.debug('Received file search request:', {
       directory: params.directory,
       effectiveDirectory,
@@ -908,11 +1075,15 @@ export default class LocalFileCtr extends ControllerModule {
 
   @IpcMethod()
   async handleGrepContent(params: GrepContentParams): Promise<GrepContentResult> {
+    await this.checkFileGovernance('grepContent', 'read', [params.path ?? params.scope]);
+
     return this.contentSearchService.grep(params);
   }
 
   @IpcMethod()
   async handleGlobFiles(params: GlobFilesParams): Promise<GlobFilesResult> {
+    await this.checkFileGovernance('globFiles', 'read', [params.scope]);
+
     return this.searchService.glob(params);
   }
 
@@ -920,6 +1091,8 @@ export default class LocalFileCtr extends ControllerModule {
 
   @IpcMethod()
   async handleEditFile(params: EditLocalFileParams): Promise<EditLocalFileResult> {
+    await this.checkFileGovernance('editFile', 'write', [params.file_path]);
+
     logger.debug(`Editing file ${params.file_path}`, { replace_all: params.replace_all });
     return editLocalFile(params);
   }

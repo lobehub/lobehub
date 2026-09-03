@@ -6,15 +6,25 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { type App } from '@/core/App';
 
 import LocalFileCtr from '../LocalFileCtr';
+import RemoteServerConfigCtr from '../RemoteServerConfigCtr';
 
-const { execaMock, ipcMainHandleMock, fetchMock } = vi.hoisted(() => ({
+const { execaMock, ipcMainHandleMock, fetchMock, mockCallLambdaMutation } = vi.hoisted(() => ({
   execaMock: vi.fn(),
   ipcMainHandleMock: vi.fn(),
   fetchMock: vi.fn(),
+  mockCallLambdaMutation: vi.fn(),
 }));
 
 vi.mock('@/utils/net-fetch', () => ({
   netFetch: fetchMock,
+}));
+
+vi.mock('../RemoteServerConfigCtr', () => ({
+  default: class RemoteServerConfigCtr {},
+}));
+
+vi.mock('@/modules/heterogeneousAgent/fileStorePort', () => ({
+  callLambdaMutation: (...args: unknown[]) => mockCallLambdaMutation(...args),
 }));
 
 vi.mock('execa', () => ({
@@ -98,6 +108,14 @@ vi.mock('@/utils/file-system', () => ({
   makeSureDirExist: vi.fn(),
 }));
 
+// Resolves to `undefined` by default (no signed-in remote server, matching
+// most tests' assumption of no policy) — the governance tests below override
+// these per case, mirroring ShellCommandCtr.test.ts's execution-policy mocks.
+const mockRemoteServerConfigCtr = {
+  getAccessToken: vi.fn(),
+  getRemoteServerUrl: vi.fn(),
+};
+
 const mockApp = {
   appStoragePath: '/mock/app/storage',
   getService: vi.fn((ServiceClass: any) => {
@@ -106,6 +124,10 @@ const mockApp = {
       return mockContentSearchService;
     }
     return mockSearchService;
+  }),
+  getController: vi.fn((ControllerClass: unknown) => {
+    if (ControllerClass === RemoteServerConfigCtr) return mockRemoteServerConfigCtr;
+    return undefined;
   }),
   localFileProtocolManager: mockLocalFileProtocolManager,
   binaryManager: {
@@ -120,6 +142,12 @@ describe('LocalFileCtr', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+
+    // `clearAllMocks` clears call history, not a `mockResolvedValue` set by an
+    // earlier test — reset explicitly so "no remote server" is the default.
+    mockRemoteServerConfigCtr.getAccessToken.mockReset();
+    mockRemoteServerConfigCtr.getRemoteServerUrl.mockReset();
+    mockCallLambdaMutation.mockReset();
 
     // Import mocks
     mockShell = (await import('electron')).shell;
@@ -1670,6 +1698,191 @@ describe('LocalFileCtr', () => {
       await localFileCtr.handleGrepContent(params);
 
       expect(mockContentSearchService.grep).toHaveBeenCalledWith(params);
+    });
+  });
+
+  // The `local` (this machine) half of file-operation governance — see
+  // `docs/文件操作治理-实施指南-20260902.md` §3. `device` coverage (routed
+  // through the CPC server's `builtin.ts`) is tested separately in
+  // `apps/server/src/services/toolExecution/__tests__/builtin.test.ts`.
+  describe('file access governance (local execution target)', () => {
+    beforeEach(() => {
+      mockRemoteServerConfigCtr.getAccessToken.mockResolvedValue('token-123');
+      mockRemoteServerConfigCtr.getRemoteServerUrl.mockResolvedValue('https://server.example.com');
+    });
+
+    const BLOCKED_MESSAGE_PATTERN = /blocked by an administrator-configured execution policy/;
+
+    it('allows a write when no policy is configured for the user', async () => {
+      mockCallLambdaMutation.mockResolvedValueOnce(null); // executionPolicy.get
+      vi.mocked(mockFsPromises.mkdir).mockResolvedValue(undefined);
+      vi.mocked(mockFsPromises.writeFile).mockResolvedValue(undefined);
+
+      const result = await localFileCtr.handleWriteFile({
+        path: '/test/file.txt',
+        content: 'hi',
+      });
+
+      expect(result).toEqual({ success: true });
+    });
+
+    it('fails open (allows) when the policy fetch itself fails', async () => {
+      mockRemoteServerConfigCtr.getAccessToken.mockResolvedValue(undefined);
+      vi.mocked(mockFsPromises.mkdir).mockResolvedValue(undefined);
+      vi.mocked(mockFsPromises.writeFile).mockResolvedValue(undefined);
+
+      const result = await localFileCtr.handleWriteFile({
+        path: '/Users/alice/.ssh/config',
+        content: 'x',
+      });
+
+      expect(result).toEqual({ success: true });
+      // No accessToken means the governance fetch never ran — nothing to
+      // report either.
+      expect(mockCallLambdaMutation).not.toHaveBeenCalled();
+    });
+
+    it('blocks handleWriteFile when the path is under a denied write root', async () => {
+      mockCallLambdaMutation.mockResolvedValueOnce({ deniedWriteRoots: ['/Users/alice/.ssh'] });
+
+      await expect(
+        localFileCtr.handleWriteFile({ path: '/Users/alice/.ssh/config', content: 'x' }),
+      ).rejects.toThrow(BLOCKED_MESSAGE_PATTERN);
+
+      expect(mockFsPromises.writeFile).not.toHaveBeenCalled();
+    });
+
+    it('reports the blocked write to governance.logFileAccess with the matched field', async () => {
+      mockCallLambdaMutation
+        .mockResolvedValueOnce({ deniedWriteRoots: ['/Users/alice/.ssh'] }) // executionPolicy.get
+        .mockResolvedValueOnce({ success: true }); // executionPolicy.logFileAccess
+
+      await expect(
+        localFileCtr.handleWriteFile({ path: '/Users/alice/.ssh/config', content: 'x' }),
+      ).rejects.toThrow();
+
+      expect(mockCallLambdaMutation).toHaveBeenLastCalledWith(
+        { accessToken: 'token-123', serverUrl: 'https://server.example.com' },
+        'executionPolicy.logFileAccess',
+        {
+          apiName: 'writeFile',
+          matchedField: 'deniedWriteRoots',
+          path: '/Users/alice/.ssh/config',
+        },
+      );
+    });
+
+    it('a reporting failure does not turn an already-decided block into an allow', async () => {
+      mockCallLambdaMutation
+        .mockResolvedValueOnce({ deniedWriteRoots: ['/Users/alice/.ssh'] })
+        .mockRejectedValueOnce(new Error('network down'));
+
+      await expect(
+        localFileCtr.handleWriteFile({ path: '/Users/alice/.ssh/config', content: 'x' }),
+      ).rejects.toThrow(BLOCKED_MESSAGE_PATTERN);
+
+      expect(mockFsPromises.writeFile).not.toHaveBeenCalled();
+    });
+
+    it('checks handleEditFile against file_path (the manifest arg name), not path', async () => {
+      mockCallLambdaMutation.mockResolvedValueOnce({ deniedWriteRoots: ['/Users/alice/.ssh'] });
+
+      await expect(
+        localFileCtr.handleEditFile({
+          file_path: '/Users/alice/.ssh/config',
+          old_string: 'a',
+          new_string: 'b',
+          replace_all: false,
+        }),
+      ).rejects.toThrow(BLOCKED_MESSAGE_PATTERN);
+
+      expect(mockFsPromises.writeFile).not.toHaveBeenCalled();
+    });
+
+    it('blocks readFile against deniedReadRoots', async () => {
+      mockCallLambdaMutation.mockResolvedValueOnce({ deniedReadRoots: ['/Users/alice/.ssh'] });
+
+      await expect(
+        localFileCtr.readFile({ path: '/Users/alice/.ssh/id_rsa' } as any),
+      ).rejects.toThrow(BLOCKED_MESSAGE_PATTERN);
+    });
+
+    it('blocks listLocalFiles against deniedReadRoots', async () => {
+      mockCallLambdaMutation.mockResolvedValueOnce({ deniedReadRoots: ['/Users/alice/.ssh'] });
+
+      await expect(localFileCtr.listLocalFiles({ path: '/Users/alice/.ssh' })).rejects.toThrow(
+        BLOCKED_MESSAGE_PATTERN,
+      );
+
+      expect(mockFsPromises.readdir).not.toHaveBeenCalled();
+    });
+
+    it('checks every item of a moveFiles batch, not just the first', async () => {
+      mockCallLambdaMutation.mockResolvedValueOnce({ deniedWriteRoots: ['/Users/alice/.ssh'] });
+
+      await expect(
+        localFileCtr.handleMoveFiles({
+          items: [
+            { oldPath: '/workspace/a.txt', newPath: '/workspace/b.txt' },
+            { oldPath: '/workspace/c.txt', newPath: '/Users/alice/.ssh/authorized_keys' },
+          ],
+        }),
+      ).rejects.toThrow(BLOCKED_MESSAGE_PATTERN);
+
+      expect(mockFsPromises.rename).not.toHaveBeenCalled();
+    });
+
+    it('checks handleLocalFilesSearch against scope (deniedReadRoots)', async () => {
+      mockCallLambdaMutation.mockResolvedValueOnce({ deniedReadRoots: ['/Users/alice/.ssh'] });
+
+      await expect(
+        localFileCtr.handleLocalFilesSearch({ keywords: 'id', scope: '/Users/alice/.ssh' }),
+      ).rejects.toThrow(BLOCKED_MESSAGE_PATTERN);
+
+      expect(mockSearchService.search).not.toHaveBeenCalled();
+    });
+
+    it('checks handleGrepContent against scope (deniedReadRoots)', async () => {
+      mockCallLambdaMutation.mockResolvedValueOnce({ deniedReadRoots: ['/Users/alice/.ssh'] });
+
+      await expect(
+        localFileCtr.handleGrepContent({ pattern: 'x', scope: '/Users/alice/.ssh' }),
+      ).rejects.toThrow(BLOCKED_MESSAGE_PATTERN);
+
+      expect(mockContentSearchService.grep).not.toHaveBeenCalled();
+    });
+
+    it('checks handleGlobFiles against scope (deniedReadRoots)', async () => {
+      mockCallLambdaMutation.mockResolvedValueOnce({ deniedReadRoots: ['/Users/alice/.ssh'] });
+
+      await expect(
+        localFileCtr.handleGlobFiles({ pattern: '*', scope: '/Users/alice/.ssh' }),
+      ).rejects.toThrow(BLOCKED_MESSAGE_PATTERN);
+
+      expect(mockSearchService.glob).not.toHaveBeenCalled();
+    });
+
+    it('expands a leading ~ in the denied root before comparing', async () => {
+      const os = await import('node:os');
+      mockCallLambdaMutation.mockResolvedValueOnce({ deniedWriteRoots: ['~/.ssh'] });
+
+      await expect(
+        localFileCtr.handleWriteFile({
+          path: path.join(os.homedir(), '.ssh/config'),
+          content: 'x',
+        } as any),
+      ).rejects.toThrow(BLOCKED_MESSAGE_PATTERN);
+    });
+
+    it('memoizes the fetched policy instead of re-fetching on every call', async () => {
+      mockCallLambdaMutation.mockResolvedValue({ deniedWriteRoots: [] });
+      vi.mocked(mockFsPromises.mkdir).mockResolvedValue(undefined);
+      vi.mocked(mockFsPromises.writeFile).mockResolvedValue(undefined);
+
+      await localFileCtr.handleWriteFile({ path: '/a.txt', content: '1' });
+      await localFileCtr.handleWriteFile({ path: '/b.txt', content: '2' });
+
+      expect(mockCallLambdaMutation).toHaveBeenCalledTimes(1);
     });
   });
 });
