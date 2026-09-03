@@ -2,7 +2,7 @@
 
 import { Center, Flexbox, SkeletonTitle } from '@lobehub/ui';
 import { ActionIcon, Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { MessageSquarePlus } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,10 +11,26 @@ import AsyncError from '@/components/AsyncError';
 import { useChatStore } from '@/store/chat';
 
 import { getTopicPanelViewState } from './topicPanelViewState';
+import { isTopicRowActivationKey } from './topicRowActivation';
 import { useVisitorTopics } from './useVisitorTopics';
 
 /** Placeholder rows shown while the visitor's topic list is loading, sized like a typical topic title. */
 const LOADING_ROW_WIDTHS = ['80%', '55%', '68%'];
+
+const styles = createStaticStyles(({ css }) => ({
+  row: css`
+    cursor: pointer;
+    border-radius: 6px;
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimary};
+      outline-offset: -1px;
+    }
+  `,
+  rowActive: css`
+    background: ${cssVar.colorFillSecondary};
+  `,
+}));
 
 /**
  * The visitor's topic list under the current share (server-scoped by
@@ -76,15 +92,22 @@ const TopicPanel = memo<{
           const active = topic.id === activeTopicId;
           return (
             <Flexbox
+              aria-current={active || undefined}
+              className={cx(styles.row, active && styles.rowActive)}
               key={topic.id}
               paddingBlock={6}
               paddingInline={8}
-              style={{
-                background: active ? cssVar.colorFillSecondary : undefined,
-                borderRadius: 6,
-                cursor: 'pointer',
-              }}
+              role={'button'}
+              tabIndex={0}
               onClick={() => selectTopic(topic.id)}
+              onKeyDown={(e) => {
+                // Mirror native button keyboard semantics for the div-as-button row.
+                if (!isTopicRowActivationKey(e.key)) return;
+                // Space's default action scrolls the page; Enter has no default
+                // action on a non-form div, so only Space needs suppressing.
+                if (e.key === ' ') e.preventDefault();
+                selectTopic(topic.id);
+              }}
             >
               <Text ellipsis fontSize={13}>
                 {topic.title || t('share.visitor.topics.untitled')}
