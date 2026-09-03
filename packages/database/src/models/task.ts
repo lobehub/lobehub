@@ -641,7 +641,7 @@ export class TaskModel {
           ...getTableColumns(tasks),
           assigneeGroupKey: assigneeGroupKey.as('assignee_group_key'),
           groupRank:
-            sql<number>`row_number() over (partition by ${assigneeGroupKey} order by ${tasks.createdAt} desc)`.as(
+            sql<number>`row_number() over (partition by ${assigneeGroupKey} order by ${tasks.createdAt} desc, ${tasks.seq} desc)`.as(
               'group_rank',
             ),
         })
@@ -727,7 +727,7 @@ export class TaskModel {
           ...getTableColumns(tasks),
           assigneeGroupKey: assigneeGroupKey.as('assignee_group_key'),
           groupRank:
-            sql<number>`row_number() over (partition by ${assigneeGroupKey} order by ${tasks.createdAt} desc)`.as(
+            sql<number>`row_number() over (partition by ${assigneeGroupKey} order by ${tasks.createdAt} desc, ${tasks.seq} desc)`.as(
               'group_rank',
             ),
         })
@@ -807,7 +807,7 @@ export class TaskModel {
           .select()
           .from(tasks)
           .where(and(...baseConditions, ...conditions))
-          .orderBy(desc(tasks.createdAt))
+          .orderBy(desc(tasks.createdAt), desc(tasks.seq))
           .limit(limit)
           .offset(offset);
 
@@ -856,7 +856,7 @@ export class TaskModel {
           .select()
           .from(tasks)
           .where(and(...baseConditions, ...conditions))
-          .orderBy(desc(tasks.createdAt))
+          .orderBy(desc(tasks.createdAt), desc(tasks.seq))
           .limit(limit)
           .offset(offset);
 
@@ -890,7 +890,7 @@ export class TaskModel {
             .select()
             .from(tasks)
             .where(and(...baseConditions, ...group.conditions))
-            .orderBy(desc(tasks.createdAt))
+            .orderBy(desc(tasks.createdAt), desc(tasks.seq))
             .limit(group.limit)
             .offset(group.offset));
 
@@ -1022,7 +1022,10 @@ export class TaskModel {
       .select()
       .from(tasks)
       .where(where)
-      .orderBy(desc(orderBy === 'updatedAt' ? tasks.updatedAt : tasks.createdAt))
+      // `seq` breaks timestamp ties so an offset-paged read never repeats or
+      // skips a row at a page boundary — the Tasks page assembles the full
+      // list from consecutive pages and depends on a stable total order.
+      .orderBy(desc(orderBy === 'updatedAt' ? tasks.updatedAt : tasks.createdAt), desc(tasks.seq))
       .limit(limit)
       .offset(offset);
     const [countResult, taskList] = await Promise.all([countQuery, taskListQuery]);

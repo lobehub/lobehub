@@ -171,13 +171,21 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   // scheduled tab's content, and listing it twice makes the split meaningless.
   // `complete`: this tab groups and sorts client-side with no pagination, so
   // it needs the whole list — one server page would drop every task older
-  // than the newest 50 once the workspace grows past that.
+  // than the newest 50 once the workspace grows past that. The scheduled and
+  // "My tasks" tabs render their own paginated collections, so the full fetch
+  // is gated to the ordinary tab instead of running unused behind them.
   const { error, isLoading, mutate } = useFetchTaskList(
     projectId
-      ? { automated: false, complete: true, projectId, visibility: 'all' }
+      ? {
+          automated: false,
+          complete: true,
+          enabled: isOrdinaryCollection,
+          projectId,
+          visibility: 'all',
+        }
       : agentId
-        ? { agentId, automated: false, complete: true }
-        : { allAgents: true, automated: false, complete: true },
+        ? { agentId, automated: false, complete: true, enabled: isOrdinaryCollection }
+        : { allAgents: true, automated: false, complete: true, enabled: isOrdinaryCollection },
   );
   // Drive the loading/empty boundary off the store's own init flag, NOT SWR's
   // per-key `data`. On a scope (agent ↔ all) or visibility switch the store

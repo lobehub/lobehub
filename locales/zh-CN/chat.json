@@ -396,7 +396,7 @@
   "goalAcceptance.gateHint": "目标最终验收会逐条核对这些标准",
   "goalAcceptance.judgePrefix": "怎么判定：",
   "goalAcceptance.remove": "移除",
-  "goalAcceptance.removeConfirm.content": "“{{title}}” 将不再限制此目标的最终接受。",
+  "goalAcceptance.removeConfirm.content": "「{{title}}」将不再作为该目标最终验收的门槛。",
   "goalAcceptance.removeConfirm.title": "移除这条标准？",
   "goalAcceptance.title": "验收标准",
   "goalChat.newTopic": "新对话",
