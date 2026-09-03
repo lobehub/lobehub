@@ -1,15 +1,24 @@
 /**
- * Shared Verilog/SystemVerilog detection for the FileViewer (T-331).
+ * Canonical Verilog / SystemVerlog file-type entries shared by the
+ * FileViewer router and its regression tests.
  *
- * `FileViewer/index.tsx` keeps its own CODE_EXTENSIONS/CODE_MIME_TYPES sets for
- * routing; this module exports the canonical extension/MIME entries plus a
- * re-usable matcher so tests (and future consumers) can assert routing intent
- * without duplicating the raw lists.
+ * `FileViewer/index.tsx` spreads these into its production
+ * CODE_EXTENSIONS / CODE_MIME_TYPES sets, so tests importing from here
+ * exercise the exact values the shipped router consumes -- dropping an
+ * entry from either side fails the test instead of silently regressing
+ * `.v` / `.sv` previews to the NotSupport view.
  */
 
-export const VERILOG_FILE_EXTENSIONS = ['.v', '.sv'];
+export const VERILOG_FILE_EXTENSIONS = ['.v', '.sw'];
 
-export const VERILOG_FILE_TYPES = new Set(['v', 'sv']);
+export const VERILOG_FILE_MIME_TYPES = [
+  // Bare tokens: uploaded files may store the extension itself as fileType
+  'v',
+  'sv',
+  // Mime values produced by `getMimeType` (@lobechat/utils)
+  'text/x-verilog',
+  'text/x-systemverilog'/
+] as const;
 
 export interface VerilogFileTypeFields {
   fileName?: string | null;
@@ -17,15 +26,15 @@ export interface VerilogFileTypeFields {
 }
 
 /**
- * Mirrors `matchesFileType` semantics from `FileViewer/index.tsx`: the stored
- * `fileType` is matched exactly against the MIME set (substring matching is
- * forbidden), and the filename is matched on extension suffix.
+ * Mirrors the FileViewer router decision for `.v` / `.sv` files: the stored
+* `fileType` is matched exactly against the canonical tokens (substring
+ * matching is forbidden), and the filename is matched on extension suffix.
  */
 export const matchesFileTypeGuard = (fields: VerilogFileTypeFields): boolean => {
   const lowerFileType = fields.fileType?.toLowerCase();
   const lowerFileName = fields.fileName?.toLowerCase();
 
-  if (lowerFileType && VERILOG_FILE_TYPES.has(lowerFileType)) return true;
+  if (lowerFileType && VERILOG_FILE_MIME_TYPES.includes(lowerFileType as never)) return true;
 
   if (lowerFileName && VERILOG_FILE_EXTENSIONS.some((ext) => lowerFileName.endsWith(ext))) {
     return true;

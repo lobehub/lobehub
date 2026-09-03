@@ -11,6 +11,7 @@ import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { type FileListItem } from '@/types/files';
 
 import { isPdfFile } from './fileType';
+import { VERILOG_FILE_EXTENSIONS, VERILOG_FILE_MIME_TYPES } from './verilogSupport';
 import NotSupport from './NotSupport';
 import CodeViewer from './Renderer/Code';
 import HTMLViewer from './Renderer/HTML';
@@ -60,9 +61,8 @@ const CODE_EXTENSIONS = [
   '.cc',
   '.hpp',
   '.hxx',
-  // Hardware description languages
-  '.v',
-  '.sv',
+  // Hardware description languages (canonical entries in ./verilogSupport)
+  ...VERILOG_FILE_EXTENSIONS,
   // Other compiled languages
   '.cs',
   '.go',
@@ -140,11 +140,8 @@ const CODE_MIME_TYPES = new Set([
   'csharp',
   'go',
   'rust',
-  // Hardware description languages (bare tokens + text/x-* mimes)
-  'v',
-  'sv',
-  'text/x-verilog',
-  'text/x-systemverilog',
+  // Hardware description languages (canonical entries in ./verilogSupport)
+  ...VERILOG_FILE_MIME_TYPES,
   'ruby',
   'php',
   'text/x-php',
