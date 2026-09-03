@@ -1613,8 +1613,6 @@
   "taskDetail.replyInThread": "在此对话中回复",
   "taskDetail.replyPlaceholder": "在此对话中回复…",
   "taskDetail.rerunTask": "重新运行",
-  "taskDetail.run.outputLabel": "运行输出",
-  "taskDetail.run.summaryLabel": "运行摘要",
   "taskDetail.runAll": "全部运行",
   "taskDetail.runAll.cancel": "取消",
   "taskDetail.runAll.confirm": "运行 {{count}} 个子任务",

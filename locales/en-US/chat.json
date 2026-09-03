@@ -1613,8 +1613,6 @@
   "taskDetail.replyInThread": "Reply in this thread",
   "taskDetail.replyPlaceholder": "Reply in this thread...",
   "taskDetail.rerunTask": "Re-run task",
-  "taskDetail.run.outputLabel": "Run output",
-  "taskDetail.run.summaryLabel": "Run summary",
   "taskDetail.runAll": "Run all",
   "taskDetail.runAll.cancel": "Cancel",
   "taskDetail.runAll.confirm": "Run {{count}} subtask(s)",
