@@ -1952,6 +1952,23 @@ describe('FileModel', () => {
       expect(result).toEqual([]);
     });
 
+    it.each([
+      ['message', 'sf-msg'],
+      ['session', 'sf-sess'],
+    ] as const)('excludes a trashed %s attachment', async (association, fileId) => {
+      if (association === 'message') {
+        await serverDB.insert(messagesFiles).values({ fileId, messageId: 'sandbox-msg-1', userId });
+      } else {
+        await serverDB.insert(filesToSessions).values({ fileId, sessionId, userId });
+      }
+      await serverDB
+        .update(files)
+        .set({ deletedAt: new Date(), isDeleted: true })
+        .where(eq(files.id, fileId));
+
+      await expect(fileModel.findFilesToInitInSandbox(topicId)).resolves.toEqual([]);
+    });
+
     it('does not return files belonging to another user', async () => {
       await serverDB.insert(messages).values({
         id: 'sandbox-msg-other',

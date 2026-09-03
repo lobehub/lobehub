@@ -1,4 +1,5 @@
 import { CUSTOM_DOCUMENT_FILE_TYPE } from '@lobechat/const';
+import matter from 'gray-matter';
 
 const DOCUMENT_PREVIEW_LENGTH = 400;
 const WEBPAGE_PREVIEW_LENGTH = 240;
@@ -8,6 +9,18 @@ interface CreateResourceContentPreviewOptions {
   fileType: string;
   title: string;
 }
+
+const stripMetadataFrontmatter = (content: string) => {
+  try {
+    const parsed = matter(content);
+    const data = parsed.data;
+    return data && typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length > 0
+      ? parsed.content
+      : content;
+  } catch {
+    return content;
+  }
+};
 
 /**
  * Turn the bounded content prefix selected by `KnowledgeRepo` into the final
@@ -21,8 +34,7 @@ export const createResourceContentPreview = ({
 }: CreateResourceContentPreviewOptions): string | null => {
   if (!content) return null;
 
-  let text = content
-    .replace(/^\s*---[\s\S]*?---\s*/, '')
+  let text = stripMetadataFrontmatter(content)
     .replaceAll(/!\[[^\]]*\]\([^)]*\)/g, '')
     .replaceAll(/\[([^\]]*)\]\([^)]*\)/g, '$1');
 

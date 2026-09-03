@@ -751,13 +751,25 @@ export class FileModel {
         .from(messagesFiles)
         .innerJoin(messages, eq(messagesFiles.messageId, messages.id))
         .innerJoin(files, eq(messagesFiles.fileId, files.id))
-        .where(and(eq(messages.topicId, topicId), eq(messagesFiles.userId, this.userId))),
+        .where(
+          and(
+            eq(messages.topicId, topicId),
+            eq(messagesFiles.userId, this.userId),
+            notTrashed(files.isDeleted),
+          ),
+        ),
       this.db
         .select(columns)
         .from(filesToSessions)
         .innerJoin(topics, eq(topics.sessionId, filesToSessions.sessionId))
         .innerJoin(files, eq(filesToSessions.fileId, files.id))
-        .where(and(eq(topics.id, topicId), eq(filesToSessions.userId, this.userId))),
+        .where(
+          and(
+            eq(topics.id, topicId),
+            eq(filesToSessions.userId, this.userId),
+            notTrashed(files.isDeleted),
+          ),
+        ),
     ]);
 
     const deduped = new Map<string, SandboxInitFileItem>();

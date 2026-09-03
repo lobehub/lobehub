@@ -6,6 +6,7 @@ import type { SoftDeleteOptions } from '@/database/utils/softDelete';
 
 import { purgeFiles } from './purgeFiles';
 import { documentEntry, fileEntry } from './resourceEntries';
+import { softDeleteResourceClosure } from './softDeleteResourceClosure';
 import {
   type TrashCascade,
   type TrashHandler,
@@ -18,31 +19,21 @@ export const softDeleteDocuments = async (
   ids: string[],
   options: SoftDeleteOptions,
 ): Promise<TrashCascade[]> => {
-  const documentModel = new DocumentModel(ctx.db, ctx.userId, ctx.workspaceId);
-  const fileModel = new FileModel(ctx.db, ctx.userId, ctx.workspaceId);
   const cascades: TrashCascade[] = [];
 
   for (const id of new Set(ids)) {
-    const { detachedEdges: detachedDocumentEdges, documents: trashedDocuments } =
-      await documentModel.softDeleteSubtree(id, options);
-    const root = trashedDocuments.find((document) => document.id === id);
-    if (!root) continue;
-
-    const documentIds = trashedDocuments.map((document) => document.id);
-    const anchoredFiles = await fileModel.findByParentIds(documentIds);
-    const detachedFileEdges = await fileModel.detachPrivateChildren(documentIds);
-    const associatedFileIds = trashedDocuments
-      .map((document) => document.fileId)
-      .filter((fileId): fileId is string => Boolean(fileId));
-    const files = await fileModel.softDelete(
-      [...new Set([...anchoredFiles.map((file) => file.id), ...associatedFileIds])],
+    const { detachedEdges, documents, files } = await softDeleteResourceClosure(
+      ctx,
+      { documentIds: [id] },
       options,
     );
+    const root = documents.find((document) => document.id === id);
+    if (!root) continue;
 
     const rootEntry = documentEntry(root);
     cascades.push({
       children: [
-        ...trashedDocuments
+        ...documents
           .filter((document) => document.id !== root.id)
           .map((document) => documentEntry(document)),
         ...files.map((file) => fileEntry(file)),
@@ -51,7 +42,7 @@ export const softDeleteDocuments = async (
         ...rootEntry,
         meta: {
           ...rootEntry.meta,
-          detachedEdges: [...detachedDocumentEdges, ...detachedFileEdges],
+          detachedEdges,
         },
       },
     });

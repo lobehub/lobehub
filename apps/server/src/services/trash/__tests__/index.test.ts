@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { getTestDB } from '@lobechat/database/test-utils';
-import { eq, sql } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DocumentModel } from '@/database/models/document';
@@ -541,6 +541,108 @@ describe('TrashService', () => {
           .from(knowledgeBaseFiles)
           .where(eq(knowledgeBaseFiles.fileId, fileId)),
       ).toHaveLength(1);
+    });
+
+    it('restores and purges the transitive document/file mirror closure', async () => {
+      const { id: sourceFileId } = await fileModel.create({
+        fileType: 'text/plain',
+        name: 'source.txt',
+        size: 10,
+        url: 'files/source.txt',
+      });
+      const rootDocument = await documentModel.create({
+        fileId: sourceFileId,
+        fileType: 'text/plain',
+        source: 'files/source.txt',
+        sourceType: 'file',
+        title: 'Source root',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+      const siblingMirror = await documentModel.create({
+        fileId: sourceFileId,
+        fileType: 'text/plain',
+        source: 'files/source.txt',
+        sourceType: 'file',
+        title: 'Sibling mirror',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+      const { id: anchoredFileId } = await fileModel.create({
+        fileType: 'text/plain',
+        name: 'anchored.txt',
+        parentId: siblingMirror.id,
+        size: 5,
+        url: 'files/anchored.txt',
+      });
+      const anchoredMirror = await documentModel.create({
+        fileId: anchoredFileId,
+        fileType: 'text/plain',
+        source: 'files/anchored.txt',
+        sourceType: 'file',
+        title: 'Anchored mirror',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+      const nestedChild = await documentModel.create({
+        fileType: 'custom/page',
+        parentId: anchoredMirror.id,
+        source: '',
+        sourceType: 'api',
+        title: 'Nested child',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+      const resourceIds = [
+        rootDocument.id,
+        sourceFileId,
+        siblingMirror.id,
+        anchoredFileId,
+        anchoredMirror.id,
+        nestedChild.id,
+      ];
+
+      const [root] = await service.trashDocuments([rootDocument.id]);
+
+      expect(
+        (await trashModel.findChildren(root.id)).map((item) => item.resourceId).sort(),
+      ).toEqual(resourceIds.filter((id) => id !== rootDocument.id).sort());
+      expect(await documentModel.findById(siblingMirror.id)).toBeUndefined();
+      expect(await documentModel.findById(anchoredMirror.id)).toBeUndefined();
+      expect(await documentModel.findById(nestedChild.id)).toBeUndefined();
+      expect(await fileModel.findById(sourceFileId)).toBeUndefined();
+      expect(await fileModel.findById(anchoredFileId)).toBeUndefined();
+
+      await service.restore([root.id]);
+
+      expect(await documentModel.findById(siblingMirror.id)).toMatchObject({
+        fileId: sourceFileId,
+      });
+      expect(await documentModel.findById(anchoredMirror.id)).toMatchObject({
+        fileId: anchoredFileId,
+      });
+      expect(await documentModel.findById(nestedChild.id)).toMatchObject({
+        parentId: anchoredMirror.id,
+      });
+      expect(await fileModel.findById(anchoredFileId)).toMatchObject({
+        parentId: siblingMirror.id,
+      });
+
+      const [purgeRoot] = await service.trashDocuments([rootDocument.id]);
+      await service.purge([purgeRoot.id]);
+
+      expect(
+        await serverDB
+          .select({ id: documents.id })
+          .from(documents)
+          .where(inArray(documents.id, resourceIds)),
+      ).toEqual([]);
+      expect(
+        await serverDB
+          .select({ id: files.id })
+          .from(files)
+          .where(inArray(files.id, [sourceFileId, anchoredFileId])),
+      ).toEqual([]);
     });
 
     it('restores a folder subtree and every anchored file without changing parent links', async () => {

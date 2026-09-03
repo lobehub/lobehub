@@ -38,4 +38,19 @@ describe('createResourceContentPreview', () => {
       createResourceContentPreview({ content: '', fileType: 'custom/document', title: 'Empty' }),
     ).toBeNull();
   });
+
+  it.each([
+    ['scalar', '---\nIntroduction\n---\nImportant body', 'Introduction Important body'],
+    ['array', '---\n- first\n- second\n---\nImportant body', '- first - second Important body'],
+    ['empty', '---\n---\nImportant body', 'Important body'],
+    [
+      'malformed',
+      '---\nname: [unterminated\n---\nImportant body',
+      'name: [unterminated Important body',
+    ],
+  ])('keeps %s YAML-shaped thematic-break content', (_kind, content, expected) => {
+    expect(
+      createResourceContentPreview({ content, fileType: 'text/markdown', title: 'Example' }),
+    ).toBe(expected);
+  });
 });

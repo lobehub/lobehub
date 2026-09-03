@@ -5,6 +5,7 @@ import type { SoftDeleteOptions } from '@/database/utils/softDelete';
 
 import { purgeFiles } from './purgeFiles';
 import { documentEntry, fileEntry } from './resourceEntries';
+import { softDeleteResourceClosure } from './softDeleteResourceClosure';
 import {
   type TrashCascade,
   type TrashHandler,
@@ -17,26 +18,39 @@ export const softDeleteFiles = async (
   ids: string[],
   options: SoftDeleteOptions,
 ): Promise<TrashCascade[]> => {
-  const fileModel = new FileModel(ctx.db, ctx.userId, ctx.workspaceId);
-  const documentModel = new DocumentModel(ctx.db, ctx.userId, ctx.workspaceId);
-  const trashedFiles = await fileModel.softDelete(ids, options);
-  const mirrorDocuments = await documentModel.findByFileIds(trashedFiles.map((file) => file.id));
-  const trashedDocuments = await documentModel.softDelete(
-    mirrorDocuments.map((document) => document.id),
-    options,
-  );
+  const cascades: TrashCascade[] = [];
+  for (const id of new Set(ids)) {
+    const { detachedEdges, documents, files } = await softDeleteResourceClosure(
+      ctx,
+      { fileIds: [id] },
+      options,
+    );
+    const root = files.find((file) => file.id === id);
+    if (!root) continue;
 
-  return trashedFiles.map((file) => ({
-    children: trashedDocuments
-      .filter((document) => document.fileId === file.id)
-      .map((document) => documentEntry(document)),
-    root: fileEntry(file),
-  }));
+    const rootEntry = fileEntry(root);
+    cascades.push({
+      children: [
+        ...documents.map((document) => documentEntry(document)),
+        ...files.filter((file) => file.id !== root.id).map((file) => fileEntry(file)),
+      ],
+      root: {
+        ...rootEntry,
+        meta: { ...rootEntry.meta, detachedEdges },
+      },
+    });
+  }
+
+  return cascades;
 };
 
 export const fileHandler: TrashHandler = {
   purge: async (ctx, root, children) => {
-    await purgeFiles(ctx, [root.resourceId], { onlyTrashed: true, root });
+    const fileIds = [
+      root.resourceId,
+      ...children.filter((child) => child.resourceType === 'file').map((child) => child.resourceId),
+    ];
+    await purgeFiles(ctx, fileIds, { onlyTrashed: true, root });
 
     const documentIds = children
       .filter((child) => child.resourceType === 'document')
@@ -46,21 +60,26 @@ export const fileHandler: TrashHandler = {
   restore: async (ctx, root, children) => {
     await lockDocumentHierarchy(ctx.db, ctx.userId, ctx.workspaceId);
     const fileModel = new FileModel(ctx.db, ctx.userId, ctx.workspaceId);
+    const documentModel = new DocumentModel(ctx.db, ctx.userId, ctx.workspaceId);
     const [file] = await fileModel.findTrashedByIds([root.resourceId]);
     if (!file) throw new TrashRestoreError('notFound');
 
-    if (
-      file.parentId &&
-      (await new DocumentModel(ctx.db, ctx.userId, ctx.workspaceId).isTrashedParent(file.parentId))
-    ) {
+    if (file.parentId && (await documentModel.isTrashedParent(file.parentId))) {
       throw new TrashRestoreError('parentTrashed');
     }
 
-    await fileModel.restore([root.resourceId]);
+    const fileIds = [
+      root.resourceId,
+      ...children.filter((child) => child.resourceType === 'file').map((child) => child.resourceId),
+    ];
+    await fileModel.restore(fileIds);
     const documentIds = children
       .filter((child) => child.resourceType === 'document')
       .map((child) => child.resourceId);
-    await new DocumentModel(ctx.db, ctx.userId, ctx.workspaceId).restore(documentIds);
+    await documentModel.restore(documentIds);
+    const detachedEdges = root.meta?.detachedEdges ?? [];
+    await documentModel.restoreDetachedParents(detachedEdges);
+    await fileModel.restoreDetachedParents(detachedEdges);
   },
   type: 'file',
 };
