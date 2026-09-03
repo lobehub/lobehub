@@ -439,7 +439,10 @@ export class TrashModel {
    * Roots in the caller's scope, newest first, keyset-paginated on
    * `(deleted_at, id)`.
    */
-  list = async (params: TrashListParams = {}): Promise<TrashListResult> => {
+  list = async (
+    params: TrashListParams = {},
+    excludeResources: TrashRestrictedResourceFilter = {},
+  ): Promise<TrashListResult> => {
     const limit = Math.min(Math.max(params.limit ?? TRASH_LIST_PAGE_SIZE, 1), 200);
     const cursor = decodeCursor(params.cursor);
 
@@ -453,6 +456,7 @@ export class TrashModel {
           this.active(),
           params.resourceType ? eq(trashItems.resourceType, params.resourceType) : undefined,
           this.visibleResource(),
+          this.excludeRestrictedResources(excludeResources),
           cursor
             ? or(
                 lt(trashItems.deletedAt, cursor.deletedAt),

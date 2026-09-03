@@ -274,7 +274,7 @@ describe('TrashModel', () => {
           ['trash-open-document', 'document'],
         ].map(async ([resourceId, resourceType], index) =>
           wsModel.register({
-            deletedAt: at(`2026-08-${String(index + 1).padStart(2, '0')}T00:00:00Z`),
+            deletedAt: at(`2026-08-${String(5 - index).padStart(2, '0')}T00:00:00Z`),
             root: {
               resourceId,
               resourceType: resourceType as 'document' | 'file' | 'knowledgeBase',
@@ -288,6 +288,9 @@ describe('TrashModel', () => {
         membershipKnowledgeBaseIds: ['trash-restricted-kb'],
       };
       expect(await wsModel.countByType(restrictedResources)).toEqual({ document: 1 });
+      const visiblePage = await wsModel.list({ limit: 1 }, restrictedResources);
+      expect(visiblePage.items.map((item) => item.resourceId)).toEqual(['trash-open-document']);
+      expect(visiblePage.nextCursor).toBeNull();
       const hidden = await wsModel.findRestrictedResourceRootIds(entries, restrictedResources);
       expect(hidden).toEqual(new Set(entries.slice(0, 4).map((entry) => entry.id)));
       expect(hidden.has(entries[4].id)).toBe(false);

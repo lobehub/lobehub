@@ -73,6 +73,13 @@ export const runLocalTrashPurge = async (
   return { batches, cursor };
 };
 
+const runAndContinueLocalTrashPurge = async (payload: TrashPurgeWorkflowPayload = {}) => {
+  const outcome = await runLocalTrashPurge(payload);
+  if (!outcome.cursor) return;
+
+  await publishLocalTrashContinuation({ ...payload, cursor: outcome.cursor });
+};
+
 /** Queue one bounded retention-sweep request, with an in-process fallback. */
 export const triggerTrashPurge = async (
   payload: TrashPurgeWorkflowPayload = {},
@@ -80,10 +87,7 @@ export const triggerTrashPurge = async (
 ) => {
   if (!process.env.QSTASH_TOKEN) {
     after(async () => {
-      const outcome = await runLocalTrashPurge(payload);
-      if (!outcome.cursor) return;
-
-      await publishLocalTrashContinuation({ ...payload, cursor: outcome.cursor });
+      await runAndContinueLocalTrashPurge(payload);
     });
     return true;
   }
@@ -108,7 +112,7 @@ export const startLocalTrashPurgeSchedule = () => {
   if (schedulerGlobal.__lobeTrashPurgeInterval) return;
 
   const sweep = () => {
-    void runLocalTrashPurge().catch((error) => {
+    void runAndContinueLocalTrashPurge().catch((error) => {
       console.error('[trash/purge] Local retention sweep failed:', error);
     });
   };

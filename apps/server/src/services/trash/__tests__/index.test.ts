@@ -3,11 +3,14 @@ import { getTestDB } from '@lobechat/database/test-utils';
 import { eq, inArray, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AgentModel } from '@/database/models/agent';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { TrashModel } from '@/database/models/trash';
 import {
+  agentDocuments,
+  agents,
   documents,
   files,
   globalFiles,
@@ -21,6 +24,7 @@ import {
   workspaces,
 } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { lockDocumentHierarchy } from '@/database/utils/documentHierarchy';
 
 import { purgeFiles } from '../handlers/purgeFiles';
 import { orderTrashRestoreRoots, TrashService } from '../index';
@@ -86,6 +90,146 @@ afterEach(async () => {
 
 describe('TrashService', () => {
   describe('resources', () => {
+    it('serializes a file scope transfer behind trashing and rejects the stale transfer', async () => {
+      const targetWorkspaceId = 'trash-file-transfer-target';
+      await serverDB.insert(workspaces).values({
+        id: targetWorkspaceId,
+        name: 'File transfer target',
+        primaryOwnerId: userId,
+        slug: targetWorkspaceId,
+      });
+      const file = await fileModel.create({
+        fileType: 'text/plain',
+        name: 'transfer-race.txt',
+        size: 1,
+        url: 'files/transfer-race.txt',
+      });
+      const deletedAt = new Date('2026-09-01T00:00:00Z');
+      let trashStamped!: () => void;
+      const stamped = new Promise<void>((resolve) => {
+        trashStamped = resolve;
+      });
+      let releaseTrash!: () => void;
+      const release = new Promise<void>((resolve) => {
+        releaseTrash = resolve;
+      });
+      const trashPromise = serverDB.transaction(async (tx) => {
+        await lockDocumentHierarchy(tx as unknown as LobeChatDatabase, userId);
+        await new FileModel(tx as unknown as LobeChatDatabase, userId).softDelete([file.id], {
+          deletedAt,
+        });
+        await new TrashModel(tx as unknown as LobeChatDatabase, userId).register({
+          deletedAt,
+          root: { resourceId: file.id, resourceType: 'file', title: file.name },
+        });
+        trashStamped();
+        await release;
+      });
+      await stamped;
+
+      let transferSettled = false;
+      const transferPromise = fileModel
+        .transferTo(file.id, targetWorkspaceId, userId)
+        .finally(() => {
+          transferSettled = true;
+        });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(transferSettled).toBe(false);
+
+      releaseTrash();
+      await trashPromise;
+      await expect(transferPromise).rejects.toThrow('File not found');
+      const [row] = await serverDB.select().from(files).where(eq(files.id, file.id));
+      expect(row.workspaceId).toBeNull();
+      expect(row.isDeleted).toBe(true);
+    });
+
+    it('serializes an agent scope transfer behind document trashing and skips the trashed VFS row', async () => {
+      const targetWorkspaceId = 'trash-agent-transfer-target';
+      await serverDB.insert(workspaces).values({
+        id: targetWorkspaceId,
+        name: 'Agent transfer target',
+        primaryOwnerId: userId,
+        slug: targetWorkspaceId,
+      });
+      const agentModel = new AgentModel(serverDB, userId);
+      const agent = await agentModel.create({ title: 'Transfer race agent' });
+      await serverDB.insert(documents).values({
+        content: 'skill',
+        fileType: 'text/markdown',
+        id: 'trash-agent-transfer-document',
+        source: `agent-document://${agent.id}/skill.md`,
+        sourceType: 'agent',
+        title: 'skill.md',
+        totalCharCount: 5,
+        totalLineCount: 1,
+        userId,
+      });
+      await serverDB.insert(agentDocuments).values({
+        agentId: agent.id,
+        documentId: 'trash-agent-transfer-document',
+        userId,
+      });
+      const deletedAt = new Date('2026-09-01T00:00:00Z');
+      let trashStamped!: () => void;
+      const stamped = new Promise<void>((resolve) => {
+        trashStamped = resolve;
+      });
+      let releaseTrash!: () => void;
+      const release = new Promise<void>((resolve) => {
+        releaseTrash = resolve;
+      });
+      const trashPromise = serverDB.transaction(async (tx) => {
+        await new DocumentModel(tx as unknown as LobeChatDatabase, userId).softDeleteSubtree(
+          'trash-agent-transfer-document',
+          { deletedAt },
+        );
+        await new TrashModel(tx as unknown as LobeChatDatabase, userId).register({
+          deletedAt,
+          root: {
+            resourceId: 'trash-agent-transfer-document',
+            resourceType: 'document',
+            title: 'skill.md',
+          },
+        });
+        trashStamped();
+        await release;
+      });
+      await stamped;
+
+      let transferSettled = false;
+      const transferPromise = agentModel
+        .transferAgent(agent.id, targetWorkspaceId, userId)
+        .finally(() => {
+          transferSettled = true;
+        });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(transferSettled).toBe(false);
+
+      releaseTrash();
+      await trashPromise;
+      await expect(transferPromise).resolves.toMatchObject({ agentId: agent.id });
+
+      const [agentRow] = await serverDB.select().from(agents).where(eq(agents.id, agent.id));
+      const [document] = await serverDB
+        .select()
+        .from(documents)
+        .where(eq(documents.id, 'trash-agent-transfer-document'));
+      const [binding] = await serverDB
+        .select()
+        .from(agentDocuments)
+        .where(eq(agentDocuments.documentId, 'trash-agent-transfer-document'));
+      const trashRoot = await trashModel.findByResource(
+        'document',
+        'trash-agent-transfer-document',
+      );
+      expect(agentRow.workspaceId).toBe(targetWorkspaceId);
+      expect(document.workspaceId).toBeNull();
+      expect(document.isDeleted).toBe(true);
+      expect(binding.workspaceId).toBeNull();
+      expect(trashRoot?.workspaceId).toBeNull();
+    });
+
     it('serializes parent-targeting document and file writes with subtree trashing', async () => {
       const folder = await documentModel.create({
         fileType: 'custom/folder',
@@ -519,9 +663,14 @@ describe('TrashService', () => {
       accessMocks.restrictedKnowledgeBaseIds = ['kb_restricted'];
 
       const workspaceService = new TrashService(serverDB, otherUserId, workspaceId);
+      const listSpy = vi.spyOn(
+        (workspaceService as unknown as { trashModel: TrashModel }).trashModel,
+        'list',
+      );
       expect((await workspaceService.list()).items.map((item) => item.resourceId)).toEqual([
         'kb_open',
       ]);
+      expect(listSpy).toHaveBeenCalledOnce();
       expect(await workspaceService.countByType()).toEqual({ knowledgeBase: 1 });
       const allRoots = await registry.list({ limit: 20 });
       expect(

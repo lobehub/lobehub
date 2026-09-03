@@ -82,6 +82,7 @@ import {
 } from '../utils/agentKnowledgeMounts';
 import { rehomeAgentLabelsForRecipient } from '../utils/agentLabelsOwnership';
 import { rehomeAgentQuotaBindingsForRecipient } from '../utils/agentQuotaBindings';
+import { lockDocumentHierarchy } from '../utils/documentHierarchy';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { resolveGroupMembershipType } from '../utils/groupMembership';
 import { normalizeInboxAgentMeta } from '../utils/inboxAgent';
@@ -2093,6 +2094,8 @@ export class AgentModel {
     if (agentIds.length === 0) return [];
 
     return this.db.transaction(async (trx) => {
+      await lockDocumentHierarchy(trx as LobeChatDatabase, this.userId, this.workspaceId);
+
       // 1. Verify all agents exist and belong to current scope. FOR UPDATE so
       // two concurrent transfers of the same agent serialize HERE, before the
       // pending-job guard below: the loser re-reads after the winner commits

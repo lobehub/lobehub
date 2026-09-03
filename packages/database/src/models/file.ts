@@ -984,6 +984,8 @@ export class FileModel {
     targetVisibility?: 'private' | 'public',
   ): Promise<{ fileId: string }> => {
     return this.db.transaction(async (trx) => {
+      await lockDocumentHierarchy(trx as LobeChatDatabase, this.userId, this.workspaceId);
+
       const file = await trx.query.files.findFirst({
         where: and(eq(files.id, fileId), this.ownership()),
       });
@@ -994,10 +996,12 @@ export class FileModel {
       const visibilityUpdate =
         targetWorkspaceId && targetVisibility ? { visibility: targetVisibility } : {};
 
-      await trx
+      const moved = await trx
         .update(files)
         .set({ ...ownershipUpdate, ...visibilityUpdate, updatedAt: new Date() })
-        .where(eq(files.id, fileId));
+        .where(and(eq(files.id, fileId), this.ownership()))
+        .returning({ id: files.id });
+      if (moved.length !== 1) throw new Error('File not found');
 
       // Knowledge base links are scoped per-user; keep them pointed at the new owner.
       await trx

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { TRASH_LIST_PAGE_SIZE, TRASH_PURGE_BATCH_SIZE } from '@lobechat/const';
+import { TRASH_PURGE_BATCH_SIZE } from '@lobechat/const';
 import type {
   TrashCountByType,
   TrashItem,
@@ -337,27 +337,7 @@ export class TrashService {
   list = async (params: TrashListParams = {}): Promise<TrashListResult> => {
     if (!this.workspaceId) return this.trashModel.list(params);
 
-    const limit = Math.min(Math.max(params.limit ?? TRASH_LIST_PAGE_SIZE, 1), 200);
-    const items: TrashItem[] = [];
-    const excludeResources = await this.getRestrictedResourceFilter();
-    let cursor = params.cursor;
-    let nextCursor: string | null;
-
-    // Restricted libraries and their contents are caller-relative. Fetch in
-    // page-sized chunks until the visible page is full so filtering never
-    // leaks titles and does not leave avoidable holes in the recycle bin.
-    do {
-      const page = await this.trashModel.list({
-        ...params,
-        cursor,
-        limit: limit - items.length,
-      });
-      items.push(...(await this.filterRestrictedResources(page.items, excludeResources)));
-      nextCursor = page.nextCursor;
-      cursor = page.nextCursor;
-    } while (items.length < limit && cursor);
-
-    return { items, nextCursor };
+    return this.trashModel.list(params, await this.getRestrictedResourceFilter());
   };
 
   countByType = async (): Promise<TrashCountByType> => {

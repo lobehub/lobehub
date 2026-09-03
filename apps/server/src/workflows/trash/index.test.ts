@@ -112,6 +112,8 @@ describe('runLocalTrashPurge', () => {
 describe('startLocalTrashPurgeSchedule', () => {
   beforeEach(() => {
     vi.unstubAllEnvs();
+    delete (globalThis as typeof globalThis & { __lobeTrashPurgeInterval?: unknown })
+      .__lobeTrashPurgeInterval;
   });
 
   it('does not start without a database connection', () => {
@@ -122,6 +124,41 @@ describe('startLocalTrashPurgeSchedule', () => {
     startLocalTrashPurgeSchedule();
 
     expect(setIntervalSpy).not.toHaveBeenCalled();
+    setIntervalSpy.mockRestore();
+  });
+
+  it('hands a full scheduled burst off to the next cursor', async () => {
+    vi.stubEnv('DATABASE_URL', 'postgres://configured');
+    vi.stubEnv('QSTASH_TOKEN', '');
+    vi.mocked(getServerDB).mockResolvedValue({} as never);
+    vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 202 }));
+    vi.mocked(TrashService.sweepExpired).mockImplementation(async (_db, options) => ({
+      failed: 0,
+      nextCursor: {
+        expiresAt: '2026-09-01',
+        id: String(Number(options?.cursor?.id ?? 0) + 1),
+      },
+      pruned: 0,
+      purged: 25,
+      scanned: 25,
+    }));
+    const interval = { unref: vi.fn() };
+    const setIntervalSpy = vi
+      .spyOn(globalThis, 'setInterval')
+      .mockReturnValue(interval as unknown as ReturnType<typeof setInterval>);
+
+    startLocalTrashPurgeSchedule();
+
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    expect(TrashService.sweepExpired).toHaveBeenCalledTimes(8);
+    expect(fetch).toHaveBeenCalledWith(
+      new URL('https://example.com/api/workflows/trash/purge'),
+      expect.objectContaining({
+        body: JSON.stringify({ cursor: { expiresAt: '2026-09-01', id: '8' } }),
+        method: 'POST',
+      }),
+    );
+    expect(interval.unref).toHaveBeenCalledOnce();
     setIntervalSpy.mockRestore();
   });
 });
