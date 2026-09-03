@@ -49,8 +49,14 @@ describe('metricRouter', () => {
   const ctx: any = { serverDB: {}, userId: 'user-1', workspaceId: 'ws-1' };
   const caller = metricRouter.createCaller(ctx);
 
+  const visibleSeries = { id: 'mtr_1', subjectId: 'goal_1', subjectType: 'goal', userId: 'user-1' };
+
   beforeEach(() => {
     vi.clearAllMocks();
+    // A metric is exactly as visible as its subject, so every by-id path
+    // resolves the series and then re-checks the subject.
+    mockModel.findById.mockResolvedValue(visibleSeries);
+    mockGoalFindById.mockResolvedValue({ id: 'goal_1' });
   });
 
   describe('addPoint', () => {
@@ -70,10 +76,11 @@ describe('metricRouter', () => {
     });
 
     it('maps an unknown series to NOT_FOUND', async () => {
-      mockModel.addPoint.mockResolvedValue(undefined);
+      mockModel.findById.mockResolvedValue(undefined);
       await expect(caller.addPoint({ id: 'mtr_missing', value: 1 })).rejects.toMatchObject({
         code: 'NOT_FOUND',
       });
+      expect(mockModel.addPoint).not.toHaveBeenCalled();
     });
   });
 
@@ -127,6 +134,43 @@ describe('metricRouter', () => {
     });
   });
 
+  describe('subject visibility on read paths', () => {
+    // `metrics` has no visibility column, so in workspace mode the model's
+    // ownership filter degrades to a bare workspace_id match — a member could
+    // otherwise read the series of a coworker's private agent/task/project.
+    it.each([
+      ['getSeries', () => caller.getSeries({ id: 'mtr_1' })],
+      ['listPoints', () => caller.listPoints({ id: 'mtr_1' })],
+      ['addPoint', () => caller.addPoint({ id: 'mtr_1', value: 1 })],
+      ['listSeries', () => caller.listSeries({ subjectId: 'goal_1', subjectType: 'goal' })],
+    ])('%s refuses a series whose subject the caller cannot see', async (_name, run) => {
+      mockGoalFindById.mockResolvedValue(undefined);
+
+      await expect(run()).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(mockModel.findBySubject).not.toHaveBeenCalled();
+      expect(mockModel.listPoints).not.toHaveBeenCalled();
+      expect(mockModel.addPoint).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateSeries', () => {
+    it('clears nullable definition fields when passed null', async () => {
+      // Dropping a target back to "no target" is an edit, not an omission.
+      mockModel.update.mockResolvedValue({ ...visibleSeries, config: null });
+
+      await caller.updateSeries({ config: null, id: 'mtr_1', title: null });
+
+      expect(mockModel.update).toHaveBeenCalledWith('mtr_1', { config: null, title: null });
+    });
+
+    it('rejects a declared precision the numeric(20, 6) column cannot hold', async () => {
+      await expect(
+        caller.updateSeries({ config: { precision: 8 }, id: 'mtr_1' }),
+      ).rejects.toThrow();
+      expect(mockModel.update).not.toHaveBeenCalled();
+    });
+  });
+
   describe('workspace creator scope', () => {
     it.each([
       ['updateSeries', () => caller.updateSeries({ id: 'mtr_1', title: 'hijack' })],
@@ -134,7 +178,7 @@ describe('metricRouter', () => {
     ])('%s refuses a non-owner member mutating a coworker series', async (_name, run) => {
       // Workspace visibility lets the member *read* the series; mutating a row
       // another member created stays FORBIDDEN without the owner role.
-      mockModel.findById.mockResolvedValue({ id: 'mtr_1', userId: 'coworker' });
+      mockModel.findById.mockResolvedValue({ ...visibleSeries, userId: 'coworker' });
 
       await expect(run()).rejects.toMatchObject({ code: 'FORBIDDEN' });
       expect(mockModel.update).not.toHaveBeenCalled();
@@ -142,7 +186,6 @@ describe('metricRouter', () => {
     });
 
     it('deleteSeries surfaces NOT_FOUND when nothing was deleted', async () => {
-      mockModel.findById.mockResolvedValue({ id: 'mtr_1', userId: 'user-1' });
       mockModel.delete.mockResolvedValue(undefined);
 
       await expect(caller.deleteSeries({ id: 'mtr_1' })).rejects.toMatchObject({
