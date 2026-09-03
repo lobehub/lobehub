@@ -18,7 +18,7 @@ import {
 } from '@xyflow/react';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Maximize2, X } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PortalContent } from '@/features/Portal/router';
@@ -31,6 +31,7 @@ import type { GoalGraphView, GoalNodeView } from '../goalGraphViewModel';
 import { KindDot } from '../shared';
 import GraphNodeView, { GhostNodeView, type GraphNodeData } from './GraphNode';
 import { hideKinds, layoutGraph, NODE_WIDTH } from './layout';
+import { useFitViewOnResize } from './useFitViewOnResize';
 
 /**
  * The exploration map. Two views: 当前阶段 (what got the goal here plus what the
@@ -250,6 +251,8 @@ const useEdgeLabel = () => {
 
 const nodeTypes = { goalGhost: GhostNodeView, goalNode: GraphNodeView };
 
+const FIT_VIEW_OPTIONS = { duration: 200, maxZoom: 1, minZoom: 0.6, padding: 0.12 } as const;
+
 /** Ghost placeholders rendered beneath the problem while planning runs. */
 const GHOST_COUNT = 3;
 const GHOST_GAP = 32;
@@ -278,6 +281,7 @@ const Canvas = memo<
     view,
   }) => {
     const { fitView } = useReactFlow();
+    const containerRef = useRef<HTMLDivElement>(null);
     const subtitleOf = useSubtitle();
     const edgeLabel = useEdgeLabel();
 
@@ -440,11 +444,12 @@ const Canvas = memo<
     const allNodes = useMemo(() => [...flowNodes, ...ghostFlowNodes], [flowNodes, ghostFlowNodes]);
     const allEdges = useMemo(() => [...flowEdges, ...ghostFlowEdges], [flowEdges, ghostFlowEdges]);
 
+    // The inline map is a framed overview, so keep it fitted to the space left by
+    // the detail panel. Fullscreen keeps its existing user-navigation behavior.
+    useFitViewOnResize(containerRef, fitView, FIT_VIEW_OPTIONS, !interactive);
+
     useEffect(() => {
-      const timer = setTimeout(
-        () => fitView({ duration: 200, maxZoom: 1, minZoom: 0.6, padding: 0.12 }),
-        30,
-      );
+      const timer = setTimeout(() => fitView(FIT_VIEW_OPTIONS), 30);
       return () => clearTimeout(timer);
     }, [view, allNodes.length, hiddenKinds, fitView]);
 
@@ -452,15 +457,16 @@ const Canvas = memo<
     // animation before refitting, or the fit is computed mid-transition.
     useEffect(() => {
       if (refitKey === undefined) return;
-      const timer = setTimeout(
-        () => fitView({ duration: 200, maxZoom: 1, minZoom: 0.6, padding: 0.12 }),
-        280,
-      );
+      const timer = setTimeout(() => fitView(FIT_VIEW_OPTIONS), 280);
       return () => clearTimeout(timer);
     }, [refitKey, fitView]);
 
     return (
-      <div className={className} style={interactive ? undefined : { height: inlineHeight }}>
+      <div
+        className={className}
+        ref={containerRef}
+        style={interactive ? undefined : { height: inlineHeight }}
+      >
         {/* Inline, the map is a picture: it settles on `fitView` and stays
             there. Panning or zooming it inside a scrolling page moves the graph
             under the cursor while the page moves too, and leaves no way back to
