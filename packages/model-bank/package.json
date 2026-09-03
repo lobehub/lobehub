@@ -16,6 +16,7 @@
     "./akashchat": "./src/aiModels/akashchat.ts",
     "./antgroup": "./src/aiModels/antgroup.ts",
     "./anthropic": "./src/aiModels/anthropic.ts",
+    "./avalai": "./src/aiModels/avalai.ts",
     "./azureai": "./src/aiModels/azureai.ts",
     "./azure": "./src/aiModels/azure.ts",
     "./baichuan": "./src/aiModels/baichuan.ts",
