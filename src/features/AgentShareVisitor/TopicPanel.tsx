@@ -1,7 +1,7 @@
 'use client';
 
-import { Center, Flexbox, SkeletonTitle } from '@lobehub/ui';
-import { ActionIcon, Text } from '@lobehub/ui/base-ui';
+import { Center, Flexbox } from '@lobehub/ui';
+import { ActionIcon, SkeletonText, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { MessageSquarePlus } from 'lucide-react';
 import { memo } from 'react';
@@ -77,7 +77,7 @@ const TopicPanel = memo<{
         <Flexbox gap={4}>
           {LOADING_ROW_WIDTHS.map((width, index) => (
             <Flexbox key={index} paddingBlock={6} paddingInline={8}>
-              <SkeletonTitle style={{ marginBottom: 0, width }} />
+              <SkeletonText style={{ marginBottom: 0, width }} />
             </Flexbox>
           ))}
         </Flexbox>
