@@ -1,12 +1,11 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
-import { DEFAULT_PROVIDER } from '@lobechat/business-const';
-import { DEFAULT_MODEL } from '@lobechat/const';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   isHeterogeneousVerifyProvider,
   resolveVerifyModelConfig,
   REVIEW_PREDICT_MODEL_CONFIG,
+  VERIFY_FALLBACK_MODEL_CONFIG,
 } from '../modelConfig';
 
 const { getAgentModelConfigMock, getBuiltinAgentMock } = vi.hoisted(() => ({
@@ -38,7 +37,7 @@ describe('resolveVerifyModelConfig', () => {
     expect(isHeterogeneousVerifyProvider(null)).toBe(false);
   });
 
-  it('uses a pinned verifier agent model before the parent run model', async () => {
+  it('uses a pinned verifier agent model before the builtin verify agent', async () => {
     getAgentModelConfigMock.mockResolvedValueOnce({
       model: 'deepseek-v4-pro',
       provider: 'lobehub',
@@ -61,11 +60,14 @@ describe('resolveVerifyModelConfig', () => {
     expect(getBuiltinAgentMock).not.toHaveBeenCalled();
   });
 
-  it('filters a heterogeneous parent and falls back to the builtin verifier model', async () => {
-    getAgentModelConfigMock.mockResolvedValueOnce({
-      model: 'deepseek-v4-pro',
-      provider: 'lobehub',
-    });
+  it('falls back to the builtin verify agent model for a heterogeneous parent', async () => {
+    getAgentModelConfigMock
+      // 1st call: no pinned verifier (undefined → not called), so the mock
+      // queue starts at the builtin slug lookup.
+      .mockResolvedValueOnce({
+        model: 'deepseek-v4-pro',
+        provider: 'lobehub',
+      });
 
     await expect(
       resolveVerifyModelConfig(db, 'u', {
@@ -78,16 +80,26 @@ describe('resolveVerifyModelConfig', () => {
     expect(getAgentModelConfigMock).toHaveBeenCalledWith(BUILTIN_AGENT_SLUGS.verifyAgent);
   });
 
-  it('keeps a normal parent model when no verifier agent is pinned', async () => {
+  /**
+   * Regression: the resolver used to inherit the parent run's model, so the
+   * verification bar drifted with whichever chat model spawned the task. The
+   * parent model is no longer a resolution source — verification judges on
+   * the verifier chain exclusively.
+   */
+  it('ignores a usable parent model and judges on the verifier chain', async () => {
+    getAgentModelConfigMock.mockResolvedValueOnce({
+      model: 'deepseek-v4-pro',
+      provider: 'lobehub',
+    });
+
     await expect(
       resolveVerifyModelConfig(db, 'u', {
         parentModel: 'gpt-5.4',
         parentProvider: 'openai',
       }),
-    ).resolves.toEqual({ model: 'gpt-5.4', provider: 'openai' });
+    ).resolves.toEqual({ model: 'deepseek-v4-pro', provider: 'lobehub' });
 
-    expect(getBuiltinAgentMock).not.toHaveBeenCalled();
-    expect(getAgentModelConfigMock).not.toHaveBeenCalled();
+    expect(getAgentModelConfigMock).toHaveBeenCalledWith(BUILTIN_AGENT_SLUGS.verifyAgent);
   });
 
   it('does not fall back to the parent model when a pinned verifier model is unusable', async () => {
@@ -113,7 +125,7 @@ describe('resolveVerifyModelConfig', () => {
     expect(getAgentModelConfigMock).toHaveBeenNthCalledWith(2, BUILTIN_AGENT_SLUGS.verifyAgent);
   });
 
-  it('falls back to the platform defaults when no runnable agent model is available', async () => {
+  it('falls back to the pinned verify model when no runnable agent model is available', async () => {
     getAgentModelConfigMock.mockResolvedValueOnce({
       model: 'claude-opus-4-8',
       provider: 'claude-code',
@@ -124,7 +136,32 @@ describe('resolveVerifyModelConfig', () => {
         parentModel: null,
         parentProvider: null,
       }),
-    ).resolves.toEqual({ model: DEFAULT_MODEL, provider: DEFAULT_PROVIDER });
+    ).resolves.toEqual(VERIFY_FALLBACK_MODEL_CONFIG);
+  });
+});
+
+describe('VERIFY_FALLBACK_MODEL_CONFIG', () => {
+  /**
+   * Regression: the verify fallback once rode the platform default chat
+   * model (deepseek-v4-pro). It has no native vision, so agent-type checks
+   * detoured screenshot evidence through a vision sub-agent and the tail of
+   * that long chain dropped the verdict submission — every r6 check errored
+   * in production. The pinned model must be able to actually see the frames.
+   */
+  it('pins a model that model-bank says can read images', async () => {
+    const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
+
+    const card = LOBE_DEFAULT_MODEL_LIST.find(
+      (model) =>
+        model.id === VERIFY_FALLBACK_MODEL_CONFIG.model &&
+        model.providerId === VERIFY_FALLBACK_MODEL_CONFIG.provider &&
+        model.type === 'chat',
+    );
+    expect(
+      card,
+      `${VERIFY_FALLBACK_MODEL_CONFIG.provider}/${VERIFY_FALLBACK_MODEL_CONFIG.model} is not a chat model in model-bank`,
+    ).toBeDefined();
+    expect(card!.abilities?.vision).toBe(true);
   });
 });
 
