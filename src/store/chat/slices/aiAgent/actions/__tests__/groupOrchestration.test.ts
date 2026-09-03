@@ -164,6 +164,44 @@ describe('groupOrchestration actions', () => {
     });
   });
 
+  describe('triggerExecuteTask', () => {
+    it('includes the task title in the orchestration payload', async () => {
+      const internalExecGroupOrchestration = vi.fn().mockResolvedValue({ status: 'done' });
+      useChatStore.setState({ internal_execGroupOrchestration: internalExecGroupOrchestration });
+
+      await useChatStore.getState().triggerExecuteTask({
+        agentId: 'target-agent-id',
+        instruction: 'Analyze the data',
+        runInClient: true,
+        supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
+        timeout: 30_000,
+        title: 'Data analysis',
+        toolMessageId: 'tool-msg-id',
+      });
+
+      expect(internalExecGroupOrchestration).toHaveBeenCalledWith({
+        groupId: TEST_IDS.GROUP_ID,
+        initialResult: {
+          payload: {
+            decision: 'execute_task',
+            params: {
+              agentId: 'target-agent-id',
+              instruction: 'Analyze the data',
+              runInClient: true,
+              timeout: 30_000,
+              title: 'Data analysis',
+              toolMessageId: 'tool-msg-id',
+            },
+            skipCallSupervisor: false,
+          },
+          type: 'supervisor_decided',
+        },
+        supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      });
+    });
+  });
+
   describe('triggerSpeak', () => {
     it('should call internal_execGroupOrchestration with speak decision', async () => {
       const { result } = renderHook(() => useChatStore());

@@ -294,7 +294,10 @@ describe('GroupManagementExecutor', () => {
       expect(result.state).toEqual({
         agentId: 'agent-1',
         instruction: 'Do something',
+        runInClient: undefined,
+        skipCallSupervisor: undefined,
         timeout: undefined,
+        title: 'Test Task',
         type: 'executeAgentTask',
       });
     });
@@ -334,8 +337,11 @@ describe('GroupManagementExecutor', () => {
       expect(triggerExecuteTask).toHaveBeenCalledWith({
         agentId: 'agent-1',
         instruction: 'Do something',
+        runInClient: undefined,
+        skipCallSupervisor: undefined,
         supervisorAgentId: 'supervisor-agent',
         timeout: 30000,
+        title: 'Test Task',
         toolMessageId: 'test-message-id',
       });
     });
@@ -364,7 +370,10 @@ describe('GroupManagementExecutor', () => {
       expect(result.state).toEqual({
         agentId: 'agent-1',
         instruction: 'Do something',
+        runInClient: undefined,
+        skipCallSupervisor: undefined,
         timeout: 60000,
+        title: 'Test Task',
         type: 'executeAgentTask',
       });
     });

@@ -327,6 +327,8 @@ export interface ExecGroupMemberParams {
   supervisorMessageId?: string;
   /** Per-member timeout (ms), isolated mode. */
   timeout?: number;
+  /** Explicit thread title for an isolated member task. */
+  title?: string;
   /** Group topic id. */
   topicId: string;
 }

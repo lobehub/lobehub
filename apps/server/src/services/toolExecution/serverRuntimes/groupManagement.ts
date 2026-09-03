@@ -138,7 +138,7 @@ class GroupManagementExecutionRuntime {
     }
 
     const { started } = await ctx.agentMember.run({
-      members: [{ agentId: params.agentId, instruction: params.instruction }],
+      members: [{ agentId: params.agentId, instruction: params.instruction, title: params.title }],
       mode: 'isolated',
       onComplete: params.skipCallSupervisor ? 'finish' : 'resume',
       timeout: params.timeout,
@@ -163,7 +163,11 @@ class GroupManagementExecutionRuntime {
     if (tasks.length === 0) return buildError('tasks is required.', 'INVALID_ARGUMENTS');
 
     const { started } = await ctx.agentMember.run({
-      members: tasks.map((task) => ({ agentId: task.agentId, instruction: task.instruction })),
+      members: tasks.map((task) => ({
+        agentId: task.agentId,
+        instruction: task.instruction,
+        title: task.title,
+      })),
       mode: 'isolated',
       onComplete: params.skipCallSupervisor ? 'finish' : 'resume',
       // Per-task timeouts collapse to the longest; the barrier waits for all.

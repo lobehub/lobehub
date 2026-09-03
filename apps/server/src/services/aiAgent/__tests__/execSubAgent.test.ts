@@ -278,6 +278,36 @@ describe('AiAgentService.execSubAgent', () => {
       );
     });
 
+    it('should use the explicit group task title when creating an isolated thread', async () => {
+      vi.spyOn(service, 'execAgent').mockResolvedValue({
+        operationId: 'member-operation',
+        success: true,
+      } as any);
+
+      await service.execGroupMember({
+        agentId: 'agent-1',
+        anchorMessageId: 'task-anchor',
+        expectedMembers: 1,
+        groupId: 'group-1',
+        groupToolMessageId: 'group-tool-message',
+        instruction: 'A detailed instruction that should not become the title',
+        mode: 'isolated',
+        onComplete: 'resume',
+        parentOperationId: 'parent-operation',
+        title: 'Explicit task title',
+        topicId: 'topic-1',
+      });
+
+      expect(mockThreadModel.create).toHaveBeenCalledWith({
+        agentId: 'agent-1',
+        groupId: 'group-1',
+        sourceMessageId: 'task-anchor',
+        title: 'Explicit task title',
+        topicId: 'topic-1',
+        type: ThreadType.Isolation,
+      });
+    });
+
     it('should store operationId and startedAt in Thread metadata', async () => {
       vi.spyOn(service, 'execAgent').mockResolvedValue({
         agentId: 'agent-1',
