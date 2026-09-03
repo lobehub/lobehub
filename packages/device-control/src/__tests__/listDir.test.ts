@@ -60,6 +60,7 @@ describe('listDir', () => {
     });
     expect(result.entries.some((entry) => entry.name === 'a-file.txt')).toBe(false);
     expect(result.entries.some((entry) => entry.name === 'broken-link')).toBe(false);
+    expect(result.truncated).toBe(false);
   });
 
   it('caps and sorts directory results for large listings', async () => {
@@ -86,6 +87,25 @@ describe('listDir', () => {
     expect(result.entries.map((entry) => entry.name)).toEqual(
       result.entries.map((entry) => entry.name).sort((a, b) => a.localeCompare(b)),
     );
+    expect(result.truncated).toBe(true);
+  });
+
+  it('reports when the filesystem scan limit truncates discovery', async () => {
+    const scanLimitDirectory = path.join(root, 'scan-limit-directory');
+    await mkdir(scanLimitDirectory);
+    await Promise.all(
+      Array.from({ length: 1000 }, (_, index) =>
+        writeFile(path.join(scanLimitDirectory, `file-${index.toString().padStart(4, '0')}`), ''),
+      ),
+    );
+
+    const completeResult = await listDir({ path: scanLimitDirectory });
+    expect(completeResult).toMatchObject({ success: true, truncated: false });
+
+    await writeFile(path.join(scanLimitDirectory, 'file-1000'), '');
+
+    const truncatedResult = await listDir({ path: scanLimitDirectory });
+    expect(truncatedResult).toMatchObject({ success: true, truncated: true });
   });
 
   it('starts at the device home for a blank path', async () => {

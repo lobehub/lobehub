@@ -410,6 +410,8 @@ export interface DeviceListDirSuccessResult extends DeviceListDirBaseResult {
   entries: DeviceListDirEntry[];
   parent: string | null;
   success: true;
+  /** True when a safety limit stopped discovery before the directory was exhausted. */
+  truncated: boolean;
 }
 
 export interface DeviceListDirErrorResult extends DeviceListDirBaseResult {

@@ -348,14 +348,21 @@ export const listDir = async (params: { path?: string } = {}): Promise<ListDirRe
 
   const entries: ListDirEntry[] = [];
   let scannedEntries = 0;
+  let truncated = false;
   try {
     for await (const entry of directory) {
-      if (scannedEntries >= MAX_LIST_DIR_SCANNED_ENTRIES) break;
+      if (scannedEntries >= MAX_LIST_DIR_SCANNED_ENTRIES) {
+        truncated = true;
+        break;
+      }
       scannedEntries += 1;
 
       const resolvedEntry = await resolveListDirDirectory(resolved, entry);
       if (resolvedEntry) entries.push(resolvedEntry);
-      if (entries.length > MAX_LIST_DIR_ENTRIES) break;
+      if (entries.length > MAX_LIST_DIR_ENTRIES) {
+        truncated = true;
+        break;
+      }
     }
   } catch (error) {
     return createListDirError(resolved, getListDirErrorCode(error));
@@ -373,6 +380,7 @@ export const listDir = async (params: { path?: string } = {}): Promise<ListDirRe
     pathStyle: getDevicePathStyle(),
     roots: getPathRoots(resolved),
     success: true,
+    truncated,
   };
 };
 

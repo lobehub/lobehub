@@ -770,6 +770,7 @@ describe('DeviceGateway', () => {
         pathStyle: 'posix',
         roots: ['/'],
         success: true,
+        truncated: true,
       } as const;
       const notFound = {
         code: 'NOT_FOUND',

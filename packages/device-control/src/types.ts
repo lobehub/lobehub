@@ -83,6 +83,8 @@ export interface ListDirSuccessResult extends ListDirBaseResult {
   entries: ListDirEntry[];
   parent: string | null;
   success: true;
+  /** True when a safety limit stopped discovery before the directory was exhausted. */
+  truncated: boolean;
 }
 
 export interface ListDirErrorResult extends ListDirBaseResult {

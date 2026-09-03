@@ -147,11 +147,13 @@ describe('executeDeviceRpc', () => {
       entries: { name: string }[];
       path: string;
       success: boolean;
+      truncated: boolean;
     };
 
     expect(result.success).toBe(true);
     expect(result.path).toBe(root);
-    expect(result.entries.map((entry) => entry.name)).toContain('AGENTS.md');
+    expect(result.entries.map((entry) => entry.name)).toContain('.agents');
+    expect(result.truncated).toBe(false);
   });
 
   it('routes heterogeneous agent model discovery to the execution host', async () => {
