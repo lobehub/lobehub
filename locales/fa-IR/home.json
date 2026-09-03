@@ -115,6 +115,7 @@
   "inbox.goals.showAll": "نمایش همه {{count}}",
   "inbox.goals.title": "اهداف",
   "inbox.needsYou.title": "به شما نیاز دارد",
+  "inbox.news.continueChat": "ادامه گفتگو",
   "inbox.news.emptyDay": "هیچ خلاصه‌ای در این روز وجود ندارد.",
   "inbox.news.emptyToday": "هنوز امروز چیزی جدید نیست.",
   "inbox.news.markAllRead": "علامت‌گذاری همه به‌عنوان خوانده‌شده",

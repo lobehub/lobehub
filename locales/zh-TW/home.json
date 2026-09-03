@@ -115,6 +115,7 @@
   "inbox.goals.showAll": "顯示全部 {{count}}",
   "inbox.goals.title": "目標",
   "inbox.needsYou.title": "需要您",
+  "inbox.news.continueChat": "繼續對話",
   "inbox.news.emptyDay": "這一天沒有簡報。",
   "inbox.news.emptyToday": "今天還沒有新內容。",
   "inbox.news.markAllRead": "全部標記為已讀",

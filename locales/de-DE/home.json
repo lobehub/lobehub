@@ -115,6 +115,7 @@
   "inbox.goals.showAll": "Alle {{count}} anzeigen",
   "inbox.goals.title": "Ziele",
   "inbox.needsYou.title": "Braucht dich",
+  "inbox.news.continueChat": "Chat fortsetzen",
   "inbox.news.emptyDay": "Keine Zusammenfassungen an diesem Tag.",
   "inbox.news.emptyToday": "Heute gibt es noch nichts Neues.",
   "inbox.news.markAllRead": "Alle als gelesen markieren",

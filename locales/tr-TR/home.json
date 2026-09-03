@@ -115,6 +115,7 @@
   "inbox.goals.showAll": "Tümünü göster {{count}}",
   "inbox.goals.title": "Hedefler",
   "inbox.needsYou.title": "Sana ihtiyaç var",
+  "inbox.news.continueChat": "Sohbete devam et",
   "inbox.news.emptyDay": "Bu gün için özet yok.",
   "inbox.news.emptyToday": "Bugün henüz yeni bir şey yok.",
   "inbox.news.markAllRead": "Tümünü okundu olarak işaretle",

@@ -1,17 +1,21 @@
+import { AGENT_CHAT_URL } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
 import { Flexbox, Icon, Markdown } from '@lobehub/ui';
 import { Avatar, Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
+import { ChevronDownIcon, ChevronRightIcon, MessageSquarePlus } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { shallow } from 'zustand/shallow';
 
 import BriefCardArtifacts from '@/features/DailyBrief/BriefCardArtifacts';
 import BriefIcon from '@/features/DailyBrief/BriefIcon';
 import { type BriefItem } from '@/features/DailyBrief/types';
 import { homeType } from '@/features/Home/components/homeType';
 import Time from '@/features/Home/components/Time';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useBriefStore } from '@/store/brief';
+import { useTaskStore } from '@/store/task';
 
 const AVATAR_SIZE = 20;
 const ROW_GAP = 10;
@@ -82,7 +86,13 @@ interface NewsItemProps {
  * the finding's detail inline.
  */
 const NewsItem = memo<NewsItemProps>(({ bare, brief, showTime }) => {
+  const { t } = useTranslation('home');
   const markBriefRead = useBriefStore((s) => s.markBriefRead);
+  const navigate = useWorkspaceAwareNavigate();
+  const { openTopicDrawer, setActiveTaskId } = useTaskStore(
+    (s) => ({ openTopicDrawer: s.openTopicDrawer, setActiveTaskId: s.setActiveTaskId }),
+    shallow,
+  );
 
   const [expanded, setExpanded] = useState(false);
   const [localRead, setLocalRead] = useState(false);
@@ -100,6 +110,38 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief, showTime }) => {
       return !prev;
     });
   }, [brief.id, markBriefRead, read]);
+
+  // A brief is "conversable" whenever it names an agent: a run-owned brief
+  // opens its topic's chat drawer (same thread the agent worked in), while a
+  // bare insight brief without a topic falls back to the agent's chat page so
+  // a new conversation can start there.
+  const agentId = brief.agentId ?? brief.agent?.id;
+  const canContinueChat = Boolean(agentId);
+
+  const handleContinueChat = useCallback(() => {
+    if (!agentId) return;
+    if (brief.topicId) {
+      // setActiveTaskId hydrates the drawer's task context when the brief owns
+      // a task, and clears any prior drawer/task state; openTopicDrawer must
+      // come after so its topic survives the reset.
+      setActiveTaskId(brief.taskId ?? undefined);
+      openTopicDrawer(brief.topicId, {
+        agentId,
+        title: brief.taskName ?? brief.title,
+      });
+      return;
+    }
+    navigate(AGENT_CHAT_URL(agentId));
+  }, [
+    agentId,
+    brief.taskId,
+    brief.taskName,
+    brief.title,
+    brief.topicId,
+    navigate,
+    openTopicDrawer,
+    setActiveTaskId,
+  ]);
 
   return (
     <Flexbox className={bare ? undefined : styles.section}>
@@ -140,7 +182,7 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief, showTime }) => {
         </Flexbox>
       </Button>
 
-      {expanded && (brief.summary || brief.artifacts) && (
+      {expanded && (brief.summary || brief.artifacts || canContinueChat) && (
         <Flexbox className={bare ? styles.bareBody : styles.body} gap={8}>
           {brief.summary && (
             <Markdown style={{ overflow: 'unset' }} variant={'chat'}>
@@ -148,6 +190,18 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief, showTime }) => {
             </Markdown>
           )}
           <BriefCardArtifacts artifacts={brief.artifacts} />
+          {canContinueChat && (
+            <Flexbox horizontal justify={'flex-end'}>
+              <Button
+                icon={MessageSquarePlus}
+                size={'small'}
+                type={'text'}
+                onClick={handleContinueChat}
+              >
+                {t('inbox.news.continueChat')}
+              </Button>
+            </Flexbox>
+          )}
         </Flexbox>
       )}
     </Flexbox>

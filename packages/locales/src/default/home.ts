@@ -119,6 +119,7 @@ export default {
   'inbox.goals.showAll': 'Show all {{count}}',
   'inbox.goals.title': 'Goals',
   'inbox.needsYou.title': 'Needs you',
+  'inbox.news.continueChat': 'Continue chat',
   'inbox.news.emptyDay': 'No briefs this day.',
   'inbox.news.emptyToday': 'Nothing new yet today.',
   'inbox.news.markAllRead': 'Mark all read',
