@@ -139,13 +139,8 @@ export const searchRouter = router({
         ]);
         const restrictedFilters = restrictedPolicy
           ? {
-              ...(restrictedPolicy.trashedExclusiveDocumentIds.length > 0
-                ? { excludeDocumentIds: restrictedPolicy.trashedExclusiveDocumentIds }
-                : {}),
-              ...(restrictedPolicy.trashedExclusiveFileIds.length > 0
-                ? { excludeFileIds: restrictedPolicy.trashedExclusiveFileIds }
-                : {}),
               excludeKnowledgeBaseIds: restrictedPolicy.liveRestrictedKnowledgeBaseIds,
+              excludeTrashedKnowledgeBaseIds: restrictedPolicy.trashedRestrictedKnowledgeBaseIds,
               ...(restrictedPolicy.allRestrictedKnowledgeBaseIds.length > 0
                 ? {
                     excludeKnowledgeBaseRootIds: restrictedPolicy.allRestrictedKnowledgeBaseIds,

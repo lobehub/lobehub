@@ -38,6 +38,7 @@ import {
 const log = debug('lobe-server:trash');
 
 const WORKSPACE_RESOURCE_TYPES = new Set<TrashResourceType>(['document', 'file', 'knowledgeBase']);
+const PURGE_CLAIM_TTL_MS = 60 * 60 * 1000;
 
 type WorkspaceResourceTrashType = 'document' | 'file' | 'knowledgeBase';
 
@@ -306,19 +307,15 @@ export class TrashService {
   private getRestrictedResourceFilter = async (): Promise<TrashRestrictedResourceFilter> => {
     if (!this.workspaceId) return {};
 
-    const policy = await getRestrictedKnowledgeBasePolicy(
-      {
-        serverDB: this.db,
-        userId: this.userId,
-        workspaceId: this.workspaceId,
-      },
-      { includeTrashedDocuments: true },
-    );
+    const policy = await getRestrictedKnowledgeBasePolicy({
+      serverDB: this.db,
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    });
     return {
-      documentIds: policy.trashedExclusiveDocumentIds,
-      fileIds: policy.trashedExclusiveFileIds,
       knowledgeBaseIds: policy.allRestrictedKnowledgeBaseIds,
       membershipKnowledgeBaseIds: policy.liveRestrictedKnowledgeBaseIds,
+      trashedMembershipKnowledgeBaseIds: policy.trashedRestrictedKnowledgeBaseIds,
     };
   };
 
@@ -360,25 +357,40 @@ export class TrashService {
         continue;
       }
       try {
-        await this.db.transaction(async (tx) => {
+        const restoredRoot = await this.db.transaction(async (tx) => {
           const db = tx as unknown as LobeChatDatabase;
           const registry = new TrashModel(db, this.userId, this.workspaceId);
-          const children = await registry.findChildren(root.id, tx);
-          await resolveTrashHandler(root.resourceType).restore(this.ctx(db), root, children);
-          await this.recordResourceAudit(db, tx, root, 'resource.restored', {
+          // The registry row is the arbiter. Re-read it under lock so a purge
+          // claim that won after the list query can never become a fake
+          // successful restore with zero affected source rows.
+          const lockedRoot = await registry.findActiveRootForUpdate(root.id, tx);
+          if (!lockedRoot) return null;
+          const children = await registry.findChildren(lockedRoot.id, tx);
+          await resolveTrashHandler(lockedRoot.resourceType).restore(
+            this.ctx(db),
+            lockedRoot,
+            children,
+          );
+          await this.recordResourceAudit(db, tx, lockedRoot, 'resource.restored', {
             batchOperationId,
             occurredAt: restoredAt,
           });
-          await registry.removeByIds([root.id], tx);
+          await registry.removeByIds([lockedRoot.id], tx);
+          return lockedRoot;
         });
-        outcome.restored.push(this.toItem(root));
-        await this.notifyResourceMutationBestEffort([root], 'restored');
+        if (!restoredRoot) {
+          outcome.failed.push({ code: 'notFound', id: root.id });
+          continue;
+        }
+        outcome.restored.push(this.toItem(restoredRoot));
+        await this.notifyResourceMutationBestEffort([restoredRoot], 'restored');
       } catch (error) {
         if (error instanceof TrashRestoreError) {
           if (error.code === 'notFound') {
             // Nothing to bring back — drop the stale registry row so the bin
-            // stops advertising it.
-            await this.trashModel.removeByIds([root.id]);
+            // stops advertising it. A purge claim has already made its row
+            // inactive, so this cannot delete durable storage retry state.
+            await this.trashModel.removeActiveByIds([root.id]);
           }
           outcome.failed.push({ code: error.code, id: root.id });
           continue;
@@ -403,7 +415,11 @@ export class TrashService {
     }
     for (const root of roots) {
       try {
-        await this.purgeRoot(root);
+        const purged = await this.purgeRoot(root);
+        if (!purged) {
+          outcome.failed.push({ code: 'notFound', id: root.id });
+          continue;
+        }
         outcome.purged += 1;
         outcome.purgedIds.push(root.id);
       } catch (error) {
@@ -438,14 +454,37 @@ export class TrashService {
     return { scheduled: scheduledIds.length };
   };
 
-  private purgeRoot = async (root: TrashItemRow) => {
-    const children = await this.trashModel.findChildren(root.id);
+  private purgeRoot = async (root: TrashItemRow): Promise<boolean> => {
+    const claimId = randomUUID();
+    const claimedAt = new Date();
+    const claimedRoot = await this.trashModel.claimRootForPurge(root.id, {
+      claimedAt,
+      id: claimId,
+      staleBefore: new Date(claimedAt.getTime() - PURGE_CLAIM_TTL_MS),
+    });
+    if (!claimedRoot) return false;
+
+    const children = await this.trashModel.findChildren(claimedRoot.id);
     // Side effects (S3) and hard deletes are not transactional with each
-    // other by nature; run them, then drop the registry rows. If the handler
-    // throws, the root stays listed and the sweep retries next tick.
-    await resolveTrashHandler(root.resourceType).purge(this.ctx(), root, children);
-    await this.trashModel.removeByIds([root.id]);
-    log('purged %s:%s (+%d children)', root.resourceType, root.resourceId, children.length);
+    // other by nature. The durable registry claim remains the operation's
+    // lease across both phases; failures release the lease but retain a
+    // restore-block marker so a later purge attempt can retry safely.
+    try {
+      await resolveTrashHandler(claimedRoot.resourceType).purge(this.ctx(), claimedRoot, children);
+      if (!(await this.trashModel.removeClaimedRoot(claimedRoot.id, claimId))) {
+        throw new Error('Trash purge claim was lost before registry cleanup');
+      }
+      log(
+        'purged %s:%s (+%d children)',
+        claimedRoot.resourceType,
+        claimedRoot.resourceId,
+        children.length,
+      );
+      return true;
+    } catch (error) {
+      await this.trashModel.releasePurgeClaim(claimedRoot.id, claimId);
+      throw error;
+    }
   };
 
   private toItem = (row: TrashItemRow): TrashItem => toPublicTrashItem(row);
@@ -488,8 +527,7 @@ export class TrashService {
     for (const root of roots) {
       const service = new TrashService(db, root.userId, root.workspaceId ?? undefined);
       try {
-        await service.purgeRoot(root);
-        outcome.purged += 1;
+        if (await service.purgeRoot(root)) outcome.purged += 1;
       } catch (error) {
         outcome.failed += 1;
         log('purge failed for %s:%s — %O', root.resourceType, root.resourceId, error);

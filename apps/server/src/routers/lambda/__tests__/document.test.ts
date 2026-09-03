@@ -68,8 +68,7 @@ vi.mock('@/server/routers/lambda/_helpers/knowledgeBaseAccess', () => ({
   getRestrictedKnowledgeBasePolicy: vi.fn().mockResolvedValue({
     allRestrictedKnowledgeBaseIds: [],
     liveRestrictedKnowledgeBaseIds: [],
-    trashedExclusiveDocumentIds: [],
-    trashedExclusiveFileIds: [],
+    trashedRestrictedKnowledgeBaseIds: [],
   }),
 }));
 vi.mock('@/server/services/workspacePermission', () => ({

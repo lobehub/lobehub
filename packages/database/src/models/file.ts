@@ -39,6 +39,7 @@ import {
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { buildFileCategoryFilter } from '../utils/fileTypeCategory';
+import { excludeRestrictedFile } from '../utils/restrictedKnowledgeBase';
 import {
   isTrashed,
   notTrashed,
@@ -551,19 +552,19 @@ export class FileModel {
     knowledgeBaseId,
     showFilesInKnowledgeBase,
     callerAgentVisibility,
-    excludeFileIds,
     excludeKnowledgeBaseIds,
+    excludeTrashedKnowledgeBaseIds,
     visibility,
   }: QueryFileListParams & {
     callerAgentVisibility?: 'private' | 'public' | null;
-    /** Server-derived resource ids hidden by a trashed restricted knowledge base. */
-    excludeFileIds?: string[];
     /**
      * Server-derived list of restricted knowledge bases the caller may not
      * browse. Files linked to these KBs are dropped from cross-KB listings;
      * never populated from client input.
      */
     excludeKnowledgeBaseIds?: string[];
+    /** Deleted restricted KBs; only otherwise-unshared files are hidden. */
+    excludeTrashedKnowledgeBaseIds?: string[];
     visibility?: 'private' | 'public';
   } = {}) => {
     // 1. Build where clause
@@ -571,7 +572,6 @@ export class FileModel {
       q ? ilike(files.name, `%${q}%`) : undefined,
       this.ownership(callerAgentVisibility),
       visibility ? eq(files.visibility, visibility) : undefined,
-      excludeFileIds?.length ? notInArray(files.id, excludeFileIds) : undefined,
       // Artifacts owned by another surface (acceptance evidence) stay reachable
       // by id, but never appear in a listing. Applied here rather than in
       // `ownership()` so single-row reads and deletes still resolve them.
@@ -652,19 +652,17 @@ export class FileModel {
     // Cross-KB listing: drop files linked to restricted knowledge bases. A file
     // that also belongs to an open KB is still dropped — over-hiding beats
     // leaking a restricted KB's content through a shared membership.
-    else if (excludeKnowledgeBaseIds?.length) {
+    else if (this.workspaceId) {
       whereClause = and(
         whereClause,
-        notExists(
-          this.db
-            .select()
-            .from(knowledgeBaseFiles)
-            .where(
-              and(
-                eq(knowledgeBaseFiles.fileId, files.id),
-                inArray(knowledgeBaseFiles.knowledgeBaseId, excludeKnowledgeBaseIds),
-              ),
-            ),
+        excludeRestrictedFile(
+          this.db,
+          files.id,
+          { userId: this.userId, workspaceId: this.workspaceId },
+          {
+            liveKnowledgeBaseIds: excludeKnowledgeBaseIds,
+            trashedKnowledgeBaseIds: excludeTrashedKnowledgeBaseIds,
+          },
         ),
       );
     }

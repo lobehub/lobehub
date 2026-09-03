@@ -35,6 +35,10 @@ import { FileModel } from '../../models/file';
 import { DOCUMENT_FOLDER_TYPE, documents, files, knowledgeBaseFiles, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { buildDocumentCategoryFilter, buildFileCategoryFilter } from '../../utils/fileTypeCategory';
+import {
+  excludeRestrictedDocument,
+  excludeRestrictedFile,
+} from '../../utils/restrictedKnowledgeBase';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
 /**
@@ -237,16 +241,14 @@ export type RecentItemKind = 'file' | 'page';
 interface KnowledgeQueryParams extends QueryFileListParams {
   /** Restrict the result set to rows created by a specific workspace member. */
   creatorUserId?: string;
-  /** Server-derived document ids hidden by a trashed restricted knowledge base. */
-  excludeDocumentIds?: string[];
-  /** Server-derived file ids hidden by a trashed restricted knowledge base. */
-  excludeFileIds?: string[];
   /**
    * Server-derived list of restricted knowledge bases the caller may not
    * browse (resource-permission `use` level). Content linked to these KBs is
    * dropped from cross-KB listings; never populated from client input.
    */
   excludeKnowledgeBaseIds?: string[];
+  /** Deleted restricted KBs; only otherwise-unshared resources are hidden. */
+  excludeTrashedKnowledgeBaseIds?: string[];
   /**
    * Include full document bodies in the result. List and bulk-operation callers
    * should disable this and load content through the document detail endpoint.
@@ -430,9 +432,8 @@ export class KnowledgeRepo {
     q,
     sortType,
     sorter,
-    excludeDocumentIds,
-    excludeFileIds,
     excludeKnowledgeBaseIds,
+    excludeTrashedKnowledgeBaseIds,
     includeContent = true,
     includeContentPreview = false,
     knowledgeBaseId,
@@ -474,11 +475,18 @@ export class KnowledgeRepo {
         }),
         this.fileCategoryFilter(category),
         this.fileSourceFilter(sourceFilter),
-        excludeFileIds?.length ? notInArray(f.id, excludeFileIds) : undefined,
         // Exclude files in knowledge base if needed
         !knowledgeBaseId && !showFilesInKnowledgeBase ? this.notInAnyKnowledgeBase() : undefined,
-        !knowledgeBaseId && excludeKnowledgeBaseIds?.length
-          ? this.notInKnowledgeBases(excludeKnowledgeBaseIds)
+        !knowledgeBaseId && this.workspaceId
+          ? excludeRestrictedFile(
+              this.db,
+              f.id,
+              { userId: this.userId, workspaceId: this.workspaceId },
+              {
+                liveKnowledgeBaseIds: excludeKnowledgeBaseIds,
+                trashedKnowledgeBaseIds: excludeTrashedKnowledgeBaseIds,
+              },
+            )
           : undefined,
       ],
       knowledgeBaseId,
@@ -497,14 +505,21 @@ export class KnowledgeRepo {
         }),
         this.documentCategoryFilter(category),
         this.documentSourceFilter(sourceFilter),
-        excludeDocumentIds?.length ? notInArray(d.id, excludeDocumentIds) : undefined,
         // Inside a knowledge base only standalone rows (folders and notes with no
         // backing file) belong to the document arm — documents that do have a file
         // already come back through the file arm.
         knowledgeBaseId ? isNull(d.fileId) : undefined,
         knowledgeBaseId ? eq(d.knowledgeBaseId, knowledgeBaseId) : undefined,
-        !knowledgeBaseId && excludeKnowledgeBaseIds?.length
-          ? or(isNull(d.knowledgeBaseId), notInArray(d.knowledgeBaseId, excludeKnowledgeBaseIds))
+        !knowledgeBaseId && this.workspaceId
+          ? excludeRestrictedDocument(
+              this.db,
+              { fileId: d.fileId, knowledgeBaseId: d.knowledgeBaseId },
+              { userId: this.userId, workspaceId: this.workspaceId },
+              {
+                liveKnowledgeBaseIds: excludeKnowledgeBaseIds,
+                trashedKnowledgeBaseIds: excludeTrashedKnowledgeBaseIds,
+              },
+            )
           : undefined,
       ],
       includeContent,
@@ -634,24 +649,6 @@ export class KnowledgeRepo {
 
   private notInAnyKnowledgeBase = () =>
     notExists(this.db.select().from(knowledgeBaseFiles).where(eq(knowledgeBaseFiles.fileId, f.id)));
-
-  /**
-   * Drop files linked to any of the given knowledge bases. A file that also
-   * belongs to an open KB is still dropped — hiding slightly more beats
-   * leaking a restricted KB's content through a shared membership.
-   */
-  private notInKnowledgeBases = (knowledgeBaseIds: string[]) =>
-    notExists(
-      this.db
-        .select()
-        .from(knowledgeBaseFiles)
-        .where(
-          and(
-            eq(knowledgeBaseFiles.fileId, f.id),
-            inArray(knowledgeBaseFiles.knowledgeBaseId, knowledgeBaseIds),
-          ),
-        ),
-    );
 
   private fileCategoryFilter = (category?: string): SQL | undefined => {
     if (!category || category === FilesTabs.All) return undefined;

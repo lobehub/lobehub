@@ -27,8 +27,7 @@ import { TrashService } from '../index';
 const accessMocks = vi.hoisted(() => ({
   liveRestrictedKnowledgeBaseIds: undefined as string[] | undefined,
   restrictedKnowledgeBaseIds: [] as string[],
-  trashedExclusiveDocumentIds: [] as string[],
-  trashedExclusiveFileIds: [] as string[],
+  trashedRestrictedKnowledgeBaseIds: [] as string[],
 }));
 const fileServiceMocks = vi.hoisted(() => ({ deleteFiles: vi.fn() }));
 const notificationMocks = vi.hoisted(() => ({ notifyResourceTrashMutation: vi.fn() }));
@@ -39,8 +38,7 @@ vi.mock('@/server/services/knowledgeBaseAccess', () => ({
     allRestrictedKnowledgeBaseIds: accessMocks.restrictedKnowledgeBaseIds,
     liveRestrictedKnowledgeBaseIds:
       accessMocks.liveRestrictedKnowledgeBaseIds ?? accessMocks.restrictedKnowledgeBaseIds,
-    trashedExclusiveDocumentIds: accessMocks.trashedExclusiveDocumentIds,
-    trashedExclusiveFileIds: accessMocks.trashedExclusiveFileIds,
+    trashedRestrictedKnowledgeBaseIds: accessMocks.trashedRestrictedKnowledgeBaseIds,
   })),
 }));
 
@@ -69,8 +67,7 @@ beforeEach(async () => {
   vi.clearAllMocks();
   accessMocks.liveRestrictedKnowledgeBaseIds = undefined;
   accessMocks.restrictedKnowledgeBaseIds = [];
-  accessMocks.trashedExclusiveDocumentIds = [];
-  accessMocks.trashedExclusiveFileIds = [];
+  accessMocks.trashedRestrictedKnowledgeBaseIds = [];
   workflowMocks.triggerTrashPurge.mockResolvedValue(true);
   await serverDB.delete(users);
   await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
@@ -88,6 +85,51 @@ afterEach(async () => {
 
 describe('TrashService', () => {
   describe('resources', () => {
+    it('serializes restore behind an in-flight permanent purge claim', async () => {
+      await fileModel.createGlobalFile({
+        creator: userId,
+        fileType: 'text/plain',
+        hashId: 'purge-race-hash',
+        size: 1,
+        url: 'files/purge-race.txt',
+      });
+      const file = await fileModel.create({
+        fileHash: 'purge-race-hash',
+        fileType: 'text/plain',
+        name: 'purge-race.txt',
+        size: 1,
+        url: 'files/purge-race.txt',
+      });
+      const [root] = await service.trashFiles([file.id]);
+      let releaseStorageDelete!: () => void;
+      fileServiceMocks.deleteFiles.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            releaseStorageDelete = resolve;
+          }),
+      );
+
+      const purgePromise = service.purge([root.id]);
+      await vi.waitFor(() => expect(fileServiceMocks.deleteFiles).toHaveBeenCalledOnce());
+
+      await expect(service.restore([root.id])).resolves.toEqual({
+        failed: [{ code: 'notFound', id: root.id }],
+        restored: [],
+      });
+      expect(await trashModel.findByIdIncludingQueued(root.id)).toMatchObject({
+        meta: expect.objectContaining({ purgeClaim: expect.any(Object) }),
+      });
+
+      releaseStorageDelete();
+      await expect(purgePromise).resolves.toEqual({
+        failed: [],
+        purged: 1,
+        purgedIds: [root.id],
+      });
+      expect(await serverDB.select().from(files).where(eq(files.id, file.id))).toEqual([]);
+      expect(await trashModel.findByIdIncludingQueued(root.id)).toBeUndefined();
+    });
+
     it('audits delete and restore in the transaction and notifies the original creator', async () => {
       const workspaceId = 'trash-audit-workspace';
       await serverDB
@@ -333,6 +375,7 @@ describe('TrashService', () => {
       const [root] = await creatorService.trashFiles([file.id]);
       accessMocks.restrictedKnowledgeBaseIds = [restricted.id];
       accessMocks.liveRestrictedKnowledgeBaseIds = [];
+      accessMocks.trashedRestrictedKnowledgeBaseIds = [restricted.id];
 
       const actorService = new TrashService(serverDB, otherUserId, workspaceId);
       expect((await actorService.list()).items.map((item) => item.resourceId)).toEqual([file.id]);

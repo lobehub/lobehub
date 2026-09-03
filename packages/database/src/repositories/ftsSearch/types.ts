@@ -159,14 +159,12 @@ export type FtsSearchResult =
 export interface FtsSearchOptions {
   agentId?: string;
   contextType?: 'agent' | 'resource' | 'page';
-  /** Caller-relative document ids hidden by trashed restricted KBs. */
-  excludeDocumentIds?: string[];
-  /** Caller-relative file ids hidden by trashed restricted KBs. */
-  excludeFileIds?: string[];
   /** Caller-relative restricted KBs that must not be discoverable. */
   excludeKnowledgeBaseIds?: string[];
   /** Caller-relative KB root ids hidden from the KB result type. */
   excludeKnowledgeBaseRootIds?: string[];
+  /** Deleted restricted KBs; PostgreSQL filters only otherwise-unshared resources. */
+  excludeTrashedKnowledgeBaseIds?: string[];
   limitPerType?: number;
   offset?: number;
   query: string;
@@ -206,6 +204,7 @@ export interface FtsSearchBackendFilters {
   /** Exact entity ids excluded after caller-relative access-policy evaluation. */
   excludeIds?: string[];
   excludeKnowledgeBaseIds?: string[];
+  excludeTrashedKnowledgeBaseIds?: string[];
   excludeVirtual?: boolean;
   knowledgeBaseIds?: string[];
   memoryCategories?: string[];

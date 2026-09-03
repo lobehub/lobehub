@@ -321,6 +321,71 @@ describe('TrashModel', () => {
     });
   });
 
+  describe('purge arbitration', () => {
+    it('allows one purge claimant and keeps restore blocked across retry hand-off', async () => {
+      const root = await model.register({
+        deletedAt: at('2026-08-01T00:00:00Z'),
+        root: { resourceId: 'file_claimed', resourceType: 'file' },
+      });
+      const claimedAt = at('2026-09-01T00:00:00Z');
+      const claimed = await model.claimRootForPurge(root.id, {
+        claimedAt,
+        id: 'claim-1',
+        staleBefore: at('2026-08-31T23:00:00Z'),
+      });
+      expect(claimed?.meta?.purgeClaim).toEqual({
+        claimedAt: claimedAt.toISOString(),
+        id: 'claim-1',
+      });
+      await expect(
+        model.claimRootForPurge(root.id, {
+          claimedAt: at('2026-09-01T00:01:00Z'),
+          id: 'claim-2',
+          staleBefore: at('2026-08-31T23:01:00Z'),
+        }),
+      ).resolves.toBeUndefined();
+      await expect(
+        serverDB.transaction((trx) => model.findActiveRootForUpdate(root.id, trx)),
+      ).resolves.toBeUndefined();
+      expect((await model.list()).items[0].meta).toBeNull();
+
+      const stolen = await model.claimRootForPurge(root.id, {
+        claimedAt: at('2026-09-01T02:00:00Z'),
+        id: 'claim-stale-retry',
+        staleBefore: at('2026-09-01T01:00:00Z'),
+      });
+      expect(stolen?.meta?.purgeClaim?.id).toBe('claim-stale-retry');
+      await model.releasePurgeClaim(root.id, 'claim-stale-retry');
+      const released = await model.findByIdIncludingQueued(root.id);
+      expect(released?.meta).toMatchObject({ purgeBlocked: true });
+      await expect(
+        serverDB.transaction((trx) => model.findActiveRootForUpdate(root.id, trx)),
+      ).resolves.toBeUndefined();
+
+      const retry = await model.claimRootForPurge(root.id, {
+        claimedAt: at('2026-09-01T01:00:00Z'),
+        id: 'claim-retry',
+        staleBefore: at('2026-09-01T00:00:00Z'),
+      });
+      expect(retry?.meta?.purgeClaim?.id).toBe('claim-retry');
+      await expect(model.removeClaimedRoot(root.id, 'wrong-claim')).resolves.toBe(false);
+      await expect(model.removeClaimedRoot(root.id, 'claim-retry')).resolves.toBe(true);
+    });
+
+    it('locks an unclaimed active root for restore and removes only active stale rows', async () => {
+      const restorable = await model.register({
+        deletedAt: at('2026-08-01T00:00:00Z'),
+        root: { resourceId: 'file_restorable', resourceType: 'file' },
+      });
+
+      await expect(
+        serverDB.transaction((trx) => model.findActiveRootForUpdate(restorable.id, trx)),
+      ).resolves.toMatchObject({ id: restorable.id });
+      await model.removeActiveByIds([restorable.id]);
+      await expect(model.findById(restorable.id)).resolves.toBeUndefined();
+    });
+  });
+
   describe('sweep helpers', () => {
     it('listExpiredRoots returns roots past their expiry across users, oldest first', async () => {
       const now = at('2026-09-15T00:00:00Z');

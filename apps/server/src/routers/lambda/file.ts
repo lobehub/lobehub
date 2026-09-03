@@ -59,13 +59,8 @@ const getRestrictedResourceFilters = async (
 ) => {
   const policy = await getRestrictedKnowledgeBasePolicy(ctx);
   return {
-    ...(policy.trashedExclusiveDocumentIds.length > 0
-      ? { excludeDocumentIds: policy.trashedExclusiveDocumentIds }
-      : {}),
-    ...(policy.trashedExclusiveFileIds.length > 0
-      ? { excludeFileIds: policy.trashedExclusiveFileIds }
-      : {}),
     excludeKnowledgeBaseIds: policy.liveRestrictedKnowledgeBaseIds,
+    excludeTrashedKnowledgeBaseIds: policy.trashedRestrictedKnowledgeBaseIds,
   };
 };
 

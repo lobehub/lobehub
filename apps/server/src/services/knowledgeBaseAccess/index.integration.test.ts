@@ -177,14 +177,7 @@ describe('restricted knowledge-base policy integration', () => {
       ['kb-live-restricted', 'kb-trashed-restricted'].sort(),
     );
     expect(policy.liveRestrictedKnowledgeBaseIds).toEqual(['kb-live-restricted']);
-    expect(policy.trashedExclusiveDocumentIds).toEqual(['docs-live-exclusive']);
-    expect(policy.trashedExclusiveFileIds).toEqual(['file-trashed-exclusive']);
-    const trashPolicy = await getRestrictedKnowledgeBasePolicy(ctx, {
-      includeTrashedDocuments: true,
-    });
-    expect(trashPolicy.trashedExclusiveDocumentIds.sort()).toEqual(
-      ['docs-live-exclusive', 'docs-trashed-exclusive'].sort(),
-    );
+    expect(policy.trashedRestrictedKnowledgeBaseIds).toEqual(['kb-trashed-restricted']);
     await expect(
       assertFileNotInRestrictedKnowledgeBase(ctx, 'file-trashed-exclusive'),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });

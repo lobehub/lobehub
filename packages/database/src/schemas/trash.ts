@@ -15,6 +15,13 @@ export interface TrashDetachedEdge {
 export interface TrashItemRowMeta extends TrashItemMeta {
   /** Internal hierarchy snapshot; never expose through the public Trash DTO. */
   detachedEdges?: TrashDetachedEdge[];
+  /** A previous purge crossed the point where restore is no longer safe. */
+  purgeBlocked?: true;
+  /** Internal purge lease; serializes restore and permanent deletion without a schema migration. */
+  purgeClaim?: {
+    claimedAt: string;
+    id: string;
+  };
   /** Internal retry hand-off; never expose through the public Trash DTO. */
   storageCleanup?: {
     files: { fileHash: string; url: string }[];

@@ -142,10 +142,9 @@ export class FtsSearchRepo {
 
     const trimmedQuery = query.trim();
     const limits = this.calculateLimits(limitPerType, type, agentId, contextType);
-    const excludeDocumentIds = options.excludeDocumentIds ?? [];
-    const excludeFileIds = options.excludeFileIds ?? [];
     const excludeKnowledgeBaseIds = options.excludeKnowledgeBaseIds ?? [];
     const excludeKnowledgeBaseRootIds = options.excludeKnowledgeBaseRootIds ?? [];
+    const excludeTrashedKnowledgeBaseIds = options.excludeTrashedKnowledgeBaseIds ?? [];
     const searches: Promise<FtsSearchBackendResponse>[] = [];
 
     if ((!type || type === 'agent') && limits.agent > 0) {
@@ -168,8 +167,8 @@ export class FtsSearchRepo {
       searches.push(
         this.execute(
           this.createRequest('files', trimmedQuery, limits.file, {
-            excludeIds: excludeFileIds,
             excludeKnowledgeBaseIds,
+            excludeTrashedKnowledgeBaseIds,
           }),
         ),
       );
@@ -179,8 +178,8 @@ export class FtsSearchRepo {
         this.execute(
           this.createRequest('documents', trimmedQuery, limits.folder, {
             documentKind: 'folder',
-            excludeIds: excludeDocumentIds,
             excludeKnowledgeBaseIds,
+            excludeTrashedKnowledgeBaseIds,
           }),
         ),
       );
@@ -190,8 +189,8 @@ export class FtsSearchRepo {
         this.execute(
           this.createRequest('documents', trimmedQuery, limits.page, {
             documentKind: 'page',
-            excludeIds: excludeDocumentIds,
             excludeKnowledgeBaseIds,
+            excludeTrashedKnowledgeBaseIds,
           }),
         ),
       );

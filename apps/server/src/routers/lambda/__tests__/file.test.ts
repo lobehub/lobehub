@@ -1111,6 +1111,7 @@ describe('fileRouter', () => {
 
       expect(mockKnowledgeRepoQuery).toHaveBeenCalledWith({
         excludeKnowledgeBaseIds: [],
+        excludeTrashedKnowledgeBaseIds: [],
         includeContent: false,
         includeContentPreview: false,
         limit: 501,
@@ -1141,6 +1142,7 @@ describe('fileRouter', () => {
 
       expect(mockKnowledgeRepoQuery).toHaveBeenCalledWith({
         excludeKnowledgeBaseIds: [],
+        excludeTrashedKnowledgeBaseIds: [],
         includeContent: false,
         includeContentPreview: false,
         limit: 501,
@@ -1163,6 +1165,7 @@ describe('fileRouter', () => {
 
       expect(mockKnowledgeRepoQuery).toHaveBeenLastCalledWith({
         excludeKnowledgeBaseIds: [],
+        excludeTrashedKnowledgeBaseIds: [],
         includeContent: false,
         includeContentPreview: false,
         limit: 501,
@@ -1178,6 +1181,7 @@ describe('fileRouter', () => {
 
       expect(mockKnowledgeRepoQuery).toHaveBeenLastCalledWith({
         excludeKnowledgeBaseIds: [],
+        excludeTrashedKnowledgeBaseIds: [],
         includeContent: false,
         includeContentPreview: false,
         limit: 501,

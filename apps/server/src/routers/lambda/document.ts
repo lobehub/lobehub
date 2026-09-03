@@ -374,8 +374,8 @@ export const documentRouter = router({
         : undefined;
       return ctx.documentService.queryDocuments({
         ...input,
-        excludeDocumentIds: restrictedPolicy?.trashedExclusiveDocumentIds,
         excludeKnowledgeBaseIds: restrictedPolicy?.liveRestrictedKnowledgeBaseIds,
+        excludeTrashedKnowledgeBaseIds: restrictedPolicy?.trashedRestrictedKnowledgeBaseIds,
       });
     }),
 

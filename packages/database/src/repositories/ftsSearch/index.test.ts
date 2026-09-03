@@ -43,15 +43,15 @@ beforeEach(async () => {
 });
 
 describe('FtsSearchRepo candidate search', () => {
-  it('forwards caller-relative exact exclusions to each resource search', async () => {
+  it('forwards caller-relative relational KB filters to each resource search', async () => {
     const backendFtsSearch = vi.fn().mockResolvedValue({ candidates: [], items: [] });
     const repo = new FtsSearchRepo(serverDB, userId, undefined, undefined, {
       backend: { key: 'policy', search: backendFtsSearch },
     });
 
     await repo.search({
-      excludeFileIds: ['file-trashed-exclusive'],
       excludeKnowledgeBaseIds: ['kb-live-restricted'],
+      excludeTrashedKnowledgeBaseIds: ['kb-trashed-restricted'],
       query: 'secret',
       type: 'file',
     });
@@ -60,8 +60,8 @@ describe('FtsSearchRepo candidate search', () => {
       expect.objectContaining({
         entity: 'files',
         filters: {
-          excludeIds: ['file-trashed-exclusive'],
           excludeKnowledgeBaseIds: ['kb-live-restricted'],
+          excludeTrashedKnowledgeBaseIds: ['kb-trashed-restricted'],
         },
       }),
     );

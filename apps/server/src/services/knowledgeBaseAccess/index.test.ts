@@ -194,15 +194,11 @@ describe('getRestrictedKnowledgeBaseIds', () => {
 });
 
 describe('getRestrictedKnowledgeBasePolicy', () => {
-  it('keeps trashed restrictions while allowing files shared into a live browsable KB', async () => {
+  it('returns KB state without materializing every linked file or document', async () => {
+    const serverDB = dbWithResults([{ id: 'kb-trashed', isDeleted: true }], []);
+    const select = vi.spyOn(serverDB, 'select');
     const ctx = {
-      serverDB: dbWithResults(
-        [{ id: 'kb-trashed', isDeleted: true }],
-        [],
-        [{ fileId: 'file-exclusive' }, { fileId: 'file-shared' }],
-        [{ fileId: 'file-shared' }],
-        [{ id: 'docs-exclusive' }],
-      ),
+      serverDB,
       userId: 'member',
       workspaceId: 'ws-1',
     };
@@ -210,9 +206,9 @@ describe('getRestrictedKnowledgeBasePolicy', () => {
     await expect(getRestrictedKnowledgeBasePolicy(ctx)).resolves.toEqual({
       allRestrictedKnowledgeBaseIds: ['kb-trashed'],
       liveRestrictedKnowledgeBaseIds: [],
-      trashedExclusiveDocumentIds: ['docs-exclusive'],
-      trashedExclusiveFileIds: ['file-exclusive'],
+      trashedRestrictedKnowledgeBaseIds: ['kb-trashed'],
     });
+    expect(select).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -247,8 +243,7 @@ describe('assertFileNotInRestrictedKnowledgeBase', () => {
 
   it('throws FORBIDDEN when the file belongs to a restricted KB', async () => {
     const ctx = {
-      // 1st select: memberships; 2nd select: restriction rows
-      serverDB: dbWithResults([{ knowledgeBaseId: 'kb-1' }], [{ id: 'kb-1' }]),
+      serverDB: dbWithResults([{ id: 'kb-1' }], [], [], [{ id: 'file-1' }]),
       userId: 'member',
       workspaceId: 'ws-1',
     };
@@ -260,7 +255,7 @@ describe('assertFileNotInRestrictedKnowledgeBase', () => {
 
   it('passes when the file only belongs to open KBs', async () => {
     const ctx = {
-      serverDB: dbWithResults([{ knowledgeBaseId: 'kb-open' }], [{ id: 'kb-restricted' }]),
+      serverDB: dbWithResults([{ id: 'kb-restricted' }], [], [], []),
       userId: 'member',
       workspaceId: 'ws-1',
     };
@@ -270,14 +265,7 @@ describe('assertFileNotInRestrictedKnowledgeBase', () => {
 
   it('does not hide a shared file through a trashed restricted KB when its other KB is live and open', async () => {
     const ctx = {
-      serverDB: dbWithResults(
-        [{ knowledgeBaseId: 'kb-restricted-trashed' }, { knowledgeBaseId: 'kb-open-live' }],
-        [{ id: 'kb-restricted-trashed', isDeleted: true }],
-        [],
-        [{ fileId: 'file-shared' }],
-        [{ fileId: 'file-shared' }],
-        [],
-      ),
+      serverDB: dbWithResults([{ id: 'kb-restricted-trashed', isDeleted: true }], [], [], [], []),
       userId: 'member',
       workspaceId: 'ws-1',
     };
@@ -290,12 +278,11 @@ describe('assertFileNotInRestrictedKnowledgeBase', () => {
   it('blocks a file exclusive to a trashed restricted KB', async () => {
     const ctx = {
       serverDB: dbWithResults(
-        [{ knowledgeBaseId: 'kb-restricted-trashed' }],
         [{ id: 'kb-restricted-trashed', isDeleted: true }],
         [],
-        [{ fileId: 'file-exclusive' }],
         [],
         [],
+        [{ id: 'file-exclusive' }],
       ),
       userId: 'member',
       workspaceId: 'ws-1',
@@ -335,7 +322,7 @@ describe('assertContentsNotInRestrictedKnowledgeBase', () => {
     const ctx = {
       // 1st select: restriction rows; 2nd: the caller's collaborator grants
       // (none); 3rd: restricted file membership hit
-      serverDB: dbWithResults([{ id: 'kb-1' }], [], [{ fileId: 'file-1' }]),
+      serverDB: dbWithResults([{ id: 'kb-1' }], [], [], [{ id: 'file-1' }]),
       userId: 'member',
       workspaceId: 'ws-1',
     };
@@ -347,14 +334,7 @@ describe('assertContentsNotInRestrictedKnowledgeBase', () => {
 
   it('throws FORBIDDEN when a parsed-file docs_* id links to a restricted KB via fileId', async () => {
     const ctx = {
-      // 1st select: restriction rows; 2nd: collaborator grants (none); 3rd:
-      // document lookup; 4th: fileId → knowledge_base_files membership.
-      serverDB: dbWithResults(
-        [{ id: 'kb-1' }],
-        [],
-        [{ fileId: 'file-parsed', id: 'docs_parsed', knowledgeBaseId: null }],
-        [{ fileId: 'file-parsed' }],
-      ),
+      serverDB: dbWithResults([{ id: 'kb-1' }], [], [], [], [{ id: 'docs_parsed' }]),
       userId: 'member',
       workspaceId: 'ws-1',
     };
@@ -366,13 +346,7 @@ describe('assertContentsNotInRestrictedKnowledgeBase', () => {
 
   it('throws FORBIDDEN when a docs_* id belongs to a restricted KB', async () => {
     const ctx = {
-      // 1st select: restriction rows; 2nd: collaborator grants (none); 3rd:
-      // direct document lookup
-      serverDB: dbWithResults(
-        [{ id: 'kb-1' }],
-        [],
-        [{ fileId: null, id: 'docs_1', knowledgeBaseId: 'kb-1' }],
-      ),
+      serverDB: dbWithResults([{ id: 'kb-1' }], [], [], [], [{ id: 'docs_1' }]),
       userId: 'member',
       workspaceId: 'ws-1',
     };
@@ -386,7 +360,7 @@ describe('assertContentsNotInRestrictedKnowledgeBase', () => {
     const ctx = {
       // restriction rows, collaborator grants (none), empty file hit, empty
       // document hit
-      serverDB: dbWithResults([{ id: 'kb-1' }], [], [], []),
+      serverDB: dbWithResults([{ id: 'kb-1' }], [], [], [], [], []),
       userId: 'member',
       workspaceId: 'ws-1',
     };

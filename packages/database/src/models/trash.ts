@@ -25,8 +25,12 @@ import {
 } from 'drizzle-orm';
 
 import type { NewTrashItemRow, TrashItemRow, TrashItemRowMeta } from '../schemas';
-import { documents, files, knowledgeBaseFiles, knowledgeBases, trashItems } from '../schemas';
+import { documents, files, knowledgeBases, trashItems } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
+import {
+  documentInRestrictedKnowledgeBase,
+  fileInRestrictedKnowledgeBase,
+} from '../utils/restrictedKnowledgeBase';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
 export interface TrashRegisterEntry {
@@ -51,14 +55,12 @@ export interface TrashExpiredCursor {
 }
 
 export interface TrashRestrictedResourceFilter {
-  /** Exact document ids protected only by a trashed restricted knowledge base. */
-  documentIds?: string[];
-  /** Exact file ids protected only by a trashed restricted knowledge base. */
-  fileIds?: string[];
   /** Restricted knowledge-base roots, whether live or trashed. */
   knowledgeBaseIds?: string[];
   /** Live restricted knowledge bases whose current contents remain hidden. */
   membershipKnowledgeBaseIds?: string[];
+  /** Trashed restricted KBs; only otherwise-unshared contents remain hidden. */
+  trashedMembershipKnowledgeBaseIds?: string[];
 }
 
 /**
@@ -80,6 +82,8 @@ const ROOT_TABLES: Record<TrashResourceType, { id: any; isDeleted: any; table: a
 export const toPublicTrashItem = (row: TrashItemRow): TrashItem => {
   const {
     detachedEdges: _detachedEdges,
+    purgeBlocked: _purgeBlocked,
+    purgeClaim: _purgeClaim,
     storageCleanup: _storageCleanup,
     ...publicMeta
   } = row.meta ?? {};
@@ -132,51 +136,42 @@ export class TrashModel {
   private active = () => gt(trashItems.expiresAt, trashItems.deletedAt);
 
   private excludeRestrictedResources = (filter: TrashRestrictedResourceFilter): SQL | undefined => {
-    const documentIds = filter.documentIds ?? [];
-    const fileIds = filter.fileIds ?? [];
     const knowledgeBaseIds = filter.knowledgeBaseIds ?? [];
     const membershipKnowledgeBaseIds = filter.membershipKnowledgeBaseIds ?? [];
+    const trashedMembershipKnowledgeBaseIds = filter.trashedMembershipKnowledgeBaseIds ?? [];
     if (
-      documentIds.length === 0 &&
-      fileIds.length === 0 &&
       knowledgeBaseIds.length === 0 &&
-      membershipKnowledgeBaseIds.length === 0
+      membershipKnowledgeBaseIds.length === 0 &&
+      trashedMembershipKnowledgeBaseIds.length === 0
     ) {
       return;
     }
 
-    const fileInRestrictedKnowledgeBase =
-      membershipKnowledgeBaseIds.length > 0
-        ? exists(
-            this.db
-              .select({ fileId: knowledgeBaseFiles.fileId })
-              .from(knowledgeBaseFiles)
-              .where(
-                and(
-                  eq(knowledgeBaseFiles.fileId, trashItems.resourceId),
-                  inArray(knowledgeBaseFiles.knowledgeBaseId, membershipKnowledgeBaseIds),
-                ),
-              ),
-          )
-        : undefined;
-    const documentInRestrictedKnowledgeBase =
-      membershipKnowledgeBaseIds.length > 0
-        ? exists(
-            this.db
-              .select({ id: documents.id })
-              .from(documents)
-              .leftJoin(knowledgeBaseFiles, eq(documents.fileId, knowledgeBaseFiles.fileId))
-              .where(
-                and(
-                  eq(documents.id, trashItems.resourceId),
-                  or(
-                    inArray(documents.knowledgeBaseId, membershipKnowledgeBaseIds),
-                    inArray(knowledgeBaseFiles.knowledgeBaseId, membershipKnowledgeBaseIds),
-                  ),
-                ),
-              ),
-          )
-        : undefined;
+    if (!this.workspaceId) return;
+    const restrictedFilter = {
+      liveKnowledgeBaseIds: membershipKnowledgeBaseIds,
+      trashedKnowledgeBaseIds: trashedMembershipKnowledgeBaseIds,
+    };
+    const restrictedFile = fileInRestrictedKnowledgeBase(
+      this.db,
+      trashItems.resourceId,
+      { userId: this.userId, workspaceId: this.workspaceId },
+      restrictedFilter,
+    );
+    const restrictedDocument = documentInRestrictedKnowledgeBase(
+      this.db,
+      { fileId: documents.fileId, knowledgeBaseId: documents.knowledgeBaseId },
+      { userId: this.userId, workspaceId: this.workspaceId },
+      restrictedFilter,
+    );
+    const restrictedDocumentRoot = restrictedDocument
+      ? exists(
+          this.db
+            .select({ id: documents.id })
+            .from(documents)
+            .where(and(eq(documents.id, trashItems.resourceId), restrictedDocument)),
+        )
+      : undefined;
     const restricted = or(
       knowledgeBaseIds.length > 0
         ? and(
@@ -184,17 +179,9 @@ export class TrashModel {
             inArray(trashItems.resourceId, knowledgeBaseIds),
           )
         : undefined,
-      documentIds.length > 0
-        ? and(eq(trashItems.resourceType, 'document'), inArray(trashItems.resourceId, documentIds))
-        : undefined,
-      fileIds.length > 0
-        ? and(eq(trashItems.resourceType, 'file'), inArray(trashItems.resourceId, fileIds))
-        : undefined,
-      fileInRestrictedKnowledgeBase
-        ? and(eq(trashItems.resourceType, 'file'), fileInRestrictedKnowledgeBase)
-        : undefined,
-      documentInRestrictedKnowledgeBase
-        ? and(eq(trashItems.resourceType, 'document'), documentInRestrictedKnowledgeBase)
+      restrictedFile ? and(eq(trashItems.resourceType, 'file'), restrictedFile) : undefined,
+      restrictedDocumentRoot
+        ? and(eq(trashItems.resourceType, 'document'), restrictedDocumentRoot)
         : undefined,
     );
 
@@ -347,6 +334,77 @@ export class TrashModel {
       );
   };
 
+  /**
+   * Claim a root for permanent deletion and make it non-restorable in the same
+   * transaction. A stale lease can be stolen by a later sweep after its owner
+   * has had ample time to finish external storage cleanup.
+   */
+  claimRootForPurge = async (
+    id: string,
+    claim: { claimedAt: Date; id: string; staleBefore: Date },
+  ): Promise<TrashItemRow | undefined> => {
+    return this.db.transaction(async (trx) => {
+      const [root] = await trx
+        .select()
+        .from(trashItems)
+        .where(and(eq(trashItems.id, id), this.ownership(), isNull(trashItems.rootId)))
+        .for('update');
+      if (!root) return;
+
+      const currentClaimedAt = root.meta?.purgeClaim?.claimedAt
+        ? new Date(root.meta.purgeClaim.claimedAt)
+        : undefined;
+      if (
+        currentClaimedAt &&
+        !Number.isNaN(currentClaimedAt.getTime()) &&
+        currentClaimedAt > claim.staleBefore
+      ) {
+        return;
+      }
+
+      const meta: TrashItemRowMeta = {
+        ...root.meta,
+        purgeClaim: { claimedAt: claim.claimedAt.toISOString(), id: claim.id },
+      };
+      const [claimed] = await trx
+        .update(trashItems)
+        .set({ meta })
+        .where(eq(trashItems.id, root.id))
+        .returning();
+      return claimed;
+    });
+  };
+
+  /** Release a failed purge for the next sweep while keeping restore blocked. */
+  releasePurgeClaim = async (id: string, claimId: string): Promise<void> => {
+    await this.db
+      .update(trashItems)
+      .set({
+        meta: sql<TrashItemRowMeta>`jsonb_set(COALESCE(${trashItems.meta}, '{}'::jsonb) - 'purgeClaim', '{purgeBlocked}', 'true'::jsonb, true)`,
+      })
+      .where(
+        and(
+          eq(trashItems.id, id),
+          this.ownership(),
+          sql`${trashItems.meta}->'purgeClaim'->>'id' = ${claimId}`,
+        ),
+      );
+  };
+
+  removeClaimedRoot = async (id: string, claimId: string): Promise<boolean> => {
+    const rows = await this.db
+      .delete(trashItems)
+      .where(
+        and(
+          eq(trashItems.id, id),
+          this.ownership(),
+          sql`${trashItems.meta}->'purgeClaim'->>'id' = ${claimId}`,
+        ),
+      )
+      .returning({ id: trashItems.id });
+    return rows.length > 0;
+  };
+
   // ─────────────────────────── reads ───────────────────────────
 
   /**
@@ -412,6 +470,44 @@ export class TrashModel {
     });
   };
 
+  /** Restore arbitration: lock and re-read an active root inside the caller's transaction. */
+  findActiveRootForUpdate = async (
+    id: string,
+    trx: Transaction,
+  ): Promise<TrashItemRow | undefined> => {
+    const [root] = await trx
+      .select()
+      .from(trashItems)
+      .where(
+        and(
+          eq(trashItems.id, id),
+          this.ownership(),
+          isNull(trashItems.rootId),
+          this.active(),
+          sql`COALESCE(${trashItems.meta}->'purgeBlocked', 'false'::jsonb) <> 'true'::jsonb`,
+          sql`${trashItems.meta}->'purgeClaim' IS NULL`,
+        ),
+      )
+      .for('update');
+    return root;
+  };
+
+  /** Remove only a still-restorable stale root; never steal a purge worker's retry hand-off. */
+  removeActiveByIds = async (ids: string[]): Promise<void> => {
+    if (ids.length === 0) return;
+    await this.db
+      .delete(trashItems)
+      .where(
+        and(
+          inArray(trashItems.id, ids),
+          this.ownership(),
+          this.active(),
+          sql`COALESCE(${trashItems.meta}->'purgeBlocked', 'false'::jsonb) <> 'true'::jsonb`,
+          sql`${trashItems.meta}->'purgeClaim' IS NULL`,
+        ),
+      );
+  };
+
   /** Internal purge lookup that also sees roots queued by empty-trash. */
   findByIdIncludingQueued = async (id: string): Promise<TrashItemRow | undefined> => {
     return this.db.query.trashItems.findFirst({
@@ -434,68 +530,26 @@ export class TrashModel {
   ): Promise<Set<string>> => {
     if (items.length === 0) return new Set();
 
-    const documentIds = new Set(filter.documentIds ?? []);
-    const fileIds = new Set(filter.fileIds ?? []);
     const knowledgeBaseIds = new Set(filter.knowledgeBaseIds ?? []);
-    const membershipKnowledgeBaseIds = filter.membershipKnowledgeBaseIds ?? [];
-
     const hidden = new Set(
       items
         .filter(
-          (item) =>
-            (item.resourceType === 'knowledgeBase' && knowledgeBaseIds.has(item.resourceId)) ||
-            (item.resourceType === 'file' && fileIds.has(item.resourceId)) ||
-            (item.resourceType === 'document' && documentIds.has(item.resourceId)),
+          (item) => item.resourceType === 'knowledgeBase' && knowledgeBaseIds.has(item.resourceId),
         )
         .map((item) => item.id),
     );
-    const filesByResourceId = new Map(
-      items
-        .filter((item) => item.resourceType === 'file')
-        .map((item) => [item.resourceId, item.id]),
-    );
-    const documentsByResourceId = new Map(
-      items
-        .filter((item) => item.resourceType === 'document')
-        .map((item) => [item.resourceId, item.id]),
-    );
+    const candidateIds = items
+      .filter((item) => item.resourceType === 'file' || item.resourceType === 'document')
+      .map((item) => item.id);
+    if (candidateIds.length === 0) return hidden;
 
-    if (filesByResourceId.size > 0 && membershipKnowledgeBaseIds.length > 0) {
-      const rows = await this.db
-        .select({ fileId: knowledgeBaseFiles.fileId })
-        .from(knowledgeBaseFiles)
-        .where(
-          and(
-            inArray(knowledgeBaseFiles.fileId, [...filesByResourceId.keys()]),
-            inArray(knowledgeBaseFiles.knowledgeBaseId, membershipKnowledgeBaseIds),
-          ),
-        );
-      for (const row of rows) {
-        const itemId = filesByResourceId.get(row.fileId);
-        if (itemId) hidden.add(itemId);
-      }
-    }
-
-    if (documentsByResourceId.size > 0 && membershipKnowledgeBaseIds.length > 0) {
-      const rows = await this.db
-        .select({ id: documents.id })
-        .from(documents)
-        .leftJoin(knowledgeBaseFiles, eq(documents.fileId, knowledgeBaseFiles.fileId))
-        .where(
-          and(
-            inArray(documents.id, [...documentsByResourceId.keys()]),
-            or(
-              inArray(documents.knowledgeBaseId, membershipKnowledgeBaseIds),
-              inArray(knowledgeBaseFiles.knowledgeBaseId, membershipKnowledgeBaseIds),
-            ),
-          ),
-        );
-      for (const row of rows) {
-        const itemId = documentsByResourceId.get(row.id);
-        if (itemId) hidden.add(itemId);
-      }
-    }
-
+    const restricted = this.excludeRestrictedResources(filter);
+    if (!restricted) return hidden;
+    const rows = await this.db
+      .select({ id: trashItems.id })
+      .from(trashItems)
+      .where(and(inArray(trashItems.id, candidateIds), not(restricted)));
+    for (const row of rows) hidden.add(row.id);
     return hidden;
   };
 

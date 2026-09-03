@@ -276,8 +276,8 @@ export class DocumentService {
    */
   async queryDocuments(params?: {
     current?: number;
-    excludeDocumentIds?: string[];
     excludeKnowledgeBaseIds?: string[];
+    excludeTrashedKnowledgeBaseIds?: string[];
     fileTypes?: string[];
     pageSize?: number;
     sourceTypes?: string[];

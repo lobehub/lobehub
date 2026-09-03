@@ -1,7 +1,8 @@
-import { and, desc, eq, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne, notInArray, sql } from 'drizzle-orm';
 
 import { DOCUMENT_FOLDER_TYPE, documents, knowledgeBaseFiles } from '../../../schemas';
 import { sanitizeBm25Query } from '../../../utils/bm25';
+import { excludeRestrictedDocument } from '../../../utils/restrictedKnowledgeBase';
 import { buildWorkspaceWhere } from '../../../utils/workspace';
 import type {
   FtsSearchBackendResponse,
@@ -18,6 +19,7 @@ export async function searchFolders(
   query: string,
   limit: number,
   excludeKbIds?: string[],
+  excludeTrashedKbIds?: string[],
   excludeIds?: string[],
 ): Promise<FtsSearchBackendResponse<FtsSearchFolderResult>> {
   const bm25Query = sanitizeBm25Query(query);
@@ -28,6 +30,7 @@ export async function searchFolders(
       createdAt: documents.createdAt,
       description: documents.description,
       filename: documents.filename,
+      fileId: documents.fileId,
       id: documents.id,
       isDeleted: documents.isDeleted,
       knowledgeBaseId: documents.knowledgeBaseId,
@@ -67,8 +70,16 @@ export async function searchFolders(
         context.liftedScopeWhere(hits.workspaceId),
         context.liftedTrashWhere(hits.isDeleted),
         excludeIds?.length ? notInArray(hits.id, excludeIds) : undefined,
-        excludeKbIds && excludeKbIds.length > 0
-          ? or(isNull(hits.knowledgeBaseId), notInArray(hits.knowledgeBaseId, excludeKbIds))
+        context.scope.workspaceId
+          ? excludeRestrictedDocument(
+              db,
+              { fileId: hits.fileId, knowledgeBaseId: hits.knowledgeBaseId },
+              { userId: context.scope.userId, workspaceId: context.scope.workspaceId },
+              {
+                liveKnowledgeBaseIds: excludeKbIds,
+                trashedKnowledgeBaseIds: excludeTrashedKbIds,
+              },
+            )
           : undefined,
       ),
     )
@@ -97,6 +108,7 @@ export async function searchPages(
   query: string,
   limit: number,
   excludeKbIds?: string[],
+  excludeTrashedKbIds?: string[],
   excludeIds?: string[],
 ): Promise<FtsSearchBackendResponse<FtsSearchPageResult>> {
   const bm25Query = sanitizeBm25Query(query);
@@ -142,21 +154,15 @@ export async function searchPages(
         context.liftedScopeWhere(hits.workspaceId),
         context.liftedTrashWhere(hits.isDeleted),
         excludeIds?.length ? notInArray(hits.id, excludeIds) : undefined,
-        excludeKbIds && excludeKbIds.length > 0
-          ? or(isNull(hits.knowledgeBaseId), notInArray(hits.knowledgeBaseId, excludeKbIds))
-          : undefined,
-        // Parsed-file pages store KB membership on file_id instead of the
-        // document row, so check the join table as well.
-        excludeKbIds && excludeKbIds.length > 0
-          ? or(
-              isNull(hits.fileId),
-              notInArray(
-                hits.fileId,
-                db
-                  .select({ fileId: knowledgeBaseFiles.fileId })
-                  .from(knowledgeBaseFiles)
-                  .where(inArray(knowledgeBaseFiles.knowledgeBaseId, excludeKbIds)),
-              ),
+        context.scope.workspaceId
+          ? excludeRestrictedDocument(
+              db,
+              { fileId: hits.fileId, knowledgeBaseId: hits.knowledgeBaseId },
+              { userId: context.scope.userId, workspaceId: context.scope.workspaceId },
+              {
+                liveKnowledgeBaseIds: excludeKbIds,
+                trashedKnowledgeBaseIds: excludeTrashedKbIds,
+              },
             )
           : undefined,
       ),

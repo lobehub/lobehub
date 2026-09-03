@@ -8,23 +8,23 @@ import {
   documentLikes,
   documents,
   files,
-  knowledgeBaseFiles,
   works,
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { excludeRestrictedDocument } from '../utils/restrictedKnowledgeBase';
 import { isTrashed, restoreStamp, type SoftDeleteOptions, trashStamp } from '../utils/softDelete';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export interface QueryDocumentParams {
   current?: number;
-  /** Server-derived document ids hidden by a trashed restricted knowledge base. */
-  excludeDocumentIds?: string[];
   /**
    * Knowledge-base ids whose documents must be dropped from the listing —
    * restricted (member No-access) libraries. Applied inside the query so
    * pagination and totals stay correct.
    */
   excludeKnowledgeBaseIds?: string[];
+  /** Deleted restricted KBs; only otherwise-unshared content is hidden. */
+  excludeTrashedKnowledgeBaseIds?: string[];
   fileTypes?: string[];
   pageSize?: number;
   sourceTypes?: string[];
@@ -136,8 +136,8 @@ export class DocumentModel {
   query = async ({
     current = 0,
     pageSize = 9999,
-    excludeDocumentIds,
     excludeKnowledgeBaseIds,
+    excludeTrashedKnowledgeBaseIds,
     fileTypes,
     sourceTypes,
   }: QueryDocumentParams = {}): Promise<{
@@ -147,33 +147,21 @@ export class DocumentModel {
     const offset = current * pageSize;
     const conditions = [this.ownership()];
 
-    if (excludeDocumentIds?.length) {
-      conditions.push(notInArray(documents.id, excludeDocumentIds));
-    }
-
     if (fileTypes?.length) {
       conditions.push(inArray(documents.fileType, fileTypes));
     }
 
-    if (excludeKnowledgeBaseIds?.length) {
-      conditions.push(
-        or(
-          isNull(documents.knowledgeBaseId),
-          notInArray(documents.knowledgeBaseId, excludeKnowledgeBaseIds),
-        )!,
-        // Parsed-file documents leave `knowledgeBaseId` null — their KB
-        // membership lives on `fileId` → `knowledge_base_files`.
-        or(
-          isNull(documents.fileId),
-          notInArray(
-            documents.fileId,
-            this.db
-              .select({ fileId: knowledgeBaseFiles.fileId })
-              .from(knowledgeBaseFiles)
-              .where(inArray(knowledgeBaseFiles.knowledgeBaseId, excludeKnowledgeBaseIds)),
-          ),
-        )!,
+    if (this.workspaceId) {
+      const restrictedFilter = excludeRestrictedDocument(
+        this.db,
+        { fileId: documents.fileId, knowledgeBaseId: documents.knowledgeBaseId },
+        { userId: this.userId, workspaceId: this.workspaceId },
+        {
+          liveKnowledgeBaseIds: excludeKnowledgeBaseIds,
+          trashedKnowledgeBaseIds: excludeTrashedKnowledgeBaseIds,
+        },
       );
+      if (restrictedFilter) conditions.push(restrictedFilter);
     }
 
     if (sourceTypes?.length) {

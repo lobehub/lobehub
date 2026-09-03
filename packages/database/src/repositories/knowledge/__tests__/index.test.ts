@@ -227,17 +227,111 @@ describe('KnowledgeRepo', () => {
       expect(result.every((item) => item.id !== 'other-doc')).toBe(true);
     });
 
-    it('should exclude exact files and documents selected by the server access policy', async () => {
-      const visible = await knowledgeRepo.query({ showFilesInKnowledgeBase: true });
-      expect(visible.map((item) => item.id)).toEqual(expect.arrayContaining(['doc-1', 'file-1']));
+    it('filters restricted memberships relationally while preserving shared files', async () => {
+      const workspaceId = 'knowledge-query-policy-workspace';
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Policy workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB.insert(knowledgeBases).values([
+        {
+          id: 'kb-policy-live',
+          name: 'Live restricted',
+          userId,
+          visibility: 'public',
+          workspaceId,
+        },
+        {
+          id: 'kb-policy-trashed',
+          isDeleted: true,
+          name: 'Trashed restricted',
+          userId,
+          visibility: 'public',
+          workspaceId,
+        },
+        {
+          id: 'kb-policy-open',
+          name: 'Open',
+          userId,
+          visibility: 'public',
+          workspaceId,
+        },
+      ]);
+      await serverDB.insert(files).values([
+        {
+          fileType: 'text/plain',
+          id: 'file-policy-live',
+          name: 'live.txt',
+          size: 1,
+          url: 'files/live.txt',
+          userId,
+          workspaceId,
+        },
+        {
+          fileType: 'text/plain',
+          id: 'file-policy-exclusive',
+          name: 'exclusive.txt',
+          size: 1,
+          url: 'files/exclusive.txt',
+          userId,
+          workspaceId,
+        },
+        {
+          fileType: 'text/plain',
+          id: 'file-policy-shared',
+          name: 'shared.txt',
+          size: 1,
+          url: 'files/shared.txt',
+          userId,
+          workspaceId,
+        },
+      ]);
+      await serverDB.insert(documents).values({
+        fileType: 'custom/note',
+        id: 'doc-policy-exclusive',
+        knowledgeBaseId: 'kb-policy-trashed',
+        source: 'internal://policy-exclusive',
+        sourceType: 'topic',
+        title: 'Exclusive document',
+        totalCharCount: 0,
+        totalLineCount: 0,
+        userId,
+        workspaceId,
+      });
+      await serverDB.insert(knowledgeBaseFiles).values([
+        { fileId: 'file-policy-live', knowledgeBaseId: 'kb-policy-live', userId, workspaceId },
+        {
+          fileId: 'file-policy-exclusive',
+          knowledgeBaseId: 'kb-policy-trashed',
+          userId,
+          workspaceId,
+        },
+        {
+          fileId: 'file-policy-shared',
+          knowledgeBaseId: 'kb-policy-trashed',
+          userId,
+          workspaceId,
+        },
+        {
+          fileId: 'file-policy-shared',
+          knowledgeBaseId: 'kb-policy-open',
+          userId,
+          workspaceId,
+        },
+      ]);
 
-      const filtered = await knowledgeRepo.query({
-        excludeDocumentIds: ['doc-1'],
-        excludeFileIds: ['file-1'],
+      const filtered = await new KnowledgeRepo(serverDB, userId, workspaceId).query({
+        excludeKnowledgeBaseIds: ['kb-policy-live'],
+        excludeTrashedKnowledgeBaseIds: ['kb-policy-trashed'],
         showFilesInKnowledgeBase: true,
       });
-      expect(filtered.map((item) => item.id)).not.toContain('doc-1');
-      expect(filtered.map((item) => item.id)).not.toContain('file-1');
+      const ids = filtered.map((item) => item.id);
+      expect(ids).toContain('file-policy-shared');
+      expect(ids).not.toContain('file-policy-live');
+      expect(ids).not.toContain('file-policy-exclusive');
+      expect(ids).not.toContain('doc-policy-exclusive');
     });
 
     it('should omit document bodies from summary queries', async () => {

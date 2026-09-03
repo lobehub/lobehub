@@ -41,9 +41,8 @@ export const knowledgeRouter = router({
 
     const knowledgeItems = await ctx.knowledgeRepo.query({
       ...input,
-      excludeDocumentIds: restrictedPolicy?.trashedExclusiveDocumentIds,
-      excludeFileIds: restrictedPolicy?.trashedExclusiveFileIds,
       excludeKnowledgeBaseIds: restrictedPolicy?.liveRestrictedKnowledgeBaseIds,
+      excludeTrashedKnowledgeBaseIds: restrictedPolicy?.trashedRestrictedKnowledgeBaseIds,
     });
 
     // Process files (add chunk info and async task status)

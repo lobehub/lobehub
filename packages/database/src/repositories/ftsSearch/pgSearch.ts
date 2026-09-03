@@ -46,6 +46,7 @@ export class PgSearchFtsSearchBackend implements FtsSearchBackend {
         query,
         limit,
         filters.excludeKnowledgeBaseIds,
+        filters.excludeTrashedKnowledgeBaseIds,
         filters.excludeIds,
       );
     }
@@ -64,6 +65,7 @@ export class PgSearchFtsSearchBackend implements FtsSearchBackend {
           query,
           limit,
           filters.excludeKnowledgeBaseIds,
+          filters.excludeTrashedKnowledgeBaseIds,
           filters.excludeIds,
         );
       }
@@ -73,6 +75,7 @@ export class PgSearchFtsSearchBackend implements FtsSearchBackend {
           query,
           limit,
           filters.excludeKnowledgeBaseIds,
+          filters.excludeTrashedKnowledgeBaseIds,
           filters.excludeIds,
         );
       }
