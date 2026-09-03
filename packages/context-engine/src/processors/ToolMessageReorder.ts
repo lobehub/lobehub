@@ -16,16 +16,31 @@ declare module '../types' {
 const log = debug('context-engine:processor:ToolMessageReorder');
 
 /**
- * Why a synthetic failure payload was injected. The model sees this field, so
- * the wording doubles as a diagnosis: it can tell whether the tool may still
- * have executed (result lost in transport) versus ran and produced nothing
- * usable — instead of guessing from an opaque "Tool call failed".
+ * Why a synthetic failure payload was injected. The model sees these fields,
+ * so the wording doubles as a diagnosis: it can tell whether the tool may
+ * still have executed (result lost in transport) versus ran and produced
+ * nothing usable — instead of guessing from an opaque "Tool call failed".
  */
 type SyntheticToolFailureReason = 'tool_result_missing' | 'tool_result_unusable';
 
-const syntheticToolFailureContent = (reason: SyntheticToolFailureReason, tool?: string) =>
+/**
+ * Model-readable hint per reason. The retry-safety distinction is the point:
+ * a missing result says nothing about whether the call executed — it may well
+ * have — so blindly retrying a side-effecting tool can repeat its effects.
+ * Kept to one sentence each: this payload rides along in every request until
+ * the failed call ages out of context.
+ */
+export const SYNTHETIC_TOOL_FAILURE_HINTS: Record<SyntheticToolFailureReason, string> = {
+  tool_result_missing:
+    'No result arrived, so whether the call actually executed is unknown; check observable state before retrying tools with side effects.',
+  tool_result_unusable:
+    'The call returned no readable content and no error message; check the inputs before retrying, as a retry may return the same.',
+};
+
+export const syntheticToolFailureContent = (reason: SyntheticToolFailureReason, tool?: string) =>
   JSON.stringify({
     error: 'Tool call failed',
+    hint: SYNTHETIC_TOOL_FAILURE_HINTS[reason],
     reason,
     success: false,
     synthetic: true,

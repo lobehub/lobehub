@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { PipelineContext } from '../../types';
 import { ToolMessageReorder } from '../ToolMessageReorder';
+import { syntheticToolFailureContent, SYNTHETIC_TOOL_FAILURE_HINTS } from '../ToolMessageReorder';
 
 const createContext = (messages: any[]): PipelineContext => ({
   initialState: { messages: [] } as any,
@@ -222,7 +223,7 @@ describe('ToolMessageReorder', () => {
         ],
       },
       {
-        content: '{"error":"Tool call failed","reason":"tool_result_missing","success":false,"synthetic":true,"tool":"test-plugin____testApi"}',
+        content: syntheticToolFailureContent('tool_result_missing', 'test-plugin____testApi'),
         name: 'test-plugin____testApi',
         role: 'tool',
         tool_call_id: 'call_missing',
@@ -363,6 +364,7 @@ describe('ToolMessageReorder', () => {
 
     const failure = JSON.stringify({
       error: 'Tool call failed',
+      hint: SYNTHETIC_TOOL_FAILURE_HINTS.tool_result_unusable,
       reason: 'tool_result_unusable',
       success: false,
       synthetic: true,
@@ -395,6 +397,7 @@ describe('ToolMessageReorder', () => {
     const parsed = JSON.parse(failure);
     expect(parsed).toEqual({
       error: 'Tool call failed',
+      hint: SYNTHETIC_TOOL_FAILURE_HINTS.tool_result_missing,
       reason: 'tool_result_missing',
       success: false,
       synthetic: true,
@@ -402,5 +405,29 @@ describe('ToolMessageReorder', () => {
     });
     // Structured fields must stay machine-readable, not flattened into prose.
     expect(parsed.reason).toBeDefined();
+  });
+
+  it('should give the two failure reasons distinct, actionable hints', async () => {
+    const missing = JSON.parse(
+      syntheticToolFailureContent('tool_result_missing', 'runCommand'),
+    );
+    const unusable = JSON.parse(
+      syntheticToolFailureContent('tool_result_unusable', 'runCommand'),
+    );
+
+    // The missing-result hint must carry the retry-safety warning the old
+    // payload lacked: a lost result says nothing about whether the call
+    // executed, so the model is told to check observable state first.
+    expect(missing.hint).toContain('executed is unknown');
+    expect(missing.hint).toContain('check observable state');
+    expect(missing.hint).toContain('side effects');
+
+    // The unusable-result hint must not imply the call may not have run —
+    // a result row exists, the call definitely executed and returned empty.
+    expect(unusable.hint).not.toContain('executed is unknown');
+    expect(unusable.hint).toContain('check the inputs');
+
+    // The hints must be distinguishable, or the field adds noise.
+    expect(missing.hint).not.toBe(unusable.hint);
   });
 });
