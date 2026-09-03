@@ -1,3 +1,4 @@
+import { isDesktop } from '@lobechat/const';
 import { type DataSyncConfig } from '@lobechat/electron-client-ipc';
 import isEqual from 'fast-deep-equal';
 import { type SWRResponse } from 'swr';
@@ -110,7 +111,10 @@ export class ElectronRemoteServerActionImpl {
 
   useDataSyncConfig = (): SWRResponse => {
     return useSWR<DataSyncConfig>(
-      electronKeys.remoteServerConfig(),
+      // Desktop-only IPC: on web there is no electronAPI, and under a
+      // suspense-mode SWRConfig a rejected fetch throws into the route
+      // boundary instead of staying in `error` — so never fetch off-desktop.
+      isDesktop ? electronKeys.remoteServerConfig() : null,
       async () => {
         try {
           return await remoteServerService.getRemoteServerConfig();

@@ -1,3 +1,5 @@
+import type { SpendOrigin } from './agentRuntime';
+
 export enum AsyncTaskType {
   Chunking = 'chunk',
   Embedding = 'embedding',
@@ -199,5 +201,14 @@ export interface HourlyUserMemoryExtractionMetadata {
 
 export interface VideoGenerationTaskMetadata {
   precharge?: Record<string, unknown>;
+  /**
+   * Origin of the submitting request, carried across the async boundary so the
+   * completion charge (webhook / polling) can keep the spend attributed.
+   *
+   * Persisted on the async task row under this exact key. It was named
+   * `spendAttribution` before Agent Share v2; no double-read is needed because
+   * the feature had not shipped, so no stored row carries the old key.
+   */
+  spendOrigin?: SpendOrigin;
   webhookToken?: string;
 }

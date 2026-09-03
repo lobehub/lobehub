@@ -99,6 +99,54 @@ export const REACT_ARTIFACT_DEFAULT_DEV_DEPENDENCIES: Record<string, string> = {
   'esbuild-wasm': '^0.17.12',
   'typescript': 'latest',
   'vite': '4.2.0',
+  // Babel presets used instead of esbuild for TS/JSX — see `defaultViteConfig` for why.
+  '@babel/preset-react': '^7.26.3',
+  '@babel/preset-typescript': '^7.26.0',
+};
+
+/**
+ * Bare module specifiers that must always be pre-bundled: they are imported by the
+ * bootstrap entry / injected by `@vitejs/plugin-react`, so Vite needs them regardless of
+ * what the artifact itself imports.
+ */
+const REACT_ARTIFACT_CORE_OPTIMIZE_DEPS = [
+  'react',
+  'react-dom',
+  'react-dom/client',
+  'react/jsx-runtime',
+  'react/jsx-dev-runtime',
+];
+
+// Static `import`/`export ... from` statements only; dynamic `import()` calls are left to
+// Vite's runtime dependency discovery.
+const IMPORT_SPECIFIER_RE = /\b(?:import|export)\b(?:[^'"]+?\bfrom)?\s*['"]([^'"]+)['"]/g;
+
+/**
+ * Collect the bare package specifiers imported by the artifact source so they can be
+ * listed in `optimizeDeps.include`. Relative and absolute paths are skipped; alias
+ * prefixes are mapped to their real package target.
+ */
+export const collectArtifactBareImports = (appCode: string): string[] => {
+  const specifiers = new Set<string>();
+
+  for (const match of appCode.matchAll(IMPORT_SPECIFIER_RE)) {
+    let specifier = match[1];
+    if (specifier.startsWith('.') || specifier.startsWith('/')) continue;
+
+    for (const [alias, target] of Object.entries(REACT_ARTIFACT_VITE_ALIASES)) {
+      if (specifier === alias || specifier.startsWith(`${alias}/`)) {
+        specifier = target + specifier.slice(alias.length);
+        break;
+      }
+    }
+
+    // Unresolved aliases (e.g. `@/lib/utils`) are not packages.
+    if (specifier.startsWith('@/')) continue;
+
+    specifiers.add(specifier);
+  }
+
+  return [...specifiers];
 };
 
 export const REACT_ARTIFACT_TAILWIND_CDN = 'https://cdn.tailwindcss.com';
@@ -141,12 +189,43 @@ createRoot(container).render(
 );
 `;
 
-const defaultViteConfig = `import react from '@vitejs/plugin-react';
+// Why this config avoids esbuild for the artifact source:
+//
+// In the Sandpack preview, Vite runs inside Nodebox, where `esbuild-wasm` runs as an
+// emulated child process talking to Vite over an emulated stdio pipe. Any single message
+// Vite sends to that child larger than 16 KiB desyncs the esbuild protocol and the
+// service hangs forever — every transform after that times out and the preview stays
+// blank. Two code paths push the raw `App.tsx` through that pipe:
+//   1. the `vite:esbuild` TS/JSX transform plugin, and
+//   2. the dependency scanner (`optimizeDeps.entries` crawl), which feeds entry sources
+//      to esbuild via `onLoad`.
+// Real artifacts easily exceed 16 KiB, so both are switched off: `@vitejs/plugin-react`
+// compiles TS/JSX with Babel in-process, and `optimizeDeps` gets an explicit `include`
+// list (derived from the artifact's imports) with no entry crawl. Pre-bundling itself is
+// safe because esbuild reads `node_modules` and writes output on its own side of the pipe.
+//
+// `esbuild: false` must be re-applied by a trailing plugin because `@vitejs/plugin-react`'s
+// `config()` hook returns an `esbuild: { jsx: ... }` object that overrides the user value.
+const defaultViteConfig = (
+  optimizeDepsInclude: string[],
+) => `import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
   base: './',
-  plugins: [react()],
+  esbuild: false,
+  optimizeDeps: {
+    entries: [],
+    include: ${JSON.stringify(optimizeDepsInclude, null, 6)},
+  },
+  plugins: [
+    react({
+      babel: {
+        presets: ['@babel/preset-typescript', ['@babel/preset-react', { runtime: 'automatic' }]],
+      },
+    }),
+    { name: 'lobe-artifact:disable-esbuild', enforce: 'post', config: () => ({ esbuild: false }) },
+  ],
   resolve: {
     alias: ${JSON.stringify(REACT_ARTIFACT_VITE_ALIASES, null, 6)},
   },
@@ -192,8 +271,16 @@ export const buildReactArtifactProject = (
     ...overrides?.packageJson?.devDependencies,
   };
 
+  const resolvedAppCode = overrides?.appCode ?? appCode;
+  const optimizeDepsInclude = [
+    ...new Set([
+      ...REACT_ARTIFACT_CORE_OPTIMIZE_DEPS,
+      ...collectArtifactBareImports(resolvedAppCode),
+    ]),
+  ];
+
   const files: Record<string, string> = {
-    [REACT_ARTIFACT_APP_PATH]: overrides?.appCode ?? appCode,
+    [REACT_ARTIFACT_APP_PATH]: resolvedAppCode,
     [REACT_ARTIFACT_BOOTSTRAP_PATH]: overrides?.entry ?? defaultEntry,
     [REACT_ARTIFACT_INDEX_HTML_PATH]: overrides?.indexHtml ?? defaultIndexHtml(resolvedTitle),
     [REACT_ARTIFACT_PACKAGE_JSON_PATH]: defaultPackageJson(
@@ -201,7 +288,8 @@ export const buildReactArtifactProject = (
       dependencies,
       devDependencies,
     ),
-    [REACT_ARTIFACT_VITE_CONFIG_PATH]: overrides?.viteConfig ?? defaultViteConfig,
+    [REACT_ARTIFACT_VITE_CONFIG_PATH]:
+      overrides?.viteConfig ?? defaultViteConfig(optimizeDepsInclude),
   };
 
   if (extraFiles) {

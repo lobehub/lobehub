@@ -1,3 +1,4 @@
+import { AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT } from '@lobechat/const';
 import type {
   ChatTopicMetadata,
   ChatTopicStatus,
@@ -17,6 +18,7 @@ import {
   and,
   asc,
   count,
+  countDistinct,
   desc,
   eq,
   getTableColumns,
@@ -50,6 +52,7 @@ import { markCopiedMessageMetadata } from '../utils/copyMessagesInDatabase';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
 import { inJsonStringArray } from '../utils/inJsonStringArray';
+import { notShareVisitorTopic } from '../utils/shareVisitor';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { recomputeTopicUsage } from './topicUsage';
 
@@ -105,6 +108,68 @@ export interface TopicListItem extends TopicItem {
   runStartedAt?: Date | null;
 }
 
+/**
+ * Sanitized projection of `topics.metadata.runningOperation` for a visitor DTO
+ * — only the fields `useGatewayReconnect`'s `RunningOperation` needs to resume
+ * a streaming session on reload. Never the full `runningOperation` object: it
+ * also carries device/hetero fields (`deviceId`, `deviceUserId`, `hooks`, …)
+ * that describe creator-side dispatch and must not reach a visitor.
+ */
+export interface VisitorRunningOperation {
+  assistantMessageId: string;
+  heteroType?: string | null;
+  operationId: string;
+  scope?: string;
+  threadId?: string | null;
+}
+
+/**
+ * Visitor-facing topic DTO for the agent-share surface. Deliberately narrow:
+ * the underlying row is CREATOR-owned and also carries the creator's userId,
+ * model/provider snapshot, cost/usage and internal metadata.
+ */
+export interface VisitorTopicItem {
+  createdAt: Date;
+  id: string;
+  /**
+   * Sanitized `runningOperation` marker, present only while a run is active on
+   * this topic. Lets the share surface reconnect a Gateway stream after a page
+   * reload — see {@link VisitorRunningOperation} for why it's projected
+   * instead of forwarding `topics.metadata.runningOperation` as-is.
+   */
+  runningOperation?: VisitorRunningOperation | null;
+  title: string | null;
+  updatedAt: Date;
+}
+
+/**
+ * Fallback page size for {@link TopicModel.queryBySender} when a caller
+ * doesn't pass one. Pinned to the package default per-visitor topic cap.
+ *
+ * Callers with a live share config (e.g. `shareChat.getTopics`) MUST pass the
+ * share's actual resolved `maxTopicsPerVisitor` as `pageSize` instead of
+ * relying on this default — a creator who raises the cap above the default
+ * would otherwise have a visitor's list silently truncated below what that
+ * visitor is actually allowed to create.
+ */
+const VISITOR_TOPIC_PAGE_SIZE = AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT;
+
+/**
+ * Projects `topics.metadata.runningOperation` down to the visitor-safe subset
+ * — see {@link VisitorRunningOperation}. Used by {@link TopicModel.queryBySender}
+ * so a share visitor's topic list can drive `useGatewayReconnect` without ever
+ * receiving the rest of `metadata` (creator-only fields — see the module doc).
+ */
+const pickVisitorRunningOperation = (
+  metadata: ChatTopicMetadata | null | undefined,
+): VisitorRunningOperation | null => {
+  const runningOperation = metadata?.runningOperation;
+  if (!runningOperation) return null;
+
+  const { assistantMessageId, operationId, scope, threadId, heteroType } = runningOperation;
+  return { assistantMessageId, heteroType, operationId, scope, threadId };
+};
+
 export interface CreateTopicParams {
   agentId?: string | null;
   favorite?: boolean;
@@ -114,6 +179,18 @@ export interface CreateTopicParams {
   /** Pinned model snapshot, persisted to the top-level `topics.model` column. */
   model?: string | null;
   provider?: string | null;
+  /**
+   * Agent-share visitor topics carry the CREATOR's `userId` (billing/data
+   * attribution) plus the visitor's id here, so creator-facing listings
+   * exclude them (`notShareVisitorTopic`, applied by `query`, `count`,
+   * `queryTopics`, `queryRecent` and `rank`) while the share surface scopes
+   * reads per visitor (`queryBySender` / `countBySender`).
+   *
+   * A future opt-in surface (`allowCreatorViewSessions`) may let a creator
+   * explicitly browse visitor sessions; that is not wired up yet — every
+   * creator-facing read today unconditionally excludes senderId rows.
+   */
+  senderId?: string | null;
   sessionId?: string | null;
   /**
    * Initial status. Defaults to the column default (`active`). A topic created
@@ -288,37 +365,90 @@ const buildTopicOrderBy = (topicActivityAt: SQL, sortBy?: TopicQuerySortBy): SQL
  * tick from the day it shipped, so rate-limit continuations never once resumed).
  * `jsonbNullTest.test.ts` is the source-shape guard that holds the line.
  */
+export interface TopicModelOptions {
+  /**
+   * Opt IN to agent-share visitor topics. Visitor conversations persist under
+   * the CREATOR's `userId` (only `topics.senderId` marks them), so every
+   * creator-facing read/write is default-scoped to exclude them. Only the
+   * share-runtime surfaces (share-scoped tRPC routers, share abuse guards,
+   * and the agent runtime paths that persist or clean up a visitor turn
+   * under the creator's identity) should set this to `true`.
+   */
+  includeShareVisitor?: boolean;
+}
+
 export class TopicModel {
   private userId: string;
   private db: LobeChatDatabase;
   private ftsSearchCandidateSource?: FtsSearchCandidateSource;
   private workspaceId?: string;
+  /**
+   * When true, {@link ownership} (and by extension every creator-scoped read
+   * path below) stops ANDing {@link notShareVisitorTopic}. Reserved for
+   * surfaces that are share-runtime by design (agent-share visitor router,
+   * share-scoped abuse guards) and for the agent runtime paths that persist
+   * or clean up a visitor turn under the CREATOR's identity. Defaults to
+   * false so every ordinary creator-facing caller fails closed instead of
+   * relying on a per-callsite `notShareVisitorTopic()` AND.
+   */
+  private includeShareVisitor: boolean;
 
   constructor(
     db: LobeChatDatabase,
     userId: string,
     workspaceId?: string,
     ftsSearchCandidateSource?: FtsSearchCandidateSource,
+    options: TopicModelOptions = {},
   ) {
     this.userId = userId;
     this.db = db;
     this.workspaceId = workspaceId;
     this.ftsSearchCandidateSource = ftsSearchCandidateSource;
+    this.includeShareVisitor = options.includeShareVisitor ?? false;
   }
 
-  private ownership = () =>
+  /**
+   * Raw workspace/user scope, WITHOUT the visitor exclusion. Backing store for
+   * both {@link ownership} and {@link mine}, and the escape hatch for methods
+   * that must see visitor rows independent of the instance flag
+   * ({@link queryBySender} / {@link countBySender} / {@link countVisitors}).
+   */
+  private workspaceScope = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics);
+
+  private ownership = () => and(this.workspaceScope(), this.notShareVisitor());
 
   /**
    * In workspace mode `ownership()` matches every member's topics, so a bulk
    * "clear all" would wipe teammates' conversations. Destructive sweeps must
    * additionally pin `user_id` to the caller (personal mode is unchanged —
    * ownership already scopes to the user there).
+   *
+   * `mine()` deliberately does NOT AND {@link notShareVisitor} — it is the
+   * per-user variant of {@link workspaceScope} and the share-scoped methods
+   * ({@link queryBySender} / {@link countBySender} / {@link countVisitors})
+   * layer their own `senderId` predicate on top of it. Creator-facing
+   * destructive sweeps that reach for `mine()` still get the visitor
+   * exclusion by AND-ing {@link notShareVisitor} themselves.
    */
-  private mine = () => and(this.ownership(), eq(topics.userId, this.userId));
+  private mine = () => and(this.workspaceScope(), eq(topics.userId, this.userId));
 
   private messageOwnership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages);
+
+  /**
+   * The default visitor exclusion applied by {@link ownership}: `topics.senderId IS NULL`,
+   * shared with the repositories/models that query `topics` outside this
+   * class (see `notShareVisitorTopic` in `../utils/shareVisitor`). Returns
+   * `undefined` when the instance was constructed with `includeShareVisitor:
+   * true`, so the share runtime opts in explicitly and every other caller
+   * gets the visitor guard for free.
+   *
+   * The visitor-scoped counterparts ({@link queryBySender}, {@link countBySender})
+   * intentionally do the opposite — they match on `senderId`, not exclude
+   * it — and use {@link mine} (which skips this helper).
+   */
+  private notShareVisitor = () => (this.includeShareVisitor ? undefined : notShareVisitorTopic());
   // **************** Query *************** //
 
   query = async ({
@@ -428,6 +558,7 @@ export class TopicModel {
     if (groupId) {
       const whereCondition = and(
         this.ownership(),
+        this.notShareVisitor(),
         eq(topics.groupId, groupId),
         includeTriggerCondition,
         excludeTriggerCondition,
@@ -507,6 +638,7 @@ export class TopicModel {
 
       const agentWhere = and(
         this.ownership(),
+        this.notShareVisitor(),
         agentCondition,
         editingTargetCondition,
         includeTriggerCondition,
@@ -578,6 +710,7 @@ export class TopicModel {
     // Fallback to containerId-based query (backward compatibility)
     const whereCondition = and(
       this.ownership(),
+      this.notShareVisitor(),
       this.matchContainer(containerId),
       includeTriggerCondition,
       excludeTriggerCondition,
@@ -648,10 +781,50 @@ export class TopicModel {
     return { items: cleanItems, total: totalResult[0].count };
   };
 
+  /**
+   * Ownership-scoped lookup. Agent-share visitor topics carry the CREATOR's
+   * `userId` and are excluded by default; the share runtime opts in by
+   * constructing the model with `{ includeShareVisitor: true }`.
+   * `findVisitorTopicOrThrow` in `apps/server/src/routers/lambda/shareChat.ts`
+   * relies on that opt-in and then verifies `senderId` itself.
+   */
   findById = async (id: string) => {
     return this.db.query.topics.findFirst({
       where: and(eq(topics.id, id), this.ownership()),
     });
+  };
+
+  /**
+   * Kept for readability at creator-facing router call sites; the default
+   * scope already excludes agent-share visitor topics, so this is a thin
+   * alias of {@link TopicModel.findById}.
+   */
+  findOwnTopicById = async (id: string) => {
+    return this.findById(id);
+  };
+
+  /**
+   * Ids among `ids` that resolve to an agent-share VISITOR topic under this
+   * owner — the inverse of {@link notShareVisitorTopic}, the predicate every
+   * creator-facing read applies.
+   *
+   * Creator-facing write entry points use this to reject visitor targets
+   * (see `assertCreatorTopicTargets` in the server router helpers). Ids that
+   * match no row at all are NOT reported, so callers keep their existing no-op
+   * behaviour for stale/foreign ids.
+   */
+  findShareVisitorTopicIds = async (ids: string[]): Promise<string[]> => {
+    if (ids.length === 0) return [];
+
+    const rows = await this.db
+      .select({ id: topics.id })
+      .from(topics)
+      // Explicitly scoped visitor-inclusive: this method's whole job is to
+      // return visitor ids so the router-level `assertCreatorTopicTargets`
+      // can reject them, so it must bypass the instance's visitor exclusion.
+      .where(and(inArray(topics.id, ids), this.workspaceScope(), isNotNull(topics.senderId)));
+
+    return rows.map((row) => row.id);
   };
 
   findByIds = async (ids: string[]): Promise<TopicItem[]> => {
@@ -659,6 +832,15 @@ export class TopicModel {
     return this.db.query.topics.findMany({
       where: and(inArray(topics.id, ids), this.ownership()),
     });
+  };
+
+  /**
+   * Kept for readability at creator-facing router call sites; the default
+   * scope already excludes agent-share visitor topics, so this is a thin
+   * alias of {@link TopicModel.findByIds}.
+   */
+  findOwnTopicsByIds = async (ids: string[]): Promise<TopicItem[]> => {
+    return this.findByIds(ids);
   };
 
   /**
@@ -722,6 +904,7 @@ export class TopicModel {
   } = {}): Promise<TopicListItem[]> => {
     const where = and(
       this.ownership(),
+      this.notShareVisitor(),
       statuses && statuses.length > 0
         ? inArray(topics.status, statuses as ChatTopicStatus[])
         : undefined,
@@ -881,6 +1064,7 @@ export class TopicModel {
         .where(
           and(
             this.ownership(),
+            this.notShareVisitor(),
             scopeCondition,
             topicCandidateIds
               ? inJsonStringArray(topics.id, topicCandidateIds)
@@ -900,6 +1084,7 @@ export class TopicModel {
               ? inJsonStringArray(messages.id, messageCandidateIds)
               : sql`${messages.content} @@@ ${bm25Query}`,
             this.ownership(),
+            this.notShareVisitor(),
             scopeCondition,
           ),
         )
@@ -955,6 +1140,7 @@ export class TopicModel {
       .where(
         genWhere([
           this.ownership(),
+          this.notShareVisitor(),
           agentCondition,
           params?.containerId ? this.matchContainer(params.containerId) : undefined,
           params?.range
@@ -981,7 +1167,7 @@ export class TopicModel {
         title: topics.title,
       })
       .from(topics)
-      .where(and(this.ownership()))
+      .where(and(this.ownership(), this.notShareVisitor()))
       .leftJoin(messages, eq(topics.id, messages.topicId))
       .groupBy(topics.id)
       .orderBy(desc(sql`count`))
@@ -1022,6 +1208,7 @@ export class TopicModel {
       .where(
         and(
           this.ownership(),
+          this.notShareVisitor(),
           or(
             // Group topics: has groupId
             not(isNull(topics.groupId)),
@@ -1040,6 +1227,106 @@ export class TopicModel {
       type: item.groupId ? ('group' as const) : ('agent' as const),
       updatedAt: item.updatedAt instanceof Date ? item.updatedAt : new Date(item.updatedAt),
     }));
+  };
+
+  // **************** Agent Share (visitor-scoped) *************** //
+
+  /**
+   * Share-visitor topic list for one visitor on one shared agent. The model is
+   * constructed with the CREATOR's userId (visitor topics carry it), so the
+   * caller — the shareChat router — must have already authorized the visitor
+   * via the share access check; `agentId` + `senderId` together are the
+   * per-visitor boundary.
+   *
+   * `agent_shares` is 1:1 per agent (`agent_shares_agent_id_unique`), so
+   * `agentId` alone identifies which share a visitor topic belongs to — there
+   * is no `topics.share_id` column to scope by. Turning sharing off and back
+   * on keeps the same row and the same `agentId`, so a returning visitor's
+   * older conversations DO resurface under the republished share. That is the
+   * accepted trade-off of not carrying a share id on the row.
+   *
+   * Selects a visitor-facing DTO instead of the full row: the visitor surface
+   * only renders id/title/runningOperation, and the row also carries
+   * creator-only fields (owning userId, model/provider snapshot, cost/usage,
+   * internal status and the rest of `metadata`) that must never reach a share
+   * visitor. `metadata` itself IS selected (needed to project
+   * `runningOperation`), but only the sanitized projection — never the raw
+   * column — leaves this method; see {@link VisitorRunningOperation}.
+   */
+  queryBySender = async (
+    { agentId, senderId }: { agentId: string; senderId: string },
+    { pageSize = VISITOR_TOPIC_PAGE_SIZE }: { pageSize?: number } = {},
+  ): Promise<VisitorTopicItem[]> => {
+    const rows = await this.db
+      .select({
+        createdAt: topics.createdAt,
+        id: topics.id,
+        metadata: topics.metadata,
+        title: topics.title,
+        updatedAt: topics.updatedAt,
+      })
+      .from(topics)
+      .where(and(this.mine(), eq(topics.agentId, agentId), eq(topics.senderId, senderId)))
+      .orderBy(desc(topics.updatedAt))
+      .limit(pageSize);
+
+    return rows.map(({ metadata, ...rest }) => ({
+      ...rest,
+      runningOperation: pickVisitorRunningOperation(metadata),
+    }));
+  };
+
+  /**
+   * Per-visitor topic count on a shared agent — drives `maxTopicsPerVisitor`.
+   * Same `(agentId, senderId)` scoping as {@link queryBySender}; see that
+   * method's JSDoc for why there is no share-id dimension.
+   */
+  countBySender = async ({
+    agentId,
+    senderId,
+  }: {
+    agentId: string;
+    senderId: string;
+  }): Promise<number> => {
+    const result = await this.db
+      .select({ count: count(topics.id) })
+      .from(topics)
+      .where(and(this.mine(), eq(topics.agentId, agentId), eq(topics.senderId, senderId)));
+
+    return result[0].count;
+  };
+
+  /**
+   * Creator-facing roll-up for one shared agent: how many conversations
+   * visitors started, and how many distinct visitors started them.
+   *
+   * Counterpart to {@link countBySender}, which counts ONE visitor. Both rely
+   * on `senderId` being non-null only for share-originated topics, so the
+   * creator's own conversations with the same agent are excluded. Scoped by
+   * `this.mine()` like every other read here, so the numbers can only ever
+   * describe rows the caller owns.
+   *
+   * `agentShares` is 1:1 per agent, so `agentId` alone is the share dimension
+   * — see {@link queryBySender} for why a disable → re-enable cycle keeps
+   * counting the earlier conversations.
+   */
+  countShareVisitors = async ({
+    agentId,
+  }: {
+    agentId: string;
+  }): Promise<{ topicCount: number; visitorCount: number }> => {
+    const [result] = await this.db
+      .select({
+        topicCount: count(topics.id),
+        visitorCount: countDistinct(topics.senderId),
+      })
+      .from(topics)
+      .where(and(this.mine(), eq(topics.agentId, agentId), isNotNull(topics.senderId)));
+
+    return {
+      topicCount: Number(result?.topicCount ?? 0),
+      visitorCount: Number(result?.visitorCount ?? 0),
+    };
   };
 
   // **************** Create *************** //
@@ -1270,16 +1557,28 @@ export class TopicModel {
   // **************** Delete *************** //
 
   /**
-   * Delete a session, also delete all messages and topics associated with it.
+   * Delete one topic, cascading to the messages associated with it.
+   *
+   * Agent-share visitor topics carry the creator's `userId`, so ownership alone
+   * would let the creator-facing `topic.removeTopic` destroy a visitor
+   * conversation from a raw topic id (obtainable out of band, e.g. through data
+   * export). Excluded here for the same reason the bulk sweeps exclude them —
+   * see {@link deleteAll}.
    */
   delete = async (id: string) => {
-    return this.db.delete(topics).where(and(eq(topics.id, id), this.ownership()));
+    return this.db
+      .delete(topics)
+      .where(and(eq(topics.id, id), this.ownership(), this.notShareVisitor()));
   };
 
   /**
    * Deletes multiple topics based on the sessionId.
    * `restrictToCreator` limits the sweep to the caller's own rows (workspace
    * non-owner members must not clear teammates' topics).
+   *
+   * Visitor topics have no sessionId, so the null-session (inbox) branch would
+   * otherwise sweep them in — see {@link deleteAll} for why bulk sweeps exclude
+   * them.
    */
   batchDeleteBySessionId = async (
     sessionId?: string | null,
@@ -1291,6 +1590,7 @@ export class TopicModel {
         and(
           this.matchSession(sessionId),
           options?.restrictToCreator ? this.mine() : this.ownership(),
+          this.notShareVisitor(),
         ),
       );
   };
@@ -1298,6 +1598,9 @@ export class TopicModel {
   /**
    * Deletes multiple topics based on the groupId.
    * `restrictToCreator` limits the sweep to the caller's own rows in workspace mode.
+   *
+   * Visitor topics have no groupId, so the null-group branch would otherwise
+   * sweep them in — see {@link deleteAll}.
    */
   batchDeleteByGroupId = async (
     groupId?: string | null,
@@ -1306,7 +1609,11 @@ export class TopicModel {
     return this.db
       .delete(topics)
       .where(
-        and(this.matchGroup(groupId), options?.restrictToCreator ? this.mine() : this.ownership()),
+        and(
+          this.matchGroup(groupId),
+          options?.restrictToCreator ? this.mine() : this.ownership(),
+          this.notShareVisitor(),
+        ),
       );
   };
 
@@ -1314,6 +1621,11 @@ export class TopicModel {
    * Deletes all topics matching the given agentId (`topics.agentId`).
    * `restrictToCreator` limits the sweep to the caller's own rows (workspace
    * non-owner members must not clear teammates' topics).
+   *
+   * This is the creator's "clear this agent's topics" action, so agent-share
+   * visitor topics are excluded (see {@link deleteAll}). Deleting the agent
+   * itself is a different path: `topics.agent_id` cascades at the DB level, so
+   * visitor topics do go away with the agent without any call to this method.
    */
   batchDeleteByAgentId = async (agentId: string, options?: { restrictToCreator?: boolean }) => {
     return this.db
@@ -1322,19 +1634,37 @@ export class TopicModel {
         and(
           options?.restrictToCreator ? this.mine() : this.ownership(),
           eq(topics.agentId, agentId),
+          this.notShareVisitor(),
         ),
       );
   };
 
   /**
    * Deletes multiple topics and all messages associated with them in a transaction.
+   *
+   * Agent-share visitor topics are excluded — see {@link TopicModel.delete}.
    */
   batchDelete = async (ids: string[]) => {
-    return this.db.delete(topics).where(and(inArray(topics.id, ids), this.ownership()));
+    return this.db
+      .delete(topics)
+      .where(and(inArray(topics.id, ids), this.ownership(), this.notShareVisitor()));
   };
 
+  /**
+   * Creator-facing "clear all my topics".
+   *
+   * Agent-share visitor topics live under the creator's `userId` but are hidden
+   * from every creator-facing listing (see `notShareVisitorTopic` in
+   * `../utils/shareVisitor`), so a sweep the creator cannot see the contents of
+   * must not destroy them — "clear all" can only mean the rows the creator sees.
+   * The same rule applies to the other id-less sweeps here.
+   *
+   * Id-targeted deletes ({@link TopicModel.delete}, {@link TopicModel.batchDelete})
+   * apply the same guard: a creator can obtain a visitor topic id out of band
+   * (data export), so naming the id is not proof the row is theirs to delete.
+   */
   deleteAll = async () => {
-    return this.db.delete(topics).where(this.mine());
+    return this.db.delete(topics).where(and(this.mine(), this.notShareVisitor()));
   };
 
   // **************** Update *************** //
@@ -2122,6 +2452,9 @@ export class TopicModel {
       orderBy: (fields, { asc }) => [asc(fields.createdAt), asc(fields.id)],
       where: and(
         this.ownership(),
+        // Share-visitor conversations are not the creator's own speech — never
+        // feed them into the creator's memory extraction.
+        this.notShareVisitor(),
         options.startDate ? gte(topics.createdAt, options.startDate) : undefined,
         options.endDate ? lte(topics.createdAt, options.endDate) : undefined,
         options.ignoreExtracted
@@ -2148,6 +2481,7 @@ export class TopicModel {
       .where(
         and(
           this.ownership(),
+          this.notShareVisitor(),
           options.startDate ? gte(topics.createdAt, options.startDate) : undefined,
           options.endDate ? lte(topics.createdAt, options.endDate) : undefined,
           options.ignoreExtracted

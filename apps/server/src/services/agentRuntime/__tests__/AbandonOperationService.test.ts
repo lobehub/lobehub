@@ -1,7 +1,11 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { MessageModel } from '@/database/models/message';
+import { TopicModel } from '@/database/models/topic';
+
 import { AbandonOperationService } from '../AbandonOperationService';
+import { CompletionLifecycle } from '../CompletionLifecycle';
 
 const buildStore = () => ({
   get: vi.fn(),
@@ -528,6 +532,116 @@ describe('AbandonOperationService', () => {
     expect(findOperationMock).not.toHaveBeenCalled();
     expect(topicSettleRunningOperationMock).toHaveBeenCalledWith('tpc_x', 'op_member');
     expect(coord.deleteAgentOperation).toHaveBeenCalledWith('op_member');
+  });
+
+  it('opts message/topic/lifecycle models into visitor rows for a visitor run (streamOwnerUserId present)', async () => {
+    // Shared-agent visitor run: op executes as the creator (`user_owner`)
+    // but the visitor (`visitor_1`) owns the stream. The abandon cleanup
+    // touches rows on `topics.senderId <> NULL`, so MessageModel /
+    // TopicModel / CompletionLifecycle must be constructed with
+    // `includeShareVisitor: true` — otherwise the cleanup silently no-ops.
+    (MessageModel as unknown as ReturnType<typeof vi.fn>).mockClear();
+    (TopicModel as unknown as ReturnType<typeof vi.fn>).mockClear();
+    (CompletionLifecycle as unknown as ReturnType<typeof vi.fn>).mockClear();
+
+    const coord = buildCoordinator({
+      loadAgentState: vi.fn().mockResolvedValue(
+        stateWith({
+          metadata: {
+            agentId: 'agt_x',
+            assistantMessageId: 'msg_assist_1',
+            streamOwnerUserId: 'visitor_1',
+            topicId: 'tpc_x',
+            userId: 'user_owner',
+            workspaceId: 'ws_1',
+          },
+        }),
+      ),
+    });
+    const store = buildStore();
+    store.loadPartial.mockResolvedValue(null);
+
+    await new AbandonOperationService({} as any, {
+      coordinator: coord as any,
+      snapshotStore: store as any,
+    }).finalizeAbandoned('op_visitor', 'inactivity_5m');
+
+    expect(MessageModel).toHaveBeenCalledWith(expect.anything(), 'user_owner', 'ws_1', undefined, {
+      includeShareVisitor: true,
+    });
+    expect(TopicModel).toHaveBeenCalledWith(expect.anything(), 'user_owner', 'ws_1', undefined, {
+      includeShareVisitor: true,
+    });
+    expect(CompletionLifecycle).toHaveBeenCalledWith(expect.anything(), 'user_owner', 'ws_1', {
+      includeShareVisitor: true,
+    });
+  });
+
+  it('keeps the visitor exclusion for an ordinary creator run (no streamOwnerUserId)', async () => {
+    (MessageModel as unknown as ReturnType<typeof vi.fn>).mockClear();
+    (TopicModel as unknown as ReturnType<typeof vi.fn>).mockClear();
+    (CompletionLifecycle as unknown as ReturnType<typeof vi.fn>).mockClear();
+
+    const coord = buildCoordinator({
+      loadAgentState: vi.fn().mockResolvedValue(stateWith()),
+    });
+    const store = buildStore();
+    store.loadPartial.mockResolvedValue(null);
+
+    await new AbandonOperationService({} as any, {
+      coordinator: coord as any,
+      snapshotStore: store as any,
+    }).finalizeAbandoned('op_x', 'inactivity_5m');
+
+    expect(MessageModel).toHaveBeenCalledWith(expect.anything(), 'user_x', undefined, undefined, {
+      includeShareVisitor: false,
+    });
+    expect(TopicModel).toHaveBeenCalledWith(expect.anything(), 'user_x', undefined, undefined, {
+      includeShareVisitor: false,
+    });
+    expect(CompletionLifecycle).toHaveBeenCalledWith(expect.anything(), 'user_x', undefined, {
+      includeShareVisitor: false,
+    });
+  });
+
+  it('opts the no-state cleanup path into visitor rows unconditionally', async () => {
+    // No-state path only has the persisted `agentOperations` row; the op may
+    // belong to a visitor topic whose rows the default gate would hide.
+    // The service opts in unconditionally so the placeholder can still be
+    // errored / topic settled.
+    (MessageModel as unknown as ReturnType<typeof vi.fn>).mockClear();
+    (TopicModel as unknown as ReturnType<typeof vi.fn>).mockClear();
+
+    const coord = buildCoordinator({ loadAgentState: vi.fn().mockResolvedValue(null) });
+    const store = buildStore();
+    const db = buildDb({
+      operationRow: {
+        agentId: 'agt_x',
+        id: 'op_ns',
+        provider: 'claude-code',
+        startedAt: new Date('2026-06-30T11:51:14.745Z'),
+        status: 'running',
+        topicId: 'tpc_x',
+        userId: 'user_x',
+        workspaceId: 'ws_1',
+      },
+    });
+    topicSettleRunningOperationMock.mockResolvedValue({
+      assistantMessageId: 'msg_ns',
+      status: 'settled',
+    });
+
+    await new AbandonOperationService(db, {
+      coordinator: coord as any,
+      snapshotStore: store as any,
+    }).finalizeAbandoned('op_ns', 'inactivity_watchdog');
+
+    expect(TopicModel).toHaveBeenCalledWith(expect.anything(), 'user_x', 'ws_1', undefined, {
+      includeShareVisitor: true,
+    });
+    expect(MessageModel).toHaveBeenCalledWith(expect.anything(), 'user_x', 'ws_1', undefined, {
+      includeShareVisitor: true,
+    });
   });
 
   it('omits subAgentResume for a non-sub-agent abandoned op', async () => {

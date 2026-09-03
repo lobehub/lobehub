@@ -30,9 +30,9 @@ vi.mock('@/database/models/verifyRun', () => ({
 
 // Goal-loop rounds suppress the per-topic brief; onTopicComplete asks the
 // goals table whether this task carries a goal. Default = plain task.
-const goalFindByWorkTask = vi.fn().mockResolvedValue(undefined);
+const goalFindByGraphTask = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/database/models/goal', () => ({
-  GoalModel: vi.fn(() => ({ findByWorkTask: goalFindByWorkTask })),
+  GoalModel: vi.fn(() => ({ findByGraphTask: goalFindByGraphTask })),
 }));
 
 // Error-brief copy is localized at the source via the server translator; mock it

@@ -16,6 +16,10 @@ vi.mock('@/business/server/trpc-middlewares/rbacPermission', () => ({
 }));
 
 const mockTopicFindById = vi.fn();
+// The entry lookup goes through the visitor-excluding twin; by default it
+// mirrors `findById` so the existing scenarios keep their single source of
+// topic state.
+const mockTopicFindOwnTopicById = vi.fn((...args: unknown[]) => mockTopicFindById(...args));
 const mockTopicSettleRunningOperation = vi.fn();
 const mockTopicUpdateMetadata = vi.fn();
 const mockTopicRemoveRunningOperationChild = vi.fn();
@@ -39,6 +43,7 @@ vi.mock('@/server/services/verify', async (orig) => ({
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn(() => ({
     findById: mockTopicFindById,
+    findOwnTopicById: mockTopicFindOwnTopicById,
     removeRunningOperationChild: mockTopicRemoveRunningOperationChild,
     settleRunningOperation: mockTopicSettleRunningOperation,
     updateMetadata: mockTopicUpdateMetadata,
@@ -124,6 +129,26 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
 
   afterEach(() => {
     hookDispatcher.unregister(OP);
+  });
+
+  // Visitor topics carry the creator's userId, so an ownership-only lookup
+  // would let a creator-side caller append to or overwrite a visitor
+  // transcript through this callback.
+  it('rejects an agent-share visitor topic with NOT_FOUND before any write', async () => {
+    mockTopicFindOwnTopicById.mockResolvedValueOnce(undefined);
+
+    await expect(
+      createCaller().notify({
+        content: 'hi',
+        messageId: 'msg-1',
+        role: 'assistant',
+        topicId: TOPIC,
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+    expect(mockMessageUpdate).not.toHaveBeenCalled();
+    expect(mockMessageCreate).not.toHaveBeenCalled();
+    expect(mockExecAgent).not.toHaveBeenCalled();
   });
 
   it('empty done signal finalizes success AND carries the final reply into the hooks', async () => {

@@ -2347,7 +2347,7 @@ describe('HeterogeneousAgentCtr', () => {
         ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
       ).rejects.toThrow('Codex CLI was not found');
 
-      expect(detect).toHaveBeenCalledWith('codex', true);
+      expect(detect).toHaveBeenCalledWith('codex');
       expect(spawnCalls).toHaveLength(0);
     });
 
@@ -2535,7 +2535,7 @@ describe('HeterogeneousAgentCtr', () => {
       ).rejects.toThrow('Codex CLI was not found');
 
       expect(statSync).toHaveBeenCalledWith(FAKE_DESKTOP_PATH, expect.anything());
-      expect(detect).toHaveBeenCalledWith('codex', true);
+      expect(detect).toHaveBeenCalledWith('codex');
     });
 
     it('reports a missing working directory instead of claiming the Codex CLI is missing', async () => {
@@ -2580,7 +2580,7 @@ describe('HeterogeneousAgentCtr', () => {
         ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
       ).rejects.toThrow('Claude Code CLI was not found');
 
-      expect(detect).toHaveBeenCalledWith('claude', true);
+      expect(detect).toHaveBeenCalledWith('claude');
       expect(spawnCalls).toHaveLength(0);
     });
 
@@ -2600,7 +2600,7 @@ describe('HeterogeneousAgentCtr', () => {
         ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
       ).rejects.toThrow('CodeBuddy CLI was not found');
 
-      expect(detect).toHaveBeenCalledWith('codebuddy', true);
+      expect(detect).toHaveBeenCalledWith('codebuddy');
       expect(spawnCalls).toHaveLength(0);
     });
 
@@ -2617,7 +2617,7 @@ describe('HeterogeneousAgentCtr', () => {
         ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
       ).rejects.toThrow('Amp CLI was not found');
 
-      expect(detect).toHaveBeenCalledWith('amp', true);
+      expect(detect).toHaveBeenCalledWith('amp');
       expect(spawnCalls).toHaveLength(0);
     });
 
@@ -2637,7 +2637,7 @@ describe('HeterogeneousAgentCtr', () => {
         ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
       ).rejects.toThrow('OpenCode CLI was not found');
 
-      expect(detect).toHaveBeenCalledWith('opencode', true);
+      expect(detect).toHaveBeenCalledWith('opencode');
       expect(spawnCalls).toHaveLength(0);
     });
 

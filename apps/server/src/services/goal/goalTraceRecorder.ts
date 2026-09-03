@@ -49,7 +49,7 @@ export class GoalAdvanceRecorder {
     return this.store !== null;
   }
 
-  /** Pass to `GoalService.tick`; undefined when tracing is off, so tick skips the work. */
+  /** Pass to `GoalService.tick`; undefined when tracing is off, so tick skips recording. */
   get onDecision(): ((observation: GoalTickObservation) => void) | undefined {
     if (!this.store) return undefined;
     return (observation) => {

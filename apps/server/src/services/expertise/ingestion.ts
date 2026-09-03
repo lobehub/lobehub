@@ -21,6 +21,7 @@ import { z } from 'zod';
 import { AgentSignalReviewContextModel } from '@/database/models/agentSignal/reviewContext';
 import { ExpertiseModel } from '@/database/models/expertise';
 import type { LobeChatDatabase } from '@/database/type';
+import { notShareVisitorMessage, notShareVisitorTopic } from '@/database/utils/shareVisitor';
 import type { CompletionCallbackParams } from '@/server/services/agentSignal/policies/completionPolicy';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 
@@ -162,15 +163,27 @@ export class ExpertiseIngestionService {
       ? eq(messages.workspaceId, this.workspaceId)
       : and(eq(messages.userId, this.userId), isNull(messages.workspaceId));
 
+    // Share-visitor topics/messages are billed to the creator but are visitor traffic,
+    // not the creator's own activity — they must never feed self-learning/expertise
+    // ingestion. See `notShareVisitorMessage`/`notShareVisitorTopic` for the shared rule.
     const byMessageAgent = this.db
       .select({ topicId: messages.topicId })
       .from(messages)
-      .where(and(scope, eq(messages.agentId, agentId), isNotNull(messages.topicId)));
+      .where(
+        and(
+          scope,
+          eq(messages.agentId, agentId),
+          isNotNull(messages.topicId),
+          notShareVisitorMessage(),
+        ),
+      );
     const byTopicAgent = this.db
       .select({ topicId: messages.topicId })
       .from(messages)
       .innerJoin(topics, eq(topics.id, messages.topicId))
-      .where(and(scope, isNull(messages.agentId), eq(topics.agentId, agentId)));
+      .where(
+        and(scope, isNull(messages.agentId), eq(topics.agentId, agentId), notShareVisitorTopic()),
+      );
 
     return byMessageAgent.union(byTopicAgent).as('historical_topic_candidates');
   };
@@ -327,6 +340,8 @@ export class ExpertiseIngestionService {
           : and(eq(messages.userId, this.userId), isNull(messages.workspaceId)),
         eq(messages.topicId, topicId),
         isNull(messages.threadId),
+        // Same rule as `historicalTopicCandidates` above — exclude share-visitor messages.
+        notShareVisitorMessage(),
       ),
     });
     return {

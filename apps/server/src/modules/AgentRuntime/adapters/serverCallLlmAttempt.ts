@@ -15,6 +15,7 @@ import {
   ModelRefusalError,
 } from '@lobechat/model-runtime';
 import type {
+  AgentShareVisitorIds,
   ChatImageItem,
   ChatToolPayload,
   GroundingSearch,
@@ -38,6 +39,13 @@ import {
 import type { ServerCallLlmTooling } from './serverCallLlmTooling';
 
 interface CreateServerCallLlmAttemptInput {
+  /**
+   * Shared-agent attribution for a visitor run. The call is billed to the
+   * share's CREATOR, so without this the spend row is indistinguishable from
+   * the creator's own usage. Only ids — never the share's tool/memory grants;
+   * the caller projects with `toAgentShareVisitorIds`.
+   */
+  agentShareVisitorIds?: AgentShareVisitorIds;
   attempt: number;
   blobStore?: BlobStore;
   chatPayload: ChatStreamPayload;
@@ -152,6 +160,7 @@ export class ServerCallLlmAttempt {
   private usage?: ModelUsage;
 
   constructor({
+    agentShareVisitorIds,
     attempt,
     blobStore,
     chatPayload,
@@ -182,6 +191,7 @@ export class ServerCallLlmAttempt {
     this.provider = provider;
     this.resolved = resolved;
     this.runtimeMetadata = {
+      agentShare: agentShareVisitorIds,
       clientIp,
       operationId: ctx.operationId,
       topicId,

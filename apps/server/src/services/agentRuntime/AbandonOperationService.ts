@@ -34,6 +34,13 @@ interface AbandonOperationOptions {
  */
 export interface AbandonedSubAgentResume {
   parentOperationId: string;
+  /**
+   * When true, the parent op is a shared-agent visitor run (its metadata
+   * carries `streamOwnerUserId`). The inline resume path must construct
+   * services with `includeShareVisitor: true` so the visitor-owned rows
+   * remain visible.
+   */
+  streamOwnerUserId?: string;
   threadId: string;
   /** The parent's placeholder `role: 'tool'` message to backfill (= thread.sourceMessageId). */
   toolMessageId: string;
@@ -108,6 +115,8 @@ export class AbandonOperationService {
       assistantMessageId?: string;
       isSubAgent?: boolean;
       orchestrationRole?: 'supervisor' | 'member';
+      /** Present only for shared-agent visitor runs (visitor owns the stream). */
+      streamOwnerUserId?: string;
       threadId?: string | null;
       topicId?: string | null;
       userId?: string;
@@ -150,9 +159,22 @@ export class AbandonOperationService {
       result.finalized = partial !== null;
     }
 
+    // Shared-agent visitor runs mark themselves with `streamOwnerUserId` on
+    // the operation metadata (the op executes as the creator `userId`, but the
+    // visitor owns the stream). The visitor-owned rows are excluded from
+    // MessageModel/TopicModel/CompletionLifecycle by default, so the cleanup
+    // path must opt in when this flag is present.
+    const includeShareVisitor = Boolean(metadata.streamOwnerUserId);
+
     if (metadata.userId && metadata.assistantMessageId) {
       try {
-        const messageModel = new MessageModel(this.db, metadata.userId, metadata.workspaceId);
+        const messageModel = new MessageModel(
+          this.db,
+          metadata.userId,
+          metadata.workspaceId,
+          undefined,
+          { includeShareVisitor },
+        );
         await messageModel.update(metadata.assistantMessageId, { error });
         result.assistantMessageUpdated = true;
       } catch (e) {
@@ -162,7 +184,13 @@ export class AbandonOperationService {
 
     if (metadata.topicId && metadata.userId) {
       try {
-        const topicModel = new TopicModel(this.db, metadata.userId, metadata.workspaceId);
+        const topicModel = new TopicModel(
+          this.db,
+          metadata.userId,
+          metadata.workspaceId,
+          undefined,
+          { includeShareVisitor },
+        );
         await topicModel.settleRunningOperation(metadata.topicId, operationId);
       } catch (e) {
         log('[%s] abandoned op runningOperation cleanup failed (non-fatal): %O', operationId, e);
@@ -171,14 +199,11 @@ export class AbandonOperationService {
 
     if (!metadata.isSubAgent && metadata.userId && shouldDispatchAbandonedLifecycle) {
       try {
-        await new CompletionLifecycle(this.db, metadata.userId, metadata.workspaceId).dispatchHooks(
-          operationId,
-          finalState,
-          'error',
-          {
-            skipErrorMessageWrite: result.assistantMessageUpdated,
-          },
-        );
+        await new CompletionLifecycle(this.db, metadata.userId, metadata.workspaceId, {
+          includeShareVisitor,
+        }).dispatchHooks(operationId, finalState, 'error', {
+          skipErrorMessageWrite: result.assistantMessageUpdated,
+        });
       } catch (e) {
         log('[%s] abandoned op lifecycle dispatch failed (non-fatal): %O', operationId, e);
       }
@@ -218,6 +243,11 @@ export class AbandonOperationService {
           if (toolMessageId) {
             result.subAgentResume = {
               parentOperationId,
+              // Forward the visitor-run marker so an inline resume (local mode)
+              // constructs its services with `includeShareVisitor: true`; the
+              // queue-mode `subagent-callback` re-derives the same flag from
+              // the parent op's coordinator metadata.
+              streamOwnerUserId: metadata.streamOwnerUserId,
               threadId,
               toolMessageId,
               userId: metadata.userId,
@@ -293,7 +323,19 @@ export class AbandonOperationService {
     if (!assistantMessageId) return;
 
     try {
-      const messageModel = new MessageModel(this.db, op.userId, op.workspaceId ?? undefined);
+      // No-state cleanup path: this is a system-side finalize keyed on ids
+      // read from the persisted `agentOperations` row (no user input), and the
+      // op may belong to a shared-agent visitor conversation whose rows the
+      // default MessageModel gate would hide. Opt in unconditionally so the
+      // placeholder can still be marked errored when the coordinator state has
+      // already evaporated.
+      const messageModel = new MessageModel(
+        this.db,
+        op.userId,
+        op.workspaceId ?? undefined,
+        undefined,
+        { includeShareVisitor: true },
+      );
       await messageModel.update(assistantMessageId, { content: '', error });
       result.assistantMessageUpdated = true;
     } catch (e) {
@@ -320,7 +362,13 @@ export class AbandonOperationService {
 
     if (op.topicId) {
       try {
-        topicModel = new TopicModel(this.db, op.userId, op.workspaceId ?? undefined);
+        // No-state cleanup path: same rationale as the MessageModel above —
+        // system-side finalize keyed on ids from the persisted operation row,
+        // and the op may belong to a shared-agent visitor topic that the
+        // default TopicModel gate would exclude. Opt in unconditionally.
+        topicModel = new TopicModel(this.db, op.userId, op.workspaceId ?? undefined, undefined, {
+          includeShareVisitor: true,
+        });
         const settled = await topicModel.settleRunningOperation(op.topicId, operationId);
         if (settled.status !== 'settled') return undefined;
         if (settled.assistantMessageId) return settled.assistantMessageId;

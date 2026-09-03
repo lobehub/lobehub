@@ -1,4 +1,5 @@
 import type { GoalAdvanceEffect } from '@lobechat/agent-tracing';
+import { buildGoalRequirement } from '@lobechat/builtin-tool-goal';
 import { GOAL_COORDINATOR_ACTOR_ID } from '@lobechat/const/goal';
 import type {
   GoalConfig,
@@ -30,18 +31,22 @@ import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRunt
 import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
 import { AcceptanceService } from '../verify/acceptanceService';
+import { VerifyPlanGeneratorService } from '../verify/planGenerator';
 import { GoalCriteriaGeneratorService, type GoalDecompositionDraft } from './criteriaGenerator';
 import {
   decideNextMove,
   frontierNeedsBudget,
   GOAL_ACCEPTANCE_TASK_TITLE,
   type GoalMove,
+  LEASE_EXPIRED_ERROR,
   selectFrontier,
+  TERMINAL_NODE_STATUSES,
 } from './decideNextMove';
 import {
   resolveMaxConcurrentTasks,
   resolveOperationLeaseTimeout,
   resolveTaskMaxSteps,
+  VERIFY_SETTLE_GRACE_MS,
 } from './recoveryPolicy';
 import { TaskRecoveryCoordinator } from './taskRecoveryCoordinator';
 import {
@@ -56,7 +61,7 @@ const TASK_DESCRIPTION_MAX_LENGTH = 255;
 /** Advisory-lock namespace for goal dispatch. `0x676f_6469` is ASCII `godi`. */
 const GOAL_DISPATCH_LOCK_NAMESPACE = 0x67_6f_64_69;
 
-export interface CreateGoalWorkInput {
+export interface CreateGoalTaskInput {
   description?: string;
   title: string;
 }
@@ -70,6 +75,14 @@ export interface CreateGoalGraphInput {
    * on an agent's page sets that, but the author is still the person.
    */
   createdByAgentId?: string;
+  /**
+   * Structured acceptance criteria. Persisted as `verify_criteria` rows and
+   * recorded on `config.acceptance.criteriaIds`, so the goal page can show and
+   * edit them and the terminal Goal-acceptance Task verifies against exactly
+   * these checks. Callers still fold the same criteria into `requirement`
+   * prose — that text remains what every Task's execution context reads.
+   */
+  criteria?: Array<{ description?: string; instruction?: string; title: string }>;
   maxRounds?: number;
   maxTotalCost?: number;
   /**
@@ -80,12 +93,12 @@ export interface CreateGoalGraphInput {
   problemDescription?: string;
   projectId?: string;
   requirement?: string;
-  title: string;
   /**
-   * Seed Work nodes, in dependency-free order. A plain string is title-only.
+   * Seed task nodes, in dependency-free order. A plain string is title-only.
    * When omitted, the coordinator plans the decomposition on first advance.
    */
-  work?: Array<CreateGoalWorkInput | string>;
+  tasks?: Array<CreateGoalTaskInput | string>;
+  title: string;
 }
 
 export interface CreateGoalNodeInput {
@@ -106,8 +119,8 @@ export class GoalService {
    */
   private readonly graphModel: GoalGraphModel;
   /**
-   * Graph writes the coordinator makes on its own — claiming Work, binding its
-   * task, synthesizing a finding, opening a gate. Attributed to the coordinator
+   * Graph writes the coordinator makes on its own — claiming a Task node,
+   * binding its task, synthesizing a finding, opening a gate. Attributed to the coordinator
    * even when a person pressed Advance: they asked it to run, they did not make
    * these moves.
    */
@@ -159,13 +172,48 @@ export class GoalService {
       ).findManageableById(input.projectId);
       if (!project) throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
     }
+    // Persist the structured acceptance criteria first: their ids ride on the
+    // goal config so the page can edit them and the terminal acceptance Task
+    // is gated on exactly these checks (not an AI re-derivation of the prose).
+    let config = input.config;
+    let requirement = input.requirement;
+    if (input.criteria?.length) {
+      // The prose requirement must keep carrying the full standard (the goal
+      // page's 什么算完成 block and every Task's execution context read it).
+      // Callers normally compose it via `buildGoalRequirement`; guard API
+      // callers that pass criteria with a bare requirement.
+      const carriesCriteria = input.criteria.every((item) =>
+        input.requirement?.includes(item.title),
+      );
+      if (!carriesCriteria) {
+        requirement = buildGoalRequirement(input.title, input.criteria, input.requirement);
+      }
+    }
+    if (input.criteria?.length) {
+      const criteriaIds = await new VerifyPlanGeneratorService(
+        this.db,
+        this.userId,
+        this.workspaceId,
+      ).createCriteriaFromDrafts(
+        input.criteria.map((item) => ({
+          description: item.description,
+          instruction: item.instruction,
+          onFail: 'manual',
+          required: true,
+          title: item.title,
+          verifierType: 'agent',
+        })),
+      );
+      config = { ...config, acceptance: { criteriaIds } };
+    }
+
     const goal = await this.goalModel.create({
       agentId: input.agentId,
-      config: input.config,
+      config,
       maxRounds: input.maxRounds,
       maxTotalCost: input.maxTotalCost,
       projectId: input.projectId,
-      requirement: input.requirement,
+      requirement,
       subjectType: 'standalone',
       title: input.title,
     });
@@ -184,16 +232,16 @@ export class GoalService {
       });
       if (!problem) throw new Error('Failed to seed goal problem');
 
-      for (const seed of input.work ?? []) {
+      for (const seed of input.tasks ?? []) {
         const { description, title } = typeof seed === 'string' ? { title: seed } : seed;
-        const work = await authorGraph.createNode(goal.id, {
+        const taskNode = await authorGraph.createNode(goal.id, {
           createdByAgentId: input.createdByAgentId,
           description,
           kind: 'task',
           title,
         });
-        if (!work) throw new Error('Failed to seed goal work');
-        await authorGraph.createEdge(goal.id, problem.id, work.id, 'decomposes');
+        if (!taskNode) throw new Error('Failed to seed goal task');
+        await authorGraph.createEdge(goal.id, problem.id, taskNode.id, 'decomposes');
       }
     } catch (error) {
       await this.goalModel.delete(goal.id).catch(() => {});
@@ -202,7 +250,94 @@ export class GoalService {
     return (await this.graphModel.getGraph(goal.id))!;
   };
 
-  graph = async (goalId: string) => this.requireGraph(goalId);
+  /**
+   * Replace the goal's structured acceptance criteria id list (goal-page
+   * editing). The criteria rows themselves are edited through the verify
+   * criteria endpoints; this only rebinds which of them gate the goal.
+   */
+  setAcceptanceCriteria = async (goalId: string, criteriaIds: string[]) => {
+    const goal = await this.goalModel.findById(goalId);
+    if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    await this.goalModel.update(goalId, {
+      config: { ...goal.config, acceptance: { criteriaIds } },
+    });
+
+    // A terminal Goal-acceptance Task may already be dispatched — its
+    // Acceptance row snapshotted the previous id list. Rebind it too, or the
+    // page would present the new criteria as gates while the verifier keeps
+    // materializing plans from the stale list. A verify round already
+    // materialized for an in-flight run stays as-is (rounds are immutable
+    // snapshots); every later run instantiates from the updated config.
+    const graph = await this.graphModel.getGraph(goalId);
+    const terminalTaskId = graph?.nodes.find(
+      (node) => node.kind === 'task' && node.title === GOAL_ACCEPTANCE_TASK_TITLE && node.taskId,
+    )?.taskId;
+    if (!terminalTaskId) return;
+
+    const acceptance = await this.acceptanceService.acceptanceModel.findBySubject(
+      'task',
+      terminalTaskId,
+    );
+    if (!acceptance || acceptance.status === 'accepted') return;
+    await this.acceptanceService.acceptanceModel.update(acceptance.id, {
+      config: {
+        ...acceptance.config,
+        ...(criteriaIds.length > 0
+          ? { verifyCriteriaIds: criteriaIds }
+          : { verifyCriteriaIds: undefined }),
+      },
+    });
+  };
+
+  graph = async (goalId: string) => {
+    const graph = await this.requireGraph(goalId);
+    return { ...graph, runHeartbeats: await this.collectRunHeartbeats(graph) };
+  };
+
+  /**
+   * Live heartbeat per active task node: the `agent_operations.updatedAt` of
+   * the run behind it. The runtime refreshes that lease every ~90s while
+   * `goal_nodes.updatedAt` only moves on observations / status changes, so a
+   * client judging liveness from the node row alone would cry "lost" over any
+   * long quiet stretch (a big tool call, the verify stage) the reclaim path
+   * considers perfectly healthy.
+   */
+  private collectRunHeartbeats = async (
+    graph: GoalGraphSnapshot,
+  ): Promise<Record<string, Date> | undefined> => {
+    const activeTasks = graph.nodes.filter(
+      (node): node is GoalGraphNode & { taskId: string } =>
+        node.kind === 'task' && node.status === 'active' && !!node.taskId,
+    );
+    if (activeTasks.length === 0) return undefined;
+
+    const nodeByTaskId = new Map(activeTasks.map((node) => [node.taskId, node.id]));
+    const running = await this.taskTopicModel.findRunningByTaskIds(
+      activeTasks.map((n) => n.taskId),
+    );
+
+    // One batched read: the graph polls every few seconds per open client, so
+    // a per-topic operation lookup would scale queries with task concurrency.
+    const operationIds = [
+      ...new Set(running.flatMap((topic) => (topic.operationId ? [topic.operationId] : []))),
+    ];
+    const operations = await new AgentOperationModel(
+      this.db,
+      this.userId,
+      this.workspaceId,
+    ).findByIds(operationIds);
+    const operationById = new Map(operations.map((operation) => [operation.id, operation]));
+
+    const heartbeats: Record<string, Date> = {};
+    for (const topic of running) {
+      const nodeId = topic.taskId ? nodeByTaskId.get(topic.taskId) : undefined;
+      if (!nodeId || !topic.operationId || heartbeats[nodeId]) continue;
+      const updatedAt = operationById.get(topic.operationId)?.updatedAt;
+      if (updatedAt) heartbeats[nodeId] = updatedAt;
+    }
+
+    return Object.keys(heartbeats).length > 0 ? heartbeats : undefined;
+  };
 
   /** Current lifecycle status, without paying for the whole graph. */
   status = async (goalId: string): Promise<GoalStatus | undefined> =>
@@ -228,7 +363,7 @@ export class GoalService {
   /**
    * Stop everything the goal has running, then delete it and its graph.
    *
-   * Deleting only the goal row cascades the graph away but leaves each Work
+   * Deleting only the goal row cascades the graph away but leaves each graph
    * Task — and the agent operation behind it — running, spending the user's
    * budget with nothing left on screen to stop it. The tasks themselves stay:
    * they are ordinary tasks with their own history and acceptance.
@@ -305,9 +440,14 @@ export class GoalService {
   /**
    * What the goal has spent against what it is allowed to spend.
    *
-   * Rounds are counted across every Work Task in the graph, not per Work — the
+   * Rounds are counted across every Task in the graph, not per Task — the
    * budget is the goal's, so `setBudget` has to read it exactly the way the
    * coordinator does or raising a budget would not reliably unstick a goal.
+   *
+   * The calendar-time budget (schedule.deadline) is evaluated in the same
+   * shape: time is the long-horizon budget unit the attempt/round/dollar trio
+   * cannot express, and a goal whose deadline passed must stop the same way a
+   * goal out of money does.
    */
   private evaluateBudget = async (goal: GoalItem, graph: GoalGraphSnapshot) => {
     const taskIds = graph.nodes.flatMap((node) => (node.taskId ? [node.taskId] : []));
@@ -326,8 +466,8 @@ export class GoalService {
 
   /**
    * Edit the goal's standing acceptance requirement in place. The next
-   * coordinator move and every later dispatched Work read the updated text;
-   * already-running Work keeps the contract it was dispatched with.
+   * coordinator move and every later dispatched Task read the updated text;
+   * an already-running Task keeps the contract it was dispatched with.
    */
   updateRequirement = async (goalId: string, requirement: string) => {
     const goal = await this.goalModel.update(goalId, { requirement });
@@ -537,7 +677,7 @@ export class GoalService {
         // sweep's window. A `running` goal that always reports `no_progress` is
         // picked by every scan forever, and enough of them starve every other
         // stalled goal out of the newest-first limit.
-        await this.transitionStatus(graph.goal, 'paused', 'no eligible work to advance');
+        await this.transitionStatus(graph.goal, 'paused', 'no eligible task to advance');
         effects.push({ type: 'goal_status', detail: 'paused' });
         return observe({ goalId, message: move.message, outcome: move.outcome });
       }
@@ -633,8 +773,8 @@ export class GoalService {
   };
 
   /**
-   * Create the Goal-level acceptance Work, or read the verdict it already
-   * reached. Only runs once every other Work is terminal.
+   * Create the Goal-level acceptance Task, or read the verdict it already
+   * reached. Only runs once every other Task is terminal.
    */
   private settleTerminalAcceptance = async (
     graph: GoalGraphSnapshot,
@@ -644,6 +784,14 @@ export class GoalService {
     const goalId = graph.goal.id;
 
     if (move.outcome === 'achieved') {
+      // The map must agree with the verdict: only task nodes get resolved as
+      // Tasks complete, so without this the seeded problem nodes would read
+      // "active / unanswered" forever on an achieved goal.
+      for (const node of graph.nodes) {
+        if (node.kind !== 'problem' || TERMINAL_NODE_STATUSES.has(node.status)) continue;
+        await this.coordinatorGraph.updateNodeStatus(goalId, node.id, 'resolved', 'Goal achieved');
+        effects.push({ detail: 'resolved', nodeId: node.id, type: 'node_status' });
+      }
       await this.transitionStatus(graph.goal, 'achieved', 'Goal-level acceptance passed');
       effects.push({ type: 'goal_status', detail: 'achieved' });
       return { goalId, message: move.message, outcome: 'achieved' };
@@ -657,7 +805,7 @@ export class GoalService {
       description: [
         `Complete and prove the overall Goal acceptance requirement: ${graph.goal.requirement}`,
         'Inspect and reuse existing Goal findings, artifacts, metrics, and command results as the primary evidence. Do not repeat expensive or destructive work when the existing evidence is sufficient and still auditable.',
-        'Explicitly close every remaining acceptance gap instead of treating completed upstream Work as proof that the whole Goal is achieved. Run only the missing or stale checks needed to close those gaps.',
+        'Explicitly close every remaining acceptance gap instead of treating completed upstream Tasks as proof that the whole Goal is achieved. Run only the missing or stale checks needed to close those gaps.',
         'Return one auditable final delivery with evidence for every requirement. If a requirement cannot be satisfied, state the exact gap and the minimum next action; do not claim the Goal is complete.',
       ].join('\n\n'),
       kind: 'task',
@@ -667,7 +815,7 @@ export class GoalService {
     if (!result) {
       return {
         goalId,
-        message: 'Could not create the Goal-level acceptance Work',
+        message: 'Could not create the Goal-level acceptance Task',
         outcome: 'no_progress',
       };
     }
@@ -681,14 +829,14 @@ export class GoalService {
     return {
       goalId,
       message: result.created
-        ? 'Created Goal-level acceptance Work for the remaining contract'
-        : 'Goal-level acceptance Work was created by another coordinator',
+        ? 'Created Goal-level acceptance Task for the remaining contract'
+        : 'Goal-level acceptance Task was created by another coordinator',
       nodeId: result.node.id,
       outcome: 'advanced',
     };
   };
 
-  /** Claim the chosen Work and give it a responsible task plus its acceptance contract. */
+  /** Claim the chosen Task node and give it a responsible task plus its acceptance contract. */
   private createResponsibleTask = async (
     graph: GoalGraphSnapshot,
     frontier: GoalGraphNode,
@@ -708,7 +856,7 @@ export class GoalService {
         goalId,
         message: current?.taskId
           ? 'Responsible task was created by another coordinator'
-          : 'Work node is being claimed by another coordinator',
+          : 'Task node is being claimed by another coordinator',
         nodeId: frontier.id,
         outcome: 'waiting_external',
         taskId: current?.taskId ?? undefined,
@@ -727,8 +875,19 @@ export class GoalService {
         name: frontier.title,
         projectId: graph.goal.projectId ?? undefined,
       });
+      // The terminal Goal-acceptance Task is gated on the goal's structured
+      // criteria when it has them: the verify plan materializes exactly those
+      // rows (deterministic checklist) instead of AI-deriving checks from the
+      // requirement prose. Ordinary Tasks keep the prose-scoped contract.
+      const goalCriteriaIds =
+        frontier.title === GOAL_ACCEPTANCE_TASK_TITLE
+          ? graph.goal.config?.acceptance?.criteriaIds
+          : undefined;
       const acceptance = await this.acceptanceService.ensureForSubject('task', task.id, {
-        config: { enabled: true },
+        config: {
+          enabled: true,
+          ...(goalCriteriaIds?.length ? { verifyCriteriaIds: goalCriteriaIds } : {}),
+        },
         requirement: this.buildTaskAcceptanceRequirement(
           graph,
           frontier.title,
@@ -786,8 +945,8 @@ export class GoalService {
   };
 
   /**
-   * Automatic recovery after a Work delivery failed verification. Spends the
-   * Work's remaining attempt budget before it escalates to a person.
+   * Automatic recovery after a Task delivery failed verification. Spends the
+   * Task's remaining attempt budget before it escalates to a person.
    */
   private recoverAfterVerification = async (
     graph: GoalGraphSnapshot,
@@ -810,7 +969,7 @@ export class GoalService {
         goalId,
         nodeId,
         'active',
-        'Automatically started the next Work attempt after verification feedback',
+        'Automatically started the next Task attempt after verification feedback',
       );
       await this.transitionStatus(graph.goal, 'running', 'automatic recovery started a run');
       // Only when this advance is the one that spawned the run. Reporting it
@@ -838,7 +997,7 @@ export class GoalService {
       recovery.outcome === 'exhausted-cost'
         ? 'Goal cost budget was exhausted'
         : recovery.outcome === 'exhausted-rounds'
-          ? 'Work attempt budget was exhausted'
+          ? 'Task attempt budget was exhausted'
           : 'Automatic recovery could not start the next attempt';
     return this.openFailureDecision(graph, nodeId, task.id, exhaustedReason, effects);
   };
@@ -855,7 +1014,7 @@ export class GoalService {
     // Advances arrive from independent sources — an event hook, a manual nudge,
     // the sweep — and can overlap. `runTask` decides whether a run is already
     // in flight by reading the task's topics and only then creating one, so two
-    // overlapping advances would both dispatch this Work and pay for it twice.
+    // overlapping advances would both dispatch this Task and pay for it twice.
     // Claim the task first: the transition is a single conditional UPDATE, so
     // exactly one advance can win it.
     //
@@ -925,7 +1084,7 @@ export class GoalService {
       };
     } catch (error) {
       // We claimed the task, so nothing else will put it back. Release it or the
-      // Work stays 'running' with no run behind it and only the lease reclaims it.
+      // Task stays 'running' with no run behind it and only the lease reclaims it.
       await this.taskModel
         .updateStatusIfCurrent(task.id, 'running', task.status)
         .catch((releaseError) => {
@@ -972,6 +1131,29 @@ export class GoalService {
     const staleBefore = new Date(Date.now() - resolveOperationLeaseTimeout(graph.goal));
 
     if (!operationId || !topicId) {
+      // No running topic covers two very different shapes. A verify-bound Task
+      // that delivered keeps its task `running` with a *completed* topic until
+      // the verify run settles, and that judgment — a full agent run — outlives
+      // the operation lease routinely. Re-dispatching there pays for a duplicate
+      // attempt the verify settle path will cancel, and the canceled retry then
+      // becomes the newest topic and shadows the delivered one. Hold off while
+      // the delivery is fresh; past the grace window, fall through to the
+      // release below so a verify run that died silently cannot strand the
+      // goal forever.
+      const [lastTopic] = await this.taskTopicModel.findWithHandoff(task.id, 1);
+      if (lastTopic?.status === 'completed') {
+        const deliveredAt = lastTopic.completedAt ?? lastTopic.createdAt;
+        if (new Date(deliveredAt).getTime() >= Date.now() - VERIFY_SETTLE_GRACE_MS) {
+          return {
+            goalId: graph.goal.id,
+            message: `Task ${task.identifier} delivered; waiting for verification to settle`,
+            nodeId,
+            outcome: 'waiting_external',
+            taskId: task.id,
+          };
+        }
+      }
+
       // A task claimed for dispatch but with no run behind it. Normally this is
       // the sliver between the claim and `runTask` creating the topic; if the
       // worker died in there it is permanent, and every later advance would
@@ -1004,7 +1186,7 @@ export class GoalService {
         'timeout',
       );
       await new TaskModel(tx, this.userId, this.workspaceId).updateStatus(task.id, 'paused', {
-        error: 'Goal Work operation lease expired.',
+        error: LEASE_EXPIRED_ERROR,
       });
       return true;
     });
@@ -1029,9 +1211,9 @@ export class GoalService {
         graph.goal.id,
         nodeId,
         'active',
-        'Recovered an abandoned Work operation and started the next attempt',
+        'Recovered an abandoned Task operation and started the next attempt',
       );
-      await this.transitionStatus(graph.goal, 'running', 'reclaimed an abandoned Work');
+      await this.transitionStatus(graph.goal, 'running', 'reclaimed an abandoned Task');
       if (recovery.outcome === 'started') {
         effects.push({
           detail: 'abandoned operation retry',
@@ -1054,7 +1236,7 @@ export class GoalService {
       recovery.outcome === 'exhausted-cost'
         ? 'Goal cost budget was exhausted after an operation was abandoned'
         : recovery.outcome === 'exhausted-rounds'
-          ? 'Work attempt budget was exhausted after an operation was abandoned'
+          ? 'Task attempt budget was exhausted after an operation was abandoned'
           : 'Automatic recovery could not restart an abandoned operation';
     return this.openFailureDecision(graph, nodeId, task.id, reason, effects);
   };
@@ -1069,11 +1251,11 @@ export class GoalService {
       graph.goal.requirement
         ? `Overall goal acceptance context (background only): ${graph.goal.requirement}`
         : undefined,
-      `Current Work contract (authoritative execution scope): ${title}`,
+      `Current Task contract (authoritative execution scope): ${title}`,
       description,
-      'Execute only the Current Work contract. Do not implement, validate, or pre-empt any sibling or downstream Work node, even when the overall goal context describes it.',
-      'The complete requirements for this Work are included here. Do not inspect unrelated agent documents to recover requirements. Do not invoke Acceptance skills or Acceptance CLI commands during the main Work; a dedicated post-run phase will ask you to submit your evidence before an independent verifier judges it.',
-      'Create implementation-level subtasks when useful. Finish the operation once the Current Work deliverable and its concrete evidence are ready; Acceptance verification will decide whether this Task is complete.',
+      'Execute only the Current Task contract. Do not implement, validate, or pre-empt any sibling or downstream Task node, even when the overall goal context describes it.',
+      'The complete requirements for this Task are included here. Do not inspect unrelated agent documents to recover requirements. Do not invoke Acceptance skills or Acceptance CLI commands during the main Task; a dedicated post-run phase will ask you to submit your evidence before an independent verifier judges it.',
+      'Create implementation-level subtasks when useful. Finish the operation once the Current Task deliverable and its concrete evidence are ready; Acceptance verification will decide whether this Task is complete.',
       'Make the final delivery self-contained for an independent verifier that may not have workspace access. Include the relevant artifact contents or exact excerpts and the raw outputs of decisive verification commands; file paths and claims that checks passed are not sufficient evidence by themselves.',
       'Return the produced artifacts, evidence, key findings, and the recommended next action. Do not mark the overall Goal complete.',
     ]
@@ -1081,9 +1263,9 @@ export class GoalService {
       .join('\n\n');
 
   /**
-   * Turn a goal with no work into an explorable structure: the LLM plans the
+   * Turn a goal with no tasks into an explorable structure: the LLM plans the
    * core question plus 1–5 independent directions, each carrying only its own
-   * deliverable requirements. A planning failure degrades to one work seeded
+   * deliverable requirements. A planning failure degrades to one task seeded
    * from the raw requirement — the goal must never stall on its planner.
    */
   private planDecomposition = async (graph: GoalGraphSnapshot, effects: GoalAdvanceEffect[]) => {
@@ -1092,7 +1274,7 @@ export class GoalService {
     const requirement = graph.goal.requirement ?? problem?.description ?? graph.goal.title;
 
     // Two advances can reach this branch together — the queued kickoff and the
-    // client's fire-and-forget fallback both see zero Works. The conditional
+    // client's fire-and-forget fallback both see zero Tasks. The conditional
     // `planning → running` write is the claim: the loser stops before even
     // calling the planner, so nothing double-plans and nothing double-pays.
     // `waiting_external` ends its advance loop — the winner carries the goal.
@@ -1113,7 +1295,7 @@ export class GoalService {
     const generator = new GoalCriteriaGeneratorService(this.db, this.userId, this.workspaceId);
     const plan = await generator.decompose({ requirement }).catch(() => undefined);
 
-    // Rare shape: a goal already past `planning` whose Works were all removed.
+    // Rare shape: a goal already past `planning` whose Tasks were all removed.
     // There is no status edge to claim on that path, so shrink the duplicate
     // window to the instant before the inserts with a re-read instead.
     if (graph.goal.status !== 'planning') {
@@ -1127,7 +1309,7 @@ export class GoalService {
       }
     }
 
-    const works: GoalDecompositionDraft['works'] = plan?.works ?? [
+    const draftTasks: GoalDecompositionDraft['tasks'] = plan?.tasks ?? [
       { instruction: problem?.description ?? requirement, title: graph.goal.title },
     ];
 
@@ -1138,27 +1320,27 @@ export class GoalService {
     }
 
     const createdIds: (string | undefined)[] = [];
-    for (const work of works) {
+    for (const draft of draftTasks) {
       const node = await this.coordinatorGraph.createNode(goalId, {
-        description: work.instruction,
+        description: draft.instruction,
         kind: 'task',
-        title: work.title,
+        title: draft.title,
       });
       createdIds.push(node?.id);
       if (!node) continue;
       if (problem)
         await this.coordinatorGraph.createEdge(goalId, problem.id, node.id, 'decomposes');
-      effects.push({ nodeId: node.id, type: 'created_node', detail: work.title });
+      effects.push({ nodeId: node.id, type: 'created_node', detail: draft.title });
     }
 
     // The planner's `dependsOn` indices become `depends_on` edges, drawn
     // dependent → prerequisite the way `decideNextMove` reads a blocker. Only
     // earlier indices are honoured, so a hallucinated forward or self reference
     // can never form a cycle that deadlocks the frontier.
-    for (const [index, work] of works.entries()) {
+    for (const [index, draft] of draftTasks.entries()) {
       const nodeId = createdIds[index];
       if (!nodeId) continue;
-      for (const dep of new Set(work.dependsOn ?? [])) {
+      for (const dep of new Set(draft.dependsOn ?? [])) {
         const prerequisiteId = dep < index ? createdIds[dep] : undefined;
         if (!prerequisiteId) continue;
         await this.coordinatorGraph.createEdge(goalId, nodeId, prerequisiteId, 'depends_on');
@@ -1168,8 +1350,8 @@ export class GoalService {
     return {
       goalId,
       message: plan
-        ? `Planned ${works.length} exploration direction${works.length > 1 ? 's' : ''}`
-        : 'Planner unavailable; seeded a single work from the requirement',
+        ? `Planned ${draftTasks.length} exploration direction${draftTasks.length > 1 ? 's' : ''}`
+        : 'Planner unavailable; seeded a single task from the requirement',
       outcome: 'advanced' as const,
     };
   };
@@ -1193,13 +1375,13 @@ export class GoalService {
 
     // The full goal requirement (with its numbered acceptance list) is NOT
     // injected here: it belongs to the terminal acceptance task above, and
-    // pasting it into every Work made each task's acceptance read as the whole
-    // contract. A Work is judged on its own outcome only.
+    // pasting it into every Task made each task's acceptance read as the whole
+    // contract. A Task is judged on its own outcome only.
     return [
-      `Verify only this Work: ${title}.`,
-      description ? `Required Work outcome: ${description}` : undefined,
-      `This Work is one direction of the Goal "${graph.goal.title}"; the full Goal contract is verified separately at the end.`,
-      'Pass only when the current Work deliverable is complete and supported by concrete evidence. Ignore sibling and downstream Work deliverables; they are verified by their own Tasks.',
+      `Verify only this Task: ${title}.`,
+      description ? `Required Task outcome: ${description}` : undefined,
+      `This Task is one direction of the Goal "${graph.goal.title}"; the full Goal contract is verified separately at the end.`,
+      'Pass only when the current Task deliverable is complete and supported by concrete evidence. Ignore sibling and downstream Task deliverables; they are verified by their own acceptance runs.',
     ]
       .filter(Boolean)
       .join('\n\n');
@@ -1214,7 +1396,16 @@ export class GoalService {
     const existingFinding = graph.edges.some(
       (edge) => edge.sourceNodeId === nodeId && edge.kind === 'produces',
     );
-    const [latest] = await this.taskTopicModel.findWithHandoff(taskId, 1);
+    // The newest row by seq can be a retry that was canceled when verification
+    // accepted an earlier delivery — the settle path cancels the in-flight
+    // attempt it superseded. The finding must be synthesized from the run that
+    // actually delivered, so prefer the newest completed topic (with a handoff
+    // when one exists) over whatever happens to be last.
+    const recent = await this.taskTopicModel.findWithHandoff(taskId, 10);
+    const latest =
+      recent.find((topic) => topic.status === 'completed' && topic.handoff) ??
+      recent.find((topic) => topic.status === 'completed') ??
+      recent[0];
     const completedWork = await this.workModel.registerTask({
       changeType: 'updated',
       rootOperationId: latest?.operationId,

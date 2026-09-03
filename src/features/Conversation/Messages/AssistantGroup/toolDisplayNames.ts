@@ -12,7 +12,6 @@ import {
   DURATION_SECONDS_PER_MINUTE,
   TIME_MS_PER_SECOND,
   TOOL_API_DISPLAY_NAMES,
-  TOOL_FIRST_DETAIL_MAX_CHARS,
   TOOL_HEADLINE_DETAIL_MAX_CHARS,
   TOOL_HEADLINE_DETAIL_TRUNCATE_LEN,
   TOOL_HEADLINE_TRUNCATION_SUFFIX,
@@ -23,6 +22,7 @@ import {
   WORKFLOW_PROSE_SOURCE_MIN_CHARS,
   WORKFLOW_TRUNCATE_WORD_BOUNDARY_MIN_RATIO,
 } from './constants';
+import { extractToolKeyword } from './Tool/Inspector/extractToolKeyword';
 
 export const areWorkflowToolsComplete = (tools: ChatToolPayloadWithResult[]): boolean => {
   const collapsible = tools.filter((t) => t.intervention?.status !== 'pending');
@@ -95,21 +95,26 @@ export const getWorkflowCompletionStatus = (
   return 'partial';
 };
 
-export const getToolFirstDetail = (tool: ChatToolPayloadWithResult): string => {
+/**
+ * Identifier-aware action label ("Run command" / 执行命令) — the same builtin
+ * per-API copy the collapsed inspector rows use; workflow display name (or
+ * title-cased apiName) otherwise.
+ */
+const getToolActionLabel = (tool: ChatToolPayloadWithResult): string => {
+  const builtinLabel = tool.identifier
+    ? t(`builtins.${tool.identifier}.apiName.${tool.apiName}`, { defaultValue: '', ns: 'plugin' })
+    : '';
+  return builtinLabel || getToolDisplayName(tool.apiName);
+};
+
+/** The single most informative token from the args — never the raw args dump. */
+const getToolKeywordDetail = (tool: ChatToolPayloadWithResult): string => {
   try {
-    const args = JSON.parse(tool.arguments || '{}');
-    const values = Object.values(args);
-    for (const val of values) {
-      if (typeof val === 'string' && val.trim()) {
-        return val.length > TOOL_FIRST_DETAIL_MAX_CHARS
-          ? val.slice(0, TOOL_FIRST_DETAIL_MAX_CHARS) + TOOL_HEADLINE_TRUNCATION_SUFFIX
-          : val;
-      }
-    }
+    return extractToolKeyword(JSON.parse(tool.arguments || '{}')) ?? '';
   } catch {
     // arguments still streaming or invalid
+    return '';
   }
-  return '';
 };
 
 /** Optional progress line from tool-runtime state (pluginState → result.state) or metadata */
@@ -130,7 +135,7 @@ const getResultStepMessage = (tool: ChatToolPayloadWithResult): string => {
 export const getExplicitStepHeadlineLine = (tool: ChatToolPayloadWithResult): string => {
   const step = getResultStepMessage(tool).trim();
   if (!step) return '';
-  const label = getToolDisplayName(tool.apiName);
+  const label = getToolActionLabel(tool);
   const short =
     step.length > TOOL_HEADLINE_DETAIL_MAX_CHARS
       ? step.slice(0, TOOL_HEADLINE_DETAIL_TRUNCATE_LEN) + TOOL_HEADLINE_TRUNCATION_SUFFIX
@@ -138,18 +143,15 @@ export const getExplicitStepHeadlineLine = (tool: ChatToolPayloadWithResult): st
   return `${label}: ${short}`;
 };
 
-/** C — tool label + first string arg (no explicit step). */
+/**
+ * C — action label + one keyword (no explicit step). This is the shining line
+ * of a RUNNING collapsed workflow, so it reads as a sentence ("执行命令
+ * monthly.ts"), never as a raw args dump.
+ */
 export const getToolFallbackHeadlineLine = (tool: ChatToolPayloadWithResult): string => {
-  const label = getToolDisplayName(tool.apiName);
-  const fromArgs = getToolFirstDetail(tool).trim();
-  if (fromArgs) {
-    const short =
-      fromArgs.length > TOOL_HEADLINE_DETAIL_MAX_CHARS
-        ? fromArgs.slice(0, TOOL_HEADLINE_DETAIL_TRUNCATE_LEN) + TOOL_HEADLINE_TRUNCATION_SUFFIX
-        : fromArgs;
-    return `${label}: ${short}`;
-  }
-  return label;
+  const label = getToolActionLabel(tool);
+  const keyword = getToolKeywordDetail(tool);
+  return keyword ? `${label} ${keyword}` : label;
 };
 
 /**

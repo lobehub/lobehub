@@ -164,6 +164,14 @@ const PROGRAMMATIC_TEST_PATTERNS: RegExp[] = [
 ];
 
 /**
+ * Stored title of the synthesized holistic fallback check (one broad agent
+ * verify over the whole deliverable, used when a task opted into verify without
+ * decomposing into criteria). The server persists this fixed English string;
+ * clients match against it to render a localized display title instead.
+ */
+export const HOLISTIC_CHECK_TITLE = 'Task delivery acceptance';
+
+/**
  * Whether a proposed acceptance check is really one of the repo's programmatic
  * test / static-analysis gates rather than a delivery outcome a person accepts.
  *

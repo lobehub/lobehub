@@ -90,8 +90,15 @@ const namedExportProxy = (maps: Record<string, Barrel>): Plugin => ({
 
     return `export { ${entry.imported} as default } from ${JSON.stringify(source)};`;
   },
-  resolveId(id) {
+  resolveId(id, importer) {
     if (!id.startsWith(NAMED_EXPORT_PREFIX)) return;
+
+    const [barrel, member] = id.slice(NAMED_EXPORT_PREFIX.length).split(':');
+    const entry = maps[barrel]?.members[member];
+    // A default export needs no proxy module; pointing straight at the source
+    // avoids one facade chunk per member shared between routes.
+    if (entry?.imported === 'default' && entry.source.startsWith('@lobehub/ui/es/'))
+      return this.resolve(entry.source, importer);
 
     return `\0${id}`;
   },

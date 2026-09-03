@@ -32,6 +32,7 @@ import {
   Group,
   ListChecks,
   ListFilter,
+  MoreHorizontal,
   PanelLeftClose,
   Search,
   TriangleAlert,
@@ -63,6 +64,7 @@ import {
 import AcceptanceRow from './AcceptanceRow';
 import {
   acceptanceBatchTargets,
+  acceptanceProjectTargets,
   acceptanceSelectAllState,
   chunkAcceptanceBatch,
   nextAcceptanceSelectAll,
@@ -87,7 +89,10 @@ const ACCEPTANCE_GROUP_MODE_STORAGE_KEY = 'lobehub-acceptance-group-mode';
 /** Pull the next page before the sentinel is actually on screen. */
 const LOAD_MORE_ROOT_MARGIN = '240px';
 type BatchSuccessKey =
-  'acceptance.workspace.batch.deleteSuccess' | 'acceptance.workspace.batch.statusSuccess';
+  | 'acceptance.workspace.batch.deleteSuccess'
+  | 'acceptance.workspace.batch.projectRemoveSuccess'
+  | 'acceptance.workspace.batch.projectSuccess'
+  | 'acceptance.workspace.batch.statusSuccess';
 const EMPTY_FILTER_KEYS = {
   active: 'acceptance.workspace.filters.empty.active',
   completed: 'acceptance.workspace.filters.empty.completed',
@@ -267,12 +272,14 @@ const styles = createStaticStyles(({ css }) => ({
 interface AcceptanceListPanelProps extends ReportPanelExpand {
   headerLeading?: ReactNode;
   /**
-   * Renders the per-project action menu. Injected by the main app rather than
-   * imported here: the actions open the create-project modal and navigate to
+   * The per-project entries, as MENU ITEMS. Injected by the main app rather
+   * than imported here: they open the create-project modal and navigate to
    * `/project/:id`, neither of which exists in the standalone workbench app —
-   * and a direct import would drag the project store into its bundle.
+   * and a direct import would drag the project store into its bundle. The menu
+   * chrome stays here so the header can carry ONE overflow menu for everything
+   * it offers, the multi-select toggle included.
    */
-  renderProjectActions?: (projectId?: string) => ReactNode;
+  projectActionItems?: (projectId?: string) => DropdownItem[];
 }
 
 /**
@@ -281,7 +288,7 @@ interface AcceptanceListPanelProps extends ReportPanelExpand {
  * same persisted panel-width preference so the two surfaces read as one family.
  */
 const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
-  ({ expand, headerLeading, isNarrow, renderProjectActions, setExpand }) => {
+  ({ expand, headerLeading, isNarrow, projectActionItems, setExpand }) => {
     const { t } = useTranslation('verify');
     const navigate = useNavigate();
     const { acceptanceId } = useParams<{ acceptanceId: string }>();
@@ -466,6 +473,60 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
       }
     };
 
+    /**
+     * File the visible selection under one project (`null` takes it out of
+     * any). Rows already where they are headed count as "unchanged" in the
+     * report, same as a status sweep — so moving a mixed pick states honestly
+     * how many actually moved.
+     */
+    const sweepProject = async (projectId: string | null) => {
+      const targets = acceptanceProjectTargets(items, selectedVisible, projectId);
+      const attempted = selectedVisible.length;
+      const successKey: BatchSuccessKey = projectId
+        ? 'acceptance.workspace.batch.projectSuccess'
+        : 'acceptance.workspace.batch.projectRemoveSuccess';
+      // Every selected row is already in place: nothing to send, but silence
+      // would read as a broken button — report the unchanged sweep instead.
+      if (targets.length === 0) {
+        reportBatch(0, attempted, successKey);
+        return;
+      }
+
+      setBatchPending(true);
+      try {
+        const chunks = chunkAcceptanceBatch(targets);
+        const settled = await Promise.allSettled(
+          chunks.map((chunk) => verifyService.setAcceptanceProjectBatch(chunk, projectId)),
+        );
+
+        let updated = 0;
+        const failedIds: string[] = [];
+        settled.forEach((part, index) => {
+          if (part.status === 'fulfilled') {
+            updated += part.value.updated;
+            failedIds.push(...part.value.failedIds);
+            return;
+          }
+          // A chunk that never reached the server: every id in it is unchanged.
+          console.error('[acceptance:batchProject]', part.reason);
+          failedIds.push(...chunks[index]);
+        });
+
+        const failedSet = new Set(failedIds);
+        await settleBatch(
+          selectedVisible,
+          targets.filter((id) => !failedSet.has(id)),
+          selectedVisible.filter((id) => !targets.includes(id) || failedSet.has(id)),
+        );
+        reportBatch(updated, attempted, successKey);
+      } catch (cause) {
+        console.error('[acceptance:batchProject]', cause);
+        toast.error(t('acceptance.workspace.batch.error'));
+      } finally {
+        setBatchPending(false);
+      }
+    };
+
     const deleteSelected = () => {
       const targets = selectedVisible;
       if (targets.length === 0) return;
@@ -569,6 +630,24 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
       },
     ];
 
+    // One overflow menu for everything the header offers. Multi-select used to
+    // sit outside as its own icon; a 260px header cannot carry a fourth control
+    // without crowding the search field, and "enter selection mode" is a rare
+    // deliberate act, not something to keep one tap away at all times. The
+    // project entries join it only when they have nowhere better to live —
+    // under project grouping each group header carries its own.
+    const overflowItems: DropdownItem[] = [
+      {
+        icon: <Icon icon={ListChecks} />,
+        key: 'select',
+        label: t('acceptance.workspace.batch.enter'),
+        onClick: () => (selecting ? leaveSelecting() : setSelecting(true)),
+      },
+      ...(showGroups || !projectActionItems
+        ? []
+        : [{ type: 'divider' as const }, ...projectActionItems()]),
+    ];
+
     const [panelWidth, updateSystemStatus] = useGlobalStore((s) => [
       systemStatusSelectors.verifyReportPanelWidth(s),
       s.updateSystemStatus,
@@ -645,15 +724,15 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                   title={t('acceptance.workspace.filters.title')}
                 />
               </DropdownMenu>
-              <ActionIcon
-                active={selecting}
-                className={styles.filterButton}
-                icon={ListChecks}
-                size={'small'}
-                title={t('acceptance.workspace.batch.enter')}
-                onClick={() => (selecting ? leaveSelecting() : setSelecting(true))}
-              />
-              {!showGroups && renderProjectActions?.()}
+              <DropdownMenu items={overflowItems} placement={'bottomRight'}>
+                <ActionIcon
+                  active={selecting}
+                  className={styles.filterButton}
+                  icon={MoreHorizontal}
+                  size={'small'}
+                  title={t('acceptance.workspace.actions.more')}
+                />
+              </DropdownMenu>
             </div>
             {selecting && (
               <div className={styles.selectionRow}>
@@ -748,9 +827,18 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                         paddingBlock={4}
                         paddingInline={8}
                         action={
-                          groupMode === 'project'
-                            ? renderProjectActions?.(group.projectName ? group.key : undefined)
-                            : undefined
+                          groupMode === 'project' && projectActionItems ? (
+                            <DropdownMenu
+                              placement={'bottomRight'}
+                              items={projectActionItems(group.projectName ? group.key : undefined)}
+                            >
+                              <ActionIcon
+                                icon={MoreHorizontal}
+                                size={'small'}
+                                title={t('acceptance.workspace.groups.actions')}
+                              />
+                            </DropdownMenu>
+                          ) : undefined
                         }
                         title={
                           <span className={styles.groupTitle}>
@@ -805,11 +893,13 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
           {selecting && (
             <AcceptanceBatchBar
               acceptCount={acceptanceBatchTargets(items, selectedVisible, 'accept').length}
+              canRemoveProject={acceptanceProjectTargets(items, selectedVisible, null).length > 0}
               closeCount={acceptanceBatchTargets(items, selectedVisible, 'close').length}
               pending={batchPending || selectedVisible.length === 0}
               onAccept={() => void sweepStatus('accept', 'accepted')}
               onClose={() => void sweepStatus('close', 'closed')}
               onDelete={deleteSelected}
+              onMoveToProject={(projectId) => void sweepProject(projectId)}
             />
           )}
         </DraggablePanelContainer>

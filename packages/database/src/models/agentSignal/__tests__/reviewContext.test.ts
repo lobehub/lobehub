@@ -368,6 +368,68 @@ describe('AgentSignalReviewContextModel', () => {
         }),
       ]);
     });
+
+    it('excludes agent-share visitor topics from the creator-facing activity window', async () => {
+      const visitorTopicId = 'agent-signal-review-context-visitor-topic';
+
+      await serverDB.insert(users).values({ id: userId });
+      await serverDB.insert(agents).values([
+        {
+          chatConfig: { selfIteration: { enabled: true } },
+          id: agentId,
+          title: 'Review Context Agent',
+          userId,
+        },
+      ]);
+      await serverDB.insert(topics).values([
+        {
+          agentId,
+          id: topicId,
+          title: 'Creator topic',
+          userId,
+        },
+        // Agent-share visitor topic: stored under the creator's userId (billing
+        // attribution) but carries a visitor senderId, so it must be excluded.
+        {
+          agentId,
+          id: visitorTopicId,
+          senderId: 'visitor-user-x',
+          title: 'Visitor topic',
+          userId,
+        },
+      ]);
+      await serverDB.insert(messages).values([
+        {
+          agentId,
+          content: 'creator message',
+          createdAt: new Date('2026-05-03T12:00:00.000Z'),
+          id: 'agent-signal-review-context-creator-message',
+          role: 'assistant',
+          topicId,
+          userId,
+        },
+        {
+          agentId,
+          content: 'visitor message',
+          createdAt: new Date('2026-05-03T12:00:00.000Z'),
+          id: 'agent-signal-review-context-visitor-message',
+          role: 'assistant',
+          topicId: visitorTopicId,
+          userId,
+        },
+      ]);
+
+      const model = new AgentSignalReviewContextModel(serverDB, userId);
+
+      const result = await model.listTopicActivity({
+        agentId,
+        limit: 10,
+        windowEnd: new Date('2026-05-03T23:59:59.999Z'),
+        windowStart: new Date('2026-05-03T00:00:00.000Z'),
+      });
+
+      expect(result).toEqual([expect.objectContaining({ topicId })]);
+    });
   });
 
   describe('listRelevantMemories', () => {
@@ -586,6 +648,49 @@ describe('AgentSignalReviewContextModel', () => {
       const result = await model.listSelfReflectionTopicActivity({
         agentId,
         topicId,
+        windowEnd: new Date('2026-05-03T23:59:59.999Z'),
+        windowStart: new Date('2026-05-03T00:00:00.000Z'),
+      });
+
+      expect(result).toEqual([]);
+    });
+
+    it('excludes agent-share visitor topics even when scoped by topicId', async () => {
+      const visitorTopicId = 'agent-signal-review-context-reflection-visitor-topic';
+
+      await serverDB.insert(users).values({ id: userId });
+      await serverDB.insert(agents).values([
+        {
+          chatConfig: { selfIteration: { enabled: true } },
+          id: agentId,
+          title: 'Review Context Agent',
+          userId,
+        },
+      ]);
+      // Agent-share visitor topic: stored under the creator's userId (billing
+      // attribution) but carries a visitor senderId, so it must be excluded.
+      await serverDB.insert(topics).values({
+        agentId,
+        id: visitorTopicId,
+        senderId: 'visitor-user-x',
+        title: 'Visitor topic',
+        userId,
+      });
+      await serverDB.insert(messages).values({
+        agentId,
+        content: 'visitor message',
+        createdAt: new Date('2026-05-03T12:00:00.000Z'),
+        id: 'agent-signal-review-context-reflection-visitor-message',
+        role: 'assistant',
+        topicId: visitorTopicId,
+        userId,
+      });
+
+      const model = new AgentSignalReviewContextModel(serverDB, userId);
+
+      const result = await model.listSelfReflectionTopicActivity({
+        agentId,
+        topicId: visitorTopicId,
         windowEnd: new Date('2026-05-03T23:59:59.999Z'),
         windowStart: new Date('2026-05-03T00:00:00.000Z'),
       });

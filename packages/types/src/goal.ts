@@ -1,3 +1,5 @@
+import type { InitialGoalOverviewContext } from './stepContext';
+
 // ============================================
 // Goal — independent target entity (`goals` table)
 // ============================================
@@ -15,19 +17,19 @@ export type GoalStatus =
 
 /**
  * The execution carrier a goal is optionally bound to. Goals are standalone
- * today: the Goal Graph owns execution and dispatches its own Work Tasks, so
+ * today: the Goal Graph owns execution and dispatches its own Tasks, so
  * nothing binds a goal to a single carrier row. The column stays because
  * existing rows still carry the earlier `task` value.
  */
 export type GoalSubjectType = 'task' | 'topic' | 'standalone';
 
-/** Automatic recovery policy for Goal Graph Work. */
+/** Automatic recovery policy for Goal Graph Tasks. */
 export interface GoalRecoveryPolicy {
-  /** Maximum execution attempts for one Work before escalating to a decision gate. */
+  /** Maximum execution attempts for one Task before escalating to a decision gate. */
   maxAttemptsPerTask?: number;
   /** Per-operation agent step limit. Null/undefined leaves the runtime uncapped. */
   maxStepsPerRun?: number | null;
-  /** Time without a durable runtime lease refresh before a running Work is reclaimed. */
+  /** Time without a durable runtime lease refresh before a running Task is reclaimed. */
   operationLeaseTimeoutMs?: number;
 }
 
@@ -39,13 +41,24 @@ export interface GoalRecoveryPolicy {
  */
 export interface GoalSchedulePolicy {
   /**
-   * ISO-8601 instant. Past it the coordinator stops dispatching new Work and
+   * ISO-8601 instant. Past it the coordinator stops dispatching new Tasks and
    * pauses the goal — the temporal twin of `budget_exhausted`.
    */
   deadline?: string | null;
 }
 
+/**
+ * The goal's structured acceptance standard. The drafted criteria persist as
+ * `verify_criteria` rows (viewable and editable on the goal page); this block
+ * records their ids so the terminal Goal-acceptance Task verifies against
+ * exactly these checks instead of re-deriving them from the requirement prose.
+ */
+export interface GoalAcceptancePolicy {
+  criteriaIds?: string[];
+}
+
 export interface GoalConfig {
+  acceptance?: GoalAcceptancePolicy;
   /**
    * How many of a goal's Tasks may be in flight at once. Independent Tasks are
    * the common case — four bug fixes that share no code have no reason to run
@@ -209,8 +222,41 @@ export interface GoalGraphSnapshot {
   events: GoalGraphEvent[];
   goal: GoalItem;
   nodes: GoalGraphNode[];
+  /**
+   * Live heartbeat per active task node id: the `agent_operations.updatedAt`
+   * of the run behind it. The runtime refreshes that lease every ~90s, while
+   * `goal_nodes.updatedAt` only moves on observations / status changes —
+   * liveness judgements must use whichever of the two is newer.
+   */
+  runHeartbeats?: Record<string, Date>;
   workVersions: GoalGraphWorkVersionLink[];
 }
+
+/**
+ * Distill a graph snapshot into the structured goal overview that rides
+ * `RuntimeInitialContext.goalOverview`. Shared by every transport (client
+ * executor, gateway → server pipeline) so they ship identical data; the
+ * context-engine injector owns rendering it into prompt text.
+ */
+export const buildGoalOverviewContext = (
+  snapshot: GoalGraphSnapshot,
+): InitialGoalOverviewContext => {
+  let taskSeq = 0;
+  return {
+    findings: snapshot.nodes.filter((node) => node.kind === 'finding').map((node) => node.title),
+    goal: {
+      requirement: snapshot.goal.requirement,
+      status: snapshot.goal.status,
+      title: snapshot.goal.title,
+    },
+    pendingDecisions: snapshot.decisions
+      .filter((decision) => decision.status === 'pending')
+      .map((decision) => ({ question: decision.question })),
+    tasks: snapshot.nodes
+      .filter((node) => node.kind === 'task')
+      .map((node) => ({ seq: ++taskSeq, status: node.status, title: node.title })),
+  };
+};
 
 export type GoalTickOutcome =
   'advanced' | 'achieved' | 'waiting_human' | 'waiting_external' | 'no_progress' | 'failed';

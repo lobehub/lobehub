@@ -68,6 +68,54 @@ lh usage [--month [--daily] [--json [fields]] < YYYY-MM > ]
 
 ---
 
+## Workspace (`lh workspace`)
+
+Aliased `lh ws`. Workspace membership is a cloud feature; on an open-source
+deployment these procedures answer empty or `NOT_IMPLEMENTED`.
+
+### Scope
+
+| Command                       | Description                                            |
+| ----------------------------- | ------------------------------------------------------ |
+| `lh workspace current`        | Which scope commands run under, and where it came from |
+| `lh workspace use <id\|slug>` | Persist the scope for subsequent commands              |
+| `lh workspace use --personal` | Drop back to personal content                          |
+
+Resolution order is `--workspace` → `LOBEHUB_WORKSPACE_ID` → the persisted scope
+→ personal. Setting the persisted scope while `LOBEHUB_WORKSPACE_ID` is exported
+prints a warning, because the env var still wins.
+
+The persisted scope lives in `~/.lobehub/active-workspace` together with the
+account (`sub` claim) and server URL it was chosen under. Switching account or
+server invalidates it; `lh logout` deletes it. API-key auth has no local account
+identity, so `workspace use` refuses to save under it — use the env var.
+
+### Reads
+
+| Command                    | Description                                           |
+| -------------------------- | ----------------------------------------------------- |
+| `lh workspace list`        | Workspaces you belong to; `*` marks the effective one |
+| `lh workspace view [id]`   | Workspace detail                                      |
+| `lh workspace settings`    | The workspace settings blob                           |
+| `lh workspace stats`       | Content totals — admin only; `--mine` for your own    |
+| `lh workspace usage`       | Credit spend by type for the billing window           |
+| `lh workspace members`     | Members with role and email                           |
+| `lh workspace invitations` | Pending invitations (admin)                           |
+| `lh workspace audit-log`   | Audit entries (admin, Business plan)                  |
+
+### Writes
+
+| Command                             | Description                                     |
+| ----------------------------------- | ----------------------------------------------- |
+| `lh workspace create <name> --slug` | Create a workspace; `--use` switches into it    |
+| `lh workspace update`               | Name / slug / description / avatar (admin)      |
+| `lh workspace invite <email>`       | Invite a member, `--role admin\|member\|viewer` |
+
+Slugs are 3–32 chars, lowercase alphanumerics with inner hyphens. Deleting a
+workspace and removing members are deliberately not exposed here.
+
+---
+
 ## Global Options
 
 These options are available across most commands:

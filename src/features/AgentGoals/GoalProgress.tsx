@@ -58,10 +58,10 @@ const styles = createStaticStyles(({ css }) => ({
 export interface GoalProgressProps {
   findingCount: number;
   pendingDecisions: number;
+  taskDone: number;
+  taskTotal: number;
   totalRunCost: number;
   totalRunDuration: number;
-  workDone: number;
-  workTotal: number;
 }
 
 /**
@@ -70,24 +70,24 @@ export interface GoalProgressProps {
  * blocked on the user right now.
  */
 export const GoalProgress = memo<GoalProgressProps>(
-  ({ findingCount, pendingDecisions, totalRunCost, totalRunDuration, workDone, workTotal }) => {
+  ({ findingCount, pendingDecisions, totalRunCost, totalRunDuration, taskDone, taskTotal }) => {
     const { t } = useTranslation('chat');
-    const progress = workTotal > 0 ? Math.round((workDone / workTotal) * 100) : 0;
+    const progress = taskTotal > 0 ? Math.round((taskDone / taskTotal) * 100) : 0;
 
     return (
       <div className={styles.metrics}>
-        {workTotal > 0 ? (
+        {taskTotal > 0 ? (
           <Flexbox horizontal align={'center'} className={styles.acceptance} gap={6}>
             <div aria-hidden className={styles.progress}>
               <div className={styles.progressValue} style={{ width: `${progress}%` }} />
             </div>
             <Text ellipsis color={cssVar.colorTextTertiary} fontSize={12}>
-              {t('goalList.workProgress', { done: workDone, total: workTotal })}
+              {t('goalList.taskProgress', { done: taskDone, total: taskTotal })}
             </Text>
           </Flexbox>
         ) : (
           <Text ellipsis color={cssVar.colorTextTertiary} fontSize={12}>
-            {t('goalList.noWork')}
+            {t('goalList.noTasks')}
           </Text>
         )}
         {pendingDecisions > 0 ? (

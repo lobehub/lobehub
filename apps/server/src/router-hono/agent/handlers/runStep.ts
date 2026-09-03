@@ -130,7 +130,13 @@ export async function runStep(c: Context): Promise<Response> {
     // Thread the operation's workspace through so the runtime's models stay
     // workspace-scoped. Without it the worker is personal-scoped and the
     // parent-message lookup misses workspace-scoped rows → ConversationParentMissing.
+    // Opt into agent-share visitor rows only when this op is a shared-agent
+    // visitor run — signalled by `streamOwnerUserId` (set on the operation
+    // metadata when the visitor owns the stream but the run executes as the
+    // creator `userId`). Ordinary creator runs keep the default exclusion.
+    const includeShareVisitor = Boolean(metadata.streamOwnerUserId);
     const aiAgentService = new AiAgentService(serverDB, metadata.userId, {
+      includeShareVisitor,
       workspaceId: metadata.workspaceId,
     });
 

@@ -21,6 +21,7 @@ import {
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { DocumentModel } from '@/database/models/document';
 import { LlmGenerationTracingModel } from '@/database/models/llmGenerationTracing';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyCriterionModel } from '@/database/models/verifyCriterion';
@@ -270,6 +271,7 @@ const verifyProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =
   return opts.next({
     ctx: {
       criterionModel: new VerifyCriterionModel(ctx.serverDB, ctx.userId, workspaceId),
+      documentModel: new DocumentModel(ctx.serverDB, ctx.userId, workspaceId),
       evidenceModel: new VerifyEvidenceModel(ctx.serverDB, ctx.userId, workspaceId),
       executorService: new VerifyExecutorService(ctx.serverDB, ctx.userId, workspaceId),
       tracingModel: new LlmGenerationTracingModel(ctx.serverDB, ctx.userId, workspaceId),
@@ -359,6 +361,36 @@ export const verifyRouter = router({
   forkRubricCriteria: verifyWriteProcedure
     .input(z.object({ ids: z.array(z.string()) }))
     .mutation(async ({ ctx, input }) => ctx.criterionModel.forkRubricCriteria(input.ids)),
+
+  /**
+   * Resolve a specific criteria id list (e.g. the ones bound to a goal), in
+   * input order. Each row carries `instruction` resolved from its linked
+   * document — the judge rule must be inspectable and editable where the
+   * criteria are shown, not an invisible value edits would silently replace.
+   */
+  getCriteria: verifyProcedure
+    .input(z.object({ ids: z.array(z.string()) }))
+    .query(async ({ ctx, input }) => {
+      if (input.ids.length === 0) return [];
+      const rows = await ctx.criterionModel.findByIds(input.ids);
+      const documentIds = [
+        ...new Set(rows.flatMap((row) => (row.documentId ? [row.documentId] : []))),
+      ];
+      const documents = await Promise.all(documentIds.map((id) => ctx.documentModel.findById(id)));
+      const contentByDocId = new Map(
+        documents.flatMap((doc) => (doc ? [[doc.id, doc.content ?? undefined] as const] : [])),
+      );
+      const byId = new Map(
+        rows.map((row) => [
+          row.id,
+          {
+            ...row,
+            instruction: row.documentId ? contentByDocId.get(row.documentId) : undefined,
+          },
+        ]),
+      );
+      return input.ids.map((id) => byId.get(id)).filter(Boolean);
+    }),
 
   listCriteria: verifyProcedure.query(async ({ ctx }) => ctx.criterionModel.query()),
 

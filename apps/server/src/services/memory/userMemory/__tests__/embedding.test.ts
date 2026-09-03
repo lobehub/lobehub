@@ -102,4 +102,49 @@ describe('embedUserMemoryTexts', () => {
     );
     expect(result).toEqual([[1, 2, 3]]);
   });
+
+  it('overrides the default memory trigger with the caller spend attribution', async () => {
+    const runtime = {
+      embeddings: vi.fn(async () => [[1, 2, 3]]),
+    } satisfies UserMemoryEmbeddingRuntime;
+
+    await embedUserMemoryTexts({
+      input: ['short text'],
+      model: 'text-embedding-3-large',
+      runtime,
+      source: 'test:share',
+      spendOrigin: {
+        agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+        trigger: 'agent_share',
+      },
+      userId: 'creator-1',
+    });
+
+    expect(runtime.embeddings).toHaveBeenCalledWith(expect.anything(), {
+      metadata: {
+        agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+        trigger: 'agent_share',
+      },
+      user: 'creator-1',
+    });
+  });
+
+  it('keeps the memory trigger when no spend attribution is supplied', async () => {
+    const runtime = {
+      embeddings: vi.fn(async () => [[1, 2, 3]]),
+    } satisfies UserMemoryEmbeddingRuntime;
+
+    await embedUserMemoryTexts({
+      input: ['short text'],
+      model: 'text-embedding-3-large',
+      runtime,
+      source: 'test:plain',
+      userId: 'user-test',
+    });
+
+    expect(runtime.embeddings).toHaveBeenCalledWith(expect.anything(), {
+      metadata: { trigger: 'memory' },
+      user: 'user-test',
+    });
+  });
 });

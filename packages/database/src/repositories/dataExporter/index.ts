@@ -1,11 +1,41 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or, type SQL } from 'drizzle-orm';
 import pMap from 'p-map';
 
 import * as EXPORT_TABLES from '../../schemas';
+import { messages } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import {
+  notShareVisitorMessage,
+  notShareVisitorTopic,
+  notShareVisitorTopicRef,
+} from '../../utils/shareVisitor';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
+/**
+ * Agent-share visitor conversations are stored under the CREATOR's `userId`
+ * with a non-null `topics.senderId`, so a plain `eq(table.userId, userId)`
+ * filter would dump third-party visitor chats into the creator's data export.
+ * Each conversation-carrying table therefore declares how it reaches the owning
+ * topic:
+ *
+ * - `topicSender`: the table IS `topics` — filter on `senderId` directly.
+ * - `topicRef`: the table references a topic id (messages, threads).
+ * - `messageRef`: the table references a message id and has no topic column
+ *   (message_plugins / message_translates keyed by `id`, message_chunks keyed
+ *   by `messageId`), so the predicate is relayed one extra hop through
+ *   `messages`.
+ *
+ * Tables without any of these (userSettings, userInstalledPlugins, agents,
+ * aiModels, aiProviders, sessionGroups, sessions, and the `agentsToSessions`
+ * relation) hold creator-authored configuration only — a visitor never creates
+ * rows there — so they stay unfiltered and the export shape is unchanged.
+ */
+type ShareVisitorRef =
+  { column?: undefined; via: 'topicSender' } | { column: string; via: 'messageRef' | 'topicRef' };
+
 interface BaseTableConfig {
+  /** How this table reaches the topic that decides share-visitor ownership. */
+  shareVisitorRef?: ShareVisitorRef;
   table: keyof typeof EXPORT_TABLES;
   type: 'base';
   userField?: string;
@@ -42,13 +72,13 @@ export const DATA_EXPORT_CONFIG = {
     // { table: 'filesToSessions' },
     // { table: 'knowledgeBases' },
     // { table: 'knowledgeBaseFiles' },
-    { table: 'messageChunks' },
-    { table: 'messagePlugins' },
+    { shareVisitorRef: { column: 'messageId', via: 'messageRef' }, table: 'messageChunks' },
+    { shareVisitorRef: { column: 'id', via: 'messageRef' }, table: 'messagePlugins' },
     // { table: 'messageQueryChunks' },
     // { table: 'messageQueries' },
-    { table: 'messageTranslates' },
+    { shareVisitorRef: { column: 'id', via: 'messageRef' }, table: 'messageTranslates' },
     // { table: 'messageTTS' },
-    { table: 'messages' },
+    { shareVisitorRef: { column: 'topicId', via: 'topicRef' }, table: 'messages' },
     // { table: 'messagesFiles' },
 
     // next auth tables won't be included
@@ -58,8 +88,8 @@ export const DATA_EXPORT_CONFIG = {
     // { table: 'nextauthVerificationTokens' },
     { table: 'sessionGroups' },
     { table: 'sessions' },
-    { table: 'threads' },
-    { table: 'topics' },
+    { shareVisitorRef: { column: 'topicId', via: 'topicRef' }, table: 'threads' },
+    { shareVisitorRef: { via: 'topicSender' }, table: 'topics' },
   ] as BaseTableConfig[],
   relationTables: [
     // {
@@ -90,6 +120,34 @@ export class DataExporterRepos {
     this.db = db;
     this.userId = userId;
     this.workspaceId = workspaceId;
+  }
+
+  /**
+   * Builds the share-visitor exclusion for a base table, reusing the shared
+   * predicates in `utils/shareVisitor` so the export can never drift from the
+   * rest of the creator-facing surfaces.
+   */
+  private buildShareVisitorCondition(
+    ref: ShareVisitorRef,
+    tableObj: Record<string, any>,
+  ): SQL | undefined {
+    if (ref.via === 'topicSender') return notShareVisitorTopic();
+
+    const column = tableObj[ref.column];
+    if (!column) return undefined;
+
+    if (ref.via === 'topicRef') return notShareVisitorTopicRef(column);
+
+    // `messageRef`: no topic column here, so keep only rows whose parent
+    // message itself survives `notShareVisitorMessage()`. A NULL message
+    // reference is trivially kept, matching the shared helpers' semantics.
+    return or(
+      isNull(column),
+      inArray(
+        column,
+        this.db.select({ id: messages.id }).from(messages).where(notShareVisitorMessage()),
+      ),
+    );
   }
 
   private removeUserId(data: any[]) {
@@ -162,13 +220,26 @@ export class DataExporterRepos {
 
       // Default to querying with userId, use userField for special cases
       const userField = config.userField || 'userId';
-      const where =
+      const ownershipWhere =
         'workspaceId' in tableObj
           ? buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, tableObj)
           : eq(tableObj[userField], this.userId);
 
-      // @ts-expect-error query
-      const result = await this.db.query[table].findMany({ where });
+      const shareVisitorWhere = config.shareVisitorRef
+        ? this.buildShareVisitorCondition(config.shareVisitorRef, tableObj)
+        : undefined;
+
+      const where = shareVisitorWhere ? and(ownershipWhere, shareVisitorWhere) : ownershipWhere;
+
+      // Plain select builder instead of `db.query...findMany` whenever a
+      // share-visitor predicate is involved: the relational query API
+      // re-qualifies raw SQL fragments to the outer table alias, which breaks
+      // the `topics`-referencing NOT EXISTS inside the shared helpers (same
+      // caveat as `MessageModel.queryBySessionId`).
+      const result = shareVisitorWhere
+        ? await this.db.select().from(tableObj).where(where)
+        : // @ts-expect-error query
+          await this.db.query[table].findMany({ where });
 
       // Only remove userId field for tables queried with userId
       console.info(`Successfully exported table: ${table}, count: ${result.length}`);

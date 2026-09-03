@@ -77,6 +77,7 @@ const UploadItem = memo<UploadItemProps>(({ error, errorCode, id, file, status, 
         return (
           <Text style={{ fontSize: 12 }} type={'secondary'}>
             {formatSize(size)} · {t('uploadDock.body.item.pending')}
+            {uploadState?.progress ? ` ${uploadState.progress}%` : ''}
           </Text>
         );
       }

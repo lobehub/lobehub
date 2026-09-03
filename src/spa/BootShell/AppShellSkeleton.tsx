@@ -25,20 +25,7 @@ const CSS_VAR_CLASS = 'lobe-vars';
 
 export const APP_SHELL_FALLBACK_ID = 'app-shell-fallback';
 
-/**
- * A boot that hands over inside a second reads as a transition, not a wait, so
- * the shell stays a bare brand mark. Past that the user is waiting on something
- * and deserves to be told so.
- *
- * Measured from the document, not from this component: the static HTML logo is
- * already on screen before any bundle runs, and the shell itself only mounts
- * `BOOT_SHELL_DELAY` after React's first commit. Timing from mount would restart
- * the clock the user has been watching all along, and on the slow boots that
- * need the hint most it would arrive last.
- */
 const HINT_DELAY = 1000;
-
-const sinceDocument = () => performance.now() - (window.__LOBE_BOOT_T_HTML__ ?? 0);
 
 // The X half of the transform is the centering, not the motion — it has to be
 // restated in both frames or the keyframe overwrites it and the caption jumps
@@ -119,7 +106,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const LoadingHint = memo(() => {
   const { t } = useTranslation('common');
 
-  return <div className={styles.hint}>{t('loading')}</div>;
+  return <div className={styles.hint}>{t('stillLoading')}</div>;
 });
 
 LoadingHint.displayName = 'AppShellLoadingHint';
@@ -130,14 +117,12 @@ interface AppShellSkeletonProps {
 
 const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
   const { isDark, navPanelBackground, navPanelWidth, showLeftPanel } = readBootShellGeometry();
-  const [waiting, setWaiting] = useState(() => sinceDocument() >= HINT_DELAY);
+  const [waiting, setWaiting] = useState(false);
 
   useEffect(() => {
-    if (waiting) return;
-
-    const timer = setTimeout(() => setWaiting(true), HINT_DELAY - sinceDocument());
+    const timer = setTimeout(() => setWaiting(true), HINT_DELAY);
     return () => clearTimeout(timer);
-  }, [waiting]);
+  }, []);
 
   return (
     <div aria-hidden className={`${CSS_VAR_CLASS} ${styles.root}`} id={id}>
@@ -173,7 +158,7 @@ const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
             <div className={styles.contentBrand}>
               <div className={styles.brand}>
                 <div className={styles.mark}>
-                  <LobeHub size={56} type={'mono'} />
+                  <LobeHub size={40} type={'text'} />
                 </div>
                 {waiting && <LoadingHint />}
               </div>

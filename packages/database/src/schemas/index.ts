@@ -32,6 +32,7 @@ export * from './llmGenerationTracing';
 export * from './message';
 export * from './messengerAccountLink';
 export * from './messengerInstallation';
+export * from './metric';
 export * from './nextauth';
 export * from './notification';
 export * from './oidc';

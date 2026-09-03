@@ -15,9 +15,9 @@ export interface HomeGoalEntry {
   pendingDecisions: number;
   /** Key in the `chat` namespace — the same label the goal pages use. */
   statusKey: GoalStatusKey;
+  taskDone: number;
+  taskTotal: number;
   title: string;
-  workDone: number;
-  workTotal: number;
 }
 
 /**
@@ -57,8 +57,8 @@ export const buildHomeGoalEntries = (goals: GoalListItem[]): HomeGoalEntry[] => 
         pendingDecisions: item.pendingDecisions,
         statusKey,
         title: item.goal.title,
-        workDone: item.workDone,
-        workTotal: item.workTotal,
+        taskDone: item.taskDone,
+        taskTotal: item.taskTotal,
       },
     ];
   });

@@ -53,7 +53,7 @@ const trajectory: GoalTrajectory = {
 /** Ranks the same way the recorded run did: priority desc, then creation order. */
 const faithful: GoalDecider = ({ graph: state }) => {
   const candidates = state.nodes
-    .filter((item) => item.kind === 'work')
+    .filter((item) => item.kind === 'task')
     .sort((a, b) => b.priority - a.priority || a.createdAt - b.createdAt)
     .map((item) => ({
       blockedBy: [],

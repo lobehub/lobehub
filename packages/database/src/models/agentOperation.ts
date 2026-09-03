@@ -15,6 +15,7 @@ import type {
 } from '../schemas/agentOperations';
 import { agentOperations } from '../schemas/agentOperations';
 import type { LobeChatDatabase } from '../type';
+import { notShareVisitorTopicRef } from '../utils/shareVisitor';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
 /**
@@ -396,6 +397,14 @@ export class AgentOperationModel {
     };
   }
 
+  /**
+   * Raw ownership-scoped lookup. Agent-share visitor runs execute under the
+   * CREATOR's identity, so this DOES return their operations — required by the
+   * agent runtime (execution, intervention, completion, verify, abandon), which
+   * has to resolve the operation it is currently driving no matter who started
+   * it. Creator-facing read entry points must use
+   * {@link AgentOperationModel.findOwnOperationById} instead.
+   */
   async findById(operationId: string) {
     const [row] = await this.db
       .select()
@@ -405,11 +414,48 @@ export class AgentOperationModel {
     return row ?? null;
   }
 
+  /** Batch lookup for callers that would otherwise issue one query per id. */
+  async findByIds(operationIds: string[]) {
+    if (operationIds.length === 0) return [];
+    return this.db
+      .select()
+      .from(agentOperations)
+      .where(and(inArray(agentOperations.id, operationIds), this.ownership()));
+  }
+
+  /**
+   * Creator-facing twin of {@link AgentOperationModel.findById}: excludes
+   * operations recorded inside an agent-share visitor topic, so a creator
+   * handed a raw visitor operation id gets nothing back instead of reading a
+   * visitor conversation's trajectory (e.g. via a pre-signed trace URL).
+   *
+   * Mirrors `TopicModel.findById` / `TopicModel.findOwnTopicById`.
+   */
+  async findOwnOperationById(operationId: string) {
+    const [row] = await this.db
+      .select()
+      .from(agentOperations)
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          this.ownership(),
+          notShareVisitorTopicRef(agentOperations.topicId),
+        ),
+      )
+      .limit(1);
+    return row ?? null;
+  }
+
   /**
    * Operations recorded for one topic, newest first — the lookup that turns a
    * topic id (what a user actually has on hand) into the operation ids their
    * traces are keyed by. `traceS3Key` rides along so callers can tell "no
    * snapshot was recorded" apart from "snapshot exists but the fetch failed".
+   *
+   * Creator-facing only (the trace panel). Agent-share visitor runs execute
+   * under the CREATOR's identity, so their operation rows pass `ownership()`;
+   * without the visitor guard a creator could read a visitor conversation's
+   * full trajectory snapshot from a raw topic id.
    */
   async listByTopic(topicId: string, limit = 20) {
     return this.db
@@ -429,7 +475,13 @@ export class AgentOperationModel {
         trigger: agentOperations.trigger,
       })
       .from(agentOperations)
-      .where(and(eq(agentOperations.topicId, topicId), this.ownership()))
+      .where(
+        and(
+          eq(agentOperations.topicId, topicId),
+          this.ownership(),
+          notShareVisitorTopicRef(agentOperations.topicId),
+        ),
+      )
       .orderBy(sql`${agentOperations.createdAt} desc`)
       .limit(limit);
   }

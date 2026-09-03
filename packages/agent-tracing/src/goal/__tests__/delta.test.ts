@@ -113,7 +113,7 @@ describe('reconstructGraphAt', () => {
 });
 
 describe('buildGraphShape', () => {
-  it('splits open work into ready and blocked by unresolved dependencies', () => {
+  it('splits open tasks into ready and blocked by unresolved dependencies', () => {
     const state = graph({
       edges: [edge('e1', 'b', 'a')],
       nodes: [
@@ -133,7 +133,7 @@ describe('buildGraphShape', () => {
     });
   });
 
-  it('counts work ready once its dependency resolves', () => {
+  it('counts a task ready once its dependency resolves', () => {
     const state = graph({
       edges: [edge('e1', 'b', 'a')],
       nodes: [node('a', { status: 'resolved' }), node('b')],

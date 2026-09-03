@@ -8,7 +8,7 @@ import { TaskRunnerService } from '@/server/services/taskRunner';
 
 import { resolveTaskAttemptBudget, resolveTaskMaxSteps } from './recoveryPolicy';
 
-const log = debug('lobe-server:goal-work-recovery');
+const log = debug('lobe-server:goal-task-recovery');
 
 export type TaskRecoveryOutcome =
   /** This call spawned the retry, and `operationId` is its run. */
@@ -20,7 +20,7 @@ export type TaskRecoveryOutcome =
   | 'spawn-failed';
 
 /**
- * `started` and `already-running` both mean "the Work is moving, keep waiting",
+ * `started` and `already-running` both mean "the Task is moving, keep waiting",
  * but only the first is something *this* advance did. They used to share the
  * name `continued`, which made the trajectory claim a run it had not started
  * and drop the operation id of the one it had.
@@ -31,7 +31,7 @@ export interface TaskRecoveryResult {
   outcome: TaskRecoveryOutcome;
 }
 
-/** Retry budget and spawn boundary for a Goal Graph Work Task. */
+/** Retry budget and spawn boundary for a Goal Graph Task. */
 export class TaskRecoveryCoordinator {
   constructor(
     private readonly db: LobeChatDatabase,
@@ -62,7 +62,7 @@ export class TaskRecoveryCoordinator {
     // reach here from `tick`, and advances overlap: an event hook, a manual
     // nudge, the sweep. `runTask` decides whether a run is in flight by reading
     // the task's topics before creating one, so without this claim two
-    // coordinators would each spawn a paid retry of the same Work.
+    // coordinators would each spawn a paid retry of the same Task.
     //
     // Both paths hand us a task row read before they paused it, so the claim
     // has to compare against what the row says now. A task already `running`

@@ -1,4 +1,5 @@
-import { constants } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { constants, createReadStream } from 'node:fs';
 import { access, readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -12,6 +13,7 @@ import {
   type GlobFilesResult,
   type GrepContentParams,
   type GrepContentResult,
+  type HashLocalFileParams,
   type ListLocalFileParams,
   type LocalFilePreviewResult,
   type LocalFilePreviewUrlParams,
@@ -438,6 +440,13 @@ export default class LocalFileCtr extends ControllerModule {
 
     logger.debug('Batch file reading completed', { count: results.length });
     return results;
+  }
+
+  @IpcMethod()
+  async hashLocalFile({ path: filePath }: HashLocalFileParams): Promise<string> {
+    const hash = createHash('sha256');
+    for await (const chunk of createReadStream(filePath)) hash.update(chunk);
+    return hash.digest('hex');
   }
 
   @IpcMethod()

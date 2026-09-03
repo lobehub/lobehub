@@ -1,11 +1,13 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Button } from '@lobehub/ui/base-ui';
+import { ActionIcon, Button, DropdownMenu } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { CircleCheck, Trash2, X } from 'lucide-react';
+import { CircleCheck, FolderInput, Trash2, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { useAcceptanceProjectMenu } from './useAcceptanceProjectMenuItem';
 
 const styles = createStaticStyles(({ css }) => ({
   bar: css`
@@ -22,11 +24,15 @@ const styles = createStaticStyles(({ css }) => ({
 interface AcceptanceBatchBarProps {
   /** Selected rows the accept sweep can actually move. */
   acceptCount: number;
+  /** Whether any selected row is filed under a project, so "remove" has work. */
+  canRemoveProject: boolean;
   /** Selected rows the close sweep can actually move. */
   closeCount: number;
   onAccept: () => void;
   onClose: () => void;
   onDelete: () => void;
+  /** `null` takes the selection out of its projects. */
+  onMoveToProject: (projectId: string | null) => void;
   pending: boolean;
 }
 
@@ -35,12 +41,28 @@ interface AcceptanceBatchBarProps {
  *
  * Each status action is disabled when nothing in the selection can take it —
  * an already-accepted delivery cannot be accepted again — so a live button is
- * always a button that will change something. Delete stays an icon: it is the
- * destructive one and must not read as a peer of the two routine sweeps.
+ * always a button that will change something. The move action opens the same
+ * project menu a single row offers; which rows a given project can actually
+ * move is only known once a target is picked, so the button itself only waits
+ * on the selection. Move and delete stay icons: the bar lives in a panel that
+ * narrows to 260px, and a third labeled button would spill out of it.
  */
 const AcceptanceBatchBar = memo<AcceptanceBatchBarProps>(
-  ({ acceptCount, closeCount, onAccept, onClose, onDelete, pending }) => {
+  ({
+    acceptCount,
+    canRemoveProject,
+    closeCount,
+    onAccept,
+    onClose,
+    onDelete,
+    onMoveToProject,
+    pending,
+  }) => {
     const { t } = useTranslation('verify');
+    const projectMenu = useAcceptanceProjectMenu({
+      onSelect: onMoveToProject,
+      showRemove: canRemoveProject,
+    });
 
     return (
       <Flexbox horizontal align={'center'} className={styles.bar} gap={6}>
@@ -62,6 +84,19 @@ const AcceptanceBatchBar = memo<AcceptanceBatchBarProps>(
         >
           {t('acceptance.workspace.batch.close')}
         </Button>
+        <DropdownMenu
+          items={projectMenu.items}
+          placement={'topLeft'}
+          popupProps={{ style: { minWidth: 160 } }}
+          onOpenChange={projectMenu.onOpenChange}
+        >
+          <ActionIcon
+            disabled={pending}
+            icon={FolderInput}
+            size={'small'}
+            title={t('acceptance.workspace.batch.move')}
+          />
+        </DropdownMenu>
         <Flexbox flex={1} />
         <ActionIcon
           danger

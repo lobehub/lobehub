@@ -328,4 +328,39 @@ describe('goal create command', () => {
     expect(output).toContain('https://app.lobehub.com/goal/goal_PrUIwfSnU9TH');
     expect(output).not.toContain('/goal/undefined');
   });
+
+  it('sends task seeds and the per-Task attempt budget with the primary flags', async () => {
+    mockClient.goal.create.mutate.mockResolvedValue({
+      data: {
+        decisions: [],
+        edges: [],
+        events: [],
+        goal: { id: 'goal-1', requirement: null, status: 'planning', title: 'Fix bugs' },
+        nodes: [],
+        workVersions: [],
+      },
+    });
+
+    await createProgram().parseAsync([
+      'node',
+      'test',
+      'goal',
+      'create',
+      'Fix bugs',
+      '--task',
+      'Inspect',
+      'Repair',
+      '--max-attempts-per-task',
+      '4',
+    ]);
+
+    expect(mockClient.goal.create.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({
+          recovery: expect.objectContaining({ maxAttemptsPerTask: 4 }),
+        }),
+        tasks: ['Inspect', 'Repair'],
+      }),
+    );
+  });
 });

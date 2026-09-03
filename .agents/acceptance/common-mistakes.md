@@ -326,6 +326,26 @@ list items, table rows, fenced code, and literal transcript output, which are ex
 the places the break is the content. Never run a proseWrap formatter over files under
 `assets/`.
 
+### L-E20 — Seeding an entity below its composing layer, then publishing its page as evidence
+
+**Wrong approach:** build a goal/task fixture by calling the service or TRPC endpoint
+directly with minimal fields, skipping the client-side composer the real creation flows
+run (e.g. `buildGoalRequirement` folding acceptance criteria into the requirement
+prose), then screenshot the entity page as feature evidence.
+
+**Why it fails:** the page renders the under-composed data faithfully — a requirement
+reduced to one bare sentence — and the reviewer reads that as a code regression in an
+untouched block ("这块怎么被改了？canary 才是对的"). A whole feedback round gets spent
+disproving a defect that only exists in the fixture. The diff shows nothing because
+nothing changed.
+
+**Correct approach:** drive fixtures through the same composition the product uses —
+either the real creation surface, or the same shaping helpers the callers invoke — and
+before publishing an entity page as evidence, compare its populated fields against a
+canary-created sibling. When a service accepts decomposed inputs, prefer adding a
+server-side guard that re-derives the composed field, so no API caller (fixtures
+included) can create the under-composed shape at all.
+
 ## Product and interaction contracts
 
 ### L-D1 — Rebuilding a canonical surface from visual impression
@@ -741,6 +761,24 @@ a dev server started by another session can point somewhere else entirely. Re-se
 `init-dev-env.sh seed-user`, then prove the fix with a real product write (an `ensure`
 round-trip), and re-run `setup-auth.sh web-seed` because the SPA's client-side auth
 gate still redirects to `/signin` after the row is recreated.
+
+### L-S20 — Bootstrapping the isolated stack with the script's default DB port hits another project's Postgres
+
+**Wrong approach:** run `init-dev-env.sh setup-db` / `seed-user` / `dev` from a fresh
+worktree and trust "database migration pass" plus a started server.
+
+**Why it fails:** the script defaults to `DB_PORT=5433` / `REDIS_PORT=6380`, but on a
+machine where those ports were already taken the managed containers were created on
+5434 / 6381 (`docker ps` shows `lobehub-agent-testing-postgres` → `0.0.0.0:5434`). The
+default then dials whatever owns 5433 — another project's Postgres — and fails with
+`password authentication failed` (`routine: 'auth_failed'`), or worse, succeeds against
+a database that is not ours. The dev server started in that state serves a healthy page
+whose every tRPC write fails far from the cause.
+
+**Correct approach:** read the managed containers' host ports from `docker ps` first and
+pass them explicitly to every subcommand and to the backgrounded `dev`
+(`DB_PORT=5434 REDIS_PORT=6381 init-dev-env.sh …`). Treat a `migrate` that fails with
+`auth_failed` as a port mismatch, never as a credentials problem.
 
 ### L-S8 — Reading a first-boot renderer crash as a defect of the change under test
 

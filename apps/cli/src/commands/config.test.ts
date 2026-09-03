@@ -21,6 +21,12 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
 }));
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
+// Scope resolution falls through to the persisted `workspace use` value, which
+// must not leak the developer's own machine state into these assertions.
+vi.mock('../settings', () => ({
+  loadActiveWorkspace: () => undefined,
+  resolveServerUrl: () => 'https://app.lobehub.com',
+}));
 describe('config command', () => {
   let consoleSpy: ReturnType<typeof vi.spyOn>;
   const originalWorkspaceId = process.env.LOBEHUB_WORKSPACE_ID;
@@ -73,7 +79,11 @@ describe('config command', () => {
       await program.parseAsync(['node', 'test', 'whoami', '--json']);
 
       expect(consoleSpy).toHaveBeenCalledWith(
-        JSON.stringify({ ...state, scope: 'personal', workspaceId: null }, null, 2),
+        JSON.stringify(
+          { ...state, scope: 'personal', scopeSource: 'personal', workspaceId: null },
+          null,
+          2,
+        ),
       );
     });
 
@@ -107,7 +117,11 @@ describe('config command', () => {
       await program.parseAsync(['node', 'test', 'whoami', '--json']);
 
       expect(consoleSpy).toHaveBeenCalledWith(
-        JSON.stringify({ userId: 'u1', scope: 'workspace', workspaceId: 'ws-42' }, null, 2),
+        JSON.stringify(
+          { userId: 'u1', scope: 'workspace', scopeSource: 'env', workspaceId: 'ws-42' },
+          null,
+          2,
+        ),
       );
     });
   });

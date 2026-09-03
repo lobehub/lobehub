@@ -4,7 +4,8 @@ import { t } from 'i18next';
 
 import { handleFileUploadError } from '@/business/client/handleFileUploadError';
 import { fileService } from '@/services/file';
-import { hashFile, uploadService } from '@/services/upload';
+import { hashFile } from '@/services/hashFile';
+import { uploadService } from '@/services/upload';
 import type { StoreSetter } from '@/store/types';
 import type { UploadFileItem } from '@/types/files';
 import { getAudioDuration } from '@/utils/client/audioDuration';
@@ -160,7 +161,13 @@ export class FileUploadActionImpl {
       const dimensions = await getImageDimensions(normalizedFile);
 
       // 2. check file hash
-      const hash = await hashFile(normalizedFile, abortController?.signal);
+      const hash = await hashFile(normalizedFile, abortController?.signal, (progress) => {
+        onStatusUpdate?.({
+          id: statusId,
+          type: 'updateFile',
+          value: { status: 'pending', uploadState: { progress, restTime: 0, speed: 0 } },
+        });
+      });
 
       const checkStatus = await fileService.checkFileHash(hash);
       let metadata: ExistingFileMetadata;

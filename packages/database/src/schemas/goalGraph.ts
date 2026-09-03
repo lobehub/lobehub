@@ -34,8 +34,8 @@ import { workVersions } from './work';
 
 /**
  * Goal Graph nodes preserve the evolving problem framing above individual Task
- * execution. A Work node may own one responsible Task; that Task remains free to
- * create its own implementation-level subtree.
+ * execution. A task node may own one responsible Task; that Task remains free
+ * to create its own implementation-level subtree.
  */
 export const goalNodes = pgTable(
   'goal_nodes',
@@ -48,7 +48,7 @@ export const goalNodes = pgTable(
     status: text('status').$type<GoalNodeStatus>().default('proposed').notNull(),
     title: text('title').notNull(),
     description: text('description'),
-    /** Responsible execution container. Valid only when kind is `work`. */
+    /** Responsible execution container. Valid only when kind is `task`. */
     taskId: text('task_id').references(() => tasks.id, { onDelete: 'set null' }),
     priority: integer('priority').default(0).notNull(),
     /** Agent or reviewer confidence from 0 to 1. */

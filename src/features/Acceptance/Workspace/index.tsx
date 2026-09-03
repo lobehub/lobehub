@@ -12,12 +12,8 @@ import { RouteMetaBridge } from '@/features/RouteMeta';
 import { useAcceptanceList } from '../hooks';
 import AcceptanceListPanel from './AcceptanceListPanel';
 import AcceptanceOnboarding from './AcceptanceOnboarding';
-import AcceptanceProjectActions from './AcceptanceProjectActions';
+import { useAcceptanceProjectActionItems } from './AcceptanceProjectActions';
 import { useReportPanelExpand } from './useReportPanelExpand';
-
-const renderProjectActions = (projectId?: string) => (
-  <AcceptanceProjectActions projectId={projectId} />
-);
 
 const styles = createStaticStyles(({ css }) => ({
   expandBtn: css`
@@ -83,6 +79,7 @@ export const shouldShowAcceptanceOnboarding = ({
 const AcceptanceWorkspace = memo(() => {
   const { t } = useTranslation('verify');
   const panel = useReportPanelExpand();
+  const projectActionItems = useAcceptanceProjectActionItems();
   const { acceptanceId, checkId } = useParams<{ acceptanceId: string; checkId: string }>();
   const [searchParams] = useSearchParams();
   const hasFocusedCheck = Boolean(checkId || searchParams.get('check'));
@@ -114,7 +111,7 @@ const AcceptanceWorkspace = memo(() => {
   return (
     <Flexbox horizontal height={'100dvh'} style={{ overflow: 'hidden' }} width={'100%'}>
       <RouteMetaBridge />
-      {showList && <AcceptanceListPanel {...panel} renderProjectActions={renderProjectActions} />}
+      {showList && <AcceptanceListPanel {...panel} projectActionItems={projectActionItems} />}
       <div className={styles.main}>
         {showList && !panel.expand && (
           <button

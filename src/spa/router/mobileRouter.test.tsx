@@ -1,7 +1,30 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import type { ReactElement } from 'react';
+import { matchRoutes } from 'react-router';
 import { describe, expect, it } from 'vitest';
+
+import { mobileRoutes } from './mobileRouter.config';
+
+describe('mobileRouter agent share route', () => {
+  it('serves the agent-share visitor surface on mobile through the shared /agent/:aid route', () => {
+    const matches = matchRoutes(mobileRoutes, '/agent/my-agent');
+
+    // Visitor and creator surfaces share this route; `AgentRouteSwitch` picks.
+    expect(matches?.some((match) => match.route.path === ':aid')).toBe(true);
+    expect(matches?.at(-1)?.params).toMatchObject({ aid: 'my-agent' });
+  });
+
+  it('redirects legacy /share/agent links instead of bouncing to the catch-all', () => {
+    const matches = matchRoutes(mobileRoutes, '/share/agent/my-agent');
+    const element = matches?.at(-1)?.route.element as ReactElement;
+
+    expect(matches?.at(-1)?.route.path).toBe('/share/agent/:slugOrId');
+    expect(matches?.at(-1)?.params).toMatchObject({ slugOrId: 'my-agent' });
+    expect((element.type as { displayName?: string }).displayName).toBe('AgentShareLegacyRedirect');
+  });
+});
 
 describe('mobileRouter task routes', () => {
   it('registers task list and detail routes under the shared workspace layout', async () => {

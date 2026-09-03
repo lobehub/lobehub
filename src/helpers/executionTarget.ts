@@ -420,6 +420,16 @@ export interface ResolveExecutionPlanParams {
   /** See {@link ResolveExecutionTargetOptions.sandboxExecutionAvailable}. */
   sandboxExecutionAvailable?: boolean;
   /**
+   * Resolve to the cloud sandbox instead of `none` whenever the run cannot
+   * route to a device (a device-capable target denied by `canUseDevice`, or a
+   * stored `none` target). Set by the aiAgent caller for Agent Share visitor
+   * runs the creator granted `lobe-cloud-sandbox`: a visitor can never reach
+   * the creator's device, so the sandbox is the only surface that grant can
+   * mean, and it only materializes when the plan resolves to `sandbox`. Chat
+   * mode still wins — it means "no tools", not "no device".
+   */
+  sandboxFallback?: boolean;
+  /**
    * What initiated this run. Bot triggers have no UI to pick a device, so a
    * stored `local` target (in-process IPC, unreachable from the cloud bot
    * server) is upgraded to `auto` and auto-activates an online device. `none`
@@ -441,7 +451,8 @@ export interface ResolveExecutionPlanParams {
  * 2. `none` / `sandbox` NEVER route to a device — no auto-activation, no
  *    step-level re-injection, no exceptions.
  * 3. `canUseDevice === false` degrades any device-capable target to `none`
- *    (sandbox stays available — it never touches the user's machines).
+ *    (sandbox stays available — it never touches the user's machines). With
+ *    `sandboxFallback` the degraded run resolves to the sandbox instead.
  * 4. With online info: a bound device is used only if online (an offline
  *    binding stays unrouted rather than guessing another machine). An UNBOUND
  *    run auto-activates ONLY in the opt-in `auto` mode (single device → use it;
@@ -463,6 +474,7 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
     onlineDeviceIds,
     requestedDeviceId,
     sandboxExecutionAvailable,
+    sandboxFallback,
     trigger,
     workspaceScoped,
   } = params;
@@ -499,6 +511,10 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
     // no device can run. Device-only providers stay pending at `none` so the
     // caller can require an explicit local/connected-device selection.
     if (isHetero && sandboxAvailable) return { kind: 'sandbox', target: 'sandbox' };
+    // Share-visitor runs granted the cloud sandbox land here for every
+    // device-capable target (visitors never pass `canUseDevice`); the grant
+    // is honoured with the sandbox rather than dropped with `none`.
+    if (sandboxFallback) return { kind: 'sandbox', target: 'sandbox' };
     // a device-capable target denied by the access policy degrades to plain
     // chat — the effective target is `none`, not the stored one
     return { kind: 'none', target: 'none' };
