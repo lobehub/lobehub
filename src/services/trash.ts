@@ -1,4 +1,6 @@
+import { TRASH_MUTATION_BATCH_SIZE } from '@lobechat/const';
 import type { TrashListParams, TrashResourceType } from '@lobechat/types';
+import { chunk } from 'es-toolkit';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -15,12 +17,37 @@ class TrashService {
     return lambdaClient.trash.countByType.query();
   }
 
-  restore(ids: string[]) {
-    return lambdaClient.trash.restore.mutate({ ids });
+  async restore(ids: string[]) {
+    const outcomes = await Promise.all(
+      chunk(ids, TRASH_MUTATION_BATCH_SIZE).map((batchIds) =>
+        lambdaClient.trash.restore.mutate({ ids: batchIds }),
+      ),
+    );
+
+    return outcomes.reduce(
+      (result, outcome) => ({
+        failed: [...result.failed, ...outcome.failed],
+        restored: [...result.restored, ...outcome.restored],
+      }),
+      { failed: [], restored: [] } as (typeof outcomes)[number],
+    );
   }
 
-  purge(ids: string[]) {
-    return lambdaClient.trash.purge.mutate({ ids });
+  async purge(ids: string[]) {
+    const outcomes = await Promise.all(
+      chunk(ids, TRASH_MUTATION_BATCH_SIZE).map((batchIds) =>
+        lambdaClient.trash.purge.mutate({ ids: batchIds }),
+      ),
+    );
+
+    return outcomes.reduce(
+      (result, outcome) => ({
+        failed: [...result.failed, ...outcome.failed],
+        purged: result.purged + outcome.purged,
+        purgedIds: [...result.purgedIds, ...outcome.purgedIds],
+      }),
+      { failed: [], purged: 0, purgedIds: [] } as (typeof outcomes)[number],
+    );
   }
 
   emptyTrash(resourceType?: TrashResourceType) {

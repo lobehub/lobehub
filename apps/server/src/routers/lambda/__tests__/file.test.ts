@@ -940,6 +940,7 @@ describe('fileRouter', () => {
       mockKnowledgeRepoQuery.mockResolvedValue([
         {
           content: '# Legacy document',
+          editorData: { root: { children: [{ text: 'Legacy document' }] } },
           fileType: 'custom/document',
           id: 'doc-legacy',
           name: 'Legacy document',
@@ -952,7 +953,11 @@ describe('fileRouter', () => {
       expect(mockKnowledgeRepoQuery).toHaveBeenCalledWith(
         expect.objectContaining({ includeContent: true, includeContentPreview: false }),
       );
-      expect(result.items[0]).toMatchObject({ content: '# Legacy document', id: 'doc-legacy' });
+      expect(result.items[0]).toMatchObject({
+        content: '# Legacy document',
+        editorData: { root: { children: [{ text: 'Legacy document' }] } },
+        id: 'doc-legacy',
+      });
       expect(result.items[0]).not.toHaveProperty('contentPreview');
     });
   });

@@ -4,6 +4,7 @@ import {
   MARKDOWN_MIME_TYPES,
   MAX_UPLOAD_FILE_SIZE,
   RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH,
+  TRASH_MUTATION_BATCH_SIZE,
   UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE,
 } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
@@ -49,7 +50,6 @@ const fileTransferEntityTypeSchema = z.enum(['document', 'file', 'folder']);
 const deleteKnowledgeItemsByQuerySchema = QueryFileListSchema.extend({
   excludedIds: z.array(z.string()).optional(),
 });
-const TRASH_DELETE_BATCH_SIZE = 200;
 const markdownPreviewTypes = new Set<string>(MARKDOWN_MIME_TYPES);
 
 const isMarkdownFile = (item: { fileType: string; name: string }) =>
@@ -523,6 +523,7 @@ export const fileRouter = router({
             chunkingError: status.chunkingError,
             chunkingStatus: status.chunkingStatus,
             ...(includeContent ? { content: item.content } : {}),
+            ...(includeContent ? { editorData: item.editorData } : {}),
             ...(includeContentPreview ? { contentPreview } : {}),
             createdAt: item.createdAt,
             embeddingError: status.embeddingError,
@@ -548,6 +549,7 @@ export const fileRouter = router({
           chunkingError: null,
           chunkingStatus: null,
           ...(includeContent ? { content: item.content } : {}),
+          ...(includeContent ? { editorData: item.editorData } : {}),
           ...(includeContentPreview ? { contentPreview } : {}),
           createdAt: item.createdAt,
           embeddingError: null,
@@ -681,16 +683,18 @@ export const fileRouter = router({
             message: 'No permission to delete documents',
           });
         }
-        for (let index = 0; index < documentIds.length; index += TRASH_DELETE_BATCH_SIZE) {
+        for (let index = 0; index < documentIds.length; index += TRASH_MUTATION_BATCH_SIZE) {
           await ctx.trashService.trashDocuments(
-            documentIds.slice(index, index + TRASH_DELETE_BATCH_SIZE),
+            documentIds.slice(index, index + TRASH_MUTATION_BATCH_SIZE),
           );
         }
       }
 
       if (fileIds.length > 0) {
-        for (let index = 0; index < fileIds.length; index += TRASH_DELETE_BATCH_SIZE) {
-          await ctx.trashService.trashFiles(fileIds.slice(index, index + TRASH_DELETE_BATCH_SIZE));
+        for (let index = 0; index < fileIds.length; index += TRASH_MUTATION_BATCH_SIZE) {
+          await ctx.trashService.trashFiles(
+            fileIds.slice(index, index + TRASH_MUTATION_BATCH_SIZE),
+          );
         }
       }
 
@@ -826,7 +830,7 @@ export const fileRouter = router({
 
   removeFiles: fileProcedure
     .use(withScopedPermission('file:delete'))
-    .input(z.object({ ids: z.array(z.string()).max(TRASH_DELETE_BATCH_SIZE) }))
+    .input(z.object({ ids: z.array(z.string()).max(TRASH_MUTATION_BATCH_SIZE) }))
     .mutation(async ({ input, ctx }) => {
       const targets = await ctx.fileModel.findByIds(input.ids);
       assertAllFilesAccessible(input.ids, targets);

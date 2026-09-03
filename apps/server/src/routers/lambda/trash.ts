@@ -1,4 +1,6 @@
-import { TRASH_RESOURCE_TYPES, type TrashResourceType } from '@lobechat/types';
+import { TRASH_MUTATION_BATCH_SIZE } from '@lobechat/const';
+import type { TrashResourceType } from '@lobechat/types';
+import { TRASH_RESOURCE_TYPES } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -63,14 +65,14 @@ export const trashRouter = router({
     ),
 
   purge: trashHighRiskProcedure
-    .input(z.object({ ids: z.array(z.string()).min(1).max(200) }))
+    .input(z.object({ ids: z.array(z.string()).min(1).max(TRASH_MUTATION_BATCH_SIZE) }))
     .mutation(async ({ input, ctx }) => {
       await assertItemsManageable(ctx, input.ids, 'purge');
       return ctx.trashService.purge(input.ids);
     }),
 
   restore: trashProcedure
-    .input(z.object({ ids: z.array(z.string()).min(1).max(200) }))
+    .input(z.object({ ids: z.array(z.string()).min(1).max(TRASH_MUTATION_BATCH_SIZE) }))
     .mutation(async ({ input, ctx }) => {
       await assertItemsManageable(ctx, input.ids, 'restore');
       return ctx.trashService.restore(input.ids);
