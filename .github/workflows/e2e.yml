@@ -9,7 +9,13 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Canary push runs publish the bundle-size / entry-graph baselines every PR
+  # gate compares against (find-size-baseline.cjs only accepts a *successful*
+  # canary run). Cancelling them under a burst of canary merges leaves the
+  # baseline pinned to the last completed run — after a chunking change every
+  # rebased PR then fails the "new chunk entered the static import graph" gate
+  # until a canary run manages to finish. Keep canary runs; cancel the rest.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/canary' }}
 
 env:
   # Same-repo PRs get their pull_request run skipped as a duplicate of the push run,
