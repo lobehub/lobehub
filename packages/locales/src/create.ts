@@ -100,10 +100,13 @@ export const createI18nNext = (lang?: string) => {
         interpolation: {
           escapeValue: false,
         },
-        // Re-render components when new language resources are loaded from backend,
-        // so preloaded en-US fallback gets replaced by the user's actual language.
         react: {
-          bindI18nStore: 'added',
+          // NOT `bindI18nStore: 'added'`: that subscribes every `useTranslation` consumer
+          // to every lazily-loaded bundle, so each namespace arrival re-renders the whole
+          // app — ~30 full-tree passes during boot. Components waiting on their own
+          // namespace are already covered by react-i18next's `!ready` path; the only
+          // event that must reach everyone is the one-time en-US -> user-language swap,
+          // emitted once after `reloadResources` below.
           useSuspense: false,
         },
         keySeparator: false,
@@ -114,8 +117,11 @@ export const createI18nNext = (lang?: string) => {
       });
 
       if (initialLang !== DEFAULT_LANG) {
-        initPromise.then(() => {
-          void instance.reloadResources([initialLang], bundledNamespaces);
+        initPromise.then(async () => {
+          await instance.reloadResources([initialLang], bundledNamespaces);
+          // One refresh for the whole tree instead of one per bundle: `bindI18n`
+          // defaults to `languageChanged`, which every `useTranslation` already binds.
+          instance.emit('languageChanged', instance.language);
         });
       }
 
