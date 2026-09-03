@@ -19,7 +19,6 @@ import RouteSegmentSkeleton from '@/components/Skeleton/RouteSegment';
 import SettingsPageSkeleton from '@/components/Skeleton/Settings/Page';
 import TasksSkeleton from '@/components/Skeleton/Tasks';
 import TopicsSkeleton from '@/components/Skeleton/Topics';
-import ResourceCategorySkeleton from '@/features/ResourceHome/Skeleton';
 import { WORKSPACE_SETTINGS_TABS } from '@/features/Workspace/workspaceAwarePath';
 import AppShellSkeleton from '@/spa/BootShell/AppShellSkeleton';
 import { createTabRouter } from '@/spa/router/tabRouter';
@@ -33,7 +32,7 @@ import {
   createMainAreaChildren as createElectronMainAreaChildren,
   desktopRoutes as electronDesktopRoutes,
 } from './desktopRouter.config.desktop';
-import { createMainAreaRouteFactory } from './desktopRouter.shared';
+import { createMainAreaRouteFactory, ResourceCategorySkeleton } from './desktopRouter.shared';
 
 type MainAreaFactory = () => RouteObject[];
 
