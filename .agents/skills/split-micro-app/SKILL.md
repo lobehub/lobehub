@@ -290,9 +290,10 @@ To add a micro app:
    the production script's Cloudflare deployments; a row is only rollbackable while its
    version is within Cloudflare's 100-upload window — which is the reason previews stay off
    the production script (§1). **Previews** lists the `-preview` Worker's versions (PR label
-   and actor come from the `--message` stamp) with Open and, under staging, **Send here**,
-   which fills the target's Override draft for the operator to Save. Adding a micro app to
-   `bindings.ts` is therefore part of wiring it into the gateway.
+   and actor come from the `--message` stamp) with Open and, under staging, **Set override**,
+   which writes the preview host into the target's `targetOverrides` immediately (a saved,
+   history-recorded config write — no editor Save). Adding a micro app to `bindings.ts` is
+   therefore part of wiring it into the gateway.
 
 Landmine (fixed 2026-08, stay aware): the lobehub-com `react-router-data` plugin owns `.data`
 protocol affinity for the landing pair; it consults `resolveRule` and lets other targets'
