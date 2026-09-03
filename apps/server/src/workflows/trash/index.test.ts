@@ -33,9 +33,12 @@ describe('triggerTrashPurge', () => {
     vi.stubEnv('QSTASH_TOKEN', '');
     vi.mocked(getServerDB).mockResolvedValue({} as never);
     vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 202 }));
-    vi.mocked(TrashService.sweepExpired).mockImplementation(async (_db, { cursor }) => ({
+    vi.mocked(TrashService.sweepExpired).mockImplementation(async (_db, options) => ({
       failed: 0,
-      nextCursor: { expiresAt: '2026-09-01', id: String(Number(cursor?.id ?? 0) + 1) },
+      nextCursor: {
+        expiresAt: '2026-09-01',
+        id: String(Number(options?.cursor?.id ?? 0) + 1),
+      },
       pruned: 0,
       purged: 25,
       scanned: 25,
