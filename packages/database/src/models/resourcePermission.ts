@@ -229,6 +229,21 @@ export class ResourcePermissionModel {
    * transferred out of the workspace.
    */
   removeAll = async (resourceType: PermissionResourceType, resourceId: string) => {
-    await this.db.delete(resourcePermissions).where(this.resourceMatch(resourceType, resourceId));
+    await this.removeAllByIds(resourceType, [resourceId]);
+  };
+
+  /** Remove every permission row for a set of same-type resources in one query. */
+  removeAllByIds = async (resourceType: PermissionResourceType, resourceIds: string[]) => {
+    if (resourceIds.length === 0) return;
+
+    await this.db
+      .delete(resourcePermissions)
+      .where(
+        and(
+          eq(resourcePermissions.workspaceId, this.workspaceId),
+          eq(resourcePermissions.resourceType, resourceType),
+          inArray(resourcePermissions.resourceId, resourceIds),
+        ),
+      );
   };
 }

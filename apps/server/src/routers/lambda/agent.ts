@@ -1373,9 +1373,7 @@ export const agentRouter = router({
 
       if (ctx.workspaceId) {
         const sourcePermissionModel = new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId);
-        await Promise.all(
-          agentIds.map((agentId) => sourcePermissionModel.removeAll('agent', agentId)),
-        );
+        await sourcePermissionModel.removeAllByIds('agent', agentIds);
         // The agents left this workspace — void any live member-transfer requests.
         await new ResourceTransferRequestModel(
           ctx.serverDB,

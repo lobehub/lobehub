@@ -529,9 +529,7 @@ export const documentRouter = router({
       }
       if (ctx.workspaceId) {
         const sourcePermissionModel = new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId);
-        await Promise.all(
-          result.documentIds.map((id) => sourcePermissionModel.removeAll('document', id)),
-        );
+        await sourcePermissionModel.removeAllByIds('document', result.documentIds);
       }
       if (input.targetWorkspaceId && input.targetVisibility === 'public') {
         const targetPermissionModel = new ResourcePermissionModel(

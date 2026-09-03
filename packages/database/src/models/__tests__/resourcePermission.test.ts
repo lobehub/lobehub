@@ -114,6 +114,24 @@ describe('ResourcePermissionModel', () => {
 
     expect(await model.getAccessLevel('agent', agentId)).toBeNull();
   });
+
+  it('removeAllByIds clears a same-type set without crossing type or workspace boundaries', async () => {
+    const secondAgentId = 'rp-test-agent-2';
+    const otherWorkspaceModel = new ResourcePermissionModel(serverDB, wsId2);
+    await Promise.all([
+      model.setAccessLevel('agent', agentId, 'use', ownerId),
+      model.setAccessLevel('agent', secondAgentId, 'edit', ownerId),
+      model.setAccessLevel('agentGroup', agentId, 'view', ownerId),
+      otherWorkspaceModel.setAccessLevel('agent', agentId, 'edit', ownerId),
+    ]);
+
+    await model.removeAllByIds('agent', [agentId, secondAgentId]);
+
+    expect(await model.getAccessLevel('agent', agentId)).toBeNull();
+    expect(await model.getAccessLevel('agent', secondAgentId)).toBeNull();
+    expect(await model.getAccessLevel('agentGroup', agentId)).toBe('view');
+    expect(await otherWorkspaceModel.getAccessLevel('agent', agentId)).toBe('edit');
+  });
 });
 
 describe('ResourcePermissionModel collaborators', () => {

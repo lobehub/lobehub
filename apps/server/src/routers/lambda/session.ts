@@ -245,7 +245,7 @@ export const sessionRouter = router({
       // leave dangling resource_permissions rows behind.
       if (ctx.workspaceId && orphanedAgentIds.length > 0) {
         const permissionModel = new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId);
-        await Promise.all(orphanedAgentIds.map((id) => permissionModel.removeAll('agent', id)));
+        await permissionModel.removeAllByIds('agent', orphanedAgentIds);
       }
 
       return result;

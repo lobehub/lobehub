@@ -1,5 +1,6 @@
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
+import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { lockDocumentHierarchy } from '@/database/utils/documentHierarchy';
 import type { SoftDeleteOptions } from '@/database/utils/softDelete';
 
@@ -52,6 +53,12 @@ export const fileHandler: TrashHandler = {
       .filter((child) => child.resourceType === 'document')
       .map((child) => child.resourceId);
     await new DocumentModel(ctx.db, ctx.userId, ctx.workspaceId).purge(documentIds);
+    if (ctx.workspaceId) {
+      await new ResourcePermissionModel(ctx.db, ctx.workspaceId).removeAllByIds(
+        'document',
+        documentIds,
+      );
+    }
   },
   restore: async (ctx, root, children) => {
     await lockDocumentHierarchy(ctx.db, ctx.userId, ctx.workspaceId);

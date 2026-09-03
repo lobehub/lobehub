@@ -1372,6 +1372,53 @@ describe('TrashService', () => {
       ).toEqual([]);
     });
 
+    it('removes attached document ACL rows when purging a workspace file', async () => {
+      const workspaceId = 'trash-file-document-acl-workspace';
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'File document ACL',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      const workspaceFileModel = new FileModel(serverDB, userId, workspaceId);
+      const workspaceDocumentModel = new DocumentModel(serverDB, userId, workspaceId);
+      const workspaceService = new TrashService(serverDB, userId, workspaceId);
+      const file = await workspaceFileModel.create({
+        fileType: 'text/plain',
+        name: 'attached-page-source.txt',
+        size: 3,
+        url: 'files/attached-page-source.txt',
+        visibility: 'public',
+      });
+      const document = await workspaceDocumentModel.create({
+        fileId: file.id,
+        fileType: 'custom/page',
+        source: '',
+        sourceType: 'api',
+        title: 'Attached public page',
+        totalCharCount: 0,
+        totalLineCount: 0,
+        visibility: 'public',
+      });
+      await serverDB.insert(resourcePermissions).values({
+        accessLevel: 'edit',
+        createdBy: userId,
+        resourceId: document.id,
+        resourceType: 'document',
+        workspaceId,
+      });
+      const [root] = await workspaceService.trashFiles([file.id]);
+
+      await workspaceService.purge([root.id]);
+
+      expect(
+        await serverDB
+          .select()
+          .from(resourcePermissions)
+          .where(eq(resourcePermissions.resourceId, document.id)),
+      ).toEqual([]);
+    });
+
     it('retries storage cleanup from the registry after the database purge commits', async () => {
       await fileModel.createGlobalFile({
         creator: userId,

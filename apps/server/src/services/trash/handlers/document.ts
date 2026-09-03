@@ -64,7 +64,7 @@ export const documentHandler: TrashHandler = {
     await new DocumentModel(ctx.db, ctx.userId, ctx.workspaceId).purge(documentIds);
     if (ctx.workspaceId) {
       const permissionModel = new ResourcePermissionModel(ctx.db, ctx.workspaceId);
-      await Promise.all(documentIds.map((id) => permissionModel.removeAll('document', id)));
+      await permissionModel.removeAllByIds('document', documentIds);
     }
   },
   restore: async (ctx, root, children) => {
