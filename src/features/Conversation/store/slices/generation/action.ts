@@ -508,7 +508,7 @@ const regenerateUserMessageFromSource = async (
  * Handles generation control (stop, cancel, regenerate, continue)
  */
 export interface GenerationAction {
-  cancelHeteroContinuation: () => Promise<void>;
+  cancelHeteroContinuation: (topicId?: string) => Promise<void>;
   /**
    * Cancel a specific operation
    */
@@ -688,8 +688,8 @@ export const generationSlice: StateCreator<
   [],
   GenerationAction
 > = (set, get) => ({
-  cancelHeteroContinuation: async () => {
-    const topicId = get().context.topicId;
+  cancelHeteroContinuation: async (sourceTopicId) => {
+    const topicId = sourceTopicId ?? get().context.topicId;
     if (!topicId) return;
 
     const chatStore = useChatStore.getState();

@@ -1135,7 +1135,7 @@
   "messageForward.success": "已转发给 {{title}}",
   "messageForward.successMulti": "已转发给 {{count}} 个智能体",
   "messageForward.topic.context": "话题上下文",
-  "messageForward.topic.description": "将向选中的 Agent 发送指令，让它通过 LobeHub CLI 读取该话题并继续处理。",
+  "messageForward.topic.description": "选中的 Agent 将获取该话题的上下文并继续处理。",
   "messageForward.topic.header": "以下话题转发自另一段对话，请将其作为上下文并继续处理：",
   "messageForward.topic.loadFailed": "无法加载该话题进行转发",
   "messageForward.topic.modalTitle": "转发话题给助手",

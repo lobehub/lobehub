@@ -454,7 +454,7 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
               ? () =>
                   createTopicForwardModal({
                     onForwardSuccess: activeTopicScheduled
-                      ? () => void cancelHeteroContinuation()
+                      ? () => void cancelHeteroContinuation(conversationTopicId)
                       : undefined,
                     sourceAgentId: conversationAgentId,
                     topicId: conversationTopicId,

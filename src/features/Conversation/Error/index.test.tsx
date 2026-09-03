@@ -613,7 +613,7 @@ describe('ErrorMessageExtra', () => {
 
     const props = createTopicForwardModalMock.mock.calls[0][0];
     props.onForwardSuccess();
-    expect(cancelHeteroContinuationMock).toHaveBeenCalledTimes(1);
+    expect(cancelHeteroContinuationMock).toHaveBeenCalledWith('source-topic');
   });
 
   it('renders the working-directory guide instead of the CLI install guide', () => {

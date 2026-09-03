@@ -767,7 +767,7 @@ export default {
     'The following {{count}} messages were forwarded from another conversation. Please use them as context and continue:',
   'messageForward.topic.context': 'Topic context',
   'messageForward.topic.description':
-    'The selected Agent will receive an instruction to read this topic with the LobeHub CLI and continue the work.',
+    "The selected Agent will receive this topic's context and continue the work.",
   'messageForward.topic.header':
     'The following topic was forwarded from another conversation. Please use it as context and continue:',
   'messageForward.topic.loadFailed': 'Could not load this topic for forwarding',
