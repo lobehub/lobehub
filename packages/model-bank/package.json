@@ -28,6 +28,7 @@
     "./cohere": "./src/aiModels/cohere.ts",
     "./cometapi": "./src/aiModels/cometapi.ts",
     "./comfyui": "./src/aiModels/comfyui.ts",
+    "./daoxe": "./src/aiModels/daoxe.ts",
     "./deepseek": "./src/aiModels/deepseek.ts",
     "./fal": "./src/aiModels/fal.ts",
     "./fireworksai": "./src/aiModels/fireworksai.ts",
