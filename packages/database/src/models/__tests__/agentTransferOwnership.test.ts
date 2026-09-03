@@ -14,6 +14,7 @@ import {
   agentProviderAccounts,
   agents,
   agentsFiles,
+  agentShares,
   agentsKnowledgeBases,
   chatGroups,
   chatGroupsAgents,
@@ -70,6 +71,18 @@ afterEach(async () => {
 });
 
 describe('AgentModel.transferAgentOwnership', () => {
+  it('revokes the previous owner’s agent share on handover', async () => {
+    const agent = await ownerModel.create({ slug: 'shared-handover', title: 'Shared Handover' });
+    await serverDB
+      .insert(agentShares)
+      .values({ agentId: agent.id, shareConfig: { monthlySpendLimit: 5 }, visibility: 'link' });
+
+    await handover({ agentId: agent.id, fromUserId: ownerId, toUserId: recipientId });
+
+    const rows = await serverDB.select().from(agentShares).where(eq(agentShares.agentId, agent.id));
+    expect(rows).toHaveLength(0);
+  });
+
   it('flips only the agent owner; scope, slug and visibility stay put', async () => {
     const agent = await ownerModel.create({
       slug: 'handover-agent',

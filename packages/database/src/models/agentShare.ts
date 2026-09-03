@@ -379,11 +379,15 @@ export class AgentShareModel {
    *
    * The agent must ALSO still be personal (`agents.workspaceId IS NULL`) —
    * the same condition `findByShareId` resolves through. Sharing is
-   * personal-only, and `transferAgent` does not touch `agent_shares`, so a
-   * creator moving the agent into a workspace mid-run leaves the share row
-   * intact while every entry point stops resolving it; without this join the
-   * in-flight run would keep spending under the creator after the share was
-   * effectively revoked.
+   * personal-only, so a creator moving the agent into a workspace mid-run
+   * leaves the share row intact while every entry point stops resolving it;
+   * without this join the in-flight run would keep spending under the creator
+   * after the share was effectively paused. Same-owner personal ↔ workspace
+   * moves preserve the row deliberately, so returning the agent to personal
+   * scope resumes the same link. An OWNERSHIP TRANSFER is different:
+   * `AgentModel.transferAgents` now hard-deletes the row when
+   * `agents.userId` changes, since the share carries the previous owner's
+   * grants and spend cap — the new owner must publish explicitly.
    *
    * Deliberately cheap (one indexed lookup + a primary-key join): it runs once
    * per runtime step. Returns `false` — never throws — for an ordinary

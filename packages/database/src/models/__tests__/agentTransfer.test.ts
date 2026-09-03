@@ -9,6 +9,7 @@ import {
   agentDocuments,
   agents,
   agentsFiles,
+  agentShares,
   agentsKnowledgeBases,
   agentsToSessions,
   briefs,
@@ -1065,6 +1066,48 @@ describe('AgentModel.transferAgent', () => {
     await expect(model.transferAgent('nonexistent', wsId1, userId)).rejects.toThrow(
       'Agent not found',
     );
+  });
+
+  // Regression: a share carries the previous owner's tool grants, custom
+  // slug, and (in Cloud) monthly spend cap — an ownership transfer must NOT
+  // silently republish that under a new owner. See `AgentModel.transferAgents`
+  // step 4a and the `isRunStillAuthorized` doc in `agentShare.ts`.
+  it('should hard-delete the share row when ownership transfers to another user', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Shared Agent', slug: 'shared-agent' });
+
+    await serverDB
+      .insert(agentShares)
+      .values({ agentId: agent.id, shareConfig: { monthlySpendLimit: 5 }, visibility: 'link' });
+
+    await model.transferAgent(agent.id, null, targetUserId);
+
+    const remaining = await serverDB
+      .select()
+      .from(agentShares)
+      .where(eq(agentShares.agentId, agent.id));
+    expect(remaining).toHaveLength(0);
+  });
+
+  it('should keep the share row on a same-owner personal ↔ workspace round-trip', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Roundtrip Agent', slug: 'roundtrip-agent' });
+
+    await serverDB
+      .insert(agentShares)
+      .values({ agentId: agent.id, shareConfig: { monthlySpendLimit: 5 }, visibility: 'link' });
+
+    // Personal → workspace (owner unchanged, share paused via workspaceId join).
+    await model.transferAgent(agent.id, wsId1, userId);
+    let rows = await serverDB.select().from(agentShares).where(eq(agentShares.agentId, agent.id));
+    expect(rows).toHaveLength(1);
+
+    // Workspace → personal, same owner: share resumes.
+    const wsModel = new AgentModel(serverDB, userId, wsId1);
+    await wsModel.transferAgent(agent.id, null, userId);
+    rows = await serverDB.select().from(agentShares).where(eq(agentShares.agentId, agent.id));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].visibility).toBe('link');
   });
 });
 

@@ -34,6 +34,7 @@ import {
   agentLabelAssignments,
   agents,
   agentsFiles,
+  agentShares,
   agentsKnowledgeBases,
   agentsToSessions,
   briefs,
@@ -2209,6 +2210,26 @@ export class AgentModel {
           .where(eq(agents.id, agent.id));
       }
 
+      // 4a. Revoke shares when the OWNER changes. A share row carries the
+      // previous owner's grants — tool grants, custom slug, and (in Cloud) the
+      // billing/spend cap linked to their budget — so the new owner must
+      // publish explicitly rather than inherit a link they never consented to.
+      // A same-owner move (personal ↔ workspace) intentionally keeps the row:
+      // that pause/resume behaviour is documented on `isRunStillAuthorized` in
+      // `agentShare.ts` — the visibility + `agents.workspaceId IS NULL` join
+      // pauses resolution, and moving back resumes it.
+      //
+      // Direct `tx.delete` on the schema table avoids importing
+      // `AgentShareModel` here (which would create a model↔model cycle). The
+      // `agent_shares` FK cascades on agent delete only, so a scope transfer
+      // that changes ownership must clean up explicitly.
+      const ownerChangedAgentIds = foundAgents
+        .filter((agent) => agent.userId !== targetUserId)
+        .map((agent) => agent.id);
+      if (ownerChangedAgentIds.length > 0) {
+        await trx.delete(agentShares).where(inArray(agentShares.agentId, ownerChangedAgentIds));
+      }
+
       // 5. Update sessions linked via agentsToSessions
       const links = await trx
         .select({ sessionId: agentsToSessions.sessionId })
@@ -2652,6 +2673,13 @@ export class AgentModel {
         userId: toUserId,
       })
       .where(eq(agents.id, agentId));
+
+    // Same rule as the owner-change branch of `transferAgents`: an agent-share
+    // row carries the PREVIOUS owner's grants and spend cap and would resume
+    // under the recipient the moment they move the agent back to personal
+    // scope (sharing is personal-only, so it is merely paused while the agent
+    // sits in the workspace). The recipient must publish explicitly.
+    await trx.delete(agentShares).where(eq(agentShares.agentId, agentId));
 
     // Owner-attributed runtime rows travel with the agent: cron jobs and bot
     // providers execute AS their `userId`, so rows the previous owner set up
