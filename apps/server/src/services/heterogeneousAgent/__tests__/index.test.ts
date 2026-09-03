@@ -64,7 +64,11 @@ const createFakePersistenceHandler = () => {
   return handler as unknown as HeterogeneousPersistenceHandler & typeof handler;
 };
 
-const createFakeAgentOperationModel = () => ({ touchRunning: vi.fn(async () => true) });
+const createFakeAgentOperationModel = () => ({
+  findById: vi.fn(async () => null),
+  settleRunning: vi.fn(async () => true),
+  touchRunning: vi.fn(async () => true),
+});
 
 const buildEvent = (
   type: AgentStreamEvent['type'],
@@ -820,19 +824,28 @@ describe('HeterogeneousAgentService', () => {
       },
     };
 
-    const makeService = (hooks: SerializedHook[] | undefined) => {
+    const makeService = (
+      hooks: SerializedHook[] | undefined,
+      options: { operationHooks?: SerializedHook[]; topicStatus?: 'missing' | 'settled' } = {},
+    ) => {
       const topicModel = {
-        // Mirror what execAgent persisted at dispatch: the serialized hooks live
-        // under runningOperation. heteroFinish must read them from here.
+        // Keep covering the legacy topic mirror used by partially upgraded runs.
         settleRunningOperation: vi.fn(async () => ({
           assistantMessageId: undefined,
           hooks,
-          status: 'settled' as const,
+          status: options.topicStatus ?? ('settled' as const),
           threadId: undefined,
         })),
       } as any;
       const { manager } = createFakeStreamManager();
+      const agentOperationModel = createFakeAgentOperationModel();
+      agentOperationModel.findById.mockResolvedValue({
+        metadata: options.operationHooks
+          ? { _hooks: options.operationHooks, assistantMessageId: 'asst-op' }
+          : undefined,
+      } as any);
       const service = new HeterogeneousAgentService({} as any, 'user-test', {
+        agentOperationModel: agentOperationModel as any,
         persistenceHandler: createFakePersistenceHandler(),
         snapshotStore: null,
         streamEventManager: manager,
@@ -875,6 +888,26 @@ describe('HeterogeneousAgentService', () => {
         hookType: 'onComplete',
         reason: 'done',
         taskId: 'task_q',
+        topicId: 'topic-q',
+      });
+    });
+
+    it('delivers hooks from the operation when the stream terminal already cleared the topic', async () => {
+      const { service } = makeService(undefined, {
+        operationHooks: [taskHook],
+        topicStatus: 'missing',
+      });
+
+      await service.heteroFinish({
+        agentType: 'claude-code',
+        operationId: 'op-q',
+        result: 'success',
+        topicId: 'topic-q',
+      });
+
+      expect(mockPublishJSON).toHaveBeenCalledTimes(1);
+      expect(mockPublishJSON.mock.calls[0][0].body).toMatchObject({
+        hookId: 'task-on-complete',
         topicId: 'topic-q',
       });
     });

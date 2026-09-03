@@ -1291,6 +1291,19 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       // The non-serializable handler must be stripped (only webhook crosses the
       // process boundary).
       expect(seed.runningOperation.hooks[0]).not.toHaveProperty('handler');
+      expect(recordStartSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            assistantMessageId: expect.any(String),
+            _hooks: [
+              expect.objectContaining({
+                id: 'task-on-complete',
+                type: 'onComplete',
+              }),
+            ],
+          }),
+        }),
+      );
     });
 
     it('serializes the onComplete webhook hook onto runningOperation (device dispatch)', async () => {
