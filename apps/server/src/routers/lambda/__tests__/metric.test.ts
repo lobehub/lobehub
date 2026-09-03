@@ -29,6 +29,20 @@ vi.mock('@/database/models/metric', () => ({
   MetricModel: vi.fn(() => mockModel),
 }));
 
+const mockGoalFindById = vi.fn();
+vi.mock('@/database/models/goal', () => ({
+  GoalModel: vi.fn(() => ({ findById: mockGoalFindById })),
+}));
+vi.mock('@/database/models/agent', () => ({
+  AgentModel: vi.fn(() => ({ existsById: vi.fn().mockResolvedValue(false) })),
+}));
+vi.mock('@/database/models/project', () => ({
+  ProjectModel: vi.fn(() => ({ findById: vi.fn().mockResolvedValue(null) })),
+}));
+vi.mock('@/database/models/task', () => ({
+  TaskModel: vi.fn(() => ({ findById: vi.fn().mockResolvedValue(null) })),
+}));
+
 const { metricRouter } = await import('../metric');
 
 describe('metricRouter', () => {
@@ -95,11 +109,45 @@ describe('metricRouter', () => {
   });
 
   describe('upsertSeries', () => {
+    it('rejects a subject the caller cannot see before touching the slot', async () => {
+      mockGoalFindById.mockResolvedValue(undefined);
+
+      await expect(
+        caller.upsertSeries({ key: 'k', subjectId: 'goal_foreign', subjectType: 'goal' }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(mockModel.ensure).not.toHaveBeenCalled();
+    });
+
     it('maps a foreign-owned slot to CONFLICT', async () => {
+      mockGoalFindById.mockResolvedValue({ id: 'goal_1' });
       mockModel.ensure.mockResolvedValue(undefined);
       await expect(
         caller.upsertSeries({ key: 'k', subjectId: 'goal_1', subjectType: 'goal' }),
       ).rejects.toMatchObject({ code: 'CONFLICT' });
+    });
+  });
+
+  describe('workspace creator scope', () => {
+    it.each([
+      ['updateSeries', () => caller.updateSeries({ id: 'mtr_1', title: 'hijack' })],
+      ['deleteSeries', () => caller.deleteSeries({ id: 'mtr_1' })],
+    ])('%s refuses a non-owner member mutating a coworker series', async (_name, run) => {
+      // Workspace visibility lets the member *read* the series; mutating a row
+      // another member created stays FORBIDDEN without the owner role.
+      mockModel.findById.mockResolvedValue({ id: 'mtr_1', userId: 'coworker' });
+
+      await expect(run()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(mockModel.update).not.toHaveBeenCalled();
+      expect(mockModel.delete).not.toHaveBeenCalled();
+    });
+
+    it('deleteSeries surfaces NOT_FOUND when nothing was deleted', async () => {
+      mockModel.findById.mockResolvedValue({ id: 'mtr_1', userId: 'user-1' });
+      mockModel.delete.mockResolvedValue(undefined);
+
+      await expect(caller.deleteSeries({ id: 'mtr_1' })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
     });
   });
 });

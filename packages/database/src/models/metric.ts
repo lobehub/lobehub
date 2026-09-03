@@ -96,9 +96,12 @@ export class MetricModel {
   };
 
   findById = async (id: string): Promise<MetricItem | undefined> => {
-    return this.db.query.metrics.findFirst({
-      where: and(eq(metrics.id, id), this.seriesOwnership()),
-    });
+    const [row] = await this.db
+      .select()
+      .from(metrics)
+      .where(and(eq(metrics.id, id), this.seriesOwnership()))
+      .limit(1);
+    return row;
   };
 
   findByKey = async (
@@ -106,28 +109,36 @@ export class MetricModel {
     subjectId: string,
     key: string,
   ): Promise<MetricItem | undefined> => {
-    return this.db.query.metrics.findFirst({
-      where: and(
-        eq(metrics.subjectType, subjectType),
-        eq(metrics.subjectId, subjectId),
-        eq(metrics.key, key),
-        this.seriesOwnership(),
-      ),
-    });
+    const [row] = await this.db
+      .select()
+      .from(metrics)
+      .where(
+        and(
+          eq(metrics.subjectType, subjectType),
+          eq(metrics.subjectId, subjectId),
+          eq(metrics.key, key),
+          this.seriesOwnership(),
+        ),
+      )
+      .limit(1);
+    return row;
   };
 
   findBySubject = async (
     subjectType: MetricSubjectType,
     subjectId: string,
   ): Promise<MetricItem[]> => {
-    return this.db.query.metrics.findMany({
-      orderBy: asc(metrics.key),
-      where: and(
-        eq(metrics.subjectType, subjectType),
-        eq(metrics.subjectId, subjectId),
-        this.seriesOwnership(),
-      ),
-    });
+    return this.db
+      .select()
+      .from(metrics)
+      .where(
+        and(
+          eq(metrics.subjectType, subjectType),
+          eq(metrics.subjectId, subjectId),
+          this.seriesOwnership(),
+        ),
+      )
+      .orderBy(asc(metrics.key));
   };
 
   update = async (id: string, patch: MetricPatch): Promise<MetricItem | undefined> => {
@@ -139,9 +150,16 @@ export class MetricModel {
     return row;
   };
 
-  /** Hard delete; points cascade with the series. */
-  delete = async (id: string): Promise<void> => {
-    await this.db.delete(metrics).where(and(eq(metrics.id, id), this.seriesOwnership()));
+  /**
+   * Hard delete; points cascade with the series. Returns the deleted row so
+   * the caller can tell a completed deletion from a stale or foreign id.
+   */
+  delete = async (id: string): Promise<MetricItem | undefined> => {
+    const [row] = await this.db
+      .delete(metrics)
+      .where(and(eq(metrics.id, id), this.seriesOwnership()))
+      .returning();
+    return row;
   };
 
   // ── Points ──────────────────────────────────────────────
@@ -188,6 +206,11 @@ export class MetricModel {
    * average down), `gauge` takes avg. Returns undefined when the series is
    * not visible to this owner, so callers can distinguish "no data" from
    * "no series".
+   *
+   * When the range holds more rows than `limit`, the *newest* window is kept
+   * (fetched descending, then reversed for rendering) — a chart that silently
+   * drops its current tail goes stale, while a truncated history is visibly
+   * incomplete on the left edge.
    */
   listPoints = async (
     metricId: string,
@@ -210,9 +233,9 @@ export class MetricModel {
         .select({ observedAt: metricPoints.observedAt, value: metricPoints.value })
         .from(metricPoints)
         .where(where)
-        .orderBy(asc(metricPoints.observedAt))
+        .orderBy(desc(metricPoints.observedAt))
         .limit(limit);
-      return { points: rows, series };
+      return { points: rows.reverse(), series };
     }
 
     const bucketExpr = sql`date_trunc(${bucket}, ${metricPoints.observedAt})`;
@@ -229,8 +252,8 @@ export class MetricModel {
       // parameter, and Postgres will not match two date_trunc($n, …) calls
       // with different parameter slots as the same grouping expression.
       .groupBy(sql`1`)
-      .orderBy(sql`1`)
+      .orderBy(sql`1 desc`)
       .limit(limit);
-    return { points: rows, series };
+    return { points: rows.reverse(), series };
   };
 }

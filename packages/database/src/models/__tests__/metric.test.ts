@@ -174,6 +174,16 @@ describe('MetricModel', () => {
       const series = await seedWeek('gauge');
       expect(await otherModel.listPoints(series.id)).toBeUndefined();
     });
+
+    it('keeps the newest window when the limit truncates, still ascending', async () => {
+      const series = await seedWeek('gauge');
+
+      const raw = await model.listPoints(series.id, { limit: 2 });
+      expect(raw?.points.map((p) => p.value)).toEqual([30, 20]);
+
+      const bucketed = await model.listPoints(series.id, { bucket: 'day', limit: 1 });
+      expect(bucketed?.points.map((p) => p.observedAt)).toEqual([day(2)]);
+    });
   });
 
   describe('delete', () => {
@@ -186,10 +196,18 @@ describe('MetricModel', () => {
         value: 1,
       });
 
-      await model.delete(series.id);
+      const deleted = await model.delete(series.id);
 
+      expect(deleted?.id).toBe(series.id);
       expect(await model.findById(series.id)).toBeUndefined();
       expect(await model.latestPoint(series.id)).toBeUndefined();
+    });
+
+    it('reports nothing deleted for a foreign or missing series', async () => {
+      const series = (await seed())!;
+      expect(await otherModel.delete(series.id)).toBeUndefined();
+      expect(await model.findById(series.id)).toBeDefined();
+      expect(await model.delete('mtr_missing')).toBeUndefined();
     });
   });
 });

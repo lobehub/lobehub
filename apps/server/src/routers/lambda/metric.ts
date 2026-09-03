@@ -1,11 +1,19 @@
+import type { MetricSubjectType } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { AgentModel } from '@/database/models/agent';
+import { GoalModel } from '@/database/models/goal';
 import { MetricModel } from '@/database/models/metric';
+import { ProjectModel } from '@/database/models/project';
+import { TaskModel } from '@/database/models/task';
+import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
 
 const metricProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
   opts.next({
@@ -50,6 +58,43 @@ function mapMetricError(error: unknown, operation: string): never {
 
 const notFound = () => new TRPCError({ code: 'NOT_FOUND', message: 'Metric series not found' });
 
+/**
+ * The subject link is polymorphic with no FK, and the schema explicitly leaves
+ * existence/ownership validation to the service that binds it. Without this
+ * check a caller could mint series against arbitrary ids — durable dangling
+ * rows, and because (subject_type, subject_id, key) is globally unique, a
+ * reserved slot the legitimate owner can never claim.
+ */
+const assertSubjectVisible = async (
+  db: LobeChatDatabase,
+  ctx: { userId: string; workspaceId?: string | null },
+  subjectType: MetricSubjectType,
+  subjectId: string,
+): Promise<void> => {
+  const workspaceId = ctx.workspaceId ?? undefined;
+  const visible = await (() => {
+    switch (subjectType) {
+      case 'agent': {
+        return new AgentModel(db, ctx.userId, workspaceId).existsById(subjectId);
+      }
+      case 'goal': {
+        return new GoalModel(db, ctx.userId, workspaceId).findById(subjectId);
+      }
+      case 'project': {
+        return new ProjectModel(db, ctx.userId, workspaceId).findById(subjectId);
+      }
+      case 'task': {
+        return new TaskModel(db, ctx.userId, workspaceId).findById(subjectId);
+      }
+      case 'workspace': {
+        return workspaceId === subjectId;
+      }
+    }
+  })();
+  if (!visible)
+    throw new TRPCError({ code: 'NOT_FOUND', message: `Metric subject not found: ${subjectType}` });
+};
+
 export const metricRouter = router({
   /**
    * Append one observation. Actor attribution is server-set — a TRPC caller is
@@ -84,7 +129,13 @@ export const metricRouter = router({
 
   deleteSeries: metricWriteProcedure.input(idInput).mutation(async ({ input, ctx }) => {
     try {
-      await ctx.metricModel.delete(input.id);
+      const series = await ctx.metricModel.findById(input.id);
+      if (!series) throw notFound();
+      // Workspace visibility lets any member read the series; deleting it (and
+      // cascading every observation) stays with the creator or an owner.
+      assertWorkspaceRowManageable(ctx, series.userId, 'metric series');
+      const deleted = await ctx.metricModel.delete(input.id);
+      if (!deleted) throw notFound();
       return { message: 'Series deleted', success: true };
     } catch (error) {
       mapMetricError(error, 'deleteSeries');
@@ -155,6 +206,11 @@ export const metricRouter = router({
     .mutation(async ({ input, ctx }) => {
       try {
         const { id, ...patch } = input;
+        const existing = await ctx.metricModel.findById(id);
+        if (!existing) throw notFound();
+        // Definition edits rewrite the render/evaluation contract for everyone
+        // reading the series — creator or workspace owner only.
+        assertWorkspaceRowManageable(ctx, existing.userId, 'metric series');
         const series = await ctx.metricModel.update(id, patch);
         if (!series) throw notFound();
         return { data: series, message: 'Series updated', success: true };
@@ -174,6 +230,7 @@ export const metricRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
+        await assertSubjectVisible(ctx.serverDB, ctx, input.subjectType, input.subjectId);
         const series = await ctx.metricModel.ensure(input);
         if (!series)
           throw new TRPCError({
