@@ -386,13 +386,24 @@ export class TrashService {
       const owner = rootsById.get(child.rootId);
       if (owner) restoringDocumentOwners.set(child.resourceId, owner);
     }
+    const dependenciesByRootId = new Map(selectedRoots.map((root) => [root.id, new Set<string>()]));
+    for (const resource of [...selectedRoots, ...closureChildren]) {
+      const owner = resource.rootId ? rootsById.get(resource.rootId) : rootsById.get(resource.id);
+      const parentId = resource.meta?.parentId;
+      const parentOwner = parentId ? restoringDocumentOwners.get(parentId) : undefined;
+      if (!owner || !parentOwner || owner.id === parentOwner.id) continue;
+      dependenciesByRootId.get(owner.id)?.add(parentOwner.id);
+    }
     const restoreDepth = (root: TrashItemRow, visited = new Set<string>()): number => {
       if (visited.has(root.id)) return 0;
-      const parentId = root.meta?.parentId;
-      const parentOwner = parentId ? restoringDocumentOwners.get(parentId) : undefined;
-      if (!parentOwner || parentOwner.id === root.id) return 0;
       const nextVisited = new Set(visited).add(root.id);
-      return restoreDepth(parentOwner, nextVisited) + 1;
+      return Math.max(
+        0,
+        ...[...(dependenciesByRootId.get(root.id) ?? [])].map((dependencyId) => {
+          const dependency = rootsById.get(dependencyId);
+          return dependency ? restoreDepth(dependency, nextVisited) + 1 : 0;
+        }),
+      );
     };
     const orderedRoots = roots
       .map((root, index) => ({ depth: restoreDepth(root), index, root }))

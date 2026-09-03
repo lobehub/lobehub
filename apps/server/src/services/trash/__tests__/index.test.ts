@@ -1375,6 +1375,43 @@ describe('TrashService', () => {
       expect(await documentModel.findById(child.id)).toMatchObject({ parentId: parent.id });
     });
 
+    it('orders a file root after the selected folder needed by its mirror child', async () => {
+      const folder = await documentModel.create({
+        fileType: 'custom/folder',
+        source: '',
+        sourceType: 'api',
+        title: 'Mirror parent',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+      const file = await fileModel.create({
+        fileType: 'text/plain',
+        name: 'nested-mirror.txt',
+        size: 1,
+        url: 'files/nested-mirror.txt',
+      });
+      const mirror = await documentModel.create({
+        fileId: file.id,
+        fileType: 'custom/document',
+        parentId: folder.id,
+        source: 'files/nested-mirror.txt',
+        sourceType: 'file',
+        title: 'Nested mirror',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+      const [fileRoot] = await service.trashFiles([file.id]);
+      const [folderRoot] = await service.trashDocuments([folder.id]);
+
+      const outcome = await service.restore([fileRoot.id, folderRoot.id]);
+
+      expect(outcome.failed).toEqual([]);
+      expect(outcome.restored.map((item) => item.id)).toEqual([folderRoot.id, fileRoot.id]);
+      expect(await documentModel.findById(folder.id)).toBeDefined();
+      expect(await fileModel.findById(file.id)).toBeDefined();
+      expect(await documentModel.findById(mirror.id)).toMatchObject({ parentId: folder.id });
+    });
+
     it("refuses to restore a public document beneath another creator's private trashed parent", async () => {
       const workspaceId = 'trash-private-parent-document-workspace';
       await serverDB.insert(workspaces).values({
