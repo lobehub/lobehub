@@ -217,7 +217,7 @@ const findWindowsPowerShell = async (): Promise<string | undefined> => {
     'v1.0',
     'powershell.exe',
   );
-  return (await executableExists(candidate)) ? candidate : undefined;
+  return firstExisting([candidate]);
 };
 
 /**

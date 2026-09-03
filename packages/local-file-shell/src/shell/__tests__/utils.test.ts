@@ -180,6 +180,24 @@ describe('getShellConfig', () => {
     expect((await getShellConfig('echo two')).cmd).toBe(powershellPath);
   });
 
+  it('should fall back to cmd after Windows PowerShell is marked unhealthy', async () => {
+    setPlatform('win32');
+    process.env.PATH = 'C:\\Tools';
+    process.env.SystemRoot = 'C:\\Windows';
+    const powershellPath = path.join(
+      'C:\\Windows',
+      'System32',
+      'WindowsPowerShell',
+      'v1.0',
+      'powershell.exe',
+    );
+    mockExisting(powershellPath);
+
+    expect((await getShellConfig('echo one')).cmd).toBe(powershellPath);
+    markWindowsShellUnhealthy(powershellPath);
+    expect(await getShellConfig('echo two')).toEqual({ args: ['/c', 'echo two'], cmd: 'cmd.exe' });
+  });
+
   it('should share a single detection run between concurrent first calls', async () => {
     setPlatform('win32');
     const pwshDir = '/fake/tools/pwsh';

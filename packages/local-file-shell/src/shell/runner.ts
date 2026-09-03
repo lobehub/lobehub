@@ -67,7 +67,7 @@ export async function runCommand(
   // Node reports a missing working directory as a spawn ENOENT for the shell
   // executable, which sends users looking for a PowerShell installation issue
   // that does not exist. Fail before shell detection with the actual cause.
-  if (cwd) {
+  if (process.platform === 'win32' && cwd) {
     try {
       const cwdStat = await fs.promises.stat(cwd);
       if (!cwdStat.isDirectory()) {
@@ -155,6 +155,9 @@ export async function runCommand(
     childProcess.on('exit', (code) => {
       logger?.debug(`${logPrefix} Process exited`, { code, shellId });
       shellProcess.exitCode = code ?? 0;
+      if (process.platform === 'win32' && !sandboxPolicy && code === WINDOWS_DLL_INIT_FAILED) {
+        markWindowsShellUnhealthy(shellConfig.cmd);
+      }
     });
 
     childProcess.on('error', (error) => {
@@ -208,7 +211,6 @@ export async function runCommand(
     // retry exactly once with the next shell in the detection chain.
     if (
       process.platform === 'win32' &&
-      !run_in_background &&
       !sandboxPolicy &&
       !shellFallbackAttempted &&
       isWindowsShellSpawnFailure(result)
