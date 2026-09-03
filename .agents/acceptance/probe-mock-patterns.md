@@ -1749,6 +1749,22 @@ pool instance along the way (the log shows
 `GPU process exited unexpectedly: exit_code=15`), so the order is: fix the port and
 start the server first, then start Electron.
 
+#### Electron 实例连不上后端：先看它存的 `remoteServerUrl`，再注入种子 cookie
+
+**Situation:** 池实例起来了、`app-probe.sh auth` 也报 `isSignedIn: true`，但页面是骨架屏或「与服务器的连接被拒绝」，随后弹「登录已过期」。
+
+**Doesn't work:** 把它当成被测分支的加载缺陷去查数据或路由。渲染进程的 `isSignedIn` 读的是本地 store，和「能不能访问后端」是两回事。也不要去点「重新登录」——那会走 OAuth，按项目规范是禁止的。
+
+**Works:** 先读实例存档 `<userData>/lobehub-settings.json` 的 `dataSyncConfig.remoteServerUrl`。它常常指向某次历史运行的动态端口，那个端口现在没人监听。两种收敛方式：把本轮 dev server 直接起在那个端口（`APP_URL=http://localhost:<port> PORT=<port> init-dev-env.sh dev`，不动共享存档），或改存档指向当前端口。
+
+端口对上之后若仍提示登录过期，说明存档里的 token 已经不可刷新。此时按 `references/auth.md` 的第 2 条注入而不是登录：better-auth 的 cookie 是按 host 存的、与端口无关，所以 `setup-auth.sh web-seed` 种出来的 `~/.lobehub-agent-testing/web-state.json` 可以直接搬进 Electron 会话：
+
+```bash
+agent-browser --session s<port> --cdp <port> cookies set better-auth.session_token "<value>" --url http://localhost:<port> --path / --httpOnly
+```
+
+判定用 `app-probe.sh server-auth`（真发一个带鉴权的请求）而不是 `auth`，返回 `{"authenticated":true,"status":200}` 才算通。收尾时用 `electron-dev.sh stop <id>` 而不是 kill，它会把修好的登录态回存到共享快照，下一轮就不用重来。
+
 ### Renderer OTA: creating a real download delta in dev
 
 **Situation:** verifying renderer OTA incremental download in dev, where the

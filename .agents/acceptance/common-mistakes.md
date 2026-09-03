@@ -1051,3 +1051,11 @@ A clean round prints `plan: N item(s)` with nothing after it.
 `lh acceptance run delete`: deleting the round to hide a bookkeeping error also
 destroys the real results and evidence it carried, and rounds are immutable
 snapshots.
+
+### L-S20 — 在 dev server 运行期间做 standalone 安装
+
+**Wrong approach:** dev server 已经起着，中途在 `apps/cli` 或 `apps/desktop` 里跑 `pnpm install`（因为发现某个 standalone app 缺依赖），然后继续用同一个 server 取证。
+
+**Why it fails:** 这两个 app 有自己的 `node_modules`，安装会在仓库里落下同一个包的第二份副本（常常还绑着不同的 react 版本）。Turbopack 的模块图是运行期建立的，新副本出现后它可能把 `packages/*` 的导入解析到那份副本上，于是 `packages/const` 这类共享模块报 `Module ... was instantiated because it was required from ..., but the module factory is not available`。整条 tRPC 全线 500，页面上表现为「项目列表加载失败」这类业务错误，读起来完全像被测改动的缺陷；错误信息里唯一的线索是那条 `apps/cli/node_modules/...` 路径。
+
+**Correct approach:** 需要哪个 standalone app 就在**启动 dev server 之前**装完。若确实中途装了，不要就地继续取证：`rm -rf .next node_modules/.vite` 并重启 dev server 进程，再复验一次同样的请求返回 200。与 [[L-S0]] 的区别是触发源——那条是依赖范围变更导致的重复解析，这条是安装动作本身发生在 server 生命周期之内。
