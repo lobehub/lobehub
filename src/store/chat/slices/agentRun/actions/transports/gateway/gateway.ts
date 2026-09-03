@@ -55,6 +55,14 @@ import { createGatewayEventBuffer } from './gatewayEventBuffer';
 import { createGatewayEventHandler, isCompletedRuntimeEnd } from './gatewayEventHandler';
 import { createGatewayEventRouter } from './gatewayEventRouter';
 import { createGatewayMemberStreamHandler } from './gatewayMemberStreamHandler';
+import {
+  gatewayPerfAbort,
+  gatewayPerfConnectStart,
+  gatewayPerfFirstEvent,
+  gatewayPerfFreshRun,
+  gatewayPerfReconnect,
+  gatewayPerfStatusChanged,
+} from './gatewayPerf';
 
 /**
  * Interrupts a gateway operation and rejects when its physical shutdown is unconfirmed.
@@ -313,6 +321,7 @@ export class GatewayActionImpl {
 
     // Wire up status changes
     client.on('status_changed', (status) => {
+      gatewayPerfStatusChanged(operationId, status);
       this.#set(
         (state) => {
           const conn = state.gatewayConnections[operationId];
@@ -356,6 +365,7 @@ export class GatewayActionImpl {
     // status. Match on the event's operationId (absent ⇒ legacy single-op WS,
     // treat as this op's to preserve prior behavior).
     client.on('agent_event', (event) => {
+      gatewayPerfFirstEvent(operationId);
       const isOwnOp = !event.operationId || event.operationId === operationId;
       if (isOwnOp && (event.type === 'agent_runtime_end' || event.type === 'error')) {
         receivedTerminalEvent = true;
@@ -435,6 +445,7 @@ export class GatewayActionImpl {
    * Disconnect from the Gateway for a specific operation.
    */
   disconnectFromGateway = (operationId: string): void => {
+    gatewayPerfAbort(operationId);
     const conn = this.#get().gatewayConnections[operationId];
     if (!conn) return;
 
@@ -681,6 +692,10 @@ export class GatewayActionImpl {
     // share config, never by this client.
     const agentShareId = executionContext.agentShareId;
 
+    // Phase-0 perf instrumentation: measure the exec round trip, the store-sync
+    // gap before the WS connect, and the connect/auth/first-event chain. See
+    // gatewayPerf.ts for the phase model.
+    const execStartedAt = precreatedResult ? null : Date.now();
     const result =
       precreatedResult ??
       (agentShareId
@@ -762,6 +777,7 @@ export class GatewayActionImpl {
 
     // Persistence is the ownership boundary. Notify before later UI synchronization awaits and
     // before handling a late abort so callers never delete a file already attached server-side.
+    gatewayPerfFreshRun(result.operationId, execStartedAt);
     try {
       onMessageAccepted?.();
     } catch (error) {
@@ -1016,6 +1032,8 @@ export class GatewayActionImpl {
       }),
     });
 
+    gatewayPerfConnectStart(result.operationId);
+
     // Demux the supervisor's WebSocket: with single-connection multiplexing
     // this WS also carries each broadcast member's streaming events (forwarded
     // server-side onto the supervisor op channel). Route owner events to the
@@ -1165,6 +1183,7 @@ export class GatewayActionImpl {
     // the store). Clear it and bail silently so the reconnect SWR fetcher resolves
     // and does not retry the 404 forever.
     let token: string;
+    const refreshStartedAt = Date.now();
     try {
       // Share visitors have no owner-scoped access to `aiAgentService.refreshGatewayToken`
       // (its TopicModel is scoped to the caller, and share topics belong to the
@@ -1273,6 +1292,8 @@ export class GatewayActionImpl {
       ownerOperationId: operationId,
     });
 
+    gatewayPerfReconnect(operationId, refreshStartedAt);
+    gatewayPerfConnectStart(operationId);
     this.#get().connectToGateway({
       gatewayUrl: agentGatewayUrl,
       onEvent: eventRouter,
