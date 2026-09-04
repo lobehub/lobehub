@@ -1,5 +1,5 @@
 import type { KnowledgeBaseItem } from '@lobechat/types';
-import { and, asc, count, desc, eq, inArray, ne, or, sum } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNull, ne, or, sum } from 'drizzle-orm';
 
 import type {
   KnowledgeBaseItem as KnowledgeBaseRecord,
@@ -785,6 +785,30 @@ export class KnowledgeBaseModel {
       .groupBy(knowledgeBaseFiles.fileId);
 
     return sharedFiles.filter((f) => Number(f.kbCount) === 1).map((f) => f.fileId);
+  };
+
+  lockPurgeDocumentIds = async (
+    knowledgeBaseId: string,
+    exclusiveFileIds: string[],
+  ): Promise<string[]> => {
+    const exclusiveDocumentWhere =
+      exclusiveFileIds.length > 0
+        ? or(isNull(documents.fileId), inArray(documents.fileId, exclusiveFileIds))
+        : isNull(documents.fileId);
+
+    const rows = await this.db
+      .select({ id: documents.id })
+      .from(documents)
+      .where(
+        and(
+          eq(documents.knowledgeBaseId, knowledgeBaseId),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents),
+          exclusiveDocumentWhere,
+        ),
+      )
+      .for('update');
+
+    return rows.map(({ id }) => id);
   };
 
   /**

@@ -154,6 +154,14 @@ export class DocumentModel {
     return this.db.delete(documents).where(and(eq(documents.id, id), this.ownership()));
   };
 
+  deleteMany = async (ids: string[]) => {
+    if (ids.length === 0) return [];
+    return this.db
+      .delete(documents)
+      .where(and(inArray(documents.id, ids), this.ownership()))
+      .returning({ id: documents.id });
+  };
+
   deleteAll = async () => {
     return this.db.delete(documents).where(this.ownership());
   };

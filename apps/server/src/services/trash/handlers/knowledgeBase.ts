@@ -1,3 +1,4 @@
+import { DocumentModel } from '@/database/models/document';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import type { LobeChatDatabase } from '@/database/type';
@@ -37,6 +38,13 @@ export const knowledgeBaseHandler: TrashHandler = {
 
       await knowledgeBaseModel.lockLinkedFiles(root.resourceId);
       const exclusiveFileIds = await knowledgeBaseModel.findExclusiveFileIds(root.resourceId);
+      const exclusiveDocumentIds = await knowledgeBaseModel.lockPurgeDocumentIds(
+        root.resourceId,
+        exclusiveFileIds,
+      );
+      const deletedDocuments = await new DocumentModel(db, ctx.userId, ctx.workspaceId).deleteMany(
+        exclusiveDocumentIds,
+      );
       if (exclusiveFileIds.length > 0) {
         // Delete database rows and persist the S3 retry hand-off while the
         // shared-file lock is held. External storage cleanup runs after commit.
@@ -44,9 +52,11 @@ export const knowledgeBaseHandler: TrashHandler = {
       }
       await knowledgeBaseModel.purge([root.resourceId]);
       if (ctx.workspaceId) {
-        await new ResourcePermissionModel(db, ctx.workspaceId).removeAll(
-          'knowledgeBase',
-          root.resourceId,
+        const permissionModel = new ResourcePermissionModel(db, ctx.workspaceId);
+        await permissionModel.removeAll('knowledgeBase', root.resourceId);
+        await permissionModel.removeAllByIds(
+          'document',
+          deletedDocuments.map(({ id }) => id),
         );
       }
     });

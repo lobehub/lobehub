@@ -1276,6 +1276,102 @@ describe('TrashService', () => {
       expect(await serverDB.select().from(files).where(eq(files.id, fileId))).toHaveLength(0);
     });
 
+    it('purges folder-only documents without deleting documents backed by shared files', async () => {
+      const workspaceId = 'trash-kb-folder-purge-workspace';
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'KB folder purge',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      const workspaceKnowledgeBaseModel = new KnowledgeBaseModel(serverDB, userId, workspaceId);
+      const workspaceDocumentModel = new DocumentModel(serverDB, userId, workspaceId);
+      const workspaceFileModel = new FileModel(serverDB, userId, workspaceId);
+      const workspaceService = new TrashService(serverDB, userId, workspaceId);
+      const firstKnowledgeBase = await workspaceKnowledgeBaseModel.create({
+        name: 'First library',
+      });
+      const secondKnowledgeBase = await workspaceKnowledgeBaseModel.create({
+        name: 'Second library',
+      });
+      const folder = await workspaceDocumentModel.create({
+        fileType: 'custom/folder',
+        knowledgeBaseId: firstKnowledgeBase.id,
+        source: '',
+        sourceType: 'api',
+        title: 'Folder only',
+        totalCharCount: 0,
+        totalLineCount: 0,
+        visibility: 'public',
+      });
+      const sharedFile = await workspaceFileModel.create({
+        fileType: 'text/plain',
+        knowledgeBaseId: firstKnowledgeBase.id,
+        name: 'shared.txt',
+        size: 6,
+        url: 'files/shared.txt',
+        visibility: 'public',
+      });
+      await serverDB.insert(knowledgeBaseFiles).values({
+        fileId: sharedFile.id,
+        knowledgeBaseId: secondKnowledgeBase.id,
+        userId,
+        workspaceId,
+      });
+      const sharedDocument = await workspaceDocumentModel.create({
+        fileId: sharedFile.id,
+        fileType: 'custom/page',
+        knowledgeBaseId: firstKnowledgeBase.id,
+        source: '',
+        sourceType: 'api',
+        title: 'Shared page',
+        totalCharCount: 0,
+        totalLineCount: 0,
+        visibility: 'public',
+      });
+      await serverDB.insert(resourcePermissions).values([
+        {
+          accessLevel: 'edit',
+          createdBy: userId,
+          resourceId: folder.id,
+          resourceType: 'document',
+          workspaceId,
+        },
+        {
+          accessLevel: 'edit',
+          createdBy: userId,
+          resourceId: sharedDocument.id,
+          resourceType: 'document',
+          workspaceId,
+        },
+      ]);
+
+      const [root] = await workspaceService.trashKnowledgeBases([firstKnowledgeBase.id]);
+      await workspaceService.purge([root.id]);
+
+      expect(await serverDB.select().from(documents).where(eq(documents.id, folder.id))).toEqual(
+        [],
+      );
+      expect(
+        await serverDB
+          .select()
+          .from(resourcePermissions)
+          .where(eq(resourcePermissions.resourceId, folder.id)),
+      ).toEqual([]);
+      expect(
+        await serverDB.select().from(documents).where(eq(documents.id, sharedDocument.id)),
+      ).toEqual([expect.objectContaining({ id: sharedDocument.id, knowledgeBaseId: null })]);
+      expect(await serverDB.select().from(files).where(eq(files.id, sharedFile.id))).toHaveLength(
+        1,
+      );
+      expect(
+        await serverDB
+          .select()
+          .from(resourcePermissions)
+          .where(eq(resourcePermissions.resourceId, sharedDocument.id)),
+      ).toHaveLength(1);
+    });
+
     it('serializes concurrent knowledge-base purges that share their last file', async () => {
       const firstKnowledgeBase = await knowledgeBaseModel.create({ name: 'First library' });
       const secondKnowledgeBase = await knowledgeBaseModel.create({ name: 'Second library' });
