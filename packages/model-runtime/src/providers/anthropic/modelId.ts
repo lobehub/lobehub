@@ -178,7 +178,10 @@ const EFFORTS_INCOMPATIBLE_WITH_DISABLED_THINKING = new Set(['xhigh', 'max']);
  * Unsupported routed values are omitted rather than allowing the provider to reject the request.
  * @see https://platform.claude.com/docs/en/build-with-claude/effort
  */
-export const supportsClaudeEffortLevel = (model: string, effort: string | undefined): boolean => {
+export const supportsClaudeEffortLevel = (
+  model: string,
+  effort: string | undefined,
+): effort is 'high' | 'low' | 'max' | 'medium' | 'xhigh' => {
   if (!effort) return false;
 
   const normalizedModelId = model
