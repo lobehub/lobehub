@@ -9,6 +9,7 @@ import { Component, type CSSProperties, lazy, memo, type PropsWithChildren, Susp
 import { LobeAnalyticsProviderWrapper } from '@/components/Analytics/LobeAnalyticsProviderWrapper';
 import { DragUploadProvider } from '@/components/DragUploadZone/DragUploadProvider';
 import { isDesktop } from '@/const/version';
+import TaskDock from '@/features/TaskDock';
 import { useDevDockMounted } from '@/hooks/useDevDockMounted';
 import AuthProvider from '@/layout/AuthProvider';
 import { MarketAuthProvider } from '@/layout/AuthProvider/MarketAuth';
@@ -107,6 +108,7 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
                 <BaseModalHost />
                 <ToastHost />
                 <ContextMenuHost />
+                <TaskDock />
                 <Suspense>
                   <ImperativeMountHost />
                 </Suspense>
