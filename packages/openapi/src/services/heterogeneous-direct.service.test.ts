@@ -189,7 +189,12 @@ describe('heterogeneous direct invocation protocol', () => {
       agentType: 'grok-build',
       model: 'kimi-k3',
       payload: normalizeResponsesRequest(
-        { input: 'hello', model: 'lobehub-default', stream: true },
+        {
+          input: 'hello',
+          model: 'lobehub-default',
+          reasoning: { effort: 'high', summary: 'auto' },
+          stream: true,
+        },
         'lobehub-default',
       ),
       signal: new AbortController().signal,
@@ -199,9 +204,11 @@ describe('heterogeneous direct invocation protocol', () => {
     expect(chat.mock.calls[0][0]).toMatchObject({
       messages: [{ content: 'hello', role: 'user' }],
       model: 'kimi-k3',
+      reasoning_effort: 'high',
       stream: true,
     });
     expect(chat.mock.calls[0][0]).not.toHaveProperty('apiMode');
+    expect(chat.mock.calls[0][0]).not.toHaveProperty('reasoning');
   });
 
   it('adapts custom Codex relay models to chat completions with their reasoning effort', async () => {

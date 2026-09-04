@@ -919,9 +919,15 @@ export const invokeServerDefaultModel = async (params: {
   )
     ? (requestedReasoningEffort as ChatStreamPayload['reasoning_effort'])
     : undefined;
+  const routedReasoningEffort =
+    normalizedPayload.reasoning_effort ??
+    (requestedReasoningEffort as ChatStreamPayload['reasoning_effort']);
   // Responses describes the CLI-facing ingress, not necessarily the selected provider's API.
   // Keep it upstream only for native Codex models; the deployment router owns every other choice.
-  let payload = normalizedPayload;
+  let payload = {
+    ...chatCompletionsPayload,
+    ...(routedReasoningEffort ? { reasoning_effort: routedReasoningEffort } : {}),
+  };
   if (params.agentType === 'codex') {
     payload = isCodexServerDefaultCustomModel(params.model)
       ? {
