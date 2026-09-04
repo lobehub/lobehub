@@ -199,6 +199,7 @@ describe('MessageModel Create Tests', () => {
         content: 'tool result',
         plugin: {
           apiName: oversizedApiName,
+          arguments: '{}',
           identifier: oversizedIdentifier,
           type: 'default',
         },
