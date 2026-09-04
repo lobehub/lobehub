@@ -232,6 +232,49 @@ describe('acceptanceEvidenceRuntime', () => {
     expect(result.content).toContain('Document');
   });
 
+  it('accepts a caption alongside a cited artifact', async () => {
+    // A live builder that had captured a screenshot AND wanted to describe it
+    // was rejected, dropped the fileId, and resubmitted prose with the id
+    // written into the text — the text-only outcome this path exists to prevent.
+    mocks.operationFindById.mockResolvedValue({ id: 'task-op', parentOperationId: null });
+    mocks.fileFindById.mockResolvedValue({ id: 'files_shot' });
+    const runtime = acceptanceEvidenceRuntime.factory({
+      operationId: 'task-op',
+      serverDB: {} as never,
+      toolManifestMap: {},
+      userId: 'user-1',
+    });
+
+    const result = await runtime.submitEvidence({
+      checkItemId: 'criterion-1',
+      evidence: [{ content: 'The sign-in page rendered', fileId: 'files_shot', type: 'screenshot' }],
+    });
+
+    expect(result.success).toBe(true);
+    expect(mocks.evidenceCreateMany).toHaveBeenCalledWith([
+      expect.objectContaining({ content: 'The sign-in page rendered', fileId: 'files_shot' }),
+    ]);
+  });
+
+  it('rejects an item that references both a document and a file', async () => {
+    mocks.operationFindById.mockResolvedValue({ id: 'task-op', parentOperationId: null });
+    const runtime = acceptanceEvidenceRuntime.factory({
+      operationId: 'task-op',
+      serverDB: {} as never,
+      toolManifestMap: {},
+      userId: 'user-1',
+    });
+
+    const result = await runtime.submitEvidence({
+      checkItemId: 'criterion-1',
+      evidence: [{ documentId: 'docs_1', fileId: 'files_1', type: 'markdown' }],
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({ error: 'INVALID_EVIDENCE', success: false }),
+    );
+  });
+
   it('waits for a plan that the fire-and-forget run-start instantiation has not landed yet', async () => {
     // Answering NO_ACCEPTANCE_PLAN to a builder that asks what to prove as its
     // first move reads as "this Task has no Acceptance", and the run then ends

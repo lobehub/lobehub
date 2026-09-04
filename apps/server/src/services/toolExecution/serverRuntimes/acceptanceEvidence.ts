@@ -138,17 +138,25 @@ class AcceptanceEvidenceExecutionRuntime {
       })),
     };
 
-    if (
-      params.evidence.some(
-        (item) =>
-          [item.content, item.documentId, item.fileId].filter((value) => Boolean(value)).length !==
-          1,
-      )
-    ) {
+    // `content` is a caption, not a competing payload. Requiring exactly one of
+    // the three made a live builder that had captured a screenshot AND wanted to
+    // describe it get rejected, drop the fileId, and resubmit prose with the id
+    // written into the text — the exact text-only outcome this path exists to
+    // prevent. Only the two *references* are mutually exclusive.
+    const empty = params.evidence.find((item) => !item.content && !item.documentId && !item.fileId);
+    if (empty) {
+      return {
+        content: 'Every evidence item needs content, a documentId, or a fileId.',
+        error: 'INVALID_EVIDENCE',
+        success: false,
+      };
+    }
+    const ambiguous = params.evidence.find((item) => item.documentId && item.fileId);
+    if (ambiguous) {
       return {
         content:
-          'Every evidence item must carry exactly one of content, documentId, or fileId. ' +
-          'Omit the other two entirely — do not pass them as empty strings.',
+          'An evidence item references either a documentId or a fileId, not both. ' +
+          'Use `content` for any prose you want to attach alongside it.',
         error: 'INVALID_EVIDENCE',
         success: false,
       };
