@@ -12,6 +12,7 @@ import { messengerInstall } from './handlers/messengerInstall';
 import { messengerOAuthCallback } from './handlers/messengerOAuthCallback';
 import { messengerWebhook } from './handlers/messengerWebhook';
 import { platformWebhook } from './handlers/platformWebhook';
+import { reapOperations } from './handlers/reapOperations';
 import { runStep, runStepHealth } from './handlers/runStep';
 import { subAgentCallback } from './handlers/subAgentCallback';
 import { toolResult } from './handlers/toolResult';
@@ -55,6 +56,13 @@ app.get(
   '/gateway',
   bearerSecretAuth(() => process.env.CRON_SECRET),
   gatewayCron,
+);
+
+// GET /api/agent/reap-operations — Vercel cron entry point (Bearer CRON_SECRET)
+app.get(
+  '/reap-operations',
+  bearerSecretAuth(() => process.env.CRON_SECRET),
+  reapOperations,
 );
 
 // POST /api/agent/gateway/start — non-Vercel ensureRunning (Bearer KEY_VAULTS_SECRET)

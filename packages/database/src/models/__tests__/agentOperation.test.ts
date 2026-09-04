@@ -467,6 +467,88 @@ describe('AgentOperationModel', () => {
     });
   });
 
+  describe('claimStaleRedrive', () => {
+    const makeStale = async (operationId: string) =>
+      serverDB
+        .update(agentOperations)
+        .set({ updatedAt: new Date('2026-01-01T00:00:00.000Z') })
+        .where(eq(agentOperations.id, operationId));
+
+    const staleBefore = () => new Date(Date.now() - 60_000);
+
+    it('hands out increasing attempts and stops at the budget', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-redrive-budget';
+      await model.recordStart({ operationId });
+
+      await makeStale(operationId);
+      expect(await model.claimStaleRedrive(operationId, staleBefore(), 2)).toBe(1);
+      await makeStale(operationId);
+      expect(await model.claimStaleRedrive(operationId, staleBefore(), 2)).toBe(2);
+      await makeStale(operationId);
+      // Budget spent — the caller falls back to abandoning the operation.
+      expect(await model.claimStaleRedrive(operationId, staleBefore(), 2)).toBeNull();
+    });
+
+    it('re-arms the lease so the next sweep skips a recovering operation', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-redrive-rearm';
+      await model.recordStart({ operationId });
+      await makeStale(operationId);
+
+      expect(await model.claimStaleRedrive(operationId, staleBefore(), 3)).toBe(1);
+      // The claim itself bumped updatedAt, so the row is no longer a candidate.
+      expect(await model.claimStaleRedrive(operationId, staleBefore(), 3)).toBeNull();
+    });
+
+    it('loses to a heartbeat that landed after the candidate was selected', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-redrive-heartbeat-race';
+      await model.recordStart({ operationId });
+      await makeStale(operationId);
+
+      const selectedAt = staleBefore();
+      await model.touchRunning(operationId);
+
+      expect(await model.claimStaleRedrive(operationId, selectedAt, 3)).toBeNull();
+      expect((await model.findById(operationId))?.status).toBe('running');
+    });
+
+    it('never claims an operation that already reached a terminal state', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-redrive-terminal';
+      await model.recordStart({ operationId });
+      await model.recordCompletion(operationId, { completionReason: 'done', status: 'done' });
+      await makeStale(operationId);
+
+      expect(await model.claimStaleRedrive(operationId, staleBefore(), 3)).toBeNull();
+    });
+
+    it('preserves unrelated metadata keys', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-redrive-metadata';
+      await model.recordStart({ operationId, metadata: { keepMe: 'yes' } });
+      await makeStale(operationId);
+
+      await model.claimStaleRedrive(operationId, staleBefore(), 3);
+
+      const row = await model.findById(operationId);
+      expect(row?.metadata).toMatchObject({
+        keepMe: 'yes',
+        staleRedrive: { attempts: 1 },
+      });
+    });
+
+    it('is scoped to the owning user', async () => {
+      const operationId = 'op-redrive-ownership';
+      await new AgentOperationModel(serverDB, userId).recordStart({ operationId });
+      await makeStale(operationId);
+
+      const intruder = new AgentOperationModel(serverDB, otherUserId);
+      expect(await intruder.claimStaleRedrive(operationId, staleBefore(), 3)).toBeNull();
+    });
+  });
+
   describe('sumChildUsage', () => {
     const seedChild = async (
       model: AgentOperationModel,
