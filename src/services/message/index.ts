@@ -32,6 +32,27 @@ export interface MessageQueryContext {
   topicShareId?: string;
 }
 
+const normalizeMessageError = (value: ChatMessageError): ChatMessageError => {
+  const record =
+    value && typeof value === 'object' ? (value as unknown as Record<string, unknown>) : {};
+  const candidateType = record.type;
+  const type =
+    typeof candidateType === 'string' ||
+    (typeof candidateType === 'number' && Number.isFinite(candidateType))
+      ? candidateType
+      : 'ApplicationRuntimeError';
+
+  return {
+    ...record,
+    body: record.body ?? value,
+    message:
+      typeof record.message === 'string'
+        ? record.message
+        : 'The model request failed before returning a response',
+    type,
+  } as ChatMessageError;
+};
+
 interface MessageReadQueryContext {
   agentId?: string | null;
   /** Agent-share visitor surface — routes the read through `shareChat.getMessages`. */
@@ -213,9 +234,7 @@ export class MessageService {
   };
 
   updateMessageError = async (id: string, value: ChatMessageError, ctx?: MessageQueryContext) => {
-    const error = value.type
-      ? value
-      : { body: value, message: value.message, type: 'ApplicationRuntimeError' };
+    const error = normalizeMessageError(value);
 
     return lambdaClient.message.update.mutate({
       ...ctx,
@@ -250,10 +269,14 @@ export class MessageService {
     value: Partial<UpdateMessageParams>,
     ctx?: MessageQueryContext,
   ): Promise<UpdateMessageResult> => {
+    const normalizedValue = value.error
+      ? { ...value, error: normalizeMessageError(value.error) }
+      : value;
+
     return lambdaClient.message.update.mutate({
       ...ctx,
       id,
-      value,
+      value: normalizedValue,
     });
   };
 
