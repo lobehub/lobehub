@@ -120,6 +120,175 @@ describe('KnowledgeBaseModel', () => {
     });
   });
 
+  describe('trash lifecycle', () => {
+    it('soft-deletes, finds, restores, and purges only owned knowledge bases', async () => {
+      const owned = await knowledgeBaseModel.create({ name: 'Trash lifecycle' });
+      const foreignModel = new KnowledgeBaseModel(serverDB, 'user2');
+      const foreign = await foreignModel.create({ name: 'Foreign trash lifecycle' });
+      const deletedAt = new Date('2026-09-01T00:00:00Z');
+
+      await expect(
+        knowledgeBaseModel.softDelete([], { deletedAt, restrictToCreator: true }),
+      ).resolves.toEqual([]);
+      await expect(knowledgeBaseModel.findTrashedByIds([])).resolves.toEqual([]);
+      await expect(knowledgeBaseModel.restore([])).resolves.toEqual([]);
+      await expect(knowledgeBaseModel.purge([])).resolves.toEqual([]);
+
+      const deleted = await knowledgeBaseModel.softDelete([owned.id, foreign.id], {
+        deletedAt,
+        restrictToCreator: true,
+      });
+      expect(deleted.map(({ id }) => id)).toEqual([owned.id]);
+      await expect(knowledgeBaseModel.findById(owned.id)).resolves.toBeUndefined();
+
+      const trashed = await knowledgeBaseModel.findTrashedByIds([owned.id, foreign.id]);
+      expect(trashed).toEqual([
+        expect.objectContaining({ deletedAt, id: owned.id, isDeleted: true }),
+      ]);
+
+      const restored = await knowledgeBaseModel.restore([owned.id, foreign.id]);
+      expect(restored.map(({ id }) => id)).toEqual([owned.id]);
+      await expect(knowledgeBaseModel.findTrashedByIds([owned.id])).resolves.toEqual([]);
+
+      await knowledgeBaseModel.softDelete([owned.id], { deletedAt });
+      await expect(knowledgeBaseModel.purge([owned.id, foreign.id])).resolves.toEqual([
+        { id: owned.id },
+      ]);
+      await expect(KnowledgeBaseModel.findById(serverDB, owned.id)).resolves.toBeUndefined();
+      await expect(KnowledgeBaseModel.findById(serverDB, foreign.id)).resolves.toMatchObject({
+        id: foreign.id,
+      });
+    });
+
+    it('detects foreign cascade rows before a workspace transfer', async () => {
+      const kbWithForeignFile = await knowledgeBaseModel.create({ name: 'Foreign file cascade' });
+      await serverDB.insert(files).values({
+        fileType: 'text/plain',
+        id: 'foreign-cascade-file',
+        name: 'Foreign file',
+        size: 10,
+        url: 'internal://foreign-file',
+        userId: 'user2',
+      });
+      await serverDB.insert(knowledgeBaseFiles).values({
+        fileId: 'foreign-cascade-file',
+        knowledgeBaseId: kbWithForeignFile.id,
+        userId: 'user2',
+      });
+      await expect(knowledgeBaseModel.hasForeignLinkedRows(kbWithForeignFile.id)).resolves.toBe(
+        true,
+      );
+
+      const kbWithForeignDocument = await knowledgeBaseModel.create({
+        name: 'Foreign document cascade',
+      });
+      await serverDB.insert(documents).values({
+        content: 'Foreign document',
+        fileType: 'custom/document',
+        id: 'foreign-cascade-document',
+        knowledgeBaseId: kbWithForeignDocument.id,
+        source: 'document',
+        sourceType: 'api',
+        title: 'Foreign document',
+        totalCharCount: 16,
+        totalLineCount: 1,
+        userId: 'user2',
+      });
+      await expect(knowledgeBaseModel.hasForeignLinkedRows(kbWithForeignDocument.id)).resolves.toBe(
+        true,
+      );
+
+      const ownedOnly = await knowledgeBaseModel.create({ name: 'Owned cascade' });
+      await expect(knowledgeBaseModel.hasForeignLinkedRows(ownedOnly.id)).resolves.toBe(false);
+    });
+
+    it('locks linked files and resolves the documents eligible for knowledge-base purge', async () => {
+      const knowledgeBase = await knowledgeBaseModel.create({ name: 'Purge locks' });
+      await serverDB.insert(files).values({
+        fileType: 'text/plain',
+        id: 'purge-lock-file',
+        name: 'Purge lock file',
+        size: 10,
+        url: 'internal://purge-lock-file',
+        userId,
+      });
+      await serverDB.insert(knowledgeBaseFiles).values({
+        fileId: 'purge-lock-file',
+        knowledgeBaseId: knowledgeBase.id,
+        userId,
+      });
+      await serverDB.insert(documents).values([
+        {
+          content: 'Direct document',
+          fileType: 'custom/document',
+          id: 'purge-direct-document',
+          knowledgeBaseId: knowledgeBase.id,
+          source: 'document',
+          sourceType: 'api',
+          title: 'Direct document',
+          totalCharCount: 15,
+          totalLineCount: 1,
+          userId,
+        },
+        {
+          content: 'File document',
+          fileId: 'purge-lock-file',
+          fileType: 'text/plain',
+          id: 'purge-file-document',
+          knowledgeBaseId: knowledgeBase.id,
+          source: 'internal://purge-lock-file',
+          sourceType: 'file',
+          title: 'File document',
+          totalCharCount: 13,
+          totalLineCount: 1,
+          userId,
+        },
+      ]);
+
+      await expect(knowledgeBaseModel.lockLinkedFiles(knowledgeBase.id)).resolves.toBeUndefined();
+      await expect(
+        knowledgeBaseModel.lockPurgeDocumentIds(knowledgeBase.id, ['purge-lock-file']),
+      ).resolves.toEqual(expect.arrayContaining(['purge-direct-document', 'purge-file-document']));
+      await expect(knowledgeBaseModel.lockPurgeDocumentIds(knowledgeBase.id, [])).resolves.toEqual([
+        'purge-direct-document',
+      ]);
+
+      const empty = await knowledgeBaseModel.create({ name: 'No linked files' });
+      await expect(knowledgeBaseModel.lockLinkedFiles(empty.id)).resolves.toBeUndefined();
+    });
+
+    it('counts the total size of linked files', async () => {
+      const knowledgeBase = await knowledgeBaseModel.create({ name: 'File usage' });
+      const empty = await knowledgeBaseModel.create({ name: 'Empty file usage' });
+
+      await serverDB.insert(files).values([
+        {
+          fileType: 'text/plain',
+          id: 'file-usage-a',
+          name: 'File usage A',
+          size: 10,
+          url: 'internal://file-usage-a',
+          userId,
+        },
+        {
+          fileType: 'text/plain',
+          id: 'file-usage-b',
+          name: 'File usage B',
+          size: 20,
+          url: 'internal://file-usage-b',
+          userId,
+        },
+      ]);
+      await serverDB.insert(knowledgeBaseFiles).values([
+        { fileId: 'file-usage-a', knowledgeBaseId: knowledgeBase.id, userId },
+        { fileId: 'file-usage-b', knowledgeBaseId: knowledgeBase.id, userId },
+      ]);
+
+      await expect(knowledgeBaseModel.countFileUsage(knowledgeBase.id)).resolves.toBe(30);
+      await expect(knowledgeBaseModel.countFileUsage(empty.id)).resolves.toBe(0);
+    });
+  });
+
   describe('update', () => {
     it('should update a knowledge base', async () => {
       const { id } = await knowledgeBaseModel.create({ name: 'Test Group' });
