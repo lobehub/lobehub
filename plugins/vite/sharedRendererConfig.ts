@@ -8,6 +8,7 @@ import { lobeUiImports } from './lobeUiImports';
 import { viteMarkdownImport } from './markdownImport';
 import { viteNodeModuleStub } from './nodeModuleStub';
 import { vitePlatformResolve } from './platformResolve';
+import { viteStaticStylesPrecompile } from './staticStylesPrecompile';
 
 /**
  * Shared manual chunk naming — groups leaf-node modules to reduce chunk file count.
@@ -384,6 +385,7 @@ export function sharedRendererPlugins(options: SharedRendererOptions) {
         hotKeys: ['altKey', 'ctrlKey'],
       }),
     react(),
+    viteStaticStylesPrecompile(),
     ...(options.platform === 'desktop' ? [] : [...lobeIconImports(), ...lobeUiImports()]),
   ];
 }

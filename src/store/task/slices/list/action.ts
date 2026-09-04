@@ -395,7 +395,7 @@ export class TaskListSliceActionImpl {
        * Fetch every page instead of the first server page. The Tasks page
        * renders and groups the whole list client-side with no pagination, so
        * a single page silently dropped every task older than the newest 50
-       * once a workspace outgrew that (LOBE-13779). Embedded overviews that
+       * once a workspace outgrew that. Embedded overviews that
        * only show a slice keep the default single page.
        */
       complete?: boolean;

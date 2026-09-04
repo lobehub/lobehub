@@ -346,6 +346,65 @@ describe('Group', () => {
     ]);
   });
 
+  it('breaks an image-bearing tool out between two workflow folds', () => {
+    const { container } = render(
+      <Group
+        isLatestItem
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: 'Inspecting.',
+            id: 'block-1',
+            tools: [
+              { apiName: 'Bash', id: 'tool-0', identifier: 'claude-code' } as any,
+              { apiName: 'Bash', id: 'tool-1', identifier: 'claude-code' } as any,
+              {
+                apiName: 'Read',
+                id: 'tool-2',
+                identifier: 'claude-code',
+                result: {
+                  content: 'ok',
+                  id: 'r2',
+                  state: { images: [{ url: 'https://x/a.png' }] },
+                },
+              } as any,
+              { apiName: 'Bash', id: 'tool-3', identifier: 'claude-code' } as any,
+            ],
+          }),
+          blk({
+            content: 'Continuing.',
+            id: 'block-2',
+            tools: [{ apiName: 'Bash', id: 'tool-4', identifier: 'claude-code' } as any],
+          }),
+        ]}
+      />,
+    );
+
+    const sequence = Array.from(container.querySelectorAll('[data-testid]')).map((node) =>
+      node.getAttribute('data-testid'),
+    );
+    expect(sequence).toEqual(['workflow-segment', 'answer-segment', 'workflow-segment']);
+
+    const [first, second] = screen
+      .getAllByTestId('workflow-segment')
+      .map((node) => JSON.parse(node.getAttribute('data-blocks') || '[]'));
+    expect(first).toEqual([
+      expect.objectContaining({
+        contentOverride: 'Inspecting.',
+        domId: 'block-1__tool-0__workflow',
+        toolCount: 2,
+      }),
+    ]);
+    expect(second).toEqual([
+      expect.objectContaining({ domId: 'block-1__tool-3__workflow', toolCount: 1 }),
+      expect.objectContaining({ content: 'Continuing.', toolCount: 1 }),
+    ]);
+    expect(parseAnswerSegment()).toEqual(
+      expect.objectContaining({ domId: 'block-1__tool-2__workflow', id: 'block-1', toolCount: 1 }),
+    );
+  });
+
   it('does not fold the latest process behind a non-renderable final answer placeholder', () => {
     render(
       <Group

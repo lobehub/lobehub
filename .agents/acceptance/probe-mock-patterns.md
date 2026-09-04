@@ -2000,6 +2000,46 @@ A stale version means the server needs a real process restart (PROJECT.md §6), 
 reload. Gate the first evidence-bearing call on this row, not on the edit's timestamp —
 otherwise the round publishes new-prompt claims backed by old-prompt output.
 
+#### The user's Vite serves a `node_modules` that a reinstall already replaced — every `.vite/deps` 504s, the page is black
+
+**Situation:** the user's own `bun run dev` is up (Next answers, auth is green), but
+the SPA never mounts: `#root` has 0 children, no console error, and every
+`/node_modules/.vite/deps/*.js` request returns 504. `ls node_modules/.vite` shows no
+`deps/` directory and a sibling `node_modules/.old_modules-<hash>/` exists.
+
+**Doesn't work:** waiting for the optimizer, reloading, or blaming the change under
+test. That Vite process predates a `pnpm install` that moved the old tree aside; its
+dep cache is gone for good and HMR cannot recover it.
+
+**Works:** leave the user's process alone and start an isolated SPA on a free port
+against the same backend — `PORT=3010 SPA_PORT=<free> bun run dev:spa` from the repo
+root. `localhost` cookies are port-agnostic, so the seeded `lobehub-dev` session is
+already signed in there. Prove identity before capturing (fetch the changed module from
+the new Vite origin and grep the change's marker), stop only that pid at teardown, and
+tell the user to restart their `dev:spa`.
+
+#### Every agent/topic read returns 500 `Failed query: select … from "agents"` — the `.env` database is behind the repo's migrations
+
+**Situation:** with the user's `.env` backend, opening a conversation shows
+"Failed to load agent settings"; `agent.getBuiltinAgent` and `topic.queryTopics`
+are 500 with a `Failed query` whose column list includes fields the table lacks.
+
+**Doesn't work:** reading the error tail (the pg cause is not included) or assuming
+the change under test broke the server.
+
+**Works:** compare the database's migration count with the repo's:
+
+```bash
+docker exec -c 'echo $POSTGRES_USER $POSTGRES_DB' < pg-container > sh # never read .env for this
+docker exec -U "select count(*) from drizzle.__drizzle_migrations" < pg-container > psql < user > -d < db > -Atc
+ls packages/database/migrations | grep -c '\.sql$'
+```
+
+A gap means the running canary server expects columns the DB never got. This is the
+user's database: surface it at the plan gate and run `bun run db:migrate` (it loads
+`.env` itself) only with their authorization; the isolated alternative is a worktree
+with a second Next against the managed `:5434` test DB.
+
 #### Server-side reads of local S3 evidence are blocked by SSRF protection — private IPs must be allowed explicitly
 
 **Situation:** verifying any capability where the **server** reads back an uploaded
