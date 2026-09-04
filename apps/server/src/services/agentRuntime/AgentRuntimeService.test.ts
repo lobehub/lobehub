@@ -1097,8 +1097,9 @@ describe('AgentRuntimeService', () => {
       };
 
       try {
-        vi.spyOn(service as any, 'createAgentRuntime').mockImplementation(
-          ({ abortSignal }: { abortSignal: AbortSignal }) => ({
+        vi.spyOn(service as any, 'createAgentRuntime').mockImplementation((...args: unknown[]) => {
+          const { abortSignal } = args[0] as { abortSignal: AbortSignal };
+          return {
             runtime: {
               step: vi.fn(
                 () =>
@@ -1109,8 +1110,8 @@ describe('AgentRuntimeService', () => {
                   }),
               ),
             },
-          }),
-        );
+          };
+        });
         mockCoordinator.loadAgentState
           .mockResolvedValueOnce(mockState)
           .mockResolvedValue({ ...mockState, status: 'interrupted' });
