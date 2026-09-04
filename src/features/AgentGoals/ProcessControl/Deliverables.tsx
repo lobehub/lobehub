@@ -6,9 +6,9 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { ExternalLink, FileDown, FileText, Link2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
 
 import { useActivityTime } from '@/hooks/useActivityTime';
+import { useChatStore } from '@/store/chat';
 
 import type { GoalArtifactView, GoalGraphView } from './goalGraphViewModel';
 import { KindDot } from './shared';
@@ -27,6 +27,11 @@ import { KindDot } from './shared';
  *
  * Goal-level rather than per-task, because "show me the report" is a question
  * about the goal — no single task node can answer it.
+ *
+ * Opening one keeps you on the goal: the surrounding page already drills into a
+ * node or a task run through the side Portal, and a deliverable is the same
+ * kind of look. Navigating away would cost the reader the goal they were
+ * reading. Only a resource that genuinely lives outside the product leaves.
  */
 
 const styles = createStaticStyles(({ css }) => ({
@@ -94,20 +99,18 @@ DeliverableRow.displayName = 'GoalDeliverableRow';
 
 const Deliverables = memo<{ graph: GoalGraphView }>(({ graph }) => {
   const { t } = useTranslation('chat');
-  const navigate = useNavigate();
-  const agentId = graph.goal.agentId;
+  const openDocument = useChatStore((s) => s.openDocument);
 
   const open = (artifact: GoalArtifactView) => {
-    // A document lives in this app, so keep it in-app; anything else only has
-    // the canonical url the producing tool recorded.
-    //
-    // The route resolves the DOCUMENT id (`resourceId`), not the agent-document
-    // binding id: `agentDocumentId` only establishes that a binding exists, and
-    // navigating with it lands on the documents index instead of the document.
-    if (artifact.agentDocumentId && artifact.resourceId && agentId) {
-      navigate(`/agent/${agentId}/docs/${artifact.resourceId}`);
+    // `openDocument` takes the DOCUMENT id, not the agent-document binding id:
+    // `agentDocumentId` only establishes that a binding exists.
+    if (artifact.type === 'document' && artifact.resourceId) {
+      openDocument(artifact.resourceId, artifact.agentDocumentId);
       return;
     }
+    // A generated file and an external resource both leave for their canonical
+    // target. The file-preview Portal is not a substitute: it resolves a
+    // knowledge-base item, so an ordinary exported file loads forever in it.
     if (artifact.url) window.open(artifact.url, '_blank', 'noopener,noreferrer');
   };
 
