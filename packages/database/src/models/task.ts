@@ -1628,8 +1628,10 @@ export class TaskModel {
     // joins as NULL → surfaced as an inaccessible tombstone node.
     const documentVisibility = this.workspaceId
       ? sql`d.workspace_id = ${this.workspaceId}
-            AND (d.visibility IS NULL OR d.visibility = 'public' OR d.user_id = ${this.userId})`
-      : sql`d.user_id = ${this.userId} AND d.workspace_id IS NULL`;
+            AND (d.visibility IS NULL OR d.visibility = 'public' OR d.user_id = ${this.userId})
+            AND d.is_deleted IS NOT TRUE`
+      : sql`d.user_id = ${this.userId} AND d.workspace_id IS NULL
+            AND d.is_deleted IS NOT TRUE`;
     const result = await this.db.execute(sql`
       WITH RECURSIVE task_tree AS (
         SELECT id, identifier FROM tasks WHERE id = ${rootTaskId} AND ${rootOwnership}

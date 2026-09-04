@@ -19,6 +19,7 @@ import {
   chatGroups,
   chatGroupsAgents,
   devices,
+  documentHistories,
   documents,
   expertiseBindings,
   expertiseDomains,
@@ -37,6 +38,7 @@ import {
 import type { LobeChatDatabase } from '../../type';
 import { AGENT_OWNERSHIP_STALE, AGENT_SHARED_TRANSFER_BLOCKED, AgentModel } from '../agent';
 import { AGENT_TRANSFER_IN_PROGRESS, AgentTransferJobModel } from '../agentTransferJob';
+import { TrashModel } from '../trash';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -749,6 +751,69 @@ describe('AgentModel.transferAgentOwnership', () => {
     expect(docRows.find((d) => d.id === 'doc-criterion')?.userId).toBe(ownerId);
     // Dedicated provenance with an EXTERNAL binding: shared content, stays put.
     expect(docRows.find((d) => d.id === 'doc-vfs-shared')?.userId).toBe(ownerId);
+  });
+
+  it('leaves trashed VFS documents and their ownership chain with the previous owner', async () => {
+    const agent = await ownerModel.create({ title: 'Agent with trashed skill' });
+    const deletedAt = new Date('2026-09-01T00:00:00Z');
+    await serverDB.insert(documents).values({
+      content: 'deleted skill',
+      deletedAt,
+      fileType: 'text/markdown',
+      id: 'doc-vfs-trashed-handover',
+      isDeleted: true,
+      source: `agent-document://${agent.id}/deleted.md`,
+      sourceType: 'agent',
+      title: 'deleted.md',
+      totalCharCount: 13,
+      totalLineCount: 1,
+      userId: ownerId,
+      workspaceId: wsId,
+    });
+    await serverDB.insert(agentDocuments).values({
+      agentId: agent.id,
+      documentId: 'doc-vfs-trashed-handover',
+      userId: ownerId,
+      workspaceId: wsId,
+    });
+    await serverDB.insert(documentHistories).values({
+      documentId: 'doc-vfs-trashed-handover',
+      editorData: {},
+      saveSource: 'manual',
+      savedAt: deletedAt,
+      userId: ownerId,
+      workspaceId: wsId,
+    });
+    const registry = new TrashModel(serverDB, ownerId, wsId);
+    await registry.register({
+      deletedAt,
+      root: {
+        resourceId: 'doc-vfs-trashed-handover',
+        resourceType: 'document',
+        title: 'deleted.md',
+      },
+    });
+
+    await handover({ agentId: agent.id, fromUserId: ownerId, toUserId: recipientId });
+
+    const [document] = await serverDB
+      .select()
+      .from(documents)
+      .where(eq(documents.id, 'doc-vfs-trashed-handover'));
+    const [binding] = await serverDB
+      .select()
+      .from(agentDocuments)
+      .where(eq(agentDocuments.documentId, 'doc-vfs-trashed-handover'));
+    const [history] = await serverDB
+      .select()
+      .from(documentHistories)
+      .where(eq(documentHistories.documentId, 'doc-vfs-trashed-handover'));
+    const trashRoot = await registry.findByResource('document', 'doc-vfs-trashed-handover');
+
+    expect(document.userId).toBe(ownerId);
+    expect(binding.userId).toBe(ownerId);
+    expect(history.userId).toBe(ownerId);
+    expect(trashRoot?.userId).toBe(ownerId);
   });
 
   it('drops a binding to another member’s PRIVATE workspace device, keeps public ones', async () => {

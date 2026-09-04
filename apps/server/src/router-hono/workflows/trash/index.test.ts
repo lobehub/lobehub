@@ -1,0 +1,77 @@
+// @vitest-environment node
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import app from './index';
+
+const mocks = vi.hoisted(() => ({
+  purge: vi.fn((c: { json: (body: unknown, status: number) => Response }) =>
+    c.json({ success: true }, 202),
+  ),
+  qstashAuth: vi.fn(() => async (c: any, next: () => Promise<void>) => {
+    if (c.req.header('x-test-qstash-signature') !== 'valid') {
+      return c.json({ error: 'Invalid signature' }, 401);
+    }
+    await next();
+  }),
+}));
+
+vi.mock('../middlewares/qstashAuth', () => ({ qstashAuth: mocks.qstashAuth }));
+vi.mock('./handlers/purge', () => ({ purge: mocks.purge }));
+
+describe('trash workflow routes', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.unstubAllEnvs();
+    vi.stubEnv('KEY_VAULTS_SECRET', 'local-secret');
+  });
+
+  it('accepts a local continuation with the configured bearer secret', async () => {
+    const response = await app.request('/purge/local', {
+      headers: { authorization: 'Bearer local-secret' },
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(202);
+    expect(mocks.purge).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ['missing', undefined],
+    ['incorrect', 'Bearer wrong-secret'],
+  ])('rejects a local continuation with %s authorization', async (_label, authorization) => {
+    const response = await app.request('/purge/local', {
+      headers: authorization ? { authorization } : undefined,
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(401);
+    expect(mocks.purge).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the local continuation secret is unset', async () => {
+    vi.stubEnv('KEY_VAULTS_SECRET', '');
+
+    const response = await app.request('/purge/local', {
+      headers: { authorization: 'Bearer local-secret' },
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(503);
+    expect(mocks.purge).not.toHaveBeenCalled();
+  });
+
+  it('keeps the public purge route behind QStash authentication', async () => {
+    const unsigned = await app.request('/purge', {
+      headers: { authorization: 'Bearer local-secret' },
+      method: 'POST',
+    });
+    expect(unsigned.status).toBe(401);
+
+    const signed = await app.request('/purge', {
+      headers: { 'x-test-qstash-signature': 'valid' },
+      method: 'POST',
+    });
+    expect(signed.status).toBe(202);
+    expect(mocks.purge).toHaveBeenCalledOnce();
+  });
+});

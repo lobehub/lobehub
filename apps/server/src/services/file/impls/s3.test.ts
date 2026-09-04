@@ -347,7 +347,9 @@ describe('S3StaticFileImpl', () => {
       const proxyUrl = 'http://localhost:3010/f/abc123';
       const expectedKey = 'ppp/491067/image.jpg';
 
-      vi.spyOn(FileModel, 'getFileById').mockResolvedValue({ url: expectedKey } as any);
+      vi.spyOn(FileModel, 'getFileById').mockResolvedValue({
+        url: expectedKey,
+      } as any);
 
       const result = await fileService.getKeyFromFullUrl(proxyUrl);
 
@@ -355,7 +357,7 @@ describe('S3StaticFileImpl', () => {
       expect(result).toBe(expectedKey);
     });
 
-    it('should return null when file is not found in database', async () => {
+    it('should return null when the proxy file is missing or trashed', async () => {
       const proxyUrl = 'http://localhost:3010/f/nonexistent';
 
       vi.spyOn(FileModel, 'getFileById').mockResolvedValue(undefined);
@@ -370,7 +372,9 @@ describe('S3StaticFileImpl', () => {
       const proxyUrl = 'https://example.com/f/file456';
       const expectedKey = 'uploads/file.png';
 
-      vi.spyOn(FileModel, 'getFileById').mockResolvedValue({ url: expectedKey } as any);
+      vi.spyOn(FileModel, 'getFileById').mockResolvedValue({
+        url: expectedKey,
+      } as any);
 
       const result = await fileService.getKeyFromFullUrl(proxyUrl);
 

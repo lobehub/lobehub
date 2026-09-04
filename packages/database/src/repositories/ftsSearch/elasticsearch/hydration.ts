@@ -28,6 +28,10 @@ import {
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { normalizeInboxAgentMeta, normalizeInboxAgentTitle } from '../../../utils/inboxAgent';
+import {
+  excludeRestrictedDocument,
+  excludeRestrictedFile,
+} from '../../../utils/restrictedKnowledgeBase';
 import { notShareVisitorMessage, notShareVisitorTopic } from '../../../utils/shareVisitor';
 import { buildWorkspaceWhere } from '../../../utils/workspace';
 import type {
@@ -454,6 +458,7 @@ export const hydrateFiles = async (
   scope: FtsSearchBackendScope,
   limit: number,
   excludeKnowledgeBaseIds: string[] = [],
+  excludeTrashedKnowledgeBaseIds: string[] = [],
 ): Promise<FtsSearchFileResult[]> => {
   if (hits.length === 0) return [];
 
@@ -477,17 +482,22 @@ export const hydrateFiles = async (
         buildWorkspaceWhere(scope, files),
         ne(files.fileType, 'custom/document'),
         or(isNull(files.source), notInArray(files.source, LIBRARY_HIDDEN_FILE_SOURCES)),
+        scope.workspaceId
+          ? excludeRestrictedFile(
+              db,
+              files.id,
+              { userId: scope.userId, workspaceId: scope.workspaceId },
+              {
+                liveKnowledgeBaseIds: excludeKnowledgeBaseIds,
+                trashedKnowledgeBaseIds: excludeTrashedKnowledgeBaseIds,
+              },
+            )
+          : undefined,
       ),
     );
   const fileIds = rows.map(({ id }) => id);
   const knowledgeBaseIdsByFile = await getKnowledgeBaseIdsByFile(db, fileIds);
-  const excluded = new Set(excludeKnowledgeBaseIds);
-  const authorizedRows = rows.filter(({ id }) =>
-    (knowledgeBaseIdsByFile.get(id) ?? []).every(
-      (knowledgeBaseId) => !excluded.has(knowledgeBaseId),
-    ),
-  );
-  const scoredRows = attachScores(authorizedRows, hits).slice(0, limit);
+  const scoredRows = attachScores(rows, hits).slice(0, limit);
   const selectedFileIds = scoredRows.map(({ id }) => id);
   const documentRows =
     selectedFileIds.length === 0
@@ -529,6 +539,7 @@ export const hydrateFolders = async (
   scope: FtsSearchBackendScope,
   limit: number,
   excludeKnowledgeBaseIds: string[] = [],
+  excludeTrashedKnowledgeBaseIds: string[] = [],
 ): Promise<FtsSearchFolderResult[]> => {
   if (hits.length === 0) return [];
 
@@ -553,22 +564,20 @@ export const hydrateFolders = async (
         ),
         buildWorkspaceWhere(scope, documents),
         eq(documents.fileType, DOCUMENT_FOLDER_TYPE),
+        scope.workspaceId
+          ? excludeRestrictedDocument(
+              db,
+              { fileId: documents.fileId, knowledgeBaseId: documents.knowledgeBaseId },
+              { userId: scope.userId, workspaceId: scope.workspaceId },
+              {
+                liveKnowledgeBaseIds: excludeKnowledgeBaseIds,
+                trashedKnowledgeBaseIds: excludeTrashedKnowledgeBaseIds,
+              },
+            )
+          : undefined,
       ),
     );
-  const knowledgeBaseIdsByFile = await getKnowledgeBaseIdsByFile(
-    db,
-    rows.flatMap(({ fileId }) => (fileId ? [fileId] : [])),
-  );
-  const excluded = new Set(excludeKnowledgeBaseIds);
-  const authorizedRows = rows.filter((row) => {
-    const knowledgeBaseIds = [
-      ...(row.knowledgeBaseId ? [row.knowledgeBaseId] : []),
-      ...(row.fileId ? (knowledgeBaseIdsByFile.get(row.fileId) ?? []) : []),
-    ];
-    return knowledgeBaseIds.every((knowledgeBaseId) => !excluded.has(knowledgeBaseId));
-  });
-
-  return attachScores(authorizedRows, hits)
+  return attachScores(rows, hits)
     .slice(0, limit)
     .map((row) => ({
       createdAt: row.createdAt,
@@ -589,6 +598,7 @@ export const hydratePages = async (
   scope: FtsSearchBackendScope,
   limit: number,
   excludeKnowledgeBaseIds: string[] = [],
+  excludeTrashedKnowledgeBaseIds: string[] = [],
 ): Promise<FtsSearchPageResult[]> => {
   if (hits.length === 0) return [];
 
@@ -611,22 +621,20 @@ export const hydratePages = async (
         ),
         buildWorkspaceWhere(scope, documents),
         eq(documents.fileType, 'custom/document'),
+        scope.workspaceId
+          ? excludeRestrictedDocument(
+              db,
+              { fileId: documents.fileId, knowledgeBaseId: documents.knowledgeBaseId },
+              { userId: scope.userId, workspaceId: scope.workspaceId },
+              {
+                liveKnowledgeBaseIds: excludeKnowledgeBaseIds,
+                trashedKnowledgeBaseIds: excludeTrashedKnowledgeBaseIds,
+              },
+            )
+          : undefined,
       ),
     );
-  const knowledgeBaseIdsByFile = await getKnowledgeBaseIdsByFile(
-    db,
-    rows.flatMap(({ fileId }) => (fileId ? [fileId] : [])),
-  );
-  const excluded = new Set(excludeKnowledgeBaseIds);
-  const authorizedRows = rows.filter((row) => {
-    const knowledgeBaseIds = [
-      ...(row.knowledgeBaseId ? [row.knowledgeBaseId] : []),
-      ...(row.fileId ? (knowledgeBaseIdsByFile.get(row.fileId) ?? []) : []),
-    ];
-    return knowledgeBaseIds.every((knowledgeBaseId) => !excluded.has(knowledgeBaseId));
-  });
-
-  return attachScores(authorizedRows, hits)
+  return attachScores(rows, hits)
     .slice(0, limit)
     .map((row) => ({
       createdAt: row.createdAt,

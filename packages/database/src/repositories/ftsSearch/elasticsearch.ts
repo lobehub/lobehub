@@ -195,6 +195,7 @@ export class ElasticsearchFtsSearchBackend implements FtsSearchBackend {
             request.scope,
             limit,
             request.filters.excludeKnowledgeBaseIds,
+            request.filters.excludeTrashedKnowledgeBaseIds,
           ),
         ),
       };
@@ -226,6 +227,7 @@ export class ElasticsearchFtsSearchBackend implements FtsSearchBackend {
             request.scope,
             limit,
             request.filters.excludeKnowledgeBaseIds,
+            request.filters.excludeTrashedKnowledgeBaseIds,
           ),
         ),
       };
@@ -240,6 +242,7 @@ export class ElasticsearchFtsSearchBackend implements FtsSearchBackend {
             request.scope,
             limit,
             request.filters.excludeKnowledgeBaseIds,
+            request.filters.excludeTrashedKnowledgeBaseIds,
           ),
         ),
       };

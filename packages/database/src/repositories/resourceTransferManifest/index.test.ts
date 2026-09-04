@@ -8,11 +8,13 @@ import { ChatGroupModel } from '../../models/chatGroup';
 import {
   agentBotProviders,
   agentCronJobs,
+  agentDocuments,
   agents,
   agentsFiles,
   agentsKnowledgeBases,
   chatGroupsAgents,
   devices,
+  documents,
   expertiseBindings,
   expertiseDomains,
   files,
@@ -194,6 +196,27 @@ describe('buildMemberTransferManifest', () => {
       .values([
         { agentId: agent.id, fileId: 'file-owner-private', userId: ownerId, workspaceId: wsId },
       ]);
+    await serverDB.insert(documents).values({
+      content: 'already deleted',
+      deletedAt: new Date('2026-09-01T00:00:00Z'),
+      fileType: 'text/markdown',
+      id: 'manifest-trashed-private-document',
+      isDeleted: true,
+      source: 'editor',
+      sourceType: 'file',
+      title: 'Deleted notes',
+      totalCharCount: 15,
+      totalLineCount: 1,
+      userId: ownerId,
+      visibility: 'private',
+      workspaceId: wsId,
+    });
+    await serverDB.insert(agentDocuments).values({
+      agentId: agent.id,
+      documentId: 'manifest-trashed-private-document',
+      userId: ownerId,
+      workspaceId: wsId,
+    });
 
     const manifest = await buildMemberTransferManifest(serverDB, {
       recipientId,
@@ -203,7 +226,8 @@ describe('buildMemberTransferManifest', () => {
     });
 
     // Owner-private KB + owner-private file are invisible to the recipient;
-    // the public KB and the recipient's own private KB are not.
+    // the public KB and the recipient's own private KB are not. The trashed
+    // private document is already outside the handover and adds no warning.
     expect(manifest?.knowledgeToDetach).toBe(2);
   });
 

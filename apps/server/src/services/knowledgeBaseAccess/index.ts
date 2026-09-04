@@ -1,14 +1,15 @@
 import { TRPCError } from '@trpc/server';
-import { and, eq, inArray, isNull, ne, or } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
 
+import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
-import {
-  documents,
-  knowledgeBaseFiles,
-  knowledgeBases,
-  resourcePermissions,
-} from '@/database/schemas';
+import { documents, files, knowledgeBases, resourcePermissions } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import {
+  documentInRestrictedKnowledgeBase,
+  fileInRestrictedKnowledgeBase,
+} from '@/database/utils/restrictedKnowledgeBase';
+import { notTrashed } from '@/database/utils/softDelete';
 import {
   assertCanPerformResourceAction,
   type ResourceMeta,
@@ -20,6 +21,24 @@ interface KnowledgeBaseAccessCtx {
   userId: string;
   workspaceId?: string | null;
 }
+
+export interface RestrictedKnowledgeBasePolicy {
+  allRestrictedKnowledgeBaseIds: string[];
+  liveRestrictedKnowledgeBaseIds: string[];
+  trashedRestrictedKnowledgeBaseIds: string[];
+}
+
+interface RestrictedKnowledgeBaseState {
+  allRestrictedKnowledgeBaseIds: string[];
+  liveRestrictedKnowledgeBaseIds: string[];
+  trashedRestrictedKnowledgeBaseIds: string[];
+}
+
+const emptyRestrictedState = (): RestrictedKnowledgeBaseState => ({
+  allRestrictedKnowledgeBaseIds: [],
+  liveRestrictedKnowledgeBaseIds: [],
+  trashedRestrictedKnowledgeBaseIds: [],
+});
 
 /**
  * Assert the caller may browse a knowledge base's internal content (file
@@ -34,12 +53,30 @@ export const assertKnowledgeBaseBrowsable = async (
   knowledgeBaseId: string,
   meta?: ResourceMeta,
 ): Promise<void> => {
+  const liveKnowledgeBase = meta
+    ? undefined
+    : await new KnowledgeBaseModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined).findById(
+        knowledgeBaseId,
+      );
+
+  if (!meta && !liveKnowledgeBase) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Knowledge base not found' });
+  }
+
   if (!ctx.workspaceId) return;
+
+  const resourceMeta =
+    meta ??
+    ({
+      userId: liveKnowledgeBase!.userId,
+      visibility: liveKnowledgeBase!.visibility ?? null,
+      workspaceId: liveKnowledgeBase!.workspaceId ?? null,
+    } satisfies ResourceMeta);
 
   await assertCanPerformResourceAction({
     action: 'view',
     db: ctx.serverDB,
-    meta,
+    meta: resourceMeta,
     resourceId: knowledgeBaseId,
     resourceType: 'knowledgeBase',
     userId: ctx.userId,
@@ -69,6 +106,7 @@ export const getUseLevelKnowledgeBaseIds = async (
         // member, and must never mark the knowledge base itself as restricted.
         isNull(resourcePermissions.userId),
         eq(resourcePermissions.accessLevel, 'use'),
+        notTrashed(knowledgeBases.isDeleted),
         // A permission row staged on a still-private KB is inert until the KB
         // is published — private KBs are creator-only regardless of the row.
         eq(knowledgeBases.visibility, 'public'),
@@ -87,13 +125,13 @@ export const getUseLevelKnowledgeBaseIds = async (
  * Used to drop restricted KBs (and their linked content) from listings —
  * restricted KBs are fully hidden from non-privileged members.
  */
-export const getRestrictedKnowledgeBaseIds = async (
+const getRestrictedKnowledgeBaseState = async (
   ctx: KnowledgeBaseAccessCtx,
-): Promise<string[]> => {
-  if (!ctx.workspaceId) return [];
+): Promise<RestrictedKnowledgeBaseState> => {
+  if (!ctx.workspaceId) return emptyRestrictedState();
 
   const rows = await ctx.serverDB
-    .select({ id: resourcePermissions.resourceId })
+    .select({ id: resourcePermissions.resourceId, isDeleted: knowledgeBases.isDeleted })
     .from(resourcePermissions)
     .innerJoin(knowledgeBases, eq(knowledgeBases.id, resourcePermissions.resourceId))
     .where(
@@ -112,7 +150,7 @@ export const getRestrictedKnowledgeBaseIds = async (
       ),
     );
 
-  if (rows.length === 0) return [];
+  if (rows.length === 0) return emptyRestrictedState();
 
   const { hasAllScope } = await getWorkspaceScopedPermissionMatches({
     action: 'KNOWLEDGE_BASE_UPDATE',
@@ -120,7 +158,7 @@ export const getRestrictedKnowledgeBaseIds = async (
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
-  if (hasAllScope) return [];
+  if (hasAllScope) return emptyRestrictedState();
 
   // A collaborator grant at `edit` lifts the caller back to browsable on that
   // knowledge base — drop it from the restricted set so every listing/search
@@ -131,7 +169,37 @@ export const getRestrictedKnowledgeBaseIds = async (
   ).getCollaboratorResourceIds('knowledgeBase', ctx.userId, 'edit');
   const grantedSet = new Set(grantedIds);
 
-  return rows.map((row) => row.id).filter((id) => !grantedSet.has(id));
+  const restrictedRows = rows.filter((row) => !grantedSet.has(row.id));
+  const liveRestrictedKnowledgeBaseIds = restrictedRows
+    .filter((row) => row.isDeleted !== true)
+    .map((row) => row.id);
+  const trashedRestrictedKnowledgeBaseIds = restrictedRows
+    .filter((row) => row.isDeleted === true)
+    .map((row) => row.id);
+  const allRestrictedKnowledgeBaseIds = [
+    ...liveRestrictedKnowledgeBaseIds,
+    ...trashedRestrictedKnowledgeBaseIds,
+  ];
+
+  return {
+    allRestrictedKnowledgeBaseIds,
+    liveRestrictedKnowledgeBaseIds,
+    trashedRestrictedKnowledgeBaseIds,
+  };
+};
+
+export const getRestrictedKnowledgeBasePolicy = async (
+  ctx: KnowledgeBaseAccessCtx,
+): Promise<RestrictedKnowledgeBasePolicy> => {
+  return getRestrictedKnowledgeBaseState(ctx);
+};
+
+export const getRestrictedKnowledgeBaseIds = async (
+  ctx: KnowledgeBaseAccessCtx,
+): Promise<string[]> => {
+  const state = await getRestrictedKnowledgeBaseState(ctx);
+
+  return state.liveRestrictedKnowledgeBaseIds;
 };
 
 /**
@@ -146,17 +214,25 @@ export const assertFileNotInRestrictedKnowledgeBase = async (
 ): Promise<void> => {
   if (!ctx.workspaceId) return;
 
-  const memberships = await ctx.serverDB
-    .select({ knowledgeBaseId: knowledgeBaseFiles.knowledgeBaseId })
-    .from(knowledgeBaseFiles)
-    .where(eq(knowledgeBaseFiles.fileId, fileId));
-  if (memberships.length === 0) return;
-
-  const restricted = await getRestrictedKnowledgeBaseIds(ctx);
-  if (restricted.length === 0) return;
-
-  const restrictedSet = new Set(restricted);
-  if (memberships.some((m) => restrictedSet.has(m.knowledgeBaseId))) {
+  const policy = await getRestrictedKnowledgeBasePolicy(ctx);
+  if (policy.allRestrictedKnowledgeBaseIds.length === 0) return;
+  const restricted = fileInRestrictedKnowledgeBase(
+    ctx.serverDB,
+    files.id,
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    {
+      liveKnowledgeBaseIds: policy.liveRestrictedKnowledgeBaseIds,
+      trashedKnowledgeBaseIds: policy.trashedRestrictedKnowledgeBaseIds,
+    },
+  );
+  const [hidden] = restricted
+    ? await ctx.serverDB
+        .select({ id: files.id })
+        .from(files)
+        .where(and(eq(files.id, fileId), eq(files.workspaceId, ctx.workspaceId), restricted))
+        .limit(1)
+    : [];
+  if (hidden) {
     throw new TRPCError({
       code: 'FORBIDDEN',
       message: 'Only knowledge base managers can view this file',
@@ -178,24 +254,31 @@ export const assertContentsNotInRestrictedKnowledgeBase = async (
 ): Promise<void> => {
   if (!ctx.workspaceId || ids.length === 0) return;
 
-  const restricted = await getRestrictedKnowledgeBaseIds(ctx);
-  if (restricted.length === 0) return;
+  const policy = await getRestrictedKnowledgeBasePolicy(ctx);
+  if (policy.allRestrictedKnowledgeBaseIds.length === 0) return;
 
   const documentIds = ids.filter((id) => id.startsWith('docs_'));
   const fileIds = ids.filter((id) => !id.startsWith('docs_'));
 
-  if (fileIds.length > 0) {
-    const rows = await ctx.serverDB
-      .select({ fileId: knowledgeBaseFiles.fileId })
-      .from(knowledgeBaseFiles)
+  const restrictedFilter = {
+    liveKnowledgeBaseIds: policy.liveRestrictedKnowledgeBaseIds,
+    trashedKnowledgeBaseIds: policy.trashedRestrictedKnowledgeBaseIds,
+  };
+  const restrictedFile = fileInRestrictedKnowledgeBase(
+    ctx.serverDB,
+    files.id,
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    restrictedFilter,
+  );
+  if (fileIds.length > 0 && restrictedFile) {
+    const [hiddenFile] = await ctx.serverDB
+      .select({ id: files.id })
+      .from(files)
       .where(
-        and(
-          inArray(knowledgeBaseFiles.fileId, fileIds),
-          inArray(knowledgeBaseFiles.knowledgeBaseId, restricted),
-        ),
+        and(inArray(files.id, fileIds), eq(files.workspaceId, ctx.workspaceId), restrictedFile),
       )
       .limit(1);
-    if (rows.length > 0) {
+    if (hiddenFile) {
       throw new TRPCError({
         code: 'FORBIDDEN',
         message: 'Only knowledge base managers can view this file',
@@ -204,24 +287,26 @@ export const assertContentsNotInRestrictedKnowledgeBase = async (
   }
 
   if (documentIds.length > 0) {
-    // Inline pages carry `knowledgeBaseId` directly; parsed-file documents
-    // leave it null and are linked through `fileId` → `knowledge_base_files`,
-    // so both membership routes must be checked.
-    const rows = await ctx.serverDB
-      .select({ id: documents.id })
-      .from(documents)
-      .leftJoin(knowledgeBaseFiles, eq(documents.fileId, knowledgeBaseFiles.fileId))
-      .where(
-        and(
-          inArray(documents.id, documentIds),
-          or(
-            inArray(documents.knowledgeBaseId, restricted),
-            inArray(knowledgeBaseFiles.knowledgeBaseId, restricted),
-          ),
-        ),
-      )
-      .limit(1);
-    if (rows.length > 0) {
+    const restrictedDocument = documentInRestrictedKnowledgeBase(
+      ctx.serverDB,
+      { fileId: documents.fileId, knowledgeBaseId: documents.knowledgeBaseId },
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      restrictedFilter,
+    );
+    const [hiddenDocument] = restrictedDocument
+      ? await ctx.serverDB
+          .select({ id: documents.id })
+          .from(documents)
+          .where(
+            and(
+              inArray(documents.id, documentIds),
+              eq(documents.workspaceId, ctx.workspaceId),
+              restrictedDocument,
+            ),
+          )
+          .limit(1)
+      : [];
+    if (hiddenDocument) {
       throw new TRPCError({
         code: 'FORBIDDEN',
         message: 'Only knowledge base managers can view this document',

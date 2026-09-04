@@ -5,6 +5,7 @@ import type { DocumentCommentItem } from '../schemas/documentComment';
 import { documentCommentMentions, documentComments } from '../schemas/documentComment';
 import { documents } from '../schemas/file';
 import type { LobeChatDatabase } from '../type';
+import { notTrashed } from '../utils/softDelete';
 
 export const DOCUMENT_COMMENT_WORKSPACE_REQUIRED =
   'Document comments are workspace-scoped; a workspaceId is required';
@@ -110,7 +111,7 @@ export class DocumentCommentModel {
       const [document] = await tx
         .select({ id: documents.id, userId: documents.userId, workspaceId: documents.workspaceId })
         .from(documents)
-        .where(eq(documents.id, params.documentId))
+        .where(and(eq(documents.id, params.documentId), notTrashed(documents.isDeleted)))
         .limit(1)
         .for('update');
 

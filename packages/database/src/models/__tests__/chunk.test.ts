@@ -16,12 +16,15 @@ import {
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { ChunkModel } from '../chunk';
+import { FileModel } from '../file';
 import { codeEmbedding, designThinkingQuery, designThinkingQuery2 } from './fixtures/embedding';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'chunk-model-test-user-id';
+const otherUserId = 'chunk-model-test-other-user-id';
 const workspaceId = 'chunk-model-workspace';
+const otherWorkspaceId = 'chunk-model-other-workspace';
 const chunkModel = new ChunkModel(serverDB, userId);
 const sharedFileList = [
   {
@@ -52,13 +55,21 @@ const sharedFileList = [
 
 beforeEach(async () => {
   await serverDB.delete(users);
-  await serverDB.insert(users).values([{ id: userId }]);
-  await serverDB.insert(workspaces).values({
-    id: workspaceId,
-    name: 'Chunk Workspace',
-    primaryOwnerId: userId,
-    slug: workspaceId,
-  });
+  await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
+  await serverDB.insert(workspaces).values([
+    {
+      id: workspaceId,
+      name: 'Chunk Workspace',
+      primaryOwnerId: userId,
+      slug: workspaceId,
+    },
+    {
+      id: otherWorkspaceId,
+      name: 'Other Chunk Workspace',
+      primaryOwnerId: otherUserId,
+      slug: otherWorkspaceId,
+    },
+  ]);
   await serverDB.insert(files).values(sharedFileList);
 });
 
@@ -217,6 +228,16 @@ describe('ChunkModel', () => {
       expect(result[0].id).toBe(chunk1.id);
       expect(result[1].id).toBe(chunk2.id);
       expect(result[0].similarity).toBeGreaterThan(result[1].similarity);
+
+      await serverDB.update(files).set({ isDeleted: true }).where(eq(files.id, fileId));
+
+      await expect(
+        chunkModel.semanticSearch({
+          embedding: designThinkingQuery2,
+          fileIds: [fileId],
+          query: 'design thinking',
+        }),
+      ).resolves.toHaveLength(0);
     });
     // Additional search scenario without file ID
     it('should perform semantic search without fileIds', async () => {
@@ -365,6 +386,63 @@ describe('ChunkModel', () => {
       expect(result[0].text).toBe('Chunk 1');
       expect(result[1].text).toBe('Chunk 2');
     });
+
+    it('requires the source file to remain live and visible in the same workspace', async () => {
+      const workspaceChunkModel = new ChunkModel(serverDB, userId, workspaceId);
+      const workspaceFileModel = new FileModel(serverDB, userId, workspaceId);
+      const liveFile = await workspaceFileModel.create({
+        fileType: 'text/plain',
+        name: 'live.txt',
+        size: 1,
+        url: 'files/live.txt',
+        visibility: 'public',
+      });
+      await workspaceChunkModel.bulkCreate([{ text: 'Visible chunk', userId }], liveFile.id);
+
+      await expect(workspaceChunkModel.findByFileId(liveFile.id)).resolves.toHaveLength(1);
+      await expect(workspaceChunkModel.getChunksTextByFileId(liveFile.id)).resolves.toHaveLength(1);
+
+      await workspaceFileModel.softDelete([liveFile.id], { deletedAt: new Date() });
+
+      await expect(workspaceChunkModel.findByFileId(liveFile.id)).resolves.toEqual([]);
+      await expect(workspaceChunkModel.getChunksTextByFileId(liveFile.id)).resolves.toEqual([]);
+
+      const privateFileModel = new FileModel(serverDB, otherUserId, workspaceId);
+      const privateFile = await privateFileModel.create({
+        fileType: 'text/plain',
+        name: 'private.txt',
+        size: 1,
+        url: 'files/private.txt',
+        visibility: 'private',
+      });
+      const privateChunkModel = new ChunkModel(serverDB, otherUserId, workspaceId);
+      await privateChunkModel.bulkCreate(
+        [{ text: 'Private chunk', userId: otherUserId }],
+        privateFile.id,
+      );
+
+      await expect(workspaceChunkModel.findByFileId(privateFile.id)).resolves.toEqual([]);
+      await expect(workspaceChunkModel.getChunksTextByFileId(privateFile.id)).resolves.toEqual([]);
+
+      const otherWorkspaceFileModel = new FileModel(serverDB, otherUserId, otherWorkspaceId);
+      const otherWorkspaceFile = await otherWorkspaceFileModel.create({
+        fileType: 'text/plain',
+        name: 'other-workspace.txt',
+        size: 1,
+        url: 'files/other-workspace.txt',
+        visibility: 'public',
+      });
+      const otherWorkspaceChunkModel = new ChunkModel(serverDB, otherUserId, otherWorkspaceId);
+      await otherWorkspaceChunkModel.bulkCreate(
+        [{ text: 'Other workspace chunk', userId: otherUserId }],
+        otherWorkspaceFile.id,
+      );
+
+      await expect(workspaceChunkModel.findByFileId(otherWorkspaceFile.id)).resolves.toEqual([]);
+      await expect(
+        workspaceChunkModel.getChunksTextByFileId(otherWorkspaceFile.id),
+      ).resolves.toEqual([]);
+    });
   });
 
   describe('countByFileIds', () => {
@@ -423,7 +501,7 @@ describe('ChunkModel', () => {
   describe('countByFileId', () => {
     it('should count chunks by file id', async () => {
       const fileId = '1';
-      const [chunk1, chunk2, chunk3] = await serverDB
+      const [chunk1, chunk2] = await serverDB
         .insert(chunks)
         .values([
           { text: 'Chunk 1', userId, index: 0 },
@@ -479,6 +557,16 @@ describe('ChunkModel', () => {
       expect(result[0].id).toBe(chunk1.id);
       expect(result[1].id).toBe(chunk2.id);
       expect(result[0].similarity).toBeGreaterThan(result[1].similarity);
+
+      await serverDB.update(files).set({ isDeleted: true }).where(eq(files.id, fileId));
+
+      await expect(
+        chunkModel.semanticSearchForChat({
+          embedding: designThinkingQuery2,
+          fileIds: [fileId],
+          query: 'design thinking',
+        }),
+      ).resolves.toHaveLength(0);
     });
   });
 

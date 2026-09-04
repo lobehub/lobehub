@@ -98,6 +98,10 @@ const startServer = async () => {
 
   await closePreviousServer(standaloneGlobal.__lobeHonoStandaloneServer);
   standaloneGlobal.__lobeHonoStandaloneServer = server;
+  if (process.env.DATABASE_URL && !process.env.QSTASH_TOKEN) {
+    const { startLocalTrashPurgeSchedule } = await import('@/server/workflows/trash');
+    startLocalTrashPurgeSchedule();
+  }
 
   process.title = `lobe-dev-hono-${port}`;
   server.listen(port, host, () => {

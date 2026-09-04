@@ -110,4 +110,18 @@ describe('mobile settings useCategory', () => {
     expect(developerGroup?.items.map((item) => item.key)).toContain(SettingsTabs.OAuthApps);
     expect(systemGroup?.items.map((item) => item.key)).not.toContain(SettingsTabs.OAuthApps);
   });
+
+  it('shows Trash in the System group and opens its settings route', () => {
+    const { result } = renderHook(() => useCategory(), {
+      wrapper: createWrapper(true),
+    });
+    const systemGroup = result.current.find((group) => group.key === SettingsGroupKey.System);
+    const trash = systemGroup?.items.find((item) => item.key === SettingsTabs.Trash);
+
+    expect(trash).toBeDefined();
+
+    trash?.onClick?.();
+
+    expect(navigate).toHaveBeenCalledWith('/settings/trash');
+  });
 });

@@ -87,3 +87,15 @@ describe('mobile community route layouts', () => {
     }
   });
 });
+
+describe('mobileRouter workspace Trash route', () => {
+  it('registers the workspace Trash settings page', async () => {
+    const source = await readFile(
+      path.join(process.cwd(), 'src/spa/router/mobileRouter.config.tsx'),
+      'utf8',
+    );
+
+    expect(source).toContain("import('@/routes/(main)/[workspaceSlug]/settings/trash')");
+    expect(source).toContain("path: 'trash'");
+  });
+});

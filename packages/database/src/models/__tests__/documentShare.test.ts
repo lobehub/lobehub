@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { TRPCError } from '@trpc/server';
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -185,6 +186,25 @@ describe('DocumentShareModel', () => {
       expect(result.isOwner).toBe(false);
       expect(result.visibility).toBe('link');
       expect(result.ownerDisplayName).toBe('Alice');
+    });
+
+    it('hides a link-shared document from every caller while it is trashed', async () => {
+      await shareModel.create(docId, { visibility: 'link' });
+      await serverDB
+        .update(documents)
+        .set({ deletedAt: new Date(), isDeleted: true })
+        .where(eq(documents.id, docId));
+
+      await expect(DocumentShareModel.findByDocumentId(serverDB, docId)).resolves.toBeNull();
+
+      for (const accessUserId of [userId, userId2, undefined]) {
+        try {
+          await DocumentShareModel.findByDocumentIdWithAccessCheck(serverDB, docId, accessUserId);
+          throw new Error('should not reach');
+        } catch (error) {
+          expect((error as TRPCError).code).toBe('NOT_FOUND');
+        }
+      }
     });
 
     it('throws NOT_FOUND when document does not exist', async () => {

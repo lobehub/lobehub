@@ -8,13 +8,13 @@ const routerMocks = vi.hoisted(() => ({
   assertKnowledgeBaseBrowsable: vi.fn(),
   assertCanPerformResourceAction: vi.fn(),
   businessFileTransferStorageCheck: vi.fn(),
+  filterRestrictedKnowledgeBases: vi.fn(),
   hasWorkspaceScopedPermission: vi.fn(),
 }));
 
 const mockKnowledgeBaseModelCountFileUsage = vi.fn();
 const mockKnowledgeBaseModelAddFiles = vi.fn();
 const mockKnowledgeBaseModelCopyToWorkspace = vi.fn();
-const mockKnowledgeBaseModelDeleteWithFiles = vi.fn();
 const mockKnowledgeBaseModelFindById = vi.fn();
 const mockKnowledgeBaseModelQuery = vi.fn();
 const mockKnowledgeBaseModelRemoveFiles = vi.fn();
@@ -23,6 +23,7 @@ const mockKnowledgeBaseModelHasForeignLinkedRows = vi.fn().mockResolvedValue(fal
 const mockKnowledgeBaseModelUpdate = vi.fn();
 const mockDocumentModelFindByIds = vi.fn();
 const mockFileModelFindByIds = vi.fn();
+const mockTrashKnowledgeBases = vi.fn();
 
 vi.mock('@/business/server/lambda-routers/file', () => ({
   businessFileTransferStorageCheck: routerMocks.businessFileTransferStorageCheck,
@@ -40,7 +41,7 @@ vi.mock('@/server/routers/lambda/_helpers/knowledgeBaseAccess', () => ({
   assertContentsNotInRestrictedKnowledgeBase:
     routerMocks.assertContentsNotInRestrictedKnowledgeBase,
   assertKnowledgeBaseBrowsable: routerMocks.assertKnowledgeBaseBrowsable,
-  filterRestrictedKnowledgeBases: vi.fn(async (_ctx, items) => items),
+  filterRestrictedKnowledgeBases: routerMocks.filterRestrictedKnowledgeBases,
   getUseLevelKnowledgeBaseIds: vi.fn().mockResolvedValue([]),
 }));
 
@@ -52,8 +53,8 @@ vi.mock('@/database/models/file', () => ({
   FileModel: vi.fn(() => ({ findByIds: mockFileModelFindByIds })),
 }));
 
-vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn(() => ({ deleteFiles: vi.fn() })),
+vi.mock('@/server/services/trash', () => ({
+  TrashService: vi.fn(() => ({ trashKnowledgeBases: mockTrashKnowledgeBases })),
 }));
 
 const mockPermissionRemoveAll = vi.fn();
@@ -70,7 +71,6 @@ vi.mock('@/database/models/knowledgeBase', () => ({
     addFilesToKnowledgeBase: mockKnowledgeBaseModelAddFiles,
     copyToWorkspace: mockKnowledgeBaseModelCopyToWorkspace,
     countFileUsage: mockKnowledgeBaseModelCountFileUsage,
-    deleteWithFiles: mockKnowledgeBaseModelDeleteWithFiles,
     findById: mockKnowledgeBaseModelFindById,
     hasForeignLinkedRows: mockKnowledgeBaseModelHasForeignLinkedRows,
     query: mockKnowledgeBaseModelQuery,
@@ -96,19 +96,48 @@ describe('knowledgeBaseRouter', () => {
     routerMocks.assertKnowledgeBaseBrowsable.mockResolvedValue(undefined);
     routerMocks.assertCanPerformResourceAction.mockResolvedValue(undefined);
     routerMocks.businessFileTransferStorageCheck.mockResolvedValue(undefined);
+    routerMocks.filterRestrictedKnowledgeBases.mockImplementation(async (_ctx, items) => items);
     routerMocks.hasWorkspaceScopedPermission.mockResolvedValue(true);
     mockKnowledgeBaseModelCopyToWorkspace.mockResolvedValue({ id: 'kb-copy' });
     mockKnowledgeBaseModelCountFileUsage.mockResolvedValue(4096);
-    mockKnowledgeBaseModelDeleteWithFiles.mockResolvedValue({ deletedFiles: [] });
     mockKnowledgeBaseModelFindById.mockResolvedValue({
       id: 'kb-1',
       userId: 'test-user',
       visibility: 'public',
       workspaceId: 'workspace-active',
     });
-    mockKnowledgeBaseModelQuery.mockResolvedValue([]);
     mockKnowledgeBaseModelTransferTo.mockResolvedValue({ id: 'kb-1' });
     mockKnowledgeBaseModelUpdate.mockResolvedValue({ id: 'kb-1' });
+    mockKnowledgeBaseModelQuery.mockResolvedValue([]);
+  });
+
+  describe('removeAllKnowledgeBases', () => {
+    it("trashes every visible workspace library, including another member's public library", async () => {
+      mockKnowledgeBaseModelQuery.mockResolvedValue([
+        { id: 'kb-own', userId: 'test-user' },
+        { id: 'kb-shared', userId: 'another-member' },
+      ]);
+
+      await caller.removeAllKnowledgeBases();
+
+      expect(mockTrashKnowledgeBases).toHaveBeenCalledWith(['kb-own', 'kb-shared']);
+    });
+
+    it('excludes caller-restricted workspace libraries from the bulk removal', async () => {
+      mockKnowledgeBaseModelQuery.mockResolvedValue([
+        { id: 'kb-own', userId: 'test-user' },
+        { id: 'kb-open', userId: 'another-member' },
+        { id: 'kb-restricted', userId: 'another-member' },
+      ]);
+      routerMocks.filterRestrictedKnowledgeBases.mockResolvedValue([
+        { id: 'kb-own', userId: 'test-user' },
+        { id: 'kb-open', userId: 'another-member' },
+      ]);
+
+      await caller.removeAllKnowledgeBases();
+
+      expect(mockTrashKnowledgeBases).toHaveBeenCalledWith(['kb-own', 'kb-open']);
+    });
   });
 
   describe('updateKnowledgeBase', () => {
@@ -220,10 +249,7 @@ describe('knowledgeBaseRouter', () => {
 
       await caller.removeKnowledgeBase({ id: 'kb-1' });
 
-      expect(mockKnowledgeBaseModelDeleteWithFiles).toHaveBeenCalledWith(
-        'kb-1',
-        expect.any(Boolean),
-      );
+      expect(mockTrashKnowledgeBases).toHaveBeenCalledWith(['kb-1']);
     });
   });
 

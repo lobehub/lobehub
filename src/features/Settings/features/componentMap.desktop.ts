@@ -1,3 +1,5 @@
+import { lazy } from 'react';
+
 import Billing from '@/business/client/BusinessSettingPages/Billing';
 import Credits from '@/business/client/BusinessSettingPages/Credits';
 import Notification from '@/business/client/BusinessSettingPages/Notification';
@@ -29,6 +31,8 @@ import Stats from '../stats';
 import Storage from '../storage';
 import SystemTools from '../system-tools';
 
+const Trash = lazy(() => import('../trash'));
+
 export const componentMap = {
   [SettingsTabs.Advanced]: Advanced,
   [SettingsTabs.Labs]: Labs,
@@ -43,6 +47,7 @@ export const componentMap = {
   [SettingsTabs.Proxy]: Proxy,
   [SettingsTabs.SystemTools]: SystemTools,
   [SettingsTabs.Storage]: Storage,
+  [SettingsTabs.Trash]: Trash,
   [SettingsTabs.Devices]: Devices,
   [SettingsTabs.Labels]: Labels,
   // Profile related tabs

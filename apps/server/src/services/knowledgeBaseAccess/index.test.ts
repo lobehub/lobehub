@@ -4,13 +4,16 @@ import { PgDialect } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeChatDatabase } from '@/database/type';
+import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 import { getWorkspaceScopedPermissionMatches } from '@/server/services/workspacePermission';
 
 import {
   assertContentsNotInRestrictedKnowledgeBase,
   assertFileNotInRestrictedKnowledgeBase,
+  assertKnowledgeBaseBrowsable,
   filterRestrictedKnowledgeBases,
   getRestrictedKnowledgeBaseIds,
+  getRestrictedKnowledgeBasePolicy,
   getUseLevelKnowledgeBaseIds,
 } from './index';
 
@@ -18,7 +21,17 @@ vi.mock('@/server/services/workspacePermission', () => ({
   getWorkspaceScopedPermissionMatches: vi.fn(),
 }));
 
+const findKnowledgeBaseByIdMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@/database/models/knowledgeBase', () => ({
+  KnowledgeBaseModel: vi.fn(() => ({ findById: findKnowledgeBaseByIdMock })),
+}));
+vi.mock('@/server/services/resourcePermission', () => ({
+  assertCanPerformResourceAction: vi.fn(),
+}));
+
 const permissionMatchesMock = vi.mocked(getWorkspaceScopedPermissionMatches);
+const resourcePermissionMock = vi.mocked(assertCanPerformResourceAction);
 
 /**
  * Fake drizzle db returning one prepared result per `select()` call, in order.
@@ -32,14 +45,16 @@ const dbWithResults = (...results: unknown[][]) => {
     // Support the optional trailing `.limit(n)` some helpers chain on.
     return Object.assign(promise, { limit: () => promise });
   };
-  return {
-    select: () => ({
-      from: () => ({
-        innerJoin: () => ({ where: next }),
-        leftJoin: () => ({ where: next }),
-        where: next,
-      }),
+  const select = () => ({
+    from: () => ({
+      innerJoin: () => ({ where: next }),
+      leftJoin: () => ({ where: next }),
+      where: next,
     }),
+  });
+  return {
+    select,
+    selectDistinct: select,
   } as unknown as LobeChatDatabase;
 };
 
@@ -72,7 +87,52 @@ const dbCapturingWhere = (...results: unknown[][]) => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  findKnowledgeBaseByIdMock.mockResolvedValue({
+    id: 'kb-live',
+    userId: 'u1',
+    visibility: 'public',
+    workspaceId: 'ws-1',
+  });
+  resourcePermissionMock.mockResolvedValue(undefined);
   permissionMatchesMock.mockResolvedValue({ hasAllScope: false, hasOwnerScope: true });
+});
+
+describe('assertKnowledgeBaseBrowsable', () => {
+  it('rejects a missing or trashed knowledge base in personal mode', async () => {
+    findKnowledgeBaseByIdMock.mockResolvedValue(undefined);
+    const ctx = { serverDB: dbWithResults(), userId: 'u1' };
+
+    await expect(assertKnowledgeBaseBrowsable(ctx, 'kb-trashed')).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(resourcePermissionMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a missing or trashed knowledge base before workspace permission evaluation', async () => {
+    findKnowledgeBaseByIdMock.mockResolvedValue(undefined);
+    const ctx = { serverDB: dbWithResults(), userId: 'u1', workspaceId: 'ws-1' };
+
+    await expect(assertKnowledgeBaseBrowsable(ctx, 'kb-trashed')).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(resourcePermissionMock).not.toHaveBeenCalled();
+  });
+
+  it('checks workspace permission with metadata from the live scoped row', async () => {
+    const ctx = { serverDB: dbWithResults(), userId: 'u1', workspaceId: 'ws-1' };
+
+    await expect(assertKnowledgeBaseBrowsable(ctx, 'kb-live')).resolves.toBeUndefined();
+    expect(resourcePermissionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          userId: 'u1',
+          visibility: 'public',
+          workspaceId: 'ws-1',
+        }),
+        resourceId: 'kb-live',
+      }),
+    );
+  });
 });
 
 describe('getRestrictedKnowledgeBaseIds', () => {
@@ -133,6 +193,25 @@ describe('getRestrictedKnowledgeBaseIds', () => {
   });
 });
 
+describe('getRestrictedKnowledgeBasePolicy', () => {
+  it('returns KB state without materializing every linked file or document', async () => {
+    const serverDB = dbWithResults([{ id: 'kb-trashed', isDeleted: true }], []);
+    const select = vi.spyOn(serverDB, 'select');
+    const ctx = {
+      serverDB,
+      userId: 'member',
+      workspaceId: 'ws-1',
+    };
+
+    await expect(getRestrictedKnowledgeBasePolicy(ctx)).resolves.toEqual({
+      allRestrictedKnowledgeBaseIds: ['kb-trashed'],
+      liveRestrictedKnowledgeBaseIds: [],
+      trashedRestrictedKnowledgeBaseIds: ['kb-trashed'],
+    });
+    expect(select).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('filterRestrictedKnowledgeBases', () => {
   it('strips restricted KBs from the list for a member', async () => {
     const ctx = {
@@ -164,8 +243,7 @@ describe('assertFileNotInRestrictedKnowledgeBase', () => {
 
   it('throws FORBIDDEN when the file belongs to a restricted KB', async () => {
     const ctx = {
-      // 1st select: memberships; 2nd select: restriction rows
-      serverDB: dbWithResults([{ knowledgeBaseId: 'kb-1' }], [{ id: 'kb-1' }]),
+      serverDB: dbWithResults([{ id: 'kb-1' }], [], [], [{ id: 'file-1' }]),
       userId: 'member',
       workspaceId: 'ws-1',
     };
@@ -177,12 +255,42 @@ describe('assertFileNotInRestrictedKnowledgeBase', () => {
 
   it('passes when the file only belongs to open KBs', async () => {
     const ctx = {
-      serverDB: dbWithResults([{ knowledgeBaseId: 'kb-open' }], [{ id: 'kb-restricted' }]),
+      serverDB: dbWithResults([{ id: 'kb-restricted' }], [], [], []),
       userId: 'member',
       workspaceId: 'ws-1',
     };
 
     await expect(assertFileNotInRestrictedKnowledgeBase(ctx, 'file-1')).resolves.toBeUndefined();
+  });
+
+  it('does not hide a shared file through a trashed restricted KB when its other KB is live and open', async () => {
+    const ctx = {
+      serverDB: dbWithResults([{ id: 'kb-restricted-trashed', isDeleted: true }], [], [], [], []),
+      userId: 'member',
+      workspaceId: 'ws-1',
+    };
+
+    await expect(
+      assertFileNotInRestrictedKnowledgeBase(ctx, 'file-shared'),
+    ).resolves.toBeUndefined();
+  });
+
+  it('blocks a file exclusive to a trashed restricted KB', async () => {
+    const ctx = {
+      serverDB: dbWithResults(
+        [{ id: 'kb-restricted-trashed', isDeleted: true }],
+        [],
+        [],
+        [],
+        [{ id: 'file-exclusive' }],
+      ),
+      userId: 'member',
+      workspaceId: 'ws-1',
+    };
+
+    await expect(
+      assertFileNotInRestrictedKnowledgeBase(ctx, 'file-exclusive'),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 });
 
@@ -214,7 +322,7 @@ describe('assertContentsNotInRestrictedKnowledgeBase', () => {
     const ctx = {
       // 1st select: restriction rows; 2nd: the caller's collaborator grants
       // (none); 3rd: restricted file membership hit
-      serverDB: dbWithResults([{ id: 'kb-1' }], [], [{ fileId: 'file-1' }]),
+      serverDB: dbWithResults([{ id: 'kb-1' }], [], [], [{ id: 'file-1' }]),
       userId: 'member',
       workspaceId: 'ws-1',
     };
@@ -226,10 +334,7 @@ describe('assertContentsNotInRestrictedKnowledgeBase', () => {
 
   it('throws FORBIDDEN when a parsed-file docs_* id links to a restricted KB via fileId', async () => {
     const ctx = {
-      // 1st select: restriction rows; 2nd: collaborator grants (none); 3rd:
-      // document hit through the fileId → knowledge_base_files membership
-      // (knowledgeBaseId null)
-      serverDB: dbWithResults([{ id: 'kb-1' }], [], [{ id: 'docs_parsed' }]),
+      serverDB: dbWithResults([{ id: 'kb-1' }], [], [], [], [{ id: 'docs_parsed' }]),
       userId: 'member',
       workspaceId: 'ws-1',
     };
@@ -241,9 +346,7 @@ describe('assertContentsNotInRestrictedKnowledgeBase', () => {
 
   it('throws FORBIDDEN when a docs_* id belongs to a restricted KB', async () => {
     const ctx = {
-      // 1st select: restriction rows; 2nd: collaborator grants (none); 3rd:
-      // restricted document hit
-      serverDB: dbWithResults([{ id: 'kb-1' }], [], [{ id: 'docs_1' }]),
+      serverDB: dbWithResults([{ id: 'kb-1' }], [], [], [], [{ id: 'docs_1' }]),
       userId: 'member',
       workspaceId: 'ws-1',
     };
@@ -257,7 +360,7 @@ describe('assertContentsNotInRestrictedKnowledgeBase', () => {
     const ctx = {
       // restriction rows, collaborator grants (none), empty file hit, empty
       // document hit
-      serverDB: dbWithResults([{ id: 'kb-1' }], [], [], []),
+      serverDB: dbWithResults([{ id: 'kb-1' }], [], [], [], [], []),
       userId: 'member',
       workspaceId: 'ws-1',
     };
@@ -274,6 +377,7 @@ describe('workspace-wide subject scoping', () => {
   // A grant reaching these scans would restrict the knowledge base for
   // everyone, so both direct reads must pin the workspace-wide subject.
   const workspaceWide = '"resource_permissions"."user_id" is null';
+  const liveKnowledgeBase = '"knowledge_bases"."is_deleted" IS NOT TRUE';
 
   it('getUseLevelKnowledgeBaseIds reads only the workspace-wide rows', async () => {
     const { clauses, db } = dbCapturingWhere();
@@ -281,6 +385,7 @@ describe('workspace-wide subject scoping', () => {
     await getUseLevelKnowledgeBaseIds(db, 'ws-1');
 
     expect(clauses[0]).toContain(workspaceWide);
+    expect(clauses[0]).toContain(liveKnowledgeBase);
   });
 
   it('getRestrictedKnowledgeBaseIds reads only the workspace-wide rows', async () => {
@@ -289,5 +394,6 @@ describe('workspace-wide subject scoping', () => {
     await getRestrictedKnowledgeBaseIds({ serverDB: db, userId: 'member', workspaceId: 'ws-1' });
 
     expect(clauses[0]).toContain(workspaceWide);
+    expect(clauses[0]).not.toContain(liveKnowledgeBase);
   });
 });

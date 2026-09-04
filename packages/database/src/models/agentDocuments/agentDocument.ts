@@ -230,7 +230,10 @@ export class AgentDocumentModel {
     const results = await this.db
       .select({ doc: documents, settings: agentDocuments })
       .from(agentDocuments)
-      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .innerJoin(
+        documents,
+        and(eq(agentDocuments.documentId, documents.id), this.documentOwnership()),
+      )
       .where(
         and(
           this.agentDocOwnership(),
@@ -489,7 +492,10 @@ export class AgentDocumentModel {
     const [existingResult] = await trx
       .select({ doc: documents, settings: agentDocuments })
       .from(agentDocuments)
-      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .innerJoin(
+        documents,
+        and(eq(agentDocuments.documentId, documents.id), this.documentOwnership()),
+      )
       .where(
         and(
           eq(agentDocuments.id, params.agentDocumentId),
@@ -544,7 +550,10 @@ export class AgentDocumentModel {
     const [updatedResult] = await trx
       .select({ doc: documents, settings: agentDocuments })
       .from(agentDocuments)
-      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .innerJoin(
+        documents,
+        and(eq(agentDocuments.documentId, documents.id), this.documentOwnership()),
+      )
       .where(
         and(
           eq(agentDocuments.id, params.agentDocumentId),
@@ -860,7 +869,10 @@ export class AgentDocumentModel {
     const [result] = await this.db
       .select({ doc: documents, settings: agentDocuments })
       .from(agentDocuments)
-      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .innerJoin(
+        documents,
+        and(eq(agentDocuments.documentId, documents.id), this.documentOwnership()),
+      )
       .where(
         and(
           eq(agentDocuments.id, documentId),
@@ -957,7 +969,10 @@ export class AgentDocumentModel {
     const results = await this.db
       .select({ doc: documents, settings: agentDocuments })
       .from(agentDocuments)
-      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .innerJoin(
+        documents,
+        and(eq(agentDocuments.documentId, documents.id), this.documentOwnership()),
+      )
       .where(
         and(
           this.agentDocOwnership(),
@@ -999,7 +1014,10 @@ export class AgentDocumentModel {
         updatedAt: agentDocuments.updatedAt,
       })
       .from(agentDocuments)
-      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .innerJoin(
+        documents,
+        and(eq(agentDocuments.documentId, documents.id), this.documentOwnership()),
+      )
       .where(
         and(
           this.agentDocOwnership(),
@@ -1019,7 +1037,10 @@ export class AgentDocumentModel {
     const results = await this.db
       .select({ doc: documents, settings: agentDocuments })
       .from(agentDocuments)
-      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .innerJoin(
+        documents,
+        and(eq(agentDocuments.documentId, documents.id), this.documentOwnership()),
+      )
       .where(
         and(
           this.agentDocOwnership(),
@@ -1082,7 +1103,10 @@ export class AgentDocumentModel {
         },
       })
       .from(agentDocuments)
-      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .innerJoin(
+        documents,
+        and(eq(agentDocuments.documentId, documents.id), this.documentOwnership()),
+      )
       .where(
         and(
           this.agentDocOwnership(),
@@ -1137,7 +1161,10 @@ export class AgentDocumentModel {
     const results = await this.db
       .select({ doc: documents, settings: agentDocuments })
       .from(agentDocuments)
-      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .innerJoin(
+        documents,
+        and(eq(agentDocuments.documentId, documents.id), this.documentOwnership()),
+      )
       .where(
         and(
           this.agentDocOwnership(),
@@ -1181,7 +1208,10 @@ export class AgentDocumentModel {
         updatedAt: agentDocuments.updatedAt,
       })
       .from(agentDocuments)
-      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .innerJoin(
+        documents,
+        and(eq(agentDocuments.documentId, documents.id), this.documentOwnership()),
+      )
       .where(
         and(
           this.agentDocOwnership(),
@@ -1200,6 +1230,10 @@ export class AgentDocumentModel {
     const [result] = await this.db
       .select({ id: agentDocuments.id })
       .from(agentDocuments)
+      .innerJoin(
+        documents,
+        and(eq(agentDocuments.documentId, documents.id), this.documentOwnership()),
+      )
       .where(
         and(
           this.agentDocOwnership(),
@@ -1216,7 +1250,10 @@ export class AgentDocumentModel {
     const results = await this.db
       .select({ doc: documents, settings: agentDocuments })
       .from(agentDocuments)
-      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .innerJoin(
+        documents,
+        and(eq(agentDocuments.documentId, documents.id), this.documentOwnership()),
+      )
       .where(
         and(
           this.agentDocOwnership(),
@@ -1245,7 +1282,10 @@ export class AgentDocumentModel {
     const [result] = await this.db
       .select({ doc: documents, settings: agentDocuments })
       .from(agentDocuments)
-      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .innerJoin(
+        documents,
+        and(eq(agentDocuments.documentId, documents.id), this.documentOwnership()),
+      )
       .where(
         and(
           this.agentDocOwnership(),
@@ -1271,7 +1311,10 @@ export class AgentDocumentModel {
     const [result] = await this.db
       .select({ doc: documents, settings: agentDocuments })
       .from(agentDocuments)
-      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .innerJoin(
+        documents,
+        and(eq(agentDocuments.documentId, documents.id), this.documentOwnership()),
+      )
       .where(
         and(
           this.agentDocOwnership(),
@@ -1311,7 +1354,10 @@ export class AgentDocumentModel {
     const results = await this.db
       .select({ doc: documents, settings: agentDocuments })
       .from(agentDocuments)
-      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .innerJoin(
+        documents,
+        and(eq(agentDocuments.documentId, documents.id), this.documentOwnership()),
+      )
       .where(
         and(
           this.agentDocOwnership(),
@@ -1336,7 +1382,10 @@ export class AgentDocumentModel {
     const [result] = await this.db
       .select({ doc: documents, settings: agentDocuments })
       .from(agentDocuments)
-      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .innerJoin(
+        documents,
+        and(eq(agentDocuments.documentId, documents.id), this.documentOwnership()),
+      )
       .where(
         and(
           this.agentDocOwnership(),
@@ -1361,7 +1410,10 @@ export class AgentDocumentModel {
     const results = await this.db
       .select({ doc: documents, settings: agentDocuments })
       .from(agentDocuments)
-      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .innerJoin(
+        documents,
+        and(eq(agentDocuments.documentId, documents.id), this.documentOwnership()),
+      )
       .where(
         and(
           this.agentDocOwnership(),
@@ -1381,7 +1433,10 @@ export class AgentDocumentModel {
     const results = await this.db
       .select({ doc: documents, settings: agentDocuments })
       .from(agentDocuments)
-      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .innerJoin(
+        documents,
+        and(eq(agentDocuments.documentId, documents.id), this.documentOwnership()),
+      )
       .where(
         and(
           this.agentDocOwnership(),

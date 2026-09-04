@@ -6,6 +6,29 @@ import { createdAt, timestamptz } from './_helpers';
 import { users } from './user';
 import { workspaces } from './workspace';
 
+export interface TrashDetachedEdge {
+  originalParentId: string;
+  resourceId: string;
+  resourceType: 'document' | 'file';
+}
+
+export interface TrashItemRowMeta extends TrashItemMeta {
+  /** Internal hierarchy snapshot; never expose through the public Trash DTO. */
+  detachedEdges?: TrashDetachedEdge[];
+  /** A previous purge crossed the point where restore is no longer safe. */
+  purgeBlocked?: true;
+  /** Internal purge lease; serializes restore and permanent deletion without a schema migration. */
+  purgeClaim?: {
+    claimedAt: string;
+    id: string;
+  };
+  /** Internal retry hand-off; never expose through the public Trash DTO. */
+  storageCleanup?: {
+    files: { fileHash: string; url: string }[];
+    pending: true;
+  };
+}
+
 /**
  * Recycle-bin registry.
  *
@@ -42,7 +65,7 @@ export const trashItems = pgTable(
 
     /** Denormalised display title captured at trash time. */
     title: text('title'),
-    meta: jsonb('meta').$type<TrashItemMeta>(),
+    meta: jsonb('meta').$type<TrashItemRowMeta>(),
 
     /**
      * Cascade root. NULL for the row the user actually deleted; set for rows

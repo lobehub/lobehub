@@ -273,6 +273,9 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   topUp: 'blocked',
   topic: rw('chat:read', 'chat:write'),
   topicComment: rw('chat:read', 'chat:write'),
+  // Restore / purge is a destructive Resource operation, so restricted keys
+  // never reach the recycle bin; only full-access keys can.
+  trash: 'blocked',
   upload: rw('file:read', 'file:write'),
   usage: rw('usage:read', null),
   user: rw('user:read', 'user:write'),

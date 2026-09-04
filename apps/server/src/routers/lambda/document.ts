@@ -1,3 +1,4 @@
+import { TRASH_MUTATION_BATCH_SIZE } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -20,13 +21,14 @@ import {
   buildResourcePermissionState,
   getResourceMeta,
 } from '@/server/services/resourcePermission';
+import { TrashService } from '@/server/services/trash';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { TransferErrorCode } from '@/types/transferError';
 
 import { isWorkspaceNonOwner } from './_helpers/assertWorkspaceRowManageable';
 import {
   assertContentsNotInRestrictedKnowledgeBase,
-  getRestrictedKnowledgeBaseIds,
+  getRestrictedKnowledgeBasePolicy,
 } from './_helpers/knowledgeBaseAccess';
 import {
   compareDocumentHistoryItemsInputSchema,
@@ -79,6 +81,7 @@ const documentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts)
       documentService: new DocumentService(ctx.serverDB, ctx.userId, wsId),
       fileModel: new FileModel(ctx.serverDB, ctx.userId, wsId),
       messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
+      trashService: new TrashService(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
@@ -209,14 +212,7 @@ export const documentRouter = router({
       if (!document) throw new TRPCError({ code: 'NOT_FOUND', message: 'Document not found' });
       await assertContentsNotInRestrictedKnowledgeBase(ctx, [input.id]);
 
-      const result = await ctx.documentService.deleteDocument(input.id);
-      if (ctx.workspaceId) {
-        await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).removeAll(
-          'document',
-          input.id,
-        );
-      }
-      return result;
+      return ctx.trashService.trashDocuments([input.id]);
     }),
 
   deleteDocuments: documentProcedure
@@ -224,22 +220,27 @@ export const documentRouter = router({
     .input(z.object({ ids: z.array(z.string()) }))
     .mutation(async ({ ctx, input }) => {
       const ids = [...new Set(input.ids)];
-      const documents = await ctx.documentModel.findByIds(ids);
-      const accessibleIds = new Set(documents.map((document) => document.id));
-      if (ids.some((id) => !accessibleIds.has(id))) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'One or more documents were not found or are not accessible',
-        });
+      const batches: string[][] = [];
+      for (let index = 0; index < ids.length; index += TRASH_MUTATION_BATCH_SIZE) {
+        batches.push(ids.slice(index, index + TRASH_MUTATION_BATCH_SIZE));
       }
-      await assertContentsNotInRestrictedKnowledgeBase(ctx, ids);
 
-      const result = await ctx.documentService.deleteDocuments(ids);
-      if (ctx.workspaceId) {
-        const permissionModel = new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId);
-        await Promise.all(ids.map((id) => permissionModel.removeAll('document', id)));
+      // Validate the complete legacy request before mutating any batch.
+      for (const batch of batches) {
+        const documents = await ctx.documentModel.findByIds(batch);
+        const accessibleIds = new Set(documents.map((document) => document.id));
+        if (batch.some((id) => !accessibleIds.has(id))) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'One or more documents were not found or are not accessible',
+          });
+        }
+        await assertContentsNotInRestrictedKnowledgeBase(ctx, batch);
       }
-      return result;
+
+      const roots = [];
+      for (const batch of batches) roots.push(...(await ctx.trashService.trashDocuments(batch)));
+      return roots;
     }),
 
   getDocumentById: documentProcedure
@@ -380,10 +381,14 @@ export const documentRouter = router({
       // KB pages are ordinary workspace-public documents, so listings must
       // drop rows from restricted (member No-access) libraries. The exclusion
       // runs inside the query so pagination and totals stay correct.
-      const excludeKnowledgeBaseIds = ctx.workspaceId
-        ? await getRestrictedKnowledgeBaseIds(ctx)
-        : [];
-      return ctx.documentService.queryDocuments({ ...input, excludeKnowledgeBaseIds });
+      const restrictedPolicy = ctx.workspaceId
+        ? await getRestrictedKnowledgeBasePolicy(ctx)
+        : undefined;
+      return ctx.documentService.queryDocuments({
+        ...input,
+        excludeKnowledgeBaseIds: restrictedPolicy?.liveRestrictedKnowledgeBaseIds,
+        excludeTrashedKnowledgeBaseIds: restrictedPolicy?.trashedRestrictedKnowledgeBaseIds,
+      });
     }),
 
   acquireDocumentLock: documentProcedure
@@ -535,9 +540,7 @@ export const documentRouter = router({
       }
       if (ctx.workspaceId) {
         const sourcePermissionModel = new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId);
-        await Promise.all(
-          result.documentIds.map((id) => sourcePermissionModel.removeAll('document', id)),
-        );
+        await sourcePermissionModel.removeAllByIds('document', result.documentIds);
       }
       if (input.targetWorkspaceId && input.targetVisibility === 'public') {
         const targetPermissionModel = new ResourcePermissionModel(

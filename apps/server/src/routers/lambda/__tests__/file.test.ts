@@ -256,9 +256,18 @@ vi.mock('@/server/services/document', () => ({
 }));
 
 const mockAssertCanPerformResourceAction = vi.hoisted(() => vi.fn());
+const mockTrashDocuments = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+const mockTrashFiles = vi.hoisted(() => vi.fn().mockResolvedValue([]));
 
 vi.mock('@/server/services/resourcePermission', () => ({
   assertCanPerformResourceAction: mockAssertCanPerformResourceAction,
+}));
+
+vi.mock('@/server/services/trash', () => ({
+  TrashService: vi.fn(() => ({
+    trashDocuments: mockTrashDocuments,
+    trashFiles: mockTrashFiles,
+  })),
 }));
 
 describe('fileRouter', () => {
@@ -1007,11 +1016,9 @@ describe('fileRouter', () => {
         workspaceRole: 'member',
       }));
       mockFileModelFindById.mockResolvedValue({ id: 'shared-file', userId: 'other-member' });
-      mockFileModelDelete.mockResolvedValue({ url: 'files/shared.txt' });
-
       await caller.removeFile({ id: 'shared-file' });
 
-      expect(mockFileModelDelete).toHaveBeenCalledWith('shared-file', false);
+      expect(mockTrashFiles).toHaveBeenCalledWith(['shared-file']);
     });
   });
 
@@ -1044,7 +1051,36 @@ describe('fileRouter', () => {
         code: 'NOT_FOUND',
       });
 
-      expect(ctx.fileService.deleteFiles).not.toHaveBeenCalled();
+      expect(mockTrashFiles).not.toHaveBeenCalled();
+    });
+
+    it('accepts a legacy bulk request and processes it in bounded batches', async () => {
+      const ids = Array.from({ length: 401 }, (_, index) => `file-${index}`);
+      mockFileModelFindByIds.mockImplementation(async (batch: string[]) =>
+        batch.map((id) => ({ id })),
+      );
+
+      await caller.removeFiles({ ids });
+
+      expect(mockFileModelFindByIds.mock.calls.map(([batch]) => batch.length)).toEqual([
+        200, 200, 1,
+      ]);
+      expect(mockTrashFiles.mock.calls.map(([batch]) => batch.length)).toEqual([200, 200, 1]);
+    });
+
+    it('validates every batch before trashing any file', async () => {
+      const ids = Array.from({ length: 401 }, (_, index) => `file-${index}`);
+      mockFileModelFindByIds
+        .mockImplementationOnce(async (batch: string[]) => batch.map((id) => ({ id })))
+        .mockImplementationOnce(async (batch: string[]) =>
+          batch.slice(0, -1).map((id) => ({ id })),
+        );
+
+      await expect(caller.removeFiles({ ids })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+
+      expect(mockTrashFiles).not.toHaveBeenCalled();
     });
   });
 
@@ -1073,7 +1109,7 @@ describe('fileRouter', () => {
   });
 
   describe('deleteKnowledgeItemsByQuery', () => {
-    it('should delete page-backed knowledge items via documentService and plain files via fileModel', async () => {
+    it('should trash page-backed knowledge items and plain files', async () => {
       mockKnowledgeRepoQuery.mockResolvedValue([
         {
           documentId: 'doc-1',
@@ -1090,12 +1126,10 @@ describe('fileRouter', () => {
           sourceType: 'file',
         },
       ]);
-      mockFileModelDeleteMany.mockResolvedValue([]);
-
       const result = await caller.deleteKnowledgeItemsByQuery({});
 
-      expect(mockDocumentServiceDeleteDocuments).toHaveBeenCalledWith(['doc-1']);
-      expect(mockFileModelDeleteMany).toHaveBeenCalledWith(['file-2'], false);
+      expect(mockTrashDocuments).toHaveBeenCalledWith(['doc-1']);
+      expect(mockTrashFiles).toHaveBeenCalledWith(['file-2']);
       expect(result).toEqual({ count: 2 });
     });
 
@@ -1128,13 +1162,14 @@ describe('fileRouter', () => {
 
       expect(mockKnowledgeRepoQuery).toHaveBeenCalledWith({
         excludeKnowledgeBaseIds: [],
+        excludeTrashedKnowledgeBaseIds: [],
         includeContent: false,
         includeContentPreview: false,
         limit: 501,
         offset: 0,
         showFilesInKnowledgeBase: false,
       });
-      expect(mockFileModelDeleteMany).toHaveBeenCalledWith(['file-delete'], false);
+      expect(mockTrashFiles).toHaveBeenCalledWith(['file-delete']);
       expect(result).toEqual({ count: 1 });
     });
 
@@ -1158,13 +1193,14 @@ describe('fileRouter', () => {
 
       expect(mockKnowledgeRepoQuery).toHaveBeenCalledWith({
         excludeKnowledgeBaseIds: [],
+        excludeTrashedKnowledgeBaseIds: [],
         includeContent: false,
         includeContentPreview: false,
         limit: 501,
         offset: 0,
         showFilesInKnowledgeBase: false,
       });
-      expect(mockFileModelDeleteMany).toHaveBeenCalledWith(['member-file'], false);
+      expect(mockTrashFiles).toHaveBeenCalledWith(['member-file']);
     });
   });
 
@@ -1180,6 +1216,7 @@ describe('fileRouter', () => {
 
       expect(mockKnowledgeRepoQuery).toHaveBeenLastCalledWith({
         excludeKnowledgeBaseIds: [],
+        excludeTrashedKnowledgeBaseIds: [],
         includeContent: false,
         includeContentPreview: false,
         limit: 501,
@@ -1195,6 +1232,7 @@ describe('fileRouter', () => {
 
       expect(mockKnowledgeRepoQuery).toHaveBeenLastCalledWith({
         excludeKnowledgeBaseIds: [],
+        excludeTrashedKnowledgeBaseIds: [],
         includeContent: false,
         includeContentPreview: false,
         limit: 501,

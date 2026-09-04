@@ -5,17 +5,19 @@
  * literal here plus a handler in the server `TrashService` — never a new
  * table.
  *
- * Phase 1 wires up the chat domain (agent / topic / message); the remaining
- * content kinds (chat groups, pages, files, knowledge bases, projects, tasks,
- * generation topics) follow once the pattern has proven itself — see
- * docs/development/soft-delete-recycle-bin-design.md.
+ * The first slice covers the chat domain. Resource-domain support is added by
+ * the workspace Resource recycle-bin slice without removing those literals.
  *
  * Only *root* kinds are user-visible in the recycle bin. Rows that were
- * trashed as part of a parent's cascade (e.g. a topic under a trashed agent)
- * are still registered as `trash_items` children so a restore / purge of the
- * root can find them, but the UI never lists them on their own.
+ * trashed as part of a parent's cascade (e.g. a topic under a trashed agent or
+ * a document under a trashed folder) are still registered as `trash_items`
+ * children so a restore / purge of the root can find them, but the UI never
+ * lists them on their own.
  */
-export const TRASH_RESOURCE_TYPES = ['agent', 'topic', 'message'] as const;
+export const RESOURCE_TRASH_TYPES = ['file', 'document', 'knowledgeBase'] as const;
+export type ResourceTrashType = (typeof RESOURCE_TRASH_TYPES)[number];
+
+export const TRASH_RESOURCE_TYPES = ['agent', 'topic', 'message', ...RESOURCE_TRASH_TYPES] as const;
 export type TrashResourceType = (typeof TRASH_RESOURCE_TYPES)[number];
 
 /**
@@ -27,27 +29,27 @@ export type TrashResourceType = (typeof TRASH_RESOURCE_TYPES)[number];
 export interface TrashItemMeta {
   avatar?: string | null;
   backgroundColor?: string | null;
-  /** Number of cascaded children registered under this root (topics under an agent …) */
+  /** Number of cascaded children registered under this root. */
   childCount?: number;
+  /** Original resource creator; differs from the delete actor in a shared workspace. */
+  creatorUserId?: string | null;
   /** e.g. mime type for files, `sourceType` for documents */
   kind?: string | null;
-  /**
-   * Message-only: original `parentId` and the child ids that were re-parented
-   * onto it at trash time, so a restore can splice the message back into its
-   * branch (see `MessageModel.softDeleteMessages`).
-   */
+  /** Original knowledge base, when the resource is directly attached to one. */
+  knowledgeBaseId?: string | null;
+  /** Message-only hierarchy snapshot used during restore. */
   messageTree?: { childIds: string[]; parentId: string | null };
-  /** Human readable parent title (agent name for a topic, folder for a page …) */
+  /** Original folder parent, retained for audit and restore context. */
+  parentId?: string | null;
+  /** Human-readable parent title shown by trash UIs. */
   parentTitle?: string | null;
-  /**
-   * Topic-only: the user asked for the topic's attachments to go with it.
-   * Files are not trash-aware yet, so they stay live while the topic sits in
-   * the bin and are removed (with their storage objects) when it is purged.
-   */
+  /** Topic-only marker for deleting its attachments during purge. */
   removeFiles?: boolean;
-  /** Message-only: role of the trashed message, drives the list glyph. */
+  /** Message-only role used to select the list glyph. */
   role?: string | null;
   size?: number | null;
+  /** Visibility snapshot used to keep private resources out of teammates' bins. */
+  visibility?: 'private' | 'public' | null;
 }
 
 export interface TrashItem {
@@ -77,6 +79,20 @@ export interface TrashListResult {
 }
 
 export type TrashCountByType = Partial<Record<TrashResourceType, number>>;
+
+export interface ResourceTrashItem extends Omit<TrashItem, 'resourceType'> {
+  resourceType: ResourceTrashType;
+}
+
+export interface ResourceTrashListParams extends Omit<TrashListParams, 'resourceType'> {
+  resourceType?: ResourceTrashType;
+}
+
+export interface ResourceTrashListResult extends Omit<TrashListResult, 'items'> {
+  items: ResourceTrashItem[];
+}
+
+export type ResourceTrashCountByType = Partial<Record<ResourceTrashType, number>>;
 
 /**
  * Why a restore was refused. Surfaced to the client so it can explain the

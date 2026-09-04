@@ -150,6 +150,7 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<SettingsTabs, string[]>> = {
     'account deletion',
     'delete account',
   ],
+  [SettingsTabs.Trash]: ['trash', 'recycle bin', 'deleted', 'restore', 'undelete', 'recover'],
   [SettingsTabs.SystemTools]: [
     'system tools',
     'built-in tools',
@@ -196,6 +197,7 @@ export const TAB_SEARCH_KEYWORDS_KEYS: Partial<Record<SettingsTabs, string>> = {
   [SettingsTabs.Stats]: 'settingsSearch.tabKeywords.stats',
   [SettingsTabs.Storage]: 'settingsSearch.tabKeywords.storage',
   [SettingsTabs.SystemTools]: 'settingsSearch.tabKeywords.systemTools',
+  [SettingsTabs.Trash]: 'settingsSearch.tabKeywords.trash',
   [SettingsTabs.Usage]: 'settingsSearch.tabKeywords.usage',
 };
 

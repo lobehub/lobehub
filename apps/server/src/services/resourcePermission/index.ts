@@ -1,7 +1,7 @@
 import { isCollaborativeBuiltinAgentRow } from '@lobechat/builtin-agents';
 import type { PERMISSION_ACTIONS } from '@lobechat/const/rbac';
 import { TRPCError } from '@trpc/server';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import type { PermissionResourceType, ResourceAccessLevel } from '@/database/schemas';
@@ -13,6 +13,7 @@ import {
   knowledgeBases,
 } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { notTrashed } from '@/database/utils/softDelete';
 import {
   getWorkspaceScopedPermissionMatches,
   isWorkspacePrimaryOwner,
@@ -106,7 +107,7 @@ export const getResourceMeta = async (
         workspaceId: agents.workspaceId,
       })
       .from(agents)
-      .where(eq(agents.id, resourceId))
+      .where(and(eq(agents.id, resourceId), notTrashed(agents.isDeleted)))
       .limit(1);
 
     return row ?? null;
@@ -119,7 +120,7 @@ export const getResourceMeta = async (
   const [row] = await db
     .select({ userId: table.userId, visibility: table.visibility, workspaceId: table.workspaceId })
     .from(table)
-    .where(eq(table.id, resourceId))
+    .where(and(eq(table.id, resourceId), notTrashed(table.isDeleted)))
     .limit(1);
 
   return row ?? null;

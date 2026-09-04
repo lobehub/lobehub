@@ -91,6 +91,7 @@ import { taskRouter } from './task';
 import { threadRouter } from './thread';
 import { topicRouter } from './topic';
 import { topicCommentRouter } from './topicComment';
+import { trashRouter } from './trash';
 import { uploadRouter } from './upload';
 import { usageRouter } from './usage';
 import { userRouter } from './user';
@@ -175,6 +176,7 @@ export const lambdaRouter = router({
   task: taskRouter,
   thread: threadRouter,
   topic: topicRouter,
+  trash: trashRouter,
   topicComment: topicCommentRouter,
   upload: uploadRouter,
   usage: usageRouter,

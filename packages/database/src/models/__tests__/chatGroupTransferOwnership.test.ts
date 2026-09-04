@@ -4,10 +4,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
+  agentDocuments,
   agents,
   agentsKnowledgeBases,
   chatGroups,
   chatGroupsAgents,
+  documentHistories,
+  documents,
   knowledgeBases,
   topics,
   users,
@@ -20,6 +23,7 @@ import {
   CHAT_GROUP_TRANSFER_HIDDEN_MEMBER,
   ChatGroupModel,
 } from '../chatGroup';
+import { TrashModel } from '../trash';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -102,6 +106,69 @@ describe('ChatGroupModel.transferGroupOwnership', () => {
     const [ownedAgent] = await serverDB.select().from(agents).where(eq(agents.id, supervisor.id));
     expect(ownedAgent.userId).toBe(recipientId);
     expect(ownedAgent.workspaceId).toBe(wsId);
+  });
+
+  it('leaves an owned member’s trashed VFS document chain with the previous owner', async () => {
+    const { group, supervisor } = await seedGroupWithRoster();
+    const deletedAt = new Date('2026-09-01T00:00:00Z');
+    await serverDB.insert(documents).values({
+      content: 'deleted group skill',
+      deletedAt,
+      fileType: 'text/markdown',
+      id: 'group-trashed-skill',
+      isDeleted: true,
+      source: `agent-document://${supervisor.id}/deleted.md`,
+      sourceType: 'agent',
+      title: 'deleted.md',
+      totalCharCount: 19,
+      totalLineCount: 1,
+      userId: ownerId,
+      workspaceId: wsId,
+    });
+    await serverDB.insert(agentDocuments).values({
+      agentId: supervisor.id,
+      documentId: 'group-trashed-skill',
+      userId: ownerId,
+      workspaceId: wsId,
+    });
+    await serverDB.insert(documentHistories).values({
+      documentId: 'group-trashed-skill',
+      editorData: {},
+      saveSource: 'manual',
+      savedAt: deletedAt,
+      userId: ownerId,
+      workspaceId: wsId,
+    });
+    const registry = new TrashModel(serverDB, ownerId, wsId);
+    await registry.register({
+      deletedAt,
+      root: {
+        resourceId: 'group-trashed-skill',
+        resourceType: 'document',
+        title: 'deleted.md',
+      },
+    });
+
+    await handover({ fromUserId: ownerId, groupId: group.id, toUserId: recipientId });
+
+    const [document] = await serverDB
+      .select()
+      .from(documents)
+      .where(eq(documents.id, 'group-trashed-skill'));
+    const [binding] = await serverDB
+      .select()
+      .from(agentDocuments)
+      .where(eq(agentDocuments.documentId, 'group-trashed-skill'));
+    const [history] = await serverDB
+      .select()
+      .from(documentHistories)
+      .where(eq(documentHistories.documentId, 'group-trashed-skill'));
+    const trashRoot = await registry.findByResource('document', 'group-trashed-skill');
+
+    expect(document.userId).toBe(ownerId);
+    expect(binding.userId).toBe(ownerId);
+    expect(history.userId).toBe(ownerId);
+    expect(trashRoot?.userId).toBe(ownerId);
   });
 
   it('leaves referenced standalone members with their own owners', async () => {

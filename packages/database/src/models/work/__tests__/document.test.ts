@@ -376,4 +376,21 @@ describe('WorkModel · workspace document visibility', () => {
     expect(await ownerWorks.listByConversation({ topicId })).toHaveLength(1);
     expect(await memberWorks.listByConversation({ topicId })).toHaveLength(0);
   });
+
+  it('hides a soft-deleted document Work from both the registrant and other members', async () => {
+    await seedWorkspace();
+    const ownerWorks = new WorkModel(serverDB, userId, workspaceId);
+    const memberWorks = new WorkModel(serverDB, userId2, workspaceId);
+
+    const { doc, work } = await registerWorkspaceDocument('public');
+    await serverDB
+      .update(documents)
+      .set({ deletedAt: new Date(), isDeleted: true })
+      .where(eq(documents.id, doc.documentId));
+
+    expect(await ownerWorks.listByConversation({ topicId })).toHaveLength(0);
+    expect(await memberWorks.listByConversation({ topicId })).toHaveLength(0);
+    expect((await memberWorks.listByWorkspace({})).items).toHaveLength(0);
+    expect(await ownerWorks.listVersions(work!.id)).toHaveLength(0);
+  });
 });

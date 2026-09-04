@@ -3,6 +3,7 @@ import { eq, isNull } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import type { LobeChatDatabase } from '../../../type';
+import { notTrashed } from '../../../utils/softDelete';
 import { buildWorkspaceWhere } from '../../../utils/workspace';
 import type { FtsSearchBackendScope } from '../types';
 
@@ -17,6 +18,7 @@ export interface PgSearchFtsSearchWorkspaceScopedColumns {
 export interface PgSearchFtsSearchContext {
   db: LobeChatDatabase;
   liftedScopeWhere: (workspaceIdColumn: SQLWrapper) => SQL | undefined;
+  liftedTrashWhere: (isDeletedColumn: AnyPgColumn) => SQL | undefined;
   liftsAgentFilter: boolean;
   liftsWorkspaceFilter: boolean;
   scanCandidateLimit: (limit: number) => number;
@@ -74,6 +76,11 @@ export function createPgSearchFtsSearchContext(
     db,
     liftedScopeWhere: (workspaceIdColumn) =>
       liftsWorkspaceFilter ? (isNull(workspaceIdColumn) as SQL) : undefined,
+    // `is_deleted` is not a BM25 fast field. In personal mode keep the trash
+    // predicate beside the already-lifted workspace filter so ParadeDB retains
+    // its TopN scan; workspace mode gets the predicate from buildWorkspaceWhere.
+    liftedTrashWhere: (isDeletedColumn) =>
+      liftsWorkspaceFilter ? notTrashed(isDeletedColumn) : undefined,
     liftsAgentFilter,
     liftsWorkspaceFilter,
     scanCandidateLimit: (limit) =>

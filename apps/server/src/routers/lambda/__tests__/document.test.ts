@@ -12,8 +12,6 @@ const mocks = vi.hoisted(() => ({
   businessFileTransferStorageCheck: vi.fn(),
   countFileUsageInSubtree: vi.fn(),
   createDocument: vi.fn(),
-  deleteDocument: vi.fn(),
-  deleteDocuments: vi.fn(),
   findById: vi.fn(),
   findByIds: vi.fn(),
   findBySlug: vi.fn(),
@@ -23,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   setAccessLevel: vi.fn(),
   subtreeHasForeignRows: vi.fn(),
   transferTo: vi.fn(),
+  trashDocuments: vi.fn(),
   updateDocument: vi.fn(),
 }));
 
@@ -54,8 +53,6 @@ vi.mock('@/database/models/resourcePermission', () => ({
 vi.mock('@/server/services/document', () => ({
   DocumentService: vi.fn(() => ({
     createDocument: mocks.createDocument,
-    deleteDocument: mocks.deleteDocument,
-    deleteDocuments: mocks.deleteDocuments,
     publishToWorkspace: mocks.publishToWorkspace,
     updateDocument: mocks.updateDocument,
   })),
@@ -66,12 +63,19 @@ vi.mock('@/server/services/resourcePermission', () => ({
   buildResourcePermissionState: vi.fn(),
   getResourceMeta: mocks.getResourceMeta,
 }));
-vi.mock('@/server/services/workspacePermission', () => ({
-  hasWorkspaceScopedPermission: vi.fn(),
+vi.mock('@/server/services/trash', () => ({
+  TrashService: vi.fn(() => ({ trashDocuments: mocks.trashDocuments })),
 }));
 vi.mock('@/server/routers/lambda/_helpers/knowledgeBaseAccess', () => ({
   assertContentsNotInRestrictedKnowledgeBase: mocks.assertContentsNotInRestrictedKnowledgeBase,
-  getRestrictedKnowledgeBaseIds: vi.fn().mockResolvedValue([]),
+  getRestrictedKnowledgeBasePolicy: vi.fn().mockResolvedValue({
+    allRestrictedKnowledgeBaseIds: [],
+    liveRestrictedKnowledgeBaseIds: [],
+    trashedRestrictedKnowledgeBaseIds: [],
+  }),
+}));
+vi.mock('@/server/services/workspacePermission', () => ({
+  hasWorkspaceScopedPermission: vi.fn(),
 }));
 
 const { DOCUMENT_TRANSFER_FOREIGN_ROWS } = await import('@/database/models/document');
@@ -193,12 +197,51 @@ describe('documentRouter transferDocument', () => {
 
     await caller.deleteDocument({ id: 'doc-1' });
 
-    expect(mocks.deleteDocument).toHaveBeenCalledWith('doc-1');
+    expect(mocks.trashDocuments).toHaveBeenCalledWith(['doc-1']);
     expect(mocks.assertCanPerformResourceAction).not.toHaveBeenCalled();
   });
 });
 
-describe('documentRouter createDocument under a knowledge-base folder', () => {
+describe('documentRouter deleteDocuments', () => {
+  const caller = () =>
+    documentRouter.createCaller({
+      serverDB: {},
+      userId: 'member-1',
+      workspaceId: 'ws-1',
+      workspaceRole: 'member',
+    } as any);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.assertContentsNotInRestrictedKnowledgeBase.mockResolvedValue(undefined);
+  });
+
+  it('accepts a legacy bulk request and processes it in bounded batches', async () => {
+    const ids = Array.from({ length: 401 }, (_, index) => `doc-${index}`);
+    mocks.findByIds.mockImplementation(async (batch: string[]) => batch.map((id) => ({ id })));
+    mocks.trashDocuments.mockImplementation(async (batch: string[]) => batch.map((id) => ({ id })));
+
+    await expect(caller().deleteDocuments({ ids })).resolves.toHaveLength(401);
+
+    expect(mocks.findByIds.mock.calls.map(([batch]) => batch.length)).toEqual([200, 200, 1]);
+    expect(mocks.trashDocuments.mock.calls.map(([batch]) => batch.length)).toEqual([200, 200, 1]);
+  });
+
+  it('validates every batch before trashing any document', async () => {
+    const ids = Array.from({ length: 401 }, (_, index) => `doc-${index}`);
+    mocks.findByIds
+      .mockImplementationOnce(async (batch: string[]) => batch.map((id) => ({ id })))
+      .mockImplementationOnce(async (batch: string[]) => batch.slice(0, -1).map((id) => ({ id })));
+
+    await expect(caller().deleteDocuments({ ids })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+
+    expect(mocks.trashDocuments).not.toHaveBeenCalled();
+  });
+});
+
+describe('documentRouter createDocument under a workspace parent', () => {
   const caller = () =>
     documentRouter.createCaller({
       serverDB: {},
@@ -214,7 +257,6 @@ describe('documentRouter createDocument under a knowledge-base folder', () => {
     mocks.assertCanEditResource.mockResolvedValue(undefined);
     mocks.assertContentsNotInRestrictedKnowledgeBase.mockResolvedValue(undefined);
     mocks.findBySlug.mockResolvedValue(undefined);
-    // The parent folder was created by another member inside a public KB.
     mocks.getResourceMeta.mockResolvedValue({
       userId: 'creator-1',
       visibility: 'public',
@@ -309,30 +351,14 @@ describe('documentRouter createDocument under a knowledge-base folder', () => {
     expect(mocks.createDocument).not.toHaveBeenCalled();
   });
 
-  it('authorizes a move into a KB folder through the KB as well', async () => {
-    mocks.findById.mockImplementation(async (id: string) =>
-      id === 'doc-1'
-        ? {
-            id: 'doc-1',
-            parentId: null,
-            userId: 'member-1',
-            visibility: 'public',
-            workspaceId: 'ws-1',
-          }
-        : { id, ...kbFolder },
-    );
+  it('rejects a missing or trashed parent', async () => {
+    mocks.getResourceMeta.mockResolvedValue(null);
 
-    await caller().updateDocument({ id: 'doc-1', parentId: 'kb-folder' });
-
-    expect(mocks.assertContentsNotInRestrictedKnowledgeBase).toHaveBeenCalledWith(
-      expect.anything(),
-      ['doc-1'],
-    );
-    expect(mocks.assertContentsNotInRestrictedKnowledgeBase).toHaveBeenCalledWith(
-      expect.anything(),
-      ['kb-folder'],
-    );
-    expect(mocks.updateDocument).toHaveBeenCalled();
+    await expect(
+      caller().createDocument({ parentId: 'trashed-folder', title: 'Doc' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(mocks.assertContentsNotInRestrictedKnowledgeBase).not.toHaveBeenCalled();
+    expect(mocks.createDocument).not.toHaveBeenCalled();
   });
 });
 

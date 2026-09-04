@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports, regexp/no-unused-capturing-group */
 const dns = require('node:dns').promises;
 const fs = require('node:fs').promises;
 const path = require('node:path');
@@ -178,6 +179,11 @@ const QSTASH_SCHEDULES = [
     cron: '*/5 * * * *',
     id: 'lobe-goal-sweep',
     path: '/api/workflows/goal/sweep',
+  },
+  {
+    cron: '0 * * * *',
+    id: 'lobe-trash-purge',
+    path: '/api/workflows/trash/purge',
   },
 ];
 

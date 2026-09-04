@@ -49,6 +49,7 @@ import {
   TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS,
   TopicCommentModel,
 } from '../topicComment';
+import { TrashModel } from '../trash';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 const isServerDB = process.env.TEST_SERVER_DB === '1';
@@ -1274,6 +1275,54 @@ describe('AgentModel.transferAgent scope riders (connectors & documents)', () =>
       .from(documentHistories)
       .where(eq(documentHistories.documentId, 'dedicated-doc'));
     expect(history.workspaceId).toBe(wsId1);
+  });
+
+  it('should leave trashed agent documents and their registry in the source scope', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Trashed Doc Agent' });
+    const deletedAt = new Date('2026-09-01T00:00:00Z');
+
+    await serverDB.insert(documents).values({
+      content: '# trashed skill',
+      deletedAt,
+      fileType: 'text/markdown',
+      id: 'trashed-agent-doc',
+      isDeleted: true,
+      source: `agent-document://${agent.id}/trashed.md`,
+      sourceType: 'agent',
+      title: 'trashed.md',
+      totalCharCount: 15,
+      totalLineCount: 1,
+      userId,
+    });
+    await serverDB.insert(agentDocuments).values({
+      agentId: agent.id,
+      documentId: 'trashed-agent-doc',
+      userId,
+    });
+    const trashModel = new TrashModel(serverDB, userId);
+    await trashModel.register({
+      deletedAt,
+      root: { resourceId: 'trashed-agent-doc', resourceType: 'document' },
+    });
+
+    await model.transferAgent(agent.id, wsId1, userId, 'private');
+
+    const [doc] = await serverDB
+      .select()
+      .from(documents)
+      .where(eq(documents.id, 'trashed-agent-doc'));
+    expect(doc.workspaceId).toBeNull();
+    expect(doc.isDeleted).toBe(true);
+
+    const [binding] = await serverDB
+      .select()
+      .from(agentDocuments)
+      .where(eq(agentDocuments.documentId, 'trashed-agent-doc'));
+    expect(binding.workspaceId).toBeNull();
+
+    const trashItem = await trashModel.findByResource('document', 'trashed-agent-doc');
+    expect(trashItem?.workspaceId).toBeNull();
   });
 
   it('should detach associated documents and leave them in the source scope', async () => {

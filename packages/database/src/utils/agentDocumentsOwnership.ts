@@ -12,6 +12,8 @@ import {
   topicDocuments,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
+import { lockDocumentHierarchy } from './documentHierarchy';
+import { notTrashed } from './softDelete';
 import { buildWorkspaceWhere } from './workspace';
 
 /**
@@ -129,6 +131,8 @@ export const rehomeAgentDocumentsForRecipient = async (
   const { agentIds, fromUserId, recipientId, workspaceId } = params;
   if (agentIds.length === 0) return;
 
+  await lockDocumentHierarchy(db as LobeChatDatabase, fromUserId, workspaceId);
+
   const rows = await db
     .select({
       accessible: sql<boolean>`(${buildWorkspaceWhere(
@@ -143,7 +147,10 @@ export const rehomeAgentDocumentsForRecipient = async (
       sourceType: documents.sourceType,
     })
     .from(agentDocuments)
-    .innerJoin(documents, eq(documents.id, agentDocuments.documentId))
+    .innerJoin(
+      documents,
+      and(eq(documents.id, agentDocuments.documentId), notTrashed(documents.isDeleted)),
+    )
     .where(and(inArray(agentDocuments.agentId, agentIds), eq(agentDocuments.userId, fromUserId)));
   if (rows.length === 0) return;
 
@@ -230,11 +237,21 @@ export const rehomeAgentDocumentsForRecipient = async (
       );
   }
   if (dedicated.length > 0) {
-    const dedicatedDocIds = dedicated.map((row) => row.documentId);
-    await db
+    const dedicatedDocIds = [...new Set(dedicated.map((row) => row.documentId))];
+    const movedDocuments = await db
       .update(documents)
       .set({ clientId: null, userId: recipientId })
-      .where(and(inArray(documents.id, dedicatedDocIds), eq(documents.userId, fromUserId)));
+      .where(
+        and(
+          inArray(documents.id, dedicatedDocIds),
+          eq(documents.userId, fromUserId),
+          notTrashed(documents.isDeleted),
+        ),
+      )
+      .returning({ id: documents.id });
+    if (movedDocuments.length !== dedicatedDocIds.length) {
+      throw new Error('Agent document changed during ownership handover');
+    }
     // Revision history rows also cascade on user deletion — they follow their
     // document, or the transferred document would survive while its history
     // dies with the previous owner's account.
@@ -265,7 +282,10 @@ export const countAssociatedAgentDocumentsToDetach = async (
   const [row] = await db
     .select({ value: count() })
     .from(agentDocuments)
-    .innerJoin(documents, eq(documents.id, agentDocuments.documentId))
+    .innerJoin(
+      documents,
+      and(eq(documents.id, agentDocuments.documentId), notTrashed(documents.isDeleted)),
+    )
     .where(
       and(
         inArray(agentDocuments.agentId, agentIds),
@@ -371,7 +391,10 @@ export const moveAgentDocumentsForScopeTransfer = async (
       sourceType: documents.sourceType,
     })
     .from(agentDocuments)
-    .innerJoin(documents, eq(documents.id, agentDocuments.documentId))
+    .innerJoin(
+      documents,
+      and(eq(documents.id, agentDocuments.documentId), notTrashed(documents.isDeleted)),
+    )
     .where(inArray(agentDocuments.agentId, agentIds));
   if (rows.length === 0) return [];
 
@@ -501,14 +524,25 @@ export const moveAgentDocumentsForScopeTransfer = async (
     ...(targetWorkspaceId && targetVisibility ? { visibility: targetVisibility } : {}),
   };
   const cleanDocIds = dedicatedDocIds.filter((id) => !conflictedDocIds.has(id));
+  const movedDocumentIds: string[] = [];
   if (cleanDocIds.length > 0) {
-    await db.update(documents).set(documentScopeUpdate).where(inArray(documents.id, cleanDocIds));
+    const moved = await db
+      .update(documents)
+      .set(documentScopeUpdate)
+      .where(and(inArray(documents.id, cleanDocIds), notTrashed(documents.isDeleted)))
+      .returning({ id: documents.id });
+    movedDocumentIds.push(...moved.map((row) => row.id));
   }
   if (conflictedDocIds.size > 0) {
-    await db
+    const moved = await db
       .update(documents)
       .set({ ...documentScopeUpdate, slug: null })
-      .where(inArray(documents.id, [...conflictedDocIds]));
+      .where(and(inArray(documents.id, [...conflictedDocIds]), notTrashed(documents.isDeleted)))
+      .returning({ id: documents.id });
+    movedDocumentIds.push(...moved.map((row) => row.id));
+  }
+  if (movedDocumentIds.length !== dedicatedDocIds.length) {
+    throw new Error('Agent document changed during scope transfer');
   }
 
   // Revision history denormalizes the scope — left behind, scope-filtered

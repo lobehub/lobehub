@@ -2230,6 +2230,26 @@ describe('TaskModel', () => {
       expect(data.tree).toEqual([]);
     });
 
+    it('should render a trashed pinned document as an inaccessible tombstone', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const root = await model.create({ instruction: 'Root' });
+      const doc = await insertDoc('Private draft');
+      await model.pinDocument(root.id, doc.id);
+      await serverDB
+        .update(documents)
+        .set({ deletedAt: new Date('2026-09-01T00:00:00Z'), isDeleted: true })
+        .where(eq(documents.id, doc.id));
+
+      const data = await model.getTreePinnedDocuments(root.id);
+
+      expect(data.nodeMap[doc.id]).toMatchObject({
+        charCount: null,
+        inaccessible: true,
+        title: '',
+        updatedAt: null,
+      });
+    });
+
     it('should scope to the workspace when model is workspace-scoped', async () => {
       const wsId = 'task-tree-docs-ws';
       await serverDB

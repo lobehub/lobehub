@@ -1427,6 +1427,13 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
               },
               {
                 element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/trash'),
+                  'Desktop > Workspace > Settings > Trash',
+                ),
+                path: 'trash',
+              },
+              {
+                element: dynamicElement(
                   () => import('@/routes/(main)/[workspaceSlug]/settings/devices'),
                   'Desktop > Workspace > Settings > Devices',
                 ),

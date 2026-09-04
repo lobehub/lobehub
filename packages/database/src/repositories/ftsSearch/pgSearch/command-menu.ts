@@ -1,5 +1,5 @@
 import { LIBRARY_HIDDEN_FILE_SOURCES } from '@lobechat/types';
-import { and, desc, eq, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
 
 import {
   agents,
@@ -13,6 +13,7 @@ import {
 } from '../../../schemas';
 import { sanitizeBm25Query } from '../../../utils/bm25';
 import { normalizeInboxAgentMeta, normalizeInboxAgentTitle } from '../../../utils/inboxAgent';
+import { excludeRestrictedFile } from '../../../utils/restrictedKnowledgeBase';
 import { notShareVisitorMessage, notShareVisitorTopic } from '../../../utils/shareVisitor';
 import { buildWorkspaceWhere } from '../../../utils/workspace';
 import type {
@@ -322,6 +323,8 @@ export async function searchFiles(
   query: string,
   limit: number,
   excludeKbIds?: string[],
+  excludeTrashedKbIds?: string[],
+  excludeIds?: string[],
 ): Promise<FtsSearchBackendResponse<FtsSearchFileResult>> {
   const bm25Query = sanitizeBm25Query(query);
   const { db } = context;
@@ -331,6 +334,7 @@ export async function searchFiles(
       createdAt: files.createdAt,
       fileType: files.fileType,
       id: files.id,
+      isDeleted: files.isDeleted,
       name: files.name,
       score: sql<number>`paradedb.score(${files.id})`.as('score'),
       size: files.size,
@@ -371,15 +375,17 @@ export async function searchFiles(
     .where(
       and(
         context.liftedScopeWhere(hits.workspaceId),
-        // A file linked to any restricted KB is fully hidden. The subquery
-        // avoids leaking it through a different joined membership row.
-        excludeKbIds && excludeKbIds.length > 0
-          ? notInArray(
+        context.liftedTrashWhere(hits.isDeleted),
+        excludeIds?.length ? notInArray(hits.id, excludeIds) : undefined,
+        context.scope.workspaceId
+          ? excludeRestrictedFile(
+              db,
               hits.id,
-              db
-                .select({ fileId: knowledgeBaseFiles.fileId })
-                .from(knowledgeBaseFiles)
-                .where(inArray(knowledgeBaseFiles.knowledgeBaseId, excludeKbIds)),
+              { userId: context.scope.userId, workspaceId: context.scope.workspaceId },
+              {
+                liveKnowledgeBaseIds: excludeKbIds,
+                trashedKnowledgeBaseIds: excludeTrashedKbIds,
+              },
             )
           : undefined,
       ),
@@ -480,6 +486,7 @@ export async function searchKnowledgeBases(
       createdAt: knowledgeBases.createdAt,
       description: knowledgeBases.description,
       id: knowledgeBases.id,
+      isDeleted: knowledgeBases.isDeleted,
       name: knowledgeBases.name,
       score: sql<number>`paradedb.score(${knowledgeBases.id})`.as('score'),
       updatedAt: knowledgeBases.updatedAt,
@@ -510,6 +517,7 @@ export async function searchKnowledgeBases(
     .where(
       and(
         context.liftedScopeWhere(hits.workspaceId),
+        context.liftedTrashWhere(hits.isDeleted),
         // Keep excluded knowledge bases out of the inner BM25 scan so TopN
         // ranking remains intact; restricted rows only consume pool slots.
         excludeIds && excludeIds.length > 0 ? notInArray(hits.id, excludeIds) : undefined,
