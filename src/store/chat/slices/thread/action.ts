@@ -27,6 +27,7 @@ import { systemAgentSelectors, userGeneralSettingsSelectors } from '@/store/user
 import { setNamespace } from '@/utils/storeDebug';
 
 import { PortalViewType } from '../portal/initialState';
+import { chatPortalSelectors } from '../portal/selectors';
 import { type ThreadDispatch } from './reducer';
 import { threadReducer } from './reducer';
 import { genParentMessages } from './selectors';
@@ -105,6 +106,43 @@ export class ChatThreadActionImpl {
       startMessageId: sourceMessageId ?? undefined,
     });
   };
+
+  /**
+   * Surface a freshly spawned `callSubAgent` isolation thread in the portal.
+   *
+   * `toolMessageId` is the pending placeholder tool message anchoring the run —
+   * the thread points back at it via `sourceMessageId`. That anchor is the only
+   * key available at spawn time: the persisted `pluginState.threadId` is only
+   * backfilled by the completion bridge when the child finishes.
+   *
+   * One-shot per anchor: a user who closes the portal mid-run must not have it
+   * forced back open by a replayed spawn event. And when the portal is already
+   * showing a non-Thread view (an Artifact/Document the user is reading), the
+   * open is skipped rather than covering that surface — the same guard
+   * `#syncCreatedThread` applies. The thread-list refresh still runs on the
+   * skip paths so the sidebar and the tool card's "View Detail" button pick the
+   * new thread up without waiting for a topic switch.
+   */
+  internal_autoOpenSubAgentThread = async (toolMessageId: string): Promise<void> => {
+    await this.#get().refreshThreads();
+
+    if (this.#autoOpenedSubAgentAnchors.has(toolMessageId)) return;
+
+    const state = this.#get();
+    const currentViewType = chatPortalSelectors.currentViewType(state);
+    if (state.showPortal && currentViewType && currentViewType !== PortalViewType.Thread) return;
+
+    // `currentTopicThreads` scoping doubles as the topic guard: a sub-agent
+    // spawned in a background topic never hijacks the one being viewed.
+    const thread = threadSelectors.getIsolationThreadBySourceMsgId(toolMessageId)(state);
+    if (!thread) return;
+
+    this.#autoOpenedSubAgentAnchors.add(toolMessageId);
+    this.#get().openThreadInPortal(thread.id, thread.sourceMessageId);
+  };
+
+  /** Spawn anchors (placeholder tool message ids) already auto-opened once. */
+  #autoOpenedSubAgentAnchors = new Set<string>();
 
   /**
    * Sync the portal slice's thread state to a freshly-created thread *without*
