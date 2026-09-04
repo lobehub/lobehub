@@ -511,6 +511,8 @@
   "goalProcess.acceptance.delivered": "待你确认",
   "goalProcess.acceptance.errored": "验收出错",
   "goalProcess.acceptance.rejected": "验收未通过",
+  "goalProcess.acceptance.repairing": "修复中",
+  "goalProcess.acceptance.verifying": "验收中",
   "goalProcess.activity.empty": "暂无活动",
   "goalProcess.activity.finding": "沉淀结论：{{title}}",
   "goalProcess.activity.title": "活动",

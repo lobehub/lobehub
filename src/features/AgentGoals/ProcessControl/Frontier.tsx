@@ -289,12 +289,19 @@ StaleBody.displayName = 'GoalStaleBody';
  * say nothing yet, and `verifying` / `repairing` are already what the row's own
  * state chip says — repeating either would cost the row its scannability for no
  * information.
+ *
+ * `verifying` / `repairing` are in the map even though the row's own state chip
+ * already names them: that chip is a label, and while the judgment is running is
+ * exactly when a reader wants to look INTO it. Leaving them out meant the one
+ * state where the acceptance matters most offered no way to reach it.
  */
 const ACCEPTANCE_CHIP: Partial<Record<AcceptanceStatus, { color: string; key: string }>> = {
   accepted: { color: 'success', key: 'accepted' },
   delivered: { color: 'info', key: 'delivered' },
   errored: { color: 'error', key: 'errored' },
   rejected: { color: 'error', key: 'rejected' },
+  repairing: { color: 'info', key: 'repairing' },
+  verifying: { color: 'info', key: 'verifying' },
 };
 
 const AcceptanceChip = memo<{ view: GoalNodeView }>(({ view }) => {
@@ -351,16 +358,26 @@ const FrontierRow = memo<{
 
   // Gate rows carry no tag: the expanded card with its action buttons already
   // says "this needs you", and a warning chip next to it is noise.
+  // While verifying, the acceptance chip carries the same word AND opens the
+  // judgment, so a second inert label beside it would only take space.
+  const verifyingChipShown =
+    item.kind === 'verifying' && !!view.acceptance && !!ACCEPTANCE_CHIP[view.acceptance.status];
   const tag =
-    item.kind === 'stale'
-      ? { color: 'error', text: t('goalProcess.tag.lost') }
-      : item.kind === 'done'
-        ? {
-            color: undefined,
-            text:
-              node.status === 'resolved' ? t('goalProcess.tag.done') : t('goalProcess.tag.retired'),
-          }
-        : null;
+    item.kind === 'verifying'
+      ? verifyingChipShown
+        ? null
+        : { color: 'info', text: t('goalProcess.tag.verifying') }
+      : item.kind === 'stale'
+        ? { color: 'error', text: t('goalProcess.tag.lost') }
+        : item.kind === 'done'
+          ? {
+              color: undefined,
+              text:
+                node.status === 'resolved'
+                  ? t('goalProcess.tag.done')
+                  : t('goalProcess.tag.retired'),
+             }
+           : null;
 
   const stop = (event: React.MouseEvent) => event.stopPropagation();
 

@@ -279,12 +279,17 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true, prim
     );
 
   return (
+    // The primary result is not one card among many — it is the agent reporting
+    // what this task produced, and it should read like a document rather than a
+    // boxed activity row. The outline, the inner padding and the duplicated
+    // summary line all belong to the list presentation; a report drops them and
+    // lets the delivery own the surface.
     <Block
-      gap={8}
-      paddingBlock={8}
-      paddingInline={8}
-      style={{ borderRadius: cssVar.borderRadiusLG }}
-      variant={'outlined'}
+      gap={primary ? 12 : 8}
+      paddingBlock={primary ? 0 : 8}
+      paddingInline={primary ? 0 : 8}
+      style={primary ? undefined : { borderRadius: cssVar.borderRadiusLG }}
+      variant={primary ? 'borderless' : 'outlined'}
     >
       <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
         <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0, overflow: 'hidden' }}>
@@ -372,8 +377,8 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true, prim
       </Flexbox>
 
       {hasBody && bodyExpanded && (
-        <Flexbox gap={8} paddingInline={4}>
-          {activity.summary && (
+        <Flexbox gap={primary ? 12 : 8} paddingInline={primary ? 0 : 4}>
+          {activity.summary && !(primary && activity.content) && (
             <Text
               fontSize={13}
               style={{ color: cssVar.colorTextDescription, whiteSpace: 'pre-wrap' }}

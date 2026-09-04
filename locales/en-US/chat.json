@@ -511,6 +511,8 @@
   "goalProcess.acceptance.delivered": "Awaiting your call",
   "goalProcess.acceptance.errored": "Verification error",
   "goalProcess.acceptance.rejected": "Rejected",
+  "goalProcess.acceptance.repairing": "Repairing",
+  "goalProcess.acceptance.verifying": "Verifying",
   "goalProcess.activity.empty": "No activity yet",
   "goalProcess.activity.finding": "Recorded finding: {{title}}",
   "goalProcess.activity.title": "Activity",
