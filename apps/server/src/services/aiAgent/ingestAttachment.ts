@@ -2,6 +2,7 @@ import debug from 'debug';
 import mime from 'mime';
 import sharp from 'sharp';
 
+import { businessFileUploadCheck } from '@/business/server/lambda-routers/file';
 import type { FileService } from '@/server/services/file';
 
 const log = debug('lobe-server:file-ingestion');
@@ -97,6 +98,7 @@ export async function ingestAttachment(
   source: AttachmentSource,
   fileService: FileService,
   userId: string,
+  workspaceId?: string,
 ): Promise<IngestResult> {
   log(
     'ingestAttachment: input name=%s, mimeType=%s, hasBuffer=%s, hasUrl=%s, size=%s',
@@ -174,6 +176,18 @@ export async function ingestAttachment(
   const ext = source.name?.split('.').pop() || 'bin';
   const { nanoid } = await import('@lobechat/utils');
   const pathname = `files/${userId}/${nanoid()}/${source.name || `file.${ext}`}`;
+
+  // `uploadFromBuffer` writes straight through `FileService`, which has no quota
+  // gate of its own. Charge the post-compression length, since that is what
+  // actually lands in storage.
+  await businessFileUploadCheck({
+    actualSize: buffer.length,
+    inputSize: source.size ?? buffer.length,
+    url: pathname,
+    userId,
+    workspaceId,
+  });
+
   const { fileId, key } = await fileService.uploadFromBuffer(buffer, mimeType, pathname);
 
   // 5. Resolve access URL for images, videos and audio.

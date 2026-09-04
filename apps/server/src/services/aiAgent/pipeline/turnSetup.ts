@@ -100,7 +100,7 @@ const resolveRunAttachments = async (
       await throwIfAborted('file upload');
 
       try {
-        const result = await ingestAttachment(file, fileService, deps.userId);
+        const result = await ingestAttachment(file, fileService, deps.userId, deps.workspaceId);
         fileIds.push(result.fileId);
 
         if (result.isImage) {
@@ -161,7 +161,13 @@ const resolveRunAttachments = async (
         });
       } catch (error) {
         log('execAgent: failed to ingest file %s: %O', file.name || file.url, error);
-        warnings.push(`File "${file.name || 'unknown'}" could not be uploaded and was skipped.`);
+        // A quota rejection is actionable, so name it rather than leaving the
+        // sender to guess why every attachment silently vanished.
+        warnings.push(
+          (error as { code?: string })?.code === 'FORBIDDEN'
+            ? `File "${file.name || 'unknown'}" was skipped: storage limit reached.`
+            : `File "${file.name || 'unknown'}" could not be uploaded and was skipped.`,
+        );
       }
     }
 
