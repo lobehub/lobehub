@@ -10,6 +10,10 @@ vi.mock('@/server/services/trash', () => ({
   TrashService: vi.fn().mockImplementation(() => ({ trashKnowledgeBases })),
 }));
 
+vi.mock('@/server/services/file', () => ({
+  FileService: vi.fn().mockImplementation(() => ({})),
+}));
+
 describe('knowledgeBaseRuntime', () => {
   beforeEach(() => {
     trashKnowledgeBases.mockReset();
