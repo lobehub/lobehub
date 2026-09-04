@@ -534,6 +534,60 @@ describe('ConversationLifecycle actions', () => {
         expect(sendMessageOperation?.metadata.inputSendErrorMsg).toBeUndefined();
       });
 
+      it('should clear the editor temp state after a gateway send persists the message', async () => {
+        // LOBE-13794 regression: the gateway branch returned straight after
+        // executeGatewayAgent resolved without clearing `inputEditorTempState`.
+        // A later Stop click then replayed that snapshot into the composer via
+        // cancelSendMessageInServer, which looked like the app re-sent the
+        // already-persisted message. The client path (`if (data)`) and the
+        // hetero branch (line ~1532) both clear it; the gateway branch must too.
+        const { result } = renderHook(() => useChatStore());
+        const inputEditorState = { root: { children: [], type: 'root', version: 1 } };
+        const executeGatewayAgentSpy = vi.fn().mockImplementation(async (params) => {
+          params.onMessageAccepted();
+          return {
+            assistantMessageId: 'assistant-gateway',
+            createdThreadId: undefined,
+            topicId: 'tpc_gateway',
+            userMessageId: 'user-gateway',
+          };
+        });
+
+        act(() => {
+          useChatStore.setState({
+            executeGatewayAgent: executeGatewayAgentSpy,
+            isGatewayModeEnabled: () => true,
+            mainInputEditor: {
+              getJSONState: vi.fn().mockReturnValue(inputEditorState),
+              setDocument: vi.fn(),
+              setJSONState: vi.fn(),
+            } as any,
+          });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: createTestContext(),
+            editorData: inputEditorState as any,
+            message: 'Persisted via gateway',
+          });
+        });
+
+        const sendMessageOperation = Object.values(result.current.operations).find(
+          (operation) => operation.type === 'sendMessage',
+        );
+
+        // Prove the gateway branch actually ran and succeeded. (The real
+        // executeGatewayAgent completes its parent op at phase-1 hand-off; the
+        // mock doesn't simulate that, so the parent may still read `running`
+        // here — irrelevant to what this regression pins.)
+        expect(executeGatewayAgentSpy).toHaveBeenCalledOnce();
+
+        // The snapshot is dropped once persistence lands, so a later Stop can
+        // never replay it into the composer.
+        expect(sendMessageOperation?.metadata.inputEditorTempState).toBeNull();
+      });
+
       it('should restore the pre-send editor snapshot when a hetero send fails', async () => {
         // Same silent-discard shape as the gateway branch above: persistence
         // throws, the temp rows are cleaned up, and the typed text is gone.
