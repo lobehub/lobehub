@@ -136,6 +136,7 @@
   "workspace_payment_method_removed_title": "Payment method removed from {{workspaceName}}",
   "workspace_primary_ownership_transferred": "You are now the Owner of workspace \"{{workspaceName}}\". Billing responsibility and full Owner privileges have been transferred to you.",
   "workspace_primary_ownership_transferred_title": "You are now the Owner of {{workspaceName}}",
+  "workspace_resource_anonymous_actor": "A workspace member",
   "workspace_resource_changed_by_member": "{{actorLabel}} changed your {{resourceLabel}} \"{{resourceTitle}}\".",
   "workspace_resource_changed_by_member_title": "Workspace resource changed",
   "workspace_resource_deleted_by_member": "{{actorLabel}} moved your {{resourceLabel}} \"{{resourceTitle}}\" to Trash.",

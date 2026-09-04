@@ -136,6 +136,7 @@
   "workspace_payment_method_removed_title": "{{workspaceName}} 的付款方式已移除",
   "workspace_primary_ownership_transferred": "您现在是工作区 \"{{workspaceName}}\" 的所有者，计费责任和完整所有者权限已转让给您。",
   "workspace_primary_ownership_transferred_title": "您现在是 {{workspaceName}} 的所有者",
+  "workspace_resource_anonymous_actor": "一位工作区成员",
   "workspace_resource_changed_by_member": "{{actorLabel}} 更改了你的{{resourceLabel}}「{{resourceTitle}}」。",
   "workspace_resource_changed_by_member_title": "工作区资源已更改",
   "workspace_resource_deleted_by_member": "{{actorLabel}} 将你的{{resourceLabel}}「{{resourceTitle}}」移入了回收站。",

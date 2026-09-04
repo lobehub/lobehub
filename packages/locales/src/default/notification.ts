@@ -172,6 +172,7 @@ export default {
   'workspace_resource_changed_by_member':
     '{{actorLabel}} changed your {{resourceLabel}} "{{resourceTitle}}".',
   'workspace_resource_changed_by_member_title': 'Workspace resource changed',
+  'workspace_resource_anonymous_actor': 'A workspace member',
   'workspace_resource_deleted_by_member':
     '{{actorLabel}} moved your {{resourceLabel}} "{{resourceTitle}}" to Trash.',
   'workspace_resource_deleted_by_member_document':
