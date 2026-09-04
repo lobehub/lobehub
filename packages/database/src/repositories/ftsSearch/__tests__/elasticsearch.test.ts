@@ -1489,6 +1489,81 @@ describe('ElasticsearchFtsSearchBackend', () => {
     );
   });
 
+  it('continues file candidates after trashed-library hydration empties the first page', async () => {
+    const trashedKnowledgeBaseId = 'file-paging-trashed-kb';
+    const trashedFiles = Array.from({ length: 8 }, (_, index) => ({
+      fileType: 'text/plain',
+      id: `file-paging-trashed-${index}`,
+      name: `Search phrase trashed ${index}`,
+      size: 10,
+      url: `file://file-paging-trashed-${index}`,
+      userId,
+      workspaceId,
+    }));
+    await db.insert(knowledgeBases).values({
+      deletedAt: new Date(),
+      id: trashedKnowledgeBaseId,
+      isDeleted: true,
+      name: 'Trashed paging KB',
+      userId,
+      workspaceId,
+    });
+    await db.insert(files).values([
+      ...trashedFiles,
+      {
+        fileType: 'text/plain',
+        id: 'file-paging-live',
+        name: 'Search phrase live',
+        size: 10,
+        url: 'file://file-paging-live',
+        userId,
+        workspaceId,
+      },
+    ]);
+    await db.insert(knowledgeBaseFiles).values(
+      trashedFiles.map(({ id }) => ({
+        fileId: id,
+        knowledgeBaseId: trashedKnowledgeBaseId,
+        userId,
+        workspaceId,
+      })),
+    );
+    const firstPage = trashedFiles.map(({ id }, index) => ({
+      _id: id,
+      _score: 20 - index,
+      sort: [20 - index, id],
+    }));
+    const client: ElasticsearchFtsSearchClient = {
+      search: vi
+        .fn()
+        .mockResolvedValueOnce({ hits: { hits: firstPage } })
+        .mockResolvedValueOnce({
+          hits: { hits: [{ _id: 'file-paging-live', _score: 10 }] },
+        }),
+    };
+    const backend = new ElasticsearchFtsSearchBackend(db, { client, indexNamespace });
+
+    const response = await backend.search(
+      request('files', {
+        filters: { excludeTrashedKnowledgeBaseIds: [trashedKnowledgeBaseId] },
+        limit: 2,
+      }),
+    );
+
+    expect(response.items).toEqual([
+      expect.objectContaining({ id: 'file-paging-live', type: 'file' }),
+    ]);
+    expect(response.candidates).toHaveLength(9);
+    expect(client.search).toHaveBeenCalledTimes(2);
+    expect(client.search).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        body: expect.objectContaining({ search_after: firstPage.at(-1)?.sort }),
+        pagination: 'bounded',
+      }),
+    );
+  });
+
   it('keeps folder fields separate from page content and rechecks restricted document links', async () => {
     await db.insert(knowledgeBases).values({
       id: 'documents-kb-restricted',
