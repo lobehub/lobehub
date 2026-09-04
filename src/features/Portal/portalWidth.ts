@@ -1,4 +1,5 @@
 import {
+  CHAT_PORTAL_CONVERSATION_MAX_WIDTH,
   CHAT_PORTAL_MAX_WIDTH,
   CHAT_PORTAL_TASK_WIDTH,
   CHAT_PORTAL_TOOL_UI_WIDTH,
@@ -8,11 +9,20 @@ import {
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 
 /**
+ * Opening width for the panel when it hosts a side conversation instead of a
+ * portal view (the goal page's "ask about progress" chat). Stored under its
+ * own view key so a conversation's remembered width never bleeds into tool /
+ * detail views, and vice versa.
+ */
+export const PORTAL_CONVERSATION_VIEW_TYPE = 'conversation';
+
+/**
  * Persisted portal widths, keyed by `PortalViewType`. Each view remembers the
  * width the user dragged it to, so resizing the task detail pane no longer
- * shrinks the acceptance report the next time it opens.
+ * shrinks the acceptance report the next time it opens. Side conversations
+ * (`PORTAL_CONVERSATION_VIEW_TYPE`) share the same memory map.
  */
-export type PortalWidths = Partial<Record<PortalViewType, number>>;
+export type PortalWidths = Partial<Record<PortalViewType, number>> & Record<string, number>;
 
 /**
  * Views that can't be read in the default 400px reading column: they render
@@ -50,7 +60,18 @@ const VIEW_DEFAULT_WIDTH: PortalWidths = {
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
-const normalizeViewType = (viewType?: PortalViewType | null) => viewType ?? PortalViewType.Home;
+const CONVERSATION_MIN_WIDTH = CHAT_PORTAL_WIDTH;
+
+/**
+ * A side conversation renders in the panel when no drill-down view is open.
+ * It gets its own storage key and width bounds so the conversation column can
+ * never inherit — or be inflated into — a work-surface width.
+ */
+const isConversationViewType = (viewType?: PortalViewType | null): boolean =>
+  !viewType || viewType === PortalViewType.Home;
+
+const normalizeViewType = (viewType?: PortalViewType | null): string =>
+  viewType ?? PORTAL_CONVERSATION_VIEW_TYPE;
 
 /**
  * Surfaces that host the Portal remember widths independently: dragging the
@@ -63,7 +84,13 @@ export const portalWidthStorageKey = (viewType?: PortalViewType | null, scope?: 
 };
 
 export const getPortalViewMinWidth = (viewType?: PortalViewType | null): number =>
-  VIEW_MIN_WIDTH[normalizeViewType(viewType)] ?? CHAT_PORTAL_WIDTH;
+  isConversationViewType(viewType)
+    ? CONVERSATION_MIN_WIDTH
+    : (VIEW_MIN_WIDTH[normalizeViewType(viewType)] ?? CHAT_PORTAL_WIDTH);
+
+/** Drag ceiling for a view: conversations cap low, work views keep 1280. */
+export const getPortalViewMaxWidth = (viewType?: PortalViewType | null): number =>
+  isConversationViewType(viewType) ? CHAT_PORTAL_CONVERSATION_MAX_WIDTH : CHAT_PORTAL_MAX_WIDTH;
 
 interface GetPortalViewWidthParams {
   /**
@@ -84,11 +111,15 @@ export const getPortalViewWidth = ({
   widths,
 }: GetPortalViewWidthParams): number => {
   const key = normalizeViewType(viewType);
+  // A conversation never falls back to the legacy shared width: it always has
+  // its own default, so an old narrow drag can't shrink it and a work view's
+  // memory can't inflate it.
   const fallback = VIEW_DEFAULT_WIDTH[key] ?? legacyWidth ?? CHAT_PORTAL_WIDTH;
 
   return clamp(
-    widths?.[portalWidthStorageKey(key, scope)] || fallback,
-    getPortalViewMinWidth(key),
-    CHAT_PORTAL_MAX_WIDTH,
+    widths?.[portalWidthStorageKey(viewType, scope)] ||
+      (isConversationViewType(viewType) ? CHAT_PORTAL_WIDTH : fallback),
+    getPortalViewMinWidth(viewType),
+    getPortalViewMaxWidth(viewType),
   );
 };

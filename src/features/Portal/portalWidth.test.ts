@@ -84,9 +84,11 @@ describe('getPortalViewWidth', () => {
   });
 
   it('falls back to the legacy width for views without an explicit default', () => {
-    expect(getPortalViewWidth({ legacyWidth: 520, viewType: PortalViewType.Home })).toBe(520);
-    expect(getPortalViewWidth({ viewType: PortalViewType.Home })).toBe(CHAT_PORTAL_WIDTH);
-    expect(getPortalViewWidth({})).toBe(CHAT_PORTAL_WIDTH);
+    // Document has no entry in the default-width map, so it rides the legacy
+    // chain. (Home is the conversation host state now — see
+    // conversationWidth.test.ts — so it deliberately ignores the legacy width.)
+    expect(getPortalViewWidth({ legacyWidth: 520, viewType: PortalViewType.Document })).toBe(520);
+    expect(getPortalViewWidth({ legacyWidth: 480, viewType: PortalViewType.Notebook })).toBe(480);
   });
 
   it('clamps to the view min width and the panel max width', () => {

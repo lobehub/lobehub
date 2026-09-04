@@ -15,6 +15,7 @@ import NavHeader from '@/features/NavHeader';
 import { PortalContent } from '@/features/Portal/router';
 import { usePortalPanelWidth } from '@/features/Portal/usePortalPanelWidth';
 import RightPanel from '@/features/RightPanel';
+import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { usePermission } from '@/hooks/usePermission';
@@ -151,6 +152,11 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const findings = nodes.filter((node) => node.kind === 'finding').length;
   const open = (metric: GoalMetricKind) => () => openGoalMetric(goalId, metric);
 
+  // The panel hosts the goal conversation only when the goal has a
+  // responsible agent; without one it is drill-down-only.
+  const panelExpandable = !!agentId;
+  const chatVisible = chatOpen && panelExpandable;
+
   const paused = goal.status === 'paused';
   // Pace control exists only while the coordinator loop is actually moving (or
   // explicitly paused). A goal in review awaits the human, and a closed goal
@@ -191,6 +197,26 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                   be deletable, and this menu is the only place that can do it. */}
               <GoalDetailActions agentId={agentId} goalId={goal.id} projectId={goal.projectId} />
             </Flexbox>
+          }
+          right={
+            graphFullscreen ? undefined : (
+              /* Re-entry point for a collapsed panel: the GoalChat toolbar's
+                 close button (or a drag under the collapse threshold) hides
+                 the panel, and with `expandable={false}` on the panel itself
+                 this header button is the only way back. Hidden while a
+                 drill-down owns the panel — its header carries the close. */
+              <ToggleRightPanelButton
+                hideWhenExpanded
+                expand={showPortal || chatVisible}
+                onToggle={() => {
+                  if (showPortal) {
+                    clearPortalStack();
+                    return;
+                  }
+                  if (panelExpandable) setChatOpen(true);
+                }}
+              />
+            )
           }
         />
         <Flexbox flex={1} style={{ overflowY: 'auto' }}>
@@ -293,7 +319,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
           open, the panel hosts the conversation with the goal's responsible
           agent so a user can just ask about progress. */}
       <RightPanel
-        expand={(showPortal || (chatOpen && !!agentId)) && !graphFullscreen}
+        expand={(showPortal || chatVisible) && !graphFullscreen}
         maxWidth={maxWidth}
         minWidth={minWidth}
         width={width}
