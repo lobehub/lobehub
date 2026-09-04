@@ -43,7 +43,7 @@ describe('HomeRepository', () => {
   });
 
   describe('getSidebarAgentList - agents', () => {
-    it('should return agents with their session info', async () => {
+    it('should return agents without projecting legacy session info', async () => {
       // Create agent
       const [agent] = await serverDB
         .insert(agents)
@@ -80,7 +80,6 @@ describe('HomeRepository', () => {
         description: 'Test agent description',
         id: agent.id,
         pinned: false,
-        sessionId: session.id,
         title: 'Test Agent',
         type: 'agent',
       });
@@ -116,7 +115,6 @@ describe('HomeRepository', () => {
       expect(result.ungrouped[0]).toMatchObject({
         avatar: DEFAULT_INBOX_AVATAR,
         id: agent.id,
-        sessionId: session.id,
         title: DEFAULT_INBOX_TITLE,
       });
     });
@@ -198,16 +196,13 @@ describe('HomeRepository', () => {
     });
 
     it('should return custom avatar when chat group has one set', async () => {
-      const [group] = await serverDB
-        .insert(chatGroups)
-        .values({
-          avatar: '🚀',
-          backgroundColor: '#ff5500',
-          pinned: false,
-          title: 'Custom Avatar Group',
-          userId,
-        })
-        .returning();
+      await serverDB.insert(chatGroups).values({
+        avatar: '🚀',
+        backgroundColor: '#ff5500',
+        pinned: false,
+        title: 'Custom Avatar Group',
+        userId,
+      });
 
       const result = await homeRepo.getSidebarAgentList();
 

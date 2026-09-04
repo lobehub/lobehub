@@ -423,8 +423,8 @@ describe('HomeRepository', () => {
       expect(group!.unreadCount).toBe(1);
     });
 
-    describe('backward compatibility - fallback to sessions.pinned', () => {
-      it('should fallback to sessions.pinned when agents.pinned is undefined (legacy data)', async () => {
+    describe('agents.pinned is the only sidebar pin source', () => {
+      it('should ignore sessions.pinned when agents.pinned is null', async () => {
         // Simulate legacy data: agents.pinned is null, but sessions.pinned is true
         const agentId = 'legacy-agent';
         const sessionId = 'legacy-session';
@@ -452,10 +452,10 @@ describe('HomeRepository', () => {
         const result = await homeRepo.getSidebarAgentList();
 
         // Should fallback to sessions.pinned = true
-        expect(result.pinned).toHaveLength(1);
-        expect(result.pinned[0].id).toBe(agentId);
-        expect(result.pinned[0].pinned).toBe(true);
-        expect(result.ungrouped).toHaveLength(0);
+        expect(result.pinned).toHaveLength(0);
+        expect(result.ungrouped).toHaveLength(1);
+        expect(result.ungrouped[0].id).toBe(agentId);
+        expect(result.ungrouped[0].pinned).toBe(false);
       });
 
       it('should use agents.pinned when both agents.pinned and sessions.pinned exist (agents.pinned takes priority)', async () => {
@@ -671,8 +671,8 @@ describe('HomeRepository', () => {
       expect(result).toHaveLength(0);
     });
 
-    describe('backward compatibility - fallback to sessions.pinned', () => {
-      it('should fallback to sessions.pinned when agents.pinned is null in search results', async () => {
+    describe('agents.pinned is the only search pin source', () => {
+      it('should ignore sessions.pinned when agents.pinned is null', async () => {
         // Create legacy agent with pinned on session only
         await clientDB.transaction(async (tx) => {
           await tx.insert(Schema.agents).values({
@@ -700,7 +700,7 @@ describe('HomeRepository', () => {
 
         expect(result).toHaveLength(1);
         expect(result[0].id).toBe('legacy-search');
-        expect(result[0].pinned).toBe(true); // Should fallback to sessions.pinned
+        expect(result[0].pinned).toBe(false);
       });
 
       it('should prioritize agents.pinned over sessions.pinned in search results', async () => {
@@ -850,7 +850,7 @@ describe('HomeRepository', () => {
       expect(result.ungrouped).toHaveLength(0);
     });
 
-    it('should prioritize agents.sessionGroupId over sessions.groupId', async () => {
+    it('should ignore sessions.groupId when agents.sessionGroupId is set', async () => {
       // agents.sessionGroupId points to folder A; sessions.groupId points to folder B.
       // The agent must land in folder A.
       await clientDB.transaction(async (tx) => {
@@ -887,7 +887,7 @@ describe('HomeRepository', () => {
       expect(folderB?.items).toHaveLength(0);
     });
 
-    it('should fall back to sessions.groupId when agents.sessionGroupId is null', async () => {
+    it('should ignore sessions.groupId when agents.sessionGroupId is null', async () => {
       await clientDB.transaction(async (tx) => {
         await tx.insert(Schema.sessionGroups).values({
           id: 'folder-fallback',
@@ -920,7 +920,8 @@ describe('HomeRepository', () => {
 
       expect(result.groups).toHaveLength(1);
       expect(result.groups[0].id).toBe('folder-fallback');
-      expect(result.groups[0].items.map((i) => i.id)).toContain('agent-fallback-group');
+      expect(result.groups[0].items).toHaveLength(0);
+      expect(result.ungrouped.map((item) => item.id)).toContain('agent-fallback-group');
     });
   });
 
