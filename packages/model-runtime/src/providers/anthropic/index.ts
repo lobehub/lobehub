@@ -7,12 +7,12 @@ import {
 } from '../../core/anthropicCompatibleFactory';
 import type { ChatStreamPayload } from '../../types';
 import { normalizeClaudeThinkingHistoryMessages } from './claudeThinkingHistory';
+import { supportsClaudeEffortLevel } from './modelId';
 
 const buildAnthropicPayload = (payload: ChatStreamPayload) => {
-  const reasoningEffort =
-    payload.reasoning_effort === 'none' || payload.reasoning_effort === 'minimal'
-      ? undefined
-      : payload.reasoning_effort;
+  const reasoningEffort = supportsClaudeEffortLevel(payload.model, payload.reasoning_effort)
+    ? payload.reasoning_effort
+    : undefined;
   return buildDefaultAnthropicPayload({
     ...payload,
     effort: payload.effort ?? reasoningEffort,

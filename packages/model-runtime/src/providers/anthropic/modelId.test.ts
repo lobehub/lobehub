@@ -12,6 +12,7 @@ import {
   rejectsForcedToolChoice,
   shouldDropUnsupportedClaudeAssistantPrefill,
   shouldOmitSamplingParams,
+  supportsClaudeEffortLevel,
 } from './modelId';
 
 describe('parseClaudeModelId', () => {
@@ -186,6 +187,23 @@ describe('isThinkingDisplayOmittedByDefaultModel', () => {
     expect(isThinkingDisplayOmittedByDefaultModel('claude-opus-4-5-20251101')).toBe(false);
     expect(isThinkingDisplayOmittedByDefaultModel('claude-haiku-4-5-20251001')).toBe(false);
     expect(isThinkingDisplayOmittedByDefaultModel('gpt-5')).toBe(false);
+  });
+});
+
+describe('supportsClaudeEffortLevel', () => {
+  it.each([
+    ['claude-opus-4-6', 'high', true],
+    ['claude-haiku-4-5-20251001', 'high', false],
+    ['claude-sonnet-4-6', 'xhigh', false],
+    ['anthropic/claude-opus-4-7', 'xhigh', true],
+    ['claude-opus-4-5-20251101', 'max', false],
+    ['global.anthropic.claude-sonnet-4-6', 'max', true],
+    ['claude-fable-5-1', 'xhigh', true],
+    ['claude-mythos-preview', 'max', true],
+    ['claude-mythos-preview', 'xhigh', false],
+    ['gpt-5', 'high', false],
+  ])('should report model %s effort %s support as %s', (model, effort, expected) => {
+    expect(supportsClaudeEffortLevel(model, effort)).toBe(expected);
   });
 });
 
