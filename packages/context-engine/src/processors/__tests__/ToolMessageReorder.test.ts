@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import type { PipelineContext } from '../../types';
-import { ToolMessageReorder } from '../ToolMessageReorder';
-import { syntheticToolFailureContent, SYNTHETIC_TOOL_FAILURE_HINTS } from '../ToolMessageReorder';
+import {
+  SYNTHETIC_TOOL_FAILURE_HINTS,
+  syntheticToolFailureContent,
+  ToolMessageReorder,
+} from '../ToolMessageReorder';
 
 const createContext = (messages: any[]): PipelineContext => ({
   initialState: { messages: [] } as any,
@@ -382,7 +385,11 @@ describe('ToolMessageReorder', () => {
         role: 'assistant',
         content: '',
         tool_calls: [
-          { function: { arguments: '{}', name: 'lobe-local-system____runCommand' }, id: 'call_1', type: 'function' },
+          {
+            function: { arguments: '{}', name: 'lobe-local-system____runCommand' },
+            id: 'call_1',
+            type: 'function',
+          },
         ],
       },
       // No tool message at all — e.g. the result was lost to a gateway 503/504
@@ -391,7 +398,7 @@ describe('ToolMessageReorder', () => {
 
     const result = await proc.process(ctx);
 
-    const failure = result.messages[1].content;
+    const failure = result.messages[1].content as string;
     expect(typeof failure).toBe('string');
 
     const parsed = JSON.parse(failure);
@@ -408,12 +415,8 @@ describe('ToolMessageReorder', () => {
   });
 
   it('should give the two failure reasons distinct, actionable hints', async () => {
-    const missing = JSON.parse(
-      syntheticToolFailureContent('tool_result_missing', 'runCommand'),
-    );
-    const unusable = JSON.parse(
-      syntheticToolFailureContent('tool_result_unusable', 'runCommand'),
-    );
+    const missing = JSON.parse(syntheticToolFailureContent('tool_result_missing', 'runCommand'));
+    const unusable = JSON.parse(syntheticToolFailureContent('tool_result_unusable', 'runCommand'));
 
     // The missing-result hint must carry the retry-safety warning the old
     // payload lacked: a lost result says nothing about whether the call
