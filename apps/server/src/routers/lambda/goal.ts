@@ -5,7 +5,6 @@ import { z } from 'zod';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { GoalModel } from '@/database/models/goal';
-import { MetricModel } from '@/database/models/metric';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { GoalService } from '@/server/services/goal';
@@ -264,39 +263,20 @@ export const goalRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        const goal = await ctx.goalModel.findById(input.id);
-        if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
-
-        const metricModel = new MetricModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
-        const series = await metricModel.ensure({
-          key: input.key,
-          kind: input.kind,
-          subjectId: goal.id,
-          subjectType: 'goal',
-          title: input.title,
-          unit: input.unit,
-        });
-        if (!series)
-          throw new TRPCError({
-            code: 'CONFLICT',
-            message: 'Metric series slot is owned by another scope',
+        const { id, ...observation } = input;
+        const { shouldAdvance, ...data } = await ctx.goalService.recordObservation(id, observation);
+        // A goal parked short of its measured acceptance is only worth waking
+        // when the measurement actually cleared the gate; otherwise the advance
+        // would tick straight back out as `goal_paused`.
+        if (shouldAdvance) {
+          await scheduleGoalAdvance({
+            goalId: id,
+            trigger: 'observe',
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId ?? undefined,
           });
-
-        const point = await metricModel.addPoint(series.id, {
-          actorId: ctx.userId,
-          actorType: 'user',
-          observedAt: input.observedAt ?? new Date(),
-          sourceType: 'manual',
-          value: input.value,
-        });
-
-        await scheduleGoalAdvance({
-          goalId: goal.id,
-          trigger: 'observe',
-          userId: ctx.userId,
-          workspaceId: ctx.workspaceId ?? undefined,
-        });
-        return { data: { point, series }, message: 'Observation recorded', success: true };
+        }
+        return { data, message: 'Observation recorded', success: true };
       } catch (error) {
         mapGoalError(error, 'recordObservation');
       }

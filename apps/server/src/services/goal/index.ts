@@ -12,6 +12,7 @@ import type {
   GoalNodeStatus,
   GoalStatus,
   GoalTickResult,
+  MetricKind,
   TaskItem,
   TaskTopicHandoff,
 } from '@lobechat/types';
@@ -271,6 +272,75 @@ export class GoalService {
    * already parked short of acceptance — the same reason extending a deadline
    * resumes a budget-stopped one — so the caller schedules an advance.
    */
+  /**
+   * Write a measurement against this goal, and reopen it when that measurement
+   * is what it was waiting for.
+   *
+   * The gate parks the goal (see the `measured_acceptance` branch), and `tick`
+   * refuses to move a paused goal — so without the reopen here the observation
+   * would land and nothing would happen. Only a goal the gate actually stopped
+   * is reopened, and only once every clause holds: the same discipline
+   * `setBudget` uses, so a deliberate pause is never undone by a stray sample
+   * and a still-short measurement does not queue a no-op advance.
+   */
+  recordObservation = async (
+    goalId: string,
+    input: {
+      key: string;
+      kind?: MetricKind;
+      observedAt?: Date;
+      title?: string;
+      unit?: string;
+      value: number;
+    },
+  ) => {
+    const goal = await this.goalModel.findById(goalId);
+    if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+
+    const metricModel = new MetricModel(this.db, this.userId, this.workspaceId);
+    const series = await metricModel.ensure({
+      key: input.key,
+      kind: input.kind,
+      subjectId: goal.id,
+      subjectType: 'goal',
+      title: input.title,
+      unit: input.unit,
+    });
+    if (!series)
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: 'Metric series slot is owned by another scope',
+      });
+
+    const point = await metricModel.addPoint(series.id, {
+      actorId: this.userId,
+      actorType: 'user',
+      observedAt: input.observedAt ?? new Date(),
+      sourceType: 'manual',
+      value: input.value,
+    });
+
+    return { point, series, shouldAdvance: await this.reopenIfMeasurementCleared(goalId) };
+  };
+
+  /**
+   * Whether the coordinator is worth waking: either the goal is already
+   * running, or it was parked short of its measured acceptance and every
+   * clause now holds.
+   */
+  private reopenIfMeasurementCleared = async (goalId: string): Promise<boolean> => {
+    const graph = await this.coordinatorGraph.getGraph(goalId);
+    if (!graph) return false;
+    if (graph.goal.status !== 'paused') return true;
+    if (!needsMetricCriteria(graph)) return false;
+
+    const { allMet } = await this.evaluateMetricCriteria(graph);
+    if (!allMet) return false;
+
+    await this.transitionStatus(graph.goal, 'running', 'a measurement cleared the acceptance gate');
+    return true;
+  };
+
   setMetricCriteria = async (goalId: string, metrics: GoalMetricCriterion[]) => {
     const goal = await this.goalModel.findById(goalId);
     if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
@@ -283,6 +353,8 @@ export class GoalService {
         },
       },
     });
+    // Relaxing or dropping a clause can clear a gate the goal is parked on.
+    await this.reopenIfMeasurementCleared(goalId);
     return this.graph(goalId);
   };
 
@@ -737,8 +809,17 @@ export class GoalService {
 
       // The measured half of acceptance stopped the goal short of its delivery
       // contract. Nothing to create and nothing to settle — the next
-      // observation is what moves it.
+      // observation is what moves it, which can be days away.
+      //
+      // Park it for the same reason `no_frontier` does: a `running` goal that
+      // always reports `no_progress` is picked by every sweep forever, and a
+      // long-horizon goal waiting on a measurement would sit in that state for
+      // its whole life — enough of them crowd genuinely stranded goals out of
+      // the newest-first scan limit. `recordObservation` resumes it when a
+      // measurement actually clears the gate.
       case 'measured_acceptance': {
+        await this.transitionStatus(graph.goal, 'paused', move.message);
+        effects.push({ type: 'goal_status', detail: 'paused' });
         return observe({ goalId, message: move.message, outcome: move.outcome });
       }
 

@@ -866,14 +866,15 @@ describe('GoalService', () => {
     ).toHaveLength(1);
   });
 
-  it('holds a goal short of acceptance until the measured clause is satisfied', async () => {
+  it('parks a goal short of acceptance and reopens it when the measurement clears', async () => {
     // The measured half of acceptance: "followers >= 1000" is not a document a
     // verifier reads, it is a number. Until it holds, the acceptance Task must
-    // not even be created.
+    // not be created — and the goal must not sit `running` reporting
+    // `no_progress`, or every sweep would re-tick it for the whole wait.
     vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({} as never);
     const service = new GoalService(serverDB, userId);
     const taskModel = new TaskModel(serverDB, userId);
-    const metricModel = new MetricModel(serverDB, userId);
+    const goalModel = new GoalModel(serverDB, userId);
     const graph = await service.create({
       config: { acceptance: { metrics: [{ key: 'followers', target: 1000 }] } },
       requirement: 'Grow the account',
@@ -888,35 +889,29 @@ describe('GoalService', () => {
     const unmeasured = await service.tick(graph.goal.id);
     expect(unmeasured).toMatchObject({ outcome: 'no_progress' });
     expect(unmeasured.message).toContain('no observation');
-
-    const series = (await metricModel.ensure({
-      key: 'followers',
-      subjectId: graph.goal.id,
-      subjectType: 'goal',
-    }))!;
-    await metricModel.addPoint(series.id, {
-      actorType: 'system',
-      observedAt: new Date('2026-09-01T00:00:00Z'),
-      sourceType: 'probe',
-      value: 400,
-    });
-
-    const short = await service.tick(graph.goal.id);
-    expect(short).toMatchObject({ outcome: 'no_progress' });
-    expect(short.message).toContain('400');
+    expect((await goalModel.findById(graph.goal.id))?.status).toBe('paused');
     expect(
       (await service.graph(graph.goal.id)).nodes.some(
         (n) => n.title === 'Complete full Goal acceptance',
       ),
     ).toBe(false);
 
-    // The number lands: the goal falls through to its delivery contract.
-    await metricModel.addPoint(series.id, {
-      actorType: 'system',
-      observedAt: new Date('2026-09-02T00:00:00Z'),
-      sourceType: 'probe',
+    // A sample that is still short leaves it parked and is not worth an advance.
+    const short = await service.recordObservation(graph.goal.id, {
+      key: 'followers',
+      value: 400,
+    });
+    expect(short.shouldAdvance).toBe(false);
+    expect((await goalModel.findById(graph.goal.id))?.status).toBe('paused');
+
+    // The number lands: the goal reopens and falls through to its delivery
+    // contract.
+    const cleared = await service.recordObservation(graph.goal.id, {
+      key: 'followers',
       value: 1200,
     });
+    expect(cleared.shouldAdvance).toBe(true);
+    expect((await goalModel.findById(graph.goal.id))?.status).toBe('running');
 
     const advanced = await service.tick(graph.goal.id);
     expect(advanced).toMatchObject({ outcome: 'advanced' });
@@ -925,6 +920,27 @@ describe('GoalService', () => {
         (n) => n.title === 'Complete full Goal acceptance',
       ),
     ).toBe(true);
+  });
+
+  it('leaves a deliberately paused goal alone when a stray sample lands', async () => {
+    // `setBudget` only reopens a goal the budget actually stopped; the same
+    // discipline applies here, or an unrelated measurement would restart a goal
+    // somebody paused on purpose.
+    vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({} as never);
+    const service = new GoalService(serverDB, userId);
+    const goalModel = new GoalModel(serverDB, userId);
+    const graph = await service.create({
+      requirement: 'No measured gate here',
+      tasks: ['Do the work'],
+      title: 'Deliberately paused',
+    });
+    await service.tick(graph.goal.id);
+    await service.pause(graph.goal.id);
+
+    const stray = await service.recordObservation(graph.goal.id, { key: 'followers', value: 10 });
+
+    expect(stray.shouldAdvance).toBe(false);
+    expect((await goalModel.findById(graph.goal.id))?.status).toBe('paused');
   });
 
   it('keeps the numeric gate when the delivery criteria are bound or rebound', async () => {

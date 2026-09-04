@@ -12,6 +12,7 @@ import type {
   GoalMetricComparison,
   TaskItem,
 } from '@lobechat/types';
+import { toMetricScale } from '@lobechat/types';
 
 export { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
 
@@ -113,7 +114,17 @@ export const frontierNeedsBudget = (
   });
 
 /** Evaluate one numeric clause. Kept beside the gate that consumes it. */
-export const compareMetric = (value: number, op: GoalMetricComparison, target: number): boolean => {
+export const compareMetric = (
+  rawValue: number,
+  op: GoalMetricComparison,
+  rawTarget: number,
+): boolean => {
+  // Both operands are read at the storage scale: the observation was already
+  // rounded on its way into `numeric(20, 6)`, so comparing it against a
+  // full-precision target would judge two different numbers — `eq 0.1234567`
+  // could never hold, and `gte` / `lte` could flip at the rounding boundary.
+  const value = toMetricScale(rawValue);
+  const target = toMetricScale(rawTarget);
   switch (op) {
     case 'eq': {
       return value === target;

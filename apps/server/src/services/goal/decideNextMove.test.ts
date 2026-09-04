@@ -485,6 +485,17 @@ describe('compareMetric', () => {
     expect(compareMetric(11, 'lt', 10)).toBe(false);
     expect(compareMetric(10, 'eq', 10)).toBe(true);
   });
+
+  it('reads both operands at the scale observations are stored with', () => {
+    // `metric_points.value` is numeric(20, 6): recording 0.1234567 reads back
+    // as 0.123457, so a full-precision target would make the clause
+    // unsatisfiable and could flip gte/lte right at the boundary.
+    expect(compareMetric(0.123_457, 'eq', 0.123_456_7)).toBe(true);
+    expect(compareMetric(0.123_457, 'gte', 0.123_456_7)).toBe(true);
+    expect(compareMetric(0.123_457, 'lte', 0.123_456_7)).toBe(true);
+    // Differences the column can still represent are not rounded away.
+    expect(compareMetric(0.123_457, 'eq', 0.123_458)).toBe(false);
+  });
 });
 
 describe('measured acceptance', () => {

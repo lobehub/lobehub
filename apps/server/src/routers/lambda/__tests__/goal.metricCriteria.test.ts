@@ -16,11 +16,13 @@ vi.mock('@/business/server/trpc-middlewares/workspaceAuth', async () => {
 
 const mockCreate = vi.fn();
 const mockSetMetricCriteria = vi.fn();
+const mockRecordObservation = vi.fn();
 const mockFindById = vi.fn();
 
 vi.mock('@/server/services/goal', () => ({
   GoalService: vi.fn(() => ({
     create: mockCreate,
+    recordObservation: mockRecordObservation,
     setMetricCriteria: mockSetMetricCriteria,
   })),
 }));
@@ -29,8 +31,9 @@ vi.mock('@/database/models/goal', () => ({
   GoalModel: vi.fn(() => ({ findById: mockFindById })),
 }));
 
+const mockScheduleGoalAdvance = vi.fn();
 vi.mock('@/server/services/goal/scheduler', () => ({
-  scheduleGoalAdvance: vi.fn(),
+  scheduleGoalAdvance: mockScheduleGoalAdvance,
 }));
 
 const { goalRouter } = await import('../goal');
@@ -44,6 +47,7 @@ describe('goalRouter numeric acceptance', () => {
     mockCreate.mockResolvedValue({ goal: { id: 'goal_1' } });
     mockFindById.mockResolvedValue({ id: 'goal_1', userId: 'user-1' });
     mockSetMetricCriteria.mockResolvedValue({ goal: { id: 'goal_1' } });
+    mockRecordObservation.mockResolvedValue({ point: {}, series: {}, shouldAdvance: true });
   });
 
   it('carries measured clauses through the create contract', async () => {
@@ -81,5 +85,29 @@ describe('goalRouter numeric acceptance', () => {
       }),
     ).rejects.toThrow();
     expect(mockSetMetricCriteria).not.toHaveBeenCalled();
+  });
+
+  describe('recordObservation', () => {
+    it('wakes the coordinator when the measurement cleared the gate', async () => {
+      await caller.recordObservation({ id: 'goal_1', key: 'followers', value: 1200 });
+
+      expect(mockRecordObservation).toHaveBeenCalledWith('goal_1', {
+        key: 'followers',
+        value: 1200,
+      });
+      expect(mockScheduleGoalAdvance).toHaveBeenCalledWith(
+        expect.objectContaining({ goalId: 'goal_1', trigger: 'observe' }),
+      );
+    });
+
+    it('does not queue an advance a parked goal would tick straight back out of', async () => {
+      mockRecordObservation.mockResolvedValue({ point: {}, series: {}, shouldAdvance: false });
+
+      const result = await caller.recordObservation({ id: 'goal_1', key: 'followers', value: 400 });
+
+      expect(mockScheduleGoalAdvance).not.toHaveBeenCalled();
+      // `shouldAdvance` is coordination bookkeeping, not part of the response.
+      expect(result.data).not.toHaveProperty('shouldAdvance');
+    });
   });
 });
