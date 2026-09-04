@@ -2377,6 +2377,37 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         );
       });
 
+      it('should apply the agent input template before the server-side model call', async () => {
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: {
+            chatConfig: { inputTemplate: 'PREPROCESSED:\n{{text}}' },
+            plugins: [],
+            systemRole: 'test',
+          },
+        };
+        const executors = createRuntimeExecutors(ctxWithConfig);
+
+        await executors.call_llm!(
+          {
+            payload: {
+              messages: [{ content: 'Hello', role: 'user' }],
+              model: 'gpt-4',
+              provider: 'openai',
+            },
+            type: 'call_llm',
+          },
+          createMockState(),
+        );
+
+        expect(engineSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ inputTemplate: 'PREPROCESSED:\n{{text}}' }),
+        );
+        expect(mockChat.mock.calls[0][0].messages.at(-1)).toEqual(
+          expect.objectContaining({ content: 'PREPROCESSED:\nHello', role: 'user' }),
+        );
+      });
+
       it('should forward additional contexts without leaking model parameters', async () => {
         const ctxWithConfig: RuntimeExecutorContext = {
           ...ctx,
