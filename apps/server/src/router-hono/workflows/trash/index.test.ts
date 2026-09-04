@@ -22,7 +22,18 @@ describe('trash workflow routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.unstubAllEnvs();
+    vi.stubEnv('CRON_SECRET', 'cron-secret');
     vi.stubEnv('KEY_VAULTS_SECRET', 'local-secret');
+  });
+
+  it('accepts a Vercel cron request with the configured bearer secret', async () => {
+    const response = await app.request('/purge', {
+      headers: { authorization: 'Bearer cron-secret' },
+      method: 'GET',
+    });
+
+    expect(response.status).toBe(202);
+    expect(mocks.purge).toHaveBeenCalledOnce();
   });
 
   it('accepts a local continuation with the configured bearer secret', async () => {

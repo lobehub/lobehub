@@ -6,6 +6,11 @@ import { purge } from './handlers/purge';
 
 const app = new Hono();
 
+app.get(
+  '/purge',
+  bearerSecretAuth(() => process.env.CRON_SECRET),
+  purge,
+);
 app.post('/purge', qstashAuth(), purge);
 app.post(
   '/purge/local',

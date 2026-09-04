@@ -1068,7 +1068,7 @@ describe('TrashService', () => {
       expect(await fileModel.findById(fileId)).toMatchObject({ parentId: folder.id });
     });
 
-    it("restores another member's detached private documents and files without overwriting moves", async () => {
+    it("restores another member's retained descendants without overwriting moves", async () => {
       const workspaceId = 'trash-private-descendant-workspace';
       await serverDB.insert(workspaces).values({
         id: workspaceId,
@@ -1122,14 +1122,25 @@ describe('TrashService', () => {
         url: 'files/private-child.txt',
         visibility: 'private',
       });
+      const publicFile = await memberFileModel.create({
+        fileType: 'text/plain',
+        name: 'public child.txt',
+        parentId: publicFolder.id,
+        size: 1,
+        url: 'files/public-child.txt',
+        visibility: 'public',
+      });
 
       const actorService = new TrashService(serverDB, userId, workspaceId);
-      const [root] = await actorService.trashDocuments([publicFolder.id]);
+      const [root] = await actorService.trashDocuments([publicFolder.id], {
+        restrictToCreator: true,
+      });
 
       expect(await ownerModel.findById(publicFolder.id)).toBeUndefined();
       expect(await memberModel.findById(privateFolder.id)).toMatchObject({ parentId: null });
       expect(await memberModel.findById(movedPrivateFolder.id)).toMatchObject({ parentId: null });
       expect(await memberFileModel.findById(privateFile.id)).toMatchObject({ parentId: null });
+      expect(await memberFileModel.findById(publicFile.id)).toMatchObject({ parentId: null });
       expect(await new TrashModel(serverDB, userId, workspaceId).findChildren(root.id)).toEqual([]);
 
       const [internalRoot] = await serverDB
@@ -1141,10 +1152,12 @@ describe('TrashService', () => {
           expect.objectContaining({ resourceId: privateFolder.id, resourceType: 'document' }),
           expect.objectContaining({ resourceId: movedPrivateFolder.id, resourceType: 'document' }),
           expect.objectContaining({ resourceId: privateFile.id, resourceType: 'file' }),
+          expect.objectContaining({ resourceId: publicFile.id, resourceType: 'file' }),
         ]),
       );
       expect(JSON.stringify((await actorService.list()).items)).not.toContain(privateFolder.id);
       expect(JSON.stringify((await actorService.list()).items)).not.toContain(privateFile.id);
+      expect(JSON.stringify((await actorService.list()).items)).not.toContain(publicFile.id);
 
       await memberModel.update(movedPrivateFolder.id, { parentId: privateDestination.id });
       await actorService.restore([root.id]);
@@ -1158,11 +1171,17 @@ describe('TrashService', () => {
       expect(await memberFileModel.findById(privateFile.id)).toMatchObject({
         parentId: publicFolder.id,
       });
+      expect(await memberFileModel.findById(publicFile.id)).toMatchObject({
+        parentId: publicFolder.id,
+      });
 
-      const [purgeRoot] = await actorService.trashDocuments([publicFolder.id]);
+      const [purgeRoot] = await actorService.trashDocuments([publicFolder.id], {
+        restrictToCreator: true,
+      });
       await actorService.purge([purgeRoot.id]);
       expect(await memberModel.findById(privateFolder.id)).toMatchObject({ parentId: null });
       expect(await memberFileModel.findById(privateFile.id)).toMatchObject({ parentId: null });
+      expect(await memberFileModel.findById(publicFile.id)).toMatchObject({ parentId: null });
     });
 
     it('rolls back detached private edges when the trash transaction fails', async () => {

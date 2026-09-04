@@ -166,7 +166,10 @@ export class FileModel {
       .where(and(this.ownership(), inArray(files.parentId, parentIds)));
   };
 
-  detachPrivateChildren = async (parentIds: string[]): Promise<TrashDetachedEdge[]> => {
+  detachRetainedChildren = async (
+    parentIds: string[],
+    options?: { restrictToCreator?: boolean },
+  ): Promise<TrashDetachedEdge[]> => {
     if (!this.workspaceId || parentIds.length === 0) return [];
 
     const boundaryFiles = await this.db
@@ -179,8 +182,8 @@ export class FileModel {
             { isDeleted: files.isDeleted, userId: files.userId, workspaceId: files.workspaceId },
           ),
           inArray(files.parentId, parentIds),
-          eq(files.visibility, 'private'),
           ne(files.userId, this.userId),
+          options?.restrictToCreator ? undefined : eq(files.visibility, 'private'),
         ),
       )
       .for('update');

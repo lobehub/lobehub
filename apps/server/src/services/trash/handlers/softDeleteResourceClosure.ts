@@ -167,7 +167,7 @@ export const softDeleteResourceClosures = async (
 
       const documentIds = result.documents.map((document) => document.id);
       const anchoredFiles = await fileModel.findByParentIds(documentIds);
-      const detachedFileEdges = await fileModel.detachPrivateChildren(documentIds);
+      const detachedFileEdges = await fileModel.detachRetainedChildren(documentIds, options);
       for (const edge of detachedFileEdges) {
         detachedEdgesById.set(`${edge.resourceType}:${edge.resourceId}`, edge);
       }
