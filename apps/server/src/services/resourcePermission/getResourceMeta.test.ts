@@ -3,7 +3,14 @@ import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { agents, documents, users } from '@/database/schemas';
+import {
+  agents,
+  documents,
+  files,
+  knowledgeBaseFiles,
+  knowledgeBases,
+  users,
+} from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { getResourceMeta } from './index';
@@ -60,5 +67,98 @@ describe('getResourceMeta', () => {
     await expect(
       getResourceMeta(serverDB, 'document', 'resource-meta-document'),
     ).resolves.toBeNull();
+  });
+
+  it('hides live documents exclusive to a trashed library and preserves shared documents', async () => {
+    await serverDB.insert(knowledgeBases).values([
+      {
+        id: 'resource-meta-kb-trashed',
+        isDeleted: true,
+        name: 'Trashed library',
+        userId,
+      },
+      { id: 'resource-meta-kb-live', name: 'Live library', userId },
+    ]);
+    await serverDB.insert(files).values([
+      {
+        fileType: 'text/plain',
+        id: 'resource-meta-file-exclusive',
+        name: 'Exclusive',
+        size: 1,
+        url: 'file://exclusive',
+        userId,
+      },
+      {
+        fileType: 'text/plain',
+        id: 'resource-meta-file-shared',
+        name: 'Shared',
+        size: 1,
+        url: 'file://shared',
+        userId,
+      },
+    ]);
+    await serverDB.insert(knowledgeBaseFiles).values([
+      {
+        fileId: 'resource-meta-file-exclusive',
+        knowledgeBaseId: 'resource-meta-kb-trashed',
+        userId,
+      },
+      {
+        fileId: 'resource-meta-file-shared',
+        knowledgeBaseId: 'resource-meta-kb-trashed',
+        userId,
+      },
+      {
+        fileId: 'resource-meta-file-shared',
+        knowledgeBaseId: 'resource-meta-kb-live',
+        userId,
+      },
+    ]);
+    await serverDB.insert(documents).values([
+      {
+        fileType: 'custom/document',
+        id: 'resource-meta-inline-exclusive',
+        knowledgeBaseId: 'resource-meta-kb-trashed',
+        source: '',
+        sourceType: 'api',
+        title: 'Inline exclusive',
+        totalCharCount: 0,
+        totalLineCount: 0,
+        userId,
+      },
+      {
+        fileId: 'resource-meta-file-exclusive',
+        fileType: 'text/plain',
+        id: 'resource-meta-file-backed-exclusive',
+        source: 'file://exclusive',
+        sourceType: 'file',
+        title: 'File backed exclusive',
+        totalCharCount: 0,
+        totalLineCount: 0,
+        userId,
+      },
+      {
+        fileId: 'resource-meta-file-shared',
+        fileType: 'text/plain',
+        id: 'resource-meta-file-backed-shared',
+        knowledgeBaseId: 'resource-meta-kb-trashed',
+        source: 'file://shared',
+        sourceType: 'file',
+        title: 'File backed shared',
+        totalCharCount: 0,
+        totalLineCount: 0,
+        userId,
+      },
+    ]);
+
+    await expect(
+      getResourceMeta(serverDB, 'document', 'resource-meta-inline-exclusive'),
+    ).resolves.toBeNull();
+    await expect(
+      getResourceMeta(serverDB, 'document', 'resource-meta-file-backed-exclusive'),
+    ).resolves.toBeNull();
+    await expect(
+      getResourceMeta(serverDB, 'document', 'resource-meta-file-backed-shared'),
+    ).resolves.toMatchObject({ userId });
   });
 });

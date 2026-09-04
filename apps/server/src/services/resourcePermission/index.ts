@@ -1,7 +1,7 @@
 import { isCollaborativeBuiltinAgentRow } from '@lobechat/builtin-agents';
 import type { PERMISSION_ACTIONS } from '@lobechat/const/rbac';
 import { TRPCError } from '@trpc/server';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, not } from 'drizzle-orm';
 
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import type { PermissionResourceType, ResourceAccessLevel } from '@/database/schemas';
@@ -13,6 +13,7 @@ import {
   knowledgeBases,
 } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { documentOnlyInTrashedKnowledgeBase } from '@/database/utils/restrictedKnowledgeBase';
 import { notTrashed } from '@/database/utils/softDelete';
 import {
   getWorkspaceScopedPermissionMatches,
@@ -113,9 +114,32 @@ export const getResourceMeta = async (
     return row ?? null;
   }
 
-  const table = { agentGroup: chatGroups, document: documents, knowledgeBase: knowledgeBases }[
-    resourceType
-  ];
+  if (resourceType === 'document') {
+    const [row] = await db
+      .select({
+        userId: documents.userId,
+        visibility: documents.visibility,
+        workspaceId: documents.workspaceId,
+      })
+      .from(documents)
+      .where(
+        and(
+          eq(documents.id, resourceId),
+          notTrashed(documents.isDeleted),
+          not(
+            documentOnlyInTrashedKnowledgeBase(db, {
+              fileId: documents.fileId,
+              knowledgeBaseId: documents.knowledgeBaseId,
+            }),
+          ),
+        ),
+      )
+      .limit(1);
+
+    return row ?? null;
+  }
+
+  const table = { agentGroup: chatGroups, knowledgeBase: knowledgeBases }[resourceType];
 
   const [row] = await db
     .select({ userId: table.userId, visibility: table.visibility, workspaceId: table.workspaceId })

@@ -3,6 +3,7 @@ import { and, eq, exists, inArray, isNotNull, not, notInArray, or } from 'drizzl
 
 import { knowledgeBaseFiles, knowledgeBases } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { isTrashed, notTrashed } from './softDelete';
 import { buildWorkspaceWhere } from './workspace';
 
 export interface RestrictedKnowledgeBaseFilter {
@@ -124,4 +125,45 @@ export const excludeRestrictedDocument = (
 ): SQL | undefined => {
   const restricted = documentInRestrictedKnowledgeBase(db, columns, scope, filter);
   return restricted ? not(restricted) : undefined;
+};
+
+const documentHasKnowledgeBaseState = (
+  db: LobeChatDatabase,
+  columns: { fileId: SQLWrapper; knowledgeBaseId: SQLWrapper },
+  trashed: boolean,
+): SQL => {
+  const state = trashed
+    ? isTrashed(knowledgeBases.isDeleted)
+    : notTrashed(knowledgeBases.isDeleted);
+
+  return or(
+    exists(
+      db
+        .select({ id: knowledgeBases.id })
+        .from(knowledgeBases)
+        .where(and(eq(knowledgeBases.id, columns.knowledgeBaseId), state)),
+    ),
+    exists(
+      db
+        .select({ id: knowledgeBaseFiles.fileId })
+        .from(knowledgeBaseFiles)
+        .innerJoin(knowledgeBases, eq(knowledgeBases.id, knowledgeBaseFiles.knowledgeBaseId))
+        .where(and(eq(knowledgeBaseFiles.fileId, columns.fileId), state)),
+    ),
+  )!;
+};
+
+/**
+ * A live document can outlive its soft-deleted library for restoration. Hide
+ * it from direct-ID APIs only when it has a trashed KB membership and no live
+ * KB membership through either its inline root or mirrored file.
+ */
+export const documentOnlyInTrashedKnowledgeBase = (
+  db: LobeChatDatabase,
+  columns: { fileId: SQLWrapper; knowledgeBaseId: SQLWrapper },
+): SQL => {
+  const trashedMembership = documentHasKnowledgeBaseState(db, columns, true);
+  const liveMembership = documentHasKnowledgeBaseState(db, columns, false);
+
+  return and(trashedMembership, not(liveMembership))!;
 };
