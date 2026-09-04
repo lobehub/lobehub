@@ -1549,6 +1549,7 @@ export default {
   'taskDetail.runVerify.round': 'Round {{index}}',
   'taskDetail.runVerify.running': 'Verifying',
   'taskDetail.runExpand': 'Expand run',
+  'taskDetail.openRunChat': 'Open this run’s conversation',
   'taskDetail.runFollowUp': 'Ask a follow-up',
   'taskDetail.runFollowUpPlaceholder': 'Ask a follow-up about this run...',
   'taskDetail.collapseReply': 'Collapse',

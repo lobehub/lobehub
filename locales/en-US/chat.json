@@ -1621,6 +1621,7 @@
   "taskDetail.notFound.desc": "This task may have been deleted, or you don't have permission to view it.",
   "taskDetail.notFound.title": "Task not found",
   "taskDetail.openDetail": "Open detail",
+  "taskDetail.openRunChat": "Open this run’s conversation",
   "taskDetail.pauseTask": "Pause task",
   "taskDetail.priority.high": "High",
   "taskDetail.priority.low": "Low",

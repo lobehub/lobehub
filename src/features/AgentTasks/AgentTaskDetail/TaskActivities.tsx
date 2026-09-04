@@ -197,6 +197,9 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
                       activity={activity}
                       defaultExpanded={key === firstTopicKey}
                       key={key}
+                      // The result panel is opened to read the latest delivery,
+                      // so that one run renders its content in full.
+                      primary={variant === 'result' && key === firstTopicKey}
                     />
                   );
                 }
