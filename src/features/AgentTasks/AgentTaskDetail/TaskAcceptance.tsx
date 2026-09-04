@@ -114,6 +114,7 @@ const TaskAcceptance = memo(() => {
   const verify = useTaskStore(taskDetailSelectors.activeTaskVerifyConfig);
   const [sectionExpanded, setSectionExpanded] = useState(true);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
+  const [requirementExpanded, setRequirementExpanded] = useState(false);
 
   const {
     data: acceptanceSubject,
@@ -252,7 +253,18 @@ const TaskAcceptance = memo(() => {
                   <Text fontSize={12} type={'secondary'}>
                     {t('taskDetail.acceptance.goal')}
                   </Text>
-                  <Text>{requirement}</Text>
+                  {/* The contract, not the result. A goal-dispatched task carries
+                      a generated paragraph here, and printing it in full pushed
+                      the checks — the thing the reader came for — below the
+                      fold. Two lines, and the rest on demand. */}
+                  <Text
+                    ellipsis={requirementExpanded ? undefined : { rows: 2 }}
+                    style={{ cursor: 'pointer' }}
+                    title={requirement}
+                    onClick={() => setRequirementExpanded((open) => !open)}
+                  >
+                    {requirement}
+                  </Text>
                 </Flexbox>
               )}
               <Flexbox gap={7}>
