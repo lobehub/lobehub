@@ -7,6 +7,7 @@ import type {
   GoalEventEntityType,
   GoalEventType,
   GoalGraphSnapshot,
+  GoalGraphWorkVersionDisplay,
   GoalNodeKind,
   GoalNodeStatus,
   GoalNodeWorkVersionRelation,
@@ -126,43 +127,17 @@ export class GoalGraphModel {
         .where(eq(goalEvents.goalId, goalId))
         .orderBy(desc(goalEvents.createdAt))
         .limit(GoalGraphModel.GRAPH_EVENT_LIMIT),
-      // The version row carries its own display snapshot, so naming a linked
-      // deliverable costs two joins rather than a second round-trip per link.
-      //
-      // `works` joins under `workOwnership`, NOT plainly: `goals` has no
-      // visibility column, so every member of a team workspace can read a
-      // workspace goal, while a Work is owner-scoped (external Works are always
-      // private, and document/file Works follow their backing resource). Hydrating
-      // without the predicate would hand another member the owner's private title,
-      // status, url and document binding. A Work the viewer may not see simply
-      // fails to join and stays an unresolved link — it still counts.
       this.db
-        .select({
-          identifier: workVersions.identifier,
-          // Document and file Works keep their open target in the version
-          // metadata rather than the `url` column.
-          metadata: workVersions.metadata,
-          resourceId: works.resourceId,
-          link: goalNodeWorkVersions,
-          status: workVersions.status,
-          title: workVersions.title,
-          type: works.type,
-          url: workVersions.url,
-          workId: works.id,
-        })
+        .select({ link: goalNodeWorkVersions })
         .from(goalNodeWorkVersions)
         .innerJoin(goalNodes, eq(goalNodeWorkVersions.nodeId, goalNodes.id))
-        .leftJoin(workVersions, eq(goalNodeWorkVersions.workVersionId, workVersions.id))
-        .leftJoin(
-          works,
-          and(
-            eq(workVersions.workId, works.id),
-            workOwnership({ db: this.db, userId: this.userId, workspaceId: this.workspaceId }),
-          ),
-        )
         .where(eq(goalNodes.goalId, goalId))
         .orderBy(asc(goalNodeWorkVersions.createdAt)),
     ]);
+
+    const linkDisplays = await this.hydrateWorkVersions(
+      linkedWorkVersions.map(({ link }) => link.workVersionId),
+    );
 
     return {
       decisions: decisions.map(({ goal_node_decisions }) => goal_node_decisions),
@@ -170,27 +145,73 @@ export class GoalGraphModel {
       events,
       goal,
       nodes,
-      workVersions: linkedWorkVersions.map(({ link, type, workId, ...display }) => ({
+      workVersions: linkedWorkVersions.map(({ link }) => ({
         ...link,
-        // A link whose version row is gone still counts; it just cannot be named.
-        work:
-          type && workId
-            ? {
-                identifier: display.identifier,
-                resourceId: display.resourceId,
-                status: display.status,
-                title: display.title,
-                type,
-                url: display.url,
-                workId,
-                ...(display.metadata?.agentDocumentId
-                  ? { agentDocumentId: display.metadata.agentDocumentId }
-                  : {}),
-                ...(display.metadata?.fileUrl ? { fileUrl: display.metadata.fileUrl } : {}),
-              }
-            : undefined,
+        // A link nothing came back for still counts; it just cannot be named.
+        work: linkDisplays.get(link.workVersionId),
       })),
     };
+  };
+
+  /**
+   * Display snapshots for linked Work versions, keyed by version id.
+   *
+   * Read separately from the link rows, and gated by `workOwnership`: `goals`
+   * has no visibility column, so every member of a team workspace can read a
+   * workspace goal, while a Work is owner-scoped (external Works are always
+   * private, document/file Works follow their backing resource). Hydrating
+   * without the predicate handed another member the owner's private title,
+   * status, url and document binding.
+   *
+   * A second small query rather than a join on the graph read: `workOwnership`
+   * carries correlated EXISTS guards, and evaluating those inside the graph
+   * join cost that read ~2.5x — which the detail page pays every few seconds
+   * while it polls. Here they run once over a handful of linked versions, and a
+   * goal with no links skips the query entirely.
+   */
+  private hydrateWorkVersions = async (versionIds: string[]) => {
+    const display = new Map<string, GoalGraphWorkVersionDisplay>();
+    const ids = [...new Set(versionIds)];
+    if (ids.length === 0) return display;
+
+    const rows = await this.db
+      .select({
+        identifier: workVersions.identifier,
+        // Document and file Works keep their open target in the version
+        // metadata rather than the `url` column.
+        metadata: workVersions.metadata,
+        resourceId: works.resourceId,
+        status: workVersions.status,
+        title: workVersions.title,
+        type: works.type,
+        url: workVersions.url,
+        versionId: workVersions.id,
+        workId: works.id,
+      })
+      .from(workVersions)
+      .innerJoin(
+        works,
+        and(
+          eq(workVersions.workId, works.id),
+          workOwnership({ db: this.db, userId: this.userId, workspaceId: this.workspaceId }),
+        ),
+      )
+      .where(inArray(workVersions.id, ids));
+
+    for (const row of rows) {
+      display.set(row.versionId, {
+        identifier: row.identifier,
+        resourceId: row.resourceId,
+        status: row.status,
+        title: row.title,
+        type: row.type,
+        url: row.url,
+        workId: row.workId,
+        ...(row.metadata?.agentDocumentId ? { agentDocumentId: row.metadata.agentDocumentId } : {}),
+        ...(row.metadata?.fileUrl ? { fileUrl: row.metadata.fileUrl } : {}),
+      });
+    }
+    return display;
   };
 
   /**

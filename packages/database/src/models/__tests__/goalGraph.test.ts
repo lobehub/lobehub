@@ -223,7 +223,11 @@ describe('GoalGraphModel', () => {
     );
 
     expect(link).toMatchObject({ nodeId: node!.id, relation: 'produced' });
-    expect((await graphModel.getGraph(goal.id))?.workVersions).toHaveLength(1);
+    const links = (await graphModel.getGraph(goal.id))?.workVersions;
+    expect(links).toHaveLength(1);
+    // Personal mode: the Work ownership predicate the workspace case needs must
+    // not hide the owner's own deliverable from their own goal.
+    expect(links?.[0].work).toMatchObject({ type: 'task', workId: work!.id });
   });
 
   it('hydrates a linked Work only for a viewer allowed to see it', async () => {
