@@ -2,11 +2,12 @@
 
 import { Flexbox, Icon } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ExternalLink, FileDown, FileText, Link2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { isSafeExternalUrl } from '@/features/Work/descriptors';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useChatStore } from '@/store/chat';
 
@@ -51,16 +52,43 @@ const styles = createStaticStyles(({ css }) => ({
     text-align: end;
   `,
   row: css`
-    cursor: pointer;
+    width: 100%;
     padding-block: 8px;
     padding-inline: 8px;
+    border: none;
     border-radius: ${cssVar.borderRadiusSM};
+
+    text-align: start;
+
+    background: none;
+  `,
+  rowOpenable: css`
+    cursor: pointer;
 
     &:hover {
       background: ${cssVar.colorFillQuaternary};
     }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimary};
+      outline-offset: -2px;
+    }
   `,
 }));
+
+/**
+ * Where a row actually goes, or `undefined` when it goes nowhere: an external
+ * Work registered without a url, a file version missing its `fileUrl`, a
+ * document whose binding never resolved. Such a row must not look clickable,
+ * and a url is only a destination once it is proven http(s) — a stored value
+ * can carry `javascript:` / `data:` / a custom scheme, and on desktop
+ * `window.open` hands straight to `shell.openExternal`.
+ */
+export const openTargetOf = (artifact: GoalArtifactView) => {
+  if (artifact.type === 'document' && artifact.resourceId) return { kind: 'document' } as const;
+  if (isSafeExternalUrl(artifact.url)) return { kind: 'external', url: artifact.url } as const;
+  return undefined;
+};
 
 const DeliverableRow = memo<{
   artifact: GoalArtifactView;
@@ -74,13 +102,19 @@ const DeliverableRow = memo<{
   const icon =
     artifact.type === 'document' ? FileText : artifact.type === 'file' ? FileDown : ExternalLink;
 
+  const openable = !!openTargetOf(artifact);
+
   return (
     <Flexbox
       horizontal
       align={'center'}
-      className={styles.row}
+      as={openable ? 'button' : 'div'}
+      className={cx(styles.row, openable && styles.rowOpenable)}
       gap={8}
-      onClick={() => onOpen(artifact)}
+      // A real button carries focus, Enter/Space and the right semantics for
+      // free; a row with nowhere to go stays inert rather than faking an
+      // affordance it cannot honour.
+      {...(openable ? { onClick: () => onOpen(artifact), type: 'button' as const } : {})}
     >
       <Icon color={cssVar.colorTextQuaternary} icon={icon} size={14} />
       {/* The title takes the slack so the attribution and the timestamp form
@@ -111,16 +145,18 @@ const Deliverables = memo<{ graph: GoalGraphView }>(({ graph }) => {
   const openDocument = useChatStore((s) => s.openDocument);
 
   const open = (artifact: GoalArtifactView) => {
+    const target = openTargetOf(artifact);
+    if (!target) return;
     // `openDocument` takes the DOCUMENT id, not the agent-document binding id:
     // `agentDocumentId` only establishes that a binding exists.
-    if (artifact.type === 'document' && artifact.resourceId) {
-      openDocument(artifact.resourceId, artifact.agentDocumentId);
+    if (target.kind === 'document') {
+      openDocument(artifact.resourceId!, artifact.agentDocumentId);
       return;
     }
     // A generated file and an external resource both leave for their canonical
     // target. The file-preview Portal is not a substitute: it resolves a
     // knowledge-base item, so an ordinary exported file loads forever in it.
-    if (artifact.url) window.open(artifact.url, '_blank', 'noopener,noreferrer');
+    window.open(target.url, '_blank', 'noopener,noreferrer');
   };
 
   if (graph.artifacts.length === 0)

@@ -440,7 +440,9 @@ describe('buildGoalGraphView', () => {
             },
             workVersionId: 'v1',
           },
-          // Version row gone: the link still exists but cannot be named.
+          // Nothing to name the link with — the version row is gone, or the
+          // Work belongs to another member and the read-time ownership guard
+          // refused to hydrate it. Either way the link still counts.
           { createdAt: at(9), id: 'l2', nodeId: 'w1', relation: 'produced', workVersionId: 'v2' },
         ],
       }),

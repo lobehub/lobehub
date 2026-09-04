@@ -111,6 +111,14 @@ export interface CreateGoalNodeInput {
 }
 
 /** Application service shared by CLI today and Graph UI/schedulers later. */
+/**
+ * Version events read per task run when harvesting deliverables. Generous
+ * because the cap applies to events rather than to Works: the newest N events
+ * of a run must still contain every Work it produced, even one revised many
+ * times over.
+ */
+const DELIVERABLE_EVENTS_PER_RUN = 200;
+
 export class GoalService {
   private readonly acceptanceService: AcceptanceService;
   private readonly goalModel: GoalModel;
@@ -1421,8 +1429,12 @@ export class GoalService {
   ) => {
     if (operationIds.length === 0) return;
 
+    // The per-operation cap is applied to version EVENTS before this dedupes by
+    // Work identity, so the default of 20 lets a document revised twenty times
+    // push every other deliverable out of its own task's list.
     const byOperation = await this.workModel.listByRootOperations({
       includeFileWorks: true,
+      limit: DELIVERABLE_EVENTS_PER_RUN,
       rootOperationIds: operationIds,
     });
 
@@ -1494,10 +1506,14 @@ export class GoalService {
         'produced',
       );
     }
+    // Every run of the task, not the ten `findWithHandoff` reads for the
+    // finding: an attempt budget above ten would otherwise strand a deliverable
+    // produced early and merely referenced later.
+    const allRuns = await this.taskTopicModel.findByTaskId(taskId);
     await this.attachTaskDeliverables(
       graph.goal.id,
       nodeId,
-      recent.flatMap((topic) => (topic.operationId ? [topic.operationId] : [])),
+      allRuns.flatMap((topic) => (topic.operationId ? [topic.operationId] : [])),
       effects,
     );
     if (!existingFinding) {

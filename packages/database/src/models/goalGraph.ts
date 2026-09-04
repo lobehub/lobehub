@@ -128,6 +128,14 @@ export class GoalGraphModel {
         .limit(GoalGraphModel.GRAPH_EVENT_LIMIT),
       // The version row carries its own display snapshot, so naming a linked
       // deliverable costs two joins rather than a second round-trip per link.
+      //
+      // `works` joins under `workOwnership`, NOT plainly: `goals` has no
+      // visibility column, so every member of a team workspace can read a
+      // workspace goal, while a Work is owner-scoped (external Works are always
+      // private, and document/file Works follow their backing resource). Hydrating
+      // without the predicate would hand another member the owner's private title,
+      // status, url and document binding. A Work the viewer may not see simply
+      // fails to join and stays an unresolved link — it still counts.
       this.db
         .select({
           identifier: workVersions.identifier,
@@ -145,7 +153,13 @@ export class GoalGraphModel {
         .from(goalNodeWorkVersions)
         .innerJoin(goalNodes, eq(goalNodeWorkVersions.nodeId, goalNodes.id))
         .leftJoin(workVersions, eq(goalNodeWorkVersions.workVersionId, workVersions.id))
-        .leftJoin(works, eq(workVersions.workId, works.id))
+        .leftJoin(
+          works,
+          and(
+            eq(workVersions.workId, works.id),
+            workOwnership({ db: this.db, userId: this.userId, workspaceId: this.workspaceId }),
+          ),
+        )
         .where(eq(goalNodes.goalId, goalId))
         .orderBy(asc(goalNodeWorkVersions.createdAt)),
     ]);
