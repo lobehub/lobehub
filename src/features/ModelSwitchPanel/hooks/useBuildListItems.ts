@@ -1,3 +1,4 @@
+import dayjs from 'dayjs';
 import { useMemo } from 'react';
 
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
@@ -11,6 +12,22 @@ import { type GroupMode, type ListItem, type ModelWithProviders } from '../types
  * jump ahead with no visible explanation.
  */
 const isNewModel = (releasedAt?: string): boolean => !!releasedAt && isNewReleaseDate(releasedAt);
+
+/**
+ * Pins new models to the top, then orders them newest-first. Ranking the pinned models by
+ * `displayOrder` instead would surface whichever vendor happens to sit earliest in the catalog,
+ * so a model released days earlier could outrank today's launch under the same "new" badge.
+ *
+ * Same-day releases fall through to 0 and keep `displayOrder` via stable sort.
+ */
+const compareNewness = (a?: string, b?: string): number => {
+  const aNew = isNewModel(a);
+  const bNew = isNewModel(b);
+  if (aNew !== bNew) return aNew ? -1 : 1;
+  if (!aNew) return 0;
+
+  return dayjs(b).valueOf() - dayjs(a).valueOf();
+};
 
 export const buildListItems = (
   enabledList: EnabledProviderWithModels[],
@@ -84,10 +101,7 @@ export const buildListItems = (
         const bLast = b.providers.every((provider) => sortModelLast(b.model.id, provider.id));
         if (aLast !== bLast) return Number(aLast) - Number(bLast);
       }
-      const aNew = isNewModel(a.model.releasedAt);
-      const bNew = isNewModel(b.model.releasedAt);
-      if (aNew !== bNew) return aNew ? -1 : 1;
-      return 0;
+      return compareNewness(a.model.releasedAt, b.model.releasedAt);
     });
 
     return sortedModels.map((data) => ({
@@ -112,10 +126,7 @@ export const buildListItems = (
             Number(sortModelLast(b.id, providerItem.id));
           if (diff !== 0) return diff;
         }
-        const aNew = isNewModel(a.releasedAt);
-        const bNew = isNewModel(b.releasedAt);
-        if (aNew !== bNew) return aNew ? -1 : 1;
-        return 0;
+        return compareNewness(a.releasedAt, b.releasedAt);
       });
 
       if (sortedModels.length > 0 || !searchKeyword.trim()) {
