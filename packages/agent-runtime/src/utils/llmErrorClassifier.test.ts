@@ -48,6 +48,21 @@ describe('llmErrorClassifier', () => {
     ).toBe('retry');
   });
 
+  it('stops retrying a provider business error that contains a nested arrears code', () => {
+    expect(
+      classifyLLMError({
+        error: { code: 'Arrearage', message: 'Access denied because the account is in arrears' },
+        errorType: 'ProviderBizError',
+      }).kind,
+    ).toBe('stop');
+  });
+
+  it('does not retry an upstream canceled stream', () => {
+    expect(classifyLLMError({ message: 'canceled', type: 'UnknownChatFetchError' }).kind).toBe(
+      'stop',
+    );
+  });
+
   it('stops ProviderBizError invalid request shapes but retries transient ones', () => {
     expect(
       classifyWithSpecs({
