@@ -163,6 +163,27 @@ describe('TrashAction', () => {
       expect(outcome).toMatchObject({ purged: 201, purgedIds: ids });
     });
 
+    it('reports a partial outcome when a later purge batch request fails', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const ids = Array.from({ length: 201 }, (_, index) => `trash_${index}`);
+      vi.spyOn(trashService, 'purge')
+        .mockResolvedValueOnce({
+          failed: [],
+          purged: 200,
+          purgedIds: ids.slice(0, 200),
+        })
+        .mockRejectedValueOnce(new Error('later preflight failed'));
+
+      const outcome = await useTrashStore.getState().purge(ids, personalContext);
+
+      expect(outcome).toEqual({
+        failed: [{ code: 'purgeFailed', id: ids[200] }],
+        purged: 200,
+        purgedIds: ids.slice(0, 200),
+      });
+      expect(consoleError).toHaveBeenCalledWith('[trash:purgeBatch]', expect.any(Error));
+    });
+
     it('preserves a successful purge outcome when follow-up refresh fails', async () => {
       const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
       vi.spyOn(trashService, 'purge').mockResolvedValue({

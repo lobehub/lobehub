@@ -309,6 +309,30 @@ export class DocumentModel {
     return Boolean(row);
   };
 
+  /**
+   * Whether every referenced parent still exists as a live document in this exact scope.
+   * Restore paths use this after locking the hierarchy: a parent transferred out of scope is as
+   * unusable as a trashed parent because retaining that parentId would create an unreachable row.
+   */
+  hasUnrestorableParents = async (ids: string[]): Promise<boolean> => {
+    const uniqueIds = [...new Set(ids)];
+    if (uniqueIds.length === 0) return false;
+    const rows = await this.db
+      .select({ id: documents.id })
+      .from(documents)
+      .where(
+        and(
+          inArray(documents.id, uniqueIds),
+          notTrashed(documents.isDeleted),
+          this.workspaceId
+            ? eq(documents.workspaceId, this.workspaceId)
+            : and(isNull(documents.workspaceId), eq(documents.userId, this.userId)),
+        ),
+      );
+
+    return rows.length !== uniqueIds.length;
+  };
+
   findByFileIds = async (fileIds: string[]): Promise<DocumentItem[]> => {
     if (fileIds.length === 0) return [];
     return this.db

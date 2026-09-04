@@ -23,7 +23,7 @@ export const assertRestorableParents = async (
     ),
   ];
 
-  if (await documentModel.hasTrashedParents(externalParentIds)) {
+  if (await documentModel.hasUnrestorableParents(externalParentIds)) {
     throw new TrashRestoreError('parentTrashed');
   }
 };

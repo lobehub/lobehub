@@ -167,17 +167,27 @@ export const trashSlice: TrashSlice = (set, get) => {
       const outcome: PurgeOutcome = { failed: [], purged: 0, purgedIds: [] };
       await withLoading(ids, context, async () => {
         const trashService = await getTrashService();
-        for (const batch of mutationBatches(ids)) {
-          const batchOutcome = await trashService.purge(batch);
-          outcome.failed.push(...batchOutcome.failed);
-          outcome.purged += batchOutcome.purged;
-          outcome.purgedIds.push(...batchOutcome.purgedIds);
-          const gone = new Set(batchOutcome.purgedIds);
-          updateBucketItems(
-            context,
-            (items) => items.filter((item) => !gone.has(item.id)),
-            'purge',
-          );
+        const batches = mutationBatches(ids);
+        for (const [index, batch] of batches.entries()) {
+          try {
+            const batchOutcome = await trashService.purge(batch);
+            outcome.failed.push(...batchOutcome.failed);
+            outcome.purged += batchOutcome.purged;
+            outcome.purgedIds.push(...batchOutcome.purgedIds);
+            const gone = new Set(batchOutcome.purgedIds);
+            updateBucketItems(
+              context,
+              (items) => items.filter((item) => !gone.has(item.id)),
+              'purge',
+            );
+          } catch (error) {
+            if (outcome.purgedIds.length === 0) throw error;
+            console.error('[trash:purgeBatch]', error);
+            for (const id of batches.slice(index).flat()) {
+              outcome.failed.push({ code: 'purgeFailed', id });
+            }
+            break;
+          }
         }
       });
       return outcome;

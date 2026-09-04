@@ -1027,6 +1027,54 @@ describe('TrashService', () => {
       expect(await fileModel.findById(sourceFile.id)).toBeUndefined();
     });
 
+    it('refuses to restore a child after its live parent transfers out of scope', async () => {
+      const sourceWorkspaceId = 'trash-parent-transfer-source';
+      const targetWorkspaceId = 'trash-parent-transfer-target';
+      await serverDB.insert(workspaces).values([
+        {
+          id: sourceWorkspaceId,
+          name: 'Parent transfer source',
+          primaryOwnerId: userId,
+          slug: sourceWorkspaceId,
+        },
+        {
+          id: targetWorkspaceId,
+          name: 'Parent transfer target',
+          primaryOwnerId: userId,
+          slug: targetWorkspaceId,
+        },
+      ]);
+      const sourceDocumentModel = new DocumentModel(serverDB, userId, sourceWorkspaceId);
+      const sourceService = new TrashService(serverDB, userId, sourceWorkspaceId);
+      const parent = await sourceDocumentModel.create({
+        fileType: 'custom/folder',
+        source: '',
+        sourceType: 'api',
+        title: 'Transferred parent',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+      const child = await sourceDocumentModel.create({
+        fileType: 'custom/page',
+        parentId: parent.id,
+        source: '',
+        sourceType: 'api',
+        title: 'Trashed child',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+      const [childRoot] = await sourceService.trashDocuments([child.id]);
+
+      await sourceDocumentModel.transferTo(parent.id, targetWorkspaceId, userId, 'private');
+      const outcome = await sourceService.restore([childRoot.id]);
+
+      expect(outcome.failed).toEqual([{ code: 'parentTrashed', id: childRoot.id }]);
+      expect(await sourceDocumentModel.findById(child.id)).toBeUndefined();
+      expect(
+        await new DocumentModel(serverDB, userId, targetWorkspaceId).findById(parent.id),
+      ).toBeDefined();
+    });
+
     it('restores a folder subtree and every anchored file without changing parent links', async () => {
       const folder = await documentModel.create({
         fileType: 'custom/folder',
