@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../core/getTestDB';
 import {
   agentDocuments,
+  agentHistoryJobs,
   agents,
   agentsKnowledgeBases,
   chatGroups,
@@ -69,6 +70,10 @@ const seedGroupWithRoster = async () => {
 };
 
 beforeEach(async () => {
+  // Job rows deliberately have no FK onto their owners (guards must observe a
+  // pending job, not have it cascade away), so clean them explicitly or they
+  // leak into sibling suites sharing this DB.
+  await serverDB.delete(agentHistoryJobs);
   await serverDB.delete(users);
   await serverDB.insert(users).values([{ id: ownerId }, { id: recipientId }, { id: teammateId }]);
   await serverDB.insert(workspaces).values([
@@ -82,6 +87,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  await serverDB.delete(agentHistoryJobs);
   await serverDB.delete(users);
 });
 
