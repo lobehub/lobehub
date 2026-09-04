@@ -232,6 +232,33 @@ describe('acceptanceEvidenceRuntime', () => {
     expect(result.content).toContain('Document');
   });
 
+  it('waits for a plan that the fire-and-forget run-start instantiation has not landed yet', async () => {
+    // Answering NO_ACCEPTANCE_PLAN to a builder that asks what to prove as its
+    // first move reads as "this Task has no Acceptance", and the run then ends
+    // with no evidence at all.
+    mocks.operationFindById.mockResolvedValue({ id: 'task-op', parentOperationId: null });
+    mocks.runFindByOperation
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({ id: 'run-1', plan: [] })
+      .mockResolvedValue({
+        id: 'run-1',
+        plan: [{ id: 'criterion-1', index: 0, required: true, title: 'Late', verifierType: 'llm' }],
+      });
+
+    const runtime = acceptanceEvidenceRuntime.factory({
+      operationId: 'task-op',
+      serverDB: {} as never,
+      toolManifestMap: {},
+      userId: 'user-1',
+    });
+
+    const result = await runtime.listCriteria();
+
+    expect(result.success).toBe(true);
+    expect(result.criteria).toHaveLength(1);
+    expect(mocks.runFindByOperation.mock.calls.length).toBeGreaterThan(2);
+  });
+
   it('rejects a visual type that has no artifact behind it', async () => {
     // A live builder submitted { type: 'screenshot', content: '…(see the
     // screenshot file)' } with no file, which would render on the acceptance

@@ -66,7 +66,12 @@ describe('browserRuntime', () => {
       expect(result.content).toContain('file_1');
       expect(result.state).toEqual({
         height: 100,
-        images: [{ fileId: 'file_1', mediaType: 'image/jpeg', url: 'https://cdn.example.com/shot.jpeg' }],
+        images: [
+          { fileId: 'file_1', mediaType: 'image/jpeg', url: 'https://cdn.example.com/shot.jpeg' },
+        ],
+        // `dataUrl` was both the model's copy and the chat renderer's src, so
+        // dropping it without a replacement blanked every proxied screenshot.
+        url: 'https://cdn.example.com/shot.jpeg',
         width: 200,
       });
       // The base64 must not survive into the persisted tool state.

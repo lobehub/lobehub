@@ -14,6 +14,10 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import type { ServerRuntimeRegistration } from './types';
 
+/** Bounded wait for the run-start plan instantiation to land (~3s total). */
+const PLAN_WAIT_ATTEMPTS = 6;
+const PLAN_WAIT_INTERVAL_MS = 500;
+
 class AcceptanceEvidenceExecutionRuntime {
   constructor(
     private readonly db: LobeChatDatabase,
@@ -48,10 +52,26 @@ class AcceptanceEvidenceExecutionRuntime {
     const runOperationId = await this.resolveRunOperationId();
     if (!runOperationId) return { error: 'NO_OPERATION', success: false };
 
-    const run = await new VerifyRunModel(this.db, this.userId, this.workspaceId).findByOperation(
-      runOperationId,
-    );
-    if (!run?.plan?.length) return { error: 'NO_ACCEPTANCE_PLAN', success: false };
+    // The plan is instantiated fire-and-forget at run start, so a builder that
+    // asks what to prove as its first move can legitimately arrive before it
+    // lands. Answering NO_ACCEPTANCE_PLAN then reads as "this Task has no
+    // Acceptance" and the run finishes with no evidence at all, so wait out the
+    // race instead of racing it.
+    const runModel = new VerifyRunModel(this.db, this.userId, this.workspaceId);
+    let run = await runModel.findByOperation(runOperationId);
+    for (let attempt = 0; !run?.plan?.length && attempt < PLAN_WAIT_ATTEMPTS; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, PLAN_WAIT_INTERVAL_MS));
+      run = await runModel.findByOperation(runOperationId);
+    }
+    if (!run?.plan?.length) {
+      return {
+        content:
+          'No Acceptance plan is attached to this run yet. If this Task is expected to have one, ' +
+          'continue working and call listCriteria again before you finish.',
+        error: 'NO_ACCEPTANCE_PLAN',
+        success: false,
+      };
+    }
 
     const evidence = await new VerifyEvidenceModel(
       this.db,

@@ -5,7 +5,7 @@ import { deviceGateway } from '@/server/services/deviceGateway';
 import { FileService } from '@/server/services/file';
 
 import { buildNoActiveDeviceResult, REMOTE_DEVICE_TOOL_IDENTIFIER } from './noActiveDevice';
-import { resolveRunWorkspaceId } from './resolveWorkspaceScope';
+import { resolveContentWorkspaceId, resolveRunWorkspaceId } from './resolveWorkspaceScope';
 import { type ServerRuntimeRegistration } from './types';
 
 /**
@@ -53,13 +53,19 @@ const IMAGE_EXT_BY_MEDIA_TYPE: Record<string, string> = {
  * its id. It doubles as the only signal a non-vision model gets, since the
  * device returns an empty `content` for this api.
  *
+ * The file is created under the CONTENT workspace, not the gateway-addressing
+ * one: a workspace run routed to a personal device still writes workspace data,
+ * and some dispatch/resume paths never thread `workspaceId` into the tool
+ * context at all — so a raw `context.workspaceId` would file the evidence in
+ * personal scope where a workspace-scoped lookup cannot reach it.
+ *
  * Best-effort by construction: the capture succeeded either way, so an upload
  * failure degrades to the previous pass-through instead of failing the call.
  * `dataUrl` is dropped once stored so the base64 never reaches the DB.
  */
 const storeScreenshot = async (
   result: { content?: string; state?: unknown; success?: boolean },
-  context: { serverDB?: unknown; userId?: string; workspaceId?: string },
+  context: { agentId?: string; serverDB?: unknown; userId?: string; workspaceId?: string },
 ) => {
   const state = result.state as { dataUrl?: string } | undefined;
   const match =
@@ -70,11 +76,8 @@ const storeScreenshot = async (
 
   const [, mediaType, base64Data] = match;
   try {
-    const fileService = new FileService(
-      context.serverDB as never,
-      context.userId,
-      context.workspaceId,
-    );
+    const workspaceId = await resolveContentWorkspaceId(context as never);
+    const fileService = new FileService(context.serverDB as never, context.userId, workspaceId);
     const date = new Date().toISOString().slice(0, 10);
     const ext = IMAGE_EXT_BY_MEDIA_TYPE[mediaType] ?? 'png';
     const { fileId, url } = await fileService.uploadBase64(
@@ -83,11 +86,15 @@ const storeScreenshot = async (
       { fileType: mediaType },
     );
 
+    // `dataUrl` carried both the model's copy and the chat renderer's `src`.
+    // Dropping it (so the base64 never reaches the DB) must not blank the
+    // screenshot in chat, so the stored URL takes its place as the renderable
+    // field; the client executor path still supplies `dataUrl` directly.
     const { dataUrl: _dropped, ...rest } = state!;
     return {
       ...result,
       content: `Screenshot captured and stored as file ${fileId}. Cite that id when a tool asks for a fileId.`,
-      state: { ...rest, images: [{ fileId, mediaType, url }] },
+      state: { ...rest, images: [{ fileId, mediaType, url }], url },
     };
   } catch (error) {
     log('screenshot upload failed, passing the capture through inline: %O', error);
