@@ -43,6 +43,14 @@ export interface ResolvedRouteMeta {
   title: string;
 }
 
+/**
+ * For a route whose surface is mounted outside the router outlet, or that
+ * paints fast enough that any placeholder is pure flicker. Declared rather than
+ * omitted: an absent `Skeleton` falls through to `RouteSegmentSkeleton`'s
+ * path heuristics, which would guess a generic surface shape instead.
+ */
+export const NoRouteSkeleton = () => null;
+
 export const routeMeta = (meta: RouteMeta): RouteMeta => meta;
 
 export const getRouteMetaFromHandle = (handle: unknown): RouteMeta | undefined => {

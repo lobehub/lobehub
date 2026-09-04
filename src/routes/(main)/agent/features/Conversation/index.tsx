@@ -3,6 +3,7 @@ import React, { memo, Suspense } from 'react';
 
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
 import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
+import { delayed } from '@/components/Skeleton/Delayed';
 import { useAgentContext } from '@/features/Conversation/useAgentContext';
 import { useLocalPathReference } from '@/features/Conversation/useLocalPathReference';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
@@ -46,7 +47,7 @@ const ChatConversation = memo(() => {
   );
 
   return (
-    <Suspense fallback={<ConversationSegmentSkeleton />}>
+    <Suspense fallback={delayed(<ConversationSegmentSkeleton />)}>
       {canUseResource ? (
         <DragUploadZone
           enableLocalPathReference={enableLocalPathReference}

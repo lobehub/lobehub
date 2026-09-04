@@ -10,6 +10,7 @@ import BrandTextLoading from '@/components/Loading/BrandTextLoading';
 import AppsSkeleton from '@/components/Skeleton/Apps';
 import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
 import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
+import DelayedFallback from '@/components/Skeleton/Delayed';
 import GoalSkeleton from '@/components/Skeleton/Goal';
 import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
 import MemorySkeleton from '@/components/Skeleton/Memory';
@@ -313,12 +314,21 @@ describe('desktop router shared definition', () => {
   // Suspense, which always beats an outlet-level boundary — so without the
   // rewrite the brand wordmark reappears inside the container for 1–2s on a
   // cold deep link, right after the boot shell hands over.
+  // Page-level fallbacks sit behind the 200ms gate, so the skeleton under test
+  // is the gate's child rather than the fallback element itself.
+  const fallbackType = (fallback?: ReactElement): unknown => {
+    if (!fallback) return undefined;
+    if (fallback.type !== DelayedFallback) return fallback.type;
+
+    return (fallback.props as { children: ReactElement }).children.type;
+  };
+
   const collectFallbacks = (list: RouteObject[]): unknown[] => {
     const fallbacks: unknown[] = [];
     const walk = (routes: RouteObject[]) => {
       for (const route of routes) {
         const element = route.element as ReactElement<{ fallback?: ReactElement }> | undefined;
-        if (element?.props?.fallback) fallbacks.push(element.props.fallback.type);
+        if (element?.props?.fallback) fallbacks.push(fallbackType(element.props.fallback));
         if (route.children) walk(route.children);
       }
     };
@@ -359,10 +369,11 @@ describe('desktop router shared definition', () => {
       ] as const) {
         const matches = matchRoutes(createRuntimeRoutes(pathname), pathname);
         const fallbackTypes = matches
-          ?.map(
-            ({ route }) =>
+          ?.map(({ route }) =>
+            fallbackType(
               (route.element as ReactElement<{ fallback?: ReactElement }> | undefined)?.props
-                .fallback?.type,
+                .fallback,
+            ),
           )
           .filter(Boolean);
 

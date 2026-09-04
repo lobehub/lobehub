@@ -7,6 +7,7 @@ import { useRouteSkeleton } from '@/spa/router/useRouteSkeleton';
 
 import AppsSkeleton from './Apps';
 import ConversationLayoutSkeleton from './Conversation/Layout';
+import DelayedFallback from './Delayed';
 import MemorySkeleton from './Memory';
 import SettingsPageSkeleton from './Settings/Page';
 import SurfaceSkeleton, { type SurfaceSkeletonVariant } from './Surface';
@@ -36,7 +37,7 @@ const isConversationPath = (pathname: string) => {
   return segments.length === 3 && segments[2].startsWith('tpc_');
 };
 
-const RouteSegmentSkeleton = () => {
+const RouteSegmentContent = () => {
   const Skeleton = useRouteSkeleton();
   const chrome = useRouteSkeletonChrome();
   const { pathname } = useLocation();
@@ -51,5 +52,11 @@ const RouteSegmentSkeleton = () => {
 
   return <SurfaceSkeleton header={chrome !== 'body'} variant={getSurfaceVariant(pathname)} />;
 };
+
+const RouteSegmentSkeleton = () => (
+  <DelayedFallback>
+    <RouteSegmentContent />
+  </DelayedFallback>
+);
 
 export default RouteSegmentSkeleton;

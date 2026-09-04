@@ -56,7 +56,7 @@ describe('workspaceHomeRouteMeta', () => {
     });
   });
 
-  it('renders no outlet skeleton on web, where Home is mounted beside the outlet', () => {
+  it('renders no outlet skeleton — Home never loads inside the outlet', () => {
     const Skeleton = workspaceHomeRouteMeta.Skeleton!;
     const { container } = render(<Skeleton />);
 
