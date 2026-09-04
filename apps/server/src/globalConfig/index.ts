@@ -57,6 +57,9 @@ export const getServerGlobalConfig = async () => {
     kimicodingplan: {
       withDeploymentName: true,
     },
+    llmman: {
+      fetchOnClient: isDesktop ? false : undefined,
+    },
     lmstudio: {
       fetchOnClient: isDesktop ? false : undefined,
     },

@@ -34,6 +34,7 @@
   "internlm.description": "An open-source organization focused on large-model research and tooling, providing an efficient, easy-to-use platform that makes cutting-edge models and algorithms accessible.",
   "jina.description": "Founded in 2020, Jina AI is a leading search AI company. Its search stack includes vector models, rerankers, and small language models to build reliable, high-quality generative and multimodal search apps.",
   "kimicodingplan.description": "Kimi Code from Moonshot AI provides access to Kimi models including K2.5 for coding tasks.",
+  "llmman.description": "llmman is a command-line tool for running and serving local models, distributed as OCI artifacts.",
   "lmstudio.description": "LM Studio is a desktop app for developing and experimenting with LLMs on your computer.",
   "lobehub.description": "LobeHub Cloud uses official APIs to access AI models and measures usage with Credits tied to model tokens.",
   "longcat.description": "LongCat is a series of generative AI large models independently developed by Meituan. It is designed to enhance internal enterprise productivity and enable innovative applications through an efficient computational architecture and strong multimodal capabilities.",
