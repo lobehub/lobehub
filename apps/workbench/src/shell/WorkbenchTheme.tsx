@@ -1,7 +1,8 @@
 'use client';
 
-import 'antd/dist/reset.css';
+import '@/styles/antdReset.css';
 
+import { StyleProvider } from '@ant-design/cssinjs';
 import ConfigProvider from '@lobehub/ui/es/ConfigProvider/index';
 import ThemeProvider from '@lobehub/ui/es/ThemeProvider/index';
 import { App } from 'antd';
@@ -19,21 +20,23 @@ const WorkbenchTheme = memo<PropsWithChildren>(({ children }) => {
   const appearance = isDark ? 'dark' : 'light';
 
   return (
-    <ThemeProvider
-      appearance={appearance}
-      className={'workbench-layout'}
-      defaultAppearance={appearance}
-      defaultThemeMode={appearance}
-      style={{ height: '100%', minHeight: '100dvh', width: '100%' }}
-      theme={{ cssVar: { key: 'lobe-vars' } }}
-    >
-      <App style={{ height: '100%' }}>
-        <AntdStaticMethods />
-        <ConfigProvider config={{ aAs: Link, imgAs: Image, imgUnoptimized: true }} motion={m}>
-          <LazyMotion features={domMax}>{children}</LazyMotion>
-        </ConfigProvider>
-      </App>
-    </ThemeProvider>
+    <StyleProvider layer>
+      <ThemeProvider
+        appearance={appearance}
+        className={'workbench-layout'}
+        defaultAppearance={appearance}
+        defaultThemeMode={appearance}
+        style={{ height: '100%', minHeight: '100dvh', width: '100%' }}
+        theme={{ cssVar: { key: 'lobe-vars' } }}
+      >
+        <App style={{ height: '100%' }}>
+          <AntdStaticMethods />
+          <ConfigProvider config={{ aAs: Link, imgAs: Image, imgUnoptimized: true }} motion={m}>
+            <LazyMotion features={domMax}>{children}</LazyMotion>
+          </ConfigProvider>
+        </App>
+      </ThemeProvider>
+    </StyleProvider>
   );
 });
 

@@ -1,7 +1,8 @@
 'use client';
 
-import 'antd/dist/reset.css';
+import '@/styles/antdReset.css';
 
+import { StyleProvider } from '@ant-design/cssinjs';
 import { type NeutralColors, type PrimaryColors } from '@lobehub/ui';
 import { ConfigProvider, FontLoader, ThemeProvider } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
@@ -160,42 +161,44 @@ const AppTheme = memo<AppThemeProps>(
     const currentAppearence = isDark ? 'dark' : 'light';
 
     return (
-      <ThemeProvider
-        appearance={currentAppearence}
-        className={cx(styles.app, styles.scrollbar, styles.scrollbarPolyfill)}
-        defaultAppearance={currentAppearence}
-        defaultThemeMode={currentAppearence}
-        customTheme={{
-          neutralColor: neutralColor ?? defaultNeutralColor,
-          primaryColor: primaryColor ?? defaultPrimaryColor,
-        }}
-        theme={{
-          cssVar: { key: 'lobe-vars' },
-          token: {
-            fontFamily,
-            fontFamilyCode,
-            motion: animationMode !== 'disabled',
-            motionUnit: animationMode === 'agile' ? 0.05 : 0.1,
-          },
-        }}
-      >
-        {!!customFontURL && <FontLoader url={customFontURL} />}
-        <GlobalStyle />
-        <AntdStaticMethods />
-        <ConfigProvider
-          locale={uiLocale}
-          motion={m}
-          resources={uiResources}
-          config={{
-            aAs: Link,
-            imgAs: Image,
-            imgUnoptimized: true,
-            proxy: globalCDN ? 'unpkg' : undefined,
+      <StyleProvider layer>
+        <ThemeProvider
+          appearance={currentAppearence}
+          className={cx(styles.app, styles.scrollbar, styles.scrollbarPolyfill)}
+          defaultAppearance={currentAppearence}
+          defaultThemeMode={currentAppearence}
+          customTheme={{
+            neutralColor: neutralColor ?? defaultNeutralColor,
+            primaryColor: primaryColor ?? defaultPrimaryColor,
+          }}
+          theme={{
+            cssVar: { key: 'lobe-vars' },
+            token: {
+              fontFamily,
+              fontFamilyCode,
+              motion: animationMode !== 'disabled',
+              motionUnit: animationMode === 'agile' ? 0.05 : 0.1,
+            },
           }}
         >
-          {children}
-        </ConfigProvider>
-      </ThemeProvider>
+          {!!customFontURL && <FontLoader url={customFontURL} />}
+          <GlobalStyle />
+          <AntdStaticMethods />
+          <ConfigProvider
+            locale={uiLocale}
+            motion={m}
+            resources={uiResources}
+            config={{
+              aAs: Link,
+              imgAs: Image,
+              imgUnoptimized: true,
+              proxy: globalCDN ? 'unpkg' : undefined,
+            }}
+          >
+            {children}
+          </ConfigProvider>
+        </ThemeProvider>
+      </StyleProvider>
     );
   },
 );

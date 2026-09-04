@@ -1,7 +1,8 @@
 'use client';
 
-import 'antd/dist/reset.css';
+import '@/styles/antdReset.css';
 
+import { StyleProvider } from '@ant-design/cssinjs';
 import { ConfigProvider, ThemeProvider } from '@lobehub/ui';
 import { ToastHost } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
@@ -24,32 +25,34 @@ const AuthThemeLite = memo<AuthThemeLiteProps>(({ children, globalCDN }) => {
   const currentAppearance = isDark ? 'dark' : 'light';
 
   return (
-    <ThemeProvider
-      appearance={currentAppearance}
-      className={'auth-layout'}
-      defaultAppearance={currentAppearance}
-      defaultThemeMode={currentAppearance}
-      style={{ height: '100%' }}
-      theme={{
-        cssVar: { key: 'lobe-vars' },
-      }}
-    >
-      <App style={{ height: '100%' }}>
-        <AntdStaticMethods />
-        <ConfigProvider
-          motion={m}
-          config={{
-            aAs: Link,
-            imgAs: Image,
-            imgUnoptimized: true,
-            proxy: globalCDN ? 'unpkg' : undefined,
-          }}
-        >
-          <LazyMotion features={domMax}>{children}</LazyMotion>
-          <ToastHost />
-        </ConfigProvider>
-      </App>
-    </ThemeProvider>
+    <StyleProvider layer>
+      <ThemeProvider
+        appearance={currentAppearance}
+        className={'auth-layout'}
+        defaultAppearance={currentAppearance}
+        defaultThemeMode={currentAppearance}
+        style={{ height: '100%' }}
+        theme={{
+          cssVar: { key: 'lobe-vars' },
+        }}
+      >
+        <App style={{ height: '100%' }}>
+          <AntdStaticMethods />
+          <ConfigProvider
+            motion={m}
+            config={{
+              aAs: Link,
+              imgAs: Image,
+              imgUnoptimized: true,
+              proxy: globalCDN ? 'unpkg' : undefined,
+            }}
+          >
+            <LazyMotion features={domMax}>{children}</LazyMotion>
+            <ToastHost />
+          </ConfigProvider>
+        </App>
+      </ThemeProvider>
+    </StyleProvider>
   );
 });
 
