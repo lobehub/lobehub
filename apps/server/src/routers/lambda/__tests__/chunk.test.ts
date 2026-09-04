@@ -20,7 +20,15 @@ vi.mock('@/database/models/file', () => ({ FileModel: vi.fn() }));
 vi.mock('@/database/models/message', () => ({ MessageModel: vi.fn() }));
 vi.mock('@/server/services/chunk', () => ({ ChunkService: vi.fn() }));
 vi.mock('@/server/services/document', () => ({ DocumentService: vi.fn() }));
-vi.mock('@/database/server', () => ({ getServerDB: vi.fn() }));
+// The serverDatabase middleware replaces ctx.serverDB with this. Keep the
+// query chain awaitable-empty so access checks resolve to no trashed KBs.
+vi.mock('@/database/core/db-adaptor', () => ({
+  getServerDB: vi.fn(() => ({
+    select: vi.fn(() => ({
+      from: vi.fn(() => ({ where: vi.fn(() => Promise.resolve([])) })),
+    })),
+  })),
+}));
 
 describe('chunkRouter.getFileContents — ID branching', () => {
   const userId = 'user_test';
