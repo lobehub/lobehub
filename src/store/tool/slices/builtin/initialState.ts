@@ -1,11 +1,11 @@
-import { builtinSkills } from '@lobechat/builtin-skills';
+import { builtinSkillManifests } from '@lobechat/builtin-skills/manifests';
 import { builtinTools, defaultUninstalledBuiltinTools } from '@lobechat/builtin-tools';
-import { type BuiltinSkill, type LobeBuiltinTool } from '@lobechat/types';
+import { type BuiltinSkillManifest, type LobeBuiltinTool } from '@lobechat/types';
 
 import { filterBuiltinSkills } from '@/helpers/skillFilters';
 
 export interface BuiltinToolState {
-  builtinSkills: BuiltinSkill[];
+  builtinSkills: BuiltinSkillManifest[];
   builtinToolLoading: Record<string, boolean>;
   builtinTools: LobeBuiltinTool[];
   /**
@@ -20,7 +20,7 @@ export interface BuiltinToolState {
 }
 
 export const initialBuiltinToolState: BuiltinToolState = {
-  builtinSkills: filterBuiltinSkills(builtinSkills),
+  builtinSkills: filterBuiltinSkills(builtinSkillManifests),
   builtinToolLoading: {},
   builtinTools,
   uninstalledBuiltinTools: defaultUninstalledBuiltinTools,

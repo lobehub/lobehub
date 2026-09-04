@@ -11,6 +11,10 @@
     "ai",
     "lobe"
   ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./agent-document": "./src/providers/AgentDocumentInjector/shared.ts"
+  },
   "main": "src/index.ts",
   "scripts": {
     "test": "vitest",

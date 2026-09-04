@@ -6,7 +6,6 @@ import {
   type LobeAgentAgencyConfig,
   pruneWorkingDirByDeviceDeletes,
 } from '@lobechat/types';
-import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
 import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
@@ -16,6 +15,7 @@ import type { PartialDeep } from 'type-fest';
 
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
+import { analyticsClient } from '@/libs/analytics/client';
 import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
 import { agentConfigKeys } from '@/libs/swr/keys';
 import type { AvailableAgentItem, CreateAgentParams, CreateAgentResult } from '@/services/agent';
@@ -183,21 +183,18 @@ export class AgentSliceActionImpl {
     this.#get().invalidateAvailableAgents();
 
     // Track new agent creation analytics
-    const analytics = getSingletonAnalyticsOptional();
-    if (analytics) {
-      const userStore = getUserStoreState();
-      const userId = userProfileSelectors.userId(userStore);
+    const userStore = getUserStoreState();
+    const userId = userProfileSelectors.userId(userStore);
 
-      analytics.track({
-        name: 'new_agent_created',
-        properties: {
-          agent_id: result.agentId,
-          assistant_name: params.config?.title || 'Untitled Agent',
-          assistant_tags: params.config?.tags || [],
-          user_id: userId || 'anonymous',
-        },
-      });
-    }
+    analyticsClient.track({
+      name: 'new_agent_created',
+      properties: {
+        agent_id: result.agentId,
+        assistant_name: params.config?.title || 'Untitled Agent',
+        assistant_tags: params.config?.tags || [],
+        user_id: userId || 'anonymous',
+      },
+    });
 
     return result;
   };

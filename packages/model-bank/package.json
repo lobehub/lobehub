@@ -2,6 +2,7 @@
   "name": "model-bank",
   "version": "1.0.0",
   "private": true,
+  "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
     "./aiModel": "./src/types/aiModel.ts",

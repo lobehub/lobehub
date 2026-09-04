@@ -9,6 +9,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 import { customBrandingLoadingScreen } from './plugins/vite/customBrandingLoadingScreen';
 import { viteEnvRestartKeys } from './plugins/vite/envRestartKeys';
+import { firstScreenForbidden, viteFirstScreenGate } from './plugins/vite/firstScreenGate';
 import {
   createSharedRolldownOutput,
   sharedModulePreload,
@@ -119,6 +120,7 @@ export default defineConfig({
         isAuth ? 'index.auth.html' : isMobile ? 'index.mobile.html' : 'index.html',
       ),
       output: createSharedRolldownOutput({ strictExecutionOrder: true }),
+      preserveEntrySignatures: 'allow-extension',
     },
   },
   define: {
@@ -152,6 +154,14 @@ export default defineConfig({
         },
       },
     vercelSkewProtection(),
+    !isDev &&
+      !isAuth &&
+      !isMobile &&
+      viteFirstScreenGate({
+        forbidden: firstScreenForbidden,
+        maxGzipKB: 1600,
+        maxUnreachableKB: 64,
+      }),
     customBrandingLoadingScreen(),
     viteEnvRestartKeys(['APP_URL']),
     enableViteDevTools &&

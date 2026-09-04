@@ -1,10 +1,10 @@
-import { type BuiltinSkill } from '@lobechat/types';
+import { type BuiltinSkillManifest } from '@lobechat/types';
 import { type TFunction } from 'i18next';
 
 type Translate = TFunction<'setting'>;
 
 export const getLocalizedBuiltinSkillDetail = (
-  builtinSkill: BuiltinSkill | undefined,
+  builtinSkill: BuiltinSkillManifest | undefined,
   identifier: string,
   t: Translate,
 ) => {

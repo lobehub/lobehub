@@ -70,7 +70,7 @@ const renderFooter = async ({
       analytics: { track: analyticsTrack },
     };
   }
-  vi.doMock('@lobehub/analytics/react', () => ({
+  vi.doMock('@/libs/analytics/client', () => ({
     useAnalytics: createAnalyticsApi,
   }));
   vi.doMock('@/components/ChangelogModal', () => ({
@@ -149,7 +149,7 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.doUnmock('@lobechat/const');
-  vi.doUnmock('@lobehub/analytics/react');
+  vi.doUnmock('@/libs/analytics/client');
   vi.doUnmock('@/components/ChangelogModal');
   vi.doUnmock('@/components/FeedbackModal');
   vi.doUnmock('@/features/Billboard');

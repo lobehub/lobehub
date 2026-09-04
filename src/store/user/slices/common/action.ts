@@ -1,11 +1,11 @@
 import { isDesktop } from '@lobechat/const';
 import type { UserGeneralConfig } from '@lobechat/types';
-import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 import { type PartialDeep } from 'type-fest';
 
 import { DEFAULT_PREFERENCE } from '@/const/user';
+import { analyticsClient } from '@/libs/analytics/client';
 import { mutate, useOnlyFetchOnceSWR } from '@/libs/swr';
 import { taskTemplateKeys, userKeys } from '@/libs/swr/keys';
 import { userService } from '@/services/user';
@@ -195,9 +195,7 @@ export class CommonActionImpl {
                 .catch(() => {});
             }
 
-            //analytics
-            const analytics = getSingletonAnalyticsOptional();
-            analytics?.identify(data.userId || '', {
+            analyticsClient.identify(data.userId || '', {
               email: data.email,
               firstName: data.firstName,
               lastName: data.lastName,

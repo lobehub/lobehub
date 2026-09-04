@@ -4,7 +4,7 @@ import {
   manualModeExcludeToolIds,
   runtimeManagedToolIds,
 } from '@lobechat/builtin-tools';
-import type { BuiltinSkill, LobeToolMeta } from '@lobechat/types';
+import type { BuiltinSkillManifest, LobeToolMeta } from '@lobechat/types';
 
 import {
   isBuiltinSkillAvailableInCurrentEnv,
@@ -37,7 +37,7 @@ const toBuiltinMetaWithAvailability = (
   availableInWeb: isBuiltinToolAvailableInCurrentEnv(t.identifier),
 });
 
-const toSkillMeta = (s: BuiltinSkill): LobeToolMeta => ({
+const toSkillMeta = (s: BuiltinSkillManifest): LobeToolMeta => ({
   author: 'LobeHub',
   identifier: s.identifier,
   meta: {
@@ -48,7 +48,7 @@ const toSkillMeta = (s: BuiltinSkill): LobeToolMeta => ({
   type: 'builtin' as const,
 });
 
-const toSkillMetaWithAvailability = (s: BuiltinSkill): LobeToolMetaWithAvailability => ({
+const toSkillMetaWithAvailability = (s: BuiltinSkillManifest): LobeToolMetaWithAvailability => ({
   ...toSkillMeta(s),
   availableInWeb: isBuiltinSkillAvailableInCurrentEnv(s.identifier),
 });
@@ -325,7 +325,7 @@ const fixedDisplayMetaList =
 /**
  * Get installed builtin skills (excludes uninstalled ones)
  */
-const installedBuiltinSkills = (s: ToolStoreState): BuiltinSkill[] =>
+const installedBuiltinSkills = (s: ToolStoreState): BuiltinSkillManifest[] =>
   (s.builtinSkills || []).filter((skill) => {
     if (!isBuiltinSkillAvailableInCurrentEnv(skill.identifier)) return false;
     if (s.uninstalledBuiltinTools.includes(skill.identifier)) return false;

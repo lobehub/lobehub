@@ -235,6 +235,7 @@ export default defineConfig(async (env) => {
           popup: path.resolve(__dirname, 'popup.html'),
         },
         output: createSharedRolldownOutput({ strictExecutionOrder: true }),
+        preserveEntrySignatures: 'allow-extension',
       },
       sourcemap: false,
       target: RENDERER_CHROME_TARGET,

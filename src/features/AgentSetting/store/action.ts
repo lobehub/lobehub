@@ -7,10 +7,10 @@ import {
 } from '@lobechat/prompts';
 import { type TracePayload } from '@lobechat/types';
 import { TraceNameMap, TraceTopicType } from '@lobechat/types';
-import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
 import { type PartialDeep } from 'type-fest';
 import { type StateCreator } from 'zustand/vanilla';
 
+import { analyticsClient } from '@/libs/analytics/client';
 import { chatService } from '@/services/chat';
 import { globalHelpers } from '@/store/global/helpers';
 import { useUserStore } from '@/store/user';
@@ -311,23 +311,20 @@ export const store: StateCreator<Store, [['zustand/devtools', never]]> = (set, g
     const mergedMeta = merge(currentMeta, meta);
 
     try {
-      const analytics = getSingletonAnalyticsOptional();
-      if (analytics) {
-        analytics.track({
-          name: 'agent_meta_updated',
-          properties: {
-            assistant_avatar: mergedMeta.avatar,
-            assistant_background_color: mergedMeta.backgroundColor,
-            assistant_description: mergedMeta.description,
-            assistant_name: mergedMeta.title,
-            assistant_tags: mergedMeta.tags,
-            is_inbox: id === 'inbox',
-            session_id: id || 'unknown',
-            timestamp: Date.now(),
-            user_id: useUserStore.getState().user?.id || 'anonymous',
-          },
-        });
-      }
+      analyticsClient.track({
+        name: 'agent_meta_updated',
+        properties: {
+          assistant_avatar: mergedMeta.avatar,
+          assistant_background_color: mergedMeta.backgroundColor,
+          assistant_description: mergedMeta.description,
+          assistant_name: mergedMeta.title,
+          assistant_tags: mergedMeta.tags,
+          is_inbox: id === 'inbox',
+          session_id: id || 'unknown',
+          timestamp: Date.now(),
+          user_id: useUserStore.getState().user?.id || 'anonymous',
+        },
+      });
     } catch (error) {
       console.warn('Failed to track agent meta update:', error);
     }

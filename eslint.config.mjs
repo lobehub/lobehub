@@ -194,6 +194,36 @@ export default eslint(
               'Boot-path modules must load EmojiPicker with lazy(); it carries the emoji-mart dataset.',
             name: '@/components/EmojiPicker',
           },
+          {
+            allowTypeImports: true,
+            message:
+              'Boot-path modules must not import the model-bank root barrel; it re-exports the full aiModels catalog. Use a subpath such as "model-bank/aiModel", "model-bank/modelProvider" or "model-bank/standardParameters".',
+            name: 'model-bank',
+          },
+          {
+            allowTypeImports: true,
+            message:
+              'Boot-path modules must not import @lobehub/analytics; it bundles posthog-js. Use "@/libs/analytics/client", which loads it after first paint and queues events.',
+            name: '@lobehub/analytics',
+          },
+          {
+            allowTypeImports: true,
+            message:
+              'Boot-path modules must not import @lobehub/analytics/react; use useAnalytics from "@/libs/analytics/client".',
+            name: '@lobehub/analytics/react',
+          },
+          {
+            allowTypeImports: true,
+            message:
+              'Boot-path modules must not import @lobehub/editor; it carries lexical, yjs and fuse. Mount editors inside route chunks, and for the locale provider import ../node_modules/@lobehub/editor/es/react/EditorProvider as GlobalProvider/Editor.tsx does.',
+            name: '@lobehub/editor',
+          },
+          {
+            allowTypeImports: true,
+            message:
+              'Boot-path modules must not import @lobehub/editor/react; it carries lexical, yjs and fuse. Mount editors inside route chunks.',
+            name: '@lobehub/editor/react',
+          },
         ],
         patterns: [
           {
