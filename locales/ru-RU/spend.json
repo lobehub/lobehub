@@ -6,6 +6,7 @@
   "duration.stage.end": "Конец",
   "duration.stage.firstToken": "Первый токен",
   "duration.stage.start": "Начало",
+  "table.agentShareDesc": "Каждый вызов модели посетителем этой общей ссылки будет списан с вашего аккаунта.",
   "table.columns.TTFT.tooltip": "Время до первого токена, единица измерения: секунды",
   "table.columns.duration": "Длительность",
   "table.columns.model": "Модель",

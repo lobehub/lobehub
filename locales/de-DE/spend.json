@@ -6,6 +6,7 @@
   "duration.stage.end": "Ende",
   "duration.stage.firstToken": "Erstes Token",
   "duration.stage.start": "Start",
+  "table.agentShareDesc": "Jeder Modellaufruf eines Besuchers dieses Shares wird ausgelöst und Ihrem Konto belastet.",
   "table.columns.TTFT.tooltip": "Zeit bis zum ersten Token, Einheit: Sekunden",
   "table.columns.duration": "Dauer",
   "table.columns.model": "Modell",

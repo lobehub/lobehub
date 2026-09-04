@@ -6,6 +6,7 @@
   "duration.stage.end": "Fin",
   "duration.stage.firstToken": "Premier jeton",
   "duration.stage.start": "Début",
+  "table.agentShareDesc": "Chaque appel de modèle par un visiteur de ce partage est déclenché, facturé à votre compte.",
   "table.columns.TTFT.tooltip": "Temps jusqu’au premier jeton, unité : secondes",
   "table.columns.duration": "Durée",
   "table.columns.model": "Modèle",

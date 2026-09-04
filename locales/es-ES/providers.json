@@ -37,6 +37,7 @@
   "lmstudio.description": "LM Studio es una aplicación de escritorio para desarrollar y experimentar con LLMs en tu ordenador.",
   "lobehub.description": "LobeHub Cloud utiliza APIs oficiales para acceder a modelos de IA y mide el uso con Créditos vinculados a los tokens del modelo.",
   "longcat.description": "LongCat es una serie de modelos grandes de inteligencia artificial generativa desarrollados de manera independiente por Meituan. Está diseñado para mejorar la productividad interna de la empresa y permitir aplicaciones innovadoras mediante una arquitectura computacional eficiente y sólidas capacidades multimodales.",
+  "meta.description": "Meta crea modelos y productos de IA que ayudan a las personas a conectarse, crear y realizar tareas, incluidas las familias de modelos Llama y Muse.",
   "minimax.description": "Fundada en 2021, MiniMax desarrolla IA de propósito general con modelos fundacionales multimodales, incluyendo modelos de texto MoE con billones de parámetros, modelos de voz y visión, junto con aplicaciones como Hailuo AI.",
   "minimaxcodingplan.description": "El Plan de Tokens MiniMax proporciona acceso a los modelos MiniMax, incluidos M2.7, para tareas de codificación mediante una suscripción de tarifa fija.",
   "mistral.description": "Mistral ofrece modelos avanzados generales, especializados y de investigación para razonamiento complejo, tareas multilingües y generación de código, con llamadas a funciones para integraciones personalizadas.",

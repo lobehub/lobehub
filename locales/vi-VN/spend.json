@@ -6,6 +6,7 @@
   "duration.stage.end": "Kết thúc",
   "duration.stage.firstToken": "Token đầu tiên",
   "duration.stage.start": "Bắt đầu",
+  "table.agentShareDesc": "Mỗi lần gọi mô hình của một khách truy cập từ chia sẻ này được kích hoạt, sẽ được tính vào tài khoản của bạn.",
   "table.columns.TTFT.tooltip": "Thời gian đến token đầu tiên, đơn vị: giây",
   "table.columns.duration": "Thời lượng",
   "table.columns.model": "Mô hình",

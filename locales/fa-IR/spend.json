@@ -6,6 +6,7 @@
   "duration.stage.end": "پایان",
   "duration.stage.firstToken": "اولین توکن",
   "duration.stage.start": "شروع",
+  "table.agentShareDesc": "هر بار که یک مدل بازدیدکننده‌ای از این اشتراک را فراخوانی کند، هزینه آن به حساب شما منظور می‌شود.",
   "table.columns.TTFT.tooltip": "زمان تا اولین توکن، واحد: ثانیه",
   "table.columns.duration": "مدت‌زمان",
   "table.columns.model": "مدل",

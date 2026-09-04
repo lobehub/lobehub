@@ -6,6 +6,7 @@
   "duration.stage.end": "終了",
   "duration.stage.firstToken": "最初のトークン",
   "duration.stage.start": "開始",
+  "table.agentShareDesc": "この共有を通じて訪問者がモデルを呼び出すたびに、あなたのアカウントに請求されます。",
   "table.columns.TTFT.tooltip": "最初のトークンまでの時間（単位：秒）",
   "table.columns.duration": "所要時間",
   "table.columns.model": "モデル",
