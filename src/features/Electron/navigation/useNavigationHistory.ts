@@ -12,13 +12,13 @@ import {
   getTabRouter,
   subscribeTabHistory,
 } from '@/features/Electron/TabHost/tabRouterManager';
-import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useElectronStore } from '@/store/electron';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 const DEFAULT_SNAPSHOT: HistorySnapshot = { canGoBack: false, canGoForward: false };
 
 export const useNavigationHistory = () => {
-  const location = useActiveLocation();
+  const currentUrl = useRouterStore(routerSelectors.url);
   const activeTabId = useElectronStore((s) => s.activeTabId);
   const addRecentPage = useElectronStore((s) => s.addRecentPage);
   const prevUrlRef = useRef<string | null>(null);
@@ -42,11 +42,10 @@ export const useNavigationHistory = () => {
   }, [activeTabId]);
 
   useEffect(() => {
-    const currentUrl = location.pathname + location.search;
     if (prevUrlRef.current === currentUrl) return;
     prevUrlRef.current = currentUrl;
     addRecentPage(currentUrl);
-  }, [location.pathname, location.search, addRecentPage]);
+  }, [addRecentPage, currentUrl]);
 
   useWatchBroadcast('historyGoBack', goBack);
   useWatchBroadcast('historyGoForward', goForward);

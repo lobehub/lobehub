@@ -3,11 +3,11 @@
 import { Flexbox } from '@lobehub/ui';
 import { type FC } from 'react';
 import { memo, Suspense } from 'react';
-import { useParams } from 'react-router';
 
 import ProfileSkeleton from '@/components/Skeleton/Profile';
 import ResourceConfigAccessGate from '@/features/ResourcePermission/ResourceConfigAccessGate';
 import WideScreenContainer from '@/features/WideScreenContainer';
+import { useParams } from '@/libs/router/navigation';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useGroupProfileStore } from '@/store/groupProfile';
@@ -52,7 +52,7 @@ const ProfileArea = memo(() => {
 });
 
 const GroupProfile: FC = () => {
-  const { gid } = useParams<{ gid: string }>();
+  const { gid } = useParams<{ gid: string }>('gid');
 
   return (
     <Suspense fallback={<ProfileSkeleton variant={'group'} />}>

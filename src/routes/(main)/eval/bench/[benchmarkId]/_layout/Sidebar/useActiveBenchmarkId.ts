@@ -1,4 +1,4 @@
-import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
+import { useParams } from '@/libs/router/navigation';
 
 export const useActiveBenchmarkId = () =>
-  useActiveRouteParams<{ benchmarkId?: string }>().benchmarkId ?? '';
+  useParams<{ benchmarkId?: string }>('benchmarkId').benchmarkId ?? '';

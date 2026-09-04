@@ -1,9 +1,9 @@
 import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
-import { useMatches } from 'react-router';
 
 import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
+import { useMatches } from '@/libs/router/navigation';
 
 import { Controls } from './Controls';
 

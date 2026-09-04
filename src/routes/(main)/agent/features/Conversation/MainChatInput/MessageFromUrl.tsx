@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useRef } from 'react';
-import { useLocation, useSearchParams } from 'react-router';
 
 import { useConversationStore } from '@/features/Conversation';
 import { useConversationResourceAccess } from '@/features/Conversation/hooks/useConversationResourceAccess';
@@ -9,8 +8,10 @@ import { overlayCaptureUploadPool } from '@/features/Electron/ScreenCapture/over
 import { canConsumePendingOverlayDispatch } from '@/features/Electron/ScreenCapture/overlayDispatch';
 import { useOverlayDispatchStore } from '@/features/Electron/ScreenCapture/overlayDispatchStore';
 import { usePermission } from '@/hooks/usePermission';
+import { useSearchParams } from '@/libs/router/navigation';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
+import { routerSelectors, useRouterStore } from '@/store/router';
 import type { UploadFileItem } from '@/types/files/upload';
 
 /**
@@ -27,7 +28,7 @@ const MessageFromUrl = () => {
   ]);
   const agentId = context.agentId;
   const [searchParams, setSearchParams] = useSearchParams();
-  const location = useLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
   const isAgentConfigLoading = useAgentStore(agentSelectors.isAgentConfigLoading);
   const { allowed: canCreate } = usePermission('create_content');
   const { allowed: canEdit } = usePermission('edit_own_content');
@@ -41,9 +42,9 @@ const MessageFromUrl = () => {
   ]);
 
   const routeAgentId = useMemo(() => {
-    const match = location.pathname?.match(/^\/agent\/([^#/?]+)/);
+    const match = pathname?.match(/^\/agent\/([^#/?]+)/);
     return match?.[1];
-  }, [location.pathname]);
+  }, [pathname]);
 
   // Track last processed (agentId, message) to prevent duplicate sends on re-render,
   // while still allowing sending when navigating to a different agent (or message).

@@ -9,11 +9,11 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import { type FC, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
+import { useParams } from '@/libs/router/navigation';
 import { agentService } from '@/services/agent';
 import { useEvalStore } from '@/store/eval';
 
@@ -61,7 +61,7 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
 
   const navigate = useWorkspaceAwareNavigate();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
-  const { benchmarkId } = useParams<{ benchmarkId: string }>();
+  const { benchmarkId } = useParams<{ benchmarkId: string }>('benchmarkId');
   const updateRun = useEvalStore((s) => s.updateRun);
   const datasetList = useEvalStore((s) => s.datasetList);
   const [form] = Form.useForm();

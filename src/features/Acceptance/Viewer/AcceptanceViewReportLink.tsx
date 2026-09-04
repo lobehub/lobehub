@@ -2,7 +2,8 @@
 
 import { createStaticStyles, cssVar } from 'antd-style';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router';
+
+import { useSearchParams } from '@/libs/router/navigation';
 
 import { useAcceptanceScope } from './AcceptanceScope';
 import { useAcceptanceBundle } from './useAcceptanceBundle';

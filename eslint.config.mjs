@@ -16,6 +16,21 @@ const performanceRestrictedImportPaths = [
   },
 ];
 
+const routerDataRestrictedPaths = ['react-router', 'react-router-dom'].map((name) => ({
+  importNames: [
+    'useLocation',
+    'useMatch',
+    'useMatches',
+    'useNavigation',
+    'useNavigationType',
+    'useParams',
+    'useSearchParams',
+  ],
+  message:
+    'Read route data from useRouterStore/routerSelectors or the store-backed hooks in @/libs/router/navigation. React Router data hooks subscribe the component to broad Router context updates.',
+  name,
+}));
+
 // On desktop the shell — every NavPanelPortal sidebar, the titlebar, the command
 // menu — renders as a sibling of TabHost, so React context binds these hooks to
 // the frozen root router while page content lives in per-tab memory routers.
@@ -24,17 +39,16 @@ const performanceRestrictedImportPaths = [
 // href plus an onClick that preventDefaults into the navigation facade.
 const shellRouterRestrictedPaths = [
   {
-    importNames: [
-      'useLocation',
-      'useMatch',
-      'useMatches',
-      'useNavigate',
-      'useParams',
-      'useSearchParams',
-    ],
+    importNames: ['useNavigate'],
     message:
-      'Shell trees render outside the per-tab router. Read with useActiveLocation / useActiveRouteParams and navigate with useWorkspaceAwareNavigate. There is no active-tab twin for useSearchParams: express the write as a facade navigation, or move the url state into the route tree that owns it.',
+      'Shell trees render outside the per-tab router. Navigate with useWorkspaceAwareNavigate so writes reach the active tab.',
     name: 'react-router',
+  },
+  {
+    importNames: ['useNavigate'],
+    message:
+      'Shell trees render outside the per-tab router. Navigate with useWorkspaceAwareNavigate so writes reach the active tab.',
+    name: 'react-router-dom',
   },
   {
     importNames: ['useQueryParam', 'useQueryState'],
@@ -51,6 +65,7 @@ const createRestrictedImportRule = ({ paths = [], patterns } = {}) => [
     paths: [
       ...(baseRestrictedImportOptions.paths ?? []),
       ...performanceRestrictedImportPaths,
+      ...routerDataRestrictedPaths,
       ...paths,
     ],
     ...(patterns?.length

@@ -4,13 +4,13 @@ import { Center, Flexbox } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { cx, useTheme } from 'antd-style';
 import { type FC, type PropsWithChildren, useEffect } from 'react';
-import { useLocation } from 'react-router';
 
 import { ProductLogo } from '@/components/Branding';
 import LangButton from '@/features/User/UserPanel/LangButton';
 import ThemeButton from '@/features/User/UserPanel/ThemeButton';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { routerSelectors, useRouterStore } from '@/store/router';
 import { stashOnboardingCallbackUrl } from '@/utils/onboardingRedirect';
 
 import { styles } from './style';
@@ -19,7 +19,7 @@ const OnBoardingContainer: FC<PropsWithChildren> = ({ children }) => {
   const isDarkMode = useIsDark();
   const isMobile = useIsMobile();
   const theme = useTheme();
-  const { search } = useLocation();
+  const search = useRouterStore(routerSelectors.search);
 
   // Signup flows land here with a threaded `callbackUrl`; stash it so finish
   // points can restore the original target after onboarding completes.

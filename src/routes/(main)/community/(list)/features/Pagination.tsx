@@ -3,11 +3,11 @@
 import { Pagination as Page } from 'antd';
 import { createStaticStyles, useResponsive } from 'antd-style';
 import { memo } from 'react';
-import { useLocation } from 'react-router';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useQuery } from '@/hooks/useQuery';
 import { SCROLL_PARENT_ID } from '@/routes/(main)/community/features/const';
+import { routerSelectors, useRouterStore } from '@/store/router';
 import { type DiscoverTab } from '@/types/discover';
 
 const SCROLL_CONTAINER_ID = 'lobe-mobile-scroll-container';
@@ -40,11 +40,11 @@ interface PaginationProps {
 const Pagination = memo<PaginationProps>(({ tab, currentPage, total, pageSize }) => {
   const { page } = useQuery();
   const navigate = useWorkspaceAwareNavigate();
-  const location = useLocation();
+  const search = useRouterStore(routerSelectors.search);
   const { mobile } = useResponsive();
 
   const handlePageChange = (newPage: number) => {
-    const searchParams = new URLSearchParams(location.search);
+    const searchParams = new URLSearchParams(search);
     searchParams.set('page', String(newPage));
     navigate(`/community/${tab}?${searchParams.toString()}`);
 

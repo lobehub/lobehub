@@ -31,8 +31,14 @@ vi.mock('@/hooks/useQueryRoute', () => ({
   }),
 }));
 
-vi.mock('@/hooks/useActiveLocation', () => ({
-  useActiveLocation: () => ({ hash: '', pathname: pathnameMock(), search: '' }),
+vi.mock('@/libs/router/navigation', () => ({
+  useParams: () => ({}),
+}));
+
+vi.mock('@/store/router', () => ({
+  routerSelectors: { pathname: (state: { pathname: string }) => state.pathname },
+  useRouterStore: (selector: (state: { pathname: string }) => string) =>
+    selector({ pathname: pathnameMock() }),
 }));
 
 vi.mock('@/store/chat', () => ({

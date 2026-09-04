@@ -14,6 +14,9 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('react-router', () => ({
   useNavigate: () => mocks.navigate,
+}));
+
+vi.mock('@/libs/router/navigation', () => ({
   useParams: () => mocks.params,
 }));
 

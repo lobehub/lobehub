@@ -1,10 +1,10 @@
 'use client';
 
 import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { useLocation } from 'react-router';
 import { SWRConfig } from 'swr';
 
 import AsyncError, { type AsyncErrorVariant } from '@/components/AsyncError';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 import {
   resetOnLocationChange,
@@ -77,7 +77,8 @@ const SuspenseRouteBoundary = ({
   variant?: AsyncErrorVariant;
 }) => {
   const { onError, onReset } = useRouteRetry();
-  const { pathname, search } = useLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
+  const search = useRouterStore(routerSelectors.search);
 
   return (
     <SWRConfig value={{ onError }}>

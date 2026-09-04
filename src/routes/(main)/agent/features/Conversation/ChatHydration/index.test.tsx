@@ -36,12 +36,27 @@ vi.mock('react-router', async () => {
 
   return {
     ...actual,
-    useLocation: useLocationMock,
     useNavigate: () => navigateMock,
-    useParams: useParamsMock,
-    useSearchParams: useSearchParamsMock,
   };
 });
+
+vi.mock('@/libs/router/navigation', () => ({
+  useParams: useParamsMock,
+  useSearchParams: useSearchParamsMock,
+}));
+
+vi.mock('@/store/router', () => ({
+  routerSelectors: {
+    fullUrl: (state: { location: { hash: string; pathname: string; search: string } }) =>
+      `${state.location.pathname}${state.location.search}${state.location.hash}`,
+    hash: (state: { location: { hash: string } }) => state.location.hash,
+    pathname: (state: { location: { pathname: string } }) => state.location.pathname,
+    search: (state: { location: { search: string } }) => state.location.search,
+  },
+  useRouterStore: (
+    selector: (state: { location: { hash: string; pathname: string; search: string } }) => unknown,
+  ) => selector({ location: useLocationMock() }),
+}));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
   getActiveWorkspaceSlug: () => workspaceMock.activeSlug,

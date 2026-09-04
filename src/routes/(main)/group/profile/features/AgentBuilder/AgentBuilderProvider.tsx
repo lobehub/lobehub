@@ -1,9 +1,9 @@
 import { type ReactNode } from 'react';
 import { memo, useMemo } from 'react';
-import { useParams } from 'react-router';
 
 import { ConversationProvider } from '@/features/Conversation';
 import { useOperationState } from '@/hooks/useOperationState';
+import { useParams } from '@/libs/router/navigation';
 import { useChatStore } from '@/store/chat';
 import { type MessageMapKeyInput } from '@/store/chat/utils/messageMapKey';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -26,7 +26,7 @@ const AgentBuilderProvider = memo<AgentBuilderProviderProps>(({ agentId, childre
   // send path samples its fallback (`activeGroupId`) after async preflight work,
   // so switching groups while a send is starting would hand the server the newly
   // active group and let the tool runtime stamp the wrong one.
-  const { gid } = useParams<{ gid: string }>();
+  const { gid } = useParams<{ gid: string }>('gid');
 
   // Build conversation context for group agent builder
   // Using group_agent_builder scope with groupId for per-group message isolation

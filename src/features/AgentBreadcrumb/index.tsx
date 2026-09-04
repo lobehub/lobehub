@@ -8,7 +8,7 @@ import { createStaticStyles } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
 import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useLocation } from 'react-router';
+import { Link } from 'react-router';
 import urlJoin from 'url-join';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
@@ -19,6 +19,7 @@ import {
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 const styles = createStaticStyles(({ css }) => ({
   breadcrumb: css`
@@ -54,7 +55,7 @@ interface AgentBreadcrumbProps {
  */
 const AgentBreadcrumb = memo<AgentBreadcrumbProps>(({ agentId, extraItems, title }) => {
   const { t } = useTranslation(['chat', 'common']);
-  const { pathname } = useLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const agentTitle = useAgentStore((s) =>
     agentDisplayName(agentSelectors.getAgentMetaById(agentId)(s)),

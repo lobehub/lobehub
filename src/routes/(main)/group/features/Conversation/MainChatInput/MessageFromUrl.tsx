@@ -1,11 +1,11 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { useSearchParams } from 'react-router';
 
 import { useConversationStore } from '@/features/Conversation';
 import { useConversationResourceAccess } from '@/features/Conversation/hooks/useConversationResourceAccess';
 import { usePermission } from '@/hooks/usePermission';
+import { useSearchParams } from '@/libs/router/navigation';
 
 /**
  * MessageFromUrl

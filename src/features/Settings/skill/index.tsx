@@ -3,9 +3,9 @@
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router';
 
 import NavHeader from '@/features/NavHeader';
+import { useSearchParams } from '@/libs/router/navigation';
 import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors, builtinToolSelectors } from '@/store/tool/selectors';
 

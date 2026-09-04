@@ -23,9 +23,13 @@ interface AgentProps {
   itemKey: string;
 }
 
+export const AgentListRevalidationIndicator = memo(() => {
+  const { isRevalidating } = useFetchAgentList();
+  return isRevalidating ? <NeuralNetworkLoading size={14} /> : null;
+});
+
 const Agent = memo<AgentProps>(({ itemKey }) => {
   const { t } = useTranslation('common');
-  const { isRevalidating } = useFetchAgentList();
   // Keep the label registry warm so the per-item "Labels" submenu opens populated.
   useFetchAgentLabels();
   // In workspace mode the section pairs with the "Private" bucket, so the
@@ -86,7 +90,7 @@ const Agent = memo<AgentProps>(({ itemKey }) => {
           <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
             {t(titleKey)}
           </Text>
-          {isRevalidating && <NeuralNetworkLoading size={14} />}
+          <AgentListRevalidationIndicator />
         </Flexbox>
       }
     >

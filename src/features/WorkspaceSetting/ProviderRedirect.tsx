@@ -1,6 +1,8 @@
 'use client';
 
-import { Navigate, useParams } from 'react-router';
+import { Navigate } from 'react-router';
+
+import { useParams } from '@/libs/router/navigation';
 
 /**
  * Personal settings deep-links use the `/settings/provider/:providerId` path
@@ -14,7 +16,7 @@ const WorkspaceProviderRedirect = () => {
   const { providerId = 'all', workspaceSlug } = useParams<{
     providerId: string;
     workspaceSlug: string;
-  }>();
+  }>('providerId', 'workspaceSlug');
 
   return (
     <Navigate

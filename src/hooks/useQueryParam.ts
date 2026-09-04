@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { useSearchParams } from 'react-router';
+
+import { useSearchParams } from '@/libs/router/navigation';
 
 type HistoryMode = 'push' | 'replace';
 

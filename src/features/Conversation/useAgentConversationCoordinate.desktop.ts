@@ -1,9 +1,8 @@
-import { useParams, useSearchParams } from 'react-router';
-
 import { useResolvedAgentRouteId } from '@/features/AgentRoute/useResolvedAgentRouteId';
+import { useParams, useSearchParams } from '@/libs/router/navigation';
 
 export const useAgentConversationCoordinate = () => {
-  const params = useParams<{ aid?: string; topicId?: string }>();
+  const params = useParams<{ aid?: string; topicId?: string }>('aid', 'topicId');
   const [searchParams] = useSearchParams();
   const { agentId } = useResolvedAgentRouteId(params.aid);
 

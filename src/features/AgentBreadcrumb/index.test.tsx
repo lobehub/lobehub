@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import { createMemoryRouter, RouterProvider } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import AgentBreadcrumb from './index';
@@ -46,11 +46,11 @@ describe('AgentBreadcrumb', () => {
   });
 
   it('links the agent crumb back to the agent chat page', () => {
-    render(
-      <MemoryRouter initialEntries={['/agent/agent-1/profile']}>
-        <AgentBreadcrumb agentId="agent-1" title="Agent Profile" />
-      </MemoryRouter>,
+    const router = createMemoryRouter(
+      [{ element: <AgentBreadcrumb agentId="agent-1" title="Agent Profile" />, path: '*' }],
+      { initialEntries: ['/agent/agent-1/profile'] },
     );
+    render(<RouterProvider router={router} />);
 
     expect(screen.getByRole('link', { name: 'Test Agent' })).toHaveAttribute(
       'href',
@@ -61,11 +61,11 @@ describe('AgentBreadcrumb', () => {
   it('keeps the active workspace route when returning from a workspace profile route', () => {
     mocks.activeWorkspaceSlug = 'team';
 
-    render(
-      <MemoryRouter initialEntries={['/team/agent/agent-1/profile']}>
-        <AgentBreadcrumb agentId="agent-1" title="Agent Profile" />
-      </MemoryRouter>,
+    const router = createMemoryRouter(
+      [{ element: <AgentBreadcrumb agentId="agent-1" title="Agent Profile" />, path: '*' }],
+      { initialEntries: ['/team/agent/agent-1/profile'] },
     );
+    render(<RouterProvider router={router} />);
 
     expect(screen.getByRole('link', { name: 'Test Agent' })).toHaveAttribute(
       'href',
@@ -76,14 +76,14 @@ describe('AgentBreadcrumb', () => {
   it('lets the router basename restore the debug proxy prefix for workspace links', () => {
     mocks.activeWorkspaceSlug = 'team';
 
-    render(
-      <MemoryRouter
-        basename="/_dangerous_local_dev_proxy"
-        initialEntries={['/_dangerous_local_dev_proxy/team/agent/agent-1/profile']}
-      >
-        <AgentBreadcrumb agentId="agent-1" title="Agent Profile" />
-      </MemoryRouter>,
+    const router = createMemoryRouter(
+      [{ element: <AgentBreadcrumb agentId="agent-1" title="Agent Profile" />, path: '*' }],
+      {
+        basename: '/_dangerous_local_dev_proxy',
+        initialEntries: ['/_dangerous_local_dev_proxy/team/agent/agent-1/profile'],
+      },
     );
+    render(<RouterProvider router={router} />);
 
     expect(screen.getByRole('link', { name: 'Test Agent' })).toHaveAttribute(
       'href',

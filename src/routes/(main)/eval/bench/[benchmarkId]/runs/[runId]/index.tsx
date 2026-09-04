@@ -7,9 +7,9 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { Play, RotateCcw } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import { useParams } from '@/libs/router/navigation';
 import { runSelectors, useEvalStore } from '@/store/eval';
 
 import { createBatchResumeModal } from './features/BatchResumeModal';
@@ -64,7 +64,10 @@ const styles = createStaticStyles(({ css }) => ({
 
 const RunDetail = memo(() => {
   const { t } = useTranslation('eval');
-  const { benchmarkId, runId } = useParams<{ benchmarkId: string; runId: string }>();
+  const { benchmarkId, runId } = useParams<{ benchmarkId: string; runId: string }>(
+    'benchmarkId',
+    'runId',
+  );
   const useFetchRunDetail = useEvalStore((s) => s.useFetchRunDetail);
   const useFetchRunResults = useEvalStore((s) => s.useFetchRunResults);
   const retryRunErrors = useEvalStore((s) => s.retryRunErrors);

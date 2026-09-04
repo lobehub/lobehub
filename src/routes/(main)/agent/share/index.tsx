@@ -1,14 +1,14 @@
 'use client';
 
 import { memo, Suspense } from 'react';
-import { useParams } from 'react-router';
 
 import AgentShareSkeleton from '@/components/Skeleton/AgentShare';
 import AgentShareSettingsPage from '@/features/AgentShareSettings/Page';
 import ResourceConfigAccessGate from '@/features/ResourcePermission/ResourceConfigAccessGate';
+import { useParams } from '@/libs/router/navigation';
 
 const AgentSharePage = memo(() => {
-  const { aid } = useParams<{ aid: string }>();
+  const { aid } = useParams<{ aid: string }>('aid');
 
   const skeleton = <AgentShareSkeleton />;
 

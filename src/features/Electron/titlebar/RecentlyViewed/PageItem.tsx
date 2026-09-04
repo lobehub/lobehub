@@ -8,8 +8,8 @@ import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useElectronStore } from '@/store/electron';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 import { type ResolvedTab } from '../TabBar/hooks/useResolvedTabs';
 import { isSameTabTarget } from '../TabBar/scope';
@@ -24,14 +24,13 @@ interface PageItemProps {
 const PageItem = memo<PageItemProps>(({ item, isPinned, onClose }) => {
   const { t } = useTranslation('electron');
   const navigate = useWorkspaceAwareNavigate();
-  const location = useActiveLocation();
+  const currentUrl = useRouterStore(routerSelectors.url);
   const styles = useStyles;
 
   const pinPage = useElectronStore((s) => s.pinPage);
   const unpinPage = useElectronStore((s) => s.unpinPage);
 
   const { meta, tab } = item;
-  const currentUrl = location.pathname + location.search;
   const isActive = isSameTabTarget(tab, currentUrl);
 
   const handleClick = () => {

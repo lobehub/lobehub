@@ -8,7 +8,7 @@ import { Link } from 'react-router';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useActiveLocation } from '@/hooks/useActiveLocation';
+import { routerSelectors, useRouterStore } from '@/store/router';
 import { DEFAULT_WORKSPACE_SETTINGS_TAB, WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 import { isModifierClick } from '@/utils/navigation';
 
@@ -16,18 +16,18 @@ import { useWorkspaceSettingCategory, WorkspaceSettingsGroupKey } from '../hooks
 
 const Body = memo(() => {
   const navigate = useWorkspaceAwareNavigate();
-  const location = useActiveLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
   const slug = useActiveWorkspaceSlug();
   const groups = useWorkspaceSettingCategory();
 
   const activeTab = useMemo(() => {
     if (!slug) return DEFAULT_WORKSPACE_SETTINGS_TAB;
-    const parts = location.pathname.split('/').filter(Boolean);
+    const parts = pathname.split('/').filter(Boolean);
     const tab = parts[2];
     return tab && (Object.values(WorkspaceSettingsTabs) as string[]).includes(tab)
       ? (tab as WorkspaceSettingsTabs)
       : DEFAULT_WORKSPACE_SETTINGS_TAB;
-  }, [location.pathname, slug]);
+  }, [pathname, slug]);
 
   if (!slug) return null;
 

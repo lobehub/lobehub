@@ -3,12 +3,12 @@ import type { ConversationContext } from '@lobechat/types';
 import { isChatGroupSessionId } from '@lobechat/types';
 import type { ReactNode } from 'react';
 import { createContext, memo, use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useMatch, useSearchParams } from 'react-router';
 
 import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
 import { ConversationProvider } from '@/features/Conversation';
 import { useInitBuiltinAgent } from '@/hooks/useInitBuiltinAgent';
 import { useOperationState } from '@/hooks/useOperationState';
+import { useMatch, useSearchParams } from '@/libs/router/navigation';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';

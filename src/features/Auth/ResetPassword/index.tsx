@@ -3,10 +3,11 @@
 import { Button } from '@lobehub/ui/base-ui';
 import { ChevronLeftIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
+import { Link, Navigate, useNavigate } from 'react-router';
 
 import AuthCard from '@/features/AuthCard';
 import { useAuthServerConfigStore } from '@/features/AuthShell/AuthServerConfigProvider';
+import { useSearchParams } from '@/libs/router/navigation';
 
 import { ResetPasswordContent } from './ResetPasswordContent';
 

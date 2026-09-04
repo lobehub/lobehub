@@ -40,10 +40,11 @@ import {
 import type { ReactNode } from 'react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate } from 'react-router';
 
 import { SkeletonList } from '@/features/NavPanel/components/SkeletonList';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
+import { useParams } from '@/libs/router/navigation';
 import { mutate as globalMutate } from '@/libs/swr';
 import { verifyKeys } from '@/libs/swr/keys';
 import type { AcceptanceStatusOverride } from '@/services/verify';
@@ -292,7 +293,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
   ({ expand, headerLeading, isNarrow, projectActionItems, projectId, setExpand }) => {
     const { t } = useTranslation('verify');
     const navigate = useNavigate();
-    const { acceptanceId } = useParams<{ acceptanceId: string }>();
+    const { acceptanceId } = useParams<{ acceptanceId: string }>('acceptanceId');
 
     const [query, setQuery] = useState('');
     const [storedFilter, setStoredFilter] = useLocalStorageState<AcceptanceListFilter>(

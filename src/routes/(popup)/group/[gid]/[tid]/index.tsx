@@ -1,17 +1,17 @@
 'use client';
 
 import { memo, useLayoutEffect } from 'react';
-import { useParams } from 'react-router';
 
 import { GroupNotFoundGuard } from '@/features/GroupNotFound';
 import { useFetchTopics } from '@/hooks/useFetchTopics';
 import { useInitGroupConfig } from '@/hooks/useInitGroupConfig';
+import { useParams } from '@/libs/router/navigation';
 import GroupConversation from '@/routes/(main)/group/features/Conversation';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
 
 const PopupGroupTopicPage = memo(() => {
-  const { gid, tid } = useParams<{ gid: string; tid: string }>();
+  const { gid, tid } = useParams<{ gid: string; tid: string }>('gid', 'tid');
 
   useInitGroupConfig();
 

@@ -4,11 +4,11 @@ import { Flexbox } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router';
 import useSWR from 'swr';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import { useSession } from '@/libs/better-auth/auth-client';
+import { useSearchParams } from '@/libs/router/navigation';
 import { messengerKeys } from '@/libs/swr/keys';
 import { messengerService } from '@/services/messenger';
 

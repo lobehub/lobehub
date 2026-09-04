@@ -6,7 +6,7 @@ import { createStaticStyles } from 'antd-style';
 import { DnaIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router';
+import { Link } from 'react-router';
 import urlJoin from 'url-join';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
@@ -14,6 +14,7 @@ import Loading from '@/components/Loading/BrandTextLoading';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
+import { useParams } from '@/libs/router/navigation';
 import { useAgentStore } from '@/store/agent';
 
 import { useExpertiseOverview } from '../hooks';
@@ -32,7 +33,7 @@ const styles = createStaticStyles(({ css }) => ({
  */
 const ExperienceList = memo(() => {
   const { t } = useTranslation('selfLearning');
-  const { domainId } = useParams();
+  const { domainId } = useParams('domainId');
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const { data, error, isLoading, mutate } = useExpertiseOverview(activeAgentId ?? undefined);
 

@@ -1,8 +1,7 @@
 'use client';
 
-import { useParams } from 'react-router';
-
 import { GoalDetailPage } from '@/features/AgentGoals';
+import { useParams } from '@/libs/router/navigation';
 
 /**
  * Goal detail without an agent in the path, mirroring the bare `/task/:taskId`
@@ -10,7 +9,7 @@ import { GoalDetailPage } from '@/features/AgentGoals';
  * is the only way to open one.
  */
 const GoalDetailRoute = () => {
-  const { goalId } = useParams<{ goalId?: string }>();
+  const { goalId } = useParams<{ goalId?: string }>('goalId');
 
   if (!goalId) return null;
 

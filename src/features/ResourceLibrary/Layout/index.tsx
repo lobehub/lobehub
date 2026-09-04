@@ -4,7 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Outlet, useParams } from 'react-router';
+import { Outlet } from 'react-router';
 import { SWRConfig } from 'swr';
 
 import AsyncError from '@/components/AsyncError';
@@ -12,13 +12,14 @@ import SuspenseRouteBoundary from '@/components/SuspenseRouteBoundary';
 import RegisterHotkeys from '@/features/ResourceLibrary/RegisterHotkeys';
 import { useKnowledgeBaseItem } from '@/features/ResourceManager/hooks/useKnowledgeItem';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useParams } from '@/libs/router/navigation';
 import { isForbiddenError } from '@/utils/forbiddenError';
 
 import Sidebar from './Sidebar';
 import { styles } from './style';
 
 const LibraryLayout: FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id } = useParams<{ id: string }>('id');
   const { t } = useTranslation('file');
   const navigate = useWorkspaceAwareNavigate();
   // Same SWR key as the page content's fetch, so this costs no extra request.

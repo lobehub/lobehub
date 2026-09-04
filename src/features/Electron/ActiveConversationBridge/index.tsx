@@ -4,7 +4,7 @@ import { useLayoutEffect, useMemo, useRef } from 'react';
 
 import { useResolvedAgentRouteId } from '@/features/AgentRoute/useResolvedAgentRouteId';
 import { selectActiveTabUrl } from '@/features/Electron/shell/activeTabUrl';
-import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
+import { useParams } from '@/libs/router/navigation';
 import { useElectronStore } from '@/store/electron';
 
 import { resolveActiveConversationCoordinate } from './coordinate';
@@ -12,7 +12,11 @@ import { subscribeActiveConversationNavigation } from './navigation';
 import { projectActiveConversationCoordinate } from './projectCoordinate';
 
 const ActiveConversationBridge = () => {
-  const params = useActiveRouteParams<{ aid?: string; gid?: string; topicId?: string }>();
+  const params = useParams<{ aid?: string; gid?: string; topicId?: string }>(
+    'aid',
+    'gid',
+    'topicId',
+  );
   const url = useElectronStore(selectActiveTabUrl) || '/';
   const { agentId } = useResolvedAgentRouteId(params.aid);
   const coordinate = useMemo(

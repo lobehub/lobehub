@@ -1,9 +1,8 @@
 'use client';
 
-import { useLocation } from 'react-router';
-
 import { useRouteSkeletonChrome } from '@/spa/router/routeSkeletonChrome';
 import { useRouteSkeleton } from '@/spa/router/useRouteSkeleton';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 import AppsSkeleton from './Apps';
 import ConversationLayoutSkeleton from './Conversation/Layout';
@@ -39,7 +38,7 @@ const isConversationPath = (pathname: string) => {
 const RouteSegmentSkeleton = () => {
   const Skeleton = useRouteSkeleton();
   const chrome = useRouteSkeletonChrome();
-  const { pathname } = useLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
   const segments = pathname.split('/').filter(Boolean);
 
   if (Skeleton) return <Skeleton chrome={chrome} />;

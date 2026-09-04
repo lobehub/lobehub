@@ -1,11 +1,11 @@
 'use client';
 
 import { AgentGoalsPage } from '@/features/AgentGoals';
-import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
+import { useParams } from '@/libs/router/navigation';
 import { useCurrentProjectDetail } from '@/store/project';
 
 const ProjectGoals = () => {
-  const { projectId } = useActiveRouteParams<{ projectId: string }>();
+  const { projectId } = useParams<{ projectId: string }>('projectId');
   const detail = useCurrentProjectDetail(projectId);
 
   if (!detail) return null;

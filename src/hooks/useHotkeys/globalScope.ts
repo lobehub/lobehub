@@ -1,10 +1,10 @@
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import { HotkeyEnum } from '@lobechat/const/hotkeys';
-import { useLocation } from 'react-router';
 
 import { useNavigateToAgent } from '@/hooks/useNavigateToAgent';
 import { usePinnedAgentState } from '@/hooks/usePinnedAgentState';
 import { useGlobalStore } from '@/store/global';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 import { useHotkeyById } from './useHotkeyById';
 
@@ -52,7 +52,7 @@ export const useToggleLeftPanelHotkey = () => {
 };
 
 export const useToggleRightPanelHotkey = () => {
-  const { pathname } = useLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
   const [toggleAgentBuilderPanel, toggleRightPanel, toggleTaskAgentPanel] = useGlobalStore((s) => [
     s.toggleAgentBuilderPanel,
     s.toggleRightPanel,

@@ -17,7 +17,6 @@ import {
 import type { ReactNode } from 'react';
 import { useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation, useParams } from 'react-router';
 
 import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
 import { openRenameModal } from '@/components/RenameModal';
@@ -27,6 +26,7 @@ import { useAgentContext } from '@/features/Conversation/useAgentContext';
 import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
 import { openDocumentCompareModal } from '@/features/PageEditor/History/CompareModal';
 import { formatHistoryAbsoluteTime } from '@/features/PageEditor/History/formatHistoryDate';
+import { useParams } from '@/libs/router/navigation';
 import type {
   DocumentHistoryListItem,
   DocumentHistorySaveSource,
@@ -37,6 +37,7 @@ import { topicSelectors } from '@/store/chat/selectors';
 import { useDocumentStore } from '@/store/document';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 interface TopicInfoHeaderProps {
   authorName: string;
@@ -68,7 +69,7 @@ const TopicInfoHeader = ({ authorName, title, updatedAtLabel }: TopicInfoHeaderP
 export const useMenu = (): { menuHeader?: ReactNode; menuItems: () => DropdownItem[] } => {
   const { t } = useTranslation(['chat', 'topic', 'common', 'file']);
 
-  const { pathname } = useLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
 
   const [wideScreen, toggleWideScreen] = useGlobalStore((s) => [
     systemStatusSelectors.wideScreen(s),
@@ -88,7 +89,7 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: () => DropdownIt
     s.updateTopicTitle,
   ]);
 
-  const { docId } = useParams<{ docId?: string }>();
+  const { docId } = useParams<{ docId?: string }>('docId');
   const compareInstanceRef = useRef<ModalInstance | null>(null);
 
   const saveSourceLabels = useMemo<Record<DocumentHistorySaveSource, string>>(

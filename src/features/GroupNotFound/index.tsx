@@ -2,9 +2,9 @@
 
 import { type FC, memo, type PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
 
 import NotFound from '@/components/404';
+import { useParams } from '@/libs/router/navigation';
 import { agentGroupByIdSelectors, useAgentGroupStore } from '@/store/agentGroup';
 
 /**
@@ -27,7 +27,7 @@ GroupNotFound.displayName = 'GroupNotFound';
  * manual refresh.
  */
 export const GroupNotFoundGuard: FC<PropsWithChildren> = memo(({ children }) => {
-  const params = useParams<{ gid?: string }>();
+  const params = useParams<{ gid?: string }>('gid');
   const isNotFound = useAgentGroupStore(
     agentGroupByIdSelectors.isGroupNotFoundById(params.gid ?? ''),
   );

@@ -2,9 +2,9 @@
 
 import { Flexbox, Grid } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { useLocation } from 'react-router';
 
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 import SkeletonBar from './Bar';
 import SkeletonContainer from './Conversation/Container';
@@ -62,7 +62,7 @@ const TopicSkeleton = () => (
 );
 
 const GenerationSkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => {
-  const { search } = useLocation();
+  const search = useRouterStore(routerSelectors.search);
   const isHome = !new URLSearchParams(search).get('topic');
 
   return (

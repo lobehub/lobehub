@@ -5,7 +5,8 @@ import { Text } from '@lobehub/ui/base-ui';
 import { Result } from 'antd';
 import React, { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router';
+
+import { useSearchParams } from '@/libs/router/navigation';
 
 type CallbackStatus = 'error' | 'success';
 

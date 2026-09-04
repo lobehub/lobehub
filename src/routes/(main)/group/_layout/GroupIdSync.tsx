@@ -1,11 +1,11 @@
 import { isDesktop } from '@lobechat/const';
 import { usePrevious, useUnmount } from 'ahooks';
 import { use, useEffect, useLayoutEffect } from 'react';
-import { useParams } from 'react-router';
 
 import { shouldSyncGroupRoute } from '@/features/Electron/groupRouteScope';
 import { TabIdContext } from '@/features/Electron/TabHost/TabIdContext';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
+import { useParams } from '@/libs/router/navigation';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
 import { useElectronStore } from '@/store/electron';
@@ -13,7 +13,7 @@ import { useElectronStore } from '@/store/electron';
 const GroupIdSync = () => {
   const tabId = use(TabIdContext);
   const activeTabId = useElectronStore((s) => s.activeTabId);
-  const params = useParams<{ gid?: string; topicId?: string }>();
+  const params = useParams<{ gid?: string; topicId?: string }>('gid', 'topicId');
   const prevGroupId = usePrevious(params.gid);
   const router = useQueryRoute();
   const isActiveTab = shouldSyncGroupRoute(isDesktop, tabId, activeTabId);

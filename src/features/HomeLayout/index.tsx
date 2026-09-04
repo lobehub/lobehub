@@ -1,10 +1,11 @@
 import { Flexbox } from '@lobehub/ui';
 import { useTheme } from 'antd-style';
 import { Activity, type FC, type ReactNode, useEffect, useMemo, useState } from 'react';
-import { Outlet, useLocation } from 'react-router';
+import { Outlet } from 'react-router';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useIsDark } from '@/hooks/useIsDark';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 import HomeAgentIdSync from './HomeAgentIdSync';
 import RecentSync from './RecentSync';
@@ -17,7 +18,7 @@ interface LayoutProps {
 const Layout: FC<LayoutProps> = ({ children }) => {
   const isDarkMode = useIsDark();
   const theme = useTheme(); // Keep for colorBgContainerSecondary (not in cssVar)
-  const { pathname } = useLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
   const activeSlug = useActiveWorkspaceSlug();
   const isHomeRoute =
     pathname === '/' ||

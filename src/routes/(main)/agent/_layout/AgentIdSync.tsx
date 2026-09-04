@@ -1,17 +1,18 @@
 import { useEffect } from 'react';
-import { useLocation, useParams, useSearchParams } from 'react-router';
 
 import { useResolvedAgentRouteId } from '@/features/AgentRoute/useResolvedAgentRouteId';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';
+import { useParams, useSearchParams } from '@/libs/router/navigation';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 import { useAgentIdStoreSync } from './useAgentIdStoreSync';
 
 const AgentIdSync = () => {
-  const params = useParams<{ aid?: string; topicId?: string }>();
+  const params = useParams<{ aid?: string; topicId?: string }>('aid', 'topicId');
   const [searchParams] = useSearchParams();
   const navigate = useWorkspaceAwareNavigate();
-  const location = useLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
   const { agentId: activeId, isSlugRoute, resolvedAgentId } = useResolvedAgentRouteId(params.aid);
 
   // Hydrate from the route-owning component. Parent layouts can retain stale
@@ -23,11 +24,11 @@ const AgentIdSync = () => {
   // Redirect slug URL to real agent ID URL, preserving child path and query string
   useEffect(() => {
     if (isSlugRoute && resolvedAgentId) {
-      const suffix = location.pathname.replace(`/agent/${params.aid}`, '');
+      const suffix = pathname.replace(`/agent/${params.aid}`, '');
       const qs = searchParams.toString();
       navigate(`/agent/${resolvedAgentId}${suffix}${qs ? `?${qs}` : ''}`, { replace: true });
     }
-  }, [isSlugRoute, resolvedAgentId, navigate, searchParams, location.pathname, params.aid]);
+  }, [isSlugRoute, resolvedAgentId, navigate, searchParams, pathname, params.aid]);
 
   useAgentIdStoreSync({
     activeId,

@@ -2,7 +2,8 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { useParams } from 'react-router';
+
+import { useParams } from '@/libs/router/navigation';
 
 import { extractUuid } from '../utils';
 import AcceptanceCheckInventory from './AcceptanceCheckInventory';
@@ -46,7 +47,7 @@ const AcceptancePage = ({
   acceptanceId: explicitAcceptanceId,
   onDraftToComposer,
 }: AcceptancePageProps) => {
-  const params = useParams<{ acceptanceId: string; checkId: string }>();
+  const params = useParams<{ acceptanceId: string; checkId: string }>('acceptanceId', 'checkId');
   const acceptanceId = explicitAcceptanceId ?? extractUuid(params.acceptanceId);
   const embedded = Boolean(explicitAcceptanceId);
   const focused = !embedded && Boolean(params.checkId);

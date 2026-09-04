@@ -5,14 +5,14 @@ import { ActionIcon } from '@lobehub/ui/base-ui';
 import { LayoutDashboardIcon, PanelRightOpenIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router';
 
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 const WorkingPanelToggle = memo(() => {
   const { t } = useTranslation('chat');
-  const { pathname } = useLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
   const [
     showRightPanel,
     showWorkingOverview,

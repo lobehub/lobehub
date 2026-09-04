@@ -5,7 +5,6 @@ import { ActionIcon } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { ArrowLeft } from 'lucide-react';
 import { memo } from 'react';
-import { useLocation } from 'react-router';
 import urlJoin from 'url-join';
 
 import NavHeader from '@/features/NavHeader';
@@ -13,13 +12,14 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import StoreSearchBar from '@/routes/(main)/community/features/Search';
 import UserAvatar from '@/routes/(main)/community/features/UserAvatar';
 import { useDiscoverStore } from '@/store/discover';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 import { styles } from './Header/style';
 
 const Header = memo(() => {
-  const location = useLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
   const navigate = useWorkspaceAwareNavigate();
-  const path = location.pathname.split('/').filter(Boolean);
+  const path = pathname.split('/').filter(Boolean);
   const communityIndex = path.indexOf('community');
   const detailType = communityIndex >= 0 ? path[communityIndex + 1] : undefined;
   const detailSlug = communityIndex >= 0 ? path[communityIndex + 2] : undefined;

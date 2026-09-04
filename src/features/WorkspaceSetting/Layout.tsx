@@ -2,11 +2,12 @@
 
 import { Text } from '@lobehub/ui/base-ui';
 import { type FC, memo } from 'react';
-import { Outlet, useMatch } from 'react-router';
+import { Outlet } from 'react-router';
 import { SWRConfig } from 'swr';
 
 import SuspenseRouteBoundary from '@/components/SuspenseRouteBoundary';
 import NavHeader from '@/features/NavHeader';
+import { useMatch } from '@/libs/router/navigation';
 import { RouteSkeletonChromeProvider } from '@/spa/router/routeSkeletonChrome';
 import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 

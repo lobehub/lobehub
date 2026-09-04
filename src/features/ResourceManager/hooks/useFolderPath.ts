@@ -1,5 +1,5 @@
-import { useActiveLocation } from '@/hooks/useActiveLocation';
-import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
+import { useParams } from '@/libs/router/navigation';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 /**
  * Hook to extract folder slug from URL
@@ -11,16 +11,16 @@ import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
  * - /knowledge -> { knowledgeBaseId: null, currentFolderSlug: null, isInKnowledgeBase: false }
  */
 export const useFolderPath = () => {
-  // Active-tab variants, not the raw router hooks: `LibraryHierarchy` renders in
-  // the sidebar, which Electron portals into the shell's frozen root router.
-  const params = useActiveRouteParams<{ id: string; slug?: string }>();
-  const location = useActiveLocation();
+  // The route store scope follows the active tab even when `LibraryHierarchy`
+  // is portal'd into the Electron shell.
+  const params = useParams<{ id: string; slug?: string }>('id', 'slug');
+  const pathname = useRouterStore(routerSelectors.pathname);
 
   // Extract knowledge base ID from params
   const knowledgeBaseId = params.id || null;
 
   // Determine if we're in a knowledge base context
-  const isInKnowledgeBase = location.pathname.includes('/resource/library/');
+  const isInKnowledgeBase = pathname.includes('/resource/library/');
 
   // Extract folder slug from params (single slug, not nested paths)
   const currentFolderSlug = params.slug || null;

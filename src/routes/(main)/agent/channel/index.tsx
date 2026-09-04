@@ -3,13 +3,14 @@
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useCallback, useEffect, useMemo } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate } from 'react-router';
 
 import NotFound from '@/components/404';
 import AsyncBoundary from '@/components/AsyncBoundary';
 import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import ResourceConfigAccessGate from '@/features/ResourcePermission/ResourceConfigAccessGate';
 import { usePermission } from '@/hooks/usePermission';
+import { useParams } from '@/libs/router/navigation';
 import { useAgentStore } from '@/store/agent';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
@@ -35,7 +36,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const ChannelContent = memo(() => {
-  const { aid, platform } = useParams<{ aid?: string; platform?: string }>();
+  const { aid, platform } = useParams<{ aid?: string; platform?: string }>('aid', 'platform');
   const navigate = useNavigate();
   const { allowed: canEdit } = usePermission('edit_own_content');
 
@@ -176,7 +177,7 @@ const ChannelContent = memo(() => {
 });
 
 const ChannelPage = () => {
-  const { aid } = useParams<{ aid?: string }>();
+  const { aid } = useParams<{ aid?: string }>('aid');
 
   return (
     <ResourceConfigAccessGate

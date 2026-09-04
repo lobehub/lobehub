@@ -3,8 +3,9 @@
 import { copyToClipboard } from '@lobehub/ui';
 import { toast } from '@lobehub/ui/base-ui';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate } from 'react-router';
 
+import { useParams } from '@/libs/router/navigation';
 import { mutate as globalMutate } from '@/libs/swr';
 import { isAcceptanceListKey } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
@@ -28,7 +29,7 @@ const CHECK_REVIEW_ORDER: Record<Exclude<CheckFilter, 'all'>, number> = {
 const AcceptanceFocusWorkspace = () => {
   const { t } = useTranslation('verify');
   const navigate = useNavigate();
-  const params = useParams<{ checkId?: string }>();
+  const params = useParams<{ checkId?: string }>('checkId');
   const { acceptanceId } = useAcceptanceScope();
   const { data, mutate } = useAcceptanceBundle(acceptanceId);
   const focusedCheck = data?.checks.find((check) => check.id === params.checkId);

@@ -6,7 +6,8 @@ import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import { PanelRightOpen } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams, useSearchParams } from 'react-router';
+
+import { useParams, useSearchParams } from '@/libs/router/navigation';
 
 import ReportViewer from '../Report/ReportViewer';
 import { resolveRoundParam } from '../utils';
@@ -38,7 +39,7 @@ const AcceptanceLedgerRail = () => {
   const { t } = useTranslation('verify');
   const { lg = true } = useResponsive();
   const isNarrowViewport = !lg;
-  const params = useParams<{ checkId?: string }>();
+  const params = useParams<{ checkId?: string }>('checkId');
   const [searchParams, setSearchParams] = useSearchParams();
   const { acceptanceId, embedded } = useAcceptanceScope();
   const { data } = useAcceptanceBundle(acceptanceId);

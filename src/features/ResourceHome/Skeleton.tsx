@@ -1,19 +1,20 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { useLocation, useSearchParams } from 'react-router';
 
 import SkeletonBar from '@/components/Skeleton/Bar';
 import ListViewSkeleton from '@/features/ResourceManager/components/Explorer/ListView/Skeleton';
 import MasonryViewSkeleton from '@/features/ResourceManager/components/Explorer/MasonryView/Skeleton';
 import { useMasonryColumnCount } from '@/features/ResourceManager/components/Explorer/useMasonryColumnCount';
 import WorkGallerySkeleton from '@/features/WorkGallery/Skeleton';
+import { useSearchParams } from '@/libs/router/navigation';
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 import { resolveResourceSkeletonView } from './skeletonView';
 
 const ResourceCategorySkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => {
-  const { pathname } = useLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
   const [searchParams] = useSearchParams();
   const columnCount = useMasonryColumnCount();
   const view = resolveResourceSkeletonView(pathname, searchParams.get('view'));

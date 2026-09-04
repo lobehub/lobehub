@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useRef } from 'react';
-import { useLocation } from 'react-router';
 
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 import { useConversationResourceAccess } from '../hooks/useConversationResourceAccess';
 import { useConversationStore } from '../store';
@@ -22,7 +22,7 @@ import { useForwardDispatchStore } from './forwardDispatchStore';
 const ForwardMessageDispatcher = () => {
   const [sendMessage, context] = useConversationStore((s) => [s.sendMessage, s.context]);
   const agentId = context.agentId;
-  const location = useLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
   const isAgentConfigLoading = useAgentStore(agentSelectors.isAgentConfigLoading);
   const [pendingForward, clearPendingForward] = useForwardDispatchStore((s) => [
     s.pendingForward,
@@ -34,9 +34,9 @@ const ForwardMessageDispatcher = () => {
   const { canUseResource, isAccessLoading } = useConversationResourceAccess();
 
   const routeAgentId = useMemo(() => {
-    const match = location.pathname?.match(/^\/agent\/([^#/?]+)/);
+    const match = pathname?.match(/^\/agent\/([^#/?]+)/);
     return match?.[1];
-  }, [location.pathname]);
+  }, [pathname]);
 
   const lastProcessedRef = useRef<string | null>(null);
 

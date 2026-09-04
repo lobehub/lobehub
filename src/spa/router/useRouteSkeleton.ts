@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
 import { useMemo } from 'react';
-import { useMatches } from 'react-router';
+
+import { useMatches } from '@/libs/router/navigation';
 
 import { getRouteMetaFromHandle, type RouteSkeletonProps } from './routeMeta';
 

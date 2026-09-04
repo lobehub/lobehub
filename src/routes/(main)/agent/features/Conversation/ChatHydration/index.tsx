@@ -1,10 +1,10 @@
 'use client';
 
 import { type FC, memo } from 'react';
-import { useParams } from 'react-router';
 
 import { useClearActiveTopicUnread } from '@/features/Conversation/hooks';
 import { useTopicCommentDeepLink } from '@/features/TopicComment/useTopicCommentDeepLink';
+import { useParams } from '@/libs/router/navigation';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 
@@ -17,7 +17,7 @@ interface ChatHydrationProps {
 }
 
 const ChatHydration: FC<ChatHydrationProps> = memo(({ getConversationPath, getTopicPath }) => {
-  const params = useParams<{ aid?: string; topicId?: string }>();
+  const params = useParams<{ aid?: string; topicId?: string }>('topicId');
   const routeTopicId = params.topicId;
   const activeAgentId = useChatStore((s) => s.activeAgentId);
   const topicMetadata = useChatStore((s) =>

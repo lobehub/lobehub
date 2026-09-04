@@ -6,11 +6,11 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { ArrowLeft, Database, Pencil, Plus, Trash2 } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import { useParams } from '@/libs/router/navigation';
 import { agentEvalService } from '@/services/agentEval';
 import { runSelectors, useEvalStore } from '@/store/eval';
 
@@ -92,7 +92,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 const DatasetDetail = memo(() => {
   const { t } = useTranslation('eval');
-  const { datasetId } = useParams<{ datasetId: string }>();
+  const { datasetId } = useParams<{ datasetId: string }>('datasetId');
   const navigate = useWorkspaceAwareNavigate();
 
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });

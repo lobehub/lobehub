@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
-import { useSearchParams } from 'react-router';
 
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { useSearchParams } from '@/libs/router/navigation';
 import { SortType } from '@/types/files';
 
 /**

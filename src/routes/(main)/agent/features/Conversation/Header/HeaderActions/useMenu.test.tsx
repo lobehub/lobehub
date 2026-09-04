@@ -53,9 +53,16 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('react-router', () => ({
-  useLocation: useLocationMock,
+vi.mock('@/libs/router/navigation', () => ({
   useParams: () => ({}),
+}));
+
+vi.mock('@/store/router', () => ({
+  routerSelectors: {
+    pathname: (state: { location: { pathname: string } }) => state.location.pathname,
+  },
+  useRouterStore: (selector: (state: { location: { pathname: string } }) => unknown) =>
+    selector({ location: useLocationMock() }),
 }));
 
 vi.mock('@/store/chat/selectors', () => ({

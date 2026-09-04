@@ -1,22 +1,24 @@
 import { useEffect, useRef } from 'react';
-import { useLocation } from 'react-router';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useChatStore } from '@/store/chat';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 const COMMENT_QUERY = 'comment';
 const COMMENT_THREAD_QUERY = 'commentThread';
 
 /** Opens a notification deep link once topic route hydration has completed. */
 export const useTopicCommentDeepLink = (topicId?: string) => {
-  const location = useLocation();
+  const hash = useRouterStore(routerSelectors.hash);
+  const pathname = useRouterStore(routerSelectors.pathname);
+  const routeSearch = useRouterStore(routerSelectors.search);
   const navigate = useWorkspaceAwareNavigate();
   const handledRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     if (!topicId) return;
 
-    const searchParams = new URLSearchParams(location.search);
+    const searchParams = new URLSearchParams(routeSearch);
     const rootCommentId = searchParams.get(COMMENT_THREAD_QUERY);
     if (!rootCommentId) return;
 
@@ -32,8 +34,8 @@ export const useTopicCommentDeepLink = (topicId?: string) => {
     searchParams.delete(COMMENT_QUERY);
     searchParams.delete(COMMENT_THREAD_QUERY);
     const search = searchParams.toString();
-    navigate(`${location.pathname}${search ? `?${search}` : ''}${location.hash}`, {
+    navigate(`${pathname}${search ? `?${search}` : ''}${hash}`, {
       replace: true,
     });
-  }, [location.hash, location.pathname, location.search, navigate, topicId]);
+  }, [hash, navigate, pathname, routeSearch, topicId]);
 };

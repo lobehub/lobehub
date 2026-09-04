@@ -6,10 +6,10 @@ import { Tabs } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useParams } from '@/libs/router/navigation';
 import { runSelectors, useEvalStore } from '@/store/eval';
 
 import CaseHeader from './features/CaseBanner';
@@ -23,7 +23,7 @@ const CaseDetail = memo(() => {
     benchmarkId: string;
     caseId: string;
     runId: string;
-  }>();
+  }>('benchmarkId', 'runId', 'caseId');
   const { t } = useTranslation('eval');
   const navigate = useWorkspaceAwareNavigate();
   const useFetchRunDetail = useEvalStore((s) => s.useFetchRunDetail);

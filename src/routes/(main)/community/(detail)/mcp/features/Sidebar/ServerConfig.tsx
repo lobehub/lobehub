@@ -2,18 +2,18 @@ import { Flexbox } from '@lobehub/ui';
 import qs from 'query-string';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router';
 
 import { getRecommendedDeployment } from '@/features/MCP/utils';
 import Platform from '@/features/MCPPluginDetail/Deployment/Platform';
 import { useDetailContext } from '@/features/MCPPluginDetail/DetailProvider';
+import { routerSelectors, useRouterStore } from '@/store/router';
 import { McpNavKey } from '@/types/discover';
 
 import Title from '../../../../features/Title';
 
 const ServerConfig = memo(() => {
   const { t } = useTranslation('discover');
-  const { pathname } = useLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
   const installLink = qs.stringifyUrl({
     query: {
       activeTab: McpNavKey.Deployment,

@@ -8,7 +8,7 @@ import type { KeyboardEvent } from 'react';
 import { memo } from 'react';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
+import { useParams } from '@/libs/router/navigation';
 
 import { GoalProgress } from './GoalProgress';
 import GoalStatusGlyph from './GoalStatusGlyph';
@@ -31,7 +31,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 export const GoalListItem = memo<GoalItemProps>(({ goal: item }) => {
   const navigate = useWorkspaceAwareNavigate();
-  const { aid } = useActiveRouteParams<{ aid?: string }>();
+  const { aid } = useParams<{ aid?: string }>('aid');
   const { goal } = item;
   // On the project Goals page there is no `aid` in the route, and a goal created
   // there has no responsible agent either — so fall back the same way tasks do,

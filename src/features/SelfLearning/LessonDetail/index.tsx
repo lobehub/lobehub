@@ -6,7 +6,7 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { MessagesSquare } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router';
+import { Link } from 'react-router';
 import urlJoin from 'url-join';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
@@ -14,6 +14,7 @@ import Loading from '@/components/Loading/BrandTextLoading';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
+import { useParams } from '@/libs/router/navigation';
 import { useAgentStore } from '@/store/agent';
 
 import { lessonSectionLabel } from '../helpers';
@@ -60,7 +61,7 @@ SectionLabel.displayName = 'ExpertiseSectionLabel';
 
 const LessonDetail = memo(() => {
   const { t } = useTranslation('selfLearning');
-  const { domainId, lessonId } = useParams();
+  const { domainId, lessonId } = useParams('domainId', 'lessonId');
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const { data: domain, error: domainError, mutate: mutateDomain } = useExpertiseDomain(domainId);
   const { data, error, isLoading, mutate } = useExpertiseLesson(lessonId);

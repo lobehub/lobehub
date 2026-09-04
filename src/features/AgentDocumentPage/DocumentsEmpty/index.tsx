@@ -5,9 +5,9 @@ import { Button, toast } from '@lobehub/ui/base-ui';
 import { FileTextIcon, PlusIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useParams } from '@/libs/router/navigation';
 import { agentDocumentService } from '@/services/agentDocument';
 
 import { buildAgentDocumentPath } from '../navigation';
@@ -19,7 +19,7 @@ import { buildAgentDocumentPath } from '../navigation';
  */
 const AgentDocumentsEmpty = memo(() => {
   const { t } = useTranslation('chat');
-  const { aid } = useParams<{ aid: string }>();
+  const { aid } = useParams<{ aid: string }>('aid');
   const agentId = aid ?? '';
   const navigate = useWorkspaceAwareNavigate();
 

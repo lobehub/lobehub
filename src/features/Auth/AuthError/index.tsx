@@ -7,9 +7,10 @@ import { Button, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useSearchParams } from 'react-router';
+import { Link } from 'react-router';
 
 import AuthCard from '@/features/AuthCard';
+import { useSearchParams } from '@/libs/router/navigation';
 
 const normalizeErrorCode = (code?: string | null) =>
   (code || 'UNKNOWN').trim().toUpperCase().replaceAll('-', '_');

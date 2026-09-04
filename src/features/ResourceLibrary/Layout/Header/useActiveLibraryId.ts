@@ -1,3 +1,3 @@
-import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
+import { useParams } from '@/libs/router/navigation';
 
-export const useActiveLibraryId = () => useActiveRouteParams<{ id?: string }>().id ?? '';
+export const useActiveLibraryId = () => useParams<{ id?: string }>('id').id ?? '';

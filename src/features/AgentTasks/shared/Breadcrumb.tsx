@@ -5,10 +5,10 @@ import { Breadcrumb as AntBreadcrumb } from 'antd';
 import { ChevronRight } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
 import { useShallow } from 'zustand/react/shallow';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import { useParams } from '@/libs/router/navigation';
 import { useTaskStore } from '@/store/task';
 
 import { styles } from './style';
@@ -21,7 +21,7 @@ interface BreadcrumbProps {
 
 const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
   const { t } = useTranslation('chat');
-  const { aid } = useParams<{ aid?: string }>();
+  const { aid } = useParams<{ aid?: string }>('aid');
   const agentMeta = useAgentDisplayMeta(aid);
   const taskTitle = useTaskStore((s) => (taskId ? s.taskDetailMap[taskId]?.name : undefined));
   const taskIdentifier = useTaskStore((s) =>

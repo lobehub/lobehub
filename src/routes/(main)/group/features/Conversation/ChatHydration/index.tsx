@@ -2,13 +2,14 @@
 
 import { GROUP_CHAT_TOPIC_URL, GROUP_CHAT_URL } from '@lobechat/const';
 import { memo, useLayoutEffect, useRef } from 'react';
-import { useLocation, useParams, useSearchParams } from 'react-router';
 
 import { useClearActiveTopicUnread } from '@/features/Conversation/hooks';
 import { useTopicCommentDeepLink } from '@/features/TopicComment/useTopicCommentDeepLink';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useQueryState } from '@/hooks/useQueryParam';
+import { useParams, useSearchParams } from '@/libs/router/navigation';
 import { useChatStore } from '@/store/chat';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 const getSearchSuffix = (searchParams: URLSearchParams) => {
   const search = searchParams.toString();
@@ -18,9 +19,10 @@ const getSearchSuffix = (searchParams: URLSearchParams) => {
 
 // sync outside state to useChatStore
 const ChatHydration = memo(() => {
-  const location = useLocation();
+  const hash = useRouterStore(routerSelectors.hash);
+  const currentUrl = useRouterStore(routerSelectors.fullUrl);
   const navigate = useWorkspaceAwareNavigate();
-  const params = useParams<{ gid?: string; topicId?: string }>();
+  const params = useParams<{ gid?: string; topicId?: string }>('gid', 'topicId');
   const [searchParams] = useSearchParams();
 
   const [thread, setThread] = useQueryState('thread', { history: 'replace', throttleMs: 500 });
@@ -45,11 +47,13 @@ const ChatHydration = memo(() => {
     }
   }, [thread]);
 
-  const locationRef = useRef(location);
+  const hashRef = useRef(hash);
+  const currentUrlRef = useRef(currentUrl);
   const paramsRef = useRef(params);
   const searchParamsRef = useRef(searchParams);
 
-  locationRef.current = location;
+  hashRef.current = hash;
+  currentUrlRef.current = currentUrl;
   paramsRef.current = params;
   searchParamsRef.current = searchParams;
 
@@ -65,10 +69,9 @@ const ChatHydration = memo(() => {
         nextSearchParams.delete('topic');
 
         const nextPath = state ? GROUP_CHAT_TOPIC_URL(gid, state) : GROUP_CHAT_URL(gid);
-        const nextUrl = `${nextPath}${getSearchSuffix(nextSearchParams)}${locationRef.current.hash}`;
-        const currentUrl = `${locationRef.current.pathname}${locationRef.current.search}${locationRef.current.hash}`;
+        const nextUrl = `${nextPath}${getSearchSuffix(nextSearchParams)}${hashRef.current}`;
 
-        if (currentUrl !== nextUrl) {
+        if (currentUrlRef.current !== nextUrl) {
           navigate(nextUrl, { replace: true });
         }
       },

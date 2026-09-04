@@ -1,16 +1,17 @@
 'use client';
 
 import { use, useEffect } from 'react';
-import { useLocation } from 'react-router';
 
 import { useElectronStore } from '@/store/electron';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 import { TabIdContext } from './TabIdContext';
 import { getTabRouter } from './tabRouterManager';
 
 const TabLocationReporter = () => {
   const tabId = use(TabIdContext);
-  const location = useLocation();
+  const locationKey = useRouterStore(routerSelectors.key);
+  const url = useRouterStore(routerSelectors.fullUrl);
   const reportTabLocation = useElectronStore((s) => s.reportTabLocation);
 
   useEffect(() => {
@@ -32,14 +33,14 @@ const TabLocationReporter = () => {
     // reporting (and mirroring into the window url) a stale location.
     const router = getTabRouter(tabId);
     const routerLocation = router?.state.location;
-    if (router && routerLocation && routerLocation.key !== location.key) {
+    if (router && routerLocation && routerLocation.key !== locationKey) {
       const { hash, pathname, search, state } = routerLocation;
       void router.navigate({ hash, pathname, search }, { replace: true, state });
       return;
     }
 
-    reportTabLocation(tabId, location.pathname + location.search + location.hash);
-  }, [tabId, location.key, location.pathname, location.search, location.hash, reportTabLocation]);
+    reportTabLocation(tabId, url);
+  }, [locationKey, reportTabLocation, tabId, url]);
 
   return null;
 };

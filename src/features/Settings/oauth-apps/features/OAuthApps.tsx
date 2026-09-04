@@ -5,9 +5,9 @@ import { Skeleton, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useParams } from '@/libs/router/navigation';
 import { useClientDataSWR } from '@/libs/swr';
 import { authKeys } from '@/libs/swr/keys';
 import { lambdaClient } from '@/libs/trpc/client';
@@ -32,7 +32,7 @@ interface OAuthAppsProps {
 const OAuthApps: FC<OAuthAppsProps> = ({ canEdit }) => {
   const { t } = useTranslation('auth');
   const navigate = useWorkspaceAwareNavigate();
-  const params = useParams<{ sub?: string }>();
+  const params = useParams<{ sub?: string }>('sub');
 
   const {
     data: apps,

@@ -2,9 +2,9 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
-import { useParams } from 'react-router';
 
 import { useQuery } from '@/hooks/useQuery';
+import { useParams } from '@/libs/router/navigation';
 import { useDiscoverStore } from '@/store/discover';
 
 import NotFound from '../components/NotFound';
@@ -19,7 +19,7 @@ interface GroupAgentDetailPageProps {
 }
 
 const GroupAgentDetailPage = memo<GroupAgentDetailPageProps>(({ mobile }) => {
-  const params = useParams<{ slug: string }>();
+  const params = useParams<{ slug: string }>('slug');
   const identifier = decodeURIComponent(params.slug ?? '');
   const { version } = useQuery() as { version?: string };
 

@@ -2,9 +2,9 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
-import { useParams } from 'react-router';
 
 import { useQuery } from '@/hooks/useQuery';
+import { useParams } from '@/libs/router/navigation';
 import { useDiscoverStore } from '@/store/discover';
 import { type AssistantMarketSource } from '@/types/discover';
 
@@ -20,7 +20,7 @@ interface AssistantDetailPageProps {
 }
 
 const AssistantDetailPage = memo<AssistantDetailPageProps>(({ mobile }) => {
-  const params = useParams<{ slug: string }>();
+  const params = useParams<{ slug: string }>('slug');
   const identifier = decodeURIComponent(params.slug ?? '');
   const { version, source } = useQuery() as { source?: AssistantMarketSource; version?: string };
 

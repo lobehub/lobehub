@@ -2,11 +2,12 @@
  * @vitest-environment happy-dom
  */
 import { act, render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
+import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { initialState as initialChatState } from '@/store/chat/initialState';
 import { useChatStore } from '@/store/chat/store';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 import ChatPage from './index.desktop';
 
@@ -57,9 +58,9 @@ vi.mock('./features/TelemetryNotification', () => ({
 }));
 
 const LocationProbe = () => {
-  const location = useLocation();
+  const url = useRouterStore(routerSelectors.url);
 
-  return <div data-testid="location-probe">{`${location.pathname}${location.search}`}</div>;
+  return <div data-testid="location-probe">{url}</div>;
 };
 
 describe('Agent desktop topic popup guard', () => {
@@ -85,21 +86,21 @@ describe('Agent desktop topic popup guard', () => {
   });
 
   it('keeps the topic route synchronized while the popup guard is visible', async () => {
-    render(
-      <MemoryRouter initialEntries={['/agent/agent-1/popup-topic']}>
-        <Routes>
-          <Route
-            path="/agent/:aid/:topicId"
-            element={
-              <>
-                <LocationProbe />
-                <ChatPage />
-              </>
-            }
-          />
-        </Routes>
-      </MemoryRouter>,
+    const router = createMemoryRouter(
+      [
+        {
+          element: (
+            <>
+              <LocationProbe />
+              <ChatPage />
+            </>
+          ),
+          path: '/agent/:aid/:topicId',
+        },
+      ],
+      { initialEntries: ['/agent/agent-1/popup-topic'] },
     );
+    render(<RouterProvider router={router} />);
 
     expect(screen.getByTestId('topic-popup-guard')).toBeInTheDocument();
     expect(screen.getByTestId('location-probe')).toHaveTextContent('/agent/agent-1/popup-topic');

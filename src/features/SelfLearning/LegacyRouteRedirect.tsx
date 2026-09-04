@@ -1,11 +1,13 @@
 'use client';
 
 import { memo } from 'react';
-import { Navigate, useParams } from 'react-router';
+import { Navigate } from 'react-router';
 import urlJoin from 'url-join';
 
+import { useParams } from '@/libs/router/navigation';
+
 const LegacyRouteRedirect = memo(() => {
-  const { aid, '*': rest } = useParams<{ '*': string; 'aid': string }>();
+  const { aid, '*': rest } = useParams<{ '*': string; 'aid': string }>('aid', '*');
 
   if (!aid) return <Navigate replace to={'/'} />;
 

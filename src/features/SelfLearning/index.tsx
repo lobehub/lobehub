@@ -7,7 +7,7 @@ import { createStaticStyles } from 'antd-style';
 import { DnaIcon, HistoryIcon, MoreHorizontalIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router';
+import { Link } from 'react-router';
 import urlJoin from 'url-join';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
@@ -15,6 +15,7 @@ import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useParams } from '@/libs/router/navigation';
 import type { ExpertiseDomainItem } from '@/services/expertise';
 import { expertiseService } from '@/services/expertise';
 import { useAgentStore } from '@/store/agent';
@@ -49,7 +50,7 @@ const styles = createStaticStyles(({ css }) => ({
 const SelfLearning = memo(() => {
   const { t } = useTranslation('selfLearning');
   const navigate = useWorkspaceAwareNavigate();
-  const { domainId } = useParams();
+  const { domainId } = useParams('domainId');
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const [teachOpen, setTeachOpen] = useState(false);
   const [teachDomainId, setTeachDomainId] = useState<string>();

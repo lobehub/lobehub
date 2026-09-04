@@ -40,10 +40,10 @@ import {
 } from 'lucide-react';
 import { memo, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import AudioPlayer from '@/features/AudioPlayer';
+import { useParams } from '@/libs/router/navigation';
 import type { VerifyEvidenceWithUrl } from '@/services/verify';
 
 import { useVerifyReportBundle } from '../hooks';
@@ -1323,7 +1323,7 @@ interface ReportViewerProps {
 
 const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
   const { t } = useTranslation('verify');
-  const { runId: routeRunId } = useParams<{ runId: string }>();
+  const { runId: routeRunId } = useParams<{ runId: string }>('runId');
   // Route params come from shared links whose autolinker may have glued
   // trailing punctuation onto the id — salvage the leading UUID.
   const verifyRunId = explicitRunId ?? extractUuid(routeRunId) ?? null;

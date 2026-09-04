@@ -2,10 +2,10 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
-import { useParams, useSearchParams } from 'react-router';
 
 import { SkillDetailView, SkillNavKey } from '@/features/CommunitySkillDetail';
 import { useQuery } from '@/hooks/useQuery';
+import { useParams, useSearchParams } from '@/libs/router/navigation';
 import { useDiscoverStore } from '@/store/discover';
 
 import NotFound from '../components/NotFound';
@@ -24,7 +24,7 @@ const LEGACY_TAB_ALIASES: Record<string, SkillNavKey> = {
 };
 
 const SkillDetailPage = memo<SkillDetailPageProps>(({ mobile }) => {
-  const params = useParams<{ slug: string }>();
+  const params = useParams<{ slug: string }>('slug');
   const identifier = params.slug ?? '';
 
   const { version } = useQuery() as { version?: string };

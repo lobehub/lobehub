@@ -2,12 +2,13 @@
 
 import { type FC } from 'react';
 import { Suspense } from 'react';
-import { Outlet, useLocation } from 'react-router';
+import { Outlet } from 'react-router';
 
 import WorkspaceContextSlot from '@/business/client/WorkspaceContextSlot';
 import Loading from '@/components/Loading/BrandTextLoading';
 import { RouteMetaBridge } from '@/features/RouteMeta';
 import dynamic from '@/libs/next/dynamic';
+import { routerSelectors, useRouterStore } from '@/store/router';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import NavBar from './NavBar';
@@ -26,8 +27,8 @@ const MOBILE_NAV_ROUTES = new Set([
 
 const MobileMainLayout: FC = () => {
   const { showCloudPromotion } = useServerConfigStore(featureFlagsSelectors);
-  const location = useLocation();
-  const pathname = location.pathname;
+  const routePathname = useRouterStore(routerSelectors.pathname);
+  const pathname = routePathname;
   const showNav = MOBILE_NAV_ROUTES.has(pathname);
   return (
     <WorkspaceContextSlot>

@@ -26,6 +26,7 @@ import {
 } from '@/features/Electron/shell';
 import ZoomHUD from '@/features/Electron/system/ZoomHUD';
 import { TabHost, useSeedTabsOnBoot } from '@/features/Electron/TabHost';
+import ActiveTabRouterStoreProvider from '@/features/Electron/TabHost/ActiveTabRouterStoreProvider';
 import TabCacheBridges from '@/features/Electron/titlebar/TabBar/TabCacheBridges';
 import TitleBar from '@/features/Electron/titlebar/TitleBar';
 import HotkeyHelperPanel from '@/features/HotkeyHelperPanel';
@@ -45,13 +46,12 @@ const GlobalApprovalNotification = dynamic(() => import('@/features/GlobalApprov
 
 const tabHostContainer: CSSProperties = { position: 'relative' };
 
-const Layout: FC = () => {
+const LayoutContent: FC = () => {
   const { isPWA } = usePlatform();
   const { showCloudPromotion } = useServerConfigStore(featureFlagsSelectors);
 
-  // The nav lives outside `TabHost`, so it reads the active tab's location
-  // (mirrored into the electron store) rather than the root router's — see
-  // `useActiveLocation.desktop`. A visitor has no nav data, so the panel would
+  // The active-tab route store above this content keeps the shell aligned with
+  // the current memory router. A visitor has no nav data, so the panel would
   // stay a grey skeleton; unmount it for that branch of `/agent/:aid`.
   const isShareVisitor = useIsAgentShareVisitorRoute();
 
@@ -106,5 +106,11 @@ const Layout: FC = () => {
     </HotkeysProvider>
   );
 };
+
+const Layout = () => (
+  <ActiveTabRouterStoreProvider>
+    <LayoutContent />
+  </ActiveTabRouterStoreProvider>
+);
 
 export default Layout;

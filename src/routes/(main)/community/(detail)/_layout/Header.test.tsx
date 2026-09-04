@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import { createMemoryRouter, RouterProvider } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
 import Header from './Header';
@@ -48,11 +48,10 @@ describe('Community detail Header', () => {
       },
     });
 
-    render(
-      <MemoryRouter initialEntries={['/011/community/org/sad']}>
-        <Header />
-      </MemoryRouter>,
-    );
+    const router = createMemoryRouter([{ element: <Header />, path: '*' }], {
+      initialEntries: ['/011/community/org/sad'],
+    });
+    render(<RouterProvider router={router} />);
 
     expect(mocks.useUserProfile).toHaveBeenCalledWith({ username: 'sad' });
     expect(screen.getByTestId('community-user-avatar')).toHaveAttribute(

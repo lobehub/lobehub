@@ -8,11 +8,11 @@ import isEqual from 'fast-deep-equal';
 import { PaletteIcon } from 'lucide-react';
 import { memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
 
 import EmojiPicker from '@/components/EmojiPicker';
 import BackgroundSwatches from '@/features/AgentSetting/AgentMeta/BackgroundSwatches';
 import { usePermission } from '@/hooks/usePermission';
+import { useParams } from '@/libs/router/navigation';
 import GroupAvatar from '@/routes/(main)/group/features/GroupAvatar';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
@@ -28,7 +28,7 @@ const GroupHeader = memo(() => {
   const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
 
   // Get group meta from agentGroup store
-  const { gid } = useParams<{ gid: string }>();
+  const { gid } = useParams<{ gid: string }>('gid');
   const groupMeta = useAgentGroupStore(
     (s) => agentGroupSelectors.getGroupMeta(gid ?? '')(s),
     isEqual,

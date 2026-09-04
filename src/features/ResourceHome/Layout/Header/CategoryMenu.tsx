@@ -20,7 +20,7 @@ import { useBusinessResourceCategories } from '@/business/client/features/Resour
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useActiveLocation } from '@/hooks/useActiveLocation';
+import { routerSelectors, useRouterStore } from '@/store/router';
 import { FilesTabs } from '@/types/files';
 
 interface CategoryItem {
@@ -36,12 +36,12 @@ const CategoryMenu = memo(() => {
   const [activeKey, setMode] = useResourceManagerStore((s) => [s.category, s.setMode]);
   const navigate = useWorkspaceAwareNavigate();
   const businessCategories = useBusinessResourceCategories();
-  const location = useActiveLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
   // In Work-gallery mode (/resource/works) no file category is selected, so
   // suppress the category highlight — otherwise "Home" reads as active
   // alongside the active Work entry. Match by suffix: the pathname may carry a
   // workspace prefix.
-  const worksActive = location.pathname.endsWith('/resource/works');
+  const worksActive = pathname.endsWith('/resource/works');
 
   // Two groups below the fixed Home entry: file-based categories (uploaded
   // files by type) and LobeHub business entities (pages, works, webpages),
@@ -131,7 +131,7 @@ const CategoryMenu = memo(() => {
               item.key === 'works'
                 ? worksActive
                 : !worksActive &&
-                  (item.isBusiness ? location.pathname === item.url : activeKey === item.key);
+                  (item.isBusiness ? pathname === item.url : activeKey === item.key);
             return (
               <Link
                 key={item.key}

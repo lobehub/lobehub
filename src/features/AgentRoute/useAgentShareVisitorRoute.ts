@@ -1,7 +1,7 @@
 'use client';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import { useActiveLocation } from '@/hooks/useActiveLocation';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 import { resolveAgentRouteBranch, useAgentRouteResolution } from './useAgentRouteResolution';
 
@@ -44,7 +44,7 @@ export const resolveAgentRouteParam = (
  * until proven otherwise avoids a flash on the common path.
  */
 export const useIsAgentShareVisitorRoute = (): boolean => {
-  const { pathname } = useActiveLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const { error, isLoading, kind } = useAgentRouteResolution(
     resolveAgentRouteParam(pathname, activeWorkspaceSlug),

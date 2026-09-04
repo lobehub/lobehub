@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useActiveLocation } from '@/hooks/useActiveLocation';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 export interface UseFileItemClickOptions {
   id: string;
@@ -25,10 +25,10 @@ export const useFileItemClick = ({
   onOpen,
 }: UseFileItemClickOptions) => {
   const navigate = useWorkspaceAwareNavigate();
-  // Read/write the URL through the active-tab facade rather than
-  // `useSearchParams`: this hook also runs in the library sidebar, which Electron
-  // portals into the shell's frozen root router.
-  const { pathname, search } = useActiveLocation();
+  // This hook also runs in the library sidebar, so read from the active route
+  // store and write through the active-tab navigation facade.
+  const pathname = useRouterStore(routerSelectors.pathname);
+  const search = useRouterStore(routerSelectors.search);
   const setMode = useResourceManagerStore((s) => s.setMode);
   const setCurrentViewItemId = useResourceManagerStore((s) => s.setCurrentViewItemId);
 

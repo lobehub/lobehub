@@ -13,9 +13,7 @@ const routeParamsMock = vi.hoisted(() => ({ aid: 'agent-1' as string | undefined
 const agentStoreStateMock = vi.hoisted(() => ({ activeAgentId: 'agent-1' as string | undefined }));
 const activeWorkspaceSlugMock = vi.hoisted(() => ({ value: 'lobehub' as string | null }));
 
-vi.mock('react-router', () => ({
-  useParams: () => routeParamsMock,
-}));
+vi.mock('@/libs/router/navigation', () => ({ useParams: () => routeParamsMock }));
 
 vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -55,8 +53,10 @@ vi.mock('@/hooks/useQueryRoute', () => ({
   }),
 }));
 
-vi.mock('@/hooks/useActiveLocation', () => ({
-  useActiveLocation: () => ({ hash: '', pathname: '/lobehub/agent/agent-1/profile', search: '' }),
+vi.mock('@/store/router', () => ({
+  routerSelectors: { pathname: (state: { pathname: string }) => state.pathname },
+  useRouterStore: (selector: (state: { pathname: string }) => string) =>
+    selector({ pathname: '/lobehub/agent/agent-1/profile' }),
 }));
 
 vi.mock('@/store/agent', () => ({
