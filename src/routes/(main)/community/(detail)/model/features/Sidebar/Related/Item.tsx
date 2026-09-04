@@ -1,10 +1,10 @@
-import { ModelIcon } from '@lobehub/icons';
 import { Block, Flexbox } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ModelIcon } from '@/components/LobeIcons';
 import { type DiscoverModelItem } from '@/types/discover';
 
 const styles = createStaticStyles(({ css, cssVar }) => {

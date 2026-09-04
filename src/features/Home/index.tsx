@@ -6,7 +6,6 @@ import { lazy, memo, Suspense, useCallback, useEffect, useState } from 'react';
 
 import { useHomeUsageWidgetActive } from '@/business/client/features/HomeUsageWidget';
 import { useHomePromoLine } from '@/business/client/features/useHomePromoLine';
-import HomeInbox from '@/features/HomeInbox';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -54,6 +53,9 @@ const clearOnboardingHomeModeParam = () => {
 // actually opened.
 const TopicChatDrawer = lazy(() => import('@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer'));
 const AcceptancePortalDrawer = lazy(() => import('./AcceptancePortalDrawer'));
+// The inbox renders markdown, briefs and an editor; keeping it lazy leaves the
+// greeting and the input box as the only static content of the home route.
+const HomeInbox = lazy(() => import('@/features/HomeInbox'));
 
 /** Trailing gutter that keeps the rail's cards off the page's scroll lane. */
 const RAIL_GUTTER = 14;
@@ -408,7 +410,9 @@ const Home = memo(() => {
           id={'home-rail'}
           inert={railCollapsed}
         >
-          <HomeInbox {...RAIL_INBOX_PROPS} variant={'rail'} />
+          <Suspense fallback={null}>
+            <HomeInbox {...RAIL_INBOX_PROPS} variant={'rail'} />
+          </Suspense>
         </aside>
       )}
 

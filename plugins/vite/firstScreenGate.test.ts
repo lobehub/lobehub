@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { collectFirstScreen, firstScreenForbidden } from './firstScreenGate';
+import { collectFirstScreen, firstScreenForbidden, homeRouteForbidden } from './firstScreenGate';
 
 const chunk = (
   name: string,
@@ -58,6 +58,32 @@ describe('collectFirstScreen', () => {
     expect(report.violations).toEqual([
       '4KB emitted into eager chunks without a static path from the entry (budget 1KB)',
       'posthog reached the first screen: /node_modules/posthog-js/dist/module.js',
+    ]);
+  });
+
+  it('budgets a route closure and applies its own forbidden list', () => {
+    const bundle = {
+      'home.js': chunk('home', { '/src/routes/(main)/home/index.tsx': 10 }, { imports: ['md.js'] }),
+      'index.js': chunk('index', { '/src/entry.tsx': 10, '/src/shell.ts': 10 }, { isEntry: true }),
+      'md.js': chunk('md', { '/node_modules/katex/dist/katex.mjs': 4096 }),
+    };
+
+    const report = collectFirstScreen(bundle, getModuleInfo, {
+      forbidden: firstScreenForbidden,
+      maxGzipKB: 1,
+      routes: [
+        {
+          forbidden: homeRouteForbidden,
+          maxGzipKB: 1,
+          name: 'home',
+          roots: ['src/routes/(main)/home/index.tsx'],
+        },
+      ],
+    });
+
+    expect(report.routes).toEqual([{ chunks: 2, gzipKB: 0, name: 'home' }]);
+    expect(report.violations).toEqual([
+      'markdown stack reached route "home": /node_modules/katex/dist/katex.mjs',
     ]);
   });
 

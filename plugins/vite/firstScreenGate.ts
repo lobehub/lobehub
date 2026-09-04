@@ -18,11 +18,19 @@ interface ModuleInfoLike {
   isEntry: boolean;
 }
 
+export interface RouteGateOptions {
+  forbidden?: Record<string, (id: string) => boolean>;
+  maxGzipKB: number;
+  name: string;
+  roots: string[];
+}
+
 export interface FirstScreenGateOptions {
   entryName?: string;
   forbidden: Record<string, (id: string) => boolean>;
   maxGzipKB: number;
   maxUnreachableKB?: number;
+  routes?: RouteGateOptions[];
 }
 
 export const firstScreenForbidden: FirstScreenGateOptions['forbidden'] = {
@@ -44,9 +52,19 @@ export const firstScreenForbidden: FirstScreenGateOptions['forbidden'] = {
 export interface FirstScreenReport {
   eagerChunks: string[];
   gzipKB: number;
+  routes: { chunks: number; gzipKB: number; name: string }[];
   unreachableKB: number;
   violations: string[];
 }
+
+export const homeRouteForbidden: FirstScreenGateOptions['forbidden'] = {
+  'brand icon catalog': (id) =>
+    /\/node_modules\/@lobehub\/icons\/es\/features\/(?:model|provider)Config\.js$/.test(id),
+  'emoji-mart': (id) => /\/node_modules\/(?:emoji-mart|@emoji-mart)\//.test(id),
+  'markdown stack': (id) =>
+    /\/node_modules\/(?:elkjs|katex|@primer\/octicons|beautiful-mermaid)\//.test(id),
+  'model-bank catalog': firstScreenForbidden['model-bank catalog'],
+};
 
 const normalize = (id: string) => id.replaceAll('\\', '/').split('?')[0];
 
@@ -82,6 +100,7 @@ export const collectFirstScreen = (
   let gzip = 0;
   let unreachable = 0;
   const hits = new Map<string, string[]>();
+  const violations: string[] = [];
   for (const fileName of eager) {
     const chunk = bundle[fileName];
     gzip += gzipSync(chunk.code).length;
@@ -94,9 +113,43 @@ export const collectFirstScreen = (
     }
   }
 
+  const routes = (options.routes ?? []).map((route) => {
+    const start = chunks.filter((c) =>
+      c.moduleIds.some((id) => route.roots.some((sfx) => normalize(id).endsWith(sfx))),
+    );
+    const closure = new Set<string>();
+    const stack = start.map((c) => c.fileName);
+    while (stack.length) {
+      const fileName = stack.pop()!;
+      if (closure.has(fileName) || eager.has(fileName)) continue;
+      closure.add(fileName);
+      for (const dep of bundle[fileName].imports) stack.push(dep);
+    }
+    let routeGzip = 0;
+    const routeHits = new Map<string, string[]>();
+    for (const fileName of closure) {
+      const chunk = bundle[fileName];
+      routeGzip += gzipSync(chunk.code).length;
+      for (const id of Object.keys(chunk.modules)) {
+        const normalized = normalize(id);
+        for (const [rule, test] of Object.entries(route.forbidden ?? {}))
+          if (test(normalized)) routeHits.set(rule, [...(routeHits.get(rule) ?? []), normalized]);
+      }
+    }
+    const routeGzipKB = Math.round(routeGzip / 1024);
+    if (routeGzipKB > route.maxGzipKB)
+      violations.push(
+        `route "${route.name}" closure gzip ${routeGzipKB}KB exceeds budget ${route.maxGzipKB}KB`,
+      );
+    for (const [rule, ids] of routeHits)
+      violations.push(
+        `${rule} reached route "${route.name}": ${ids.slice(0, 3).join(', ')}${ids.length > 3 ? ` (+${ids.length - 3})` : ''}`,
+      );
+    return { chunks: closure.size, gzipKB: routeGzipKB, name: route.name };
+  });
+
   const gzipKB = Math.round(gzip / 1024);
   const unreachableKB = Math.round(unreachable / 1024);
-  const violations: string[] = [];
   if (gzipKB > options.maxGzipKB)
     violations.push(`first-screen gzip ${gzipKB}KB exceeds budget ${options.maxGzipKB}KB`);
   if (options.maxUnreachableKB !== undefined && unreachableKB > options.maxUnreachableKB)
@@ -108,7 +161,7 @@ export const collectFirstScreen = (
       `${rule} reached the first screen: ${ids.slice(0, 3).join(', ')}${ids.length > 3 ? ` (+${ids.length - 3})` : ''}`,
     );
 
-  return { eagerChunks: [...eager], gzipKB, unreachableKB, violations };
+  return { eagerChunks: [...eager], gzipKB, routes, unreachableKB, violations };
 };
 
 export const viteFirstScreenGate = (options: FirstScreenGateOptions): Plugin => ({
@@ -121,9 +174,16 @@ export const viteFirstScreenGate = (options: FirstScreenGateOptions): Plugin => 
       options,
     );
     this.info(
-      `[first-screen-gate] ${report.eagerChunks.length} eager chunks, ${report.gzipKB}KB gzip, ${report.unreachableKB}KB unreachable`,
+      `[first-screen-gate] ${report.eagerChunks.length} eager chunks, ${report.gzipKB}KB gzip, ${report.unreachableKB}KB unreachable` +
+        report.routes
+          .map((r) => `; route ${r.name}: ${r.chunks} chunks, ${r.gzipKB}KB gzip`)
+          .join(''),
     );
     if (report.violations.length) {
+      if (process.env.FIRST_SCREEN_GATE === 'warn') {
+        this.warn(`[first-screen-gate]\n  ${report.violations.join('\n  ')}`);
+        return;
+      }
       this.error(
         `[first-screen-gate]\n  ${report.violations.join('\n  ')}\n  Move the import behind import() or a subpath export; the boot-path rules in eslint.config.mjs name the usual culprits.`,
       );

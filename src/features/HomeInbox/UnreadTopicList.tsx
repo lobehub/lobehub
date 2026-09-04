@@ -10,7 +10,6 @@ import { useTranslation } from 'react-i18next';
 
 import UnreadDot from '@/components/UnreadDot';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
-import MarkdownMessage from '@/features/Conversation/Markdown';
 import { homeType } from '@/features/Home/components/homeType';
 import Time from '@/features/Home/components/Time';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -20,6 +19,8 @@ import AuthorChip from './AuthorChip';
 import { sanitizeInboxPreview } from './sanitizeInboxPreview';
 import { useHomeInboxMarkdown } from './useHomeInboxMarkdown';
 import { type InboxTopic } from './useHomeInboxTopics';
+
+const MarkdownMessage = lazy(() => import('@/features/Conversation/Markdown'));
 
 const DOT_WIDTH = 14;
 const ROW_GAP = 8;
@@ -209,9 +210,11 @@ const UnreadTopicItem = memo<UnreadTopicItemProps>(
         {expanded && (
           <Flexbox className={bare ? styles.bareBody : styles.body} gap={8}>
             {assistantPreview && (
-              <MarkdownMessage {...markdownProps} style={{ overflow: 'unset' }}>
-                {assistantPreview}
-              </MarkdownMessage>
+              <Suspense fallback={null}>
+                <MarkdownMessage {...markdownProps} style={{ overflow: 'unset' }}>
+                  {assistantPreview}
+                </MarkdownMessage>
+              </Suspense>
             )}
 
             {replying ? (

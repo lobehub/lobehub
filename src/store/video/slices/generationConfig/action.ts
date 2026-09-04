@@ -1,11 +1,11 @@
+import { type AIVideoModelCard } from 'model-bank/aiModel';
 import {
-  type AIVideoModelCard,
   extractVideoDefaultValues,
   type RuntimeVideoGenParams,
   type RuntimeVideoGenParamsKeys,
   type RuntimeVideoGenParamsValue,
   type VideoModelParamsSchema,
-} from 'model-bank';
+} from 'model-bank/standardParameters';
 
 import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 import { useGlobalStore } from '@/store/global';

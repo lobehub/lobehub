@@ -44,7 +44,7 @@ describe('useOpenChatSettings', () => {
     expect(mockNavigate).toHaveBeenCalledWith(`/agent/123/settings?showMobileWorkspace=true`);
   });
 
-  it('opens desktop agent settings overlay when not on mobile', () => {
+  it('opens desktop agent settings overlay when not on mobile', async () => {
     useAgentStore.setState({ activeAgentId: '456' });
     vi.mocked(useIsMobile).mockReturnValue(false);
 
@@ -54,7 +54,7 @@ describe('useOpenChatSettings', () => {
       result.current();
     });
 
-    expect(openAgentSettingsModal).toHaveBeenCalled();
+    await vi.waitFor(() => expect(openAgentSettingsModal).toHaveBeenCalled());
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 });

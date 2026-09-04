@@ -4,7 +4,6 @@ import {
 } from '@lobechat/heterogeneous-agents';
 import type { ModelPerformance, ModelUsage } from '@lobechat/types';
 import { unwrapServerDefaultHeterogeneousModel } from '@lobechat/types';
-import { ModelIcon } from '@lobehub/icons';
 import { Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -12,6 +11,7 @@ import { CircleDollarSignIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ModelIcon } from '@/components/LobeIcons';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';

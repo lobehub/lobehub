@@ -4,6 +4,8 @@
   "private": true,
   "sideEffects": false,
   "exports": {
+    "./knowledgeCutoff": "./src/const/knowledgeCutoff.ts",
+    "./utils": "./src/utils.ts",
     ".": "./src/index.ts",
     "./aiModel": "./src/types/aiModel.ts",
     "./aiProvider": "./src/types/aiProvider.ts",

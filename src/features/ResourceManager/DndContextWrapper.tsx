@@ -6,15 +6,16 @@ import { toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { FileText, FolderIcon } from 'lucide-react';
 import { type PropsWithChildren } from 'react';
-import { createContext, memo, use, useEffect, useRef, useState } from 'react';
+import { createContext, lazy, memo, Suspense, use, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
-import FileIcon from '@/components/FileIcon';
 import { usePermission } from '@/hooks/usePermission';
 import { useTreeStore } from '@/store/tree';
 
 import { useResourceManagerStore } from './store';
+
+const FileIcon = lazy(() => import('@/components/FileIcon'));
 
 /**
  * Pre-create a transparent 1x1 pixel image for drag operations
@@ -279,11 +280,13 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
                     ) : currentDrag.data.fileType === CUSTOM_DOCUMENT_FILE_TYPE ? (
                       <Icon icon={FileText} size={20} />
                     ) : (
-                      <FileIcon
-                        fileName={currentDrag.data.name}
-                        fileType={currentDrag.data.fileType}
-                        size={20}
-                      />
+                      <Suspense fallback={null}>
+                        <FileIcon
+                          fileName={currentDrag.data.name}
+                          fileType={currentDrag.data.fileType}
+                          size={20}
+                        />
+                      </Suspense>
                     )}
                   </div>
                   <span

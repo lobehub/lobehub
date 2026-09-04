@@ -1,6 +1,5 @@
 'use client';
 
-import { ProviderIcon } from '@lobehub/icons';
 import { Block, Flexbox, Icon, Tooltip, TooltipGroup } from '@lobehub/ui';
 import { ActionIcon } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
@@ -10,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
 import InlineTable from '@/components/InlineTable';
+import { ProviderIcon } from '@/components/LobeIcons';
 import { ModelInfoTags } from '@/components/ModelSelect';
 import { BASE_PROVIDER_DOC_URL } from '@/const/url';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';

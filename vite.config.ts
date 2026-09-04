@@ -9,7 +9,11 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 import { customBrandingLoadingScreen } from './plugins/vite/customBrandingLoadingScreen';
 import { viteEnvRestartKeys } from './plugins/vite/envRestartKeys';
-import { firstScreenForbidden, viteFirstScreenGate } from './plugins/vite/firstScreenGate';
+import {
+  firstScreenForbidden,
+  homeRouteForbidden,
+  viteFirstScreenGate,
+} from './plugins/vite/firstScreenGate';
 import {
   createSharedRolldownOutput,
   sharedModulePreload,
@@ -161,6 +165,14 @@ export default defineConfig({
         forbidden: firstScreenForbidden,
         maxGzipKB: 1600,
         maxUnreachableKB: 64,
+        routes: [
+          {
+            forbidden: homeRouteForbidden,
+            maxGzipKB: 1300,
+            name: 'home',
+            roots: ['src/routes/(main)/home/index.tsx', 'src/routes/(main)/_layout/index.tsx'],
+          },
+        ],
       }),
     customBrandingLoadingScreen(),
     viteEnvRestartKeys(['APP_URL']),
