@@ -1,8 +1,9 @@
+import type { InitOptions } from 'i18next';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { emit, init, on, reloadResources, storeOn, use } = vi.hoisted(() => ({
   emit: vi.fn(),
-  init: vi.fn(() => Promise.resolve()),
+  init: vi.fn((_options: InitOptions) => Promise.resolve()),
   on: vi.fn(),
   reloadResources: vi.fn(() => Promise.resolve()),
   storeOn: vi.fn(),
@@ -42,7 +43,7 @@ describe('createI18nNext', () => {
 
     // `bindI18nStore: 'added'` re-renders every `useTranslation` consumer once per
     // lazily-loaded bundle — ~30 full-tree passes during boot.
-    expect(init.mock.calls[0][0].react).not.toHaveProperty('bindI18nStore');
+    expect(init.mock.calls[0]![0].react).not.toHaveProperty('bindI18nStore');
   });
 
   it('emits one languageChanged after the fallback resources are replaced', async () => {
