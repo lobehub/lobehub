@@ -6,11 +6,13 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { PauseIcon, PlayIcon } from 'lucide-react';
 import { memo, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router';
 
 import NotFound from '@/components/404';
 import AsyncError from '@/components/AsyncError';
 import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
+import { useAgentRoutePath } from '@/features/AgentBreadcrumb/useAgentRoutePath';
 import NavHeader from '@/features/NavHeader';
 import { PortalContent } from '@/features/Portal/router';
 import { usePortalPanelWidth } from '@/features/Portal/usePortalPanelWidth';
@@ -111,6 +113,8 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const pauseGoal = useGoalStore((s) => s.pauseGoal);
   const resumeGoal = useGoalStore((s) => s.resumeGoal);
 
+  const buildAgentPath = useAgentRoutePath(agentId ?? '');
+
   const showPortal = useChatStore(chatPortalSelectors.showPortal);
   const currentViewType = useChatStore(chatPortalSelectors.currentViewType);
   const [chatOpen, setChatOpen] = useState(true);
@@ -180,7 +184,9 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                 <AgentBreadcrumb
                   agentId={agentId}
                   extraItems={[goal.title]}
-                  title={t('goalList.title')}
+                  // The goal title owns the last crumb, so this one is a way back
+                  // to the agent's goal list rather than a label for this page.
+                  title={<Link to={buildAgentPath('goals')}>{t('goalList.title')}</Link>}
                 />
               ) : (
                 <Text fontSize={14} weight={500}>
