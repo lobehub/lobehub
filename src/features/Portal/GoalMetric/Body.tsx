@@ -1,16 +1,18 @@
 import { Flexbox } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
+import { Tag, Text, toast } from '@lobehub/ui/base-ui';
+import { InputNumber } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
-import { memo, type ReactNode, useMemo } from 'react';
+import { memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { formatSpan } from '@/features/AgentGoals/goalPresentation';
+import { formatSpan, formatUsd } from '@/features/AgentGoals/goalPresentation';
 import {
   buildGoalGraphView,
   type GoalGraphView,
 } from '@/features/AgentGoals/ProcessControl/goalGraphViewModel';
 import { KindDot } from '@/features/AgentGoals/ProcessControl/shared';
+import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { goalSelectors, useGoalStore } from '@/store/goal';
@@ -190,30 +192,124 @@ const Findings = memo<{ goalId: string; graph: GoalGraphView }>(({ goalId, graph
 
 Findings.displayName = 'GoalMetricFindings';
 
-const Budget = memo<{ graph: GoalGraphView }>(({ graph }) => {
+/**
+ * One budget dimension as `spent / cap`, where the cap IS the input — the
+ * number you read and the number you change are the same number, so raising a
+ * budget needs no separate edit mode.
+ *
+ * The draft is local and commits on blur / Enter: the goal graph polls while
+ * the goal runs, and binding the field straight to the snapshot would wipe
+ * half-typed digits on every refresh.
+ */
+const BudgetField = memo<{
+  cap: number | null;
+  goalId: string;
+  label: string;
+  /** `maxTotalCost` is money and takes a `$`; `maxRounds` is a plain count. */
+  money?: boolean;
+  used: number;
+}>(({ cap, goalId, label, money, used }) => {
+  const { t } = useTranslation('chat');
+  const { allowed: canEdit } = usePermission('create_content');
+  const setGoalBudget = useGoalStore((s) => s.setGoalBudget);
+  const [draft, setDraft] = useState<number | null>(cap);
+  const [saving, setSaving] = useState(false);
+
+  // Re-seed from the server whenever it disagrees and the user is not mid-edit.
+  const [committed, setCommitted] = useState(cap);
+  if (committed !== cap && !saving) {
+    setCommitted(cap);
+    setDraft(cap);
+  }
+
+  const commit = async () => {
+    if (!canEdit || draft === cap) return;
+    // A cap below what the goal already spent would park it immediately; that
+    // is a legitimate way to stop a goal, so it is allowed — only nonsense
+    // (negative, zero) is refused, matching the router's `positive()`.
+    if (draft !== null && draft <= 0) {
+      setDraft(cap);
+      return;
+    }
+
+    try {
+      setSaving(true);
+      // Only the field that changed is sent: `setBudget` treats an omitted
+      // dimension as untouched, so editing the cost cap keeps the round cap.
+      await setGoalBudget(goalId, money ? { maxTotalCost: draft } : { maxRounds: draft });
+    } catch (error) {
+      console.error('[GoalMetricBudget] Failed to save:', error);
+      toast.error(t('goalProcess.metricDetail.budget.saveFailed'));
+      setDraft(cap);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Flexbox gap={2}>
+      <span className={styles.label}>{label}</span>
+      <Flexbox horizontal align={'center'} gap={8}>
+        <Text className={styles.mono} style={{ fontSize: 20 }} weight={600}>
+          {money ? formatUsd(used) : used}
+        </Text>
+        <Text className={styles.mono} style={{ fontSize: 20 }} type={'secondary'}>
+          /
+        </Text>
+        <InputNumber
+          className={styles.mono}
+          controls={false}
+          disabled={!canEdit || saving}
+          min={0}
+          placeholder={t('goalProcess.metricDetail.budget.uncapped')}
+          size={'small'}
+          style={{ width: 120 }}
+          value={draft}
+          variant={'filled'}
+          prefix={
+            money ? (
+              <Text fontSize={12} type={'secondary'}>
+                $
+              </Text>
+            ) : undefined
+          }
+          onBlur={() => void commit()}
+          onChange={setDraft}
+          onPressEnter={() => void commit()}
+        />
+      </Flexbox>
+    </Flexbox>
+  );
+});
+
+BudgetField.displayName = 'GoalMetricBudgetField';
+
+const Budget = memo<{ goalId: string; graph: GoalGraphView }>(({ goalId, graph }) => {
   const { t } = useTranslation('chat');
   const { maxRounds, maxTotalCost } = graph.goal;
+  const snapshot = useGoalStore(goalSelectors.goalGraph(goalId));
+  const spend = snapshot?.spend;
 
   return (
     <Flexbox gap={14}>
-      <Flexbox gap={2}>
-        <span className={styles.label}>{t('goalProcess.metricDetail.budget.totalCost')}</span>
-        <Text className={styles.mono} style={{ fontSize: 20 }} weight={600}>
-          {maxTotalCost === null
-            ? t('goalProcess.metricDetail.budget.uncapped')
-            : `$${maxTotalCost}`}
-        </Text>
-      </Flexbox>
-      <Flexbox gap={2}>
-        <span className={styles.label}>{t('goalProcess.metricDetail.budget.rounds')}</span>
-        <Text className={styles.mono} style={{ fontSize: 20 }} weight={600}>
-          {maxRounds === null ? t('goalProcess.metricDetail.budget.uncapped') : maxRounds}
-        </Text>
-      </Flexbox>
-      {/* Per-round spend is recorded on each dispatched Task, not on the goal
-          row — say so instead of rendering a fabricated total. */}
-      <Text fontSize={12} type={'secondary'}>
-        {t('goalProcess.metricDetail.budget.spendNote')}
+      <BudgetField
+        money
+        cap={maxTotalCost}
+        goalId={goalId}
+        label={t('goalProcess.metricDetail.budget.totalCost')}
+        used={spend?.totalCost ?? 0}
+      />
+      <BudgetField
+        cap={maxRounds}
+        goalId={goalId}
+        label={t('goalProcess.metricDetail.budget.rounds')}
+        used={spend?.runs ?? 0}
+      />
+      {/* Raising a cap is how a user restarts a goal the coordinator parked on
+          one — say so, because the alternative gesture (Resume) looks like the
+          obvious one and does nothing while the budget is still binding. */}
+      <Text fontSize={12} style={{ lineHeight: 1.7 }} type={'secondary'}>
+        {t('goalProcess.metricDetail.budget.raiseNote')}
       </Text>
     </Flexbox>
   );
@@ -335,7 +431,7 @@ const Body = memo(() => {
       {metric === 'lifecycle' && <Lifecycle goalId={goalId} graph={graph} />}
       {metric === 'tasks' && <Tasks goalId={goalId} graph={graph} />}
       {metric === 'findings' && <Findings goalId={goalId} graph={graph} />}
-      {metric === 'budget' && <Budget graph={graph} />}
+      {metric === 'budget' && <Budget goalId={goalId} graph={graph} />}
       {metric === 'duration' && <Duration goalId={goalId} graph={graph} />}
       {metric === 'liveness' && <Liveness goalId={goalId} graph={graph} />}
     </Flexbox>

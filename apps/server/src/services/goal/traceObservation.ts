@@ -94,7 +94,8 @@ export interface BudgetEvaluation {
   deadline: string | null;
   deadlinePassed: boolean;
   roundLimitReached: boolean;
-  runs: { length: number };
+  /** Runs the graph's Task nodes produced — the round count. */
+  runs: number;
   totalCost: number;
 }
 
@@ -104,6 +105,6 @@ export const toBudgetState = (goal: GoalItem, budget: BudgetEvaluation): GoalBud
   maxRounds: goal.maxRounds,
   maxTotalCost: goal.maxTotalCost === null ? null : Number(goal.maxTotalCost),
   roundLimitReached: budget.roundLimitReached,
-  runs: budget.runs.length,
+  runs: budget.runs,
   totalCost: budget.totalCost,
 });

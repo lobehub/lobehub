@@ -27,7 +27,7 @@ import { goalSelectors, useGoalStore } from '@/store/goal';
 
 import GoalChat from './GoalChat';
 import GoalDetailActions from './GoalDetailActions';
-import { formatSpan, goalStatusKey } from './goalPresentation';
+import { formatSpan, formatUsd, goalStatusKey, summarizeGoalBudget } from './goalPresentation';
 import GoalRequirement from './GoalRequirement';
 import GoalStatusGlyph from './GoalStatusGlyph';
 import ProcessControl from './ProcessControl';
@@ -167,12 +167,19 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const durationText = goal.startedAt
     ? formatSpan((goal.completedAt ?? new Date()).getTime() - goal.startedAt.getTime())
     : '—';
+  // Spend and budget are one number over another — see `summarizeGoalBudget`.
+  const budget = summarizeGoalBudget(goal, snapshot.spend);
+  const budgetLabel = t(
+    budget.kind === 'rounds'
+      ? 'goalProcess.metrics.roundsBudget'
+      : 'goalProcess.metrics.spendBudget',
+  );
   const budgetText =
-    goal.maxTotalCost === null
-      ? goal.maxRounds === null
-        ? t('goalProcess.metrics.uncapped')
-        : t('goalProcess.metrics.roundsValue', { count: goal.maxRounds })
-      : `$${goal.maxTotalCost}`;
+    budget.kind === 'cost'
+      ? `${formatUsd(budget.spent)} / ${formatUsd(budget.cap)}`
+      : budget.kind === 'rounds'
+        ? `${budget.runs} / ${t('goalProcess.metrics.roundsValue', { count: budget.cap })}`
+        : `${formatUsd(budget.spent)} · ${t('goalProcess.metrics.uncapped')}`;
 
   return (
     <Flexbox horizontal flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
@@ -237,7 +244,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                   onClick={open('findings')}
                 />
                 <Metric
-                  label={t('goalProcess.metrics.budget')}
+                  label={budgetLabel}
                   value={
                     <Text fontSize={16} weight={600}>
                       {budgetText}

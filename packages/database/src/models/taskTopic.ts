@@ -314,6 +314,33 @@ export class TaskTopicModel {
       .limit(limit);
   }
 
+  /**
+   * A goal's spend and round count in one aggregate: how many runs those tasks
+   * produced and what they cost.
+   *
+   * The Goal page renders these numbers and the coordinator enforces the budget
+   * against them, so both read them from here — a second definition of "what
+   * this goal has spent" would let the header disagree with the move that
+   * parks the goal on `budget_exhausted`.
+   *
+   * `topics.totalCost` is NULL for a run that has not settled yet; those count
+   * as a round but contribute nothing to the sum.
+   */
+  async sumRunCostByTaskIds(taskIds: string[]): Promise<{ runs: number; totalCost: number }> {
+    if (taskIds.length === 0) return { runs: 0, totalCost: 0 };
+
+    const rows = await this.db
+      .select({
+        runs: count(),
+        totalCost: sql<string>`coalesce(sum(${topics.totalCost}), 0)`,
+      })
+      .from(taskTopics)
+      .leftJoin(topics, eq(taskTopics.topicId, topics.id))
+      .where(and(inArray(taskTopics.taskId, taskIds), this.ownership()));
+
+    return { runs: rows[0]?.runs ?? 0, totalCost: Number(rows[0]?.totalCost ?? 0) };
+  }
+
   async findWithHandoffByTaskIds(taskIds: string[], limit: number) {
     if (taskIds.length === 0) return [];
 
