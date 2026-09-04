@@ -1,6 +1,5 @@
-import { CUSTOM_DOCUMENT_FILE_TYPE, TRASH_MUTATION_BATCH_SIZE } from '@lobechat/const';
+import { CUSTOM_DOCUMENT_FILE_TYPE } from '@lobechat/const';
 import type { DocumentItem } from '@lobechat/database/schemas';
-import { chunk } from 'es-toolkit';
 
 import { lambdaClient } from '@/libs/trpc/client';
 import type {
@@ -217,11 +216,7 @@ export class DocumentService {
   }
 
   async deleteDocuments(ids: string[]): Promise<void> {
-    await Promise.all(
-      chunk(ids, TRASH_MUTATION_BATCH_SIZE).map((batchIds) =>
-        lambdaClient.document.deleteDocuments.mutate({ ids: batchIds }),
-      ),
-    );
+    await lambdaClient.document.deleteDocuments.mutate({ ids });
   }
 
   async updateDocument(params: UpdateDocumentParams): Promise<UpdateDocumentOutput> {

@@ -92,16 +92,13 @@ describe('DocumentService', () => {
     );
   });
 
-  it('splits bulk deletion into requests accepted by the server', async () => {
+  it('sends the complete bulk deletion request for atomic validation on the server', async () => {
     mockDeleteDocuments.mockResolvedValue(undefined);
     const ids = Array.from({ length: 401 }, (_, index) => `document-${index}`);
 
     await service.deleteDocuments(ids);
 
-    expect(mockDeleteDocuments).toHaveBeenCalledTimes(3);
-    expect(mockDeleteDocuments.mock.calls.map(([input]) => input.ids.length)).toEqual([
-      200, 200, 1,
-    ]);
-    expect(mockDeleteDocuments.mock.calls.flatMap(([input]) => input.ids)).toEqual(ids);
+    expect(mockDeleteDocuments).toHaveBeenCalledOnce();
+    expect(mockDeleteDocuments).toHaveBeenCalledWith({ ids });
   });
 });

@@ -98,14 +98,13 @@ describe('FileService.getKnowledgeItem', () => {
     ).toBe(false);
   });
 
-  it('splits bulk removal into requests accepted by the server', async () => {
+  it('sends the complete bulk removal request for atomic validation on the server', async () => {
     mockRemoveFiles.mockResolvedValue(undefined);
     const ids = Array.from({ length: 401 }, (_, index) => `file-${index}`);
 
     await service.removeFiles(ids);
 
-    expect(mockRemoveFiles).toHaveBeenCalledTimes(3);
-    expect(mockRemoveFiles.mock.calls.map(([input]) => input.ids.length)).toEqual([200, 200, 1]);
-    expect(mockRemoveFiles.mock.calls.flatMap(([input]) => input.ids)).toEqual(ids);
+    expect(mockRemoveFiles).toHaveBeenCalledOnce();
+    expect(mockRemoveFiles).toHaveBeenCalledWith({ ids });
   });
 });

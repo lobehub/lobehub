@@ -1,9 +1,4 @@
-import {
-  CUSTOM_DOCUMENT_FILE_TYPE,
-  DERIVED_DOCUMENT_SOURCE_TYPE,
-  TRASH_MUTATION_BATCH_SIZE,
-} from '@lobechat/const';
-import { chunk } from 'es-toolkit';
+import { CUSTOM_DOCUMENT_FILE_TYPE, DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
 
 import { lambdaClient } from '@/libs/trpc/client';
 import {
@@ -67,11 +62,7 @@ export class FileService {
   };
 
   removeFiles = async (ids: string[]): Promise<void> => {
-    await Promise.all(
-      chunk(ids, TRASH_MUTATION_BATCH_SIZE).map((batchIds) =>
-        lambdaClient.file.removeFiles.mutate({ ids: batchIds }),
-      ),
-    );
+    await lambdaClient.file.removeFiles.mutate({ ids });
   };
 
   // V2.0 Migrate from getFiles to getKnowledgeItems
