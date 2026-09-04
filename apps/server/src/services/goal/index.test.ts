@@ -927,6 +927,49 @@ describe('GoalService', () => {
     ).toBe(true);
   });
 
+  it('keeps the numeric gate when the delivery criteria are bound or rebound', async () => {
+    // Both writers used to rebuild `config.acceptance` from `criteriaIds`
+    // alone, so declaring criteria — at creation or later from the goal page —
+    // silently dropped a live measured gate and let the goal be accepted
+    // without it.
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({
+      config: { acceptance: { metrics: [{ key: 'followers', target: 1000 }] } },
+      criteria: [{ title: 'Ship the launch post' }],
+      requirement: 'Grow the account',
+      tasks: ['Publish the first posts'],
+      title: 'Both halves of acceptance',
+    });
+
+    const created = await new GoalModel(serverDB, userId).findById(graph.goal.id);
+    expect(created?.config?.acceptance?.metrics).toEqual([{ key: 'followers', target: 1000 }]);
+    expect(created?.config?.acceptance?.criteriaIds).toHaveLength(1);
+
+    await service.setAcceptanceCriteria(graph.goal.id, []);
+
+    const rebound = await new GoalModel(serverDB, userId).findById(graph.goal.id);
+    expect(rebound?.config?.acceptance?.metrics).toEqual([{ key: 'followers', target: 1000 }]);
+  });
+
+  it('declares numeric clauses after creation without touching the criteria binding', async () => {
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({
+      criteria: [{ title: 'Ship the launch post' }],
+      requirement: 'Grow the account',
+      tasks: ['Publish the first posts'],
+      title: 'Late-declared gate',
+    });
+
+    await service.setMetricCriteria(graph.goal.id, [{ key: 'churn', op: 'lte', target: 5 }]);
+
+    const updated = await new GoalModel(serverDB, userId).findById(graph.goal.id);
+    expect(updated?.config?.acceptance).toMatchObject({
+      criteriaIds: expect.any(Array),
+      metrics: [{ key: 'churn', op: 'lte', target: 5 }],
+    });
+    expect(updated?.config?.acceptance?.criteriaIds).toHaveLength(1);
+  });
+
   it('records what the measured decision read, not just its verdict', async () => {
     // A replay has to see the number the live run saw — the same reason the
     // deadline verdict travels with the budget.

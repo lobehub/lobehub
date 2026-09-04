@@ -504,7 +504,7 @@ describe('measured acceptance', () => {
       },
     });
 
-    expect(move).toMatchObject({ branch: 'terminal_acceptance', outcome: 'no_progress' });
+    expect(move).toMatchObject({ branch: 'measured_acceptance', outcome: 'no_progress' });
     expect(move.message).toContain('followers');
     expect(move.message).toContain('4200');
   });

@@ -397,7 +397,7 @@ const decideWithoutFrontier = (
     const unmet = metricCriteria.criteria.filter((criterion) => !criterion.met);
     return {
       ...base,
-      branch: 'terminal_acceptance',
+      branch: 'measured_acceptance',
       message: `Measured acceptance not met: ${unmet
         .map((c) => `${c.key} ${c.op} ${c.target} (${c.value ?? 'no observation'})`)
         .join(', ')}`,

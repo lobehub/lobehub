@@ -7,6 +7,7 @@ import type {
   GoalGraphNode,
   GoalGraphSnapshot,
   GoalItem,
+  GoalMetricCriterion,
   GoalNodeKind,
   GoalNodeStatus,
   GoalStatus,
@@ -207,7 +208,10 @@ export class GoalService {
           verifierType: 'agent',
         })),
       );
-      config = { ...config, acceptance: { criteriaIds } };
+      // Merge, never replace: `acceptance` also carries the numeric clauses,
+      // and rebuilding the object from `criteriaIds` alone would drop a
+      // measured gate the caller asked for in the same call.
+      config = { ...config, acceptance: { ...config?.acceptance, criteriaIds } };
     }
 
     const goal = await this.goalModel.create({
@@ -258,11 +262,35 @@ export class GoalService {
    * editing). The criteria rows themselves are edited through the verify
    * criteria endpoints; this only rebinds which of them gate the goal.
    */
+  /**
+   * Declare (or clear) the numeric clauses that gate this goal's acceptance.
+   *
+   * Merged into `config.acceptance` so it cannot clobber the delivery criteria
+   * binding, and settable after creation because a long-horizon goal learns its
+   * real thresholds while it runs. Relaxing a clause can unblock a goal that is
+   * already parked short of acceptance — the same reason extending a deadline
+   * resumes a budget-stopped one — so the caller schedules an advance.
+   */
+  setMetricCriteria = async (goalId: string, metrics: GoalMetricCriterion[]) => {
+    const goal = await this.goalModel.findById(goalId);
+    if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    await this.goalModel.update(goalId, {
+      config: {
+        ...goal.config,
+        acceptance: {
+          ...goal.config?.acceptance,
+          metrics: metrics.length > 0 ? metrics : undefined,
+        },
+      },
+    });
+    return this.graph(goalId);
+  };
+
   setAcceptanceCriteria = async (goalId: string, criteriaIds: string[]) => {
     const goal = await this.goalModel.findById(goalId);
     if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
     await this.goalModel.update(goalId, {
-      config: { ...goal.config, acceptance: { criteriaIds } },
+      config: { ...goal.config, acceptance: { ...goal.config?.acceptance, criteriaIds } },
     });
 
     // A terminal Goal-acceptance Task may already be dispatched — its
@@ -705,6 +733,13 @@ export class GoalService {
           nodeId: move.focusNodeId,
           outcome: move.outcome,
         });
+      }
+
+      // The measured half of acceptance stopped the goal short of its delivery
+      // contract. Nothing to create and nothing to settle — the next
+      // observation is what moves it.
+      case 'measured_acceptance': {
+        return observe({ goalId, message: move.message, outcome: move.outcome });
       }
 
       case 'terminal_acceptance': {

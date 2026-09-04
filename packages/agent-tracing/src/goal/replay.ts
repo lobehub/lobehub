@@ -4,6 +4,7 @@ import type {
   GoalBudgetState,
   GoalFrontierTaskState,
   GoalGraphState,
+  GoalMetricCriteriaState,
   GoalTickBranch,
   GoalTrajectory,
 } from './types';
@@ -20,6 +21,8 @@ export interface GoalDecisionInput {
   /** @deprecated Legacy single-task shape; present only on older trajectories. */
   frontierTask?: GoalFrontierTaskState;
   graph: GoalGraphState;
+  /** Numeric acceptance clauses as the recorded tick read them. */
+  metricCriteria?: GoalMetricCriteriaState;
 }
 
 /**
@@ -80,6 +83,7 @@ export const replayGoalTrajectory = (
       const graph: GoalGraphState = reconstructGraphAt(trajectory, advance.seq, tick.index);
       const replayed = decide({
         budget: tick.budget,
+        metricCriteria: tick.metricCriteria,
         // A trajectory recorded before the scheduler existed has only the
         // chosen candidate's task. Dropping it would replay every one of those
         // ticks as `missing_task` and report divergences that never happened.

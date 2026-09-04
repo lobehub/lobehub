@@ -104,6 +104,20 @@ export const goalRouter = router({
         createdByAgentId: z.string().optional(),
         config: z
           .object({
+            acceptance: z
+              .object({
+                /** Numeric clauses gating acceptance; keyed by a series on this goal. */
+                metrics: z
+                  .array(
+                    z.object({
+                      key: z.string().min(1).max(255),
+                      op: z.enum(['gte', 'lte', 'gt', 'lt', 'eq']).optional(),
+                      target: z.number(),
+                    }),
+                  )
+                  .optional(),
+              })
+              .optional(),
             // Bounds mirror `resolveMaxConcurrentTasks`, so a rejected value and
             // a clamped one cannot disagree about what the cap may be.
             maxConcurrentTasks: z.number().int().min(1).max(10).nullable().optional(),
@@ -192,6 +206,38 @@ export const goalRouter = router({
         return { data, message: 'Decision resolved', success: true };
       } catch (error) {
         mapGoalError(error, 'decide');
+      }
+    }),
+
+  /** Declare or clear the numeric clauses gating this goal's acceptance. */
+  setMetricCriteria: goalWriteProcedure
+    .input(
+      idInput.extend({
+        metrics: z.array(
+          z.object({
+            key: z.string().min(1).max(255),
+            op: z.enum(['gte', 'lte', 'gt', 'lt', 'eq']).optional(),
+            target: z.number(),
+          }),
+        ),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const goal = await ctx.goalModel.findById(input.id);
+        if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+        assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
+        const data = await ctx.goalService.setMetricCriteria(input.id, input.metrics);
+        // Relaxing a clause can free a goal parked short of acceptance.
+        await scheduleGoalAdvance({
+          goalId: input.id,
+          trigger: 'observe',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+        return { data, message: 'Metric criteria updated', success: true };
+      } catch (error) {
+        mapGoalError(error, 'setMetricCriteria');
       }
     }),
 

@@ -40,6 +40,13 @@ export type GoalTickBranch =
   | 'plan_decomposition'
   /** Every task node finished; the goal-level acceptance contract is next. */
   | 'terminal_acceptance'
+  /**
+   * Every task node finished, but a declared numeric clause is unmet, so the
+   * delivery contract is not attempted. Distinct from `terminal_acceptance`
+   * on purpose: both stop in the terminal phase, and a replay that could not
+   * tell them apart would report a regressed gate as a match.
+   */
+  | 'measured_acceptance'
   /** The chosen task node has no responsible task yet. */
   | 'create_task'
   /** Its task row is gone. */
