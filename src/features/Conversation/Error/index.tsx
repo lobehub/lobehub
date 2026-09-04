@@ -390,19 +390,16 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     // orchestration lives in the conversation store; this only binds the actions.
     const scheduleHeteroContinuation = useConversationStore((s) => s.scheduleHeteroContinuation);
     const cancelHeteroContinuation = useConversationStore((s) => s.cancelHeteroContinuation);
-    const activeTopicScheduled = useChatStore(
-      (s) => topicSelectors.currentActiveTopic(s)?.status === 'scheduled',
-    );
     const activeAgentId = useChatStore((s) => s.activeAgentId);
-    const conversationTopicTitle = useChatStore((s) =>
-      conversationTopicId ? topicSelectors.getTopicById(conversationTopicId)(s)?.title : undefined,
+    const conversationTopic = useChatStore((s) =>
+      conversationTopicId ? topicSelectors.getTopicById(conversationTopicId)(s) : undefined,
     );
-    const scheduledResetsAt = useChatStore((s) => {
-      const scheduledRun = topicSelectors.currentActiveTopic(s)?.metadata?.scheduledRun;
-      return scheduledRun?.kind === 'resume_after_rate_limit'
+    const conversationTopicScheduled = conversationTopic?.status === 'scheduled';
+    const scheduledRun = conversationTopic?.metadata?.scheduledRun;
+    const scheduledResetsAt =
+      scheduledRun?.kind === 'resume_after_rate_limit'
         ? scheduledRun.rateLimit?.resetsAt
         : undefined;
-    });
 
     const isRateLimitError =
       canCreate &&
@@ -414,8 +411,8 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
 
     const schedule: HeterogeneousAgentScheduleState | undefined = isRateLimitError
       ? {
-          isScheduled: activeTopicScheduled,
-          onCancel: () => void cancelHeteroContinuation(),
+          isScheduled: conversationTopicScheduled,
+          onCancel: () => void cancelHeteroContinuation(conversationTopicId),
           // Same fallback as the retry button: `onRegenerate` is absent on the
           // standalone surfaces, where a bare `onRegenerate?.()` was a no-op.
           onRunNow: handleManualRetry,
@@ -453,12 +450,12 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
             isRateLimitError && conversationAgentId && conversationTopicId
               ? () =>
                   createTopicForwardModal({
-                    onForwardSuccess: activeTopicScheduled
+                    onForwardSuccess: conversationTopicScheduled
                       ? () => void cancelHeteroContinuation(conversationTopicId)
                       : undefined,
                     sourceAgentId: conversationAgentId,
                     topicId: conversationTopicId,
-                    topicTitle: conversationTopicTitle || '',
+                    topicTitle: conversationTopic?.title || '',
                   })
               : undefined
           }

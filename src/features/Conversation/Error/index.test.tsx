@@ -576,10 +576,15 @@ describe('ErrorMessageExtra', () => {
     });
   });
 
-  it('cancels a scheduled continuation only after the topic handoff succeeds', () => {
+  it('cancels the scheduled conversation topic after handoff even when another topic is active', () => {
     useChatStore.setState({
-      activeTopicId: 'source-topic',
+      activeTopicId: 'main-topic',
       topicDetailMap: {
+        'main-topic': {
+          id: 'main-topic',
+          status: 'active',
+          title: 'Main topic',
+        } as any,
         'source-topic': {
           id: 'source-topic',
           metadata: { scheduledRun: { kind: 'resume_after_rate_limit' } },
