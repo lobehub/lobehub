@@ -73,7 +73,7 @@ const findLastBlockId = (block: AssistantContentBlock | undefined): string | und
 
 /**
  * Recursively finds the last message ID in a message tree
- * Priority: children > tools > self
+ * Priority: children > tools > virtual group members/tasks/columns > self
  */
 const findLastMessageIdRecursive = (node: UIChatMessage | undefined): string | undefined => {
   if (!node) return undefined;
@@ -90,7 +90,27 @@ const findLastMessageIdRecursive = (node: UIChatMessage | undefined): string | u
     return lastTool?.result_msg_id;
   }
 
-  // Priority 3: Return self ID
+  // Priority 3: Virtual group messages (agentCouncil / groupTasks / tasks / compare)
+  // carry a synthetic composite id (e.g. `agentCouncil-msg_X-msg_Y-msg_Z`) that is
+  // never persisted to the `messages` table. Returning it as a parentId triggers a
+  // PostgreSQL FK violation (23503). Dive into the real member/task/column messages
+  // and resolve the last persisted id instead.
+  const members = (node as any).members as UIChatMessage[] | undefined;
+  if (members && members.length > 0) {
+    return findLastMessageIdRecursive(members.at(-1));
+  }
+
+  const tasks = (node as any).tasks as UIChatMessage[] | undefined;
+  if (tasks && tasks.length > 0) {
+    return findLastMessageIdRecursive(tasks.at(-1));
+  }
+
+  const columns = (node as any).columns as UIChatMessage[][] | undefined;
+  if (columns && columns.length > 0) {
+    return findLastMessageIdRecursive(columns.at(-1)?.at(-1));
+  }
+
+  // Priority 4: Return self ID
   return node.id;
 };
 

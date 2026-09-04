@@ -921,5 +921,112 @@ describe('displayMessageSelectors', () => {
       const result = displayMessageSelectors.findLastMessageId('mg_123456')(state as ChatStore);
       expect(result).toBe('msg-999');
     });
+
+    it('should resolve a real member id for an agentCouncil virtual message (not the composite id)', () => {
+      // ROOT CAUSE (issue #15531):
+      //
+      // agentCouncil virtual messages carry a synthetic composite id like
+      // `agentCouncil-msg_X-msg_Y-msg_Z` that is never persisted to the
+      // `messages` table. Returning it as the next turn's parentId triggers a
+      // PostgreSQL FK violation (23503, messages_parent_id_messages_id_fk).
+      const councilMessage = {
+        id: 'agentCouncil-supervisor-1-member-a-member-b',
+        role: 'agentCouncil',
+        content: '',
+        members: [
+          { id: 'member-a', role: 'assistant', content: 'A' },
+          { id: 'member-b', role: 'assistant', content: 'B' },
+        ],
+      } as unknown as UIChatMessage;
+
+      const state: Partial<ChatStore> = {
+        activeAgentId: 'test-id',
+        messagesMap: {
+          [messageMapKey({ agentId: 'test-id' })]: [councilMessage],
+        },
+      };
+
+      const result = displayMessageSelectors.findLastMessageId(
+        'agentCouncil-supervisor-1-member-a-member-b',
+      )(state as ChatStore);
+      expect(result).toBe('member-b');
+    });
+
+    it('should dive into a member assistantGroup to resolve its last real id', () => {
+      const councilMessage = {
+        id: 'agentCouncil-supervisor-1-member-a-member-b',
+        role: 'agentCouncil',
+        content: '',
+        members: [
+          { id: 'member-a', role: 'assistant', content: 'A' },
+          {
+            id: 'member-b-group',
+            role: 'assistantGroup',
+            content: '',
+            children: [
+              { id: 'member-b-block-1', content: 'first' },
+              { id: 'member-b-block-2', content: 'second' },
+            ],
+          },
+        ],
+      } as unknown as UIChatMessage;
+
+      const state: Partial<ChatStore> = {
+        activeAgentId: 'test-id',
+        messagesMap: {
+          [messageMapKey({ agentId: 'test-id' })]: [councilMessage],
+        },
+      };
+
+      const result = displayMessageSelectors.findLastMessageId(
+        'agentCouncil-supervisor-1-member-a-member-b',
+      )(state as ChatStore);
+      expect(result).toBe('member-b-block-2');
+    });
+
+    it('should resolve a real task id for a groupTasks/tasks virtual message (not the composite id)', () => {
+      const groupTasksMessage = {
+        id: 'groupTasks-supervisor-1-task-a-task-b',
+        role: 'groupTasks',
+        content: '',
+        tasks: [
+          { id: 'task-a', role: 'assistant', content: 'A' },
+          { id: 'task-b', role: 'assistant', content: 'B' },
+        ],
+      } as unknown as UIChatMessage;
+
+      const state: Partial<ChatStore> = {
+        activeAgentId: 'test-id',
+        messagesMap: {
+          [messageMapKey({ agentId: 'test-id' })]: [groupTasksMessage],
+        },
+      };
+
+      const result = displayMessageSelectors.findLastMessageId(
+        'groupTasks-supervisor-1-task-a-task-b',
+      )(state as ChatStore);
+      expect(result).toBe('task-b');
+    });
+
+    it('should resolve a real column id for a compare virtual message', () => {
+      const compareMessage = {
+        id: 'compare-group-1',
+        role: 'compare',
+        content: '',
+        columns: [[{ id: 'col-a', content: 'A' }], [{ id: 'col-b', content: 'B' }]],
+      } as unknown as UIChatMessage;
+
+      const state: Partial<ChatStore> = {
+        activeAgentId: 'test-id',
+        messagesMap: {
+          [messageMapKey({ agentId: 'test-id' })]: [compareMessage],
+        },
+      };
+
+      const result = displayMessageSelectors.findLastMessageId('compare-group-1')(
+        state as ChatStore,
+      );
+      expect(result).toBe('col-b');
+    });
   });
 });
