@@ -308,14 +308,20 @@ export const openaiChatModels: AIChatModelCard[] = [
       units: [
         {
           name: 'textInput',
-          rate: 30,
-          strategy: 'fixed',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 30, upTo: 272_000 },
+            { rate: 60, upTo: 'infinity' },
+          ],
           unit: 'millionTokens',
         },
         {
           name: 'textOutput',
-          rate: 180,
-          strategy: 'fixed',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 180, upTo: 272_000 },
+            { rate: 270, upTo: 'infinity' },
+          ],
           unit: 'millionTokens',
         },
       ],
