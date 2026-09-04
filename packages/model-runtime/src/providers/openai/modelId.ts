@@ -160,6 +160,37 @@ export const isGPT5ResponsesModel = (model: string): boolean => {
   return parsed.minorVersion !== undefined && parsed.minorVersion >= 2;
 };
 
+/**
+ * Models that can ONLY be reached through the Responses API — they have no
+ * `/v1/chat/completions` endpoint at all. Membership here is a hard requirement:
+ * `shouldUseResponsesAPI()` ignores the user's `enableResponseApi` toggle for them,
+ * because honoring an opt-out would simply break the request.
+ */
+export const isResponsesAPIRequiredModel = (model: string): boolean => {
+  if (responsesAPIModels.has(model)) return true;
+
+  const parsed = isGPT5ResponsesEndpointModel(model);
+  if (!parsed || hasModifier(parsed, 'chat')) return false;
+
+  // Codex-namespaced ids (`codex/gpt-*`) are served by gateways that speak the Responses
+  // contract only — there is no /chat/completions to fall back to, so an explicit
+  // `apiMode: 'chatCompletion'` must not reroute them (see #17831 / #17851).
+  // Gated on isGPT5ResponsesModel so "required" stays a subset of the preferred set.
+  if (parsed.source === 'codex') return isGPT5ResponsesModel(model);
+
+  return hasModifier(parsed, 'pro') || hasModifier(parsed, 'codex');
+};
+
+/**
+ * Superset of "requires the Responses API" and "prefers the Responses API".
+ *
+ * The preferred cohort (GPT-5 non-pro/non-codex, e.g. `gpt-5.2`, `gpt-5-mini`) works
+ * over Chat Completions too, so `shouldUseResponsesAPI()` lets the user's
+ * `enableResponseApi` toggle opt out of it — see {@link isResponsesAPIRequiredModel}.
+ *
+ * Consumers that only need "does this model default to the Responses API" (Azure,
+ * GitHub Copilot, `src/services/chat`) should keep using this superset.
+ */
 export const isResponsesAPIModel = (model: string): boolean =>
   responsesAPIModels.has(model) || isGPT5ResponsesModel(model);
 

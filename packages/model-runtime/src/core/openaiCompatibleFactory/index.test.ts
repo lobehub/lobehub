@@ -4231,4 +4231,144 @@ describe('LobeOpenAICompatibleFactory', () => {
       await expect(instance.transcribe!({ file, model: 'whisper-1' })).rejects.toBeDefined();
     });
   });
+
+  // The method is private; it is exercised through `(instance as any)` to keep the
+  // priority chain covered without reshaping production code.
+  describe('shouldUseResponsesAPI', () => {
+    // Requires the Responses API — no chat/completions endpoint exists for it.
+    const requiredModel = 'gpt-5.5-pro';
+    // Defaults to the Responses API but works over chat/completions too.
+    const preferredModel = 'gpt-5.2';
+    const regularModel = 'gpt-4o-mini';
+
+    it('returns true for required models even when the user disables Responses API', () => {
+      // Priority 0. Regression guard: toggling `enableResponseApi` off must not
+      // route Pro-tier models to an endpoint they do not have.
+      const result = (instance as any).shouldUseResponsesAPI({
+        model: requiredModel,
+        userApiMode: 'chatCompletion',
+      });
+
+      expect(result).toBe(true);
+    });
+
+    it('returns true for required models with no config at all', () => {
+      expect((instance as any).shouldUseResponsesAPI({ model: requiredModel })).toBe(true);
+    });
+
+    it('keeps Codex-namespaced ids on the Responses API despite the user opt-out', () => {
+      // Priority 0. `codex/gpt-*` gateways only implement the Responses contract
+      // (#17831 / #17851), so they belong to the required cohort even though the
+      // bare `gpt-5.6-luna` id is merely preferred and stays overridable.
+      const codexResult = (instance as any).shouldUseResponsesAPI({
+        model: 'codex/gpt-5.6-luna',
+        userApiMode: 'chatCompletion',
+      });
+      expect(codexResult).toBe(true);
+
+      const bareResult = (instance as any).shouldUseResponsesAPI({
+        model: 'gpt-5.6-luna',
+        userApiMode: 'chatCompletion',
+      });
+      expect(bareResult).toBe(false);
+    });
+
+    it('returns false for preferred models when the user disables Responses API', () => {
+      // Priority 1. The user's explicit opt-out is what lets OpenAI-compatible
+      // proxies (CLIProxyAPI, LiteLLM, One-API, vLLM) receive /v1/chat/completions.
+      const result = (instance as any).shouldUseResponsesAPI({
+        model: preferredModel,
+        userApiMode: 'chatCompletion',
+      });
+
+      expect(result).toBe(false);
+    });
+
+    it('returns true for preferred models when no user override is set', () => {
+      // Priority 2. Default behavior preserved for users who never touched the toggle.
+      expect((instance as any).shouldUseResponsesAPI({ model: preferredModel })).toBe(true);
+    });
+
+    it('returns true for preferred models when userApiMode is responses', () => {
+      const result = (instance as any).shouldUseResponsesAPI({
+        model: preferredModel,
+        userApiMode: 'responses',
+      });
+
+      expect(result).toBe(true);
+    });
+
+    it('returns true when userApiMode=responses and no useResponseModels filter is set', () => {
+      // Priority 3
+      const result = (instance as any).shouldUseResponsesAPI({
+        model: regularModel,
+        userApiMode: 'responses',
+      });
+
+      expect(result).toBe(true);
+    });
+
+    it('respects the useResponseModels filter when userApiMode=responses', () => {
+      // Priority 3 with a filter: only matching models go through Responses API.
+      const matching = (instance as any).shouldUseResponsesAPI({
+        flagUseResponseModels: ['gpt-4'],
+        model: 'gpt-4o',
+        userApiMode: 'responses',
+      });
+      expect(matching).toBe(true);
+
+      const nonMatching = (instance as any).shouldUseResponsesAPI({
+        flagUseResponseModels: ['gpt-4'],
+        model: 'claude-3-5-sonnet',
+        userApiMode: 'responses',
+      });
+      expect(nonMatching).toBe(false);
+    });
+
+    it('returns true when the explicit responseApi flag is set', () => {
+      // Priority 4
+      const result = (instance as any).shouldUseResponsesAPI({
+        model: regularModel,
+        responseApi: true,
+      });
+
+      expect(result).toBe(true);
+    });
+
+    it('returns true when the factory-level flagUseResponse is set', () => {
+      // Priority 5
+      const result = (instance as any).shouldUseResponsesAPI({
+        flagUseResponse: true,
+        model: regularModel,
+      });
+
+      expect(result).toBe(true);
+    });
+
+    it('matches the model against flagUseResponseModels patterns when no userApiMode is set', () => {
+      // Priority 6
+      const result = (instance as any).shouldUseResponsesAPI({
+        flagUseResponseModels: [/^gpt-4/],
+        model: 'gpt-4o',
+      });
+
+      expect(result).toBe(true);
+    });
+
+    it('returns false for regular models with no special config', () => {
+      expect((instance as any).shouldUseResponsesAPI({ model: regularModel })).toBe(false);
+    });
+
+    it('lets the user override win over the factory-level flagUseResponse', () => {
+      // Regression guard: a downstream provider setting flagUseResponse=true must not
+      // resurrect the Responses API for a preferred model the user opted out of.
+      const result = (instance as any).shouldUseResponsesAPI({
+        flagUseResponse: true,
+        model: preferredModel,
+        userApiMode: 'chatCompletion',
+      });
+
+      expect(result).toBe(false);
+    });
+  });
 });

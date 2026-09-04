@@ -428,6 +428,66 @@ describe('LobeOpenAI', () => {
       expect(createCall.presence_penalty).toBe(0.3);
       expect(createCall.stream).toBe(true);
     });
+
+    // See #13513: OpenAI-compatible proxies (CLIProxyAPI, LiteLLM, One-API, vLLM) implement
+    // /v1/chat/completions but not the Responses API, so users must be able to opt out.
+    describe('with apiMode=chatCompletion (user disabled Responses API)', () => {
+      it('should use chat completions for models that merely prefer the responses API', async () => {
+        const payload = {
+          apiMode: 'chatCompletion' as const,
+          messages: [{ content: 'Hello', role: 'user' as const }],
+          model: 'gpt-5.6-sol',
+        };
+
+        await instance.chat(payload);
+
+        expect(instance['client'].responses.create).not.toHaveBeenCalled();
+        const createCall = (instance['client'].chat.completions.create as Mock).mock.calls[0][0];
+        expect(createCall.model).toBe('gpt-5.6-sol');
+        expect(createCall.apiMode).toBeUndefined();
+      });
+
+      it('should still use responses API for GPT-5 pro models', async () => {
+        const payload = {
+          apiMode: 'chatCompletion' as const,
+          messages: [{ content: 'Hello', role: 'user' as const }],
+          model: 'gpt-5.5-pro',
+        };
+
+        await instance.chat(payload);
+
+        expect(instance['client'].chat.completions.create).not.toHaveBeenCalled();
+        const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
+        expect(createCall.model).toBe('gpt-5.5-pro');
+      });
+
+      it('should still use responses API for models with no chat completions endpoint', async () => {
+        const payload = {
+          apiMode: 'chatCompletion' as const,
+          messages: [{ content: 'Hello', role: 'user' as const }],
+          model: 'o1-pro',
+        };
+
+        await instance.chat(payload);
+
+        expect(instance['client'].chat.completions.create).not.toHaveBeenCalled();
+        expect(instance['client'].responses.create).toHaveBeenCalled();
+      });
+
+      it('should still use responses API when enabledSearch is true', async () => {
+        const payload = {
+          apiMode: 'chatCompletion' as const,
+          enabledSearch: true,
+          messages: [{ content: 'Hello', role: 'user' as const }],
+          model: 'gpt-4o',
+        };
+
+        await instance.chat(payload);
+
+        expect(instance['client'].chat.completions.create).not.toHaveBeenCalled();
+        expect(instance['client'].responses.create).toHaveBeenCalled();
+      });
+    });
   });
 
   describe('responses.handlePayload', () => {

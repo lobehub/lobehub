@@ -12,6 +12,7 @@ import { ErrorClassifier, refineErrorCode } from '../../errors';
 import {
   isGPT5ProResponsesModel,
   isResponsesAPIModel,
+  isResponsesAPIRequiredModel,
   supportsGPT5ResponsesReasoningEffortNone,
 } from '../../providers/openai/modelId';
 import type {
@@ -497,20 +498,30 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
       const log = debug(`${this.logPrefix}:shouldUseResponsesAPI`);
 
-      // Priority 0: Check built-in Responses API model rules FIRST (highest priority)
-      // These models MUST use Responses API regardless of user settings.
-      if (model && isResponsesAPIModel(model)) {
-        log('using Responses API: model %s matches built-in Responses API model rules', model);
+      // Priority 0: Models that have no Chat Completions endpoint at all.
+      // They MUST use Responses API regardless of user settings — honoring an opt-out
+      // here would just break the request (e.g. gpt-5-pro, o3-pro, *-deep-research).
+      if (model && isResponsesAPIRequiredModel(model)) {
+        log('using Responses API: model %s requires Responses API', model);
         return true;
       }
 
-      // Priority 1: userApiMode is explicitly set to 'chatCompletion' (user disabled the switch)
+      // Priority 1: userApiMode is explicitly set to 'chatCompletion' (user disabled the switch).
+      // This outranks the "prefers Responses API" defaults below, so users behind
+      // OpenAI-compatible proxies can force /v1/chat/completions for models that support it.
       if (userApiMode === 'chatCompletion') {
-        log('using Chat Completions API: userApiMode=%s', userApiMode);
+        log('using Chat Completions API: userApiMode=%s (user override)', userApiMode);
         return false;
       }
 
-      // Priority 2: When user enables the switch (userApiMode === 'responses')
+      // Priority 2: Models that default to Responses API but also work over Chat Completions.
+      // Only reached when the user has not explicitly opted out above.
+      if (model && isResponsesAPIModel(model)) {
+        log('using Responses API: model %s defaults to Responses API', model);
+        return true;
+      }
+
+      // Priority 3: When user enables the switch (userApiMode === 'responses')
       // Check if useResponseModels is configured - if so, only matching models use Responses API
       // If useResponseModels is not configured, all models use Responses API
       if (userApiMode === 'responses') {
@@ -536,19 +547,19 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         return true;
       }
 
-      // Priority 3: Explicit responseApi flag
+      // Priority 4: Explicit responseApi flag
       if (responseApi) {
         log('using Responses API: explicit responseApi flag for %s', context);
         return true;
       }
 
-      // Priority 4: Factory/instance level useResponse flag
+      // Priority 5: Factory/instance level useResponse flag
       if (flagUseResponse) {
         log('using Responses API: flagUseResponse=true for %s', context);
         return true;
       }
 
-      // Priority 5: Check if model matches useResponseModels patterns (without user switch)
+      // Priority 6: Check if model matches useResponseModels patterns (without user switch)
       if (model && flagUseResponseModels?.length) {
         const matches = flagUseResponseModels.some((m: string | RegExp) =>
           typeof m === 'string' ? model.includes(m) : (m as RegExp).test(model),
