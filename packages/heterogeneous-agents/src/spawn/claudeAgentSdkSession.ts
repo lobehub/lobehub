@@ -7,6 +7,7 @@ import type {
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 
 import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
+import { resolveCliSpawnPlan } from './cliSpawn';
 
 const CLAUDE_SDK_DISALLOWED_TOOLS = ['AskUserQuestion', 'Monitor', 'ScheduleWakeup'] as const;
 const DEFAULT_INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
@@ -24,6 +25,24 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
+
+export const resolveClaudeSdkExecutablePath = async (
+  commandPath: string,
+  env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform = process.platform,
+): Promise<string> => {
+  if (platform !== 'win32' || !/\.(?:bat|cmd)$/i.test(commandPath)) return commandPath;
+
+  // The Agent SDK spawns native paths directly and runs JavaScript paths with
+  // Node. Reuse the CLI launcher's shell-free shim parser so a detected npm
+  // wrapper becomes its real `cli.js`, which packaged builds can still access.
+  const spawnPlan = await resolveCliSpawnPlan(commandPath, [], env);
+  if (spawnPlan.command === commandPath) {
+    throw new Error(`Unable to resolve the Claude Code Windows shim: ${commandPath}`);
+  }
+
+  return spawnPlan.args[0] ?? spawnPlan.command;
+};
 
 const hasContentMessage = (value: unknown): value is SDKUserMessage => {
   if (!isObject(value)) return false;
@@ -176,7 +195,7 @@ export class ClaudeAgentSdkSession {
       const userMessage = buildClaudeSdkUserMessageFromStreamJson(this.options.stdinPayload);
 
       this.queryHandle = query({
-        options: this.buildQueryOptions(),
+        options: await this.buildQueryOptions(),
         prompt: this.createInputStream(userMessage),
       });
 
@@ -223,8 +242,12 @@ export class ClaudeAgentSdkSession {
     this.queryHandle?.close();
   }
 
-  private buildQueryOptions(): ClaudeAgentSdkOptions {
+  private async buildQueryOptions(): Promise<ClaudeAgentSdkOptions> {
     const argOptions = parseClaudeSdkExtraArgs(this.options.args);
+    const executablePath = await resolveClaudeSdkExecutablePath(
+      this.options.commandPath,
+      this.options.env,
+    );
 
     return {
       allowDangerouslySkipPermissions: true,
@@ -233,7 +256,7 @@ export class ClaudeAgentSdkSession {
       disallowedTools: [...CLAUDE_SDK_DISALLOWED_TOOLS],
       env: this.options.env,
       includePartialMessages: true,
-      pathToClaudeCodeExecutable: this.options.commandPath,
+      pathToClaudeCodeExecutable: executablePath,
       permissionMode: 'bypassPermissions',
       ...(this.options.resumeSessionId ? { resume: this.options.resumeSessionId } : {}),
       ...argOptions,
