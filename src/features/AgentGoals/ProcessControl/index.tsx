@@ -13,6 +13,7 @@ import { goalSelectors, useGoalStore } from '@/store/goal';
 
 import GoalAcceptanceCriteria from '../GoalAcceptanceCriteria';
 import Activity from './Activity';
+import Deliverables from './Deliverables';
 import Findings from './Findings';
 import Frontier, { type FrontierActions } from './Frontier';
 import { buildGoalGraphView } from './goalGraphViewModel';
@@ -126,7 +127,7 @@ const ProcessControl = memo<ProcessControlProps>(
           onSelect={select}
         />
 
-        <Accordion defaultExpandedKeys={['findings', 'activity']} gap={0}>
+        <Accordion defaultExpandedKeys={['deliverables', 'findings', 'activity']} gap={0}>
           {/* The structured acceptance standard the terminal goal acceptance is
             gated on. Collapsed by default — reference material, like the task
             detail's 交付验收 section. Prose-only legacy goals have none. */}
@@ -152,6 +153,26 @@ const ProcessControl = memo<ProcessControlProps>(
               </Flexbox>
             </AccordionItem>
           )}
+          {/* Between the standard and the conclusions on purpose: 验收标准 says
+              what counts as done, 交付物 what was produced, 结论 what the goal now
+              believes about it. Findings routinely cite these artifacts. */}
+          <AccordionItem
+            itemKey={'deliverables'}
+            paddingBlock={6}
+            paddingInline={0}
+            title={
+              <Flexbox horizontal align={'center'} gap={8}>
+                <Text fontSize={14} weight={600}>
+                  {t('goalProcess.deliverables.title')}
+                </Text>
+                {graph.artifacts.length > 0 && <Tag size={'small'}>{graph.artifacts.length}</Tag>}
+              </Flexbox>
+            }
+          >
+            <Flexbox className={styles.section}>
+              <Deliverables graph={graph} />
+            </Flexbox>
+          </AccordionItem>
           <AccordionItem
             itemKey={'findings'}
             paddingBlock={6}

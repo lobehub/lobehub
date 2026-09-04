@@ -10,6 +10,7 @@ import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { WorkModel } from '@/database/models/work';
 import {
   acceptances,
   agentOperations,
@@ -341,6 +342,79 @@ describe('GoalService', () => {
       description: 'Delivered content with the full run summary.',
       title: 'Delivered title',
     });
+  });
+
+  it('links what the task delivered to its node, and skips the task Work itself', async () => {
+    // The deliverable used to survive only as a URL inside the finding's prose:
+    // the graph recorded that a task finished but not what came out of it.
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const workModel = new WorkModel(serverDB, userId);
+    const graph = await service.create({ tasks: ['Deliver me'], title: 'Harvest deliverables' });
+    const created = await service.tick(graph.goal.id);
+    await serverDB.insert(taskTopics).values({
+      handoff: { summary: 'Delivered', title: 'Delivered title' },
+      operationId: 'op-delivered',
+      seq: 1,
+      status: 'completed',
+      taskId: created.taskId!,
+      userId,
+    });
+    await workModel.registerExternal({
+      changeType: 'created',
+      identifier: 'ENG-7',
+      resourceId: 'lobehub/lobehub#7',
+      resourceType: 'github_issue',
+      rootOperationId: 'op-delivered',
+      title: 'The delivered issue',
+      toolIdentifier: 'lobe-github',
+      toolName: 'createIssue',
+    });
+    await taskModel.updateStatus(created.taskId!, 'completed');
+
+    await service.tick(graph.goal.id);
+
+    const snapshot = await service.graph(graph.goal.id);
+    const linked = snapshot.workVersions.filter((link) => link.nodeId === created.nodeId);
+    expect(linked.some((link) => link.work?.title === 'The delivered issue')).toBe(true);
+    // The responsible task's own Work is still linked — it is the execution
+    // container, and the client is what filters it out of the deliverable list.
+    expect(linked.some((link) => link.work?.type === 'task')).toBe(true);
+  });
+
+  it('re-settling a task does not duplicate its deliverable links', async () => {
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const workModel = new WorkModel(serverDB, userId);
+    const graph = await service.create({ tasks: ['Deliver me'], title: 'Idempotent harvest' });
+    const created = await service.tick(graph.goal.id);
+    await serverDB.insert(taskTopics).values({
+      handoff: { summary: 'Delivered', title: 'Delivered title' },
+      operationId: 'op-delivered',
+      seq: 1,
+      status: 'completed',
+      taskId: created.taskId!,
+      userId,
+    });
+    await workModel.registerExternal({
+      changeType: 'created',
+      resourceId: 'lobehub/lobehub#8',
+      resourceType: 'github_issue',
+      rootOperationId: 'op-delivered',
+      title: 'Delivered once',
+      toolIdentifier: 'lobe-github',
+      toolName: 'createIssue',
+    });
+    await taskModel.updateStatus(created.taskId!, 'completed');
+
+    await service.tick(graph.goal.id);
+    await service.tick(graph.goal.id);
+
+    const snapshot = await service.graph(graph.goal.id);
+    const delivered = snapshot.workVersions.filter(
+      (link) => link.nodeId === created.nodeId && link.work?.title === 'Delivered once',
+    );
+    expect(delivered).toHaveLength(1);
   });
 
   it('leaves a fresh dispatch claim alone', async () => {

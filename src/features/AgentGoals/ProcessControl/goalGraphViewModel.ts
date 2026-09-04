@@ -5,14 +5,15 @@ import type {
   GoalGraphNode,
   GoalGraphSnapshot,
   GoalItem,
+  WorkType,
 } from '@lobechat/types';
 
 /**
  * Read model for the Goal process-control surface.
  *
  * Everything here is derived from one `goal.graph` snapshot — the server has no
- * frontier projection, no per-node attempt/cost roll-up and no artifact
- * hydration, so the client reproduces the coordinator's own selection rule
+ * frontier projection and no per-node attempt/cost roll-up, so the client
+ * reproduces the coordinator's own selection rule
  * (`GoalService.tick`) and reads the append-only `goal_events` trail for the
  * per-node attempt ledger. Anything that cannot be derived honestly is left
  * `undefined` and the UI omits it rather than inventing a value.
@@ -39,11 +40,30 @@ export interface GoalAttempt {
   taskId?: string;
 }
 
+/**
+ * One deliverable a task produced, named rather than counted. `link` keeps the
+ * relation so a future `input` / `supports` link can render differently without
+ * another shape.
+ */
+export interface GoalArtifactView {
+  /** In-app open target for a document deliverable. */
+  agentDocumentId?: string;
+  createdAt: Date;
+  identifier: string | null;
+  /** The task node that produced it — the goal-level list has no other owner. */
+  nodeId: string;
+  title: string | null;
+  type: WorkType;
+  url: string | null;
+  workId: string;
+  workVersionId: string;
+}
+
 export interface GoalNodeView {
   /** Problems this finding was linked to with a `supports` edge. */
   answers: GoalGraphNode[];
-  /** Registered work versions. Names/urls need a server join that does not exist yet. */
-  artifactCount: number;
+  /** Deliverables this node produced, newest first. */
+  artifacts: GoalArtifactView[];
   attempts: GoalAttempt[];
   /** Unresolved `depends_on` targets — why this node cannot start. */
   blockers: GoalGraphNode[];
@@ -82,6 +102,11 @@ export interface FrontierItem {
 export interface GoalGraphView {
   /** Every node the frontier can move now, excluding the fading done rows. */
   advanceable: number;
+  /**
+   * Every deliverable the goal has produced, newest first — the goal-level
+   * answer to "what came out of this", which no single node can give.
+   */
+  artifacts: GoalArtifactView[];
   blocked: GoalNodeView[];
   byId: Record<string, GoalNodeView>;
   decisions: GoalGraphDecision[];
@@ -207,9 +232,27 @@ export const buildGoalGraphView = (
       supportsByFinding.set(source.id, [...(supportsByFinding.get(source.id) ?? []), target]);
   }
 
-  const artifactCounts = new Map<string, number>();
-  for (const link of workVersions)
-    artifactCounts.set(link.nodeId, (artifactCounts.get(link.nodeId) ?? 0) + 1);
+  // Only Works that were named by the read-time join can be shown, and the
+  // responsible task's own `task` Work is execution bookkeeping rather than a
+  // deliverable — it would otherwise head every task's list with itself.
+  const artifactsByNode = new Map<string, GoalArtifactView[]>();
+  for (const link of workVersions) {
+    if (!link.work || link.work.type === 'task') continue;
+    const artifact: GoalArtifactView = {
+      createdAt: link.createdAt,
+      identifier: link.work.identifier,
+      nodeId: link.nodeId,
+      title: link.work.title,
+      type: link.work.type,
+      url: link.work.url,
+      workId: link.work.workId,
+      workVersionId: link.workVersionId,
+      ...(link.work.agentDocumentId ? { agentDocumentId: link.work.agentDocumentId } : {}),
+    };
+    artifactsByNode.set(link.nodeId, [...(artifactsByNode.get(link.nodeId) ?? []), artifact]);
+  }
+  for (const list of artifactsByNode.values())
+    list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
   const decisionsByNode = new Map<string, GoalGraphDecision[]>();
   for (const decision of decisions)
@@ -234,7 +277,7 @@ export const buildGoalGraphView = (
     );
     return {
       answers: supportsByFinding.get(node.id) ?? [],
-      artifactCount: artifactCounts.get(node.id) ?? 0,
+      artifacts: artifactsByNode.get(node.id) ?? [],
       attempts,
       blockers: (dependsOn.get(node.id) ?? [])
         .map((id) => nodeById.get(id))
@@ -298,6 +341,9 @@ export const buildGoalGraphView = (
 
   return {
     advanceable: frontier.length,
+    artifacts: [...artifactsByNode.values()]
+      .flat()
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
     blocked,
     byId,
     decisions,

@@ -126,10 +126,23 @@ export class GoalGraphModel {
         .where(eq(goalEvents.goalId, goalId))
         .orderBy(desc(goalEvents.createdAt))
         .limit(GoalGraphModel.GRAPH_EVENT_LIMIT),
+      // The version row carries its own display snapshot, so naming a linked
+      // deliverable costs two joins rather than a second round-trip per link.
       this.db
-        .select({ link: goalNodeWorkVersions })
+        .select({
+          agentDocumentId: workVersions.metadata,
+          identifier: workVersions.identifier,
+          link: goalNodeWorkVersions,
+          status: workVersions.status,
+          title: workVersions.title,
+          type: works.type,
+          url: workVersions.url,
+          workId: works.id,
+        })
         .from(goalNodeWorkVersions)
         .innerJoin(goalNodes, eq(goalNodeWorkVersions.nodeId, goalNodes.id))
+        .leftJoin(workVersions, eq(goalNodeWorkVersions.workVersionId, workVersions.id))
+        .leftJoin(works, eq(workVersions.workId, works.id))
         .where(eq(goalNodes.goalId, goalId))
         .orderBy(asc(goalNodeWorkVersions.createdAt)),
     ]);
@@ -140,7 +153,24 @@ export class GoalGraphModel {
       events,
       goal,
       nodes,
-      workVersions: linkedWorkVersions.map(({ link }) => link),
+      workVersions: linkedWorkVersions.map(({ link, type, workId, ...display }) => ({
+        ...link,
+        // A link whose version row is gone still counts; it just cannot be named.
+        work:
+          type && workId
+            ? {
+                identifier: display.identifier,
+                status: display.status,
+                title: display.title,
+                type,
+                url: display.url,
+                workId,
+                ...(display.agentDocumentId?.agentDocumentId
+                  ? { agentDocumentId: display.agentDocumentId.agentDocumentId }
+                  : {}),
+              }
+            : undefined,
+      })),
     };
   };
 

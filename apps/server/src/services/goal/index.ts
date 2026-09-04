@@ -13,6 +13,7 @@ import type {
   GoalTickResult,
   TaskItem,
   TaskTopicHandoff,
+  WorkVersionEventItem,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { sql } from 'drizzle-orm';
@@ -1387,6 +1388,62 @@ export class GoalService {
       .join('\n\n');
   };
 
+  /**
+   * Link what a task actually delivered to the node that ordered it.
+   *
+   * The task Work attached alongside is the execution container; these are its
+   * outputs — the documents and external resources the run registered. Without
+   * them the graph records that a task finished but not what it produced, and
+   * the deliverable survives only as a URL buried in the finding's prose.
+   *
+   * Harvested across every run of the task, not just the delivering one: a task
+   * that wrote its document in an earlier round and only revised it in the last
+   * still delivered that document. Works are deduplicated by identity and
+   * linked at their newest version, so a document refined across rounds is one
+   * deliverable with a history rather than several deliverables.
+   *
+   * `file` and `task` Works are deliberately excluded. A `file` Work is an
+   * edit-level event — the Work registry itself gates them behind an opt-in —
+   * and the responsible task's own Work is already linked by the caller.
+   */
+  private attachTaskDeliverables = async (
+    goalId: string,
+    nodeId: string,
+    operationIds: string[],
+    effects: GoalAdvanceEffect[],
+  ) => {
+    if (operationIds.length === 0) return;
+
+    const byOperation = await this.workModel.listByRootOperations({
+      rootOperationIds: operationIds,
+    });
+
+    const newestByWork = new Map<string, WorkVersionEventItem>();
+    for (const item of Object.values(byOperation).flat()) {
+      if (item.type !== 'document' && item.type !== 'external') continue;
+      const seen = newestByWork.get(item.id);
+      if (!seen || seen.version.createdAt < item.version.createdAt) newestByWork.set(item.id, item);
+    }
+
+    for (const item of newestByWork.values()) {
+      const link = await this.coordinatorGraph.attachWorkVersion(
+        goalId,
+        nodeId,
+        item.version.id,
+        'produced',
+      );
+      // `attachWorkVersion` is idempotent, so a re-settled task re-links the
+      // same versions silently; only a genuinely new link is worth an effect.
+      if (link)
+        effects.push({
+          detail: item.type,
+          nodeId,
+          targetId: item.id,
+          type: 'attached_work_version',
+        });
+    }
+  };
+
   private consumeCompletedTask = async (
     graph: GoalGraphSnapshot,
     nodeId: string,
@@ -1429,6 +1486,12 @@ export class GoalService {
         'produced',
       );
     }
+    await this.attachTaskDeliverables(
+      graph.goal.id,
+      nodeId,
+      recent.flatMap((topic) => (topic.operationId ? [topic.operationId] : [])),
+      effects,
+    );
     if (!existingFinding) {
       const handoff = latest?.handoff as TaskTopicHandoff | null;
       const finding = await this.coordinatorGraph.createNode(graph.goal.id, {

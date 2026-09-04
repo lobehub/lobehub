@@ -300,18 +300,81 @@ describe('buildGoalGraphView', () => {
     expect(view.advanceable).toBe(1);
   });
 
-  it('counts registered work versions per node', () => {
+  it("names a node's deliverables newest first, and rolls them up for the goal", () => {
     const view = buildGoalGraphView(
       snapshot({
         nodes: [node('w1')],
         workVersions: [
-          { createdAt: at(5), id: 'l1', nodeId: 'w1', relation: 'produced', workVersionId: 'v1' },
+          {
+            createdAt: at(5),
+            id: 'l1',
+            nodeId: 'w1',
+            relation: 'produced',
+            work: {
+              agentDocumentId: 'docs_1',
+              identifier: null,
+              status: null,
+              title: 'Report',
+              type: 'document',
+              url: null,
+              workId: 'wk1',
+            },
+            workVersionId: 'v1',
+          },
+          {
+            createdAt: at(9),
+            id: 'l2',
+            nodeId: 'w1',
+            relation: 'produced',
+            work: {
+              identifier: 'ENG-1',
+              status: 'open',
+              title: 'Issue',
+              type: 'external',
+              url: 'https://example.com/1',
+              workId: 'wk2',
+            },
+            workVersionId: 'v2',
+          },
+        ],
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1.artifacts.map((a) => a.title)).toEqual(['Issue', 'Report']);
+    expect(view.artifacts.map((a) => a.workId)).toEqual(['wk2', 'wk1']);
+  });
+
+  it('leaves the responsible task Work and unresolvable links out of the deliverables', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        nodes: [node('w1')],
+        workVersions: [
+          {
+            createdAt: at(5),
+            id: 'l1',
+            nodeId: 'w1',
+            relation: 'produced',
+            // The execution container the coordinator links on dispatch — it
+            // would otherwise head every task's list with the task itself.
+            work: {
+              identifier: 'T-1',
+              status: 'completed',
+              title: 'Build the thing',
+              type: 'task',
+              url: null,
+              workId: 'wk1',
+            },
+            workVersionId: 'v1',
+          },
+          // Version row gone: the link still exists but cannot be named.
           { createdAt: at(9), id: 'l2', nodeId: 'w1', relation: 'produced', workVersionId: 'v2' },
         ],
       }),
       NOW,
     );
 
-    expect(view.byId.w1.artifactCount).toBe(2);
+    expect(view.byId.w1.artifacts).toEqual([]);
+    expect(view.artifacts).toEqual([]);
   });
 });
