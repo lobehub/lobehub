@@ -415,11 +415,29 @@ export class SkillImporter {
       .replace(/^\//, '') // Remove leading slash
       .replace(/\.md$/i, '') // Remove .md extension
       .replaceAll('/', '.'); // Replace slashes with dots
-    const identifier = options?.identifier || `url.${url.host}.${pathPart || 'skill'}`;
+    const urlIdentifier = `url.${url.host}.${pathPart || 'skill'}`;
+    const identifier = options?.identifier || urlIdentifier;
     log('importFromUrl: identifier=%s', identifier);
 
     // 5. Check for existing skill
-    const existing = await this.skillModel.findByIdentifier(identifier);
+    let existing = await this.skillModel.findByIdentifier(identifier);
+    let shouldUpgradeIdentifier = false;
+
+    // Older marketplace imports through the server runtime omitted the canonical identifier,
+    // so they were persisted with the URL-derived fallback. A canonical market reinstall should
+    // repair that exact row rather than attempting to create a duplicate with the same name.
+    if (
+      !existing &&
+      options?.identifier &&
+      options.source === 'market' &&
+      identifier !== urlIdentifier
+    ) {
+      const legacy = await this.skillModel.findByIdentifier(urlIdentifier);
+      if (legacy?.source === 'market') {
+        existing = legacy;
+        shouldUpgradeIdentifier = legacy.identifier !== identifier;
+      }
+    }
 
     // 6. Build manifest with source URL
     const fullManifest: SkillManifest = {
@@ -466,20 +484,23 @@ export class SkillImporter {
       // Use nullish coalescing to handle null/undefined comparison correctly
       const existingHash = existing.zipFileHash ?? undefined;
       const isSameContent = existing.content === skillContent && existingHash === zipFileHash;
-      if (isSameContent) {
+      if (isSameContent && !shouldUpgradeIdentifier) {
         log('importFromUrl: skill unchanged, skipping update id=%s', existing.id);
         return { skill: existing, status: 'unchanged' };
       }
 
       this.assertCanOverwrite(existing);
-      log('importFromUrl: skill exists but content changed, updating id=%s', existing.id);
+      log('importFromUrl: skill requires an update, updating id=%s', existing.id);
       const skill = await this.skillModel.update(existing.id, {
-        content: skillContent,
-        description: manifest.description,
-        manifest: fullManifest,
-        name: manifest.name,
-        ...(resourceMap && { resources: resourceMap }),
-        ...(zipFileHash && { zipFileHash }),
+        ...(shouldUpgradeIdentifier && { identifier, source: 'market' }),
+        ...(!isSameContent && {
+          content: skillContent,
+          description: manifest.description,
+          manifest: fullManifest,
+          name: manifest.name,
+          ...(resourceMap && { resources: resourceMap }),
+          ...(zipFileHash && { zipFileHash }),
+        }),
       });
       log('importFromUrl: updated skill id=%s', skill.id);
       return { skill, status: 'updated' };

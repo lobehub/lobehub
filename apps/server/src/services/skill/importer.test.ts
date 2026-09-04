@@ -958,6 +958,61 @@ description: A nested skill
       expect(second.skill.id).toBe(first.skill.id);
     });
 
+    it.each([
+      { importedContent: '# Same Content', label: 'unchanged' },
+      { importedContent: '# Updated Content', label: 'changed' },
+    ])(
+      'should self-heal a legacy marketplace identifier when content is $label',
+      async ({ importedContent }) => {
+        const downloadUrl =
+          'https://market.lobehub.com/api/v1/skills/openclaw-skills-homebrew/download';
+        const canonicalIdentifier = 'openclaw-skills-homebrew';
+        const legacyIdentifier =
+          'url.market.lobehub.com.api.v1.skills.openclaw-skills-homebrew.download';
+        const [legacySkill] = await db
+          .insert(agentSkills)
+          .values({
+            content: '# Same Content',
+            description: 'Legacy description',
+            identifier: legacyIdentifier,
+            manifest: { description: 'Legacy description', name: 'Homebrew' },
+            name: 'Homebrew',
+            source: 'market',
+            userId,
+          })
+          .returning();
+
+        mockSsrfSafeFetch.mockResolvedValue({
+          arrayBuffer: async () => new ArrayBuffer(8),
+          headers: { get: () => 'application/zip' },
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+        });
+        mockParserInstance.parseZipPackage.mockResolvedValue({
+          content: importedContent,
+          manifest: { description: 'Market description', name: 'Homebrew' },
+          resources: new Map(),
+          zipHash: undefined,
+        });
+
+        const result = await importer.importFromUrl(
+          { url: downloadUrl },
+          { identifier: canonicalIdentifier, source: 'market' },
+        );
+
+        expect(result.status).toBe('updated');
+        expect(result.skill.id).toBe(legacySkill.id);
+        expect(result.skill.identifier).toBe(canonicalIdentifier);
+        expect(result.skill.content).toBe(importedContent);
+
+        const rows = await db.query.agentSkills.findMany({
+          where: eq(agentSkills.userId, userId),
+        });
+        expect(rows).toHaveLength(1);
+      },
+    );
+
     it('should throw INVALID_URL error for invalid URL', async () => {
       await expect(importer.importFromUrl({ url: 'not-a-valid-url' })).rejects.toThrow(
         SkillImportError,
@@ -1290,6 +1345,57 @@ description: A nested skill
       });
       expect(dbSkill?.name).toBe('pdf');
       expect(dbSkill?.workspaceId).toBe(workspaceId);
+    });
+
+    it('does not self-heal a legacy market skill owned by another workspace member', async () => {
+      const downloadUrl =
+        'https://market.lobehub.com/api/v1/skills/openclaw-skills-homebrew/download';
+      const legacyIdentifier =
+        'url.market.lobehub.com.api.v1.skills.openclaw-skills-homebrew.download';
+      const [legacySkill] = await db
+        .insert(agentSkills)
+        .values({
+          content: '# Same Content',
+          description: 'Legacy description',
+          identifier: legacyIdentifier,
+          manifest: { description: 'Legacy description', name: 'Homebrew' },
+          name: 'Homebrew',
+          source: 'market',
+          userId,
+          workspaceId,
+        })
+        .returning();
+      const memberId = `member-${userId}`;
+      await db.insert(users).values({ id: memberId });
+      const memberImporter = new SkillImporter(db, memberId, workspaceId);
+
+      mockSsrfSafeFetch.mockResolvedValue({
+        arrayBuffer: async () => new ArrayBuffer(8),
+        headers: { get: () => 'application/zip' },
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+      });
+      mockParserInstance.parseZipPackage.mockResolvedValue({
+        content: '# Same Content',
+        manifest: { description: 'Market description', name: 'Homebrew' },
+        resources: new Map(),
+        zipHash: undefined,
+      });
+
+      await expect(
+        memberImporter.importFromUrl(
+          { url: downloadUrl },
+          { identifier: 'openclaw-skills-homebrew', source: 'market' },
+        ),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+      const unchangedSkill = await db.query.agentSkills.findFirst({
+        where: eq(agentSkills.id, legacySkill.id),
+      });
+      expect(unchangedSkill?.identifier).toBe(legacyIdentifier);
+
+      await db.delete(users).where(eq(users.id, memberId));
     });
   });
 });

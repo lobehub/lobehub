@@ -2,8 +2,10 @@ import { RBAC_PERMISSIONS } from '@lobechat/const/rbac';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  getSkillDownloadUrl: vi.fn(),
   getUserSettings: vi.fn(),
   hasAnyPermission: vi.fn(),
+  importFromUrl: vi.fn(),
   SkillImporter: vi.fn(),
 }));
 
@@ -32,7 +34,9 @@ vi.mock('@/database/models/user', () => ({
 }));
 
 vi.mock('@/server/services/market', () => ({
-  MarketService: vi.fn(() => ({})),
+  MarketService: vi.fn(() => ({
+    getSkillDownloadUrl: mocks.getSkillDownloadUrl,
+  })),
 }));
 
 vi.mock('@/server/services/skill/importer', () => ({
@@ -57,6 +61,9 @@ describe('skillStoreRuntime', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.SkillImporter.mockImplementation(function (this: any) {
+      this.importFromUrl = mocks.importFromUrl;
+    });
     mocks.getUserSettings.mockResolvedValue({ market: { accessToken: 'market-token' } });
     // Default: caller is allowed to manage workspace skills.
     mocks.hasAnyPermission.mockResolvedValue(true);
@@ -125,5 +132,29 @@ describe('skillStoreRuntime', () => {
 
     expect(mocks.hasAnyPermission).not.toHaveBeenCalled();
     expect(mocks.SkillImporter).toHaveBeenCalledWith(serverDB, 'user-1', undefined);
+  });
+
+  it('forwards the canonical identifier when importing a marketplace skill', async () => {
+    const downloadUrl =
+      'https://market.lobehub.com/api/v1/skills/openclaw-skills-homebrew/download';
+    mocks.getSkillDownloadUrl.mockReturnValue(downloadUrl);
+    mocks.importFromUrl.mockResolvedValue({
+      skill: { id: 'skill-1', name: 'Homebrew' },
+      status: 'created',
+    });
+    const { skillStoreRuntime } = await import('../skillStore');
+
+    const runtime = (await skillStoreRuntime.factory({
+      serverDB,
+      toolManifestMap: {},
+      userId: 'user-1',
+    })) as any;
+
+    await runtime.service.importFromMarket('openclaw-skills-homebrew');
+
+    expect(mocks.importFromUrl).toHaveBeenCalledWith(
+      { url: downloadUrl },
+      { identifier: 'openclaw-skills-homebrew', source: 'market' },
+    );
   });
 });
