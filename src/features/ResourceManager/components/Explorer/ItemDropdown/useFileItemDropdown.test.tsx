@@ -10,6 +10,7 @@ interface SendToMessengerParams {
 const mocks = vi.hoisted(() => ({
   confirmModal: vi.fn(),
   deleteResource: vi.fn<() => Promise<void>>(async () => {}),
+  dropTreeNodes: vi.fn(async () => undefined),
   refreshFileList: vi.fn(async () => undefined),
   revalidateTree: vi.fn(async () => undefined),
   useSendToMessengerMenuItem: vi.fn((_params: SendToMessengerParams) => undefined),
@@ -50,7 +51,7 @@ vi.mock('@/store/file', () => ({
 vi.mock('@/store/library', () => ({ useKnowledgeBaseStore: () => [vi.fn(), vi.fn()] }));
 vi.mock('@/store/tree', () => ({
   useTreeStore: Object.assign(() => vi.fn(), {
-    getState: () => ({ revalidate: mocks.revalidateTree }),
+    getState: () => ({ dropNodes: mocks.dropTreeNodes, revalidate: mocks.revalidateTree }),
   }),
 }));
 
@@ -133,5 +134,38 @@ describe('useFileItemDropdown — workspace resource permissions', () => {
     resolveDelete();
     await pendingDelete;
     await waitFor(() => expect(mocks.refreshFileList).toHaveBeenCalled());
+  });
+
+  it("refreshes the row's own folder, not the folder the explorer is listing", async () => {
+    // Regression: the sidebar navigates into a folder on click, so
+    // deleting it from its own context menu refreshed the deleted folder while
+    // the parent list the sidebar renders kept the row until a page reload.
+    const { result } = renderHook(() =>
+      useFileItemDropdown({
+        ...baseParams,
+        fileType: CUSTOM_FOLDER_FILE_TYPE,
+        parentId: 'tree-parent-id',
+      } as any),
+    );
+    const deleteItem = result.current.menuItems().find((item) => item?.key === 'delete') as any;
+    await deleteItem.onClick({ domEvent: { stopPropagation: vi.fn() } });
+
+    mocks.confirmModal.mock.calls.at(-1)![0].onOk();
+
+    await waitFor(() =>
+      expect(mocks.dropTreeNodes).toHaveBeenCalledWith(['resource-id'], 'tree-parent-id'),
+    );
+  });
+
+  it("falls back to the explorer's folder for a row the tree does not own", async () => {
+    const { result } = renderHook(() => useFileItemDropdown(baseParams as any));
+    const deleteItem = result.current.menuItems().find((item) => item?.key === 'delete') as any;
+    await deleteItem.onClick({ domEvent: { stopPropagation: vi.fn() } });
+
+    mocks.confirmModal.mock.calls.at(-1)![0].onOk();
+
+    await waitFor(() =>
+      expect(mocks.dropTreeNodes).toHaveBeenCalledWith(['resource-id'], 'parent-id'),
+    );
   });
 });

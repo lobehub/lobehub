@@ -135,13 +135,34 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
       setRenamingValue(item.name);
     }, [item.name]);
 
+    /**
+     * Deleting the folder the explorer is parked in would leave it on a route
+     * that no longer resolves — an empty list under a breadcrumb naming the
+     * folder that was just removed. Step out to the parent folder instead
+     * (the library root when the row sat at the top level).
+     */
+    const handleDeleted = useCallback(() => {
+      if (!item.isFolder || !isHierarchyNodeActive(item, selectedKey)) return;
+
+      const parent = parentKey
+        ? Object.values(useTreeStore.getState().children)
+            .flat()
+            .find((row) => row.id === parentKey)
+        : undefined;
+      const navKey = parent ? parent.slug || parent.id : '';
+
+      navigate(`/resource/library/${libraryId}${navKey ? `/${navKey}` : ''}`);
+    }, [item, selectedKey, parentKey, libraryId, navigate]);
+
     const { menuItems } = useFileItemDropdown({
       fileId: item.fileId,
       fileType: item.fileType,
       filename: item.name,
       id: item.id,
       libraryId,
+      onDeleted: handleDeleted,
       onRenameStart: item.isFolder ? handleRenameStart : undefined,
+      parentId: parentKey,
       size: item.size,
       sourceType: item.sourceType,
       url: item.url,

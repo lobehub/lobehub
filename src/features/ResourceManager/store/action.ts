@@ -57,6 +57,12 @@ export class ResourceManagerStoreActionImpl {
 
     switch (type) {
       case 'delete': {
+        // The explorer's own list is optimistic, but the sidebar tree keeps a
+        // separate per-folder cache: without this it holds deleted folders
+        // until the next full load.
+        const { useTreeStore } = await import('@/store/tree');
+        const currentFolderKey = fileStore.queryParams?.parentId ?? '';
+
         if (selectAllState === 'all' && fileStore.queryParams) {
           const { resourceService } = await import('@/services/resource');
 
@@ -70,6 +76,9 @@ export class ResourceManagerStoreActionImpl {
           // Revalidate so any surviving rows immediately reappear.
           const { revalidateResources } = await import('@/store/file/slices/resource/hooks');
           await revalidateResources(fileStore.queryParams);
+          // The deleted set is only known to the server here, and every row in
+          // it was a child of the listed folder, so refetch that one folder.
+          void useTreeStore.getState().revalidate(currentFolderKey);
 
           this.clearSelectAllState();
           return;
@@ -79,6 +88,7 @@ export class ResourceManagerStoreActionImpl {
           selectAllState === 'all' ? await resolveSelectedResourceIds() : selectedFileIds;
 
         await fileStore.deleteResources(resourceIds);
+        void useTreeStore.getState().dropNodes(resourceIds, currentFolderKey);
 
         this.clearSelectAllState();
         return;

@@ -35,6 +35,12 @@ export interface TreeDataState {
 export type TreeStoreHandle = StoreHandle<TreeDataState>;
 
 export interface TreeState extends TreeDataState {
+  /**
+   * Forget rows another store already deleted and refresh the folders that
+   * held them, falling back to `fallbackParentKey` for rows the tree never
+   * loaded. Local bookkeeping only — the caller owns the delete request.
+   */
+  dropNodes: (itemIds: string[], fallbackParentKey?: string) => Promise<void>;
   epoch: number;
   /** Last load error per folderId, so a failed fetch renders a failure state (with Retry) instead of a false "empty folder". */
   errors: Record<string, unknown>;

@@ -52,6 +52,7 @@ vi.mock('@/store/file', () => ({
 
 const createState = (): TreeState => ({
   children: {},
+  dropNodes: vi.fn(),
   epoch: 0,
   errors: {},
   expanded: {},
@@ -499,5 +500,111 @@ describe('TreeActionImpl optimistic moves (destination and other mutations)', ()
     expect(state.children['folder-test']).toBeUndefined();
     expect(state.expanded['folder-test']).toBeUndefined();
     expect(revalidateSpy).toHaveBeenCalledWith('');
+  });
+});
+
+describe('TreeActionImpl.dropNodes', () => {
+  const folderA = toTreeItem({
+    fileType: CUSTOM_FOLDER_FILE_TYPE,
+    id: 'folder-a',
+    name: 'A',
+    slug: 'folder-a-slug',
+  });
+  const folderChild = toTreeItem({
+    fileType: CUSTOM_FOLDER_FILE_TYPE,
+    id: 'folder-child',
+    name: 'Child',
+  });
+  const docA = toTreeItem({ fileType: 'custom/document', id: 'doc-a', name: 'A' });
+
+  const setup = (state: TreeState) => {
+    const actions = new TreeActionImpl(
+      createSetter(() => state),
+      () => state,
+    );
+    const revalidateSpy = vi.spyOn(actions, 'revalidate').mockResolvedValue();
+    return { actions, revalidateSpy };
+  };
+
+  it('refreshes the folder that held the row, not the explorer fallback', async () => {
+    // Regression: deleting a folder from the sidebar right after opening it
+    // left `queryParams.parentId` pointing at the folder being deleted, so the
+    // parent list the sidebar renders was never refetched and the row stayed.
+    const state = createState();
+    state.children = { '': [folderA, docA], 'folder-a': [] };
+    const { actions, revalidateSpy } = setup(state);
+
+    await actions.dropNodes(['folder-a'], 'folder-a-slug');
+
+    expect(state.children['']?.map((i) => i.id)).toEqual(['doc-a']);
+    expect(revalidateSpy).toHaveBeenCalledWith('');
+    expect(revalidateSpy).not.toHaveBeenCalledWith('folder-a-slug');
+  });
+
+  it('forgets the removed folder subtree, descendants included', async () => {
+    const state = createState();
+    state.children = {
+      '': [folderA],
+      'folder-a': [folderChild],
+      'folder-child': [docA],
+    };
+    state.expanded = { 'folder-a': true, 'folder-child': true };
+    state.status = { 'folder-a': 'idle', 'folder-child': 'idle' };
+    state.errors = { 'folder-a': new Error('stale') };
+    const { actions } = setup(state);
+
+    await actions.dropNodes(['folder-a']);
+
+    expect(state.children['folder-a']).toBeUndefined();
+    expect(state.children['folder-child']).toBeUndefined();
+    expect(state.expanded['folder-a']).toBeUndefined();
+    expect(state.expanded['folder-child']).toBeUndefined();
+    expect(state.status['folder-a']).toBeUndefined();
+    expect(state.errors['folder-a']).toBeUndefined();
+  });
+
+  it('falls back to the given parent key when the tree never loaded the row', async () => {
+    const state = createState();
+    state.children = { '': [docA] };
+    const { actions, revalidateSpy } = setup(state);
+
+    await actions.dropNodes(['file-not-in-tree'], 'folder-a');
+
+    expect(revalidateSpy).toHaveBeenCalledWith('folder-a');
+    expect(revalidateSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('refreshes every folder that held one of the rows', async () => {
+    const state = createState();
+    state.children = { '': [folderA], 'folder-a': [docA, folderChild] };
+    const { actions, revalidateSpy } = setup(state);
+
+    await actions.dropNodes(['folder-child', 'doc-a'], 'ignored');
+
+    expect(revalidateSpy).toHaveBeenCalledWith('folder-a');
+    expect(revalidateSpy).toHaveBeenCalledTimes(1);
+    expect(revalidateSpy).not.toHaveBeenCalledWith('ignored');
+  });
+
+  it('skips a parent that is itself being removed', async () => {
+    const state = createState();
+    state.children = { '': [folderA], 'folder-a': [docA] };
+    const { actions, revalidateSpy } = setup(state);
+
+    await actions.dropNodes(['folder-a', 'doc-a'], 'fallback');
+
+    expect(revalidateSpy).toHaveBeenCalledWith('');
+    expect(revalidateSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('does nothing for an empty id list', async () => {
+    const state = createState();
+    state.children = { '': [folderA] };
+    const { actions, revalidateSpy } = setup(state);
+
+    await actions.dropNodes([], 'folder-a');
+
+    expect(state.children['']?.map((i) => i.id)).toEqual(['folder-a']);
+    expect(revalidateSpy).not.toHaveBeenCalled();
   });
 });
