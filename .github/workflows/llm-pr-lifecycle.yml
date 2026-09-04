@@ -15,6 +15,7 @@ jobs:
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
       (startsWith(github.event.pull_request.head.ref, 'automatic/') ||
+      startsWith(github.event.pull_request.head.ref, 'test/e2e-') ||
       github.event.pull_request.head.ref == 'style/auto-i18n')
     runs-on: ubuntu-latest
     steps:
