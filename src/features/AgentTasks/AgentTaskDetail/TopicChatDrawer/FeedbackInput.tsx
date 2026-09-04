@@ -1,9 +1,10 @@
+import { type IEditor } from '@lobehub/editor';
 import { ChatInput, ChatInputActionBar, SendButton, useEditor } from '@lobehub/editor/react';
 import { Flexbox } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { $getRoot } from 'lexical';
 import { ChevronDownIcon, MessageCirclePlus } from 'lucide-react';
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AttachmentUploadButton } from '@/features/AttachmentInput';
@@ -18,6 +19,10 @@ import {
 import { useEnterToSend } from '@/hooks/useEnterToSend';
 
 interface FeedbackInputProps {
+  /** Expand and focus the composer right when the host surface mounts — the
+      floating drawer opened by "Continue chat" wants the input hot, while a
+      read-first surface keeps the compact, opt-in default. */
+  autoFocus?: boolean;
   /** Acceptance's in-flow topic rail starts with the composer visible. The
       floating Topic drawer keeps its compact, opt-in default. */
   defaultExpanded?: boolean;
@@ -27,14 +32,14 @@ interface FeedbackInputProps {
 }
 
 const FeedbackInput = memo<FeedbackInputProps>(
-  ({ defaultExpanded = false, disableCollapse = false }) => {
+  ({ autoFocus = false, defaultExpanded = false, disableCollapse = false }) => {
     const { t } = useTranslation('chat');
     const editor = useEditor();
     const sendMessage = useConversationStore((s) => s.sendMessage);
     const [submitting, setSubmitting] = useState(false);
     const [hasContent, setHasContent] = useState(false);
     const [hasAttachments, setHasAttachments] = useState(false);
-    const [expanded, setExpanded] = useState(defaultExpanded);
+    const [expanded, setExpanded] = useState(defaultExpanded || autoFocus);
     const shouldSendOnEnter = useEnterToSend();
     // Task follow-ups send into the shared agent's topic — view-only members
     // can watch the run but get no reply composer.
@@ -42,9 +47,18 @@ const FeedbackInput = memo<FeedbackInputProps>(
 
     const canSubmit = hasContent || hasAttachments;
 
-    useEffect(() => {
-      if (expanded) editor?.focus?.();
-    }, [expanded, editor]);
+    // "Continue chat" opens the drawer with conversational intent, so the
+    // composer mounts expanded and must come up focused. Focus from the
+    // editor's own init callback: a mount-time `editor.focus()` runs before
+    // the lexical root attaches and is silently dropped (InternalEditor's
+    // onInit retries until the kernel is ready, which is the reliable signal).
+    const handleEditorInit = useCallback(
+      (instance: unknown) => {
+        if (!expanded) return;
+        (instance as { focus?: () => void } | null)?.focus?.();
+      },
+      [expanded],
+    );
 
     const handleContentChange = useCallback(() => {
       const lexicalEditor = editor?.getLexicalEditor?.();
@@ -153,6 +167,7 @@ const FeedbackInput = memo<FeedbackInputProps>(
             placeholder={t('taskDetail.replyPlaceholder')}
             style={{ paddingBlock: 0 }}
             onContentChange={handleContentChange}
+            onInit={handleEditorInit as (editor: IEditor) => void}
             onPressEnter={({ event }) => {
               if (shouldSendOnEnter(event)) {
                 handleSubmit();

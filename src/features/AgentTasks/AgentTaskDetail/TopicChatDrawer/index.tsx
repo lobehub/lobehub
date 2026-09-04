@@ -50,13 +50,16 @@ const EXPANDED_PANEL_WIDTH = 'min(960px, calc(100vw - 16px))';
 
 export interface TopicChatDrawerBodyProps {
   agentId: string;
+  /** Expand and focus the reply composer on mount — used when the drawer is
+      opened with conversational intent (e.g. the brief's "Continue chat"). */
+  autoFocusInput?: boolean;
   defaultInputExpanded?: boolean;
   disableInputCollapse?: boolean;
   topicId: string;
 }
 
 export const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(
-  ({ agentId, defaultInputExpanded, disableInputCollapse, topicId }) => {
+  ({ agentId, autoFocusInput, defaultInputExpanded, disableInputCollapse, topicId }) => {
     const isLogin = useUserStore(authSelectors.isLogin);
     const useHydrateAgentConfig = useAgentStore((s) => s.useHydrateAgentConfig);
 
@@ -106,6 +109,7 @@ export const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(
             </Flexbox>
             <Flexbox paddingBlock={'0 12px'} paddingInline={12} style={{ flexShrink: 0 }}>
               <FeedbackInput
+                autoFocus={autoFocusInput}
                 defaultExpanded={defaultInputExpanded}
                 disableCollapse={disableInputCollapse}
               />
@@ -127,6 +131,7 @@ const TopicChatDrawer = memo(() => {
   const activeTaskId = useTaskStore((s) => s.activeTaskId);
   const agentId = useTaskStore(taskDetailSelectors.topicDrawerAgentId);
   const drawerTitle = useTaskStore(taskDetailSelectors.topicDrawerTitle);
+  const autoFocusInput = useTaskStore(taskDetailSelectors.topicDrawerAutoFocus);
   const activity = useTaskStore(taskActivitySelectors.activeDrawerTopicActivity);
   const closeTopicDrawer = useTaskStore((s) => s.closeTopicDrawer);
   const deleteTopic = useTaskStore((s) => s.deleteTopic);
@@ -343,7 +348,13 @@ const TopicChatDrawer = memo(() => {
           task: a run opened from the home inbox may have no parent task at all,
           and gating on one renders a titled but empty panel. */}
       <Freeze frozen={!open}>
-        {open && <TopicChatDrawerBody agentId={agentId!} topicId={topicId!} />}
+        {open && (
+          <TopicChatDrawerBody
+            agentId={agentId!}
+            autoFocusInput={autoFocusInput}
+            topicId={topicId!}
+          />
+        )}
       </Freeze>
     </FloatingPanel>
   );

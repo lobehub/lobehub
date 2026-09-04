@@ -2,9 +2,10 @@ import { agentDisplayName } from '@lobechat/types';
 import { Flexbox, Icon, Markdown } from '@lobehub/ui';
 import { Avatar, Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
+import { ChevronDownIcon, ChevronRightIcon, MessageSquarePlus, Workflow } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { shallow } from 'zustand/shallow';
 
 import BriefCardArtifacts from '@/features/DailyBrief/BriefCardArtifacts';
 import BriefIcon from '@/features/DailyBrief/BriefIcon';
@@ -12,6 +13,7 @@ import { type BriefItem } from '@/features/DailyBrief/types';
 import { homeType } from '@/features/Home/components/homeType';
 import Time from '@/features/Home/components/Time';
 import { useBriefStore } from '@/store/brief';
+import { useTaskStore } from '@/store/task';
 
 const AVATAR_SIZE = 20;
 const ROW_GAP = 10;
@@ -82,7 +84,12 @@ interface NewsItemProps {
  * the finding's detail inline.
  */
 const NewsItem = memo<NewsItemProps>(({ bare, brief, showTime }) => {
+  const { t } = useTranslation('home');
   const markBriefRead = useBriefStore((s) => s.markBriefRead);
+  const { openTopicDrawer, setActiveTaskId } = useTaskStore(
+    (s) => ({ openTopicDrawer: s.openTopicDrawer, setActiveTaskId: s.setActiveTaskId }),
+    shallow,
+  );
 
   const [expanded, setExpanded] = useState(false);
   const [localRead, setLocalRead] = useState(false);
@@ -100,6 +107,43 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief, showTime }) => {
       return !prev;
     });
   }, [brief.id, markBriefRead, read]);
+
+  // Only a run-owned brief (it names both an agent and a topic) renders
+  // conversation actions: "View chat" reopens the very conversation the agent
+  // worked in, and "Continue chat" jumps into the same thread with the reply
+  // composer hot. A brief without a topic has no thread to reopen — review
+  // feedback r3 removed its entry entirely, so it stays a pure information
+  // row and users who want that agent find it through the agent itself.
+  const agentId = brief.agentId ?? brief.agent?.id;
+  const hasTopicChat = Boolean(agentId && brief.topicId);
+
+  const openTopicChat = useCallback(() => {
+    if (!agentId || !brief.topicId) return;
+    // setActiveTaskId hydrates the drawer's task context when the brief owns
+    // a task, and clears any prior drawer/task state; openTopicDrawer must
+    // come after so its topic survives the reset.
+    setActiveTaskId(brief.taskId ?? undefined);
+    openTopicDrawer(brief.topicId, {
+      agentId,
+      // The drawer opens with conversational intent — mount the reply
+      // composer expanded and focused (review feedback C2).
+      autoFocus: true,
+      title: brief.taskName ?? brief.title,
+    });
+  }, [
+    agentId,
+    brief.taskId,
+    brief.taskName,
+    brief.title,
+    brief.topicId,
+    openTopicDrawer,
+    setActiveTaskId,
+  ]);
+
+  const handleContinueChat = useCallback(() => {
+    if (!agentId || !brief.topicId) return;
+    openTopicChat();
+  }, [agentId, brief.topicId, openTopicChat]);
 
   return (
     <Flexbox className={bare ? undefined : styles.section}>
@@ -140,7 +184,7 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief, showTime }) => {
         </Flexbox>
       </Button>
 
-      {expanded && (brief.summary || brief.artifacts) && (
+      {expanded && (brief.summary || brief.artifacts || hasTopicChat) && (
         <Flexbox className={bare ? styles.bareBody : styles.body} gap={8}>
           {brief.summary && (
             <Markdown style={{ overflow: 'unset' }} variant={'chat'}>
@@ -148,6 +192,27 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief, showTime }) => {
             </Markdown>
           )}
           <BriefCardArtifacts artifacts={brief.artifacts} />
+          {hasTopicChat && (
+            <Flexbox horizontal align={'center'} gap={4} justify={'flex-end'}>
+              <Button
+                icon={Workflow}
+                size={'small'}
+                style={{ color: cssVar.colorTextSecondary }}
+                type={'text'}
+                onClick={openTopicChat}
+              >
+                {t('inbox.news.viewChat')}
+              </Button>
+              <Button
+                icon={MessageSquarePlus}
+                size={'small'}
+                type={'fill'}
+                onClick={handleContinueChat}
+              >
+                {t('inbox.news.continueChat')}
+              </Button>
+            </Flexbox>
+          )}
         </Flexbox>
       )}
     </Flexbox>
