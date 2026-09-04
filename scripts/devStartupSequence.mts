@@ -48,7 +48,9 @@ const findFreePort = async (startPort: number): Promise<number> => {
   for (let port = startPort; port < startPort + MAX_PORT_SCAN_ATTEMPTS; port++) {
     if (await isPortFree(port)) return port;
   }
-  throw new Error(`No free port found in range ${startPort}-${startPort + MAX_PORT_SCAN_ATTEMPTS - 1}`);
+  throw new Error(
+    `No free port found in range ${startPort}-${startPort + MAX_PORT_SCAN_ATTEMPTS - 1}`,
+  );
 };
 
 /**
@@ -91,8 +93,10 @@ const packageScriptCommand = 'bun';
 
 let nextPort = 3010;
 let nextRootUrl = `http://${NEXT_HOST}:${nextPort}/`;
+let honoProcess: ChildProcess | undefined;
 let nextProcess: ChildProcess | undefined;
 let viteProcess: ChildProcess | undefined;
+let honoHandle: DevProcessHandle | undefined;
 let nextHandle: DevProcessHandle | undefined;
 let viteHandle: DevProcessHandle | undefined;
 let forceKillTimer: ReturnType<typeof setTimeout> | undefined;
@@ -235,11 +239,13 @@ const runNextBackgroundTasks = () => {
 };
 
 const terminateChildren = () => {
+  sendSignalToDevProcess(honoHandle, 'SIGTERM');
   sendSignalToDevProcess(viteHandle, 'SIGTERM');
   sendSignalToDevProcess(nextHandle, 'SIGTERM');
 };
 
 const forceKillChildren = () => {
+  sendSignalToDevProcess(honoHandle, 'SIGKILL');
   sendSignalToDevProcess(viteHandle, 'SIGKILL');
   sendSignalToDevProcess(nextHandle, 'SIGKILL');
 };
@@ -255,7 +261,8 @@ const hasChildSettled = (child?: ChildProcess) =>
 
 const clearForceKillTimerWhenChildrenSettle = () => {
   if (!shuttingDown) return;
-  if (hasChildSettled(nextProcess) && hasChildSettled(viteProcess)) clearForceKillTimer();
+  if (hasChildSettled(honoProcess) && hasChildSettled(nextProcess) && hasChildSettled(viteProcess))
+    clearForceKillTimer();
 };
 
 const shutdownAll = (signal: NodeJS.Signals) => {
@@ -275,7 +282,7 @@ const shutdownAll = (signal: NodeJS.Signals) => {
   }, FORCE_KILL_TIMEOUT_MS);
 };
 
-const watchChildExit = (child: ChildProcess, name: 'next' | 'vite') => {
+const watchChildExit = (child: ChildProcess, name: 'hono' | 'next' | 'vite') => {
   child.once('exit', (code, signal) => {
     if (shuttingDown) {
       clearForceKillTimerWhenChildrenSettle();
@@ -293,9 +300,13 @@ const main = async () => {
   loadEnv();
   nextPort = await resolveNextPort();
   process.env.PORT = String(nextPort);
+  const isHonoTopology = process.env.LOBE_DEV_TOPOLOGY === 'hono';
+  if (isHonoTopology) process.env.HONO_PORT ||= nextPort === 3011 ? '3012' : '3011';
   nextRootUrl = `http://${NEXT_HOST}:${nextPort}/`;
   const vitePort = await resolveVitePortEnv();
-  console.log(`🔌 dev ports — next: ${nextPort}, vite: ${vitePort}`);
+  console.log(
+    `🔌 dev ports — next: ${nextPort}, vite: ${vitePort}${isHonoTopology ? `, hono: ${process.env.HONO_PORT}` : ''}`,
+  );
 
   const forwardedSignals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM', 'SIGHUP'];
   for (const sig of forwardedSignals) {
@@ -316,6 +327,12 @@ const main = async () => {
     forceKillChildren();
   });
 
+  if (isHonoTopology) {
+    honoProcess = runPackageScript('dev:hono:server');
+    honoHandle = createDevProcessHandle({ isWindows, pid: honoProcess.pid });
+    watchChildExit(honoProcess, 'hono');
+  }
+
   nextProcess = spawn('bunx', ['next', 'dev', '-p', String(nextPort)], {
     detached: !isWindows,
     env: process.env,
@@ -331,6 +348,7 @@ const main = async () => {
   runNextBackgroundTasks();
 
   await Promise.race([
+    ...(honoProcess ? [new Promise((resolve) => honoProcess?.once('exit', resolve))] : []),
     new Promise((resolve) => nextProcess?.once('exit', resolve)),
     new Promise((resolve) => viteProcess?.once('exit', resolve)),
   ]);

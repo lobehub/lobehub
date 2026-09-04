@@ -163,3 +163,4 @@ docs/superpowers/
 # Amp agent runtime
 .amp/*
 !.amp/settings.json
+!apps/server/Dockerfile.dockerignore

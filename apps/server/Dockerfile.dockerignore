@@ -1,0 +1,13 @@
+**/node_modules
+**/.git
+.next
+dist
+public/_spa*
+apps/desktop/dist
+apps/desktop/release
+apps/desktop/out
+apps/server/dist
+apps/share/build
+apps/workbench/build
+e2e
+docs

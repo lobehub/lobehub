@@ -30,9 +30,17 @@ export const honoServerPlugins = () => [
 
 export const honoServerDedupe = ['@lobehub/editor'];
 
+const nextCompatDir = path.resolve(SERVER_CONFIG_DIR, 'src/router-hono/next-compat');
+
+export const honoServerAlias = [
+  { find: /^next\/headers$/, replacement: path.join(nextCompatDir, 'headers.ts') },
+  { find: /^next\/server$/, replacement: path.join(nextCompatDir, 'server.ts') },
+];
+
 export default defineConfig({
   plugins: honoServerPlugins(),
   resolve: {
+    alias: honoServerAlias,
     dedupe: honoServerDedupe,
   },
 });
