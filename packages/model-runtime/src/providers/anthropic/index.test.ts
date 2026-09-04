@@ -107,6 +107,19 @@ describe('LobeAnthropicAI', () => {
       expect(result).toBeInstanceOf(Response);
     });
 
+    it('should map routed reasoning effort to Anthropic output config', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'claude-opus-4-6',
+        reasoning_effort: 'high',
+      });
+
+      const payload = (instance['client'].messages.create as Mock).mock.calls[0][0];
+
+      expect(payload).toMatchObject({ output_config: { effort: 'high' } });
+      expect(payload).not.toHaveProperty('reasoning_effort');
+    });
+
     it('should handle system prompt correctly', async () => {
       // Arrange
       const mockStream = new ReadableStream({

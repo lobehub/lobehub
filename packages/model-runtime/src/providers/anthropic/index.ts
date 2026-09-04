@@ -9,8 +9,13 @@ import type { ChatStreamPayload } from '../../types';
 import { normalizeClaudeThinkingHistoryMessages } from './claudeThinkingHistory';
 
 const buildAnthropicPayload = (payload: ChatStreamPayload) => {
+  const reasoningEffort =
+    payload.reasoning_effort === 'none' || payload.reasoning_effort === 'minimal'
+      ? undefined
+      : payload.reasoning_effort;
   return buildDefaultAnthropicPayload({
     ...payload,
+    effort: payload.effort ?? reasoningEffort,
     messages: normalizeClaudeThinkingHistoryMessages(payload.messages),
   });
 };
