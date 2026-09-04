@@ -334,18 +334,19 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     }, [handleRetryAgentMessage, resetHeteroOverloadRetry, resolvedScopeId]);
 
     const handleHeterogeneousRetry = useCallback(async () => {
-      const shouldForceCliDetection =
+      if (
         isDesktop &&
         isHeterogeneousAgentStatusGuideError(sessionErrorBody) &&
         sessionErrorBody.code === HeterogeneousAgentSessionErrorCode.CliDetectionTimeout &&
         sessionErrorBody.agentType &&
-        sessionErrorBody.command;
+        sessionErrorBody.command
+      ) {
+        const { agentType, command } = sessionErrorBody;
 
-      if (shouldForceCliDetection) {
         try {
           await binaryService.detectHeterogeneousAgentCommand({
-            agentType: sessionErrorBody.agentType,
-            command: sessionErrorBody.command,
+            agentType,
+            command,
           });
         } catch (error) {
           console.error(error);
