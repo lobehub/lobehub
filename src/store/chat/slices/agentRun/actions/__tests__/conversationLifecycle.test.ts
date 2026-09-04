@@ -314,6 +314,115 @@ describe('ConversationLifecycle actions', () => {
         });
       });
 
+      describe('effective model', () => {
+        const AGENT_MODEL = { model: 'agent-default-model', provider: 'agent-default-provider' };
+        const TOPIC_MODEL = { model: 'topic-pinned-model', provider: 'topic-pinned-provider' };
+        const OTHER_MODEL = { model: 'other-topic-model', provider: 'other-topic-provider' };
+
+        const seedTopic = (agentId: string, topic: Record<string, any>) => {
+          act(() => {
+            useChatStore.setState({
+              topicDataMap: {
+                [topicMapKey({ agentId })]: {
+                  currentPage: 0,
+                  hasMore: false,
+                  items: [topic as any],
+                  pageSize: 20,
+                  total: 1,
+                },
+              },
+            });
+          });
+        };
+
+        it('persists the assistant turn under the topic-pinned model, not the agent default', async () => {
+          setupMockSelectors({ agentConfig: AGENT_MODEL });
+          const { result } = renderHook(() => useChatStore());
+          const agentId = TEST_IDS.SESSION_ID;
+          const topicId = TEST_IDS.TOPIC_ID;
+          seedTopic(agentId, { id: topicId, title: 'pinned topic', ...TOPIC_MODEL });
+
+          const sendMessageInServerSpy = vi
+            .spyOn(aiChatService, 'sendMessageInServer')
+            .mockResolvedValue({ messages: [], topicId } as any);
+
+          await act(async () => {
+            await result.current.sendMessage({
+              context: { agentId, threadId: null, topicId },
+              message: TEST_CONTENT.USER_MESSAGE,
+            });
+          });
+
+          expect(sendMessageInServerSpy.mock.calls[0][0].newAssistantMessage).toEqual(
+            expect.objectContaining(TOPIC_MODEL),
+          );
+        });
+
+        it('falls back to the agent default when the topic pins no model', async () => {
+          setupMockSelectors({ agentConfig: AGENT_MODEL });
+          const { result } = renderHook(() => useChatStore());
+          const agentId = TEST_IDS.SESSION_ID;
+          const topicId = TEST_IDS.TOPIC_ID;
+          seedTopic(agentId, { id: topicId, title: 'legacy topic' });
+
+          const sendMessageInServerSpy = vi
+            .spyOn(aiChatService, 'sendMessageInServer')
+            .mockResolvedValue({ messages: [], topicId } as any);
+
+          await act(async () => {
+            await result.current.sendMessage({
+              context: { agentId, threadId: null, topicId },
+              message: TEST_CONTENT.USER_MESSAGE,
+            });
+          });
+
+          expect(sendMessageInServerSpy.mock.calls[0][0].newAssistantMessage).toEqual(
+            expect.objectContaining(AGENT_MODEL),
+          );
+        });
+
+        it("uses the run's own topic pin, not the globally active topic", async () => {
+          setupMockSelectors({ agentConfig: AGENT_MODEL });
+          const { result } = renderHook(() => useChatStore());
+          const agentId = TEST_IDS.SESSION_ID;
+          const topicId = TEST_IDS.TOPIC_ID;
+          const activeTopicId = 'another-topic-id';
+          act(() => {
+            useChatStore.setState({
+              activeAgentId: agentId,
+              activeTopicId,
+              topicDataMap: {
+                [topicMapKey({ agentId })]: {
+                  currentPage: 0,
+                  hasMore: false,
+                  items: [
+                    { id: topicId, title: 'the run topic', ...TOPIC_MODEL } as any,
+                    { id: activeTopicId, title: 'the focused topic', ...OTHER_MODEL } as any,
+                  ],
+                  pageSize: 20,
+                  total: 2,
+                },
+              },
+            });
+          });
+
+          const sendMessageInServerSpy = vi
+            .spyOn(aiChatService, 'sendMessageInServer')
+            .mockResolvedValue({ messages: [], topicId } as any);
+
+          await act(async () => {
+            await result.current.sendMessage({
+              context: { agentId, threadId: null, topicId },
+              message: TEST_CONTENT.USER_MESSAGE,
+            });
+          });
+
+          expect(sendMessageInServerSpy.mock.calls[0][0].newAssistantMessage).toEqual(
+            expect.objectContaining(TOPIC_MODEL),
+          );
+        });
+      });
+
       it('should not process AI when onlyAddUserMessage is true', async () => {
         const { result } = renderHook(() => useChatStore());
         const onMessageAccepted = vi.fn();
