@@ -15,11 +15,37 @@ export const getCompressionCandidateMessageIds = (messages: UIChatMessage[]) =>
     .map((message) => message.id)
     .filter(Boolean);
 
+const collectCompressedGroupMessageIds = (messages: UIChatMessage[]): Set<string> => {
+  const ids = new Set<string>();
+
+  const walk = (message: UIChatMessage | undefined) => {
+    if (!message) return;
+    if (message.id) ids.add(message.id);
+    if ('lastMessageId' in message && typeof message.lastMessageId === 'string') {
+      ids.add(message.lastMessageId);
+    }
+    message.compressedMessages?.forEach(walk);
+    message.children?.forEach(walk);
+    for (const pinned of message.pinnedMessages ?? []) {
+      if (pinned.id) ids.add(pinned.id);
+    }
+    for (const tool of message.tools ?? []) {
+      if (tool.result_msg_id) ids.add(tool.result_msg_id);
+    }
+  };
+
+  for (const message of messages) {
+    if (message.role === 'compressedGroup') walk(message);
+  }
+
+  return ids;
+};
+
 /**
  * Mid-turn compression snapshots nest the already-streamed assistant/tool
  * turn inside `compressedGroup` and leave only the latest user on the mainline.
- * Re-attach local messages that follow that user so the reply the user is
- * watching is not replaced away.
+ * Re-attach local messages that follow that user only when they are proven to
+ * live inside an incoming compressed group — never resurrect a server-deleted row.
  */
 export const graftInFlightTurnAfterLatestUser = (
   snapshot: UIChatMessage[],
@@ -27,6 +53,9 @@ export const graftInFlightTurnAfterLatestUser = (
 ): UIChatMessage[] => {
   const latestUser = snapshot.findLast((message) => message.role === 'user');
   if (!latestUser?.id) return snapshot;
+
+  const foldedIds = collectCompressedGroupMessageIds(snapshot);
+  if (foldedIds.size === 0) return snapshot;
 
   const snapshotIds = new Set(snapshot.map((message) => message.id));
   const localUserIndex = localMessages.findIndex((message) => message.id === latestUser.id);
@@ -41,7 +70,10 @@ export const graftInFlightTurnAfterLatestUser = (
 
   const missing = inFlight.filter(
     (message) =>
-      Boolean(message.id) && !snapshotIds.has(message.id) && message.role !== 'compressedGroup',
+      Boolean(message.id) &&
+      !snapshotIds.has(message.id) &&
+      foldedIds.has(message.id) &&
+      message.role !== 'compressedGroup',
   );
   if (missing.length === 0) return snapshot;
 

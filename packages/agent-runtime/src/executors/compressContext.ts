@@ -177,6 +177,15 @@ export const compressContext =
         return skippedResult();
       }
 
+      // Next call_llm parents the continuation on this id. Prefer the latest
+      // assistant still on the mainline (the preserved active turn); otherwise
+      // fall back to the last compressed assistant / group lastMessageId.
+      const latestPreservedAssistant = dbMessages.findLast(
+        (message) =>
+          message.role === 'assistant' &&
+          typeof message.id === 'string' &&
+          preservedMessageIds.has(message.id),
+      );
       const latestCompressedAssistant = dbMessages.findLast(
         (message) =>
           message.role === 'assistant' &&
@@ -184,6 +193,7 @@ export const compressContext =
           !preservedMessageIds.has(message.id),
       );
       const parentMessageId =
+        latestPreservedAssistant?.id ??
         latestCompressedAssistant?.id ??
         (sourceCompressionGroups.at(-1) as { lastMessageId?: string } | undefined)?.lastMessageId;
       const compressionModel =

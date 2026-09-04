@@ -134,7 +134,7 @@ export interface GeneralAgentCompressionResultPayload {
   compressedMessages?: any[];
   /** Compression group ID in database */
   groupId: string;
-  /** Parent message ID for subsequent LLM call (last assistant message before compression) */
+  /** Parent message ID for the post-compression LLM call (latest mainline assistant) */
   parentMessageId?: string;
   /** Whether compression was skipped (no messages to compress) */
   skipped?: boolean;

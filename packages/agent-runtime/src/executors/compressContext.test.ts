@@ -335,6 +335,7 @@ describe('compressContext executor', () => {
       inFlightAssistant,
       inFlightTool,
     ]);
+    expect((result.nextContext?.payload as any).parentMessageId).toBe('msg-inflight-asst');
   });
 
   it('skips without compression side effects when topic context is missing', async () => {
@@ -436,7 +437,7 @@ describe('compressContext executor', () => {
       { content: 'recent question', id: 'msg-recent', role: 'user' },
       { content: 'recent answer', id: 'assistant-recent', role: 'assistant' },
     ]);
-    expect((result.nextContext?.payload as any).parentMessageId).toBe('assistant-in-source-2');
+    expect((result.nextContext?.payload as any).parentMessageId).toBe('assistant-recent');
   });
 
   it('can recompress summaries when there are no new persisted messages', async () => {

@@ -125,6 +125,29 @@ describe('compression utils', () => {
     ).toEqual(['mg-compress', 'msg-user']);
   });
 
+  it('should not resurrect a locally present reply that the snapshot omitted without folding it', () => {
+    const currentUser = {
+      content: 'continue',
+      createdAt: 3000,
+      id: 'msg-user',
+      role: 'user' as const,
+    };
+    const inFlightAssistant = {
+      content: 'working',
+      createdAt: 4000,
+      id: 'msg-asst',
+      parentId: 'msg-user',
+      role: 'assistant' as const,
+    };
+
+    expect(
+      graftInFlightTurnAfterLatestUser(
+        [currentUser] as any,
+        [currentUser, inFlightAssistant] as any,
+      ).map((m) => m.id),
+    ).toEqual(['msg-user']);
+  });
+
   it('should build a pending compressedGroup message', () => {
     const message = createPendingCompressedGroup({
       agentId: 'agent-1',
