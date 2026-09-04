@@ -32,7 +32,7 @@ import {
   createMainAreaChildren as createElectronMainAreaChildren,
   desktopRoutes as electronDesktopRoutes,
 } from './desktopRouter.config.desktop';
-import { createMainAreaRouteFactory } from './desktopRouter.shared';
+import { createMainAreaRouteFactory, ResourceCategorySkeleton } from './desktopRouter.shared';
 
 type MainAreaFactory = () => RouteObject[];
 
@@ -186,7 +186,7 @@ describe('desktop router shared definition', () => {
   });
 
   it.each(mainAreaVariants)(
-    '%s exposes projects as task and goal containers only',
+    '%s exposes project task, goal, and acceptance workspaces',
     (_, factory) => {
       const projectRoute = factory().find((route) => route.path === 'project/:projectId');
       const projectIndexRoute = projectRoute?.children?.find((route) => route.index);
@@ -194,7 +194,7 @@ describe('desktop router shared definition', () => {
         ?.map((route) => route.path)
         .filter((routePath): routePath is string => Boolean(routePath));
 
-      expect(projectPaths).toEqual(['tasks', 'goals']);
+      expect(projectPaths).toEqual(['tasks', 'goals', 'acceptance']);
       expect(
         (projectIndexRoute?.element as ReactElement<{ to: string }> | undefined)?.props.to,
       ).toBe('tasks');
@@ -390,6 +390,9 @@ describe('desktop router shared definition', () => {
       ['/apps', AppsSkeleton],
       ['/memory', MemorySkeleton],
       ['/resource', ResourceHomeSkeleton],
+      ['/resource/files', ResourceCategorySkeleton],
+      ['/resource/images', ResourceCategorySkeleton],
+      ['/resource/works', ResourceCategorySkeleton],
     ] as const) {
       const matches = matchRoutes(getRoutes(pathname), pathname);
       expect(

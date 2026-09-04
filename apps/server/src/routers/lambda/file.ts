@@ -1,10 +1,13 @@
 import {
   CUSTOM_FOLDER_FILE_TYPE,
   DERIVED_DOCUMENT_SOURCE_TYPE,
+  MARKDOWN_MIME_TYPES,
   MAX_UPLOAD_FILE_SIZE,
+  RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH,
   UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE,
 } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import {
@@ -27,6 +30,7 @@ import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
+import { createResourceContentPreview } from '@/server/utils/resourceContentPreview';
 import { AsyncTaskStatus, AsyncTaskType, type IAsyncTaskError } from '@/types/asyncTask';
 import type { FileListItem, KnowledgeItemStatus } from '@/types/files';
 import { QueryFileListSchema, toFileSource, UploadFileSchema } from '@/types/files';
@@ -36,7 +40,9 @@ import {
   assertWorkspaceRowManageable,
   isWorkspaceNonOwner,
 } from './_helpers/assertWorkspaceRowManageable';
+import type { KnowledgeBaseAccessCtx } from './_helpers/knowledgeBaseAccess';
 import {
+  assertContentsNotInRestrictedKnowledgeBase,
   assertFileNotInRestrictedKnowledgeBase,
   assertKnowledgeBaseBrowsable,
   getRestrictedKnowledgeBaseIds,
@@ -46,6 +52,38 @@ const fileTransferEntityTypeSchema = z.enum(['document', 'file', 'folder']);
 const deleteKnowledgeItemsByQuerySchema = QueryFileListSchema.extend({
   excludedIds: z.array(z.string()).optional(),
 });
+const markdownPreviewTypes = new Set<string>(MARKDOWN_MIME_TYPES);
+const KNOWLEDGE_ITEM_RESOLUTION_CONCURRENCY = 8;
+
+const isMarkdownFile = (item: { fileType: string; name: string }) =>
+  markdownPreviewTypes.has(item.fileType) || /\.md(?:arkdown)?$/i.test(item.name);
+
+const assertAllFilesAccessible = (requestedIds: string[], files: Array<{ id: string }>): void => {
+  const accessibleIds = new Set(files.map((file) => file.id));
+  if ([...new Set(requestedIds)].some((id) => !accessibleIds.has(id))) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'One or more files were not found or are not accessible',
+    });
+  }
+};
+
+const resolveAccessibleParentDocument = async (
+  ctx: KnowledgeBaseAccessCtx & {
+    documentModel: Pick<DocumentModel, 'findById' | 'findBySlug'>;
+  },
+  parentId: string,
+) => {
+  const parentDocument =
+    (await ctx.documentModel.findBySlug(parentId)) ?? (await ctx.documentModel.findById(parentId));
+
+  if (!parentDocument) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Parent document not found' });
+  }
+
+  await assertContentsNotInRestrictedKnowledgeBase(ctx, [parentDocument.id]);
+  return parentDocument;
+};
 
 const filterKnowledgeItems = <
   T extends {
@@ -191,19 +229,11 @@ export const fileRouter = router({
       const existingFile = await ctx.fileModel.checkHash(input.hash!);
       const { isExist } = existingFile;
 
-      // Resolve parentId if it's a slug
-      let resolvedParentId = input.parentId;
-      let parentVisibility: 'private' | 'public' | undefined;
-      if (input.parentId) {
-        const docBySlug = await ctx.documentModel.findBySlug(input.parentId);
-        if (docBySlug) {
-          resolvedParentId = docBySlug.id;
-          parentVisibility = docBySlug.visibility;
-        } else {
-          const docById = await ctx.documentModel.findById(input.parentId);
-          if (docById) parentVisibility = docById.visibility;
-        }
-      }
+      const parentDocument = input.parentId
+        ? await resolveAccessibleParentDocument(ctx, input.parentId)
+        : undefined;
+      const resolvedParentId = parentDocument?.id;
+      const parentVisibility = parentDocument?.visibility;
 
       let knowledgeBaseVisibility: 'private' | 'public' | undefined;
       if (ctx.workspaceId && input.knowledgeBaseId) {
@@ -433,9 +463,15 @@ export const fileRouter = router({
 
     // Request one more item than limit to check if there are more items
     const limit = input.limit ?? 50;
+    // Absent preserves the legacy response for released clients. Current list
+    // surfaces explicitly send false (metadata only) or true (bounded preview).
+    const includeContent = input.includeContentPreview === undefined;
+    const includeContentPreview = input.includeContentPreview === true;
     const knowledgeItems = await ctx.knowledgeRepo.query({
       ...input,
       excludeKnowledgeBaseIds,
+      includeContent,
+      includeContentPreview,
       limit: limit + 1,
     });
 
@@ -452,30 +488,94 @@ export const fileRouter = router({
     const fileItems = filteredItems.filter((item) => item.sourceType === 'file');
     const statusMap = await getKnowledgeItemStatusMap(ctx, fileItems);
 
-    // Resolve file access URLs in parallel: in local dev each call goes through
-    // Redis + a possible S3 presign, so a serial loop stacks up N RTTs on
-    // larger result sets (visible when switching from Private to Workspace).
-    const resultItems = await Promise.all(
-      filteredItems.map(async (item) => {
+    // Resolve file access URLs and raw Markdown previews with bounded concurrency:
+    // each item may perform Redis/S3 I/O, so serial work is slow while an unbounded
+    // Promise.all lets a caller fan out arbitrary object-storage reads.
+    const resultItems = await pMap(
+      filteredItems,
+      async (item) => {
+        let contentPreviewSource = item.contentPreviewSource;
+        if (
+          includeContentPreview &&
+          item.sourceType === 'file' &&
+          !item.documentId &&
+          !contentPreviewSource &&
+          item.url &&
+          isMarkdownFile(item)
+        ) {
+          try {
+            contentPreviewSource = await ctx.fileService.getFileContent(
+              item.url,
+              RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH,
+            );
+          } catch {
+            // Preview failure must not fail the resource list. The derived
+            // document will become the normal source once parsing completes.
+          }
+        }
+        const contentPreview = includeContentPreview
+          ? createResourceContentPreview({
+              content: contentPreviewSource,
+              fileType: item.fileType,
+              title: item.name,
+            })
+          : undefined;
+
         if (item.sourceType === 'file') {
           const status = statusMap.get(item.id)!;
           return {
-            ...item,
-            editorData: null,
+            chunkCount: status.chunkCount,
+            chunkingError: status.chunkingError,
+            chunkingStatus: status.chunkingStatus,
+            ...(includeContent ? { content: item.content } : {}),
+            ...(includeContent ? { editorData: null } : {}),
+            ...(includeContentPreview ? { contentPreview } : {}),
+            createdAt: item.createdAt,
+            embeddingError: status.embeddingError,
+            embeddingStatus: status.embeddingStatus,
+            fileId: item.fileId,
+            fileType: item.fileType,
+            finishEmbedding: status.finishEmbedding,
+            id: item.id,
+            metadata: item.metadata,
+            name: item.name,
+            size: item.size,
+            slug: item.slug,
+            sourceType: item.sourceType,
+            updatedAt: item.updatedAt,
+            uploader: item.uploader,
             url: await ctx.fileService.getFileAccessUrl(item),
-            ...status,
+            userId: item.userId,
+            visibility: item.visibility,
           } as FileListItem;
         }
         return {
-          ...item,
           chunkCount: null,
           chunkingError: null,
           chunkingStatus: null,
+          ...(includeContent ? { content: item.content } : {}),
+          ...(includeContent ? { editorData: item.editorData } : {}),
+          ...(includeContentPreview ? { contentPreview } : {}),
+          createdAt: item.createdAt,
           embeddingError: null,
           embeddingStatus: null,
+          fileId: item.fileId,
+          fileType: item.fileType,
           finishEmbedding: false,
+          id: item.id,
+          metadata: item.metadata,
+          name: item.name,
+          size: item.size,
+          slug: item.slug,
+          sourceType: item.sourceType,
+          updatedAt: item.updatedAt,
+          uploader: item.uploader,
+          url: item.url ?? '',
+          userId: item.userId,
+          visibility: item.visibility,
         } as FileListItem;
-      }),
+      },
+      { concurrency: KNOWLEDGE_ITEM_RESOLUTION_CONCURRENCY },
     );
 
     return {
@@ -500,8 +600,9 @@ export const fileRouter = router({
       while (hasMore) {
         const knowledgeItems = await ctx.knowledgeRepo.query({
           ...input,
-          creatorUserId: isWorkspaceNonOwner(ctx) ? ctx.userId : undefined,
           excludeKnowledgeBaseIds,
+          includeContent: false,
+          includeContentPreview: false,
           limit: batchSize + 1,
           offset,
         });
@@ -523,9 +624,10 @@ export const fileRouter = router({
     .use(withScopedPermission('file:delete'))
     .input(deleteKnowledgeItemsByQuerySchema)
     .mutation(async ({ ctx, input }): Promise<{ count: number }> => {
-      // Members can sweep only rows they created. Workspace owners may clear
-      // the entire query scope, including rows uploaded by other members.
-      const restrictToCreator = isWorkspaceNonOwner(ctx);
+      if (input.knowledgeBaseId) await assertKnowledgeBaseBrowsable(ctx, input.knowledgeBaseId);
+      const excludeKnowledgeBaseIds = input.knowledgeBaseId
+        ? undefined
+        : await getRestrictedKnowledgeBaseIds(ctx);
       const { excludedIds = [], ...query } = input;
       const excludedIdSet = new Set(excludedIds);
 
@@ -538,7 +640,9 @@ export const fileRouter = router({
       while (hasMore) {
         const knowledgeItems = await ctx.knowledgeRepo.query({
           ...query,
-          creatorUserId: restrictToCreator ? ctx.userId : undefined,
+          excludeKnowledgeBaseIds,
+          includeContent: false,
+          includeContentPreview: false,
           limit: batchSize + 1,
           offset,
         });
@@ -567,31 +671,16 @@ export const fileRouter = router({
         hasMore = currentHasMore;
       }
 
+      await assertContentsNotInRestrictedKnowledgeBase(ctx, [...documentIds, ...fileIds]);
+
       if (documentIds.length > 0) {
-        // Per-document delete guard, mirroring `document.deleteDocuments` — a
-        // query-driven sweep must not delete shared docs the member can't delete.
-        if (ctx.workspaceId) {
-          await Promise.all(
-            documentIds.map((id) =>
-              assertCanPerformResourceAction({
-                action: 'delete',
-                db: ctx.serverDB,
-                resourceId: id,
-                resourceType: 'document',
-                userId: ctx.userId,
-                workspaceId: ctx.workspaceId!,
-              }),
-            ),
-          );
-        }
-        await ctx.documentService.deleteDocuments(documentIds, { restrictToCreator });
+        await ctx.documentService.deleteDocuments(documentIds);
       }
 
       if (fileIds.length > 0) {
         const needToRemoveFileList = await ctx.fileModel.deleteMany(
           fileIds,
           serverDBEnv.REMOVE_GLOBAL_FILE,
-          { restrictToCreator },
         );
 
         if (needToRemoveFileList && needToRemoveFileList.length > 0) {
@@ -688,8 +777,8 @@ export const fileRouter = router({
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const existing = await ctx.fileModel.findById(input.id);
-      if (!existing) return;
-      assertWorkspaceRowManageable(ctx, existing.userId, 'file');
+      if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
+      await assertFileNotInRestrictedKnowledgeBase(ctx, input.id);
 
       const file = await ctx.fileModel.delete(input.id, serverDBEnv.REMOVE_GLOBAL_FILE);
 
@@ -704,8 +793,8 @@ export const fileRouter = router({
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const existing = await ctx.fileModel.findById(input.id);
-      if (!existing) return;
-      assertWorkspaceRowManageable(ctx, existing.userId, 'file');
+      if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
+      await assertFileNotInRestrictedKnowledgeBase(ctx, input.id);
 
       const file = await ctx.fileModel.deleteUnreferenced(input.id, serverDBEnv.REMOVE_GLOBAL_FILE);
       if (!file) return;
@@ -724,8 +813,8 @@ export const fileRouter = router({
     .mutation(async ({ ctx, input }) => {
       const file = await ctx.fileModel.findById(input.id);
 
-      if (!file) return;
-      assertWorkspaceRowManageable(ctx, file.userId, 'file');
+      if (!file) throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
+      await assertFileNotInRestrictedKnowledgeBase(ctx, input.id);
 
       const taskId = input.type === 'embedding' ? file.embeddingTaskId : file.chunkTaskId;
 
@@ -738,13 +827,15 @@ export const fileRouter = router({
     .use(withScopedPermission('file:delete'))
     .input(z.object({ ids: z.array(z.string()) }))
     .mutation(async ({ input, ctx }) => {
-      const targets = await ctx.fileModel.findByIds(input.ids);
-      for (const target of targets) {
-        assertWorkspaceRowManageable(ctx, target.userId, 'file');
-      }
+      const ids = [...new Set(input.ids)];
+      const targets = await ctx.fileModel.findByIds(ids);
+      assertAllFilesAccessible(ids, targets);
+      await Promise.all(
+        targets.map((target) => assertFileNotInRestrictedKnowledgeBase(ctx, target.id)),
+      );
 
       const needToRemoveFileList = await ctx.fileModel.deleteMany(
-        input.ids,
+        ids,
         serverDBEnv.REMOVE_GLOBAL_FILE,
       );
 
@@ -768,16 +859,13 @@ export const fileRouter = router({
       const { id, metadata, name, parentId } = input;
 
       const existing = await ctx.fileModel.findById(id);
-      if (!existing) return { success: true };
-      assertWorkspaceRowManageable(ctx, existing.userId, 'file');
+      if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
+      await assertFileNotInRestrictedKnowledgeBase(ctx, id);
 
       // Resolve parentId if it's a slug (otherwise use as-is)
       let resolvedParentId: string | null | undefined = parentId;
       if (parentId) {
-        const docBySlug = await ctx.documentModel.findBySlug(parentId);
-        if (docBySlug) {
-          resolvedParentId = docBySlug.id;
-        }
+        resolvedParentId = (await resolveAccessibleParentDocument(ctx, parentId)).id;
       }
 
       const updates: Parameters<typeof ctx.fileModel.update>[1] = {};

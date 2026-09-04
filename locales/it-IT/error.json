@@ -126,6 +126,7 @@
   "transfer.ownerOnly": "Solo i proprietari dello spazio di lavoro possono trasferire risorse create da altri membri.",
   "transfer.resourceNotFound": "Questa risorsa non esiste più o non hai più accesso. Aggiorna e riprova.",
   "transfer.sameWorkspace": "Questa risorsa è già nello spazio di lavoro selezionato. Scegli un'altra destinazione.",
+  "transfer.sharedTransferBlocked": "Questo agente ha un link condiviso, quindi il suo proprietario non può essere modificato.",
   "transfer.targetIsCurrentOwner": "Questo agente appartiene già a quel membro. Scegli qualcun altro.",
   "transfer.targetNoWriteAccess": "Hai bisogno dell'accesso come Membro o Proprietario per spostare risorse nello spazio di lavoro di destinazione.",
   "transfer.targetNotWorkspaceMember": "Il destinatario selezionato non è un membro attivo di questo workspace. Aggiorna l'elenco dei membri e riprova.",

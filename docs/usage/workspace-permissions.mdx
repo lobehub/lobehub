@@ -19,11 +19,11 @@ Every member of a LobeHub workspace has one of three roles. This page is the com
 
 ## Roles at a Glance
 
-| Role       | Summary                                                                                                                                                       |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Owner**  | Full control: workspace settings, members, billing, AI providers, and every member's content. A workspace can have multiple owners.                           |
-| **Member** | Everyday collaborator: chats with agents, creates content, and manages skills and connectors. Can co-edit shared content, but deletes only what they created. |
-| **Viewer** | Read-only: browses agents, conversations, pages, and files, but cannot chat, create, or change anything.                                                      |
+| Role       | Summary                                                                                                                                              |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Owner**  | Full control: workspace settings, members, billing, AI providers, and every member's content. A workspace can have multiple owners.                  |
+| **Member** | Everyday collaborator: chats with agents, creates content, and manages skills and connectors. Can manage every visible Resource, including deletion. |
+| **Viewer** | Read-only: browses agents, conversations, pages, and files, but cannot chat, create, or change anything.                                             |
 
 <Callout type={'info'}>
   The workspace's **primary owner** is the owner who holds the billing relationship. Only the
@@ -86,21 +86,23 @@ Skills and connectors are shared across the workspace — everyone can browse an
 
 Content covers agents, conversations (topics and messages), pages, files, documents, and knowledge bases.
 
-| Capability                                                                                              | Owner | Member | Viewer |
-| ------------------------------------------------------------------------------------------------------- | :---: | :----: | :----: |
-| Browse all workspace content                                                                            |   ✅   |    ✅   |    ✅   |
-| Chat with agents                                                                                        |   ✅   |    ✅   |    ❌   |
-| Create new content                                                                                      |   ✅   |    ✅   |    ❌   |
-| Edit / delete their own content                                                                         |   ✅   |    ✅   |    ❌   |
-| Collaboratively edit shared content (public pages, public agent / group settings, tasks, shared topics) |   ✅   |    ✅   |    ❌   |
-| Delete / transfer other members' content                                                                |   ✅   |    ❌   |    ❌   |
+| Capability                                                                                         | Owner | Member | Viewer |
+| -------------------------------------------------------------------------------------------------- | :---: | :----: | :----: |
+| Browse all workspace content                                                                       |   ✅   |    ✅   |    ✅   |
+| Chat with agents                                                                                   |   ✅   |    ✅   |    ❌   |
+| Create new content                                                                                 |   ✅   |    ✅   |    ❌   |
+| Edit / delete their own content                                                                    |   ✅   |    ✅   |    ❌   |
+| Manage visible Resources (pages, files, documents, folders, and knowledge bases), including delete |   ✅   |    ✅   |    ❌   |
+| Collaboratively edit other shared content (public agent / group settings, tasks, shared topics)    |   ✅   |    ✅   |    ❌   |
+| Delete / transfer other members' non-Resource content                                              |   ✅   |    ❌   |    ❌   |
 
 Row-level ownership rules that apply on top of the table:
 
-- **Deleting or transferring** a conversation, topic, page, file, document, knowledge base, agent, group, image-generation topic, verify session, or task created by someone else is limited to that creator and workspace owners.
+- **Resource Manager exception:** members can create, edit, move, and delete every visible page, file, document, folder, and knowledge base regardless of creator. Private and restricted visibility still defines what is visible. Cross-workspace transfer and visibility changes remain creator- or owner-only.
+- **Deleting or transferring other content** — conversations, topics, agents, groups, image-generation topics, verify sessions, tasks, and credentials — is limited to that creator and workspace owners.
 - **Credential-backed entries** (workspace API keys, bot integrations) can be modified or removed only by their creator or an owner, and each member sees only their own API key values.
-- **"Clear all" bulk actions** (clear topics, threads, tasks, knowledge bases, API keys) only affect content the caller created.
-- **Collaborative editing** of shared content is intentional: members can co-edit public pages and documents, public agent and group configurations, tasks, and messages in shared topics — but they still cannot delete those resources.
+- **"Clear all" bulk actions** for topics, threads, tasks, and API keys only affect content the caller created. Resource Manager bulk actions affect every visible Resource in the current scope.
+- **Collaborative editing** of shared non-Resource content is intentional: members can co-edit public agent and group configurations, tasks, and messages in shared topics, but only creators and owners can delete those entries.
 
 <Callout type={'tip'}>
   Viewers cannot chat because a conversation both writes message history and spends the workspace

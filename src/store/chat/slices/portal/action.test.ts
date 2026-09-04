@@ -434,6 +434,26 @@ describe('chatDockSlice', () => {
 
       expect(chatPortalSelectors.goalNodeView(result.current)?.nodeId).toBe('node_1');
     });
+
+    it('opens a Task result and returns to it after inspecting the original Task', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openTaskResult('task_1');
+      });
+
+      expect(result.current.portalStack).toEqual([
+        { taskId: 'task_1', type: PortalViewType.TaskResult },
+      ]);
+      expect(chatPortalSelectors.taskResultId(result.current)).toBe('task_1');
+
+      act(() => {
+        result.current.openTaskDetail('task_1');
+        result.current.goBack();
+      });
+
+      expect(chatPortalSelectors.currentViewType(result.current)).toBe(PortalViewType.TaskResult);
+    });
   });
 
   describe('openLocalFile', () => {

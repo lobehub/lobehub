@@ -65,7 +65,12 @@ export class GoalModel {
   };
 
   findById = async (id: string): Promise<GoalItem | undefined> => {
-    return this.db.query.goals.findFirst({ where: and(eq(goals.id, id), this.ownership()) });
+    const [row] = await this.db
+      .select()
+      .from(goals)
+      .where(and(eq(goals.id, id), this.ownership()))
+      .limit(1);
+    return row;
   };
 
   /** The Goal Graph that owns this Task, or undefined when the task is not graph-managed. */

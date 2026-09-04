@@ -184,6 +184,7 @@ export class TreeActionImpl {
 
     try {
       const response = await fileService.getKnowledgeItems({
+        includeContentPreview: false,
         knowledgeBaseId: knowledgeBaseId ?? undefined,
         parentId: folderId || null,
         showFilesInKnowledgeBase: false,
@@ -239,6 +240,7 @@ export class TreeActionImpl {
 
     try {
       const response = await fileService.getKnowledgeItems({
+        includeContentPreview: false,
         knowledgeBaseId: knowledgeBaseId ?? undefined,
         parentId: folderId || null,
         showFilesInKnowledgeBase: false,

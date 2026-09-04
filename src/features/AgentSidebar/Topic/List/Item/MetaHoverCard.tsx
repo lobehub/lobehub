@@ -1,15 +1,8 @@
-import type { ChatTopicMetadata, DeviceGitPullRequestCiStatus } from '@lobechat/types';
+import type { ChatTopicMetadata } from '@lobechat/types';
 import { Icon } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import type { Clock } from 'lucide-react';
-import {
-  CircleCheck,
-  CircleSlash,
-  CircleX,
-  GitBranchIcon,
-  GitForkIcon,
-  LoaderCircle,
-} from 'lucide-react';
+import { GitBranchIcon, GitForkIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,7 +10,12 @@ import { useTranslation } from 'react-i18next';
 import DirIcon from '@/features/ChatInput/ControlBar/DirIcon';
 import { useChatStore } from '@/store/chat';
 
-import { getPullRequestState, getTopicMetaCard, PR_STATE_VISUAL } from './metaCardData';
+import {
+  getCiVisual,
+  getPullRequestState,
+  getTopicMetaCard,
+  PR_STATE_VISUAL,
+} from './metaCardData';
 
 const styles = createStaticStyles(({ css }) => ({
   card: css`
@@ -89,29 +87,6 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
 }));
-
-interface CiVisual {
-  color: string;
-  icon: typeof Clock;
-  labelKey: string;
-}
-
-const getCiVisual = (status?: DeviceGitPullRequestCiStatus): CiVisual => {
-  switch (status) {
-    case 'success': {
-      return { color: cssVar.colorSuccess, icon: CircleCheck, labelKey: 'metaCard.ci.success' };
-    }
-    case 'failure': {
-      return { color: cssVar.colorError, icon: CircleX, labelKey: 'metaCard.ci.failure' };
-    }
-    case 'pending': {
-      return { color: cssVar.colorWarning, icon: LoaderCircle, labelKey: 'metaCard.ci.pending' };
-    }
-    default: {
-      return { color: cssVar.colorTextTertiary, icon: CircleSlash, labelKey: 'metaCard.ci.none' };
-    }
-  }
-};
 
 interface DetailRowProps {
   children: ReactNode;
@@ -239,7 +214,7 @@ const MetaHoverCard = memo<MetaHoverCardProps>(({ metadata, title, time, topicId
 
       {ci && (
         <DetailRow icon={ci.icon} iconColor={ci.color}>
-          {t(ci.labelKey as 'metaCard.ci.none')}
+          {t(ci.labelKey)}
         </DetailRow>
       )}
     </div>

@@ -836,6 +836,7 @@
   "lobehub.gemini-3.5-flash.description": "Gemini's meest intelligente model, gebouwd voor snelheid, dat grensverleggende intelligentie combineert met superieure zoek- en onderbouwing.",
   "lobehub.gemini-3.6-flash.description": "Gemini 3.6 Flash combineert snelheid met intelligentie voor sterke agent-, codeer- en multimodale prestaties met verbeterde token-efficiëntie.",
   "lobehub.gemini-3.7-flash.description": "Gemini 3.7 Flash is Google's meest geavanceerde Flash-model, ontworpen voor complexe codering, agentische workflows en betrouwbare uitvoering in meerdere stappen.",
+  "lobehub.gemini-3.8-flash.description": "Google's meest intelligente Flash-model, afgestemd op langdurige codering en autonome agenten — sneller eerste token en minder omslachtig dan 3.7 Flash voor dezelfde prijs.",
   "lobehub.glm-5.1.description": "Zai's nieuwste vlaggenschipmodel, afgestemd op Claude Opus 4.6 qua algemene en codeercapaciteiten. Uitstekend geschikt voor langdurige taken met autonoom werk tot 8 uur, een ideale basis voor autonome agents en langdurige codeeragents.",
   "lobehub.glm-5.2.description": "GLM-5.2 is het eerste open-source model dat de prestaties van de nieuwste generatie Claude Opus, uitgebracht in dezelfde periode, benadert.",
   "lobehub.glm-5.3-flash.description": "De eerste GLM-5 die kan zien — krachtiger dan GLM-5.2, codering die Opus 4.8 benadert, voor ongeveer een tiende van de vlaggenschipprijs.",

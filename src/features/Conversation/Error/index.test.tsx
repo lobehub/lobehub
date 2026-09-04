@@ -1,9 +1,10 @@
+import type * as lobechatConstModule from '@lobechat/const';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import type * as modelRuntimeModule from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import type * as lobechatTypesModule from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -15,6 +16,7 @@ const dynamicComponentPropsMock = vi.hoisted(() => vi.fn());
 
 const serverConfigMock = vi.hoisted(() => ({ enableBusinessFeatures: false }));
 const delAndRegenerateMessageMock = vi.hoisted(() => vi.fn());
+const detectHeterogeneousAgentCommandMock = vi.hoisted(() => vi.fn());
 // Keyed by message id so a test can decide whether `data.id` is a top-level
 // displayMessage hanging off a user turn — the condition that decides whether a
 // self-contained retry can actually do anything.
@@ -29,6 +31,12 @@ const businessErrorContentMock = vi.hoisted(() =>
     message: undefined as string | undefined,
   })),
 );
+
+vi.mock('@lobechat/const', async (importOriginal) => {
+  const actual = (await importOriginal()) as typeof lobechatConstModule;
+
+  return { ...actual, isDesktop: true };
+});
 
 vi.mock('@lobechat/model-runtime', async (importOriginal) => {
   const actual = (await importOriginal()) as typeof modelRuntimeModule;
@@ -101,16 +109,25 @@ vi.mock('@/features/Electron/HeterogeneousAgent/StatusGuide', () => ({
     agentType,
     error,
     onDismiss,
+    onRetry,
   }: {
     agentType?: string;
     error?: { code?: string };
     onDismiss?: () => void;
+    onRetry?: () => void;
   }) => (
     <div>
       {`guide:${agentType}:${error?.code}`}
       {onDismiss && <button onClick={onDismiss}>dismiss</button>}
+      {onRetry && <button onClick={onRetry}>guide-retry</button>}
     </div>
   ),
+}));
+
+vi.mock('@/services/electron/binary', () => ({
+  binaryService: {
+    detectHeterogeneousAgentCommand: detectHeterogeneousAgentCommandMock,
+  },
 }));
 
 vi.mock('@/hooks/useProviderName', () => ({
@@ -165,6 +182,8 @@ const ErrorMessageWithContent = ({ data }: { data: any }) => {
 describe('ErrorMessageExtra', () => {
   beforeEach(() => {
     dynamicComponentPropsMock.mockClear();
+    detectHeterogeneousAgentCommandMock.mockReset();
+    detectHeterogeneousAgentCommandMock.mockResolvedValue({ available: true });
     missingTranslationKeys.clear();
     businessSlot.render = false;
     serverConfigMock.enableBusinessFeatures = false;
@@ -438,6 +457,64 @@ describe('ErrorMessageExtra', () => {
     );
 
     expect(screen.getByText('guide:claude-code:auth_required')).toBeInTheDocument();
+  });
+
+  it('renders the CLI detection timeout guide instead of the generic JSON error', () => {
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.AgentRuntimeError' }}
+        data={{
+          error: {
+            body: {
+              agentType: 'codex',
+              code: HeterogeneousAgentSessionErrorCode.CliDetectionTimeout,
+              command: 'codex',
+              message: 'Timed out looking for `codex` while reading PATH from your login shell.',
+            },
+            type: AgentRuntimeErrorType.AgentRuntimeError,
+          } as any,
+          id: 'msg-cli-detection-timeout',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('guide:codex:cli_detection_timeout')).toBeInTheDocument();
+    expect(screen.queryByText(/Timed out looking for/)).not.toBeInTheDocument();
+  });
+
+  it('forces fresh CLI detection before retrying a detection timeout', async () => {
+    displayMessageMock.set('msg-cli-detection-timeout', { parentId: 'user-1' });
+
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.AgentRuntimeError' }}
+        data={{
+          error: {
+            body: {
+              agentType: 'codex',
+              code: HeterogeneousAgentSessionErrorCode.CliDetectionTimeout,
+              command: 'codex',
+              message: 'Timed out looking for `codex` while reading PATH from your login shell.',
+            },
+            type: AgentRuntimeErrorType.AgentRuntimeError,
+          } as any,
+          id: 'msg-cli-detection-timeout',
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('guide-retry'));
+
+    await waitFor(() => {
+      expect(detectHeterogeneousAgentCommandMock).toHaveBeenCalledWith({
+        agentType: 'codex',
+        command: 'codex',
+      });
+      expect(delAndRegenerateMessageMock).toHaveBeenCalledWith('msg-cli-detection-timeout');
+    });
+    expect(detectHeterogeneousAgentCommandMock.mock.invocationCallOrder[0]).toBeLessThan(
+      delAndRegenerateMessageMock.mock.invocationCallOrder[0],
+    );
   });
 
   it('renders the rate-limit guide when the refreshed error carries rate_limit code', () => {

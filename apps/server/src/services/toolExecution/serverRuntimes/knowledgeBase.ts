@@ -114,6 +114,7 @@ export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
         },
         getKnowledgeItems: async ({ knowledgeBaseId, limit, offset }) => {
           const items = await knowledgeRepo.query({
+            includeContent: false,
             knowledgeBaseId,
             limit: limit + 1,
             offset,
@@ -178,6 +179,7 @@ export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
         getKnowledgeItems: async ({ category, limit, offset, q, showFilesInKnowledgeBase }) => {
           const items = await knowledgeRepo.query({
             category,
+            includeContent: false,
             limit: limit + 1,
             offset,
             q,

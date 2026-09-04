@@ -610,10 +610,11 @@ const EvidenceList = memo<{
         }
         if (item.content && markdownTextEvidenceTypes.has(item.type))
           return (
-            <Flexbox gap={4} key={item.id}>
-              <CollapsibleMarkdownEvidence>{item.content}</CollapsibleMarkdownEvidence>
-              {caption}
-            </Flexbox>
+            // An authored alt/description becomes the fold row's title itself —
+            // the supplement below the row duplicated it one line later.
+            <CollapsibleMarkdownEvidence key={item.id} title={description ?? undefined}>
+              {item.content}
+            </CollapsibleMarkdownEvidence>
           );
         if (item.content)
           return (

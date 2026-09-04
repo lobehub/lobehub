@@ -1,8 +1,16 @@
 import { useMemo } from 'react';
 
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
+import { isNewReleaseDate } from '@/utils/time';
 
 import { type GroupMode, type ListItem, type ModelWithProviders } from '../types';
+
+/**
+ * Shares the exact rule behind `NewModelBadge`, so a model is pinned to the top only while its
+ * badge is still visible. Every renderer of this list must keep the badge on — otherwise models
+ * jump ahead with no visible explanation.
+ */
+const isNewModel = (releasedAt?: string): boolean => !!releasedAt && isNewReleaseDate(releasedAt);
 
 export const buildListItems = (
   enabledList: EnabledProviderWithModels[],
@@ -70,14 +78,17 @@ export const buildListItems = (
       });
     }
 
-    const sortedModels = sortModelLast
-      ? modelArray.toSorted((a, b) => {
-          const aLast = a.providers.every((provider) => sortModelLast(a.model.id, provider.id));
-          const bLast = b.providers.every((provider) => sortModelLast(b.model.id, provider.id));
-
-          return Number(aLast) - Number(bLast);
-        })
-      : modelArray;
+    const sortedModels = modelArray.toSorted((a, b) => {
+      if (sortModelLast) {
+        const aLast = a.providers.every((provider) => sortModelLast(a.model.id, provider.id));
+        const bLast = b.providers.every((provider) => sortModelLast(b.model.id, provider.id));
+        if (aLast !== bLast) return Number(aLast) - Number(bLast);
+      }
+      const aNew = isNewModel(a.model.releasedAt);
+      const bNew = isNewModel(b.model.releasedAt);
+      if (aNew !== bNew) return aNew ? -1 : 1;
+      return 0;
+    });
 
     return sortedModels.map((data) => ({
       data,
@@ -94,13 +105,18 @@ export const buildListItems = (
         (modelItem) =>
           matchesSearch(modelItem.displayName || modelItem.id) || matchesSearch(providerItem.name),
       );
-      const sortedModels = sortModelLast
-        ? filteredModels.toSorted(
-            (a, b) =>
-              Number(sortModelLast(a.id, providerItem.id)) -
-              Number(sortModelLast(b.id, providerItem.id)),
-          )
-        : filteredModels;
+      const sortedModels = filteredModels.toSorted((a, b) => {
+        if (sortModelLast) {
+          const diff =
+            Number(sortModelLast(a.id, providerItem.id)) -
+            Number(sortModelLast(b.id, providerItem.id));
+          if (diff !== 0) return diff;
+        }
+        const aNew = isNewModel(a.releasedAt);
+        const bNew = isNewModel(b.releasedAt);
+        if (aNew !== bNew) return aNew ? -1 : 1;
+        return 0;
+      });
 
       if (sortedModels.length > 0 || !searchKeyword.trim()) {
         items.push({ provider: providerItem, type: 'group-header' });

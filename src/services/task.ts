@@ -16,6 +16,8 @@ class TaskService {
   getDetail = async (id: string) => lambdaClient.task.detail.query({ id });
 
   list = async (params: {
+    /** Keyset cursor: rows strictly after this `(orderBy timestamp, seq)` position. */
+    after?: { at: Date | string; seq: number };
     assigneeAgentId?: string;
     automated?: boolean;
     orderBy?: 'createdAt' | 'updatedAt';

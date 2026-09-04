@@ -2072,6 +2072,10 @@ export class TopicModel {
    * Whether the run a `runningOperation` marker points at is still the topic's
    * legitimate owner.
    *
+   * Public so the gateway-token refresh routers can refuse to reconnect a
+   * client to a marker whose run has already ended (the marker is cleared
+   * best-effort, so a stale one must not be taken at face value).
+   *
    * The marker itself cannot answer this — it carries no heartbeat and is
    * cleared best-effort — so the authority is the operation row, which both the
    * in-process runtime (`createOperation`) and the heterogeneous path
@@ -2082,7 +2086,7 @@ export class TopicModel {
    * with a marker and no row. A marker with neither a row nor a stamp cannot be
    * proven live and must not keep an already-stuck topic stuck.
    */
-  private isRunningOperationAlive = async (
+  isRunningOperationAlive = async (
     tx: Pick<LobeChatDatabase, 'select'>,
     runningOperation: NonNullable<ChatTopicMetadata['runningOperation']>,
   ): Promise<boolean> => {

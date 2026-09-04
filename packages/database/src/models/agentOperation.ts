@@ -1,7 +1,9 @@
-import type {
-  AgentOperationCompletionReason,
-  AgentOperationStatus,
-  VerifyRunStatus,
+import {
+  type AgentOperationCompletionReason,
+  type AgentOperationStatus,
+  isServerDefaultHeterogeneousRelayInvocation,
+  type ServerDefaultHeterogeneousRelayInvocation,
+  type VerifyRunStatus,
 } from '@lobechat/types';
 import { and, eq, gte, inArray, isNotNull, or, sql } from 'drizzle-orm';
 
@@ -62,6 +64,16 @@ export interface AgentInterventionPreparationMarker {
   state: 'ready';
   stepIndex: number;
 }
+
+const sameServerDefaultRelayInvocation = (
+  left: ServerDefaultHeterogeneousRelayInvocation,
+  right: ServerDefaultHeterogeneousRelayInvocation,
+): boolean =>
+  left.agentType === right.agentType &&
+  left.ingress === right.ingress &&
+  left.model === right.model &&
+  left.operationId === right.operationId &&
+  left.provider === right.provider;
 
 /** Terminal usage summed across every child operation of one parent. All-zero when it has none. */
 export interface ChildUsageRollup {
@@ -273,6 +285,45 @@ export class AgentOperationModel {
       )
       .returning({ id: agentOperations.id });
     return Boolean(row);
+  }
+
+  /**
+   * Record the first official-relay acceptance for a server-default operation.
+   * Matching retries reuse the original timestamp; a conflicting selection or
+   * terminal operation fails closed.
+   */
+  async recordServerDefaultRelayInvocation(
+    operationId: string,
+    invocation: ServerDefaultHeterogeneousRelayInvocation,
+  ): Promise<ServerDefaultHeterogeneousRelayInvocation | null> {
+    if (operationId !== invocation.operationId) return null;
+
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({
+        metadata: sql`coalesce(${agentOperations.metadata}, '{}'::jsonb) || ${JSON.stringify({ serverDefaultRelayInvocation: invocation })}::jsonb`,
+      })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          eq(agentOperations.status, 'running'),
+          eq(agentOperations.model, invocation.model),
+          eq(agentOperations.provider, invocation.provider),
+          this.ownership(),
+          sql`${agentOperations.metadata}->>'serverDefaultHeterogeneous' = 'true'`,
+          sql`${agentOperations.metadata}->>'agentType' = ${invocation.agentType}`,
+          sql`NOT COALESCE(jsonb_exists(${agentOperations.metadata}, 'serverDefaultRelayInvocation'), false)`,
+        ),
+      )
+      .returning({ metadata: agentOperations.metadata });
+
+    if (row) return invocation;
+
+    const existing = (await this.findById(operationId))?.metadata?.serverDefaultRelayInvocation;
+    return isServerDefaultHeterogeneousRelayInvocation(existing) &&
+      sameServerDefaultRelayInvocation(existing, invocation)
+      ? existing
+      : null;
   }
 
   /** Idempotently settle a running operation without rewriting an existing terminal outcome. */

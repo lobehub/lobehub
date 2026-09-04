@@ -592,6 +592,7 @@ export const acceptanceRouter = router({
         .object({
           filter: z.enum(['active', 'all', 'completed']).optional(),
           limit: z.number().int().min(1).max(200).optional(),
+          projectId: z.string().optional(),
           q: z.string().max(200).optional(),
         })
         .optional(),
@@ -613,6 +614,7 @@ export const acceptanceRouter = router({
           cursor: z.string().optional(),
           filter: z.enum(['active', 'all', 'completed']).optional(),
           limit: z.number().int().min(1).max(100).optional(),
+          projectId: z.string().optional(),
         })
         .optional(),
     )
@@ -621,6 +623,7 @@ export const acceptanceRouter = router({
         cursor: input?.cursor,
         filter: input?.filter,
         limit: input?.limit,
+        projectId: input?.projectId,
       }),
     ),
 

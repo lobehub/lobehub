@@ -8,16 +8,23 @@ import { requireHeteroModelInvocation } from './hetero-operation-auth';
 const {
   mockExtractBearerToken,
   mockGetServerDB,
+  mockRecordServerDefaultRelayInvocation,
   mockResolveActiveHeteroOperationPrincipal,
   mockValidateHeteroOperationJWT,
 } = vi.hoisted(() => ({
   mockExtractBearerToken: vi.fn(),
   mockGetServerDB: vi.fn(),
+  mockRecordServerDefaultRelayInvocation: vi.fn(),
   mockResolveActiveHeteroOperationPrincipal: vi.fn(),
   mockValidateHeteroOperationJWT: vi.fn(),
 }));
 
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: mockGetServerDB }));
+vi.mock('@/database/models/agentOperation', () => ({
+  AgentOperationModel: vi.fn(function AgentOperationModel() {
+    return { recordServerDefaultRelayInvocation: mockRecordServerDefaultRelayInvocation };
+  }),
+}));
 vi.mock('@/libs/trpc/utils/internalJwt', () => ({
   validateHeteroOperationJWT: mockValidateHeteroOperationJWT,
 }));
@@ -40,6 +47,7 @@ const createApp = (ingress: ServerDefaultHeterogeneousIngress = 'anthropic-messa
       workspaceId: c.get('workspaceId' as never),
     }),
   );
+  app.get('/upstream-error', (c) => c.json({ error: 'upstream failed' }, 502));
   return app;
 };
 
@@ -52,7 +60,9 @@ describe('heterogeneous operation auth middleware', () => {
     );
     mockValidateHeteroOperationJWT.mockResolvedValue({
       capabilities: ['model:invoke'],
+      model: 'claude-sonnet-4-6',
       operation_id: 'operation-1',
+      provider_id: 'lobehub',
       sub: 'user-1',
     });
     mockGetServerDB.mockResolvedValue({});
@@ -61,6 +71,9 @@ describe('heterogeneous operation auth middleware', () => {
       userId: 'user-1',
       workspaceId: 'workspace-1',
     });
+    mockRecordServerDefaultRelayInvocation.mockImplementation(
+      async (_operationId, invocation) => invocation,
+    );
   });
 
   afterEach(() => {
@@ -81,6 +94,14 @@ describe('heterogeneous operation auth middleware', () => {
     expect(mockResolveActiveHeteroOperationPrincipal).toHaveBeenCalledWith(
       expect.objectContaining({ capability: 'model:invoke', operationId: 'operation-1' }),
     );
+    expect(mockRecordServerDefaultRelayInvocation).toHaveBeenCalledWith('operation-1', {
+      acceptedAt: expect.any(String),
+      agentType: 'claude-code',
+      ingress: 'anthropic-messages',
+      model: 'claude-sonnet-4-6',
+      operationId: 'operation-1',
+      provider: 'lobehub',
+    });
   });
 
   it('authorizes a Kimi Code x-api-key token on the Anthropic ingress', async () => {
@@ -149,6 +170,28 @@ describe('heterogeneous operation auth middleware', () => {
 
     expect(response.status).toBe(401);
     expect(mockResolveActiveHeteroOperationPrincipal).not.toHaveBeenCalled();
+  });
+
+  it('does not attest a rejected upstream invocation', async () => {
+    const response = await createApp().request('/upstream-error', {
+      headers: { Authorization: 'Bearer operation-token' },
+    });
+
+    expect(response.status).toBe(502);
+    expect(mockRecordServerDefaultRelayInvocation).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when an accepted invocation cannot be durably attested', async () => {
+    mockRecordServerDefaultRelayInvocation.mockResolvedValueOnce(null);
+
+    const response = await createApp().request('/invoke', {
+      headers: { Authorization: 'Bearer operation-token' },
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.text()).resolves.toContain(
+      'Server-default relay invocation could not be attested',
+    );
   });
 
   it('rejects previously issued tokens when server-default agents are disabled', async () => {

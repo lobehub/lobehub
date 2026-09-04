@@ -4,10 +4,12 @@ import { type AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { LOADING_FLAT } from '@lobechat/const';
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { parse } from '@lobechat/conversation-flow';
+import { getServerDefaultHeterogeneousAgentConfig } from '@lobechat/heterogeneous-agents';
 import type { ExecAgentResult, TaskCurrentActivity, TaskStatusResult } from '@lobechat/types';
 import {
   CreateThreadWithMessageSchema,
   entityIdPattern,
+  isServerDefaultHeterogeneousRelayInvocation,
   LocalHeterogeneousAgentTypeSchema,
   RequestTrigger,
   ThreadStatus,
@@ -1835,13 +1837,28 @@ export const aiAgentRouter = router({
         operationId: input.operationId,
         userId: ctx.userId,
       });
+      const relayInvocation = operation.metadata?.serverDefaultRelayInvocation;
+      const agentType = operation.metadata?.agentType;
+      const agentConfig =
+        typeof agentType === 'string'
+          ? getServerDefaultHeterogeneousAgentConfig(agentType)
+          : undefined;
+      const verifiedRelayInvocation =
+        isServerDefaultHeterogeneousRelayInvocation(relayInvocation) &&
+        agentConfig?.ingress === relayInvocation.ingress &&
+        relayInvocation.operationId === input.operationId &&
+        relayInvocation.agentType === agentType &&
+        relayInvocation.model === operation.model &&
+        relayInvocation.provider === operation.provider
+          ? relayInvocation
+          : null;
       await settleServerDefaultControlOperation({
         currentStatus: operation.status,
         model,
         operationId: input.operationId,
         targetStatus: input.result,
       });
-      return { success: true as const };
+      return { relayInvocation: verifiedRelayInvocation, success: true as const };
     }),
 
   cancelServerDefaultHeterogeneousOperation: aiAgentBaseProcedure
@@ -3683,7 +3700,14 @@ export const aiAgentRouter = router({
       // `shareChat.refreshGatewayToken` instead.
       const topic = await ctx.topicModel.findOwnTopicById(input.topicId);
 
-      if (!topic?.metadata?.runningOperation) {
+      // Same liveness check as `shareChat.refreshGatewayToken`: the marker is
+      // cleared best-effort, so refuse to reconnect a client to a run that has
+      // already ended — the client treats NOT_FOUND as "stale marker, clear it".
+      const runningOperation = topic?.metadata?.runningOperation;
+      if (
+        !runningOperation ||
+        !(await ctx.topicModel.isRunningOperationAlive(ctx.serverDB, runningOperation))
+      ) {
         throw new TRPCError({
           code: 'NOT_FOUND',
           message: 'No running operation found on this topic',

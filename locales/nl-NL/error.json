@@ -126,6 +126,7 @@
   "transfer.ownerOnly": "Alleen werkruimte-eigenaren kunnen bronnen overdragen die door andere leden zijn gemaakt.",
   "transfer.resourceNotFound": "Deze bron bestaat niet meer of je hebt er geen toegang meer toe. Vernieuw en probeer opnieuw.",
   "transfer.sameWorkspace": "Deze bron bevindt zich al in de geselecteerde werkruimte. Kies een andere bestemming.",
+  "transfer.sharedTransferBlocked": "Deze agent heeft een gedeelde link, dus de eigenaar kan niet worden gewijzigd.",
   "transfer.targetIsCurrentOwner": "Deze agent behoort al tot dat lid. Kies iemand anders.",
   "transfer.targetNoWriteAccess": "Je hebt Lid- of Eigenaarstoegang nodig om bronnen naar de doelwerkruimte te verplaatsen.",
   "transfer.targetNotWorkspaceMember": "De geselecteerde ontvanger is geen actief lid van deze werkruimte. Vernieuw de ledenlijst en probeer het opnieuw.",

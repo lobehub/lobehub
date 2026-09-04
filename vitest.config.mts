@@ -32,6 +32,9 @@ const alias = {
   '@/utils/errorResponse': resolve(__dirname, './src/utils/errorResponse'),
   '@/utils/unzipFile': resolve(__dirname, './src/utils/unzipFile'),
   '@/utils/server': resolve(__dirname, './src/utils/server'),
+  // apps/auth sits outside the root tsconfig's include, so its files get no path
+  // mapping from tsconfigPaths — pin the one server util its worker shares.
+  '@/server/utils/serializeForHtml': resolve(__dirname, './apps/server/src/utils/serializeForHtml'),
   '@/utils/identifier': resolve(__dirname, './src/utils/identifier'),
   '@/utils/electron': resolve(__dirname, './src/utils/electron'),
   '@/utils/markdownToTxt': resolve(__dirname, './src/utils/markdownToTxt'),

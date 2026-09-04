@@ -18,6 +18,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  lt,
   ne,
   notInArray,
   or,
@@ -116,6 +117,13 @@ interface TaskListFilterOptions {
 }
 
 interface TaskListOptions extends TaskListFilterOptions {
+  /**
+   * Keyset cursor: only rows that sort strictly after this `(orderBy, seq)`
+   * position in the list's newest-first order. Unlike `offset`, a cursor is
+   * unaffected by rows inserted or deleted ahead of it, so a client walking
+   * the whole list page by page never repeats or skips a row.
+   */
+  after?: { at: Date; seq: number };
   limit?: number;
   offset?: number;
   orderBy?: 'createdAt' | 'updatedAt';
@@ -641,7 +649,7 @@ export class TaskModel {
           ...getTableColumns(tasks),
           assigneeGroupKey: assigneeGroupKey.as('assignee_group_key'),
           groupRank:
-            sql<number>`row_number() over (partition by ${assigneeGroupKey} order by ${tasks.createdAt} desc)`.as(
+            sql<number>`row_number() over (partition by ${assigneeGroupKey} order by ${tasks.createdAt} desc, ${tasks.seq} desc)`.as(
               'group_rank',
             ),
         })
@@ -727,7 +735,7 @@ export class TaskModel {
           ...getTableColumns(tasks),
           assigneeGroupKey: assigneeGroupKey.as('assignee_group_key'),
           groupRank:
-            sql<number>`row_number() over (partition by ${assigneeGroupKey} order by ${tasks.createdAt} desc)`.as(
+            sql<number>`row_number() over (partition by ${assigneeGroupKey} order by ${tasks.createdAt} desc, ${tasks.seq} desc)`.as(
               'group_rank',
             ),
         })
@@ -807,7 +815,7 @@ export class TaskModel {
           .select()
           .from(tasks)
           .where(and(...baseConditions, ...conditions))
-          .orderBy(desc(tasks.createdAt))
+          .orderBy(desc(tasks.createdAt), desc(tasks.seq))
           .limit(limit)
           .offset(offset);
 
@@ -856,7 +864,7 @@ export class TaskModel {
           .select()
           .from(tasks)
           .where(and(...baseConditions, ...conditions))
-          .orderBy(desc(tasks.createdAt))
+          .orderBy(desc(tasks.createdAt), desc(tasks.seq))
           .limit(limit)
           .offset(offset);
 
@@ -890,7 +898,7 @@ export class TaskModel {
             .select()
             .from(tasks)
             .where(and(...baseConditions, ...group.conditions))
-            .orderBy(desc(tasks.createdAt))
+            .orderBy(desc(tasks.createdAt), desc(tasks.seq))
             .limit(group.limit)
             .offset(group.offset));
 
@@ -1004,12 +1012,21 @@ export class TaskModel {
   }
 
   async list(options: TaskListOptions = {}): Promise<{ tasks: TaskItem[]; total: number }> {
-    const { statuses, priorities, limit = 50, offset = 0, orderBy = 'createdAt' } = options;
+    const { after, statuses, priorities, limit = 50, offset = 0, orderBy = 'createdAt' } = options;
+    const orderColumn = orderBy === 'updatedAt' ? tasks.updatedAt : tasks.createdAt;
 
     const conditions = this.buildListConditions(options);
 
     if (statuses?.length) conditions.push(inArray(tasks.status, statuses));
     if (priorities?.length) conditions.push(inArray(tasks.priority, priorities));
+    if (after) {
+      conditions.push(
+        or(
+          lt(orderColumn, after.at),
+          and(eq(orderColumn, after.at), lt(tasks.seq, after.seq)),
+        ) as SQL,
+      );
+    }
 
     const where = and(...conditions);
 
@@ -1022,7 +1039,9 @@ export class TaskModel {
       .select()
       .from(tasks)
       .where(where)
-      .orderBy(desc(orderBy === 'updatedAt' ? tasks.updatedAt : tasks.createdAt))
+      // `seq` breaks timestamp ties so the order is total — required for the
+      // keyset cursor above and for offset pages to never repeat or skip a row.
+      .orderBy(desc(orderColumn), desc(tasks.seq))
       .limit(limit)
       .offset(offset);
     const [countResult, taskList] = await Promise.all([countQuery, taskListQuery]);

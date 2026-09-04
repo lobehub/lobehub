@@ -243,6 +243,7 @@ export class FileManageActionImpl {
     try {
       const response = await serverFileService.getKnowledgeItems({
         ...queryListParams,
+        includeContentPreview: queryListParams.includeContentPreview ?? false,
         limit: queryListParams.limit ?? 50,
         offset: fileListOffset,
       });
@@ -773,6 +774,7 @@ export class FileManageActionImpl {
     return useClientDataSWR<FileListItem[]>(fileKeys.knowledgeItems(params), async () => {
       const response = await serverFileService.getKnowledgeItems({
         ...params,
+        includeContentPreview: params.includeContentPreview ?? false,
         limit: params.limit ?? 50,
         offset: 0,
       });

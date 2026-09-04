@@ -76,4 +76,21 @@ describe('AcceptanceService.listWithSubjects', () => {
     expect(mocks.resolveDocuments).toHaveBeenCalledOnce();
     expect(result.map(({ id }: { id: string }) => id)).toEqual(['older']);
   });
+
+  it('scopes the candidate query to a project', async () => {
+    const query = vi.fn().mockResolvedValue([]);
+    const service = new AcceptanceService({} as any, 'user-1') as any;
+    service.acceptanceModel = { query };
+    service.latestCheckCounts = vi.fn().mockResolvedValue(new Map());
+    service.resolveProjects = vi.fn().mockResolvedValue(new Map());
+
+    await service.listWithSubjects({ filter: 'all', projectId: 'project-1' });
+
+    expect(query).toHaveBeenCalledWith({
+      limit: 50,
+      projectId: 'project-1',
+      statuses: undefined,
+      unbounded: false,
+    });
+  });
 });

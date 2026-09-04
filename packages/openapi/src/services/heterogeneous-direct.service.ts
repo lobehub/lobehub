@@ -267,7 +267,6 @@ export const normalizeResponsesRequest = (request: Record<string, unknown>, mode
       )
     : undefined;
   return {
-    apiMode: 'responses',
     max_tokens:
       typeof request.max_output_tokens === 'number' ? request.max_output_tokens : undefined,
     messages,
@@ -738,8 +737,23 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>, model:
         },
         transform(event, controller) {
           if (finalized) return;
-          if (event.type === 'text' && typeof event.data === 'string' && event.data) {
-            outputText += event.data;
+          const part =
+            (event.type === 'content_part' || event.type === 'reasoning_part') &&
+            isRecord(event.data) &&
+            event.data.partType === 'text'
+              ? event.data
+              : undefined;
+          const content =
+            event.type === 'text' || event.type === 'reasoning'
+              ? typeof event.data === 'string'
+                ? event.data
+                : undefined
+              : typeof part?.content === 'string'
+                ? part.content
+                : undefined;
+          const isReasoning = event.type === 'reasoning' || event.type === 'reasoning_part';
+          if (content && !isReasoning) {
+            outputText += content;
             if (textOutputIndex === undefined) {
               textOutputIndex = nextOutputIndex++;
               controller.enqueue(
@@ -768,14 +782,14 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>, model:
             controller.enqueue(
               responseSse('response.output_text.delta', {
                 content_index: 0,
-                delta: event.data,
+                delta: content,
                 item_id: `msg_${responseId}`,
                 output_index: textOutputIndex,
                 type: 'response.output_text.delta',
               }),
             );
-          } else if (event.type === 'reasoning' && typeof event.data === 'string' && event.data) {
-            reasoningText += event.data;
+          } else if (content && isReasoning) {
+            reasoningText += content;
             if (reasoningOutputIndex === undefined) {
               reasoningItemId = event.id || `rs_${responseId}`;
               reasoningOutputIndex = nextOutputIndex++;
@@ -794,7 +808,7 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>, model:
             }
             controller.enqueue(
               responseSse('response.reasoning_summary_text.delta', {
-                delta: event.data,
+                delta: content,
                 item_id: reasoningItemId,
                 output_index: reasoningOutputIndex,
                 summary_index: 0,
@@ -920,14 +934,24 @@ export const invokeServerDefaultModel = async (params: {
   )
     ? (requestedReasoningEffort as ChatStreamPayload['reasoning_effort'])
     : undefined;
-  const payload =
-    params.agentType === 'codex' && isCodexServerDefaultCustomModel(params.model)
+  const routedReasoningEffort =
+    normalizedPayload.reasoning_effort ??
+    (requestedReasoningEffort as ChatStreamPayload['reasoning_effort']);
+  // Responses describes the CLI-facing ingress, not necessarily the selected provider's API.
+  // Keep it upstream only for native Codex models; the deployment router owns every other choice.
+  let payload = {
+    ...chatCompletionsPayload,
+    ...(routedReasoningEffort ? { reasoning_effort: routedReasoningEffort } : {}),
+  };
+  if (params.agentType === 'codex') {
+    payload = isCodexServerDefaultCustomModel(params.model)
       ? {
           ...chatCompletionsPayload,
           apiMode: 'chatCompletion' as const,
           reasoning_effort: normalizedPayload.reasoning_effort ?? reasoningEffort,
         }
-      : normalizedPayload;
+      : { ...normalizedPayload, apiMode: 'responses' };
+  }
   const response = await runtime.chat(
     {
       ...payload,

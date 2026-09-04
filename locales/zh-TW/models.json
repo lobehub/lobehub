@@ -836,6 +836,7 @@
   "lobehub.gemini-3.5-flash.description": "Gemini 最智能的模型，專為速度而設計，結合前沿智能與卓越的搜索和基礎能力。",
   "lobehub.gemini-3.6-flash.description": "Gemini 3.6 Flash 在速度與智能之間取得平衡，適用於強大的代理、編碼和多模態性能，並提高了標記效率。",
   "lobehub.gemini-3.7-flash.description": "Gemini 3.7 Flash 是 Google 最強大的 Flash 模型，專為複雜的編碼、代理工作流程以及可靠的多步執行而設計。",
+  "lobehub.gemini-3.8-flash.description": "Google 最智能的 Flash 模型，專為長期程式編碼和自主代理調校——首個標記生成速度更快，且比 3.7 Flash 更精簡，價格相同。",
   "lobehub.glm-5.1.description": "Zai 的最新旗艦模型，在整體和編碼能力上與 Claude Opus 4.6 對齊。擅長長期任務，能自主工作長達 8 小時，是自主代理和長期編碼代理的理想基礎。",
   "lobehub.glm-5.2.description": "GLM-5.2 是首個接近同期發布的最新一代 Claude Opus 性能的開源模型。",
   "lobehub.glm-5.3-flash.description": "第一款能看見的 GLM-5 —— 比 GLM-5.2 更強大，編碼能力接近 Opus 4.8，價格僅為旗艦機型的十分之一。",

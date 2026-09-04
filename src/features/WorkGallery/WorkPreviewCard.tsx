@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { formatTaskItemDate } from '@/features/AgentTasks/features/formatTaskItemDate';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import { getWorkTypeDescriptor } from '@/features/Work/descriptors';
+import { getWorkVersionTotalTokens } from '@/utils/workCumulativeUsage';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
 
 import WorkPreview from './WorkPreview';
@@ -120,17 +121,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null;
-
-const getTotalTokens = (item: WorkSummaryItem): number | null => {
-  const usage = item.event.cumulativeUsage?.usage;
-  if (!isRecord(usage) || !isRecord(usage.llm) || !isRecord(usage.llm.tokens)) return null;
-
-  const total = usage.llm.tokens.total;
-  return typeof total === 'number' && Number.isFinite(total) && total > 0 ? total : null;
-};
-
 interface WorkPreviewCardProps {
   item: WorkSummaryItem;
   onOpen: (item: WorkSummaryItem) => void;
@@ -190,7 +180,7 @@ const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen }) => {
     date: eventAt,
     ns: 'file',
   });
-  const totalTokens = getTotalTokens(item);
+  const totalTokens = getWorkVersionTotalTokens(item.event.cumulativeUsage);
   const cost = formatWorkVersionCost(item.totalCost);
 
   return (

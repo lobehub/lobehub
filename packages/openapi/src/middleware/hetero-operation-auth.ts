@@ -4,6 +4,7 @@ import type { MiddlewareHandler } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 
 import { getServerDB } from '@/database/core/db-adaptor';
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import type { HeteroOperationJwtClaims } from '@/libs/trpc/utils/internalJwt';
 import { validateHeteroOperationJWT } from '@/libs/trpc/utils/internalJwt';
 import {
@@ -32,27 +33,54 @@ export const requireHeteroModelInvocation =
     }
 
     try {
+      const db = await getServerDB();
       const principal = await resolveActiveHeteroOperationPrincipal({
         capability: 'model:invoke',
         claims,
-        db: await getServerDB(),
+        db,
         operationId: claims.operation_id,
       });
-      const config = getServerDefaultHeterogeneousAgentConfig(principal.agentType);
-      if (!config || config.ingress !== ingress || config.tokenHeader !== tokenHeader) {
+      const agentType = principal.agentType;
+      const config = getServerDefaultHeterogeneousAgentConfig(agentType);
+      if (
+        !agentType ||
+        !config ||
+        config.ingress !== ingress ||
+        config.tokenHeader !== tokenHeader
+      ) {
         throw new HTTPException(403, {
           message: 'Operation token cannot invoke this server model ingress',
         });
       }
-      c.set('heteroAgentType', principal.agentType);
+      c.set('heteroAgentType', agentType);
       c.set('heteroOperationClaims', claims satisfies HeteroOperationJwtClaims);
       c.set('userId', principal.userId);
       c.set('workspaceId', principal.workspaceId);
+
+      await next();
+      if (!c.res.ok || !claims.model || !claims.provider_id) return;
+
+      const relayInvocation = await new AgentOperationModel(
+        db,
+        principal.userId,
+        principal.workspaceId,
+      ).recordServerDefaultRelayInvocation(claims.operation_id, {
+        acceptedAt: new Date().toISOString(),
+        agentType,
+        ingress,
+        model: claims.model,
+        operationId: claims.operation_id,
+        provider: claims.provider_id,
+      });
+      if (!relayInvocation) {
+        throw new HTTPException(409, {
+          message: 'Server-default relay invocation could not be attested',
+        });
+      }
     } catch (error) {
       if (error instanceof HeteroOperationPrincipalError) {
         throw new HTTPException(error.status, { message: error.message });
       }
       throw error;
     }
-    return next();
   };

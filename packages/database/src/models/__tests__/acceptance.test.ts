@@ -213,6 +213,25 @@ describe('AcceptanceModel', () => {
     await expect(model.listStatusesBySubjects('task', [topicId])).resolves.toEqual([]);
   });
 
+  it('filters flat and paged lists by project before applying limits', async () => {
+    const projectModel = new ProjectModel(serverDB, userId);
+    const alpha = await projectModel.create({ identifier: 'ALPHA', name: 'Alpha project' });
+    const beta = await projectModel.create({ identifier: 'BETA', name: 'Beta project' });
+    const model = new AcceptanceModel(serverDB, userId);
+
+    await model.create({ projectId: alpha.id, subjectId: 'alpha-1', subjectType: 'standalone' });
+    await model.create({ projectId: beta.id, subjectId: 'beta-1', subjectType: 'standalone' });
+    await model.create({ projectId: alpha.id, subjectId: 'alpha-2', subjectType: 'standalone' });
+
+    const alphaRows = await model.query({ projectId: alpha.id });
+    expect(alphaRows.map(({ subjectId }) => subjectId).sort()).toEqual(['alpha-1', 'alpha-2']);
+    expect(alphaRows.every(({ projectId }) => projectId === alpha.id)).toBe(true);
+    await expect(model.queryPage({ limit: 1, projectId: alpha.id })).resolves.toMatchObject({
+      items: [expect.objectContaining({ projectId: alpha.id })],
+      nextCursor: expect.any(String),
+    });
+  });
+
   it('updateStatus stamps completedAt only on user-terminal statuses', async () => {
     const model = new AcceptanceModel(serverDB, userId);
     const row = await model.ensureForSubject('topic', topicId);

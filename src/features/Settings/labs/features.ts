@@ -13,7 +13,6 @@ export type LabStage = 'alpha' | 'beta';
  */
 type LabFeatureI18nKey =
   | 'agentGraphConfig'
-  | 'agentProviderBinding'
   | 'artifactDeployment'
   | 'claudeCodeSdk'
   | 'codexAppServer'
@@ -113,13 +112,6 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     flag: 'enableImessage',
     i18nKey: 'imessage',
     searchKeywords: ['imessage', 'bluebubbles'],
-    stage: 'alpha',
-  },
-  {
-    desktopOnly: true,
-    flag: 'enableAgentProviderBinding',
-    i18nKey: 'agentProviderBinding',
-    searchKeywords: ['agent provider binding', 'claude code api', 'codex api', 'api provider'],
     stage: 'alpha',
   },
   {

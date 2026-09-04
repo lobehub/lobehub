@@ -114,14 +114,6 @@ describe('evaluateFeatureFlag', () => {
     expect(evaluateFeatureFlag([], 'user-123')).toBe(false);
     expect(evaluateFeatureFlag([])).toBe(false);
   });
-
-  it('should match allowlist entries against the user email as well', () => {
-    const allowlist = ['someone@example.com', 'user-456'];
-    expect(evaluateFeatureFlag(allowlist, 'user-123', 'someone@example.com')).toBe(true);
-    expect(evaluateFeatureFlag(allowlist, 'user-456', 'other@example.com')).toBe(true);
-    expect(evaluateFeatureFlag(allowlist, 'user-123', 'other@example.com')).toBe(false);
-    expect(evaluateFeatureFlag(allowlist, 'user-123')).toBe(false);
-  });
 });
 
 describe('mapFeatureFlagsEnvToState', () => {
@@ -179,34 +171,28 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config).enableDevDock).toBe(false);
   });
 
-  it('should keep agent share off by default and narrow it to listed user IDs or emails', () => {
+  it('should keep agent share off by default and narrow it to listed user IDs', () => {
     expect(DEFAULT_FEATURE_FLAGS.agent_share).toBe(false);
     expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableAgentShare).toBe(false);
 
-    const config = { agent_share: ['creator-123', 'creator@example.com'] };
+    const config = { agent_share: ['creator-123'] };
 
     expect(mapFeatureFlagsEnvToState(config, 'creator-123').enableAgentShare).toBe(true);
-    expect(
-      mapFeatureFlagsEnvToState(config, 'user-456', 'creator@example.com').enableAgentShare,
-    ).toBe(true);
     expect(mapFeatureFlagsEnvToState(config, 'user-456').enableAgentShare).toBe(false);
     expect(mapFeatureFlagsEnvToState(config).enableAgentShare).toBe(false);
   });
 
   it('should gate agent share visitors with the same `agent_share` allowlist', () => {
     // One flag drives both capabilities, so a visitor is admitted by exactly
-    // the same entry (id or email) that would let them publish a share.
+    // the same user ID that would let them publish a share.
     expect(DEFAULT_FEATURE_FLAGS.agent_share).toBe(false);
     expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'visitor-1').enableAgentShare).toBe(
       false,
     );
 
-    const config = { agent_share: ['visitor-123', 'visitor@example.com'] };
+    const config = { agent_share: ['visitor-123'] };
 
     expect(mapFeatureFlagsEnvToState(config, 'visitor-123').enableAgentShare).toBe(true);
-    expect(
-      mapFeatureFlagsEnvToState(config, 'user-456', 'visitor@example.com').enableAgentShare,
-    ).toBe(true);
     expect(mapFeatureFlagsEnvToState(config, 'user-456').enableAgentShare).toBe(false);
     expect(mapFeatureFlagsEnvToState(config).enableAgentShare).toBe(false);
   });

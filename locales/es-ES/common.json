@@ -464,6 +464,7 @@
   "serverVersionOutdated.warning": "Es posible que algunas funciones no funcionen correctamente o se comporten de forma inesperada. Por favor, actualiza tu servidor para una mejor experiencia.",
   "setting": "Configuración",
   "share": "Compartir",
+  "stillLoading": "Cargando aún...",
   "stop": "Detener",
   "switch": "Interruptor",
   "sync.actions.settings": "Configuración de sincronización",

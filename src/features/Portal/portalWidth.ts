@@ -26,6 +26,7 @@ const VIEW_MIN_WIDTH: PortalWidths = {
   [PortalViewType.GoalMetric]: CHAT_PORTAL_TOOL_UI_WIDTH,
   [PortalViewType.GoalNode]: CHAT_PORTAL_TOOL_UI_WIDTH,
   [PortalViewType.TaskDetail]: CHAT_PORTAL_TOOL_UI_WIDTH,
+  [PortalViewType.TaskResult]: CHAT_PORTAL_TOOL_UI_WIDTH,
   [PortalViewType.Thread]: CHAT_PORTAL_TOOL_UI_WIDTH,
   [PortalViewType.ToolUI]: CHAT_PORTAL_TOOL_UI_WIDTH,
   [PortalViewType.Topic]: CHAT_PORTAL_TOOL_UI_WIDTH,
@@ -44,6 +45,7 @@ const VIEW_DEFAULT_WIDTH: PortalWidths = {
   // full document width crowds the page it sits next to.
   [PortalViewType.GoalNode]: CHAT_PORTAL_TASK_WIDTH,
   [PortalViewType.TaskDetail]: CHAT_PORTAL_TASK_WIDTH,
+  [PortalViewType.TaskResult]: CHAT_PORTAL_TASK_WIDTH,
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);

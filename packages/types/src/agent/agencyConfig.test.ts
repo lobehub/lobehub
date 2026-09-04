@@ -8,6 +8,7 @@ import {
   canPublishAgentTopicLink,
   formatServerDefaultHeterogeneousModel,
   isServerDefaultHeterogeneousModel,
+  isServerDefaultHeterogeneousRelayInvocation,
   normalizeHeterogeneousProviderConfig,
   pruneWorkingDirByDeviceDeletes,
   resolveAgencyConfig,
@@ -52,6 +53,29 @@ describe('server-default heterogeneous model request', () => {
     expect(unwrapServerDefaultHeterogeneousModel(undefined, 'claude-sonnet-4-6')).toBe(
       'claude-sonnet-4-6',
     );
+  });
+
+  it('recognizes only complete official-relay attestations', () => {
+    const invocation = {
+      acceptedAt: '2026-09-01T00:00:00.000Z',
+      agentType: 'trae',
+      ingress: 'openai-responses',
+      model: 'gpt-5.4',
+      operationId: 'operation-1',
+      provider: 'lobehub',
+    };
+
+    expect(isServerDefaultHeterogeneousRelayInvocation(invocation)).toBe(true);
+    expect(isServerDefaultHeterogeneousRelayInvocation(null)).toBe(false);
+    expect(isServerDefaultHeterogeneousRelayInvocation({ ...invocation, ingress: undefined })).toBe(
+      false,
+    );
+    expect(
+      isServerDefaultHeterogeneousRelayInvocation({ ...invocation, operationId: undefined }),
+    ).toBe(false);
+    expect(
+      isServerDefaultHeterogeneousRelayInvocation({ ...invocation, ingress: 'openai-chat' }),
+    ).toBe(false);
   });
 });
 

@@ -238,6 +238,9 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   message: rw('chat:read', 'chat:write'),
   // IM channel management carries channel credentials
   messenger: 'blocked',
+  // numeric telemetry attached to a goal / agent / task / project — same
+  // domain as the subjects that own it
+  metric: rw('agent:read', 'agent:write'),
   notebook: rw('knowledge:read', 'knowledge:write'),
   notification: rw('user:read', 'user:write'),
   oauthApp: 'blocked',

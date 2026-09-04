@@ -9,6 +9,7 @@ import {
   recentKeys,
   resourceKeys,
   taskKeys,
+  verifyKeys,
   workKeys,
 } from './keys';
 import { CACHE_TIERS } from './localStorageProvider';
@@ -70,6 +71,15 @@ describe('isAcceptanceListKey', () => {
       true,
     );
     expect(isAcceptanceListKey(['verify:acceptanceBundle', 'acceptance-1'])).toBe(false);
+  });
+
+  it('keeps project-scoped acceptance feeds in separate cache entries', () => {
+    expect(verifyKeys.acceptances(undefined, undefined, 'all', 'project-1')).not.toEqual(
+      verifyKeys.acceptances(undefined, undefined, 'all', 'project-2'),
+    );
+    expect(verifyKeys.acceptancePage('workspace-1', 'all', 'project-1')).not.toEqual(
+      verifyKeys.acceptancePage('workspace-1', 'all', 'project-2'),
+    );
   });
 });
 

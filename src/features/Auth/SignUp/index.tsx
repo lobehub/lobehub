@@ -2,7 +2,7 @@
 
 import { Navigate } from 'react-router';
 
-import { useAuthServerConfigStore } from '@/features/AuthShell';
+import { useAuthServerConfigStore } from '@/features/AuthShell/AuthServerConfigProvider';
 
 import BetterAuthSignUpForm from './BetterAuthSignUpForm';
 

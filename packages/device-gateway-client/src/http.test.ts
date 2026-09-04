@@ -256,7 +256,77 @@ describe('GatewayHttpClient', () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe('HTTP 500');
+      // With no gateway body to quote, the code carries the diagnosis instead
+      // of a bare status.
+      expect(result.error).toBe('DEVICE_GATEWAY_ERROR (HTTP 500)');
+    });
+
+    it('explains a 503 as an undelivered call that is safe to retry', async () => {
+      // A bare `Device tool call failed (HTTP 503)` told the model nothing about
+      // whether the tool ran, so it either abandoned a device that was one retry
+      // from answering or re-ran a mutating command blindly.
+      mockFetch({ ok: false, status: 503, text: vi.fn().mockResolvedValue('DEVICE_OFFLINE') });
+
+      const result = await client.executeToolCall(
+        { userId: 'user-1' },
+        { apiName: 'runCommand', arguments: '{}', identifier: 'test' },
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('never ran on it');
+      expect(result.content).toContain('retrying the same call is safe');
+      expect(result.content).toContain('HTTP 503');
+      // The gateway's own code stays verbatim for downstream matching.
+      expect(result.error).toBe('DEVICE_OFFLINE');
+      expect(result.content).toContain('DEVICE_OFFLINE');
+    });
+
+    it('warns that a 504 may still be running on the device', async () => {
+      // The opposite of 503: the call WAS delivered, so repeating a write can
+      // double-apply it.
+      mockFetch({ ok: false, status: 504, text: vi.fn().mockResolvedValue('') });
+
+      const result = await client.executeToolCall(
+        { userId: 'user-1' },
+        { apiName: 'writeFile', arguments: '{}', identifier: 'test' },
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('did not answer before the deadline');
+      expect(result.content).toContain('do NOT blindly repeat');
+      expect(result.error).toBe('DEVICE_RESPONSE_TIMEOUT (HTTP 504)');
+    });
+
+    it('describes a client-side timeout instead of leaking the abort error', async () => {
+      // `AbortSignal.timeout` rejects the fetch, which used to escape as a bare
+      // `The operation was aborted due to timeout` — indistinguishable from the
+      // tool itself failing.
+      const timeout = Object.assign(new Error('The operation was aborted due to timeout'), {
+        name: 'TimeoutError',
+      });
+      vi.mocked(fetch).mockRejectedValue(timeout);
+
+      const result = await client.executeToolCall(
+        { userId: 'user-1' },
+        { apiName: 'runCommand', arguments: '{}', identifier: 'test' },
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('timed out before the device answered');
+      expect(result.error).toContain('DEVICE_RESPONSE_TIMEOUT');
+    });
+
+    it('describes an unreachable gateway host', async () => {
+      vi.mocked(fetch).mockRejectedValue(new TypeError('fetch failed'));
+
+      const result = await client.executeToolCall(
+        { userId: 'user-1' },
+        { apiName: 'readFile', arguments: '{}', identifier: 'test' },
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('Could not reach the device gateway');
+      expect(result.error).toContain('DEVICE_GATEWAY_UNREACHABLE');
     });
 
     it('should pass optional deviceId and timeout', async () => {
@@ -547,11 +617,11 @@ describe('GatewayHttpClient', () => {
         { apiName: 'ping', payload: {}, platform: 'imessage' },
       );
 
-      expect(result).toEqual({
-        content: 'Device message API call failed (HTTP 503)',
-        error: 'Desktop offline',
-        success: false,
-      });
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Desktop offline');
+      expect(result.content).toContain('The device is not reachable right now');
+      expect(result.content).toContain('message API call');
+      expect(result.content).toContain('HTTP 503');
     });
 
     it('should pass optional deviceId and timeout', async () => {

@@ -39,7 +39,7 @@ vi.mock('@/business/client/hooks/useBusinessSignup', () => ({
 
 let mockEnableEmailVerification = false;
 let mockEnableBusinessFeatures = false;
-vi.mock('@/features/AuthShell', () => ({
+vi.mock('@/features/AuthShell/AuthServerConfigProvider', () => ({
   useAuthServerConfigStore: (selector: (s: any) => any) =>
     selector({
       serverConfig: {

@@ -211,17 +211,23 @@ export class AcceptanceModel {
 
   /** Acceptances for the current user/workspace, newest first. */
   query = async (
-    options: { limit?: number; statuses?: AcceptanceStatus[]; unbounded?: boolean } = {},
+    options: {
+      limit?: number;
+      projectId?: string;
+      statuses?: AcceptanceStatus[];
+      unbounded?: boolean;
+    } = {},
   ) => {
-    const { statuses, unbounded } = options;
+    const { projectId, statuses, unbounded } = options;
     const limit = unbounded ? undefined : (options.limit ?? 50);
+    const conditions = [this.ownership()];
+    if (projectId) conditions.push(eq(acceptances.projectId, projectId));
+    if (statuses && statuses.length > 0) conditions.push(inArray(acceptances.status, statuses));
+
     return this.db.query.acceptances.findMany({
       limit,
       orderBy: [desc(acceptances.createdAt)],
-      where:
-        statuses && statuses.length > 0
-          ? and(this.ownership(), inArray(acceptances.status, statuses))
-          : this.ownership(),
+      where: and(...conditions),
     });
   };
 
@@ -235,12 +241,19 @@ export class AcceptanceModel {
   queryPage = async ({
     cursor,
     limit = 30,
+    projectId,
     statuses,
-  }: { cursor?: string; limit?: number; statuses?: AcceptanceStatus[] } = {}): Promise<{
+  }: {
+    cursor?: string;
+    limit?: number;
+    projectId?: string;
+    statuses?: AcceptanceStatus[];
+  } = {}): Promise<{
     items: AcceptanceItem[];
     nextCursor: string | null;
   }> => {
     const conditions = [this.ownership()];
+    if (projectId) conditions.push(eq(acceptances.projectId, projectId));
     if (statuses && statuses.length > 0) conditions.push(inArray(acceptances.status, statuses));
 
     // Millisecond-truncated createdAt — the precision the cursor round-trips

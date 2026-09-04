@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { ServerOperationStore } from './ServerOperationStore';
@@ -32,6 +33,22 @@ describe('ServerOperationStore', () => {
   });
 
   describe('clearRunningMark', () => {
+    // Regression: agent-share visitor runs execute under the creator's userId
+    // on a topic whose `senderId` is the visitor. The default topic scope hides
+    // those rows, so `findById` returned nothing, the clear silently bailed,
+    // and every visitor topic kept a stale `runningOperation` forever — each
+    // later open reconnected to a finished run and froze the message list.
+    it('looks the topic up with the share-visitor scope so visitor topics can be cleared', async () => {
+      topicMock.findById.mockResolvedValue(markedWith('op-main'));
+
+      await createStore('op-main').clearRunningMark();
+
+      expect(TopicModel).toHaveBeenCalledWith(db, 'user-1', undefined, undefined, {
+        includeShareVisitor: true,
+      });
+      expect(topicMock.settleRunningOperation).toHaveBeenCalledWith('topic-1', 'op-main', 'unread');
+    });
+
     it('clears the mark when this operation owns it', async () => {
       topicMock.findById.mockResolvedValue(markedWith('op-main'));
 

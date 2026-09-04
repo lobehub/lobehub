@@ -12,10 +12,8 @@ import {
   agentLabelAssignments,
   agentLabels,
   agents,
-  agentsToSessions,
   chatGroups,
   sessionGroups,
-  sessions,
   topics,
 } from '../../schemas';
 import { type LobeChatDatabase } from '../../type';
@@ -82,14 +80,14 @@ export class HomeRepository {
     includeLabels = true,
     includeGroups = true,
   ): Promise<SidebarAgentListResponse> {
-    // 1. Query all agents (non-virtual) with their session info (if exists).
+    // 1. Query all non-virtual agents.
     //    `visibility` is selected so we can later bucket public vs. the
     //    current user's private rows; the WHERE already hides other members'
     //    private rows via the workspace-aware predicate.
     const agentList = await this.db
       .select({
         agencyConfig: agents.agencyConfig,
-        agentSessionGroupId: agents.sessionGroupId,
+        sessionGroupId: agents.sessionGroupId,
         agentUserId: agents.userId,
         avatar: agents.avatar,
         backgroundColor: agents.backgroundColor,
@@ -97,17 +95,12 @@ export class HomeRepository {
         id: agents.id,
         name: agents.name,
         pinned: agents.pinned,
-        sessionGroupId: sessions.groupId,
-        sessionId: sessions.id,
-        sessionPinned: sessions.pinned,
         slug: agents.slug,
         title: agents.title,
         updatedAt: agents.updatedAt,
         visibility: agents.visibility,
       })
       .from(agents)
-      .leftJoin(agentsToSessions, eq(agents.id, agentsToSessions.agentId))
-      .leftJoin(sessions, eq(agentsToSessions.sessionId, sessions.id))
       .where(
         and(
           buildWorkspaceWhere(this.scope, {
@@ -288,7 +281,6 @@ export class HomeRepository {
   private processAgentList(
     agentItems: Array<{
       agencyConfig: { heterogeneousProvider?: { type?: string } } | null;
-      agentSessionGroupId: string | null;
       agentUserId: string;
       avatar: string | null;
       backgroundColor: string | null;
@@ -297,8 +289,6 @@ export class HomeRepository {
       name: string | null;
       pinned: boolean | null;
       sessionGroupId: string | null;
-      sessionId: string | null;
-      sessionPinned: boolean | null;
       slug: string | null;
       title: string | null;
       updatedAt: Date;
@@ -334,8 +324,6 @@ export class HomeRepository {
     // The only per-member layer left is show/hide, applied client-side from
     // `sidebarAgentVisibilityOverrides` / `sidebarHiddenGroupIds`.
     // Convert to unified format
-    // For pinned status: agents.pinned takes priority, fallback to sessions.pinned for backward compatibility
-    // For groupId: agents.sessionGroupId takes priority, fallback to sessions.groupId for backward compatibility
     type EnrichedItem = SidebarAgentItem & {
       groupId: string | null;
       isPrivate: boolean;
@@ -353,24 +341,13 @@ export class HomeRepository {
           avatar: meta.avatar,
           backgroundColor: a.backgroundColor,
           description: a.description,
-          // Legacy fallback, personal scope only. `sessions` are per-user rows
-          // and this join does not filter by the caller, so in a workspace the
-          // fallback would hand one member's old per-session folder to every
-          // member — arbitrarily, since which session wins depends on the join.
-          // That was harmless while folders were per-member; now that the
-          // sidebar is shared it would publish one person's legacy state.
-          groupId: this.workspaceId
-            ? a.agentSessionGroupId
-            : (a.agentSessionGroupId ?? a.sessionGroupId),
+          groupId: a.sessionGroupId,
           heterogeneousType: a.agencyConfig?.heterogeneousProvider?.type ?? null,
           id: a.id,
           isPrivate: visibility === 'private',
           labels: agentLabelsMap.get(a.id),
           name: a.name,
-          // Same personal-only reasoning as `groupId`: `sessions.pinned` is one
-          // member's legacy pin, and pins are shared again.
-          pinned: this.workspaceId ? (a.pinned ?? false) : (a.pinned ?? a.sessionPinned ?? false),
-          sessionId: a.sessionId,
+          pinned: a.pinned ?? false,
           slug: a.slug,
           title: meta.title,
           type: 'agent' as const,
@@ -393,7 +370,6 @@ export class HomeRepository {
           id: g.id,
           isPrivate: visibility === 'private',
           pinned: g.pinned ?? false,
-          sessionId: null,
           title: g.title,
           type: 'group' as const,
           unreadCount: groupUnread.get(g.id) ?? 0,
@@ -510,8 +486,6 @@ export class HomeRepository {
           id: agents.id,
           name: agents.name,
           pinned: agents.pinned,
-          sessionId: sessions.id,
-          sessionPinned: sessions.pinned,
           slug: agents.slug,
           title: agents.title,
           updatedAt: agents.updatedAt,
@@ -519,8 +493,6 @@ export class HomeRepository {
           visibility: agents.visibility,
         })
         .from(agents)
-        .leftJoin(agentsToSessions, eq(agents.id, agentsToSessions.agentId))
-        .leftJoin(sessions, eq(agentsToSessions.sessionId, sessions.id))
         .where(
           and(
             buildWorkspaceWhere(this.scope, agents),
@@ -576,10 +548,7 @@ export class HomeRepository {
           description: a.description,
           id: a.id,
           name: a.name,
-          // Same personal-only reasoning as `groupId`: `sessions.pinned` is one
-          // member's legacy pin, and pins are shared again.
-          pinned: this.workspaceId ? (a.pinned ?? false) : (a.pinned ?? a.sessionPinned ?? false),
-          sessionId: a.sessionId,
+          pinned: a.pinned ?? false,
           title: meta.title,
           type: 'agent' as const,
           updatedAt: a.updatedAt,

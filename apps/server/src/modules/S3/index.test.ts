@@ -268,6 +268,21 @@ describe('FileS3', () => {
       expect(result).toBe(mockContent);
     });
 
+    it('requests only a bounded byte range for a content preview', async () => {
+      const s3 = new FileS3();
+      mockS3ClientSend.mockResolvedValue({
+        Body: { transformToString: vi.fn().mockResolvedValue('# Preview') },
+      });
+
+      await s3.getFileContent('preview.md', 8192);
+
+      expect(GetObjectCommand).toHaveBeenCalledWith({
+        Bucket: 'test-bucket',
+        Key: 'preview.md',
+        Range: 'bytes=0-8191',
+      });
+    });
+
     it('should throw error when response body is missing', async () => {
       const s3 = new FileS3();
       mockS3ClientSend.mockResolvedValue({

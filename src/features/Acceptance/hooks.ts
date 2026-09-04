@@ -99,16 +99,20 @@ export const useAcceptanceList = (
   options?: {
     filter?: 'active' | 'all' | 'completed';
     limit?: number;
+    projectId?: string;
     q?: string;
     revalidateOnMount?: boolean;
   },
 ) =>
   useClientDataSWR(
-    enabled ? verifyKeys.acceptances(options?.limit, options?.q, options?.filter) : null,
+    enabled
+      ? verifyKeys.acceptances(options?.limit, options?.q, options?.filter, options?.projectId)
+      : null,
     () =>
       verifyService.listAcceptances({
         filter: options?.filter,
         limit: options?.limit,
+        projectId: options?.projectId,
         q: options?.q,
       }),
     {
@@ -126,7 +130,10 @@ export const useAcceptanceList = (
  * loaded depth collapses back to one page rather than cascading a refetch of as
  * many pages as the previous view had open.
  */
-export const useAcceptanceListInfinite = (filter: AcceptanceListFilter | null) => {
+export const useAcceptanceListInfinite = (
+  filter: AcceptanceListFilter | null,
+  projectId?: string,
+) => {
   const workspaceId = useActiveWorkspaceId();
 
   const getKey = useCallback(
@@ -136,26 +143,28 @@ export const useAcceptanceListInfinite = (filter: AcceptanceListFilter | null) =
       return verifyKeys.acceptancePage(
         workspaceId ?? undefined,
         filter,
+        projectId,
         previous?.nextCursor ?? undefined,
       );
     },
-    [filter, workspaceId],
+    [filter, projectId, workspaceId],
   );
 
   const { data, error, isLoading, mutate, setSize, size } = useSWRInfinite(
     getKey,
-    ([, , , cursor]: readonly [string, string, string, string]) =>
+    ([, , , scopedProjectId, cursor]: readonly [string, string, string, string, string]) =>
       verifyService.listAcceptancePage({
         cursor: cursor || undefined,
         filter: filter ?? undefined,
         limit: ACCEPTANCE_PAGE_SIZE,
+        projectId: scopedProjectId || undefined,
       }),
     { ...VERIFY_REPORT_SWR_CONFIG, revalidateFirstPage: false },
   );
 
   useEffect(() => {
     setSize(1);
-  }, [filter, workspaceId, setSize]);
+  }, [filter, projectId, workspaceId, setSize]);
 
   const loadMore = useCallback(() => {
     void setSize((s) => s + 1);

@@ -126,6 +126,7 @@
   "transfer.ownerOnly": "Chỉ chủ sở hữu không gian làm việc mới có thể chuyển tài nguyên do thành viên khác tạo ra.",
   "transfer.resourceNotFound": "Tài nguyên này không còn tồn tại hoặc bạn không còn quyền truy cập. Vui lòng làm mới và thử lại.",
   "transfer.sameWorkspace": "Tài nguyên này đã nằm trong không gian làm việc được chọn. Vui lòng chọn mục tiêu khác.",
+  "transfer.sharedTransferBlocked": "Đại lý này có liên kết chia sẻ, vì vậy chủ sở hữu của nó không thể được thay đổi.",
   "transfer.targetIsCurrentOwner": "Đại lý này đã thuộc về thành viên đó. Vui lòng chọn người khác.",
   "transfer.targetNoWriteAccess": "Bạn cần quyền Thành viên hoặc Chủ sở hữu để di chuyển tài nguyên vào không gian làm việc mục tiêu.",
   "transfer.targetNotWorkspaceMember": "Người nhận được chọn không phải là thành viên hoạt động của không gian làm việc này. Làm mới danh sách thành viên và thử lại.",

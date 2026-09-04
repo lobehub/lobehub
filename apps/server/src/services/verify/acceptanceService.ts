@@ -1148,6 +1148,7 @@ export class AcceptanceService {
     options: {
       filter?: 'active' | 'all' | 'completed';
       limit?: number;
+      projectId?: string;
       q?: string;
     } = {},
   ) => {
@@ -1162,6 +1163,7 @@ export class AcceptanceService {
       limit: normalizedQuery ? undefined : limit,
       statuses,
       unbounded: Boolean(normalizedQuery),
+      ...(options.projectId ? { projectId: options.projectId } : {}),
     });
     const subjects = await this.resolveSubjects(candidates);
     const withSubjects = candidates.map((row) => ({
@@ -1203,11 +1205,13 @@ export class AcceptanceService {
     cursor?: string;
     filter?: AcceptanceListFilter;
     limit?: number;
+    projectId?: string;
   }) => {
     const { items, nextCursor } = await this.acceptanceModel.queryPage({
       cursor: options.cursor,
       limit: options.limit,
       statuses: statusesForFilter(options.filter ?? 'all'),
+      ...(options.projectId ? { projectId: options.projectId } : {}),
     });
 
     const subjects = await this.resolveSubjects(items);

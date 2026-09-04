@@ -249,6 +249,11 @@ const taskDetailId = (s: ChatStoreState): string | undefined => {
   return view?.taskId;
 };
 
+const taskResultId = (s: ChatStoreState): string | undefined => {
+  const view = getViewData(s, PortalViewType.TaskResult);
+  return view?.taskId;
+};
+
 // Goal detail drill-down selectors
 const goalNodeView = (s: ChatStoreState) => getViewData(s, PortalViewType.GoalNode);
 const goalMetricView = (s: ChatStoreState) => getViewData(s, PortalViewType.GoalMetric);
@@ -353,6 +358,7 @@ export const chatPortalSelectors = {
 
   // Task detail data
   taskDetailId,
+  taskResultId,
 
   // Topic chat data
   portalTopicId,

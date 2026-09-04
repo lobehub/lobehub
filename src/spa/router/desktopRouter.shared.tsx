@@ -16,7 +16,14 @@ import {
   ShapesIcon,
   SquarePlay,
 } from 'lucide-react';
-import { createElement, isValidElement, type ReactElement, type ReactNode, Suspense } from 'react';
+import {
+  createElement,
+  isValidElement,
+  lazy,
+  type ReactElement,
+  type ReactNode,
+  Suspense,
+} from 'react';
 import type { RouteObject } from 'react-router';
 
 import {
@@ -35,6 +42,7 @@ import MemorySkeleton from '@/components/Skeleton/Memory';
 import ResourceHomeSkeleton from '@/components/Skeleton/ResourceHome';
 import RouteSegmentSkeleton from '@/components/Skeleton/RouteSegment';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
+import { acceptanceRouteMeta } from '@/features/Acceptance/routeMeta';
 import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { goalDetailRouteMeta, goalsRouteMeta } from '@/features/AgentGoals/routeMeta';
 import AgentRouteSwitch from '@/features/AgentRoute/AgentRouteSwitch';
@@ -64,9 +72,17 @@ import {
 } from '@/routes/(main)/group/features/routeMeta';
 import AppShellSkeleton, { APP_SHELL_FALLBACK_ID } from '@/spa/BootShell/AppShellSkeleton';
 import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces';
-import { routeMeta } from '@/spa/router/routeMeta';
+import { routeMeta, type RouteSkeletonProps } from '@/spa/router/routeMeta';
 import { SettingsTabs } from '@/store/global/initialState';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
+
+const LazyResourceCategorySkeleton = lazy(() => import('@/features/ResourceHome/Skeleton'));
+
+export const ResourceCategorySkeleton = (props: RouteSkeletonProps) => (
+  <Suspense fallback={null}>
+    <LazyResourceCategorySkeleton {...props} />
+  </Suspense>
+);
 
 const agentChatElement = dynamicElement(
   () => loadRouteWithBuiltinToolSurfaces(() => import('@/routes/(main)/agent')),
@@ -664,6 +680,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
           'Desktop > Resource > Home > Layout',
           { preloadId: 'resource' },
         ),
+        handle: { meta: routeMeta({ Skeleton: ResourceCategorySkeleton }) },
       },
       // Library routes (knowledge base detail)
       {
@@ -1000,6 +1017,23 @@ export const sharedMainAreaChildren: RouteObject[] = [
         ),
         handle: { meta: goalsRouteMeta },
         path: 'goals',
+      },
+      {
+        children: [
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/acceptance/empty'),
+              'Desktop > Project Acceptance > Empty',
+            ),
+            index: true,
+          },
+        ],
+        element: dynamicLayout(
+          () => import('@/routes/(main)/project/[projectId]/acceptance'),
+          'Desktop > Project Acceptance',
+        ),
+        handle: { meta: acceptanceRouteMeta },
+        path: 'acceptance',
       },
     ],
     element: dynamicLayout(

@@ -22,6 +22,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { usePermission } from '@/hooks/usePermission';
 import { useProviderName } from '@/hooks/useProviderName';
 import dynamic from '@/libs/next/dynamic';
+import { binaryService } from '@/services/electron/binary';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
@@ -332,6 +333,30 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
       handleRetryAgentMessage();
     }, [handleRetryAgentMessage, resetHeteroOverloadRetry, resolvedScopeId]);
 
+    const handleHeterogeneousRetry = useCallback(async () => {
+      if (
+        isDesktop &&
+        isHeterogeneousAgentStatusGuideError(sessionErrorBody) &&
+        sessionErrorBody.code === HeterogeneousAgentSessionErrorCode.CliDetectionTimeout &&
+        sessionErrorBody.agentType &&
+        sessionErrorBody.command
+      ) {
+        const { agentType, command } = sessionErrorBody;
+
+        try {
+          await binaryService.detectHeterogeneousAgentCommand({
+            agentType,
+            command,
+          });
+        } catch (error) {
+          console.error(error);
+          return;
+        }
+      }
+
+      handleManualRetry();
+    }, [handleManualRetry, sessionErrorBody]);
+
     // Business cards get the surface-resolved retry rather than deriving one
     // from `data.id`: on the group surface that id is a nested content block,
     // so message-level store actions can't resolve it and silently no-op.
@@ -404,7 +429,7 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
           error={sessionErrorBody}
           schedule={schedule}
           onDismiss={() => void updateMessageError(data.id, null)}
-          onRetry={handleManualRetry}
+          onRetry={() => void handleHeterogeneousRetry()}
           onOpenSystemTools={() =>
             navigate(
               isDesktop

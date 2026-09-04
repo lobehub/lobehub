@@ -126,6 +126,7 @@
   "transfer.ownerOnly": "ワークスペースの所有者のみ、他のメンバーが作成したリソースを移動できます。",
   "transfer.resourceNotFound": "このリソースは存在しないか、アクセス権がありません。再読み込みしてもう一度お試しください。",
   "transfer.sameWorkspace": "このリソースはすでに選択されたワークスペースにあります。別のターゲットを選択してください。",
+  "transfer.sharedTransferBlocked": "このエージェントには共有リンクがあるため、所有者を変更することはできません。",
   "transfer.targetIsCurrentOwner": "このエージェントはすでにそのメンバーに属しています。別の人を選んでください。",
   "transfer.targetNoWriteAccess": "ターゲットワークスペースにリソースを移動するには、メンバーまたは所有者のアクセス権が必要です。",
   "transfer.targetNotWorkspaceMember": "選択した受信者はこのワークスペースのアクティブなメンバーではありません。メンバーリストを更新して、もう一度試してください。",

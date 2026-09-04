@@ -3,14 +3,12 @@ import { z } from 'zod';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentModel } from '@/database/models/agent';
-import { AgentMigrationRepo } from '@/database/repositories/agentMigration';
 import { HomeRepository } from '@/database/repositories/home';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 import { type HomeBriefData, HomeService } from '@/server/services/home';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
-import { after } from '@/server/utils/scheduleAfterResponse';
 
 const homeProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -18,7 +16,6 @@ const homeProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => 
 
   return opts.next({
     ctx: {
-      agentMigrationRepo: new AgentMigrationRepo(ctx.serverDB, ctx.userId, workspaceId),
       agentModel: new AgentModel(ctx.serverDB, ctx.userId, workspaceId),
       homeRepository: new HomeRepository(ctx.serverDB, ctx.userId, workspaceId),
       homeService: new HomeService(ctx.userId),
@@ -76,20 +73,7 @@ export const homeRouter = router({
         })
       : true;
 
-    const result = await ctx.homeRepository.getSidebarAgentList(includeLabels, includeGroups);
-
-    // Runtime migration: backfill sessionGroupId for legacy agents
-    const runMigration = async () => {
-      try {
-        await ctx.agentMigrationRepo.migrateSessionGroupId();
-      } catch (error) {
-        console.error('[AgentMigration] Failed to migrate sessionGroupId:', error);
-      }
-    };
-
-    after(runMigration);
-
-    return result;
+    return ctx.homeRepository.getSidebarAgentList(includeLabels, includeGroups);
   }),
 
   searchAgents: homeSearchProcedure

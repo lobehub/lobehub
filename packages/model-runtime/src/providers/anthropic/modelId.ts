@@ -169,7 +169,53 @@ export const isThinkingDisplayOmittedByDefaultModel = (model: string): boolean =
   return parsed.family === 'opus' && parsed.majorVersion === 4 && hasMinorVersionAtLeast(parsed, 7);
 };
 
+const CLAUDE_COMMON_EFFORT_LEVELS = new Set(['low', 'medium', 'high']);
+const CLAUDE_5_EFFORT_FAMILIES = ['fable', 'mythos', 'opus', 'sonnet'] as const;
 const EFFORTS_INCOMPATIBLE_WITH_DISABLED_THINKING = new Set(['xhigh', 'max']);
+
+/**
+ * Whether an Anthropic model accepts an `output_config.effort` level.
+ * Unsupported routed values are omitted rather than allowing the provider to reject the request.
+ * @see https://platform.claude.com/docs/en/build-with-claude/effort
+ */
+export const supportsClaudeEffortLevel = (
+  model: string,
+  effort: string | undefined,
+): effort is 'high' | 'low' | 'max' | 'medium' | 'xhigh' => {
+  if (!effort) return false;
+
+  const normalizedModelId = model
+    .trim()
+    .toLowerCase()
+    .replace(/^anthropic\//, '');
+  if (normalizedModelId === 'claude-mythos-preview') {
+    return CLAUDE_COMMON_EFFORT_LEVELS.has(effort) || effort === 'max';
+  }
+
+  const parsed = parseClaudeModelId(model);
+  if (!parsed) return false;
+
+  const isSupportedModel =
+    (parsed.majorVersion === 5 && isClaudeFamily(parsed, CLAUDE_5_EFFORT_FAMILIES)) ||
+    (parsed.majorVersion === 4 &&
+      ((parsed.family === 'opus' &&
+        parsed.minorVersion !== undefined &&
+        parsed.minorVersion >= 5 &&
+        parsed.minorVersion <= 8) ||
+        (parsed.family === 'sonnet' && parsed.minorVersion === 6)));
+  if (!isSupportedModel) return false;
+
+  if (CLAUDE_COMMON_EFFORT_LEVELS.has(effort)) return true;
+  if (effort === 'max') {
+    return !(parsed.majorVersion === 4 && parsed.family === 'opus' && parsed.minorVersion === 5);
+  }
+  if (effort !== 'xhigh') return false;
+
+  return (
+    parsed.majorVersion === 5 ||
+    (parsed.family === 'opus' && parsed.majorVersion === 4 && (parsed.minorVersion ?? 0) >= 7)
+  );
+};
 
 /**
  * Claude Fable 5.1 / Mythos 5.1 reject forced tool use. `tool_choice` of type `any`

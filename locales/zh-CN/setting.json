@@ -465,8 +465,6 @@
   "heterogeneousStatus.account.label": "账号",
   "heterogeneousStatus.apiMode.configureProvider": "前往服务商设置",
   "heterogeneousStatus.apiMode.defaultProvider": "LobeHub",
-  "heterogeneousStatus.apiMode.enableInLabs": "前往实验室开启",
-  "heterogeneousStatus.apiMode.labDisabled": "API 模式是实验室功能。开启后即可使用 LobeHub 默认服务商或已配置的 API 服务商，而不是 Agent 订阅。",
   "heterogeneousStatus.apiMode.localOnly": "仅支持桌面端本地执行",
   "heterogeneousStatus.apiMode.model": "模型",
   "heterogeneousStatus.apiMode.modelPlaceholder": "选择模型",

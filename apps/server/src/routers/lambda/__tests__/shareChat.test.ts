@@ -53,9 +53,11 @@ vi.mock('@/database/models/agentShare', () => ({
 const mockFindById = vi.fn();
 const mockCountBySender = vi.fn();
 const mockQueryBySender = vi.fn();
+const mockIsRunningOperationAlive = vi.fn();
 const TopicModelMock = vi.fn(() => ({
   countBySender: mockCountBySender,
   findById: mockFindById,
+  isRunningOperationAlive: mockIsRunningOperationAlive,
   queryBySender: mockQueryBySender,
 }));
 vi.mock('@/database/models/topic', () => ({
@@ -144,6 +146,7 @@ describe('shareChatRouter', () => {
     mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare: true });
     mockAccessCheck.mockResolvedValue(share);
     mockFindById.mockResolvedValue(visitorTopic);
+    mockIsRunningOperationAlive.mockResolvedValue(true);
     mockCountBySender.mockResolvedValue(0);
     mockQueryBySender.mockResolvedValue([]);
     mockMessageCountByTopic.mockResolvedValue(0);
@@ -536,6 +539,23 @@ describe('shareChatRouter', () => {
       await expect(
         caller.refreshGatewayToken({ shareId: 'share-1', topicId: 'tpc_visitor' }),
       ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(mockSignUserJWT).not.toHaveBeenCalled();
+    });
+
+    // The marker is cleared best-effort at finish, so a stale one must not
+    // send the visitor's browser to reconnect to a finished run (it would
+    // register the topic as "running" locally and freeze its message list).
+    it('rejects when the marker points at a run that already ended', async () => {
+      mockIsRunningOperationAlive.mockResolvedValue(false);
+      const caller = await createCaller();
+
+      await expect(
+        caller.refreshGatewayToken({ shareId: 'share-1', topicId: 'tpc_visitor' }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(mockIsRunningOperationAlive).toHaveBeenCalledWith(
+        expect.anything(),
+        visitorTopic.metadata.runningOperation,
+      );
       expect(mockSignUserJWT).not.toHaveBeenCalled();
     });
   });

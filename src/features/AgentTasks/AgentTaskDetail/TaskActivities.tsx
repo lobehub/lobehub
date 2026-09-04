@@ -128,7 +128,12 @@ const ActivityRow = memo<{ activity: TaskDetailActivity }>(({ activity }) => {
   );
 });
 
-const TaskActivities = memo(() => {
+interface TaskActivitiesProps {
+  /** Result review leads with run output and leaves the reply composer after the evidence. */
+  variant?: 'activity' | 'result';
+}
+
+const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
   const { t } = useTranslation('chat');
   const activities = useTaskStore(taskActivitySelectors.activeTaskActivities);
   const activeTaskId = useTaskStore(taskDetailSelectors.activeTaskId);
@@ -150,6 +155,8 @@ const TaskActivities = memo(() => {
     [activities],
   );
 
+  const commentInput = activeTaskId ? <CommentInput taskId={activeTaskId} /> : null;
+
   return (
     <Accordion defaultExpandedKeys={['activities']} gap={0}>
       <AccordionItem
@@ -160,13 +167,13 @@ const TaskActivities = memo(() => {
           <Flexbox horizontal align="center" gap={8}>
             <Icon color={cssVar.colorTextDescription} icon={BotMessageSquare} size={16} />
             <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
-              {t('taskDetail.activities')}
+              {t(variant === 'result' ? 'taskDetail.runResults' : 'taskDetail.activities')}
             </Text>
           </Flexbox>
         }
       >
         <Flexbox gap={12} paddingBlock={12} paddingInline={12}>
-          {activeTaskId && <CommentInput taskId={activeTaskId} />}
+          {variant === 'activity' && commentInput}
           {items.length > 0 ? (
             // A goal loop can produce many rounds; only the newest run opens by
             // default so the latest result is not buried under older ones.
@@ -206,6 +213,7 @@ const TaskActivities = memo(() => {
               style={{ marginTop: 8 }}
             />
           )}
+          {variant === 'result' && commentInput}
         </Flexbox>
       </AccordionItem>
     </Accordion>

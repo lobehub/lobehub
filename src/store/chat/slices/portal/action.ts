@@ -634,6 +634,10 @@ export class ChatPortalActionImpl {
     this.#get().pushPortalView({ taskId, type: PortalViewType.TaskDetail });
   };
 
+  openTaskResult = (taskId: string): void => {
+    this.#get().pushPortalView({ taskId, type: PortalViewType.TaskResult });
+  };
+
   openGoalNode = (goalId: string, nodeId: string): void => {
     this.#get().pushPortalView({ goalId, nodeId, type: PortalViewType.GoalNode });
   };

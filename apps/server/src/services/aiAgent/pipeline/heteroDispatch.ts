@@ -247,6 +247,12 @@ export const dispatchHeteroAgent = async (
   // so hetero ops aren't visually distinct bare nanoids in the trace/op tables.
   const operationId = `op_${Date.now()}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
 
+  // Hooks belong to this operation's lifecycle. Persist their serializable
+  // form on the durable operation row before dispatch; runningOperation below
+  // remains a compatibility mirror for older terminal consumers.
+  if (hooks?.length) hookDispatcher.register(operationId, hooks);
+  const serializedHooks = hookDispatcher.getSerializedHooks(operationId);
+
   // Persist a first-class agent_operations row for the hetero run. The id is
   // generated here (authoritative) and flows through to heteroIngest /
   // heteroFinish unchanged. Without this row the run is invisible to the
@@ -263,6 +269,10 @@ export const dispatchHeteroAgent = async (
     agentId: persistAgentId,
     chatGroupId: appContext?.groupId ?? null,
     maxSteps,
+    metadata: {
+      _hooks: serializedHooks,
+      assistantMessageId,
+    },
     operationId,
     parentOperationId,
     provider: heteroType,
@@ -272,6 +282,7 @@ export const dispatchHeteroAgent = async (
     trigger,
   });
   if (!operationPersisted) {
+    hookDispatcher.unregister(operationId);
     throw new Error('Failed to persist heterogeneous agent operation');
   }
 
@@ -449,11 +460,8 @@ export const dispatchHeteroAgent = async (
   // runtime uses — driving the task lifecycle (onTopicComplete) and IM bot
   // completion callbacks uniformly. The hetero block returns before
   // AgentRuntimeService (which registers hooks for normal runs), so we do it
-  // here. Local mode dispatches these in-memory handlers; queue mode
-  // delivers the serialized webhooks persisted on runningOperation below.
-  if (hooks?.length) hookDispatcher.register(operationId, hooks);
-  const serializedHooks = hookDispatcher.getSerializedHooks(operationId);
-
+  // here. Local mode dispatches these in-memory handlers; queue mode delivers
+  // the serialized webhooks persisted on the operation row above.
   // Seed topic.metadata.runningOperation so heteroIngest can validate the
   // operation, and so every terminal site (heteroFinish, agentNotify done,
   // dispatch failure) can re-fire the serialized hooks across a process

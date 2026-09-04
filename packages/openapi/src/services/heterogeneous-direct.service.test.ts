@@ -153,7 +153,6 @@ describe('heterogeneous direct invocation protocol', () => {
       agentType: 'codex',
       model: 'gpt-5.4',
       payload: {
-        apiMode: 'responses',
         messages: [],
         model: 'lobehub-default',
         reasoning: { effort: 'high', summary: 'detailed' },
@@ -173,6 +172,43 @@ describe('heterogeneous direct invocation protocol', () => {
       stream: true,
     });
     expect(runtimePayload).not.toHaveProperty('deploymentName');
+  });
+
+  it('lets non-Codex Responses relays use the upstream protocol selected by the router', async () => {
+    const chat = vi.fn().mockResolvedValue(new Response('stream'));
+    vi.mocked(resolveServerDefaultHeterogeneousModel).mockResolvedValue({
+      model: 'kimi-k3',
+      provider: 'lobehub',
+      supportsAdaptiveThinking: false,
+    });
+    vi.mocked(initModelRuntimeFromServerConfig).mockResolvedValue({
+      chat,
+    } as unknown as Awaited<ReturnType<typeof initModelRuntimeFromServerConfig>>);
+
+    await invokeServerDefaultModel({
+      agentType: 'grok-build',
+      model: 'kimi-k3',
+      payload: normalizeResponsesRequest(
+        {
+          input: 'hello',
+          model: 'lobehub-default',
+          reasoning: { effort: 'high', summary: 'auto' },
+          stream: true,
+        },
+        'lobehub-default',
+      ),
+      signal: new AbortController().signal,
+      userId: 'user-1',
+    });
+
+    expect(chat.mock.calls[0][0]).toMatchObject({
+      messages: [{ content: 'hello', role: 'user' }],
+      model: 'kimi-k3',
+      reasoning_effort: 'high',
+      stream: true,
+    });
+    expect(chat.mock.calls[0][0]).not.toHaveProperty('apiMode');
+    expect(chat.mock.calls[0][0]).not.toHaveProperty('reasoning');
   });
 
   it('adapts custom Codex relay models to chat completions with their reasoning effort', async () => {
@@ -334,6 +370,7 @@ describe('heterogeneous direct invocation protocol', () => {
       { content: 'LOBEHUB_HETERO_SMOKE_OK', role: 'user' },
     ]);
     expect(payload.max_tokens).toBe(16_384);
+    expect(payload).not.toHaveProperty('apiMode');
   });
 
   it('normalizes two-round Responses reasoning and function call continuity', () => {
@@ -704,6 +741,51 @@ describe('heterogeneous direct invocation protocol', () => {
       output_tokens_details: { reasoning_tokens: 2 },
       total_tokens: 11,
     });
+  });
+
+  it('encodes Gemini text and reasoning parts as Responses output', async () => {
+    const events = parseSseEvents(
+      await readText(
+        responsesSse(
+          protocolStream([
+            {
+              data: { content: 'thinking', inReasoning: true, partType: 'text' },
+              type: 'reasoning_part',
+            },
+            { data: { content: 'answer', partType: 'text' }, type: 'content_part' },
+            {
+              data: { content: 'base64-image', mimeType: 'image/png', partType: 'image' },
+              type: 'content_part',
+            },
+          ]),
+        ),
+      ),
+    );
+    const textDeltas = events
+      .filter(({ type }) => type === 'response.output_text.delta')
+      .map(({ data }) => data.delta);
+    const reasoningDeltas = events
+      .filter(({ type }) => type === 'response.reasoning_summary_text.delta')
+      .map(({ data }) => data.delta);
+    const completed = events.find(({ type }) => type === 'response.completed');
+
+    expect(textDeltas).toEqual(['answer']);
+    expect(reasoningDeltas).toEqual(['thinking']);
+    expect(completed?.data.response.output).toEqual([
+      {
+        id: expect.any(String),
+        status: 'completed',
+        summary: [{ text: 'thinking', type: 'summary_text' }],
+        type: 'reasoning',
+      },
+      {
+        content: [{ annotations: [], text: 'answer', type: 'output_text' }],
+        id: expect.any(String),
+        role: 'assistant',
+        status: 'completed',
+        type: 'message',
+      },
+    ]);
   });
 
   it('encodes Responses incomplete and failed terminal lifecycle events', async () => {

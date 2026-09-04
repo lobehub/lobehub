@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { evidenceTitleFromMarkdown } from './MarkdownEvidence';
+import { evidenceTitleFromMarkdown, resolveMarkdownEvidenceFold } from './MarkdownEvidence';
 
 describe('evidenceTitleFromMarkdown — the collapsed row label', () => {
   it('strips heading syntax so the first line reads as a sentence', () => {
@@ -33,5 +33,39 @@ describe('evidenceTitleFromMarkdown — the collapsed row label', () => {
 
   it('returns empty for whitespace-only content (caller renders inline)', () => {
     expect(evidenceTitleFromMarkdown('   \n\n')).toBe('');
+  });
+});
+
+describe('resolveMarkdownEvidenceFold — authored alt as the fold title', () => {
+  const DOC = '## 环境说明\n\n正文第一段。';
+
+  it('uses the authored alt/description as the fold title and folds the row', () => {
+    const { fold, foldTitle } = resolveMarkdownEvidenceFold(DOC, 'T-338 审计补充说明');
+    expect(fold).toBe(true);
+    expect(foldTitle).toBe('T-338 审计补充说明');
+  });
+
+  it('keeps the document-first-line label when no title is given', () => {
+    const { fold, foldTitle } = resolveMarkdownEvidenceFold(DOC);
+    expect(fold).toBe(true);
+    expect(foldTitle).toBe('环境说明');
+  });
+
+  it('folds a short single-line doc when an explicit title is present', () => {
+    // Without a title this renders inline (too short to be worth folding);
+    // an authored title means the row label IS the point, so it folds anyway.
+    const { fold, foldTitle } = resolveMarkdownEvidenceFold('只有一行正文。', '一句简短说明');
+    expect(fold).toBe(true);
+    expect(foldTitle).toBe('一句简短说明');
+  });
+
+  it('renders a short single-line doc inline when no title is given', () => {
+    expect(resolveMarkdownEvidenceFold('只有一行正文。').fold).toBe(false);
+  });
+
+  it('ignores a blank authored title (falls back to the derived one)', () => {
+    const { fold, foldTitle } = resolveMarkdownEvidenceFold(DOC, '   ');
+    expect(fold).toBe(true);
+    expect(foldTitle).toBe('环境说明');
   });
 });
