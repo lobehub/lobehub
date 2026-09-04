@@ -48,7 +48,7 @@ const ProcessControl = memo<ProcessControlProps>(
     const useFetchGoalGraph = useGoalStore((s) => s.useFetchGoalGraph);
     const decideGoal = useGoalStore((s) => s.decideGoal);
     const refreshGoalGraph = useGoalStore((s) => s.refreshGoalGraph);
-    const openTaskDetail = useChatStore((s) => s.openTaskDetail);
+    const openTaskResult = useChatStore((s) => s.openTaskResult);
     const openGoalNode = useChatStore((s) => s.openGoalNode);
     useFetchGoalGraph(goalId);
     const snapshot = useGoalStore(goalSelectors.goalGraph(goalId));
@@ -68,17 +68,17 @@ const ProcessControl = memo<ProcessControlProps>(
     );
 
     // Every click funnels here: keep the map highlight (spatial continuity) and
-    // open the drill-down — a dispatched Task goes straight to its Task detail,
-    // everything else opens the node view. This is the chain the page was
-    // missing: node → task → topic conversation.
+    // open the drill-down — a dispatched Task lands on its result-focused
+    // review surface. The original editable Task remains one explicit step
+    // deeper, so Goal inspection does not begin with implementation metadata.
     const select = useCallback(
       (nodeId: string) => {
         setSelectedId(nodeId);
         const taskId = graph?.byId[nodeId]?.node.taskId;
-        if (taskId) openTaskDetail(taskId);
+        if (taskId) openTaskResult(taskId);
         else openGoalNode(goalId, nodeId);
       },
-      [goalId, graph, openGoalNode, openTaskDetail],
+      [goalId, graph, openGoalNode, openTaskResult],
     );
 
     // Task-carried goals share the `goals` table but never grow a graph. Nothing

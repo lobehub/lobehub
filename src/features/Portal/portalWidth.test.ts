@@ -27,6 +27,7 @@ describe('getPortalViewMinWidth', () => {
       PortalViewType.GoalMetric,
       PortalViewType.GoalNode,
       PortalViewType.TaskDetail,
+      PortalViewType.TaskResult,
       PortalViewType.Thread,
       PortalViewType.ToolUI,
     ]) {
@@ -43,7 +44,11 @@ describe('getPortalViewWidth', () => {
   });
 
   it('opens task and goal-node detail at the task width even when the legacy width is narrow', () => {
-    for (const viewType of [PortalViewType.TaskDetail, PortalViewType.GoalNode]) {
+    for (const viewType of [
+      PortalViewType.TaskDetail,
+      PortalViewType.TaskResult,
+      PortalViewType.GoalNode,
+    ]) {
       expect(getPortalViewWidth({ legacyWidth: CHAT_PORTAL_WIDTH, viewType })).toBe(
         CHAT_PORTAL_TASK_WIDTH,
       );
