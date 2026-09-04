@@ -1,4 +1,5 @@
 import type { InitialGoalOverviewContext } from './stepContext';
+import type { AcceptanceStatus } from './verify';
 import type { WorkType } from './work';
 
 // ============================================
@@ -296,7 +297,20 @@ export interface GoalGraphWorkVersionDisplay {
   workId: string;
 }
 
+/** Where a task node's own verification stands, for a reader scanning the goal. */
+export interface GoalNodeAcceptance {
+  id: string;
+  status: AcceptanceStatus;
+}
+
 export interface GoalGraphSnapshot {
+  /**
+   * Verification state per task node, keyed by node id. Every dispatched task
+   * gets its own Acceptance, but the goal used to show only the standard it was
+   * judged against and never the judgment — so the page could say a task
+   * finished without saying whether it held up.
+   */
+  acceptances?: Record<string, GoalNodeAcceptance>;
   decisions: GoalGraphDecision[];
   edges: GoalGraphEdge[];
   events: GoalGraphEvent[];

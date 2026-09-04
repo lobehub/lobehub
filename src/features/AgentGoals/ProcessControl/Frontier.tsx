@@ -1,6 +1,6 @@
 'use client';
 
-import type { GoalDecisionOption } from '@lobechat/types';
+import type { AcceptanceStatus, GoalDecisionOption } from '@lobechat/types';
 import { Block, Flexbox, Icon, TextArea, Tooltip } from '@lobehub/ui';
 import { Button, Tag, Text } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
@@ -13,6 +13,7 @@ import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import { openAddGoalTaskModal } from '@/features/AgentGoals/AddTaskModal';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
 import { useActivityTime } from '@/hooks/useActivityTime';
+import { useChatStore } from '@/store/chat';
 
 import {
   coordinatorGateReason,
@@ -280,6 +281,48 @@ const StaleBody = memo<{ view: GoalNodeView }>(({ view }) => {
 
 StaleBody.displayName = 'GoalStaleBody';
 
+/**
+ * Whether this task's own delivery held up.
+ *
+ * Only the statuses a reader would act on: a settled judgment, a rejection, a
+ * delivery waiting on them, or a verification that broke. `pending` / `planned`
+ * say nothing yet, and `verifying` / `repairing` are already what the row's own
+ * state chip says — repeating either would cost the row its scannability for no
+ * information.
+ */
+const ACCEPTANCE_CHIP: Partial<Record<AcceptanceStatus, { color: string; key: string }>> = {
+  accepted: { color: 'success', key: 'accepted' },
+  delivered: { color: 'info', key: 'delivered' },
+  errored: { color: 'error', key: 'errored' },
+  rejected: { color: 'error', key: 'rejected' },
+};
+
+const AcceptanceChip = memo<{ view: GoalNodeView }>(({ view }) => {
+  const { t } = useTranslation('chat');
+  const openAcceptance = useChatStore((s) => s.openAcceptance);
+  const acceptance = view.acceptance;
+  const chip = acceptance ? ACCEPTANCE_CHIP[acceptance.status] : undefined;
+  if (!acceptance || !chip) return null;
+
+  return (
+    <Tag
+      color={chip.color}
+      size={'small'}
+      style={{ cursor: 'pointer' }}
+      // The evidence is the point: the chip is the way into it, opened in the
+      // side Portal like every other drill-down on this page.
+      onClick={(event) => {
+        event.stopPropagation();
+        openAcceptance(acceptance.id);
+      }}
+    >
+      {t(`goalProcess.acceptance.${chip.key}` as any)}
+    </Tag>
+  );
+});
+
+AcceptanceChip.displayName = 'GoalAcceptanceChip';
+
 const FrontierRow = memo<{
   actions: FrontierActions;
   canEdit: boolean;
@@ -347,6 +390,7 @@ const FrontierRow = memo<{
         )}
         <Flexbox flex={1} />
         <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
+          <AcceptanceChip view={view} />
           {item.kind === 'running' && <RunningClock startedAt={view.startedAt} />}
           {item.kind === 'done' && <DoneTime view={view} />}
         </Flexbox>

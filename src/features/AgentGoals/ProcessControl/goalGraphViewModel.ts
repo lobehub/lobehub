@@ -5,6 +5,7 @@ import type {
   GoalGraphNode,
   GoalGraphSnapshot,
   GoalItem,
+  GoalNodeAcceptance,
   WorkType,
 } from '@lobechat/types';
 
@@ -65,6 +66,8 @@ export interface GoalArtifactView {
 }
 
 export interface GoalNodeView {
+  /** This task's own verification, when it has been dispatched. */
+  acceptance?: GoalNodeAcceptance;
   /** Problems this finding was linked to with a `supports` edge. */
   answers: GoalGraphNode[];
   /** Deliverables this node produced, newest first. */
@@ -227,7 +230,17 @@ export const buildGoalGraphView = (
   snapshot: GoalGraphSnapshot,
   now: number = Date.now(),
 ): GoalGraphView => {
-  const { decisions, edges, events, goal, nodes, runHeartbeats, workVersions } = snapshot;
+  const {
+    acceptances,
+    decisions,
+    deliveredAt,
+    edges,
+    events,
+    goal,
+    nodes,
+    runHeartbeats,
+    workVersions,
+  } = snapshot;
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const lease = leaseTimeoutMs(goal);
 
@@ -301,6 +314,7 @@ export const buildGoalGraphView = (
     return {
       answers: supportsByFinding.get(node.id) ?? [],
       artifacts: artifactsByNode.get(node.id) ?? [],
+      ...(acceptances?.[node.id] ? { acceptance: acceptances[node.id] } : {}),
       attempts,
       blockers: (dependsOn.get(node.id) ?? [])
         .map((id) => nodeById.get(id))
