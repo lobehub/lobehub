@@ -37,7 +37,18 @@ import { KindDot } from './shared';
 const styles = createStaticStyles(({ css }) => ({
   producer: css`
     flex: none;
+    justify-content: flex-end;
     max-width: 40%;
+  `,
+  /**
+   * A fixed slot for the timestamp. Without it the attribution column ends
+   * wherever the relative time happens to start, so a list mixing "几秒前" with
+   * "8 小时前" loses the very alignment this row is built for.
+   */
+  time: css`
+    flex: none;
+    min-width: 60px;
+    text-align: end;
   `,
   row: css`
     cursor: pointer;
@@ -72,7 +83,10 @@ const DeliverableRow = memo<{
       onClick={() => onOpen(artifact)}
     >
       <Icon color={cssVar.colorTextQuaternary} icon={icon} size={14} />
-      <Text ellipsis style={{ flexShrink: 1, minWidth: 0 }} weight={500}>
+      {/* The title takes the slack so the attribution and the timestamp form
+          right-aligned columns; letting the title size itself left every row's
+          attribution starting at a different x. */}
+      <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={500}>
         {artifact.title || artifact.identifier || t('goalProcess.deliverables.untitled')}
       </Text>
       {!!producerTitle && (
@@ -83,12 +97,7 @@ const DeliverableRow = memo<{
           </Text>
         </Flexbox>
       )}
-      <Text
-        fontSize={12}
-        style={{ flex: 'none', marginInlineStart: 'auto' }}
-        title={title}
-        type={'secondary'}
-      >
+      <Text className={styles.time} fontSize={12} title={title} type={'secondary'}>
         {text}
       </Text>
     </Flexbox>
