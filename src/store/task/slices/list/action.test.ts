@@ -458,7 +458,7 @@ describe('TaskListSliceAction', () => {
   // has no pagination. Without `complete` it only ever saw the first server
   // page (50 newest by creation), so older tasks silently vanished once a
   // workspace grew past that — e.g. a private task assigned to the viewer
-  // showing under "Private" (few rows) but not under "All" (LOBE-13779).
+  // showing under "Private" (few rows) but not under "All".
   describe('useFetchTaskList complete mode', () => {
     interface Row {
       createdAt: Date;

@@ -50,7 +50,7 @@ beforeEach(() => {
 });
 
 describe('useWorkspaceSurface (desktop)', () => {
-  // Regression for LOBE-13771: a workspace member's "Local device" pick lives in
+  // Regression: a workspace member's "Local device" pick lives in
   // their per-user override, never in the shared row. The surface must follow
   // the effective target — a shared-row-only runtime mode can never be `local`
   // for a workspace agent, which hid the directory picker.
