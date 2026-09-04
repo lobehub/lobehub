@@ -1079,6 +1079,56 @@ describe('Task Router Integration', () => {
     });
   });
 
+  describe('updateStatusCascade', () => {
+    it('updates the task family atomically without rewriting failed subtasks', async () => {
+      const parent = await caller.create({ instruction: 'Parent' });
+      const open = await caller.create({
+        instruction: 'Open',
+        parentTaskId: parent.data.id,
+      });
+      const failed = await caller.create({
+        instruction: 'Failed',
+        parentTaskId: parent.data.id,
+      });
+      await caller.updateStatus({ error: 'Needs attention', id: failed.data.id, status: 'failed' });
+
+      const result = await caller.updateStatusCascade({
+        id: parent.data.identifier,
+        status: 'completed',
+      });
+
+      expect(result.data.updatedSubtasks).toEqual([open.data.identifier]);
+      expect((await caller.find({ id: parent.data.id })).data.status).toBe('completed');
+      expect((await caller.find({ id: open.data.id })).data.status).toBe('completed');
+      expect((await caller.find({ id: failed.data.id })).data).toMatchObject({
+        error: 'Needs attention',
+        status: 'failed',
+      });
+    });
+
+    it('does not start a dependent sibling while completing the whole family', async () => {
+      const parent = await caller.create({ instruction: 'Parent' });
+      const first = await caller.create({
+        assigneeAgentId: testAgentId,
+        instruction: 'First',
+        parentTaskId: parent.data.id,
+      });
+      const dependent = await caller.create({
+        assigneeAgentId: testAgentId,
+        instruction: 'Dependent',
+        parentTaskId: parent.data.id,
+      });
+      await caller.addDependency({ dependsOnId: first.data.id, taskId: dependent.data.id });
+      mockExecAgent.mockClear();
+
+      await caller.updateStatusCascade({ id: parent.data.id, status: 'completed' });
+
+      expect(mockExecAgent).not.toHaveBeenCalled();
+      expect((await caller.find({ id: first.data.id })).data.status).toBe('completed');
+      expect((await caller.find({ id: dependent.data.id })).data.status).toBe('completed');
+    });
+  });
+
   describe('list participants', () => {
     it('should populate participants from assignee agent', async () => {
       const { agents } = await import('@/database/schemas');

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { UNFINISHED_TASK_STATUSES } from '@lobechat/builtin-tool-task';
 import { TASK_ASSIGNEE_PERMISSION_CODES } from '@lobechat/const/rbac';
 import type {
   TaskContext,
@@ -87,6 +88,13 @@ export interface UpdateStatusResult {
   paused: string[];
   task: TaskItem;
   unlocked: string[];
+}
+
+export interface UpdateStatusCascadeResult {
+  paused: string[];
+  task: TaskItem;
+  unlocked: string[];
+  updatedSubtasks: string[];
 }
 
 export interface RunReadySubtasksResult {
@@ -527,6 +535,80 @@ export class TaskService {
       unlocked,
       ...(checkpointTriggered && { checkpointTriggered: true }),
       ...(allSubtasksDone && { allSubtasksDone: true, parentTaskId: task.parentTaskId }),
+    };
+  }
+
+  /**
+   * Transition a parent and every currently unfinished direct subtask as one
+   * database transaction. Completion side effects run only after the whole
+   * family has reached the target status, so dependency edges cannot start a
+   * sibling in the middle of the cascade.
+   */
+  async updateStatusCascade(input: {
+    id: string;
+    status: 'canceled' | 'completed';
+  }): Promise<UpdateStatusCascadeResult> {
+    const resolved = await this.resolveOrThrow(input.id);
+    const subtasks = await this.taskModel.findSubtasks(resolved.id);
+    const unfinishedStatuses = new Set<string>(UNFINISHED_TASK_STATUSES);
+    const openSubtasks = subtasks.filter((task) => unfinishedStatuses.has(task.status));
+    const targetTasks = [resolved, ...openSubtasks];
+
+    const runningTopics = await this.taskTopicModel.findRunningByTaskIds(
+      targetTasks.filter((task) => task.status === 'running').map((task) => task.id),
+    );
+    if (runningTopics.length > 0) {
+      const aiAgentService = new AiAgentService(this.db, this.userId, {
+        workspaceId: this.workspaceId,
+      });
+      await Promise.all(
+        runningTopics.map(async (topic) => {
+          if (topic.operationId) {
+            await aiAgentService.interruptTask({ operationId: topic.operationId });
+          }
+        }),
+      );
+    }
+
+    const completedAt = new Date();
+    let updatedTasks: TaskItem[] = [];
+    await this.db.transaction(async (tx) => {
+      const taskModel = new TaskModel(tx, this.userId, this.workspaceId);
+      const taskTopicModel = new TaskTopicModel(tx, this.userId, this.workspaceId);
+
+      for (const topic of runningTopics) {
+        if (topic.topicId) await taskTopicModel.cancelIfRunning(topic.taskId, topic.topicId);
+      }
+
+      updatedTasks = await taskModel.updateStatusWithUnfinishedSubtasks(
+        resolved.id,
+        input.status,
+        UNFINISHED_TASK_STATUSES,
+        { completedAt },
+      );
+    });
+
+    const task = updatedTasks.find(({ id }) => id === resolved.id);
+    if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
+
+    const unlocked: string[] = [];
+    const paused: string[] = [];
+    if (input.status === 'completed') {
+      const runner = new TaskRunnerService(this.db, this.userId, this.workspaceId);
+      for (const updatedTask of updatedTasks) {
+        const cascade = await runner.cascadeOnCompletion(updatedTask.id);
+        unlocked.push(...cascade.started);
+        paused.push(...cascade.paused);
+      }
+    }
+
+    return {
+      paused,
+      task,
+      unlocked,
+      updatedSubtasks: updatedTasks
+        .filter(({ parentTaskId }) => parentTaskId === resolved.id)
+        .map(({ identifier }) => identifier),
     };
   }
 

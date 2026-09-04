@@ -6,18 +6,33 @@ import { useTaskStatusChange } from './useTaskStatusChange';
 const mocks = vi.hoisted(() => ({
   createCascadeModal: vi.fn(),
   getSubtasks: vi.fn(),
+  refreshTaskDetail: vi.fn(),
+  refreshTaskList: vi.fn(),
   toastError: vi.fn(),
+  updateStatusCascade: vi.fn(),
   updateTaskStatus: vi.fn(),
 }));
 
 vi.mock('@/services/task', () => ({
-  taskService: { getSubtasks: mocks.getSubtasks },
+  taskService: {
+    getSubtasks: mocks.getSubtasks,
+    updateStatusCascade: mocks.updateStatusCascade,
+  },
 }));
 
 vi.mock('@/store/task', () => ({
   useTaskStore: (
-    selector: (state: { updateTaskStatus: typeof mocks.updateTaskStatus }) => unknown,
-  ) => selector({ updateTaskStatus: mocks.updateTaskStatus }),
+    selector: (state: {
+      internal_refreshTaskDetail: typeof mocks.refreshTaskDetail;
+      refreshTaskList: typeof mocks.refreshTaskList;
+      updateTaskStatus: typeof mocks.updateTaskStatus;
+    }) => unknown,
+  ) =>
+    selector({
+      internal_refreshTaskDetail: mocks.refreshTaskDetail,
+      refreshTaskList: mocks.refreshTaskList,
+      updateTaskStatus: mocks.updateTaskStatus,
+    }),
 }));
 
 vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
@@ -36,6 +51,9 @@ vi.mock('react-i18next', () => ({
 describe('useTaskStatusChange', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.refreshTaskDetail.mockResolvedValue(undefined);
+    mocks.refreshTaskList.mockResolvedValue(undefined);
+    mocks.updateStatusCascade.mockResolvedValue(undefined);
     mocks.updateTaskStatus.mockResolvedValue('T-1');
   });
 
@@ -69,6 +87,7 @@ describe('useTaskStatusChange', () => {
         { identifier: 'T-2', name: 'Open', status: 'backlog' },
         { identifier: 'T-3', name: 'Already done', status: 'completed' },
         { identifier: 'T-4', name: 'Running', status: 'running' },
+        { identifier: 'T-5', name: 'Failed', status: 'failed' },
       ],
     });
     mocks.createCascadeModal.mockImplementation(async ({ onApply }) => {
@@ -88,11 +107,10 @@ describe('useTaskStatusChange', () => {
         targetStatus: 'completed',
       }),
     );
-    expect(mocks.updateTaskStatus.mock.calls).toEqual([
-      ['T-2', 'completed'],
-      ['T-4', 'completed'],
-      ['T-1', 'completed'],
-    ]);
+    expect(mocks.updateStatusCascade).toHaveBeenCalledWith('T-1', 'completed');
+    expect(mocks.updateTaskStatus).not.toHaveBeenCalled();
+    expect(mocks.refreshTaskDetail).toHaveBeenCalledWith('T-1');
+    expect(mocks.refreshTaskList).toHaveBeenCalledTimes(1);
   });
 
   it('leaves subtasks unchanged when the user chooses parent only', async () => {

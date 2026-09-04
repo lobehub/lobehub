@@ -1874,6 +1874,31 @@ describe('TaskModel', () => {
     });
   });
 
+  describe('updateStatusWithUnfinishedSubtasks', () => {
+    it('updates the parent and unfinished direct subtasks without rewriting failed tasks', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const parent = await model.create({ instruction: 'Parent' });
+      const open = await model.create({ instruction: 'Open', parentTaskId: parent.id });
+      const failed = await model.create({ instruction: 'Failed', parentTaskId: parent.id });
+      await model.updateStatus(failed.id, 'failed', { error: 'Needs attention' });
+
+      const updated = await model.updateStatusWithUnfinishedSubtasks(
+        parent.id,
+        'completed',
+        ['backlog', 'running', 'scheduled', 'paused'],
+        { completedAt: new Date() },
+      );
+
+      expect(updated.map(({ id }) => id).sort()).toEqual([open.id, parent.id].sort());
+      expect((await model.findById(parent.id))!.status).toBe('completed');
+      expect((await model.findById(open.id))!.status).toBe('completed');
+      expect(await model.findById(failed.id)).toMatchObject({
+        error: 'Needs attention',
+        status: 'failed',
+      });
+    });
+  });
+
   describe('updateContext', () => {
     it('should deep merge into context jsonb', async () => {
       const model = new TaskModel(serverDB, userId);

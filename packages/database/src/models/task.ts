@@ -1213,6 +1213,34 @@ export class TaskModel {
     return result.length;
   }
 
+  /**
+   * Update a parent and all of its currently unfinished direct subtasks in one
+   * SQL statement so the family cannot be left partially transitioned.
+   */
+  async updateStatusWithUnfinishedSubtasks(
+    parentTaskId: string,
+    status: string,
+    unfinishedStatuses: readonly string[],
+    extra?: { completedAt?: Date; error?: string | null; startedAt?: Date },
+  ): Promise<TaskItem[]> {
+    return this.db
+      .update(tasks)
+      .set({ status, updatedAt: new Date(), ...extra })
+      .where(
+        and(
+          or(
+            eq(tasks.id, parentTaskId),
+            and(
+              eq(tasks.parentTaskId, parentTaskId),
+              inArray(tasks.status, [...unfinishedStatuses]),
+            ),
+          ),
+          this.ownership(),
+        ),
+      )
+      .returning();
+  }
+
   // ========== Config ==========
 
   /**
