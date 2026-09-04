@@ -8,6 +8,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import {
   documentInRestrictedKnowledgeBase,
   fileInRestrictedKnowledgeBase,
+  type RestrictedKnowledgeBaseFilter,
 } from '@/database/utils/restrictedKnowledgeBase';
 import { notTrashed } from '@/database/utils/softDelete';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
@@ -18,6 +19,7 @@ import {
 import { getWorkspaceScopedPermissionMatches } from '@/server/services/workspacePermission';
 
 interface KnowledgeBaseAccessCtx {
+  callerAgentVisibility?: 'private' | 'public' | null;
   serverDB: LobeChatDatabase;
   userId: string;
   workspaceId?: string | null;
@@ -195,6 +197,15 @@ export const getRestrictedKnowledgeBasePolicy = async (
   ctx: KnowledgeBaseAccessCtx,
 ): Promise<RestrictedKnowledgeBasePolicy> => {
   const restricted = await getRestrictedKnowledgeBaseState(ctx);
+  const trashedKnowledgeBaseIds = await getTrashedKnowledgeBaseIds(ctx);
+
+  return {
+    ...restricted,
+    trashedKnowledgeBaseIds,
+  };
+};
+
+const getTrashedKnowledgeBaseIds = async (ctx: KnowledgeBaseAccessCtx): Promise<string[]> => {
   const trashed = await ctx.serverDB
     .select({ id: knowledgeBases.id })
     .from(knowledgeBases)
@@ -208,10 +219,40 @@ export const getRestrictedKnowledgeBasePolicy = async (
       ),
     );
 
-  return {
-    ...restricted,
-    trashedKnowledgeBaseIds: trashed.map(({ id }) => id),
-  };
+  return trashed.map(({ id }) => id);
+};
+
+/**
+ * Intersect caller-supplied IDs with live knowledge bases in the caller's
+ * scope. This is a server-side trust boundary for stale agent/project state:
+ * callers may retain a knowledge-base ID after its root has been trashed.
+ */
+export const filterLiveKnowledgeBaseIds = async (
+  ctx: KnowledgeBaseAccessCtx,
+  ids: string[],
+): Promise<string[]> => {
+  const uniqueIds = [...new Set(ids)];
+  if (uniqueIds.length === 0) return [];
+
+  const rows = await ctx.serverDB
+    .select({ id: knowledgeBases.id })
+    .from(knowledgeBases)
+    .where(
+      and(
+        inArray(knowledgeBases.id, uniqueIds),
+        buildWorkspaceWhere(
+          {
+            callerAgentVisibility: ctx.callerAgentVisibility,
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId ?? undefined,
+          },
+          knowledgeBases,
+        ),
+      ),
+    );
+  const liveIds = new Set(rows.map(({ id }) => id));
+
+  return uniqueIds.filter((id) => liveIds.has(id));
 };
 
 export const getRestrictedKnowledgeBaseIds = async (
@@ -276,7 +317,7 @@ export const assertContentsNotInRestrictedKnowledgeBase = async (
   ctx: KnowledgeBaseAccessCtx,
   ids: string[],
 ): Promise<void> => {
-  if (!ctx.workspaceId || ids.length === 0) return;
+  if (ids.length === 0) return;
 
   const policy = await getRestrictedKnowledgeBasePolicy(ctx);
   if (
@@ -285,17 +326,41 @@ export const assertContentsNotInRestrictedKnowledgeBase = async (
   )
     return;
 
-  const documentIds = ids.filter((id) => id.startsWith('docs_'));
-  const fileIds = ids.filter((id) => !id.startsWith('docs_'));
-
   const restrictedFilter = {
     liveKnowledgeBaseIds: policy.liveRestrictedKnowledgeBaseIds,
     trashedKnowledgeBaseIds: policy.trashedKnowledgeBaseIds,
   };
+  await assertContentsNotInKnowledgeBases(ctx, ids, restrictedFilter);
+};
+
+/**
+ * Reject direct content IDs that are reachable only through trashed knowledge
+ * bases. Semantic retrieval from a live restricted KB remains allowed, while
+ * a shared resource stays readable through any other live KB membership.
+ */
+export const assertContentsNotInTrashedKnowledgeBase = async (
+  ctx: KnowledgeBaseAccessCtx,
+  ids: string[],
+): Promise<void> => {
+  if (ids.length === 0) return;
+
+  const trashedKnowledgeBaseIds = await getTrashedKnowledgeBaseIds(ctx);
+  if (trashedKnowledgeBaseIds.length === 0) return;
+
+  await assertContentsNotInKnowledgeBases(ctx, ids, { trashedKnowledgeBaseIds });
+};
+
+const assertContentsNotInKnowledgeBases = async (
+  ctx: KnowledgeBaseAccessCtx,
+  ids: string[],
+  restrictedFilter: RestrictedKnowledgeBaseFilter,
+): Promise<void> => {
+  const documentIds = ids.filter((id) => id.startsWith('docs_'));
+  const fileIds = ids.filter((id) => !id.startsWith('docs_'));
   const restrictedFile = fileInRestrictedKnowledgeBase(
     ctx.serverDB,
     files.id,
-    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
     restrictedFilter,
   );
   if (fileIds.length > 0 && restrictedFile) {
@@ -303,7 +368,18 @@ export const assertContentsNotInRestrictedKnowledgeBase = async (
       .select({ id: files.id })
       .from(files)
       .where(
-        and(inArray(files.id, fileIds), eq(files.workspaceId, ctx.workspaceId), restrictedFile),
+        and(
+          inArray(files.id, fileIds),
+          buildWorkspaceWhere(
+            {
+              callerAgentVisibility: ctx.callerAgentVisibility,
+              userId: ctx.userId,
+              workspaceId: ctx.workspaceId ?? undefined,
+            },
+            files,
+          ),
+          restrictedFile,
+        ),
       )
       .limit(1);
     if (hiddenFile) {
@@ -318,7 +394,7 @@ export const assertContentsNotInRestrictedKnowledgeBase = async (
     const restrictedDocument = documentInRestrictedKnowledgeBase(
       ctx.serverDB,
       { fileId: documents.fileId, knowledgeBaseId: documents.knowledgeBaseId },
-      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
       restrictedFilter,
     );
     const [hiddenDocument] = restrictedDocument
@@ -328,7 +404,14 @@ export const assertContentsNotInRestrictedKnowledgeBase = async (
           .where(
             and(
               inArray(documents.id, documentIds),
-              eq(documents.workspaceId, ctx.workspaceId),
+              buildWorkspaceWhere(
+                {
+                  callerAgentVisibility: ctx.callerAgentVisibility,
+                  userId: ctx.userId,
+                  workspaceId: ctx.workspaceId ?? undefined,
+                },
+                documents,
+              ),
               restrictedDocument,
             ),
           )

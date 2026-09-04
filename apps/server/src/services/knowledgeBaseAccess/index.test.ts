@@ -9,8 +9,10 @@ import { getWorkspaceScopedPermissionMatches } from '@/server/services/workspace
 
 import {
   assertContentsNotInRestrictedKnowledgeBase,
+  assertContentsNotInTrashedKnowledgeBase,
   assertFileNotInRestrictedKnowledgeBase,
   assertKnowledgeBaseBrowsable,
+  filterLiveKnowledgeBaseIds,
   filterRestrictedKnowledgeBases,
   getRestrictedKnowledgeBaseIds,
   getRestrictedKnowledgeBasePolicy,
@@ -322,12 +324,25 @@ describe('assertFileNotInRestrictedKnowledgeBase', () => {
 });
 
 describe('assertContentsNotInRestrictedKnowledgeBase', () => {
-  it('passes through in personal mode and for empty id lists', async () => {
-    const personal = { serverDB: dbWithResults([{ id: 'kb-1' }]), userId: 'u1' };
+  it('allows personal content when it is not exclusive to a trashed knowledge base', async () => {
+    const personal = { serverDB: dbWithResults([], []), userId: 'u1' };
     await expect(
       assertContentsNotInRestrictedKnowledgeBase(personal, ['file-1']),
     ).resolves.toBeUndefined();
+  });
 
+  it('blocks personal content exclusive to a trashed knowledge base', async () => {
+    const personal = {
+      serverDB: dbWithResults([{ id: 'kb-trashed' }], [], [], [{ id: 'file-1' }]),
+      userId: 'u1',
+    };
+
+    await expect(
+      assertContentsNotInRestrictedKnowledgeBase(personal, ['file-1']),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('passes through for empty id lists', async () => {
     const ws = { serverDB: dbWithResults([{ id: 'kb-1' }]), userId: 'u1', workspaceId: 'ws-1' };
     await expect(assertContentsNotInRestrictedKnowledgeBase(ws, [])).resolves.toBeUndefined();
   });
@@ -398,6 +413,47 @@ describe('assertContentsNotInRestrictedKnowledgeBase', () => {
   });
 });
 
+describe('assertContentsNotInTrashedKnowledgeBase', () => {
+  it('preserves semantic access to content that is not exclusive to a trashed library', async () => {
+    const ctx = {
+      serverDB: dbWithResults([{ id: 'kb-trashed' }], [], [], []),
+      userId: 'member',
+      workspaceId: 'ws-1',
+    };
+
+    await expect(
+      assertContentsNotInTrashedKnowledgeBase(ctx, ['file-shared']),
+    ).resolves.toBeUndefined();
+  });
+
+  it('blocks semantic access to content exclusive to a trashed library', async () => {
+    const ctx = {
+      serverDB: dbWithResults([{ id: 'kb-trashed' }], [], [], [{ id: 'file-exclusive' }]),
+      userId: 'member',
+      workspaceId: 'ws-1',
+    };
+
+    await expect(
+      assertContentsNotInTrashedKnowledgeBase(ctx, ['file-exclusive']),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+});
+
+describe('filterLiveKnowledgeBaseIds', () => {
+  it('keeps only live scoped IDs while preserving caller order and removing duplicates', async () => {
+    const ctx = {
+      callerAgentVisibility: 'public' as const,
+      serverDB: dbWithResults([{ id: 'kb-live-2' }, { id: 'kb-live-1' }]),
+      userId: 'member',
+      workspaceId: 'ws-1',
+    };
+
+    await expect(
+      filterLiveKnowledgeBaseIds(ctx, ['kb-trashed', 'kb-live-1', 'kb-live-2', 'kb-live-1']),
+    ).resolves.toEqual(['kb-live-1', 'kb-live-2']);
+  });
+});
+
 describe('workspace-wide subject scoping', () => {
   // `resource_permissions` is polymorphic on `user_id`: NULL carries the
   // workspace-wide level, a set value carries one member's collaborator grant.
@@ -422,5 +478,16 @@ describe('workspace-wide subject scoping', () => {
 
     expect(clauses[0]).toContain(workspaceWide);
     expect(clauses[0]).not.toContain(liveKnowledgeBase);
+  });
+
+  it('filterLiveKnowledgeBaseIds excludes trashed roots in the database predicate', async () => {
+    const { clauses, db } = dbCapturingWhere([{ id: 'kb-live' }]);
+
+    await filterLiveKnowledgeBaseIds({ serverDB: db, userId: 'member', workspaceId: 'ws-1' }, [
+      'kb-live',
+      'kb-trashed',
+    ]);
+
+    expect(clauses[0]).toContain(liveKnowledgeBase);
   });
 });

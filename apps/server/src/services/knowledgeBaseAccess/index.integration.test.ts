@@ -14,7 +14,12 @@ import {
 } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
-import { assertFileNotInRestrictedKnowledgeBase, getRestrictedKnowledgeBasePolicy } from './index';
+import {
+  assertContentsNotInTrashedKnowledgeBase,
+  assertFileNotInRestrictedKnowledgeBase,
+  filterLiveKnowledgeBaseIds,
+  getRestrictedKnowledgeBasePolicy,
+} from './index';
 
 vi.mock('@/server/services/workspacePermission', () => ({
   getWorkspaceScopedPermissionMatches: vi.fn(async () => ({
@@ -219,6 +224,9 @@ describe('restricted knowledge-base policy integration', () => {
       ['kb-trashed-open', 'kb-trashed-restricted'].sort(),
     );
     expect(policy.trashedRestrictedKnowledgeBaseIds).toEqual(['kb-trashed-restricted']);
+    await expect(
+      filterLiveKnowledgeBaseIds(ctx, ['kb-trashed-open', 'kb-live-open']),
+    ).resolves.toEqual(['kb-live-open']);
 
     const rows = await new KnowledgeRepo(serverDB, memberId, workspaceId).query({
       excludeKnowledgeBaseIds: policy.liveRestrictedKnowledgeBaseIds,
@@ -234,6 +242,12 @@ describe('restricted knowledge-base policy integration', () => {
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     await expect(
       assertFileNotInRestrictedKnowledgeBase(ctx, 'file-trashed-shared'),
+    ).resolves.toBeUndefined();
+    await expect(
+      assertContentsNotInTrashedKnowledgeBase(ctx, ['file-trashed-exclusive']),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(
+      assertContentsNotInTrashedKnowledgeBase(ctx, ['file-trashed-shared']),
     ).resolves.toBeUndefined();
   });
 });

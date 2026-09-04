@@ -19,6 +19,11 @@ import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { DocumentService } from '@/server/services/document';
 import { createFtsSearchRepo } from '@/server/services/ftsSearch';
+import {
+  assertContentsNotInRestrictedKnowledgeBase,
+  assertContentsNotInTrashedKnowledgeBase,
+  filterLiveKnowledgeBaseIds,
+} from '@/server/services/knowledgeBaseAccess';
 
 export interface FileContentResult {
   content: string;
@@ -127,7 +132,26 @@ export class KnowledgeBaseSearchService {
     input: SemanticSearchSchemaType,
   ): Promise<SemanticSearchForChatResult> {
     const topK = input.topK ?? 20;
-    const knowledgeIds = input.knowledgeIds ?? [];
+    const [knowledgeIds] = await Promise.all([
+      filterLiveKnowledgeBaseIds(
+        {
+          callerAgentVisibility: this.callerAgentVisibility,
+          serverDB: this.serverDB,
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        },
+        input.knowledgeIds ?? [],
+      ),
+      assertContentsNotInTrashedKnowledgeBase(
+        {
+          callerAgentVisibility: this.callerAgentVisibility,
+          serverDB: this.serverDB,
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        },
+        input.fileIds ?? [],
+      ),
+    ]);
 
     // Path 1: vector search over file chunks
     const vectorPath = async (): Promise<ChatSemanticSearchChunk[]> => {
@@ -226,6 +250,16 @@ export class KnowledgeBaseSearchService {
   }
 
   async getFileContents(ids: string[]): Promise<FileContentResult[]> {
+    await assertContentsNotInRestrictedKnowledgeBase(
+      {
+        callerAgentVisibility: this.callerAgentVisibility,
+        serverDB: this.serverDB,
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      },
+      ids,
+    );
+
     return pMap(
       ids,
       async (id) => {
