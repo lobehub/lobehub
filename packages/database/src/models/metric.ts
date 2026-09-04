@@ -124,6 +124,33 @@ export class MetricModel {
     return row;
   };
 
+  /**
+   * The named series of one subject. Distinct from {@link findBySubject}: a
+   * caller that already knows which keys it needs — an acceptance contract
+   * naming a handful — must not materialize every series the subject has ever
+   * sampled, which nothing bounds.
+   */
+  findByKeys = async (
+    subjectType: MetricSubjectType,
+    subjectId: string,
+    keys: string[],
+  ): Promise<MetricItem[]> => {
+    if (keys.length === 0) return [];
+
+    return this.db
+      .select()
+      .from(metrics)
+      .where(
+        and(
+          eq(metrics.subjectType, subjectType),
+          eq(metrics.subjectId, subjectId),
+          inArray(metrics.key, keys),
+          this.seriesOwnership(),
+        ),
+      )
+      .orderBy(asc(metrics.key));
+  };
+
   findBySubject = async (
     subjectType: MetricSubjectType,
     subjectId: string,

@@ -124,6 +124,28 @@ describe('MetricModel', () => {
     });
   });
 
+  describe('findByKeys', () => {
+    it('fetches only the named series, not everything the subject has sampled', async () => {
+      await seed('declared.one');
+      await seed('declared.two');
+      await seed('sampled.noise');
+
+      const found = await model.findByKeys('goal', 'goal_metric_test', [
+        'declared.one',
+        'declared.two',
+        'never.created',
+      ]);
+
+      expect(found.map((item) => item.key)).toEqual(['declared.one', 'declared.two']);
+      expect(await model.findByKeys('goal', 'goal_metric_test', [])).toEqual([]);
+    });
+
+    it('scopes to the owner', async () => {
+      await seed('declared.one');
+      expect(await otherModel.findByKeys('goal', 'goal_metric_test', ['declared.one'])).toEqual([]);
+    });
+  });
+
   describe('latestPointsByMetricIds', () => {
     it('returns one newest row per series in a single read', async () => {
       const a = (await seed('a.metric'))!;

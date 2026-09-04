@@ -44,6 +44,7 @@ import {
   GOAL_ACCEPTANCE_TASK_TITLE,
   type GoalMove,
   LEASE_EXPIRED_ERROR,
+  MEASURED_ACCEPTANCE_PAUSE_REASON,
   needsMetricCriteria,
   selectFrontier,
   TERMINAL_NODE_STATUSES,
@@ -338,11 +339,20 @@ export class GoalService {
    * the clauses being dropped altogether (`setMetricCriteria(id, [])`), which
    * otherwise left the goal parked on a gate that no longer existed.
    */
-  private reopenIfMeasurementCleared = async (goalId: string): Promise<boolean> => {
+  private reopenIfMeasurementCleared = async (
+    goalId: string,
+    /**
+     * Whether the gate held the goal *before* the caller's edit, for callers
+     * that change the clauses themselves: dropping the last one erases the
+     * evidence, so the verdict is taken from the state that preceded it — the
+     * same way `setBudget` reads what was binding before it wrote.
+     */
+    parkedBeforeEdit?: boolean,
+  ): Promise<boolean> => {
     const graph = await this.coordinatorGraph.getGraph(goalId);
     if (!graph) return false;
     if (graph.goal.status !== 'paused') return true;
-    if (graph.goal.config?.pausedBy !== 'measured_acceptance') return false;
+    if (!(parkedBeforeEdit ?? this.isParkedOnMeasuredGate(graph))) return false;
 
     if (needsMetricCriteria(graph)) {
       const { allMet } = await this.evaluateMetricCriteria(graph);
@@ -363,15 +373,46 @@ export class GoalService {
    * is the whole wait.
    */
   private setPauseReason = async (goalId: string, reason: GoalPauseReason | undefined) => {
-    const goal = await this.goalModel.findById(goalId);
-    if (!goal) return;
-    if (goal.config?.pausedBy === reason) return;
-    await this.goalModel.update(goalId, { config: { ...goal.config, pausedBy: reason } });
+    await this.goalModel.updatePauseReason(goalId, reason);
+  };
+
+  /**
+   * Whether the coordinator is the one holding this paused goal.
+   *
+   * The marker answers it outright. Goals parked before the marker existed —
+   * and any parked by an old worker mid-deploy — carry none, so fall back to
+   * who performed the transition: every status change records a goal-entity
+   * event, and the newest one is by definition the transition that produced
+   * the current status. A coordinator park is attributed to `system`, a user
+   * pause to `user`, so the two stay distinguishable without the marker.
+   *
+   * Absent both, the pause is left alone: a goal wrongly resumed spends money
+   * against an explicit human decision, while one left parked says so on its
+   * row and is one Resume away.
+   */
+  private isParkedOnMeasuredGate = (graph: GoalGraphSnapshot): boolean => {
+    if (graph.goal.status !== 'paused') return false;
+    if (graph.goal.config?.pausedBy) return graph.goal.config.pausedBy === 'measured_acceptance';
+
+    // Match the park this gate actually recorded, not merely "the coordinator
+    // paused it": it also parks goals that are blocked or out of budget, and an
+    // unrelated sample must not restart either. The newest goal-entity event is
+    // by definition the transition that produced the current status; if two
+    // share a millisecond and the read picks the other one, the result is a
+    // missed reopen rather than a wrongful one.
+    const lastTransition = graph.events.find((event) => event.entityType === 'goal');
+    return (
+      lastTransition?.actorType !== 'user' &&
+      !!lastTransition?.reason?.startsWith(MEASURED_ACCEPTANCE_PAUSE_REASON) &&
+      needsMetricCriteria(graph)
+    );
   };
 
   setMetricCriteria = async (goalId: string, metrics: GoalMetricCriterion[]) => {
-    const goal = await this.goalModel.findById(goalId);
-    if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    const before = await this.coordinatorGraph.getGraph(goalId);
+    if (!before) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    const parkedOnGate = this.isParkedOnMeasuredGate(before);
+    const goal = before.goal;
     await this.goalModel.update(goalId, {
       config: {
         ...goal.config,
@@ -382,7 +423,7 @@ export class GoalService {
       },
     });
     // Relaxing or dropping a clause can clear a gate the goal is parked on.
-    await this.reopenIfMeasurementCleared(goalId);
+    await this.reopenIfMeasurementCleared(goalId, parkedOnGate);
     return this.graph(goalId);
   };
 
@@ -564,7 +605,9 @@ export class GoalService {
   pause = async (goalId: string) => {
     const graph = await this.requireGraph(goalId);
     // From here the pause is the person's, so no later measurement lifts it.
-    await this.setPauseReason(goalId, undefined);
+    // Written even when the goal is already paused — that transition is a
+    // no-op, so this marker is the only record that the person took it over.
+    await this.setPauseReason(goalId, 'user');
     const goal = await this.transitionStatus(graph.goal, 'paused', 'paused by user', 'user');
     if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
     return goal;
@@ -597,8 +640,14 @@ export class GoalService {
 
     // Two queries for the whole contract, not two per clause: this runs on
     // every terminal tick, and a goal carrying a large acceptance payload would
-    // otherwise pace the connection pool for unrelated requests.
-    const series = await metricModel.findBySubject('goal', graph.goal.id);
+    // otherwise pace the connection pool for unrelated requests. Only the
+    // declared keys are fetched — the same goal can accumulate any number of
+    // other sampled series, and none of them can gate acceptance.
+    const series = await metricModel.findByKeys(
+      'goal',
+      graph.goal.id,
+      declared.map((criterion) => criterion.key),
+    );
     const seriesByKey = new Map(series.map((item) => [item.key, item]));
     const latestByMetricId = await metricModel.latestPointsByMetricIds(
       declared.flatMap((criterion) => {

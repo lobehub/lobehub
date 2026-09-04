@@ -57,6 +57,50 @@ describe('GoalModel', () => {
     });
   });
 
+  describe('updatePauseReason', () => {
+    it('patches only the marker, leaving a concurrent config edit intact', async () => {
+      // The coordinator writes this from a tick while the user edits budget and
+      // acceptance criteria on the same JSONB column from the goal page. A
+      // read-modify-write of the whole config would let whichever landed second
+      // discard the other's work.
+      const goal = await goalModel.create({
+        config: { acceptance: { metrics: [{ key: 'followers', target: 1000 }] } },
+        subjectType: 'standalone',
+        title: 'Concurrent config writers',
+      });
+
+      await goalModel.updatePauseReason(goal.id, 'measured_acceptance');
+
+      const parked = await goalModel.findById(goal.id);
+      expect(parked?.config).toMatchObject({
+        acceptance: { metrics: [{ key: 'followers', target: 1000 }] },
+        pausedBy: 'measured_acceptance',
+      });
+
+      await goalModel.updatePauseReason(goal.id, undefined);
+
+      const cleared = await goalModel.findById(goal.id);
+      expect(cleared?.config?.pausedBy).toBeUndefined();
+      expect(cleared?.config?.acceptance?.metrics).toEqual([{ key: 'followers', target: 1000 }]);
+    });
+
+    it('starts from an empty object when the goal has no config yet', async () => {
+      const goal = await goalModel.create({ subjectType: 'standalone', title: 'No config' });
+
+      await goalModel.updatePauseReason(goal.id, 'measured_acceptance');
+
+      expect((await goalModel.findById(goal.id))?.config?.pausedBy).toBe('measured_acceptance');
+    });
+
+    it('does not reach a goal owned by somebody else', async () => {
+      const goal = await goalModel.create({ subjectType: 'standalone', title: 'Owned' });
+
+      await new GoalModel(serverDB, otherUserId).updatePauseReason(goal.id, 'measured_acceptance');
+
+      expect((await goalModel.findById(goal.id))?.config?.pausedBy).toBeUndefined();
+    });
+  });
+
   describe('findByGraphTask', () => {
     it('finds the goal whose graph owns a Task', async () => {
       const task = await new TaskModel(serverDB, userId).create({ instruction: 'do the work' });

@@ -92,13 +92,15 @@ export interface GoalAcceptancePolicy {
 }
 
 /**
- * Why the *coordinator* parked a goal, recorded when it does.
+ * Who a goal's current pause belongs to, recorded whenever one is taken.
  *
  * Runtime bookkeeping rather than policy: without it, an event that clears the
- * reason cannot tell a park it owns from a pause a person chose, and would
- * restart a goal somebody deliberately stopped.
+ * coordinator's reason cannot tell a park it owns from a pause a person chose,
+ * and would restart a goal somebody deliberately stopped. A person's claim is
+ * stored explicitly rather than as the absence of a marker, because pausing an
+ * already-paused goal is a no-op that leaves no other trace of who asked.
  */
-export type GoalPauseReason = 'measured_acceptance';
+export type GoalPauseReason = 'measured_acceptance' | 'user';
 
 export interface GoalConfig {
   acceptance?: GoalAcceptancePolicy;
@@ -109,7 +111,7 @@ export interface GoalConfig {
    * before the first result came back. Null/undefined uses the default.
    */
   maxConcurrentTasks?: number | null;
-  /** Set while the coordinator holds this goal paused; absent for a user pause. */
+  /** Who the current pause belongs to; cleared when the goal runs again. */
   pausedBy?: GoalPauseReason;
   recovery?: GoalRecoveryPolicy;
   schedule?: GoalSchedulePolicy;

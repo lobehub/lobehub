@@ -113,6 +113,13 @@ export const frontierNeedsBudget = (
     return needsBudget(tasksById.get(node.taskId) ?? null);
   });
 
+/**
+ * Opening of the message the gate parks a goal with, and therefore of the
+ * reason recorded on its status trail. Shared so the recovery path that reads
+ * historical parks back cannot drift from the wording that wrote them.
+ */
+export const MEASURED_ACCEPTANCE_PAUSE_REASON = 'Measured acceptance not met';
+
 /** Evaluate one numeric clause. Kept beside the gate that consumes it. */
 export const compareMetric = (
   rawValue: number,
@@ -409,7 +416,7 @@ const decideWithoutFrontier = (
     return {
       ...base,
       branch: 'measured_acceptance',
-      message: `Measured acceptance not met: ${unmet
+      message: `${MEASURED_ACCEPTANCE_PAUSE_REASON}: ${unmet
         .map((c) => `${c.key} ${c.op} ${c.target} (${c.value ?? 'no observation'})`)
         .join(', ')}`,
       outcome: 'no_progress',

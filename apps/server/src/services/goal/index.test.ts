@@ -936,6 +936,56 @@ describe('GoalService', () => {
     return graph.goal.id;
   };
 
+  it('reopens a goal parked before the pause marker existed', async () => {
+    // Rows parked by the parent implementation — and any parked by an old
+    // worker mid-deploy — carry no marker. Requiring one strictly would strand
+    // them until somebody pressed Resume by hand, so the transition's recorded
+    // actor stands in for it.
+    vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({} as never);
+    const service = new GoalService(serverDB, userId);
+    const goalModel = new GoalModel(serverDB, userId);
+    const goalId = await parkedOnGate(service);
+
+    // Exactly what a pre-marker row looks like.
+    const parked = (await goalModel.findById(goalId))!;
+    await goalModel.update(goalId, { config: { ...parked.config, pausedBy: undefined } });
+
+    const cleared = await service.recordObservation(goalId, { key: 'followers', value: 5000 });
+
+    expect(cleared.shouldAdvance).toBe(true);
+    expect((await goalModel.findById(goalId))?.status).toBe('running');
+  });
+
+  it('does not let an observation restart a goal the coordinator parked for another reason', async () => {
+    // The coordinator also parks goals that are deadlocked or out of budget.
+    // Those carry no marker either once they predate it, so the fallback has to
+    // read *why* it parked — not just that it was the coordinator.
+    vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({} as never);
+    const service = new GoalService(serverDB, userId);
+    const goalModel = new GoalModel(serverDB, userId);
+    const graph = await service.create({
+      config: { acceptance: { metrics: [{ key: 'followers', target: 1000 }] } },
+      requirement: 'Deadlocked before the gate',
+      tasks: ['A', 'B'],
+      title: 'Parked with work outstanding',
+    });
+    const [a, b] = graph.nodes.filter((n) => n.kind === 'task');
+    const graphModel = new GoalGraphModel(serverDB, userId);
+    await graphModel.createEdge(graph.goal.id, a.id, b.id, 'depends_on');
+    await graphModel.createEdge(graph.goal.id, b.id, a.id, 'depends_on');
+
+    await service.tick(graph.goal.id); // deadlock → no_frontier → paused
+    expect((await goalModel.findById(graph.goal.id))?.status).toBe('paused');
+
+    const satisfying = await service.recordObservation(graph.goal.id, {
+      key: 'followers',
+      value: 5000,
+    });
+
+    expect(satisfying.shouldAdvance).toBe(false);
+    expect((await goalModel.findById(graph.goal.id))?.status).toBe('paused');
+  });
+
   it('leaves a deliberately paused goal alone even when the measurement lands', async () => {
     // The hard case: same status, same terminal phase, same clauses as a goal
     // the coordinator parked. Only the recorded pause reason tells them apart,
