@@ -96,6 +96,10 @@ const runAndContinueLocalTrashPurge = async (payload: TrashPurgeWorkflowPayload 
       await publishLocalTrashContinuation(continuationPayload);
       return;
     }
+    // Persistent Node processes may safely drain in-process. Serverless
+    // runtimes must stop after one bounded burst; the next cron invocation
+    // resumes the global expired-root scan without overrunning its lifetime.
+    if (process.env.VERCEL) return;
   }
 };
 

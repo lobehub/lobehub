@@ -21,51 +21,21 @@ describe('TrashService', () => {
     vi.clearAllMocks();
   });
 
-  it('splits restore requests and combines their outcomes', async () => {
-    let releaseFirst!: () => void;
-    mockRestore
-      .mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            releaseFirst = () => resolve({ failed: [], restored: [{ id: 'trash-0' }] });
-          }),
-      )
-      .mockResolvedValueOnce({
-        failed: [{ code: 'parentTrashed', id: 'trash-200' }],
-        restored: [],
-      })
-      .mockResolvedValueOnce({ failed: [], restored: [{ id: 'trash-400' }] });
+  it('forwards the full restore selection for one server-side preflight', async () => {
+    mockRestore.mockRejectedValue(new Error('selection exceeds the server limit'));
     const ids = Array.from({ length: 401 }, (_, index) => `trash-${index}`);
 
-    const restorePromise = trashService.restore(ids);
-    expect(mockRestore).toHaveBeenCalledTimes(1);
-    releaseFirst();
-
-    await expect(restorePromise).resolves.toEqual({
-      failed: [{ code: 'parentTrashed', id: 'trash-200' }],
-      restored: [{ id: 'trash-0' }, { id: 'trash-400' }],
-    });
-    expect(mockRestore.mock.calls.map(([input]) => input.ids.length)).toEqual([200, 200, 1]);
-    expect(mockRestore.mock.calls.flatMap(([input]) => input.ids)).toEqual(ids);
+    await expect(trashService.restore(ids)).rejects.toThrow('selection exceeds the server limit');
+    expect(mockRestore).toHaveBeenCalledOnce();
+    expect(mockRestore).toHaveBeenCalledWith({ ids });
   });
 
-  it('splits purge requests and combines their outcomes', async () => {
-    mockPurge
-      .mockResolvedValueOnce({ failed: [], purged: 200, purgedIds: ['trash-0'] })
-      .mockResolvedValueOnce({
-        failed: [{ code: 'notFound', id: 'trash-200' }],
-        purged: 199,
-        purgedIds: ['trash-201'],
-      })
-      .mockResolvedValueOnce({ failed: [], purged: 1, purgedIds: ['trash-400'] });
+  it('forwards the full purge selection before any irreversible mutation', async () => {
+    mockPurge.mockRejectedValue(new Error('selection exceeds the server limit'));
     const ids = Array.from({ length: 401 }, (_, index) => `trash-${index}`);
 
-    await expect(trashService.purge(ids)).resolves.toEqual({
-      failed: [{ code: 'notFound', id: 'trash-200' }],
-      purged: 400,
-      purgedIds: ['trash-0', 'trash-201', 'trash-400'],
-    });
-    expect(mockPurge.mock.calls.map(([input]) => input.ids.length)).toEqual([200, 200, 1]);
-    expect(mockPurge.mock.calls.flatMap(([input]) => input.ids)).toEqual(ids);
+    await expect(trashService.purge(ids)).rejects.toThrow('selection exceeds the server limit');
+    expect(mockPurge).toHaveBeenCalledOnce();
+    expect(mockPurge).toHaveBeenCalledWith({ ids });
   });
 });

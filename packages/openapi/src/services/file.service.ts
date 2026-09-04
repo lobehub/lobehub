@@ -24,6 +24,7 @@ import type { S3 } from '@/server/modules/S3';
 import { FileS3 } from '@/server/modules/S3';
 import { DocumentService } from '@/server/services/document';
 import { FileService as CoreFileService } from '@/server/services/file';
+import { TrashService } from '@/server/services/trash';
 import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
 import { nanoid } from '@/utils/uuid';
 
@@ -69,6 +70,7 @@ export class FileUploadService extends BaseService {
   private chunkModel: ChunkModel;
   private asyncTaskModel: AsyncTaskModel;
   private knowledgeBaseModel: KnowledgeBaseModel;
+  private trashService: TrashService;
   // Lazy import ChunkService to avoid circular dependency overhead
   // Note: ChunkService is only available in server-side environments
 
@@ -82,6 +84,7 @@ export class FileUploadService extends BaseService {
     this.chunkModel = new ChunkModel(db, userId, workspaceId);
     this.asyncTaskModel = new AsyncTaskModel(db, userId, workspaceId);
     this.knowledgeBaseModel = new KnowledgeBaseModel(db, userId, workspaceId);
+    this.trashService = new TrashService(db, userId, workspaceId);
   }
 
   /**
@@ -1009,15 +1012,10 @@ export class FileUploadService extends BaseService {
         throw this.createAuthorizationError(permissionResult.message || '无权删除此文件');
       }
 
-      const file = await this.findFileByIdWithPermission(fileId, permissionResult);
+      await this.findFileByIdWithPermission(fileId, permissionResult);
+      await this.trashService.trashFiles([fileId]);
 
-      // Delete S3 file
-      await this.coreFileService.deleteFile(file.url);
-
-      // Delete database record and associated chunks / global_files
-      await this.fileModel.delete(fileId);
-
-      this.log('info', 'File deleted successfully', { fileId, key: file.url });
+      this.log('info', 'File moved to Trash successfully', { fileId });
 
       return;
     } catch (error) {

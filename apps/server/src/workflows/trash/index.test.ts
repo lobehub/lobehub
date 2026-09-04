@@ -69,6 +69,7 @@ describe('triggerTrashPurge', () => {
   it('continues in-process when the local continuation secret is not configured', async () => {
     vi.stubEnv('QSTASH_TOKEN', '');
     vi.stubEnv('KEY_VAULTS_SECRET', '');
+    vi.stubEnv('VERCEL', '');
     vi.mocked(getServerDB).mockResolvedValue({} as never);
     vi.mocked(TrashService.sweepExpired).mockImplementation(async (_db, options) => {
       const next = Number(options?.cursor?.id ?? 0) + 1;
@@ -84,6 +85,29 @@ describe('triggerTrashPurge', () => {
     await triggerTrashPurge();
     await expect(vi.mocked(after).mock.calls[0][0]()).resolves.toBeUndefined();
     expect(TrashService.sweepExpired).toHaveBeenCalledTimes(9);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('stops a serverless fallback after one bounded burst without a continuation secret', async () => {
+    vi.stubEnv('QSTASH_TOKEN', '');
+    vi.stubEnv('KEY_VAULTS_SECRET', '');
+    vi.stubEnv('VERCEL', '1');
+    vi.mocked(getServerDB).mockResolvedValue({} as never);
+    vi.mocked(TrashService.sweepExpired).mockImplementation(async (_db, options) => ({
+      failed: 0,
+      nextCursor: {
+        expiresAt: '2026-09-01',
+        id: String(Number(options?.cursor?.id ?? 0) + 1),
+      },
+      pruned: 0,
+      purged: 25,
+      scanned: 25,
+    }));
+
+    await triggerTrashPurge();
+    await expect(vi.mocked(after).mock.calls[0][0]()).resolves.toBeUndefined();
+
+    expect(TrashService.sweepExpired).toHaveBeenCalledTimes(8);
     expect(fetch).not.toHaveBeenCalled();
   });
 
