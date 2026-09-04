@@ -4,10 +4,10 @@ import { Flexbox } from '@lobehub/ui';
 import { Skeleton } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
-import { useParams } from 'react-router';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { ArticleSkeleton } from '@/components/Skeleton';
+import { useParams } from '@/libs/router/navigation';
 import { experimentSelectors, useEvalStore } from '@/store/eval';
 
 import BenchmarksSection from './BenchmarksSection';
@@ -31,7 +31,7 @@ const styles = createStaticStyles(({ css }) => ({
  * focused component fed by the shared useExperimentActions.
  */
 const ExperimentDetailPage = memo(() => {
-  const { experimentId } = useParams<{ experimentId: string }>();
+  const { experimentId } = useParams<{ experimentId: string }>('experimentId');
   const useFetchExperimentDetail = useEvalStore((s) => s.useFetchExperimentDetail);
   const experiment = useEvalStore(experimentSelectors.getExperimentDetailById(experimentId || ''));
 

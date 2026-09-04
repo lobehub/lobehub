@@ -4,24 +4,24 @@ import { Flexbox } from '@lobehub/ui';
 import { ClipboardCheckIcon, ListTodoIcon, TargetIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { NavPanelPortal } from '@/features/NavPanel/NavPanelPortal';
 import SideBarLayout from '@/features/NavPanel/SideBarLayout';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
+import { useParams } from '@/libs/router/navigation';
 import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 import { getProjectAcceptancePath, getProjectGoalsPath, getProjectTasksPath } from './navigation';
 import ProjectHeader from './ProjectHeader';
 
 const ProjectSidebarContent = memo(() => {
   const { t } = useTranslation('project');
-  const { projectId } = useActiveRouteParams<{ projectId: string }>();
+  const { projectId } = useParams<{ projectId: string }>('projectId');
   const navigate = useWorkspaceAwareNavigate();
-  const { pathname } = useLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
   const detail = useCurrentProjectDetail(projectId);
   const detailSWR = useProjectStore((s) => s.useFetchProjectDetail)(projectId);
   const projectTasksPath = getProjectTasksPath(projectId!);

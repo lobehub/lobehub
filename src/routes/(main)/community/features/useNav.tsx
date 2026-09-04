@@ -4,18 +4,18 @@ import { Bot, Brain, BrainCircuit, House } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router';
 
 import { type MenuProps } from '@/components/Menu';
+import { routerSelectors, useRouterStore } from '@/store/router';
 import { DiscoverTab } from '@/types/discover';
 
 const ICON_SIZE = 16;
 
 export const useNav = () => {
-  const location = useLocation();
+  const routePathname = useRouterStore(routerSelectors.pathname);
   const { t } = useTranslation('discover');
   const activeKey = useMemo(() => {
-    const pathname = location.pathname;
+    const pathname = routePathname;
     for (const value of Object.values(DiscoverTab)) {
       if (pathname.includes(`/${DiscoverTab.Plugins}`)) {
         return DiscoverTab.Mcp;
@@ -24,7 +24,7 @@ export const useNav = () => {
       }
     }
     return DiscoverTab.Home;
-  }, [location.pathname]);
+  }, [routePathname]);
 
   const items: MenuProps['items'] = useMemo(
     () => [

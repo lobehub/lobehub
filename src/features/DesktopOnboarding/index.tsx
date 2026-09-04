@@ -4,9 +4,9 @@ import { APP_WINDOW_MIN_SIZE } from '@lobechat/desktop-bridge';
 import { Flexbox } from '@lobehub/ui';
 import { Skeleton } from '@lobehub/ui/base-ui';
 import { memo, Suspense, useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
+import { useSearchParams } from '@/libs/router/navigation';
 import { remoteServerService } from '@/services/electron/remoteServer';
 import { electronSystemService } from '@/services/electron/system';
 

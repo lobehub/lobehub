@@ -1,4 +1,5 @@
 import type { createTabRouter } from '@/spa/router/tabRouter';
+import { disposeScopedRouterStore } from '@/store/router';
 
 import {
   createHistoryTracker,
@@ -49,10 +50,14 @@ export const disposeTabRouter = (tabId: string): void => {
   }
 
   const router = routers.get(tabId);
-  if (!router) return;
+  if (!router) {
+    disposeScopedRouterStore(tabId);
+    return;
+  }
 
   router.dispose();
   routers.delete(tabId);
+  disposeScopedRouterStore(tabId);
 };
 
 export const syncTabRouters = (liveTabIds: string[]): void => {

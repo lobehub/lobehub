@@ -4,12 +4,12 @@ import { Center, Flexbox } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { memo, useCallback, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import NavHeader from '@/features/NavHeader';
 import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';
+import { useParams } from '@/libs/router/navigation';
 import ChatConversation from '@/routes/(main)/agent/features/Conversation';
 import ChatHydration from '@/routes/(main)/agent/features/Conversation/ChatHydration';
 import { useAgentStore } from '@/store/agent';
@@ -21,7 +21,10 @@ import { getProjectConversationPath } from '../Layout/navigation';
 
 const ProjectConversation = memo(() => {
   const { t } = useTranslation('project');
-  const { projectId, topicId } = useParams<{ projectId: string; topicId?: string }>();
+  const { projectId, topicId } = useParams<{ projectId: string; topicId?: string }>(
+    'projectId',
+    'topicId',
+  );
   const detail = useCurrentProjectDetail(projectId);
   const detailSWR = useProjectStore((s) => s.useFetchProjectDetail)(projectId);
   const coordinatorAgentId = detail?.project.coordinatorAgentId;

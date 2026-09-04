@@ -16,15 +16,15 @@ import urlJoin from 'url-join';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
-import { useActiveLocation } from '@/hooks/useActiveLocation';
-import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
+import { useParams } from '@/libs/router/navigation';
 import { useActionSWR } from '@/libs/swr';
 import { topicActionKeys } from '@/libs/swr/keys';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
+import { routerSelectors, useRouterStore } from '@/store/router';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
@@ -33,9 +33,9 @@ const Nav = memo(() => {
   const { t } = useTranslation('chat');
   const { t: tTopic } = useTranslation('topic');
   const { t: tSelfLearning } = useTranslation('selfLearning');
-  const params = useActiveRouteParams();
+  const params = useParams('aid');
   const agentId = params.aid;
-  const { pathname } = useActiveLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
   // The profile entry now owns a group of sub-views — profile / channels /
   // statistics — switched by a Segmented in the page header, so all three keep
   // this entry lit instead of leaving the sidebar with nothing selected.

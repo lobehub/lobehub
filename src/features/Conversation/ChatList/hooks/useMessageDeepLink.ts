@@ -1,5 +1,7 @@
 import { useCallback, useMemo } from 'react';
-import { useLocation, useNavigate } from 'react-router';
+import { useNavigate } from 'react-router';
+
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 import type { MessageDeepLink } from '../utils/messageDeepLink';
 
@@ -16,16 +18,18 @@ export const parseMessageIdFromHash = (hash: string) => {
 
 /** Reads and consumes a message hash after the conversation has located the target. */
 export const useMessageDeepLink = (): MessageDeepLink | undefined => {
-  const location = useLocation();
+  const hash = useRouterStore(routerSelectors.hash);
+  const locationKey = useRouterStore(routerSelectors.key);
+  const url = useRouterStore(routerSelectors.url);
   const navigate = useNavigate();
-  const messageId = useMemo(() => parseMessageIdFromHash(location.hash), [location.hash]);
+  const messageId = useMemo(() => parseMessageIdFromHash(hash), [hash]);
   const clearHash = useCallback(() => {
-    navigate(`${location.pathname}${location.search}`, { replace: true });
-  }, [location.pathname, location.search, navigate]);
+    navigate(url, { replace: true });
+  }, [navigate, url]);
 
   return useMemo(
     () =>
-      messageId ? { id: messageId, navigationKey: location.key, onHandled: clearHash } : undefined,
-    [clearHash, location.key, messageId],
+      messageId ? { id: messageId, navigationKey: locationKey, onHandled: clearHash } : undefined,
+    [clearHash, locationKey, messageId],
   );
 };

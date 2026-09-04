@@ -5,12 +5,12 @@ import { Button, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
 import useSWR from 'swr';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import ImperativeModal from '@/components/ImperativeModal';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useParams } from '@/libs/router/navigation';
 import { messengerKeys } from '@/libs/swr/keys';
 import { messengerService } from '@/services/messenger';
 
@@ -55,7 +55,7 @@ const MessengerSettings = memo(() => {
   const { t, ready } = useTranslation('messenger');
 
   const navigate = useWorkspaceAwareNavigate();
-  const params = useParams<{ sub?: string }>();
+  const params = useParams<{ sub?: string }>('sub');
   const selected: MessengerPlatform | null = isMessengerPlatform(params.sub) ? params.sub : null;
   // Tenant name from `?workspace=...` plus the platform it belongs to. When
   // set, render the takeover explainer modal — toast is too transient for a

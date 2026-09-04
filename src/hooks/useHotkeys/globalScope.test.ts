@@ -29,8 +29,12 @@ const mocks = vi.hoisted(() => ({
   useHotkeyById: vi.fn(),
 }));
 
-vi.mock('react-router', () => ({
-  useLocation: () => ({ pathname: mocks.pathname }),
+vi.mock('@/store/router', () => ({
+  routerSelectors: {
+    pathname: (state: { location: { pathname: string } }) => state.location.pathname,
+  },
+  useRouterStore: (selector: (state: { location: { pathname: string } }) => unknown) =>
+    selector({ location: { pathname: mocks.pathname } }),
 }));
 
 vi.mock('@/hooks/useNavigateToAgent', () => ({

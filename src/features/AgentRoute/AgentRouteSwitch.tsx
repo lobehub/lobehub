@@ -1,7 +1,9 @@
 'use client';
 
 import { memo, type ReactElement, type ReactNode } from 'react';
-import { Navigate, useParams } from 'react-router';
+import { Navigate } from 'react-router';
+
+import { useParams } from '@/libs/router/navigation';
 
 import { resolveAgentRouteBranch, useAgentRouteResolution } from './useAgentRouteResolution';
 
@@ -35,7 +37,7 @@ const defaultOwnShareRedirect = (agentId: string) => `/agent/${agentId}/share`;
  */
 const AgentRouteSwitch = memo<AgentRouteSwitchProps>(
   ({ fallback, ownElement, ownShareRedirect = defaultOwnShareRedirect, shareElement }) => {
-    const { aid } = useParams<{ aid?: string }>();
+    const { aid } = useParams<{ aid?: string }>('aid');
     const { error, isLoading, kind, resolvedAgentId } = useAgentRouteResolution(aid);
     const branch = resolveAgentRouteBranch({ error, isLoading, kind });
 

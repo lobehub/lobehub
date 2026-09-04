@@ -2,11 +2,11 @@
 
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
-import { useLocation } from 'react-router';
 
 import { isDesktop } from '@/const/version';
 import { selectActiveTabUrl } from '@/features/Electron/shell/activeTabUrl';
 import { useElectronStore } from '@/store/electron';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 const styles = createStaticStyles(({ css }) => ({
   path: css`
@@ -24,7 +24,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const RoutePathWidget = memo(() => {
-  const { pathname } = useLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
   const activeTabUrl = useElectronStore(selectActiveTabUrl);
 
   // The DevDock renders inside the root router, which Electron freezes at the boot

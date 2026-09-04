@@ -1,19 +1,19 @@
 import { AGENT_CHAT_TOPIC_URL, AGENT_CHAT_URL } from '@lobechat/const';
 import { useCallback } from 'react';
 
-import { useActiveLocation } from '@/hooks/useActiveLocation';
-import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
+import { useParams } from '@/libs/router/navigation';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 /**
  * Hook to handle thread navigation with automatic route detection
  * If in agent sub-route (e.g., /agent/:aid/profile), navigate back to chat first
  */
 export const useThreadNavigation = () => {
-  const { pathname } = useActiveLocation();
-  const params = useActiveRouteParams<{ aid?: string; topicId?: string }>();
+  const pathname = useRouterStore(routerSelectors.pathname);
+  const params = useParams<{ aid?: string; topicId?: string }>('aid', 'topicId');
   const router = useQueryRoute();
   const toggleConfig = useGlobalStore((s) => s.toggleMobileTopic);
   const switchThread = useChatStore((s) => s.switchThread);

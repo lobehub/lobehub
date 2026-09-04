@@ -1,18 +1,18 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { useLocation } from 'react-router';
 
 import NavHeader from '@/features/NavHeader';
 import SettingContainer from '@/features/Setting/SettingContainer';
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 import SkeletonBar from '../Bar';
 import SettingsProfileSkeleton from './Profile';
 import SettingsSectionSkeleton from './Section';
 
 const SettingsPageSkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => {
-  const { pathname } = useLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
   const tab = pathname.match(/\/settings\/([^/]+)/)?.[1] ?? 'profile';
   const profile = tab === 'profile';
 

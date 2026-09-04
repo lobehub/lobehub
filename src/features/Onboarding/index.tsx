@@ -2,7 +2,6 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { memo, useCallback, useEffect } from 'react';
-import { useSearchParams } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import ClassicOnboardingPage from '@/features/Onboarding/Classic';
@@ -11,6 +10,7 @@ import ResponseLanguageStep from '@/features/Onboarding/steps/ResponseLanguageSt
 import TelemetryStep from '@/features/Onboarding/steps/TelemetryStep';
 import { useOnboardingAgentTemplates } from '@/hooks/useOnboardingAgentTemplates';
 import { useSingleton } from '@/hooks/useSingleton';
+import { useSearchParams } from '@/libs/router/navigation';
 import {
   trackOnboardingStepCompleted,
   trackOnboardingStepViewed,

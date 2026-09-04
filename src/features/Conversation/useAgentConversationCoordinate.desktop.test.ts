@@ -17,7 +17,7 @@ const route = vi.hoisted(() => ({
   search: new URLSearchParams('thread=thread-route'),
 }));
 
-vi.mock('react-router', () => ({
+vi.mock('@/libs/router/navigation', () => ({
   useParams: () => route.params,
   useSearchParams: () => [route.search, vi.fn()],
 }));

@@ -3,9 +3,10 @@
 import { Button } from '@lobehub/ui/base-ui';
 import { ChevronLeftIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Link, useSearchParams } from 'react-router';
+import { Link } from 'react-router';
 
 import AuthCard from '@/features/AuthCard';
+import { useSearchParams } from '@/libs/router/navigation';
 
 import { VerifyEmailContent } from './VerifyEmailContent';
 

@@ -2,13 +2,13 @@
 
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import { memo, useLayoutEffect, useMemo } from 'react';
-import { useParams } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import { WelcomeExtraProvider } from '@/features/AgentHome/WelcomeExtraContext';
 import { AgentNotFoundGuard } from '@/features/AgentNotFound';
 import { useFetchTopics } from '@/hooks/useFetchTopics';
 import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';
+import { useParams } from '@/libs/router/navigation';
 import Conversation from '@/routes/(main)/agent/features/Conversation';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
@@ -17,7 +17,7 @@ import { useChatStore } from '@/store/chat';
 import QuickChatAgentSwitcher from './QuickChatAgentSwitcher';
 
 const PopupAgentQuickPage = memo(() => {
-  const { aid } = useParams<{ aid: string }>();
+  const { aid } = useParams<{ aid: string }>('aid');
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
 
   // The inbox slug is not a real agent id. Resolve it through

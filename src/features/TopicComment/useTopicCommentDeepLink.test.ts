@@ -17,7 +17,15 @@ const mocks = vi.hoisted(() => ({
   openTopicComments: vi.fn(),
 }));
 
-vi.mock('react-router', () => ({ useLocation: () => mocks.location }));
+vi.mock('@/store/router', () => ({
+  routerSelectors: {
+    hash: (state: { location: typeof mocks.location }) => state.location.hash,
+    pathname: (state: { location: typeof mocks.location }) => state.location.pathname,
+    search: (state: { location: typeof mocks.location }) => state.location.search,
+  },
+  useRouterStore: (selector: (state: { location: typeof mocks.location }) => unknown) =>
+    selector({ location: mocks.location }),
+}));
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => mocks.navigate,
 }));

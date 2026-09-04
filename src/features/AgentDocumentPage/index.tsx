@@ -2,7 +2,6 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { memo, useCallback, useEffect, useMemo } from 'react';
-import { useParams } from 'react-router';
 
 import { type ComposerTarget, createComposerTarget } from '@/features/Conversation/types';
 import FloatingChatPanel from '@/features/FloatingChatPanel';
@@ -10,6 +9,7 @@ import { useDocumentChatTopic } from '@/features/FloatingChatPanel/useDocumentCh
 import { PageEditor } from '@/features/PageEditor';
 import RightPanel from '@/features/RightPanel';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useParams } from '@/libs/router/navigation';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import Header from './Header';
@@ -29,7 +29,7 @@ interface AgentDocumentPageProps {
  * document layout owns the page-mode right panel.
  */
 const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
-  const { aid } = useParams<{ aid: string }>();
+  const { aid } = useParams<{ aid: string }>('aid');
   const agentId = aid ?? '';
   const navigate = useWorkspaceAwareNavigate();
   const {

@@ -26,12 +26,22 @@ vi.mock('react-router', async () => {
 
   return {
     ...actual,
-    useLocation: useLocationMock,
     useNavigate: () => useNavigateMock,
-    useParams: useParamsMock,
-    useSearchParams: useSearchParamsMock,
   };
 });
+
+vi.mock('@/libs/router/navigation', () => ({
+  useParams: useParamsMock,
+  useSearchParams: useSearchParamsMock,
+}));
+
+vi.mock('@/store/router', () => ({
+  routerSelectors: {
+    pathname: (state: { location: { pathname: string } }) => state.location.pathname,
+  },
+  useRouterStore: (selector: (state: { location: { pathname: string } }) => unknown) =>
+    selector({ location: useLocationMock() }),
+}));
 
 describe('AgentIdSync', () => {
   beforeEach(() => {

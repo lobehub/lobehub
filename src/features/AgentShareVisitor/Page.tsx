@@ -7,11 +7,12 @@ import { cssVar } from 'antd-style';
 import { PanelLeftOpen } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
 import CircleLoading from '@/components/Loading/CircleLoading';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { useParams } from '@/libs/router/navigation';
 
 import { resolveShareAccessState, SHARE_ACCESS_ERROR_KEYS } from './resolveShareAccessState';
 import { isShareInteractive } from './shareInteractivity';
@@ -33,7 +34,7 @@ const SIDEBAR_WIDTH = 260;
  */
 const AgentShareVisitorPage = memo(() => {
   const { t } = useTranslation('agent');
-  const { aid: slugOrId } = useParams<{ aid: string }>();
+  const { aid: slugOrId } = useParams<{ aid: string }>('aid');
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [drawerOpen, setDrawerOpen] = useState(false);

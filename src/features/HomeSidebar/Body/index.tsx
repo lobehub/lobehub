@@ -13,7 +13,7 @@ import Recents from '@/features/Home/Recents';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
-import { useActiveTabKey } from '@/hooks/useActiveTabKey';
+import { useIsActiveTab } from '@/hooks/useIsActiveTab';
 import type { NavItem as NavItemType } from '@/hooks/useNavLayout';
 import { useNavLayout } from '@/hooks/useNavLayout';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
@@ -74,10 +74,42 @@ const mergeSidebarExpandedKeys = (
   return nextKeys;
 };
 
+interface ConnectedNavLinkProps {
+  getContextMenuItems: (key: string) => MenuProps['items'];
+  navItem: NavItemType;
+}
+
+const ConnectedNavLink = memo<ConnectedNavLinkProps>(({ getContextMenuItems, navItem }) => {
+  const active = useIsActiveTab(navItem.key);
+  const navigate = useWorkspaceAwareNavigate();
+  const contextMenuItems = getContextMenuItems(navItem.key);
+
+  return (
+    <WorkspaceLink
+      to={navItem.url!}
+      onClick={(e) => {
+        if (isModifierClick(e)) return;
+        e.preventDefault();
+        navigate(navItem.url!);
+      }}
+    >
+      <NavItem
+        active={active}
+        contextMenuItems={contextMenuItems}
+        icon={navItem.icon}
+        title={navItem.title}
+        actions={
+          <DropdownMenu items={contextMenuItems}>
+            <ActionIcon icon={MoreHorizontalIcon} size={'small'} style={{ flex: 'none' }} />
+          </DropdownMenu>
+        }
+      />
+    </WorkspaceLink>
+  );
+});
+
 const Body = memo(() => {
   const { t } = useTranslation('common');
-  const tab = useActiveTabKey();
-  const navigate = useWorkspaceAwareNavigate();
   const { topNavItems, bottomMenuItems } = useNavLayout();
   // Personal mode has no notion of "private vs workspace-public" — every row
   // is implicitly the owner's. Hide the Private section entirely there so the
@@ -161,30 +193,10 @@ const Body = memo(() => {
       const navItem = navLinkItems.get(key);
       if (!navItem || navItem.hidden) return null;
       return (
-        <WorkspaceLink
-          key={key}
-          to={navItem.url!}
-          onClick={(e) => {
-            if (isModifierClick(e)) return;
-            e.preventDefault();
-            navigate(navItem.url!);
-          }}
-        >
-          <NavItem
-            active={tab === key}
-            contextMenuItems={getContextMenuItems(key)}
-            icon={navItem.icon}
-            title={navItem.title}
-            actions={
-              <DropdownMenu items={getContextMenuItems(key)}>
-                <ActionIcon icon={MoreHorizontalIcon} size={'small'} style={{ flex: 'none' }} />
-              </DropdownMenu>
-            }
-          />
-        </WorkspaceLink>
+        <ConnectedNavLink getContextMenuItems={getContextMenuItems} key={key} navItem={navItem} />
       );
     },
-    [navLinkItems, tab, getContextMenuItems, navigate],
+    [navLinkItems, getContextMenuItems],
   );
 
   const handleAccordionExpandedChange = useCallback(

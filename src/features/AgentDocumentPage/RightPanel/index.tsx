@@ -16,8 +16,8 @@ import ToggleLeftPanelButton from '@/features/NavPanel/ToggleLeftPanelButton';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
-import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
+import { useParams } from '@/libs/router/navigation';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 
@@ -57,9 +57,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const AgentDocumentSidebarContent = memo(() => {
   const { t } = useTranslation('chat');
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
-  const { aid: agentId = '' } = useActiveRouteParams<{
+  const { aid: agentId = '' } = useParams<{
     aid?: string;
-  }>();
+  }>('aid');
   const agentMeta = useAgentStore(agentSelectors.getAgentMetaById(agentId));
   const agentTitle = agentDisplayName(agentMeta, t('untitledAgent'));
   const agentPath = buildWorkspaceAwarePath(`/agent/${agentId}`, activeWorkspaceSlug);

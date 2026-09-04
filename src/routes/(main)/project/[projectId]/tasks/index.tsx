@@ -1,11 +1,11 @@
 'use client';
 
 import { AgentTasksPage } from '@/features/AgentTasks';
-import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
+import { useParams } from '@/libs/router/navigation';
 import { useCurrentProjectDetail } from '@/store/project';
 
 const ProjectTasks = () => {
-  const { projectId } = useActiveRouteParams<{ projectId: string }>();
+  const { projectId } = useParams<{ projectId: string }>('projectId');
   const detail = useCurrentProjectDetail(projectId);
 
   if (!detail) return null;

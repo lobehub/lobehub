@@ -2,17 +2,17 @@
 
 import { ChatHeader } from '@lobehub/ui/mobile';
 import { memo } from 'react';
-import { useLocation } from 'react-router';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { routerSelectors, useRouterStore } from '@/store/router';
 import { mobileHeaderSticky } from '@/styles/mobileHeader';
 
 const Header = memo(() => {
-  const location = useLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
   const navigate = useWorkspaceAwareNavigate();
 
   // Extract the path segment (assistant, model, provider, mcp)
-  const path = location.pathname.split('/').find(Boolean);
+  const path = pathname.split('/').find(Boolean);
 
   return (
     <ChatHeader

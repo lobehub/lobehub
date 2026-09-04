@@ -26,15 +26,7 @@ vi.mock('@/features/ResourcePermission/useResourceAccess', () => ({
   useResourceAccess: () => ({ canEditResource: true, isAccessResolved: true }),
 }));
 
-vi.mock('react-router', async () => {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const actual = (await vi.importActual('react-router')) as typeof import('react-router');
-
-  return {
-    ...actual,
-    useParams: useParamsMock,
-  };
-});
+vi.mock('@/libs/router/navigation', () => ({ useParams: useParamsMock }));
 
 vi.mock('@/features/NavPanel/components/NavItem', () => ({
   default: ({
@@ -60,8 +52,10 @@ vi.mock('@/hooks/useQueryRoute', () => ({
   }),
 }));
 
-vi.mock('@/hooks/useActiveLocation', () => ({
-  useActiveLocation: () => ({ hash: '', pathname: usePathnameMock(), search: '' }),
+vi.mock('@/store/router', () => ({
+  routerSelectors: { pathname: (state: { pathname: string }) => state.pathname },
+  useRouterStore: (selector: (state: { pathname: string }) => string) =>
+    selector({ pathname: usePathnameMock() }),
 }));
 
 vi.mock('@/libs/swr', () => ({

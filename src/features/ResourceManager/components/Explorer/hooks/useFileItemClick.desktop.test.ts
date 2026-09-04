@@ -1,13 +1,11 @@
 import { act, cleanup, renderHook, screen } from '@testing-library/react';
-import React, { type PropsWithChildren } from 'react';
-import { createMemoryRouter, MemoryRouter, useLocation } from 'react-router';
+import React, { type PropsWithChildren, use } from 'react';
+import { createMemoryRouter, MemoryRouter, UNSAFE_LocationContext } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Resolve the desktop twins of both facades. The web twins are plain
-// `useLocation` / `useNavigate`, under which the pre-fix `useSearchParams` and
-// the fixed facade call behave identically — only the desktop twins can tell
-// them apart, because only they dispatch to the active tab's own router.
-vi.mock('@/hooks/useActiveLocation', async () => await import('@/hooks/useActiveLocation.desktop'));
+import ActiveTabRouterStoreProvider from '@/features/Electron/TabHost/ActiveTabRouterStoreProvider';
+
+// Resolve the desktop navigation facade so writes reach the active tab router.
 vi.mock(
   '@/features/Workspace/useWorkspaceAwareNavigate',
   async () => await import('@/features/Workspace/useWorkspaceAwareNavigate.desktop'),
@@ -32,7 +30,11 @@ const createRouter = (url: string) =>
   createMemoryRouter([{ element: null, path: '*' }], { initialEntries: [url] }) as any;
 
 const ShellProbe = () =>
-  React.createElement('div', { 'data-testid': 'shell-search' }, useLocation().search);
+  React.createElement(
+    'div',
+    { 'data-testid': 'shell-search' },
+    use(UNSAFE_LocationContext)!.location.search,
+  );
 
 // The library sidebar is portal'd into the shell, which on desktop is a sibling
 // of TabHost — so the hook renders under the shell router while the page it
@@ -42,7 +44,7 @@ const shellWrapper = ({ children }: PropsWithChildren) =>
     MemoryRouter,
     { initialEntries: ['/'] },
     React.createElement(ShellProbe),
-    children,
+    React.createElement(ActiveTabRouterStoreProvider, null, children),
   );
 
 const renderFileClick = (options: Parameters<typeof useFileItemClick>[0]) =>

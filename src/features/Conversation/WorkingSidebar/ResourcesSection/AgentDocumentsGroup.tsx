@@ -15,7 +15,6 @@ import { EyeIcon, FileTextIcon, GlobeIcon, PencilIcon, Trash2Icon } from 'lucide
 import type { CSSProperties, DragEvent, MouseEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
 import { withErrorBoundary } from '@/components/ErrorBoundary';
@@ -32,6 +31,7 @@ import {
   useProjectSkills,
 } from '@/features/SkillsList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useParams } from '@/libs/router/navigation';
 import { useClientDataSWR } from '@/libs/swr';
 import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
@@ -306,7 +306,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
     const { t: tCommon } = useTranslation('common');
 
     const agentId = useAgentStore((s) => s.activeAgentId);
-    const { docId } = useParams<{ docId?: string }>();
+    const { docId } = useParams<{ docId?: string }>('docId');
     const navigate = useWorkspaceAwareNavigate();
     const openDocument = useChatStore((s) => s.openDocument);
     const isDocumentMode = !!docId;

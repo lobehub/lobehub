@@ -4,11 +4,11 @@ import urlJoin from 'url-join';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useFocusTopicPopup } from '@/features/TopicPopupGuard/useTopicPopupsRegistry';
-import { useActiveLocation } from '@/hooks/useActiveLocation';
-import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
+import { useParams } from '@/libs/router/navigation';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 import { buildPrefixedAgentRoutePath, parseAgentPathname } from '../../utils/agentPathname';
 
@@ -21,9 +21,9 @@ interface NavigateToTopicOptions {
 }
 
 export const useTopicNavigation = () => {
-  const { pathname } = useActiveLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
   const agentRoute = useMemo(() => parseAgentPathname(pathname), [pathname]);
-  const params = useActiveRouteParams<{ aid?: string; topicId?: string }>();
+  const params = useParams<{ aid?: string; topicId?: string }>('aid', 'topicId');
   const [activeAgentId, activeTopicId] = useChatStore((s) => [s.activeAgentId, s.activeTopicId]);
   const router = useQueryRoute();
   const toggleConfig = useGlobalStore((s) => s.toggleMobileTopic);

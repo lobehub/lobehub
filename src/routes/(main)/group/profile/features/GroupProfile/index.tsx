@@ -7,7 +7,6 @@ import { useTheme } from 'antd-style';
 import { MoreHorizontalIcon, PlayIcon, Settings2Icon, UsersIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
 import urlJoin from 'url-join';
 
 import { useAgentGroupTransferMenuItem } from '@/business/client/hooks/useAgentGroupTransferMenuItem';
@@ -20,6 +19,7 @@ import { useResourceAccess } from '@/features/ResourcePermission/useResourceAcce
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
+import { useParams } from '@/libs/router/navigation';
 import { lambdaClient } from '@/libs/trpc/client';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
@@ -45,7 +45,7 @@ const GroupProfile = memo(() => {
   const { t } = useTranslation(['setting', 'chat']);
   const { allowed: hasEditPermission } = usePermission('edit_own_content');
   const theme = useTheme();
-  const { gid } = useParams<{ gid: string }>();
+  const { gid } = useParams<{ gid: string }>('gid');
   const groupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
   const hasActiveWorkspace = useHasActiveWorkspace();
   const currentGroup = useAgentGroupStore((s) => agentGroupSelectors.getGroupById(gid ?? '')(s));

@@ -54,6 +54,9 @@ vi.mock('swr', () => ({ default: () => swrReturn }));
 
 vi.mock('react-router', () => ({
   useNavigate: () => navigate,
+}));
+
+vi.mock('@/libs/router/navigation', () => ({
   useSearchParams: () => [searchParams],
 }));
 

@@ -2,7 +2,7 @@ import { toast } from '@lobehub/ui/base-ui';
 import { Form } from 'antd';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useNavigate } from 'react-router';
 
 import type { CheckUserResponseData } from '@/app/(backend)/api/auth/check-user/route';
 import type { ResolveUsernameResponseData } from '@/app/(backend)/api/auth/resolve-username/route';
@@ -11,6 +11,7 @@ import { useAuthServerConfigStore } from '@/features/AuthShell/AuthServerConfigP
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 import { requestPasswordReset, signIn } from '@/libs/better-auth/auth-client';
 import { isBuiltinProvider, normalizeProviderId } from '@/libs/better-auth/utils/client';
+import { useSearchParams } from '@/libs/router/navigation';
 import {
   buildOnboardingRedirectUrl,
   sanitizeRedirectPath,

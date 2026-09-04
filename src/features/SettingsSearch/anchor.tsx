@@ -2,7 +2,8 @@
 
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo, type PropsWithChildren, useEffect } from 'react';
-import { useLocation } from 'react-router';
+
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 export const SETTINGS_ANCHOR_ATTR = 'data-settings-anchor';
 /**
@@ -101,11 +102,12 @@ export const scrollToSettingsAnchor = (anchor: string) => {
  * navigating away cancels the in-flight poll.
  */
 export const useSettingsAnchorScroll = () => {
-  const location = useLocation();
+  const hash = useRouterStore(routerSelectors.hash);
+  const locationKey = useRouterStore(routerSelectors.key);
 
   useEffect(() => {
-    const anchor = location.hash.replace(/^#/, '');
+    const anchor = hash.replace(/^#/, '');
     if (anchor) return scrollToSettingsAnchor(anchor);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.key]);
+  }, [locationKey]);
 };

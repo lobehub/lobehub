@@ -5,11 +5,11 @@ import { Center } from '@lobehub/ui';
 import AsyncError from '@/components/AsyncError';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { AcceptanceWorkspace } from '@/features/Acceptance';
-import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
+import { useParams } from '@/libs/router/navigation';
 import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
 
 const ProjectAcceptance = () => {
-  const { projectId } = useActiveRouteParams<{ projectId: string }>();
+  const { projectId } = useParams<{ projectId: string }>('projectId');
   const detail = useCurrentProjectDetail(projectId);
   const detailSWR = useProjectStore((state) => state.useFetchProjectDetail)(projectId);
 

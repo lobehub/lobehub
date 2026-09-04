@@ -2,11 +2,11 @@
 
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
 
 import { DEFAULT_AVATAR } from '@/const/meta';
 import { AgentSettings as Settings, SettingsModalLayout } from '@/features/AgentSetting';
 import { usePermission } from '@/hooks/usePermission';
+import { useParams } from '@/libs/router/navigation';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { ChatSettingsTabs } from '@/store/global/initialState';
@@ -14,7 +14,7 @@ import { ChatSettingsTabs } from '@/store/global/initialState';
 const Content = memo(() => {
   const { t } = useTranslation('setting');
   const { allowed: canEdit } = usePermission('edit_own_content');
-  const { gid } = useParams<{ gid: string }>();
+  const { gid } = useParams<{ gid: string }>('gid');
   const groupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
   const currentGroup = useAgentGroupStore((s) => agentGroupSelectors.getGroupById(gid ?? '')(s));
 

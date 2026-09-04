@@ -1,10 +1,10 @@
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import { useActiveLocation } from '@/hooks/useActiveLocation';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 import { resolveNavPanelKey } from './routeKey';
 
 export const useActiveNavKey = () => {
-  const { pathname } = useActiveLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
 
   return resolveNavPanelKey(pathname, activeWorkspaceSlug);

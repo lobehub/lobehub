@@ -3,9 +3,9 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { type FC, memo, type PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
 
 import NotFound from '@/components/404';
+import { useParams } from '@/libs/router/navigation';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
@@ -34,7 +34,7 @@ AgentNotFound.displayName = 'AgentNotFound';
  * is made public again), so the guard recovers without a manual refresh.
  */
 export const AgentNotFoundGuard: FC<PropsWithChildren> = memo(({ children }) => {
-  const params = useParams<{ aid?: string }>();
+  const params = useParams<{ aid?: string }>('aid');
   const aid = params.aid && !BUILTIN_SLUG_SET.has(params.aid) ? params.aid : '';
   const isNotFound = useAgentStore(agentByIdSelectors.isAgentNotFoundById(aid));
 

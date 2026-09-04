@@ -8,16 +8,16 @@ import { SidebarHeaderSelectPopover } from '@/features/NavPanel/SidebarHeaderSel
 import type { SwitcherItem } from '@/features/NavPanel/switcher/switcherItems';
 import SwitcherMenu from '@/features/NavPanel/switcher/SwitcherMenu';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { useAgentStore } from '@/store/agent';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 const SwitchPanel = memo<PropsWithChildren>(({ children }) => {
   const { t } = useTranslation('common');
   const navigate = useWorkspaceAwareNavigate();
-  const { pathname } = useActiveLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
   const { error, mutate } = useFetchAgentList();
   const isInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
   const activeId = useAgentStore((s) => s.activeAgentId);

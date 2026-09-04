@@ -13,11 +13,11 @@ import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import UserAvatar from '@/features/User/UserAvatar';
-import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
+import { routerSelectors, useRouterStore } from '@/store/router';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
@@ -51,7 +51,8 @@ const GroupMember = memo<GroupMemberProps>(({ addModalOpen, onAddModalOpenChange
   const { canEditResource } = useResourceAccess('agentGroup', groupId);
   const canEdit = hasEditPermission && canEditResource;
   const router = useQueryRoute();
-  const location = useActiveLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
+  const search = useRouterStore(routerSelectors.search);
   const [nickname, username] = useUserStore((s) => [
     userProfileSelectors.nickName(s),
     userProfileSelectors.username(s),
@@ -61,14 +62,11 @@ const GroupMember = memo<GroupMemberProps>(({ addModalOpen, onAddModalOpenChange
 
   const groupMembers = useAgentGroupStore(agentGroupSelectors.getGroupMembers(groupId || ''));
 
-  const activeTab = useMemo(
-    () => new URLSearchParams(location.search).get('tab'),
-    [location.search],
-  );
+  const activeTab = useMemo(() => new URLSearchParams(search).get('tab'), [search]);
   const isProfileRoute = useMemo(() => {
     if (!groupId) return false;
-    return location.pathname === `/group/${groupId}/profile`;
-  }, [groupId, location.pathname]);
+    return pathname === `/group/${groupId}/profile`;
+  }, [groupId, pathname]);
 
   const handleAddMembers = async (selectedAgents: string[]) => {
     if (!canEdit) return;

@@ -1,4 +1,6 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import type * as ReactModule from 'react';
+import { Profiler } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Body from './index';
@@ -17,6 +19,13 @@ const mocks = vi.hoisted(() => ({
   navLayout: {
     bottomMenuItems: [] as { key: string; title: string; url: string }[],
     topNavItems: [] as { key: string; title: string; url: string }[],
+  },
+  activeTabKey: 'home',
+  activeTabListeners: new Set<() => void>(),
+  accordionCommits: vi.fn(),
+  setActiveTabKey: (key: string) => {
+    mocks.activeTabKey = key;
+    for (const listener of mocks.activeTabListeners) listener();
   },
   updateSystemStatus: vi.fn(),
 }));
@@ -50,12 +59,25 @@ vi.mock('react-router', () => ({
 }));
 
 vi.mock('@/features/NavPanel/components/NavItem', () => ({
-  default: ({ title }: { title: string }) => <div>{title}</div>,
+  default: ({ active, title }: { active?: boolean; title: string }) => (
+    <div data-active={active}>{title}</div>
+  ),
 }));
 
-vi.mock('@/hooks/useActiveTabKey', () => ({
-  useActiveTabKey: () => 'home',
-}));
+vi.mock('@/hooks/useIsActiveTab', async () => {
+  const { useSyncExternalStore } = await vi.importActual<typeof ReactModule>('react');
+
+  return {
+    useIsActiveTab: (key: string) =>
+      useSyncExternalStore(
+        (listener) => {
+          mocks.activeTabListeners.add(listener);
+          return () => mocks.activeTabListeners.delete(listener);
+        },
+        () => mocks.activeTabKey === key,
+      ),
+  };
+});
 
 vi.mock('@/hooks/useNavLayout', () => ({
   useNavLayout: () => mocks.navLayout,
@@ -66,7 +88,11 @@ vi.mock('@/utils/navigation', () => ({
 }));
 
 vi.mock('@/features/Home/Recents', () => ({
-  default: ({ itemKey }: { itemKey: string }) => <div data-testid={`sidebar-item-${itemKey}`} />,
+  default: ({ itemKey }: { itemKey: string }) => (
+    <Profiler id={itemKey} onRender={mocks.accordionCommits}>
+      <div data-testid={`sidebar-item-${itemKey}`} />
+    </Profiler>
+  ),
 }));
 
 vi.mock('./Agent', () => ({
@@ -86,6 +112,8 @@ vi.mock('@/store/global', () => ({
 }));
 
 beforeEach(() => {
+  mocks.activeTabKey = 'home';
+  mocks.accordionCommits.mockReset();
   mocks.updateSystemStatus.mockReset();
   mocks.navLayout = {
     bottomMenuItems: [],
@@ -177,5 +205,20 @@ describe('Home sidebar body', () => {
     expect(children[1]).toHaveAttribute('data-sidebar-bottom-spacer');
     expect(children[2]).toHaveTextContent('Image');
     expect(children[3]).toHaveTextContent('Tasks');
+  });
+
+  it('updates the active nav link without rerendering accordion content', () => {
+    mocks.navLayout.topNavItems = [{ key: 'tasks', title: 'Tasks', url: '/tasks' }];
+    mocks.globalState.status.sidebarItems = ['recents', 'tasks'];
+
+    render(<Body />);
+
+    expect(screen.getByText('Tasks')).toHaveAttribute('data-active', 'false');
+    mocks.accordionCommits.mockClear();
+
+    act(() => mocks.setActiveTabKey('tasks'));
+
+    expect(screen.getByText('Tasks')).toHaveAttribute('data-active', 'true');
+    expect(mocks.accordionCommits).not.toHaveBeenCalled();
   });
 });

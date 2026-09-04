@@ -8,12 +8,12 @@ import { createStaticStyles, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { MoreHorizontalIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
-import { useParams } from 'react-router';
 
 import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import { type SidebarAgentItem } from '@/database/repositories/home';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
+import { useParams } from '@/libs/router/navigation';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useHomeStore } from '@/store/home';
@@ -161,7 +161,7 @@ const QuickChatAgentSwitcher = memo(() => {
   useFetchAgentList();
 
   const navigate = useWorkspaceAwareNavigate();
-  const { aid } = useParams<{ aid: string }>();
+  const { aid } = useParams<{ aid: string }>('aid');
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const items = useSwitchItems();
   const [popoverOpen, setPopoverOpen] = useState(false);

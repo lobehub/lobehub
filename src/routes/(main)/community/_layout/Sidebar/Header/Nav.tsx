@@ -10,7 +10,7 @@ import { type NavItemProps } from '@/features/NavPanel/components/NavItem';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
-import { useActiveLocation } from '@/hooks/useActiveLocation';
+import { routerSelectors, useRouterStore } from '@/store/router';
 import { DiscoverTab } from '@/types/discover';
 import { isModifierClick } from '@/utils/navigation';
 
@@ -23,7 +23,7 @@ interface Item {
 }
 
 const useActiveTabKey = () => {
-  const { pathname } = useActiveLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
   if (pathname.endsWith('/community')) return DiscoverTab.Home;
   return (pathname.split('/community/').at(1) as DiscoverTab) || DiscoverTab.Home;
 };

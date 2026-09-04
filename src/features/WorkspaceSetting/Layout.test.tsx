@@ -1,6 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { createMemoryRouter, RouterProvider } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
 import { WorkspaceSettingsContentLayout } from './Layout';
@@ -39,16 +39,19 @@ vi.mock('./hooks/useCategory', () => ({
   ],
 }));
 
-const renderLayout = (tab: string) =>
-  renderToStaticMarkup(
-    <MemoryRouter initialEntries={[`/acme/settings/${tab}`]}>
-      <Routes>
-        <Route element={<WorkspaceSettingsContentLayout />} path="/:workspaceSlug/settings">
-          <Route element={<div>Page content</div>} path=":tab" />
-        </Route>
-      </Routes>
-    </MemoryRouter>,
+const renderLayout = (tab: string) => {
+  const router = createMemoryRouter(
+    [
+      {
+        children: [{ element: <div>Page content</div>, path: ':tab' }],
+        element: <WorkspaceSettingsContentLayout />,
+        path: '/:workspaceSlug/settings',
+      },
+    ],
+    { initialEntries: [`/acme/settings/${tab}`] },
   );
+  return renderToStaticMarkup(<RouterProvider router={router} />);
+};
 
 describe('WorkspaceSettingsContentLayout', () => {
   it.each([

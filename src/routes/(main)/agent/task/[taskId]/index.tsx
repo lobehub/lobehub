@@ -1,12 +1,12 @@
 'use client';
 
 import { memo } from 'react';
-import { useParams } from 'react-router';
 
 import { AgentScopedTaskDetailPage } from '@/features/AgentTasks';
+import { useParams } from '@/libs/router/navigation';
 
 const AgentTaskDetailRoute = memo(() => {
-  const { aid, taskId } = useParams<{ aid?: string; taskId?: string }>();
+  const { aid, taskId } = useParams<{ aid?: string; taskId?: string }>('aid', 'taskId');
 
   if (!taskId) return null;
 

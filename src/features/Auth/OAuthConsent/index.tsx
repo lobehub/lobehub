@@ -2,9 +2,9 @@
 
 import type { ReactNode } from 'react';
 import { memo } from 'react';
-import { useParams } from 'react-router';
 
 import NotFound from '@/components/404';
+import { useParams } from '@/libs/router/navigation';
 
 import OAuthGuard from '../OAuthGuard';
 import ClientError from './ClientError';
@@ -62,7 +62,7 @@ const renderError = (error: unknown): ReactNode => {
 };
 
 const InteractionContent = memo(() => {
-  const { uid } = useParams<{ uid: string }>();
+  const { uid } = useParams<{ uid: string }>('uid');
   const { data, error, isLoading } = useInteractionDetails(uid);
 
   if (!uid) return <NotFound />;

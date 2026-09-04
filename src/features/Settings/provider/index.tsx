@@ -2,9 +2,10 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
-import { Outlet, useParams } from 'react-router';
+import { Outlet } from 'react-router';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useParams } from '@/libs/router/navigation';
 
 import DesktopLayoutContainer from './_layout/Desktop/Container';
 import ProviderDetailPageComponent from './detail';
@@ -38,7 +39,7 @@ ProviderLayout.displayName = 'ProviderLayout';
 
 // Detail page component that receives providerId from route params
 export const ProviderDetailPage = memo(() => {
-  const params = useParams<{ providerId: string }>();
+  const params = useParams<{ providerId: string }>('providerId');
   const navigate = useWorkspaceAwareNavigate();
 
   const handleProviderSelect = (providerKey: string) => {

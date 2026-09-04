@@ -1,5 +1,4 @@
-import { useParams } from 'react-router';
-
+import { useParams } from '@/libs/router/navigation';
 import { useAgentStore } from '@/store/agent';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
@@ -16,7 +15,7 @@ export const useInitAgentConfig = (agentId?: string) => {
 
   const isLogin = useUserStore(authSelectors.isLogin);
 
-  const params = useParams<{ aid?: string }>();
+  const params = useParams<{ aid?: string }>('aid');
 
   // Prioritize URL params over store's activeAgentId to avoid stale ID from previous navigation
   const id = agentId || params.aid || activeAgentId || '';

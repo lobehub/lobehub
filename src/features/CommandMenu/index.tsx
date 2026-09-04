@@ -8,8 +8,8 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
-import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useGlobalStore } from '@/store/global';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 import { useCommandMenuAnalytics } from './analytics';
 import AskAgentCommands from './AskAgentCommands';
@@ -255,8 +255,8 @@ const CommandMenu = memo(() => {
   const [appRoot, setAppRoot] = useState<HTMLElement | null>(null);
   const [isClosing, setIsClosing] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
-  const location = useActiveLocation();
-  const pathname = location.pathname;
+  const routePathname = useRouterStore(routerSelectors.pathname);
+  const pathname = routePathname;
 
   // Ensure we're mounted on the client
   useEffect(() => {

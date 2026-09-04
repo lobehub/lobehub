@@ -5,9 +5,10 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { PanelLeftOpen } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Outlet, useParams, useSearchParams } from 'react-router';
+import { Outlet } from 'react-router';
 
 import { RouteMetaBridge } from '@/features/RouteMeta';
+import { useParams, useSearchParams } from '@/libs/router/navigation';
 
 import { useAcceptanceList } from '../hooks';
 import AcceptanceListPanel from './AcceptanceListPanel';
@@ -84,7 +85,10 @@ const AcceptanceWorkspace = memo<AcceptanceWorkspaceProps>(({ projectId }) => {
   const { t } = useTranslation('verify');
   const panel = useReportPanelExpand();
   const projectActionItems = useAcceptanceProjectActionItems();
-  const { acceptanceId, checkId } = useParams<{ acceptanceId: string; checkId: string }>();
+  const { acceptanceId, checkId } = useParams<{ acceptanceId: string; checkId: string }>(
+    'acceptanceId',
+    'checkId',
+  );
   const [searchParams] = useSearchParams();
   const hasFocusedCheck = Boolean(checkId || searchParams.get('check'));
   const showList = !hasFocusedCheck;

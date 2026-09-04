@@ -2,13 +2,21 @@
  * @vitest-environment happy-dom
  */
 import { act, renderHook } from '@testing-library/react';
-import type { ReactNode } from 'react';
-import { MemoryRouter, useLocation } from 'react-router';
+import { type ReactNode, useState } from 'react';
+import { createMemoryRouter, RouterProvider } from 'react-router';
 import { describe, expect, it } from 'vitest';
+
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 import { parseAsInteger, parseAsString, useQueryStates } from './useQueryParam';
 
-const wrapper = ({ children }: { children: ReactNode }) => <MemoryRouter>{children}</MemoryRouter>;
+const Wrapper = ({ children }: { children: ReactNode }) => {
+  const [router] = useState(() =>
+    createMemoryRouter([{ element: children, path: '*' }], { initialEntries: ['/'] }),
+  );
+
+  return <RouterProvider router={router} />;
+};
 
 const renderPagination = () =>
   renderHook(
@@ -20,9 +28,9 @@ const renderPagination = () =>
         },
         { clearOnDefault: true },
       ),
-      search: useLocation().search,
+      search: useRouterStore(routerSelectors.search),
     }),
-    { wrapper },
+    { wrapper: Wrapper },
   );
 
 describe('useQueryStates', () => {
@@ -75,9 +83,9 @@ describe('useQueryStates', () => {
     const { result } = renderHook(
       () => ({
         state: useQueryStates({ q: parseAsString }),
-        search: useLocation().search,
+        search: useRouterStore(routerSelectors.search),
       }),
-      { wrapper },
+      { wrapper: Wrapper },
     );
 
     act(() => result.current.state[1]({ q: 'lobe' }));

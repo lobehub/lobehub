@@ -1,8 +1,8 @@
 'use client';
 
 import { memo } from 'react';
-import { useMatches, useParams } from 'react-router';
 
+import { useMatches, useParams } from '@/libs/router/navigation';
 import { SettingsTabs } from '@/store/global/initialState';
 
 import SettingsContent from './features/SettingsContent';
@@ -24,7 +24,7 @@ const getSettingsTabFromMatches = (matches: ReturnType<typeof useMatches>) => {
 };
 
 const Layout = memo<LayoutProps>(() => {
-  const params = useParams<{ tab?: string }>();
+  const params = useParams<{ tab?: string }>('tab');
   const matches = useMatches();
 
   const activeTab =

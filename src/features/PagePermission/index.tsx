@@ -2,9 +2,9 @@
 
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
 
 import ResourceAccessPage from '@/features/ResourcePermission/ResourceAccessPage';
+import { useParams } from '@/libs/router/navigation';
 import { useClientDataSWR } from '@/libs/swr';
 import { documentService } from '@/services/document';
 
@@ -16,7 +16,7 @@ import { documentService } from '@/services/document';
  */
 const PagePermission = memo(() => {
   const { t } = useTranslation('setting');
-  const { id } = useParams<{ id: string }>();
+  const { id } = useParams<{ id: string }>('id');
   const { data } = useClientDataSWR(id ? ['page-permission-title', id] : null, () =>
     documentService.getDocumentById(id!),
   );

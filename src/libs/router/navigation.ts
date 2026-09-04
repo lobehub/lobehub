@@ -8,13 +8,19 @@
  * @see RFC 147
  */
 import qs from 'query-string';
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
-  useLocation,
+  createSearchParams,
+  matchPath,
+  type NavigateOptions,
+  type PathPattern,
+  type SetURLSearchParams,
+  type URLSearchParamsInit,
   useNavigate,
-  useParams as useReactRouterParams,
-  useSearchParams as useReactRouterSearchParams,
 } from 'react-router';
+import { useShallow } from 'zustand/react/shallow';
+
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 /**
  * Hook to get router navigation functions.
@@ -40,8 +46,7 @@ export const useRouter = () => {
  * Hook to get current pathname.
  */
 export const usePathname = () => {
-  const location = useLocation();
-  return location.pathname;
+  return useRouterStore(routerSelectors.pathname);
 };
 
 /**
@@ -49,7 +54,23 @@ export const usePathname = () => {
  * Returns [searchParams, setSearchParams] tuple similar to React Router.
  */
 export const useSearchParams = () => {
-  return useReactRouterSearchParams();
+  const search = useRouterStore(routerSelectors.search);
+  const navigate = useNavigate();
+  const searchParams = useMemo(() => createSearchParams(search), [search]);
+  const setSearchParams = useCallback<SetURLSearchParams>(
+    (
+      nextInit?: URLSearchParamsInit | ((previous: URLSearchParams) => URLSearchParamsInit),
+      options?: NavigateOptions,
+    ) => {
+      const next = createSearchParams(
+        typeof nextInit === 'function' ? nextInit(searchParams) : nextInit,
+      );
+      void navigate(`?${next}`, options);
+    },
+    [navigate, searchParams],
+  );
+
+  return [searchParams, setSearchParams] as const;
 };
 
 /**
@@ -57,15 +78,30 @@ export const useSearchParams = () => {
  */
 export const useParams = <
   T extends Record<string, string | undefined> = Record<string, string | undefined>,
->() => {
-  return useReactRouterParams<T>();
+  K extends keyof T = keyof T,
+>(
+  ...keys: K[]
+): Readonly<Pick<T, K>> => {
+  return useRouterStore(
+    useShallow(
+      (state) =>
+        Object.fromEntries(keys.map((key) => [key, state.params[key as string]])) as Pick<T, K>,
+    ),
+  );
 };
+
+export const useMatch = (pattern: PathPattern | string) => {
+  const pathname = usePathname();
+  return useMemo(() => matchPath(pattern, pathname), [pathname, pattern]);
+};
+
+export const useMatches = () => useRouterStore(routerSelectors.matches);
 
 /**
  * Hook to get query parameters as a parsed object.
  */
 export const useQuery = () => {
-  const [searchParams] = useReactRouterSearchParams();
+  const [searchParams] = useSearchParams();
   return useMemo(() => qs.parse(searchParams.toString()), [searchParams]);
 };
 

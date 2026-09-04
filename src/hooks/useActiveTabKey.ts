@@ -1,14 +1,15 @@
-import { useActiveLocation } from '@/hooks/useActiveLocation';
-import { usePathname, useSearchParams } from '@/libs/router/navigation';
 import { ProfileTabs, SettingsTabs, SidebarTabKey } from '@/store/global/initialState';
+import { useRouterStore } from '@/store/router';
+
+export const getActiveTabKey = (pathname: string): SidebarTabKey =>
+  (pathname.split('/').find(Boolean)! as SidebarTabKey) || SidebarTabKey.Home;
 
 /**
  * Returns the active tab key (chat/market/settings/...)
  * React Router version for SPA
  */
 export const useActiveTabKey = () => {
-  const { pathname } = useActiveLocation();
-  return (pathname.split('/').find(Boolean)! as SidebarTabKey) || SidebarTabKey.Home;
+  return useRouterStore((state) => getActiveTabKey(state.location.pathname));
 };
 
 /**
@@ -16,10 +17,10 @@ export const useActiveTabKey = () => {
  * React Router version for SPA
  */
 export const useActiveSettingsKey = () => {
-  const [searchParams] = useSearchParams();
-  const tabs = searchParams.get('active');
-  if (!tabs) return SettingsTabs.Appearance;
-  return tabs as SettingsTabs;
+  return useRouterStore((state) => {
+    const tab = new URLSearchParams(state.location.search).get('active');
+    return (tab as SettingsTabs | null) ?? SettingsTabs.Appearance;
+  });
 };
 
 /**
@@ -27,11 +28,8 @@ export const useActiveSettingsKey = () => {
  * React Router version for SPA
  */
 export const useActiveProfileKey = () => {
-  const pathname = usePathname();
-
-  const tabs = pathname.split('/').at(-1);
-
-  if (tabs === 'profile') return ProfileTabs.Profile;
-
-  return tabs as ProfileTabs;
+  return useRouterStore((state) => {
+    const tab = state.location.pathname.split('/').at(-1);
+    return tab === 'profile' ? ProfileTabs.Profile : (tab as ProfileTabs);
+  });
 };

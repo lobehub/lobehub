@@ -30,6 +30,9 @@ const mockLocalStorage = vi.hoisted(() => {
 
 vi.mock('react-router', () => ({
   useNavigate: () => mockNavigate,
+}));
+
+vi.mock('@/libs/router/navigation', () => ({
   useSearchParams: () => [{ get: mockSearchParamsGet }],
 }));
 

@@ -1,15 +1,15 @@
 'use client';
 
 import { memo, useEffect } from 'react';
-import { useParams } from 'react-router';
 
 import { GoalDetailPage } from '@/features/AgentGoals';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useParams } from '@/libs/router/navigation';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
 const GoalDetailRoute = memo(() => {
-  const { aid, goalId } = useParams<{ aid?: string; goalId?: string }>();
+  const { aid, goalId } = useParams<{ aid?: string; goalId?: string }>('aid', 'goalId');
   const navigate = useWorkspaceAwareNavigate();
   const enabled = useUserStore(labPreferSelectors.enableTopicAcceptance);
 

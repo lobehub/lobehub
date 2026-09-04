@@ -5,9 +5,9 @@ import { ActionIcon, Button, confirmModal, toast } from '@lobehub/ui/base-ui';
 import { Trash2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router';
 
 import { DESKTOP_HEADER_ICON_SIZE, DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
+import { useSearchParams } from '@/libs/router/navigation';
 import { useUserMemoryStore } from '@/store/userMemory';
 
 export const MEMORY_DETAIL_QUERY_KEYS = [

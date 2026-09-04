@@ -2,11 +2,12 @@
 
 import { useAnalytics } from '@lobehub/analytics/react';
 import { memo, useEffect } from 'react';
-import { useLocation } from 'react-router';
+
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 const HomePageTracker = memo(() => {
   const { analytics } = useAnalytics();
-  const { pathname } = useLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
 
   useEffect(() => {
     if (!analytics || pathname !== '/') return;

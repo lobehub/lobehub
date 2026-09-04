@@ -8,15 +8,15 @@ import { useTranslation } from 'react-i18next';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
-import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useEvalStore } from '@/store/eval';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 import BenchmarkList from './BenchmarkList';
 import DatasetList from './DatasetList';
 import ExperimentList from './ExperimentList';
 
 const useActiveKey = () => {
-  const { pathname } = useActiveLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
   if (pathname === '/eval') return 'dashboard';
 
   const benchMatch = pathname.match(/\/eval\/bench\/([^/]+)/);

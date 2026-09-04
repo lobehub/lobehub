@@ -17,8 +17,8 @@ import { Link } from 'react-router';
 import { type NavItemProps } from '@/features/NavPanel/components/NavItem';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useGlobalStore } from '@/store/global';
+import { routerSelectors, useRouterStore } from '@/store/router';
 import { isModifierClick } from '@/utils/navigation';
 
 interface Item {
@@ -39,7 +39,7 @@ enum MemoryTabKey {
 }
 
 const useActiveTabKey = () => {
-  const { pathname } = useActiveLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
   if (pathname === '/memory') return MemoryTabKey.Home;
   return (pathname.split('/memory/').find(Boolean)! as MemoryTabKey) || MemoryTabKey.Home;
 };

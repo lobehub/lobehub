@@ -2,9 +2,9 @@
 
 import { CUSTOM_DOCUMENT_FILE_TYPE, DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
 import { useEffect } from 'react';
-import { useSearchParams } from 'react-router';
 
 import { isPdfFile } from '@/features/FileViewer/fileType';
+import { useSearchParams } from '@/libs/router/navigation';
 import { documentSelectors, useFileStore } from '@/store/file';
 
 import { useResourceManagerStore } from '../store';

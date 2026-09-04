@@ -16,7 +16,7 @@ vi.hoisted(() => {
   });
 });
 
-vi.mock('react-router', () => ({
+vi.mock('@/libs/router/navigation', () => ({
   useParams: () => ({}),
 }));
 

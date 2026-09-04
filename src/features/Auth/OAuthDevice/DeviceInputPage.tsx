@@ -1,7 +1,8 @@
 'use client';
 
 import { memo } from 'react';
-import { useSearchParams } from 'react-router';
+
+import { useSearchParams } from '@/libs/router/navigation';
 
 import OAuthGuard from '../OAuthGuard';
 import DeviceCodeInput from './DeviceCodeInput';

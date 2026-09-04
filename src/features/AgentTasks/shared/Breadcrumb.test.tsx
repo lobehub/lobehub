@@ -17,6 +17,9 @@ const createState = (taskDetailMap: Record<string, any>) => ({
 
 vi.mock('react-router', () => ({
   Link: ({ children, to }: { children: ReactNode; to: string }) => <a href={to}>{children}</a>,
+}));
+
+vi.mock('@/libs/router/navigation', () => ({
   useParams: () => ({}),
 }));
 

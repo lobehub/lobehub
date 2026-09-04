@@ -9,7 +9,7 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import AgentDocumentPage from './index';
 
-vi.mock('react-router', () => ({
+vi.mock('@/libs/router/navigation', () => ({
   useParams: () => ({ aid: 'agent-from-url' }),
 }));
 

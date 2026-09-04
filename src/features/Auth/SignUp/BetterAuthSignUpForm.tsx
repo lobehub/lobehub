@@ -7,11 +7,12 @@ import { Form, Input, type InputRef } from 'antd';
 import { Lock, Mail } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate, useSearchParams } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 
 import { AuthCard } from '@/features/AuthCard';
 import AuthAgreement, { useAuthAgreement } from '@/features/AuthShell/AuthAgreement';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
+import { useSearchParams } from '@/libs/router/navigation';
 
 import { useSignUp } from './useSignUp';
 

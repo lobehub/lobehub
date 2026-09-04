@@ -15,13 +15,13 @@ import { isDesktop } from '@/const/version';
 import { useCommitWorkingDirectory } from '@/features/ChatInput/ControlBar/useCommitWorkingDirectory';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
-import { useActiveLocation } from '@/hooks/useActiveLocation';
-import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
+import { useParams } from '@/libs/router/navigation';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 import { buildPrefixedAgentRoutePath, parseAgentPathname } from '../../../utils/agentPathname';
 import TopicItem from '../../List/Item';
@@ -166,8 +166,8 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
   );
 
   const agentId = useAgentStore((s) => s.activeAgentId);
-  const { aid: routeAgentId } = useActiveRouteParams<{ aid?: string }>();
-  const { pathname } = useActiveLocation();
+  const { aid: routeAgentId } = useParams<{ aid?: string }>('aid');
+  const pathname = useRouterStore(routerSelectors.pathname);
   const agentRoute = useMemo(() => parseAgentPathname(pathname), [pathname]);
   const targetAgentId = routeAgentId ?? agentRoute?.agentId ?? agentId;
   const currentAgentId = targetAgentId ?? agentId;

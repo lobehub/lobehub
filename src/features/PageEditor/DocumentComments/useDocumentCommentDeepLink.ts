@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useLocation } from 'react-router';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 const COMMENT_QUERY = 'comment';
 const COMMENT_THREAD_QUERY = 'commentThread';
@@ -25,14 +25,16 @@ export interface DocumentCommentFocus {
  * `clearFocus` (thread gone) or `focusRoot` (only the reply is gone).
  */
 export const useDocumentCommentDeepLink = (documentId: string) => {
-  const location = useLocation();
+  const hash = useRouterStore(routerSelectors.hash);
+  const pathname = useRouterStore(routerSelectors.pathname);
+  const routeSearch = useRouterStore(routerSelectors.search);
   const navigate = useWorkspaceAwareNavigate();
   const [focus, setFocus] = useState<(DocumentCommentFocus & { documentId: string }) | undefined>(
     undefined,
   );
 
   useEffect(() => {
-    const searchParams = new URLSearchParams(location.search);
+    const searchParams = new URLSearchParams(routeSearch);
     const rootCommentId = searchParams.get(COMMENT_THREAD_QUERY);
     if (!rootCommentId) return;
 
@@ -47,10 +49,10 @@ export const useDocumentCommentDeepLink = (documentId: string) => {
     searchParams.delete(COMMENT_QUERY);
     searchParams.delete(COMMENT_THREAD_QUERY);
     const search = searchParams.toString();
-    navigate(`${location.pathname}${search ? `?${search}` : ''}${location.hash}`, {
+    navigate(`${pathname}${search ? `?${search}` : ''}${hash}`, {
       replace: true,
     });
-  }, [documentId, location.hash, location.pathname, location.search, navigate]);
+  }, [documentId, hash, navigate, pathname, routeSearch]);
 
   const clearFocus = useCallback(() => setFocus(undefined), []);
   /** Fall back to the thread root when the linked reply itself is gone. */

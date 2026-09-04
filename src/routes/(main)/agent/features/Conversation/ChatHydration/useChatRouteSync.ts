@@ -1,10 +1,11 @@
 import { AGENT_CHAT_TOPIC_URL, AGENT_CHAT_URL } from '@lobechat/const';
 import { useLayoutEffect, useRef } from 'react';
-import { useLocation, useParams, useSearchParams } from 'react-router';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useQueryState } from '@/hooks/useQueryParam';
+import { useParams, useSearchParams } from '@/libs/router/navigation';
 import { useChatStore } from '@/store/chat';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 const getSearchSuffix = (searchParams: URLSearchParams) => {
   const search = searchParams.toString();
@@ -18,9 +19,10 @@ interface ChatRouteSyncOptions {
 }
 
 export const useChatRouteSync = (options: ChatRouteSyncOptions = {}) => {
-  const location = useLocation();
+  const hash = useRouterStore(routerSelectors.hash);
+  const currentUrl = useRouterStore(routerSelectors.fullUrl);
   const navigate = useWorkspaceAwareNavigate();
-  const params = useParams<{ aid?: string; topicId?: string }>();
+  const params = useParams<{ aid?: string; topicId?: string }>('aid', 'topicId');
   const [searchParams] = useSearchParams();
   const [thread, setThread] = useQueryState('thread', { history: 'replace', throttleMs: 500 });
   const routeTopicId = params.topicId;
@@ -39,11 +41,13 @@ export const useChatRouteSync = (options: ChatRouteSyncOptions = {}) => {
     }
   }, [thread]);
 
-  const locationRef = useRef(location);
+  const hashRef = useRef(hash);
+  const currentUrlRef = useRef(currentUrl);
   const paramsRef = useRef(params);
   const searchParamsRef = useRef(searchParams);
 
-  locationRef.current = location;
+  hashRef.current = hash;
+  currentUrlRef.current = currentUrl;
   paramsRef.current = params;
   searchParamsRef.current = searchParams;
 
@@ -71,10 +75,9 @@ export const useChatRouteSync = (options: ChatRouteSyncOptions = {}) => {
         const nextPath = state
           ? options.getTopicPath?.(routeAgentId, state) || AGENT_CHAT_TOPIC_URL(routeAgentId, state)
           : options.getConversationPath?.(routeAgentId) || AGENT_CHAT_URL(routeAgentId);
-        const nextUrl = `${nextPath}${getSearchSuffix(nextSearchParams)}${locationRef.current.hash}`;
-        const currentUrl = `${locationRef.current.pathname}${locationRef.current.search}${locationRef.current.hash}`;
+        const nextUrl = `${nextPath}${getSearchSuffix(nextSearchParams)}${hashRef.current}`;
 
-        if (currentUrl !== nextUrl) navigate(nextUrl, { replace: true });
+        if (currentUrlRef.current !== nextUrl) navigate(nextUrl, { replace: true });
       },
     );
     const unsubscribeThread = useChatStore.subscribe(

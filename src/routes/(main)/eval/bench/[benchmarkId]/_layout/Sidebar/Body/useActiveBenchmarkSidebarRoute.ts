@@ -1,5 +1,5 @@
-import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useEvalStore } from '@/store/eval';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 import { useActiveBenchmarkId } from '../useActiveBenchmarkId';
 
@@ -17,7 +17,7 @@ const resolveActiveKey = (pathname: string) => {
 
 export const useActiveBenchmarkSidebarRoute = () => {
   const benchmarkId = useActiveBenchmarkId();
-  const { pathname } = useActiveLocation();
+  const pathname = useRouterStore(routerSelectors.pathname);
   const useFetchDatasets = useEvalStore((state) => state.useFetchDatasets);
   const useFetchRuns = useEvalStore((state) => state.useFetchRuns);
 

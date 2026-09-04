@@ -6,12 +6,11 @@ import { ArrowRight } from 'lucide-react';
 import React, { memo, type MouseEvent, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 
 import { useCreateMenuItems } from '../../hooks';
+import { AgentListRevalidationIndicator } from '../Agent';
 import Actions from '../Agent/Actions';
 import { useAgentModal } from '../Agent/ModalProvider';
 import PrivateList from './List';
@@ -31,7 +30,6 @@ interface PrivateProps {
 // the workspace-public Agent section.
 const Private = memo<PrivateProps>(({ itemKey }) => {
   const { t } = useTranslation('common');
-  const { isRevalidating } = useFetchAgentList();
 
   const { openConfigGroupModal } = useAgentModal();
 
@@ -111,7 +109,7 @@ const Private = memo<PrivateProps>(({ itemKey }) => {
           <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
             {t('navPanel.privateAgents', { defaultValue: 'Private' })}
           </Text>
-          {isRevalidating && <NeuralNetworkLoading size={14} />}
+          <AgentListRevalidationIndicator />
         </Flexbox>
       }
     >

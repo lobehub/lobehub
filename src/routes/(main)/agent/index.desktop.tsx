@@ -2,10 +2,10 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
-import { useParams } from 'react-router';
 
 import TopicInPopupGuard from '@/features/TopicPopupGuard';
 import { useTopicInPopup } from '@/features/TopicPopupGuard/useTopicPopupsRegistry';
+import { useParams } from '@/libs/router/navigation';
 import { useChatStore } from '@/store/chat';
 
 import Conversation from './features/Conversation';
@@ -13,7 +13,7 @@ import ChatHydration from './features/Conversation/ChatHydration';
 import TelemetryNotification from './features/TelemetryNotification';
 
 const ChatPage = memo(() => {
-  const { topicId: urlTopicId } = useParams<{ topicId?: string }>();
+  const { topicId: urlTopicId } = useParams<{ topicId?: string }>('topicId');
   const activeAgentId = useChatStore((s) => s.activeAgentId);
   const popup = useTopicInPopup({
     agentId: activeAgentId,

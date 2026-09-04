@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { MemoryRouter } from 'react-router';
+import { createMemoryRouter, RouterProvider } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
 import CreateGenerationPage from './CreateGenerationPage';
@@ -24,12 +24,20 @@ vi.mock('@/hooks/useQueryParam', () => ({
 const PromptInput = () => <div data-testid="prompt-input" />;
 const Workspace = () => <div data-testid="generation-workspace" />;
 
-const renderPage = (path: string, entry: string) =>
-  render(
-    <MemoryRouter initialEntries={[entry]}>
-      <CreateGenerationPage PromptInput={PromptInput} Workspace={Workspace} path={path} />
-    </MemoryRouter>,
+const renderPage = (path: string, entry: string) => {
+  const router = createMemoryRouter(
+    [
+      {
+        element: (
+          <CreateGenerationPage PromptInput={PromptInput} Workspace={Workspace} path={path} />
+        ),
+        path: '*',
+      },
+    ],
+    { initialEntries: [entry] },
   );
+  return render(<RouterProvider router={router} />);
+};
 
 describe('CreateGenerationPage', () => {
   it.each([

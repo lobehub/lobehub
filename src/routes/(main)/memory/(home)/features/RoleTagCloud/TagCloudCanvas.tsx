@@ -27,6 +27,31 @@ const CONFIG = {
   UPDATE_INTERVAL: 0.1,
 } as const;
 
+interface ConnectionState {
+  birthTime: number;
+  duration: number;
+  end: THREE.Vector3;
+  id: string;
+  start: THREE.Vector3;
+}
+
+export const updateConnections = (
+  previous: ConnectionState[],
+  time: number,
+  connectionCount: number,
+  createConnection: (time: number) => ConnectionState | null,
+  random: () => number = Math.random,
+): ConnectionState[] => {
+  const active = previous.filter((connection) => time - connection.birthTime < connection.duration);
+
+  if (connectionCount > active.length && random() < CONFIG.SPAWN_PROBABILITY) {
+    const connection = createConnection(time);
+    if (connection) return [...active, connection];
+  }
+
+  return active.length === previous.length ? previous : active;
+};
+
 interface WordProps {
   position: THREE.Vector3;
   size: number;
@@ -267,7 +292,7 @@ const ConnectionLine = memo<ConnectionLineProps>(
   },
 );
 
-const CenterAvatar = () => {
+const CenterAvatar = memo(() => {
   return (
     <Html
       center
@@ -280,7 +305,9 @@ const CenterAvatar = () => {
       <UserAvatar shape={'circle'} size={80} />
     </Html>
   );
-};
+});
+
+CenterAvatar.displayName = 'CenterAvatar';
 
 interface CloudProps {
   radius?: number;
@@ -325,15 +352,6 @@ const Cloud = memo<CloudProps>(({ tags, radius = 20 }) => {
     if (wordsData.length < 2) return 0;
     return Math.min(Math.floor(wordsData.length * CONFIG.CONNECTION_RATIO), CONFIG.MAX_CONNECTIONS);
   }, [wordsData.length]);
-
-  // Dynamic connection line state
-  interface ConnectionState {
-    birthTime: number;
-    duration: number;
-    end: THREE.Vector3;
-    id: string;
-    start: THREE.Vector3;
-  }
 
   const [connections, setConnections] = useState<ConnectionState[]>([]);
   const lastUpdateTime = useRef(0);
@@ -409,24 +427,9 @@ const Cloud = memo<CloudProps>(({ tags, radius = 20 }) => {
     if (time - lastUpdateTime.current > CONFIG.UPDATE_INTERVAL) {
       lastUpdateTime.current = time;
 
-      setConnections((prev) => {
-        // Filter out expired connections
-        const active = prev.filter((conn) => time - conn.birthTime < conn.duration);
-
-        // If there are not enough connections, randomly add new ones
-        const needed = connectionCount - active.length;
-        if (
-          needed > 0 && // Randomly decide whether to add a new connection this time
-          Math.random() < CONFIG.SPAWN_PROBABILITY
-        ) {
-          const newConnection = generateRandomConnection(time);
-          if (newConnection) {
-            return [...active, newConnection];
-          }
-        }
-
-        return active;
-      });
+      setConnections((previous) =>
+        updateConnections(previous, time, connectionCount, generateRandomConnection),
+      );
     }
 
     // Auto-rotation animation

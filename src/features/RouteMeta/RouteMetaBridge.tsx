@@ -3,9 +3,9 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation, useMatches } from 'react-router';
 
 import { isDesktop } from '@/const/version';
+import { useMatches } from '@/libs/router/navigation';
 import {
   type DynamicRouteMeta,
   getRouteMetaFromHandle,
@@ -13,6 +13,7 @@ import {
   type RouteMetaParams,
 } from '@/spa/router/routeMeta';
 import { useElectronStore } from '@/store/electron';
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 import DynamicMetaRunner from './DynamicMetaRunner';
 import { mergeSearchParams } from './params';
@@ -54,10 +55,10 @@ const translateTitleKey = (titleKey: string | undefined, translate: Translate) =
 
 const RouteMetaBridge = memo(() => {
   const { t } = useTranslation('electron');
-  const location = useLocation();
+  const currentUrl = useRouterStore(routerSelectors.url);
+  const search = useRouterStore(routerSelectors.search);
   const setCurrentRouteMeta = useElectronStore((s) => s.setCurrentRouteMeta);
   const matched = useMatchedRouteMeta();
-  const currentUrl = location.pathname + location.search;
   const matchedRouteId = matched?.routeId ?? null;
   const DynamicMeta = matched?.meta.DynamicMeta;
   const [dynamic, setDynamic] = useState<DynamicRouteMetaState>({ meta: {}, routeId: null });
@@ -78,8 +79,8 @@ const RouteMetaBridge = memo(() => {
   const translate = t as unknown as Translate;
   const titleKey = matched?.meta.titleKey;
   const routeMetaParams = useMemo(
-    () => (matched ? mergeSearchParams(matched.params, location.search) : {}),
-    [location.search, matched],
+    () => (matched ? mergeSearchParams(matched.params, search) : {}),
+    [matched, search],
   );
   // Keep the previously resolved meta while navigating within the same route family
   // (e.g. switching topics) so the title doesn't briefly fall back to the static label.

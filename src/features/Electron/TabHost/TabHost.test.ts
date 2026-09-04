@@ -1,17 +1,20 @@
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
-import { createMemoryRouter, Outlet, RouterProvider, useParams } from 'react-router';
+import { createMemoryRouter, Outlet, RouterProvider } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type TabItem } from '@/features/Electron/titlebar/TabBar/types';
+import { useParams, usePathname } from '@/libs/router/navigation';
 import { useElectronStore } from '@/store/electron';
 import { initialState } from '@/store/electron/initialState';
 import { useUserStore } from '@/store/user';
 
+import ActiveTabRouterStoreProvider from './ActiveTabRouterStoreProvider';
 import { MAX_LIVE_TAB_ROUTERS } from './resolveLiveTabIds';
 import TabHost from './TabHost';
 import TabLocationReporter from './TabLocationReporter';
 import {
+  getOrCreateTabRouter,
   getTabHistorySnapshot,
   getTabRouter,
   resetTabRouterManager,
@@ -19,7 +22,7 @@ import {
 } from './tabRouterManager';
 
 const TestRoute = () => {
-  const { id } = useParams();
+  const { id } = useParams<{ id?: string }>('id');
   return React.createElement('div', { 'data-testid': `param-${id}` }, id);
 };
 
@@ -100,7 +103,48 @@ afterEach(() => {
 });
 
 describe('TabHost', () => {
-  it('mounts per-tab routers inside an outer data router without tripping the nested-Router invariant', async () => {
+  it('keeps the shell mounted while boot switches from the outer router to the active tab', async () => {
+    const lifecycle = { cleanups: 0, mounts: 0 };
+    const ShellProbe = () => {
+      const pathname = usePathname();
+
+      React.useEffect(() => {
+        lifecycle.mounts += 1;
+        return () => {
+          lifecycle.cleanups += 1;
+        };
+      }, []);
+
+      return React.createElement('div', { 'data-testid': 'shell-pathname' }, pathname);
+    };
+    const outerRouter = createMemoryRouter(
+      [
+        {
+          element: React.createElement(
+            ActiveTabRouterStoreProvider,
+            null,
+            React.createElement(ShellProbe),
+          ),
+          path: '*',
+        },
+      ],
+      { initialEntries: ['/'] },
+    );
+
+    getOrCreateTabRouter('a', '/item/a', createTestRouter);
+    render(React.createElement(RouterProvider, { router: outerRouter }));
+
+    expect(await screen.findByTestId('shell-pathname')).toHaveTextContent('/');
+
+    act(() => {
+      setStore([{ id: 'a', lastVisited: 1, url: '/item/a' }], 'a');
+    });
+
+    await waitFor(() => expect(screen.getByTestId('shell-pathname')).toHaveTextContent('/item/a'));
+    expect(lifecycle).toEqual({ cleanups: 0, mounts: 1 });
+  });
+
+  it('cold-starts only the active restored tab inside the outer data router', async () => {
     setStore(
       [
         { id: 'a', lastVisited: 2, url: '/item/a' },
@@ -122,7 +166,7 @@ describe('TabHost', () => {
     render(React.createElement(RouterProvider, { router: outerRouter }));
 
     expect(await screen.findByTestId('param-a')).toHaveTextContent('a');
-    expect(await screen.findByTestId('param-b')).toHaveTextContent('b');
+    expect(screen.queryByTestId('param-b')).not.toBeInTheDocument();
   });
 
   it('renders each live tab router at its own location so params never bleed across tabs', async () => {
@@ -137,7 +181,14 @@ describe('TabHost', () => {
     renderHost();
 
     expect(await screen.findByTestId('param-a')).toHaveTextContent('a');
+    expect(screen.queryByTestId('param-b')).not.toBeInTheDocument();
+
+    act(() => {
+      useElectronStore.getState().activateTab('b');
+    });
+
     expect(await screen.findByTestId('param-b')).toHaveTextContent('b');
+    expect(screen.getByTestId('param-a')).toHaveTextContent('a');
   });
 
   it('toggles slot visibility when the active tab changes without unmounting the deactivated tab', async () => {
@@ -150,6 +201,11 @@ describe('TabHost', () => {
     );
 
     renderHost();
+
+    await screen.findByTestId('param-a');
+    act(() => useElectronStore.getState().activateTab('b'));
+    await screen.findByTestId('param-b');
+    act(() => useElectronStore.getState().activateTab('a'));
 
     const slotA = (await screen.findByTestId('param-a')).parentElement!;
     const slotB = (await screen.findByTestId('param-b')).parentElement!;
@@ -224,7 +280,7 @@ describe('TabHost', () => {
     renderHost();
 
     expect(await screen.findByTestId('param-a')).toBeVisible();
-    expect(screen.getByTestId('param-b').parentElement).toHaveStyle({ display: 'none' });
+    expect(screen.queryByTestId('param-b')).not.toBeInTheDocument();
     await waitFor(() => expect(useElectronStore.getState().splitView).toBeNull());
   });
 
@@ -234,17 +290,20 @@ describe('TabHost', () => {
       lastVisited: 10 - index,
       url: `/item/t${index}`,
     }));
-    const oldest = baseTabs.at(-1)!;
+    const oldest = baseTabs[0];
 
     setStore(baseTabs, 't0');
     renderHost();
 
-    await screen.findByTestId(`param-${oldest.id}`);
+    for (const entry of baseTabs.slice(1)) {
+      act(() => useElectronStore.getState().activateTab(entry.id));
+      await screen.findByTestId(`param-${entry.id}`);
+    }
     expect(created).toHaveLength(MAX_LIVE_TAB_ROUTERS);
 
     const withEvictor: TabItem[] = [
-      ...baseTabs,
-      { id: 'evictor', lastVisited: 20, url: '/item/evictor' },
+      ...useElectronStore.getState().tabs,
+      { id: 'evictor', lastVisited: Date.now() + 1, url: '/item/evictor' },
     ];
     act(() => {
       useElectronStore.setState({ activeTabId: 'evictor', tabs: withEvictor });
@@ -290,14 +349,10 @@ describe('TabHost', () => {
     );
     expect(getTabHistorySnapshot('target').canGoBack).toBe(true);
 
-    const evicted = useElectronStore
-      .getState()
-      .tabs.map((t) =>
-        t.id === 'target' ? { ...t, lastVisited: 0 } : { ...t, lastVisited: 1000 },
-      );
-    act(() => {
-      useElectronStore.setState({ activeTabId: 'f0', tabs: evicted });
-    });
+    for (const filler of fillers.slice(0, MAX_LIVE_TAB_ROUTERS)) {
+      act(() => useElectronStore.getState().activateTab(filler.id));
+      await screen.findByTestId(`param-${filler.id}`);
+    }
 
     const targetEntry = created.find((entry) => entry.url === '/agent/orig')!;
     await vi.waitFor(() => expect(targetEntry.dispose).toHaveBeenCalled());
@@ -322,13 +377,15 @@ describe('TabHost', () => {
       url: `/item/f${index}`,
     }));
 
-    // The newest filler is active; `target` is hidden but live. `createTestRouter`
-    // mounts no reporter, mirroring the real hidden tab whose reporter effect is
-    // torn down.
-    setStore([target, ...fillers], fillers.at(-1)!.id);
+    setStore([target, ...fillers], target.id);
     renderHost();
 
     await screen.findByTestId('param-target');
+
+    for (const filler of fillers) {
+      act(() => useElectronStore.getState().activateTab(filler.id));
+      await screen.findByTestId(`param-${filler.id}`);
+    }
 
     const targetRouter = created.find((entry) => entry.url === '/item/target')!.router;
     await act(async () => {
@@ -340,7 +397,7 @@ describe('TabHost', () => {
       '/item/target',
     );
 
-    // A newly active sixth tab pushes the oldest (`target`) out of the live set.
+    // A newly active tab pushes the oldest (`target`) out of the live set.
     const withEvictor: TabItem[] = [
       ...useElectronStore.getState().tabs,
       { id: 'evictor', lastVisited: 100, url: '/item/evictor' },
@@ -380,6 +437,10 @@ describe('TabHost', () => {
     );
 
     render(React.createElement(TabHost, { createRouter: createScopedRouter }));
+
+    act(() => useElectronStore.getState().activateTab('b'));
+    await vi.waitFor(() => expect(getTabRouter('b')).toBeDefined());
+    act(() => useElectronStore.getState().activateTab('a'));
 
     await vi.waitFor(() => {
       expect(getTabRouter('a')).toBeDefined();
@@ -422,7 +483,10 @@ describe('TabHost', () => {
 
     render(React.createElement(TabHost, { createRouter: createReporterRouter }));
 
+    await screen.findByTestId('param-a');
+    act(() => useElectronStore.getState().activateTab('b'));
     await screen.findByTestId('param-b');
+    act(() => useElectronStore.getState().activateTab('a'));
 
     const hiddenRouter = created.find((entry) => entry.url === '/agent/b')!.router;
     await act(async () => {

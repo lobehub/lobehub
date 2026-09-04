@@ -1,11 +1,10 @@
 'use client';
 
-import { useParams } from 'react-router';
-
 import { TaskDetailPage } from '@/features/AgentTasks';
+import { useParams } from '@/libs/router/navigation';
 
 const TaskDetailRoute = () => {
-  const { taskId } = useParams<{ taskId?: string }>();
+  const { taskId } = useParams<{ taskId?: string }>('taskId');
 
   if (!taskId) return null;
 

@@ -72,15 +72,31 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('react-router', async () => {
+vi.mock('@/libs/router/navigation', async () => {
   const React = await vi.importActual<typeof ReactModule>('react');
 
   return {
     useMatches: () => React.useSyncExternalStore(mocks.subscribe, mocks.getSnapshot),
-    useLocation: () => {
+  };
+});
+
+vi.mock('@/store/router', async () => {
+  const React = await vi.importActual<typeof ReactModule>('react');
+
+  return {
+    routerSelectors: {
+      search: (state: { location: { search: string } }) => state.location.search,
+      url: (state: { location: { pathname: string; search: string } }) =>
+        `${state.location.pathname}${state.location.search}`,
+    },
+    useRouterStore: (
+      selector: (state: { location: { pathname: string; search: string } }) => unknown,
+    ) => {
       const matches = React.useSyncExternalStore(mocks.subscribe, mocks.getSnapshot);
       const match = matches.at(-1);
-      return { pathname: match?.pathname ?? '/', search: match?.search ?? '' };
+      return selector({
+        location: { pathname: match?.pathname ?? '/', search: match?.search ?? '' },
+      });
     },
   };
 });

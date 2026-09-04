@@ -1,13 +1,13 @@
 import { useCallback } from 'react';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
+import { useParams } from '@/libs/router/navigation';
 
 export const taskDetailPath = (taskId: string, agentId?: string) =>
   agentId ? `/agent/${agentId}/task/${taskId}` : `/task/${taskId}`;
 
 export const useTaskDetailPath = () => {
-  const { aid } = useActiveRouteParams<{ aid?: string }>();
+  const { aid } = useParams<{ aid?: string }>('aid');
 
   return useCallback(
     (taskId: string, agentId?: string) => taskDetailPath(taskId, agentId ?? aid),

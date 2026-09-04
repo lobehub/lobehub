@@ -1,9 +1,8 @@
 'use client';
 
-import { useParams } from 'react-router';
-
 import { useIsWorkspaceLoading } from '@/business/client/hooks/useIsWorkspaceLoading';
 import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
+import { useParams } from '@/libs/router/navigation';
 
 export type WorkspaceSlugStatus =
   | { status: 'no-slug' }
@@ -20,7 +19,7 @@ export type WorkspaceSlugStatus =
  * read-side.
  */
 export const useWorkspaceFromSlug = (): WorkspaceSlugStatus => {
-  const { workspaceSlug } = useParams<{ workspaceSlug: string }>();
+  const { workspaceSlug } = useParams<{ workspaceSlug: string }>('workspaceSlug');
   const workspaces = useWorkspaces();
   const isLoading = useIsWorkspaceLoading();
 

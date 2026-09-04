@@ -1,7 +1,6 @@
 'use client';
 
 import { memo, useLayoutEffect } from 'react';
-import { useLocation, useParams } from 'react-router';
 
 import NotFound from '@/components/404';
 import AsyncError from '@/components/AsyncError';
@@ -11,11 +10,13 @@ import ResourceManager from '@/features/ResourceManager';
 import { useInitFileCheck } from '@/features/ResourceManager/hooks/useInitFileCheck';
 import { useKnowledgeBaseItem } from '@/features/ResourceManager/hooks/useKnowledgeItem';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { useParams } from '@/libs/router/navigation';
+import { routerSelectors, useRouterStore } from '@/store/router';
 import { isForbiddenError } from '@/utils/forbiddenError';
 
 const MainContent = memo(() => {
-  const { id: knowledgeBaseId } = useParams<{ id: string }>();
-  const location = useLocation();
+  const { id: knowledgeBaseId } = useParams<{ id: string }>('id');
+  const pathname = useRouterStore(routerSelectors.pathname);
   const setLibraryId = useResourceManagerStore((s) => s.setLibraryId);
 
   // Load knowledge base data
@@ -32,11 +33,11 @@ const MainContent = memo(() => {
   // before Explorer component renders and computes query parameters
   // IMPORTANT: Only depend on knowledgeBaseId and location.pathname, NOT currentLibraryId to avoid feedback loop
   useLayoutEffect(() => {
-    const isOnLibraryRoute = location.pathname.includes('/library/');
+    const isOnLibraryRoute = pathname.includes('/library/');
     if (isOnLibraryRoute) {
       setLibraryId(knowledgeBaseId);
     }
-  }, [knowledgeBaseId, setLibraryId, location.pathname]);
+  }, [knowledgeBaseId, setLibraryId, pathname]);
 
   // Sync file view mode from URL
   useInitFileCheck();

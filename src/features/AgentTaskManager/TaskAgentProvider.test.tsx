@@ -86,7 +86,7 @@ vi.mock('@/store/chat', () => ({
   ),
 }));
 
-vi.mock('react-router', () => ({
+vi.mock('@/libs/router/navigation', () => ({
   useMatch: () => mocks.routeMatch,
   useSearchParams: () => [new URLSearchParams(mocks.search)],
 }));

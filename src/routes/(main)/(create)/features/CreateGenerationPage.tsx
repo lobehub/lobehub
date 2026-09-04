@@ -4,13 +4,13 @@ import { Flexbox } from '@lobehub/ui';
 import { AnimatePresence, m as motion } from 'motion/react';
 import type { ComponentType, CSSProperties } from 'react';
 import { memo } from 'react';
-import { useMatch } from 'react-router';
 
 import DragUploadZone from '@/components/DragUploadZone';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
 import { useQueryState } from '@/hooks/useQueryParam';
+import { useMatch } from '@/libs/router/navigation';
 
 // The drop zone is a sibling of NavHeader inside a column flex container.
 // `height: 100%` would size it to the FULL container (its content floor keeps

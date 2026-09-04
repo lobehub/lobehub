@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
-import { useParams, useSearchParams } from 'react-router';
 
+import { useParams, useSearchParams } from '@/libs/router/navigation';
 import { useChatStore } from '@/store/chat/store';
 
 export interface AgentMockReplayTarget {
@@ -10,7 +10,7 @@ export interface AgentMockReplayTarget {
 }
 
 export const useAgentMockReplayTarget = () => {
-  const params = useParams<{ aid?: string; topicId?: string }>();
+  const params = useParams<{ aid?: string; topicId?: string }>('aid', 'topicId');
   const [searchParams] = useSearchParams();
 
   return useCallback((): AgentMockReplayTarget => {

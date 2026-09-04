@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router';
+import { Link } from 'react-router';
 import urlJoin from 'url-join';
 
 import GeneratingBorder from '@/components/GeneratingBorder';
@@ -25,6 +25,7 @@ import { useResolvedAgentRouteId } from '@/features/AgentRoute/useResolvedAgentR
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useParams } from '@/libs/router/navigation';
 import type { ExpertiseDomainDraft } from '@/services/expertise';
 import { expertiseService } from '@/services/expertise';
 import { useAgentStore } from '@/store/agent';
@@ -200,7 +201,7 @@ const slugify = (s: string, fallback: string) =>
 const CreateDomainPage = memo(() => {
   const { t } = useTranslation('selfLearning');
   const navigate = useWorkspaceAwareNavigate();
-  const { aid } = useParams<{ aid?: string }>();
+  const { aid } = useParams<{ aid?: string }>('aid');
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const { agentId: routeAgentId } = useResolvedAgentRouteId(aid);
   const agentId = routeAgentId || activeAgentId;

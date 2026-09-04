@@ -1,8 +1,10 @@
 import { act, cleanup, renderHook, screen } from '@testing-library/react';
-import React, { type PropsWithChildren } from 'react';
-import { MemoryRouter, UNSAFE_LocationContext, useLocation } from 'react-router';
+import React, { type PropsWithChildren, useState } from 'react';
+import { createMemoryRouter, RouterProvider, UNSAFE_LocationContext } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { create } from 'zustand';
+
+import { routerSelectors, useRouterStore } from '@/store/router';
 
 import { useTopicUrlSync } from './useTopicUrlSync';
 
@@ -11,7 +13,7 @@ const useTopicStore = create<{ activeGenerationTopicId: string | null }>(() => (
 }));
 
 const probe = (testId: string) => () =>
-  React.createElement('div', { 'data-testid': testId }, useLocation().search);
+  React.createElement('div', { 'data-testid': testId }, useRouterStore(routerSelectors.search));
 
 const PageProbe = probe('page-search');
 const ShellProbe = probe('shell-search');
@@ -21,22 +23,46 @@ const ShellProbe = probe('shell-search');
 // resets LocationContext so its own router mounts as a root.
 const desktopWrapper =
   (tabEntry: string) =>
-  ({ children }: PropsWithChildren) =>
-    React.createElement(
-      MemoryRouter,
-      { initialEntries: ['/'] },
-      React.createElement(ShellProbe),
-      React.createElement(
-        UNSAFE_LocationContext,
-        { value: null as never },
-        React.createElement(
-          MemoryRouter,
-          { initialEntries: [tabEntry] },
-          React.createElement(PageProbe),
-          children,
-        ),
+  ({ children }: PropsWithChildren) => {
+    const [tabRouter] = useState(() =>
+      createMemoryRouter(
+        [
+          {
+            element: React.createElement(
+              React.Fragment,
+              null,
+              React.createElement(PageProbe),
+              children,
+            ),
+            path: '*',
+          },
+        ],
+        { initialEntries: [tabEntry] },
       ),
     );
+    const [shellRouter] = useState(() =>
+      createMemoryRouter(
+        [
+          {
+            element: React.createElement(
+              React.Fragment,
+              null,
+              React.createElement(ShellProbe),
+              React.createElement(
+                UNSAFE_LocationContext,
+                { value: null as never },
+                React.createElement(RouterProvider, { router: tabRouter }),
+              ),
+            ),
+            path: '*',
+          },
+        ],
+        { initialEntries: ['/'] },
+      ),
+    );
+
+    return React.createElement(RouterProvider, { router: shellRouter });
+  };
 
 const renderSync = (tabEntry: string) =>
   renderHook(() => useTopicUrlSync(useTopicStore), { wrapper: desktopWrapper(tabEntry) });

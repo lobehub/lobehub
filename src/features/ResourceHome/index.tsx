@@ -1,7 +1,6 @@
 'use client';
 
 import { memo, useLayoutEffect } from 'react';
-import { useLocation, useParams, useSearchParams } from 'react-router';
 
 import ResourceManager from '@/features/ResourceManager';
 import { useInitFileCheck } from '@/features/ResourceManager/hooks/useInitFileCheck';
@@ -9,6 +8,8 @@ import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import WorkGallery from '@/features/WorkGallery';
 import { parseWorkGalleryKey } from '@/features/WorkGallery/const';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useParams, useSearchParams } from '@/libs/router/navigation';
+import { routerSelectors, useRouterStore } from '@/store/router';
 import { FilesTabs } from '@/types/files';
 
 import HomeDashboard from './Home';
@@ -46,8 +47,8 @@ export const WORKS_PATH_SEGMENT = 'works';
 
 const ResourceHomePage = memo(() => {
   const [searchParams] = useSearchParams();
-  const location = useLocation();
-  const params = useParams<{ category?: string }>();
+  const pathname = useRouterStore(routerSelectors.pathname);
+  const params = useParams<{ category?: string }>('category');
   const navigate = useWorkspaceAwareNavigate();
   const [setCategory, setLibraryId] = useResourceManagerStore((s) => [
     s.setCategory,
@@ -56,7 +57,7 @@ const ResourceHomePage = memo(() => {
 
   // Category-specific route metadata uses static sibling routes, so recover
   // their segment from the pathname when React Router has no :category param.
-  const pathCategory = resolveResourcePathCategory(params.category, location.pathname);
+  const pathCategory = resolveResourcePathCategory(params.category, pathname);
   const segmentCategory = pathCategory ? CATEGORY_BY_SEGMENT[pathCategory] : undefined;
   const isValidPathCategory = segmentCategory !== undefined;
   // The Work gallery owns its own path segment; `?works=<key>` narrows it
@@ -95,22 +96,20 @@ const ResourceHomePage = memo(() => {
   // When location changes to /resource, clear libraryId
   // Don't clear when location is /library/* (even if this component is still mounted)
   useLayoutEffect(() => {
-    const isOnHomeRoute =
-      location.pathname === '/resource' || !location.pathname.includes('/library/');
+    const isOnHomeRoute = pathname === '/resource' || !pathname.includes('/library/');
     if (isOnHomeRoute) {
       setLibraryId(undefined);
     }
-  }, [setLibraryId, location.pathname]);
+  }, [setLibraryId, pathname]);
 
   // Sync category from URL using useLayoutEffect
   // IMPORTANT: Only sync if we're actually on the home route (not transitioning to library)
   useLayoutEffect(() => {
-    const isOnHomeRoute =
-      location.pathname === '/resource' || !location.pathname.includes('/library/');
+    const isOnHomeRoute = pathname === '/resource' || !pathname.includes('/library/');
     if (isOnHomeRoute) {
       setCategory(categoryParam);
     }
-  }, [categoryParam, setCategory, location.pathname]);
+  }, [categoryParam, setCategory, pathname]);
 
   // Sync file view mode from URL
   useInitFileCheck();

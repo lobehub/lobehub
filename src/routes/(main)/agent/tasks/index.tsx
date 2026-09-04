@@ -1,11 +1,10 @@
 'use client';
 
-import { useParams } from 'react-router';
-
 import { AgentTasksPage } from '@/features/AgentTasks';
+import { useParams } from '@/libs/router/navigation';
 
 const AgentScopedTasksRoute = () => {
-  const { aid } = useParams<{ aid?: string }>();
+  const { aid } = useParams<{ aid?: string }>('aid');
 
   if (!aid) return null;
 

@@ -2,8 +2,8 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
-import { useParams } from 'react-router';
 
+import { useParams } from '@/libs/router/navigation';
 import { useDiscoverStore } from '@/store/discover';
 
 import NotFound from '../components/NotFound';
@@ -16,7 +16,7 @@ interface ModelDetailPageProps {
 }
 
 const ModelDetailPage = memo<ModelDetailPageProps>(({ mobile }) => {
-  const params = useParams<{ slug: string }>();
+  const params = useParams<{ slug: string }>('slug');
   const identifier = decodeURIComponent(params.slug ?? '');
 
   const useModelDetail = useDiscoverStore((s) => s.useModelDetail);

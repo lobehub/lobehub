@@ -15,6 +15,7 @@ import { RouterProvider } from 'react-router/dom';
 
 import { createTabRouter } from '@/spa/router/tabRouter';
 import { useElectronStore } from '@/store/electron';
+import { RouterStoreProvider } from '@/store/router';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors';
 
@@ -114,7 +115,13 @@ const TabHost = ({ createRouter = createTabRouter }: TabHostProps) => {
   }, [closeSplitView, isPreferenceInit, splitView, splitViewEnabled]);
 
   const liveIds = useMemo(
-    () => resolveLiveTabIds(tabs, activeTabId, MAX_LIVE_TAB_ROUTERS, visibleTabIds),
+    () =>
+      resolveLiveTabIds(
+        tabs.filter((tab) => visibleTabIds.includes(tab.id) || getTabRouter(tab.id)),
+        activeTabId,
+        MAX_LIVE_TAB_ROUTERS,
+        visibleTabIds,
+      ),
     [tabs, activeTabId, visibleTabIds],
   );
 
@@ -163,6 +170,7 @@ const TabHost = ({ createRouter = createTabRouter }: TabHostProps) => {
                   width: `${(1 - effectiveSplitView.ratio) * 100}%`,
                 }
             : slotStyle;
+          const router = getOrCreateTabRouter(tab.id, tab.url, createRouter);
 
           return (
             <Activity key={tab.id} mode={isVisible ? 'visible' : 'hidden'} name={`Tab:${tab.id}`}>
@@ -180,9 +188,11 @@ const TabHost = ({ createRouter = createTabRouter }: TabHostProps) => {
                   {/* react-router forbids a data <RouterProvider> inside another Router
                       (useInRouterContext invariant). Reset LocationContext so each per-tab
                       router mounts as a root; nothing renders between the reset and the
-                      provider, so no consumer can observe the null gap. */}
+                  provider, so no consumer can observe the null gap. */}
                   <UNSAFE_LocationContext value={null as never}>
-                    <RouterProvider router={getOrCreateTabRouter(tab.id, tab.url, createRouter)} />
+                    <RouterStoreProvider router={router} scopeId={tab.id}>
+                      <RouterProvider router={router} />
+                    </RouterStoreProvider>
                   </UNSAFE_LocationContext>
                 </TabIdContext>
               </div>

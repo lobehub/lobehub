@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import { createMemoryRouter, RouterProvider } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Header from './Header';
@@ -17,12 +17,13 @@ vi.mock('@/store/session', () => ({
   useSessionStore: (selector: (state: { activeId?: string }) => unknown) => selector({}),
 }));
 
-const renderHeader = (tab: string) =>
-  render(
-    <MemoryRouter initialEntries={[`/acme/settings/${tab}`]}>
-      <Header />
-    </MemoryRouter>,
+const renderHeader = (tab: string, search = '') => {
+  const router = createMemoryRouter(
+    [{ element: <Header />, path: '/:workspaceSlug/settings/:tab' }],
+    { initialEntries: [`/acme/settings/${tab}${search}`] },
   );
+  return render(<RouterProvider router={router} />);
+};
 
 beforeEach(() => {
   navigateMock.mockClear();
@@ -44,21 +45,13 @@ describe('mobile settings Header', () => {
   });
 
   it('recognizes a query-selected workspace provider and titles it', () => {
-    render(
-      <MemoryRouter initialEntries={['/acme/settings/provider?active=provider&provider=openai']}>
-        <Header />
-      </MemoryRouter>,
-    );
+    renderHeader('provider', '?active=provider&provider=openai');
 
     expect(within(screen.getByRole('banner')).getByText('openai')).toBeInTheDocument();
   });
 
   it('goes back to the workspace provider list from a query-selected provider', () => {
-    render(
-      <MemoryRouter initialEntries={['/acme/settings/provider?active=provider&provider=openai']}>
-        <Header />
-      </MemoryRouter>,
-    );
+    renderHeader('provider', '?active=provider&provider=openai');
 
     fireEvent.click(within(screen.getByRole('banner')).getByRole('button'));
 

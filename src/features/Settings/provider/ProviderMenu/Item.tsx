@@ -4,11 +4,11 @@ import { Center } from '@lobehub/ui';
 import { Avatar } from '@lobehub/ui/base-ui';
 import { Badge } from 'antd';
 import { memo, useMemo } from 'react';
-import { useLocation } from 'react-router';
 
 import { ProductLogo } from '@/components/Branding/ProductLogo';
 import { isCustomBranding } from '@/const/version';
 import NavItem from '@/features/NavPanel/components/NavItem';
+import { routerSelectors, useRouterStore } from '@/store/router';
 import { type AiProviderListItem } from '@/types/aiProvider';
 import { AiProviderSourceEnum } from '@/types/aiProvider';
 
@@ -18,17 +18,17 @@ interface ProviderItemProps extends AiProviderListItem {
 
 const ProviderItem = memo<ProviderItemProps>(
   ({ id, name, source, enabled, logo, onClick = () => {} }) => {
-    const location = useLocation();
+    const pathname = useRouterStore(routerSelectors.pathname);
 
     // Extract providerId from pathname: /settings/provider/xxx -> xxx
     const activeKey = useMemo(() => {
-      const pathParts = location.pathname.split('/');
+      const pathParts = pathname.split('/');
       // pathname is like /settings/provider/all or /settings/provider/openai
       if (pathParts.length >= 4 && pathParts[2] === 'provider') {
         return pathParts[3];
       }
       return null;
-    }, [location.pathname]);
+    }, [pathname]);
 
     const isCustom = source === AiProviderSourceEnum.Custom;
     const providerIcon =
