@@ -132,6 +132,16 @@ describe('ClientLLMTransport.runAttempt · empty-completion grounding guard', ()
   });
 });
 
+describe('ClientLLMTransport retry budget', () => {
+  it('keeps interactive chat failures bounded to one retry', () => {
+    const retryPolicy = createTransport().transport.retryPolicy;
+
+    expect(retryPolicy.maxAttempts('qwen')).toBe(2);
+    expect(retryPolicy.maxAttempts('chatgpt')).toBe(2);
+    expect(retryPolicy.maxAttempts('lobehub')).toBe(1);
+  });
+});
+
 describe('ClientLLMTransport.retryPolicy.onError · terminal operation teardown', () => {
   it('writes the message error and fails the running operation immediately', () => {
     const { store, transport } = createTransport();
