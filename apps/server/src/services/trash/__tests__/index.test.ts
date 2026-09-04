@@ -2144,7 +2144,7 @@ describe('TrashService', () => {
       expect((await service.list()).items.map((i) => i.resourceId)).toEqual([fresh.id]);
     });
 
-    it('advances beyond a fully failing batch so later expired roots are still purged', async () => {
+    it('reschedules a fully failing batch so a fresh sweep reaches later roots', async () => {
       const roots: { id: string }[] = [];
       for (const index of [0, 1]) {
         const hash = `failing-hash-${index}`;
@@ -2183,12 +2183,18 @@ describe('TrashService', () => {
       const first = await TrashService.sweepExpired(serverDB, { limit: 2, now });
       expect(first).toMatchObject({ failed: 2, purged: 0, scanned: 2 });
       expect(first.nextCursor).not.toBeNull();
+      const failedRows = await serverDB
+        .select()
+        .from(trashItems)
+        .where(
+          inArray(
+            trashItems.id,
+            roots.map(({ id }) => id),
+          ),
+        );
+      expect(failedRows.every(({ expiresAt }) => expiresAt > now)).toBe(true);
 
-      const second = await TrashService.sweepExpired(serverDB, {
-        cursor: first.nextCursor!,
-        limit: 2,
-        now,
-      });
+      const second = await TrashService.sweepExpired(serverDB, { limit: 2, now });
       expect(second).toMatchObject({ failed: 0, purged: 1, scanned: 1 });
       expect(await serverDB.select().from(files).where(eq(files.id, laterFile.id))).toEqual([]);
     });

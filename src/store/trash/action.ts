@@ -1,3 +1,4 @@
+import { TRASH_MUTATION_BATCH_SIZE } from '@lobechat/const';
 import type {
   ResourceTrashCountByType,
   ResourceTrashItem,
@@ -25,6 +26,11 @@ export interface TrashBucketContext {
 }
 
 const getTrashService = async () => (await import('@/services/trash')).trashService;
+
+const mutationBatches = (ids: string[]) =>
+  Array.from({ length: Math.ceil(ids.length / TRASH_MUTATION_BATCH_SIZE) }, (_, index) =>
+    ids.slice(index * TRASH_MUTATION_BATCH_SIZE, (index + 1) * TRASH_MUTATION_BATCH_SIZE),
+  );
 
 /** SWR key roots whose lists can regain rows after a restore. */
 const RESTORE_AFFECTED_KEY_PREFIXES = [
@@ -137,28 +143,42 @@ export const trashSlice: TrashSlice = (set, get) => {
       );
     },
     restore: async (ids: string[], context: TrashBucketContext) => {
-      let outcome: RestoreOutcome = { failed: [], restored: [] };
+      const outcome: RestoreOutcome = { failed: [], restored: [] };
       await withLoading(ids, context, async () => {
         const trashService = await getTrashService();
-        outcome = await trashService.restore(ids);
-        const gone = new Set(outcome.restored.map((item) => item.id));
-        for (const failure of outcome.failed) if (failure.code === 'notFound') gone.add(failure.id);
-        updateBucketItems(
-          context,
-          (items) => items.filter((item) => !gone.has(item.id)),
-          'restore',
-        );
+        for (const batch of mutationBatches(ids)) {
+          const batchOutcome = await trashService.restore(batch);
+          outcome.failed.push(...batchOutcome.failed);
+          outcome.restored.push(...batchOutcome.restored);
+          const gone = new Set(batchOutcome.restored.map((item) => item.id));
+          for (const failure of batchOutcome.failed)
+            if (failure.code === 'notFound') gone.add(failure.id);
+          updateBucketItems(
+            context,
+            (items) => items.filter((item) => !gone.has(item.id)),
+            'restore',
+          );
+        }
       });
       if (outcome.restored.length > 0) void revalidateRestoredScopes();
       return outcome;
     },
     purge: async (ids: string[], context: TrashBucketContext) => {
-      let outcome: PurgeOutcome = { failed: [], purged: 0, purgedIds: [] };
+      const outcome: PurgeOutcome = { failed: [], purged: 0, purgedIds: [] };
       await withLoading(ids, context, async () => {
         const trashService = await getTrashService();
-        outcome = await trashService.purge(ids);
-        const gone = new Set(outcome.purgedIds);
-        updateBucketItems(context, (items) => items.filter((item) => !gone.has(item.id)), 'purge');
+        for (const batch of mutationBatches(ids)) {
+          const batchOutcome = await trashService.purge(batch);
+          outcome.failed.push(...batchOutcome.failed);
+          outcome.purged += batchOutcome.purged;
+          outcome.purgedIds.push(...batchOutcome.purgedIds);
+          const gone = new Set(batchOutcome.purgedIds);
+          updateBucketItems(
+            context,
+            (items) => items.filter((item) => !gone.has(item.id)),
+            'purge',
+          );
+        }
       });
       return outcome;
     },

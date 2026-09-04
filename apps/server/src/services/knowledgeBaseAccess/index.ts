@@ -273,8 +273,6 @@ export const assertFileNotInRestrictedKnowledgeBase = async (
   ctx: KnowledgeBaseAccessCtx,
   fileId: string,
 ): Promise<void> => {
-  if (!ctx.workspaceId) return;
-
   const policy = await getRestrictedKnowledgeBasePolicy(ctx);
   if (
     policy.allRestrictedKnowledgeBaseIds.length === 0 &&
@@ -284,7 +282,7 @@ export const assertFileNotInRestrictedKnowledgeBase = async (
   const restricted = fileInRestrictedKnowledgeBase(
     ctx.serverDB,
     files.id,
-    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
     {
       liveKnowledgeBaseIds: policy.liveRestrictedKnowledgeBaseIds,
       trashedKnowledgeBaseIds: policy.trashedKnowledgeBaseIds,
@@ -294,13 +292,26 @@ export const assertFileNotInRestrictedKnowledgeBase = async (
     ? await ctx.serverDB
         .select({ id: files.id })
         .from(files)
-        .where(and(eq(files.id, fileId), eq(files.workspaceId, ctx.workspaceId), restricted))
+        .where(
+          and(
+            eq(files.id, fileId),
+            buildWorkspaceWhere(
+              {
+                callerAgentVisibility: ctx.callerAgentVisibility,
+                userId: ctx.userId,
+                workspaceId: ctx.workspaceId ?? undefined,
+              },
+              files,
+            ),
+            restricted,
+          ),
+        )
         .limit(1)
     : [];
   if (hidden) {
     throw new TRPCError({
       code: 'FORBIDDEN',
-      message: 'Only knowledge base managers can view this file',
+      message: 'File is not accessible',
     });
   }
 };

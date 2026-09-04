@@ -378,12 +378,11 @@ export const documentRouter = router({
         .optional(),
     )
     .query(async ({ ctx, input }) => {
-      // KB pages are ordinary workspace-public documents, so listings must
-      // drop rows from restricted (member No-access) libraries. The exclusion
-      // runs inside the query so pagination and totals stay correct.
-      const restrictedPolicy = ctx.workspaceId
-        ? await getRestrictedKnowledgeBasePolicy(ctx)
-        : undefined;
+      // KB pages remain live while their library is in Trash, so personal and
+      // workspace listings must exclude trashed-library content. Workspace
+      // policy also drops member No-access libraries. The exclusions run
+      // inside the query so pagination and totals stay correct.
+      const restrictedPolicy = await getRestrictedKnowledgeBasePolicy(ctx);
       return ctx.documentService.queryDocuments({
         ...input,
         excludeKnowledgeBaseIds: restrictedPolicy?.liveRestrictedKnowledgeBaseIds,

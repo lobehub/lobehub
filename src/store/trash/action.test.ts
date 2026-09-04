@@ -116,6 +116,23 @@ describe('TrashAction', () => {
       await pending;
       expect(trashSelectors.isLoading('trash_1')(useTrashStore.getState())).toBe(false);
     });
+
+    it('splits oversized restore selections into accepted mutation batches', async () => {
+      const ids = Array.from({ length: 201 }, (_, index) => `trash_${index}`);
+      vi.spyOn(trashService, 'restore').mockImplementation(async (batch) => ({
+        failed: [],
+        restored: batch.map((id, index) =>
+          buildItem({ id, resourceId: `file_${index}`, title: id }),
+        ),
+      }));
+
+      const outcome = await useTrashStore.getState().restore(ids, personalContext);
+
+      expect(vi.mocked(trashService.restore).mock.calls.map(([batch]) => batch.length)).toEqual([
+        200, 1,
+      ]);
+      expect(outcome.restored).toHaveLength(201);
+    });
   });
 
   describe('purge / emptyTrash', () => {
@@ -128,6 +145,22 @@ describe('TrashAction', () => {
       await useTrashStore.getState().purge(['trash_1'], personalContext);
       expect(trashService.purge).toHaveBeenCalledWith(['trash_1']);
       expect(getPersonalItems().map((i) => i.id)).toEqual(['trash_2']);
+    });
+
+    it('splits oversized purge selections and aggregates every batch outcome', async () => {
+      const ids = Array.from({ length: 201 }, (_, index) => `trash_${index}`);
+      vi.spyOn(trashService, 'purge').mockImplementation(async (batch) => ({
+        failed: [],
+        purged: batch.length,
+        purgedIds: batch,
+      }));
+
+      const outcome = await useTrashStore.getState().purge(ids, personalContext);
+
+      expect(vi.mocked(trashService.purge).mock.calls.map(([batch]) => batch.length)).toEqual([
+        200, 1,
+      ]);
+      expect(outcome).toMatchObject({ purged: 201, purgedIds: ids });
     });
 
     it('preserves a successful purge outcome when follow-up refresh fails', async () => {

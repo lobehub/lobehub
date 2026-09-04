@@ -274,6 +274,17 @@ describe('assertFileNotInRestrictedKnowledgeBase', () => {
     });
   });
 
+  it('blocks a personal file exclusive to a trashed knowledge base', async () => {
+    const ctx = {
+      serverDB: dbWithResults([{ id: 'kb-personal-trashed' }], [], [], [{ id: 'file-personal' }]),
+      userId: 'u1',
+    };
+
+    await expect(
+      assertFileNotInRestrictedKnowledgeBase(ctx, 'file-personal'),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
   it('passes when the file only belongs to open KBs', async () => {
     const ctx = {
       serverDB: dbWithResults([{ id: 'kb-restricted' }], [], [], []),

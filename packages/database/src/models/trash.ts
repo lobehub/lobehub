@@ -63,6 +63,8 @@ export interface TrashRestrictedResourceFilter {
   trashedMembershipKnowledgeBaseIds?: string[];
 }
 
+const PURGE_RETRY_DELAY_MS = 60 * 60 * 1000;
+
 /**
  * Source tables for the "does the resource still exist" checks. Purge relies
  * on FK cascades for children, so a root's registry row can be orphaned only
@@ -133,7 +135,11 @@ export class TrashModel {
       : undefined;
 
   /** Roots not explicitly queued by "empty trash" (`expiresAt = deletedAt`). */
-  private active = () => gt(trashItems.expiresAt, trashItems.deletedAt);
+  private active = () =>
+    and(
+      gt(trashItems.expiresAt, trashItems.deletedAt),
+      sql`COALESCE(${trashItems.meta}->'purgeBlocked', 'false'::jsonb) <> 'true'::jsonb`,
+    );
 
   private excludeRestrictedResources = (filter: TrashRestrictedResourceFilter): SQL | undefined => {
     const knowledgeBaseIds = filter.knowledgeBaseIds ?? [];
@@ -415,6 +421,7 @@ export class TrashModel {
     await this.db
       .update(trashItems)
       .set({
+        expiresAt: new Date(Date.now() + PURGE_RETRY_DELAY_MS),
         meta: sql<TrashItemRowMeta>`jsonb_set(COALESCE(${trashItems.meta}, '{}'::jsonb) - 'purgeClaim', '{purgeBlocked}', 'true'::jsonb, true)`,
       })
       .where(

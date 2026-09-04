@@ -15,9 +15,11 @@ const mocks = vi.hoisted(() => ({
   findById: vi.fn(),
   findByIds: vi.fn(),
   findBySlug: vi.fn(),
+  getRestrictedKnowledgeBasePolicy: vi.fn(),
   getAccessLevel: vi.fn(),
   getResourceMeta: vi.fn(),
   publishToWorkspace: vi.fn(),
+  queryDocuments: vi.fn(),
   setAccessLevel: vi.fn(),
   subtreeHasForeignRows: vi.fn(),
   transferTo: vi.fn(),
@@ -54,6 +56,7 @@ vi.mock('@/server/services/document', () => ({
   DocumentService: vi.fn(() => ({
     createDocument: mocks.createDocument,
     publishToWorkspace: mocks.publishToWorkspace,
+    queryDocuments: mocks.queryDocuments,
     updateDocument: mocks.updateDocument,
   })),
 }));
@@ -68,12 +71,7 @@ vi.mock('@/server/services/trash', () => ({
 }));
 vi.mock('@/server/routers/lambda/_helpers/knowledgeBaseAccess', () => ({
   assertContentsNotInRestrictedKnowledgeBase: mocks.assertContentsNotInRestrictedKnowledgeBase,
-  getRestrictedKnowledgeBasePolicy: vi.fn().mockResolvedValue({
-    allRestrictedKnowledgeBaseIds: [],
-    liveRestrictedKnowledgeBaseIds: [],
-    trashedKnowledgeBaseIds: [],
-    trashedRestrictedKnowledgeBaseIds: [],
-  }),
+  getRestrictedKnowledgeBasePolicy: mocks.getRestrictedKnowledgeBasePolicy,
 }));
 vi.mock('@/server/services/workspacePermission', () => ({
   hasWorkspaceScopedPermission: vi.fn(),
@@ -100,7 +98,35 @@ describe('documentRouter transferDocument', () => {
       visibility: 'public',
       workspaceId: 'ws-1',
     });
+    mocks.getRestrictedKnowledgeBasePolicy.mockResolvedValue({
+      allRestrictedKnowledgeBaseIds: [],
+      liveRestrictedKnowledgeBaseIds: [],
+      trashedKnowledgeBaseIds: [],
+      trashedRestrictedKnowledgeBaseIds: [],
+    });
+    mocks.queryDocuments.mockResolvedValue({ items: [], total: 0 });
     mocks.subtreeHasForeignRows.mockResolvedValue(false);
+  });
+
+  it('filters personal document lists through trashed knowledge bases', async () => {
+    mocks.getRestrictedKnowledgeBasePolicy.mockResolvedValue({
+      allRestrictedKnowledgeBaseIds: [],
+      liveRestrictedKnowledgeBaseIds: [],
+      trashedKnowledgeBaseIds: ['kb-trashed'],
+      trashedRestrictedKnowledgeBaseIds: [],
+    });
+    const caller = documentRouter.createCaller({
+      serverDB: {},
+      userId: 'member-1',
+    } as any);
+
+    await caller.queryDocuments();
+
+    expect(mocks.getRestrictedKnowledgeBasePolicy).toHaveBeenCalledOnce();
+    expect(mocks.queryDocuments).toHaveBeenCalledWith({
+      excludeKnowledgeBaseIds: [],
+      excludeTrashedKnowledgeBaseIds: ['kb-trashed'],
+    });
   });
 
   it('blocks a non-owner from transferring a tree containing foreign rows', async () => {

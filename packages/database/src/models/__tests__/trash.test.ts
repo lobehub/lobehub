@@ -390,9 +390,12 @@ describe('TrashModel', () => {
       expect(await model.findById(root.id)).toBeUndefined();
       expect(await model.findByIds([root.id])).toEqual([]);
       expect(await model.findByResource('file', 'file_claimed')).toBeUndefined();
-      expect(await TrashModel.listExpiredRoots(serverDB, { limit: 10, now: claimedAt })).toEqual([
-        expect.objectContaining({ id: root.id }),
-      ]);
+      expect(await TrashModel.listExpiredRoots(serverDB, { limit: 10, now: claimedAt })).toEqual(
+        [],
+      );
+      expect(
+        await TrashModel.listExpiredRoots(serverDB, { limit: 10, now: released!.expiresAt }),
+      ).toEqual([expect.objectContaining({ id: root.id })]);
       await expect(
         serverDB.transaction((trx) => model.findActiveRootForUpdate(root.id, trx)),
       ).resolves.toBeUndefined();
