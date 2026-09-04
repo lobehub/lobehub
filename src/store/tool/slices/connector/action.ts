@@ -37,6 +37,12 @@ export class ConnectorActionImpl {
    * workspace's own tools vanish from the tool picker for the rest of the
    * session. In the open-source build there are no workspaces and
    * `getActiveWorkspaceId()` is always `null`, so this is a no-op.
+   *
+   * Dropping a response deliberately leaves the one-shot init flag alone
+   * rather than marking the bucket loaded: a scope change remounts the
+   * workspace context slot's subtree, so the consumers gated on that flag
+   * re-issue their fetch under the new scope and the discarded result is not
+   * one anybody still needs.
    */
   #isStillInScope = (scope: string | null): boolean => getActiveWorkspaceId() === scope;
 

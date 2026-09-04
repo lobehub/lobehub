@@ -48,7 +48,11 @@ interface UseFileItemDropdownParams {
   fileType: string;
   id: string;
   libraryId?: string;
-  /** Runs once the row is gone, so a caller can leave a route that pointed at it. */
+  /**
+   * Runs once the row is gone, so a caller can leave a route that pointed at
+   * it. Fires before the sidebar tree forgets the subtree, so a caller may
+   * still inspect what is about to be removed.
+   */
   onDeleted?: () => void;
   onRenameStart?: () => void;
   /**
@@ -460,13 +464,14 @@ export const useFileItemDropdown = ({
                     // Drop the row from the sidebar tree and refresh the folder
                     // that actually held it. The explorer's current folder is
                     // only the fallback, for rows the tree never loaded.
-                    void useTreeStore
-                      .getState()
-                      .dropNodes(
-                        [id],
-                        parentId ?? useFileStore.getState().queryParams?.parentId ?? '',
-                      );
+                    const treeParentKey =
+                      parentId ?? useFileStore.getState().queryParams?.parentId ?? '';
+
+                    // Before the purge, not after: a caller leaving a route
+                    // that pointed into this subtree still has to walk it, and
+                    // `dropNodes` forgets the whole subtree synchronously.
                     onDeleted?.();
+                    void useTreeStore.getState().dropNodes([id], treeParentKey);
                     await refreshFileList({ revalidateResources: false });
 
                     toast.success(t('FileManager.actions.deleteSuccess'));

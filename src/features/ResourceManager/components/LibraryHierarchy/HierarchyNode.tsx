@@ -26,7 +26,7 @@ import { useTreeStore } from '@/store/tree';
 import { useFileItemClick } from '../Explorer/hooks/useFileItemClick';
 import { useFileItemDropdown } from '../Explorer/ItemDropdown/useFileItemDropdown';
 import FolderAddButton from './FolderAddButton';
-import { isHierarchyNodeActive } from './selection';
+import { hierarchySubtreeHoldsSelection, isHierarchyNodeActive } from './selection';
 import { styles } from './styles';
 
 interface HierarchyNodeProps {
@@ -136,16 +136,22 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
     }, [item.name]);
 
     /**
-     * Deleting the folder the explorer is parked in would leave it on a route
-     * that no longer resolves — an empty list under a breadcrumb naming the
-     * folder that was just removed. Step out to the parent folder instead
-     * (the library root when the row sat at the top level).
+     * Deleting a folder the explorer is sitting inside — the folder itself, or
+     * any ancestor of where it is parked — would leave it on a route that no
+     * longer resolves: an empty list under a breadcrumb naming a folder that
+     * was just removed. Step out to the deleted row's own parent instead (the
+     * library root when it sat at the top level).
+     *
+     * Runs before the tree purge, so the subtree is still walkable here.
      */
     const handleDeleted = useCallback(() => {
-      if (!item.isFolder || !isHierarchyNodeActive(item, selectedKey)) return;
+      if (!item.isFolder) return;
+
+      const { children } = useTreeStore.getState();
+      if (!hierarchySubtreeHoldsSelection(item, children, selectedKey)) return;
 
       const parent = parentKey
-        ? Object.values(useTreeStore.getState().children)
+        ? Object.values(children)
             .flat()
             .find((row) => row.id === parentKey)
         : undefined;
