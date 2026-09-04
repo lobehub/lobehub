@@ -41,6 +41,7 @@ import { UserModel } from '@/database/models/user';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import { serverMessagesEngine } from '@/server/modules/Mecha/ContextEngineering';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { resolveKnowledgeFileContents } from '@/server/services/file/resolveKnowledgeFileContents';
 import { MarketService } from '@/server/services/market';
 import { OnboardingService } from '@/server/services/onboarding';
 import { toAgentContextDocuments } from '@/utils/agentDocumentContextMapping';
@@ -692,13 +693,16 @@ export const buildServerCallLlmContext = async ({
     historyCount: resolveRuntimeHistoryCount(agentConfig.chatConfig?.historyCount),
     initialContext: (state as any).initialContext?.initialContext,
     knowledge: {
-      fileContents: agentConfig.files
-        ?.filter((file: { enabled?: boolean | null }) => file.enabled === true)
-        .map((file: { content?: string | null; id?: string; name?: string }) => ({
-          content: file.content ?? '',
-          fileId: file.id ?? '',
-          filename: file.name ?? '',
-        })),
+      // Files whose parse never ran (or failed at upload time) carry a null
+      // content here; resolve them the way message attachments are resolved
+      // instead of injecting an empty <file> block the model reads as a
+      // missing attachment.
+      fileContents: await resolveKnowledgeFileContents({
+        db: ctx.serverDB,
+        files: agentConfig.files,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      }),
       knowledgeBases: agentConfig.knowledgeBases
         ?.filter((knowledgeBase: { enabled?: boolean | null }) => knowledgeBase.enabled === true)
         .map((knowledgeBase: { id?: string; name?: string }) => ({
