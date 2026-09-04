@@ -27,6 +27,14 @@ const log = debug('lobe-server:browser-runtime');
 /** `data:image/png;base64,…` → the media type and the payload. */
 const DATA_URL_RE = /^data:(image\/[\w.+-]+);base64,(.+)$/;
 
+/** Filename extension per IANA media type, mirroring the heterogeneous uploader. */
+const IMAGE_EXT_BY_MEDIA_TYPE: Record<string, string> = {
+  'image/gif': 'gif',
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+};
+
 /**
  * Turn the screenshot's inline `dataUrl` into a stored file, exposed on
  * `state.images` as `{ fileId, mediaType, url }`.
@@ -39,6 +47,12 @@ const DATA_URL_RE = /^data:(image\/[\w.+-]+);base64,(.+)$/;
  * behind it: the model could not see its own screenshot, and nothing
  * downstream — Acceptance evidence included — had an id to cite.
  *
+ * The stored id is also named in `content`: `state` reaches the model as image
+ * parts, not as text, so a builder that has to cite the artifact (Acceptance
+ * evidence) would otherwise be able to see the screenshot without ever learning
+ * its id. It doubles as the only signal a non-vision model gets, since the
+ * device returns an empty `content` for this api.
+ *
  * Best-effort by construction: the capture succeeded either way, so an upload
  * failure degrades to the previous pass-through instead of failing the call.
  * `dataUrl` is dropped once stored so the base64 never reaches the DB.
@@ -48,7 +62,10 @@ const storeScreenshot = async (
   context: { serverDB?: unknown; userId?: string; workspaceId?: string },
 ) => {
   const state = result.state as { dataUrl?: string } | undefined;
-  const match = typeof state?.dataUrl === 'string' ? state.dataUrl.match(DATA_URL_RE) : null;
+  const match =
+    result.success !== false && typeof state?.dataUrl === 'string'
+      ? state.dataUrl.match(DATA_URL_RE)
+      : null;
   if (!match || !context.serverDB || !context.userId) return result;
 
   const [, mediaType, base64Data] = match;
@@ -58,18 +75,26 @@ const storeScreenshot = async (
       context.userId,
       context.workspaceId,
     );
-    const pathname = `files/${new Date().toISOString().slice(0, 10)}/browser-screenshot-${Date.now()}.${mediaType.split('/')[1]}`;
-    const { fileId, url } = await fileService.uploadBase64(base64Data, pathname, {
-      fileType: mediaType,
-    });
+    const date = new Date().toISOString().slice(0, 10);
+    const ext = IMAGE_EXT_BY_MEDIA_TYPE[mediaType] ?? 'png';
+    const { fileId, url } = await fileService.uploadBase64(
+      base64Data,
+      `files/${date}/browser-screenshot-${Date.now()}.${ext}`,
+      { fileType: mediaType },
+    );
 
     const { dataUrl: _dropped, ...rest } = state!;
-    return { ...result, state: { ...rest, images: [{ fileId, mediaType, url }] } };
+    return {
+      ...result,
+      content: `Screenshot captured and stored as file ${fileId}. Cite that id when a tool asks for a fileId.`,
+      state: { ...rest, images: [{ fileId, mediaType, url }] },
+    };
   } catch (error) {
     log('screenshot upload failed, passing the capture through inline: %O', error);
     return result;
   }
 };
+
 export const browserRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
     if (!context.userId) {

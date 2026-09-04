@@ -57,9 +57,13 @@ describe('browserRuntime', () => {
 
       expect(mockUploadBase64).toHaveBeenCalledWith(
         'QUJD',
-        expect.stringContaining('browser-screenshot-'),
+        expect.stringMatching(/^files\/\d{4}-\d{2}-\d{2}\/browser-screenshot-\d+\.jpg$/),
         { fileType: 'image/jpeg' },
       );
+      // `state` reaches the model as image parts, not text, so the id has to be
+      // named in `content` or a builder can see the shot without being able to
+      // cite it.
+      expect(result.content).toContain('file_1');
       expect(result.state).toEqual({
         height: 100,
         images: [{ fileId: 'file_1', mediaType: 'image/jpeg', url: 'https://cdn.example.com/shot.jpeg' }],
@@ -81,6 +85,20 @@ describe('browserRuntime', () => {
       const result = await runtime.screenshot({});
 
       expect(result.state).toEqual({ dataUrl: 'data:image/jpeg;base64,QUJD' });
+    });
+
+    it('does not upload a stale dataUrl from a failed capture', async () => {
+      mockExecuteToolCall.mockResolvedValue({
+        content: 'Browser action failed',
+        state: { dataUrl: 'data:image/jpeg;base64,QUJD' },
+        success: false,
+      });
+
+      const runtime = browserRuntime.factory(screenshotContext);
+      const result = await runtime.screenshot({});
+
+      expect(mockUploadBase64).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
     });
 
     it('leaves non-screenshot apis untouched', async () => {
