@@ -195,6 +195,46 @@ describe('MessageWriteQueue', () => {
     await queue.drain();
   });
 
+  it('creates the log readable only by its owner', async () => {
+    const queue = new MessageWriteQueue({
+      logPath: path.join(dir, 'nested', 'pending.jsonl'),
+      sink: { flush: () => new Promise<void>(() => {}) },
+    });
+
+    await queue.enqueue(op('a'));
+
+    // Every pending operation carries raw conversation content, and a create
+    // may carry tool arguments. The default mode leaves that readable by every
+    // other user on a shared host.
+    const stat = await fs.stat(path.join(dir, 'nested', 'pending.jsonl'));
+    expect(stat.mode & 0o777).toBe(0o600);
+  });
+
+  it('keeps the log owner-only after a confirmed batch rewrites it', async () => {
+    let resolveFirst: () => void = () => {};
+    let calls = 0;
+    const queue = new MessageWriteQueue({
+      logPath,
+      sink: {
+        flush: async () => {
+          calls += 1;
+          if (calls === 1) await new Promise<void>((r) => (resolveFirst = r));
+        },
+      },
+    });
+
+    await queue.enqueue(op('a'));
+    await vi.waitFor(() => expect(calls).toBe(1));
+    await queue.enqueue(op('b'));
+    resolveFirst();
+    await vi.waitFor(async () => {
+      // The confirm path replaces the file; a fresh one must not widen it back.
+      const stat = await fs.stat(logPath).catch(() => null);
+      expect(stat === null || (stat.mode & 0o777) === 0o600).toBe(true);
+    });
+    await queue.drain();
+  });
+
   it('recovers the intact entries when the last log line was truncated', async () => {
     // A process killed mid-append leaves a partial trailing line. The entries
     // before it are still deliverable and must not be thrown away with it.

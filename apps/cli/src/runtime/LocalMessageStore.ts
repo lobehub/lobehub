@@ -31,13 +31,13 @@ import { merge, nanoid } from '@lobechat/utils';
  *   - `flatten` runs the same `@lobechat/conversation-flow` parser the server
  *     adapter uses, so grouped/tool rows collapse identically.
  */
+/** Same default as `MessageModel.query`. */
+const DEFAULT_PAGE_SIZE = 1000;
+
 export class LocalMessageStore {
   private readonly messages = new Map<string, UIChatMessage>();
   /** `clientId` → message id, for idempotent re-creation of one logical step. */
   private readonly byClientId = new Map<string, string>();
-  /** Monotonic tiebreaker so messages created in the same millisecond keep insertion order. */
-  private sequence = 0;
-  private readonly sequenceById = new Map<string, number>();
   /**
    * `threadId` → the ids a thread read must include alongside its own rows.
    *
@@ -75,7 +75,6 @@ export class LocalMessageStore {
     } as UIChatMessage;
 
     this.messages.set(id, message);
-    this.sequenceById.set(id, this.sequence++);
     if (clientId) this.byClientId.set(clientId, id);
 
     return message;
@@ -87,7 +86,6 @@ export class LocalMessageStore {
 
   delete(id: string): void {
     this.messages.delete(id);
-    this.sequenceById.delete(id);
     for (const [clientId, mappedId] of this.byClientId) {
       if (mappedId === id) this.byClientId.delete(clientId);
     }
@@ -229,12 +227,19 @@ export class LocalMessageStore {
 
     matches.sort((a, b) => {
       if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt;
-      return (this.sequenceById.get(a.id) ?? 0) - (this.sequenceById.get(b.id) ?? 0);
+      // By id, matching `queryWithWhere`'s `(createdAt, id)` ordering — not by
+      // local insertion order. A parallel tool batch writes several rows in the
+      // same millisecond, and ordering those by arrival would feed the next LLM
+      // step a different sequence than the persisted transcript, and a
+      // different one again after a restart re-hydrates them.
+      return a.id < b.id ? -1 : 1;
     });
 
-    if (!options.flatten) return matches;
+    const page = this.paginate(matches, params);
 
-    const { flatList } = parse(matches as never);
+    if (!options.flatten) return page;
+
+    const { flatList } = parse(page as never);
     return flatList as unknown as UIChatMessage[];
   }
 
@@ -245,10 +250,7 @@ export class LocalMessageStore {
 
   /** Seed prior conversation history fetched once at run start. */
   hydrate(messages: UIChatMessage[]): void {
-    for (const message of messages) {
-      this.messages.set(message.id, message);
-      this.sequenceById.set(message.id, this.sequence++);
-    }
+    for (const message of messages) this.messages.set(message.id, message);
   }
 
   get size(): number {
@@ -257,5 +259,32 @@ export class LocalMessageStore {
 
   private matchesScope(value: string | null | undefined, filter: string | undefined): boolean {
     return filter ? value === filter : value === null || value === undefined;
+  }
+
+  /**
+   * Take the same page the canonical model would.
+   *
+   * `MessageModel.query` defaults to the NEWEST 1,000 rows — it orders
+   * descending, applies `limit`/`offset`, then restores ascending order. A
+   * local store that always returned everything would drift further from the
+   * server's context with every step of a long run, and grow the per-step
+   * re-query and flatten without bound.
+   *
+   * The canonical model additionally aligns a truncated page's lower boundary
+   * to a round start. That is deliberately not reproduced: its stated purpose
+   * is to stop the RENDERER stranding sibling chains, and reproducing it
+   * approximately would be worse than not at all. It only differs past the
+   * page size in a single conversation.
+   */
+  private paginate(matches: UIChatMessage[], params: QueryMessagesInput): UIChatMessage[] {
+    const pageSize = params.pageSize ?? DEFAULT_PAGE_SIZE;
+    const current = params.current ?? 0;
+    if (pageSize <= 0) return [];
+
+    // Page from the newest end, then present ascending.
+    const end = matches.length - current * pageSize;
+    if (end <= 0) return [];
+
+    return matches.slice(Math.max(0, end - pageSize), end);
   }
 }
