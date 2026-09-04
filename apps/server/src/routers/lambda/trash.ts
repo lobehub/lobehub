@@ -96,12 +96,18 @@ const assertItemsManageable = async (
     throw new TRPCError({ code: 'NOT_FOUND', message: 'One or more trash items were not found' });
   }
   if (!ctx.workspaceId) return;
+  const resourceTypes = new Set<ResourceTrashType>();
   for (const item of items) {
     if (item.meta?.visibility === 'private' && item.meta.creatorUserId !== ctx.userId) {
       throw new TRPCError({ code: 'FORBIDDEN', message: 'Trash item is not accessible' });
     }
-    await assertResourceCapability(ctx, item.resourceType, operation);
+    resourceTypes.add(item.resourceType);
   }
+  await Promise.all(
+    [...resourceTypes].map((resourceType) =>
+      assertResourceCapability(ctx, resourceType, operation),
+    ),
+  );
 };
 
 const assertResourceCapability = async (

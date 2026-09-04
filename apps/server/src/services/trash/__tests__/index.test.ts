@@ -43,6 +43,7 @@ vi.mock('@/server/services/knowledgeBaseAccess', () => ({
     allRestrictedKnowledgeBaseIds: accessMocks.restrictedKnowledgeBaseIds,
     liveRestrictedKnowledgeBaseIds:
       accessMocks.liveRestrictedKnowledgeBaseIds ?? accessMocks.restrictedKnowledgeBaseIds,
+    trashedKnowledgeBaseIds: accessMocks.trashedRestrictedKnowledgeBaseIds,
     trashedRestrictedKnowledgeBaseIds: accessMocks.trashedRestrictedKnowledgeBaseIds,
   })),
 }));

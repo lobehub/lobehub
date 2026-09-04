@@ -247,7 +247,7 @@ interface KnowledgeQueryParams extends QueryFileListParams {
    * dropped from cross-KB listings; never populated from client input.
    */
   excludeKnowledgeBaseIds?: string[];
-  /** Deleted restricted KBs; only otherwise-unshared resources are hidden. */
+  /** Deleted KBs; only otherwise-unshared resources are hidden. */
   excludeTrashedKnowledgeBaseIds?: string[];
   /**
    * Include full document bodies in the result. List and bulk-operation callers
@@ -480,13 +480,10 @@ export class KnowledgeRepo {
         !knowledgeBaseId && excludeKnowledgeBaseIds?.length
           ? this.notInKnowledgeBases(excludeKnowledgeBaseIds)
           : undefined,
-        !knowledgeBaseId && this.workspaceId && excludeTrashedKnowledgeBaseIds?.length
-          ? excludeRestrictedFile(
-              this.db,
-              f.id,
-              { userId: this.userId, workspaceId: this.workspaceId },
-              { trashedKnowledgeBaseIds: excludeTrashedKnowledgeBaseIds },
-            )
+        !knowledgeBaseId && excludeTrashedKnowledgeBaseIds?.length
+          ? excludeRestrictedFile(this.db, f.id, this.scope(), {
+              trashedKnowledgeBaseIds: excludeTrashedKnowledgeBaseIds,
+            })
           : undefined,
       ],
       knowledgeBaseId,
@@ -513,11 +510,11 @@ export class KnowledgeRepo {
         !knowledgeBaseId && excludeKnowledgeBaseIds?.length
           ? or(isNull(d.knowledgeBaseId), notInArray(d.knowledgeBaseId, excludeKnowledgeBaseIds))
           : undefined,
-        !knowledgeBaseId && this.workspaceId && excludeTrashedKnowledgeBaseIds?.length
+        !knowledgeBaseId && excludeTrashedKnowledgeBaseIds?.length
           ? excludeRestrictedDocument(
               this.db,
               { fileId: d.fileId, knowledgeBaseId: d.knowledgeBaseId },
-              { userId: this.userId, workspaceId: this.workspaceId },
+              this.scope(),
               { trashedKnowledgeBaseIds: excludeTrashedKnowledgeBaseIds },
             )
           : undefined,

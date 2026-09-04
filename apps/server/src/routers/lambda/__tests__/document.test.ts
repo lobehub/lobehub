@@ -71,6 +71,7 @@ vi.mock('@/server/routers/lambda/_helpers/knowledgeBaseAccess', () => ({
   getRestrictedKnowledgeBasePolicy: vi.fn().mockResolvedValue({
     allRestrictedKnowledgeBaseIds: [],
     liveRestrictedKnowledgeBaseIds: [],
+    trashedKnowledgeBaseIds: [],
     trashedRestrictedKnowledgeBaseIds: [],
   }),
 }));

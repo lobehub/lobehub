@@ -195,7 +195,11 @@ describe('getRestrictedKnowledgeBaseIds', () => {
 
 describe('getRestrictedKnowledgeBasePolicy', () => {
   it('returns KB state without materializing every linked file or document', async () => {
-    const serverDB = dbWithResults([{ id: 'kb-trashed', isDeleted: true }], []);
+    const serverDB = dbWithResults(
+      [{ id: 'kb-trashed', isDeleted: true }],
+      [],
+      [{ id: 'kb-trashed' }],
+    );
     const select = vi.spyOn(serverDB, 'select');
     const ctx = {
       serverDB,
@@ -206,9 +210,24 @@ describe('getRestrictedKnowledgeBasePolicy', () => {
     await expect(getRestrictedKnowledgeBasePolicy(ctx)).resolves.toEqual({
       allRestrictedKnowledgeBaseIds: ['kb-trashed'],
       liveRestrictedKnowledgeBaseIds: [],
+      trashedKnowledgeBaseIds: ['kb-trashed'],
       trashedRestrictedKnowledgeBaseIds: ['kb-trashed'],
     });
-    expect(select).toHaveBeenCalledTimes(2);
+    expect(select).toHaveBeenCalledTimes(3);
+  });
+
+  it('returns ordinary trashed knowledge bases in personal mode', async () => {
+    const ctx = {
+      serverDB: dbWithResults([{ id: 'kb-personal-trashed' }]),
+      userId: 'u1',
+    };
+
+    await expect(getRestrictedKnowledgeBasePolicy(ctx)).resolves.toEqual({
+      allRestrictedKnowledgeBaseIds: [],
+      liveRestrictedKnowledgeBaseIds: [],
+      trashedKnowledgeBaseIds: ['kb-personal-trashed'],
+      trashedRestrictedKnowledgeBaseIds: [],
+    });
   });
 });
 
@@ -243,7 +262,7 @@ describe('assertFileNotInRestrictedKnowledgeBase', () => {
 
   it('throws FORBIDDEN when the file belongs to a restricted KB', async () => {
     const ctx = {
-      serverDB: dbWithResults([{ id: 'kb-1' }], [], [], [{ id: 'file-1' }]),
+      serverDB: dbWithResults([{ id: 'kb-1' }], [], [], [], [{ id: 'file-1' }]),
       userId: 'member',
       workspaceId: 'ws-1',
     };
@@ -265,7 +284,14 @@ describe('assertFileNotInRestrictedKnowledgeBase', () => {
 
   it('does not hide a shared file through a trashed restricted KB when its other KB is live and open', async () => {
     const ctx = {
-      serverDB: dbWithResults([{ id: 'kb-restricted-trashed', isDeleted: true }], [], [], [], []),
+      serverDB: dbWithResults(
+        [{ id: 'kb-restricted-trashed', isDeleted: true }],
+        [],
+        [{ id: 'kb-restricted-trashed' }],
+        [],
+        [],
+        [],
+      ),
       userId: 'member',
       workspaceId: 'ws-1',
     };
@@ -280,6 +306,7 @@ describe('assertFileNotInRestrictedKnowledgeBase', () => {
       serverDB: dbWithResults(
         [{ id: 'kb-restricted-trashed', isDeleted: true }],
         [],
+        [{ id: 'kb-restricted-trashed' }],
         [],
         [],
         [{ id: 'file-exclusive' }],
@@ -322,7 +349,7 @@ describe('assertContentsNotInRestrictedKnowledgeBase', () => {
     const ctx = {
       // 1st select: restriction rows; 2nd: the caller's collaborator grants
       // (none); 3rd: restricted file membership hit
-      serverDB: dbWithResults([{ id: 'kb-1' }], [], [], [{ id: 'file-1' }]),
+      serverDB: dbWithResults([{ id: 'kb-1' }], [], [], [], [{ id: 'file-1' }]),
       userId: 'member',
       workspaceId: 'ws-1',
     };
@@ -334,7 +361,7 @@ describe('assertContentsNotInRestrictedKnowledgeBase', () => {
 
   it('throws FORBIDDEN when a parsed-file docs_* id links to a restricted KB via fileId', async () => {
     const ctx = {
-      serverDB: dbWithResults([{ id: 'kb-1' }], [], [], [], [{ id: 'docs_parsed' }]),
+      serverDB: dbWithResults([{ id: 'kb-1' }], [], [], [], [], [{ id: 'docs_parsed' }]),
       userId: 'member',
       workspaceId: 'ws-1',
     };
@@ -346,7 +373,7 @@ describe('assertContentsNotInRestrictedKnowledgeBase', () => {
 
   it('throws FORBIDDEN when a docs_* id belongs to a restricted KB', async () => {
     const ctx = {
-      serverDB: dbWithResults([{ id: 'kb-1' }], [], [], [], [{ id: 'docs_1' }]),
+      serverDB: dbWithResults([{ id: 'kb-1' }], [], [], [], [], [{ id: 'docs_1' }]),
       userId: 'member',
       workspaceId: 'ws-1',
     };
@@ -360,7 +387,7 @@ describe('assertContentsNotInRestrictedKnowledgeBase', () => {
     const ctx = {
       // restriction rows, collaborator grants (none), empty file hit, empty
       // document hit
-      serverDB: dbWithResults([{ id: 'kb-1' }], [], [], [], [], []),
+      serverDB: dbWithResults([{ id: 'kb-1' }], [], [], [], [], [], []),
       userId: 'member',
       workspaceId: 'ws-1',
     };

@@ -315,6 +315,22 @@ describe('KnowledgeRepo', () => {
       expect(ids).not.toContain('doc-policy-exclusive');
     });
 
+    it('filters content linked only to a trashed personal knowledge base', async () => {
+      await serverDB
+        .update(knowledgeBases)
+        .set({ isDeleted: true })
+        .where(eq(knowledgeBases.id, 'kb-1'));
+
+      const rows = await knowledgeRepo.query({
+        excludeTrashedKnowledgeBaseIds: ['kb-1'],
+        showFilesInKnowledgeBase: true,
+      });
+      const ids = rows.map(({ id }) => id);
+
+      expect(ids).not.toContain('file-in-kb');
+      expect(ids).not.toContain('doc-in-kb');
+    });
+
     it('should omit document bodies from summary queries', async () => {
       const content = `Preview body ${'x'.repeat(RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH)}`;
       await serverDB.insert(documents).values({

@@ -65,7 +65,7 @@ const getRestrictedResourceFilters = async (
   const policy = await getRestrictedKnowledgeBasePolicy(ctx);
   return {
     excludeKnowledgeBaseIds: policy.liveRestrictedKnowledgeBaseIds,
-    excludeTrashedKnowledgeBaseIds: policy.trashedRestrictedKnowledgeBaseIds,
+    excludeTrashedKnowledgeBaseIds: policy.trashedKnowledgeBaseIds,
   };
 };
 

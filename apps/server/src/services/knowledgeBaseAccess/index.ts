@@ -10,6 +10,7 @@ import {
   fileInRestrictedKnowledgeBase,
 } from '@/database/utils/restrictedKnowledgeBase';
 import { notTrashed } from '@/database/utils/softDelete';
+import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import {
   assertCanPerformResourceAction,
   type ResourceMeta,
@@ -25,6 +26,8 @@ interface KnowledgeBaseAccessCtx {
 export interface RestrictedKnowledgeBasePolicy {
   allRestrictedKnowledgeBaseIds: string[];
   liveRestrictedKnowledgeBaseIds: string[];
+  /** Every trashed KB visible in the caller's personal/workspace scope. */
+  trashedKnowledgeBaseIds: string[];
   trashedRestrictedKnowledgeBaseIds: string[];
 }
 
@@ -191,7 +194,24 @@ const getRestrictedKnowledgeBaseState = async (
 export const getRestrictedKnowledgeBasePolicy = async (
   ctx: KnowledgeBaseAccessCtx,
 ): Promise<RestrictedKnowledgeBasePolicy> => {
-  return getRestrictedKnowledgeBaseState(ctx);
+  const restricted = await getRestrictedKnowledgeBaseState(ctx);
+  const trashed = await ctx.serverDB
+    .select({ id: knowledgeBases.id })
+    .from(knowledgeBases)
+    .where(
+      and(
+        buildWorkspaceWhere(
+          { includeTrashed: true, userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+          knowledgeBases,
+        ),
+        eq(knowledgeBases.isDeleted, true),
+      ),
+    );
+
+  return {
+    ...restricted,
+    trashedKnowledgeBaseIds: trashed.map(({ id }) => id),
+  };
 };
 
 export const getRestrictedKnowledgeBaseIds = async (
@@ -215,14 +235,18 @@ export const assertFileNotInRestrictedKnowledgeBase = async (
   if (!ctx.workspaceId) return;
 
   const policy = await getRestrictedKnowledgeBasePolicy(ctx);
-  if (policy.allRestrictedKnowledgeBaseIds.length === 0) return;
+  if (
+    policy.allRestrictedKnowledgeBaseIds.length === 0 &&
+    policy.trashedKnowledgeBaseIds.length === 0
+  )
+    return;
   const restricted = fileInRestrictedKnowledgeBase(
     ctx.serverDB,
     files.id,
     { userId: ctx.userId, workspaceId: ctx.workspaceId },
     {
       liveKnowledgeBaseIds: policy.liveRestrictedKnowledgeBaseIds,
-      trashedKnowledgeBaseIds: policy.trashedRestrictedKnowledgeBaseIds,
+      trashedKnowledgeBaseIds: policy.trashedKnowledgeBaseIds,
     },
   );
   const [hidden] = restricted
@@ -255,14 +279,18 @@ export const assertContentsNotInRestrictedKnowledgeBase = async (
   if (!ctx.workspaceId || ids.length === 0) return;
 
   const policy = await getRestrictedKnowledgeBasePolicy(ctx);
-  if (policy.allRestrictedKnowledgeBaseIds.length === 0) return;
+  if (
+    policy.allRestrictedKnowledgeBaseIds.length === 0 &&
+    policy.trashedKnowledgeBaseIds.length === 0
+  )
+    return;
 
   const documentIds = ids.filter((id) => id.startsWith('docs_'));
   const fileIds = ids.filter((id) => !id.startsWith('docs_'));
 
   const restrictedFilter = {
     liveKnowledgeBaseIds: policy.liveRestrictedKnowledgeBaseIds,
-    trashedKnowledgeBaseIds: policy.trashedRestrictedKnowledgeBaseIds,
+    trashedKnowledgeBaseIds: policy.trashedKnowledgeBaseIds,
   };
   const restrictedFile = fileInRestrictedKnowledgeBase(
     ctx.serverDB,

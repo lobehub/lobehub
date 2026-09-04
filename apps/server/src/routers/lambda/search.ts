@@ -137,15 +137,19 @@ export const searchRouter = router({
             workspaceId: ctx.workspaceId ?? undefined,
           }),
         ]);
+        const excludeKnowledgeBaseRootIds = restrictedPolicy
+          ? [
+              ...new Set([
+                ...restrictedPolicy.liveRestrictedKnowledgeBaseIds,
+                ...restrictedPolicy.trashedKnowledgeBaseIds,
+              ]),
+            ]
+          : [];
         const restrictedFilters = restrictedPolicy
           ? {
               excludeKnowledgeBaseIds: restrictedPolicy.liveRestrictedKnowledgeBaseIds,
-              excludeTrashedKnowledgeBaseIds: restrictedPolicy.trashedRestrictedKnowledgeBaseIds,
-              ...(restrictedPolicy.allRestrictedKnowledgeBaseIds.length > 0
-                ? {
-                    excludeKnowledgeBaseRootIds: restrictedPolicy.allRestrictedKnowledgeBaseIds,
-                  }
-                : {}),
+              excludeTrashedKnowledgeBaseIds: restrictedPolicy.trashedKnowledgeBaseIds,
+              ...(excludeKnowledgeBaseRootIds.length > 0 ? { excludeKnowledgeBaseRootIds } : {}),
             }
           : { excludeKnowledgeBaseIds: [] };
         searchPromises.push(

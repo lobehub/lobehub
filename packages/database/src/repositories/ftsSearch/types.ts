@@ -163,7 +163,7 @@ export interface FtsSearchOptions {
   excludeKnowledgeBaseIds?: string[];
   /** Caller-relative KB root ids hidden from the KB result type. */
   excludeKnowledgeBaseRootIds?: string[];
-  /** Deleted restricted KBs; PostgreSQL filters only otherwise-unshared resources. */
+  /** Deleted KBs; PostgreSQL filters only otherwise-unshared resources. */
   excludeTrashedKnowledgeBaseIds?: string[];
   limitPerType?: number;
   offset?: number;

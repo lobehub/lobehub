@@ -387,7 +387,7 @@ export const documentRouter = router({
       return ctx.documentService.queryDocuments({
         ...input,
         excludeKnowledgeBaseIds: restrictedPolicy?.liveRestrictedKnowledgeBaseIds,
-        excludeTrashedKnowledgeBaseIds: restrictedPolicy?.trashedRestrictedKnowledgeBaseIds,
+        excludeTrashedKnowledgeBaseIds: restrictedPolicy?.trashedKnowledgeBaseIds,
       });
     }),
 

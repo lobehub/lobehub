@@ -106,6 +106,39 @@ describe('trashRouter workspace resource permissions', () => {
     expect(mocks.service.restore).toHaveBeenCalledWith(['trash-1']);
   });
 
+  it('checks each resource capability once for a bulk restore', async () => {
+    mocks.service.findByIds.mockResolvedValue([
+      {
+        id: 'trash-file-1',
+        meta: { creatorUserId: 'creator', visibility: 'public' },
+        resourceType: 'file',
+      },
+      {
+        id: 'trash-file-2',
+        meta: { creatorUserId: 'creator', visibility: 'public' },
+        resourceType: 'file',
+      },
+      {
+        id: 'trash-document',
+        meta: { creatorUserId: 'creator', visibility: 'public' },
+        resourceType: 'document',
+      },
+    ]);
+    vi.mocked(hasWorkspaceScopedPermission).mockResolvedValue(true);
+
+    await caller('member').restore({
+      ids: ['trash-file-1', 'trash-file-2', 'trash-document'],
+    });
+
+    expect(hasWorkspaceScopedPermission).toHaveBeenCalledTimes(2);
+    expect(hasWorkspaceScopedPermission).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'FILE_UPDATE' }),
+    );
+    expect(hasWorkspaceScopedPermission).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'DOCUMENT_UPDATE' }),
+    );
+  });
+
   it('never exposes another creator private resource through an explicit id', async () => {
     mocks.service.findByIds.mockResolvedValue([
       {

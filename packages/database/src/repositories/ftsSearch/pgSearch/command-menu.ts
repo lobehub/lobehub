@@ -377,17 +377,10 @@ export async function searchFiles(
         context.liftedScopeWhere(hits.workspaceId),
         context.liftedTrashWhere(hits.isDeleted),
         excludeIds?.length ? notInArray(hits.id, excludeIds) : undefined,
-        context.scope.workspaceId
-          ? excludeRestrictedFile(
-              db,
-              hits.id,
-              { userId: context.scope.userId, workspaceId: context.scope.workspaceId },
-              {
-                liveKnowledgeBaseIds: excludeKbIds,
-                trashedKnowledgeBaseIds: excludeTrashedKbIds,
-              },
-            )
-          : undefined,
+        excludeRestrictedFile(db, hits.id, context.scope, {
+          liveKnowledgeBaseIds: excludeKbIds,
+          trashedKnowledgeBaseIds: excludeTrashedKbIds,
+        }),
       ),
     )
     .orderBy(desc(hits.score))

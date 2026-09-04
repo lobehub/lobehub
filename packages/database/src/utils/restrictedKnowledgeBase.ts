@@ -1,20 +1,20 @@
 import type { SQL, SQLWrapper } from 'drizzle-orm';
-import { and, eq, exists, inArray, isNotNull, isNull, not, notInArray, or } from 'drizzle-orm';
+import { and, eq, exists, inArray, isNotNull, not, notInArray, or } from 'drizzle-orm';
 
 import { knowledgeBaseFiles, knowledgeBases } from '../schemas';
 import type { LobeChatDatabase } from '../type';
-import { notTrashed } from './softDelete';
+import { buildWorkspaceWhere } from './workspace';
 
 export interface RestrictedKnowledgeBaseFilter {
   /** Live restricted libraries. Any membership hides the resource. */
   liveKnowledgeBaseIds?: string[];
-  /** Deleted restricted libraries. Membership hides only otherwise-unshared resources. */
+  /** Deleted libraries. Membership hides only otherwise-unshared resources. */
   trashedKnowledgeBaseIds?: string[];
 }
 
 interface RestrictedKnowledgeBaseScope {
   userId: string;
-  workspaceId: string;
+  workspaceId?: string;
 }
 
 const hasMembership = (db: LobeChatDatabase, fileId: SQLWrapper, knowledgeBaseIds: string[]) =>
@@ -44,16 +44,10 @@ const hasBrowsableLiveMembership = (
       .where(
         and(
           eq(knowledgeBaseFiles.fileId, fileId),
-          eq(knowledgeBases.workspaceId, scope.workspaceId),
-          notTrashed(knowledgeBases.isDeleted),
+          buildWorkspaceWhere(scope, knowledgeBases),
           liveRestrictedIds.length > 0
             ? notInArray(knowledgeBases.id, liveRestrictedIds)
             : undefined,
-          or(
-            isNull(knowledgeBases.visibility),
-            eq(knowledgeBases.visibility, 'public'),
-            eq(knowledgeBases.userId, scope.userId),
-          ),
         ),
       ),
   );

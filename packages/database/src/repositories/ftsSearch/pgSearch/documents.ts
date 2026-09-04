@@ -70,17 +70,15 @@ export async function searchFolders(
         context.liftedScopeWhere(hits.workspaceId),
         context.liftedTrashWhere(hits.isDeleted),
         excludeIds?.length ? notInArray(hits.id, excludeIds) : undefined,
-        context.scope.workspaceId
-          ? excludeRestrictedDocument(
-              db,
-              { fileId: hits.fileId, knowledgeBaseId: hits.knowledgeBaseId },
-              { userId: context.scope.userId, workspaceId: context.scope.workspaceId },
-              {
-                liveKnowledgeBaseIds: excludeKbIds,
-                trashedKnowledgeBaseIds: excludeTrashedKbIds,
-              },
-            )
-          : undefined,
+        excludeRestrictedDocument(
+          db,
+          { fileId: hits.fileId, knowledgeBaseId: hits.knowledgeBaseId },
+          context.scope,
+          {
+            liveKnowledgeBaseIds: excludeKbIds,
+            trashedKnowledgeBaseIds: excludeTrashedKbIds,
+          },
+        ),
       ),
     )
     .orderBy(desc(hits.score))
@@ -154,17 +152,15 @@ export async function searchPages(
         context.liftedScopeWhere(hits.workspaceId),
         context.liftedTrashWhere(hits.isDeleted),
         excludeIds?.length ? notInArray(hits.id, excludeIds) : undefined,
-        context.scope.workspaceId
-          ? excludeRestrictedDocument(
-              db,
-              { fileId: hits.fileId, knowledgeBaseId: hits.knowledgeBaseId },
-              { userId: context.scope.userId, workspaceId: context.scope.workspaceId },
-              {
-                liveKnowledgeBaseIds: excludeKbIds,
-                trashedKnowledgeBaseIds: excludeTrashedKbIds,
-              },
-            )
-          : undefined,
+        excludeRestrictedDocument(
+          db,
+          { fileId: hits.fileId, knowledgeBaseId: hits.knowledgeBaseId },
+          context.scope,
+          {
+            liveKnowledgeBaseIds: excludeKbIds,
+            trashedKnowledgeBaseIds: excludeTrashedKbIds,
+          },
+        ),
       ),
     )
     .orderBy(desc(hits.score))

@@ -654,7 +654,7 @@ export class FileModel {
     // Cross-KB listing: drop files linked to restricted knowledge bases. A file
     // that also belongs to an open KB is still dropped — over-hiding beats
     // leaking a restricted KB's content through a shared membership.
-    else if (this.workspaceId) {
+    else {
       whereClause = and(
         whereClause,
         excludeRestrictedFile(

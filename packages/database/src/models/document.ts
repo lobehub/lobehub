@@ -176,18 +176,16 @@ export class DocumentModel {
       conditions.push(inArray(documents.fileType, fileTypes));
     }
 
-    if (this.workspaceId) {
-      const restrictedFilter = excludeRestrictedDocument(
-        this.db,
-        { fileId: documents.fileId, knowledgeBaseId: documents.knowledgeBaseId },
-        { userId: this.userId, workspaceId: this.workspaceId },
-        {
-          liveKnowledgeBaseIds: excludeKnowledgeBaseIds,
-          trashedKnowledgeBaseIds: excludeTrashedKnowledgeBaseIds,
-        },
-      );
-      if (restrictedFilter) conditions.push(restrictedFilter);
-    }
+    const restrictedFilter = excludeRestrictedDocument(
+      this.db,
+      { fileId: documents.fileId, knowledgeBaseId: documents.knowledgeBaseId },
+      { userId: this.userId, workspaceId: this.workspaceId },
+      {
+        liveKnowledgeBaseIds: excludeKnowledgeBaseIds,
+        trashedKnowledgeBaseIds: excludeTrashedKnowledgeBaseIds,
+      },
+    );
+    if (restrictedFilter) conditions.push(restrictedFilter);
 
     if (sourceTypes?.length) {
       conditions.push(

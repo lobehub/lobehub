@@ -482,17 +482,10 @@ export const hydrateFiles = async (
         buildWorkspaceWhere(scope, files),
         ne(files.fileType, 'custom/document'),
         or(isNull(files.source), notInArray(files.source, LIBRARY_HIDDEN_FILE_SOURCES)),
-        scope.workspaceId
-          ? excludeRestrictedFile(
-              db,
-              files.id,
-              { userId: scope.userId, workspaceId: scope.workspaceId },
-              {
-                liveKnowledgeBaseIds: excludeKnowledgeBaseIds,
-                trashedKnowledgeBaseIds: excludeTrashedKnowledgeBaseIds,
-              },
-            )
-          : undefined,
+        excludeRestrictedFile(db, files.id, scope, {
+          liveKnowledgeBaseIds: excludeKnowledgeBaseIds,
+          trashedKnowledgeBaseIds: excludeTrashedKnowledgeBaseIds,
+        }),
       ),
     );
   const fileIds = rows.map(({ id }) => id);
@@ -564,17 +557,15 @@ export const hydrateFolders = async (
         ),
         buildWorkspaceWhere(scope, documents),
         eq(documents.fileType, DOCUMENT_FOLDER_TYPE),
-        scope.workspaceId
-          ? excludeRestrictedDocument(
-              db,
-              { fileId: documents.fileId, knowledgeBaseId: documents.knowledgeBaseId },
-              { userId: scope.userId, workspaceId: scope.workspaceId },
-              {
-                liveKnowledgeBaseIds: excludeKnowledgeBaseIds,
-                trashedKnowledgeBaseIds: excludeTrashedKnowledgeBaseIds,
-              },
-            )
-          : undefined,
+        excludeRestrictedDocument(
+          db,
+          { fileId: documents.fileId, knowledgeBaseId: documents.knowledgeBaseId },
+          scope,
+          {
+            liveKnowledgeBaseIds: excludeKnowledgeBaseIds,
+            trashedKnowledgeBaseIds: excludeTrashedKnowledgeBaseIds,
+          },
+        ),
       ),
     );
   return attachScores(rows, hits)
@@ -621,17 +612,15 @@ export const hydratePages = async (
         ),
         buildWorkspaceWhere(scope, documents),
         eq(documents.fileType, 'custom/document'),
-        scope.workspaceId
-          ? excludeRestrictedDocument(
-              db,
-              { fileId: documents.fileId, knowledgeBaseId: documents.knowledgeBaseId },
-              { userId: scope.userId, workspaceId: scope.workspaceId },
-              {
-                liveKnowledgeBaseIds: excludeKnowledgeBaseIds,
-                trashedKnowledgeBaseIds: excludeTrashedKnowledgeBaseIds,
-              },
-            )
-          : undefined,
+        excludeRestrictedDocument(
+          db,
+          { fileId: documents.fileId, knowledgeBaseId: documents.knowledgeBaseId },
+          scope,
+          {
+            liveKnowledgeBaseIds: excludeKnowledgeBaseIds,
+            trashedKnowledgeBaseIds: excludeTrashedKnowledgeBaseIds,
+          },
+        ),
       ),
     );
   return attachScores(rows, hits)

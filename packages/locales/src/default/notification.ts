@@ -176,19 +176,31 @@ export default {
     '{{actorLabel}} moved your {{resourceLabel}} "{{resourceTitle}}" to Trash.',
   'workspace_resource_deleted_by_member_document':
     '{{actorLabel}} moved your document "{{resourceTitle}}" to Trash.',
+  'workspace_resource_deleted_by_member_document_untitled':
+    '{{actorLabel}} moved your untitled document to Trash.',
   'workspace_resource_deleted_by_member_file':
     '{{actorLabel}} moved your file "{{resourceTitle}}" to Trash.',
+  'workspace_resource_deleted_by_member_file_untitled':
+    '{{actorLabel}} moved your untitled file to Trash.',
   'workspace_resource_deleted_by_member_knowledge_base':
     '{{actorLabel}} moved your knowledge base "{{resourceTitle}}" to Trash.',
+  'workspace_resource_deleted_by_member_knowledge_base_untitled':
+    '{{actorLabel}} moved your untitled knowledge base to Trash.',
   'workspace_resource_deleted_by_member_title': 'Workspace resource moved to Trash',
   'workspace_resource_restored_by_member':
     '{{actorLabel}} restored your {{resourceLabel}} "{{resourceTitle}}" from Trash.',
   'workspace_resource_restored_by_member_document':
     '{{actorLabel}} restored your document "{{resourceTitle}}" from Trash.',
+  'workspace_resource_restored_by_member_document_untitled':
+    '{{actorLabel}} restored your untitled document from Trash.',
   'workspace_resource_restored_by_member_file':
     '{{actorLabel}} restored your file "{{resourceTitle}}" from Trash.',
+  'workspace_resource_restored_by_member_file_untitled':
+    '{{actorLabel}} restored your untitled file from Trash.',
   'workspace_resource_restored_by_member_knowledge_base':
     '{{actorLabel}} restored your knowledge base "{{resourceTitle}}" from Trash.',
+  'workspace_resource_restored_by_member_knowledge_base_untitled':
+    '{{actorLabel}} restored your untitled knowledge base from Trash.',
   'workspace_resource_restored_by_member_title': 'Workspace resource restored',
   'workspace_subscription_expired':
     'The subscription for workspace "{{workspaceName}}" has ended. Renew within {{days}} days to restore full access before the workspace is downgraded.',

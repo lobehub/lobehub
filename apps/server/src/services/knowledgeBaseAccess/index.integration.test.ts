@@ -2,6 +2,7 @@
 import { getTestDB } from '@lobechat/database/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { KnowledgeRepo } from '@/database/repositories/knowledge';
 import {
   documents,
   files,
@@ -59,6 +60,14 @@ beforeEach(async () => {
       visibility: 'public',
       workspaceId,
     },
+    {
+      id: 'kb-trashed-open',
+      isDeleted: true,
+      name: 'Trashed open',
+      userId: ownerId,
+      visibility: 'public',
+      workspaceId,
+    },
   ]);
   await serverDB.insert(resourcePermissions).values([
     {
@@ -97,6 +106,16 @@ beforeEach(async () => {
       visibility: 'public',
       workspaceId,
     },
+    {
+      fileType: 'text/plain',
+      id: 'file-open-trash-exclusive',
+      name: 'open-trash-exclusive.txt',
+      size: 1,
+      url: 'files/open-trash-exclusive.txt',
+      userId: ownerId,
+      visibility: 'public',
+      workspaceId,
+    },
   ]);
   await serverDB.insert(knowledgeBaseFiles).values([
     {
@@ -114,6 +133,12 @@ beforeEach(async () => {
     {
       fileId: 'file-trashed-shared',
       knowledgeBaseId: 'kb-live-open',
+      userId: ownerId,
+      workspaceId,
+    },
+    {
+      fileId: 'file-open-trash-exclusive',
+      knowledgeBaseId: 'kb-trashed-open',
       userId: ownerId,
       workspaceId,
     },
@@ -161,6 +186,19 @@ beforeEach(async () => {
       visibility: 'public',
       workspaceId,
     },
+    {
+      fileType: 'custom/document',
+      id: 'docs-open-trash-exclusive',
+      knowledgeBaseId: 'kb-trashed-open',
+      source: '',
+      sourceType: 'api',
+      title: 'Open trash exclusive page',
+      totalCharCount: 0,
+      totalLineCount: 0,
+      userId: ownerId,
+      visibility: 'public',
+      workspaceId,
+    },
   ]);
 });
 
@@ -177,7 +215,20 @@ describe('restricted knowledge-base policy integration', () => {
       ['kb-live-restricted', 'kb-trashed-restricted'].sort(),
     );
     expect(policy.liveRestrictedKnowledgeBaseIds).toEqual(['kb-live-restricted']);
+    expect(policy.trashedKnowledgeBaseIds.sort()).toEqual(
+      ['kb-trashed-open', 'kb-trashed-restricted'].sort(),
+    );
     expect(policy.trashedRestrictedKnowledgeBaseIds).toEqual(['kb-trashed-restricted']);
+
+    const rows = await new KnowledgeRepo(serverDB, memberId, workspaceId).query({
+      excludeKnowledgeBaseIds: policy.liveRestrictedKnowledgeBaseIds,
+      excludeTrashedKnowledgeBaseIds: policy.trashedKnowledgeBaseIds,
+      showFilesInKnowledgeBase: true,
+    });
+    const ids = rows.map(({ id }) => id);
+    expect(ids).not.toContain('file-open-trash-exclusive');
+    expect(ids).not.toContain('docs-open-trash-exclusive');
+    expect(rows.some(({ fileId }) => fileId === 'file-trashed-shared')).toBe(true);
     await expect(
       assertFileNotInRestrictedKnowledgeBase(ctx, 'file-trashed-exclusive'),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
