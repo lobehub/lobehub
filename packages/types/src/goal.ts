@@ -232,6 +232,8 @@ export interface GoalGraphWorkVersionLink {
 export interface GoalGraphWorkVersionDisplay {
   /** Agent document behind a `document` Work — the in-app open target. */
   agentDocumentId?: string;
+  /** Durable download target of a `file` Work, which keeps it out of `url`. */
+  fileUrl?: string;
   identifier: string | null;
   status: string | null;
   title: string | null;

@@ -345,6 +345,39 @@ describe('buildGoalGraphView', () => {
     expect(view.artifacts.map((a) => a.workId)).toEqual(['wk2', 'wk1']);
   });
 
+  it('opens a generated file at the url its version metadata carries', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        nodes: [node('w1')],
+        workVersions: [
+          {
+            createdAt: at(5),
+            id: 'l1',
+            nodeId: 'w1',
+            relation: 'produced',
+            // A file Work keeps its target in the version metadata, so the
+            // `url` column is null and the row would otherwise not open.
+            work: {
+              fileUrl: 'https://cdn.example.com/deck.pptx',
+              identifier: null,
+              status: null,
+              title: 'deck.pptx',
+              type: 'file',
+              url: null,
+              workId: 'wk1',
+            },
+            workVersionId: 'v1',
+          },
+        ],
+      }),
+      NOW,
+    );
+
+    expect(view.artifacts).toMatchObject([
+      { title: 'deck.pptx', type: 'file', url: 'https://cdn.example.com/deck.pptx' },
+    ]);
+  });
+
   it('leaves the responsible task Work and unresolvable links out of the deliverables', () => {
     const view = buildGoalGraphView(
       snapshot({

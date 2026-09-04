@@ -130,8 +130,10 @@ export class GoalGraphModel {
       // deliverable costs two joins rather than a second round-trip per link.
       this.db
         .select({
-          agentDocumentId: workVersions.metadata,
           identifier: workVersions.identifier,
+          // Document and file Works keep their open target in the version
+          // metadata rather than the `url` column.
+          metadata: workVersions.metadata,
           link: goalNodeWorkVersions,
           status: workVersions.status,
           title: workVersions.title,
@@ -165,9 +167,10 @@ export class GoalGraphModel {
                 type,
                 url: display.url,
                 workId,
-                ...(display.agentDocumentId?.agentDocumentId
-                  ? { agentDocumentId: display.agentDocumentId.agentDocumentId }
+                ...(display.metadata?.agentDocumentId
+                  ? { agentDocumentId: display.metadata.agentDocumentId }
                   : {}),
+                ...(display.metadata?.fileUrl ? { fileUrl: display.metadata.fileUrl } : {}),
               }
             : undefined,
       })),

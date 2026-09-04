@@ -518,7 +518,7 @@
   "goalProcess.attempts.retired": "已放弃",
   "goalProcess.attempts.running": "进行中",
   "goalProcess.attempts.title": "之前的尝试",
-  "goalProcess.deliverables.empty": "还没有交付物——任务产出的文档和关联资源会出现在这里。",
+  "goalProcess.deliverables.empty": "还没有交付物。任务写入产品的文档、生成的文件和关联资源会出现在这里——只留在本地路径上的产物不会。",
   "goalProcess.deliverables.from": "来自「{{title}}」",
   "goalProcess.deliverables.title": "交付物",
   "goalProcess.deliverables.untitled": "未命名",

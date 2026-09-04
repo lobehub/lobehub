@@ -1258,6 +1258,11 @@ export class GoalService {
       'The complete requirements for this Task are included here. Do not inspect unrelated agent documents to recover requirements. Do not invoke Acceptance skills or Acceptance CLI commands during the main Task; a dedicated post-run phase will ask you to submit your evidence before an independent verifier judges it.',
       'Create implementation-level subtasks when useful. Finish the operation once the Current Task deliverable and its concrete evidence are ready; Acceptance verification will decide whether this Task is complete.',
       'Make the final delivery self-contained for an independent verifier that may not have workspace access. Include the relevant artifact contents or exact excerpts and the raw outputs of decisive verification commands; file paths and claims that checks passed are not sufficient evidence by themselves.',
+      // A path on the machine that happened to run the task is not a
+      // deliverable: the goal page cannot open it, the reviewer cannot read it,
+      // and /tmp does not survive the week. Only artifacts that reach the
+      // product are harvested onto the Goal Graph (see attachTaskDeliverables).
+      'Persist every deliverable inside the product, not only on the local disk. Write reports and analyses as agent documents, and produce generated files (pptx / xlsx / docx / pdf, …) in the operation workspace so they are uploaded and registered. A local path such as /tmp or a repository directory is a working location, not a delivery — anything left only there is unreviewable and is not attached to the Goal.',
       'Return the produced artifacts, evidence, key findings, and the recommended next action. Do not mark the overall Goal complete.',
     ]
       .filter(Boolean)
@@ -1402,9 +1407,11 @@ export class GoalService {
    * linked at their newest version, so a document refined across rounds is one
    * deliverable with a history rather than several deliverables.
    *
-   * `file` and `task` Works are deliberately excluded. A `file` Work is an
-   * edit-level event — the Work registry itself gates them behind an opt-in —
-   * and the responsible task's own Work is already linked by the caller.
+   * `task` Works are deliberately excluded: the responsible task's own Work is
+   * the execution container and the caller already links it. `file` Works are
+   * opt-in at the registry (conversation lists do not want every exported
+   * file), but a goal's deliverables are exactly where a produced deck or PDF
+   * belongs, so they are requested explicitly here.
    */
   private attachTaskDeliverables = async (
     goalId: string,
@@ -1415,12 +1422,13 @@ export class GoalService {
     if (operationIds.length === 0) return;
 
     const byOperation = await this.workModel.listByRootOperations({
+      includeFileWorks: true,
       rootOperationIds: operationIds,
     });
 
     const newestByWork = new Map<string, WorkVersionEventItem>();
     for (const item of Object.values(byOperation).flat()) {
-      if (item.type !== 'document' && item.type !== 'external') continue;
+      if (item.type === 'task') continue;
       const seen = newestByWork.get(item.id);
       if (!seen || seen.version.createdAt < item.version.createdAt) newestByWork.set(item.id, item);
     }

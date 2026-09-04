@@ -3,10 +3,10 @@
 import { Flexbox, Icon } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ExternalLink, FileText, Link2 } from 'lucide-react';
+import { ExternalLink, FileDown, FileText, Link2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 
 import { useActivityTime } from '@/hooks/useActivityTime';
 
@@ -20,6 +20,10 @@ import { KindDot } from './shared';
  * are deliberately separate rows: a finding is the synthesized prose, the
  * deliverable is the artifact that prose is about, and until now the artifact
  * survived only as a URL buried inside that prose.
+ *
+ * Only artifacts the run persisted into the product appear. Anything a task
+ * left on a local path is invisible here by construction — which is what the
+ * empty state says, and what the dispatched task contract asks for up front.
  *
  * Goal-level rather than per-task, because "show me the report" is a question
  * about the goal — no single task node can answer it.
@@ -49,8 +53,10 @@ const DeliverableRow = memo<{
 }>(({ artifact, onOpen, producerTitle }) => {
   const { t } = useTranslation('chat');
   const { text, title } = useActivityTime(artifact.createdAt);
-  // An external Work opens away from the app; a document opens inside it.
-  const external = artifact.type === 'external';
+  // A document opens inside the app; a generated file downloads; an external
+  // resource leaves for its own site.
+  const icon =
+    artifact.type === 'document' ? FileText : artifact.type === 'file' ? FileDown : ExternalLink;
 
   return (
     <Flexbox
@@ -60,11 +66,7 @@ const DeliverableRow = memo<{
       gap={8}
       onClick={() => onOpen(artifact)}
     >
-      <Icon
-        color={cssVar.colorTextQuaternary}
-        icon={external ? ExternalLink : FileText}
-        size={14}
-      />
+      <Icon color={cssVar.colorTextQuaternary} icon={icon} size={14} />
       <Text ellipsis style={{ flexShrink: 1, minWidth: 0 }} weight={500}>
         {artifact.title || artifact.identifier || t('goalProcess.deliverables.untitled')}
       </Text>

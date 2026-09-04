@@ -1991,7 +1991,7 @@ export default {
   'goalProcess.node.humanTouched': 'You took part in this task',
   'goalProcess.deliverables.title': 'Deliverables',
   'goalProcess.deliverables.empty':
-    'Nothing delivered yet — documents and linked resources a task produces show up here.',
+    'Nothing delivered yet. Documents, generated files and linked resources a task persists show up here — anything left only on a local path does not.',
   'goalProcess.deliverables.from': 'From “{{title}}”',
   'goalProcess.deliverables.untitled': 'Untitled',
   'goalProcess.findings.title': 'Findings',

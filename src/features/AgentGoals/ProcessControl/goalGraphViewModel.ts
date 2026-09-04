@@ -244,7 +244,8 @@ export const buildGoalGraphView = (
       nodeId: link.nodeId,
       title: link.work.title,
       type: link.work.type,
-      url: link.work.url,
+      // A file Work carries its target in the version metadata, not `url`.
+      url: link.work.url ?? link.work.fileUrl ?? null,
       workId: link.work.workId,
       workVersionId: link.workVersionId,
       ...(link.work.agentDocumentId ? { agentDocumentId: link.work.agentDocumentId } : {}),
