@@ -88,125 +88,101 @@ export class MCPService {
     return rest as Omit<T, 'env'>;
   };
 
-  // --- MCP Interaction ---
-
-  // listTools now accepts MCPClientParams
-  async listTools(params: MCPClientParams): Promise<LobeChatPluginApi[]> {
+  /**
+   * Run an MCP operation with automatic session re-establishment.
+   *
+   * When the remote MCP server restarts, the cached client keeps sending the
+   * stale session id and the server rejects it (`-32000 / No valid session ID
+   * provided`), surfaced by MCPClient as a `NoValidSessionId` error. On that
+   * error we discard the cached client (`skipCache`) and retry, so the next
+   * attempt re-initializes a fresh session transparently. Any other error bails
+   * immediately as a TRPCError without retrying.
+   */
+  private async withSessionRetry<T>(
+    params: MCPClientParams,
+    operationName: string,
+    operation: (client: MCPClient) => Promise<T>,
+  ): Promise<T> {
     const loggableParams = this.sanitizeForLogging(params);
 
     return retry(
       async (bail, attemptNumber) => {
-        // Skip cache on retry attempts
+        // Skip cache on retry attempts to drop the stale (dead) session
         const skipCache = attemptNumber > 1;
-        const client = await this.getClient(params, skipCache);
-        log(`Listing tools using client for params: %O (attempt ${attemptNumber})`, loggableParams);
+        log(`${operationName} for params: %O (attempt ${attemptNumber})`, loggableParams);
 
         try {
-          const result = await client.listTools();
-          log(
-            `Tools listed successfully for params: %O, result count: %d`,
-            loggableParams,
-            result.length,
-          );
-          return result.map<LobeChatPluginApi>((item) => ({
-            // Assuming identifier is the unique name/id
-            description: item.description,
-            name: item.name,
-            parameters: item.inputSchema as ToolManifestSettings,
-          }));
+          // Keep getClient inside the guarded block: a client initialization
+          // failure (bad URL/token, stdio spawn error) is NOT a stale-session
+          // error, so it must bail immediately instead of retrying — otherwise
+          // we'd repeat auth attempts / respawn stdio commands needlessly.
+          const client = await this.getClient(params, skipCache);
+          return await operation(client);
         } catch (error) {
           // Only retry for NoValidSessionId errors
           if ((error as Error).message !== 'NoValidSessionId') {
-            console.error(`Error listing tools for params %O:`, loggableParams, error);
+            console.error(`Error ${operationName} for params %O:`, loggableParams, error);
             bail(
-              new TRPCError({
-                cause: error,
-                code: 'INTERNAL_SERVER_ERROR',
-                message: `Error listing tools from MCP server: ${(error as Error).message}`,
-              }),
+              error instanceof TRPCError
+                ? error
+                : new TRPCError({
+                    cause: error,
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: `Error ${operationName} from MCP server: ${(error as Error).message}`,
+                  }),
             );
-            return []; // This line will never be reached due to bail, but needed for type safety
+            // After bail() the promise is already rejected; return (do NOT throw)
+            // so async-retry does not schedule another attempt.
+            return undefined as T;
           }
-          throw error; // Rethrow to trigger retry
+          throw error; // rethrow to trigger retry with a fresh session
         }
       },
       { maxRetryTime: 1000, minTimeout: 100, retries: 3 },
     );
   }
 
+  // --- MCP Interaction ---
+
+  // listTools now accepts MCPClientParams
+  async listTools(params: MCPClientParams): Promise<LobeChatPluginApi[]> {
+    return this.withSessionRetry(params, 'listing tools', async (client) => {
+      const result = await client.listTools();
+      log(`Tools listed successfully, result count: %d`, result.length);
+      return result.map<LobeChatPluginApi>((item) => ({
+        // Assuming identifier is the unique name/id
+        description: item.description,
+        name: item.name,
+        parameters: item.inputSchema as ToolManifestSettings,
+      }));
+    });
+  }
+
   // listTools now accepts MCPClientParams
   async listRawTools(params: MCPClientParams): Promise<McpTool[]> {
-    const client = await this.getClient(params); // Get client using params
-    const loggableParams = this.sanitizeForLogging(params);
-    log(`Listing tools using client for params: %O`, loggableParams);
-
-    try {
+    return this.withSessionRetry(params, 'listing tools', async (client) => {
       const result = await client.listTools();
-      log(
-        `Tools listed successfully for params: %O, result count: %d`,
-        loggableParams,
-        result.length,
-      );
+      log(`Tools listed successfully, result count: %d`, result.length);
       return result;
-    } catch (error) {
-      console.error(`Error listing tools for params %O:`, loggableParams, error);
-      // Propagate a TRPCError for better handling upstream
-      throw new TRPCError({
-        cause: error,
-        code: 'INTERNAL_SERVER_ERROR',
-        message: `Error listing tools from MCP server: ${(error as Error).message}`,
-      });
-    }
+    });
   }
 
   // listResources now accepts MCPClientParams
   async listResources(params: MCPClientParams): Promise<McpResource[]> {
-    const client = await this.getClient(params); // Get client using params
-    const loggableParams = this.sanitizeForLogging(params);
-    log(`Listing resources using client for params: %O`, loggableParams);
-
-    try {
+    return this.withSessionRetry(params, 'listing resources', async (client) => {
       const result = await client.listResources();
-      log(
-        `Resources listed successfully for params: %O, result count: %d`,
-        loggableParams,
-        result.length,
-      );
+      log(`Resources listed successfully, result count: %d`, result.length);
       return result;
-    } catch (error) {
-      console.error(`Error listing resources for params %O:`, loggableParams, error);
-      // Propagate a TRPCError for better handling upstream
-      throw new TRPCError({
-        cause: error,
-        code: 'INTERNAL_SERVER_ERROR',
-        message: `Error listing resources from MCP server: ${(error as Error).message}`,
-      });
-    }
+    });
   }
 
   // listPrompts now accepts MCPClientParams
   async listPrompts(params: MCPClientParams): Promise<McpPrompt[]> {
-    const client = await this.getClient(params); // Get client using params
-    const loggableParams = this.sanitizeForLogging(params);
-    log(`Listing prompts using client for params: %O`, loggableParams);
-
-    try {
+    return this.withSessionRetry(params, 'listing prompts', async (client) => {
       const result = await client.listPrompts();
-      log(
-        `Prompts listed successfully for params: %O, result count: %d`,
-        loggableParams,
-        result.length,
-      );
+      log(`Prompts listed successfully, result count: %d`, result.length);
       return result;
-    } catch (error) {
-      console.error(`Error listing prompts for params %O:`, loggableParams, error);
-      // Propagate a TRPCError for better handling upstream
-      throw new TRPCError({
-        cause: error,
-        code: 'INTERNAL_SERVER_ERROR',
-        message: `Error listing prompts from MCP server: ${(error as Error).message}`,
-      });
-    }
+    });
   }
 
   // callTool now accepts an object with clientParams, toolName, argsStr, and processContentBlocks
@@ -223,61 +199,47 @@ export class MCPService {
       processContentBlocks: processContentBlocksFn,
     } = options;
 
-    const client = await this.getClient(clientParams); // Get client using params
-
     const args = safeParseJSON(argsStr);
-    const loggableParams = this.sanitizeForLogging(clientParams);
 
-    log(
-      `Calling tool "${toolName}" using client for params: %O with args: %O`,
-      loggableParams,
-      args,
-    );
+    return this.withSessionRetry(clientParams, `calling tool "${toolName}"`, async (client) => {
+      log(`Calling tool "${toolName}" with args: %O`, args);
 
-    try {
-      // Delegate the call to the MCPClient instance
-      const result = await client.callTool(toolName, args); // Pass args directly
+      try {
+        // Delegate the call to the MCPClient instance
+        const result = await client.callTool(toolName, args); // Pass args directly
 
-      // Use the common processing method
-      const processedResult = await MCPService.processToolCallResult(
-        result,
-        processContentBlocksFn,
-      );
+        // Use the common processing method
+        const processedResult = await MCPService.processToolCallResult(
+          result,
+          processContentBlocksFn,
+        );
 
-      log(
-        `Tool "${toolName}" called successfully for params: %O, result: %O`,
-        loggableParams,
-        processedResult.state,
-      );
+        log(`Tool "${toolName}" called successfully, result: %O`, processedResult.state);
 
-      return processedResult;
-    } catch (error) {
-      if (error instanceof McpError) {
-        const mcpError = error as McpError;
+        return processedResult;
+      } catch (error) {
+        // Session errors must bubble up so withSessionRetry can reconnect & retry
+        if ((error as Error).message === 'NoValidSessionId') throw error;
 
-        return {
-          content: mcpError.message,
-          error,
-          state: {
-            content: [{ text: mcpError.message, type: 'text' }],
-            isError: true,
-          },
-          success: false,
-        };
+        // Tool-level MCP errors are returned as a failed tool result, not thrown
+        if (error instanceof McpError) {
+          const mcpError = error as McpError;
+
+          return {
+            content: mcpError.message,
+            error,
+            state: {
+              content: [{ text: mcpError.message, type: 'text' }],
+              isError: true,
+            },
+            success: false,
+          };
+        }
+
+        // Other errors propagate; withSessionRetry wraps them as a TRPCError
+        throw error;
       }
-
-      console.error(
-        `Error calling tool "${toolName}" for params %O:`,
-        this.sanitizeForLogging(clientParams),
-        error,
-      );
-      // Propagate a TRPCError
-      throw new TRPCError({
-        cause: error,
-        code: 'INTERNAL_SERVER_ERROR',
-        message: `Error calling tool "${toolName}" on MCP server: ${(error as Error).message}`,
-      });
-    }
+    });
   }
 
   // Private method to get or initialize a client based on parameters
