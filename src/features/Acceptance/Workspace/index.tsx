@@ -1,15 +1,18 @@
 'use client';
 
 import { Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Drawer } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { PanelLeftOpen } from 'lucide-react';
-import { memo } from 'react';
+import { Menu, PanelLeftOpen } from 'lucide-react';
+import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Outlet, useParams, useSearchParams } from 'react-router';
+import { Outlet, useNavigate, useParams, useSearchParams } from 'react-router';
 
+import { ShellTopBar } from '@/features/PageShell';
 import { RouteMetaBridge } from '@/features/RouteMeta';
 
 import { useAcceptanceList } from '../hooks';
+import { acceptanceHomePath } from '../Viewer/routes';
 import AcceptanceListPanel from './AcceptanceListPanel';
 import AcceptanceOnboarding from './AcceptanceOnboarding';
 import { useAcceptanceProjectActionItems } from './AcceptanceProjectActions';
@@ -58,13 +61,8 @@ interface AcceptanceOnboardingState {
   data?: unknown[];
   enabled: boolean;
   error?: unknown;
-  /**
-   * A deep-linked `:acceptanceId` must render even when the viewer's own list
-   * is empty — a shared link is often the very first acceptance a user opens,
-   * and the install onboarding would swallow it entirely.
-   */
   hasDeepLink?: boolean;
-  isLoading: boolean;
+  isLoading?: boolean;
 }
 
 export const shouldShowAcceptanceOnboarding = ({
@@ -82,30 +80,68 @@ interface AcceptanceWorkspaceProps {
 
 const AcceptanceWorkspace = memo<AcceptanceWorkspaceProps>(({ projectId }) => {
   const { t } = useTranslation('verify');
+  const navigate = useNavigate();
   const panel = useReportPanelExpand();
   const projectActionItems = useAcceptanceProjectActionItems();
   const { acceptanceId, checkId } = useParams<{ acceptanceId: string; checkId: string }>();
   const [searchParams] = useSearchParams();
   const hasFocusedCheck = Boolean(checkId || searchParams.get('check'));
+
+  /**
+   * Inside a project the workspace is already wearing the `(main)` shell's
+   * chrome, so it keeps its inline rail. Only the standalone `/acceptance`
+   * route — registered outside `(main)`, with nothing above it — grows a top
+   * bar of its own, and there the list becomes a drawer so a record can own
+   * the full width without the collection having to disappear to give it.
+   */
+  const standalone = !projectId;
   const showList = !hasFocusedCheck;
+  const [listOpen, setListOpen] = useState(false);
+  // Picking a row is what the drawer was opened to cause; once the route has
+  // changed the drawer has nothing left to do.
+  useEffect(() => {
+    setListOpen(false);
+  }, [acceptanceId]);
+
   const {
     data: allAcceptances,
     error,
     isLoading,
-  } = useAcceptanceList(showList, {
+  } = useAcceptanceList(standalone ? !acceptanceId : showList, {
     filter: 'all',
     projectId,
   });
   const isFirstUse = shouldShowAcceptanceOnboarding({
     data: allAcceptances,
-    enabled: showList && !projectId,
+    enabled: standalone ? !acceptanceId : showList && !projectId,
     error,
     hasDeepLink: Boolean(acceptanceId),
     isLoading,
   });
 
+  const topBar = standalone ? (
+    <ShellTopBar
+      title={t('acceptance.workspace.title')}
+      titleExtra={
+        <ActionIcon
+          icon={Menu}
+          size={'small'}
+          title={t('acceptance.shell.menu')}
+          onClick={() => setListOpen(true)}
+        />
+      }
+      onBack={() => navigate(acceptanceHomePath())}
+    />
+  ) : null;
+
   if (isFirstUse) {
-    return (
+    return standalone ? (
+      <Flexbox height={'100dvh'} style={{ overflow: 'hidden' }} width={'100%'}>
+        <RouteMetaBridge />
+        {topBar}
+        <AcceptanceOnboarding />
+      </Flexbox>
+    ) : (
       <>
         <RouteMetaBridge />
         <AcceptanceOnboarding />
@@ -113,30 +149,55 @@ const AcceptanceWorkspace = memo<AcceptanceWorkspaceProps>(({ projectId }) => {
     );
   }
 
-  return (
-    <Flexbox horizontal height={'100dvh'} style={{ overflow: 'hidden' }} width={'100%'}>
-      <RouteMetaBridge />
-      {showList && (
-        <AcceptanceListPanel
-          {...panel}
-          projectActionItems={projectActionItems}
-          projectId={projectId}
-        />
-      )}
-      <div className={styles.main}>
-        {showList && !panel.expand && (
-          <button
-            aria-label={t('workspace.expand')}
-            className={styles.expandBtn}
-            title={t('workspace.expand')}
-            type={'button'}
-            onClick={() => panel.setExpand(true)}
-          >
-            <Icon icon={PanelLeftOpen} size={16} />
-          </button>
+  if (!standalone)
+    return (
+      <Flexbox horizontal height={'100dvh'} style={{ overflow: 'hidden' }} width={'100%'}>
+        <RouteMetaBridge />
+        {showList && (
+          <AcceptanceListPanel
+            {...panel}
+            projectActionItems={projectActionItems}
+            projectId={projectId}
+          />
         )}
-        <Outlet />
-      </div>
+        <div className={styles.main}>
+          {showList && !panel.expand && (
+            <button
+              aria-label={t('workspace.expand')}
+              className={styles.expandBtn}
+              title={t('workspace.expand')}
+              type={'button'}
+              onClick={() => panel.setExpand(true)}
+            >
+              <Icon icon={PanelLeftOpen} size={16} />
+            </button>
+          )}
+          <Outlet />
+        </div>
+      </Flexbox>
+    );
+
+  return (
+    <Flexbox height={'100dvh'} style={{ overflow: 'hidden' }} width={'100%'}>
+      <RouteMetaBridge />
+      {topBar}
+      <Drawer
+        noHeader
+        closable={false}
+        containerMaxWidth={'100%'}
+        open={listOpen}
+        placement={'left'}
+        styles={{ bodyContent: { height: '100%', minHeight: 0, overflow: 'hidden', padding: 0 } }}
+        width={'min(360px, 88vw)'}
+        onClose={() => setListOpen(false)}
+      >
+        <AcceptanceListPanel hosted {...panel} projectActionItems={projectActionItems} />
+      </Drawer>
+      <Flexbox horizontal flex={1} style={{ minHeight: 0 }} width={'100%'}>
+        <div className={styles.main}>
+          <Outlet />
+        </div>
+      </Flexbox>
     </Flexbox>
   );
 });

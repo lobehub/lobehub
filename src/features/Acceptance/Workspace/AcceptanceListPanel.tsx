@@ -272,6 +272,12 @@ const styles = createStaticStyles(({ css }) => ({
 interface AcceptanceListPanelProps extends ReportPanelExpand {
   headerLeading?: ReactNode;
   /**
+   * Rendered inside a host that already supplies the collection title and the
+   * way to dismiss it (the shell top bar plus its drawer). Drops the panel's
+   * own resizable frame and title row so the title is not stated twice.
+   */
+  hosted?: boolean;
+  /**
    * The per-project entries, as MENU ITEMS. Injected by the main app rather
    * than imported here: they open the create-project modal and navigate to
    * `/project/:id`, neither of which exists in the standalone workbench app —
@@ -289,7 +295,7 @@ interface AcceptanceListPanelProps extends ReportPanelExpand {
  * same persisted panel-width preference so the two surfaces read as one family.
  */
 const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
-  ({ expand, headerLeading, isNarrow, projectActionItems, projectId, setExpand }) => {
+  ({ expand, headerLeading, hosted, isNarrow, projectActionItems, projectId, setExpand }) => {
     const { t } = useTranslation('verify');
     const navigate = useNavigate();
     const { acceptanceId } = useParams<{ acceptanceId: string }>();
@@ -666,21 +672,10 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
       updateSystemStatus({ verifyReportPanelWidth: w });
     };
 
-    return (
-      <DraggablePanel
-        className={styles.panel}
-        defaultSize={{ width: panelWidth }}
-        expand={expand}
-        maxWidth={PANEL_MAX}
-        minWidth={PANEL_MIN}
-        mode={isNarrow ? 'float' : 'fixed'}
-        placement={'left'}
-        size={{ height: '100%', width: panelWidth }}
-        onExpandChange={setExpand}
-        onSizeChange={handleSizeChange}
-      >
-        <DraggablePanelContainer style={{ flex: 'none', height: '100%', minWidth: PANEL_MIN }}>
-          <div className={headerLeading ? styles.headWithBrand : styles.head}>
+    const body = (
+      <>
+        <div className={headerLeading ? styles.headWithBrand : styles.head}>
+          {!hosted && (
             <div className={headerLeading ? styles.titleRowWithBrand : styles.titleRow}>
               <Flexbox
                 horizontal
@@ -711,203 +706,227 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                 <Icon icon={PanelLeftClose} size={16} />
               </button>
             </div>
-            <div className={styles.searchRow}>
-              <label className={styles.search}>
-                <Icon icon={Search} size={13} />
-                <input
-                  placeholder={t('workspace.search')}
-                  type={'search'}
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-              </label>
-              <DropdownMenu items={filterItems} placement={'bottomRight'}>
-                <ActionIcon
-                  active={filter !== 'all'}
-                  className={styles.filterButton}
-                  icon={ListFilter}
-                  size={'small'}
-                  title={t('acceptance.workspace.filters.title')}
-                />
-              </DropdownMenu>
-              <DropdownMenu items={overflowItems} placement={'bottomRight'}>
-                <ActionIcon
-                  active={selecting}
-                  className={styles.filterButton}
-                  icon={MoreHorizontal}
-                  size={'small'}
-                  title={t('acceptance.workspace.actions.more')}
-                />
-              </DropdownMenu>
-            </div>
-            {selecting && (
-              <div className={styles.selectionRow}>
-                <Checkbox
-                  checked={selectAllState === 'all'}
-                  disabled={items.length === 0}
-                  indeterminate={selectAllState === 'partial'}
-                  onChange={() =>
-                    setSelected((previous) => nextAcceptanceSelectAll(previous, items))
-                  }
-                >
-                  {t('acceptance.workspace.batch.selectAll')}
-                </Checkbox>
-                <Flexbox flex={1} />
-                <Text fontSize={12} type={'secondary'}>
-                  {t('acceptance.workspace.batch.selected', { count: selectedVisible.length })}
-                </Text>
-                <Button size={'small'} type={'text'} onClick={leaveSelecting}>
-                  {t('acceptance.workspace.batch.exit')}
-                </Button>
-              </div>
-            )}
+          )}
+          <div className={styles.searchRow}>
+            <label className={styles.search}>
+              <Icon icon={Search} size={13} />
+              <input
+                placeholder={t('workspace.search')}
+                type={'search'}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </label>
+            <DropdownMenu items={filterItems} placement={'bottomRight'}>
+              <ActionIcon
+                active={filter !== 'all'}
+                className={styles.filterButton}
+                icon={ListFilter}
+                size={'small'}
+                title={t('acceptance.workspace.filters.title')}
+              />
+            </DropdownMenu>
+            <DropdownMenu items={overflowItems} placement={'bottomRight'}>
+              <ActionIcon
+                active={selecting}
+                className={styles.filterButton}
+                icon={MoreHorizontal}
+                size={'small'}
+                title={t('acceptance.workspace.actions.more')}
+              />
+            </DropdownMenu>
           </div>
+          {selecting && (
+            <div className={styles.selectionRow}>
+              <Checkbox
+                checked={selectAllState === 'all'}
+                disabled={items.length === 0}
+                indeterminate={selectAllState === 'partial'}
+                onChange={() => setSelected((previous) => nextAcceptanceSelectAll(previous, items))}
+              >
+                {t('acceptance.workspace.batch.selectAll')}
+              </Checkbox>
+              <Flexbox flex={1} />
+              <Text fontSize={12} type={'secondary'}>
+                {t('acceptance.workspace.batch.selected', { count: selectedVisible.length })}
+              </Text>
+              <Button size={'small'} type={'text'} onClick={leaveSelecting}>
+                {t('acceptance.workspace.batch.exit')}
+              </Button>
+            </div>
+          )}
+        </div>
 
-          <Flexbox flex={1} style={{ minHeight: 0, overflowX: 'hidden', overflowY: 'auto' }}>
-            {error ? (
-              // A failed fetch must read as an error with a retry — never as an
-              // empty "no acceptances" page.
-              <Center className={styles.emptyState} gap={12}>
-                <Empty
-                  description={t('workspace.loadError')}
-                  icon={TriangleAlert}
-                  title={t('workspace.loadErrorTitle')}
-                />
-                <button className={styles.retryBtn} type={'button'} onClick={() => void mutate()}>
-                  {t('workspace.retry')}
+        <Flexbox flex={1} style={{ minHeight: 0, overflowX: 'hidden', overflowY: 'auto' }}>
+          {error ? (
+            // A failed fetch must read as an error with a retry — never as an
+            // empty "no acceptances" page.
+            <Center className={styles.emptyState} gap={12}>
+              <Empty
+                description={t('workspace.loadError')}
+                icon={TriangleAlert}
+                title={t('workspace.loadErrorTitle')}
+              />
+              <button className={styles.retryBtn} type={'button'} onClick={() => void mutate()}>
+                {t('workspace.retry')}
+              </button>
+            </Center>
+          ) : isLoading ? (
+            <SkeletonList rows={6} style={{ paddingBlock: 6, paddingInline: 8 }} />
+          ) : items.length === 0 ? (
+            emptyVariant === 'filtered' ? (
+              // A zero-result FILTER must read as "no match for this query",
+              // never as the first-run empty state.
+              <div className={styles.searchEmpty}>
+                <span className={styles.searchEmptyMsg}>
+                  {trimmedQuery
+                    ? t('acceptance.workspace.filters.noSearchResults', { query: trimmedQuery })
+                    : filter === 'all'
+                      ? null
+                      : t(EMPTY_FILTER_KEYS[filter])}
+                </span>
+                <button
+                  className={styles.retryBtn}
+                  type={'button'}
+                  onClick={() => {
+                    setQuery('');
+                    setStoredFilter('all');
+                  }}
+                >
+                  {t('acceptance.workspace.filters.showAll')}
                 </button>
-              </Center>
-            ) : isLoading ? (
-              <SkeletonList rows={6} style={{ paddingBlock: 6, paddingInline: 8 }} />
-            ) : items.length === 0 ? (
-              emptyVariant === 'filtered' ? (
-                // A zero-result FILTER must read as "no match for this query",
-                // never as the first-run empty state.
-                <div className={styles.searchEmpty}>
-                  <span className={styles.searchEmptyMsg}>
-                    {trimmedQuery
-                      ? t('acceptance.workspace.filters.noSearchResults', { query: trimmedQuery })
-                      : filter === 'all'
-                        ? null
-                        : t(EMPTY_FILTER_KEYS[filter])}
-                  </span>
-                  <button
-                    className={styles.retryBtn}
-                    type={'button'}
-                    onClick={() => {
-                      setQuery('');
-                      setStoredFilter('all');
-                    }}
-                  >
-                    {t('acceptance.workspace.filters.showAll')}
-                  </button>
-                </div>
-              ) : (
-                <Center className={styles.emptyState}>
-                  {/* The dashed circle is the acceptance "awaiting" glyph
+              </div>
+            ) : (
+              <Center className={styles.emptyState}>
+                {/* The dashed circle is the acceptance "awaiting" glyph
                       (AcceptanceStatusPill) — the domain's own mark, not the
                       generic inbox. */}
-                  <Empty
-                    description={t('acceptance.workspace.listEmpty')}
-                    icon={CircleDashed}
-                    title={t('acceptance.workspace.listEmptyTitle')}
-                  />
-                </Center>
-              )
-            ) : (
-              <div className={styles.list}>
-                {showGroups ? (
-                  <Accordion
-                    expandedKeys={expandedAcceptanceGroupKeys(groups, collapsedGroups)}
-                    gap={4}
-                    onExpandedChange={(keys) =>
-                      setCollapsedGroups((previous) =>
-                        nextCollapsedGroupKeys(previous, groups, keys.map(String)),
-                      )
-                    }
-                  >
-                    {groups.map((group) => (
-                      <AccordionItem
-                        itemKey={group.key}
-                        key={group.key}
-                        paddingBlock={4}
-                        paddingInline={8}
-                        action={
-                          groupMode === 'project' && projectActionItems ? (
-                            <DropdownMenu
-                              items={projectActionItems(group.projectName ? group.key : undefined)}
-                              placement={'bottomRight'}
-                            >
-                              <ActionIcon
-                                icon={MoreHorizontal}
-                                size={'small'}
-                                title={t('acceptance.workspace.groups.actions')}
-                              />
-                            </DropdownMenu>
-                          ) : undefined
-                        }
-                        title={
-                          <span className={styles.groupTitle}>
-                            {/* The folder reads as "project"; a status or age
-                                bucket is not a folder and must not wear one. */}
-                            {groupMode === 'project' && <Icon icon={FolderClosed} size={14} />}
-                            <span>
-                              {group.name ??
-                                t(group.labelKey as 'acceptance.workspace.groups.ungrouped')}
-                            </span>
-                          </span>
-                        }
-                      >
-                        <div className={styles.groupList}>
-                          {group.items.map((item) => (
-                            <AcceptanceRow
-                              active={item.id === acceptanceId}
-                              item={item}
-                              key={item.id}
-                              showProject={showRowProject}
-                              onChanged={mutate}
-                              {...rowSelectionProps(item.id)}
+                <Empty
+                  description={t('acceptance.workspace.listEmpty')}
+                  icon={CircleDashed}
+                  title={t('acceptance.workspace.listEmptyTitle')}
+                />
+              </Center>
+            )
+          ) : (
+            <div className={styles.list}>
+              {showGroups ? (
+                <Accordion
+                  expandedKeys={expandedAcceptanceGroupKeys(groups, collapsedGroups)}
+                  gap={4}
+                  onExpandedChange={(keys) =>
+                    setCollapsedGroups((previous) =>
+                      nextCollapsedGroupKeys(previous, groups, keys.map(String)),
+                    )
+                  }
+                >
+                  {groups.map((group) => (
+                    <AccordionItem
+                      itemKey={group.key}
+                      key={group.key}
+                      paddingBlock={4}
+                      paddingInline={8}
+                      action={
+                        groupMode === 'project' && projectActionItems ? (
+                          <DropdownMenu
+                            items={projectActionItems(group.projectName ? group.key : undefined)}
+                            placement={'bottomRight'}
+                          >
+                            <ActionIcon
+                              icon={MoreHorizontal}
+                              size={'small'}
+                              title={t('acceptance.workspace.groups.actions')}
                             />
-                          ))}
-                        </div>
-                      </AccordionItem>
-                    ))}
-                  </Accordion>
-                ) : (
-                  items.map((item) => (
-                    <AcceptanceRow
-                      active={item.id === acceptanceId}
-                      item={item}
-                      key={item.id}
-                      showProject={showRowProject}
-                      onChanged={mutate}
-                      {...rowSelectionProps(item.id)}
-                    />
-                  ))
-                )}
-                {!searching && (
-                  <>
-                    <div ref={setSentinel} style={{ height: 1 }} />
-                    {isLoadingMore && (
-                      <SkeletonList rows={2} style={{ paddingBlock: 4, paddingInline: 0 }} />
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-          </Flexbox>
-          {selecting && (
-            <AcceptanceBatchBar
-              acceptCount={acceptanceBatchTargets(items, selectedVisible, 'accept').length}
-              canRemoveProject={acceptanceProjectTargets(items, selectedVisible, null).length > 0}
-              closeCount={acceptanceBatchTargets(items, selectedVisible, 'close').length}
-              pending={batchPending || selectedVisible.length === 0}
-              onAccept={() => void sweepStatus('accept', 'accepted')}
-              onClose={() => void sweepStatus('close', 'closed')}
-              onDelete={deleteSelected}
-              onMoveToProject={(projectId) => void sweepProject(projectId)}
-            />
+                          </DropdownMenu>
+                        ) : undefined
+                      }
+                      title={
+                        <span className={styles.groupTitle}>
+                          {/* The folder reads as "project"; a status or age
+                                bucket is not a folder and must not wear one. */}
+                          {groupMode === 'project' && <Icon icon={FolderClosed} size={14} />}
+                          <span>
+                            {group.name ??
+                              t(group.labelKey as 'acceptance.workspace.groups.ungrouped')}
+                          </span>
+                        </span>
+                      }
+                    >
+                      <div className={styles.groupList}>
+                        {group.items.map((item) => (
+                          <AcceptanceRow
+                            active={item.id === acceptanceId}
+                            item={item}
+                            key={item.id}
+                            showProject={showRowProject}
+                            onChanged={mutate}
+                            {...rowSelectionProps(item.id)}
+                          />
+                        ))}
+                      </div>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              ) : (
+                items.map((item) => (
+                  <AcceptanceRow
+                    active={item.id === acceptanceId}
+                    item={item}
+                    key={item.id}
+                    showProject={showRowProject}
+                    onChanged={mutate}
+                    {...rowSelectionProps(item.id)}
+                  />
+                ))
+              )}
+              {!searching && (
+                <>
+                  <div ref={setSentinel} style={{ height: 1 }} />
+                  {isLoadingMore && (
+                    <SkeletonList rows={2} style={{ paddingBlock: 4, paddingInline: 0 }} />
+                  )}
+                </>
+              )}
+            </div>
           )}
+        </Flexbox>
+        {selecting && (
+          <AcceptanceBatchBar
+            acceptCount={acceptanceBatchTargets(items, selectedVisible, 'accept').length}
+            canRemoveProject={acceptanceProjectTargets(items, selectedVisible, null).length > 0}
+            closeCount={acceptanceBatchTargets(items, selectedVisible, 'close').length}
+            pending={batchPending || selectedVisible.length === 0}
+            onAccept={() => void sweepStatus('accept', 'accepted')}
+            onClose={() => void sweepStatus('close', 'closed')}
+            onDelete={deleteSelected}
+            onMoveToProject={(projectId) => void sweepProject(projectId)}
+          />
+        )}
+      </>
+    );
+
+    if (hosted)
+      return (
+        <Flexbox height={'100%'} style={{ overflow: 'hidden' }} width={'100%'}>
+          {body}
+        </Flexbox>
+      );
+
+    return (
+      <DraggablePanel
+        className={styles.panel}
+        defaultSize={{ width: panelWidth }}
+        expand={expand}
+        maxWidth={PANEL_MAX}
+        minWidth={PANEL_MIN}
+        mode={isNarrow ? 'float' : 'fixed'}
+        placement={'left'}
+        size={{ height: '100%', width: panelWidth }}
+        onExpandChange={setExpand}
+        onSizeChange={handleSizeChange}
+      >
+        <DraggablePanelContainer style={{ flex: 'none', height: '100%', minWidth: PANEL_MIN }}>
+          {body}
         </DraggablePanelContainer>
       </DraggablePanel>
     );
