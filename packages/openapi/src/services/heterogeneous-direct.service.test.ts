@@ -153,7 +153,6 @@ describe('heterogeneous direct invocation protocol', () => {
       agentType: 'codex',
       model: 'gpt-5.4',
       payload: {
-        apiMode: 'responses',
         messages: [],
         model: 'lobehub-default',
         reasoning: { effort: 'high', summary: 'detailed' },
@@ -173,6 +172,36 @@ describe('heterogeneous direct invocation protocol', () => {
       stream: true,
     });
     expect(runtimePayload).not.toHaveProperty('deploymentName');
+  });
+
+  it('lets non-Codex Responses relays use the upstream protocol selected by the router', async () => {
+    const chat = vi.fn().mockResolvedValue(new Response('stream'));
+    vi.mocked(resolveServerDefaultHeterogeneousModel).mockResolvedValue({
+      model: 'kimi-k3',
+      provider: 'lobehub',
+      supportsAdaptiveThinking: false,
+    });
+    vi.mocked(initModelRuntimeFromServerConfig).mockResolvedValue({
+      chat,
+    } as unknown as Awaited<ReturnType<typeof initModelRuntimeFromServerConfig>>);
+
+    await invokeServerDefaultModel({
+      agentType: 'grok-build',
+      model: 'kimi-k3',
+      payload: normalizeResponsesRequest(
+        { input: 'hello', model: 'lobehub-default', stream: true },
+        'lobehub-default',
+      ),
+      signal: new AbortController().signal,
+      userId: 'user-1',
+    });
+
+    expect(chat.mock.calls[0][0]).toMatchObject({
+      messages: [{ content: 'hello', role: 'user' }],
+      model: 'kimi-k3',
+      stream: true,
+    });
+    expect(chat.mock.calls[0][0]).not.toHaveProperty('apiMode');
   });
 
   it('adapts custom Codex relay models to chat completions with their reasoning effort', async () => {
@@ -334,6 +363,7 @@ describe('heterogeneous direct invocation protocol', () => {
       { content: 'LOBEHUB_HETERO_SMOKE_OK', role: 'user' },
     ]);
     expect(payload.max_tokens).toBe(16_384);
+    expect(payload).not.toHaveProperty('apiMode');
   });
 
   it('normalizes two-round Responses reasoning and function call continuity', () => {

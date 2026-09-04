@@ -267,7 +267,6 @@ export const normalizeResponsesRequest = (request: Record<string, unknown>, mode
       )
     : undefined;
   return {
-    apiMode: 'responses',
     max_tokens:
       typeof request.max_output_tokens === 'number' ? request.max_output_tokens : undefined,
     messages,
@@ -920,14 +919,18 @@ export const invokeServerDefaultModel = async (params: {
   )
     ? (requestedReasoningEffort as ChatStreamPayload['reasoning_effort'])
     : undefined;
-  const payload =
-    params.agentType === 'codex' && isCodexServerDefaultCustomModel(params.model)
+  // Responses describes the CLI-facing ingress, not necessarily the selected provider's API.
+  // Keep it upstream only for native Codex models; the deployment router owns every other choice.
+  let payload = normalizedPayload;
+  if (params.agentType === 'codex') {
+    payload = isCodexServerDefaultCustomModel(params.model)
       ? {
           ...chatCompletionsPayload,
           apiMode: 'chatCompletion' as const,
           reasoning_effort: normalizedPayload.reasoning_effort ?? reasoningEffort,
         }
-      : normalizedPayload;
+      : { ...normalizedPayload, apiMode: 'responses' };
+  }
   const response = await runtime.chat(
     {
       ...payload,
