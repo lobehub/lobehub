@@ -9,7 +9,6 @@ import { Component, type CSSProperties, lazy, memo, type PropsWithChildren, Susp
 import { LobeAnalyticsProviderWrapper } from '@/components/Analytics/LobeAnalyticsProviderWrapper';
 import { DragUploadProvider } from '@/components/DragUploadZone/DragUploadProvider';
 import { isDesktop } from '@/const/version';
-import TaskDock from '@/features/TaskDock';
 import { useDevDockMounted } from '@/hooks/useDevDockMounted';
 import AuthProvider from '@/layout/AuthProvider';
 import { MarketAuthProvider } from '@/layout/AuthProvider/MarketAuth';
@@ -31,6 +30,7 @@ registerNativeContextMenuInterceptor();
 const DevDock = lazy(() => import('@/features/DevDock'));
 const ImperativeMountHost = lazy(() => import('@/components/ImperativeMount'));
 const DynamicFavicon = lazy(() => import('@/layout/GlobalProvider/DynamicFavicon'));
+const TaskDock = lazy(() => import('@/features/TaskDock'));
 
 const devDockLayoutStyle: CSSProperties = {
   alignItems: 'center',
@@ -108,8 +108,8 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
                 <BaseModalHost />
                 <ToastHost />
                 <ContextMenuHost />
-                <TaskDock />
                 <Suspense>
+                  <TaskDock />
                   <ImperativeMountHost />
                 </Suspense>
               </LazyMotion>
