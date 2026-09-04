@@ -789,6 +789,19 @@ export default class GatewayConnectionCtr extends ControllerModule {
       if (pid === undefined) throw new Error('Failed to get PID for openclaw process');
       child.unref();
 
+      child.on('error', (err) => {
+        console.error(`Failed to start openclaw process: ${err.message}`);
+        this.platformTasks.delete(taskId);
+        void this.sendNotify({
+          agentId,
+          content: `Failed to run OpenClaw Platform Agent: ${err.message}. Please make sure 'openclaw' is installed and available in the PATH.`,
+          role: 'assistant',
+          topicId,
+        }).finally(() =>
+          this.sendNotify({ agentId, content: '', done: true, role: 'assistant', topicId }),
+        );
+      });
+
       this.platformTasks.set(taskId, {
         agentId,
         agentType,
@@ -884,6 +897,19 @@ export default class GatewayConnectionCtr extends ControllerModule {
       const pid = child.pid;
       if (pid === undefined) throw new Error('Failed to get PID for hermes process');
       child.unref();
+
+      child.on('error', (err) => {
+        console.error(`Failed to start hermes process: ${err.message}`);
+        this.platformTasks.delete(taskId);
+        void this.sendNotify({
+          agentId,
+          content: `Failed to run Hermes Platform Agent: ${err.message}. Please make sure 'hermes' is installed and available in the PATH.`,
+          role: 'assistant',
+          topicId,
+        }).finally(() =>
+          this.sendNotify({ agentId, content: '', done: true, role: 'assistant', topicId }),
+        );
+      });
 
       this.platformTasks.set(taskId, {
         agentId,
