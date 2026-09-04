@@ -1,3 +1,4 @@
+import { ArtifactsIdentifier, builtinSkills } from '@lobechat/builtin-skills';
 import { type TFunction } from 'i18next';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -10,6 +11,48 @@ const createTranslator = (translations: Record<string, string> = {}) =>
   ) as unknown as TFunction<'setting'>;
 
 describe('SkillDetail localization helpers', () => {
+  it('preserves unwrapped builtin skill content without changing the source skill', () => {
+    const t = createTranslator();
+    const skill = {
+      content: '# Artifacts Guide',
+      description: 'Generate interactive content.',
+      identifier: 'lobe-artifacts',
+      name: 'Artifacts',
+      source: 'builtin' as const,
+    };
+
+    const result = getLocalizedBuiltinSkillDetail(skill, 'lobe-artifacts', t);
+
+    expect(result.content).toBe('# Artifacts Guide');
+    expect(skill.content).toBe('# Artifacts Guide');
+  });
+
+  it('hides a matching outer guide tag from builtin skill content', () => {
+    const t = createTranslator();
+    const skill = {
+      content: '<lobehub_platform_guides>\n# Identity\n</lobehub_platform_guides>',
+      description: 'Manage LobeHub.',
+      identifier: 'lobehub',
+      name: 'LobeHub',
+      source: 'builtin' as const,
+    };
+
+    const result = getLocalizedBuiltinSkillDetail(skill, 'lobehub', t);
+
+    expect(result.content).toBe('# Identity');
+    expect(skill.content).toBe('<lobehub_platform_guides>\n# Identity\n</lobehub_platform_guides>');
+  });
+
+  it('hides the outer tag from the built-in artifacts guide', () => {
+    const skill = builtinSkills.find(({ identifier }) => identifier === ArtifactsIdentifier);
+
+    const result = getLocalizedBuiltinSkillDetail(skill, ArtifactsIdentifier, createTranslator());
+
+    expect(result.content).not.toContain('<artifacts_guides>');
+    expect(result.content).not.toContain('</artifacts_info>');
+    expect(result.content).toContain('# 1. Evaluation Criteria');
+  });
+
   it('localizes builtin skill title and description', () => {
     const t = createTranslator({
       'tools.builtins.lobe-agent-browser.description': '浏览器自动化命令行工具',
@@ -28,7 +71,11 @@ describe('SkillDetail localization helpers', () => {
       t,
     );
 
-    expect(result).toEqual({ description: '浏览器自动化命令行工具', title: '助手浏览器' });
+    expect(result).toEqual({
+      content: '# Agent Browser',
+      description: '浏览器自动化命令行工具',
+      title: '助手浏览器',
+    });
     expect(t).toHaveBeenCalledWith('tools.builtins.lobe-agent-browser.title', {
       defaultValue: 'Agent Browser',
     });
@@ -62,7 +109,7 @@ describe('SkillDetail localization helpers', () => {
         'task',
         t,
       ),
-    ).toEqual({ description: undefined, title: '任务' });
+    ).toEqual({ content: '# Task', description: undefined, title: '任务' });
     expect(t).toHaveBeenCalledTimes(1);
   });
 
