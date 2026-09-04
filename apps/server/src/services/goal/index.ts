@@ -1,4 +1,4 @@
-import type { GoalAdvanceEffect } from '@lobechat/agent-tracing';
+import type { GoalAdvanceEffect, GoalMetricCriteriaState } from '@lobechat/agent-tracing';
 import { buildGoalRequirement } from '@lobechat/builtin-tool-goal';
 import { GOAL_COORDINATOR_ACTOR_ID } from '@lobechat/const/goal';
 import type {
@@ -20,6 +20,7 @@ import { sql } from 'drizzle-orm';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
+import { MetricModel } from '@/database/models/metric';
 import { ProjectModel } from '@/database/models/project';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
@@ -34,11 +35,13 @@ import { AcceptanceService } from '../verify/acceptanceService';
 import { VerifyPlanGeneratorService } from '../verify/planGenerator';
 import { GoalCriteriaGeneratorService, type GoalDecompositionDraft } from './criteriaGenerator';
 import {
+  compareMetric,
   decideNextMove,
   frontierNeedsBudget,
   GOAL_ACCEPTANCE_TASK_TITLE,
   type GoalMove,
   LEASE_EXPIRED_ERROR,
+  needsMetricCriteria,
   selectFrontier,
   TERMINAL_NODE_STATUSES,
 } from './decideNextMove';
@@ -449,6 +452,39 @@ export class GoalService {
    * cannot express, and a goal whose deadline passed must stop the same way a
    * goal out of money does.
    */
+  /**
+   * Read every declared numeric clause against its series' latest observation.
+   *
+   * A missing series or a series with no points reads as `null` and fails its
+   * clause: "never measured" is not "satisfied". The measured value is carried
+   * out with the verdict so the trajectory records what the decision saw.
+   */
+  private evaluateMetricCriteria = async (
+    graph: GoalGraphSnapshot,
+  ): Promise<GoalMetricCriteriaState> => {
+    const declared = graph.goal.config?.acceptance?.metrics ?? [];
+    const metricModel = new MetricModel(this.db, this.userId, this.workspaceId);
+
+    const criteria = await Promise.all(
+      declared.map(async (criterion) => {
+        const op = criterion.op ?? 'gte';
+        const series = await metricModel.findByKey('goal', graph.goal.id, criterion.key);
+        const point = series ? await metricModel.latestPoint(series.id) : undefined;
+        const value = point?.value ?? null;
+        return {
+          key: criterion.key,
+          met: value !== null && compareMetric(value, op, criterion.target),
+          observedAt: point ? new Date(point.observedAt).getTime() : undefined,
+          op,
+          target: criterion.target,
+          value,
+        };
+      }),
+    );
+
+    return { allMet: criteria.every((criterion) => criterion.met), criteria };
+  };
+
   private evaluateBudget = async (goal: GoalItem, graph: GoalGraphSnapshot) => {
     const taskIds = graph.nodes.flatMap((node) => (node.taskId ? [node.taskId] : []));
     const runs = await this.taskTopicModel.findWithHandoffByTaskIds(taskIds, 10_000);
@@ -607,12 +643,19 @@ export class GoalService {
       ? toBudgetState(graph.goal, await this.evaluateBudget(graph.goal, graph))
       : undefined;
 
+    // Same shape as the budget: a database read the pure decision cannot do,
+    // taken only in the terminal phase of a goal that declares numeric clauses.
+    const metricCriteria = needsMetricCriteria(graph)
+      ? await this.evaluateMetricCriteria(graph)
+      : undefined;
+
     const concurrency = resolveMaxConcurrentTasks(graph.goal);
     const move = decideNextMove({
       budget,
       concurrency,
       frontier,
       graph,
+      metricCriteria,
       tasksById,
     });
     // The scheduler may pick past the head of the frontier, so every arm below
@@ -631,6 +674,7 @@ export class GoalService {
         branch: move.branch,
         budget,
         candidates: move.candidates,
+        metricCriteria,
         chosenNodeId: move.chosenNodeId,
         effects,
         candidateTasks: frontier.eligible.flatMap(({ node }) => {

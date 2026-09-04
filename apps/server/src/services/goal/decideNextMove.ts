@@ -1,11 +1,17 @@
 import type {
   FrontierCandidate,
   GoalBudgetState,
+  GoalMetricCriteriaState,
   GoalTickBranch,
   GoalTickOutcome,
 } from '@lobechat/agent-tracing';
 import { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
-import type { GoalGraphNode, GoalGraphSnapshot, TaskItem } from '@lobechat/types';
+import type {
+  GoalGraphNode,
+  GoalGraphSnapshot,
+  GoalMetricComparison,
+  TaskItem,
+} from '@lobechat/types';
 
 export { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
 
@@ -106,6 +112,38 @@ export const frontierNeedsBudget = (
     return needsBudget(tasksById.get(node.taskId) ?? null);
   });
 
+/** Evaluate one numeric clause. Kept beside the gate that consumes it. */
+export const compareMetric = (value: number, op: GoalMetricComparison, target: number): boolean => {
+  switch (op) {
+    case 'eq': {
+      return value === target;
+    }
+    case 'gt': {
+      return value > target;
+    }
+    case 'gte': {
+      return value >= target;
+    }
+    case 'lt': {
+      return value < target;
+    }
+    case 'lte': {
+      return value <= target;
+    }
+  }
+};
+
+/**
+ * Whether this tick could read numeric acceptance criteria: the goal declares
+ * some, and every Task node is terminal so the coordinator is in its terminal
+ * phase. Keeps the extra reads off every dispatch tick.
+ */
+export const needsMetricCriteria = (graph: GoalGraphSnapshot): boolean => {
+  if (!graph.goal.config?.acceptance?.metrics?.length) return false;
+  const taskNodes = graph.nodes.filter((node) => node.kind === 'task');
+  return taskNodes.length > 0 && taskNodes.every((node) => TERMINAL_NODE_STATUSES.has(node.status));
+};
+
 export interface GoalMoveInput {
   /** Required only when {@link needsBudget} says the branch could dispatch or recover. */
   budget?: GoalBudgetState;
@@ -113,6 +151,13 @@ export interface GoalMoveInput {
   concurrency: number;
   frontier: FrontierSelection;
   graph: GoalGraphSnapshot;
+  /**
+   * Required only when {@link needsMetricCriteria} holds — the terminal phase
+   * of a goal that declares numeric acceptance clauses. Evaluating them is a
+   * database read, so it happens in `tick` and travels in, the same way the
+   * budget does.
+   */
+  metricCriteria?: GoalMetricCriteriaState;
   /**
    * The responsible Task of every candidate that has one, keyed by task id.
    * A candidate whose task id is absent from the map has lost its row.
@@ -161,6 +206,7 @@ export const decideNextMove = ({
   concurrency,
   frontier,
   graph,
+  metricCriteria,
   tasksById,
 }: GoalMoveInput): GoalMove => {
   const { candidates, chosen } = frontier;
@@ -239,7 +285,7 @@ export const decideNextMove = ({
     return move;
   }
 
-  if (!chosen) return decideWithoutFrontier(graph, candidates);
+  if (!chosen) return decideWithoutFrontier(graph, candidates, metricCriteria);
 
   // Everything eligible is either running, parked on a person, or waiting for a
   // slot. Report which, so the row does not read as stalled when it is simply
@@ -265,7 +311,7 @@ export const decideNextMove = ({
     };
   }
 
-  return decideWithoutFrontier(graph, candidates);
+  return decideWithoutFrontier(graph, candidates, metricCriteria);
 };
 
 /** What one candidate wants, or why it cannot be acted on right now. */
@@ -313,6 +359,7 @@ const decideForCandidate = ({
 const decideWithoutFrontier = (
   graph: GoalGraphSnapshot,
   candidates: FrontierCandidate[],
+  metricCriteria?: GoalMetricCriteriaState,
 ): GoalMove => {
   const base = { candidates };
   const taskNodes = graph.nodes.filter((node) => node.kind === 'task');
@@ -337,6 +384,23 @@ const decideWithoutFrontier = (
       ...base,
       branch: 'no_frontier',
       message: 'No task node is ready; resolve its dependencies first',
+      outcome: 'no_progress',
+    };
+  }
+
+  // Measured clauses gate the delivery contract, and are checked before it:
+  // an unmet number is not something a verifier can talk its way past, so
+  // creating (or re-running) the acceptance Task against it would only spend
+  // tokens to restate the gap. `no_progress` leaves the goal running — the
+  // next observation is what moves it, not another attempt.
+  if (metricCriteria && !metricCriteria.allMet) {
+    const unmet = metricCriteria.criteria.filter((criterion) => !criterion.met);
+    return {
+      ...base,
+      branch: 'terminal_acceptance',
+      message: `Measured acceptance not met: ${unmet
+        .map((c) => `${c.key} ${c.op} ${c.target} (${c.value ?? 'no observation'})`)
+        .join(', ')}`,
       outcome: 'no_progress',
     };
   }

@@ -8,6 +8,7 @@ import { AcceptanceModel } from '@/database/models/acceptance';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
+import { MetricModel } from '@/database/models/metric';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import {
@@ -19,6 +20,8 @@ import {
   goalNodeDecisions,
   goalNodes,
   goals,
+  metricPoints,
+  metrics,
   tasks,
   taskTopics,
   topics,
@@ -52,6 +55,8 @@ afterEach(async () => {
   await serverDB.delete(goalEvents);
   await serverDB.delete(goalNodes);
   await serverDB.delete(goals);
+  await serverDB.delete(metricPoints);
+  await serverDB.delete(metrics);
   await serverDB.delete(acceptances);
   await serverDB.delete(agentOperations);
   await serverDB.delete(taskTopics);
@@ -859,6 +864,105 @@ describe('GoalService', () => {
         (edge) => edge.kind === 'decomposes' && edge.targetNodeId === acceptanceWorks[0].id,
       ),
     ).toHaveLength(1);
+  });
+
+  it('holds a goal short of acceptance until the measured clause is satisfied', async () => {
+    // The measured half of acceptance: "followers >= 1000" is not a document a
+    // verifier reads, it is a number. Until it holds, the acceptance Task must
+    // not even be created.
+    vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({} as never);
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const metricModel = new MetricModel(serverDB, userId);
+    const graph = await service.create({
+      config: { acceptance: { metrics: [{ key: 'followers', target: 1000 }] } },
+      requirement: 'Grow the account',
+      tasks: ['Publish the first posts'],
+      title: 'Measured goal',
+    });
+    const created = await service.tick(graph.goal.id);
+    await taskModel.updateStatus(created.taskId!, 'completed');
+    await service.tick(graph.goal.id);
+
+    // Nothing measured yet — "never observed" is not "satisfied".
+    const unmeasured = await service.tick(graph.goal.id);
+    expect(unmeasured).toMatchObject({ outcome: 'no_progress' });
+    expect(unmeasured.message).toContain('no observation');
+
+    const series = (await metricModel.ensure({
+      key: 'followers',
+      subjectId: graph.goal.id,
+      subjectType: 'goal',
+    }))!;
+    await metricModel.addPoint(series.id, {
+      actorType: 'system',
+      observedAt: new Date('2026-09-01T00:00:00Z'),
+      sourceType: 'probe',
+      value: 400,
+    });
+
+    const short = await service.tick(graph.goal.id);
+    expect(short).toMatchObject({ outcome: 'no_progress' });
+    expect(short.message).toContain('400');
+    expect(
+      (await service.graph(graph.goal.id)).nodes.some(
+        (n) => n.title === 'Complete full Goal acceptance',
+      ),
+    ).toBe(false);
+
+    // The number lands: the goal falls through to its delivery contract.
+    await metricModel.addPoint(series.id, {
+      actorType: 'system',
+      observedAt: new Date('2026-09-02T00:00:00Z'),
+      sourceType: 'probe',
+      value: 1200,
+    });
+
+    const advanced = await service.tick(graph.goal.id);
+    expect(advanced).toMatchObject({ outcome: 'advanced' });
+    expect(
+      (await service.graph(graph.goal.id)).nodes.some(
+        (n) => n.title === 'Complete full Goal acceptance',
+      ),
+    ).toBe(true);
+  });
+
+  it('records what the measured decision read, not just its verdict', async () => {
+    // A replay has to see the number the live run saw — the same reason the
+    // deadline verdict travels with the budget.
+    vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({} as never);
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const metricModel = new MetricModel(serverDB, userId);
+    const graph = await service.create({
+      config: { acceptance: { metrics: [{ key: 'churn', op: 'lte', target: 5 }] } },
+      requirement: 'Keep churn down',
+      tasks: ['Ship retention fixes'],
+      title: 'Traced measurement',
+    });
+    const created = await service.tick(graph.goal.id);
+    await taskModel.updateStatus(created.taskId!, 'completed');
+    await service.tick(graph.goal.id);
+
+    const series = (await metricModel.ensure({
+      key: 'churn',
+      subjectId: graph.goal.id,
+      subjectType: 'goal',
+    }))!;
+    await metricModel.addPoint(series.id, {
+      actorType: 'system',
+      observedAt: new Date('2026-09-01T00:00:00Z'),
+      sourceType: 'probe',
+      value: 9,
+    });
+
+    const observed: GoalTickObservation[] = [];
+    await service.tick(graph.goal.id, { onDecision: (o) => observed.push(o) });
+
+    expect(observed.at(-1)!.metricCriteria).toMatchObject({
+      allMet: false,
+      criteria: [{ key: 'churn', met: false, op: 'lte', target: 5, value: 9 }],
+    });
   });
 
   it('evolves a failed task into a durable decision gate', async () => {

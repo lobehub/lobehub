@@ -53,8 +53,35 @@ export interface GoalSchedulePolicy {
  * records their ids so the terminal Goal-acceptance Task verifies against
  * exactly these checks instead of re-deriving them from the requirement prose.
  */
+/** Comparison a measured value must satisfy. */
+export type GoalMetricComparison = 'gte' | 'lte' | 'gt' | 'lt' | 'eq';
+
+/**
+ * A numeric acceptance clause: "this series must read at least this much".
+ *
+ * The counterpart to a delivery contract judged by a verifier — "followers >=
+ * 1,000,000" is not a document someone reads, it is a number that gets
+ * measured. `key` addresses a series on the goal itself (subjectType `goal`,
+ * subjectId the goal id), so a criterion needs no id of its own and survives
+ * the series being re-created.
+ */
+export interface GoalMetricCriterion {
+  /** Metric series key on this goal, e.g. 'twitter.followers'. */
+  key: string;
+  /** Defaults to `gte` — the "reach this number" case. */
+  op?: GoalMetricComparison;
+  target: number;
+}
+
 export interface GoalAcceptancePolicy {
   criteriaIds?: string[];
+  /**
+   * Measured clauses that gate acceptance. Every one must hold before the
+   * Goal-level delivery acceptance is even attempted: an unmet number is not
+   * something a verifier can talk its way past, and running the acceptance
+   * agent against it would only spend tokens to restate the gap.
+   */
+  metrics?: GoalMetricCriterion[];
 }
 
 export interface GoalConfig {

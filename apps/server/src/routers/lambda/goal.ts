@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { GoalModel } from '@/database/models/goal';
+import { MetricModel } from '@/database/models/metric';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { GoalService } from '@/server/services/goal';
@@ -191,6 +192,67 @@ export const goalRouter = router({
         return { data, message: 'Decision resolved', success: true };
       } catch (error) {
         mapGoalError(error, 'decide');
+      }
+    }),
+
+  /**
+   * Record a measurement against this goal and let the coordinator react.
+   *
+   * The graph otherwise only moves when a Task settles, but a long-horizon
+   * goal advances when the *world* changes — a follower count, a conversion
+   * rate. This is that entry point: it writes to the generic metrics layer
+   * (subject = this goal) and schedules an advance, so a goal whose numeric
+   * acceptance was the last thing outstanding closes on the observation
+   * instead of waiting up to a sweep window.
+   */
+  recordObservation: goalWriteProcedure
+    .input(
+      idInput.extend({
+        key: z.string().min(1).max(255),
+        kind: z.enum(['gauge', 'counter']).optional(),
+        observedAt: z.coerce.date().optional(),
+        title: z.string().optional(),
+        unit: z.string().optional(),
+        value: z.number(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const goal = await ctx.goalModel.findById(input.id);
+        if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+
+        const metricModel = new MetricModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
+        const series = await metricModel.ensure({
+          key: input.key,
+          kind: input.kind,
+          subjectId: goal.id,
+          subjectType: 'goal',
+          title: input.title,
+          unit: input.unit,
+        });
+        if (!series)
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'Metric series slot is owned by another scope',
+          });
+
+        const point = await metricModel.addPoint(series.id, {
+          actorId: ctx.userId,
+          actorType: 'user',
+          observedAt: input.observedAt ?? new Date(),
+          sourceType: 'manual',
+          value: input.value,
+        });
+
+        await scheduleGoalAdvance({
+          goalId: goal.id,
+          trigger: 'observe',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+        return { data: { point, series }, message: 'Observation recorded', success: true };
+      } catch (error) {
+        mapGoalError(error, 'recordObservation');
       }
     }),
 
