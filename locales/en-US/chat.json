@@ -1639,6 +1639,8 @@
   "taskDetail.reassignDisabled": "Cannot reassign agent while task is running",
   "taskDetail.replyInThread": "Reply in this thread",
   "taskDetail.replyPlaceholder": "Reply in this thread...",
+  "taskDetail.reportedBy": "Reported by {{name}}",
+  "taskDetail.reportedByAgent": "the agent",
   "taskDetail.rerunTask": "Re-run task",
   "taskDetail.runAll": "Run all",
   "taskDetail.runAll.cancel": "Cancel",

@@ -130,6 +130,10 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   // under the 'goal' scope: resizing here never affects the chat surface.
   const { maxWidth, minWidth, updateWidth, width } = usePortalPanelWidth(currentViewType, 'goal');
 
+  // Only a drill-down takes the whole width. The goal chat is a companion to
+  // what you are reading, so it keeps the split it was designed for.
+  const portalCollapsesGoal = showPortal && !graphFullscreen;
+
   // The portal stack belongs to this goal's inspection session — leaving the
   // page (or switching goals) must not leak it into the conversation surface.
   useEffect(() => () => clearPortalStack(), [clearPortalStack, goalId]);
@@ -195,7 +199,17 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
 
   return (
     <Flexbox horizontal flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
-      <Flexbox flex={1} height={'100%'} style={{ minWidth: 0 }}>
+      {/* The goal pane collapses while a drill-down is open rather than sharing
+          the width with it. Split across two panes it lost its own layout —
+          title wrapping to four lines, metrics folding to two columns, task rows
+          truncated to a few characters — so neither surface was readable. The
+          Portal's own close brings the goal straight back, and hiding rather
+          than unmounting keeps its scroll position and graph state. */}
+      <Flexbox
+        flex={1}
+        height={'100%'}
+        style={{ display: portalCollapsesGoal ? 'none' : undefined, minWidth: 0 }}
+      >
         <NavHeader
           left={
             <Flexbox horizontal align={'center'} gap={4}>

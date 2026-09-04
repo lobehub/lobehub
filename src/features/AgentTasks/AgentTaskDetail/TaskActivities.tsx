@@ -17,6 +17,7 @@ import { styles } from '../shared/style';
 import CommentCard from './CommentCard';
 import CommentInput from './CommentInput';
 import TaskBriefCard from './TaskBriefCard';
+import TaskRunReport from './TaskRunReport';
 import TopicCard from './TopicCard';
 
 const ROW_TYPE_ICON = {
@@ -192,16 +193,13 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
                   );
                 }
                 if (activity.type === 'topic') {
-                  return (
-                    <TopicCard
-                      activity={activity}
-                      defaultExpanded={key === firstTopicKey}
-                      key={key}
-                      // The result panel is opened to read the latest delivery,
-                      // so that one run renders its content in full.
-                      primary={variant === 'result' && key === firstTopicKey}
-                    />
-                  );
+                  // The result panel's newest run is not a row in a list — it is
+                  // the agent's report of what this task produced, so it gets its
+                  // own presentation rather than the activity card's chrome.
+                  if (variant === 'result' && key === firstTopicKey) {
+                    return <TaskRunReport activity={activity} key={key} />;
+                  }
+                  return <TopicCard activity={activity} defaultExpanded={false} key={key} />;
                 }
                 if (activity.type === 'comment') {
                   return <CommentCard activity={activity} key={key} />;

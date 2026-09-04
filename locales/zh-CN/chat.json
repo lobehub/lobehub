@@ -1639,6 +1639,8 @@
   "taskDetail.reassignDisabled": "任务运行中，无法切换助理",
   "taskDetail.replyInThread": "在此对话中回复",
   "taskDetail.replyPlaceholder": "在此对话中回复…",
+  "taskDetail.reportedBy": "由 {{name}} 汇报",
+  "taskDetail.reportedByAgent": "该 agent",
   "taskDetail.rerunTask": "重新运行",
   "taskDetail.runAll": "全部运行",
   "taskDetail.runAll.cancel": "取消",

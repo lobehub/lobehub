@@ -1550,6 +1550,8 @@ export default {
   'taskDetail.runVerify.running': 'Verifying',
   'taskDetail.runExpand': 'Expand run',
   'taskDetail.openRunChat': 'Open this run’s conversation',
+  'taskDetail.reportedBy': 'Reported by {{name}}',
+  'taskDetail.reportedByAgent': 'the agent',
   'taskDetail.runFollowUp': 'Ask a follow-up',
   'taskDetail.runFollowUpPlaceholder': 'Ask a follow-up about this run...',
   'taskDetail.collapseReply': 'Collapse',
