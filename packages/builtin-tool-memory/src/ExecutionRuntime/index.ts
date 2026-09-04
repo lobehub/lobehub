@@ -62,6 +62,16 @@ const READ_ONLY_RESULT: BuiltinServerRuntimeOutput = {
   success: false,
 };
 
+const getErrorMessage = (error: unknown): string => {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === 'string' && error) return error;
+  if (error && typeof error === 'object') {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message) return message;
+  }
+  return 'Unknown error';
+};
+
 export class MemoryExecutionRuntime {
   private service: MemoryRuntimeService;
   private toolPermission: MemoryToolPermission;
@@ -89,7 +99,7 @@ export class MemoryExecutionRuntime {
       };
     } catch (e) {
       return {
-        content: `searchUserMemory with error detail: ${(e as Error).message}`,
+        content: `searchUserMemory with error detail: ${getErrorMessage(e)}`,
         success: false,
       };
     }
@@ -108,7 +118,7 @@ export class MemoryExecutionRuntime {
       };
     } catch (e) {
       return {
-        content: `queryTaxonomyOptions with error detail: ${(e as Error).message}`,
+        content: `queryTaxonomyOptions with error detail: ${getErrorMessage(e)}`,
         success: false,
       };
     }
@@ -133,7 +143,7 @@ export class MemoryExecutionRuntime {
       };
     } catch (e) {
       return {
-        content: `addContextMemory with error detail: ${(e as Error).message}`,
+        content: `addContextMemory with error detail: ${getErrorMessage(e)}`,
         success: false,
       };
     }
@@ -158,7 +168,7 @@ export class MemoryExecutionRuntime {
       };
     } catch (e) {
       return {
-        content: `addActivityMemory with error detail: ${(e as Error).message}`,
+        content: `addActivityMemory with error detail: ${getErrorMessage(e)}`,
         success: false,
       };
     }
@@ -183,7 +193,7 @@ export class MemoryExecutionRuntime {
       };
     } catch (e) {
       return {
-        content: `addExperienceMemory with error detail: ${(e as Error).message}`,
+        content: `addExperienceMemory with error detail: ${getErrorMessage(e)}`,
         success: false,
       };
     }
@@ -208,7 +218,7 @@ export class MemoryExecutionRuntime {
       };
     } catch (e) {
       return {
-        content: `addIdentityMemory with error detail: ${(e as Error).message}`,
+        content: `addIdentityMemory with error detail: ${getErrorMessage(e)}`,
         success: false,
       };
     }
@@ -233,7 +243,7 @@ export class MemoryExecutionRuntime {
       };
     } catch (e) {
       return {
-        content: `addPreferenceMemory with error detail: ${(e as Error).message}`,
+        content: `addPreferenceMemory with error detail: ${getErrorMessage(e)}`,
         success: false,
       };
     }
@@ -258,7 +268,7 @@ export class MemoryExecutionRuntime {
       };
     } catch (e) {
       return {
-        content: `updateIdentityMemory with error detail: ${(e as Error).message}`,
+        content: `updateIdentityMemory with error detail: ${getErrorMessage(e)}`,
         success: false,
       };
     }
@@ -283,7 +293,7 @@ export class MemoryExecutionRuntime {
       };
     } catch (e) {
       return {
-        content: `removeIdentityMemory with error detail: ${(e as Error).message}`,
+        content: `removeIdentityMemory with error detail: ${getErrorMessage(e)}`,
         success: false,
       };
     }
