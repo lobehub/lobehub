@@ -139,7 +139,17 @@ const TaskDock = memo(() => {
   }, [tasks]);
 
   const cancelAll = useCallback(() => {
-    tasks.forEach((task) => task.cancel?.());
+    const batched = new Set<string>();
+
+    for (const task of tasks) {
+      if (!task.groupCancel) {
+        task.cancel?.();
+        continue;
+      }
+      if (batched.has(task.groupLabel)) continue;
+      batched.add(task.groupLabel);
+      task.groupCancel();
+    }
   }, [tasks]);
 
   const icon = useMemo(() => {
@@ -211,7 +221,7 @@ const TaskDock = memo(() => {
               icon={ChevronDownIcon}
               size={'small'}
               style={{ transform: expand ? undefined : 'rotate(180deg)' }}
-              title={t('taskDock.collapse')}
+              title={t(expand ? 'taskDock.collapse' : 'taskDock.expand')}
               onClick={() => setExpand(!expand)}
             />
           ) : (

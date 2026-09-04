@@ -507,6 +507,7 @@
   "taskDock.activeOf": "{{active}} 个进行中 · 共 {{total}}",
   "taskDock.cancelAll": "全部取消",
   "taskDock.collapse": "收起",
+  "taskDock.expand": "展开",
   "taskDock.group.publish": "发布",
   "taskDock.group.upload": "上传",
   "taskDock.open": "打开",

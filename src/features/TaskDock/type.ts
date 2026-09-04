@@ -23,6 +23,12 @@ export interface DockTask {
   dismiss?: () => void;
   /** Producer-supplied action node, rendered after the built-in row actions. */
   extra?: ReactNode;
+  /**
+   * Cancels every active task this producer owns in one operation. Shared by
+   * all of its tasks; the dock calls it once per group rather than walking
+   * `cancel` per task, which a producer may implement as a full-list update.
+   */
+  groupCancel?: () => void;
   /** Translated section heading; tasks sharing one keep their producer order. */
   groupLabel: string;
   icon?: ReactNode;

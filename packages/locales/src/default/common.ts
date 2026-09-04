@@ -623,6 +623,7 @@ export default {
   'taskDock.activeOf': '{{active}} running · {{total}} total',
   'taskDock.cancelAll': 'Cancel all',
   'taskDock.collapse': 'Collapse',
+  'taskDock.expand': 'Expand',
   'taskDock.group.publish': 'Publishing',
   'taskDock.group.upload': 'Uploads',
   'taskDock.open': 'Open',

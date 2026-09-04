@@ -24,6 +24,7 @@ export const useFileUploadDockTasks = (): DockTask[] => {
   const { t } = useTranslation(['file', 'common']);
   const fileList = useFileStore(fileManagerSelectors.dockFileList, isEqual);
   const cancelUpload = useFileStore((s) => s.cancelUpload);
+  const cancelUploads = useFileStore((s) => s.cancelUploads);
   const retryDockUpload = useFileStore((s) => s.retryDockUpload);
   const dispatchDockFileList = useFileStore((s) => s.dispatchDockFileList);
 
@@ -89,6 +90,14 @@ export const useFileUploadDockTasks = (): DockTask[] => {
     [t],
   );
 
+  const cancelActiveUploads = useCallback(() => {
+    cancelUploads(
+      fileList
+        .filter((item) => item.status === 'uploading' || item.status === 'pending')
+        .map((item) => item.id),
+    );
+  }, [cancelUploads, fileList]);
+
   return useMemo(
     () =>
       fileList.map((item): DockTask => {
@@ -101,6 +110,7 @@ export const useFileUploadDockTasks = (): DockTask[] => {
           ...(status === 'error' && !errorCode ? { retry: () => void retryDockUpload(id) } : {}),
           ...(active ? { cancel: () => cancelUpload(id) } : {}),
           detail: describe(item),
+          groupCancel: cancelActiveUploads,
           dismiss: () => dispatchDockFileList({ ids: [id], type: 'removeFiles' }),
           extra: errorCode ? <FileUploadErrorActions code={errorCode} /> : undefined,
           groupLabel: t('taskDock.group.upload', { ns: 'common' }),
@@ -111,6 +121,6 @@ export const useFileUploadDockTasks = (): DockTask[] => {
           title: file.name,
         };
       }),
-    [cancelUpload, describe, dispatchDockFileList, fileList, retryDockUpload],
+    [cancelActiveUploads, cancelUpload, describe, dispatchDockFileList, fileList, retryDockUpload],
   );
 };
