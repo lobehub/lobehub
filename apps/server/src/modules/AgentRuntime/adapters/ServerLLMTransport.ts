@@ -52,6 +52,11 @@ const getErrorMessage = (error: unknown): string => {
 };
 
 const SERVER_LLM_RETRY_POLICY = {
+  // Server-side sub-agents run without an interactive cancel path. Keep their
+  // retry budget bounded so provider failures cannot leave a group topic in a
+  // long-lived `running` state. The provider SDK already handles transport
+  // concerns; the runtime gets one controlled retry for transient failures.
+  maxRetries: 1,
   noRetryProviders: [BRANDING_PROVIDER],
 };
 
