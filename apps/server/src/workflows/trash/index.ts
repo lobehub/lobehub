@@ -86,10 +86,17 @@ export const runLocalTrashPurge = async (
 };
 
 const runAndContinueLocalTrashPurge = async (payload: TrashPurgeWorkflowPayload = {}) => {
-  const outcome = await runLocalTrashPurge(payload);
-  if (!outcome.cursor) return;
+  let continuationPayload = payload;
+  while (true) {
+    const outcome = await runLocalTrashPurge(continuationPayload);
+    if (!outcome.cursor) return;
 
-  await publishLocalTrashContinuation({ ...payload, cursor: outcome.cursor });
+    continuationPayload = { ...continuationPayload, cursor: outcome.cursor };
+    if (process.env.KEY_VAULTS_SECRET) {
+      await publishLocalTrashContinuation(continuationPayload);
+      return;
+    }
+  }
 };
 
 /** Queue one bounded retention-sweep request, with an in-process fallback. */

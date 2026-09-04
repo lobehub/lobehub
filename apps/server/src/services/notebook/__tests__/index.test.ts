@@ -2,21 +2,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DocumentModel } from '@/database/models/document';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
-import { DocumentService } from '@/server/services/document';
+import { TrashService } from '@/server/services/trash';
 
 import { NotebookRuntimeService } from '../index';
 
 vi.mock('@/database/models/document');
 vi.mock('@/database/models/topicDocument');
-vi.mock('@/server/services/document');
+vi.mock('@/server/services/trash');
 
 describe('NotebookRuntimeService', () => {
   let service: NotebookRuntimeService;
   const mockDb = {} as any;
   const mockUserId = 'test-user';
   let mockDocumentModel: any;
-  let mockDocumentService: any;
   let mockTopicDocumentModel: any;
+  let mockTrashService: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -28,8 +28,8 @@ describe('NotebookRuntimeService', () => {
       update: vi.fn(),
     };
 
-    mockDocumentService = {
-      deleteDocument: vi.fn(),
+    mockTrashService = {
+      trashDocuments: vi.fn(),
     };
 
     mockTopicDocumentModel = {
@@ -39,8 +39,8 @@ describe('NotebookRuntimeService', () => {
     };
 
     vi.mocked(DocumentModel).mockImplementation(() => mockDocumentModel);
-    vi.mocked(DocumentService).mockImplementation(() => mockDocumentService);
     vi.mocked(TopicDocumentModel).mockImplementation(() => mockTopicDocumentModel);
+    vi.mocked(TrashService).mockImplementation(() => mockTrashService);
 
     service = new NotebookRuntimeService({ serverDB: mockDb, userId: mockUserId });
   });
@@ -175,14 +175,13 @@ describe('NotebookRuntimeService', () => {
   });
 
   describe('deleteDocument', () => {
-    it('should delete associations first then the document', async () => {
-      mockTopicDocumentModel.deleteByDocumentId.mockResolvedValue(undefined);
-      mockDocumentService.deleteDocument.mockResolvedValue(undefined);
+    it('should move the document to Trash without removing its topic association', async () => {
+      mockTrashService.trashDocuments.mockResolvedValue([]);
 
       await service.deleteDocument('doc-1');
 
-      expect(mockTopicDocumentModel.deleteByDocumentId).toHaveBeenCalledWith('doc-1');
-      expect(mockDocumentService.deleteDocument).toHaveBeenCalledWith('doc-1', undefined);
+      expect(mockTrashService.trashDocuments).toHaveBeenCalledWith(['doc-1'], undefined);
+      expect(mockTopicDocumentModel.deleteByDocumentId).not.toHaveBeenCalled();
     });
   });
 

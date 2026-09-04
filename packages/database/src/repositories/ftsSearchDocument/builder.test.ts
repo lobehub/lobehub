@@ -308,6 +308,45 @@ describe('FtsSearchDocumentBuilder', () => {
     expect(result.map(({ id }) => id)).toEqual(['agent-1']);
   });
 
+  it('omits soft-deleted resources so incremental sync writes tombstones', async () => {
+    const deletedAt = new Date('2026-01-04T00:00:00.000Z');
+    await db.insert(knowledgeBases).values({
+      deletedAt,
+      id: 'trashed-knowledge-base',
+      isDeleted: true,
+      name: 'Trashed knowledge base',
+      userId,
+    });
+    await db.insert(files).values({
+      deletedAt,
+      fileType: 'text/plain',
+      id: 'trashed-file',
+      isDeleted: true,
+      name: 'trashed.txt',
+      size: 1,
+      url: 'https://example.com/trashed.txt',
+      userId,
+    });
+    await db.insert(documents).values({
+      deletedAt,
+      fileType: 'text/plain',
+      id: 'trashed-document',
+      isDeleted: true,
+      source: 'https://example.com/trashed.txt',
+      sourceType: 'file',
+      title: 'Trashed document',
+      totalCharCount: 0,
+      totalLineCount: 0,
+      userId,
+    });
+
+    await expect(builder.buildByIds('files', ['trashed-file'])).resolves.toEqual([]);
+    await expect(builder.buildByIds('knowledgeBases', ['trashed-knowledge-base'])).resolves.toEqual(
+      [],
+    );
+    await expect(builder.buildByIds('documents', ['trashed-document'])).resolves.toEqual([]);
+  });
+
   it('rejects invalid batch limits before querying PostgreSQL', async () => {
     await expect(builder.buildBatch('agents', { limit: 0 })).rejects.toThrow(
       'FTS search document batch limit must be a positive integer',
