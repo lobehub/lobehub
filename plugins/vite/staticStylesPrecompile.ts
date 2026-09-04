@@ -6,7 +6,8 @@ import { parseAst, type Plugin } from 'vite';
 
 const RUNTIME_ID = 'virtual:lobe-static-styles-runtime';
 const RESOLVED_RUNTIME_ID = `\0${RUNTIME_ID}`;
-const HELPER = '__lobeStaticStyle';
+const CSS_ASSET = 'static-styles.css';
+export const BASE_LAYERS = ['antd', 'lobe-popup', 'lobe-base', 'lobe-runtime'];
 
 interface AntdStyleEvaluator {
   cache: {
@@ -173,19 +174,27 @@ const evaluate = (
 const serializeStyles = (result: Record<string, unknown>, evaluator: AntdStyleEvaluator) => {
   const prefix = `${evaluator.cache.key}-`;
   const entries: string[] = [];
+  const rules: string[] = [];
   for (const [key, value] of Object.entries(result)) {
     if (typeof value !== 'string' || !value.startsWith(prefix)) return;
     const css = evaluator.cache.inserted[value.slice(prefix.length)];
     if (typeof css !== 'string') return;
-    entries.push(
-      `${JSON.stringify(key)}: ${HELPER}(${JSON.stringify(value)}, ${JSON.stringify(splitRules(css))})`,
-    );
+    entries.push(`${JSON.stringify(key)}: ${JSON.stringify(value)}`);
+    rules.push(...splitRules(css));
   }
-  return `({ ${entries.join(', ')} })`;
+  return { rules, text: `({ ${entries.join(', ')} })` };
 };
 
-export const precompileStaticStyles = (code: string, evaluator: AntdStyleEvaluator) => {
-  if (!code.includes('createStaticStyles')) return;
+export interface PrecompileResult {
+  code: string;
+  rules: string[];
+}
+
+export const precompileStaticStyles = (
+  code: string,
+  evaluator: AntdStyleEvaluator,
+): PrecompileResult | undefined => {
+  if (!code.includes('antd-style')) return;
   let program: Node;
   try {
     program = parseAst(code) as unknown as Node;
@@ -194,20 +203,23 @@ export const precompileStaticStyles = (code: string, evaluator: AntdStyleEvaluat
   }
 
   const antdImports = collectAntdStyleImports(program);
+  if (antdImports.size === 0) return;
+  const runtimeImport = `import '${RUNTIME_ID}';\n`;
   const calleeName = [...antdImports].find(
     ([, imported]) => imported === 'createStaticStyles',
   )?.[0];
-  if (!calleeName) return;
+  if (!calleeName) return { code: runtimeImport + code, rules: [] };
   const staticLocals = new Map(
     [...antdImports].filter(([, imported]) => STATIC_UTILS.has(imported)),
   );
   const staticNames = new Set(staticLocals.keys());
 
+  const rules: string[] = [];
   const replacements: Array<{ end: number; start: number; text: string }> = [];
   for (const call of findTopLevelCalls(program, calleeName)) {
     const callback = call.arguments[0] as Node;
     if (!isPureCallback(callback, staticNames)) continue;
-    let compiled: string | undefined;
+    let compiled: ReturnType<typeof serializeStyles>;
     try {
       compiled = serializeStyles(
         evaluate(code.slice(callback.start, callback.end), staticLocals, evaluator),
@@ -216,15 +228,16 @@ export const precompileStaticStyles = (code: string, evaluator: AntdStyleEvaluat
     } catch {
       continue;
     }
-    if (compiled) replacements.push({ end: call.end, start: call.start, text: compiled });
+    if (!compiled) continue;
+    rules.push(...compiled.rules);
+    replacements.push({ end: call.end, start: call.start, text: compiled.text });
   }
-  if (replacements.length === 0) return;
 
   let output = code;
   for (const { start, end, text } of replacements.sort((a, b) => b.start - a.start)) {
     output = output.slice(0, start) + text + output.slice(end);
   }
-  return `import { insertPrecompiledStyle as ${HELPER} } from '${RUNTIME_ID}';\n${output}`;
+  return { code: runtimeImport + output, rules };
 };
 
 export const loadAntdStyleEvaluator = async (): Promise<AntdStyleEvaluator> => {
@@ -245,10 +258,52 @@ export const loadAntdStyleEvaluator = async (): Promise<AntdStyleEvaluator> => {
   return { cache: emotion.cache, createStaticStyles, cssVar, responsive };
 };
 
+export const buildStaticStylesCss = (layers: Array<{ depth: number; rules: string[] }>) => {
+  const byDepth = new Map<number, Set<string>>();
+  for (const { depth, rules } of layers) {
+    const set = byDepth.get(depth) ?? new Set<string>();
+    for (const rule of rules) set.add(rule);
+    byDepth.set(depth, set);
+  }
+  const depths = [...byDepth.keys()].sort((a, b) => a - b);
+  const order = `@layer ${[...BASE_LAYERS, ...depths.map((d) => `l${d}`)].join(',')};`;
+  const blocks = depths.map((d) => `@layer l${d}{${[...byDepth.get(d)!].join('')}}`);
+  return [order, ...blocks].join('\n');
+};
+
 export function viteStaticStylesPrecompile(): Plugin {
   let evaluator: Promise<AntdStyleEvaluator> | undefined;
+  let base = '/';
+  const moduleRules = new Map<string, string[]>();
+  const depths = new Map<string, number>();
+
   return {
     apply: 'build',
+    buildEnd() {
+      const visiting = new Set<string>();
+      const depthOf = (id: string): number => {
+        const known = depths.get(id);
+        if (known !== undefined) return known;
+        if (visiting.has(id)) return 0;
+        visiting.add(id);
+        const info = this.getModuleInfo(id);
+        let depth = 0;
+        for (const child of [...(info?.importedIds ?? []), ...(info?.dynamicallyImportedIds ?? [])])
+          depth = Math.max(depth, depthOf(child) + 1);
+        visiting.delete(id);
+        depths.set(id, depth);
+        return depth;
+      };
+      for (const id of this.getModuleIds()) depthOf(id);
+
+      const source = buildStaticStylesCss(
+        [...moduleRules].map(([id, rules]) => ({ depth: depths.get(id) ?? 0, rules })),
+      );
+      this.emitFile({ name: CSS_ASSET, source, type: 'asset' });
+    },
+    configResolved(config) {
+      base = config.base;
+    },
     enforce: 'post',
     load(id) {
       if (id !== RESOLVED_RUNTIME_ID) return;
@@ -264,10 +319,33 @@ export function viteStaticStylesPrecompile(): Plugin {
     async transform(code, id) {
       if (!/\.[cm]?[jt]sx?$/.test(id.split('?')[0])) return;
       if (id.includes('node_modules') && !id.includes('/node_modules/@lobehub/ui/')) return;
-      if (!code.includes('createStaticStyles')) return;
+      if (!code.includes('antd-style')) return;
       evaluator ??= loadAntdStyleEvaluator();
       const output = precompileStaticStyles(code, await evaluator);
-      if (output) return { code: output, map: null };
+      if (!output) return;
+      if (output.rules.length > 0) moduleRules.set(id, output.rules);
+      return { code: output.code, map: null };
+    },
+    transformIndexHtml: {
+      handler(_html, ctx) {
+        const asset = Object.values(ctx.bundle ?? {}).find(
+          (item) => item.type === 'asset' && (item.names ?? [item.name]).includes(CSS_ASSET),
+        );
+        if (!asset) return;
+        return [
+          {
+            attrs: {
+              'crossorigin': true,
+              'data-lobe-static-styles': true,
+              'href': base + asset.fileName,
+              'rel': 'stylesheet',
+            },
+            injectTo: 'head',
+            tag: 'link',
+          },
+        ];
+      },
+      order: 'post',
     },
   };
 }
