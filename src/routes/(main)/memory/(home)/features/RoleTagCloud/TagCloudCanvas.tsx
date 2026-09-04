@@ -27,6 +27,31 @@ const CONFIG = {
   UPDATE_INTERVAL: 0.1,
 } as const;
 
+interface ConnectionState {
+  birthTime: number;
+  duration: number;
+  end: THREE.Vector3;
+  id: string;
+  start: THREE.Vector3;
+}
+
+export const updateConnections = (
+  previous: ConnectionState[],
+  time: number,
+  connectionCount: number,
+  createConnection: (time: number) => ConnectionState | null,
+  random: () => number = Math.random,
+): ConnectionState[] => {
+  const active = previous.filter((connection) => time - connection.birthTime < connection.duration);
+
+  if (connectionCount > active.length && random() < CONFIG.SPAWN_PROBABILITY) {
+    const connection = createConnection(time);
+    if (connection) return [...active, connection];
+  }
+
+  return active.length === previous.length ? previous : active;
+};
+
 interface WordProps {
   position: THREE.Vector3;
   size: number;
@@ -328,15 +353,6 @@ const Cloud = memo<CloudProps>(({ tags, radius = 20 }) => {
     return Math.min(Math.floor(wordsData.length * CONFIG.CONNECTION_RATIO), CONFIG.MAX_CONNECTIONS);
   }, [wordsData.length]);
 
-  // Dynamic connection line state
-  interface ConnectionState {
-    birthTime: number;
-    duration: number;
-    end: THREE.Vector3;
-    id: string;
-    start: THREE.Vector3;
-  }
-
   const [connections, setConnections] = useState<ConnectionState[]>([]);
   const lastUpdateTime = useRef(0);
   const isInitialized = useRef(false);
@@ -411,28 +427,9 @@ const Cloud = memo<CloudProps>(({ tags, radius = 20 }) => {
     if (time - lastUpdateTime.current > CONFIG.UPDATE_INTERVAL) {
       lastUpdateTime.current = time;
 
-      setConnections((prev) => {
-        // Filter out expired connections
-        const active = prev.filter((conn) => time - conn.birthTime < conn.duration);
-
-        // If there are not enough connections, randomly add new ones
-        const needed = connectionCount - active.length;
-        if (
-          needed > 0 && // Randomly decide whether to add a new connection this time
-          Math.random() < CONFIG.SPAWN_PROBABILITY
-        ) {
-          const newConnection = generateRandomConnection(time);
-          if (newConnection) {
-            return [...active, newConnection];
-          }
-        }
-
-        // The filter above always allocates, so returning it unconditionally would
-        // schedule a state update on every 0.1s tick even when the set is
-        // unchanged — re-rendering the cloud, and the DOM avatar drei mounts
-        // inside it, ~10 times a second for as long as the page is open.
-        return active.length === prev.length ? prev : active;
-      });
+      setConnections((previous) =>
+        updateConnections(previous, time, connectionCount, generateRandomConnection),
+      );
     }
 
     // Auto-rotation animation

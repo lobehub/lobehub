@@ -4,10 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import NavPanel from './index';
 import { NavPanelPortal } from './NavPanelPortal';
-import { clearNavPanelRegistry } from './registry';
+import { clearNavPanelRegistry, getNavPanelRegistrySnapshot } from './registry';
 import NavPanelShell from './Shell';
 
 let pathname = '/lobe-team/settings/general';
+let navPanelDraggableRenders = 0;
+let receivedActiveContent: NavPanelDraggableMockProps['activeContent'] | undefined;
 
 interface WorkspaceMock {
   activeWorkspaceId: string;
@@ -26,8 +28,9 @@ const workspaceState: WorkspaceMock = {
   workspaces: [{ id: 'workspace-1', slug: 'lobe-team' }],
 };
 
-vi.mock('react-router', () => ({
-  useLocation: () => ({ pathname }),
+vi.mock('@/store/router', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  useRouterStore: () => pathname,
 }));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
@@ -36,13 +39,22 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
       ?.slug ?? null,
 }));
 
-vi.mock('./components/NavPanelDraggable', () => ({
-  NavPanelDraggable: ({ activeContent }: NavPanelDraggableMockProps) => (
-    <div data-nav-key={activeContent.key} data-testid="nav-panel">
-      {activeContent.node}
-    </div>
-  ),
-}));
+vi.mock('./components/NavPanelDraggable', async () => {
+  const { memo } = await import('react');
+
+  return {
+    NavPanelDraggable: memo(({ activeContent }: NavPanelDraggableMockProps) => {
+      navPanelDraggableRenders += 1;
+      receivedActiveContent = activeContent;
+
+      return (
+        <div data-nav-key={activeContent.key} data-testid="nav-panel">
+          {activeContent.node}
+        </div>
+      );
+    }),
+  };
+});
 
 vi.mock('@/features/HomeSidebar/Content', () => ({
   default: () => <div>Home sidebar</div>,
@@ -51,7 +63,34 @@ vi.mock('@/features/HomeSidebar/Content', () => ({
 describe('NavPanel', () => {
   beforeEach(() => {
     pathname = '/lobe-team/settings/general';
+    navPanelDraggableRenders = 0;
+    receivedActiveContent = undefined;
     clearNavPanelRegistry();
+  });
+
+  it('keeps the active panel stable when an unrelated entry registers', async () => {
+    pathname = '/';
+    const home = <div>Home sidebar</div>;
+    const settings = <div>Settings sidebar</div>;
+    const Harness = ({ showSettings }: { showSettings: boolean }) => (
+      <>
+        <NavPanelPortal navKey="home">{home}</NavPanelPortal>
+        {showSettings && <NavPanelPortal navKey="settings">{settings}</NavPanelPortal>}
+        <NavPanel />
+      </>
+    );
+
+    const { rerender } = render(<Harness showSettings={false} />);
+    await screen.findByText('Home sidebar');
+
+    const renders = navPanelDraggableRenders;
+    const activeContent = receivedActiveContent;
+
+    rerender(<Harness showSettings />);
+    await waitFor(() => expect(getNavPanelRegistrySnapshot().has('settings')).toBe(true));
+
+    expect(navPanelDraggableRenders).toBe(renders);
+    expect(receivedActiveContent).toBe(activeContent);
   });
 
   it('selects the route-owned entry instead of a concurrently registered Home entry', async () => {

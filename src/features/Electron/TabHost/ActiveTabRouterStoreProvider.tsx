@@ -14,12 +14,13 @@ const ActiveTabRouterStoreProvider = ({ children }: PropsWithChildren) => {
     (state) => state.tabs.find((tab) => tab.id === state.activeTabId)?.url,
   );
 
-  if (!activeTabId || !activeTabUrl) return children;
-
-  const router = getOrCreateTabRouter(activeTabId, activeTabUrl, createTabRouter);
+  const router =
+    activeTabId && activeTabUrl
+      ? getOrCreateTabRouter(activeTabId, activeTabUrl, createTabRouter)
+      : undefined;
 
   return (
-    <RouterStoreProvider router={router} scopeId={activeTabId}>
+    <RouterStoreProvider router={router} scopeId={activeTabId ?? undefined}>
       {children}
     </RouterStoreProvider>
   );
