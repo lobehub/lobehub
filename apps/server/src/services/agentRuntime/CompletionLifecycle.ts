@@ -887,6 +887,7 @@ export class CompletionLifecycle {
           operationId,
           assistantMessageId,
           metadata?.userId || this.userId,
+          typeof metadata?.topicId === 'string' ? metadata.topicId : undefined,
         );
         if (recovered) event.lastAssistantContent = recovered;
       }
@@ -1051,8 +1052,9 @@ export class CompletionLifecycle {
     operationId: string,
     assistantMessageId: string | undefined,
     userId: string,
+    topicId?: string,
   ): Promise<string | undefined> {
-    if (!assistantMessageId) return undefined;
+    if (!assistantMessageId && !topicId) return undefined;
 
     try {
       const messageModel =
@@ -1061,7 +1063,28 @@ export class CompletionLifecycle {
           : new MessageModel(this.serverDB, userId, this.workspaceId, undefined, {
               includeShareVisitor: this.includeShareVisitor,
             });
-      const row = await messageModel.findById(assistantMessageId);
+
+      // 1. The row the event already names (client-runtime `metadata.assistantMessageId`,
+      //    or the final assistant leaf in state).
+      let row = assistantMessageId ? await messageModel.findById(assistantMessageId) : undefined;
+      let recoveredFrom = assistantMessageId;
+
+      // 2. Otherwise the run's own final assistant row, by the creation-time
+      //    provenance `call_llm` stamps on every assistant row it creates or
+      //    reuses (`metadata.operationId`). Unlike "the latest assistant row in
+      //    the topic", this is bound to THIS operation, so a topic that also
+      //    holds a concurrent run's rows cannot supply the answer (LOBE-13787).
+      if (!extractTextFromMessage(row)?.trim() && topicId) {
+        const byOperation = await messageModel.findLatestAssistantByOperationId({
+          operationId,
+          topicId,
+        });
+        if (byOperation) {
+          row = byOperation;
+          recoveredFrom = byOperation.id;
+        }
+      }
+
       const raw = typeof row?.content === 'string' ? row.content : undefined;
       if (!raw?.trim()) return undefined;
 
@@ -1079,7 +1102,7 @@ export class CompletionLifecycle {
       // production logs — the silent variant of this is what made
       // the Discord bot empty-reply issue hard to diagnose.
       console.warn(
-        `[CompletionLifecycle][${operationId}] completion event had no assistant text; recovered ${content.length} chars from message ${assistantMessageId}`,
+        `[CompletionLifecycle][${operationId}] completion event had no assistant text; recovered ${content.length} chars from message ${recoveredFrom}`,
       );
       return content;
     } catch (error) {

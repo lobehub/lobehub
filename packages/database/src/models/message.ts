@@ -2655,6 +2655,34 @@ export class MessageModel {
   };
 
   /**
+   * Resolve the newest assistant row an Agent Run produced, by the creation
+   * provenance `call_llm` stamps on every assistant row it creates or reuses
+   * (`metadata.operationId`). Scoped by `topicId` so the JSONB predicate runs
+   * inside the topic's own (indexed) rows rather than across the whole table.
+   *
+   * Used by the completion lifecycle to recover the run's real final reply
+   * when the runtime state no longer carries this run's messages — the
+   * topic-wide "latest assistant" would be an earlier turn's reply.
+   */
+  findLatestAssistantByOperationId = async ({
+    operationId,
+    topicId,
+  }: {
+    operationId: string;
+    topicId: string;
+  }) => {
+    return this.db.query.messages.findFirst({
+      where: and(
+        eq(messages.userId, this.userId),
+        eq(messages.topicId, topicId),
+        eq(messages.role, 'assistant'),
+        sql`${messages.metadata}->>'operationId' = ${operationId}`,
+      ),
+      orderBy: [desc(messages.createdAt)],
+    });
+  };
+
+  /**
    * Get parent messages for a thread
    *
    * @param params - Parameters for getting parent messages

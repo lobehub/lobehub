@@ -30,9 +30,9 @@ import {
 } from './platforms';
 import { clearReactionState, saveReactionState } from './reactionState';
 import { buildRecentChannelHistory } from './recentChannelHistory';
+import { renderThrownAgentError } from './renderThrownError';
 import {
   renderAgentError,
-  renderError,
   renderErrorWithDetails,
   renderFinalReply,
   renderStart,
@@ -414,10 +414,14 @@ export class AgentBridgeService {
 
     AgentBridgeService.clearActiveThread(thread.id);
 
+    // Classify before rendering so a startup failure lands on curated copy
+    // (harness / provider / user tier) instead of a bare "Agent Execution
+    // Failed" that tells the user nothing — especially when the run died
+    // before it had an operation id to show.
     const errorContent = {
       markdown: stopped
         ? renderStopped(errorMessage, replyLocale)
-        : renderError(operationId, replyLocale),
+        : renderThrownAgentError(error, operationId, replyLocale),
     };
 
     if (progressMessage) {
@@ -531,7 +535,7 @@ export class AgentBridgeService {
         const operationId = AgentBridgeService.activeOperations.get(thread.id);
         log('handleMention error: operationId=%s, %O', operationId, error);
         try {
-          await thread.post({ markdown: renderError(operationId, replyLocale) });
+          await thread.post({ markdown: renderThrownAgentError(error, operationId, replyLocale) });
         } catch (postError) {
           log('handleMention: failed to post error message: %O', postError);
         }
@@ -1531,7 +1535,7 @@ export class AgentBridgeService {
             if (progressMessage) {
               try {
                 await progressMessage.edit({
-                  markdown: renderError(result.operationId, replyLocale),
+                  markdown: renderThrownAgentError(result.error, result.operationId, replyLocale),
                 });
               } catch (error) {
                 log('executeWithCallback[local]: failed to edit startup error: %O', error);
@@ -1608,7 +1612,7 @@ export class AgentBridgeService {
           if (progressMessage) {
             try {
               await progressMessage.edit({
-                markdown: renderError(fallbackOperationId, replyLocale),
+                markdown: renderThrownAgentError(error, fallbackOperationId, replyLocale),
               });
             } catch (editError) {
               log('executeWithCallback[local]: failed to edit startup error: %O', editError);

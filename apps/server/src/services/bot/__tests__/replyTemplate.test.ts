@@ -505,6 +505,19 @@ describe('replyTemplate', () => {
       expect(renderAgentError(undefined, undefined, undefined)).toBe('**Agent Execution Failed**');
     });
 
+    // The raw runtime message must never reach an IM channel — it is
+    // server-side triage material only (b4aa51baa, #13998). Classification is
+    // what earns the user a reason; the message itself stays out of every tier.
+    it('never leaks the raw error message, on any tier', () => {
+      const secret = 'connect ECONNREFUSED 10.0.0.7:5432';
+
+      expect(renderAgentError('NoAvailableProvider', secret, 'op-1')).not.toContain(secret);
+      expect(
+        renderAgentError('SomeNewErrorCode', secret, 'op-1', undefined, 'harness'),
+      ).not.toContain(secret);
+      expect(renderAgentError('SomeNewErrorCode', secret, 'op-1')).not.toContain(secret);
+    });
+
     it('surfaces a network message for ProviderNetworkError instead of a bare op id', () => {
       const en = renderAgentError('ProviderNetworkError', 'fetch failed', 'op-net');
       expect(en).toContain('Network error talking to the model provider');
