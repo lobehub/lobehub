@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { ConnectorToolPermission } from '@/database/schemas';
 import type { ConnectorTool } from '@/store/tool/slices/connector';
 
+import { getConnectorPermissionStatus } from './localization';
 import ToolPermissionRow from './ToolPermissionRow';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -53,6 +54,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 interface ToolPermissionGroupProps {
   /** Read-only mode — the caller lacks the manage permission for this connector. */
+  connectorIdentifier: string;
   disabled?: boolean;
   label: string;
   onBatchPermission: (toolIds: string[], permission: ConnectorToolPermission) => void;
@@ -61,13 +63,20 @@ interface ToolPermissionGroupProps {
 }
 
 const ToolPermissionGroup = memo<ToolPermissionGroupProps>(
-  ({ disabled, label, tools, onPermissionChange, onBatchPermission }) => {
+  ({ connectorIdentifier, disabled, label, tools, onPermissionChange, onBatchPermission }) => {
     const { t } = useTranslation('tool');
     const [expanded, setExpanded] = useState(true);
 
     if (tools.length === 0) return null;
 
     const toolIds = tools.map((tool) => tool.id);
+    const permissionStatus = getConnectorPermissionStatus(tools);
+    const permissionStatusLabels = {
+      auto: t('connector.permission.auto', 'Auto — AI calls directly'),
+      custom: t('connector.permission.custom', 'Custom'),
+      disabled: t('connector.permission.disabled', 'Disabled — hidden from AI'),
+      needs_approval: t('connector.permission.approval', 'Needs approval'),
+    } satisfies Record<typeof permissionStatus, string>;
 
     const batchItems = [
       {
@@ -104,7 +113,7 @@ const ToolPermissionGroup = memo<ToolPermissionGroupProps>(
                 onClick={(e) => e.stopPropagation()}
               >
                 <MoreHorizontalIcon size={12} />
-                {t('connector.permission.custom', 'Custom')}
+                {permissionStatusLabels[permissionStatus]}
                 <ChevronDownIcon size={12} />
               </Button>
             </DropdownMenu>
@@ -115,6 +124,7 @@ const ToolPermissionGroup = memo<ToolPermissionGroupProps>(
           <div>
             {tools.map((tool) => (
               <ToolPermissionRow
+                connectorIdentifier={connectorIdentifier}
                 disabled={disabled}
                 key={tool.id}
                 tool={tool}

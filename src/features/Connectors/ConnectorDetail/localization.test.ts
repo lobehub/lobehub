@@ -1,13 +1,21 @@
 import { type TFunction } from 'i18next';
 import { describe, expect, it, vi } from 'vitest';
 
-import { getLocalizedConnectorDetail } from './localization';
+import { ConnectorToolPermission } from '@/database/schemas';
 
-const createTranslator = (translations: Record<string, string> = {}) =>
+import {
+  getConnectorPermissionStatus,
+  getLocalizedConnectorDetail,
+  getLocalizedConnectorTool,
+} from './localization';
+
+const createTranslator = <Namespace extends 'plugin' | 'setting' = 'setting'>(
+  translations: Record<string, string> = {},
+) =>
   vi.fn(
     (key: string, options?: { defaultValue?: string }) =>
       translations[key] ?? options?.defaultValue ?? key,
-  ) as unknown as TFunction<'setting'>;
+  ) as unknown as TFunction<Namespace>;
 
 describe('getLocalizedConnectorDetail', () => {
   it('localizes builtin connector name and description with setting keys', () => {
@@ -110,5 +118,53 @@ describe('getLocalizedConnectorDetail', () => {
     });
 
     expect(result).toEqual({ description: undefined, name: 'Custom HTTP' });
+  });
+});
+
+describe('getLocalizedConnectorTool', () => {
+  it('localizes builtin tool names and descriptions while preserving the callable name', () => {
+    const t = createTranslator<'plugin'>({
+      'builtins.lobe-task.apiDescription.viewTask': '查看指定任务的详细信息。',
+      'builtins.lobe-task.apiName.viewTask': '查看任务',
+    });
+    const tool = {
+      description: 'View details of a specific task.',
+      displayName: null,
+      toolName: 'viewTask',
+    };
+
+    const result = getLocalizedConnectorTool('lobe-task', tool, t);
+
+    expect(result).toEqual({
+      description: '查看指定任务的详细信息。',
+      name: '查看任务',
+      toolName: 'viewTask',
+    });
+    expect(tool.toolName).toBe('viewTask');
+  });
+});
+
+describe('getConnectorPermissionStatus', () => {
+  it.each([
+    {
+      expected: ConnectorToolPermission.auto,
+      permissions: [ConnectorToolPermission.auto, ConnectorToolPermission.auto],
+    },
+    {
+      expected: ConnectorToolPermission.needs_approval,
+      permissions: [ConnectorToolPermission.needs_approval, ConnectorToolPermission.needs_approval],
+    },
+    {
+      expected: ConnectorToolPermission.disabled,
+      permissions: [ConnectorToolPermission.disabled, ConnectorToolPermission.disabled],
+    },
+    {
+      expected: 'custom',
+      permissions: [ConnectorToolPermission.auto, ConnectorToolPermission.disabled],
+    },
+  ])('returns $expected for the group state', ({ expected, permissions }) => {
+    expect(getConnectorPermissionStatus(permissions.map((permission) => ({ permission })))).toBe(
+      expected,
+    );
   });
 });

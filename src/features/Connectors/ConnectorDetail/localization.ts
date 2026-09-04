@@ -1,5 +1,7 @@
 import { type TFunction } from 'i18next';
 
+import { type ConnectorToolPermission } from '@/database/schemas';
+
 interface LocalizableConnector {
   identifier: string;
   metadata?: Record<string, unknown> | null;
@@ -12,12 +14,30 @@ interface LocalizableProvider {
   label: string;
 }
 
+interface LocalizableConnectorTool {
+  description?: string | null;
+  displayName?: string | null;
+  toolName: string;
+}
+
 interface GetLocalizedConnectorDetailOptions {
   composioApp?: LocalizableProvider;
   connector: LocalizableConnector;
   lobehubProvider?: LocalizableProvider;
   t: TFunction<'setting'>;
 }
+
+type ConnectorPermissionStatus = ConnectorToolPermission | 'custom';
+
+export const getConnectorPermissionStatus = (
+  tools: Array<{ permission: ConnectorToolPermission }>,
+): ConnectorPermissionStatus => {
+  const firstPermission = tools[0]?.permission;
+
+  if (!firstPermission) return 'custom';
+
+  return tools.every((tool) => tool.permission === firstPermission) ? firstPermission : 'custom';
+};
 
 export const getLocalizedConnectorDetail = ({
   composioApp,
@@ -64,3 +84,19 @@ export const getLocalizedConnectorDetail = ({
     name: connector.name,
   };
 };
+
+export const getLocalizedConnectorTool = (
+  connectorIdentifier: string,
+  tool: LocalizableConnectorTool,
+  t: TFunction<'plugin'>,
+) => ({
+  description: tool.description
+    ? t(`builtins.${connectorIdentifier}.apiDescription.${tool.toolName}`, {
+        defaultValue: tool.description,
+      })
+    : undefined,
+  name: t(`builtins.${connectorIdentifier}.apiName.${tool.toolName}`, {
+    defaultValue: tool.displayName || tool.toolName,
+  }),
+  toolName: tool.toolName,
+});
