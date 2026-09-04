@@ -739,6 +739,19 @@ export class GeneralChatAgent implements Agent {
                 type: 'resolve_blocked_tools',
               } satisfies AgentInstruction);
             } else {
+              const metadata = state.metadata || {};
+              const consecutiveInterventions = (metadata.consecutiveInterventions || 0) + 1;
+              metadata.consecutiveInterventions = consecutiveInterventions;
+              state.metadata = metadata;
+
+              if (consecutiveInterventions > 5) {
+                return {
+                  reason: 'circuit_breaker_triggered',
+                  reasonDetail: 'Circuit breaker triggered: Too many consecutive human intervention requests.',
+                  type: 'finish',
+                };
+              }
+
               instructions.push({
                 // Same `parentMessageId` the sibling call_tool / call_tools_batch
                 // instructions carry: the assistant message this llm_result just
@@ -752,9 +765,19 @@ export class GeneralChatAgent implements Agent {
                 type: 'request_human_approve',
               });
             }
+          } else {
+            // Reset count if no intervention is needed in this step
+            if (state.metadata) {
+              state.metadata.consecutiveInterventions = 0;
+            }
           }
 
           return instructions;
+        }
+
+        // Reset count if there are no tool calls in this step
+        if (state.metadata) {
+          state.metadata.consecutiveInterventions = 0;
         }
 
         // Silent-drop diagnostic: LLM emitted raw tool_calls but every one

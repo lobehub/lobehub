@@ -89,7 +89,7 @@ export const messageStateSlice: StateCreator<
   copyMessage: async (id, content) => {
     const { hooks } = get();
 
-    await copyToClipboard(cleanSpeakerTag(content));
+    await copyToClipboard(cleanSpeakerTag(content).trim());
 
     // ===== Hook: onMessageCopied =====
     if (hooks.onMessageCopied) {

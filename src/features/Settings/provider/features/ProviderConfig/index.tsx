@@ -73,6 +73,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     ${responsive.sm} {
       width: 100%;
       min-width: unset !important;
+
+      .${prefixCls}-form-item-control:has(.${prefixCls}-input,.${prefixCls}-select) {
+        flex: 1;
+        width: 100%;
+        min-width: unset !important;
+      }
     }
     .${prefixCls}-select-selection-overflow-item {
       font-size: 12px;

@@ -20,7 +20,8 @@ const Renderer = memo<{ animated?: boolean; content: string; type?: string }>(
       }
 
       case 'application/lobe.artifacts.mermaid': {
-        return <Mermaid variant={'borderless'}>{content}</Mermaid>;
+        const unescapedContent = content.replace(/\\([\\`*_{}[\]()#+\-.!|"'<>~])/g, '$1');
+        return <Mermaid variant={'borderless'}>{unescapedContent}</Mermaid>;
       }
 
       case 'text/markdown': {

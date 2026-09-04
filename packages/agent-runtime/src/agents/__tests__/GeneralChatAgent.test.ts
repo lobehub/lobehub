@@ -667,6 +667,71 @@ describe('GeneralChatAgent', () => {
       ]);
     });
 
+    it('should trigger circuit breaker and return finish when consecutiveInterventions exceeds 5', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const toolCall: ChatToolPayload = {
+        id: 'call-1',
+        identifier: 'dangerous-plugin',
+        apiName: 'delete-api',
+        arguments: '{}',
+        type: 'default',
+      };
+
+      const state = createMockState({
+        metadata: {
+          consecutiveInterventions: 5,
+        },
+        toolManifestMap: {
+          'dangerous-plugin': {
+            identifier: 'dangerous-plugin',
+            humanIntervention: 'require',
+          },
+        },
+      });
+
+      const context = createMockContext('llm_result', {
+        hasToolsCalling: true,
+        toolsCalling: [toolCall],
+        parentMessageId: 'msg-1',
+      });
+
+      const result = await agent.runner(context, state);
+
+      expect(result).toEqual({
+        reason: 'circuit_breaker_triggered',
+        reasonDetail: 'Circuit breaker triggered: Too many consecutive human intervention requests.',
+        type: 'finish',
+      });
+    });
+
+    it('should reset consecutiveInterventions to 0 when no intervention is needed or no tool is called', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const state = createMockState({
+        metadata: {
+          consecutiveInterventions: 3,
+        },
+        toolManifestMap: {},
+      });
+
+      const contextText = createMockContext('llm_result', {
+        hasToolsCalling: false,
+        parentMessageId: 'msg-1',
+      });
+
+      await agent.runner(contextText, state);
+      expect(state.metadata?.consecutiveInterventions).toBe(0);
+    });
+
     it('should return both call_tools_batch and request_human_approve for mixed tools', async () => {
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },

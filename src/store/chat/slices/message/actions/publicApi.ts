@@ -208,7 +208,7 @@ export class MessagePublicApiActionImpl {
   };
 
   copyMessage = async (id: string, content: string): Promise<void> => {
-    await copyToClipboard(content);
+    await copyToClipboard(content.trim());
 
     this.#get().internal_traceMessage(id, { eventType: TraceEventType.CopyMessage });
   };
