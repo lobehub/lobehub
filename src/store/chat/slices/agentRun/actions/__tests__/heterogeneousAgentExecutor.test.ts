@@ -760,28 +760,6 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   });
 
   describe('Claude Code Desktop-local API binding', () => {
-    let previousLab: ReturnType<typeof useUserStore.getState>['preference']['lab'];
-
-    const setClaudeCodeApiModeLab = (enabled: boolean) => {
-      useUserStore.setState((state) => ({
-        preference: {
-          ...state.preference,
-          lab: { ...state.preference.lab, enableAgentProviderBinding: enabled },
-        },
-      }));
-    };
-
-    beforeEach(() => {
-      previousLab = useUserStore.getState().preference.lab;
-      setClaudeCodeApiModeLab(true);
-    });
-
-    afterEach(() => {
-      useUserStore.setState((state) => ({
-        preference: { ...state.preference, lab: previousLab },
-      }));
-    });
-
     const apiProvider = {
       apiConfig: { model: 'api-primary', providerId: 'anthropic-direct' },
       args: ['--model', 'stale-arg-model', '--effort', 'high'],
@@ -847,7 +825,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(mockGetClaudeCodeIdentity).not.toHaveBeenCalled();
     });
 
-    it('uses the deployment provider inside API mode when the Labs experiment is enabled', async () => {
+    it('uses the deployment provider inside API mode', async () => {
       await runWithEvents([ccResult()], {
         params: { heterogeneousProvider: serverDefaultApiProvider },
       });
@@ -916,47 +894,6 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         ).toBe(true);
       },
     );
-
-    it('blocks the deployment provider before spawn when the Labs experiment is disabled', async () => {
-      setClaudeCodeApiModeLab(false);
-      const store = createMockStore();
-
-      await executeHeterogeneousAgent(
-        vi.fn(() => store),
-        {
-          ...defaultParams,
-          heterogeneousProvider: serverDefaultApiProvider,
-        },
-      );
-
-      expect(mockStartSession).not.toHaveBeenCalled();
-      expect(mockUpdateMessageError).toHaveBeenCalledWith(
-        'ast-initial',
-        expect.objectContaining({ message: expect.stringMatching(/labDisabled|Labs experiment/) }),
-        expect.anything(),
-      );
-    });
-
-    it('fails before spawn when the Labs experiment is disabled', async () => {
-      configureDirectProvider();
-      setClaudeCodeApiModeLab(false);
-      const store = createMockStore();
-
-      await executeHeterogeneousAgent(
-        vi.fn(() => store),
-        {
-          ...defaultParams,
-          heterogeneousProvider: apiProvider,
-        },
-      );
-
-      expect(mockStartSession).not.toHaveBeenCalled();
-      expect(mockUpdateMessageError).toHaveBeenCalledWith(
-        'ast-initial',
-        expect.objectContaining({ message: expect.stringMatching(/labDisabled|Labs experiment/) }),
-        expect.anything(),
-      );
-    });
 
     it('fails before spawn when the binding reference is incomplete', async () => {
       const store = createMockStore();
@@ -2215,33 +2152,20 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     });
 
     it('should leave TRAE model selection to the managed profile in API mode', async () => {
-      const previousLab = useUserStore.getState().preference.lab;
-      useUserStore.setState((state) => ({
-        preference: {
-          ...state.preference,
-          lab: { ...state.preference.lab, enableAgentProviderBinding: true },
-        },
-      }));
       const store = createMockStore();
       const get = vi.fn(() => store);
 
-      try {
-        await executeHeterogeneousAgent(get, {
-          ...defaultParams,
-          heterogeneousProvider: {
-            apiConfig: { model: 'api-model', providerId: 'openai' },
-            args: ['--feature=test'],
-            authMode: 'api',
-            command: 'traecli',
-            model: 'stale-subscription-model',
-            type: 'trae' as const,
-          },
-        });
-      } finally {
-        useUserStore.setState((state) => ({
-          preference: { ...state.preference, lab: previousLab },
-        }));
-      }
+      await executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        heterogeneousProvider: {
+          apiConfig: { model: 'api-model', providerId: 'openai' },
+          args: ['--feature=test'],
+          authMode: 'api',
+          command: 'traecli',
+          model: 'stale-subscription-model',
+          type: 'trae' as const,
+        },
+      });
 
       expect(mockStartSession).toHaveBeenCalledWith(
         expect.objectContaining({

@@ -542,10 +542,6 @@ export default {
     'The provider "{{providerId}}" requires a base URL for this agent.',
   'heteroAgent.apiMode.endpointUnsupported':
     'The provider "{{providerId}}" has an unsupported base URL.',
-  'heteroAgent.apiMode.labDisabled.action': 'Enable in Labs',
-  'heteroAgent.apiMode.labDisabled.desc':
-    'Turn it on in Settings → Labs, or switch this agent to Subscription authentication.',
-  'heteroAgent.apiMode.labDisabled.title': 'Provider binding is a Labs experiment',
   'heteroAgent.apiMode.localOnly.desc':
     'Switch the execution environment to Local device, or use Subscription authentication.',
   'heteroAgent.apiMode.localOnly.title': 'API mode requires Desktop local execution',

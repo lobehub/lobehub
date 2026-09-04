@@ -4,9 +4,6 @@ export default {
   'features.agentGraphConfig.desc':
     'Show graph runtime configuration in an agent profile advanced settings.',
   'features.agentGraphConfig.title': 'Agent Graph Runtime Configuration',
-  'features.agentProviderBinding.desc':
-    'Let supported local agents run on API instead of their subscription — through the LobeHub default provider or a configured API provider and model. Available for select agents on Desktop local execution.',
-  'features.agentProviderBinding.title': 'Agent Provider Binding',
   'features.agentSelfIteration.desc':
     'Allow the agent to reflect, build self-awareness, and continuously iterate through ongoing attempts and interactions.',
   'features.agentSelfIteration.title': 'Agent Self-iteration',
