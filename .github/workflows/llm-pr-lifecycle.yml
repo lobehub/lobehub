@@ -1,0 +1,54 @@
+name: LLM PR Lifecycle
+
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: read
+
+jobs:
+  handle:
+    name: Handle automated PR
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (startsWith(github.event.pull_request.head.ref, 'automatic/') ||
+      github.event.pull_request.head.ref == 'style/auto-i18n')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger canary build after merge
+        if: github.event.pull_request.merged == true
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'release-desktop-canary.yml',
+              ref: 'canary',
+              inputs: { force: 'true' },
+            });
+
+      - name: Delete source branch after close
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const branch = context.payload.pull_request.head.ref;
+            try {
+              await github.rest.git.deleteRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `heads/${branch}`,
+              });
+              core.info(`Deleted source branch: ${branch}`);
+            } catch (error) {
+              if (error.status === 422 || error.status === 404) {
+                core.info(`Source branch is already absent: ${branch}`);
+                return;
+              }
+              throw error;
+            }
