@@ -77,6 +77,10 @@ const styles = createStaticStyles(({ css }) => ({
 
     transition: color 120ms ease;
   `,
+  /* A plain block, deliberately not a Flexbox: `Markdown`'s root is
+     `overflow: hidden`, so as a flex item its automatic minimum size collapses
+     to 0 and a long document gets squeezed to the viewer's height and clipped
+     instead of overflowing it — leaving this box scrollable in name only. */
   docViewer: css`
     overflow: auto;
     flex: 1;
@@ -275,7 +279,7 @@ export const DocumentViewer = memo<{ fileName?: string | null; markdown?: boolea
       );
 
     return (
-      <Flexbox className={styles.docViewer}>
+      <div className={styles.docViewer}>
         {markdown ? (
           <Markdown fontSize={13} variant={'chat'}>
             {fileData}
@@ -290,7 +294,7 @@ export const DocumentViewer = memo<{ fileName?: string | null; markdown?: boolea
             {fileData}
           </Highlighter>
         )}
-      </Flexbox>
+      </div>
     );
   },
 );
