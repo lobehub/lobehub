@@ -77,6 +77,44 @@ describe('LobeMetaAI - custom features', () => {
     });
   });
 
+  describe('generateObject', () => {
+    it('should generate structured output through the Responses API', async () => {
+      (instance['client'].responses.create as Mock).mockResolvedValue({
+        output_text: '{"city":"Hangzhou"}',
+      });
+
+      const result = await instance.generateObject({
+        messages: [{ content: 'Extract the city', role: 'user' }],
+        model: 'muse-spark-1.3',
+        schema: {
+          name: 'location',
+          schema: {
+            properties: { city: { type: 'string' } },
+            required: ['city'],
+            type: 'object',
+          },
+        },
+      });
+
+      const request = (instance['client'].responses.create as Mock).mock.calls[0][0];
+
+      expect(result).toEqual({ city: 'Hangzhou' });
+      expect(instance['client'].chat.completions.create).not.toHaveBeenCalled();
+      expect(request.text).toEqual({
+        format: {
+          name: 'location',
+          schema: {
+            properties: { city: { type: 'string' } },
+            required: ['city'],
+            type: 'object',
+          },
+          strict: true,
+          type: 'json_schema',
+        },
+      });
+    });
+  });
+
   describe('responses.handlePayload', () => {
     it('should add the web_search tool alongside existing tools when enabledSearch is true', async () => {
       await instance.chat({

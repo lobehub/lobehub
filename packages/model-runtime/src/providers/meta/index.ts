@@ -68,6 +68,14 @@ export const LobeMetaAI = createOpenAICompatibleRuntime({
     chatCompletion: () => process.env.DEBUG_META_CHAT_COMPLETION === '1',
     responses: () => process.env.DEBUG_META_RESPONSES === '1',
   },
+  /**
+   * Structured generation resolves its API mode from `generateObject.useResponse` alone — the
+   * `chatCompletion` flag above does not reach it — so it has to opt in separately, otherwise
+   * `outputJSON` would silently fall back to the Chat Completions endpoint.
+   */
+  generateObject: {
+    useResponse: true,
+  },
   provider: ModelProvider.Meta,
   responses: {
     handlePayload: handleMetaResponsesPayload,
