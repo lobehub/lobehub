@@ -103,6 +103,20 @@ export const goalRouter = router({
         createdByAgentId: z.string().optional(),
         config: z
           .object({
+            acceptance: z
+              .object({
+                /** Numeric clauses gating acceptance; keyed by a series on this goal. */
+                metrics: z
+                  .array(
+                    z.object({
+                      key: z.string().min(1).max(255),
+                      op: z.enum(['gte', 'lte', 'gt', 'lt', 'eq']).optional(),
+                      target: z.number(),
+                    }),
+                  )
+                  .optional(),
+              })
+              .optional(),
             // Bounds mirror `resolveMaxConcurrentTasks`, so a rejected value and
             // a clamped one cannot disagree about what the cap may be.
             maxConcurrentTasks: z.number().int().min(1).max(10).nullable().optional(),
@@ -191,6 +205,80 @@ export const goalRouter = router({
         return { data, message: 'Decision resolved', success: true };
       } catch (error) {
         mapGoalError(error, 'decide');
+      }
+    }),
+
+  /** Declare or clear the numeric clauses gating this goal's acceptance. */
+  setMetricCriteria: goalWriteProcedure
+    .input(
+      idInput.extend({
+        metrics: z.array(
+          z.object({
+            key: z.string().min(1).max(255),
+            op: z.enum(['gte', 'lte', 'gt', 'lt', 'eq']).optional(),
+            target: z.number(),
+          }),
+        ),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const goal = await ctx.goalModel.findById(input.id);
+        if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+        assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
+        const data = await ctx.goalService.setMetricCriteria(input.id, input.metrics);
+        // Relaxing a clause can free a goal parked short of acceptance.
+        await scheduleGoalAdvance({
+          goalId: input.id,
+          trigger: 'observe',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+        return { data, message: 'Metric criteria updated', success: true };
+      } catch (error) {
+        mapGoalError(error, 'setMetricCriteria');
+      }
+    }),
+
+  /**
+   * Record a measurement against this goal and let the coordinator react.
+   *
+   * The graph otherwise only moves when a Task settles, but a long-horizon
+   * goal advances when the *world* changes — a follower count, a conversion
+   * rate. This is that entry point: it writes to the generic metrics layer
+   * (subject = this goal) and schedules an advance, so a goal whose numeric
+   * acceptance was the last thing outstanding closes on the observation
+   * instead of waiting up to a sweep window.
+   */
+  recordObservation: goalWriteProcedure
+    .input(
+      idInput.extend({
+        key: z.string().min(1).max(255),
+        kind: z.enum(['gauge', 'counter']).optional(),
+        observedAt: z.coerce.date().optional(),
+        title: z.string().optional(),
+        unit: z.string().optional(),
+        value: z.number(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const { id, ...observation } = input;
+        const { shouldAdvance, ...data } = await ctx.goalService.recordObservation(id, observation);
+        // A goal parked short of its measured acceptance is only worth waking
+        // when the measurement actually cleared the gate; otherwise the advance
+        // would tick straight back out as `goal_paused`.
+        if (shouldAdvance) {
+          await scheduleGoalAdvance({
+            goalId: id,
+            trigger: 'observe',
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId ?? undefined,
+          });
+        }
+        return { data, message: 'Observation recorded', success: true };
+      } catch (error) {
+        mapGoalError(error, 'recordObservation');
       }
     }),
 

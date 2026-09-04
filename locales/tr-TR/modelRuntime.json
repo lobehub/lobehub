@@ -30,7 +30,7 @@
   "NoAvailableChannel": "Üzgünüz, proxy veya yönlendiricide istenen model için kullanılabilir bir kanal yok. Lütfen kanal/anahtar yapılandırmasını değiştirin veya daha sonra yeniden deneyin.",
   "OllamaBizError": "Ollama hizmeti istenirken hata oluştu, lütfen aşağıdaki bilgilere dayanarak sorun giderin veya yeniden deneyin.",
   "OllamaServiceUnavailable": "Ollama hizmeti kullanılamıyor. Lütfen Ollama'nın düzgün çalışıp çalışmadığını veya Ollama'nın çapraz köken yapılandırmasının doğru ayarlanıp ayarlanmadığını kontrol edin.",
-  "OperationInactivityTimeout": "Aracı işlemi çok uzun süre hareketsiz kaldı ve sonlandırıldı. Lütfen isteği yeniden deneyin.",
+  "OperationInactivityTimeout": "Ajan işlemi çok uzun süre hareketsiz kaldı ve sonlandırıldı. Lütfen isteği yeniden deneyin.",
   "PermissionDenied": "Üzgünüz, bu hizmete erişim izniniz yok. Lütfen anahtarınızın gerekli erişim haklarına sahip olup olmadığını kontrol edin.",
   "ProviderBizError": "{{provider}} hizmeti istenirken hata oluştu, lütfen aşağıdaki bilgilere dayanarak sorun giderin veya yeniden deneyin.",
   "ProviderContentPolicyViolation": "Sağlayıcı, içerik politikası nedeniyle bu isteği veya çıktısını engelledi. Lütfen isteminizi gözden geçirip tekrar deneyin.",

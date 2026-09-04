@@ -255,6 +255,8 @@ export default {
   'acceptance.status.rejected': 'Delivery rejected',
   'acceptance.status.repairing': 'Repair in progress',
   'acceptance.status.verifying': 'Verification in progress',
+  'acceptance.shell.back': 'Back',
+  'acceptance.shell.menu': 'Show deliveries',
   'acceptance.subject.document': 'Document',
   'acceptance.subject.standalone': 'Standalone',
   'acceptance.subject.task': 'Task',
@@ -325,7 +327,7 @@ export default {
   'acceptance.workspace.deleteError': 'Failed to delete acceptance',
   'acceptance.workspace.deleteSuccess': 'Acceptance deleted',
   'acceptance.workspace.emptyDetail.description':
-    'Pick an acceptance on the left to review its checks, rounds and evidence.',
+    'Open the deliveries menu to pick a record and inspect its checks, rounds and evidence.',
   'acceptance.workspace.emptyDetail.title': 'Select an acceptance',
   'acceptance.workspace.filters.active': 'In progress',
   'acceptance.workspace.filters.all': 'All acceptances',

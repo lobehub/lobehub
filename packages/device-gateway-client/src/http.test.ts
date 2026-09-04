@@ -157,6 +157,46 @@ describe('GatewayHttpClient', () => {
       });
     });
 
+    it('surfaces the failure text when the device fails with empty content', async () => {
+      // `typeof '' === 'string'` used to short-circuit the error fallback, so a
+      // device api with no handler reached the model as an empty, successful-
+      // looking result — observed live as a builder calling `screenshot`
+      // fifteen times against a device with no browser handler.
+      mockFetch({
+        json: vi
+          .fn()
+          .mockResolvedValue({ content: '', error: 'Unknown tool API: navigate', success: false }),
+        ok: true,
+      });
+
+      const result = await client.executeToolCall(
+        { userId: 'user-1' },
+        { apiName: 'navigate', arguments: '{}', identifier: 'lobe-browser' },
+      );
+
+      expect(result).toEqual({
+        content: 'Unknown tool API: navigate',
+        error: 'Unknown tool API: navigate',
+        state: undefined,
+        success: false,
+      });
+    });
+
+    it('keeps a deliberate empty success result empty', async () => {
+      mockFetch({
+        json: vi.fn().mockResolvedValue({ content: '', success: true }),
+        ok: true,
+      });
+
+      const result = await client.executeToolCall(
+        { userId: 'user-1' },
+        { apiName: 'noop', arguments: '{}', identifier: 'test' },
+      );
+
+      expect(result.content).toBe('');
+      expect(result.success).toBe(true);
+    });
+
     it('should preserve structured state alongside content', async () => {
       // The wire envelope carries `state` separately from `content`. This is
       // what makes `pluginState` work end-to-end for remote device tool calls.

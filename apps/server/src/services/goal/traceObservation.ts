@@ -4,6 +4,7 @@ import type {
   GoalBudgetState,
   GoalFrontierTaskState,
   GoalGraphState,
+  GoalMetricCriteriaState,
   GoalTickBranch,
   GoalTickOutcome,
 } from '@lobechat/agent-tracing';
@@ -27,6 +28,8 @@ export interface GoalTickObservation {
   effects: GoalAdvanceEffect[];
   graphState: GoalGraphState;
   message: string;
+  /** Numeric acceptance clauses as they read, on terminal-phase decisions. */
+  metricCriteria?: GoalMetricCriteriaState;
   outcome: GoalTickOutcome;
   taskId?: string;
 }

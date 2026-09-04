@@ -3,6 +3,18 @@ import path from 'node:path';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  plugins: [
+    // Importing `@lobechat/agent-runtime` pulls in `@lobechat/context-engine`,
+    // which reaches `@lobechat/agent-templates` and its `.md` prompt files.
+    // Vitest would otherwise try to parse the Markdown as JavaScript. Mirrors
+    // the root config's `raw-md` plugin; the content is irrelevant to the CLI.
+    {
+      name: 'raw-md',
+      transform(_code: string, id: string) {
+        if (id.endsWith('.md')) return { code: 'export default ""', map: null };
+      },
+    },
+  ],
   resolve: {
     alias: [
       {

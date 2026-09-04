@@ -1219,6 +1219,34 @@ describe('CompletionLifecycle.dispatchHooks — lastAssistantContent DB recovery
     );
   });
 
+  // LOBE-13787: the named row can be an empty placeholder while the run's real
+  // reply sits on another row. Resolve it by the run's own provenance
+  // (`metadata.operationId`), never by "the latest assistant row in the topic" —
+  // a topic can hold a concurrent run's rows.
+  it('falls back to operation provenance when the named row is empty', async () => {
+    const lifecycle = buildLifecycle();
+    const dispatchSpy = setupSpies(lifecycle);
+    const findById = vi.fn().mockResolvedValue({ content: '', id: 'msg-assistant' });
+    const findLatestAssistantByOperationId = vi
+      .fn()
+      .mockResolvedValue({ content: 'final step reply', id: 'msg-final-step' });
+    (lifecycle as any).messageModel = { findById, findLatestAssistantByOperationId };
+
+    await lifecycle.dispatchHooks('op-1', buildDoneState(''), 'done');
+
+    expect(findById).toHaveBeenCalledWith('msg-assistant');
+    expect(findLatestAssistantByOperationId).toHaveBeenCalledWith({
+      operationId: 'op-1',
+      topicId: 'tpc-1',
+    });
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      'op-1',
+      'onComplete',
+      expect.objectContaining({ lastAssistantContent: 'final step reply' }),
+      [],
+    );
+  });
+
   it('extracts only text parts when the DB row stores serialized multimodal content', async () => {
     const lifecycle = buildLifecycle();
     const dispatchSpy = setupSpies(lifecycle);

@@ -302,7 +302,7 @@
   "work.createdAt": "{{date}} tarihinde oluşturuldu",
   "work.date.today": "Bugün",
   "work.date.yesterday": "Dün",
-  "work.empty.desc": "Temsilcilerinizin ürettiği işler — görevler, belgeler, Linear ve GitHub öğeleri — burada toplanacak.",
+  "work.empty.desc": "Ajanlarınızın ürettiği işler — görevler, belgeler, Linear ve GitHub öğeleri — burada toplanacak.",
   "work.empty.title": "Henüz iş yok",
   "work.fromTopic": "{{topic}}",
   "work.group": "İşler",

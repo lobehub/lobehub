@@ -89,6 +89,9 @@ export interface BuildTaskPromptDeps {
 }
 
 export interface BuiltTaskPrompt {
+  /** The Task carries an active Acceptance, so the builder needs the evidence
+   * tool mounted for the whole run — it submits while it works. */
+  acceptanceEnabled: boolean;
   /** Merged, deduplicated list of fileIds (task instruction + all comments)
    * to forward to execAgent so files arrive as multimodal inputs. */
   fileIds: string[];
@@ -373,5 +376,5 @@ export async function buildTaskPrompt(
     }),
   });
 
-  return { fileIds: allFileIds, prompt };
+  return { acceptanceEnabled: verifyEnabled, fileIds: allFileIds, prompt };
 }

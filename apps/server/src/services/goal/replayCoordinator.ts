@@ -65,6 +65,7 @@ export const coordinatorDecider: GoalDecider = (input): GoalDecision => {
     concurrency: input.concurrency ?? DEFAULT_REPLAY_CONCURRENCY,
     frontier,
     graph,
+    metricCriteria: input.metricCriteria,
     tasksById: toTasksById(input),
   });
 

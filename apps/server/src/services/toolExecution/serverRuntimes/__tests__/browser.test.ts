@@ -11,12 +11,109 @@ vi.mock('@/server/services/deviceGateway', () => ({
   },
 }));
 
+const mockUploadBase64 = vi.fn();
+vi.mock('@/server/services/file', () => ({
+  FileService: vi.fn(() => ({ uploadBase64: mockUploadBase64 })),
+}));
+
 // Import after mock setup
 const { browserRuntime } = await import('../browser');
 
 describe('browserRuntime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  describe('screenshot', () => {
+    const screenshotContext = {
+      activeDeviceId: 'device-1',
+      agentId: 'agt-1',
+      operationId: 'op-1',
+      serverDB: {} as any,
+      toolManifestMap: {},
+      topicId: 'tpc-1',
+      userId: 'user-1',
+    } as ToolExecutionContext;
+
+    it('stores the capture as a file and exposes it on state.images', async () => {
+      // The heterogeneous pipeline already uploads a tool_result image and
+      // rewrites it to { fileId, url }. Proxying the device dataUrl verbatim
+      // left this runtime as the only image-producing tool with no file behind
+      // it — the model could not see its own screenshot and nothing downstream
+      // had an id to cite.
+      mockExecuteToolCall.mockResolvedValue({
+        content: '',
+        state: { dataUrl: 'data:image/jpeg;base64,QUJD', height: 100, width: 200 },
+        success: true,
+      });
+      mockUploadBase64.mockResolvedValue({
+        fileId: 'file_1',
+        key: 'k',
+        url: 'https://cdn.example.com/shot.jpeg',
+      });
+
+      const runtime = browserRuntime.factory(screenshotContext);
+      const result = await runtime.screenshot({});
+
+      expect(mockUploadBase64).toHaveBeenCalledWith(
+        'QUJD',
+        expect.stringMatching(/^files\/\d{4}-\d{2}-\d{2}\/browser-screenshot-\d+\.jpg$/),
+        { fileType: 'image/jpeg' },
+      );
+      // `state` reaches the model as image parts, not text, so the id has to be
+      // named in `content` or a builder can see the shot without being able to
+      // cite it.
+      expect(result.content).toContain('file_1');
+      expect(result.state).toEqual({
+        height: 100,
+        images: [
+          { fileId: 'file_1', mediaType: 'image/jpeg', url: 'https://cdn.example.com/shot.jpeg' },
+        ],
+        // `dataUrl` was both the model's copy and the chat renderer's src, so
+        // dropping it without a replacement blanked every proxied screenshot.
+        url: 'https://cdn.example.com/shot.jpeg',
+        width: 200,
+      });
+      // The base64 must not survive into the persisted tool state.
+      expect(result.state.dataUrl).toBeUndefined();
+    });
+
+    it('passes the capture through unchanged when the upload fails', async () => {
+      mockExecuteToolCall.mockResolvedValue({
+        content: '',
+        state: { dataUrl: 'data:image/jpeg;base64,QUJD' },
+        success: true,
+      });
+      mockUploadBase64.mockRejectedValue(new Error('s3 down'));
+
+      const runtime = browserRuntime.factory(screenshotContext);
+      const result = await runtime.screenshot({});
+
+      expect(result.state).toEqual({ dataUrl: 'data:image/jpeg;base64,QUJD' });
+    });
+
+    it('does not upload a stale dataUrl from a failed capture', async () => {
+      mockExecuteToolCall.mockResolvedValue({
+        content: 'Browser action failed',
+        state: { dataUrl: 'data:image/jpeg;base64,QUJD' },
+        success: false,
+      });
+
+      const runtime = browserRuntime.factory(screenshotContext);
+      const result = await runtime.screenshot({});
+
+      expect(mockUploadBase64).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+    });
+
+    it('leaves non-screenshot apis untouched', async () => {
+      mockExecuteToolCall.mockResolvedValue({ content: 'OK', success: true });
+
+      const runtime = browserRuntime.factory(screenshotContext);
+      await runtime.navigate({ url: 'https://example.com' });
+
+      expect(mockUploadBase64).not.toHaveBeenCalled();
+    });
   });
 
   it('should have the correct identifier', () => {

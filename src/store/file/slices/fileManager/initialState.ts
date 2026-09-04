@@ -12,7 +12,6 @@ export interface FileManagerState {
   fileListOffset: number;
   pendingRenameItemId: string | null;
   queryListParams?: QueryFileListParams;
-  uploadDockExpanded: boolean;
 }
 
 export const initialFileManagerState: FileManagerState = {
@@ -24,5 +23,4 @@ export const initialFileManagerState: FileManagerState = {
   fileListHasMore: false,
   fileListOffset: 0,
   pendingRenameItemId: null,
-  uploadDockExpanded: true,
 };

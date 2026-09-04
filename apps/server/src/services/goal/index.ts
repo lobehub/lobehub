@@ -1,4 +1,4 @@
-import type { GoalAdvanceEffect } from '@lobechat/agent-tracing';
+import type { GoalAdvanceEffect, GoalMetricCriteriaState } from '@lobechat/agent-tracing';
 import { buildGoalRequirement } from '@lobechat/builtin-tool-goal';
 import { GOAL_COORDINATOR_ACTOR_ID } from '@lobechat/const/goal';
 import type {
@@ -7,10 +7,12 @@ import type {
   GoalGraphNode,
   GoalGraphSnapshot,
   GoalItem,
+  GoalMetricCriterion,
   GoalNodeKind,
   GoalNodeStatus,
   GoalStatus,
   GoalTickResult,
+  MetricKind,
   TaskItem,
   TaskTopicHandoff,
 } from '@lobechat/types';
@@ -20,6 +22,7 @@ import { sql } from 'drizzle-orm';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
+import { MetricModel } from '@/database/models/metric';
 import { ProjectModel } from '@/database/models/project';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
@@ -34,11 +37,13 @@ import { AcceptanceService } from '../verify/acceptanceService';
 import { VerifyPlanGeneratorService } from '../verify/planGenerator';
 import { GoalCriteriaGeneratorService, type GoalDecompositionDraft } from './criteriaGenerator';
 import {
+  compareMetric,
   decideNextMove,
   frontierNeedsBudget,
   GOAL_ACCEPTANCE_TASK_TITLE,
   type GoalMove,
   LEASE_EXPIRED_ERROR,
+  needsMetricCriteria,
   selectFrontier,
   TERMINAL_NODE_STATUSES,
 } from './decideNextMove';
@@ -204,7 +209,10 @@ export class GoalService {
           verifierType: 'agent',
         })),
       );
-      config = { ...config, acceptance: { criteriaIds } };
+      // Merge, never replace: `acceptance` also carries the numeric clauses,
+      // and rebuilding the object from `criteriaIds` alone would drop a
+      // measured gate the caller asked for in the same call.
+      config = { ...config, acceptance: { ...config?.acceptance, criteriaIds } };
     }
 
     const goal = await this.goalModel.create({
@@ -255,11 +263,106 @@ export class GoalService {
    * editing). The criteria rows themselves are edited through the verify
    * criteria endpoints; this only rebinds which of them gate the goal.
    */
+  /**
+   * Declare (or clear) the numeric clauses that gate this goal's acceptance.
+   *
+   * Merged into `config.acceptance` so it cannot clobber the delivery criteria
+   * binding, and settable after creation because a long-horizon goal learns its
+   * real thresholds while it runs. Relaxing a clause can unblock a goal that is
+   * already parked short of acceptance — the same reason extending a deadline
+   * resumes a budget-stopped one — so the caller schedules an advance.
+   */
+  /**
+   * Write a measurement against this goal, and reopen it when that measurement
+   * is what it was waiting for.
+   *
+   * The gate parks the goal (see the `measured_acceptance` branch), and `tick`
+   * refuses to move a paused goal — so without the reopen here the observation
+   * would land and nothing would happen. Only a goal the gate actually stopped
+   * is reopened, and only once every clause holds: the same discipline
+   * `setBudget` uses, so a deliberate pause is never undone by a stray sample
+   * and a still-short measurement does not queue a no-op advance.
+   */
+  recordObservation = async (
+    goalId: string,
+    input: {
+      key: string;
+      kind?: MetricKind;
+      observedAt?: Date;
+      title?: string;
+      unit?: string;
+      value: number;
+    },
+  ) => {
+    const goal = await this.goalModel.findById(goalId);
+    if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+
+    const metricModel = new MetricModel(this.db, this.userId, this.workspaceId);
+    const series = await metricModel.ensure({
+      key: input.key,
+      kind: input.kind,
+      subjectId: goal.id,
+      subjectType: 'goal',
+      title: input.title,
+      unit: input.unit,
+    });
+    if (!series)
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: 'Metric series slot is owned by another scope',
+      });
+
+    const point = await metricModel.addPoint(series.id, {
+      actorId: this.userId,
+      actorType: 'user',
+      observedAt: input.observedAt ?? new Date(),
+      sourceType: 'manual',
+      value: input.value,
+    });
+
+    return { point, series, shouldAdvance: await this.reopenIfMeasurementCleared(goalId) };
+  };
+
+  /**
+   * Whether the coordinator is worth waking: either the goal is already
+   * running, or it was parked short of its measured acceptance and every
+   * clause now holds.
+   */
+  private reopenIfMeasurementCleared = async (goalId: string): Promise<boolean> => {
+    const graph = await this.coordinatorGraph.getGraph(goalId);
+    if (!graph) return false;
+    if (graph.goal.status !== 'paused') return true;
+    if (!needsMetricCriteria(graph)) return false;
+
+    const { allMet } = await this.evaluateMetricCriteria(graph);
+    if (!allMet) return false;
+
+    await this.transitionStatus(graph.goal, 'running', 'a measurement cleared the acceptance gate');
+    return true;
+  };
+
+  setMetricCriteria = async (goalId: string, metrics: GoalMetricCriterion[]) => {
+    const goal = await this.goalModel.findById(goalId);
+    if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    await this.goalModel.update(goalId, {
+      config: {
+        ...goal.config,
+        acceptance: {
+          ...goal.config?.acceptance,
+          metrics: metrics.length > 0 ? metrics : undefined,
+        },
+      },
+    });
+    // Relaxing or dropping a clause can clear a gate the goal is parked on.
+    await this.reopenIfMeasurementCleared(goalId);
+    return this.graph(goalId);
+  };
+
   setAcceptanceCriteria = async (goalId: string, criteriaIds: string[]) => {
     const goal = await this.goalModel.findById(goalId);
     if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
     await this.goalModel.update(goalId, {
-      config: { ...goal.config, acceptance: { criteriaIds } },
+      config: { ...goal.config, acceptance: { ...goal.config?.acceptance, criteriaIds } },
     });
 
     // A terminal Goal-acceptance Task may already be dispatched — its
@@ -449,6 +552,39 @@ export class GoalService {
    * cannot express, and a goal whose deadline passed must stop the same way a
    * goal out of money does.
    */
+  /**
+   * Read every declared numeric clause against its series' latest observation.
+   *
+   * A missing series or a series with no points reads as `null` and fails its
+   * clause: "never measured" is not "satisfied". The measured value is carried
+   * out with the verdict so the trajectory records what the decision saw.
+   */
+  private evaluateMetricCriteria = async (
+    graph: GoalGraphSnapshot,
+  ): Promise<GoalMetricCriteriaState> => {
+    const declared = graph.goal.config?.acceptance?.metrics ?? [];
+    const metricModel = new MetricModel(this.db, this.userId, this.workspaceId);
+
+    const criteria = await Promise.all(
+      declared.map(async (criterion) => {
+        const op = criterion.op ?? 'gte';
+        const series = await metricModel.findByKey('goal', graph.goal.id, criterion.key);
+        const point = series ? await metricModel.latestPoint(series.id) : undefined;
+        const value = point?.value ?? null;
+        return {
+          key: criterion.key,
+          met: value !== null && compareMetric(value, op, criterion.target),
+          observedAt: point ? new Date(point.observedAt).getTime() : undefined,
+          op,
+          target: criterion.target,
+          value,
+        };
+      }),
+    );
+
+    return { allMet: criteria.every((criterion) => criterion.met), criteria };
+  };
+
   private evaluateBudget = async (goal: GoalItem, graph: GoalGraphSnapshot) => {
     const taskIds = graph.nodes.flatMap((node) => (node.taskId ? [node.taskId] : []));
     const runs = await this.taskTopicModel.findWithHandoffByTaskIds(taskIds, 10_000);
@@ -607,12 +743,19 @@ export class GoalService {
       ? toBudgetState(graph.goal, await this.evaluateBudget(graph.goal, graph))
       : undefined;
 
+    // Same shape as the budget: a database read the pure decision cannot do,
+    // taken only in the terminal phase of a goal that declares numeric clauses.
+    const metricCriteria = needsMetricCriteria(graph)
+      ? await this.evaluateMetricCriteria(graph)
+      : undefined;
+
     const concurrency = resolveMaxConcurrentTasks(graph.goal);
     const move = decideNextMove({
       budget,
       concurrency,
       frontier,
       graph,
+      metricCriteria,
       tasksById,
     });
     // The scheduler may pick past the head of the frontier, so every arm below
@@ -631,6 +774,7 @@ export class GoalService {
         branch: move.branch,
         budget,
         candidates: move.candidates,
+        metricCriteria,
         chosenNodeId: move.chosenNodeId,
         effects,
         candidateTasks: frontier.eligible.flatMap(({ node }) => {
@@ -661,6 +805,22 @@ export class GoalService {
           nodeId: move.focusNodeId,
           outcome: move.outcome,
         });
+      }
+
+      // The measured half of acceptance stopped the goal short of its delivery
+      // contract. Nothing to create and nothing to settle — the next
+      // observation is what moves it, which can be days away.
+      //
+      // Park it for the same reason `no_frontier` does: a `running` goal that
+      // always reports `no_progress` is picked by every sweep forever, and a
+      // long-horizon goal waiting on a measurement would sit in that state for
+      // its whole life — enough of them crowd genuinely stranded goals out of
+      // the newest-first scan limit. `recordObservation` resumes it when a
+      // measurement actually clears the gate.
+      case 'measured_acceptance': {
+        await this.transitionStatus(graph.goal, 'paused', move.message);
+        effects.push({ type: 'goal_status', detail: 'paused' });
+        return observe({ goalId, message: move.message, outcome: move.outcome });
       }
 
       case 'terminal_acceptance': {
@@ -1254,7 +1414,7 @@ export class GoalService {
       `Current Task contract (authoritative execution scope): ${title}`,
       description,
       'Execute only the Current Task contract. Do not implement, validate, or pre-empt any sibling or downstream Task node, even when the overall goal context describes it.',
-      'The complete requirements for this Task are included here. Do not inspect unrelated agent documents to recover requirements. Do not invoke Acceptance skills or Acceptance CLI commands during the main Task; a dedicated post-run phase will ask you to submit your evidence before an independent verifier judges it.',
+      'The complete requirements for this Task are included here. Do not inspect unrelated agent documents to recover requirements. This Task carries its own Acceptance: run it inside this Task — drive the real product surface, capture the evidence, and submit it against your own criteria while you work. Submit evidence only; an independent verifier judges whether this Task is complete.',
       'Create implementation-level subtasks when useful. Finish the operation once the Current Task deliverable and its concrete evidence are ready; Acceptance verification will decide whether this Task is complete.',
       'Make the final delivery self-contained for an independent verifier that may not have workspace access. Include the relevant artifact contents or exact excerpts and the raw outputs of decisive verification commands; file paths and claims that checks passed are not sufficient evidence by themselves.',
       'Return the produced artifacts, evidence, key findings, and the recommended next action. Do not mark the overall Goal complete.',

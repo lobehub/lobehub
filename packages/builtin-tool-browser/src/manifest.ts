@@ -108,7 +108,7 @@ export const BrowserManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Capture a screenshot of the current page for the USER to see in chat. You cannot see the image yourself — use snapshot/readPage for perception.',
+        'Capture a screenshot of the current page. The image is stored and returned to you as a file reference, and is also shown to the USER in chat. Use snapshot/readPage when you only need the page structure or text.',
       name: BrowserApiName.screenshot,
       parameters: {
         properties: {},

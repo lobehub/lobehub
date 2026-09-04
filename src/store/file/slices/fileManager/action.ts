@@ -527,10 +527,6 @@ export class FileManageActionImpl {
     this.#set({ pendingRenameItemId: id }, false, 'setPendingRenameItemId');
   };
 
-  setUploadDockExpanded = (expanded: boolean): void => {
-    this.#set({ uploadDockExpanded: expanded }, false, 'setUploadDockExpanded');
-  };
-
   toggleEmbeddingIds = (ids: string[], loading?: boolean): void => {
     this.#set((state) => {
       const nextValue = new Set(state.creatingEmbeddingTaskIds);

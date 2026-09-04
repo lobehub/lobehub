@@ -8,6 +8,7 @@ const {
   claimEvidenceCollection,
   claimVerifying,
   execute,
+  evidenceListByRun,
   findByOperation,
   operationFindById,
   finalizeVerifyRun,
@@ -17,6 +18,7 @@ const {
 } = vi.hoisted(() => ({
   claimEvidenceCollection: vi.fn(),
   claimVerifying: vi.fn(),
+  evidenceListByRun: vi.fn(),
   execute: vi.fn(),
   finalizeVerifyRun: vi.fn(),
   findByOperation: vi.fn(),
@@ -35,6 +37,9 @@ vi.mock('@/database/models/verifyRun', () => ({
 }));
 vi.mock('@/database/models/agentOperation', () => ({
   AgentOperationModel: vi.fn(() => ({ findById: operationFindById })),
+}));
+vi.mock('@/database/models/verifyEvidence', () => ({
+  VerifyEvidenceModel: vi.fn(() => ({ listByRun: evidenceListByRun })),
 }));
 vi.mock('@/database/models/document', () => ({ DocumentModel: vi.fn(() => ({})) }));
 vi.mock('@/database/models/task', () => ({
@@ -65,7 +70,7 @@ const params = { deliverable: 'done', goal: 'ship it', operationId: 'op-1' };
 
 const confirmedRun = {
   id: 'run-1',
-  plan: [{ id: 'c1' }],
+  plan: [{ id: 'c1', required: true }],
   planConfirmedAt: new Date(),
   status: 'planned',
 };
@@ -75,6 +80,7 @@ describe('runVerifyOnCompletion — verification claim', () => {
     [
       claimEvidenceCollection,
       claimVerifying,
+      evidenceListByRun,
       execute,
       finalizeVerifyRun,
       findByOperation,
@@ -86,6 +92,80 @@ describe('runVerifyOnCompletion — verification claim', () => {
     findByOperation.mockResolvedValue(confirmedRun);
     operationFindById.mockResolvedValue({ id: 'op-1', model: 'm', provider: 'p', taskId: null });
     claimVerifying.mockResolvedValue(true);
+    evidenceListByRun.mockResolvedValue([]);
+  });
+
+  it('still collects when the builder covered only part of a multi-criterion plan', async () => {
+    // "any evidence row exists" would strand c2 at the structural gate with no
+    // chance to supply what it asks for.
+    findByOperation.mockResolvedValue({
+      ...confirmedRun,
+      plan: [
+        { id: 'c1', required: true },
+        { id: 'c2', required: true },
+      ],
+    });
+    operationFindById.mockResolvedValue({
+      agentId: 'builder',
+      id: 'op-1',
+      model: 'm',
+      provider: 'p',
+      taskId: 'task-1',
+      topicId: 'topic-1',
+    });
+    evidenceListByRun.mockResolvedValue([{ checkItemId: 'c1', type: 'text' }]);
+    claimEvidenceCollection.mockResolvedValue(true);
+
+    await runVerifyOnCompletion(db, 'u1', params);
+
+    expect(startEvidenceSubmission).toHaveBeenCalledTimes(1);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('still collects when a criterion is missing a declared evidence type', async () => {
+    findByOperation.mockResolvedValue({
+      ...confirmedRun,
+      plan: [
+        {
+          id: 'c1',
+          required: true,
+          verifierConfig: { requiredEvidence: [{ type: 'screenshot' }] },
+        },
+      ],
+    });
+    operationFindById.mockResolvedValue({
+      agentId: 'builder',
+      id: 'op-1',
+      model: 'm',
+      provider: 'p',
+      taskId: 'task-1',
+      topicId: 'topic-1',
+    });
+    evidenceListByRun.mockResolvedValue([{ checkItemId: 'c1', type: 'text' }]);
+    claimEvidenceCollection.mockResolvedValue(true);
+
+    await runVerifyOnCompletion(db, 'u1', params);
+
+    expect(startEvidenceSubmission).toHaveBeenCalledTimes(1);
+  });
+
+  it('judges directly when the builder already submitted evidence inside the Task run', async () => {
+    operationFindById.mockResolvedValue({
+      agentId: 'builder',
+      id: 'op-1',
+      model: 'm',
+      provider: 'p',
+      taskId: 'task-1',
+      topicId: 'topic-1',
+    });
+    evidenceListByRun.mockResolvedValue([{ checkItemId: 'c1', type: 'screenshot' }]);
+
+    await runVerifyOnCompletion(db, 'u1', params);
+
+    expect(claimEvidenceCollection).not.toHaveBeenCalled();
+    expect(startEvidenceSubmission).not.toHaveBeenCalled();
+    expect(claimVerifying).toHaveBeenCalledTimes(1);
+    expect(execute).toHaveBeenCalledTimes(1);
   });
 
   it('starts builder evidence collection before judging a task-bound run', async () => {

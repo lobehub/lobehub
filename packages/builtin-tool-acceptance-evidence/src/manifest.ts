@@ -9,12 +9,18 @@ export const AcceptanceEvidenceManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        'Submit evidence produced by your completed work for one Acceptance criterion. This records evidence only; it does not decide the verdict.',
+        'List the Acceptance criteria of the run you are working in, with the evidence already recorded for each. Call this first: criterion ids are minted when the run starts, so they cannot be named in your instructions.',
+      name: AcceptanceEvidenceApiName.listCriteria,
+      parameters: { properties: {}, type: 'object' },
+    },
+    {
+      description:
+        'Submit evidence produced by your work for one Acceptance criterion. This records evidence only; it does not decide the verdict.',
       name: AcceptanceEvidenceApiName.submitEvidence,
       parameters: {
         properties: {
           checkItemId: {
-            description: 'The exact criterion id from the evidence-submission instruction.',
+            description: 'A criterion id returned by listCriteria.',
             type: 'string',
           },
           evidence: {

@@ -51,12 +51,12 @@ import {
   type UserAllowlist,
   type WatchKeywordEntry,
 } from './platforms';
+import { renderThrownAgentError } from './renderThrownError';
 import {
   renderApproveSuccess,
   renderCommandReply,
   renderDmPairing,
   renderDmRejected,
-  renderError,
   renderFeedbackSubmitted,
   renderGroupRejected,
   renderInlineError,
@@ -1231,7 +1231,7 @@ export class BotMessageRouter {
           error,
         );
         try {
-          await thread.post({ markdown: renderError(operationId, replyLocale) });
+          await thread.post({ markdown: renderThrownAgentError(error, operationId, replyLocale) });
         } catch {
           // best-effort notification
         }
@@ -1419,7 +1419,7 @@ export class BotMessageRouter {
           error,
         );
         try {
-          await thread.post({ markdown: renderError(operationId, replyLocale) });
+          await thread.post({ markdown: renderThrownAgentError(error, operationId, replyLocale) });
         } catch {
           // best-effort notification
         }

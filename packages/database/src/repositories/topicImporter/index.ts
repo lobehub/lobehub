@@ -1,5 +1,7 @@
 import type { ExportedTopic, ImportedMessage } from '@lobechat/types';
 
+import { clampToolIdentifier } from '@/utils/clampToolIdentifier';
+
 import { messagePlugins, messages, topics } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { idGenerator } from '../../utils/idGenerator';
@@ -216,11 +218,11 @@ export class TopicImporterRepo {
       if (msg.plugin || msg.pluginState || msg.pluginError || msg.tool_call_id) {
         const plugin = msg.plugin as Record<string, any> | undefined;
         preparedPlugins.push({
-          apiName: plugin?.apiName || null,
+          apiName: clampToolIdentifier(plugin?.apiName) || null,
           arguments: plugin?.arguments || null,
           error: msg.pluginError || null,
           id: msg.newId,
-          identifier: plugin?.identifier || null,
+          identifier: clampToolIdentifier(plugin?.identifier) || null,
           state: msg.pluginState || null,
           toolCallId: msg.tool_call_id || null,
           type: plugin?.type || null,

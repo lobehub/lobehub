@@ -65,6 +65,7 @@ import {
   sql,
 } from 'drizzle-orm';
 
+import { clampToolIdentifier } from '@/utils/clampToolIdentifier';
 import { merge } from '@/utils/merge';
 import { sanitizeNullBytes } from '@/utils/sanitizeNullBytes';
 import { today } from '@/utils/time';
@@ -2655,6 +2656,34 @@ export class MessageModel {
   };
 
   /**
+   * Resolve the newest assistant row an Agent Run produced, by the creation
+   * provenance `call_llm` stamps on every assistant row it creates or reuses
+   * (`metadata.operationId`). Scoped by `topicId` so the JSONB predicate runs
+   * inside the topic's own (indexed) rows rather than across the whole table.
+   *
+   * Used by the completion lifecycle to recover the run's real final reply
+   * when the runtime state no longer carries this run's messages — the
+   * topic-wide "latest assistant" would be an earlier turn's reply.
+   */
+  findLatestAssistantByOperationId = async ({
+    operationId,
+    topicId,
+  }: {
+    operationId: string;
+    topicId: string;
+  }) => {
+    return this.db.query.messages.findFirst({
+      where: and(
+        eq(messages.userId, this.userId),
+        eq(messages.topicId, topicId),
+        eq(messages.role, 'assistant'),
+        sql`${messages.metadata}->>'operationId' = ${operationId}`,
+      ),
+      orderBy: [desc(messages.createdAt)],
+    });
+  };
+
+  /**
    * Get parent messages for a thread
    *
    * @param params - Parameters for getting parent messages
@@ -3191,10 +3220,10 @@ export class MessageModel {
     if (message.role === 'tool') {
       await runTimedStage(timing, `${timingPrefix}.plugin.insert`, () =>
         trx.insert(messagePlugins).values({
-          apiName: plugin?.apiName,
+          apiName: clampToolIdentifier(plugin?.apiName),
           arguments: sanitizeNullBytes(plugin?.arguments),
           id,
-          identifier: plugin?.identifier,
+          identifier: clampToolIdentifier(plugin?.identifier),
           intervention: pluginIntervention,
           state: sanitizeNullBytes(pluginState),
           toolCallId: message.tool_call_id,
@@ -3553,7 +3582,11 @@ export class MessageModel {
 
     return this.db
       .update(messagePlugins)
-      .set(value)
+      .set({
+        ...value,
+        apiName: clampToolIdentifier(value.apiName),
+        identifier: clampToolIdentifier(value.identifier),
+      })
       .where(and(eq(messagePlugins.id, id), this.pluginsOwnership()));
   };
 

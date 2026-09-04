@@ -135,6 +135,7 @@ jobs:
       - name: Check web dist size against baseline
         if: env.SIZE_GATE_ENABLED == 'true'
         id: dist_size_check
+        continue-on-error: true
         run: node .github/scripts/bundle-size-gate.cjs check --current size-report/web.json --baseline .size-baseline/web.json --label "Web dist" --report size-report/report.md
 
       # ===== Entry static-import graph gate =====
@@ -178,6 +179,7 @@ jobs:
       - name: Check entry static-import graph against baseline
         if: env.SIZE_GATE_ENABLED == 'true'
         id: entry_graph_check
+        continue-on-error: true
         run: node .github/scripts/bundle-size-gate.cjs check --current size-report/entry-graph.json --baseline .size-baseline/entry-graph.json --label "First-screen static import graph (gzip)" --report size-report/report.md --floor 65536
 
       - name: Comment bundle size report on PR

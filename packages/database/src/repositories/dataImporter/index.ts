@@ -1,6 +1,7 @@
 import type { ImporterEntryData, ImportPgDataStructure, ImportResultData } from '@lobechat/types';
 import { and, eq, inArray } from 'drizzle-orm';
 
+import { clampToolIdentifier } from '@/utils/clampToolIdentifier';
 import { uuid } from '@/utils/uuid';
 
 import * as EXPORT_TABLES from '../../schemas';
@@ -177,6 +178,10 @@ const IMPORT_TABLE_CONFIG: TableImportConfig[] = [
   },
   {
     conflictStrategy: 'skip',
+    fieldProcessors: {
+      apiName: (value) => clampToolIdentifier(value),
+      identifier: (value) => clampToolIdentifier(value),
+    },
     preserveId: true, // Uses message ID as primary key
     relations: [
       {

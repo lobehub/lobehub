@@ -27,8 +27,17 @@ export interface BrowserSnapshotState extends BrowserPageState {
 export interface BrowserClickState extends BrowserPageState {}
 
 export interface BrowserScreenshotState {
-  dataUrl: string;
+  /**
+   * Inline capture, produced by the client executor. The server-proxied path
+   * stores the image instead and sets {@link BrowserScreenshotState.url}, so a
+   * consumer must accept either.
+   */
+  dataUrl?: string;
   height?: number;
+  /** Stored artifacts, `{ fileId, mediaType, url }` — the shared tool-image contract. */
+  images?: { fileId: string; mediaType: string; url: string }[];
+  /** Accessible URL of the stored capture. */
+  url?: string;
   width?: number;
 }
 

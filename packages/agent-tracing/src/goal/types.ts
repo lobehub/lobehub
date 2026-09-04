@@ -16,7 +16,16 @@
 
 /** What caused this advance. `unknown` covers traces written before a caller was labelled. */
 export type GoalAdvanceTrigger =
-  'create' | 'decide' | 'settle' | 'sweep' | 'resume' | 'budget' | 'manual' | 'unknown';
+  | 'create'
+  | 'decide'
+  | 'settle'
+  | 'sweep'
+  | 'resume'
+  | 'budget'
+  | 'manual'
+  /** A measurement landed — the goal moves on observation, not only on work. */
+  | 'observe'
+  | 'unknown';
 
 /** Which arm of the coordinator ran. One per `tick` return path. */
 export type GoalTickBranch =
@@ -31,6 +40,13 @@ export type GoalTickBranch =
   | 'plan_decomposition'
   /** Every task node finished; the goal-level acceptance contract is next. */
   | 'terminal_acceptance'
+  /**
+   * Every task node finished, but a declared numeric clause is unmet, so the
+   * delivery contract is not attempted. Distinct from `terminal_acceptance`
+   * on purpose: both stop in the terminal phase, and a replay that could not
+   * tell them apart would report a regressed gate as a match.
+   */
+  | 'measured_acceptance'
   /** The chosen task node has no responsible task yet. */
   | 'create_task'
   /** Its task row is gone. */
@@ -145,6 +161,30 @@ export interface GoalBudgetState {
   totalCost: number;
 }
 
+/**
+ * One numeric acceptance clause as it read at decision time.
+ *
+ * The measured value travels with the verdict for the same reason
+ * `deadlinePassed` does: a replay must see the number the live run saw, not
+ * whatever the series holds when the trajectory is re-read.
+ */
+export interface GoalMetricCriterionState {
+  key: string;
+  met: boolean;
+  /** When the recorded value was observed; absent when nothing was measured. */
+  observedAt?: number;
+  op: string;
+  target: number;
+  /** Latest observation, or null when the series has no points (or no series). */
+  value: number | null;
+}
+
+/** The measured half of Goal acceptance, evaluated only in the terminal phase. */
+export interface GoalMetricCriteriaState {
+  allMet: boolean;
+  criteria: GoalMetricCriterionState[];
+}
+
 /** A candidate's responsible task at decision time; drives every post-dispatch branch. */
 export interface GoalFrontierTaskState {
   error?: string | null;
@@ -210,6 +250,11 @@ export interface GoalTickSnapshot {
   graphShape: GoalGraphShape;
   index: number;
   message: string;
+  /**
+   * Present only on terminal-phase decisions of a goal that declares numeric
+   * criteria — the one place the coordinator reads them.
+   */
+  metricCriteria?: GoalMetricCriteriaState;
   outcome: GoalTickOutcome;
   taskId?: string;
 }

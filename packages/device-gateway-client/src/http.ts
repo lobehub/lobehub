@@ -184,21 +184,29 @@ export class GatewayHttpClient {
     }
 
     const data = await res.json();
+
+    // Device sends a typed envelope ({ content, state, success }). The legacy
+    // fallback used to JSON.stringify `data.content ?? data` — when content was
+    // missing it would stringify the *entire response body* including `success`
+    // and any other top-level fields, which leaked the structured payload into
+    // the LLM-facing content string. Only stringify the `content` field itself;
+    // never fall back to the whole body.
+    const deviceContent =
+      typeof data.content === 'string'
+        ? data.content
+        : data.content === undefined || data.content === null
+          ? ''
+          : JSON.stringify(data.content);
+
     return {
-      // Device sends a typed envelope ({ content, state, success }). The legacy
-      // fallback used to JSON.stringify `data.content ?? data` — when content
-      // was missing it would stringify the *entire response body* including
-      // `success` and any other top-level fields, which leaked the structured
-      // payload into the LLM-facing content string. Only stringify the
-      // `content` field itself; never fall back to the whole body.
-      content:
-        typeof data.content === 'string'
-          ? data.content
-          : data.content !== undefined && data.content !== null
-            ? JSON.stringify(data.content)
-            : typeof data.error === 'string'
-              ? data.error
-              : '',
+      // A device that fails with nothing to say — an api it has no handler for,
+      // a handler that threw before writing output — reported `content: ''`,
+      // and `typeof '' === 'string'` short-circuited the error fallback below.
+      // The failure then reached the model as an empty, successful-looking
+      // result: observed live as a builder calling `screenshot` fifteen times
+      // against a device with no browser handler and reading nothing back each
+      // time. Every other failure path here puts the failure text in `content`.
+      content: deviceContent || (typeof data.error === 'string' ? data.error : ''),
       error: data.error,
       state: data.state,
       success: data.success ?? true,

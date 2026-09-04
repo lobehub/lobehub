@@ -457,7 +457,34 @@ describe('buildTaskRunPrompt', () => {
     expect(result).toContain('console is clean');
     expect(result).toContain('include artifact paths, commands, and observed results');
     expect(result).toContain('an independent verifier decides whether this Task is complete');
-    expect(result).not.toContain('lh acceptance run result submit');
+    expect(result).toContain('Run the Acceptance inside this Task, not after it');
+    expect(result).toContain('lh acceptance install');
+    expect(result).toContain('lh acceptance run result submit');
+    expect(result).toContain('proved by a screenshot or recording');
+    // The portable skill is pulled to disk by CLI builders and is absent from
+    // `builtinSkills`, so it must never be named as an unconditional step.
+    expect(result).not.toContain('Use the `acceptance` skill to drive');
+    expect(result).toContain('must reference a real artifact by fileId');
+  });
+
+  it('should still instruct in-task acceptance when the policy has no criteria or requirement', () => {
+    const result = buildTaskRunPrompt(
+      {
+        task: {
+          id: 'task_root',
+          identifier: 'TASK-1',
+          instruction: 'ship the feature',
+          status: 'running',
+          verify: { criteria: [], enabled: true },
+        },
+      },
+      NOW,
+    );
+
+    expect(result).toContain('Verify — delivery acceptance');
+    expect(result).toContain('Run the Acceptance inside this Task, not after it');
+    expect(result).toContain('Criterion ids are minted when this run starts');
+    expect(result).toContain('lh verify plan state');
   });
 
   it('should omit the verify section when verify is disabled', () => {
