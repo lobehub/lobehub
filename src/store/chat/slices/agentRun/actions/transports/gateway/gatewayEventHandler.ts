@@ -66,6 +66,10 @@ const loadGetExecutor = async () => {
  * `snapshotGeneration` drops a fetch that lost the race against a newer
  * snapshot on the same handler (unqueued `step_start` vs in-flight `tool_end`).
  * Last-write-wins would otherwise paint the older list over the next step.
+ *
+ * A dropped fetch returns `undefined` so callers that resolve an assistant id
+ * from the result (hetero / old-server `stream_start`) keep the current id
+ * instead of steering later chunks onto a row the store no longer has.
  */
 const fetchAndReplaceMessages = async (
   get: () => ChatStore,
@@ -81,14 +85,14 @@ const fetchAndReplaceMessages = async (
     skipWorks?: boolean;
     snapshotGeneration?: { current: number };
   },
-) => {
+): Promise<UIChatMessage[] | undefined> => {
   const skipWorks = options?.skipWorks;
   const snapshotGeneration = options?.snapshotGeneration;
   const started = snapshotGeneration?.current;
   const messages = await messageService.getMessages(
     skipWorks ? { ...context, skipWorks } : context,
   );
-  if (snapshotGeneration && snapshotGeneration.current !== started) return messages;
+  if (snapshotGeneration && snapshotGeneration.current !== started) return undefined;
   if (snapshotGeneration) snapshotGeneration.current += 1;
   get().replaceMessages(messages, { context, preserveWorks: skipWorks });
   return messages;

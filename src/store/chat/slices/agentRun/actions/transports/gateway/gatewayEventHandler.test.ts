@@ -1066,6 +1066,51 @@ describe('createGatewayEventHandler', () => {
     expect(lastCall?.[0]).not.toEqual(staleSnapshot);
   });
 
+  // Hetero / old-server stream_start has no assistantMessage.id, so it
+  // resolves the next bubble from the fetch return value. If that fetch
+  // started before step_start and we still returned the stale list, chunks
+  // would target an id the store no longer has.
+  it('does not resolve the next assistant id from a dropped stale refetch', async () => {
+    const staleSnapshot = [
+      { id: 'user-1', role: 'user' },
+      { id: 'asst-1', role: 'assistant' },
+      { id: 'asst-stale', role: 'assistant' },
+    ] as unknown as UIChatMessage[];
+    const nextStepSnapshot = [
+      { id: 'user-1', role: 'user' },
+      { id: 'asst-1', role: 'assistant' },
+      { id: 'tool-1', role: 'tool' },
+      { content: 'next step', id: 'asst-2', role: 'assistant' },
+    ] as unknown as UIChatMessage[];
+
+    let resolveFetch: ((messages: UIChatMessage[]) => void) | undefined;
+    vi.spyOn(messageService, 'getMessages').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+
+    const store = createStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'asst-1',
+      context,
+      operationId: 'op-1',
+    });
+
+    handler(makeEvent('stream_start', { newStep: true }));
+    await flush();
+    expect(messageService.getMessages).toHaveBeenCalled();
+
+    handler(makeEvent('step_start', { uiMessages: nextStepSnapshot }));
+    resolveFetch?.(staleSnapshot);
+    await flush();
+
+    expect(store.associateMessageWithOperation).not.toHaveBeenCalledWith('asst-stale', 'op-1');
+    const lastCall = vi.mocked(store.replaceMessages).mock.calls.at(-1);
+    expect(lastCall?.[0]).toEqual(nextStepSnapshot);
+  });
+
   it('falls back to the streamed accumulator when the terminal snapshot carries no assistant text', async () => {
     vi.spyOn(messageService, 'getMessages').mockResolvedValue([] as unknown as UIChatMessage[]);
     const lifecycle = createLifecycle();
