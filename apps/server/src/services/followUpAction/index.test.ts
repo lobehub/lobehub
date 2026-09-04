@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { notShareVisitorMessage } from '@/database/utils/shareVisitor';
 import * as ModelRuntimeModule from '@/server/modules/ModelRuntime';
+import * as TracingServiceModule from '@/server/services/llmGenerationTracing';
 
 import { FollowUpActionService } from './index';
 
@@ -248,6 +249,35 @@ describe('FollowUpActionService.extract', () => {
       MODEL_CONFIG.provider,
       'workspace-1',
     );
+  });
+
+  const mockTracingEnabled = (enabled: boolean) =>
+    vi
+      .spyOn(TracingServiceModule, 'getLLMGenerationTracingService')
+      .mockReturnValue({ isEnabled: () => enabled } as any);
+
+  it('returns a tracingId when the tracing store is enabled', async () => {
+    mockTracingEnabled(true);
+    queryFindFirstSpy.mockResolvedValue({ id: FOUND_MSG, content: 'q?' });
+    runtimeMock.generateObject.mockResolvedValue({ chips: [{ label: 'ok', message: 'ok' }] });
+
+    const result = await svc.extract({ modelConfig: MODEL_CONFIG, topicId: TEST_TOPIC });
+
+    expect(typeof result.tracingId).toBe('string');
+    // The id handed to the client must be the same one passed to the tracing hook.
+    expect(runtimeMock.generateObject.mock.calls[0][1].tracing.tracingId).toBe(result.tracingId);
+  });
+
+  it('omits the tracingId when the tracing store is disabled (no row would exist)', async () => {
+    mockTracingEnabled(false);
+    queryFindFirstSpy.mockResolvedValue({ id: FOUND_MSG, content: 'q?' });
+    runtimeMock.generateObject.mockResolvedValue({ chips: [{ label: 'ok', message: 'ok' }] });
+
+    const result = await svc.extract({ modelConfig: MODEL_CONFIG, topicId: TEST_TOPIC });
+
+    expect(result.chips).toHaveLength(1);
+    expect(result.tracingId).toBeUndefined();
+    expect(runtimeMock.generateObject.mock.calls[0][1].tracing.tracingId).toBeUndefined();
   });
 
   it('appends onboarding addendum to system prompt when hint is onboarding', async () => {

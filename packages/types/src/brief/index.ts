@@ -71,4 +71,10 @@ export interface BriefMetadata {
   [key: string]: unknown;
   /** Agent Signal extension metadata. */
   agentSignal?: BriefAgentSignalMetadata;
+  /**
+   * `llm_generation_tracing` row id of the generation that produced this brief's
+   * title/summary. Set for LLM-synthesized briefs so the user's resolve action
+   * (approve / feedback / ignore) can be reported back as implicit feedback.
+   */
+  tracingId?: string;
 }
