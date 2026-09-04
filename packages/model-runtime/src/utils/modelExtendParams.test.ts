@@ -182,6 +182,16 @@ describe('applyModelExtendParams', () => {
     expect(result.reasoning_effort).toBe('max');
   });
 
+  it('resolves GPT-6 xhigh reasoning effort', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({ gpt6ReasoningEffort: 'xhigh' }),
+      extendParams: ['gpt6ReasoningEffort'],
+      model: 'gpt-6-astra',
+    });
+
+    expect(result.reasoning_effort).toBe('xhigh');
+  });
+
   it('resolves Kimi K3 reasoning effort', () => {
     const result = applyModelExtendParams({
       chatConfig: chatConfig({ kimiK3ReasoningEffort: 'high' }),

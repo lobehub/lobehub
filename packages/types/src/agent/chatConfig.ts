@@ -94,6 +94,7 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
   gpt5_2ReasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
   gpt5_6ReasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   gpt5ReasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
+  gpt6ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   grok4_3ReasoningEffort?: 'none' | 'low' | 'medium' | 'high';
   grok4_5ReasoningEffort?: 'low' | 'medium' | 'high';
   grok4_6ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
@@ -251,6 +252,7 @@ export const AgentChatConfigSchema = z
     gpt5_2ProReasoningEffort: z.enum(['medium', 'high', 'xhigh']).optional(),
     gpt5_2ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh']).optional(),
     gpt5_6ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
+    gpt6ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
     glm5_2ReasoningEffort: z.enum(['high', 'max']).optional(),
     glm5_3ReasoningEffort: z.enum(['low', 'high', 'max']).optional(),
     grok4_20ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),

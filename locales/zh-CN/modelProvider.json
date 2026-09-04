@@ -236,6 +236,7 @@
   "providerModels.item.modelConfig.extendParams.options.gpt5_2ProReasoningEffort.hint": "适用于 GPT-5.2 Pro 系列；控制推理强度。",
   "providerModels.item.modelConfig.extendParams.options.gpt5_2ReasoningEffort.hint": "适用于 GPT-5.2 系列；控制推理强度。",
   "providerModels.item.modelConfig.extendParams.options.gpt5_6ReasoningEffort.hint": "适用于 GPT-5.6 系列；控制推理强度，从无到最大。",
+  "providerModels.item.modelConfig.extendParams.options.gpt6ReasoningEffort.hint": "适用于 GPT-6 系列；控制推理强度，从低到最大，无法关闭推理。",
   "providerModels.item.modelConfig.extendParams.options.grok4_20ReasoningEffort.hint": "适用于 Grok 4.20 系列；控制推理强度。低/中档使用 4 个代理，高/超高使用 16 个代理。",
   "providerModels.item.modelConfig.extendParams.options.grok4_3ReasoningEffort.hint": "适用于 Grok 4.3 系列；控制推理强度。",
   "providerModels.item.modelConfig.extendParams.options.grok4_5ReasoningEffort.hint": "适用于 Grok 4.5 系列；控制推理强度（低/中/高，默认高）。",

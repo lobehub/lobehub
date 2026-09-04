@@ -348,6 +348,7 @@ export interface AiModelReasoningConfig {
   gpt5_2ReasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
   gpt5_6ReasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   gpt5ReasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
+  gpt6ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   grok4_3ReasoningEffort?: 'none' | 'low' | 'medium' | 'high';
   grok4_5ReasoningEffort?: 'low' | 'medium' | 'high';
   grok4_6ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
@@ -373,6 +374,7 @@ export const AiModelReasoningConfigSchema = z.object({
   gpt5_2ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh']).optional(),
   gpt5_6ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
   gpt5ReasoningEffort: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
+  gpt6ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
   grok4_3ReasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
   grok4_5ReasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
   grok4_6ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
@@ -414,6 +416,7 @@ export const MODEL_REASONING_PARAM_LEVELS: {
   gpt5_2ReasoningEffort: ['none', 'low', 'medium', 'high', 'xhigh'],
   gpt5_6ReasoningEffort: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
   gpt5ReasoningEffort: ['minimal', 'low', 'medium', 'high'],
+  gpt6ReasoningEffort: ['low', 'medium', 'high', 'xhigh', 'max'],
   grok4_3ReasoningEffort: ['none', 'low', 'medium', 'high'],
   grok4_5ReasoningEffort: ['low', 'medium', 'high'],
   grok4_6ReasoningEffort: ['low', 'medium', 'high', 'xhigh'],
@@ -446,6 +449,7 @@ export const MODEL_REASONING_PARAM_DEFAULTS: {
   gpt5_2ReasoningEffort: 'none',
   gpt5_6ReasoningEffort: 'medium',
   gpt5ReasoningEffort: 'medium',
+  gpt6ReasoningEffort: 'medium',
   grok4_3ReasoningEffort: 'low',
   grok4_5ReasoningEffort: 'high',
   grok4_6ReasoningEffort: 'high',
@@ -497,6 +501,7 @@ export type ExtendParamsType =
   | 'gpt5_2ReasoningEffort'
   | 'gpt5_2ProReasoningEffort'
   | 'gpt5_6ReasoningEffort'
+  | 'gpt6ReasoningEffort'
   | 'glm5_2ReasoningEffort'
   | 'glm5_3ReasoningEffort'
   | 'grok4_20ReasoningEffort'
@@ -557,6 +562,7 @@ export const ExtendParamsTypeSchema = z.enum([
   'gpt5_2ReasoningEffort',
   'gpt5_2ProReasoningEffort',
   'gpt5_6ReasoningEffort',
+  'gpt6ReasoningEffort',
   'glm5_2ReasoningEffort',
   'glm5_3ReasoningEffort',
   'grok4_20ReasoningEffort',

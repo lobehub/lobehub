@@ -862,6 +862,7 @@
   "lobehub.gpt-5.6-sol.description": "GPT-5.6 Sol 是 OpenAI 的前沿模型，适用于复杂推理、编码和长时间智能代理工作。gpt-5.6 别名指向 Sol。",
   "lobehub.gpt-5.6-terra.description": "GPT-5.6 Terra 在智能与成本之间实现平衡，适用于日常专业工作，其性能可与 GPT-5.5 竞争，但价格约为其一半。",
   "lobehub.gpt-5.description": "跨领域编码和智能代理任务的最佳模型，具备强大的准确性、速度、推理和问题解决能力。",
+  "lobehub.gpt-6-astra.description": "OpenAI 迄今最智能、对齐程度最高的模型，在电脑操作和三维建模上达到业界最强水平。",
   "lobehub.gpt-image-1.5.description": "GPT Image 1 的增强版本，生成速度提升 4 倍，编辑更精准，文本渲染效果更佳。",
   "lobehub.gpt-image-1.description": "ChatGPT 原生多模态图像生成模型。",
   "lobehub.gpt-image-2.description": "OpenAI 的下一代多模态图像模型，具备原生推理能力，支持最高 4K 分辨率、近乎完美的文字渲染及高保真多语言能力。",
