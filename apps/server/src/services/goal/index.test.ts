@@ -696,9 +696,7 @@ describe('GoalService', () => {
       'Current Task contract (authoritative execution scope): Generate training data',
     );
     expect(task?.instruction).toContain('Do not implement, validate, or pre-empt any sibling');
-    expect(task?.instruction).toContain(
-      'Do not invoke Acceptance skills or Acceptance CLI commands',
-    );
+    expect(task?.instruction).toContain('run it inside this Task');
     expect(task?.instruction).toContain(
       'Include the relevant artifact contents or exact excerpts and the raw outputs of decisive verification commands',
     );

@@ -4,6 +4,7 @@ import debug from 'debug';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { DocumentModel } from '@/database/models/document';
 import { TaskModel } from '@/database/models/task';
+import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 
@@ -99,6 +100,24 @@ const executeVerifyLifecycle = async (
     if (!op) {
       log('op %s missing, cannot run verify', params.operationId);
       return;
+    }
+
+    // The builder now captures Acceptance evidence inside the main run. When it
+    // already did, the post-run evidence turn has nothing left to collect — it
+    // mounts the evidence tool exclusively, so all it could add is a restatement
+    // of text already in the transcript, at the cost of a second agent run.
+    if (op.taskId && !evidenceSubmitted) {
+      const inRunEvidence = await new VerifyEvidenceModel(db, userId, workspaceId).listByRun(
+        run.id,
+      );
+      if (inRunEvidence.length > 0) {
+        log(
+          'op %s already has %d in-run evidence rows, skipping the evidence turn',
+          params.operationId,
+          inRunEvidence.length,
+        );
+        evidenceSubmitted = true;
+      }
     }
 
     if (op.taskId && !evidenceSubmitted) {

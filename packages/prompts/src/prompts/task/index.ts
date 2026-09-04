@@ -691,7 +691,12 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
   }
 
   // Verify — delivery acceptance (builder self-evidence)
-  if (task.verify?.enabled && (task.verify.criteria?.length || task.verify.requirement)) {
+  //
+  // Gated on `enabled` alone: every Task that carries an Acceptance runs it
+  // in-Task. A criteria-less Acceptance still materializes a plan at run start,
+  // and the builder reads those criterion ids at runtime — so having nothing to
+  // print here is not a reason to withhold the instruction.
+  if (task.verify?.enabled) {
     taskLines.push('');
     taskLines.push(
       `Verify — delivery acceptance (maxIterations: ${task.verify.maxIterations || 3}):`,
@@ -710,10 +715,29 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
       }
     }
     taskLines.push(
+      '  Run the Acceptance inside this Task, not after it: drive the real product surface and submit each artifact as soon as the criterion it proves is provable.',
+    );
+    taskLines.push(
+      '  Criterion ids are minted when this run starts, so they are not listed above. Read them at runtime with `listCriteria`, or `lh verify plan state "$LOBEHUB_OPERATION_ID" --json` if you have a shell.',
+    );
+    // Two builder shapes, two toolchains. The portable `acceptance` skill is
+    // pulled to disk by external CLI builders and is deliberately absent from
+    // `builtinSkills`, so naming it unconditionally hands the in-product agent
+    // an instruction it cannot act on.
+    taskLines.push(
+      '  With a shell: `lh acceptance install` gives you the `acceptance` skill, and `lh acceptance run result submit --operation "$LOBEHUB_OPERATION_ID" --item <checkItemId> --type screenshot --file <path>` uploads a captured artifact.',
+    );
+    taskLines.push(
+      '  Without a shell: drive the product with your own tools and cite artifacts by id through `submitEvidence`.',
+    );
+    taskLines.push(
+      '  A criterion with a visible surface is proved by a screenshot or recording, and `screenshot`/`video` evidence must reference a real artifact by fileId. Never label prose as a visual artifact: if you could not capture one, say what you observed as `text` and name the blocker.',
+    );
+    taskLines.push(
       '  Produce concrete evidence while you work, and include artifact paths, commands, and observed results in your final response.',
     );
     taskLines.push(
-      '  Do not judge the Acceptance. A dedicated post-run phase will ask you to submit the evidence you produced; an independent verifier decides whether this Task is complete.',
+      '  Do not judge the Acceptance — submit evidence only; an independent verifier decides whether this Task is complete.',
     );
   }
 

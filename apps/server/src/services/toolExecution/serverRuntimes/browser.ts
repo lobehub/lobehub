@@ -1,6 +1,8 @@
 import { BrowserIdentifier, BrowserManifest } from '@lobechat/builtin-tool-browser';
+import debug from 'debug';
 
 import { deviceGateway } from '@/server/services/deviceGateway';
+import { FileService } from '@/server/services/file';
 
 import { buildNoActiveDeviceResult, REMOTE_DEVICE_TOOL_IDENTIFIER } from './noActiveDevice';
 import { resolveRunWorkspaceId } from './resolveWorkspaceScope';
@@ -20,6 +22,54 @@ import { type ServerRuntimeRegistration } from './types';
  * the run's identity in the args (mirroring how localSystem injects `cwd`); the
  * device strips it back out before invoking the executor.
  */
+const log = debug('lobe-server:browser-runtime');
+
+/** `data:image/png;base64,…` → the media type and the payload. */
+const DATA_URL_RE = /^data:(image\/[\w.+-]+);base64,(.+)$/;
+
+/**
+ * Turn the screenshot's inline `dataUrl` into a stored file, exposed on
+ * `state.images` as `{ fileId, mediaType, url }`.
+ *
+ * This is the same contract the heterogeneous pipeline already produces for a
+ * tool_result image (`AgentStreamPipeline.uploadResultImages` →
+ * `createFileStoreImageUploader`), and the one `MessageContent` reads to hand
+ * a vision model real `image_url` parts. Proxying the device's `dataUrl`
+ * verbatim left this runtime as the only image-producing tool with no file
+ * behind it: the model could not see its own screenshot, and nothing
+ * downstream — Acceptance evidence included — had an id to cite.
+ *
+ * Best-effort by construction: the capture succeeded either way, so an upload
+ * failure degrades to the previous pass-through instead of failing the call.
+ * `dataUrl` is dropped once stored so the base64 never reaches the DB.
+ */
+const storeScreenshot = async (
+  result: { content?: string; state?: unknown; success?: boolean },
+  context: { serverDB?: unknown; userId?: string; workspaceId?: string },
+) => {
+  const state = result.state as { dataUrl?: string } | undefined;
+  const match = typeof state?.dataUrl === 'string' ? state.dataUrl.match(DATA_URL_RE) : null;
+  if (!match || !context.serverDB || !context.userId) return result;
+
+  const [, mediaType, base64Data] = match;
+  try {
+    const fileService = new FileService(
+      context.serverDB as never,
+      context.userId,
+      context.workspaceId,
+    );
+    const pathname = `files/${new Date().toISOString().slice(0, 10)}/browser-screenshot-${Date.now()}.${mediaType.split('/')[1]}`;
+    const { fileId, url } = await fileService.uploadBase64(base64Data, pathname, {
+      fileType: mediaType,
+    });
+
+    const { dataUrl: _dropped, ...rest } = state!;
+    return { ...result, state: { ...rest, images: [{ fileId, mediaType, url }] } };
+  } catch (error) {
+    log('screenshot upload failed, passing the capture through inline: %O', error);
+    return result;
+  }
+};
 export const browserRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
     if (!context.userId) {
@@ -65,7 +115,7 @@ export const browserRuntime: ServerRuntimeRegistration = {
         // are stripped device-side.
         const finalArgs = { ...args, __agentId: context.agentId, __topicId: context.topicId };
 
-        return deviceGateway.executeToolCall(
+        const result = await deviceGateway.executeToolCall(
           {
             deviceId: context.activeDeviceId!,
             operationId: context.operationId,
@@ -79,6 +129,8 @@ export const browserRuntime: ServerRuntimeRegistration = {
           },
           context.executionTimeoutMs,
         );
+
+        return api.name === 'screenshot' ? storeScreenshot(result, context) : result;
       };
     }
 
