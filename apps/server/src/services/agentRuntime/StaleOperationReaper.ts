@@ -135,10 +135,10 @@ export class StaleOperationReaper {
   private async listStaleRunning(staleBefore: Date, limit: number) {
     return (
       this.db
+        // Only what recovery needs: everything else about the run is read from
+        // the coordinator state, and the abandon path re-reads the row itself.
         .select({
           id: agentOperations.id,
-          threadId: agentOperations.threadId,
-          topicId: agentOperations.topicId,
           userId: agentOperations.userId,
           workspaceId: agentOperations.workspaceId,
         })
