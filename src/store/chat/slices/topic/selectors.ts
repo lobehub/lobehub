@@ -2,6 +2,7 @@ import { isDesktop } from '@lobechat/const';
 import { getWorkingDirEffectivePath } from '@lobechat/types';
 import { t } from 'i18next';
 
+import { MAIN_SIDEBAR_EXCLUDE_TRIGGERS } from '@/const/topic';
 import {
   type ChatTopic,
   type ChatTopicSummary,
@@ -33,11 +34,21 @@ const currentTopicData = (s: ChatStoreState): TopicData | undefined => {
 
 const currentTopics = (s: ChatStoreState): ChatTopic[] | undefined => currentTopicData(s)?.items;
 
-// Get topics without cron-triggered ones
-const currentTopicsWithoutCron = (s: ChatStoreState): ChatTopic[] | undefined => {
+/**
+ * Every list surface reads through here, so system-owned topics (cron, task
+ * runs, doc chats, evals) stay out of the user's chat history.
+ *
+ * The sidebar fetch already excludes them server-side; this repeats the filter
+ * because `topicDataMap` is keyed by container and not by query, so any panel
+ * fetching the same agent with looser filters overwrites the bucket. Belt and
+ * braces — the fetch decides the page and the total, this decides what renders.
+ */
+const currentTopicsWithoutSystemTriggers = (s: ChatStoreState): ChatTopic[] | undefined => {
   const topics = currentTopics(s);
   if (!topics) return undefined;
-  return topics.filter((topic) => topic.trigger !== 'cron');
+  return topics.filter(
+    (topic) => !topic.trigger || !MAIN_SIDEBAR_EXCLUDE_TRIGGERS.includes(topic.trigger),
+  );
 };
 
 const currentActiveTopic = (s: ChatStoreState): ChatTopic | undefined => {
@@ -50,12 +61,14 @@ const currentActiveTopic = (s: ChatStoreState): ChatTopic | undefined => {
 };
 const searchTopics = (s: ChatStoreState): ChatTopic[] => s.searchTopics;
 
-const displayTopics = (s: ChatStoreState): ChatTopic[] | undefined => currentTopicsWithoutCron(s);
+const displayTopics = (s: ChatStoreState): ChatTopic[] | undefined =>
+  currentTopicsWithoutSystemTriggers(s);
 
 const currentUnFavTopics = (s: ChatStoreState): ChatTopic[] =>
-  currentTopicsWithoutCron(s)?.filter((s) => !s.favorite) || [];
+  currentTopicsWithoutSystemTriggers(s)?.filter((s) => !s.favorite) || [];
 
-const currentTopicLength = (s: ChatStoreState): number => currentTopicsWithoutCron(s)?.length || 0;
+const currentTopicLength = (s: ChatStoreState): number =>
+  currentTopicsWithoutSystemTriggers(s)?.length || 0;
 
 const currentTopicCount = (s: ChatStoreState): number => currentTopicData(s)?.total || 0;
 
@@ -221,7 +234,7 @@ const sortTopics = (topics: ChatTopic[], sortBy: TopicSortBy): ChatTopic[] => {
 const displayTopicsForSidebar =
   (pageSize: number, sortBy: TopicSortBy = 'updatedAt', includeCompleted = true) =>
   (s: ChatStoreState): ChatTopic[] | undefined => {
-    const topics = currentTopicsWithoutCron(s);
+    const topics = currentTopicsWithoutSystemTriggers(s);
     if (!topics) return undefined;
 
     const visibleTopics = includeCompleted
@@ -391,7 +404,7 @@ export const topicSelectors = {
   currentTopicMetadata,
   currentTopicWorkingDirectory,
   currentTopics,
-  currentTopicsWithoutCron,
+  currentTopicsWithoutSystemTriggers,
   currentUnFavTopics,
   displayTopics,
   displayTopicsForSidebar,
