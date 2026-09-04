@@ -313,6 +313,7 @@ describe('buildGoalGraphView', () => {
             work: {
               agentDocumentId: 'docs_1',
               identifier: null,
+              resourceId: null,
               status: null,
               title: 'Report',
               type: 'document',
@@ -328,6 +329,7 @@ describe('buildGoalGraphView', () => {
             relation: 'produced',
             work: {
               identifier: 'ENG-1',
+              resourceId: 'lobehub/lobehub#1',
               status: 'open',
               title: 'Issue',
               type: 'external',
@@ -345,6 +347,42 @@ describe('buildGoalGraphView', () => {
     expect(view.artifacts.map((a) => a.workId)).toEqual(['wk2', 'wk1']);
   });
 
+  it('addresses a document deliverable by its document id, not the binding id', () => {
+    // The document route resolves the DOCUMENT id. Carrying only
+    // `agentDocumentId` — the agent-document binding row — sent the user to the
+    // documents index instead of the document they asked for.
+    const view = buildGoalGraphView(
+      snapshot({
+        nodes: [node('w1')],
+        workVersions: [
+          {
+            createdAt: at(5),
+            id: 'l1',
+            nodeId: 'w1',
+            relation: 'produced',
+            work: {
+              agentDocumentId: 'a719df25-40c8-4b1c-a24d-6d38cedef82b',
+              identifier: null,
+              resourceId: 'docs_NRoMGzwytmhHCLSt',
+              status: null,
+              title: 'Issue pain-point analysis report',
+              type: 'document',
+              url: null,
+              workId: 'wk1',
+            },
+            workVersionId: 'v1',
+          },
+        ],
+      }),
+      NOW,
+    );
+
+    expect(view.artifacts[0]).toMatchObject({
+      agentDocumentId: 'a719df25-40c8-4b1c-a24d-6d38cedef82b',
+      resourceId: 'docs_NRoMGzwytmhHCLSt',
+    });
+  });
+
   it('opens a generated file at the url its version metadata carries', () => {
     const view = buildGoalGraphView(
       snapshot({
@@ -360,6 +398,7 @@ describe('buildGoalGraphView', () => {
             work: {
               fileUrl: 'https://cdn.example.com/deck.pptx',
               identifier: null,
+              resourceId: null,
               status: null,
               title: 'deck.pptx',
               type: 'file',
@@ -392,6 +431,7 @@ describe('buildGoalGraphView', () => {
             // would otherwise head every task's list with the task itself.
             work: {
               identifier: 'T-1',
+              resourceId: 'task_1',
               status: 'completed',
               title: 'Build the thing',
               type: 'task',

@@ -134,6 +134,7 @@ export class GoalGraphModel {
           // Document and file Works keep their open target in the version
           // metadata rather than the `url` column.
           metadata: workVersions.metadata,
+          resourceId: works.resourceId,
           link: goalNodeWorkVersions,
           status: workVersions.status,
           title: workVersions.title,
@@ -162,6 +163,7 @@ export class GoalGraphModel {
           type && workId
             ? {
                 identifier: display.identifier,
+                resourceId: display.resourceId,
                 status: display.status,
                 title: display.title,
                 type,

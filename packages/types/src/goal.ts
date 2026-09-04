@@ -230,11 +230,17 @@ export interface GoalGraphWorkVersionLink {
  * goal's history.
  */
 export interface GoalGraphWorkVersionDisplay {
-  /** Agent document behind a `document` Work — the in-app open target. */
+  /**
+   * Proof that a `document` Work is bound to an agent, and therefore openable
+   * in-app. It is the binding row's id, NOT a route parameter — the document
+   * route resolves {@link resourceId}.
+   */
   agentDocumentId?: string;
   /** Durable download target of a `file` Work, which keeps it out of `url`. */
   fileUrl?: string;
   identifier: string | null;
+  /** Canonical resource identity — the document id an in-app link addresses. */
+  resourceId: string | null;
   status: string | null;
   title: string | null;
   type: WorkType;

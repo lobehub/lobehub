@@ -100,8 +100,12 @@ const Deliverables = memo<{ graph: GoalGraphView }>(({ graph }) => {
   const open = (artifact: GoalArtifactView) => {
     // A document lives in this app, so keep it in-app; anything else only has
     // the canonical url the producing tool recorded.
-    if (artifact.agentDocumentId && agentId) {
-      navigate(`/agent/${agentId}/docs/${artifact.agentDocumentId}`);
+    //
+    // The route resolves the DOCUMENT id (`resourceId`), not the agent-document
+    // binding id: `agentDocumentId` only establishes that a binding exists, and
+    // navigating with it lands on the documents index instead of the document.
+    if (artifact.agentDocumentId && artifact.resourceId && agentId) {
+      navigate(`/agent/${agentId}/docs/${artifact.resourceId}`);
       return;
     }
     if (artifact.url) window.open(artifact.url, '_blank', 'noopener,noreferrer');

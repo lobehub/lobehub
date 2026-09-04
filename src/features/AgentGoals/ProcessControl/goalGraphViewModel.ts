@@ -46,12 +46,17 @@ export interface GoalAttempt {
  * another shape.
  */
 export interface GoalArtifactView {
-  /** In-app open target for a document deliverable. */
+  /**
+   * Set when a document deliverable is bound to an agent, which is what makes
+   * it openable in-app. The link itself addresses {@link resourceId}.
+   */
   agentDocumentId?: string;
   createdAt: Date;
   identifier: string | null;
   /** The task node that produced it — the goal-level list has no other owner. */
   nodeId: string;
+  /** Canonical resource identity; the document id an in-app link addresses. */
+  resourceId: string | null;
   title: string | null;
   type: WorkType;
   url: string | null;
@@ -242,6 +247,7 @@ export const buildGoalGraphView = (
       createdAt: link.createdAt,
       identifier: link.work.identifier,
       nodeId: link.nodeId,
+      resourceId: link.work.resourceId,
       title: link.work.title,
       type: link.work.type,
       // A file Work carries its target in the version metadata, not `url`.
