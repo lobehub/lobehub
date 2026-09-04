@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createQueueSendNowGate,
   getContextWindowMessages,
+  getConversationChatInputDisabled,
   getConversationChatInputUiState,
   toChatInputMessages,
 } from './utils';
@@ -178,5 +179,49 @@ describe('getConversationChatInputUiState', () => {
       showSendMenu: false,
       showStopButton: true,
     });
+  });
+});
+
+describe('getConversationChatInputDisabled', () => {
+  it('blocks sending when the selected model is unavailable', () => {
+    expect(
+      getConversationChatInputDisabled({
+        disableQueue: false,
+        disableSend: false,
+        isInputEmpty: false,
+        isInputLoading: false,
+        isInputQueueBlocked: false,
+        isModelUnavailable: true,
+        isUploadingFiles: false,
+      }),
+    ).toBe(true);
+  });
+
+  it('keeps a valid non-empty composer enabled', () => {
+    expect(
+      getConversationChatInputDisabled({
+        disableQueue: false,
+        disableSend: false,
+        isInputEmpty: false,
+        isInputLoading: false,
+        isInputQueueBlocked: false,
+        isModelUnavailable: false,
+        isUploadingFiles: false,
+      }),
+    ).toBe(false);
+  });
+
+  it('keeps the stop control enabled when a model goes offline during generation', () => {
+    expect(
+      getConversationChatInputDisabled({
+        disableQueue: false,
+        disableSend: false,
+        isInputEmpty: false,
+        isInputLoading: true,
+        isInputQueueBlocked: true,
+        isModelUnavailable: true,
+        isUploadingFiles: false,
+      }),
+    ).toBe(false);
   });
 });
