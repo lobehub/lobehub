@@ -271,12 +271,69 @@ describe('compressContext executor', () => {
 
     expect(compressionCreateGroup).toHaveBeenCalledWith(
       expect.objectContaining({
-        messageIds: ['msg-old', 'msg-assistant', 'msg-tool'],
+        messageIds: ['msg-old'],
       }),
     );
     expect(result.newState.messages).toEqual([
       { content: 'historical summary', id: 'group-123', role: 'compressedGroup' },
       activeContract,
+      { content: 'searching', id: 'msg-assistant', role: 'assistant' },
+      toolResult,
+    ]);
+  });
+
+  it('does not fold the in-flight assistant/tool turn after the latest user into the compression group', async () => {
+    const activeUser = {
+      content: 'continue with the other languages',
+      id: 'msg-current-user',
+      role: 'user',
+    };
+    const inFlightAssistant = {
+      content: 'Starting with Dutch, then the remaining four.',
+      id: 'msg-inflight-asst',
+      role: 'assistant',
+    };
+    const inFlightTool = { content: 'crawl result', id: 'msg-inflight-tool', role: 'tool' };
+
+    messagesQuery.mockResolvedValue([
+      { content: 'old history', id: 'msg-old', role: 'user' },
+      { content: 'old reply', id: 'msg-old-asst', role: 'assistant' },
+      activeUser,
+      inFlightAssistant,
+      inFlightTool,
+    ]);
+    compressionCreateGroup.mockResolvedValue({
+      messageGroupId: 'group-123',
+      messagesToSummarize: [
+        { content: 'old history', id: 'msg-old', role: 'user' },
+        { content: 'old reply', id: 'msg-old-asst', role: 'assistant' },
+      ],
+    });
+    compressionFinalizeGroup.mockResolvedValue({
+      messages: [{ content: 'historical summary', id: 'group-123', role: 'compressedGroup' }],
+    });
+
+    const state = createState({
+      messages: [
+        { content: 'old history', id: 'msg-old', role: 'user' },
+        { content: 'old reply', id: 'msg-old-asst', role: 'assistant' },
+        activeUser,
+        inFlightAssistant,
+        inFlightTool,
+      ],
+    });
+    const result = await compressContext(host)(createInstruction(state.messages), state);
+
+    expect(compressionCreateGroup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageIds: ['msg-old', 'msg-old-asst'],
+      }),
+    );
+    expect(result.newState.messages).toEqual([
+      { content: 'historical summary', id: 'group-123', role: 'compressedGroup' },
+      activeUser,
+      inFlightAssistant,
+      inFlightTool,
     ]);
   });
 
@@ -377,8 +434,9 @@ describe('compressContext executor', () => {
     expect(result.newState.messages).toEqual([
       { content: 'combined summary', id: 'group-123', role: 'compressedGroup' },
       { content: 'recent question', id: 'msg-recent', role: 'user' },
+      { content: 'recent answer', id: 'assistant-recent', role: 'assistant' },
     ]);
-    expect((result.nextContext?.payload as any).parentMessageId).toBe('assistant-recent');
+    expect((result.nextContext?.payload as any).parentMessageId).toBe('assistant-in-source-2');
   });
 
   it('can recompress summaries when there are no new persisted messages', async () => {

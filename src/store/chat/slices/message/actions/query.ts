@@ -17,6 +17,7 @@ import {
 } from '@/services/message/cache';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { type ChatStore } from '@/store/chat/store';
+import { graftInFlightTurnAfterLatestUser } from '@/store/chat/utils/compression';
 import {
   isLocalOnlyMessage,
   mergeLocalMessagesByCreatedAt,
@@ -203,9 +204,12 @@ export class MessageQueryActionImpl {
     // link while the tool row survives, which would orphan the tool bubble (see
     // reconcileAssistantToolLinks). Keeps dbMessagesMap (SoT) consistent for
     // optimistic updates, not just the parsed display.
-    const persistedIncoming = incoming.filter((message) => !isLocalOnlyMessage(message));
-    const persistedIds = new Set(persistedIncoming.map((message) => message.id));
     const currentMessages = this.#get().dbMessagesMap[messagesKey] ?? [];
+    const persistedIncoming = graftInFlightTurnAfterLatestUser(
+      incoming.filter((message) => !isLocalOnlyMessage(message)),
+      currentMessages.filter((message) => !isLocalOnlyMessage(message)),
+    );
+    const persistedIds = new Set(persistedIncoming.map((message) => message.id));
     const voiceMessageUploadMap = this.#get().voiceMessageUploadMap;
     const activeLocalMessagesById = new Map<string, UIChatMessage>();
 

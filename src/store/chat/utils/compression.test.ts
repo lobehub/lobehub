@@ -4,6 +4,7 @@ import { type Operation } from '../slices/operation/types';
 import {
   createPendingCompressedGroup,
   getCompressionCandidateMessageIds,
+  graftInFlightTurnAfterLatestUser,
   hasRunningCompressionOperation,
   isCompressionOperationType,
 } from './compression';
@@ -61,6 +62,67 @@ describe('compression utils', () => {
         topicId: 'topic-3',
       }),
     ).toBe(false);
+  });
+
+  it('should re-attach the in-flight turn omitted from a post-compression snapshot', () => {
+    const currentUser = {
+      content: 'continue',
+      createdAt: 3000,
+      id: 'msg-user',
+      role: 'user' as const,
+    };
+    const inFlightAssistant = {
+      content: 'working',
+      createdAt: 4000,
+      id: 'msg-asst',
+      parentId: 'msg-user',
+      role: 'assistant' as const,
+    };
+    const snapshot = [
+      {
+        compressedMessages: [inFlightAssistant],
+        content: 'summary',
+        createdAt: 1500,
+        id: 'mg-compress',
+        role: 'compressedGroup' as const,
+      },
+      currentUser,
+    ];
+    const local = [
+      { content: 'old', createdAt: 1000, id: 'msg-old', role: 'user' as const },
+      currentUser,
+      inFlightAssistant,
+    ];
+
+    expect(
+      graftInFlightTurnAfterLatestUser(snapshot as any, local as any).map((m) => m.id),
+    ).toEqual(['mg-compress', 'msg-user', 'msg-asst']);
+  });
+
+  it('should not resurrect history that was correctly folded into the compressed group', () => {
+    const currentUser = {
+      content: 'continue',
+      createdAt: 3000,
+      id: 'msg-user',
+      role: 'user' as const,
+    };
+    const history = { content: 'old', createdAt: 1000, id: 'msg-old', role: 'user' as const };
+    const snapshot = [
+      {
+        compressedMessages: [history],
+        content: 'summary',
+        createdAt: 1500,
+        id: 'mg-compress',
+        role: 'compressedGroup' as const,
+      },
+      currentUser,
+    ];
+
+    expect(
+      graftInFlightTurnAfterLatestUser(snapshot as any, [history, currentUser] as any).map(
+        (m) => m.id,
+      ),
+    ).toEqual(['mg-compress', 'msg-user']);
   });
 
   it('should build a pending compressedGroup message', () => {

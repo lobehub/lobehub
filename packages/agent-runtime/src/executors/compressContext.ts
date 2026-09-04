@@ -18,6 +18,20 @@ const getErrorMessage = (error: unknown): string => {
   return String(error);
 };
 
+/**
+ * Latest user message plus any assistant/tool follow-ups after it.
+ * Compression must leave this turn on the mainline — folding it into the
+ * group hides the reply the user is already watching.
+ */
+const collectActiveTurnMessages = <T extends { id?: string; role?: string }>(
+  messages: T[],
+): T[] => {
+  if (messages.length <= 1) return [];
+  const latestUserIndex = messages.findLastIndex((message) => message.role === 'user');
+  if (latestUserIndex < 0) return [];
+  return messages.slice(latestUserIndex);
+};
+
 const dispatchLifecycle = (
   host: AgentRuntimeHost,
   type: Parameters<NonNullable<AgentRuntimeHost['lifecycle']>['dispatch']>[0]['type'],
@@ -55,17 +69,17 @@ export const compressContext =
     const compression = transports.compression;
     const llm = transports.llm;
     // The latest user turn is the active contract even after assistant/tool steps have followed it.
-    // Keep it verbatim and re-inject it after the summary so compression can never demote a Task's
-    // Current Work instruction into historical prose or reactivate an older objective.
-    const latestUserMessage =
-      messages.length > 1 ? messages.findLast((message) => message.role === 'user') : undefined;
-    const preservedMessages = latestUserMessage ? [latestUserMessage] : [];
+    // Keep the whole turn (user + already-streamed assistant/tool follow-ups) verbatim so
+    // compression cannot demote a Task's Current Work instruction — or swallow the reply
+    // the user is watching — into historical prose.
+    const preservedMessages = collectActiveTurnMessages(messages);
     const preservedMessageIds = new Set(
       preservedMessages.map((message) => message.id).filter((id): id is string => Boolean(id)),
     );
-    const messagesToCompress = latestUserMessage
-      ? messages.filter((message) => message !== latestUserMessage)
-      : messages;
+    const messagesToCompress =
+      preservedMessages.length > 0
+        ? messages.slice(0, messages.length - preservedMessages.length)
+        : messages;
     const createNextContext = ({
       groupId,
       parentMessageId,
@@ -136,11 +150,22 @@ export const compressContext =
         .filter(Boolean)
         .join('\n\n');
 
+      const latestUserId = preservedMessages.find((message) => message.role === 'user')?.id;
+      const dbActiveTurnStart = latestUserId
+        ? dbMessages.findIndex((message) => message.id === latestUserId)
+        : -1;
+      if (dbActiveTurnStart >= 0) {
+        for (const message of dbMessages.slice(dbActiveTurnStart)) {
+          if (message.role === 'compressedGroup' || !message.id) continue;
+          preservedMessageIds.add(message.id);
+        }
+      }
+
       const messageIds = dbMessages
         .filter(
-          (message) =>
+          (message): message is typeof message & { id: string } =>
             message.role !== 'compressedGroup' &&
-            Boolean(message.id) &&
+            typeof message.id === 'string' &&
             !preservedMessageIds.has(message.id),
         )
         .map((message) => message.id);
@@ -152,9 +177,14 @@ export const compressContext =
         return skippedResult();
       }
 
-      const latestAssistantMessage = dbMessages.findLast((message) => message.role === 'assistant');
+      const latestCompressedAssistant = dbMessages.findLast(
+        (message) =>
+          message.role === 'assistant' &&
+          typeof message.id === 'string' &&
+          !preservedMessageIds.has(message.id),
+      );
       const parentMessageId =
-        latestAssistantMessage?.id ??
+        latestCompressedAssistant?.id ??
         (sourceCompressionGroups.at(-1) as { lastMessageId?: string } | undefined)?.lastMessageId;
       const compressionModel =
         newState.modelRuntimeConfig?.compressionModel || newState.modelRuntimeConfig;
@@ -229,7 +259,14 @@ export const compressContext =
         compressionResult.messagesToSummarize;
       const compressedMessages = [...compressedMessagesBase];
 
-      for (const preservedMessage of preservedMessages) {
+      const preservedForReinjection =
+        dbActiveTurnStart >= 0
+          ? dbMessages
+              .slice(dbActiveTurnStart)
+              .filter((message) => message.role !== 'compressedGroup' && Boolean(message.id))
+          : preservedMessages;
+
+      for (const preservedMessage of preservedForReinjection) {
         if (
           !compressedMessages.some(
             (message) =>

@@ -15,6 +15,39 @@ export const getCompressionCandidateMessageIds = (messages: UIChatMessage[]) =>
     .map((message) => message.id)
     .filter(Boolean);
 
+/**
+ * Mid-turn compression snapshots nest the already-streamed assistant/tool
+ * turn inside `compressedGroup` and leave only the latest user on the mainline.
+ * Re-attach local messages that follow that user so the reply the user is
+ * watching is not replaced away.
+ */
+export const graftInFlightTurnAfterLatestUser = (
+  snapshot: UIChatMessage[],
+  localMessages: UIChatMessage[],
+): UIChatMessage[] => {
+  const latestUser = snapshot.findLast((message) => message.role === 'user');
+  if (!latestUser?.id) return snapshot;
+
+  const snapshotIds = new Set(snapshot.map((message) => message.id));
+  const localUserIndex = localMessages.findIndex((message) => message.id === latestUser.id);
+  const inFlight =
+    localUserIndex >= 0
+      ? localMessages.slice(localUserIndex + 1)
+      : localMessages.filter(
+          (message) =>
+            message.createdAt > latestUser.createdAt ||
+            (message.createdAt === latestUser.createdAt && message.id > latestUser.id),
+        );
+
+  const missing = inFlight.filter(
+    (message) =>
+      Boolean(message.id) && !snapshotIds.has(message.id) && message.role !== 'compressedGroup',
+  );
+  if (missing.length === 0) return snapshot;
+
+  return [...snapshot, ...missing];
+};
+
 export const createPendingCompressedGroup = ({
   agentId,
   content = '...',
