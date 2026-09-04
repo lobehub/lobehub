@@ -39,6 +39,7 @@ import KimiCodingPlanProvider from './kimiCodingPlan';
 import LMStudioProvider from './lmstudio';
 import LobeHubProvider from './lobehub';
 import LongCatProvider from './longcat';
+import MetaProvider from './meta';
 import MinimaxProvider from './minimax';
 import MinimaxCodingPlanProvider from './minimaxCodingPlan';
 import MistralProvider from './mistral';
@@ -187,6 +188,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   SuperGrokProvider,
   JinaProvider,
   SambaNovaProvider,
+  MetaProvider,
   CohereProvider,
   V0Provider,
   QwenProvider,
@@ -283,6 +285,7 @@ export { default as KimiCodingPlanProviderCard } from './kimiCodingPlan';
 export { default as LMStudioProviderCard } from './lmstudio';
 export { default as LobeHubProviderCard } from './lobehub';
 export { default as LongCatProviderCard } from './longcat';
+export { default as MetaProviderCard } from './meta';
 export { default as MinimaxProviderCard } from './minimax';
 export { default as MinimaxCodingPlanProviderCard } from './minimaxCodingPlan';
 export { default as MistralProviderCard } from './mistral';
