@@ -544,6 +544,29 @@ value in the running app (`getComputedStyle` on the element, or resolve
 the tint and x9–x10 for the line, verified in both themes: the scale flips in
 dark mode, so a step that is a tint in light is a deep fill in dark.
 
+### L-D14 — Linking to an agent document with the Work's binding id
+
+**Wrong approach:** build an in-app document link out of the identifier a
+document Work carries in `work_versions.metadata.agentDocumentId`, on the
+reading that it names the agent's document.
+
+**Why it fails:** `agentDocumentId` is the `agent_documents` binding ROW id — it
+establishes that a binding exists and is not addressable. The document route
+resolves the DOCUMENT id (`src/routes/(main)/agent/docs/[docId]` runs
+`getIdFromIdentifier(docId, 'docs')`), which lives on `works.resource_id`
+(`docs_xxx`). Document Works also carry no `url`, so there is nothing to fall
+back to: the mis-addressed link degrades silently to the documents index
+instead of erroring, and both the click and the navigation look successful.
+Unit tests that assert the field was carried through cannot see it, because the
+failure is in what the id means, not whether it arrived.
+
+**Correct approach:** address an agent document by `works.resourceId`; use
+`metadata.agentDocumentId` only as the gate proving the document is bound to an
+agent. When verifying any Work-to-resource link, open it in the running app and
+read `location.pathname` plus `document.title` — a link that lands on a list
+page is the tell, and the id shape (`docs_xxx` vs a bare uuid) says which id was
+used.
+
 ## Environment safety
 
 ### L-S0 — Concluding a dependency moved from the root manifest alone
