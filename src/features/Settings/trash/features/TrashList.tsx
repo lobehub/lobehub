@@ -32,6 +32,7 @@ import {
   getEmptyTrashActionState,
   getPurgeFeedback,
   getRestoreFeedback,
+  getVisibleTrashTypes,
   toggleTrashSelection,
 } from './trashListUtils';
 import { TRASH_TYPE_ICON, TRASH_TYPE_ORDER } from './typeMeta';
@@ -333,8 +334,8 @@ const TrashList = ({ cacheScope }: TrashListProps) => {
 
   const typeOptions = [
     { label: `${t('trash.filter.all')}${total ? ` · ${total}` : ''}`, value: 'all' },
-    ...TRASH_TYPE_ORDER.filter((type) => resolvedCountByType[type]).map((type) => ({
-      label: `${typeLabel(type)} · ${resolvedCountByType[type]}`,
+    ...getVisibleTrashTypes(TRASH_TYPE_ORDER, resolvedCountByType, activeType).map((type) => ({
+      label: `${typeLabel(type)} · ${resolvedCountByType[type] ?? 0}`,
       value: type,
     })),
   ];

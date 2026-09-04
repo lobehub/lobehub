@@ -5,6 +5,7 @@ import {
   getEmptyTrashActionState,
   getPurgeFeedback,
   getRestoreFeedback,
+  getVisibleTrashTypes,
   toggleTrashSelection,
 } from './trashListUtils';
 
@@ -39,6 +40,16 @@ describe('trashListUtils', () => {
       level: 'warning',
       params: { failed: 1, purged: 2 },
     });
+  });
+
+  it('keeps the active trash type visible after its count reaches zero', () => {
+    expect(
+      getVisibleTrashTypes(
+        ['document', 'file', 'knowledgeBase'],
+        { document: 0, file: 2, knowledgeBase: 0 },
+        'document',
+      ),
+    ).toEqual(['document', 'file']);
   });
 
   it('resolves workspace actors without exposing raw user ids', () => {

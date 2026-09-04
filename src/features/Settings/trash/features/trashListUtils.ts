@@ -36,6 +36,13 @@ export const getEmptyTrashActionState = ({
   };
 };
 
+export const getVisibleTrashTypes = (
+  orderedTypes: ResourceTrashType[],
+  countByType: ResourceTrashCountByType,
+  activeType?: ResourceTrashType,
+): ResourceTrashType[] =>
+  orderedTypes.filter((type) => type === activeType || Boolean(countByType[type]));
+
 export const getRestoreFeedback = (outcome: {
   failed: { code: 'notFound' | 'parentTrashed' }[];
   restored: unknown[];
