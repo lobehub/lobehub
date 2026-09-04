@@ -164,6 +164,20 @@ describe('buildRunLifecycle.completeRun — transport-driven disposition', () =>
 
     expect(cb).toHaveBeenCalledTimes(1);
   });
+
+  it('terminalizes the operation before awaiting afterCompletion callbacks', async () => {
+    const { get, store } = makeStore();
+    let terminalizedBeforeCallback = false;
+    const callback = vi.fn(async () => {
+      terminalizedBeforeCallback = store.completeOperation.mock.calls.some(([id]) => id === OP);
+    });
+    store.operations[OP]!.metadata.runtimeHooks = { afterCompletionCallbacks: [callback] };
+
+    await lifecycle('client', get).completeRun(completeEvent('client', { runtimeStatus: 'done' }));
+
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(terminalizedBeforeCallback).toBe(true);
+  });
 });
 
 // The client transport persists `status: 'running'` at run start; without a

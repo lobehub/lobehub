@@ -371,7 +371,39 @@ export const buildRunLifecycle = (
         });
       };
 
-      // 1. afterCompletion callbacks — fire on ALL terminal states (tools that
+      // 1. Move the operation to its terminal state before running post-run
+      //    callbacks. Some callbacks revalidate the active message list; keeping
+      //    the operation `running` while awaiting that revalidation creates a
+      //    circular wait and leaves the composer spinner visible forever.
+      switch (disposition) {
+        case 'success': {
+          completeSuccess();
+          break;
+        }
+        case 'failed': {
+          get().failOperation(operationId, {
+            type: 'runtime_error',
+            message: 'Agent runtime execution failed',
+          });
+          break;
+        }
+        case 'cancelled': {
+          // Gateway / hetero reach this boundary with the op still `running`
+          // (their interrupt ends the run segment server- / CLI-side), so the op
+          // must be moved to terminal here. The client is exempt: its cancel
+          // path already set the op to `cancelled` out of band, and
+          // `completeOperation` deliberately preserves a `cancelled` status.
+          if (adapter.runtimeType !== 'client') get().completeOperation(operationId);
+          break;
+        }
+        // `undefined`: unrecognized terminal status — fall through untouched.
+        // Parked states never reach `completeRun` — the executor routes them to
+        // `onRunParked`.
+      }
+
+      resetActiveTopicRunningStatus();
+
+      // 2. afterCompletion callbacks — fire on ALL terminal states (tools that
       //    registered post-run actions: speak / broadcast / delegate).
       const operation = get().operations[operationId];
       const afterCompletionCallbacks = operation?.metadata?.runtimeHooks?.afterCompletionCallbacks;
@@ -386,8 +418,8 @@ export const buildRunLifecycle = (
         }
       }
 
-      // 2. On success with queued messages: drain, complete, and re-trigger a new
-      //    sendMessage. Only drain on success — on error the queue is preserved.
+      // 3. On success with queued messages: drain and re-trigger a new
+      //    sendMessage. On error or cancellation the queue is preserved.
       //    Gated to TOP-LEVEL runs only: the input queue belongs to the parent
       //    run, so a nested sub-agent completion must never drain it (it would
       //    re-trigger the user's queued message mid-parent-run). See RunScope.
@@ -396,7 +428,6 @@ export const buildRunLifecycle = (
         if (remainingQueued.length > 0) {
           const merged = mergeQueuedMessages(remainingQueued);
 
-          completeSuccess();
           emitComplete(operationId, runtimeStatus);
 
           const execContext = { ...context };
@@ -431,37 +462,6 @@ export const buildRunLifecycle = (
           return { requeued: true };
         }
       }
-
-      // 3. Complete the operation based on the terminal disposition.
-      switch (disposition) {
-        case 'success': {
-          completeSuccess();
-          break;
-        }
-        case 'failed': {
-          get().failOperation(operationId, {
-            type: 'runtime_error',
-            message: 'Agent runtime execution failed',
-          });
-          break;
-        }
-        case 'cancelled': {
-          // Gateway / hetero reach this boundary with the op still `running`
-          // (their interrupt ends the run segment server- / CLI-side), so the op
-          // must be moved to terminal here. The client is exempt: its cancel
-          // path already set the op to `cancelled` out of band, and
-          // `completeOperation` deliberately preserves a `cancelled` status.
-          if (adapter.runtimeType !== 'client') get().completeOperation(operationId);
-          break;
-        }
-        // `undefined`: unrecognized terminal status — fall through untouched.
-        // Parked states never reach `completeRun` — the executor routes them to
-        // `onRunParked`.
-      }
-
-      // Runs past the requeue early-return, so a run that continues into a queued
-      // follow-up (which writes 'running' again) is never reset mid-flight.
-      resetActiveTopicRunningStatus();
 
       emitComplete(operationId, runtimeStatus);
 
