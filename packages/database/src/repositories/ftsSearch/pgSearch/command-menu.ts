@@ -349,6 +349,13 @@ export async function searchFiles(
         ne(files.fileType, 'custom/document'),
         // Hidden acceptance evidence must stay out of library search too.
         or(isNull(files.source), notInArray(files.source, LIBRARY_HIDDEN_FILE_SOURCES)),
+        excludeIds?.length ? notInArray(files.id, excludeIds) : undefined,
+        // Apply relational visibility before TopN so hidden high-scoring rows
+        // cannot consume the complete workspace candidate budget.
+        excludeRestrictedFile(db, files.id, context.scope, {
+          liveKnowledgeBaseIds: excludeKbIds,
+          trashedKnowledgeBaseIds: excludeTrashedKbIds,
+        }),
         sql`${files.name} @@@ ${bm25Query}`,
       ),
     )
@@ -373,15 +380,7 @@ export async function searchFiles(
     .leftJoin(documents, eq(hits.id, documents.fileId))
     .leftJoin(knowledgeBaseFiles, eq(hits.id, knowledgeBaseFiles.fileId))
     .where(
-      and(
-        context.liftedScopeWhere(hits.workspaceId),
-        context.liftedTrashWhere(hits.isDeleted),
-        excludeIds?.length ? notInArray(hits.id, excludeIds) : undefined,
-        excludeRestrictedFile(db, hits.id, context.scope, {
-          liveKnowledgeBaseIds: excludeKbIds,
-          trashedKnowledgeBaseIds: excludeTrashedKbIds,
-        }),
-      ),
+      and(context.liftedScopeWhere(hits.workspaceId), context.liftedTrashWhere(hits.isDeleted)),
     )
     .orderBy(desc(hits.score))
     .limit(limit);
@@ -489,6 +488,7 @@ export async function searchKnowledgeBases(
     .where(
       and(
         context.scanScopeWhere(knowledgeBases),
+        excludeIds && excludeIds.length > 0 ? notInArray(knowledgeBases.id, excludeIds) : undefined,
         sql`(${knowledgeBases.name} @@@ ${bm25Query} OR ${knowledgeBases.description} @@@ ${bm25Query})`,
       ),
     )
@@ -508,13 +508,7 @@ export async function searchKnowledgeBases(
     })
     .from(hits)
     .where(
-      and(
-        context.liftedScopeWhere(hits.workspaceId),
-        context.liftedTrashWhere(hits.isDeleted),
-        // Keep excluded knowledge bases out of the inner BM25 scan so TopN
-        // ranking remains intact; restricted rows only consume pool slots.
-        excludeIds && excludeIds.length > 0 ? notInArray(hits.id, excludeIds) : undefined,
-      ),
+      and(context.liftedScopeWhere(hits.workspaceId), context.liftedTrashWhere(hits.isDeleted)),
     )
     .orderBy(desc(hits.score))
     .limit(limit);

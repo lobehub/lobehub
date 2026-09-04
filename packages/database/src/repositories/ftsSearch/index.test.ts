@@ -1741,6 +1741,89 @@ describe.skipIf(!isServerDB)('FtsSearchRepo', () => {
       expectEveryHitScopedTo(results, 'workspace');
     });
 
+    it.each([
+      ['file', 'fts-live-ranked-file'],
+      ['page', 'fts-live-ranked-page'],
+      ['folder', 'fts-live-ranked-folder'],
+    ] as const)(
+      'filters trashed-KB-linked %s candidates before applying the workspace limit',
+      async (type, liveId) => {
+        const trashedKnowledgeBaseId = `fts-trashed-ranked-kb-${type}`;
+        await serverDB.insert(knowledgeBases).values({
+          deletedAt: new Date(),
+          id: trashedKnowledgeBaseId,
+          isDeleted: true,
+          name: `Saturation probe ${type} bin`,
+          userId,
+          workspaceId,
+        });
+
+        if (type === 'file') {
+          await serverDB.insert(files).values([
+            {
+              fileType: 'text/plain',
+              id: 'fts-blocked-ranked-file',
+              name: 'saturationprobe',
+              size: 10,
+              url: 'file://blocked-ranked-file',
+              userId,
+              workspaceId,
+            },
+            {
+              fileType: 'text/plain',
+              id: liveId,
+              name: 'saturationprobe eligible result with deliberately longer filler words',
+              size: 10,
+              url: 'file://live-ranked-file',
+              userId,
+              workspaceId,
+            },
+          ]);
+          await serverDB.insert(knowledgeBaseFiles).values({
+            fileId: 'fts-blocked-ranked-file',
+            knowledgeBaseId: trashedKnowledgeBaseId,
+            userId,
+          });
+        } else {
+          const fileType = type === 'page' ? 'custom/document' : DOCUMENT_FOLDER_TYPE;
+          await serverDB.insert(documents).values([
+            {
+              fileType,
+              id: `fts-blocked-ranked-${type}`,
+              knowledgeBaseId: trashedKnowledgeBaseId,
+              source: `internal://blocked-ranked-${type}`,
+              sourceType: 'file',
+              title: 'saturationprobe',
+              totalCharCount: 0,
+              totalLineCount: 0,
+              userId,
+              workspaceId,
+            },
+            {
+              fileType,
+              id: liveId,
+              source: `internal://live-ranked-${type}`,
+              sourceType: 'file',
+              title: 'saturationprobe eligible result with deliberately longer filler words',
+              totalCharCount: 0,
+              totalLineCount: 0,
+              userId,
+              workspaceId,
+            },
+          ]);
+        }
+
+        const results = await new FtsSearchRepo(serverDB, userId, workspaceId).search({
+          excludeTrashedKnowledgeBaseIds: [trashedKnowledgeBaseId],
+          limitPerType: 1,
+          query: 'saturationprobe',
+          type,
+        });
+
+        expect(results.map((result) => result.id)).toEqual([liveId]);
+      },
+    );
+
     it('keeps agent-scoped search exact in workspace mode', async () => {
       const results = await new FtsSearchRepo(serverDB, userId, workspaceId).search({
         agentId: workspaceAgentId,

@@ -45,6 +45,16 @@ export async function searchFolders(
       and(
         context.scanScopeWhere(documents),
         eq(documents.fileType, DOCUMENT_FOLDER_TYPE),
+        excludeIds?.length ? notInArray(documents.id, excludeIds) : undefined,
+        excludeRestrictedDocument(
+          db,
+          { fileId: documents.fileId, knowledgeBaseId: documents.knowledgeBaseId },
+          context.scope,
+          {
+            liveKnowledgeBaseIds: excludeKbIds,
+            trashedKnowledgeBaseIds: excludeTrashedKbIds,
+          },
+        ),
         sql`(${documents.title} @@@ ${bm25Query} OR ${documents.slug} @@@ ${bm25Query} OR ${documents.description} @@@ ${bm25Query})`,
       ),
     )
@@ -66,20 +76,7 @@ export async function searchFolders(
     })
     .from(hits)
     .where(
-      and(
-        context.liftedScopeWhere(hits.workspaceId),
-        context.liftedTrashWhere(hits.isDeleted),
-        excludeIds?.length ? notInArray(hits.id, excludeIds) : undefined,
-        excludeRestrictedDocument(
-          db,
-          { fileId: hits.fileId, knowledgeBaseId: hits.knowledgeBaseId },
-          context.scope,
-          {
-            liveKnowledgeBaseIds: excludeKbIds,
-            trashedKnowledgeBaseIds: excludeTrashedKbIds,
-          },
-        ),
-      ),
+      and(context.liftedScopeWhere(hits.workspaceId), context.liftedTrashWhere(hits.isDeleted)),
     )
     .orderBy(desc(hits.score))
     .limit(limit);
@@ -130,6 +127,16 @@ export async function searchPages(
       and(
         context.scanScopeWhere(documents),
         eq(documents.fileType, 'custom/document'),
+        excludeIds?.length ? notInArray(documents.id, excludeIds) : undefined,
+        excludeRestrictedDocument(
+          db,
+          { fileId: documents.fileId, knowledgeBaseId: documents.knowledgeBaseId },
+          context.scope,
+          {
+            liveKnowledgeBaseIds: excludeKbIds,
+            trashedKnowledgeBaseIds: excludeTrashedKbIds,
+          },
+        ),
         sql`(${documents.title} @@@ ${bm25Query} OR ${documents.slug} @@@ ${bm25Query} OR ${documents.content} @@@ ${bm25Query})`,
       ),
     )
@@ -148,20 +155,7 @@ export async function searchPages(
     })
     .from(hits)
     .where(
-      and(
-        context.liftedScopeWhere(hits.workspaceId),
-        context.liftedTrashWhere(hits.isDeleted),
-        excludeIds?.length ? notInArray(hits.id, excludeIds) : undefined,
-        excludeRestrictedDocument(
-          db,
-          { fileId: hits.fileId, knowledgeBaseId: hits.knowledgeBaseId },
-          context.scope,
-          {
-            liveKnowledgeBaseIds: excludeKbIds,
-            trashedKnowledgeBaseIds: excludeTrashedKbIds,
-          },
-        ),
-      ),
+      and(context.liftedScopeWhere(hits.workspaceId), context.liftedTrashWhere(hits.isDeleted)),
     )
     .orderBy(desc(hits.score))
     .limit(limit);
