@@ -73,6 +73,13 @@ export interface GoalMetricCriterion {
   target: number;
 }
 
+/**
+ * Upper bound on declared numeric clauses. Every clause is read on each
+ * terminal tick, and an unbounded list would let one goal's acceptance payload
+ * pace the coordinator (and its database pool) for everyone else.
+ */
+export const MAX_GOAL_METRIC_CRITERIA = 20;
+
 export interface GoalAcceptancePolicy {
   criteriaIds?: string[];
   /**
@@ -84,6 +91,15 @@ export interface GoalAcceptancePolicy {
   metrics?: GoalMetricCriterion[];
 }
 
+/**
+ * Why the *coordinator* parked a goal, recorded when it does.
+ *
+ * Runtime bookkeeping rather than policy: without it, an event that clears the
+ * reason cannot tell a park it owns from a pause a person chose, and would
+ * restart a goal somebody deliberately stopped.
+ */
+export type GoalPauseReason = 'measured_acceptance';
+
 export interface GoalConfig {
   acceptance?: GoalAcceptancePolicy;
   /**
@@ -93,6 +109,8 @@ export interface GoalConfig {
    * before the first result came back. Null/undefined uses the default.
    */
   maxConcurrentTasks?: number | null;
+  /** Set while the coordinator holds this goal paused; absent for a user pause. */
+  pausedBy?: GoalPauseReason;
   recovery?: GoalRecoveryPolicy;
   schedule?: GoalSchedulePolicy;
 }

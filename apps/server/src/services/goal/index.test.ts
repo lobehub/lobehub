@@ -920,25 +920,84 @@ describe('GoalService', () => {
     ).toBe(true);
   });
 
-  it('leaves a deliberately paused goal alone when a stray sample lands', async () => {
-    // `setBudget` only reopens a goal the budget actually stopped; the same
-    // discipline applies here, or an unrelated measurement would restart a goal
-    // somebody paused on purpose.
+  /** A goal parked by the gate, one clause short of acceptance. */
+  const parkedOnGate = async (service: GoalService) => {
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({
+      config: { acceptance: { metrics: [{ key: 'followers', target: 1000 }] } },
+      requirement: 'Grow the account',
+      tasks: ['Publish the first posts'],
+      title: 'Parked on a measurement',
+    });
+    const created = await service.tick(graph.goal.id);
+    await taskModel.updateStatus(created.taskId!, 'completed');
+    await service.tick(graph.goal.id);
+    await service.tick(graph.goal.id);
+    return graph.goal.id;
+  };
+
+  it('leaves a deliberately paused goal alone even when the measurement lands', async () => {
+    // The hard case: same status, same terminal phase, same clauses as a goal
+    // the coordinator parked. Only the recorded pause reason tells them apart,
+    // and without it a satisfying sample would restart a goal somebody stopped
+    // on purpose — and run its acceptance work.
     vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({} as never);
     const service = new GoalService(serverDB, userId);
     const goalModel = new GoalModel(serverDB, userId);
-    const graph = await service.create({
-      requirement: 'No measured gate here',
-      tasks: ['Do the work'],
-      title: 'Deliberately paused',
-    });
-    await service.tick(graph.goal.id);
-    await service.pause(graph.goal.id);
+    const goalId = await parkedOnGate(service);
+    await service.pause(goalId);
 
-    const stray = await service.recordObservation(graph.goal.id, { key: 'followers', value: 10 });
+    const satisfying = await service.recordObservation(goalId, { key: 'followers', value: 5000 });
 
-    expect(stray.shouldAdvance).toBe(false);
-    expect((await goalModel.findById(graph.goal.id))?.status).toBe('paused');
+    expect(satisfying.shouldAdvance).toBe(false);
+    expect((await goalModel.findById(goalId))?.status).toBe('paused');
+    expect(
+      (await service.graph(goalId)).nodes.some((n) => n.title === 'Complete full Goal acceptance'),
+    ).toBe(false);
+  });
+
+  it('resumes a user-paused goal only through resume, and then it advances again', async () => {
+    // The other half: once the person lifts their own pause, the goal is the
+    // coordinator's again.
+    vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({} as never);
+    const service = new GoalService(serverDB, userId);
+    const goalId = await parkedOnGate(service);
+    await service.pause(goalId);
+    await service.recordObservation(goalId, { key: 'followers', value: 5000 });
+
+    await service.resume(goalId);
+
+    expect(await service.tick(goalId)).toMatchObject({ outcome: 'advanced' });
+  });
+
+  it('unblocks a parked goal when its last clause is dropped', async () => {
+    // `setMetricCriteria(id, [])` is the advertised way to clear the gate. It
+    // used to leave the goal parked on a gate that no longer existed, so the
+    // scheduled advance ticked straight back out as `goal_paused` and only a
+    // manual resume could move it.
+    vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({} as never);
+    const service = new GoalService(serverDB, userId);
+    const goalModel = new GoalModel(serverDB, userId);
+    const goalId = await parkedOnGate(service);
+    expect((await goalModel.findById(goalId))?.status).toBe('paused');
+
+    await service.setMetricCriteria(goalId, []);
+
+    expect((await goalModel.findById(goalId))?.status).toBe('running');
+    expect(await service.tick(goalId)).toMatchObject({ outcome: 'advanced' });
+  });
+
+  it('unblocks a parked goal when a clause is relaxed below the measurement', async () => {
+    vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({} as never);
+    const service = new GoalService(serverDB, userId);
+    const goalModel = new GoalModel(serverDB, userId);
+    const goalId = await parkedOnGate(service);
+    await service.recordObservation(goalId, { key: 'followers', value: 400 });
+    expect((await goalModel.findById(goalId))?.status).toBe('paused');
+
+    await service.setMetricCriteria(goalId, [{ key: 'followers', target: 100 }]);
+
+    expect((await goalModel.findById(goalId))?.status).toBe('running');
   });
 
   it('keeps the numeric gate when the delivery criteria are bound or rebound', async () => {

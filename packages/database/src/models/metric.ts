@@ -1,5 +1,5 @@
 import type { MetricConfig, MetricKind, MetricSubjectType } from '@lobechat/types';
-import { and, asc, desc, eq, gte, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 
 import type { MetricItem, MetricPointItem, NewMetricPoint } from '../schemas/metric';
 import { metricPoints, metrics } from '../schemas/metric';
@@ -197,6 +197,26 @@ export class MetricModel {
       .orderBy(desc(metricPoints.observedAt))
       .limit(1);
     return row;
+  };
+
+  /**
+   * The latest observation of many series at once, keyed by metric id.
+   *
+   * `DISTINCT ON` keeps this one query however many series are asked for —
+   * the per-series `latestPoint` is fine for a single read, but a caller
+   * evaluating a whole acceptance contract would otherwise issue one query per
+   * clause and pace the connection pool with it.
+   */
+  latestPointsByMetricIds = async (metricIds: string[]): Promise<Map<string, MetricPointItem>> => {
+    if (metricIds.length === 0) return new Map();
+
+    const rows = await this.db
+      .selectDistinctOn([metricPoints.metricId])
+      .from(metricPoints)
+      .where(and(inArray(metricPoints.metricId, metricIds), this.pointOwnership()))
+      .orderBy(metricPoints.metricId, desc(metricPoints.observedAt));
+
+    return new Map(rows.map((row) => [row.metricId, row]));
   };
 
   /**
