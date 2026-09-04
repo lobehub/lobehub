@@ -5,6 +5,11 @@ import { isNewReleaseDate } from '@/utils/time';
 
 import { type GroupMode, type ListItem, type ModelWithProviders } from '../types';
 
+/**
+ * Shares the exact rule behind `NewModelBadge`, so a model is pinned to the top only while its
+ * badge is still visible. Every renderer of this list must keep the badge on — otherwise models
+ * jump ahead with no visible explanation.
+ */
 const isNewModel = (releasedAt?: string): boolean => !!releasedAt && isNewReleaseDate(releasedAt);
 
 export const buildListItems = (
