@@ -1599,6 +1599,13 @@ export default {
   'taskDetail.status.paused': 'Pending review',
   'taskDetail.status.running': 'In progress',
   'taskDetail.status.scheduled': 'Scheduled',
+  'taskDetail.statusCascade.cancel': 'Cancel',
+  'taskDetail.statusCascade.description':
+    'This task still has {{count}} open subtask(s). Update them to {{status}} too?',
+  'taskDetail.statusCascade.loadFailed': 'Could not check the subtask statuses. Try again.',
+  'taskDetail.statusCascade.parentOnly': 'Update parent only',
+  'taskDetail.statusCascade.title': 'Update open subtasks too?',
+  'taskDetail.statusCascade.updateAll': 'Update all',
   'taskDetail.subtasks': 'Subtasks',
   'taskDetail.addSubtask': 'Add sub-task',
   'taskDetail.subtaskInstructionPlaceholder': 'Describe the sub-task...',
