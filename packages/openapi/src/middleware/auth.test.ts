@@ -22,6 +22,7 @@ const {
   mockAuthEnv,
   mockGetServerDB,
   mockExtractBearerToken,
+  mockDebugLog,
   mockServerDB,
   mockValidateApiKeyFormat,
   mockValidateOIDCJWT,
@@ -32,9 +33,14 @@ const {
   mockAuthEnv: { ENABLE_OIDC: true },
   mockExtractBearerToken: vi.fn(),
   mockGetServerDB: vi.fn(),
+  mockDebugLog: vi.fn(),
   mockServerDB: {},
   mockValidateApiKeyFormat: vi.fn(),
   mockValidateOIDCJWT: vi.fn(),
+}));
+
+vi.mock('debug', () => ({
+  default: vi.fn(() => mockDebugLog),
 }));
 
 vi.mock('@/database/core/db-adaptor', () => ({
@@ -242,5 +248,31 @@ describe('OpenAPI auth middleware', () => {
       ).status,
     ).toBe(401);
     expect(mockApiKeyFindByKey).toHaveBeenCalledTimes(2);
+  });
+
+  it('should not log API Key fragments', async () => {
+    const rawApiKey = 'sk-lh-logregression1';
+    mockExtractBearerToken.mockReturnValue(rawApiKey);
+    mockValidateApiKeyFormat.mockReturnValue(true);
+    mockApiKeyFindByKey.mockResolvedValueOnce({
+      enabled: true,
+      expiresAt: null,
+      id: 'api-key-log',
+      name: 'Log regression key',
+      userId: 'user-log',
+      workspaceId: null,
+    });
+
+    const response = await createApp().request('/protected', {
+      headers: { Authorization: `Bearer ${rawApiKey}` },
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockDebugLog).toHaveBeenCalledWith('Bearer token received: present');
+
+    const leakedPrefix = rawApiKey.slice(0, 10);
+    for (const value of mockDebugLog.mock.calls.flat()) {
+      if (typeof value === 'string') expect(value).not.toContain(leakedPrefix);
+    }
   });
 });
