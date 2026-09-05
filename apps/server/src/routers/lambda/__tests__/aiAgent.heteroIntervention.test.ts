@@ -395,6 +395,122 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
     expect(businessV2.rollbackAgentInterventionResolution).not.toHaveBeenCalled();
   });
 
+  it('inherits the source operation device binding when dispatching a resume', async () => {
+    const resolutionRequestId = '018fbd8e-7baf-7c6d-8000-000000000031';
+    const execution = {
+      autoStarted: true,
+      messageId: 'assistant-device',
+      operationId: 'operation-device-resumed',
+      success: true,
+    };
+    await insertPendingTool({
+      batchId: 'batch-device',
+      messageId: 'message-device',
+      operationId: 'operation-device',
+      toolCallId: 'call-device',
+    });
+    // The parked source operation durably recorded the device binding that the
+    // execution plan resolved for the original run.
+    const { agentOperations } = await import('@/database/schemas');
+    await serverDB.insert(agentOperations).values({
+      id: 'operation-device',
+      metadata: { activeDeviceId: 'device-123' },
+      status: 'waiting_for_human',
+      userId,
+    });
+    businessV2.resolveAgentInterventionBySource.mockResolvedValueOnce({
+      claimId: 'claim-device',
+      contractVersion: 2,
+      handled: true,
+      ownerUserId: userId,
+      resolutionRequestId,
+      runtimeAction: {
+        agentId: 'agent-device',
+        appContext: { topicId: 'topic-device' },
+        decisions: [
+          {
+            decision: 'approved',
+            parentMessageId: 'message-device',
+            toolCallId: 'call-device',
+          },
+        ],
+        operationId: 'operation-device',
+        parentMessageId: 'message-device',
+        type: 'resume_approval',
+      },
+      state: 'claimed',
+    });
+    aiAgentService.execAgent.mockResolvedValueOnce(execution);
+
+    await expect(
+      userCaller().resolveAgentInterventionBySource({
+        action: { scope: 'once', type: 'approve_tool' },
+        batchId: 'batch-device',
+        operationId: 'operation-device',
+        resolutionRequestId,
+        targets: [{ toolCallId: 'call-device', toolMessageId: 'message-device' }],
+      }),
+    ).resolves.toMatchObject({ contractVersion: 2, status: 'approved', success: true });
+
+    expect(aiAgentService.execAgent).toHaveBeenCalledTimes(1);
+    expect(aiAgentService.execAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ deviceId: 'device-123' }),
+    );
+  });
+
+  it('omits the device binding when the source operation never routed to a device', async () => {
+    const resolutionRequestId = '018fbd8e-7baf-7c6d-8000-000000000032';
+    const execution = {
+      autoStarted: true,
+      messageId: 'assistant-nodevice',
+      operationId: 'operation-nodevice-resumed',
+      success: true,
+    };
+    await insertPendingTool({
+      batchId: 'batch-nodevice',
+      messageId: 'message-nodevice',
+      operationId: 'operation-nodevice',
+      toolCallId: 'call-nodevice',
+    });
+    businessV2.resolveAgentInterventionBySource.mockResolvedValueOnce({
+      claimId: 'claim-nodevice',
+      contractVersion: 2,
+      handled: true,
+      ownerUserId: userId,
+      resolutionRequestId,
+      runtimeAction: {
+        agentId: 'agent-nodevice',
+        appContext: { topicId: 'topic-nodevice' },
+        decisions: [
+          {
+            decision: 'approved',
+            parentMessageId: 'message-nodevice',
+            toolCallId: 'call-nodevice',
+          },
+        ],
+        operationId: 'operation-nodevice',
+        parentMessageId: 'message-nodevice',
+        type: 'resume_approval',
+      },
+      state: 'claimed',
+    });
+    aiAgentService.execAgent.mockResolvedValueOnce(execution);
+
+    await expect(
+      userCaller().resolveAgentInterventionBySource({
+        action: { scope: 'once', type: 'approve_tool' },
+        batchId: 'batch-nodevice',
+        operationId: 'operation-nodevice',
+        resolutionRequestId,
+        targets: [{ toolCallId: 'call-nodevice', toolMessageId: 'message-nodevice' }],
+      }),
+    ).resolves.toMatchObject({ contractVersion: 2, status: 'approved', success: true });
+
+    expect(aiAgentService.execAgent).toHaveBeenCalledTimes(1);
+    const params = aiAgentService.execAgent.mock.calls[0][0];
+    expect(params.deviceId).toBeUndefined();
+  });
+
   it('routes an active Web approval through the same generic first-winner claim', async () => {
     const resolutionRequestId = '018fbd8e-7baf-7c6d-8000-000000000021';
     const execution = {
