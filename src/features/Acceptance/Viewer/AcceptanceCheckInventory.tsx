@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { ActionIcon, Select, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
+import { useResponsive } from 'antd-style';
 import { ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
@@ -29,19 +29,6 @@ import CheckList, {
 import { EMPTY_ID_SET, setAggregateEntry } from './expandState';
 import { useAcceptanceBundle } from './useAcceptanceBundle';
 import { canReviewAcceptance } from './visibility';
-
-const styles = createStaticStyles(({ css }) => ({
-  countBadge: css`
-    padding-block: 1px;
-    padding-inline: 7px;
-    border-radius: 99px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-}));
 
 interface AcceptanceCheckInventoryProps {
   children?: ReactNode;
@@ -198,10 +185,11 @@ const AcceptanceCheckInventory = ({
   return (
     <>
       <Flexbox horizontal align={'center'} gap={8} wrap={compactToolbar ? 'nowrap' : 'wrap'}>
+        {/* The tab above already carries the count; stating it twice on the
+            same screen makes the reader check whether they disagree. */}
         <Text strong style={{ fontSize: 14, whiteSpace: 'nowrap' }}>
           {t('acceptance.checks.title')}
         </Text>
-        <span className={styles.countBadge}>{counts.total}</span>
         <Flexbox flex={1} />
         {toolbar}
         <Select

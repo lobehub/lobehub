@@ -71,8 +71,6 @@ import {
 import { readVisualizationManifest } from './visualization';
 import { VisualizationRenderer } from './VisualizationRenderer';
 
-type Filter = 'all' | CheckState;
-
 const styles = createStaticStyles(({ css }) => ({
   scroll: css`
     overflow: auto;
@@ -363,79 +361,16 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
 
-  /* sticky filter chips */
-  stats: css`
-    position: sticky;
-    z-index: 10;
-    inset-block-start: 0;
-
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-
-    margin-block: 20px 12px;
-    padding-block: 12px;
-
-    background: color-mix(in srgb, ${cssVar.colorBgContainer} 88%, transparent);
-    backdrop-filter: blur(8px);
-  `,
-  chip: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    gap: 7px;
-    align-items: center;
-
-    height: 28px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 999px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: transparent;
-
-    transition: background 0.12s ease;
-
-    b {
-      font-weight: 600;
-      font-variant-numeric: tabular-nums;
-      color: ${cssVar.colorText};
-    }
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &[data-active='true'] {
-      border-color: ${cssVar.colorBorder};
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  dot: css`
-    width: 7px;
-    height: 7px;
-    border-radius: 999px;
-  `,
-  score: css`
-    cursor: default;
-    margin-inline-start: auto;
-    border-color: transparent;
-    color: ${cssVar.colorTextTertiary};
-
-    b {
-      color: ${cssVar.colorTextSecondary};
-    }
-  `,
-
   /* checks */
   checks: css`
+    /* The filter bar used to carry this gap in its own margin; without it the
+       hero and the first row collided. */
     overflow: hidden;
+
+    margin-block-start: 24px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
+
     background: ${cssVar.colorBgContainer};
   `,
   row: css`
@@ -1312,7 +1247,7 @@ const CodingScopeCard = memo<{
 CodingScopeCard.displayName = 'CodingScopeCard';
 
 /**
- * The report detail pane. Renders the verdict hero, a sticky verdict-filter bar,
+ * The report detail pane. Renders the verdict hero,
  * every check as a severity-ordered expandable row (failed rows open by default),
  * and the full narrative behind a collapsed disclosure. Addressed by `:runId`;
  * refreshes itself while the run is non-terminal.
@@ -1328,7 +1263,6 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
   // trailing punctuation onto the id — salvage the leading UUID.
   const verifyRunId = explicitRunId ?? extractUuid(routeRunId) ?? null;
   const { data, error, isLoading, mutate } = useVerifyReportBundle(verifyRunId);
-  const [filter, setFilter] = useState<Filter>('all');
 
   useEffect(() => {
     const status = data?.run.status;
@@ -1382,64 +1316,28 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
       ? (run.status as keyof typeof liveStatusLabelKey)
       : null;
 
-  const counts = ordered.reduce(
-    (acc, row) => {
-      acc[row.state] += 1;
-      return acc;
-    },
-    { failed: 0, not_executed: 0, passed: 0, uncertain: 0 } as Record<CheckState, number>,
-  );
-  // A chip's count is a promise about the rows behind it, so whenever there are
-  // rows they are the truth — the report's own stats count the cases it ingested
-  // and know nothing about a planned check that never produced one. Only an
-  // empty list falls back to them (a report can exist before any result does).
-  const hasRows = ordered.length > 0;
-  const total = hasRows ? ordered.length : (report?.totalChecks ?? 0);
-  const passed = hasRows ? counts.passed : (report?.passedChecks ?? 0);
-  const failed = hasRows ? counts.failed : (report?.failedChecks ?? 0);
-  const uncertain = hasRows ? counts.uncertain : (report?.uncertainChecks ?? 0);
   const verdict = (report?.verdict as VerifyVerdict | null) ?? null;
-  const visible = filter === 'all' ? ordered : ordered.filter((row) => row.state === filter);
+  // The verdict-filter bar is gone, so every row of the round renders. The
+  // per-verdict tallies went with it: they existed to label its chips, and the
+  // verdict pill above already states the round's outcome.
+  const visible = ordered;
   const isCodingReport = run.scenario === 'coding';
   const interactionCost = readInteractionCost(run.metadata);
   // The server strips `origin` for anyone but the author; `isOwner` keeps the
   // affordance off the page for a visitor even if that ever regressed.
   const origin = data.isOwner ? run.metadata?.origin : undefined;
 
-  const chips: { count: number; dot?: string; key: Filter; label: string }[] = [
-    { count: total, key: 'all', label: t('report.filter.all') },
-    { count: failed, dot: cssVar.colorError, key: 'failed', label: t('report.filter.failed') },
-    {
-      count: uncertain,
-      dot: cssVar.colorWarning,
-      key: 'uncertain',
-      label: t('report.filter.uncertain'),
-    },
-    // Only a report with a stored plan can have these, so the chip appears only
-    // when there is something to filter to.
-    ...(counts.not_executed > 0
-      ? [
-          {
-            count: counts.not_executed,
-            dot: cssVar.colorTextQuaternary,
-            key: 'not_executed' as const,
-            label: t('report.filter.notExecuted'),
-          },
-        ]
-      : []),
-    { count: passed, dot: cssVar.colorSuccess, key: 'passed', label: t('report.filter.passed') },
-  ];
-
   return (
     <div className={styles.scroll}>
       <div className={styles.page}>
         <main>
           <Flexbox gap={12}>
-            <div className={styles.heroLine}>
-              <Text as={'h1'} style={{ fontSize: 24, lineHeight: 1.3, margin: 0 }}>
-                {run.title || t('report.titleFallback')}
-              </Text>
-              {verdict && (
+            {/* Verdict above the title, not trailing it — the same order the
+                acceptance page uses. A badge parked after a long title wraps
+                to its own line anyway, and then reads as an afterthought
+                rather than as the report's headline state. */}
+            {verdict && (
+              <div className={styles.heroLine} style={{ marginBlockEnd: 2 }}>
                 <span
                   className={styles.pill}
                   style={{
@@ -1450,8 +1348,11 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
                   <Icon icon={VERDICT_META[verdict].icon} size={15} />
                   {t(`report.verdict.${verdict}`)}
                 </span>
-              )}
-            </div>
+              </div>
+            )}
+            <Text as={'h1'} style={{ fontSize: 24, lineHeight: 1.3, margin: 0 }}>
+              {run.title || t('report.titleFallback')}
+            </Text>
 
             {!isCodingReport && run.goal && <Text className={styles.summary}>{run.goal}</Text>}
             {report?.summary && <Text className={styles.summary}>{report.summary}</Text>}
@@ -1471,38 +1372,13 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
             )}
           </Flexbox>
 
-          <div className={styles.stats}>
-            {chips.map((c) => (
-              <button
-                className={styles.chip}
-                data-active={filter === c.key}
-                key={c.key}
-                type={'button'}
-                onClick={() => setFilter(c.key)}
-              >
-                {c.dot && <span className={styles.dot} style={{ background: c.dot }} />}
-                {c.label} <b>{c.count}</b>
-              </button>
-            ))}
-            {typeof report?.overallConfidence === 'number' && (
-              <span className={`${styles.chip} ${styles.score}`}>
-                {t('report.stats.confidence')} <b>{Math.round(report.overallConfidence * 100)}%</b>
-              </span>
-            )}
-          </div>
-
           {visible.length > 0 ? (
             <div className={styles.checks}>
               {visible.map((row) => (
-                <CheckRow
-                  key={row.id}
-                  row={row}
-                  defaultOpen={
-                    row.state === 'failed' ||
-                    row.state === 'not_executed' ||
-                    (row.result?.evidence ?? []).some(isInlineVisualEvidence)
-                  }
-                />
+                /* Every row opens. A report is read to see what was actually
+                   observed, and a page of collapsed titles makes the reader
+                   click N times to learn that. */
+                <CheckRow defaultOpen key={row.id} row={row} />
               ))}
             </div>
           ) : (

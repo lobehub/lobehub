@@ -16,12 +16,12 @@ import { useAcceptanceBundle } from './useAcceptanceBundle';
 const GOAL_COLLAPSED_STORAGE_KEY = 'lobehub-acceptance-goal-collapsed';
 
 const styles = createStaticStyles(({ css }) => ({
+  /**
+   * No border, no card. The requirement is the page's own subject line, not a
+   * widget parked on it — boxing it added a frame around the one thing nobody
+   * needs help finding.
+   */
   card: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
-
     &:hover [data-goal-toggle='true'] {
       pointer-events: auto;
       opacity: 1;
@@ -82,10 +82,9 @@ const styles = createStaticStyles(({ css }) => ({
 
 interface AcceptanceGoalProps {
   editSlot?: ReactNode;
-  reportSlot?: ReactNode;
 }
 
-const AcceptanceGoal = ({ editSlot, reportSlot }: AcceptanceGoalProps) => {
+const AcceptanceGoal = ({ editSlot }: AcceptanceGoalProps) => {
   const { t } = useTranslation('verify');
   const { acceptanceId } = useAcceptanceScope();
   const { data } = useAcceptanceBundle(acceptanceId);
@@ -93,38 +92,31 @@ const AcceptanceGoal = ({ editSlot, reportSlot }: AcceptanceGoalProps) => {
   if (!data) return null;
 
   const requirement = data.acceptance.requirement;
-  const latestSummary = data.latestReport?.summary;
-  const currentRound = data.rounds.at(-1);
-  const roundLabel = currentRound
-    ? t('acceptance.round', { round: currentRound.run.roundIndex })
-    : undefined;
   const scope = acceptanceCodingScope(data.rounds);
   const emptyLabel = editSlot
     ? t('acceptance.requirementEmptyEditable')
     : t('acceptance.requirementEmpty');
-  const showContext = Boolean(latestSummary || scope);
 
   return (
-    <Flexbox
-      className={styles.card}
-      gap={collapsed ? 0 : 12}
-      paddingBlock={collapsed ? 8 : 12}
-      paddingInline={collapsed ? 12 : 16}
-    >
-      <Flexbox horizontal align={'center'} gap={4}>
-        <Text className={styles.requirementLabel}>{t('acceptance.requirementLabel')}</Text>
+    <Flexbox className={styles.card} gap={collapsed ? 0 : 6}>
+      {/* No "Acceptance goal" label: the sentence under the title IS the goal,
+          and naming it added a caption to a paragraph that reads fine alone.
+          Its controls therefore ride the sentence's own row — a header strip
+          with nothing left to say is just an empty band of space. */}
+      <Flexbox horizontal align={collapsed ? 'center' : 'flex-start'} gap={4}>
+        <Text
+          ellipsis={collapsed}
+          title={collapsed ? (requirement ?? emptyLabel) : undefined}
+          style={{
+            flex: 1,
+            fontSize: collapsed ? 13 : 15,
+            lineHeight: collapsed ? undefined : 1.7,
+            minWidth: 0,
+          }}
+        >
+          {requirement ?? emptyLabel}
+        </Text>
         {!collapsed && editSlot}
-        {collapsed && (
-          <Text
-            ellipsis
-            fontSize={13}
-            style={{ flex: 1, minWidth: 0 }}
-            title={requirement ?? emptyLabel}
-          >
-            {requirement ?? emptyLabel}
-          </Text>
-        )}
-        {!collapsed && <Flexbox flex={1} />}
         <ActionIcon
           data-goal-toggle
           className={styles.goalToggle}
@@ -134,31 +126,8 @@ const AcceptanceGoal = ({ editSlot, reportSlot }: AcceptanceGoalProps) => {
           onClick={() => setCollapsed((value) => !value)}
         />
       </Flexbox>
-      {!collapsed &&
-        (requirement ? (
-          <Text style={{ fontSize: 15, lineHeight: 1.7 }}>{requirement}</Text>
-        ) : (
-          <Text style={{ fontSize: 15, lineHeight: 1.7 }}>{emptyLabel}</Text>
-        ))}
-      {!collapsed && showContext && (
-        <Flexbox
-          gap={8}
-          paddingBlock={'12px 0'}
-          style={{ borderBlockStart: `1px solid ${cssVar.colorBorderSecondary}` }}
-        >
-          <Flexbox horizontal align={'center'} gap={8}>
-            <Text fontSize={12} type={'secondary'}>
-              {t('acceptance.latestSummary')}
-              {roundLabel ? ` · ${roundLabel}` : ''}
-            </Text>
-            <Flexbox flex={1} />
-            {reportSlot}
-          </Flexbox>
-          {latestSummary && (
-            <Text className={styles.summaryClamp} fontSize={13} type={'secondary'}>
-              {latestSummary}
-            </Text>
-          )}
+      {!collapsed && scope && (
+        <Flexbox gap={8}>
           {scope && (
             <Flexbox horizontal align={'center'} gap={16} wrap={'wrap'}>
               {scope.branch && (
