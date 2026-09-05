@@ -384,6 +384,13 @@ export const goalRouter = router({
     .input(idInput.extend({ agentId: z.string().min(1).optional() }))
     .mutation(async ({ ctx, input: { id, agentId } }) => {
       try {
+        // `agent:update` says the member may change goals; it does not say
+        // whose. Without this any member could restart a colleague's visible
+        // goal — cancel its live runs and reset its tasks.
+        const goal = await ctx.goalModel.findById(id);
+        if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+        assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
+
         const data = await ctx.goalService.restart(id, { agentId });
         await scheduleGoalAdvance({
           goalId: id,
@@ -421,6 +428,12 @@ export const goalRouter = router({
     .input(idInput.extend({ agentId: z.string().min(1), goalOnly: z.boolean().optional() }))
     .mutation(async ({ ctx, input: { id, agentId, goalOnly } }) => {
       try {
+        // Same ownership rule as restart/delete: visibility is not
+        // manageability, so only the goal's owner may hand it to a new agent.
+        const goal = await ctx.goalModel.findById(id);
+        if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+        assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
+
         const data = await ctx.goalService.setAgent(id, agentId, { goalOnly });
         const reassigned = data.reassignedTaskIds.length;
         return {

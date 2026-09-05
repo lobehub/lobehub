@@ -543,6 +543,29 @@ describe('GoalService', () => {
     expect(resumed.goal.status).not.toBe('paused');
   });
 
+  it('cancels the failure gate a restart supersedes so the goal starts moving again', async () => {
+    // A restarted task's pending recovery gate is answered by the restart
+    // itself. Left pending, it keeps winning the coordinator's
+    // pending-decision branch and the goal sits waiting_human with every task
+    // freshly reset.
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({ tasks: ['Risky task'], title: 'Restart clears gate' });
+    const created = await service.tick(graph.goal.id);
+    await taskModel.updateStatus(created.taskId!, 'paused', { error: 'Verifier rejected output' });
+    expect((await service.tick(graph.goal.id)).outcome).toBe('waiting_human');
+
+    const result = await service.restart(graph.goal.id);
+
+    expect(result.restartedTaskIds).toEqual([created.taskId]);
+    const after = await service.graph(graph.goal.id);
+    expect(after.decisions[0].status).toBe('canceled');
+    // The freed coordinator dispatches the reset task instead of re-parking.
+    vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({} as never);
+    const next = await service.tick(graph.goal.id);
+    expect(next.outcome).not.toBe('waiting_human');
+  });
+
   it('leaves a deliberately paused goal paused when its budget changes', async () => {
     // Nothing distinguishes a user pause from a budget pause on the row, so the
     // reopen is limited to goals whose budget was actually binding.

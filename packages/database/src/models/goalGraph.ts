@@ -599,4 +599,47 @@ export class GoalGraphModel {
       });
       return decision;
     });
+
+  /**
+   * Cancel a still-pending decision whose question a later action made moot —
+   * nobody picked an option, so this is distinct from `resolveDecision`. The
+   * decision node retires with it; a canceled gate must not keep parking the
+   * goal on the pending-decision branch.
+   */
+  cancelDecision = async (goalId: string, decisionId: string, reason?: string) =>
+    this.db.transaction(async (tx) => {
+      if (!(await this.ownedGoal(goalId, tx))) return undefined;
+      const [ownedDecision] = await tx
+        .select({ id: goalNodeDecisions.id })
+        .from(goalNodeDecisions)
+        .innerJoin(goalNodes, eq(goalNodeDecisions.nodeId, goalNodes.id))
+        .where(
+          and(
+            eq(goalNodeDecisions.id, decisionId),
+            eq(goalNodeDecisions.status, 'pending'),
+            eq(goalNodes.goalId, goalId),
+          ),
+        )
+        .limit(1);
+      if (!ownedDecision) return undefined;
+      const [decision] = await tx
+        .update(goalNodeDecisions)
+        .set({ canceledAt: new Date(), status: 'canceled', updatedAt: new Date() })
+        .where(
+          and(eq(goalNodeDecisions.id, ownedDecision.id), eq(goalNodeDecisions.status, 'pending')),
+        )
+        .returning();
+      if (!decision) return undefined;
+      await tx
+        .update(goalNodes)
+        .set({ status: 'retired', updatedAt: new Date() })
+        .where(eq(goalNodes.id, decision.nodeId));
+      await this.appendEvent(tx, goalId, {
+        entityId: decision.id,
+        entityType: 'decision',
+        eventType: 'retired',
+        reason,
+      });
+      return decision;
+    });
 }
