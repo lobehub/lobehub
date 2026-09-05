@@ -15,7 +15,7 @@ import AuthThemeLite from './AuthThemeLite';
 
 const AuthShell = memo<PropsWithChildren>(({ children }) => {
   const serverConfig = window.__SERVER_CONFIG__ as unknown as AuthSPAServerConfig | undefined;
-  const locale = document.documentElement.lang || 'en-US';
+  const locale = document.documentElement.lang || 'zh-CN';
 
   return (
     <AuthLocale defaultLang={locale}>
