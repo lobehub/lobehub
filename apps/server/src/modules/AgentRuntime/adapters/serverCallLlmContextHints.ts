@@ -194,9 +194,12 @@ export const resolveServerCallLlmContextHints = async ({
   if (aiModelModel && modelHasReasoningExtendParams) {
     if (ctx.topicId && ctx.serverDB && ctx.userId) {
       try {
-        const topic = await new TopicModel(ctx.serverDB, ctx.userId, ctx.workspaceId).findById(
-          ctx.topicId,
-        );
+        // Share-visitor runs execute in the owner's context against topics that
+        // carry a `senderId`; `findById` skips those rows unless opted in, and
+        // the fallback would silently drop the visitor topic's pin.
+        const topic = await new TopicModel(ctx.serverDB, ctx.userId, ctx.workspaceId, undefined, {
+          includeShareVisitor: true,
+        }).findById(ctx.topicId);
         if (topic?.model === model && topic.provider === provider) {
           modelReasoningConfig = topic.metadata?.reasoningConfig;
         }

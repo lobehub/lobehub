@@ -1,5 +1,4 @@
 import type { AiModelReasoningConfig } from 'model-bank';
-import { AiModelReasoningConfigSchema } from 'model-bank';
 import { z } from 'zod';
 
 import type { HeterogeneousReasoningEffort } from '../agent/heteroSelectorCapabilities';
@@ -496,6 +495,21 @@ export const parseTopicScheduledRun = (raw: unknown): TopicScheduledRun | null =
 };
 
 /** Metadata patch accepted by the topic update API. */
+/**
+ * Deliberately loose shape check instead of model-bank's strict enum schema:
+ * `packages/types` only depends on model-bank for types (dozens of suites
+ * partially mock model-bank and would break on a value import), and generation
+ * only reads the keys the target model declares anyway.
+ */
+const aiModelReasoningConfigSchema = z.custom<AiModelReasoningConfig>(
+  (value) =>
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.values(value).every((entry) => typeof entry === 'string'),
+  { message: 'reasoningConfig must be a flat string map' },
+);
+
 export const chatTopicMetadataUpdateSchema = z.object({
   boundDeviceId: z.string().optional(),
   heteroEffort: z
@@ -540,7 +554,7 @@ export const chatTopicMetadataUpdateSchema = z.object({
     .optional(),
   provider: z.string().optional(),
   lastSettledOperationId: z.string().optional(),
-  reasoningConfig: AiModelReasoningConfigSchema.optional(),
+  reasoningConfig: aiModelReasoningConfigSchema.optional(),
   repos: z.array(z.string()).optional(),
   runningOperation: z
     .object({

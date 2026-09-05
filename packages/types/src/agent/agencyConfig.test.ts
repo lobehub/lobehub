@@ -1132,7 +1132,8 @@ describe('applyTopicModelToHeterogeneousProvider - effort pin', () => {
     );
 
     expect(effective.effort).toBe('default');
-    expect(buildHeteroSpawnArgs(effective)).toEqual([]);
+    // no extra args and the agent declared none, so `provider.args` (undefined) comes back
+    expect(buildHeteroSpawnArgs(effective)).toBeUndefined();
   });
 
   it('keeps the agent effort when the topic pins none', () => {

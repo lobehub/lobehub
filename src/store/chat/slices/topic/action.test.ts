@@ -1,6 +1,7 @@
 import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '@lobechat/business-const';
 import { TOPIC_TITLE_JSON_SCHEMA } from '@lobechat/prompts';
 import type { LobeUser, UIChatMessage } from '@lobechat/types';
+import { toast } from '@lobehub/ui/base-ui';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { type Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -20,6 +21,11 @@ import { useUserStore } from '@/store/user';
 import { type ChatTopic } from '@/types/topic';
 
 import { useChatStore } from '../../store';
+
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
+  const actual = await importOriginal<{ toast: Record<string, unknown> }>();
+  return { ...actual, toast: { ...actual.toast, error: vi.fn() } };
+});
 
 // Mock @/libs/swr mutate
 vi.mock('@/libs/swr', async () => {
@@ -369,6 +375,127 @@ describe('topic action', () => {
       const matcherFn = (mutate as Mock).mock.calls[0][0];
       expect(matcherFn(['topic:list', BUILDER_KEY, { pageSize: 20 }])).toBe(true);
       expect(matcherFn(['topic:list', topicMapKey({ agentId: 'edited-agent' }), {}])).toBe(false);
+    });
+
+    it('re-pins the reasoning config of the new model together with the switch', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const updateTopicSpy = vi
+        .spyOn(topicService, 'updateTopic')
+        .mockResolvedValue(undefined as any);
+      const updateMetadataSpy = vi
+        .spyOn(topicService, 'updateTopicMetadata')
+        .mockResolvedValue(undefined as any);
+      seedBuilderTopic();
+      act(() => {
+        useChatStore.setState({
+          internal_resolveTopicReasoningSnapshot: vi
+            .fn()
+            .mockResolvedValue({ deepseekV4GAReasoningEffort: 'high' }),
+        });
+      });
+
+      await act(async () => {
+        await result.current.updateTopicModel('builder-topic', {
+          model: 'deepseek-v4-flash',
+          provider: 'lobehub',
+        });
+      });
+
+      expect(updateTopicSpy).toHaveBeenCalledWith('builder-topic', {
+        model: 'deepseek-v4-flash',
+        provider: 'lobehub',
+      });
+      expect(updateMetadataSpy).toHaveBeenCalledWith('builder-topic', {
+        reasoningConfig: { deepseekV4GAReasoningEffort: 'high' },
+      });
+    });
+
+    it('rolls the model switch back when the reasoning pin cannot be written', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const updateTopicSpy = vi
+        .spyOn(topicService, 'updateTopic')
+        .mockResolvedValue(undefined as any);
+      vi.spyOn(topicService, 'updateTopicMetadata').mockRejectedValue(new Error('offline'));
+      seedBuilderTopic();
+      act(() => {
+        useChatStore.setState({
+          internal_resolveTopicReasoningSnapshot: vi
+            .fn()
+            .mockResolvedValue({ deepseekV4GAReasoningEffort: 'high' }),
+        });
+      });
+
+      await expect(
+        result.current.updateTopicModel('builder-topic', {
+          model: 'deepseek-v4-flash',
+          provider: 'lobehub',
+        }),
+      ).rejects.toThrow('offline');
+
+      // second write restores the previous model so the topic never carries
+      // the new model with the old model's pin
+      expect(updateTopicSpy).toHaveBeenLastCalledWith('builder-topic', {
+        model: 'glm-5.2',
+        provider: 'lobehub',
+      });
+    });
+  });
+
+  describe('updateTopicReasoningConfig', () => {
+    const KEY = topicMapKey({ agentId: 'agent-1' });
+    const seedTopic = () => {
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: 'agent-1',
+          activeTopicId: 'topic-1',
+          topicDataMap: {
+            [KEY]: {
+              currentPage: 0,
+              hasMore: false,
+              items: [
+                {
+                  id: 'topic-1',
+                  metadata: { reasoningConfig: { reasoningEffort: 'low', reasoningMode: 'fast' } },
+                  title: 'Topic',
+                } as ChatTopic,
+              ],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+      });
+    };
+
+    it('merges the patch over the current topic pin', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const spy = vi.spyOn(topicService, 'updateTopicMetadata').mockResolvedValue(undefined as any);
+      seedTopic();
+
+      await act(async () => {
+        await result.current.updateTopicReasoningConfig('topic-1', { reasoningEffort: 'high' });
+      });
+
+      expect(spy).toHaveBeenCalledWith('topic-1', {
+        reasoningConfig: { reasoningEffort: 'high', reasoningMode: 'fast' },
+      });
+    });
+
+    it('revalidates and toasts when the pin cannot be saved', async () => {
+      const { result } = renderHook(() => useChatStore());
+      vi.spyOn(topicService, 'updateTopicMetadata').mockRejectedValue(new Error('offline'));
+      seedTopic();
+      const refreshTopic = vi.fn();
+      act(() => {
+        useChatStore.setState({ refreshTopic });
+      });
+
+      await expect(
+        result.current.updateTopicReasoningConfig('topic-1', { reasoningEffort: 'high' }),
+      ).rejects.toThrow('offline');
+
+      expect(refreshTopic).toHaveBeenCalledWith(KEY);
+      expect(toast.error).toHaveBeenCalled();
     });
   });
 

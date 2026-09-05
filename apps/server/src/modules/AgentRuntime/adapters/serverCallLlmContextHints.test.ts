@@ -20,9 +20,13 @@ vi.mock('@/database/models/aiModel', () => ({
 }));
 
 const findTopicByIdMock = vi.hoisted(() => vi.fn());
+const topicModelCtorMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/database/models/topic', () => ({
   TopicModel: class {
+    constructor(...args: unknown[]) {
+      topicModelCtorMock(...args);
+    }
     findById = findTopicByIdMock;
   },
 }));
@@ -100,6 +104,29 @@ describe('resolveServerCallLlmContextHints - topic reasoning pin', () => {
     expect(findTopicByIdMock).toHaveBeenCalledWith('topic-1');
     expect(getModelReasoningConfigMock).not.toHaveBeenCalled();
     expect(hints.resolvedExtendParams).toEqual({ reasoning_effort: 'high' });
+  });
+
+  it('should read share-visitor topics too (they carry a senderId)', async () => {
+    findTopicByIdMock.mockResolvedValue({
+      metadata: { reasoningConfig: { reasoningEffort: 'high' } },
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    await resolveServerCallLlmContextHints({
+      ctx: ctxWithTopic({ chatConfig: {} }),
+      llmPayload,
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    expect(topicModelCtorMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'user-1',
+      undefined,
+      undefined,
+      { includeShareVisitor: true },
+    );
   });
 
   it('should treat an empty topic pin as the model defaults', async () => {

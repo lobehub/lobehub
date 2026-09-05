@@ -431,30 +431,50 @@ export class ChatTopicActionImpl {
     id: string,
     { model, provider }: { model: string; provider: string },
   ): Promise<void> => {
-    await this.#get().internal_updateTopic(id, { model, provider });
+    const previous = topicSelectors.getTopicById(id)(this.#get());
     // The effort pin belongs to the model it was taken for (the param names
     // are model-specific), so switching model re-snapshots it from the user's
     // config for the new model — same "remembers what it started with" rule.
-    await this.#get().internal_snapshotTopicReasoningConfig(id, { model, provider });
+    // Resolve that config BEFORE touching the row so the two writes are not
+    // separated by a network fetch that could leave the topic half-switched.
+    const reasoningConfig = await this.#get().internal_resolveTopicReasoningSnapshot({
+      model,
+      provider,
+    });
+    await this.#get().internal_updateTopic(id, { model, provider });
+    if (!reasoningConfig) return;
+    try {
+      await this.#get().updateTopicMetadata(id, { reasoningConfig });
+    } catch (error) {
+      // A topic that carries the new model but the previous model's pin would
+      // apply the wrong effort on the next run, so undo the model switch too.
+      if (previous) {
+        await this.#get().internal_updateTopic(id, {
+          model: previous.model,
+          provider: previous.provider,
+        });
+      }
+      throw error;
+    }
   };
 
   /**
-   * Pin the user-level reasoning config of `model` to a topic
-   * (`metadata.reasoningConfig`). No-op for models without reasoning extend
-   * params — a stale pin for another model is harmless because generation only
-   * honors it when the pinned model matches (see `getTopicReasoningConfigForModel`).
+   * Resolve the user-level reasoning config to pin for `model`, fetching it when
+   * not cached yet. Returns `undefined` for models without reasoning extend
+   * params (nothing to pin).
    */
-  internal_snapshotTopicReasoningConfig = async (
-    id: string,
-    { model, provider }: { model: string; provider: string },
-  ): Promise<void> => {
+  internal_resolveTopicReasoningSnapshot = async ({
+    model,
+    provider,
+  }: {
+    model: string;
+    provider: string;
+  }): Promise<AiModelReasoningConfig | undefined> => {
     const aiInfraStore = getAiInfraStoreState();
     if (!aiModelSelectors.isModelHasReasoningExtendParams(model, provider)(aiInfraStore)) return;
 
     await aiInfraStore.ensureModelReasoningConfig(model, provider);
-    const reasoningConfig =
-      aiModelSelectors.modelReasoningConfig(model, provider)(getAiInfraStoreState()) ?? {};
-    await this.#get().updateTopicMetadata(id, { reasoningConfig });
+    return aiModelSelectors.modelReasoningConfig(model, provider)(getAiInfraStoreState()) ?? {};
   };
 
   /**
@@ -470,7 +490,7 @@ export class ChatTopicActionImpl {
     base?: AiModelReasoningConfig,
   ): Promise<void> => {
     const current = topicSelectors.getTopicById(id)(this.#get())?.metadata?.reasoningConfig;
-    await this.#get().updateTopicMetadata(id, {
+    await this.#writeTopicEffortPin(id, {
       reasoningConfig: { ...(current ?? base), ...patch },
     });
   };
@@ -480,7 +500,26 @@ export class ChatTopicActionImpl {
     id: string,
     effort: HeterogeneousReasoningEffort,
   ): Promise<void> => {
-    await this.#get().updateTopicMetadata(id, { heteroEffort: effort });
+    await this.#writeTopicEffortPin(id, { heteroEffort: effort });
+  };
+
+  /**
+   * `updateTopicMetadata` shows the new value optimistically and has no
+   * rollback, so a failed effort write would leave the picker (and client-side
+   * generation) on a value that was never persisted. Revalidate and tell the
+   * user, mirroring `updateModelReasoningConfig` for the user-level default.
+   */
+  #writeTopicEffortPin = async (
+    id: string,
+    metadata: Pick<ChatTopicMetadata, 'heteroEffort' | 'reasoningConfig'>,
+  ): Promise<void> => {
+    try {
+      await this.#get().updateTopicMetadata(id, metadata);
+    } catch (error) {
+      await this.#get().refreshTopic(topicSelectors.getTopicContainerKeyById(id)(this.#get()));
+      toast.error(t('reasoningEffort.updateFailed', { ns: 'chat' }));
+      throw error;
+    }
   };
 
   /**
