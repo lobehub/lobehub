@@ -1,0 +1,73 @@
+---
+title: Use FunASR for Private Speech-to-Text
+description: Connect LobeHub to a self-hosted FunASR OpenAI-compatible transcription endpoint.
+tags:
+  - LobeHub
+  - FunASR
+  - SenseVoice
+  - Speech-to-Text
+  - Self-Hosted
+---
+
+# Use FunASR for Private Speech-to-Text
+
+[FunASR](https://github.com/modelscope/FunASR) is an open-source speech recognition toolkit. Its API server exposes the OpenAI-compatible `/v1/audio/transcriptions` endpoint, so LobeHub can use self-hosted SenseVoice, Paraformer, or Fun-ASR-Nano models without sending audio to a hosted transcription provider.
+
+## Start the FunASR API
+
+Install FunASR and the server dependencies on the machine that will run transcription:
+
+```bash
+python -m pip install -U "funasr>=1.3.27" fastapi uvicorn python-multipart
+funasr-server --model sensevoice --device cpu
+```
+
+Use `--device cuda` on a CUDA host. Before configuring LobeHub, verify the endpoint directly:
+
+```bash
+curl -L https://isv-data.oss-cn-hangzhou.aliyuncs.com/ics/MaaS/ASR/test_audio/BAC009S0764W0121.wav -o sample.wav
+curl http://localhost:8000/v1/audio/transcriptions \
+  -F file=@sample.wav \
+  -F model=sensevoice \
+  -F response_format=verbose_json
+```
+
+## Connect LobeHub
+
+Open `Settings` > `AI Providers` > `FunASR`, enable the provider, and set its endpoint to the FunASR API base URL, including `/v1`. No API key is required by the default local FunASR server.
+
+The endpoint must be reachable from the LobeHub server. When both services run in containers, use their shared-network service name, such as `http://funasr:8000/v1`. Use `http://host.docker.internal:8000/v1` only where your Docker environment exposes that host name.
+
+The same setup is available through the LobeHub CLI:
+
+```bash
+lh provider toggle funasr --enable
+lh provider config funasr --base-url http://funasr:8000/v1
+lh model toggle sensevoice --provider funasr --enable
+lh generate asr sample.wav --provider funasr --model sensevoice --json
+```
+
+## Model aliases
+
+| Model           | Start here when                                                                                                       |
+| --------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `sensevoice`    | You want the portable multilingual default with language, emotion, and audio-event detection.                         |
+| `paraformer`    | Your workload is primarily Mandarin and needs punctuation or timestamps.                                              |
+| `paraformer-en` | You need the compact English route.                                                                                   |
+| `fun-asr-nano`  | You have a GPU and want the LLM-based model for Chinese, English, Japanese, and Chinese dialects or regional accents. |
+
+Only enable aliases that the FunASR server instance has loaded. See the [FunASR model selection guide](https://github.com/modelscope/FunASR/blob/main/docs/model_selection.md) for deployment tradeoffs.
+
+## Troubleshooting
+
+### Connection refused
+
+Check the base URL from the LobeHub server or container, not from your browser. `localhost` points to the LobeHub container when LobeHub is containerized.
+
+### Provider does not support ASR
+
+Confirm that `FunASR` is enabled, the selected model belongs to the FunASR provider, and the configured URL ends in `/v1`.
+
+### The first request is slow
+
+The first transcription may include model loading and warmup. Check `GET /health` and run one direct transcription before measuring latency.
