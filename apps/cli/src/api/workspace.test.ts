@@ -33,6 +33,7 @@ const stored = (overrides: Record<string, string> = {}) => ({
 
 describe('api/workspace scope resolution', () => {
   const originalWorkspaceId = process.env.LOBEHUB_WORKSPACE_ID;
+  const originalJwt = process.env.LOBEHUB_JWT;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -41,11 +42,16 @@ describe('api/workspace scope resolution', () => {
     mockResolveIdentityFingerprint.mockReturnValue('user:u1');
     mockResolveServerUrl.mockReturnValue(SERVER);
     delete process.env.LOBEHUB_WORKSPACE_ID;
+    // A JWT exported in the invoking shell would flip every case onto the
+    // dispatched-run branch; scope resolution reads it, so isolate it too.
+    delete process.env.LOBEHUB_JWT;
   });
 
   afterEach(() => {
     if (originalWorkspaceId === undefined) delete process.env.LOBEHUB_WORKSPACE_ID;
     else process.env.LOBEHUB_WORKSPACE_ID = originalWorkspaceId;
+    if (originalJwt === undefined) delete process.env.LOBEHUB_JWT;
+    else process.env.LOBEHUB_JWT = originalJwt;
   });
 
   it('reports personal scope when nothing is configured', () => {
@@ -75,14 +81,11 @@ describe('api/workspace scope resolution', () => {
   it('ignores the persisted workspace when running under an injected LOBEHUB_JWT', () => {
     process.env.LOBEHUB_JWT = 'jwt-from-dispatch';
     mockLoadActiveWorkspace.mockReturnValue(stored());
-    try {
-      expect(resolveWorkspaceScope()).toEqual({ source: 'personal' });
 
-      process.env.LOBEHUB_WORKSPACE_ID = 'ws_env';
-      expect(resolveWorkspaceScope()).toEqual({ source: 'env', workspaceId: 'ws_env' });
-    } finally {
-      delete process.env.LOBEHUB_JWT;
-    }
+    expect(resolveWorkspaceScope()).toEqual({ source: 'personal' });
+
+    process.env.LOBEHUB_WORKSPACE_ID = 'ws_env';
+    expect(resolveWorkspaceScope()).toEqual({ source: 'env', workspaceId: 'ws_env' });
   });
 
   it('prefers an explicit argument over everything else', () => {
