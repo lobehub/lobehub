@@ -707,6 +707,64 @@ describe('resolveAgentConfig', () => {
         expect(result.plugins).toContain('user-plugin');
       });
 
+      it('should use user-edited systemRole over builtin template', () => {
+        const userSystemRole = 'You are a translation assistant';
+        vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
+          () =>
+            ({
+              ...mockAgentConfig,
+              systemRole: userSystemRole,
+            }) as any,
+        );
+
+        vi.spyOn(builtinAgents, 'getAgentRuntimeConfig').mockReturnValue({
+          plugins: [],
+          systemRole: 'Inbox builtin system role template',
+        });
+
+        const result = resolveAgentConfig({ agentId: 'inbox-agent' });
+
+        expect(result.agentConfig.systemRole).toBe(userSystemRole);
+      });
+
+      it('should fallback to builtin template when user systemRole is empty', () => {
+        vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
+          () =>
+            ({
+              ...mockAgentConfig,
+              systemRole: '',
+            }) as any,
+        );
+
+        vi.spyOn(builtinAgents, 'getAgentRuntimeConfig').mockReturnValue({
+          plugins: [],
+          systemRole: 'Inbox builtin system role template',
+        });
+
+        const result = resolveAgentConfig({ agentId: 'inbox-agent' });
+
+        expect(result.agentConfig.systemRole).toBe('Inbox builtin system role template');
+      });
+
+      it('should fallback to builtin template when user systemRole is undefined', () => {
+        vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
+          () =>
+            ({
+              ...mockAgentConfig,
+              systemRole: undefined,
+            }) as any,
+        );
+
+        vi.spyOn(builtinAgents, 'getAgentRuntimeConfig').mockReturnValue({
+          plugins: [],
+          systemRole: 'Inbox builtin system role template',
+        });
+
+        const result = resolveAgentConfig({ agentId: 'inbox-agent' });
+
+        expect(result.agentConfig.systemRole).toBe('Inbox builtin system role template');
+      });
+
       it('should use basePlugins from agentConfig when ctx.plugins is not provided', () => {
         // This test verifies the fix for the issue where INBOX agent lost user-configured plugins
         // when resolveAgentConfig was called without the plugins parameter.
