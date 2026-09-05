@@ -67,7 +67,7 @@ Safety:
 `;
 
 const fail = (message, exitCode = 1) => {
-  console.error(`heterogeneous-agent-official-smoke: ${message}`);
+  console.error(`official-smoke: ${message}`);
   process.exit(exitCode);
 };
 
