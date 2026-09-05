@@ -40,7 +40,7 @@ You stay in charge — without staying online.
 
 <sup>Your Chief Agent Operator</sup>
 
-<a href="https://www.producthunt.com/products/lobehub?embed=true&amp;utm_source=badge-top-post-badge&amp;utm_medium=badge&amp;utm_campaign=badge-lobehub-2" target="_blank" rel="noopener noreferrer"><img alt="LobeHub - Your Chief Agent Operator for multi-agent work | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/top-post-badge.svg?post_id=1147569&amp;theme=light&amp;period=daily&amp;t=1779247564355"></a> <a href="https://trendshift.io/repositories/19224" target="_blank"><img src="https://trendshift.io/api/badge/repositories/19224" alt="lobehub%2Flobehub | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+<a href="https://www.producthunt.com/products/lobehub?embed=true&amp;utm_source=badge-top-post-badge&amp;utm_medium=badge&amp;utm_campaign=badge-lobehub-2" target="_blank" rel="noopener noreferrer"><img alt="LobeHub - Your Chief Agent Operator for multi-agent work | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/top-post-badge.svg?post_id=1147569&amp;theme=light&amp;period=daily&amp;t=1779247564355"></a> <a href="https://trendshift.io/repositories/19224" target="_blank"><img src="https://trendshift.io/api/badge/repositories/19224" alt="lobehub%2Flobe-chat | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
 [![](https://vercel.com/oss/program-badge.svg)](https://vercel.com/oss)
 
@@ -99,8 +99,8 @@ Whether for users or professional developers, LobeHub will be your AI Agent play
 <details>
   <summary><kbd>Star History</kbd></summary>
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=lobehub%2Flobehub&theme=dark&type=Date">
-    <img width="100%" src="https://api.star-history.com/svg?repos=lobehub%2Flobehub&type=Date">
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=lobehub%2Flobe-chat&theme=dark&type=Date">
+    <img width="100%" src="https://api.star-history.com/svg?repos=lobehub%2Flobe-chat&type=Date">
   </picture>
 </details>
 
@@ -274,7 +274,7 @@ This project provides some additional configuration items set with environment v
 | Environment Variable | Required | Description                                                                                                                                                               | Example                                                                                                              |
 | -------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `OPENAI_API_KEY`     | Yes      | This is the API key you apply on the OpenAI account page                                                                                                                  | `sk-xxxxxx...xxxxxx`                                                                                                 |
-| `OPENAI_PROXY_URL`   | No       | If you manually configure the OpenAI interface proxy, you can use this configuration item to override the default OpenAI API request base URL                             | `https://api.chatanywhere.cn` or `https://aihubmix.com/v1` <br/>The default value is<br/>`https://api.openai.com/v1` |
+| `OPENAI_PROXY_URL`   | No       | If you manually configure the OpenAI interface proxy, you can use this configuration item to override the default OpenAI API request base URL                             | `https://api.chatanywhere.cn` <br/>The default value is<br/>`https://api.openai.com/v1` |
 | `OPENAI_MODEL_LIST`  | No       | Used to control the model list. Use `+` to add a model, `-` to hide a model, and `model_name=display_name` to customize the display name of a model, separated by commas. | `qwen-7b-chat,+glm-6b,-gpt-3.5-turbo`                                                                                |
 
 > \[!NOTE]
@@ -309,8 +309,6 @@ If you find signing up for an OpenAI account or binding a foreign-currency credi
 
 |                                                                     | Provider     | Features                                                                                                | Proxy URL                 | Link                              |
 | ------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------- | ------------------------- | --------------------------------- |
-| <img src="https://resource.aihubmix.com/logo.png?v=1" width="48" /> | **AIHubMix** | Uses the OpenAI enterprise API; all models site-wide at **14% off** the official price (incl. GPT-5.6 and Claude Fable 5) | `https://aihubmix.com/v1` | [Get](https://console.aihubmix.com/token?aff=8DBz) |
-
 > \[!WARNING]
 >
 > **Disclaimer**: The OpenAI API Keys recommended here are provided by third-party proxies, so we are not responsible for the **validity** or **security** of these API Keys. Please bear the risks of purchasing and using them yourself.
@@ -372,8 +370,8 @@ You can use GitHub Codespaces for online development:
 Or clone it for local development:
 
 ```fish
-$ git clone https://github.com/lobehub/lobehub.git
-$ cd lobehub
+$ git clone https://github.com/lobehub/lobe-chat.git
+$ cd lobe-chat
 $ pnpm install
 $ pnpm dev          # Full-stack (Next.js + Vite SPA)
 $ bun run dev:spa   # SPA frontend only (port 9876)
@@ -407,11 +405,11 @@ Contributions of all types are more than welcome; if you are interested in contr
 [![][submit-agents-shield]][submit-agents-link]
 [![][submit-plugin-shield]][submit-plugin-link]
 
-<a href="https://github.com/lobehub/lobehub/graphs/contributors" target="_blank">
+<a href="https://github.com/lobehub/lobe-chat/graphs/contributors" target="_blank">
   <table>
     <tr>
       <th colspan="2">
-        <br><img src="https://contrib.rocks/image?repo=lobehub/lobehub"><br><br>
+        <br><img src="https://contrib.rocks/image?repo=lobehub/lobe-chat"><br><br>
       </th>
     </tr>
     <tr>
@@ -494,12 +492,12 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [chat-plugin-sdk]: https://github.com/lobehub/chat-plugin-sdk
 [chat-plugin-template]: https://github.com/lobehub/chat-plugin-template
 [chat-plugins-gateway]: https://github.com/lobehub/chat-plugins-gateway
-[codecov-link]: https://codecov.io/gh/lobehub/lobehub
-[codecov-shield]: https://img.shields.io/codecov/c/github/lobehub/lobehub?labelColor=black&style=flat-square&logo=codecov&logoColor=white
-[codespaces-link]: https://codespaces.new/lobehub/lobehub
+[codecov-link]: https://codecov.io/gh/lobehub/lobe-chat
+[codecov-shield]: https://img.shields.io/codecov/c/github/lobehub/lobe-chat?labelColor=black&style=flat-square&logo=codecov&logoColor=white
+[codespaces-link]: https://codespaces.new/lobehub/lobe-chat
 [codespaces-shield]: https://github.com/codespaces/badge.svg
 [deploy-button-image]: https://vercel.com/button
-[deploy-link]: https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Flobehub%2Flobehub&env=OPENAI_API_KEY&envDescription=Find%20your%20OpenAI%20API%20Key%20by%20click%20the%20right%20Learn%20More%20button.&envLink=https%3A%2F%2Fplatform.openai.com%2Faccount%2Fapi-keys&project-name=lobehub&repository-name=lobehub
+[deploy-link]: https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Flobehub%2Flobe-chat&env=OPENAI_API_KEY&envDescription=Find%20your%20OpenAI%20API%20Key%20by%20click%20the%20right%20Learn%20More%20button.&envLink=https%3A%2F%2Fplatform.openai.com%2Faccount%2Fapi-keys&project-name=lobehub&repository-name=lobehub
 [deploy-on-alibaba-cloud-button-image]: https://service-info-public.oss-cn-hangzhou.aliyuncs.com/computenest-en.svg
 [deploy-on-alibaba-cloud-link]: https://computenest.console.aliyun.com/service/instance/create/default?type=user&ServiceName=LobeHub%E7%A4%BE%E5%8C%BA%E7%89%88
 [deploy-on-repocloud-button-image]: https://d16t0pc4846x52.cloudfront.net/deploylobe.svg
@@ -511,12 +509,12 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [discord-link]: https://discord.gg/AYFPHvv2jT
 [discord-shield]: https://img.shields.io/discord/1127171173982154893?color=5865F2&label=discord&labelColor=black&logo=discord&logoColor=white&style=flat-square
 [discord-shield-badge]: https://img.shields.io/discord/1127171173982154893?color=5865F2&label=discord&labelColor=black&logo=discord&logoColor=white&style=for-the-badge
-[docker-pulls-link]: https://hub.docker.com/r/lobehub/lobehub
-[docker-pulls-shield]: https://img.shields.io/docker/pulls/lobehub/lobehub?color=45cc11&labelColor=black&style=flat-square&sort=semver
-[docker-release-link]: https://hub.docker.com/r/lobehub/lobehub
-[docker-release-shield]: https://img.shields.io/docker/v/lobehub/lobehub?color=369eff&label=docker&labelColor=black&logo=docker&logoColor=white&style=flat-square&sort=semver
-[docker-size-link]: https://hub.docker.com/r/lobehub/lobehub
-[docker-size-shield]: https://img.shields.io/docker/image-size/lobehub/lobehub?color=369eff&labelColor=black&style=flat-square&sort=semver
+[docker-pulls-link]: https://hub.docker.com/r/lobehub/lobe-chat
+[docker-pulls-shield]: https://img.shields.io/docker/pulls/lobehub/lobe-chat?color=45cc11&labelColor=black&style=flat-square&sort=semver
+[docker-release-link]: https://hub.docker.com/r/lobehub/lobe-chat
+[docker-release-shield]: https://img.shields.io/docker/v/lobehub/lobe-chat?color=369eff&label=docker&labelColor=black&logo=docker&logoColor=white&style=flat-square&sort=semver
+[docker-size-link]: https://hub.docker.com/r/lobehub/lobe-chat
+[docker-size-shield]: https://img.shields.io/docker/image-size/lobehub/lobe-chat?color=369eff&labelColor=black&style=flat-square&sort=semver
 [docs]: https://lobehub.com/docs/usage/start
 [docs-dev-guide]: https://lobehub.com/docs/development/start
 [docs-docker]: https://lobehub.com/docs/self-hosting/server-database/docker-compose
@@ -525,30 +523,30 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [docs-plugin-dev]: https://lobehub.com/docs/usage/plugins/development
 [docs-self-hosting]: https://lobehub.com/docs/self-hosting/start
 [docs-upstream-sync]: https://lobehub.com/docs/self-hosting/advanced/upstream-sync
-[fossa-license-link]: https://app.fossa.com/projects/git%2Bgithub.com%2Flobehub%2Flobehub
-[fossa-license-shield]: https://app.fossa.com/api/projects/git%2Bgithub.com%2Flobehub%2Flobehub.svg?type=large
-[github-action-release-link]: https://github.com/actions/workflows/lobehub/lobehub/release.yml
-[github-action-release-shield]: https://img.shields.io/github/actions/workflow/status/lobehub/lobehub/release.yml?label=release&labelColor=black&logo=githubactions&logoColor=white&style=flat-square
-[github-action-test-link]: https://github.com/actions/workflows/lobehub/lobehub/test.yml
-[github-action-test-shield]: https://img.shields.io/github/actions/workflow/status/lobehub/lobehub/test.yml?label=test&labelColor=black&logo=githubactions&logoColor=white&style=flat-square
-[github-contributors-link]: https://github.com/lobehub/lobehub/graphs/contributors
-[github-contributors-shield]: https://img.shields.io/github/contributors/lobehub/lobehub?color=c4f042&labelColor=black&style=flat-square
-[github-forks-link]: https://github.com/lobehub/lobehub/network/members
-[github-forks-shield]: https://img.shields.io/github/forks/lobehub/lobehub?color=8ae8ff&labelColor=black&style=flat-square
-[github-issues-link]: https://github.com/lobehub/lobehub/issues
-[github-issues-shield]: https://img.shields.io/github/issues/lobehub/lobehub?color=ff80eb&labelColor=black&style=flat-square
-[github-license-link]: https://github.com/lobehub/lobehub/blob/main/LICENSE
+[fossa-license-link]: https://app.fossa.com/projects/git%2Bgithub.com%2Flobehub%2Flobe-chat
+[fossa-license-shield]: https://app.fossa.com/api/projects/git%2Bgithub.com%2Flobehub%2Flobe-chat.svg?type=large
+[github-action-release-link]: https://github.com/actions/workflows/lobehub/lobe-chat/release.yml
+[github-action-release-shield]: https://img.shields.io/github/actions/workflow/status/lobehub/lobe-chat/release.yml?label=release&labelColor=black&logo=githubactions&logoColor=white&style=flat-square
+[github-action-test-link]: https://github.com/actions/workflows/lobehub/lobe-chat/test.yml
+[github-action-test-shield]: https://img.shields.io/github/actions/workflow/status/lobehub/lobe-chat/test.yml?label=test&labelColor=black&logo=githubactions&logoColor=white&style=flat-square
+[github-contributors-link]: https://github.com/lobehub/lobe-chat/graphs/contributors
+[github-contributors-shield]: https://img.shields.io/github/contributors/lobehub/lobe-chat?color=c4f042&labelColor=black&style=flat-square
+[github-forks-link]: https://github.com/lobehub/lobe-chat/network/members
+[github-forks-shield]: https://img.shields.io/github/forks/lobehub/lobe-chat?color=8ae8ff&labelColor=black&style=flat-square
+[github-issues-link]: https://github.com/lobehub/lobe-chat/issues
+[github-issues-shield]: https://img.shields.io/github/issues/lobehub/lobe-chat?color=ff80eb&labelColor=black&style=flat-square
+[github-license-link]: https://github.com/lobehub/lobe-chat/blob/main/LICENSE
 [github-license-shield]: https://img.shields.io/badge/license-apache%202.0-white?labelColor=black&style=flat-square
-[github-project-link]: https://github.com/lobehub/lobehub/projects
-[github-release-link]: https://github.com/lobehub/lobehub/releases
-[github-release-shield]: https://img.shields.io/github/v/release/lobehub/lobehub?color=369eff&labelColor=black&logo=github&style=flat-square
-[github-releasedate-link]: https://github.com/lobehub/lobehub/releases
-[github-releasedate-shield]: https://img.shields.io/github/release-date/lobehub/lobehub?labelColor=black&style=flat-square
-[github-stars-link]: https://github.com/lobehub/lobehub/stargazers
-[github-stars-shield]: https://img.shields.io/github/stars/lobehub/lobehub?color=ffcb47&labelColor=black&style=flat-square
+[github-project-link]: https://github.com/lobehub/lobe-chat/projects
+[github-release-link]: https://github.com/lobehub/lobe-chat/releases
+[github-release-shield]: https://img.shields.io/github/v/release/lobehub/lobe-chat?color=369eff&labelColor=black&logo=github&style=flat-square
+[github-releasedate-link]: https://github.com/lobehub/lobe-chat/releases
+[github-releasedate-shield]: https://img.shields.io/github/release-date/lobehub/lobe-chat?labelColor=black&style=flat-square
+[github-stars-link]: https://github.com/lobehub/lobe-chat/stargazers
+[github-stars-shield]: https://img.shields.io/github/stars/lobehub/lobe-chat?color=ffcb47&labelColor=black&style=flat-square
 [image-banner]: https://github.com/user-attachments/assets/5f78ae58-ed4f-4d38-8037-96109fbba58c
 [image-star]: https://github.com/user-attachments/assets/3216e25b-186f-4a54-9cb4-2f124aec0471
-[issues-link]: https://img.shields.io/github/issues/lobehub/lobehub.svg?style=flat
+[issues-link]: https://img.shields.io/github/issues/lobehub/lobe-chat.svg?style=flat
 [lobe-chat-plugins]: https://github.com/lobehub/lobe-chat-plugins
 [lobe-commit]: https://github.com/lobehub/lobe-commit/tree/master/packages/lobe-commit
 [lobe-i18n]: https://github.com/lobehub/lobe-commit/tree/master/packages/lobe-i18n
@@ -567,22 +565,22 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [lobe-ui-link]: https://www.npmjs.com/package/@lobehub/ui
 [lobe-ui-shield]: https://img.shields.io/npm/v/@lobehub/ui?color=369eff&labelColor=black&logo=npm&logoColor=white&style=flat-square
 [official-site]: https://lobehub.com
-[pr-welcome-link]: https://github.com/lobehub/lobehub/pulls
+[pr-welcome-link]: https://github.com/lobehub/lobe-chat/pulls
 [pr-welcome-shield]: https://img.shields.io/badge/🤯_pr_welcome-%E2%86%92-ffcb47?labelColor=black&style=for-the-badge
 [profile-link]: https://github.com/lobehub
 [share-linkedin-link]: https://linkedin.com/feed
 [share-linkedin-shield]: https://img.shields.io/badge/-share%20on%20linkedin-black?labelColor=black&logo=linkedin&logoColor=white&style=flat-square
-[share-mastodon-link]: https://mastodon.social/share?text=Check%20this%20GitHub%20repository%20out%20%F0%9F%A4%AF%20LobeHub%20-%20An%20open-source,%20extensible%20%28Function%20Calling%29,%20high-performance%20chatbot%20framework.%20It%20supports%20one-click%20free%20deployment%20of%20your%20private%20ChatGPT%2FLLM%20web%20application.%20https://github.com/lobehub/lobehub%20#chatbot%20#chatGPT%20#openAI
+[share-mastodon-link]: https://mastodon.social/share?text=Check%20this%20GitHub%20repository%20out%20%F0%9F%A4%AF%20LobeHub%20-%20An%20open-source,%20extensible%20%28Function%20Calling%29,%20high-performance%20chatbot%20framework.%20It%20supports%20one-click%20free%20deployment%20of%20your%20private%20ChatGPT%2FLLM%20web%20application.%20https://github.com/lobehub/lobe-chat%20#chatbot%20#chatGPT%20#openAI
 [share-mastodon-shield]: https://img.shields.io/badge/-share%20on%20mastodon-black?labelColor=black&logo=mastodon&logoColor=white&style=flat-square
-[share-reddit-link]: https://www.reddit.com/submit?title=Check%20this%20GitHub%20repository%20out%20%F0%9F%A4%AF%20LobeHub%20-%20An%20open-source%2C%20extensible%20%28Function%20Calling%29%2C%20high-performance%20chatbot%20framework.%20It%20supports%20one-click%20free%20deployment%20of%20your%20private%20ChatGPT%2FLLM%20web%20application.%20%23chatbot%20%23chatGPT%20%23openAI&url=https%3A%2F%2Fgithub.com%2Flobehub%2Flobehub
+[share-reddit-link]: https://www.reddit.com/submit?title=Check%20this%20GitHub%20repository%20out%20%F0%9F%A4%AF%20LobeHub%20-%20An%20open-source%2C%20extensible%20%28Function%20Calling%29%2C%20high-performance%20chatbot%20framework.%20It%20supports%20one-click%20free%20deployment%20of%20your%20private%20ChatGPT%2FLLM%20web%20application.%20%23chatbot%20%23chatGPT%20%23openAI&url=https%3A%2F%2Fgithub.com%2Flobehub%2Flobe-chat
 [share-reddit-shield]: https://img.shields.io/badge/-share%20on%20reddit-black?labelColor=black&logo=reddit&logoColor=white&style=flat-square
-[share-telegram-link]: https://t.me/share/url"?text=Check%20this%20GitHub%20repository%20out%20%F0%9F%A4%AF%20LobeHub%20-%20An%20open-source%2C%20extensible%20%28Function%20Calling%29%2C%20high-performance%20chatbot%20framework.%20It%20supports%20one-click%20free%20deployment%20of%20your%20private%20ChatGPT%2FLLM%20web%20application.%20%23chatbot%20%23chatGPT%20%23openAI&url=https%3A%2F%2Fgithub.com%2Flobehub%2Flobehub
+[share-telegram-link]: https://t.me/share/url"?text=Check%20this%20GitHub%20repository%20out%20%F0%9F%A4%AF%20LobeHub%20-%20An%20open-source%2C%20extensible%20%28Function%20Calling%29%2C%20high-performance%20chatbot%20framework.%20It%20supports%20one-click%20free%20deployment%20of%20your%20private%20ChatGPT%2FLLM%20web%20application.%20%23chatbot%20%23chatGPT%20%23openAI&url=https%3A%2F%2Fgithub.com%2Flobehub%2Flobe-chat
 [share-telegram-shield]: https://img.shields.io/badge/-share%20on%20telegram-black?labelColor=black&logo=telegram&logoColor=white&style=flat-square
-[share-weibo-link]: http://service.weibo.com/share/share.php?sharesource=weibo&title=Check%20this%20GitHub%20repository%20out%20%F0%9F%A4%AF%20LobeHub%20-%20An%20open-source%2C%20extensible%20%28Function%20Calling%29%2C%20high-performance%20chatbot%20framework.%20It%20supports%20one-click%20free%20deployment%20of%20your%20private%20ChatGPT%2FLLM%20web%20application.%20%23chatbot%20%23chatGPT%20%23openAI&url=https%3A%2F%2Fgithub.com%2Flobehub%2Flobehub
+[share-weibo-link]: http://service.weibo.com/share/share.php?sharesource=weibo&title=Check%20this%20GitHub%20repository%20out%20%F0%9F%A4%AF%20LobeHub%20-%20An%20open-source%2C%20extensible%20%28Function%20Calling%29%2C%20high-performance%20chatbot%20framework.%20It%20supports%20one-click%20free%20deployment%20of%20your%20private%20ChatGPT%2FLLM%20web%20application.%20%23chatbot%20%23chatGPT%20%23openAI&url=https%3A%2F%2Fgithub.com%2Flobehub%2Flobe-chat
 [share-weibo-shield]: https://img.shields.io/badge/-share%20on%20weibo-black?labelColor=black&logo=sinaweibo&logoColor=white&style=flat-square
-[share-whatsapp-link]: https://api.whatsapp.com/send?text=Check%20this%20GitHub%20repository%20out%20%F0%9F%A4%AF%20LobeHub%20-%20An%20open-source%2C%20extensible%20%28Function%20Calling%29%2C%20high-performance%20chatbot%20framework.%20It%20supports%20one-click%20free%20deployment%20of%20your%20private%20ChatGPT%2FLLM%20web%20application.%20https%3A%2F%2Fgithub.com%2Flobehub%2Flobehub%20%23chatbot%20%23chatGPT%20%23openAI
+[share-whatsapp-link]: https://api.whatsapp.com/send?text=Check%20this%20GitHub%20repository%20out%20%F0%9F%A4%AF%20LobeHub%20-%20An%20open-source%2C%20extensible%20%28Function%20Calling%29%2C%20high-performance%20chatbot%20framework.%20It%20supports%20one-click%20free%20deployment%20of%20your%20private%20ChatGPT%2FLLM%20web%20application.%20https%3A%2F%2Fgithub.com%2Flobehub%2Flobe-chat%20%23chatbot%20%23chatGPT%20%23openAI
 [share-whatsapp-shield]: https://img.shields.io/badge/-share%20on%20whatsapp-black?labelColor=black&logo=whatsapp&logoColor=white&style=flat-square
-[share-x-link]: https://x.com/intent/tweet?hashtags=chatbot%2CchatGPT%2CopenAI&text=Check%20this%20GitHub%20repository%20out%20%F0%9F%A4%AF%20LobeHub%20-%20An%20open-source%2C%20extensible%20%28Function%20Calling%29%2C%20high-performance%20chatbot%20framework.%20It%20supports%20one-click%20free%20deployment%20of%20your%20private%20ChatGPT%2FLLM%20web%20application.&url=https%3A%2F%2Fgithub.com%2Flobehub%2Flobehub
+[share-x-link]: https://x.com/intent/tweet?hashtags=chatbot%2CchatGPT%2CopenAI&text=Check%20this%20GitHub%20repository%20out%20%F0%9F%A4%AF%20LobeHub%20-%20An%20open-source%2C%20extensible%20%28Function%20Calling%29%2C%20high-performance%20chatbot%20framework.%20It%20supports%20one-click%20free%20deployment%20of%20your%20private%20ChatGPT%2FLLM%20web%20application.&url=https%3A%2F%2Fgithub.com%2Flobehub%2Flobe-chat
 [share-x-shield]: https://img.shields.io/badge/-share%20on%20x-black?labelColor=black&logo=x&logoColor=white&style=flat-square
 [submit-agents-link]: https://github.com/lobehub/lobe-chat-agents
 [submit-agents-shield]: https://img.shields.io/badge/🤖/🏪_submit_agent-%E2%86%92-c4f042?labelColor=black&style=for-the-badge
