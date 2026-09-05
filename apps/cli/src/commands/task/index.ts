@@ -583,21 +583,22 @@ export function registerTaskCommand(program: Command) {
         }
         const hasFieldEdits = Object.keys(input).length > 1;
 
-        // --status routes through the lifecycle updateStatus API while every
-        // other flag goes through task.update. A combined call must apply
-        // both: an early return here used to silently drop --agent and every
-        // other field whenever --status was present.
+        // Status-only edits use the lifecycle API. Combined edits go through
+        // task.update so the server can apply the fields and lifecycle change
+        // atomically.
         if (options.status) {
           const valid = ['backlog', 'running', 'paused', 'completed', 'failed', 'canceled'];
           if (!valid.includes(options.status)) {
             log.error(`Invalid status "${options.status}". Must be one of: ${valid.join(', ')}`);
             return;
           }
-          const result = await client.task.updateStatus.mutate({ id, status: options.status });
           if (!hasFieldEdits) {
+            const result = await client.task.updateStatus.mutate({ id, status: options.status });
             log.info(`${pc.bold(result.data.identifier)} → ${options.status}`);
             return;
           }
+
+          input.status = options.status;
         }
 
         const result = await client.task.update.mutate(input as any);

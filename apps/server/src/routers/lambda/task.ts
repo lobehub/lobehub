@@ -131,6 +131,7 @@ const updateSchema = z.object({
   priority: z.number().min(0).max(4).optional(),
   schedulePattern: z.string().nullish(),
   scheduleTimezone: z.string().nullish(),
+  status: z.enum(TASK_STATUSES).optional(),
 });
 
 const listSchema = z.object({
@@ -1415,7 +1416,7 @@ export const taskRouter = router({
     }),
 
   update: taskProcedureWrite.input(idInput.merge(updateSchema)).mutation(async ({ input, ctx }) => {
-    const { id, parentTaskId, ...data } = input;
+    const { id, parentTaskId, status, ...data } = input;
     try {
       const model = ctx.taskModel;
       await assertAssigneeAgentBelongsToUser(
@@ -1481,10 +1482,19 @@ export const taskRouter = router({
         updateData.instruction !== undefined && updateData.editorData === undefined
           ? { ...updateData, editorData: null }
           : updateData;
-      const task = await ctx.taskService.updateTaskWithAssigneeLock(
-        resolved.id,
-        normalizedUpdateData,
-      );
+      const task = status
+        ? await ctx.serverDB.transaction(async (tx) => {
+            const taskService = new TaskService(tx, ctx.userId, ctx.workspaceId ?? undefined);
+            const updated = await taskService.updateTaskWithAssigneeLock(
+              resolved.id,
+              normalizedUpdateData,
+            );
+            if (!updated) return null;
+
+            const result = await taskService.updateStatus({ id: resolved.id, status });
+            return result.task;
+          })
+        : await ctx.taskService.updateTaskWithAssigneeLock(resolved.id, normalizedUpdateData);
       if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
       // Only an actual assignee change notifies — re-saving the same assignee
       // stays silent (self-assignment is filtered inside the helper).

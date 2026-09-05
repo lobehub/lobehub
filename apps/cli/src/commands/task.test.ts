@@ -120,10 +120,10 @@ describe('task edit', () => {
   it('applies --agent and --status together in one invocation', async () => {
     await run('task_1', '--agent', 'agt_new', '--status', 'backlog');
 
-    expect(mockUpdateStatus).toHaveBeenCalledWith({ id: 'task_1', status: 'backlog' });
     expect(mockUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ assigneeAgentId: 'agt_new', id: 'task_1' }),
+      expect.objectContaining({ assigneeAgentId: 'agt_new', id: 'task_1', status: 'backlog' }),
     );
+    expect(mockUpdateStatus).not.toHaveBeenCalled();
     expect(mockLogInfo).toHaveBeenCalledWith(expect.stringContaining('backlog'));
   });
 
