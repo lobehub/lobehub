@@ -11,7 +11,6 @@ import {
   ChevronDownIcon,
   ClipboardListIcon,
   FileTextIcon,
-  FolderGit2Icon,
   GitBranchIcon,
   GitForkIcon,
   LaptopIcon,
@@ -27,6 +26,7 @@ import {
   PR_STATE_VISUAL,
 } from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
 import BranchSwitcher from '@/features/ChatInput/ControlBar/BranchSwitcher';
+import DirIcon from '@/features/ChatInput/ControlBar/DirIcon';
 import WorktreeSwitcher from '@/features/ChatInput/ControlBar/WorktreeSwitcher';
 import { getAllWorkSummaries } from '@/features/Conversation/store/slices/data/workSummaries';
 import WorkSummaryCard from '@/features/Work/WorkSummaryCard';
@@ -180,8 +180,10 @@ const pathBasename = (path: string) => path.replaceAll('\\', '/').split('/').fin
 
 interface OverviewRowProps {
   danger?: boolean;
-  icon: IconProps['icon'];
+  icon?: IconProps['icon'];
   iconColor?: string;
+  /** Pre-rendered leading node (e.g. DirIcon) used instead of a lucide `icon`. */
+  iconNode?: ReactNode;
   /** Row LOOKS clickable but the click is handled by a wrapping dropdown trigger. */
   interactive?: boolean;
   onClick?: () => void;
@@ -196,7 +198,7 @@ interface OverviewRowProps {
  * trailing column holds exactly one of a number, a status, or a chevron.
  */
 const OverviewRow = memo<OverviewRowProps>(
-  ({ danger, icon, iconColor, interactive, onClick, title, trailing, value }) => (
+  ({ danger, icon, iconColor, iconNode, interactive, onClick, title, trailing, value }) => (
     <Flexbox
       horizontal
       align={'center'}
@@ -205,12 +207,14 @@ const OverviewRow = memo<OverviewRowProps>(
       role={onClick || interactive ? 'button' : undefined}
       onClick={onClick}
     >
-      <Icon
-        className={styles.icon}
-        icon={icon}
-        size={16}
-        style={iconColor ? { color: iconColor } : undefined}
-      />
+      {iconNode ?? (
+        <Icon
+          className={styles.icon}
+          icon={icon!}
+          size={16}
+          style={iconColor ? { color: iconColor } : undefined}
+        />
+      )}
       <span className={cx(styles.rowValue, danger && styles.rowValueDanger)} title={title}>
         {value}
       </span>
@@ -491,9 +495,14 @@ const Overview = memo<OverviewProps>(
         {environmentAvailable && (
           <Flexbox>
             <OverviewRow
-              icon={workingDirectory ? FolderGit2Icon : LaptopIcon}
+              icon={workingDirectory ? undefined : LaptopIcon}
               title={workingDirectory}
               value={directoryName || t('workingPanel.overview.workspace.empty')}
+              iconNode={
+                workingDirectory ? (
+                  <DirIcon repoType={isGithub ? 'github' : repoType ? 'git' : undefined} />
+                ) : undefined
+              }
               trailing={
                 workingDirectory
                   ? t(

@@ -330,6 +330,16 @@ const styles = createStaticStyles(({ css }) => ({
     display: inline-flex;
     flex: none;
   `,
+  /* Custom row triggers (overview panel) must fill the stretched trigger, or the
+     popup-open background paints wider than the row's own hover background. */
+  triggerFill: css`
+    display: flex;
+    width: 100%;
+
+    > * {
+      flex: 1;
+    }
+  `,
 }));
 
 const TEMP_PATH_PREFIXES = ['/tmp', '/var/tmp', '/private/tmp'];
@@ -636,7 +646,9 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
     return (
       <DropdownMenuRoot open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger className={styles.triggerAnchor}>
-          <div>{open ? trigger : <Tooltip title={triggerTitle}>{trigger}</Tooltip>}</div>
+          <div className={children ? styles.triggerFill : undefined}>
+            {open ? trigger : <Tooltip title={triggerTitle}>{trigger}</Tooltip>}
+          </div>
         </DropdownMenuTrigger>
         <DropdownMenuPortal>
           <DropdownMenuPositioner placement={placement} sideOffset={8}>

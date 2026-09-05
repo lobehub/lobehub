@@ -55,6 +55,16 @@ const styles = createStaticStyles(({ css }) => ({
     display: inline-flex;
     flex: none;
   `,
+  /* See WorktreeSwitcher.triggerFill — keeps a full-row custom trigger's hover
+     background aligned with the popup-open background. */
+  triggerFill: css`
+    display: flex;
+    width: 100%;
+
+    > * {
+      flex: 1;
+    }
+  `,
   container: css`
     display: flex;
     flex-direction: column;
@@ -478,7 +488,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
     return (
       <DropdownMenuRoot open={open} onOpenChange={onOpenChange}>
         <DropdownMenuTrigger className={styles.triggerAnchor}>
-          <div>{children}</div>
+          <div className={styles.triggerFill}>{children}</div>
         </DropdownMenuTrigger>
         <DropdownMenuPortal>
           <DropdownMenuPositioner placement={placement} sideOffset={8}>
