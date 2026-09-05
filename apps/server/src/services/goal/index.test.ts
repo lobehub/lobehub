@@ -463,6 +463,71 @@ describe('GoalService', () => {
     expect(raised?.status).not.toBe('paused');
   });
 
+  it('ships the spend the budget is enforced against with the graph', async () => {
+    // The header renders `spent / cap` as one fraction, so the number it shows
+    // has to be the number the coordinator will stop on — not the goal list's
+    // subtree roll-up, which counts Tasks the graph's Tasks spawned.
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({
+      maxTotalCost: 10,
+      tasks: ['Costs money'],
+      title: 'Spend',
+    });
+    const created = await service.tick(graph.goal.id);
+
+    await serverDB
+      .insert(topics)
+      .values({ id: 'tpc_spend_1', totalCost: 6.4, totalTokens: 1200, userId });
+    await serverDB
+      .insert(taskTopics)
+      .values({ seq: 1, taskId: created.taskId!, topicId: 'tpc_spend_1', userId });
+    // A run that has not settled is a round with no cost yet.
+    await serverDB.insert(topics).values({ id: 'tpc_spend_2', userId });
+    await serverDB
+      .insert(taskTopics)
+      .values({ seq: 2, taskId: created.taskId!, topicId: 'tpc_spend_2', userId });
+
+    const { spend } = await service.graph(graph.goal.id);
+
+    expect(spend).toMatchObject({ runs: 2, totalCost: 6.4, totalTokens: 1200 });
+    // The cost panel lists WHERE the money went, so the same read carries the
+    // per-Task split rather than only the total the budget is checked against.
+    expect(spend?.byTask).toEqual([
+      { runs: 2, taskId: created.taskId!, totalCost: 6.4, totalTokens: 1200 },
+    ]);
+  });
+
+  it('keeps an existing deadline when only the cost cap is edited', async () => {
+    // The budget panel sends one dimension at a time; an omitted deadline used
+    // to be written back as null, silently dropping a calendar budget someone
+    // set from a click that only meant to raise the dollars.
+    const service = new GoalService(serverDB, userId);
+    const deadline = new Date(Date.now() + 3_600_000).toISOString();
+    const graph = await service.create({
+      config: { schedule: { deadline } },
+      tasks: ['Bounded'],
+      title: 'Deadline keeper',
+    });
+
+    const updated = await service.setBudget(graph.goal.id, { maxTotalCost: 25 });
+
+    expect(updated?.config?.schedule?.deadline).toBe(deadline);
+    expect(Number(updated?.maxTotalCost)).toBe(25);
+  });
+
+  it('leaves the round cap alone when only the cost cap is edited', async () => {
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({
+      maxRounds: 7,
+      tasks: ['Bounded'],
+      title: 'Round keeper',
+    });
+
+    const updated = await service.setBudget(graph.goal.id, { maxTotalCost: 25 });
+
+    expect(updated?.maxRounds).toBe(7);
+  });
+
   it('edits the standing requirement in place', async () => {
     const service = new GoalService(serverDB, userId);
     const graph = await service.create({

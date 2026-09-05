@@ -1,5 +1,5 @@
 import { isRemoteServerNetworkError } from '@lobechat/types';
-import { type TRPCLink } from '@trpc/client';
+import { type TRPCClientError, type TRPCLink } from '@trpc/client';
 import {
   createTRPCClient,
   httpBatchLink,
@@ -23,6 +23,26 @@ let last401Time = 0;
 let lastMarket401Time = 0;
 const MIN_401_INTERVAL = 5000; // 5 seconds
 
+// `@trpc/client` throws `TransformResultError` when a response body parses as
+// JSON but is not a `TRPCResponse` — the desktop proxy's 502 network envelope
+// (`{ errorType, body }`), a gateway/WAF JSON error page, and so on. Its message
+// is an internal transport detail, yet every surface that renders `err.message`
+// prints it verbatim: that is how "Unable to transform response from server"
+// ends up as the description of the "agent config failed to load" alert above
+// the chat input while the app is simply offline. Rewrite it into copy that
+// says what actually happened.
+const TRANSFORM_RESULT_ERROR_MESSAGE = 'Unable to transform response from server';
+
+const rewriteUnreadableResponseMessage = async (err: TRPCClientError<LambdaRouter>) => {
+  if (err.message !== TRANSFORM_RESULT_ERROR_MESSAGE) return;
+
+  // dynamic import to avoid circular dependency
+  const { unreadableResponseMessage } =
+    await import('@/components/Error/unreadableResponseMessage');
+
+  err.message = unreadableResponseMessage(err.meta?.responseJSON);
+};
+
 // handle error
 const errorHandlingLink: TRPCLink<LambdaRouter> = () => {
   return ({ op, next }) =>
@@ -36,6 +56,8 @@ const errorHandlingLink: TRPCLink<LambdaRouter> = () => {
             err.name === 'AbortError' ||
             err.cause?.name === 'AbortError' ||
             err.message.includes('signal is aborted without reason');
+
+          if (!isAbortError) await rewriteUnreadableResponseMessage(err);
 
           const showError = (op.context?.showNotification as boolean) ?? true;
           const status = err.data?.httpStatus as number;

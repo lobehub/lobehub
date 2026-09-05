@@ -167,8 +167,11 @@ const Body = memo(() => {
       {node.description &&
         (isFinding ? (
           // A finding's description is the run's handoff — real Markdown, so
-          // render it as such instead of pre-wrapped source text.
-          <Markdown fontSize={13} variant={'chat'}>
+          // render it as such instead of pre-wrapped source text. `flex-shrink: 0`
+          // is load-bearing: Markdown's root is `overflow: hidden`, so as a flex
+          // item its automatic minimum size collapses to 0 and a long handoff
+          // would be squeezed (and clipped) to fit instead of scrolling the panel.
+          <Markdown fontSize={13} style={{ flexShrink: 0 }} variant={'chat'}>
             {node.description}
           </Markdown>
         ) : (

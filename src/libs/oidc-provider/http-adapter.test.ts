@@ -96,6 +96,8 @@ describe('OIDC HTTP adapter', () => {
       const ctx: SelectiveBodyContext = {
         charset: 'utf-8',
         is: (contentType: string) => contentType === 'application/x-www-form-urlencoded',
+        /** oidc-provider only parses URL-encoded bodies for POST requests. */
+        method: nodeRequest.method,
         oidc: {},
         req: nodeRequest,
         request: { length: Buffer.byteLength(body) },

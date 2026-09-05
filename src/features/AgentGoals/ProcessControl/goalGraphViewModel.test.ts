@@ -8,7 +8,7 @@ import type {
 } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { buildGoalGraphView } from './goalGraphViewModel';
+import { buildGoalGraphView, isTroubledTaskNode } from './goalGraphViewModel';
 
 const T0 = new Date('2026-08-01T00:00:00Z');
 const at = (minutes: number) => new Date(T0.getTime() + minutes * 60_000);
@@ -451,5 +451,65 @@ describe('buildGoalGraphView', () => {
 
     expect(view.byId.w1.artifacts).toEqual([]);
     expect(view.artifacts).toEqual([]);
+  });
+});
+
+describe('isTroubledTaskNode', () => {
+  // A healthy Task opens on its result surface; a broken one has no result
+  // worth reviewing, so the drill-down goes to the original Task instead.
+  it('flags a task that lost its heartbeat', () => {
+    const view = buildGoalGraphView(
+      snapshot({ nodes: [node('w1', { status: 'active', updatedAt: at(0) })] }),
+      NOW,
+    );
+
+    expect(view.byId.w1.isStale).toBe(true);
+    expect(isTroubledTaskNode(view.byId.w1)).toBe(true);
+  });
+
+  it('flags a task whose latest attempt failed', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [event('w1', 'activated', 100), event('w1', 'rejected', 110)],
+        nodes: [node('w1', { status: 'rejected', updatedAt: at(110) })],
+      }),
+      NOW,
+    );
+
+    expect(isTroubledTaskNode(view.byId.w1)).toBe(true);
+  });
+
+  it('leaves a healthy running task alone', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [event('w1', 'activated', 110)],
+        nodes: [node('w1', { status: 'active', updatedAt: at(115) })],
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1.isStale).toBe(false);
+    expect(isTroubledTaskNode(view.byId.w1)).toBe(false);
+  });
+
+  it('leaves a finished task alone — its result is the thing to read', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [event('w1', 'activated', 100), event('w1', 'resolved', 110)],
+        nodes: [node('w1', { resolvedAt: at(110), status: 'resolved', updatedAt: at(110) })],
+      }),
+      NOW,
+    );
+
+    expect(isTroubledTaskNode(view.byId.w1)).toBe(false);
+  });
+
+  it('is not a judgement about non-task nodes', () => {
+    const view = buildGoalGraphView(
+      snapshot({ nodes: [node('p1', { kind: 'problem', status: 'active', updatedAt: at(0) })] }),
+      NOW,
+    );
+
+    expect(isTroubledTaskNode(view.byId.p1)).toBe(false);
   });
 });

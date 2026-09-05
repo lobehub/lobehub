@@ -309,7 +309,36 @@ export interface GoalGraphSnapshot {
    * liveness judgements must use whichever of the two is newer.
    */
   runHeartbeats?: Record<string, Date>;
+  /**
+   * Rounds run and dollars spent so far, by the definition the coordinator
+   * enforces the budget against. Present on a fetched graph; absent on the
+   * snapshots the write paths return.
+   */
+  spend?: GoalSpend;
   workVersions: GoalGraphWorkVersionLink[];
+}
+
+/** What a goal has spent against what it is allowed to spend. */
+export interface GoalSpend {
+  /**
+   * The same spend split per Task node, so the cost panel can say WHERE the
+   * money went rather than only how much is left.
+   */
+  byTask: GoalTaskSpend[];
+  /** Runs the graph's Task nodes produced — what `maxRounds` is counted in. */
+  runs: number;
+  /** USD across those runs; a run that has not settled contributes 0. */
+  totalCost: number;
+  /** Tokens across those runs; a run that has not settled contributes 0. */
+  totalTokens: number;
+}
+
+/** One Task's share of a goal's spend. */
+export interface GoalTaskSpend {
+  runs: number;
+  taskId: string;
+  totalCost: number;
+  totalTokens: number;
 }
 
 /**

@@ -472,7 +472,11 @@ export class GoalService {
 
   graph = async (goalId: string) => {
     const graph = await this.requireGraph(goalId);
-    return { ...graph, runHeartbeats: await this.collectRunHeartbeats(graph) };
+    const [runHeartbeats, spend] = await Promise.all([
+      this.collectRunHeartbeats(graph),
+      this.resolveSpend(graph),
+    ]);
+    return { ...graph, runHeartbeats, spend };
   };
 
   /**
@@ -684,19 +688,31 @@ export class GoalService {
   };
 
   private evaluateBudget = async (goal: GoalItem, graph: GoalGraphSnapshot) => {
-    const taskIds = graph.nodes.flatMap((node) => (node.taskId ? [node.taskId] : []));
-    const runs = await this.taskTopicModel.findWithHandoffByTaskIds(taskIds, 10_000);
-    const totalCost = runs.reduce((sum, run) => sum + Number(run.totalCost ?? 0), 0);
+    const { runs, totalCost } = await this.resolveSpend(graph);
     const deadline = goal.config?.schedule?.deadline ?? null;
     return {
       costLimitReached: goal.maxTotalCost !== null && totalCost >= Number(goal.maxTotalCost),
       deadline,
       deadlinePassed: deadline !== null && Date.now() >= new Date(deadline).getTime(),
-      roundLimitReached: goal.maxRounds !== null && runs.length >= goal.maxRounds,
+      roundLimitReached: goal.maxRounds !== null && runs >= goal.maxRounds,
       runs,
       totalCost,
     };
   };
+
+  /**
+   * Rounds run and dollars spent, by the definition the budget is enforced
+   * against: the runs of the graph's own Task nodes.
+   *
+   * `graph()` ships this to the client so the page's spend reads the same
+   * number the coordinator will stop on. Note it is deliberately NOT the goal
+   * list's `totalRunCost`, which walks the whole `parent_task_id` subtree —
+   * that number is larger for a goal whose Tasks spawned Tasks.
+   */
+  private resolveSpend = async (graph: GoalGraphSnapshot) =>
+    this.taskTopicModel.sumRunCostByTaskIds(
+      graph.nodes.flatMap((node) => (node.taskId ? [node.taskId] : [])),
+    );
 
   /**
    * Edit the goal's standing acceptance requirement in place. The next
@@ -721,10 +737,12 @@ export class GoalService {
     const wasBinding = await this.evaluateBudget(before.goal, before);
 
     // Deadline joins the two execution budgets on the goal row's config; null
-    // clears it. The merge keeps an untouched recovery/schedule block intact.
+    // clears it, and omitting it leaves it alone — the cost/round editor sends
+    // only what it owns, and must not silently drop a deadline someone set.
+    // The merge keeps an untouched recovery/schedule block intact.
     const config = { ...before.goal.config };
-    if (budget.deadline !== undefined || config.schedule) {
-      config.schedule = { ...config.schedule, deadline: budget.deadline ?? null };
+    if (budget.deadline !== undefined) {
+      config.schedule = { ...config.schedule, deadline: budget.deadline };
     }
 
     const goal = await this.goalModel.update(goalId, {

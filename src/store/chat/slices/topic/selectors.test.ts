@@ -237,6 +237,34 @@ describe('topicSelectors', () => {
       const topics = topicSelectors.displayTopics(state);
       expect(topics).toEqual(topicItems);
     });
+
+    it('should hide every system-owned trigger, not just cron', () => {
+      // A panel fetching the same agent with looser filters (goal chat, task
+      // manager, page copilot) overwrites this bucket, so the list surfaces
+      // must not render whatever lands in it.
+      const polluted = [
+        ...topicItems,
+        { id: 'cron1', name: 'Cron', trigger: 'cron' },
+        { id: 'task1', name: 'Task run', trigger: 'task' },
+        { id: 'doc1', name: 'Doc chat', trigger: 'document' },
+        { id: 'eval1', name: 'Eval', trigger: 'eval' },
+      ];
+      const state = merge(initialStore, {
+        activeAgentId: 'test',
+        topicDataMap: {
+          [topicMapKey({ agentId: 'test' })]: {
+            currentPage: 0,
+            hasMore: false,
+            items: polluted,
+            pageSize: 20,
+            total: polluted.length,
+          },
+        },
+      });
+
+      expect(topicSelectors.displayTopics(state)).toEqual(topicItems);
+      expect(topicSelectors.currentTopicLength(state)).toBe(topicItems.length);
+    });
   });
 
   describe('searchTopics', () => {

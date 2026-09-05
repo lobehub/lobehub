@@ -353,7 +353,14 @@ const FrontierRow = memo<{
       </Flexbox>
 
       {item.rank === 0 && (
-        <Flexbox className={styles.body} gap={14} onClick={stop}>
+        // The expanded body is READ-ONLY content — why it stopped and what each
+        // attempt did — so it must stay part of the row's click target. It used
+        // to stop propagation wholesale for the gate form's sake, which made a
+        // lost/gate row unopenable in practice: the body is most of the row's
+        // height, so a click aimed anywhere natural landed in dead space while
+        // the pointer cursor still promised otherwise. Only the form below opts
+        // out.
+        <Flexbox className={styles.body} gap={14}>
           {item.kind === 'gate' && view.decision && (
             // State the problem itself, in the user's language when the
             // coordinator's vocabulary is recognized — the buttons below
@@ -365,7 +372,9 @@ const FrontierRow = memo<{
           {item.kind === 'stale' && <StaleBody view={view} />}
           <AttemptLedger view={subject ?? view} />
           {item.kind === 'gate' && canEdit && (
-            <>
+            // A click here is aimed at the note field or a decision button —
+            // never at "open this node".
+            <Flexbox gap={14} onClick={stop}>
               <Flexbox gap={4}>
                 <span className={styles.label}>{t('goalProcess.gate.noteLabel')}</span>
                 <TextArea
@@ -393,7 +402,7 @@ const FrontierRow = memo<{
                   </Tooltip>
                 ))}
               </Flexbox>
-            </>
+            </Flexbox>
           )}
         </Flexbox>
       )}

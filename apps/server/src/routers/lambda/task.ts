@@ -1735,6 +1735,28 @@ export const taskRouter = router({
       }
     }),
 
+  updateStatusCascade: taskProcedureWrite
+    .input(
+      z.object({
+        id: z.string(),
+        status: z.enum(['canceled', 'completed']),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const result = await ctx.taskService.updateStatusCascade(input);
+        return { data: result, message: `Task family ${input.status}`, success: true };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        console.error('[task:updateStatusCascade]', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to update task family status',
+        });
+      }
+    }),
+
   // Cross-workspace task *transfer* is intentionally not supported anymore:
   // moving a task drags its whole subtree plus history (dependencies,
   // documents, comments) out of the workspace. Use `copyTaskToWorkspace`,

@@ -16,7 +16,7 @@ import Activity from './Activity';
 import Deliverables from './Deliverables';
 import Findings from './Findings';
 import Frontier, { type FrontierActions } from './Frontier';
-import { buildGoalGraphView } from './goalGraphViewModel';
+import { buildGoalGraphView, isTroubledTaskNode } from './goalGraphViewModel';
 import Graph from './Graph';
 
 /**
@@ -50,6 +50,7 @@ const ProcessControl = memo<ProcessControlProps>(
     const decideGoal = useGoalStore((s) => s.decideGoal);
     const refreshGoalGraph = useGoalStore((s) => s.refreshGoalGraph);
     const openTaskResult = useChatStore((s) => s.openTaskResult);
+    const openTaskDetail = useChatStore((s) => s.openTaskDetail);
     const openGoalNode = useChatStore((s) => s.openGoalNode);
     useFetchGoalGraph(goalId);
     const snapshot = useGoalStore(goalSelectors.goalGraph(goalId));
@@ -72,14 +73,22 @@ const ProcessControl = memo<ProcessControlProps>(
     // open the drill-down — a dispatched Task lands on its result-focused
     // review surface. The original editable Task remains one explicit step
     // deeper, so Goal inspection does not begin with implementation metadata.
+    //
+    // A lost or failed Task inverts that: it has no result worth reviewing, and
+    // the question is what the run did, so it opens the original Task directly.
     const select = useCallback(
       (nodeId: string) => {
         setSelectedId(nodeId);
-        const taskId = graph?.byId[nodeId]?.node.taskId;
-        if (taskId) openTaskResult(taskId);
-        else openGoalNode(goalId, nodeId);
+        const view = graph?.byId[nodeId];
+        const taskId = view?.node.taskId;
+        if (!taskId) {
+          openGoalNode(goalId, nodeId);
+          return;
+        }
+        if (view && isTroubledTaskNode(view)) openTaskDetail(taskId);
+        else openTaskResult(taskId);
       },
-      [goalId, graph, openGoalNode, openTaskResult],
+      [goalId, graph, openGoalNode, openTaskDetail, openTaskResult],
     );
 
     // Task-carried goals share the `goals` table but never grow a graph. Nothing

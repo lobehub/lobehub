@@ -6,11 +6,13 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { PauseIcon, PlayIcon } from 'lucide-react';
 import { memo, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router';
 
 import NotFound from '@/components/404';
 import AsyncError from '@/components/AsyncError';
 import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
+import { useAgentRoutePath } from '@/features/AgentBreadcrumb/useAgentRoutePath';
 import NavHeader from '@/features/NavHeader';
 import { PortalContent } from '@/features/Portal/router';
 import { usePortalPanelWidth } from '@/features/Portal/usePortalPanelWidth';
@@ -26,7 +28,7 @@ import { goalSelectors, useGoalStore } from '@/store/goal';
 
 import GoalChat from './GoalChat';
 import GoalDetailActions from './GoalDetailActions';
-import { formatSpan, goalStatusKey } from './goalPresentation';
+import { formatSpan, formatUsd, goalStatusKey, summarizeGoalBudget } from './goalPresentation';
 import GoalRequirement from './GoalRequirement';
 import GoalStatusGlyph from './GoalStatusGlyph';
 import ProcessControl from './ProcessControl';
@@ -112,6 +114,8 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const pauseGoal = useGoalStore((s) => s.pauseGoal);
   const resumeGoal = useGoalStore((s) => s.resumeGoal);
 
+  const buildAgentPath = useAgentRoutePath(agentId ?? '');
+
   const showPortal = useChatStore(chatPortalSelectors.showPortal);
   const currentViewType = useChatStore(chatPortalSelectors.currentViewType);
   const [chatOpen, setChatOpen] = useState(true);
@@ -169,12 +173,25 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const durationText = goal.startedAt
     ? formatSpan((goal.completedAt ?? new Date()).getTime() - goal.startedAt.getTime())
     : '—';
-  const budgetText =
-    goal.maxTotalCost === null
-      ? goal.maxRounds === null
-        ? t('goalProcess.metrics.uncapped')
-        : t('goalProcess.metrics.roundsValue', { count: goal.maxRounds })
-      : `$${goal.maxTotalCost}`;
+  // Spend is the metric; the cap is the context it is read against — see
+  // `summarizeGoalBudget`. The label names only the number in the lead, and the
+  // cap trails it at secondary weight rather than sharing top billing.
+  const budget = summarizeGoalBudget(goal, snapshot.spend);
+  const budgetLabel = t(
+    budget.kind === 'rounds' ? 'goalProcess.metrics.rounds' : 'goalProcess.metrics.spend',
+  );
+  const budgetLead =
+    budget.kind === 'cost'
+      ? formatUsd(budget.spent)
+      : budget.kind === 'rounds'
+        ? String(budget.runs)
+        : formatUsd(budget.spent);
+  const budgetTrail =
+    budget.kind === 'cost'
+      ? `/ ${formatUsd(budget.cap)}`
+      : budget.kind === 'rounds'
+        ? `/ ${t('goalProcess.metrics.roundsValue', { count: budget.cap })}`
+        : t('goalProcess.metrics.uncapped');
 
   return (
     <Flexbox horizontal flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
@@ -186,7 +203,9 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                 <AgentBreadcrumb
                   agentId={agentId}
                   extraItems={[goal.title]}
-                  title={t('goalList.title')}
+                  // The goal title owns the last crumb, so this one is a way back
+                  // to the agent's goal list rather than a label for this page.
+                  title={<Link to={buildAgentPath('goals')}>{t('goalList.title')}</Link>}
                 />
               ) : (
                 <Text fontSize={14} weight={500}>
@@ -257,11 +276,16 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                   onClick={open('findings')}
                 />
                 <Metric
-                  label={t('goalProcess.metrics.budget')}
+                  label={budgetLabel}
                   value={
-                    <Text fontSize={16} weight={600}>
-                      {budgetText}
-                    </Text>
+                    <>
+                      <Text fontSize={16} weight={600}>
+                        {budgetLead}
+                      </Text>
+                      <Text fontSize={12} type={'secondary'}>
+                        {budgetTrail}
+                      </Text>
+                    </>
                   }
                   onClick={open('budget')}
                 />

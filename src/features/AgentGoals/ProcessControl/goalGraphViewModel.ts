@@ -94,6 +94,22 @@ export interface GoalNodeView {
   startedAt?: Date;
 }
 
+/**
+ * Whether a Task node is in trouble — lost its heartbeat, or its latest attempt
+ * failed / was rejected.
+ *
+ * A healthy Task opens on its result surface: the delivery is the thing to read
+ * and the implementation metadata stays one step deeper. A broken one inverts
+ * that — there is no result worth reviewing, and the question is what the run
+ * actually did — so it opens the original Task instead.
+ */
+export const isTroubledTaskNode = (view: GoalNodeView): boolean => {
+  if (view.node.kind !== 'task') return false;
+  if (view.isStale) return true;
+  if (view.node.status === 'rejected') return true;
+  return view.attempts.at(-1)?.outcome === 'failed';
+};
+
 export type FrontierItemKind = 'gate' | 'stale' | 'running' | 'ready' | 'done';
 
 export interface FrontierItem {
