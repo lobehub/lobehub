@@ -7,7 +7,10 @@ import { memo } from 'react';
 const styles = createStaticStyles(({ css }) => ({
   label: css`
     overflow: hidden;
+
+    min-width: 0;
     max-width: 200px;
+
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
@@ -20,10 +23,12 @@ const styles = createStaticStyles(({ css }) => ({
     cursor: pointer;
 
     display: flex;
-    flex: none;
+    flex: 0 1 auto;
     gap: 6px;
     align-items: center;
 
+    min-width: 0;
+    max-width: 100%;
     height: 28px;
     padding-inline: 8px;
     border-radius: 6px;
@@ -55,6 +60,8 @@ const styles = createStaticStyles(({ css }) => ({
  * may be ellipsised; the effort half never shrinks, so a long model name can
  * no longer push the effort out of view, and it renders a step dimmer so the
  * two values scan as name + qualifier instead of one run-on label.
+ * The trigger can shrink with its send area on narrow panels; only the model
+ * label gives up width so the effort and adjacent Send control remain visible.
  *
  * `DropdownMenuTrigger` clones its child to inject the open handler, ref and
  * `aria-haspopup`/`aria-expanded`. Swallowing the rest props here leaves a
