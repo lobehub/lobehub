@@ -326,19 +326,41 @@ export class TaskTopicModel {
    * `topics.totalCost` is NULL for a run that has not settled yet; those count
    * as a round but contribute nothing to the sum.
    */
-  async sumRunCostByTaskIds(taskIds: string[]): Promise<{ runs: number; totalCost: number }> {
-    if (taskIds.length === 0) return { runs: 0, totalCost: 0 };
+  async sumRunCostByTaskIds(taskIds: string[]): Promise<{
+    byTask: { runs: number; taskId: string; totalCost: number; totalTokens: number }[];
+    runs: number;
+    totalCost: number;
+    totalTokens: number;
+  }> {
+    if (taskIds.length === 0) return { byTask: [], runs: 0, totalCost: 0, totalTokens: 0 };
 
+    // Grouped once, then folded — one round trip serves both the enforced
+    // total and the per-Task breakdown the cost panel lists.
     const rows = await this.db
       .select({
         runs: count(),
+        taskId: taskTopics.taskId,
         totalCost: sql<string>`coalesce(sum(${topics.totalCost}), 0)`,
+        totalTokens: sql<string>`coalesce(sum(${topics.totalTokens}), 0)`,
       })
       .from(taskTopics)
       .leftJoin(topics, eq(taskTopics.topicId, topics.id))
-      .where(and(inArray(taskTopics.taskId, taskIds), this.ownership()));
+      .where(and(inArray(taskTopics.taskId, taskIds), this.ownership()))
+      .groupBy(taskTopics.taskId);
 
-    return { runs: rows[0]?.runs ?? 0, totalCost: Number(rows[0]?.totalCost ?? 0) };
+    const byTask = rows.map((row) => ({
+      runs: row.runs,
+      taskId: row.taskId,
+      totalCost: Number(row.totalCost ?? 0),
+      totalTokens: Number(row.totalTokens ?? 0),
+    }));
+
+    return {
+      byTask,
+      runs: byTask.reduce((sum, row) => sum + row.runs, 0),
+      totalCost: byTask.reduce((sum, row) => sum + row.totalCost, 0),
+      totalTokens: byTask.reduce((sum, row) => sum + row.totalTokens, 0),
+    };
   }
 
   async findWithHandoffByTaskIds(taskIds: string[], limit: number) {

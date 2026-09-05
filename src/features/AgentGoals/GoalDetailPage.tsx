@@ -167,19 +167,25 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const durationText = goal.startedAt
     ? formatSpan((goal.completedAt ?? new Date()).getTime() - goal.startedAt.getTime())
     : '—';
-  // Spend and budget are one number over another — see `summarizeGoalBudget`.
+  // Spend is the metric; the cap is the context it is read against — see
+  // `summarizeGoalBudget`. The label names only the number in the lead, and the
+  // cap trails it at secondary weight rather than sharing top billing.
   const budget = summarizeGoalBudget(goal, snapshot.spend);
   const budgetLabel = t(
-    budget.kind === 'rounds'
-      ? 'goalProcess.metrics.roundsBudget'
-      : 'goalProcess.metrics.spendBudget',
+    budget.kind === 'rounds' ? 'goalProcess.metrics.rounds' : 'goalProcess.metrics.spend',
   );
-  const budgetText =
+  const budgetLead =
     budget.kind === 'cost'
-      ? `${formatUsd(budget.spent)} / ${formatUsd(budget.cap)}`
+      ? formatUsd(budget.spent)
       : budget.kind === 'rounds'
-        ? `${budget.runs} / ${t('goalProcess.metrics.roundsValue', { count: budget.cap })}`
-        : `${formatUsd(budget.spent)} · ${t('goalProcess.metrics.uncapped')}`;
+        ? String(budget.runs)
+        : formatUsd(budget.spent);
+  const budgetTrail =
+    budget.kind === 'cost'
+      ? `/ ${formatUsd(budget.cap)}`
+      : budget.kind === 'rounds'
+        ? `/ ${t('goalProcess.metrics.roundsValue', { count: budget.cap })}`
+        : t('goalProcess.metrics.uncapped');
 
   return (
     <Flexbox horizontal flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
@@ -246,9 +252,14 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                 <Metric
                   label={budgetLabel}
                   value={
-                    <Text fontSize={16} weight={600}>
-                      {budgetText}
-                    </Text>
+                    <>
+                      <Text fontSize={16} weight={600}>
+                        {budgetLead}
+                      </Text>
+                      <Text fontSize={12} type={'secondary'}>
+                        {budgetTrail}
+                      </Text>
+                    </>
                   }
                   onClick={open('budget')}
                 />

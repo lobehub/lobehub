@@ -401,7 +401,9 @@ describe('GoalService', () => {
     });
     const created = await service.tick(graph.goal.id);
 
-    await serverDB.insert(topics).values({ id: 'tpc_spend_1', totalCost: 6.4, userId });
+    await serverDB
+      .insert(topics)
+      .values({ id: 'tpc_spend_1', totalCost: 6.4, totalTokens: 1200, userId });
     await serverDB
       .insert(taskTopics)
       .values({ seq: 1, taskId: created.taskId!, topicId: 'tpc_spend_1', userId });
@@ -411,7 +413,14 @@ describe('GoalService', () => {
       .insert(taskTopics)
       .values({ seq: 2, taskId: created.taskId!, topicId: 'tpc_spend_2', userId });
 
-    expect((await service.graph(graph.goal.id)).spend).toEqual({ runs: 2, totalCost: 6.4 });
+    const { spend } = await service.graph(graph.goal.id);
+
+    expect(spend).toMatchObject({ runs: 2, totalCost: 6.4, totalTokens: 1200 });
+    // The cost panel lists WHERE the money went, so the same read carries the
+    // per-Task split rather than only the total the budget is checked against.
+    expect(spend?.byTask).toEqual([
+      { runs: 2, taskId: created.taskId!, totalCost: 6.4, totalTokens: 1200 },
+    ]);
   });
 
   it('keeps an existing deadline when only the cost cap is edited', async () => {

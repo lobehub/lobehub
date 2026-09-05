@@ -69,7 +69,7 @@ export type GoalBudgetSummary =
 
 export const summarizeGoalBudget = (
   goal: { maxRounds: number | null; maxTotalCost: number | null },
-  spend?: GoalSpend,
+  spend?: Pick<GoalSpend, 'runs' | 'totalCost'>,
 ): GoalBudgetSummary => {
   // An unfetched spend is 0 rather than unknown: the graph read that carries
   // the budget carries the spend with it, so the pair is never half-loaded.
