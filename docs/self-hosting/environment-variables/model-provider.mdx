@@ -857,4 +857,27 @@ NewAPI is a multi-provider model aggregation service that supports automatic mod
 - Default: `-`
 - Example: `-all,+straico-model-1,+straico-model-2=straico-special`
 
+## Xiaomi MiMo
+
+### `XIAOMIMIMO_API_KEY`
+
+- Type: Required
+- Description: This is the API key you applied for in the Xiaomi MiMo service.
+- Default: -
+- Example: `xxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+
+### `XIAOMIMIMO_PROXY_URL`
+
+- Type: Optional
+- Description: The base URL used to access Xiaomi MiMo. Configure this option when using a proxy or a custom OpenAI-compatible endpoint.
+- Default: `https://api.xiaomimimo.com/v1`
+- Example: `https://api.xiaomimimo.com/v1`
+
+### `XIAOMIMIMO_MODEL_LIST`
+
+- Type: Optional
+- Description: Used to control the Xiaomi MiMo model list. Use `+` to add a model, `-` to hide a model, and `model_name=display_name` to customize the display name of a model. Separate multiple entries with commas. The definition syntax follows the same rules as other providers' model lists.
+- Default: `-`
+- Example: `-all,+mimo-v2.5-pro,+mimo-v2.5=MiMo V2.5,+mimo-v2-flash=MiMo V2 Flash`
+
 [model-list]: /docs/self-hosting/advanced/model-list

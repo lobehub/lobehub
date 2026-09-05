@@ -66,6 +66,16 @@ The `DEFAULT_AGENT_CONFIG` is used to configure the default settings for the Lob
 | Error Handling          | `model=gpt-4;maxToken`                                                                                             | Ignore invalid entry `maxToken` and only parse `model=gpt-4`.                                          |
 | Value Override          | `model=gpt-4;model=gpt-4o`                                                                                         | If a key is repeated, use the value that appears last; in this case, the value of `model` is `gpt-4o`. |
 
+To provide the fallback provider and model for the default agent, configure both fields. The provider value is the provider ID used by LobeHub:
+
+```env
+DEFAULT_AGENT_CONFIG='provider=xiaomimimo;model=mimo-v2.5-pro'
+```
+
+This value is merged first as an initial default. A user's default settings and an agent's persisted configuration take precedence, so changing the environment variable does not override existing agents that already specify a provider or model. It applies when no more specific selection is stored.
+
+This works with any supported provider. Make sure the corresponding server-side provider is enabled (for example, set `XIAOMIMIMO_API_KEY`) and that the selected model is not excluded by its `*_MODEL_LIST` configuration. `DEFAULT_AGENT_CONFIG` does not verify provider or model availability, so an unavailable fallback cannot serve chat requests.
+
 Further reading:
 
 - [\[RFC\] 022 - Default Assistant Parameters Configuration via Environment Variables](https://github.com/lobehub/lobehub/discussions/913)

@@ -62,6 +62,16 @@ LobeHub 在部署时提供了一些额外的配置项，你可以使用环境变
 | 错误处理  | `model=gpt-4;maxToken`                                                                                            | 忽略无效条目 `maxToken`，仅解析出 `model=gpt-4`。          |
 | 值覆盖   | `model=gpt-4;model=gpt-4o`                                                                                        | 如果键重复，使用最后一次出现的值，此处 `model` 的值为 `gpt-4o`。      |
 
+如需为默认助理提供回退服务商和模型，请同时配置这两个字段。服务商的值应使用 LobeHub 内部的 provider ID：
+
+```env
+DEFAULT_AGENT_CONFIG='provider=xiaomimimo;model=mimo-v2.5-pro'
+```
+
+此值会最先作为初始默认配置合并。用户的默认设置和 Agent 已持久化的配置具有更高优先级，因此修改该环境变量不会覆盖已经指定服务商或模型的现有 Agent。只有在没有保存更具体的选择时，才会使用此回退配置。
+
+此配置适用于任意受支持的模型服务商。请确保对应的服务端模型服务商已经启用（例如设置 `XIAOMIMIMO_API_KEY`），并且所选模型没有被对应的 `*_MODEL_LIST` 配置排除。`DEFAULT_AGENT_CONFIG` 不会校验服务商或模型是否可用，因此不可用的回退配置无法正常发起对话请求。
+
 相关阅读：
 
 - [\[RFC\] 022 - 环境变量配置默认助手参数](https://github.com/lobehub/lobehub/discussions/913)
