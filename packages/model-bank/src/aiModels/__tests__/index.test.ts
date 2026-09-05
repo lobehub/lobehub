@@ -106,7 +106,7 @@ describe('ChatGPT subscription models', () => {
       (model) => model.providerId === ModelProvider.ChatGPT,
     );
 
-    expect(models).toHaveLength(4);
+    expect(models).toHaveLength(5);
     expect(
       models.every((model) => model.settings?.extendParams?.includes('preserveThinking')),
     ).toBe(true);
@@ -324,5 +324,27 @@ describe('Gemini 3.8 introductory pricing', () => {
       strategy: 'fixed',
       unit: 'millionTokens',
     });
+  });
+});
+
+describe('subscription model catalogs', () => {
+  it.each([
+    ['chatgpt', 'gpt-6-astra', 'gpt6ReasoningEffort'],
+    ['supergrok', 'grok-4.6', 'grok4_6ReasoningEffort'],
+  ])('exposes %s/%s without usage-based pricing', (providerId, id, reasoningParam) => {
+    const model = LOBE_DEFAULT_MODEL_LIST.find(
+      (entry) => entry.providerId === providerId && entry.id === id,
+    );
+    expect(model).toMatchObject({ enabled: true, type: 'chat' });
+    expect(model?.pricing).toBeUndefined();
+    expect(model?.settings?.extendParams).toContain(reasoningParam);
+  });
+
+  it('keeps the ChatGPT context cap and thinking preservation', () => {
+    const model = LOBE_DEFAULT_MODEL_LIST.find(
+      (entry) => entry.providerId === 'chatgpt' && entry.id === 'gpt-6-astra',
+    );
+    expect(model?.contextWindowTokens).toBe(272_000);
+    expect(model?.settings?.extendParams).toContain('preserveThinking');
   });
 });
