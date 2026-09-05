@@ -40,6 +40,21 @@ describe('pgLikeDialect', () => {
     expect(match.params).toEqual(['%100\\%%', '%a\\_b%', '%100\\%%', '%a\\_b%']);
   });
 
+  it('bounds the number of expanded terms so bind parameters stay under the PostgreSQL limit', () => {
+    const fields = [agents.id, agents.title, agents.description, agents.slug, agents.tags].map(
+      (column) => ({ column }),
+    );
+    const query = Array.from({ length: 5000 }, (_, index) => `term${index}`).join(' ');
+
+    const match = render(pgLikeDialect.match(fields, query));
+    expect(match.params).toHaveLength(fields.length * 48);
+    expect(match.params[0]).toBe('%term0%');
+    expect(match.params[47]).toBe('%term47%');
+
+    const score = render(pgLikeDialect.score(agents.id, fields, query));
+    expect(score.params).toHaveLength(fields.length * (48 + 3));
+  });
+
   it('weights exact, prefix, phrase, and all-terms matches per field', () => {
     const score = render(
       pgLikeDialect.score(agents.id, [{ column: agents.title, weight: 5 }], 'kube ops'),

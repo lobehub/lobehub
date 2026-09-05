@@ -2,7 +2,7 @@ import type { SQL } from 'drizzle-orm';
 import { sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
-import { sanitizeBm25Query } from '../../../utils/bm25';
+import { SAFE_BM25_QUERY_OPTIONS, sanitizeBm25Query } from '../../../utils/bm25';
 import { escapeLike } from '../../../utils/like';
 
 /** One searchable column of a single table together with its ranking weight. */
@@ -60,13 +60,22 @@ export const pgSearchDialect: PgFtsSearchDialect = {
 const LIKE_ESCAPE = sql.raw(`ESCAPE '\\'`);
 
 /**
+ * Upper bound on the terms expanded into `ILIKE` predicates. Every term costs one
+ * bind parameter per searchable field in both the match predicate and the score
+ * expression, so an unbounded query would exceed PostgreSQL's 65535 bind-parameter
+ * limit (and build multi-megabyte `AND` chains long before that). Extra terms are
+ * dropped, which only widens the `AND` match, matching the BM25 sanitizer cap.
+ */
+const LIKE_MAX_TERMS = SAFE_BM25_QUERY_OPTIONS.maxTerms;
+
+/**
  * Mirrors the BM25 sanitizer's tokenization (hyphens act as separators) so a
  * hyphenated query still matches text written with spaces. A query made only of
  * separators falls back to one literal term.
  */
 const splitLikeTerms = (query: string) => {
   const trimmed = query.trim();
-  const terms = trimmed.replaceAll('-', ' ').split(/\s+/).filter(Boolean);
+  const terms = trimmed.replaceAll('-', ' ').split(/\s+/).filter(Boolean).slice(0, LIKE_MAX_TERMS);
 
   return terms.length > 0 ? terms : [trimmed];
 };
