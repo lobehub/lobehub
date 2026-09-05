@@ -230,8 +230,17 @@ export const dataSlice: StateCreator<
         merged.length,
       );
       get().replaceMessages(merged, { expectedContext: context });
+    } catch (error) {
+      // The list fires this without awaiting; a swallowed failure resets the
+      // flags below, so the next near-top scroll simply retries the page.
+      log('[loadEarlierMessages] failed | contextKey=%s | %O', messageMapKey(context), error);
     } finally {
-      set({ isLoadingEarlierMessages: false }, false, 'loadEarlierMessages/end');
+      // The flag is conversation-wide state: after a context switch it belongs
+      // to the new conversation (reset by createEphemeralResetState), so a
+      // late settle from the previous one must not clear it.
+      if (isSameConversationContext(context, get().context)) {
+        set({ isLoadingEarlierMessages: false }, false, 'loadEarlierMessages/end');
+      }
     }
   },
 
