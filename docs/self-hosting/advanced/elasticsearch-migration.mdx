@@ -113,11 +113,12 @@ clients all refuse to send an API key over plaintext HTTP.
 
 5. Keep the application's search backend on PostgreSQL and keep incremental Elasticsearch draining disabled.
 
-The first production mapping is version `v1`. The tool creates physical indexes such as `lobehub-messages-v1`. After all 14 indexes finish and their counts match the durable checkpoints, it creates stable aliases such as `lobehub-messages`. An alias is only a stable Elasticsearch name; creating it does not change which search backend serves users.
+Every entity index declares a schema version in code; the first production mapping of every entity is `v1`. The tool creates physical indexes such as `lobehub-messages-v1` and stamps the declared version and a fingerprint of the mapping into each index's `_meta`. After all 14 indexes finish and their counts match the durable checkpoints, it creates stable aliases such as `lobehub-messages`. An alias is only a stable Elasticsearch name; creating it does not change which search backend serves users.
 
-If a stable alias already points to another physical index, the command fails instead of moving it.
-Online schema-version upgrades require a separately coordinated dual-write migration and are not
-supported by this initial migration tool.
+If a stable alias already serves an older generation of the same entity, the command leaves it there
+and reports `promotion_pending`; moving an alias is the explicit `--promote` step described in
+[Change a mapping later](#change-a-mapping-later). An alias that points at an index outside the
+`<alias>-v<n>` naming scheme fails the command instead of being moved.
 
 ## Run from source
 
@@ -323,8 +324,10 @@ The high-water revision is an observation point for catch-up monitoring, not a c
 snapshot. An incremental consumer must process every queued row and must never discard rows only
 because their revision is at or below that value.
 
-Run `--status` and confirm all 14 entities show `completed`, every `failedCount` is `0`, and the
-Outbox `dead` count is `0` before starting the incremental consumer documented above. A paused
+Run `--status` and confirm all 14 entities show `completed` under `runs`, every `failedCount` is `0`,
+and the Outbox `dead` count is `0` before starting the incremental consumer documented above. When
+`ES_URL` is configured, `--status` also lists `generations`: for every entity, which physical index
+the alias serves, whether it matches the mapping the deployed code declares, and the next action. A paused
 incremental consumer may leave queued Outbox work; that is expected
 while backfill is running and does not mean source-change capture is paused. The status output
 lists unresolved document IDs, retryability, and attempt counts without persisting or printing
@@ -355,6 +358,80 @@ progress.
   the application is ready to switch search backends by itself. Keep `fts-search:sync` scheduled for as
   long as Elasticsearch serves search traffic.
 </Callout>
+
+## Change a mapping later
+
+Elasticsearch cannot alter an existing field. Every later mapping change therefore goes through the
+same generation model, one entity at a time:
+
+1. The mapping in code changes and that entity's `schemaVersion` is bumped in the same change. A test
+   fails when a mapping or the shared analysis changes without a bump, so a deployment never runs
+   against an index whose `_meta` disagrees with its code.
+2. Deploy the code. The incremental consumer keeps running while an alias still serves an older
+   generation: it writes every change to all open generations of an entity, pruned to the fields
+   each generation maps, so a new generation can be built next to the live one. It refuses to run
+   against a generation newer than the code declares, so after a code rollback move the alias back
+   first.
+3. Run `--status`. Each entity is classified as `in_sync`, `upgrade_available`, `drift` (the mapping
+   changed without a bump), `rollback_required` (the alias serves a newer version than the code), or
+   `unmanaged`, and the `mappingChange` field says whether the change is `additive` or `breaking`.
+
+### Rebuild the entity (any change)
+
+```bash
+ES_REINDEX_STATE_DIR=.elasticsearch-reindex \
+  bun run fts-search:reindex -- --apply --entity=messages --yes
+```
+
+Without `--fresh-run`, the command recognises the existing alias as a generation upgrade and builds
+`lobehub-messages-v2` beside `lobehub-messages-v1`, tracked by its own checkpoint. Only the entities
+whose declared version changed belong to the new generation; the others stay on their live indexes.
+Because the consumer writes concurrently, the new index may legitimately hold more documents than
+the backfill wrote; only a shortfall fails reconciliation. When the backfill finishes, the alias is
+left on `v1` and the command reports `promotion_pending`.
+
+Promote once `--status` shows the Outbox idle (`pending`, `retrying`, `inFlight`, and `dead` all `0`):
+
+```bash
+ES_REINDEX_STATE_DIR=.elasticsearch-reindex \
+  bun run fts-search:reindex -- --promote --entity=messages --yes
+```
+
+The alias moves atomically to the newest generation that is fully backfilled and matches the declared
+mapping. Searches switch with it; nothing is deleted. To roll back, promote the previous generation
+explicitly (`--promote --entity=messages --version=1`), redeploy the matching code, and rebuild later.
+Promotion refuses to run while the Outbox has work, because the consumer must have written every
+change to the new generation first.
+
+Retire the old generation only after the new one has served traffic and no rollback is planned:
+
+```bash
+ES_REINDEX_STATE_DIR=.elasticsearch-reindex \
+  bun run fts-search:reindex -- --retire --entity=messages --yes
+```
+
+Retirement is two-phase. The first run closes the old index, which removes it from the consumer's
+write targets; a later run deletes indexes that are already closed. Closing first avoids a window in
+which a consumer that still lists the deleted index recreates it with a dynamic mapping.
+
+### Add fields in place (additive change only)
+
+When `--status` reports `mappingChange: additive` (the new mapping only adds top-level fields), the
+live index can be widened instead of rebuilt:
+
+```bash
+ES_REINDEX_STATE_DIR=.elasticsearch-reindex \
+  bun run fts-search:reindex -- --apply --in-place --entity=messages --yes
+```
+
+The command adds the new fields and the new `_meta` to the live index, then backfills every document
+so the new fields are populated; concurrent consumer writes win through Elasticsearch versioning. The
+physical index keeps its original name (`lobehub-messages-v1`) while its `_meta` records `v2`;
+`--status` and the runtime read the version from `_meta`. Nothing is promoted or retired afterwards.
+
+The trade-off is rollback: there is no previous generation to promote back to. Rolling the code back
+after an in-place upgrade requires rebuilding the entity from the older code. Prefer a rebuild when a
+rollback is likely; prefer in place when the entity is large and the change is a safe addition.
 
 ## Remove pg\_search before the Neon deadline
 

@@ -3,14 +3,42 @@ import type { FtsSearchDocumentEntity } from '@lobechat/types';
 import { FTS_SEARCH_DOCUMENT_ENTITIES } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getFtsSearchIndexSchemaFingerprint } from '../../../../packages/database/src/repositories/ftsSearchDocument';
+import type * as FtsSearchDocumentRepository from '../../../../packages/database/src/repositories/ftsSearchDocument';
+import {
+  buildFtsSearchIndexMeta,
+  FTS_SEARCH_INDEX_ANALYSIS,
+  FTS_SEARCH_INDEX_DEFINITIONS,
+  getFtsSearchIndexSchemaFingerprint,
+  getFtsSearchPhysicalIndexName,
+} from '../../../../packages/database/src/repositories/ftsSearchDocument';
 import type { FtsSearchReindexFailure, FtsSearchReindexRunState } from '../checkpointRepository';
+import type { FtsSearchReindexGenerationDescription } from '../elasticsearchClient';
 import type {
   FtsSearchReindexElasticsearchClient,
   FtsSearchReindexProgressEvent,
   FtsSearchReindexStateRepository,
 } from '../reindexService';
-import { FtsSearchReindexService } from '../reindexService';
+import { FtsSearchReindexEntityError, FtsSearchReindexService } from '../reindexService';
+
+/**
+ * Every real search entity currently declares schema version 1, so overriding one entity's declared
+ * version is the only way to exercise a checkpoint generation that an entity has already left.
+ */
+const { declaredSchemaVersions } = vi.hoisted(() => ({
+  declaredSchemaVersions: new Map<string, number>(),
+}));
+
+vi.mock(
+  '../../../../packages/database/src/repositories/ftsSearchDocument',
+  async (importActual) => {
+    const actual = await importActual<typeof FtsSearchDocumentRepository>();
+    return {
+      ...actual,
+      getFtsSearchIndexSchemaVersion: (entity: FtsSearchDocumentEntity) =>
+        declaredSchemaVersions.get(entity) ?? actual.getFtsSearchIndexSchemaVersion(entity),
+    };
+  },
+);
 
 const createState = (): FtsSearchReindexRunState => ({
   progress: FTS_SEARCH_DOCUMENT_ENTITIES.map((entity) => ({
@@ -19,7 +47,7 @@ const createState = (): FtsSearchReindexRunState => ({
     entity,
     failedCount: 0,
     indexedCount: 0,
-    physicalIndex: `test-${entity}-v1`,
+    physicalIndex: getFtsSearchPhysicalIndexName('test', entity, 1),
     processedCount: 0,
     status: 'pending',
   })),
@@ -36,6 +64,60 @@ const createState = (): FtsSearchReindexRunState => ({
     updatedAt: '2026-08-28T00:00:00.000Z',
   },
 });
+
+type FtsSearchReindexLiveMappings = NonNullable<FtsSearchReindexGenerationDescription['mappings']>;
+
+/**
+ * Mapping the live `topics` index reports back: the declared field set minus `description`, so the
+ * declared generation only adds one top-level field and stays applicable in place.
+ */
+const upgradableTopicsMappings = (): FtsSearchReindexLiveMappings => {
+  const mappings = structuredClone(
+    FTS_SEARCH_INDEX_DEFINITIONS.topics.mappings,
+  ) as unknown as FtsSearchReindexLiveMappings;
+  delete mappings.properties.description;
+  return mappings;
+};
+
+/** Generation description Elasticsearch reports for an open index the alias serves for writes. */
+const createGeneration = (
+  index: string,
+  overrides: Partial<FtsSearchReindexGenerationDescription> = {},
+): FtsSearchReindexGenerationDescription => ({
+  aliased: true,
+  analysis: structuredClone(FTS_SEARCH_INDEX_ANALYSIS) as unknown as Record<string, unknown>,
+  index,
+  isWriteIndex: true,
+  mappings: null,
+  meta: null,
+  state: 'open',
+  version: 1,
+  ...overrides,
+});
+
+const createLiveTopicsGeneration = (
+  overrides: Partial<FtsSearchReindexGenerationDescription> = {},
+) =>
+  createGeneration('test-topics-v1', {
+    mappings: upgradableTopicsMappings(),
+    meta: buildFtsSearchIndexMeta('topics', 'run-0'),
+    ...overrides,
+  });
+
+/**
+ * Turns the state into a v2 generation that upgrades `topics` in place: every other entity targets
+ * its rebuilt v2 index while `topics` stays pinned to the v1 index the alias already serves.
+ */
+const pinTopicsInPlace = (state: FtsSearchReindexRunState) => {
+  declaredSchemaVersions.set('topics', 2);
+  state.run.schemaVersion = 2;
+  for (const progress of state.progress) {
+    progress.physicalIndex = getFtsSearchPhysicalIndexName('test', progress.entity, 2);
+  }
+  const topics = state.progress.find(({ entity }) => entity === 'topics')!;
+  topics.physicalIndex = getFtsSearchPhysicalIndexName('test', 'topics', 1);
+  return topics;
+};
 
 const createFailure = (
   entity: FtsSearchDocumentEntity,
@@ -60,8 +142,10 @@ const createDependencies = () => {
   const client: FtsSearchReindexElasticsearchClient = {
     bulk: vi.fn().mockResolvedValue([]),
     count: vi.fn().mockResolvedValue(0),
-    ensureAlias: vi.fn().mockResolvedValue(undefined),
+    describeGenerations: vi.fn().mockResolvedValue([]),
+    ensureAlias: vi.fn().mockResolvedValue('created'),
     ensureIndex: vi.fn().mockResolvedValue(undefined),
+    putMapping: vi.fn().mockResolvedValue(undefined),
     refresh: vi.fn().mockResolvedValue(undefined),
   };
   const repository: FtsSearchReindexStateRepository = {
@@ -96,7 +180,10 @@ const createDependencies = () => {
   return { builder, client, repository, state };
 };
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  declaredSchemaVersions.clear();
+  vi.clearAllMocks();
+});
 
 describe('FtsSearchReindexService', () => {
   it('uses defaults when optional batch limits are undefined', async () => {
@@ -125,7 +212,7 @@ describe('FtsSearchReindexService', () => {
     });
     vi.mocked(client.bulk).mockResolvedValue([{ status: 201 }]);
     vi.mocked(client.count).mockImplementation(async (index) =>
-      index.includes('-documents-') ? 2 : 0,
+      index === getFtsSearchPhysicalIndexName('test', 'documents', 1) ? 2 : 0,
     );
     const service = new FtsSearchReindexService(builder, repository, client, {
       batchSize: 2,
@@ -763,5 +850,309 @@ describe('FtsSearchReindexService', () => {
       'Error: Elasticsearch bulk item failed (400, type=mapper_parsing_exception)',
     );
     expect(persistedErrors.join('\n')).not.toContain('private source text');
+  });
+
+  it('reports the entities whose alias still serves an older generation', async () => {
+    const { builder, client, repository } = createDependencies();
+    const events: FtsSearchReindexProgressEvent[] = [];
+    const keptAliases = new Set(['test-agents', 'test-topics']);
+    vi.mocked(client.ensureAlias).mockImplementation(async (alias) =>
+      keptAliases.has(alias) ? 'kept_other_generation' : 'created',
+    );
+    const service = new FtsSearchReindexService(builder, repository, client, {
+      onProgress: (event) => {
+        events.push(event);
+      },
+    });
+
+    await expect(service.run('test', 1)).resolves.toMatchObject({
+      status: 'ready_for_incremental_sync',
+    });
+
+    expect(events).toContainEqual({ entities: ['agents', 'topics'], type: 'promotion_pending' });
+    /** The remaining 12 aliases were created for this generation, so the cutover still happened. */
+    expect(events).toContainEqual({ type: 'aliases_created' });
+    expect(repository.markReadyForIncrementalSync).toHaveBeenCalledOnce();
+  });
+
+  it('does not announce a cutover when every alias still serves an older generation', async () => {
+    const { builder, client, repository } = createDependencies();
+    const events: FtsSearchReindexProgressEvent[] = [];
+    vi.mocked(client.ensureAlias).mockResolvedValue('kept_other_generation');
+    const service = new FtsSearchReindexService(builder, repository, client, {
+      onProgress: (event) => {
+        events.push(event);
+      },
+    });
+
+    await expect(service.run('test', 1)).resolves.toMatchObject({
+      status: 'ready_for_incremental_sync',
+    });
+
+    expect(events).toContainEqual({
+      entities: [...FTS_SEARCH_DOCUMENT_ENTITIES],
+      type: 'promotion_pending',
+    });
+    expect(events).not.toContainEqual({ type: 'aliases_created' });
+  });
+
+  it('emits no alias event when every alias already points at this generation', async () => {
+    const { builder, client, repository } = createDependencies();
+    const events: FtsSearchReindexProgressEvent[] = [];
+    vi.mocked(client.ensureAlias).mockResolvedValue('existing');
+    const service = new FtsSearchReindexService(builder, repository, client, {
+      onProgress: (event) => {
+        events.push(event);
+      },
+    });
+
+    await expect(service.run('test', 1)).resolves.toMatchObject({
+      status: 'ready_for_incremental_sync',
+    });
+
+    expect(client.ensureAlias).toHaveBeenCalledTimes(14);
+    expect(repository.markReadyForIncrementalSync).toHaveBeenCalledOnce();
+    expect(
+      events.filter(({ type }) => type === 'aliases_created' || type === 'promotion_pending'),
+    ).toEqual([]);
+  });
+
+  it('scopes the generation to the run entities and backfills only the selected ones', async () => {
+    const { builder, client, repository, state } = createDependencies();
+    const runEntities: FtsSearchDocumentEntity[] = ['topics', 'agents'];
+    /** The checkpoint owns the generation, so it only hands back the requested entities. */
+    state.progress = state.progress.filter(({ entity }) => runEntities.includes(entity));
+    const service = new FtsSearchReindexService(builder, repository, client, {
+      entities: ['topics'],
+    });
+
+    await expect(service.run('test', 1, runEntities)).resolves.toMatchObject({
+      status: 'backfilling',
+    });
+
+    expect(repository.createOrResume).toHaveBeenCalledWith('test', 1, runEntities);
+    expect(client.ensureIndex).toHaveBeenCalledTimes(2);
+    expect(builder.buildBatch).toHaveBeenCalledOnce();
+    expect(builder.buildBatch).toHaveBeenCalledWith('topics', { afterId: undefined, limit: 500 });
+    expect(state.progress).toEqual([
+      expect.objectContaining({ entity: 'agents', status: 'pending' }),
+      expect.objectContaining({ entity: 'topics', status: 'completed' }),
+    ]);
+    expect(client.ensureAlias).not.toHaveBeenCalled();
+  });
+
+  it('skips an entity whose declared version moved to a newer generation', async () => {
+    const { builder, client, repository, state } = createDependencies();
+    declaredSchemaVersions.set('topics', 2);
+    const service = new FtsSearchReindexService(builder, repository, client, {
+      entities: ['agents'],
+    });
+
+    await service.prepareIndices(state);
+
+    expect(client.ensureIndex).toHaveBeenCalledTimes(13);
+    expect(client.ensureIndex).not.toHaveBeenCalledWith(
+      'test-topics-v1',
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it('refuses to reuse an old generation for an entity that declared a new version', async () => {
+    const { builder, client, repository, state } = createDependencies();
+    declaredSchemaVersions.set('topics', 2);
+    const service = new FtsSearchReindexService(builder, repository, client, {
+      entities: ['topics'],
+      entityConcurrency: 1,
+    });
+
+    await expect(service.prepareIndices(state)).rejects.toMatchObject({
+      entity: 'topics',
+      message: expect.stringContaining(
+        'Checkpoint targets schema version 1 but the code declares v2 for topics',
+      ),
+    });
+    expect(client.ensureIndex).not.toHaveBeenCalledWith(
+      'test-topics-v1',
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it('adds the new fields to the live index instead of building the next generation', async () => {
+    const { builder, client, repository, state } = createDependencies();
+    pinTopicsInPlace(state);
+    vi.mocked(client.describeGenerations).mockResolvedValue([createLiveTopicsGeneration()]);
+    const service = new FtsSearchReindexService(builder, repository, client, {
+      entities: ['topics'],
+      entityConcurrency: 1,
+    });
+
+    await service.prepareIndices(state);
+
+    expect(client.describeGenerations).toHaveBeenCalledWith('test-topics');
+    expect(client.putMapping).toHaveBeenCalledOnce();
+    /**
+     * The upgrade restamps `_meta` from the declared definition, so the live index records the run
+     * that widened it and the fingerprint of the mapping it now implements.
+     */
+    expect(client.putMapping).toHaveBeenCalledWith('test-topics-v1', {
+      _meta: buildFtsSearchIndexMeta('topics', 'run-1'),
+      properties: FTS_SEARCH_INDEX_DEFINITIONS.topics.mappings.properties,
+    });
+    expect(buildFtsSearchIndexMeta('topics', 'run-1')).toMatchObject({
+      reindex_run_id: 'run-1',
+      schema_fingerprint: getFtsSearchIndexSchemaFingerprint('topics'),
+    });
+    /** The pinned index already exists, so preparation must never recreate it. */
+    expect(client.ensureIndex).toHaveBeenCalledOnce();
+    expect(client.ensureIndex).toHaveBeenCalledWith('test-topics-v1', expect.any(Object), {
+      createIfMissing: false,
+    });
+  });
+
+  it('refuses an in-place upgrade when the live mapping change is not additive', async () => {
+    const { builder, client, repository, state } = createDependencies();
+    pinTopicsInPlace(state);
+    const mappings = upgradableTopicsMappings();
+    /** Elasticsearch cannot re-analyze an existing field, so a changed analyzer needs a rebuild. */
+    mappings.properties.title = { analyzer: 'lobehub_icu', type: 'text' };
+    vi.mocked(client.describeGenerations).mockResolvedValue([
+      createLiveTopicsGeneration({ mappings }),
+    ]);
+    const service = new FtsSearchReindexService(builder, repository, client, {
+      entities: ['topics'],
+      entityConcurrency: 1,
+    });
+
+    const error = await service.run('test', 2, ['topics']).catch((cause) => cause);
+
+    expect(error).toBeInstanceOf(FtsSearchReindexEntityError);
+    expect(error).toMatchObject({ entity: 'topics' });
+    expect(String((error as FtsSearchReindexEntityError).cause)).toContain(
+      'The topics mapping change is not additive',
+    );
+    expect(client.putMapping).not.toHaveBeenCalled();
+    expect(client.ensureIndex).not.toHaveBeenCalled();
+  });
+
+  it('refuses an in-place upgrade of an index the alias does not serve for writes', async () => {
+    const { builder, client, repository, state } = createDependencies();
+    pinTopicsInPlace(state);
+    vi.mocked(client.describeGenerations).mockResolvedValue([
+      createLiveTopicsGeneration({ isWriteIndex: false }),
+    ]);
+    const service = new FtsSearchReindexService(builder, repository, client, {
+      entities: ['topics'],
+      entityConcurrency: 1,
+    });
+
+    await expect(service.prepareIndices(state)).rejects.toMatchObject({
+      entity: 'topics',
+      message: expect.stringContaining('Elasticsearch alias test-topics does not serve'),
+    });
+    expect(client.putMapping).not.toHaveBeenCalled();
+  });
+
+  it('refuses an in-place upgrade of an index that is not an open generation', async () => {
+    const { builder, client, repository, state } = createDependencies();
+    pinTopicsInPlace(state);
+    vi.mocked(client.describeGenerations).mockResolvedValue([
+      createGeneration('test-topics-v2', { mappings: upgradableTopicsMappings(), version: 2 }),
+    ]);
+    const service = new FtsSearchReindexService(builder, repository, client, {
+      entities: ['topics'],
+      entityConcurrency: 1,
+    });
+
+    await expect(service.prepareIndices(state)).rejects.toMatchObject({
+      entity: 'topics',
+      message: expect.stringContaining(
+        'Elasticsearch index test-topics-v1 is not an open generation of test-topics',
+      ),
+    });
+    expect(client.putMapping).not.toHaveBeenCalled();
+  });
+
+  it('does not restamp an in-place upgrade the checkpoint already completed', async () => {
+    const { builder, client, repository, state } = createDependencies();
+    const topics = pinTopicsInPlace(state);
+    topics.completedAt = '2026-08-28T00:01:00.000Z';
+    topics.status = 'completed';
+    const service = new FtsSearchReindexService(builder, repository, client, {
+      entities: ['topics'],
+      entityConcurrency: 1,
+    });
+
+    await service.prepareIndices(state);
+
+    expect(client.describeGenerations).not.toHaveBeenCalled();
+    expect(client.putMapping).not.toHaveBeenCalled();
+    expect(client.ensureIndex).toHaveBeenCalledWith('test-topics-v1', expect.any(Object), {
+      createIfMissing: false,
+    });
+  });
+
+  it('accepts documents incremental sync wrote into an aliased generation', async () => {
+    const { builder, client, repository } = createDependencies();
+    const events: FtsSearchReindexProgressEvent[] = [];
+    vi.mocked(client.count).mockImplementation(async (index) =>
+      index.includes('-agents-') ? 1 : 0,
+    );
+    vi.mocked(client.describeGenerations).mockImplementation(async (alias) => [
+      createGeneration(`${alias}-v1`),
+    ]);
+    const service = new FtsSearchReindexService(builder, repository, client, {
+      onProgress: (event) => {
+        events.push(event);
+      },
+    });
+
+    await expect(service.run('test', 1)).resolves.toMatchObject({
+      status: 'ready_for_incremental_sync',
+    });
+
+    expect(events).toContainEqual({
+      checkpointCount: 0,
+      drift: 1,
+      elasticsearchCount: 1,
+      entity: 'agents',
+      type: 'reconciliation',
+    });
+  });
+
+  it('still blocks a shortfall while incremental sync writes to the generation', async () => {
+    const { builder, client, repository, state } = createDependencies();
+    state.progress.find(({ entity }) => entity === 'agents')!.indexedCount = 2;
+    vi.mocked(client.count).mockImplementation(async (index) =>
+      index.includes('-agents-') ? 1 : 0,
+    );
+    vi.mocked(client.describeGenerations).mockImplementation(async (alias) => [
+      createGeneration(`${alias}-v1`),
+    ]);
+    const service = new FtsSearchReindexService(builder, repository, client);
+
+    await expect(service.run('test', 1)).rejects.toThrow(
+      'Reindex count mismatch for agents: checkpoint=2, Elasticsearch=1',
+    );
+
+    expect(client.ensureAlias).not.toHaveBeenCalled();
+  });
+
+  it('blocks any drift on a fresh install whose generation no alias serves yet', async () => {
+    const { builder, client, repository } = createDependencies();
+    vi.mocked(client.count).mockImplementation(async (index) =>
+      index.includes('-agents-') ? 1 : 0,
+    );
+    vi.mocked(client.describeGenerations).mockImplementation(async (alias) => [
+      createGeneration(`${alias}-v1`, { aliased: false, isWriteIndex: false }),
+    ]);
+    const service = new FtsSearchReindexService(builder, repository, client);
+
+    await expect(service.run('test', 1)).rejects.toThrow(
+      'Reindex count mismatch for agents: checkpoint=0, Elasticsearch=1',
+    );
+
+    expect(client.ensureAlias).not.toHaveBeenCalled();
   });
 });

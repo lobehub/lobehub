@@ -114,12 +114,6 @@ describe('search index schema generations', () => {
     },
   );
 
-  it('keeps every entity on the run-level baseline until the reindex run is per-entity', () => {
-    for (const entity of FTS_SEARCH_DOCUMENT_ENTITIES) {
-      expect(getFtsSearchIndexSchemaVersion(entity)).toBe(FTS_SEARCH_INDEX_SCHEMA_VERSION);
-    }
-  });
-
   it('derives distinct fingerprints from the mapping, not from the entity name', () => {
     expect(getFtsSearchIndexSchemaFingerprint('agents')).not.toBe(
       getFtsSearchIndexSchemaFingerprint('topics'),
@@ -160,6 +154,7 @@ describe('search index mappings', () => {
   });
 
   it('provides deployment-neutral versioned alias and physical names', () => {
+    // The first rollout built every entity as v1; later generations move per entity.
     expect(FTS_SEARCH_INDEX_SCHEMA_VERSION).toBe(1);
     expect(getFtsSearchIndexAlias('lobehub-dev', 'knowledgeBases')).toBe(
       'lobehub-dev-knowledge-bases',

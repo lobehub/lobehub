@@ -470,9 +470,9 @@ export const FTS_SEARCH_INDEX_DEFINITIONS = {
 };
 
 /**
- * Run-level baseline version of the first production rollout. The reindex checkpoint still tracks
- * one generation for all entities, so every `schemaVersion` must equal this value until the run
- * model becomes per-entity; `getFtsSearchIndexSchemaVersion` is the authoritative per-entity value.
+ * Generation of the first production rollout, when every entity was built by one reindex run.
+ * Generations are per entity now and `getFtsSearchIndexSchemaVersion` is the authoritative value;
+ * this constant only identifies that initial checkpoint.
  *
  * @deprecated Use `getFtsSearchIndexSchemaVersion(entity)`.
  */
