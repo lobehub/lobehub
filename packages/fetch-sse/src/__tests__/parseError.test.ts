@@ -135,15 +135,10 @@ describe('getMessageError', () => {
   });
 
   it('should translate deprecated alias codes under their canonical key', async () => {
-    // `getErrorCodeSpec('PipelineError')` resolves through CODE_ALIASES, but the
-    // locale file only has the canonical `ContextEnginePipelineError` key.
-    const mockResponse = createMockResponse(
-      { body: {}, errorType: 'PipelineError' } as ErrorResponse,
-      false,
-      500,
-    );
+    /** Legacy server payloads may contain aliases excluded from the current ErrorResponse type. */
+    const response = Response.json({ body: {}, errorType: 'PipelineError' }, { status: 500 });
 
-    await getMessageError(mockResponse as any);
+    await getMessageError(response);
 
     expect(t).toHaveBeenCalledWith(
       'ContextEnginePipelineError',
