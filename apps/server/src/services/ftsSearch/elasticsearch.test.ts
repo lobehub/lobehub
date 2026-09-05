@@ -357,7 +357,7 @@ describe('ElasticsearchFtsSearchHttpClient', () => {
     );
   });
 
-  it('sends bulk payloads to the alias-only endpoint', async () => {
+  it('sends bulk payloads addressed to physical generation indexes', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ errors: false, items: [{ index: { status: 201 } }] }), {
         headers: { 'Content-Type': 'application/json' },
@@ -377,7 +377,7 @@ describe('ElasticsearchFtsSearchHttpClient', () => {
       items: [{ index: { status: 201 } }],
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      new URL('https://search.example.com/_bulk?require_alias=true'),
+      new URL('https://search.example.com/_bulk'),
       expect.objectContaining({
         body,
         headers: {
@@ -386,6 +386,65 @@ describe('ElasticsearchFtsSearchHttpClient', () => {
         },
         method: 'POST',
       }),
+    );
+  });
+
+  it('lists every live generation behind each alias, including the writable index', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          'lobehub-agents-v2': { aliases: { 'lobehub-agents': { is_write_index: true } } },
+          'lobehub-agents-v1': { aliases: { 'lobehub-agents': { is_write_index: false } } },
+          'custom-topics': { aliases: { 'lobehub-topics': {} } },
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          'lobehub-agents-v1': { aliases: { 'lobehub-agents': { is_write_index: false } } },
+          'lobehub-agents-v2': { aliases: { 'lobehub-agents': { is_write_index: true } } },
+          'lobehub-agents-v3': { aliases: {} },
+          'lobehub-agents-v3-backup': { aliases: {} },
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new ElasticsearchFtsSearchHttpClient({
+      apiKey: 'test-api-key',
+      url: 'https://search.example.com',
+    });
+
+    await expect(
+      client.getFtsSearchSyncGenerationTargets(['lobehub-topics', 'lobehub-agents']),
+    ).resolves.toEqual({
+      'lobehub-agents': ['lobehub-agents-v1', 'lobehub-agents-v2', 'lobehub-agents-v3'],
+      'lobehub-topics': ['custom-topics'],
+    });
+    expect(fetchMock.mock.calls.map(([url]) => url.toString())).toEqual([
+      'https://search.example.com/_alias/lobehub-topics,lobehub-agents',
+      'https://search.example.com/lobehub-topics-v*,lobehub-agents-v*/_alias?expand_wildcards=open&allow_no_indices=true',
+    ]);
+  });
+
+  it('refuses generation targets for an alias without a unique writable index', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          Response.json({
+            'lobehub-agents-v1': { aliases: { 'lobehub-agents': {} } },
+            'lobehub-agents-v2': { aliases: { 'lobehub-agents': {} } },
+          }),
+        )
+        .mockResolvedValueOnce(Response.json({})),
+    );
+    const client = new ElasticsearchFtsSearchHttpClient({
+      apiKey: 'test-api-key',
+      url: 'https://search.example.com',
+    });
+
+    await expect(client.getFtsSearchSyncGenerationTargets(['lobehub-agents'])).rejects.toThrow(
+      'is not a writable alias: lobehub-agents',
     );
   });
 

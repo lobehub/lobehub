@@ -41,14 +41,17 @@ const searchResponseSchema = z.object({
   took: z.number().nonnegative().optional(),
 });
 
+const bulkItemErrorSchema = z.object({ type: z.string().optional() }).passthrough();
 const bulkResponseSchema = z.object({
   errors: z.boolean().optional(),
   items: z.array(
     z.object({
-      index: z.object({ error: z.unknown().optional(), status: z.number() }),
+      index: z.object({ error: bulkItemErrorSchema.optional(), status: z.number() }),
     }),
   ),
 });
+
+const escapeRegExp = (value: string) => value.replaceAll(/[$()*+.?[\\\]^{|}]/g, String.raw`\$&`);
 
 const aliasResponseSchema = z.record(
   z.string(),
@@ -99,9 +102,13 @@ const indexIdentityResponseSchema = z.record(
   }),
 );
 
+export interface ElasticsearchFtsSearchBulkItem {
+  index: { error?: { type?: string }; status: number };
+}
+
 export interface ElasticsearchFtsSearchBulkResponse {
   errors?: boolean;
-  items: Array<{ index: { error?: unknown; status: number } }>;
+  items: ElasticsearchFtsSearchBulkItem[];
 }
 
 export interface ElasticsearchFtsSearchHttpClientOptions {
@@ -301,9 +308,9 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
     return resolved;
   }
 
-  private async getFtsSearchSyncWriteTargetMap(aliases: string[]) {
-    const aliasPath = aliases.map(encodeURIComponent).join(',');
-    const aliasResponse = await fetch(new URL(`/_alias/${aliasPath}`, this.url), {
+  /** Fetches `GET /_alias/...` or `GET /<indices>/_alias` and validates the shared response shape. */
+  private async fetchAliasTable(path: string): Promise<z.infer<typeof aliasResponseSchema>> {
+    const aliasResponse = await fetch(new URL(path, this.url), {
       headers: this.headers(),
       method: 'GET',
       signal: AbortSignal.timeout(this.requestTimeoutMs),
@@ -331,30 +338,74 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
         aliasResponse.status,
       );
     }
+    return aliasPayload.data;
+  }
+
+  /** Picks the unique writable physical index behind `alias`, failing closed on ambiguity. */
+  private selectWriteTarget(
+    aliasTable: z.infer<typeof aliasResponseSchema>,
+    alias: string,
+  ): string {
+    const targets = Object.entries(aliasTable).filter(([, value]) =>
+      Object.hasOwn(value.aliases, alias),
+    );
+    const explicitWriteTargets = targets.filter(
+      ([, value]) => value.aliases[alias].is_write_index === true,
+    );
+    const writeTarget =
+      explicitWriteTargets.length === 1
+        ? explicitWriteTargets[0]
+        : targets.length === 1 && targets[0][1].aliases[alias].is_write_index !== false
+          ? targets[0]
+          : undefined;
+    if (!writeTarget) {
+      throw new ElasticsearchFtsSearchRequestError(
+        `Elasticsearch full-text search sync destination is not a writable alias: ${alias}`,
+      );
+    }
+    return writeTarget[0];
+  }
+
+  private async getFtsSearchSyncWriteTargetMap(aliases: string[]) {
+    const aliasPath = aliases.map(encodeURIComponent).join(',');
+    const aliasTable = await this.fetchAliasTable(`/_alias/${aliasPath}`);
 
     const writeTargets = new Map<string, string>();
-    for (const alias of aliases) {
-      const targets = Object.entries(aliasPayload.data).filter(([, value]) =>
-        Object.hasOwn(value.aliases, alias),
-      );
-      const explicitWriteTargets = targets.filter(
-        ([, value]) => value.aliases[alias].is_write_index === true,
-      );
-      const writeTarget =
-        explicitWriteTargets.length === 1
-          ? explicitWriteTargets[0]
-          : targets.length === 1 && targets[0][1].aliases[alias].is_write_index !== false
-            ? targets[0]
-            : undefined;
-      if (!writeTarget) {
-        throw new ElasticsearchFtsSearchRequestError(
-          `Elasticsearch full-text search sync destination is not a writable alias: ${alias}`,
-        );
-      }
-      writeTargets.set(alias, writeTarget[0]);
-    }
-
+    for (const alias of aliases) writeTargets.set(alias, this.selectWriteTarget(aliasTable, alias));
     return writeTargets;
+  }
+
+  /**
+   * Lists every live physical generation of each alias so incremental sync can write to all of
+   * them. Generations follow `<alias>-v<n>`; the alias's writable index is always included even if
+   * it was named differently by an operator. Only open indexes count: a generation being retired
+   * is closed first, which drops it from this list before it is deleted.
+   *
+   * Resolved on every drain rather than cached so a generation created by a running rebuild starts
+   * receiving writes on the next batch, and a retired one stops without a restart.
+   */
+  async getFtsSearchSyncGenerationTargets(aliases: string[]): Promise<Record<string, string[]>> {
+    if (aliases.length === 0) return {};
+
+    const patternPath = aliases.map((alias) => encodeURIComponent(`${alias}-v*`)).join(',');
+    // Wildcard patterns only expand to physical indexes, so the alias table still has to be fetched
+    // by alias name to learn which generation currently serves reads and writes.
+    const [aliasTable, generationTable] = await Promise.all([
+      this.fetchAliasTable(`/_alias/${aliases.map(encodeURIComponent).join(',')}`),
+      this.fetchAliasTable(`/${patternPath}/_alias?expand_wildcards=open&allow_no_indices=true`),
+    ]);
+
+    const targets: Record<string, string[]> = {};
+    for (const alias of [...aliases].sort()) {
+      const writeIndex = this.selectWriteTarget(aliasTable, alias);
+      const generationPattern = new RegExp(`^${escapeRegExp(alias)}-v\\d+$`);
+      const generations = new Set(
+        Object.keys(generationTable).filter((index) => generationPattern.test(index)),
+      );
+      generations.add(writeIndex);
+      targets[alias] = [...generations].sort();
+    }
+    return targets;
   }
 
   /** Returns each alias's unique writable physical index after validating tombstone support. */
@@ -501,8 +552,13 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
     );
   }
 
+  /**
+   * Actions name physical generation indexes (see `getFtsSearchSyncGenerationTargets`), so
+   * `require_alias` cannot be used. The live generation is never deleted while aliased, and retired
+   * generations leave the target list before deletion, so no action can auto-create an index.
+   */
   async bulk(body: string): Promise<ElasticsearchFtsSearchBulkResponse> {
-    const endpoint = new URL('/_bulk?require_alias=true', this.url);
+    const endpoint = new URL('/_bulk', this.url);
     const response = await fetch(endpoint, {
       body,
       headers: this.headers({ 'Content-Type': 'application/x-ndjson' }),

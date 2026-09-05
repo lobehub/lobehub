@@ -39,10 +39,23 @@ const createHarness = (
     ),
     releaseMany: vi.fn(async (_items: FtsSearchSyncWork[]) => undefined),
   };
-  const client = { bulk: vi.fn() };
+  const client = {
+    bulk: vi.fn(),
+    getFtsSearchSyncGenerationTargets: vi.fn(async (aliases: string[]) =>
+      Object.fromEntries(aliases.map((alias) => [alias, [`${alias}-v1`]])),
+    ),
+  };
 
   return { builder, client, outbox };
 };
+
+/** Bulk action metadata lines of the first bulk request, in order. */
+const bulkActions = (client: { bulk: { mock: { calls: unknown[][] } } }, call = 0) =>
+  (client.bulk.mock.calls[call][0] as string)
+    .trim()
+    .split('\n')
+    .filter((_, index) => index % 2 === 0)
+    .map((line) => JSON.parse(line).index as { _id: string; _index: string; version: number });
 
 describe('FtsSearchSyncService', () => {
   beforeEach(() => {
@@ -145,6 +158,139 @@ describe('FtsSearchSyncService', () => {
         result: 'response_error',
       }),
     ]);
+  });
+
+  it('writes every change to each live generation and settles it only when all of them hold it', async () => {
+    const works = [work('a', 3), work('b', 4)];
+    const harness = createHarness(
+      works,
+      new Map(works.map((item) => [item.documentId, { id: item.documentId, title: 'title' }])),
+    );
+    harness.client.getFtsSearchSyncGenerationTargets.mockResolvedValue({
+      'lobehub-test-agents': ['lobehub-test-agents-v1', 'lobehub-test-agents-v2'],
+    });
+    harness.client.bulk.mockResolvedValue({
+      errors: true,
+      items: [201, 409, 201, 429].map((status) => ({ index: { status } })),
+    });
+    const service = new FtsSearchSyncService(
+      harness.builder as never,
+      harness.outbox as never,
+      harness.client,
+      'lobehub-test',
+    );
+
+    const result = await service.drainOnce();
+
+    expect(harness.client.getFtsSearchSyncGenerationTargets).toHaveBeenCalledWith([
+      'lobehub-test-agents',
+    ]);
+    expect(bulkActions(harness.client)).toEqual([
+      { _id: 'a', _index: 'lobehub-test-agents-v1', version: 3, version_type: 'external' },
+      { _id: 'a', _index: 'lobehub-test-agents-v2', version: 3, version_type: 'external' },
+      { _id: 'b', _index: 'lobehub-test-agents-v1', version: 4, version_type: 'external' },
+      { _id: 'b', _index: 'lobehub-test-agents-v2', version: 4, version_type: 'external' },
+    ]);
+    expect(harness.outbox.acknowledgeMany).toHaveBeenCalledWith([works[0]]);
+    expect(harness.outbox.markFailures).toHaveBeenCalledWith([
+      expect.objectContaining({ documentId: 'b', permanent: false }),
+    ]);
+    expect(result).toMatchObject({ acknowledged: 1, bulkItems: 4, failed: 1 });
+    expect(result.bulkRequestSamples[0].entities).toEqual({
+      agents: { bytes: expect.any(Number), items: 4, result: 'mixed' },
+    });
+  });
+
+  it('ignores a generation retired mid-drain once another generation accepted the write', async () => {
+    const works = [work('kept'), work('lost')];
+    const harness = createHarness(
+      works,
+      new Map(works.map((item) => [item.documentId, { id: item.documentId, title: 'title' }])),
+    );
+    harness.client.getFtsSearchSyncGenerationTargets.mockResolvedValue({
+      'lobehub-test-agents': ['lobehub-test-agents-v1', 'lobehub-test-agents-v2'],
+    });
+    const notFound = { error: { type: 'index_not_found_exception' }, status: 404 };
+    harness.client.bulk.mockResolvedValue({
+      errors: true,
+      items: [
+        { index: notFound },
+        { index: { status: 201 } },
+        { index: notFound },
+        { index: notFound },
+      ],
+    });
+    const service = new FtsSearchSyncService(
+      harness.builder as never,
+      harness.outbox as never,
+      harness.client,
+      'lobehub-test',
+    );
+
+    const result = await service.drainOnce();
+
+    expect(harness.outbox.acknowledgeMany).toHaveBeenCalledWith([works[0]]);
+    // Every generation vanished: the change must stay durable instead of being silently dropped.
+    expect(harness.outbox.markFailures).toHaveBeenCalledWith([
+      expect.objectContaining({ documentId: 'lost', permanent: true }),
+    ]);
+    expect(result).toMatchObject({ acknowledged: 1, dead: 1, failed: 1 });
+  });
+
+  it('durably retries every claimed change when generation targets cannot be resolved', async () => {
+    const works = [work('a'), work('b')];
+    const harness = createHarness(
+      works,
+      new Map(works.map((item) => [item.documentId, { id: item.documentId, title: 'title' }])),
+    );
+    harness.client.getFtsSearchSyncGenerationTargets.mockRejectedValueOnce(
+      new ElasticsearchFtsSearchRequestError('alias check failed', 503),
+    );
+    const service = new FtsSearchSyncService(
+      harness.builder as never,
+      harness.outbox as never,
+      harness.client,
+      'lobehub-test',
+    );
+
+    const result = await service.drainOnce();
+
+    expect(harness.client.bulk).not.toHaveBeenCalled();
+    expect(harness.outbox.markFailures).toHaveBeenCalledWith([
+      expect.not.objectContaining({ permanent: true }),
+      expect.not.objectContaining({ permanent: true }),
+    ]);
+    expect(result).toMatchObject({ dead: 0, failed: 2, released: 0 });
+  });
+
+  it('splits bulk requests by the expanded multi-generation payload size', async () => {
+    const works = [work('a'), work('b')];
+    const harness = createHarness(
+      works,
+      new Map(works.map((item) => [item.documentId, { id: item.documentId, title: 'x' }])),
+    );
+    harness.client.getFtsSearchSyncGenerationTargets.mockResolvedValue({
+      'lobehub-test-agents': ['lobehub-test-agents-v1', 'lobehub-test-agents-v2'],
+    });
+    harness.client.bulk.mockResolvedValue({
+      errors: false,
+      items: [{ index: { status: 201 } }, { index: { status: 201 } }],
+    });
+    const service = new FtsSearchSyncService(
+      harness.builder as never,
+      harness.outbox as never,
+      harness.client,
+      'lobehub-test',
+      // Fits one two-generation change (~270 bytes) but not two of them.
+      { bulkMaxBytes: 400 },
+    );
+
+    const result = await service.drainOnce();
+
+    expect(harness.client.bulk).toHaveBeenCalledTimes(2);
+    expect(bulkActions(harness.client, 0).map(({ _id }) => _id)).toEqual(['a', 'a']);
+    expect(bulkActions(harness.client, 1).map(({ _id }) => _id)).toEqual(['b', 'b']);
+    expect(result).toMatchObject({ acknowledged: 2, bulkItems: 4, bulkRequests: 2 });
   });
 
   it('writes a soft tombstone when the PostgreSQL row no longer exists', async () => {
@@ -276,13 +422,10 @@ describe('FtsSearchSyncService', () => {
 
     const result = await service.drainOnce();
 
-    const body = harness.client.bulk.mock.calls[0][0] as string;
-    const documentIds = body
-      .trim()
-      .split('\n')
-      .filter((_, index) => index % 2 === 0)
-      .map((line) => JSON.parse(line).index._id);
-    expect(documentIds).toEqual(['urgent-message', 'ordinary-agent']);
+    expect(bulkActions(harness.client)).toEqual([
+      expect.objectContaining({ _id: 'urgent-message', _index: 'lobehub-test-messages-v1' }),
+      expect.objectContaining({ _id: 'ordinary-agent', _index: 'lobehub-test-agents-v1' }),
+    ]);
     expect(result.bulkRequestSamples[0].entities).toEqual({
       agents: { bytes: expect.any(Number), items: 1, result: 'success' },
       messages: { bytes: expect.any(Number), items: 1, result: 'success' },
