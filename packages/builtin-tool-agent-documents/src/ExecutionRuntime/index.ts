@@ -7,7 +7,7 @@ import {
   formatReplaceDocumentResult,
   formatUpdateLoadRuleResult,
 } from '@lobechat/prompts';
-import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
+import type { BuiltinServerRuntimeOutput, BuiltinToolResult } from '@lobechat/types';
 
 import type {
   CopyDocumentArgs,
@@ -176,7 +176,7 @@ export interface AgentDocumentsRuntimeOptions {
    * on the gateway and the client service layer (which normally invalidates)
    * never runs. Invoked from the executor's `onAfterCall` lifecycle hook.
    */
-  onDocumentsMutated?: () => MaybePromise<void>;
+  onDocumentsMutated?: (result: BuiltinToolResult) => MaybePromise<void>;
 }
 
 export class AgentDocumentsExecutionRuntime {
@@ -192,8 +192,8 @@ export class AgentDocumentsExecutionRuntime {
    * mutation ran client- or server-side — covering the server-runtime path the
    * inline client service invalidation can't reach.
    */
-  notifyMutated(): Promise<void> {
-    return Promise.resolve(this.options.onDocumentsMutated?.());
+  notifyMutated(result: BuiltinToolResult): Promise<void> {
+    return Promise.resolve(this.options.onDocumentsMutated?.(result));
   }
 
   private resolveAgentId(context?: AgentDocumentOperationContext) {

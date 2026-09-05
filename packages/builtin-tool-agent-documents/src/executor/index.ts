@@ -20,15 +20,15 @@ import {
   type UpdateLoadRuleArgs,
 } from '../types';
 
-// APIs that change the document set the client list renders (membership or
-// visible title). Content-only edits (replaceDocumentContent / modifyNodes) and
-// read-only calls are excluded — they don't alter the list. Used by
-// `onAfterCall` to decide when to refresh the client-side documents list.
-const LIST_MUTATING_APIS = new Set<string>([
+// Every API that mutates a document. Content-only edits must notify too: their
+// tool result carries the backing document id used to refresh an open editor.
+const DOCUMENT_MUTATING_APIS = new Set<string>([
   AgentDocumentsApiName.createDocument,
   AgentDocumentsApiName.removeDocument,
   AgentDocumentsApiName.renameDocument,
   AgentDocumentsApiName.copyDocument,
+  AgentDocumentsApiName.modifyNodes,
+  AgentDocumentsApiName.replaceDocumentContent,
 ]);
 
 export class AgentDocumentsExecutor extends BaseExecutor<typeof AgentDocumentsApiName> {
@@ -47,8 +47,8 @@ export class AgentDocumentsExecutor extends BaseExecutor<typeof AgentDocumentsAp
   // server-runtime path never touches the client store otherwise, so a created
   // doc wouldn't appear until a manual refresh.
   onAfterCall = async ({ apiName, result }: ToolAfterCallContext): Promise<void> => {
-    if (!LIST_MUTATING_APIS.has(apiName) || !result.success) return;
-    await this.runtime.notifyMutated();
+    if (!DOCUMENT_MUTATING_APIS.has(apiName) || !result.success) return;
+    await this.runtime.notifyMutated(result);
   };
 
   listDocuments = async (

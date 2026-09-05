@@ -37,9 +37,11 @@ const EditorCanvas = memo<EditorCanvasProps>(({ askCopilotTarget, placeholder, s
 
   return (
     <SharedEditorCanvas
+      allowContentBleed
       documentId={documentId}
       editable={editable}
       editor={editor}
+      enableInlineMath={false}
       extraPlugins={extraPlugins}
       placeholder={placeholder || t('pageEditor.editorPlaceholder')}
       slashItems={slashItems}

@@ -18,7 +18,7 @@ type EditorPlugins = NonNullable<Parameters<typeof Editor>[0]['plugins']>;
 
 interface CreateChatInputRichPluginsOptions {
   linkPlugin?: EditorPlugins[number] | false;
-  mathPlugin?: EditorPlugins[number];
+  mathPlugin?: EditorPlugins[number] | false;
 }
 
 export const CHAT_INPUT_EMBED_PLUGINS: EditorPlugins = [
@@ -38,6 +38,6 @@ export const createChatInputRichPlugins = ({
   ReactHRPlugin,
   ...(linkPlugin ? [linkPlugin] : []),
   ReactVirtualBlockPlugin,
-  mathPlugin,
+  ...(mathPlugin ? [mathPlugin] : []),
   ...CHAT_INPUT_EMBED_PLUGINS,
 ];

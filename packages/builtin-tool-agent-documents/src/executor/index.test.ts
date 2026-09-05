@@ -5,7 +5,7 @@ import { AgentDocumentsExecutionRuntime } from '../ExecutionRuntime';
 import { AgentDocumentsApiName } from '../types';
 import { AgentDocumentsExecutor } from './index';
 
-const makeExecutor = (onDocumentsMutated: () => void) => {
+const makeExecutor = (onDocumentsMutated: (result: ToolAfterCallContext['result']) => void) => {
   // onAfterCall only reaches runtime.notifyMutated → options.onDocumentsMutated,
   // so the service methods are never touched here.
   const runtime = new AgentDocumentsExecutionRuntime({} as never, { onDocumentsMutated });
@@ -17,7 +17,7 @@ const ctx = (apiName: string, success: boolean): ToolAfterCallContext =>
     apiName,
     identifier: 'lobe-agent-documents',
     params: {},
-    result: { success },
+    result: { state: { documentId: 'doc-1' }, success },
     toolCallId: 'call_1',
   }) as ToolAfterCallContext;
 
@@ -35,13 +35,18 @@ describe('AgentDocumentsExecutor.onAfterCall', () => {
     AgentDocumentsApiName.removeDocument,
     AgentDocumentsApiName.renameDocument,
     AgentDocumentsApiName.copyDocument,
+    AgentDocumentsApiName.modifyNodes,
+    AgentDocumentsApiName.replaceDocumentContent,
   ])('notifies for the %s mutation', async (apiName) => {
     const onDocumentsMutated = vi.fn();
     const executor = makeExecutor(onDocumentsMutated);
 
     await executor.onAfterCall(ctx(apiName, true));
 
-    expect(onDocumentsMutated).toHaveBeenCalledTimes(1);
+    expect(onDocumentsMutated).toHaveBeenCalledWith({
+      state: { documentId: 'doc-1' },
+      success: true,
+    });
   });
 
   it('skips notification when the call failed', async () => {
@@ -53,12 +58,11 @@ describe('AgentDocumentsExecutor.onAfterCall', () => {
     expect(onDocumentsMutated).not.toHaveBeenCalled();
   });
 
-  it('skips notification for read-only / content-only calls that leave the list unchanged', async () => {
+  it('skips notification for read-only calls', async () => {
     const onDocumentsMutated = vi.fn();
     const executor = makeExecutor(onDocumentsMutated);
 
     await executor.onAfterCall(ctx(AgentDocumentsApiName.listDocuments, true));
-    await executor.onAfterCall(ctx(AgentDocumentsApiName.replaceDocumentContent, true));
 
     expect(onDocumentsMutated).not.toHaveBeenCalled();
   });
