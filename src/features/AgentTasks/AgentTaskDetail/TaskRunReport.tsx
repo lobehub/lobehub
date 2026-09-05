@@ -2,11 +2,12 @@
 
 import type { TaskDetailActivity } from '@lobechat/types';
 import { Flexbox, Markdown } from '@lobehub/ui';
-import { ActionIcon, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Avatar, Text } from '@lobehub/ui/base-ui';
 import { MessageCircle, MessagesSquare } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { DEFAULT_AVATAR } from '@/const/meta';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
@@ -55,6 +56,12 @@ const TaskRunReport = memo<TaskRunReportProps>(({ activity }) => {
 
   return (
     <Flexbox gap={16}>
+      {/* Who is reporting, at the top where a report names its author — not a
+          footnote under the text it wrote. */}
+      <Flexbox horizontal align={'center'} gap={8}>
+        <Avatar avatar={activity.author?.avatar || DEFAULT_AVATAR} size={24} />
+        <Text weight={500}>{activity.author?.name ?? t('taskDetail.reportedByAgent')}</Text>
+      </Flexbox>
       <Markdown style={{ overflow: 'unset' }} variant={'chat'}>
         {body}
       </Markdown>
@@ -70,11 +77,6 @@ const TaskRunReport = memo<TaskRunReportProps>(({ activity }) => {
         />
       ) : (
         <Flexbox horizontal align={'center'} gap={4} justify={'flex-end'}>
-          <Text fontSize={12} style={{ marginInlineEnd: 'auto' }} type={'secondary'}>
-            {t('taskDetail.reportedBy', {
-              name: activity.author?.name ?? t('taskDetail.reportedByAgent'),
-            })}
-          </Text>
           <ActionIcon
             icon={MessagesSquare}
             size={'small'}
