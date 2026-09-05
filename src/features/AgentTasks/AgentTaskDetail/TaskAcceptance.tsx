@@ -103,7 +103,18 @@ const CompactCheckRow = memo<CompactCheckRowProps>(({ check, onOpen }) => {
 
 CompactCheckRow.displayName = 'TaskAcceptanceCompactCheckRow';
 
-const TaskAcceptance = memo(() => {
+interface TaskAcceptanceProps {
+  /**
+   * `result` — the task result panel. The reader there has just read the
+   * delivery and wants one thing from this block: the checklist and how each
+   * check came out. The round timeline and the 验收目标 contract answer "how
+   * was this judged", which the full report keeps; leading with them buried
+   * the verdicts they came for.
+   */
+  variant?: 'default' | 'result';
+}
+
+const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
   const { t } = useTranslation(['chat', 'verify']);
   const openAcceptance = useChatStore((state) => state.openAcceptance);
   const openAcceptanceCheck = useChatStore((state) => state.openAcceptanceCheck);
@@ -247,8 +258,8 @@ const TaskAcceptance = memo(() => {
           {bundleError && <AcceptanceError onRetry={() => void mutateBundle()} />}
           {bundle && (
             <>
-              <GoalRoundTimeline rounds={bundle.rounds} />
-              {requirement && (
+              {variant !== 'result' && <GoalRoundTimeline rounds={bundle.rounds} />}
+              {variant !== 'result' && requirement && (
                 <Flexbox gap={6}>
                   <Text fontSize={12} type={'secondary'}>
                     {t('taskDetail.acceptance.goal')}
@@ -268,26 +279,28 @@ const TaskAcceptance = memo(() => {
                 </Flexbox>
               )}
               <Flexbox gap={7}>
-                <Flexbox horizontal align={'center'} gap={8}>
-                  <Text fontSize={12} type={'secondary'}>
-                    {t('taskDetail.acceptance.checklist')}
-                  </Text>
-                  <Flexbox flex={1} />
-                  {grouped && groupKeys.length > 0 && (
-                    <ActionIcon
-                      icon={allGroupsCollapsed ? ChevronsUpDown : ChevronsDownUp}
-                      size={'small'}
-                      title={
-                        allGroupsCollapsed
-                          ? t('taskDetail.acceptance.expandAll')
-                          : t('taskDetail.acceptance.collapseAll')
-                      }
-                      onClick={() =>
-                        setCollapsedGroups(allGroupsCollapsed ? new Set() : new Set(groupKeys))
-                      }
-                    />
-                  )}
-                </Flexbox>
+                {(variant !== 'result' || (grouped && groupKeys.length > 0)) && (
+                  <Flexbox horizontal align={'center'} gap={8}>
+                    <Text fontSize={12} type={'secondary'}>
+                      {t('taskDetail.acceptance.checklist')}
+                    </Text>
+                    <Flexbox flex={1} />
+                    {grouped && groupKeys.length > 0 && (
+                      <ActionIcon
+                        icon={allGroupsCollapsed ? ChevronsUpDown : ChevronsDownUp}
+                        size={'small'}
+                        title={
+                          allGroupsCollapsed
+                            ? t('taskDetail.acceptance.expandAll')
+                            : t('taskDetail.acceptance.collapseAll')
+                        }
+                        onClick={() =>
+                          setCollapsedGroups(allGroupsCollapsed ? new Set() : new Set(groupKeys))
+                        }
+                      />
+                    )}
+                  </Flexbox>
+                )}
                 <CriterionList>
                   {grouped
                     ? groups.map((group) => {
