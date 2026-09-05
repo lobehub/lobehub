@@ -1219,8 +1219,9 @@ describe('CompletionLifecycle.dispatchHooks — lastAssistantContent DB recovery
     );
   });
 
-  // LOBE-13787: the named row can be an empty placeholder while the run's real
-  // reply sits on another row. Resolve it by the run's own provenance
+  // The named row can be an empty placeholder while the run's real reply sits
+  // on another row (the Discord thread bug where the bot kept repeating the
+  // same message). Resolve it by the run's own provenance
   // (`metadata.operationId`), never by "the latest assistant row in the topic" —
   // a topic can hold a concurrent run's rows.
   it('falls back to operation provenance when the named row is empty', async () => {

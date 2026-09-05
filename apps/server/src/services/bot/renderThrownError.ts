@@ -9,8 +9,8 @@ import { renderAgentError } from './replyTemplate';
  * The bot's failure paths that catch a raw `Error` (bridge startup, the
  * handleMention / router catch-alls) used to render `renderError(operationId)`,
  * which produces a bare "**Agent Execution Failed**" — and, when the operation
- * never got far enough to have an id, not even that (LOBE-13787: the user saw
- * two consecutive failures carrying no information at all).
+ * never got far enough to have an id, not even that (a Discord thread report
+ * showed two consecutive failures carrying no information at all).
  *
  * Running the value through the runtime's own error normalizer first gives
  * those paths the same `errorType` + `attribution` the completion path already
