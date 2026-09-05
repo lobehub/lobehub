@@ -318,6 +318,53 @@ describe('heterogeneous direct invocation protocol', () => {
     });
   });
 
+  it.each([
+    {
+      expected: 'Claude Code system prompt',
+      name: 'a standalone array block',
+      system: [
+        {
+          text: 'x-anthropic-billing-header: cc_version=2.1.231; cc_entrypoint=sdk-cli;',
+          type: 'text',
+        },
+        { text: 'Claude Code system prompt', type: 'text' },
+      ],
+    },
+    {
+      expected: 'Claude Code system prompt',
+      name: 'a string followed by an LF blank line',
+      system:
+        'x-anthropic-billing-header: cc_version=2.1.231; cc_entrypoint=sdk-cli;\n\nClaude Code system prompt',
+    },
+    {
+      expected: 'Claude Code system prompt',
+      name: 'an array block followed by a CRLF blank line',
+      system: [
+        {
+          text: 'x-anthropic-billing-header: cc_version=2.1.231;\r\n\r\nClaude Code system prompt',
+          type: 'text',
+        },
+      ],
+    },
+    {
+      expected: undefined,
+      name: 'the entire system prompt',
+      system: 'x-anthropic-billing-header: cc_version=2.1.231;',
+    },
+  ])('strips the Claude Code billing attribution when it is $name', ({ expected, system }) => {
+    const payload = normalizeAnthropicRequest({ messages: [], system }, 'lobehub-default');
+
+    expect(payload.messages).toEqual(expected ? [{ content: expected, role: 'system' }] : []);
+  });
+
+  it('preserves non-leading Anthropic billing header text as user-authored system content', () => {
+    const system =
+      'Keep this text\nx-anthropic-billing-header: this non-leading occurrence is user content';
+    const payload = normalizeAnthropicRequest({ messages: [], system }, 'lobehub-default');
+
+    expect(payload.messages).toEqual([{ content: system, role: 'system' }]);
+  });
+
   it('preserves Anthropic thinking history across tool rounds', () => {
     const payload = normalizeAnthropicRequest(
       {

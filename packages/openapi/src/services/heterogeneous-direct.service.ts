@@ -24,19 +24,22 @@ import type { BaseStreamEvent, ResponseUsage } from '../types/responses.type';
 
 export const SERVER_DEFAULT_MODEL_ALIAS = SERVER_DEFAULT_HETEROGENEOUS_MODEL_ALIAS;
 
-const textFromParts = (content: unknown): string => {
-  if (typeof content === 'string') return content;
+const textFromParts = (content: unknown, transform = (text: string) => text): string => {
+  if (typeof content === 'string') return transform(content);
   if (!Array.isArray(content)) return '';
   return content
     .map((part) =>
       isRecord(part) &&
       typeof part.text === 'string' &&
       ['text', 'input_text', 'output_text'].includes(String(part.type))
-        ? part.text
+        ? transform(part.text)
         : '',
     )
     .join('');
 };
+
+const stripLeadingAnthropicBillingHeader = (text: string) =>
+  text.replace(/^x-anthropic-billing-header:[^\r\n]*(?:\r?\n(?:\r?\n)?)?/, '');
 
 const imageParts = (content: unknown) => {
   if (!Array.isArray(content)) return [];
@@ -97,7 +100,7 @@ const contentWithAnthropicThinking = (content: unknown): OpenAIChatMessage['cont
 
 export const normalizeAnthropicRequest = (request: Record<string, unknown>, model: string) => {
   const messages: OpenAIChatMessage[] = [];
-  const system = textFromParts(request.system);
+  const system = textFromParts(request.system, stripLeadingAnthropicBillingHeader);
   if (system) messages.push({ content: system, role: 'system' });
 
   for (const rawMessage of Array.isArray(request.messages) ? request.messages : []) {
