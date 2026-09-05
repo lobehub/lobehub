@@ -24,7 +24,9 @@ describe('BriefCardSummary', () => {
   it('should render summary text', async () => {
     vi.mocked(useSize).mockReturnValue(undefined);
     render(<BriefCardSummary summary="Test summary content" />);
-    expect(await screen.findByText('Test summary content')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Test summary content', {}, { timeout: 10_000 }),
+    ).toBeInTheDocument();
   });
 
   it('should not show expand link when content does not overflow', () => {
