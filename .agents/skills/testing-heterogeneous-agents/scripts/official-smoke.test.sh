@@ -6,7 +6,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-HARNESS="$SCRIPT_DIR/heterogeneous-agent-official-smoke.mjs"
+HARNESS="$SCRIPT_DIR/official-smoke.mjs"
 TEST_TMP="$(mktemp -d)"
 trap 'rm -rf "$TEST_TMP"' EXIT
 
@@ -197,10 +197,12 @@ export HETERO_SMOKE_STUB_STATE="$TEST_TMP/cell-count"
 # The live confirmation gate must run before even the browser/CLI
 # preflight, so a mistyped run command has no side effects.
 set +e
-node "$HARNESS" run --browser "$TEST_TMP/fake-agent-browser.mjs" > /dev/null 2>&1
+unconfirmed_output="$(node "$HARNESS" run --browser "$TEST_TMP/fake-agent-browser.mjs" 2>&1)"
 unconfirmed_code=$?
 set -e
 [[ "$unconfirmed_code" -eq 2 ]] || fail "unconfirmed run exited $unconfirmed_code instead of 2"
+[[ "$unconfirmed_output" == "official-smoke: "* ]] ||
+  fail "unexpected diagnostic prefix: $unconfirmed_output"
 [[ ! -e "$HETERO_SMOKE_STUB_LOG" ]] || fail "unconfirmed run reached agent-browser preflight"
 
 # `list` must read the live-shaped matrix but never execute a cell or create a

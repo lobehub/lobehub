@@ -85,3 +85,8 @@ Use this skill when the bug or feature lives in the external CLI agent pipeline,
 ## References
 
 - For commands, trace capture, invariants, and focused test commands, read [references/debug-workflow.md](./references/debug-workflow.md).
+- Live official-model compatibility checks are available only through explicit
+  user invocation of `/testing-heterogeneous-agents` in Claude Code or
+  `$testing-heterogeneous-agents` in Codex. Do not automatically load or run that
+  skill during diagnosis. Its failed-cell evidence can be used here for diagnosis
+  or a code fix.

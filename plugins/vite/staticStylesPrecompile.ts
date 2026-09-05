@@ -12,6 +12,7 @@ interface AntdStyleEvaluator {
   cache: {
     inserted: Record<string, string | true>;
     key: string;
+    registered: Record<string, string>;
   };
   createStaticStyles: (fn: (utils: unknown) => Record<string, unknown>) => Record<string, unknown>;
   cssVar: unknown;
@@ -176,9 +177,10 @@ const serializeStyles = (result: Record<string, unknown>, evaluator: AntdStyleEv
   for (const [key, value] of Object.entries(result)) {
     if (typeof value !== 'string' || !value.startsWith(prefix)) return;
     const css = evaluator.cache.inserted[value.slice(prefix.length)];
-    if (typeof css !== 'string') return;
+    const registered = evaluator.cache.registered[value];
+    if (typeof css !== 'string' || typeof registered !== 'string') return;
     entries.push(
-      `${JSON.stringify(key)}: ${HELPER}(${JSON.stringify(value)}, ${JSON.stringify(splitRules(css))})`,
+      `${JSON.stringify(key)}: ${HELPER}(${JSON.stringify(value)}, ${JSON.stringify(splitRules(css))}, ${JSON.stringify(registered)})`,
     );
   }
   return `({ ${entries.join(', ')} })`;
@@ -190,6 +192,7 @@ export const precompileStaticStyles = (code: string, evaluator: AntdStyleEvaluat
   try {
     program = parseAst(code) as unknown as Node;
   } catch {
+    // Unsupported syntax keeps the original runtime call; precompilation is optional.
     return;
   }
 
@@ -214,6 +217,7 @@ export const precompileStaticStyles = (code: string, evaluator: AntdStyleEvaluat
         evaluator,
       );
     } catch {
+      // Evaluation or serialization failures must preserve runtime style generation.
       continue;
     }
     if (compiled) replacements.push({ end: call.end, start: call.start, text: compiled });

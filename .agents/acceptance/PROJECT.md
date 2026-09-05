@@ -252,54 +252,15 @@ stale standalone install: a recently added workspace package fails to resolve â€
   `agent-browser --session s<port> --cdp <port>`. Pool design, the collision
   matrix, and the login-copy recipe: `.agents/acceptance/references/multi-instance.md`.
 
-#### Official heterogeneous-provider compatibility matrix
+### Heterogeneous-agent compatibility (project skill)
 
-Use `heterogeneous-agent-official-smoke.mjs` to exercise every model currently
-advertised by the server for Claude Code, Codex, Grok Build, Kimi Code, Pi, and TRAE.
-It tests only LobeHub's official `server-default` provider binding; user-defined
-providers and their API keys are outside this matrix.
-
-```bash
-HARNESS=.agents/acceptance/scripts/heterogeneous-agent-official-smoke.mjs
-
-# Read the live matrix and probe already-installed CLI versions. No model calls.
-node "$HARNESS" list --agent claude-code,codex --model MODEL_ID
-
-# Run selected cells sequentially through the real Desktop IPC + official relay.
-node "$HARNESS" run --confirm-live --topic-id TOPIC_ID --cdp 9222
-```
-
-The filters, topic id, and non-default CDP port are optional when the current
-Electron window already provides the intended scope.
-
-- Prerequisites: an already-running, signed-in Electron instance and either an
-  active personal topic or `--topic-id`. Use the Electron commands above to
-  start and authenticate the app.
-- The server's live `getServerDefaultHeterogeneousCapability` response is the
-  source of truth; model ids are not hard-coded in the harness.
-- The harness invokes no installer, updater command, or sign-in flow. Detection
-  does execute existing CLIs with version/help flags. To also suppress Claude
-  Code's own background update checks during detection, start or restart the
-  Electron instance with
-  `DISABLE_AUTOUPDATER=1 DISABLE_UPDATES=1 .agents/acceptance/scripts/electron-dev.sh start`.
-  Claude cells receive both variables independently as session environment.
-  Every model for a missing CLI is recorded as `blocked` without invoking an
-  installer/updater.
-- `run` makes real official-provider requests, consumes usage, and creates
-  server operation records. This is why `--confirm-live` is mandatory. It does
-  not persist chat messages because the harness listens to the direct IPC stream.
-  By default, CLIs run in an isolated workspace inside the report directory
-  rather than in the repository; use `--cwd` only when a specific project is
-  part of the compatibility claim.
-- Each cell starts idempotently inside the renderer and is observed with short
-  host-side polls. Do not collapse this into one long `agent-browser eval`:
-  long evaluations can be re-evaluated after roughly 30 seconds, duplicating
-  live requests and operation ids.
-- The local structured report lands under
-  `.records/reports/<timestamp>-heterogeneous-official-provider-smoke/` unless
-  `--report-dir` is supplied. It is not published automatically.
-- Exit codes: `0` all cells passed; `1` at least one failed; `2` no failures but
-  at least one blocked; `3` Electron/auth/capability preflight failed.
+The live official-provider model matrix belongs to the
+`testing-heterogeneous-agents` project skill
+(`.agents/skills/testing-heterogeneous-agents/`). It extends Acceptance with the
+matrix semantics and harness while reusing the Electron environment, auth, and
+CDP commands above. It is manual-only: the user must explicitly invoke
+`/testing-heterogeneous-agents` in Claude Code or `$testing-heterogeneous-agents`
+in Codex. Do not automatically load or run it during other acceptance tasks.
 
 ### Bot channels (project skill)
 

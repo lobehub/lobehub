@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { build, parseAst, type Plugin } from 'vite';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
   loadAntdStyleEvaluator,
@@ -14,6 +14,10 @@ let evaluator: Awaited<ReturnType<typeof loadAntdStyleEvaluator>>;
 
 beforeAll(async () => {
   evaluator = await loadAntdStyleEvaluator();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 const CALLBACK = `({ css, responsive }) => ({
@@ -57,9 +61,8 @@ describe('precompileStaticStyles', () => {
     expect(output).toContain('@media (max-width: 479.98px){.acss-');
     expect(output).toContain('"text-2": __lobeStaticStyle(');
     expect(output).toMatch(
-      /__lobeStaticStyle\("acss-[a-z0-9]+", \["\.acss-[a-z0-9]+\{font-size:12px;\}"\]\)/,
+      /__lobeStaticStyle\("acss-[a-z0-9]+", \["\.acss-[a-z0-9]+\{font-size:12px;\}"\], "font-size: 12px;"\)/,
     );
-    expect(output).not.toContain('font-size: 12px;');
   });
 
   it('matches the class names antd-style produces at runtime', () => {
@@ -155,13 +158,14 @@ describe('insertPrecompiledStyle', () => {
   it('inserts rules once and exposes emotion-mergeable registered styles', async () => {
     const { createStaticStyles, css, cx, styleManager } = (await import('antd-style')) as any;
     const insert = vi.fn();
-    styleManager.cache.sheet = { insert };
+    const insertSpy = vi.spyOn(styleManager.cache.sheet, 'insert').mockImplementation(insert);
     const rules = ['.acss-fixture{color:red;}', '.acss-fixture:hover{color:blue;}'];
+    const registered = 'color:red;&:hover{color:blue;}';
 
-    expect(insertPrecompiledStyle('acss-fixture', rules)).toBe('acss-fixture');
-    insertPrecompiledStyle('acss-fixture', rules);
+    expect(insertPrecompiledStyle('acss-fixture', rules, registered)).toBe('acss-fixture');
+    insertPrecompiledStyle('acss-fixture', rules, registered);
     expect(insert.mock.calls.map(([rule]) => rule)).toEqual(rules);
-    expect(styleManager.cache.registered['acss-fixture']).toBe('&{color:red;}&:hover{color:blue;}');
+    expect(styleManager.cache.registered['acss-fixture']).toBe(registered);
 
     const merged = cx(
       'acss-fixture',
@@ -170,7 +174,7 @@ describe('insertPrecompiledStyle', () => {
       `,
     );
     expect(merged).not.toBe('acss-fixture');
-    expect(styleManager.cache.registered[merged]).toContain('&{color:red;}&:hover{color:blue;}');
+    expect(styleManager.cache.registered[merged]).toContain(registered);
     expect(styleManager.cache.registered[merged]).toContain('margin: 0;');
 
     const composed = createStaticStyles(({ css: s }: any) => ({
@@ -182,6 +186,51 @@ describe('insertPrecompiledStyle', () => {
 
     styleManager.cache.registered['acss-fixture'] = 'color: green;';
     expect(styleManager.cache.registered['acss-fixture']).toBe('color: green;');
+    insertSpy.mockRestore();
+  });
+
+  it.each([
+    ['padding-block:12px;padding-inline:12px;', 'padding:0;'],
+    [
+      'padding-block:12px;--lobe-popover-viewport-inline-padding:12px;',
+      'padding-block:0px;--lobe-popover-viewport-inline-padding:0px;',
+    ],
+    [
+      'color:red;&:hover{color:orange;}@media(min-width:600px){color:green;}',
+      'color:blue;&:hover{color:purple;}@media(min-width:600px){color:black;}',
+    ],
+  ])('preserves runtime composition for %s', async (base, override) => {
+    const { createStaticStyles, cx, styleManager } = await import('antd-style');
+    const makeStyle = (value: string) =>
+      createStaticStyles(({ css }) => ({ root: css(value) })).root;
+    const composeStyle = (className: string) =>
+      createStaticStyles(({ css }) => ({
+        root: css`
+          ${className}${override}
+        `,
+      })).root;
+    vi.spyOn(styleManager.cache.sheet, 'insert').mockImplementation(() => {});
+    const source = `import { createStaticStyles } from 'antd-style';
+      const styles = createStaticStyles(({ css }) => ({ root: css(${JSON.stringify(base)}) }));`;
+    const output = precompileStaticStyles(source, evaluator)!;
+    const run = new Function(
+      '__lobeStaticStyle',
+      `${output.replaceAll(/^import .*;\n/gm, '')}\nreturn styles.root;`,
+    );
+    const precompiled = run(insertPrecompiledStyle);
+    const runtimeOverride = makeStyle(override);
+    const mixed = cx(precompiled, runtimeOverride);
+    const reversed = cx(runtimeOverride, precompiled);
+    const interpolated = composeStyle(precompiled);
+
+    delete styleManager.cache.registered[precompiled];
+    const runtimeBase = makeStyle(base);
+    expect(mixed).toBe(cx(runtimeBase, runtimeOverride));
+    expect(reversed).toBe(cx(runtimeOverride, runtimeBase));
+    expect(interpolated).toBe(composeStyle(runtimeBase));
+    expect(styleManager.cache.inserted[mixed.slice(styleManager.cache.key.length + 1)]).toContain(
+      override.split(';')[0],
+    );
   });
 });
 
