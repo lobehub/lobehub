@@ -569,18 +569,6 @@ export function registerTaskCommand(program: Command) {
       ) => {
         const client = await getTrpcClient();
 
-        // Handle --status separately (uses updateStatus API)
-        if (options.status) {
-          const valid = ['backlog', 'running', 'paused', 'completed', 'failed', 'canceled'];
-          if (!valid.includes(options.status)) {
-            log.error(`Invalid status "${options.status}". Must be one of: ${valid.join(', ')}`);
-            return;
-          }
-          const result = await client.task.updateStatus.mutate({ id, status: options.status });
-          log.info(`${pc.bold(result.data.identifier)} → ${options.status}`);
-          return;
-        }
-
         const input: Record<string, any> = { id };
         if (options.name) input.name = options.name;
         if (options.instruction) input.instruction = options.instruction;
@@ -593,6 +581,24 @@ export function registerTaskCommand(program: Command) {
           const val = Number.parseInt(options.heartbeatTimeout, 10);
           input.heartbeatTimeout = val === 0 ? null : val;
         }
+        const hasFieldEdits = Object.keys(input).length > 1;
+
+        // --status routes through the lifecycle updateStatus API while every
+        // other flag goes through task.update. A combined call must apply
+        // both: an early return here used to silently drop --agent and every
+        // other field whenever --status was present.
+        if (options.status) {
+          const valid = ['backlog', 'running', 'paused', 'completed', 'failed', 'canceled'];
+          if (!valid.includes(options.status)) {
+            log.error(`Invalid status "${options.status}". Must be one of: ${valid.join(', ')}`);
+            return;
+          }
+          const result = await client.task.updateStatus.mutate({ id, status: options.status });
+          if (!hasFieldEdits) {
+            log.info(`${pc.bold(result.data.identifier)} → ${options.status}`);
+            return;
+          }
+        }
 
         const result = await client.task.update.mutate(input as any);
 
@@ -601,7 +607,8 @@ export function registerTaskCommand(program: Command) {
           return;
         }
 
-        log.info(`Task updated: ${pc.bold(result.data.identifier)}`);
+        const statusSuffix = options.status ? ` → ${options.status}` : '';
+        log.info(`Task updated: ${pc.bold(result.data.identifier)}${statusSuffix}`);
       },
     );
 
