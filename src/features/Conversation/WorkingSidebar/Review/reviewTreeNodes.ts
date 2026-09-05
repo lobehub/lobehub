@@ -18,6 +18,26 @@ export interface ReviewTreeGroup {
   patches: GitWorkingTreePatch[];
 }
 
+const DEFAULT_EXPAND_BYTE_BUDGET = 100 * 1024;
+const DEFAULT_EXPAND_MAX_COUNT = 5;
+
+export const getDefaultExpandedKeys = (groups: ReviewTreeGroup[]): string[] => {
+  const keys: string[] = [];
+  let budget = DEFAULT_EXPAND_BYTE_BUDGET;
+
+  for (const group of groups) {
+    for (const patch of group.patches) {
+      if (keys.length >= DEFAULT_EXPAND_MAX_COUNT) return keys;
+      const cost = patch.patch?.length ?? 0;
+      if (keys.length > 0 && cost > budget) return keys;
+      keys.push(itemKey(group.absolutePath, patch));
+      budget -= cost;
+    }
+  }
+
+  return keys;
+};
+
 // Node ids are prefixed with the owning repo path so file paths that repeat
 // across submodule groups never collide. NUL can't appear in a real path.
 const SEP = '\u0000';
