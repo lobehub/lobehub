@@ -4,9 +4,7 @@ import { Outlet } from 'react-router';
 import { SWRConfig } from 'swr';
 
 import SuspenseRouteBoundary from '@/components/SuspenseRouteBoundary';
-import { isDesktop } from '@/const/version';
 import { GroupNotFoundGuard } from '@/features/GroupNotFound';
-import ProtocolUrlHandler from '@/features/ProtocolUrlHandler';
 import { useInitGroupConfig } from '@/hooks/useInitGroupConfig';
 
 import GroupIdSync from './GroupIdSync';
@@ -32,7 +30,6 @@ const Layout: FC = () => {
         </GroupNotFoundGuard>
       </Flexbox>
       <RegisterHotkeys />
-      {isDesktop && <ProtocolUrlHandler />}
       <GroupIdSync />
     </>
   );

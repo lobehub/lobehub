@@ -2,10 +2,8 @@ import { Flexbox } from '@lobehub/ui';
 import { type FC } from 'react';
 import { Outlet } from 'react-router';
 
-import { isDesktop } from '@/const/version';
 import { AgentNotFoundGuard } from '@/features/AgentNotFound';
 import AgentSidebar from '@/features/AgentSidebar';
-import ProtocolUrlHandler from '@/features/ProtocolUrlHandler';
 import AgentIdSync from '@/routes/(main)/agent/_layout/AgentIdSync';
 
 import PortalAutoCollapse from './PortalAutoCollapse';
@@ -24,7 +22,6 @@ const Layout: FC = () => {
         </AgentNotFoundGuard>
       </Flexbox>
       <RegisterHotkeys />
-      {isDesktop && <ProtocolUrlHandler />}
       <AgentIdSync />
       <PortalAutoCollapse />
     </>

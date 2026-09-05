@@ -270,10 +270,33 @@ describe('aiModelRouter', () => {
       models: [{ id: 'model-1' }, { id: 'model-2' }],
     });
 
-    expect(mockBatchUpdate).toHaveBeenCalledWith('provider-1', [
-      { id: 'model-1' },
-      { id: 'model-2' },
-    ]);
+    expect(mockBatchUpdate).toHaveBeenCalledWith(
+      'provider-1',
+      [{ id: 'model-1' }, { id: 'model-2' }],
+      undefined,
+    );
+  });
+
+  it('should force the type when batch updating ai models', async () => {
+    const mockBatchUpdate = vi.fn().mockResolvedValue([]);
+    vi.mocked(AiModelModel).mockImplementation(
+      () =>
+        ({
+          batchUpdateAiModels: mockBatchUpdate,
+        }) as any,
+    );
+
+    const caller = aiModelRouter.createCaller(mockCtx);
+
+    await caller.batchUpdateAiModels({
+      forceType: 'chat',
+      id: 'provider-1',
+      models: [{ id: 'model-1', type: 'chat' }],
+    });
+
+    expect(mockBatchUpdate).toHaveBeenCalledWith('provider-1', [{ id: 'model-1', type: 'chat' }], {
+      forceType: 'chat',
+    });
   });
 
   it('should clear models by provider', async () => {

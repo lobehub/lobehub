@@ -77,7 +77,6 @@ const Layout: FC = () => {
         </Suspense>
         <AuthRequiredModal />
         <ZoomHUD />
-
         <Suspense fallback={null}>
           <TitleBar />
         </Suspense>

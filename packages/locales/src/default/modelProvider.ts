@@ -436,6 +436,37 @@ export default {
   'providerModels.tabs.image': 'Image',
   'providerModels.tabs.tts': 'TTS',
   'providerModels.tabs.video': 'Video',
+  'providerImport.cancel': 'Cancel',
+  'providerImport.confirm': 'Import provider',
+  'providerImport.confirmOverwrite': 'Replace provider',
+  'providerImport.conflictTitle': 'Built-in provider conflict',
+  'providerImport.endpoint': 'API endpoint',
+  'providerImport.error.apply': 'Could not import the provider configuration',
+  'providerImport.error.builtinConflict':
+    'This provider ID belongs to a built-in provider and cannot be replaced',
+  'providerImport.error.callback_failed': 'Could not retrieve the provider configuration',
+  'providerImport.error.expired': 'This provider import has expired. Start it again.',
+  'providerImport.error.invalid_callback': 'The provider import link is invalid or has expired',
+  'providerImport.error.invalid_payload': 'The provider configuration is invalid',
+  'providerImport.error.partial':
+    'The provider was only partially updated. Keep this window open and retry to finish the import.',
+  'providerImport.error.providerChanged':
+    'The provider changed while you were reviewing it. Start the import again.',
+  'providerImport.modelCount': '{{count}} model',
+  'providerImport.modelCount_other': '{{count}} models',
+  'providerImport.models': 'Models',
+  'providerImport.overwriteDescription':
+    'This will replace the endpoint and API key for {{name}} ({{id}}), and update its imported models.',
+  'providerImport.overwriteTitle': 'Replace existing custom provider?',
+  'providerImport.provider': 'Provider',
+  'providerImport.providerId': 'Provider ID',
+  'providerImport.securityDescription':
+    'Review the endpoint before importing. The API key is transferred from a one-time local callback and is never included in the link.',
+  'providerImport.securityTitle': 'A local app wants to configure this provider',
+  'providerImport.secretNotice':
+    'The API key stays in the desktop main process until you confirm this import.',
+  'providerImport.success': '{{name}} was imported successfully',
+  'providerImport.title': 'Import AI provider',
   'sortModal.success': 'Sort update successful',
   'sortModal.title': 'Custom Order',
   'sortModal.update': 'Update',

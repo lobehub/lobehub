@@ -67,7 +67,6 @@ const Layout: FC = () => {
         </Suspense>
         {isDesktop && <AuthRequiredModal />}
         {isDesktop && <ZoomHUD />}
-
         <Suspense fallback={null}>{isDesktop && <TitleBar />}</Suspense>
         <DndContextWrapper>
           <Flexbox

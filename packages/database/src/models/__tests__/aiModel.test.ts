@@ -804,6 +804,25 @@ describe('AiModelModel', () => {
       expect(updated?.type).toBe('image');
     });
 
+    it('should update an existing non-chat model to chat when the type is forced', async () => {
+      await serverDB.insert(aiModels).values({
+        id: 'reclassified-model',
+        providerId: 'openai',
+        source: 'remote',
+        type: 'image',
+        userId,
+      });
+
+      await aiProviderModel.batchUpdateAiModels(
+        'openai',
+        [{ enabled: true, id: 'reclassified-model', type: 'chat' }],
+        { forceType: 'chat' },
+      );
+
+      const updated = await aiProviderModel.findById('reclassified-model');
+      expect(updated?.type).toBe('chat');
+    });
+
     it('should update parameters when remote provides new parameters for existing model', async () => {
       // 1. Existing model with empty parameters
       await serverDB.insert(aiModels).values({

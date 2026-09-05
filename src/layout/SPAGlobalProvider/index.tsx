@@ -9,6 +9,7 @@ import { Component, type CSSProperties, lazy, memo, type PropsWithChildren, Susp
 import { LobeAnalyticsProviderWrapper } from '@/components/Analytics/LobeAnalyticsProviderWrapper';
 import { DragUploadProvider } from '@/components/DragUploadZone/DragUploadProvider';
 import { isDesktop } from '@/const/version';
+import ProtocolUrlHandler from '@/features/ProtocolUrlHandler';
 import { useDevDockMounted } from '@/hooks/useDevDockMounted';
 import AuthProvider from '@/layout/AuthProvider';
 import { MarketAuthProvider } from '@/layout/AuthProvider/MarketAuth';
@@ -98,6 +99,7 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
                 <TooltipGroup layoutAnimation={false}>
                   <StyleProvider speedy={import.meta.env.PROD}>
                     <LobeAnalyticsProviderWrapper>
+                      {isDesktop && <ProtocolUrlHandler />}
                       <CacheHydrationGate>
                         <DevDockLayout>{children}</DevDockLayout>
                       </CacheHydrationGate>

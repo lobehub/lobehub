@@ -59,7 +59,11 @@ vi.mock('@/components/DragUploadZone/DragUploadProvider', async () => {
 });
 
 vi.mock('@/const/version', () => ({
-  isDesktop: false,
+  isDesktop: true,
+}));
+
+vi.mock('@/features/ProtocolUrlHandler', () => ({
+  default: () => <div data-testid="protocol-url-handler" />,
 }));
 
 vi.mock('@/features/DevDock', async () => {
@@ -201,6 +205,19 @@ describe('SPAGlobalProvider', () => {
     const routeContent = screen.getByTestId('spa-route-content');
 
     expect(routeContent.closest('[data-testid="market-auth-provider"]')).not.toBeNull();
+  });
+
+  it('mounts desktop protocol handling before route cache hydration completes', () => {
+    cacheGateReleased.current = false;
+
+    render(
+      <SPAGlobalProvider>
+        <div data-testid="spa-route-content" />
+      </SPAGlobalProvider>,
+    );
+
+    expect(screen.getByTestId('protocol-url-handler')).toBeInTheDocument();
+    expect(screen.queryByTestId('spa-route-content')).not.toBeInTheDocument();
   });
   it('mounts DevDock in dev builds even without server-resolved access', async () => {
     render(

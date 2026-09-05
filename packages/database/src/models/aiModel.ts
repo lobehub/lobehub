@@ -3,6 +3,7 @@ import type {
   AiModelConfig,
   AiModelReasoningConfig,
   AiModelSortMap,
+  AiModelType,
   AiProviderModelListItem,
   EnabledAiModel,
   ToggleAiModelEnableParams,
@@ -314,7 +315,11 @@ export class AiModelModel {
       });
   };
 
-  batchUpdateAiModels = async (providerId: string, models: AiProviderModelListItem[]) => {
+  batchUpdateAiModels = async (
+    providerId: string,
+    models: AiProviderModelListItem[],
+    options?: { forceType?: AiModelType },
+  ) => {
     // Early return if models array is empty to prevent database insertion error
     if (this.isEmptyArray(models)) {
       return [];
@@ -379,10 +384,12 @@ export class AiModelModel {
       }
 
       // Include type if explicitly provided
-      // When type is undefined, omit it to use schema default ('chat')
-      // This means we can't distinguish "remote explicitly said chat" vs "remote didn't provide type"
-      // Trade-off: remote models with type != 'chat' won't be updated back to 'chat' via batch update
-      if (input.type !== undefined) {
+      // Without a forced type, omit undefined values and preserve the existing workaround for the
+      // schema's 'chat' default. Trusted callers can force a whole batch when they explicitly know
+      // its model type, including reclassifying existing rows back to chat.
+      if (options?.forceType) {
+        record.type = normalizeAiModelType(options.forceType);
+      } else if (input.type !== undefined) {
         record.type = normalizeAiModelType(input.type);
       }
 
@@ -412,6 +419,10 @@ export class AiModelModel {
 
       return record;
     });
+
+    const providerModelTypeCondition = options?.forceType
+      ? sql`excluded.type IS NOT NULL`
+      : sql`excluded.type IS NOT NULL AND excluded.type != 'chat'`;
 
     return this.db
       .insert(aiModels)
@@ -461,7 +472,7 @@ export class AiModelModel {
             ELSE ai_models.released_at
           END`,
           type: sql`CASE
-            WHEN (ai_models.source = 'remote' OR ai_models.source = 'custom' OR ai_models.source IS NULL) AND excluded.type IS NOT NULL AND excluded.type != 'chat'
+            WHEN (ai_models.source = 'remote' OR ai_models.source = 'custom' OR ai_models.source IS NULL) AND ${providerModelTypeCondition}
             THEN excluded.type
             WHEN ai_models.source = 'builtin' AND excluded.type IS NOT NULL
             THEN COALESCE(ai_models.type, excluded.type)
