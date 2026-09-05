@@ -1457,10 +1457,6 @@ export const agentRouter = router({
    *
    * Read-only and ownership-scoped: an unknown slug and someone else's slug both
    * return `null`, so this cannot be used to probe which slugs exist.
-   *
-   * @deprecated Superseded by `resolveAgentRoute`, which answers the same
-   * question plus "is this an agent share?" in one round trip. Kept because
-   * already-shipped clients (e.g. an installed desktop bundle) still call it.
    */
   resolveAgentIdBySlug: agentProcedure
     .input(z.object({ slug: z.string() }))
@@ -1470,8 +1466,11 @@ export const agentRouter = router({
     }),
 
   /**
-   * Decide what `/agent/:slugOrId` points at, so the client can pick a shell
-   * before it renders.
+   * Compatibility endpoint for released clients that still resolve their
+   * agent routes here. Keep ownership-scoped lookup behavior so those clients
+   * can open their own agents without restoring share-link routing.
+   *
+   * @deprecated New clients resolve slugs with `resolveAgentIdBySlug`.
    *
    * Resolution order, cheapest first:
    * 1. an id-shaped param is always an own-agent route (no query at all);

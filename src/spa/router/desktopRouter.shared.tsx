@@ -46,7 +46,6 @@ import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import { acceptanceRouteMeta } from '@/features/Acceptance/routeMeta';
 import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { goalDetailRouteMeta, goalsRouteMeta } from '@/features/AgentGoals/routeMeta';
-import AgentRouteSwitch from '@/features/AgentRoute/AgentRouteSwitch';
 import { agentShareVisitorRouteMeta } from '@/features/AgentShareVisitor/routeMeta';
 import { AGENT_SHARE_VISITOR_PATH } from '@/features/AgentShareVisitor/visitorPath';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
@@ -347,20 +346,10 @@ export const sharedMainAreaChildren: RouteObject[] = [
             path: 'task/:taskId',
           },
         ],
-        // `/agent/:aid` is the creator's own agent, by id or by agent slug;
-        // `AgentRouteSwitch` holds the skeleton while a slug resolves. The
-        // switch is not a `Suspense`, so `withSegmentFallback` cannot swap the
-        // branding loader for a segment skeleton here — the own branch (and
-        // the switch's own resolving state) carry it explicitly instead.
-        element: (
-          <AgentRouteSwitch
-            fallback={<RouteSegmentSkeleton />}
-            ownElement={dynamicLayout(
-              () => import('@/routes/(main)/agent/_layout'),
-              'Desktop > Chat > Layout',
-              { fallback: <RouteSegmentSkeleton />, preloadId: 'agent' },
-            )}
-          />
+        element: dynamicLayout(
+          () => import('@/routes/(main)/agent/_layout'),
+          'Desktop > Chat > Layout',
+          { preloadId: 'agent' },
         ),
         errorElement: <ErrorBoundary />,
         path: ':aid',

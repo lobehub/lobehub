@@ -8,10 +8,8 @@ import {
 } from '@/business/client/BusinessMobileRoutes';
 import AgentShareVisitorSkeleton from '@/components/Skeleton/AgentShareVisitor';
 import AppsSkeleton from '@/components/Skeleton/Apps';
-import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
 import { delayed } from '@/components/Skeleton/Delayed';
 import { acceptanceRouteMeta } from '@/features/Acceptance/routeMeta';
-import AgentRouteSwitch from '@/features/AgentRoute/AgentRouteSwitch';
 import { agentShareVisitorRouteMeta } from '@/features/AgentShareVisitor/routeMeta';
 import { AGENT_SHARE_VISITOR_PATH } from '@/features/AgentShareVisitor/visitorPath';
 import { mobileAgentSettingsRouteMeta } from '@/features/RouteMeta/mobileRouteMeta';
@@ -60,17 +58,10 @@ export const sharedMainAreaChildren: RouteObject[] = [
             path: 'settings',
           },
         ],
-        // `/agent/:aid` is the creator's own agent, by id or by agent slug;
-        // `AgentRouteSwitch` holds the skeleton while a slug resolves.
-        element: (
-          <AgentRouteSwitch
-            fallback={<ConversationLayoutSkeleton />}
-            ownElement={dynamicLayout(
-              () => import('@/routes/(mobile)/chat/_layout'),
-              'Mobile > Chat > Layout',
-              { preloadId: 'mobile-agent' },
-            )}
-          />
+        element: dynamicLayout(
+          () => import('@/routes/(mobile)/chat/_layout'),
+          'Mobile > Chat > Layout',
+          { preloadId: 'mobile-agent' },
         ),
         errorElement: <ErrorBoundary />,
         path: ':aid',

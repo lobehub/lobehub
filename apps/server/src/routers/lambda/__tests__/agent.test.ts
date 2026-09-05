@@ -1022,7 +1022,7 @@ describe('agentRouter', () => {
     });
   });
 
-  describe('resolveAgentRoute', () => {
+  describe('resolveAgentRoute (released-client compatibility)', () => {
     it('treats an id-shaped param as an own agent without touching the database', async () => {
       const caller = agentRouter.createCaller(mockCtx);
       const result = await caller.resolveAgentRoute({ slugOrId: 'agt_abc123' });

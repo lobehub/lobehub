@@ -264,11 +264,12 @@ class AgentService {
   };
 
   /**
-   * Resolve what a `/agent/:slugOrId` param points at — see the
-   * `resolveAgentRoute` procedure for the resolution order.
+   * Resolve a url slug to its agent id. Returns `null` for an unknown slug and
+   * for one the caller can't see — the two are deliberately indistinguishable.
    */
-  resolveAgentRoute = async (slugOrId: string) => {
-    return lambdaClient.agent.resolveAgentRoute.query({ slugOrId });
+  resolveAgentIdBySlug = async (slug: string): Promise<string | null> => {
+    const { agentId } = await lambdaClient.agent.resolveAgentIdBySlug.query({ slug });
+    return agentId;
   };
 
   /** Rename an agent's url slug (validated server-side; see `updateAgentSlug`). */
