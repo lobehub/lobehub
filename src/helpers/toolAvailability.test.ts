@@ -49,5 +49,6 @@ describe('toolAvailability', () => {
         isDesktop: false,
       }),
     ).toBe(false);
+    expect(isToolAvailableInCurrentEnv('lobe-auv')).toBe(false);
   });
 });

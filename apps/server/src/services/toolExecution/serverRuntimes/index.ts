@@ -17,6 +17,7 @@ import { agentSignalFeedbackIntentRuntime } from './agentSignalFeedbackIntent';
 import { agentSignalReflectionRuntime } from './agentSignalReflection';
 import { agentSignalReviewRuntime } from './agentSignalReview';
 import { agentSignalSkillManagementRuntime } from './agentSignalSkillManagement';
+import { auvRuntime } from './auv';
 import { briefRuntime } from './brief';
 import { browserRuntime } from './browser';
 import { calculatorRuntime } from './calculator';
@@ -63,6 +64,7 @@ const registerRuntimes = (runtimes: ServerRuntimeRegistration[]) => {
 // Register all server runtimes
 registerRuntimes([
   acceptanceEvidenceRuntime,
+  auvRuntime,
   agentBuilderRuntime,
   webBrowsingRuntime,
   cloudSandboxRuntime,

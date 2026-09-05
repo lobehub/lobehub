@@ -1,4 +1,5 @@
 import { WEB_ONBOARDING } from '@lobechat/builtin-agents';
+import { AuvIdentifier } from '@lobechat/builtin-tool-auv/client';
 import {
   BrowserApiName,
   BrowserIdentifier,
@@ -35,6 +36,7 @@ import {
   WebOnboardingIdentifier,
   WebOnboardingManifest,
 } from '@lobechat/builtin-tool-web-onboarding';
+import { alwaysOnToolIds } from '@lobechat/builtin-tools';
 import { getBuiltinRenderDisplayControl } from '@lobechat/builtin-tools/displayControls';
 import { builtinToolIdentifiers } from '@lobechat/builtin-tools/identifiers';
 import { getBuiltinInspector } from '@lobechat/builtin-tools/inspectors';
@@ -55,6 +57,14 @@ describe('builtin tool registry', () => {
 
   it('includes web onboarding in builtin identifiers', () => {
     expect(builtinToolIdentifiers).toContain(WebOnboardingIdentifier);
+  });
+
+  it('includes AUV in builtin identifiers', () => {
+    expect(builtinToolIdentifiers).toContain(AuvIdentifier);
+  });
+
+  it('keeps the single AUV CLI entry point directly available behind its runtime gate', () => {
+    expect(alwaysOnToolIds).toContain(AuvIdentifier);
   });
 
   it('registers skill store inspectors and renders for market flows', () => {

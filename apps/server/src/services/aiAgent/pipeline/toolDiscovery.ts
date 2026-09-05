@@ -1,3 +1,4 @@
+import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { GoalIdentifier, isGoalPrompt } from '@lobechat/builtin-tool-goal';
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
@@ -858,7 +859,7 @@ export const discoverTools = async (
       : [
           ...new Set([
             ...agentPlugins,
-            ...(disableLocalSystem ? [] : [LocalSystemManifest.identifier]),
+            ...(disableLocalSystem ? [] : [LocalSystemManifest.identifier, AuvManifest.identifier]),
             RemoteDeviceManifest.identifier,
             // Include LobeHub Skills and Composio tools so they are passed to generateToolsDetailed
             ...activeLobehubSkillManifests.map((m) => m.identifier),
@@ -945,6 +946,7 @@ export const discoverTools = async (
     // executor marking below, and the desktop client owns the tool gate.
     const stripDeviceTools = gatewayConfigured && !deviceCapable;
     if (stripDeviceTools) {
+      delete toolManifestMap[AuvManifest.identifier];
       delete toolManifestMap[RemoteDeviceManifest.identifier];
       delete toolManifestMap[LocalSystemManifest.identifier];
     }
@@ -960,21 +962,23 @@ export const discoverTools = async (
       }
     }
 
-    // lobe-local-system has `discoverable: isDesktop` in builtinTools, which
-    // evaluates to false on the Node.js server side, so it never enters the
-    // loop above. Explicitly inject it only when the device gateway is
+    // Local System and AUV have `discoverable: isDesktop` in builtinTools,
+    // which evaluates to false on the Node.js server side, so they never enter
+    // the loop above. Explicitly inject them only when the device gateway is
     // configured AND the plan's target is 'local' — skip for sandbox/none
     // targets to avoid leaking local-system into non-local sessions. (The
     // plan already degrades to `none` when device access is denied, so no
     // separate `canUseDevice` check is needed here.)
-    if (
-      !disableLocalSystem &&
-      isManifestIngestAllowed(LocalSystemManifest.identifier) &&
-      gatewayConfigured &&
-      agentRuntimeMode === 'local' &&
-      !toolManifestMap[LocalSystemManifest.identifier]
-    ) {
-      toolManifestMap[LocalSystemManifest.identifier] = LocalSystemManifest as LobeToolManifest;
+    for (const manifest of [LocalSystemManifest, AuvManifest]) {
+      if (
+        !disableLocalSystem &&
+        isManifestIngestAllowed(manifest.identifier) &&
+        gatewayConfigured &&
+        agentRuntimeMode === 'local' &&
+        !toolManifestMap[manifest.identifier]
+      ) {
+        toolManifestMap[manifest.identifier] = manifest as LobeToolManifest;
+      }
     }
 
     // Include lobehub skill and composio manifests for activator discovery.

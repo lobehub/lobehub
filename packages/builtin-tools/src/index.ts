@@ -12,6 +12,7 @@ import {
   agentSignalReviewManifest,
   agentSignalSkillManagementManifest,
 } from '@lobechat/builtin-tool-agent-signal';
+import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { BriefManifest } from '@lobechat/builtin-tool-brief';
 import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { CalculatorManifest } from '@lobechat/builtin-tool-calculator/manifest';
@@ -56,6 +57,7 @@ export const defaultToolIds = [
   KnowledgeBaseManifest.identifier,
   MemoryManifest.identifier,
   LocalSystemManifest.identifier,
+  AuvManifest.identifier,
   BrowserManifest.identifier,
   CloudSandboxManifest.identifier,
   TopicReferenceManifest.identifier,
@@ -81,6 +83,10 @@ export const defaultToolIds = [
  */
 export const alwaysOnToolIds = [
   LobeAgentManifest.identifier,
+  // AUV intentionally exposes one CLI-style entry point instead of one model tool per
+  // native command. Keep that single entry point available whenever the runtime gate
+  // resolves to a local desktop/device; the later AUV rule still disables it elsewhere.
+  AuvManifest.identifier,
   LobeActivatorManifest.identifier,
   SkillsManifest.identifier,
   SkillStoreManifest.identifier,
@@ -160,6 +166,7 @@ export const groupSupervisorToolIds = [GroupManagementManifest.identifier];
  */
 export const runtimeManagedToolIds = [
   BrowserManifest.identifier,
+  AuvManifest.identifier,
   CloudSandboxManifest.identifier,
   KnowledgeBaseManifest.identifier,
   LocalSystemManifest.identifier,
@@ -350,6 +357,13 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     hidden: true,
     identifier: BrowserManifest.identifier,
     manifest: BrowserManifest,
+    type: 'builtin',
+  },
+  {
+    discoverable: isDesktop,
+    hidden: true,
+    identifier: AuvManifest.identifier,
+    manifest: AuvManifest,
     type: 'builtin',
   },
   {

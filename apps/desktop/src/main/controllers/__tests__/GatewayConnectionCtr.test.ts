@@ -5,6 +5,7 @@ import { deriveDeviceId, deriveScopedFallbackId } from '@lobechat/device-identit
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
+import AuvService from '@/services/auvSrv';
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import ImessageBridgeService from '@/services/imessageBridgeSrv';
 
@@ -60,13 +61,18 @@ const { ipcMainHandleMock, MockGatewayClient } = vi.hoisted(() => {
       this.emit('status_changed', status);
     }
 
-    simulateToolCallRequest(apiName: string, args: object, requestId = 'req-1') {
+    simulateToolCallRequest(
+      apiName: string,
+      args: object,
+      requestId = 'req-1',
+      identifier = 'test-tool',
+    ) {
       this.emit('tool_call_request', {
         requestId,
         toolCall: {
           apiName,
           arguments: JSON.stringify(args),
-          identifier: 'test-tool',
+          identifier,
         },
         type: 'tool_call_request',
       });
@@ -260,6 +266,13 @@ const mockImessageBridgeSrv = {
   handleGatewayMessageApi: vi.fn().mockResolvedValue({ ok: true }),
 } as unknown as ImessageBridgeService;
 
+const mockAuvSrv = {
+  runCommand: vi.fn().mockResolvedValue({
+    argv: ['invoke', 'display.capture'],
+    output: { artifacts: [{ file_path: '/tmp/capture.png' }] },
+  }),
+} as unknown as AuvService;
+
 const mockMcpCtr = {
   runStdioMcpTool: vi.fn().mockResolvedValue({ content: 'mcp result', state: {}, success: true }),
 } as unknown as McpCtr;
@@ -286,6 +299,7 @@ const mockApp = {
     return null;
   }),
   getService: vi.fn((Cls) => {
+    if (Cls === AuvService) return mockAuvSrv;
     if (Cls === GatewayConnectionService) return mockGatewayConnectionSrv;
     if (Cls === ImessageBridgeService) return mockImessageBridgeSrv;
     return null;
@@ -648,6 +662,32 @@ describe('GatewayConnectionCtr', () => {
       await vi.advanceTimersByTimeAsync(0);
 
       expect((controller as any)[methodName]).toHaveBeenCalled();
+    });
+
+    it('should route AUV CLI commands to the app-owned runtime', async () => {
+      const client = await connectAndOpen();
+
+      client.simulateToolCallRequest(
+        'runCommand',
+        { argv: ['invoke', 'display.capture'] },
+        'auv-command',
+        'lobe-auv',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockAuvSrv.runCommand).toHaveBeenCalledWith({
+        argv: ['invoke', 'display.capture'],
+      });
+      expect(client.sendToolCallResponse).toHaveBeenCalledWith({
+        requestId: 'auv-command',
+        result: expect.objectContaining({
+          content: JSON.stringify({
+            argv: ['invoke', 'display.capture'],
+            output: { artifacts: [{ file_path: '/tmp/capture.png' }] },
+          }),
+          success: true,
+        }),
+      });
     });
 
     it('should send tool_call_response with content + state envelope on success', async () => {

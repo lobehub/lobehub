@@ -236,6 +236,7 @@
     "@lobechat/builtin-tool-agent-documents": "workspace:*",
     "@lobechat/builtin-tool-agent-management": "workspace:*",
     "@lobechat/builtin-tool-agent-signal": "workspace:*",
+    "@lobechat/builtin-tool-auv": "workspace:*",
     "@lobechat/builtin-tool-brief": "workspace:*",
     "@lobechat/builtin-tool-browser": "workspace:*",
     "@lobechat/builtin-tool-calculator": "workspace:*",
