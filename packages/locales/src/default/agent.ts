@@ -404,8 +404,6 @@ export default {
   'share.settings.link.slugError.tooShort': 'Custom links need at least 3 characters.',
   'share.settings.link.slugHint':
     '3–64 characters: lowercase letters, numbers and hyphens. Leave it empty to use the generated link.',
-  'share.settings.link.slugLabel': 'Custom link',
-  'share.settings.link.slugPlaceholder': 'my-agent',
   'share.settings.link.slugSaved': 'Custom link updated',
   'share.settings.link.title': 'Share link',
   'share.settings.link.viewCount': '{{views}} views',
@@ -427,6 +425,8 @@ export default {
   'share.settings.permissions.showModelInfoHint':
     'Off by default: your model and provider choice stays hidden.',
   'share.settings.permissions.title': 'Permissions',
+  'share.settings.tabs.access': 'Access',
+  'share.settings.tabs.stats': 'Stats',
   'share.settings.title': 'Share Agent',
   'share.settings.usage.conversations': 'Conversations',
   'share.settings.usage.desc': 'What this share has attracted, and what it has cost you.',
@@ -443,6 +443,8 @@ export default {
   'share.settings.tools.apiWritesOwnerData':
     'Visitors can never write to your memory — this action stays off in shared runs.',
   'share.settings.tools.availableGroup': 'Not granted · {{count}}',
+  'share.settings.tools.apiGrantedCount': '{{granted}} of {{total}} APIs granted',
+  'share.settings.tools.configureApis': 'Choose which APIs visitors can call',
   'share.settings.tools.empty': 'This Agent has no tools that can be granted to visitors.',
   'share.settings.tools.grantedEmpty':
     'No tools granted yet — visitors get a plain chat. Pick from the list below to grant one.',

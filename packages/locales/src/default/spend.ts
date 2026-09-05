@@ -38,6 +38,8 @@ export default {
   'table.columns.type.enums.imageGeneration': 'Image Generation',
   'table.columns.type.enums.videoGeneration': 'Video Generation',
   'table.columns.type.title': 'Type',
+  'table.agentShareDesc':
+    'Every model call a visitor of this share triggered, billed to your account.',
   'table.desc': 'Details of credit usage for text generation, embedding, image generation, etc.',
   'table.filters.allTypes': 'All types',
   'table.filters.endDate': 'End date',

@@ -38,6 +38,9 @@ describe('AgentShareModel', () => {
           description: 'Shareable agent',
           id: agentId,
           name: 'Shareable Agent',
+          // Explicit (the column defaults to random words): `create` seeds the
+          // share slug from it, so tests below can assert the exact value.
+          slug: 'shareable-agent',
           title: 'Shareable Agent Title',
           userId,
         },
@@ -91,6 +94,63 @@ describe('AgentShareModel', () => {
       expect(rows[0].visibility).toBe('private');
     });
 
+    describe('profile slug seed', () => {
+      it("seeds the share slug from the agent's own profile slug", async () => {
+        await serverDB
+          .update(agents)
+          .set({ slug: 'wild-built-using' })
+          .where(eq(agents.id, agentId));
+
+        const share = await agentShareModel.create(agentId, 'link');
+
+        expect(share.shareConfig.slug).toBe('wild-built-using');
+        expect(await AgentShareModel.findBySlugOrId(serverDB, 'wild-built-using')).toMatchObject({
+          agentId,
+        });
+      });
+
+      it('leaves the slug unset when another share already holds it', async () => {
+        // Agent slugs are unique per owner only, so two owners can both have
+        // an agent called `shared-name`; the share slug namespace is global.
+        await serverDB.update(agents).set({ slug: 'shared-name' }).where(eq(agents.id, agentId));
+        await serverDB
+          .update(agents)
+          .set({ slug: 'shared-name' })
+          .where(eq(agents.id, otherAgentId));
+
+        const first = await otherAgentShareModel.create(otherAgentId, 'link');
+        const second = await agentShareModel.create(agentId, 'link');
+
+        expect(first.shareConfig.slug).toBe('shared-name');
+        expect(second.shareConfig.slug).toBeUndefined();
+        expect(await AgentShareModel.findBySlugOrId(serverDB, 'shared-name')).toMatchObject({
+          agentId: otherAgentId,
+        });
+      });
+
+      it.each([
+        ['reserved word', 'settings'],
+        ['too short for a share slug', 'ab'],
+      ])('leaves the slug unset when the profile slug is a %s', async (_, slug) => {
+        await serverDB.update(agents).set({ slug }).where(eq(agents.id, agentId));
+
+        const share = await agentShareModel.create(agentId, 'link');
+
+        expect(share.shareConfig.slug).toBeUndefined();
+      });
+
+      it('does not touch the slug of an existing share on re-create', async () => {
+        await serverDB.update(agents).set({ slug: 'first-name' }).where(eq(agents.id, agentId));
+        await agentShareModel.create(agentId, 'link');
+        await agentShareModel.updateSlug(agentId, null);
+        await serverDB.update(agents).set({ slug: 'second-name' }).where(eq(agents.id, agentId));
+
+        const recreated = await agentShareModel.create(agentId, 'link');
+
+        expect(recreated.shareConfig.slug).toBeUndefined();
+      });
+    });
+
     it('rejects missing, foreign, and workspace agents', async () => {
       await expect(agentShareModel.create('missing-agent')).rejects.toMatchObject({
         code: 'FORBIDDEN',
@@ -141,8 +201,11 @@ describe('AgentShareModel', () => {
       const updated = await agentShareModel.updateConfig(agentId, config);
       const readBack = await agentShareModel.getByAgentId(agentId);
 
-      expect(updated?.shareConfig).toEqual(config);
-      expect(readBack?.shareConfig).toEqual(config);
+      // The slug seeded from the agent's profile slug at `create` survives a
+      // full config overwrite — it is owner-facing url state, not config.
+      const expected = { ...config, slug: 'shareable-agent' };
+      expect(updated?.shareConfig).toEqual(expected);
+      expect(readBack?.shareConfig).toEqual(expected);
     });
 
     it('atomically merges stale cross-context patches without losing sibling fields', async () => {
@@ -179,7 +242,8 @@ describe('AgentShareModel', () => {
       // `0` is a real cap ("stop all visitor runs"), never a cleared one.
       expect(updated?.shareConfig.monthlySpendLimit).toBe(0);
       expect(updated?.shareConfig.showModelInfo).toBe(true);
-      expect(updated?.shareConfig.slug).toBeUndefined();
+      // The seeded profile slug is untouched; the smuggled one never lands.
+      expect(updated?.shareConfig.slug).toBe('shareable-agent');
       expect(await AgentShareModel.findBySlugOrId(serverDB, 'sneaky-slug')).toBeNull();
     });
 

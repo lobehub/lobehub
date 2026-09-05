@@ -6,6 +6,7 @@
   "duration.stage.end": "结束",
   "duration.stage.firstToken": "首个令牌",
   "duration.stage.start": "开始",
+  "table.agentShareDesc": "访客通过这个分享触发的每一次模型调用，费用记在你的账户上。",
   "table.columns.TTFT.tooltip": "首令牌时间，单位：秒",
   "table.columns.duration": "耗时",
   "table.columns.model": "模型",

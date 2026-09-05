@@ -6,6 +6,7 @@
   "duration.stage.end": "End",
   "duration.stage.firstToken": "First Token",
   "duration.stage.start": "Start",
+  "table.agentShareDesc": "Every model call a visitor of this share triggered, billed to your account.",
   "table.columns.TTFT.tooltip": "Time To First Token, unit: seconds",
   "table.columns.duration": "Duration",
   "table.columns.model": "Model",
