@@ -367,16 +367,15 @@ describe('FtsSearchRepo (pg_like)', () => {
     });
 
     it('requires every tag in all mode across layer tags, parent tags, or an untagged parent', async () => {
-      const [taggedParent, nullParent, emptyParent, otherParent] = await serverDB
+      const [taggedParent, untaggedParent, otherParent] = await serverDB
         .insert(userMemories)
         .values([
           { lastAccessedAt: now, tags: ['project'], title: 'Kubernetes rollout', userId },
           { lastAccessedAt: now, title: 'Kubernetes notes', userId },
-          { lastAccessedAt: now, tags: [], title: 'Kubernetes empty', userId },
           { lastAccessedAt: now, tags: ['personal'], title: 'Kubernetes hobby', userId },
         ])
         .returning({ id: userMemories.id });
-      const [split, viaNullParent, viaEmptyParent, mismatch, untagged] = await serverDB
+      const [split, ownOnly, mismatch, untagged] = await serverDB
         .insert(userMemoriesActivities)
         .values([
           // typescript on the layer, project on the parent: every tag is present
@@ -387,21 +386,13 @@ describe('FtsSearchRepo (pg_like)', () => {
             userId,
             userMemoryId: taggedParent.id,
           },
-          // a parent without tags (NULL or empty array, which Elasticsearch
-          // indexes as a missing field) satisfies every requested tag
+          // an untagged parent contributes nothing: only one required tag present
           {
-            narrative: 'Null parent',
+            narrative: 'Own only',
             tags: ['typescript'],
             type: 'event',
             userId,
-            userMemoryId: nullParent.id,
-          },
-          {
-            narrative: 'Empty parent',
-            tags: ['typescript'],
-            type: 'event',
-            userId,
-            userMemoryId: emptyParent.id,
+            userMemoryId: untaggedParent.id,
           },
           // parent carries tags but not the required one
           {
@@ -429,9 +420,8 @@ describe('FtsSearchRepo (pg_like)', () => {
         pagination: {},
         query: { text: 'kubernetes' },
       });
-      expect(all.candidates.map((candidate) => candidate.id).sort()).toEqual(
-        [split.id, viaNullParent.id, viaEmptyParent.id].sort(),
-      );
+      expect(all.candidates.map((candidate) => candidate.id)).toEqual([split.id]);
+      expect(all.candidates.map((candidate) => candidate.id)).not.toContain(ownOnly.id);
 
       const any = await repo.ftsSearchCandidates({
         entity: 'memoryActivities',
@@ -440,9 +430,10 @@ describe('FtsSearchRepo (pg_like)', () => {
         query: { text: 'kubernetes' },
       });
       expect(any.candidates.map((candidate) => candidate.id).sort()).toEqual(
-        [split.id, viaNullParent.id, viaEmptyParent.id, untagged.id].sort(),
+        [split.id, untagged.id].sort(),
       );
       expect(any.candidates.map((candidate) => candidate.id)).not.toContain(mismatch.id);
+      expect(any.candidates.map((candidate) => candidate.id)).not.toContain(ownOnly.id);
     });
 
     it('applies the memory time range before the candidate limit', async () => {
@@ -706,6 +697,128 @@ describe('FtsSearchRepo (pg_like)', () => {
 
       expect(response.candidates).toHaveLength(10);
       expect(response.total).toBe(10);
+    });
+
+    it('serves file, knowledge base, and document candidates with their exclusions', async () => {
+      const restrictedKb = 'pg-like-cand-restricted-kb';
+      const allowedKb = 'pg-like-cand-allowed-kb';
+      await serverDB.insert(knowledgeBases).values([
+        { id: restrictedKb, name: 'Kubernetes restricted', userId },
+        { id: allowedKb, name: 'Kubernetes allowed', userId },
+      ]);
+      await serverDB.insert(files).values([
+        {
+          fileType: 'application/pdf',
+          id: 'cand-restricted-file',
+          name: 'kubernetes restricted',
+          size: 1,
+          url: 's3://bucket/r.pdf',
+          userId,
+        },
+        {
+          fileType: 'application/pdf',
+          id: 'cand-allowed-file',
+          name: 'kubernetes allowed',
+          size: 1,
+          url: 's3://bucket/a.pdf',
+          userId,
+        },
+        {
+          fileType: 'custom/document',
+          id: 'cand-page-file',
+          name: 'kubernetes page backing file',
+          size: 1,
+          url: 's3://bucket/p',
+          userId,
+        },
+      ]);
+      await serverDB.insert(knowledgeBaseFiles).values([
+        { fileId: 'cand-restricted-file', knowledgeBaseId: restrictedKb, userId },
+        { fileId: 'cand-allowed-file', knowledgeBaseId: allowedKb, userId },
+      ]);
+      const document = (
+        id: string,
+        fileType: string,
+        extra: Partial<typeof documents.$inferInsert> = {},
+      ) => ({
+        content: 'kubernetes body',
+        fileType,
+        filename: id,
+        id,
+        source: `internal://${id}`,
+        sourceType: 'api' as const,
+        title: `Kubernetes ${id}`,
+        totalCharCount: 15,
+        totalLineCount: 1,
+        userId,
+        ...extra,
+      });
+      await serverDB.insert(documents).values([
+        document('cand-folder', 'custom/folder'),
+        document('cand-folder-restricted', 'custom/folder', { knowledgeBaseId: restrictedKb }),
+        document('cand-page', 'custom/document'),
+        document('cand-page-restricted', 'custom/document', { knowledgeBaseId: restrictedKb }),
+        document('cand-page-file-restricted', 'custom/document', {
+          fileId: 'cand-restricted-file',
+        }),
+        document('cand-kb-doc-inline', 'application/pdf', { knowledgeBaseId: allowedKb }),
+        document('cand-kb-doc-file', 'application/pdf', { fileId: 'cand-allowed-file' }),
+      ]);
+
+      const repo = createRepo(serverDB, userId);
+      const ids = async (
+        entity: 'documents' | 'files' | 'knowledgeBases',
+        filters: Record<string, unknown>,
+      ) => {
+        const response = await repo.ftsSearchCandidates({
+          entity,
+          filters,
+          pagination: {},
+          query: { text: 'kubernetes' },
+        });
+        return response.candidates.map((candidate) => candidate.id).sort();
+      };
+
+      expect(await ids('files', {})).toEqual(['cand-allowed-file', 'cand-restricted-file']);
+      expect(await ids('files', { excludeKnowledgeBaseIds: [restrictedKb] })).toEqual([
+        'cand-allowed-file',
+      ]);
+
+      expect(await ids('knowledgeBases', { excludeKnowledgeBaseIds: [restrictedKb] })).toEqual([
+        allowedKb,
+      ]);
+
+      expect(await ids('documents', { documentKind: 'folder' })).toEqual([
+        'cand-folder',
+        'cand-folder-restricted',
+      ]);
+      expect(
+        await ids('documents', {
+          documentKind: 'folder',
+          excludeKnowledgeBaseIds: [restrictedKb],
+        }),
+      ).toEqual(['cand-folder']);
+      expect(
+        await ids('documents', {
+          documentKind: 'page',
+          excludeKnowledgeBaseIds: [restrictedKb],
+        }),
+      ).toEqual(['cand-page']);
+      expect(
+        await ids('documents', {
+          documentKind: 'knowledgeBaseDocument',
+          knowledgeBaseIds: [allowedKb],
+        }),
+      ).toEqual(['cand-kb-doc-file', 'cand-kb-doc-inline']);
+
+      await expect(
+        repo.ftsSearchCandidates({
+          entity: 'documents',
+          filters: {},
+          pagination: {},
+          query: { text: 'kubernetes' },
+        }),
+      ).rejects.toThrow('Candidate search provider failed');
     });
 
     it('returns nothing for a blank query', async () => {
