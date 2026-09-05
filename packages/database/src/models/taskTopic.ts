@@ -119,6 +119,34 @@ export class TaskTopicModel {
     return updated;
   }
 
+  /**
+   * Cancel every still-running topic under the given tasks in one statement,
+   * returning the rows that were actually flipped. Used by the family status
+   * cascade so a topic that started after the caller's snapshot is still
+   * marked canceled inside the same transaction as the status update.
+   */
+  async cancelRunningByTaskIds(taskIds: string[]): Promise<TaskTopicItem[]> {
+    if (taskIds.length === 0) return [];
+
+    const canceled = await this.db
+      .update(taskTopics)
+      .set({ status: 'canceled' })
+      .where(
+        and(
+          inArray(taskTopics.taskId, taskIds),
+          eq(taskTopics.status, 'running'),
+          this.ownership(),
+        ),
+      )
+      .returning();
+
+    for (const topic of canceled) {
+      if (topic.topicId) await this.markTopicEnded(topic.topicId, 'canceled');
+    }
+
+    return canceled;
+  }
+
   async updateOperationId(taskId: string, topicId: string, operationId?: string): Promise<void> {
     await this.db
       .update(taskTopics)

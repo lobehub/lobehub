@@ -1599,6 +1599,7 @@ export default {
   'taskDetail.status.paused': 'Pending review',
   'taskDetail.status.running': 'In progress',
   'taskDetail.status.scheduled': 'Scheduled',
+  'taskDetail.statusCascade.applyFailed': 'Could not update the task status. Try again.',
   'taskDetail.statusCascade.cancel': 'Cancel',
   'taskDetail.statusCascade.description':
     'This task still has {{count}} open subtask(s). Update them to {{status}} too?',

@@ -326,7 +326,17 @@ export class TaskRunnerService {
    *   with the error recorded — the same fallback used by the runner itself.
    */
   async cascadeOnCompletion(completedTaskId: string): Promise<CascadeResult> {
-    const unlocked = await this.taskModel.getUnlockedTasks(completedTaskId);
+    return this.cascadeOnCompletionMany([completedTaskId]);
+  }
+
+  /**
+   * Batched variant of {@link cascadeOnCompletion} for family-wide status
+   * cascades: dependents are discovered across all completed ids in one pass,
+   * so completing N tasks costs a constant number of discovery queries instead
+   * of N dependency walks.
+   */
+  async cascadeOnCompletionMany(completedTaskIds: string[]): Promise<CascadeResult> {
+    const unlocked = await this.taskModel.getUnlockedTasksForMany(completedTaskIds);
     if (unlocked.length === 0) return TaskRunnerService.cascadeEmpty();
 
     const result: CascadeResult = { failed: [], paused: [], started: [] };

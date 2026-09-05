@@ -2,7 +2,7 @@
 
 import type { TaskStatus } from '@lobechat/types';
 import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, createModal, ScrollArea, Text, useModalContext } from '@lobehub/ui/base-ui';
+import { Button, createModal, ScrollArea, Text, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -51,6 +51,32 @@ export interface TaskStatusCascadeItem {
   status?: string;
 }
 
+/**
+ * Apply-and-close flow shared by the modal buttons: on failure the modal stays
+ * open with an error toast so the user can retry or cancel explicitly, instead
+ * of the rejection being silently discarded.
+ */
+export const useCascadeApply = (onApply: (includeSubtasks: boolean) => Promise<void>) => {
+  const { t } = useTranslation('chat');
+  const { close } = useModalContext();
+  const [loadingAction, setLoadingAction] = useState<'all' | 'parent' | null>(null);
+
+  const handleApply = async (includeSubtasks: boolean) => {
+    setLoadingAction(includeSubtasks ? 'all' : 'parent');
+    try {
+      await onApply(includeSubtasks);
+      close();
+    } catch (error) {
+      console.error('[TaskStatusCascadeModal] Failed to apply status change:', error);
+      toast.error(t('taskDetail.statusCascade.applyFailed'));
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  return { handleApply, loadingAction };
+};
+
 const TaskStatusCascadeModalContent = ({
   onApply,
   onCancel,
@@ -59,7 +85,7 @@ const TaskStatusCascadeModalContent = ({
 }: TaskStatusCascadeModalContentProps) => {
   const { t } = useTranslation('chat');
   const { close, setCanDismissByClickOutside } = useModalContext();
-  const [loadingAction, setLoadingAction] = useState<'all' | 'parent' | null>(null);
+  const { handleApply, loadingAction } = useCascadeApply(onApply);
 
   useEffect(() => {
     setCanDismissByClickOutside(!loadingAction);
@@ -75,16 +101,6 @@ const TaskStatusCascadeModalContent = ({
     window.addEventListener('keydown', preventEscapeDismiss, true);
     return () => window.removeEventListener('keydown', preventEscapeDismiss, true);
   }, [loadingAction]);
-
-  const handleApply = async (includeSubtasks: boolean) => {
-    setLoadingAction(includeSubtasks ? 'all' : 'parent');
-    try {
-      await onApply(includeSubtasks);
-      close();
-    } finally {
-      setLoadingAction(null);
-    }
-  };
 
   const handleCancel = () => {
     onCancel();

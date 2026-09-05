@@ -552,41 +552,60 @@ export class TaskService {
     const subtasks = await this.taskModel.findSubtasks(resolved.id);
     const unfinishedStatuses = new Set<string>(UNFINISHED_TASK_STATUSES);
     const openSubtasks = subtasks.filter((task) => unfinishedStatuses.has(task.status));
+    // Freeze the cascade to this snapshot: both the interrupt pass and the
+    // status update operate on the same id set, so a subtask created or
+    // transitioned after the confirmation dialog is never rewritten.
     const targetTasks = [resolved, ...openSubtasks];
+    const targetIds = targetTasks.map((task) => task.id);
 
-    const runningTopics = await this.taskTopicModel.findRunningByTaskIds(
-      targetTasks.filter((task) => task.status === 'running').map((task) => task.id),
-    );
+    const aiAgentService = new AiAgentService(this.db, this.userId, {
+      workspaceId: this.workspaceId,
+    });
+
+    const runningTopics = await this.taskTopicModel.findRunningByTaskIds(targetIds);
     if (runningTopics.length > 0) {
-      const aiAgentService = new AiAgentService(this.db, this.userId, {
-        workspaceId: this.workspaceId,
-      });
-      await Promise.all(
+      const settled = await Promise.allSettled(
         runningTopics.map(async (topic) => {
           if (topic.operationId) {
             await aiAgentService.interruptTask({ operationId: topic.operationId });
           }
         }),
       );
+      const failure = settled.find((result) => result.status === 'rejected');
+      if (failure) {
+        // Persist the interrupts that did succeed before surfacing the error,
+        // so an actually-stopped operation is not left recorded as running.
+        for (const [index, topic] of runningTopics.entries()) {
+          if (settled[index].status !== 'fulfilled' || !topic.topicId) continue;
+          await this.taskTopicModel
+            .cancelIfRunning(topic.taskId, topic.topicId)
+            .catch(() => undefined);
+        }
+        throw failure.reason;
+      }
     }
 
     const completedAt = new Date();
     let updatedTasks: TaskItem[] = [];
+    let canceledTopics: Awaited<ReturnType<TaskTopicModel['cancelRunningByTaskIds']>> = [];
     await this.db.transaction(async (tx) => {
       const taskModel = new TaskModel(tx, this.userId, this.workspaceId);
       const taskTopicModel = new TaskTopicModel(tx, this.userId, this.workspaceId);
 
-      for (const topic of runningTopics) {
-        if (topic.topicId) await taskTopicModel.cancelIfRunning(topic.taskId, topic.topicId);
-      }
-
-      updatedTasks = await taskModel.updateStatusWithUnfinishedSubtasks(
-        resolved.id,
-        input.status,
-        UNFINISHED_TASK_STATUSES,
-        { completedAt },
-      );
+      // Cancel by the frozen id set rather than the pre-read topic list, so a
+      // topic that started between the snapshot and this transaction is still
+      // closed together with the status update.
+      canceledTopics = await taskTopicModel.cancelRunningByTaskIds(targetIds);
+      updatedTasks = await taskModel.updateStatusForIds(targetIds, input.status, { completedAt });
     });
+
+    // Best-effort: stop any operation discovered only inside the transaction.
+    const interruptedOperationIds = new Set(runningTopics.map((topic) => topic.operationId));
+    await Promise.allSettled(
+      canceledTopics
+        .filter((topic) => topic.operationId && !interruptedOperationIds.has(topic.operationId))
+        .map((topic) => aiAgentService.interruptTask({ operationId: topic.operationId! })),
+    );
 
     const task = updatedTasks.find(({ id }) => id === resolved.id);
     if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
@@ -595,11 +614,9 @@ export class TaskService {
     const paused: string[] = [];
     if (input.status === 'completed') {
       const runner = new TaskRunnerService(this.db, this.userId, this.workspaceId);
-      for (const updatedTask of updatedTasks) {
-        const cascade = await runner.cascadeOnCompletion(updatedTask.id);
-        unlocked.push(...cascade.started);
-        paused.push(...cascade.paused);
-      }
+      const cascade = await runner.cascadeOnCompletionMany(updatedTasks.map(({ id }) => id));
+      unlocked.push(...cascade.started);
+      paused.push(...cascade.paused);
     }
 
     return {
