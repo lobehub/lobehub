@@ -90,6 +90,9 @@ describe('uploadRouter', () => {
     routerMocks.businessFileUploadCheck.mockResolvedValue(undefined);
     routerMocks.createMultipartUpload.mockResolvedValue('multipart-1');
     routerMocks.createPreSignedUrl.mockResolvedValue('https://example.com/upload');
+    routerMocks.getFileMetadata.mockRejectedValue(
+      Object.assign(new Error('Not Found'), { name: 'NotFound' }),
+    );
     routerMocks.model.findActiveByPathname.mockResolvedValue(undefined);
     routerMocks.model.create.mockImplementation(async (input: Record<string, unknown>) =>
       createUpload(input),
@@ -102,6 +105,16 @@ describe('uploadRouter', () => {
     routerMocks.fileUploadService.hasAnyLiveSession.mockResolvedValue(false);
     routerMocks.fileUploadService.assertActiveOrLegacy.mockResolvedValue(undefined);
     routerMocks.fileUploadService.touchActive.mockResolvedValue(undefined);
+  });
+
+  it('refuses to reserve a pathname that already holds an object', async () => {
+    routerMocks.getFileMetadata.mockResolvedValue({ contentLength: 100 });
+
+    await expect(
+      caller.createS3PreSignedUrl({ pathname: 'files/someone-elses.bin', size: 100 }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(routerMocks.businessFileUploadCheck).not.toHaveBeenCalled();
+    expect(routerMocks.model.create).not.toHaveBeenCalled();
   });
 
   it('rejects oversized requests before reserving or creating storage state', async () => {

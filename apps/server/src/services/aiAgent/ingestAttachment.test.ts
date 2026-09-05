@@ -12,6 +12,7 @@ vi.mock('@/business/server/lambda-routers/file', () => ({
 
 const createFileService = () =>
   ({
+    db: { transaction: (run: (tx: unknown) => unknown) => run({}) },
     getFileAccessUrl: vi.fn().mockResolvedValue('https://cdn.test/a.pdf'),
     uploadFromBuffer: vi.fn().mockResolvedValue({ fileId: 'file-1', key: 'files/key' }),
   }) as any;
@@ -37,6 +38,7 @@ describe('ingestAttachment storage quota', () => {
       expect.objectContaining({
         actualSize: 2048,
         inputSize: 4096,
+        transaction: expect.anything(),
         userId: 'user-1',
         workspaceId: 'ws-1',
       }),

@@ -179,16 +179,20 @@ export async function ingestAttachment(
 
   // `uploadFromBuffer` writes straight through `FileService`, which has no quota
   // gate of its own. Charge the post-compression length, since that is what
-  // actually lands in storage.
-  await businessFileUploadCheck({
-    actualSize: buffer.length,
-    inputSize: source.size ?? buffer.length,
-    url: pathname,
-    userId,
-    workspaceId,
-  });
+  // actually lands in storage. The shared transaction lets the business slot lock
+  // the owner row, so two concurrent attachments cannot both pass on stale usage.
+  const { fileId, key } = await fileService.db.transaction(async (transaction) => {
+    await businessFileUploadCheck({
+      actualSize: buffer.length,
+      inputSize: source.size ?? buffer.length,
+      transaction,
+      url: pathname,
+      userId,
+      workspaceId,
+    });
 
-  const { fileId, key } = await fileService.uploadFromBuffer(buffer, mimeType, pathname);
+    return fileService.uploadFromBuffer(buffer, mimeType, pathname, transaction);
+  });
 
   // 5. Resolve access URL for images, videos and audio.
   const resolvedUrl =

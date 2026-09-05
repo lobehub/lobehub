@@ -333,6 +333,7 @@ describe('FileService', () => {
           }),
         }),
         expect.any(Boolean),
+        undefined,
       );
     });
 
@@ -360,6 +361,7 @@ describe('FileService', () => {
           }),
         }),
         expect.any(Boolean),
+        undefined,
       );
     });
   });
@@ -406,6 +408,7 @@ describe('FileService', () => {
           }),
         }),
         expect.any(Boolean),
+        undefined,
       );
     });
 
@@ -480,6 +483,7 @@ describe('FileService', () => {
           fileHash: 'new-hash',
         }),
         true, // insertToGlobalFiles = true when hash doesn't exist
+        undefined,
       );
     });
 
@@ -500,6 +504,7 @@ describe('FileService', () => {
           fileHash: 'existing-hash',
         }),
         false, // insertToGlobalFiles = false when hash exists
+        undefined,
       );
       expect(mockFileModel.updateGlobalFile).not.toHaveBeenCalled();
     });
@@ -529,6 +534,7 @@ describe('FileService', () => {
           url: 'new/path.txt',
         }),
         false,
+        undefined,
       );
       consoleSpy.mockRestore();
     });
@@ -557,6 +563,7 @@ describe('FileService', () => {
           url: 'new/path.txt',
         }),
         false,
+        undefined,
       );
     });
   });

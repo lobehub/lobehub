@@ -55,6 +55,12 @@ const matchesReservation = (
 ) =>
   upload?.size === params.size && upload.multipartPartSize === (params.multipartPartSize ?? null);
 
+const isMissingObject = (error: unknown) => {
+  if (!error || typeof error !== 'object') return false;
+  const value = error as { $metadata?: { httpStatusCode?: number }; name?: string };
+  return value.name === 'NotFound' || value.$metadata?.httpStatusCode === 404;
+};
+
 const reserveUpload = async (params: {
   clientIp?: string;
   db: LobeChatDatabase;
@@ -62,6 +68,7 @@ const reserveUpload = async (params: {
   multipartPartSize?: number;
   pathname: string;
   size: number;
+  storage: Pick<FileS3, 'getFileMetadata'>;
   userId: string;
   workspaceId?: string | null;
 }): Promise<FileUploadItem> => {
@@ -76,6 +83,17 @@ const reserveUpload = async (params: {
 
       return (await params.model.touchActive(params.pathname, expiresAt, transaction))!;
     }
+
+    // A reservation authorizes deleting its own pathname on abort, so it must never be
+    // granted over an object that already exists and therefore belongs to someone else.
+    const objectExists = await params.storage
+      .getFileMetadata(params.pathname)
+      .then(() => true)
+      .catch((error: unknown) => {
+        if (isMissingObject(error)) return false;
+        throw error;
+      });
+    if (objectExists) throw uploadConflict('Upload pathname is already in use');
 
     try {
       await businessFileUploadCheck({
@@ -245,6 +263,7 @@ export const uploadRouter = router({
         multipartPartSize: partSize,
         pathname: input.pathname,
         size: input.size,
+        storage: s3,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
       });
@@ -314,6 +333,7 @@ export const uploadRouter = router({
         model: ctx.fileUploadService.model,
         pathname: input.pathname,
         size: input.size,
+        storage: s3,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
       });

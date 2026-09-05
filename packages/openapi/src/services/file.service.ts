@@ -20,7 +20,7 @@ import {
   knowledgeBases,
   users,
 } from '@/database/schemas';
-import type { LobeChatDatabase } from '@/database/type';
+import type { LobeChatDatabase, Transaction } from '@/database/type';
 import type { S3 } from '@/server/modules/S3';
 import { FileS3 } from '@/server/modules/S3';
 import { DocumentService } from '@/server/services/document';
@@ -661,13 +661,20 @@ export class FileUploadService extends BaseService {
    * This surface streams the whole payload through the request body rather than
    * a pre-signed URL, so there is no reservation to hold: the size is known up
    * front and the server owns the write. Check the quota directly instead, once
-   * per path that actually adds bytes.
+   * per path that actually adds bytes. The transaction is what lets the business
+   * slot lock the owner row, so admission and the row it authorizes cannot
+   * interleave with a concurrent upload.
    */
-  private async assertStorageQuota(size: number, url: string): Promise<void> {
+  private async assertStorageQuota(
+    size: number,
+    url: string,
+    transaction: Transaction,
+  ): Promise<void> {
     try {
       await businessFileUploadCheck({
         actualSize: size,
         inputSize: size,
+        transaction,
         url,
         userId: this.userId,
         workspaceId: this.workspaceId,
@@ -764,9 +771,12 @@ export class FileUploadService extends BaseService {
               userId: this.userId,
             };
 
-            await this.assertStorageQuota(file.size, existingFileCheck.url || '');
+            // Skip inserting into global table since it already exists
+            const createResult = await this.db.transaction(async (tx) => {
+              await this.assertStorageQuota(file.size, existingFileCheck.url || '', tx);
 
-            const createResult = await this.fileModel.create(fileRecord, false); // Skip inserting into global table since it already exists
+              return this.fileModel.create(fileRecord, false, tx);
+            });
 
             // If sessionId is provided (supports agentId resolution), create file-session association
             if (resolvedSessionId) {
@@ -792,12 +802,7 @@ export class FileUploadService extends BaseService {
 
       // 4. File does not exist, proceed with normal upload flow
       const metadata = this.generateFileMetadata(file, options.directory);
-
-      await this.assertStorageQuota(file.size, metadata.path);
-
-      // 5. Upload to S3
       const fileBuffer = Buffer.from(fileArrayBuffer);
-      await this.s3Service.uploadBuffer(metadata.path, fileBuffer, file.type);
 
       // 7. Save file record to database
       const fileRecord = {
@@ -814,7 +819,14 @@ export class FileUploadService extends BaseService {
         userId: this.userId,
       };
 
-      const createResult = await this.fileModel.create(fileRecord, true);
+      const createResult = await this.db.transaction(async (tx) => {
+        await this.assertStorageQuota(file.size, metadata.path, tx);
+
+        // 5. Upload to S3
+        await this.s3Service.uploadBuffer(metadata.path, fileBuffer, file.type);
+
+        return this.fileModel.create(fileRecord, true, tx);
+      });
 
       // If sessionId is provided (supports agentId resolution), create file-session association
       if (resolvedSessionId) {
