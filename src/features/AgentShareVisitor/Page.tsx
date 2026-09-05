@@ -1,5 +1,6 @@
 'use client';
 
+import { DEFAULT_AVATAR } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
 import { Center, Flexbox } from '@lobehub/ui';
 import { ActionIcon, Avatar, Button, Drawer, Text } from '@lobehub/ui/base-ui';
@@ -158,7 +159,9 @@ const AgentShareVisitorPage = memo(() => {
             />
           )}
           <Avatar
-            avatar={data.agentMeta.avatar ?? undefined}
+            // Same fallback the conversation's welcome block uses, so an agent
+            // without a custom avatar does not degrade to "UN" initials here.
+            avatar={data.agentMeta.avatar ?? DEFAULT_AVATAR}
             background={data.agentMeta.backgroundColor ?? undefined}
             size={28}
           />
