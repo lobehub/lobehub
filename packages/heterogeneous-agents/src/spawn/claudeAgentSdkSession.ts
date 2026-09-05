@@ -149,7 +149,6 @@ export class ClaudeAgentSdkSession {
   private readonly abortController = new AbortController();
   private activeTasks = new Map<string, TrackedTask>();
   private closeInput = false;
-  private closeReason: Error | undefined;
   private closedByHost = false;
   private inactivityTimer: NodeJS.Timeout | undefined;
   private lastEventAt = Date.now();
@@ -188,7 +187,6 @@ export class ClaudeAgentSdkSession {
 
       await this.flushPipeline();
 
-      if (this.closeReason) throw this.closeReason;
       if (!this.sawErrorEvent) {
         await this.options.onEvents(
           this.pipeline.completeRuntime({
@@ -205,9 +203,8 @@ export class ClaudeAgentSdkSession {
         return;
       }
 
-      const normalizedError = this.closeReason ?? error;
       this.emitStatus('error');
-      throw normalizedError;
+      throw error;
     } finally {
       this.clearInactivityTimer();
       this.closeInput = true;
@@ -375,11 +372,12 @@ export class ClaudeAgentSdkSession {
   private armInactivityTimer(): void {
     this.clearInactivityTimer();
     this.inactivityTimer = setTimeout(() => {
-      this.closeReason = new Error(
-        `Claude SDK session produced no messages for ${this.inactivityTimeoutMs}ms`,
-      );
+      // Silence is not proof that the SDK query died: a foreground Bash/tool
+      // call can legitimately produce no SDK messages for many minutes. Keep
+      // the process alive and surface `stale` as an advisory host status. A
+      // later SDK message re-arms this timer and restores running/monitoring;
+      // explicit user stop, SDK completion, and real errors still terminate.
       this.emitStatus('stale');
-      this.close();
     }, this.inactivityTimeoutMs);
     this.inactivityTimer.unref?.();
   }
