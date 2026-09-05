@@ -1,0 +1,15 @@
+{
+  "exportSha256": "c6e3b544ff400dd24cc27007b1c0c569e3993dee412a7736c2d98607386b0e65",
+  "survived": {
+    "addSheet": true,
+    "bold": true,
+    "italic": true,
+    "sheets": [
+      "Sales",
+      "Assumptions",
+      "Sheet3"
+    ],
+    "value": "RACE-A",
+    "allSurvived": true
+  }
+}
