@@ -5,6 +5,7 @@ import path from 'node:path';
 
 import treeKill from 'tree-kill';
 
+import { createLogger } from '../logger';
 import type { GetCommandOutputParams, GetCommandOutputResult, KillCommandResult } from '../types';
 import { decodeClixml } from './clixml';
 import { buildOutputPreview } from './utils';
@@ -17,6 +18,7 @@ const OUTPUT_PREVIEW_TOTAL_MAX_BYTES = 22 * 1024;
 const OUTPUT_PREVIEW_STREAM_MAX_BYTES = 18 * 1024;
 const OUTPUT_PREVIEW_SECONDARY_MIN_BYTES = 4 * 1024;
 const KILL_SIGNAL: NodeJS.Signals = 'SIGKILL';
+const logger = createLogger('shell:process-manager');
 
 export interface ShellOutputFile {
   fd: number;
@@ -320,7 +322,14 @@ const killProcessTree = (childProcess: ChildProcess): void => {
   const { pid } = childProcess;
 
   if (pid) {
-    treeKill(pid, KILL_SIGNAL);
+    // tree-kill discovers descendants asynchronously. Without a callback,
+    // errors from process.kill (for example EPERM for root-owned children on
+    // Linux) are thrown outside the caller's try/catch and can crash Electron.
+    treeKill(pid, KILL_SIGNAL, (error) => {
+      if (error) {
+        logger.warn(`Failed to kill process tree for pid ${pid}:`, error);
+      }
+    });
     return;
   }
 
