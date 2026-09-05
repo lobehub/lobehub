@@ -52,17 +52,17 @@ export type TopicReasoningSnapshot = Pick<ChatTopicMetadata, 'heteroEffort' | 'r
  * - Heterogeneous agents pin the agent's `heterogeneousProvider.effort`.
  * - API models pin the user's model-instance reasoning config for the
  *   snapshotted model — an empty object when nothing is saved, which pins the
- *   topic to the model's own defaults. Nothing is pinned while that config is
- *   still loading (`isModelReasoningConfigLoaded`), so generation falls back to
- *   the user-level value instead of freezing a wrong "defaults" snapshot.
+ *   topic to the model's own defaults. Wait for the saved config before
+ *   snapshotting; if loading fails, retain the generation fallback instead
+ *   of freezing an unverified default.
  *
  * Returns undefined when there is nothing to pin, so callers can spread it
  * into `metadata` without leaving empty keys behind.
  */
-export const snapshotAgentReasoning = (
+export const snapshotAgentReasoning = async (
   agentId: string | null | undefined,
   modelSnapshot: { model?: string; provider?: string },
-): TopicReasoningSnapshot | undefined => {
+): Promise<TopicReasoningSnapshot | undefined> => {
   if (!agentId) return undefined;
 
   const heterogeneousProvider =
@@ -75,6 +75,8 @@ export const snapshotAgentReasoning = (
   const { model, provider } = modelSnapshot;
   if (!model || !provider) return undefined;
 
+  /** Creation must settle the saved config before persistence, including a first send after reload. */
+  await getAiInfraStoreState().ensureModelReasoningConfig(model, provider);
   const aiInfraState = getAiInfraStoreState();
   if (!aiModelSelectors.isModelHasReasoningExtendParams(model, provider)(aiInfraState)) return;
   if (!aiModelSelectors.isModelReasoningConfigLoaded(model, provider)(aiInfraState)) return;

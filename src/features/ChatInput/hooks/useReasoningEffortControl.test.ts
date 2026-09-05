@@ -12,6 +12,7 @@ const testState = vi.hoisted(() => ({
     updating: false,
   },
   chat: {
+    topicEffortUpdatingIds: [] as string[],
     /** keyed by `${topicId}/${provider}/${model}` — mirrors getTopicReasoningConfigForModel */
     topicConfigs: {} as Record<string, AiModelReasoningConfig | undefined>,
     updateTopicReasoningConfig: vi.fn(() => Promise.resolve()),
@@ -47,6 +48,7 @@ beforeEach(() => {
   testState.ai.updating = false;
   testState.ai.updateModelReasoningConfig.mockClear();
   testState.chat.topicConfigs = {};
+  testState.chat.topicEffortUpdatingIds = [];
   testState.chat.updateTopicReasoningConfig.mockClear();
 });
 
@@ -111,6 +113,19 @@ describe('useReasoningEffortControl', () => {
   });
 
   describe('topic scope', () => {
+    it('uses the topic in-flight state rather than the shared default mutation', () => {
+      testState.ai.updating = true;
+      const { result, rerender } = renderHook(() =>
+        useReasoningEffortControl('claude', 'anthropic', 'topic-1'),
+      );
+      expect(result.current.updating).toBe(false);
+      testState.chat.topicEffortUpdatingIds = ['topic-1'];
+      rerender();
+      expect(result.current.updating).toBe(true);
+      result.current.select({ effort: 'high' });
+      expect(testState.chat.updateTopicReasoningConfig).not.toHaveBeenCalled();
+    });
+
     it('shows the topic pin over the user-level config when pinned for this model', () => {
       testState.ai.reasoningParams = ['effort', 'reasoningMode'];
       testState.ai.config = { effort: 'low', reasoningMode: 'pro' };

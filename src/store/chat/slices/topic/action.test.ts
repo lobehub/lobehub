@@ -13,6 +13,8 @@ import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { useAgentStore } from '@/store/agent';
+import { useAiInfraStore } from '@/store/aiInfra';
+import { aiModelSelectors } from '@/store/aiInfra/slices/aiModel/selectors';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
@@ -552,6 +554,64 @@ describe('topic action', () => {
         });
       });
     };
+
+    it('serializes consecutive selections through persistence and refresh', async () => {
+      seedTopic();
+      let finishFirst!: () => void;
+      const firstWrite = new Promise<void>((resolve) => {
+        finishFirst = resolve;
+      });
+      const spy = vi
+        .spyOn(topicService, 'updateTopicMetadata')
+        .mockImplementationOnce(async () => {
+          await firstWrite;
+          return [];
+        })
+        .mockResolvedValue([]);
+      let first!: Promise<void>;
+      let second!: Promise<void>;
+      act(() => {
+        first = useChatStore
+          .getState()
+          .updateTopicReasoningConfig('topic-1', { reasoningEffort: 'high' });
+        second = useChatStore
+          .getState()
+          .updateTopicReasoningConfig('topic-1', { reasoningMode: 'pro' });
+      });
+      await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+      expect(useChatStore.getState().topicEffortUpdatingIds).toContain('topic-1');
+      await act(async () => {
+        finishFirst();
+        await Promise.all([first, second]);
+      });
+      expect(spy).toHaveBeenCalledTimes(2);
+      expect(spy).toHaveBeenLastCalledWith('topic-1', {
+        reasoningConfig: { reasoningEffort: 'high', reasoningMode: 'pro' },
+      });
+      expect(useChatStore.getState().topicEffortUpdatingIds).not.toContain('topic-1');
+    });
+
+    it('releases the updating state after failure and accepts another selection', async () => {
+      seedTopic();
+      const spy = vi
+        .spyOn(topicService, 'updateTopicMetadata')
+        .mockRejectedValueOnce(new Error('failed'))
+        .mockResolvedValue([]);
+      await act(async () => {
+        await expect(
+          useChatStore
+            .getState()
+            .updateTopicReasoningConfig('topic-1', { reasoningEffort: 'high' }),
+        ).rejects.toThrow('failed');
+      });
+      expect(useChatStore.getState().topicEffortUpdatingIds).not.toContain('topic-1');
+      await act(async () => {
+        await useChatStore
+          .getState()
+          .updateTopicReasoningConfig('topic-1', { reasoningEffort: 'medium' });
+      });
+      expect(spy).toHaveBeenCalledTimes(2);
+    });
 
     it('merges the patch over the current topic pin', async () => {
       const { result } = renderHook(() => useChatStore());
@@ -2947,6 +3007,52 @@ describe('topic action', () => {
     });
   });
   describe('createTopic', () => {
+    it.each(['createTopic', 'saveToTopic'] as const)(
+      '%s waits for saved reasoning before persisting',
+      async (method) => {
+        const agentId = 'test-session-id';
+        useChatStore.setState({
+          activeAgentId: agentId,
+          messagesMap: { [messageMapKey({ agentId })]: [{ id: 'message-1' } as UIChatMessage] },
+          summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
+        });
+        let loaded = false;
+        let finishLoad!: () => void;
+        vi.spyOn(aiModelSelectors, 'isModelHasReasoningExtendParams').mockReturnValue(() => true);
+        vi.spyOn(aiModelSelectors, 'isModelReasoningConfigLoaded').mockReturnValue(() => loaded);
+        vi.spyOn(aiModelSelectors, 'modelReasoningConfig').mockReturnValue(() => ({
+          reasoningEffort: 'high',
+        }));
+        const ensure = vi
+          .spyOn(useAiInfraStore.getState(), 'ensureModelReasoningConfig')
+          .mockImplementation(
+            () =>
+              new Promise<void>((resolve) => {
+                finishLoad = () => {
+                  loaded = true;
+                  resolve();
+                };
+              }),
+          );
+        const persist = vi.spyOn(topicService, 'createTopic').mockResolvedValue('loaded-topic');
+        let pending!: Promise<string | undefined>;
+        act(() => {
+          pending = useChatStore.getState()[method]();
+        });
+        await waitFor(() => expect(ensure).toHaveBeenCalled());
+        expect(persist).not.toHaveBeenCalled();
+        await act(async () => {
+          finishLoad();
+          await pending;
+        });
+        expect(persist).toHaveBeenCalledWith(
+          expect.objectContaining({
+            metadata: { reasoningConfig: { reasoningEffort: 'high' } },
+          }),
+        );
+      },
+    );
+
     it('should create a new topic and update the store', async () => {
       const { result } = renderHook(() => useChatStore());
       const activeAgentId = 'test-session-id';

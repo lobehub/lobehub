@@ -1059,9 +1059,6 @@ export class ConversationLifecycleActionImpl {
     const newTopicModelSnapshot = willCreateNewTopic
       ? snapshotAgentModel(operationContext.agentId)
       : undefined;
-    const newTopicReasoningSnapshot = newTopicModelSnapshot
-      ? snapshotAgentReasoning(operationContext.agentId, newTopicModelSnapshot)
-      : undefined;
 
     // Adopt the minted topic id NOW, synchronously with the optimistic message
     // dispatch above: insert the sidebar row and point `activeTopicId` at it in
@@ -1197,6 +1194,9 @@ export class ConversationLifecycleActionImpl {
         : [];
     // Example: a pending repo topic without this metadata renders under "No
     // directory" until the server row lands.
+    const newTopicReasoningSnapshot = newTopicModelSnapshot
+      ? await snapshotAgentReasoning(operationContext.agentId, newTopicModelSnapshot)
+      : undefined;
     const workingDirectoryMetadata: ChatTopicMetadata | undefined =
       pendingTopicRepos.length > 0
         ? {

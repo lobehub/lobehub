@@ -71,9 +71,13 @@ export const useReasoningEffortControl = (
     isEqual,
   );
   const config = topicConfig ?? userConfig;
-  const updating = useAiInfraStore(
+  const modelUpdating = useAiInfraStore(
     aiModelSelectors.isModelReasoningConfigUpdating(model, provider),
   );
+  const topicUpdating = useChatStore(
+    (s) => !!topicId && s.topicEffortUpdatingIds.includes(topicId),
+  );
+  const updating = topicId ? topicUpdating : modelUpdating;
   const updateModelReasoningConfig = useAiInfraStore((s) => s.updateModelReasoningConfig);
   const updateTopicReasoningConfig = useChatStore((s) => s.updateTopicReasoningConfig);
 

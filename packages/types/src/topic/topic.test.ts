@@ -1,6 +1,27 @@
 import { describe, expect, it } from 'vitest';
 
-import { chatTopicMetadataUpdateSchema, parseTopicScheduledRun } from './topic';
+import {
+  chatTopicCreateMetadataSchema,
+  chatTopicMetadataUpdateSchema,
+  parseTopicScheduledRun,
+} from './topic';
+
+describe.each([chatTopicCreateMetadataSchema, chatTopicMetadataUpdateSchema])(
+  'reasoning metadata validation',
+  (schema) => {
+    it('rejects invalid known reasoning enum values', () => {
+      expect(
+        schema.safeParse({ reasoningConfig: { gpt5ReasoningEffort: 'invalid' } }).success,
+      ).toBe(false);
+      expect(schema.safeParse({ reasoningConfig: { reasoningMode: 'fast' } }).success).toBe(false);
+    });
+    it('accepts valid values and an explicit default pin', () => {
+      for (const reasoningConfig of [{}, { gpt5ReasoningEffort: 'high', reasoningMode: 'pro' }]) {
+        expect(schema.parse({ reasoningConfig })).toEqual({ reasoningConfig });
+      }
+    });
+  },
+);
 
 describe('chatTopicMetadataUpdateSchema', () => {
   it('parses a scheduled heterogeneous continuation patch', () => {

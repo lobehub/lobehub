@@ -16,7 +16,9 @@ const aiInfra = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@/store/aiInfra', () => ({ getAiInfraStoreState: () => aiInfra.state }));
+vi.mock('@/store/aiInfra', () => ({
+  getAiInfraStoreState: () => ({ ...aiInfra.state, ensureModelReasoningConfig: () => {} }),
+}));
 vi.mock('@/store/aiInfra/slices/aiModel/selectors', () => ({
   aiModelSelectors: {
     isModelHasReasoningExtendParams: () => (s: typeof aiInfra.state) => s.reasoningParams,
@@ -130,11 +132,11 @@ describe('snapshotAgentReasoning', () => {
     aiInfra.state = { loaded: false, reasoningConfig: undefined, reasoningParams: false };
   });
 
-  it('returns nothing without an agent', () => {
-    expect(snapshotAgentReasoning(undefined, modelSnapshot)).toBeUndefined();
+  it('returns nothing without an agent', async () => {
+    expect(await snapshotAgentReasoning(undefined, modelSnapshot)).toBeUndefined();
   });
 
-  it("pins a heterogeneous agent's effort, and nothing when it has none", () => {
+  it("pins a heterogeneous agent's effort, and nothing when it has none", async () => {
     const withEffort = seedAgent('hetero-effort', {
       agencyConfig: { heterogeneousProvider: { effort: 'high', type: 'claude-code' } },
     });
@@ -142,35 +144,35 @@ describe('snapshotAgentReasoning', () => {
       agencyConfig: { heterogeneousProvider: { type: 'claude-code' } },
     });
 
-    expect(snapshotAgentReasoning(withEffort, {})).toEqual({ heteroEffort: 'high' });
-    expect(snapshotAgentReasoning(without, {})).toBeUndefined();
+    expect(await snapshotAgentReasoning(withEffort, {})).toEqual({ heteroEffort: 'high' });
+    expect(await snapshotAgentReasoning(without, {})).toBeUndefined();
   });
 
-  it('skips models without reasoning extend params', () => {
+  it('skips models without reasoning extend params', async () => {
     const id = seedAgent('plain', { model: 'gpt-4o', provider: 'openai' });
 
-    expect(snapshotAgentReasoning(id, modelSnapshot)).toBeUndefined();
+    expect(await snapshotAgentReasoning(id, modelSnapshot)).toBeUndefined();
   });
 
-  it('pins the loaded user-level config, an empty object when nothing is saved', () => {
+  it('pins the loaded user-level config, an empty object when nothing is saved', async () => {
     const id = seedAgent('reasoning', { model: 'gpt-5.5', provider: 'openai' });
     aiInfra.state = {
       loaded: true,
       reasoningConfig: { gpt5_2ReasoningEffort: 'high' },
       reasoningParams: true,
     };
-    expect(snapshotAgentReasoning(id, modelSnapshot)).toEqual({
+    expect(await snapshotAgentReasoning(id, modelSnapshot)).toEqual({
       reasoningConfig: { gpt5_2ReasoningEffort: 'high' },
     });
 
     aiInfra.state = { loaded: true, reasoningConfig: undefined, reasoningParams: true };
-    expect(snapshotAgentReasoning(id, modelSnapshot)).toEqual({ reasoningConfig: {} });
+    expect(await snapshotAgentReasoning(id, modelSnapshot)).toEqual({ reasoningConfig: {} });
   });
 
-  it('does not pin while the user-level config is still loading', () => {
+  it('retains fallback when the user-level config could not be loaded', async () => {
     const id = seedAgent('loading', { model: 'gpt-5.5', provider: 'openai' });
     aiInfra.state = { loaded: false, reasoningConfig: undefined, reasoningParams: true };
 
-    expect(snapshotAgentReasoning(id, modelSnapshot)).toBeUndefined();
+    expect(await snapshotAgentReasoning(id, modelSnapshot)).toBeUndefined();
   });
 });

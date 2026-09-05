@@ -211,7 +211,7 @@ export class ChatTopicActionImpl {
     this.#set({ creatingTopic: true }, false, n('creatingTopic/start'));
     const targetSessionId = sessionId || activeAgentId;
     const modelSnapshot = snapshotAgentModel(targetSessionId);
-    const reasoningSnapshot = snapshotAgentReasoning(targetSessionId, modelSnapshot);
+    const reasoningSnapshot = await snapshotAgentReasoning(targetSessionId, modelSnapshot);
     const topicId = await internal_createTopic({
       ...modelSnapshot,
       ...(reasoningSnapshot ? { metadata: reasoningSnapshot } : {}),
@@ -234,7 +234,7 @@ export class ChatTopicActionImpl {
 
     // 1. create topic and bind these messages
     const modelSnapshot = snapshotAgentModel(targetSessionId);
-    const reasoningSnapshot = snapshotAgentReasoning(targetSessionId, modelSnapshot);
+    const reasoningSnapshot = await snapshotAgentReasoning(targetSessionId, modelSnapshot);
     const topicId = await internal_createTopic({
       ...modelSnapshot,
       ...(reasoningSnapshot ? { metadata: reasoningSnapshot } : {}),
@@ -508,9 +508,11 @@ export class ChatTopicActionImpl {
     patch: AiModelReasoningConfig,
     base?: AiModelReasoningConfig,
   ): Promise<void> => {
-    const current = topicSelectors.getTopicById(id)(this.#get())?.metadata?.reasoningConfig;
-    await this.#writeTopicEffortPin(id, {
-      reasoningConfig: { ...(current ?? base), ...patch },
+    await this.#enqueueTopicEffortWrite(id, async () => {
+      const current = topicSelectors.getTopicById(id)(this.#get())?.metadata?.reasoningConfig;
+      await this.#writeTopicEffortPin(id, {
+        reasoningConfig: { ...(current ?? base), ...patch },
+      });
     });
   };
 
@@ -519,7 +521,9 @@ export class ChatTopicActionImpl {
     id: string,
     effort: HeterogeneousReasoningEffort,
   ): Promise<void> => {
-    await this.#writeTopicEffortPin(id, { heteroEffort: effort });
+    await this.#enqueueTopicEffortWrite(id, () =>
+      this.#writeTopicEffortPin(id, { heteroEffort: effort }),
+    );
   };
 
   /**
@@ -545,6 +549,37 @@ export class ChatTopicActionImpl {
       model,
       provider,
     });
+  };
+
+  #topicEffortWrites = new Map<string, Promise<void>>();
+
+  /** Serialize the full optimistic write/RPC/refresh cycle so earlier selections cannot land last. */
+  #enqueueTopicEffortWrite = async (id: string, write: () => Promise<void>): Promise<void> => {
+    const previous = this.#topicEffortWrites.get(id);
+    /** Failures already revalidate and toast; a rejected write must not poison the next selection. */
+    const pending = (previous ? previous.catch(() => {}) : Promise.resolve()).then(write);
+    this.#topicEffortWrites.set(id, pending);
+    this.#set(
+      (s) => ({
+        topicEffortUpdatingIds: s.topicEffortUpdatingIds.includes(id)
+          ? s.topicEffortUpdatingIds
+          : [...s.topicEffortUpdatingIds, id],
+      }),
+      false,
+      n('topicEffort/start'),
+    );
+    try {
+      await pending;
+    } finally {
+      if (this.#topicEffortWrites.get(id) === pending) {
+        this.#topicEffortWrites.delete(id);
+        this.#set(
+          (s) => ({ topicEffortUpdatingIds: s.topicEffortUpdatingIds.filter((key) => key !== id) }),
+          false,
+          n('topicEffort/end'),
+        );
+      }
+    }
   };
 
   /**
