@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto';
+
+import { AgentModel } from '@/database/models/agent';
 import { AgentSignalReviewContextModel } from '@/database/models/agentSignal/reviewContext';
 import { BriefModel } from '@/database/models/brief';
 import type { BriefItem } from '@/database/schemas';
@@ -219,6 +222,17 @@ export class AgentSignalSelfReviewBriefService {
       this.userId,
       this.workspaceId,
     );
+    const agentModel = new AgentModel(this.db, this.userId, this.workspaceId);
+    const readAgentPromptSnapshot = async (agentId: string) => {
+      if (agentId !== brief.agentId) return;
+      const agent = await agentModel.getAgentConfigById(agentId);
+      if (!agent) return;
+      return {
+        promptHash: createHash('sha256')
+          .update(agent.systemRole ?? '')
+          .digest('hex'),
+      };
+    };
     const preflight = createSelfReviewProposalPreflightService({
       isSkillNameAvailable: async ({ name }) => {
         const skill = await skillDocumentService.getSkill({
@@ -228,6 +242,7 @@ export class AgentSignalSelfReviewBriefService {
 
         return !skill;
       },
+      readAgentPromptSnapshot,
       readSkillTargetSnapshot: (agentDocumentId) =>
         skillDocumentService.readSkillTargetSnapshot({
           agentDocumentId,
@@ -390,6 +405,10 @@ export class AgentSignalSelfReviewBriefService {
           checkServerGate: () => true,
           checkUserGate: () => isAgentSignalEnabledForUser(this.db, this.userId),
         }),
+      replaceAgentPrompt: async ({ agentId, systemRole }) => {
+        if (agentId !== brief.agentId) throw new Error('Prompt proposal target changed.');
+        await agentModel.update(agentId, { systemRole });
+      },
       tools,
       updateProposal: async (nextProposal) => {
         await this.updateProposal(brief, nextProposal);
