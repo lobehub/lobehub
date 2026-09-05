@@ -54,6 +54,7 @@ const mappingResponseSchema = z.record(
       _meta: z
         .object({
           reindex_run_id: z.string().optional(),
+          schema_fingerprint: z.string().optional(),
           schema_version: z.number().int().positive().optional(),
         })
         .optional(),
@@ -171,6 +172,15 @@ export class FtsSearchReindexHttpClient implements FtsSearchReindexElasticsearch
     ) {
       throw new FtsSearchReindexRequestError(
         `Elasticsearch index mapping or reindex run identity is incompatible for ${index}; restore the matching checkpoint or use a clean target`,
+      );
+    }
+    // Indexes created before fingerprints existed carry none; only a differing fingerprint is drift.
+    if (
+      actual._meta?.schema_fingerprint !== undefined &&
+      actual._meta.schema_fingerprint !== expected.mappings._meta.schema_fingerprint
+    ) {
+      throw new FtsSearchReindexRequestError(
+        `Elasticsearch index ${index} was built from a different v${expected.mappings._meta.schema_version} mapping than the code declares; bump the schema version and rebuild instead of resuming`,
       );
     }
     for (const [field, expectedProperty] of Object.entries(expected.mappings.properties)) {

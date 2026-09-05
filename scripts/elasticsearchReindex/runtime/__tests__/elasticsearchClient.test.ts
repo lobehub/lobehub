@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  buildFtsSearchIndexMeta,
   FTS_SEARCH_INDEX_ANALYSIS,
   FTS_SEARCH_INDEX_DEFINITIONS,
 } from '../../../../packages/database/src/repositories/ftsSearchDocument';
@@ -14,7 +15,7 @@ const response = (body: unknown, status = 200) =>
     status,
   });
 
-const reindexMeta = { reindex_run_id: '00000000-0000-4000-8000-000000000001', schema_version: 1 };
+const reindexMeta = buildFtsSearchIndexMeta('agents', '00000000-0000-4000-8000-000000000001');
 const agentsIndexBody: FtsSearchReindexIndexBody = {
   mappings: { ...FTS_SEARCH_INDEX_DEFINITIONS.agents.mappings, _meta: reindexMeta },
   settings: { analysis: FTS_SEARCH_INDEX_ANALYSIS },
@@ -226,6 +227,61 @@ describe('FtsSearchReindexHttpClient', () => {
 
     await expect(client.ensureIndex('lobehub-messages-v1', agentsIndexBody)).rejects.toThrow(
       'reindex run identity is incompatible',
+    );
+  });
+
+  it('resumes a legacy index whose _meta predates schema fingerprints', async () => {
+    const { schema_fingerprint: _fingerprint, ...legacyMeta } = reindexMeta;
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response(undefined))
+      .mockResolvedValueOnce(
+        response({
+          'lobehub-messages-v1': {
+            mappings: { _meta: legacyMeta, ...FTS_SEARCH_INDEX_DEFINITIONS.agents.mappings },
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        response({
+          'lobehub-messages-v1': {
+            settings: { index: { analysis: FTS_SEARCH_INDEX_ANALYSIS } },
+          },
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new FtsSearchReindexHttpClient({
+      apiKey: 'secret-key',
+      url: 'https://search.example.com',
+    });
+
+    await expect(
+      client.ensureIndex('lobehub-messages-v1', agentsIndexBody),
+    ).resolves.toBeUndefined();
+  });
+
+  it('refuses to resume an index built from a drifted mapping of the same schema version', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response(undefined))
+      .mockResolvedValueOnce(
+        response({
+          'lobehub-messages-v1': {
+            mappings: {
+              _meta: { ...reindexMeta, schema_fingerprint: 'f'.repeat(64) },
+              ...FTS_SEARCH_INDEX_DEFINITIONS.agents.mappings,
+            },
+          },
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new FtsSearchReindexHttpClient({
+      apiKey: 'secret-key',
+      url: 'https://search.example.com',
+    });
+
+    await expect(client.ensureIndex('lobehub-messages-v1', agentsIndexBody)).rejects.toThrow(
+      'was built from a different v1 mapping than the code declares',
     );
   });
 
