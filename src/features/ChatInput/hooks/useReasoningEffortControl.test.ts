@@ -83,6 +83,19 @@ describe('useReasoningEffortControl', () => {
     expect(other.current.effortValue).toBe('none');
   });
 
+  it.each([
+    ['thinkingLevel', 'gemini-3-flash-preview', ['minimal', 'low', 'medium', 'high'], 'high'],
+    ['thinkingLevel2', 'gemini-3-pro-preview', ['low', 'high'], 'high'],
+    ['thinkingLevel3', 'gemini-3.7-flash', ['low', 'medium', 'high'], 'medium'],
+    ['thinkingLevel4', 'gemini-3.1-flash-image', ['minimal', 'high'], 'minimal'],
+    ['thinkingLevel', 'gemini-3.1-flash-lite', ['minimal', 'low', 'medium', 'high'], 'minimal'],
+  ])('exposes %s choices and the runtime default for %s', (key, model, levels, fallback) => {
+    testState.ai.reasoningParams = [key as string];
+    const { result } = renderHook(() => useReasoningEffortControl(model as string, 'google'));
+    expect(result.current.effortLevels).toEqual(levels);
+    expect(result.current.effortValue).toBe(fallback);
+  });
+
   it('keeps the reasoning mode separate from the effort level', () => {
     testState.ai.reasoningParams = ['effort', 'reasoningMode'];
     testState.ai.config = { reasoningMode: 'pro' };
