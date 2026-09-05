@@ -5,9 +5,9 @@ export interface AgentShareSpendDetailProps {
 /**
  * Business slot for the per-call spend table under the share stats tab.
  *
- * Open-source deployments do not meter share spend, so there is nothing to
- * list; Cloud overrides this with the creator's spend log filtered to visitor
- * runs of this agent.
+ * The default renders nothing: a deployment that does not meter share spend
+ * has nothing to list. Deployments that do override the slot with their own
+ * per-call table.
  */
 const AgentShareSpendDetail = (_props: AgentShareSpendDetailProps) => null;
 
