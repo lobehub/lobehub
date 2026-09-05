@@ -502,6 +502,63 @@ describe('topic action', () => {
       });
     });
 
+    it.each(['heterogeneous', 'api'] as const)(
+      'preserves the latest effort when a %s model write finishes later',
+      async (kind) => {
+        seed();
+        let finishModel!: () => void;
+        const modelPending = new Promise<void>((resolve) => {
+          finishModel = resolve;
+        });
+        let persistedEffort = 'high';
+        const modelSpy = vi.spyOn(topicService, 'updateTopicModel').mockImplementation(async () => {
+          await modelPending;
+          persistedEffort = 'default';
+        });
+        vi.spyOn(topicService, 'updateTopicMetadata').mockImplementation(async () => {
+          persistedEffort = 'low';
+          return [];
+        });
+        vi.spyOn(
+          useChatStore.getState(),
+          'internal_resolveTopicReasoningSnapshot',
+        ).mockResolvedValue({ reasoningEffort: 'high' });
+        let modelWrite!: Promise<void>;
+        act(() => {
+          modelWrite =
+            kind === 'heterogeneous'
+              ? useChatStore.getState().updateTopicHeteroPin('hetero-topic', {
+                  model: 'new-model',
+                  provider: 'codex',
+                  effort: 'default',
+                })
+              : useChatStore
+                  .getState()
+                  .updateTopicModel('hetero-topic', { model: 'new-model', provider: 'openai' });
+        });
+        await waitFor(() => expect(modelSpy).toHaveBeenCalledTimes(1));
+        let effortWrite!: Promise<void>;
+        act(() => {
+          effortWrite =
+            kind === 'heterogeneous'
+              ? useChatStore.getState().updateTopicHeteroEffort('hetero-topic', 'low')
+              : useChatStore
+                  .getState()
+                  .updateTopicReasoningConfig('hetero-topic', { reasoningEffort: 'low' });
+        });
+        await act(async () => {
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+        await act(async () => {
+          finishModel();
+          await Promise.all([modelWrite, effortWrite]);
+        });
+        expect(persistedEffort).toBe('low');
+        expect(useChatStore.getState().topicEffortUpdatingIds).not.toContain('hetero-topic');
+      },
+    );
+
     it('writes only the effort when no model is selected', async () => {
       const { result } = renderHook(() => useChatStore());
       const updateTopicSpy = vi

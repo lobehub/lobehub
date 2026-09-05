@@ -431,17 +431,19 @@ export class ChatTopicActionImpl {
     id: string,
     { model, provider }: { model: string; provider: string },
   ): Promise<void> => {
-    // The effort pin belongs to the model it was taken for (the param names
-    // are model-specific), so switching model re-snapshots it from the user's
-    // config for the new model — same "remembers what it started with" rule.
-    const reasoningConfig = await this.#get().internal_resolveTopicReasoningSnapshot({
-      model,
-      provider,
-    });
-    await this.#writeTopicModelPin(id, {
-      metadata: reasoningConfig ? { reasoningConfig } : undefined,
-      model,
-      provider,
+    await this.#enqueueTopicEffortWrite(id, async () => {
+      // The effort pin belongs to the model it was taken for (the param names
+      // are model-specific), so switching model re-snapshots it from the user's
+      // config for the new model — same "remembers what it started with" rule.
+      const reasoningConfig = await this.#get().internal_resolveTopicReasoningSnapshot({
+        model,
+        provider,
+      });
+      await this.#writeTopicModelPin(id, {
+        metadata: reasoningConfig ? { reasoningConfig } : undefined,
+        model,
+        provider,
+      });
     });
   };
 
@@ -544,11 +546,14 @@ export class ChatTopicActionImpl {
       if (effort !== undefined) await this.#get().updateTopicHeteroEffort(id, effort);
       return;
     }
-    await this.#writeTopicModelPin(id, {
-      metadata: effort === undefined ? undefined : { heteroEffort: effort },
-      model,
-      provider,
-    });
+    /** Model resets and later effort selections must share one persistence order. */
+    await this.#enqueueTopicEffortWrite(id, () =>
+      this.#writeTopicModelPin(id, {
+        metadata: effort === undefined ? undefined : { heteroEffort: effort },
+        model,
+        provider,
+      }),
+    );
   };
 
   #topicEffortWrites = new Map<string, Promise<void>>();
