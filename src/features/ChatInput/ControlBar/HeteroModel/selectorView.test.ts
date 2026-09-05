@@ -132,11 +132,13 @@ describe('current value surfaced on each dimension', () => {
     expect(view.dimensions[0].current).toBe('ultra');
     expect(view.dimensions[0].valueLabel).toBe('heteroAgent.modelSelector.mode.ultra');
     expect(view.ariaLabel).toBe('heteroAgent.modelSelector.mode.ariaLabel');
-    expect(view.triggerText).toBe('heteroAgent.modelSelector.mode.ultra');
+    expect(view.triggerLabel).toEqual({ text: 'heteroAgent.modelSelector.mode.ultra' });
   });
 
   it('shows Default config when Amp does not override its native mode', () => {
-    expect(viewOf({ type: 'amp' }).triggerText).toBe('heteroAgent.modelSelector.defaultConfig');
+    expect(viewOf({ type: 'amp' }).triggerLabel).toEqual({
+      text: 'heteroAgent.modelSelector.defaultConfig',
+    });
   });
 
   it('shows the resolved model and effort labels', () => {
@@ -176,15 +178,23 @@ describe('current value surfaced on each dimension', () => {
   });
 
   it('collapses the trigger to one label when nothing is overridden', () => {
-    expect(viewOf({ type: 'claude-code' }).triggerText).toBe(
-      'heteroAgent.modelSelector.defaultConfig',
-    );
+    expect(viewOf({ type: 'claude-code' }).triggerLabel).toEqual({
+      text: 'heteroAgent.modelSelector.defaultConfig',
+    });
   });
 
   it('names both halves in the trigger once either is overridden', () => {
-    expect(viewOf({ model: 'opus', type: 'claude-code' }).triggerText).toBe(
-      'Opus 4.8 heteroAgent.modelSelector.defaultReasoning',
-    );
+    expect(viewOf({ model: 'opus', type: 'claude-code' }).triggerLabel).toEqual({
+      secondaryText: 'heteroAgent.modelSelector.defaultReasoning',
+      text: 'Opus 4.8',
+    });
+  });
+
+  it('keeps the effort in its own half so a long model name cannot truncate it', () => {
+    expect(viewOf({ effort: 'xhigh', model: 'gpt-5.6-sol', type: 'codex' }).triggerLabel).toEqual({
+      secondaryText: 'heteroAgent.modelSelector.reasoning.xhigh',
+      text: 'GPT-5.6 Sol',
+    });
   });
 });
 

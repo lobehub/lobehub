@@ -29,6 +29,7 @@ import ImageResolution2Slider from '@/features/ModelSwitchPanel/components/Contr
 import ImageResolutionSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ImageResolutionSlider';
 import { KimiK3ReasoningEffortSlider } from '@/features/ModelSwitchPanel/components/ControlsForm/KimiK3ReasoningEffortSlider';
 import Opus47EffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Opus47EffortSlider';
+import Qwen38ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Qwen38ReasoningEffortSlider';
 import ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ReasoningEffortSlider';
 import ReasoningModeSegmented from '@/features/ModelSwitchPanel/components/ControlsForm/ReasoningModeSegmented';
 import ReasoningTokenSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ReasoningTokenSlider';
@@ -90,6 +91,10 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
   {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.deepseekV4ReasoningEffort.hint',
     key: 'deepseekV4ReasoningEffort',
+  },
+  {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.qwen38ReasoningEffort.hint',
+    key: 'qwen38ReasoningEffort',
   },
   {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.opus47Effort.hint',
@@ -241,6 +246,7 @@ const TITLE_KEY_ALIASES: Partial<Record<ExtendParamsType, ExtendParamsType>> = {
   grok4_6ReasoningEffort: 'reasoningEffort',
   hy3ReasoningEffort: 'reasoningEffort',
   kimiK3ReasoningEffort: 'reasoningEffort',
+  qwen38ReasoningEffort: 'reasoningEffort',
   ring2_6ReasoningEffort: 'reasoningEffort',
   imageAspectRatio2: 'imageAspectRatio',
   imageResolution2: 'imageResolution',
@@ -274,6 +280,11 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
   deepseekV4ReasoningEffort: {
     labelSuffix: ' (DeepSeek V4)',
     previewWidth: 240,
+    tag: 'reasoning_effort',
+  },
+  qwen38ReasoningEffort: {
+    labelSuffix: ' (Qwen3.8 Max)',
+    previewWidth: 280,
     tag: 'reasoning_effort',
   },
   disableContextCaching: { labelSuffix: ' (Claude)', previewWidth: 400 },
@@ -481,6 +492,7 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
       codexMaxReasoningEffort: <CodexMaxReasoningEffortSlider value="medium" />,
       deepseekV4GAReasoningEffort: <DeepSeekV4GAReasoningEffortSlider value="high" />,
       deepseekV4ReasoningEffort: <DeepSeekReasoningEffortSlider value="high" />,
+      qwen38ReasoningEffort: <Qwen38ReasoningEffortSlider value="xhigh" />,
       disableContextCaching: <Switch checked disabled />,
       effort: <EffortSlider value="high" />,
       enableAdaptiveThinking: <Switch checked disabled />,

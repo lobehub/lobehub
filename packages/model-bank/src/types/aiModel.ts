@@ -494,6 +494,7 @@ export type ExtendParamsType =
   | 'effort'
   | 'deepseekV4GAReasoningEffort'
   | 'deepseekV4ReasoningEffort'
+  | 'qwen38ReasoningEffort'
   | 'reasoningEffort'
   | 'reasoningMode'
   | 'gpt5ReasoningEffort'
@@ -555,6 +556,7 @@ export const ExtendParamsTypeSchema = z.enum([
   'effort',
   'deepseekV4GAReasoningEffort',
   'deepseekV4ReasoningEffort',
+  'qwen38ReasoningEffort',
   'reasoningEffort',
   'reasoningMode',
   'gpt5ReasoningEffort',

@@ -294,13 +294,27 @@ describe('vendor provider cards', () => {
 });
 
 describe('recent direct-provider models', () => {
+  it.each(['qwen3.8-max', 'qwen3.8-max-0902'])(
+    'exposes exactly one %s card with effort and thinking preservation controls',
+    (id) => {
+      const models = LOBE_DEFAULT_MODEL_LIST.filter(
+        (entry) => entry.providerId === 'qwen' && entry.id === id,
+      );
+      expect(models).toHaveLength(1);
+      expect(models[0].settings?.extendParams).toEqual([
+        'qwen38ReasoningEffort',
+        'preserveThinking',
+      ]);
+    },
+  );
+
   it.each([
     ['openai', 'gpt-6-astra', 'gpt6ReasoningEffort'],
     ['google', 'gemini-3.8-flash', 'thinkingLevel3'],
     ['vertexai', 'gemini-3.8-flash', 'thinkingLevel3'],
     ['xai', 'grok-4.6', 'grok4_6ReasoningEffort'],
-    ['qwen', 'qwen3.8-max', 'reasoningBudgetToken'],
-    ['qwen', 'qwen3.8-max-0902', 'reasoningBudgetToken'],
+    ['qwen', 'qwen3.8-max', 'qwen38ReasoningEffort'],
+    ['qwen', 'qwen3.8-max-0902', 'qwen38ReasoningEffort'],
   ])('exposes %s/%s with its reasoning controls', (providerId, id, reasoningParam) => {
     const model = LOBE_DEFAULT_MODEL_LIST.find(
       (entry) => entry.providerId === providerId && entry.id === id,

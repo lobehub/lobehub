@@ -95,6 +95,25 @@ export class AcceptanceModel {
   };
 
   /**
+   * The acceptances for many subjects of one type, for surfaces that show a
+   * verification state per row. Batched because the caller (the Goal graph
+   * read) polls every few seconds and would otherwise issue one query per task.
+   */
+  findBySubjects = async (subjectType: AcceptanceSubjectType, subjectIds: string[]) => {
+    if (subjectIds.length === 0) return [];
+    return this.db
+      .select()
+      .from(acceptances)
+      .where(
+        and(
+          eq(acceptances.subjectType, subjectType),
+          inArray(acceptances.subjectId, subjectIds),
+          this.ownership(),
+        ),
+      );
+  };
+
+  /**
    * Resolve an execution policy for a subject. Unlike report-facing reads,
    * workspace policy lookup is shared by every workspace member: a private
    * Acceptance controls the shared Task even when another member executes it.

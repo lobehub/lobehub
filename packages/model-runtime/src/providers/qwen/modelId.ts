@@ -45,14 +45,20 @@ export const parseQwenModelId = (model: string): ParsedQwenModelId | undefined =
  * "The value of the enable_thinking parameter is restricted to True",
  * so a disabled `thinking` preference must never be forwarded.
  *
- * Rule: qwen-max from 3.8 onwards is thinking-only.
+ * Qwen3.8 Max (GA and preview) is hybrid thinking: `enable_thinking` may be
+ * false, and `reasoning_effort: 'none'` maps to disabled thinking.
  * See https://help.aliyun.com/zh/model-studio/deep-thinking
+ *
+ * Keep the gate for newer max versions until they are confirmed hybrid.
  */
 export const isThinkingForcedQwenModel = (model: string): boolean => {
   const parsed = parseQwenModelId(model);
   if (!parsed || parsed.family !== 'max' || parsed.majorVersion === undefined) return false;
 
+  // 3.8 Max is hybrid — never force enable_thinking.
+  if (parsed.majorVersion === 3 && (parsed.minorVersion ?? 0) === 8) return false;
+
   if (parsed.majorVersion > 3) return true;
 
-  return parsed.majorVersion === 3 && (parsed.minorVersion ?? 0) >= 8;
+  return parsed.majorVersion === 3 && (parsed.minorVersion ?? 0) > 8;
 };

@@ -8,6 +8,7 @@ import type {
   GoalGraphSnapshot,
   GoalItem,
   GoalMetricCriterion,
+  GoalNodeAcceptance,
   GoalNodeKind,
   GoalNodeStatus,
   GoalPauseReason,
@@ -472,11 +473,93 @@ export class GoalService {
 
   graph = async (goalId: string) => {
     const graph = await this.requireGraph(goalId);
-    const [runHeartbeats, spend] = await Promise.all([
+    const [runHeartbeats, deliveredAt, acceptances, spend] = await Promise.all([
       this.collectRunHeartbeats(graph),
+      this.collectDeliveredAt(graph),
+      this.collectAcceptances(graph),
       this.resolveSpend(graph),
     ]);
-    return { ...graph, runHeartbeats, spend };
+    return { ...graph, acceptances, deliveredAt, runHeartbeats, spend };
+  };
+
+  /**
+   * Verification state per task node.
+   *
+   * Every dispatched task already owns an Acceptance (`createResponsibleTask`
+   * creates one), but the goal surfaced only the criteria it would be judged
+   * against — never the judgment. A reader could see that a task finished and
+   * still have no idea whether it held up, which is the gap that made the page
+   * feel unverifiable.
+   */
+  private collectAcceptances = async (
+    graph: GoalGraphSnapshot,
+  ): Promise<Record<string, GoalNodeAcceptance> | undefined> => {
+    const taskNodes = graph.nodes.filter(
+      (node): node is GoalGraphNode & { taskId: string } => node.kind === 'task' && !!node.taskId,
+    );
+    if (taskNodes.length === 0) return undefined;
+
+    const nodeByTaskId = new Map(taskNodes.map((node) => [node.taskId, node.id]));
+    const rows = await this.acceptanceService.acceptanceModel.findBySubjects(
+      'task',
+      taskNodes.map((node) => node.taskId),
+    );
+
+    const result: Record<string, GoalNodeAcceptance> = {};
+    for (const row of rows) {
+      const nodeId = nodeByTaskId.get(row.subjectId);
+      if (!nodeId) continue;
+      result[nodeId] = { id: row.id, status: row.status };
+    }
+    return Object.keys(result).length > 0 ? result : undefined;
+  };
+
+  /**
+   * When an active task node's newest run delivered, for the nodes waiting on
+   * verification to settle.
+   *
+   * A verify-bound task keeps its node `active` while its topic is already
+   * `completed`, and the judgment is a full agent run that routinely outlives
+   * the operation lease — `decideNextMove` holds off re-dispatching such a node
+   * for a whole `VERIFY_SETTLE_GRACE_MS`. But a completed topic is not a
+   * *running* one, so it contributes no heartbeat, and a client judging
+   * liveness from heartbeats alone declared the goal's most informative moment
+   * — delivered, being verified — lost. Reporting the delivery instant lets the
+   * client name that state and apply the coordinator's own grace window instead
+   * of the lease.
+   */
+  private collectDeliveredAt = async (
+    graph: GoalGraphSnapshot,
+  ): Promise<Record<string, Date> | undefined> => {
+    const activeTasks = graph.nodes.filter(
+      (node): node is GoalGraphNode & { taskId: string } =>
+        node.kind === 'task' && node.status === 'active' && !!node.taskId,
+    );
+    if (activeTasks.length === 0) return undefined;
+
+    const nodeByTaskId = new Map(activeTasks.map((node) => [node.taskId, node.id]));
+    // Newest run per task: `findWithHandoffByTaskIds` orders by seq desc, so the
+    // first row seen for a task is its latest.
+    const topics = await this.taskTopicModel.findWithHandoffByTaskIds(
+      activeTasks.map((n) => n.taskId),
+      activeTasks.length,
+    );
+
+    const delivered: Record<string, Date> = {};
+    const seen = new Set<string>();
+    for (const topic of topics) {
+      const taskId = topic.sourceTaskId;
+      if (!taskId || seen.has(taskId)) continue;
+      seen.add(taskId);
+      const nodeId = nodeByTaskId.get(taskId);
+      // Only the newest run counts, and only while it is a delivery: an older
+      // completed run under a newer running one is history, not a pending
+      // verification.
+      if (!nodeId || topic.status !== 'completed') continue;
+      delivered[nodeId] = topic.completedAt ?? topic.createdAt;
+    }
+
+    return Object.keys(delivered).length > 0 ? delivered : undefined;
   };
 
   /**

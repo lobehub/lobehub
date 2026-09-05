@@ -4,7 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import { Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { PauseIcon, PlayIcon } from 'lucide-react';
-import { memo, type ReactNode, useEffect, useMemo, useState } from 'react';
+import { memo, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
@@ -24,6 +24,8 @@ import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { type GoalMetricKind } from '@/store/chat/slices/portal/initialState';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
 import { goalSelectors, useGoalStore } from '@/store/goal';
 
 import GoalChat from './GoalChat';
@@ -129,6 +131,50 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   // Same per-view width grammar as the conversation portal, but remembered
   // under the 'goal' scope: resizing here never affects the chat surface.
   const { maxWidth, minWidth, updateWidth, width } = usePortalPanelWidth(currentViewType, 'goal');
+
+  /**
+   * Give a drill-down its reading room by folding the app rail, not the goal.
+   *
+   * Opened beside the goal, the Portal used to leave both panes cramped — the
+   * goal's title wrapping to four lines, its task rows truncated to a few
+   * characters. Folding the goal pane itself was tried and is wrong: it hides
+   * the task's own verification state, which is exactly what the reader drilled
+   * in to check. The rail is the one thing on screen that no one is reading.
+   *
+   * `showLeftPanel` is a persisted preference, so this only ever restores what
+   * it collapsed: a user who already works with the rail folded is left alone,
+   * and one who folds or opens it themselves while a drill-down is up keeps
+   * that choice.
+   */
+  const showLeftPanel = useGlobalStore(systemStatusSelectors.showLeftPanel);
+  const toggleLeftPanel = useGlobalStore((s) => s.toggleLeftPanel);
+  const collapsedRailRef = useRef(false);
+
+  useEffect(() => {
+    if (showPortal) {
+      if (showLeftPanel && !collapsedRailRef.current) {
+        collapsedRailRef.current = true;
+        toggleLeftPanel(false);
+      }
+      return;
+    }
+    if (collapsedRailRef.current) {
+      collapsedRailRef.current = false;
+      toggleLeftPanel(true);
+    }
+  }, [showPortal, showLeftPanel, toggleLeftPanel]);
+
+  // Leaving the page with the rail still folded would strand it on every other
+  // surface, so give it back on the way out.
+  useEffect(
+    () => () => {
+      if (collapsedRailRef.current) {
+        collapsedRailRef.current = false;
+        useGlobalStore.getState().toggleLeftPanel(true);
+      }
+    },
+    [],
+  );
 
   // The portal stack belongs to this goal's inspection session — leaving the
   // page (or switching goals) must not leak it into the conversation surface.

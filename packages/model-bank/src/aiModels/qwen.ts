@@ -95,7 +95,7 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-09-02',
     settings: {
-      extendParams: ['reasoningBudgetToken'],
+      extendParams: ['qwen38ReasoningEffort', 'preserveThinking'],
       searchImpl: 'params',
     },
     type: 'chat',
@@ -130,7 +130,7 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-08-02',
     settings: {
-      extendParams: ['reasoningBudgetToken'],
+      extendParams: ['qwen38ReasoningEffort', 'preserveThinking'],
       searchImpl: 'params',
     },
     type: 'chat',

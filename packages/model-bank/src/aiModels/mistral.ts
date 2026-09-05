@@ -7,6 +7,28 @@ const mistralChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'A third-party open source text model from Z.ai, hosted by Mistral for long-context coding and agentic workflows. The model is served without Mistral modifications.',
+    displayName: 'Z.ai GLM 5.2',
+    family: 'glm',
+    generation: 'glm-5.2',
+    id: 'zai-glm-5-2',
+    maxOutput: 128_000,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 1.4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.26, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4.4, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-08-06',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
       reasoning: true,
       vision: true,
     },

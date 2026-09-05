@@ -374,6 +374,43 @@ describe('applyModelExtendParams', () => {
     expect(result.thinking).toEqual({ type: 'enabled' });
   });
 
+  it('maps qwen38ReasoningEffort none to disabled thinking', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({ qwen38ReasoningEffort: 'none' }),
+      extendParams: ['qwen38ReasoningEffort'],
+      model: 'qwen3.8-max',
+    });
+
+    expect(result.reasoning_effort).toBeUndefined();
+    expect(result.thinking).toEqual({ type: 'disabled' });
+  });
+
+  it('maps qwen38ReasoningEffort medium to enabled thinking and reasoning_effort', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({ qwen38ReasoningEffort: 'medium' }),
+      extendParams: ['qwen38ReasoningEffort'],
+      model: 'qwen3.8-max',
+    });
+
+    expect(result).toEqual({
+      reasoning_effort: 'medium',
+      thinking: { type: 'enabled' },
+    });
+  });
+
+  it('maps qwen38ReasoningEffort xhigh to enabled thinking and reasoning_effort', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({ qwen38ReasoningEffort: 'xhigh' }),
+      extendParams: ['qwen38ReasoningEffort'],
+      model: 'qwen3.8-max',
+    });
+
+    expect(result).toEqual({
+      reasoning_effort: 'xhigh',
+      thinking: { type: 'enabled' },
+    });
+  });
+
   it('respects Claude Sonnet 5 adaptive thinking default when unset', () => {
     const result = applyModelExtendParams({
       chatConfig: chatConfig({}),

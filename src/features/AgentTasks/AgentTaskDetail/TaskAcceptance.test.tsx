@@ -65,6 +65,11 @@ vi.mock('@/components/NeuralNetworkLoading', () => ({ default: () => <div>loadin
 vi.mock('@/features/Acceptance', async () => ({
   // The real row/list primitives: the assertions cover the shared grammar.
   ...(await vi.importActual('@/features/Acceptance/CriterionList')),
+  AcceptanceCheckRow: ({ check, onToggle }: { check: { title: string }; onToggle: () => void }) => (
+    <button data-testid="acceptance-check-item" type="button" onClick={onToggle}>
+      item: {check.title}
+    </button>
+  ),
   CheckRow: ({ check }: { check: { title: string } }) => (
     <div data-testid="acceptance-check-detail">detail: {check.title}</div>
   ),
@@ -230,6 +235,21 @@ describe('TaskAcceptance', () => {
     fireEvent.click(screen.getByText('taskDetail.acceptance.openReport'));
     expect(mocks.toggleTaskAgentPanel).toHaveBeenCalledWith(true);
     expect(mocks.openAcceptance).toHaveBeenCalledWith('acceptance-1');
+  });
+
+  it('renders the canonical Acceptance check item in the task result panel', () => {
+    mocks.acceptanceSubject = { id: 'acceptance-1' };
+    mocks.bundle = {
+      acceptance: { id: 'acceptance-1', requirement: 'Everything is verifiable.' },
+      checks: [{ category: 'Setup', id: 'c1', seq: 1, title: 'Create task' }],
+      isOwner: true,
+    };
+
+    render(<TaskAcceptance variant={'result'} />);
+
+    expect(screen.getByTestId('acceptance-check-item')).toHaveTextContent('item: Create task');
+    fireEvent.click(screen.getByTestId('acceptance-check-item'));
+    expect(mocks.openAcceptanceCheck).toHaveBeenCalledWith('acceptance-1', 'c1');
   });
 
   it('groups a checklist with more than 10 checks', () => {

@@ -298,6 +298,8 @@ export default {
     'For DeepSeek V4 GA thinking mode; controls reasoning intensity. Adds a `low` tier on top of the original V4 levels. `high` is the default, `max` unlocks the deepest reasoning used by complex agent workflows.',
   'providerModels.item.modelConfig.extendParams.options.deepseekV4ReasoningEffort.hint':
     'For DeepSeek V4 thinking mode; controls reasoning intensity. `high` is the default, `max` unlocks the deepest reasoning used by complex agent workflows.',
+  'providerModels.item.modelConfig.extendParams.options.qwen38ReasoningEffort.hint':
+    'For Qwen3.8 Max hybrid thinking; controls reasoning intensity. `none` disables thinking; `low`/`medium` trade depth for speed and cost; `xhigh` is the API default for complex analysis.',
   'providerModels.item.modelConfig.extendParams.options.imageAspectRatio.hint':
     'For Gemini image generation models; controls aspect ratio of generated images.',
   'providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint':

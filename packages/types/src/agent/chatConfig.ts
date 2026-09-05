@@ -132,6 +132,11 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    * (provider support required, e.g. Qwen preserve_thinking)
    */
   preserveThinking?: boolean;
+  /**
+   * Qwen3.8 Max hybrid thinking depth. `none` disables thinking; otherwise sets
+   * `reasoning_effort` to low / medium / xhigh (API default).
+   */
+  qwen38ReasoningEffort?: 'none' | 'low' | 'medium' | 'xhigh';
   reasoningBudgetToken?: number;
   /**
    * Reasoning budget token for models with 32k max (GLM-5/GLM-4.7)
@@ -231,6 +236,7 @@ export const AgentChatConfigSchema = z
     codexMaxReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
     deepseekV4GAReasoningEffort: z.enum(['none', 'low', 'high', 'max']).optional(),
     deepseekV4ReasoningEffort: z.enum(['none', 'high', 'max']).optional(),
+    qwen38ReasoningEffort: z.enum(['none', 'low', 'medium', 'xhigh']).optional(),
     compressionModelId: z.string().optional(),
     disableContextCaching: z.boolean().optional(),
     disableGatewayMode: z.boolean().optional(),
