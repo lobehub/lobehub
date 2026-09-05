@@ -14,7 +14,10 @@ import { acceptanceRouteMeta } from '@/features/Acceptance/routeMeta';
 import AgentRouteSwitch from '@/features/AgentRoute/AgentRouteSwitch';
 import AgentShareLegacyRedirect from '@/features/AgentShareVisitor/LegacyRedirect';
 import { agentShareVisitorRouteMeta } from '@/features/AgentShareVisitor/routeMeta';
-import { AGENT_SHARE_VISITOR_PATH } from '@/features/AgentShareVisitor/visitorPath';
+import {
+  AGENT_SHARE_VISITOR_PATH,
+  buildAgentShareOwnerPath,
+} from '@/features/AgentShareVisitor/visitorPath';
 import { mobileAgentSettingsRouteMeta } from '@/features/RouteMeta/mobileRouteMeta';
 import WorkspaceProviderRedirect from '@/features/WorkspaceSetting/ProviderRedirect';
 import { agentRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
@@ -67,7 +70,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
           <AgentRouteSwitch
             fallback={<ConversationLayoutSkeleton />}
             // Mobile has no share settings page; the agent itself is the closest stop.
-            ownShareRedirect={(agentId) => `/agent/${agentId}`}
+            ownShareRedirect={(agentId) => buildAgentShareOwnerPath(agentId, { mobile: true })}
             ownElement={dynamicLayout(
               () => import('@/routes/(mobile)/chat/_layout'),
               'Mobile > Chat > Layout',

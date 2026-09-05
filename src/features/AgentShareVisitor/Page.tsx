@@ -7,7 +7,7 @@ import { cssVar } from 'antd-style';
 import { PanelLeftOpen } from 'lucide-react';
 import { memo, type PropsWithChildren, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router';
+import { Navigate, useNavigate, useParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
 import AgentShareVisitorSkeleton from '@/components/Skeleton/AgentShareVisitor';
@@ -19,7 +19,7 @@ import { isShareInteractive } from './shareInteractivity';
 import TopicPanel from './TopicPanel';
 import { useSharedAgent } from './useSharedAgent';
 import VisitorConversation from './VisitorConversation';
-import { buildAgentShareSignInUrl } from './visitorPath';
+import { buildAgentShareOwnerPath, buildAgentShareSignInUrl } from './visitorPath';
 import VisitorTopBar from './VisitorTopBar';
 
 const SIDEBAR_WIDTH = 260;
@@ -122,6 +122,13 @@ const AgentShareVisitorPage = memo(() => {
       </VisitorShell>
     );
   }
+
+  // The creator is never a visitor of their own share: the visitor chrome
+  // (empty topic list, "runs on the creator's account" notice) is meaningless
+  // to them, and the legacy `/agent/<share-slug>` entry already sends them to
+  // the settings — keep the canonical `/a/<slug>` link consistent with it.
+  if (data.isOwner)
+    return <Navigate replace to={buildAgentShareOwnerPath(data.agentId, { mobile: isMobile })} />;
 
   const interactive = isShareInteractive(data.visibility);
 

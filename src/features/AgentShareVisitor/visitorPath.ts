@@ -17,3 +17,13 @@ export const buildAgentShareVisitorPath = (slugOrId: string) =>
  */
 export const buildAgentShareSignInUrl = (slugOrId: string) =>
   `/signin?callbackUrl=${encodeURIComponent(buildAgentShareVisitorPath(slugOrId))}`;
+
+/**
+ * Where the CREATOR lands when they open their own share link: the share
+ * settings page, or the agent itself on a platform without that page
+ * (mobile). Shared by the visitor page and the legacy `/agent/:slugOrId`
+ * switch so both entry points agree — the creator is never a visitor of their
+ * own share, whichever URL they came in through.
+ */
+export const buildAgentShareOwnerPath = (agentId: string, { mobile = false } = {}) =>
+  mobile ? `/agent/${agentId}` : `/agent/${agentId}/share`;

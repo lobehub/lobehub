@@ -3,7 +3,10 @@
 import { memo, type ReactElement, type ReactNode } from 'react';
 import { Navigate, useLocation, useParams } from 'react-router';
 
-import { buildAgentShareVisitorPath } from '@/features/AgentShareVisitor/visitorPath';
+import {
+  buildAgentShareOwnerPath,
+  buildAgentShareVisitorPath,
+} from '@/features/AgentShareVisitor/visitorPath';
 
 import { resolveAgentRouteBranch, useAgentRouteResolution } from './useAgentRouteResolution';
 
@@ -20,7 +23,7 @@ interface AgentRouteSwitchProps {
   ownShareRedirect?: (agentId: string) => string;
 }
 
-const defaultOwnShareRedirect = (agentId: string) => `/agent/${agentId}/share`;
+const defaultOwnShareRedirect = (agentId: string) => buildAgentShareOwnerPath(agentId);
 
 /**
  * `/agent/:slugOrId` is the creator's own agent, by id or by agent slug — but

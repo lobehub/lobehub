@@ -157,7 +157,7 @@ export class AgentShareModel {
 
   /**
    * Best-effort default for a brand-new share: the visitor url starts out as
-   * `/agent/<the agent's own profile slug>` instead of a bare UUID. Agent
+   * `/a/<the agent's own profile slug>` instead of a bare UUID. Agent
    * slugs are unique per OWNER while share slugs are global, so a slug another
    * share already holds — or one the share rules reject — simply leaves the
    * seed unset; the owner can still pick any slug in the settings. Never
