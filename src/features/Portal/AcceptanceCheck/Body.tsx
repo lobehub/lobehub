@@ -14,6 +14,7 @@ import {
   FocusedCheckDetails,
   useAcceptanceBundle,
 } from '@/features/Acceptance';
+import { canReviewAcceptance } from '@/features/Acceptance/Viewer/visibility';
 import { verifyService } from '@/services/verify';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
@@ -130,7 +131,7 @@ const Body = memo(() => {
         </Flexbox>
       )}
       <FocusedCheckDetails
-        canReview={data.isOwner}
+        canReview={canReviewAcceptance(data)}
         check={check}
         reviewPending={reviewPending}
         onOpenTrace={openVerifierTrace}

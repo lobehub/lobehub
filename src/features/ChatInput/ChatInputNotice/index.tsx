@@ -59,6 +59,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
+/**
+ * Base Alert fills the available width, which pushes its action away from the notice text.
+ * Keep this notice content-sized while its max-width rule handles long translations.
+ */
+const alertStyle = { fontSize: 12, width: 'fit-content' } as const;
+
 const ChatInputNotice = memo(() => {
   const { t } = useTranslation('chat');
   const notice = useChatInputNotice();
@@ -91,7 +97,7 @@ const ChatInputNotice = memo(() => {
     <Alert
       action={action}
       classNames={{ alert: cx(styles.alert), title: styles.title }}
-      style={{ fontSize: 12 }}
+      style={alertStyle}
       title={t(notice.key)}
       type={notice.type}
       variant={'borderless'}

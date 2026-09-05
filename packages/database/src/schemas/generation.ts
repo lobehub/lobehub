@@ -3,7 +3,7 @@ import { index, integer, jsonb, pgTable, text, uuid, varchar } from 'drizzle-orm
 import { createInsertSchema } from 'drizzle-zod';
 
 import { idGenerator } from '../utils/idGenerator';
-import { timestamps } from './_helpers';
+import { softDeleteColumns, timestamps } from './_helpers';
 import type { AsyncTaskSelectItem } from './asyncTask';
 import { asyncTasks } from './asyncTask';
 import { files } from './file';
@@ -44,6 +44,8 @@ export const generationTopics = pgTable(
       .default('public')
       .notNull(),
 
+    /** Recycle bin — see `schemas/trash.ts`. */
+    ...softDeleteColumns(),
     ...timestamps,
   },
   (t) => [
@@ -99,6 +101,8 @@ export const generationBatches = pgTable(
     /** Stores generation batch configuration for common settings that don't need indexing */
     config: jsonb('config'),
 
+    /** Recycle bin — see `schemas/trash.ts`. */
+    ...softDeleteColumns(),
     ...timestamps,
   },
   (t) => [
@@ -150,6 +154,8 @@ export const generations = pgTable(
     /** Generated asset information, including S3 storage key, actual image dimensions, thumbnail key, etc. */
     asset: jsonb('asset').$type<GenerationAsset>(),
 
+    /** Recycle bin — see `schemas/trash.ts`. */
+    ...softDeleteColumns(),
     ...timestamps,
   },
   (t) => [

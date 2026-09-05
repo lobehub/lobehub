@@ -1,5 +1,5 @@
 import type { DeviceGitWorktreeListItem } from '@lobechat/types';
-import { Icon, Input, Tooltip } from '@lobehub/ui';
+import { copyToClipboard, Icon, Input, Tooltip } from '@lobehub/ui';
 import {
   confirmModal,
   DropdownMenuItem,
@@ -13,6 +13,7 @@ import {
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   CheckIcon,
+  CopyIcon,
   GitBranchIcon,
   GitBranchPlusIcon,
   GitForkIcon,
@@ -434,6 +435,19 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
       [deviceId, onAfterCheckout, onOpenChange, path, t],
     );
 
+    const handleCopy = useCallback(
+      async (event: MouseEvent, branch: string) => {
+        event.stopPropagation();
+        try {
+          await copyToClipboard(branch);
+          toast.success(tCommon('copySuccess'));
+        } catch {
+          toast.error(tCommon('copyFail'));
+        }
+      },
+      [tCommon],
+    );
+
     // Delete a branch behind a destructive confirm. git rejects deleting the
     // checked-out branch, so the action is hidden for the current branch.
     const handleDelete = useCallback(
@@ -554,6 +568,16 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                           />
                         )}
                         <div className={cx('branch-row-actions', styles.rowActions)}>
+                          <Tooltip title={tCommon('copy')}>
+                            <div
+                              aria-label={tCommon('copy')}
+                              className={styles.rowAction}
+                              role="button"
+                              onClick={(e) => void handleCopy(e, branch.name)}
+                            >
+                              <Icon icon={CopyIcon} size={13} />
+                            </div>
+                          </Tooltip>
                           <Tooltip title={t('workingDirectory.renameBranchAction')}>
                             <div
                               className={styles.rowAction}

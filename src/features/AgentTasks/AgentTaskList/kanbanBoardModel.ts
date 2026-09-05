@@ -9,6 +9,7 @@ import type {
 import type { TaskGroupBy, TaskGroupMeta } from './listViewOptions';
 import {
   getTaskAssigneeGroupMeta,
+  getTaskMemberGroupMeta,
   getTaskPriorityGroupMeta,
   sortGroupEntries,
 } from './listViewOptions';
@@ -21,8 +22,8 @@ export interface KanbanColumnDefinition {
 }
 
 export interface KanbanAssigneeUpdate {
-  assigneeAgentId: string | null;
-  assigneeUserId: string | null;
+  assigneeAgentId?: string | null;
+  assigneeUserId?: string | null;
 }
 
 export type KanbanColumnHeaderVariant = 'fallback' | 'group' | 'loading';
@@ -47,7 +48,7 @@ export const STATUS_KANBAN_COLUMNS: KanbanColumnDefinition[] = [
 ];
 
 export const normalizeKanbanGroupBy = (groupBy: TaskGroupBy): TaskKanbanGroupBy =>
-  groupBy === 'assignee' || groupBy === 'priority' ? groupBy : 'status';
+  groupBy === 'assignee' || groupBy === 'member' || groupBy === 'priority' ? groupBy : 'status';
 
 export const buildKanbanColumns = (
   taskGroups: TaskGroupItem[],
@@ -58,8 +59,10 @@ export const buildKanbanColumns = (
   const groupEntries = taskGroups.map((group) => {
     const meta =
       groupBy === 'assignee'
-        ? getTaskAssigneeGroupMeta(group.assigneeAgentId, group.assigneeUserId)
-        : getTaskPriorityGroupMeta(group.priority);
+        ? getTaskAssigneeGroupMeta(group.assigneeAgentId)
+        : groupBy === 'member'
+          ? getTaskMemberGroupMeta(group.assigneeUserId)
+          : getTaskPriorityGroupMeta(group.priority);
     return [meta, group.tasks as TaskListItem[]] as [TaskGroupMeta, TaskListItem[]];
   });
 
@@ -75,14 +78,14 @@ export const getKanbanAssigneeUpdate = (
   task: TaskListItem,
   patch: Partial<TaskListItem>,
 ): KanbanAssigneeUpdate | undefined => {
-  const update = {
-    assigneeAgentId: patch.assigneeAgentId ?? null,
-    assigneeUserId: patch.assigneeUserId ?? null,
-  };
+  const update: KanbanAssigneeUpdate = {};
+  if ('assigneeAgentId' in patch) update.assigneeAgentId = patch.assigneeAgentId ?? null;
+  if ('assigneeUserId' in patch) update.assigneeUserId = patch.assigneeUserId ?? null;
 
   if (
-    (task.assigneeAgentId ?? null) === update.assigneeAgentId &&
-    (task.assigneeUserId ?? null) === update.assigneeUserId
+    (update.assigneeAgentId === undefined ||
+      (task.assigneeAgentId ?? null) === update.assigneeAgentId) &&
+    (update.assigneeUserId === undefined || (task.assigneeUserId ?? null) === update.assigneeUserId)
   ) {
     return;
   }
@@ -95,10 +98,10 @@ export const getKanbanTaskPatch = (
   column: KanbanColumnDefinition,
 ): Partial<TaskListItem> | undefined => {
   if (groupBy === 'assignee' && column.groupMeta?.groupBy === 'assignee') {
-    return {
-      assigneeAgentId: column.groupMeta.assigneeId ?? null,
-      assigneeUserId: column.groupMeta.assigneeUserId ?? null,
-    };
+    return { assigneeAgentId: column.groupMeta.assigneeId ?? null };
+  }
+  if (groupBy === 'member' && column.groupMeta?.groupBy === 'member') {
+    return { assigneeUserId: column.groupMeta.assigneeUserId ?? null };
   }
   if (groupBy === 'priority' && column.groupMeta?.groupBy === 'priority') {
     return { priority: column.groupMeta.priority ?? 0 };
@@ -114,11 +117,10 @@ export const canDropTaskIntoKanbanColumn = (
   column: KanbanColumnDefinition,
 ): boolean => {
   if (!column.droppable) return false;
-  if (groupBy !== 'assignee' || column.groupMeta?.groupBy !== 'assignee') return true;
+  if (groupBy !== 'member' || column.groupMeta?.groupBy !== 'member') return true;
 
   const targetAssigneeUserId = column.groupMeta.assigneeUserId;
   if (!targetAssigneeUserId) return true;
-  if (task.automationMode) return false;
 
   return task.visibility !== 'private' || task.createdByUserId === targetAssigneeUserId;
 };

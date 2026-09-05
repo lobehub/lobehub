@@ -11,7 +11,8 @@ import WorkflowCollapse from './WorkflowCollapse';
 
 let mockIsGenerating = true;
 
-vi.mock('@lobehub/ui', () => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   Accordion: ({
     children,
     expandedKeys,
@@ -64,8 +65,6 @@ vi.mock('@lobehub/ui', () => ({
       {IconComponent ? <IconComponent /> : null}
     </button>
   ),
-  Block: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Icon: ({ icon: IconComponent }: { icon?: ComponentType }) =>
     IconComponent ? (
       <div
@@ -77,25 +76,11 @@ vi.mock('@lobehub/ui', () => ({
     ) : (
       <div />
     ),
-  ShikiLobeTheme: {},
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  ActionIcon: ({
-    icon: IconComponent,
-    onClick,
-    title,
-  }: {
-    icon?: ComponentType;
-    onClick?: (e: unknown) => void;
-    title?: string;
-  }) => (
-    <button aria-label={title} type="button" onClick={onClick}>
-      {IconComponent ? <IconComponent /> : null}
-    </button>
-  ),
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...(await import('~base-ui-stubs')).baseUiStubs,
 }));
 
 vi.mock('motion/react', () => ({
@@ -472,7 +457,7 @@ describe('WorkflowCollapse', () => {
     expect(icon).toHaveAttribute('data-icon', 'Check');
   });
 
-  it('shows check with a warning badge when some tools fail after completion', () => {
+  it('shows only a check when some tools fail after completion', () => {
     mockIsGenerating = false;
     const blocks: AssistantContentBlock[] = [
       {
@@ -503,7 +488,7 @@ describe('WorkflowCollapse', () => {
     const icons = screen.getAllByTestId('icon');
     const iconNames = icons.map((node) => node.getAttribute('data-icon'));
     expect(iconNames).toContain('Check');
-    expect(iconNames).toContain('TriangleAlert');
+    expect(iconNames).not.toContain('TriangleAlert');
   });
 
   it('shows red x when all tools fail after completion', () => {

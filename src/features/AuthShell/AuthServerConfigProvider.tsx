@@ -1,5 +1,6 @@
 'use client';
 
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import type { ReactNode } from 'react';
 import { createContext, memo, use } from 'react';
 
@@ -31,7 +32,12 @@ export const AuthServerConfigProvider = memo<Props>(
         enableOIDC: enableOIDC ?? false,
         featureFlags: featureFlags || {},
         isMobile,
-        serverConfig: serverConfig || { aiProvider: {}, telemetry: {} },
+        // Baked into the bundle at build time, so it must not wait on injected
+        // config — prerendered markup depends on knowing it during the render.
+        serverConfig: {
+          ...(serverConfig || { aiProvider: {}, telemetry: {} }),
+          enableBusinessFeatures: ENABLE_BUSINESS_FEATURES,
+        },
         serverConfigInit: true,
       }}
     >

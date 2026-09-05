@@ -11,3 +11,16 @@ vi.mock('node-mac-permissions', () => import('./node-mac-permissions'));
 // without per-suite stubbing. A test's own `vi.mock('electron', …)` overrides
 // this per-file.
 vi.mock('electron', () => import('./electron'));
+
+// The real logger pulls in electron-log + `@/env` at module scope and prints to
+// the terminal. Every suite silenced it by hand; a suite asserting on log calls
+// overrides this with its own `vi.mock('@/utils/logger', …)`.
+vi.mock('@/utils/logger', () => ({
+  createLogger: () => ({
+    debug: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    verbose: vi.fn(),
+    warn: vi.fn(),
+  }),
+}));

@@ -2,8 +2,15 @@
 
 import type { QuotaLimitReading } from '@lobechat/heterogeneous-agents/quota';
 import { projectWindows } from '@lobechat/heterogeneous-agents/quota';
-import { Flexbox, Icon, Skeleton, Tooltip } from '@lobehub/ui';
-import { ActionIcon, createModal, type ModalInstance, Segmented, Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import {
+  ActionIcon,
+  createModal,
+  type ModalInstance,
+  Segmented,
+  Skeleton,
+  Text,
+} from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import type { TFunction } from 'i18next';
@@ -882,8 +889,8 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
   if (loading)
     return (
       <Flexbox gap={12}>
-        <Skeleton.Button active block style={{ height: 170 }} />
-        <Skeleton.Button active block style={{ height: 320 }} />
+        <Skeleton height={170} />
+        <Skeleton height={320} />
       </Flexbox>
     );
 

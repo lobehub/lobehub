@@ -9,8 +9,6 @@ import type { LobeAgentSettings } from '@/types/session';
 import type { UserSettings } from '@/types/user/settings';
 import { merge } from '@/utils/merge';
 
-vi.mock('zustand/traditional');
-
 // Mock userService
 vi.mock('@/services/user', () => ({
   userService: {

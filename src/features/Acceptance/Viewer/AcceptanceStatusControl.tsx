@@ -7,25 +7,27 @@ import { CircleCheck, RotateCcw, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { mutate as globalMutate } from '@/libs/swr';
-import { verifyKeys } from '@/libs/swr/keys';
+import { isAcceptanceListKey } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
 
 import { useAcceptanceScope } from './AcceptanceScope';
 import AcceptanceStatusPill from './AcceptanceStatusPill';
 import { getAcceptanceStatusActions } from './statusActions';
 import { useAcceptanceBundle } from './useAcceptanceBundle';
+import { canReviewAcceptance } from './visibility';
 
 const AcceptanceStatusControl = () => {
   const { t } = useTranslation('verify');
   const { acceptanceId } = useAcceptanceScope();
   const { data, mutate } = useAcceptanceBundle(acceptanceId);
-  if (!data?.isOwner) return <AcceptanceStatusPill status={data?.acceptance.status ?? 'pending'} />;
+  if (!data || !canReviewAcceptance(data))
+    return <AcceptanceStatusPill status={data?.acceptance.status ?? 'pending'} />;
 
   const changeStatus = async (status: 'accepted' | 'closed' | 'delivered') => {
     try {
       await verifyService.updateAcceptanceStatus(data.acceptance.id, status);
       await mutate();
-      void globalMutate(verifyKeys.acceptances());
+      void globalMutate(isAcceptanceListKey);
       toast.success(t('acceptance.workspace.statusSuccess'));
     } catch {
       toast.error(t('acceptance.workspace.statusError'));

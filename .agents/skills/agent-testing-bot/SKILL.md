@@ -3,7 +3,7 @@ name: agent-testing-bot
 description: >
   Bot-channel end-to-end verification for LobeHub — drives the real native chat
   apps (Discord / Slack / Telegram / WeChat / Lark / QQ / iMessage) via osascript
-  or the iMessage bridge, on macOS. Extends the generic agent-testing skill for
+  or the iMessage bridge, on macOS. Extends the generic acceptance skill for
   bot surfaces. Triggers on 'test bot', 'bot test', 'test in discord',
   'test in telegram', 'test in slack', 'test in wechat', 'test in weixin',
   'test in lark', 'test in feishu', 'test in qq'.
@@ -11,8 +11,8 @@ description: >
 
 # Agent Testing — Bot Channels (LobeHub project skill)
 
-This skill **extends** the generic `agent-testing` skill (installed alongside at
-`../agent-testing/`) to the bot-channel surfaces. It does NOT replace the core
+This skill **extends** the generic `acceptance` skill (installed alongside at
+`../acceptance/`) to the bot-channel surfaces. It does NOT replace the core
 process: the same three phases apply —
 
 ```text
@@ -20,7 +20,7 @@ PLAN (Steps 0–2) → EXECUTE (Steps 3–6) → FINISH (Step 7)
 ```
 
 — and the same report + publish pipeline (`result.json` → `report-init.sh` →
-`lh acceptance run ingest … --source agent-testing`). Read the generic skill's
+`lh acceptance run ingest … --source agent-testing`). Read the acceptance skill's
 `SKILL.md` for target grounding, the living logs, the Phase-1 approval gate, the
 report format, and teardown. This file only adds the bot-channel surface.
 
@@ -61,7 +61,7 @@ Every osascript platform script shares one interface:
 
 The script activates the app, navigates to the channel/contact, sends the
 message, waits, and screenshots the result window (via the generic skill's
-`../agent-testing/scripts/capture-app-window.sh`). iMessage is the exception: it
+`../../acceptance/scripts/capture-app-window.sh`). iMessage is the exception: it
 uses a BlueBubbles bridge, not osascript — see [imessage/index.md](./imessage/index.md).
 
 ## osascript prerequisites
@@ -69,7 +69,7 @@ uses a BlueBubbles bridge, not osascript — see [imessage/index.md](./imessage/
 The osascript platforms drive real macOS apps (activate, keystroke, click, read
 accessibility, screenshot). Read the generic skill's general macOS-automation
 reference before a first bot run:
-[../agent-testing/references/osascript.md](../agent-testing/references/osascript.md).
+[../../acceptance/references/osascript.md](../../acceptance/references/osascript.md).
 The target native app must already be running and logged in.
 
 ## Screen-recording gate (macOS-only)
@@ -80,7 +80,7 @@ Screen Recording (TCC) permission is missing OR the display is asleep / locked /
 on a screensaver. Gate BEFORE any bot capture:
 
 ```bash
-./.agents/skills/agent-testing/scripts/check-screen-recording.sh # exit 0 = OS capture will work
+./.agents/acceptance/scripts/check-screen-recording.sh # exit 0 = OS capture will work
 ```
 
 Keep the display awake for the whole capture session (`caffeinate -dimsu &`, kill

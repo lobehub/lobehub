@@ -16,6 +16,7 @@ import AcceptanceIdentity from './AcceptanceIdentity';
 import AcceptanceLedgerRail from './AcceptanceLedgerRail';
 import AcceptanceOriginTopic from './AcceptanceOriginTopic';
 import { AcceptanceBundleGate, AcceptanceScope } from './AcceptanceScope';
+import AcceptanceSharedNotice from './AcceptanceSharedNotice';
 import AcceptanceStatusControl from './AcceptanceStatusControl';
 import AcceptanceViewReportLink from './AcceptanceViewReportLink';
 import { acceptanceScrollLayout } from './layout';
@@ -70,9 +71,19 @@ const AcceptancePage = ({
               }}
             >
               {focused ? (
-                <AcceptanceFocusWorkspace />
+                <>
+                  {/* The focused branch zeroes the frame padding, so the
+                      notice carries its own margins. A shared viewer needs
+                      the capability explanation here MOST — this is where
+                      the owner-only review controls are visibly absent. */}
+                  <AcceptanceSharedNotice
+                    style={{ marginBlockStart: 16, marginInline: 20, width: 'auto' }}
+                  />
+                  <AcceptanceFocusWorkspace />
+                </>
               ) : (
                 <>
+                  <AcceptanceSharedNotice />
                   <AcceptanceIdentity
                     statusSlot={<AcceptanceStatusControl />}
                     topicSlot={<AcceptanceOriginTopic />}
@@ -82,7 +93,7 @@ const AcceptancePage = ({
                     editSlot={<AcceptanceGoalEdit />}
                     reportSlot={<AcceptanceViewReportLink />}
                   />
-                  <AcceptanceCheckInventory canReview toolbar={<AcceptanceCheckOwnerToolbar />} />
+                  <AcceptanceCheckInventory toolbar={<AcceptanceCheckOwnerToolbar />} />
                   <AcceptanceDecision onDraftToComposer={onDraftToComposer} />
                 </>
               )}

@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
+import { getGitWorkingTreeFiles } from '@lobechat/local-file-shell/git';
 import fg from 'fast-glob';
 
 import { projectFileSearchManager } from './projectFileSearchManager';
@@ -193,6 +194,47 @@ export const defaultGetProjectFileIndex = async (
   };
 };
 
+const filterSearchCandidates = (
+  entries: ProjectFileIndexEntry[],
+  params: ProjectFileSearchParams,
+  includePaths?: string[],
+) => {
+  if (!params.excludeIgnored && !includePaths) return entries;
+
+  const includedPaths = includePaths ? new Set(includePaths) : undefined;
+  return entries.filter(
+    (entry) =>
+      entry.isDirectory ||
+      ((!params.excludeIgnored || !entry.gitIgnored) &&
+        (!includedPaths || includedPaths.has(entry.relativePath))),
+  );
+};
+
+const includeMissingSearchCandidates = (
+  entries: ProjectFileIndexEntry[],
+  includePaths: string[] | undefined,
+  root: string,
+) => {
+  if (!includePaths) return entries;
+
+  const indexedPaths = new Set(entries.map((entry) => entry.relativePath));
+  const rootPrefix = `${path.resolve(root)}${path.sep}`;
+  const missingFiles = includePaths
+    .filter((relativePath) => !indexedPaths.has(relativePath))
+    .map((relativePath) => path.resolve(root, relativePath))
+    .filter((absolutePath) => absolutePath.startsWith(rootPrefix));
+
+  if (missingFiles.length === 0) return entries;
+
+  const additions = buildEntries(missingFiles, root).filter((entry) => {
+    if (indexedPaths.has(entry.relativePath)) return false;
+    indexedPaths.add(entry.relativePath);
+    return true;
+  });
+
+  return [...entries, ...additions];
+};
+
 export const defaultSearchProjectFiles = async (
   params: ProjectFileSearchParams,
 ): Promise<ProjectFileSearchResult> => {
@@ -210,6 +252,9 @@ export const defaultSearchProjectFiles = async (
       rootResult?.stdout && !exitCode ? rootResult.stdout.trim() || requestedScope : requestedScope;
 
     if (rootResult?.stdout && !exitCode) {
+      const includePaths = params.changedOnly
+        ? Object.values(await getGitWorkingTreeFiles(root)).flat()
+        : undefined;
       const [trackedResult, untrackedResult, ignoredResult] = await Promise.all([
         execFileAsync(
           'git',
@@ -246,7 +291,11 @@ export const defaultSearchProjectFiles = async (
         .split('\n')
         .map((item) => item.trim())
         .filter(Boolean);
-      const entries = buildEntries(files, root, ignoredPaths);
+      const entries = filterSearchCandidates(
+        includeMissingSearchCandidates(buildEntries(files, root, ignoredPaths), includePaths, root),
+        params,
+        includePaths,
+      );
 
       return {
         entries: projectFileSearchManager.selectEntries(entries, params.query, limit),
@@ -260,7 +309,11 @@ export const defaultSearchProjectFiles = async (
   }
 
   const files = await projectFileSearchManager.collectNonGitFilePaths(requestedScope);
-  const entries = buildEntries(files, requestedScope);
+  const entries = filterSearchCandidates(
+    includeMissingSearchCandidates(buildEntries(files, requestedScope), undefined, requestedScope),
+    params,
+    params.changedOnly ? [] : undefined,
+  );
 
   return {
     entries: projectFileSearchManager.selectEntries(entries, params.query, limit),

@@ -12,6 +12,7 @@
   "table.columns.spend": "Crédits",
   "table.columns.time": "Temps",
   "table.columns.totalTokens": "Utilisation des jetons",
+  "table.columns.trigger.enums.agent_share": "Partage de l'agent",
   "table.columns.trigger.enums.agent_signal": "Signal de l'agent",
   "table.columns.trigger.enums.api": "Appel API",
   "table.columns.trigger.enums.bot": "Message Bot",

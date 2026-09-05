@@ -153,7 +153,6 @@ describe('heterogeneous direct invocation protocol', () => {
       agentType: 'codex',
       model: 'gpt-5.4',
       payload: {
-        apiMode: 'responses',
         messages: [],
         model: 'lobehub-default',
         reasoning: { effort: 'high', summary: 'detailed' },
@@ -173,6 +172,43 @@ describe('heterogeneous direct invocation protocol', () => {
       stream: true,
     });
     expect(runtimePayload).not.toHaveProperty('deploymentName');
+  });
+
+  it('lets non-Codex Responses relays use the upstream protocol selected by the router', async () => {
+    const chat = vi.fn().mockResolvedValue(new Response('stream'));
+    vi.mocked(resolveServerDefaultHeterogeneousModel).mockResolvedValue({
+      model: 'kimi-k3',
+      provider: 'lobehub',
+      supportsAdaptiveThinking: false,
+    });
+    vi.mocked(initModelRuntimeFromServerConfig).mockResolvedValue({
+      chat,
+    } as unknown as Awaited<ReturnType<typeof initModelRuntimeFromServerConfig>>);
+
+    await invokeServerDefaultModel({
+      agentType: 'grok-build',
+      model: 'kimi-k3',
+      payload: normalizeResponsesRequest(
+        {
+          input: 'hello',
+          model: 'lobehub-default',
+          reasoning: { effort: 'high', summary: 'auto' },
+          stream: true,
+        },
+        'lobehub-default',
+      ),
+      signal: new AbortController().signal,
+      userId: 'user-1',
+    });
+
+    expect(chat.mock.calls[0][0]).toMatchObject({
+      messages: [{ content: 'hello', role: 'user' }],
+      model: 'kimi-k3',
+      reasoning_effort: 'high',
+      stream: true,
+    });
+    expect(chat.mock.calls[0][0]).not.toHaveProperty('apiMode');
+    expect(chat.mock.calls[0][0]).not.toHaveProperty('reasoning');
   });
 
   it('adapts custom Codex relay models to chat completions with their reasoning effort', async () => {
@@ -312,6 +348,31 @@ describe('heterogeneous direct invocation protocol', () => {
     });
   });
 
+  it('normalizes Pi Responses messages whose optional type is omitted', () => {
+    const payload = normalizeResponsesRequest(
+      {
+        input: [
+          { content: 'Pi coding assistant', role: 'system' },
+          {
+            content: [{ text: 'LOBEHUB_HETERO_SMOKE_OK', type: 'input_text' }],
+            role: 'user',
+          },
+        ],
+        max_output_tokens: 16_384,
+        model: 'lobehub/glm-5.2',
+        stream: true,
+      },
+      'lobehub-default',
+    );
+
+    expect(payload.messages).toEqual([
+      { content: 'Pi coding assistant', role: 'system' },
+      { content: 'LOBEHUB_HETERO_SMOKE_OK', role: 'user' },
+    ]);
+    expect(payload.max_tokens).toBe(16_384);
+    expect(payload).not.toHaveProperty('apiMode');
+  });
+
   it('normalizes two-round Responses reasoning and function call continuity', () => {
     const firstReasoning = {
       encrypted_content: 'encrypted-first',
@@ -423,6 +484,85 @@ describe('heterogeneous direct invocation protocol', () => {
     expect(output).toContain('"id":"call-1"');
     expect(output).toContain('"id":"call-2"');
     expect(output).toContain('"stop_reason":"tool_use"');
+  });
+
+  it('encodes Gemini textual part events through the Anthropic relay', async () => {
+    const events = parseSseEvents(
+      await readText(
+        anthropicSse(
+          protocolStream([
+            {
+              data: { content: 'thinking', inReasoning: true, partType: 'text' },
+              type: 'reasoning_part',
+            },
+            { data: { content: 'answer', partType: 'text' }, type: 'content_part' },
+            {
+              data: { content: 'base64-image', mimeType: 'image/png', partType: 'image' },
+              type: 'content_part',
+            },
+            { data: 'STOP', type: 'stop' },
+            { data: { totalInputTokens: 7, totalOutputTokens: 4 }, type: 'usage' },
+          ]),
+        ),
+      ),
+    );
+    const deltas = events
+      .filter(({ type }) => type === 'content_block_delta')
+      .map(({ data }) => data.delta);
+
+    expect(deltas).toEqual([
+      { thinking: 'thinking', type: 'thinking_delta' },
+      { text: 'answer', type: 'text_delta' },
+    ]);
+    expect(events.at(-2)?.data).toMatchObject({
+      delta: { stop_reason: 'end_turn' },
+      usage: { input_tokens: 7, output_tokens: 4 },
+    });
+    expect(events.at(-1)?.type).toBe('message_stop');
+  });
+
+  it('preserves Anthropic signature-only reasoning blocks', async () => {
+    const events = parseSseEvents(
+      await readText(
+        anthropicSse(
+          protocolStream([
+            { data: '', type: 'reasoning' },
+            { data: 'hidden-thinking-signature', type: 'reasoning_signature' },
+          ]),
+        ),
+      ),
+    );
+    const thinkingStart = events.find(({ type }) => type === 'content_block_start');
+    const deltas = events
+      .filter(({ type }) => type === 'content_block_delta')
+      .map(({ data }) => data.delta);
+
+    expect(thinkingStart?.data).toMatchObject({
+      content_block: { signature: '', thinking: '', type: 'thinking' },
+      index: 0,
+    });
+    expect(deltas).toEqual([{ signature: 'hidden-thinking-signature', type: 'signature_delta' }]);
+    expect(events.filter(({ type }) => type === 'content_block_stop')).toHaveLength(1);
+  });
+
+  it('does not stringify null Anthropic text and reasoning chunks', async () => {
+    const events = parseSseEvents(
+      await readText(
+        anthropicSse(
+          protocolStream([
+            { data: 'answer', type: 'text' },
+            { data: null, type: 'text' },
+            { data: null, type: 'reasoning' },
+            { data: null, type: 'reasoning_signature' },
+          ]),
+        ),
+      ),
+    );
+    const deltas = events
+      .filter(({ type }) => type === 'content_block_delta')
+      .map(({ data }) => data.delta);
+
+    expect(deltas).toEqual([{ text: 'answer', type: 'text_delta' }]);
   });
 
   it('finalizes Anthropic stop, usage, and message_stop exactly once', async () => {
@@ -541,7 +681,15 @@ describe('heterogeneous direct invocation protocol', () => {
     expect(terminalEvents).toHaveLength(1);
     expect(terminalEvents[0]).toMatchObject({
       data: {
-        response: { usage: { input_tokens: 2, output_tokens: 1, total_tokens: 3 } },
+        response: {
+          usage: {
+            input_tokens: 2,
+            input_tokens_details: { cached_tokens: 0 },
+            output_tokens: 1,
+            output_tokens_details: { reasoning_tokens: 0 },
+            total_tokens: 3,
+          },
+        },
         type: 'response.completed',
       },
       type: 'response.completed',
@@ -551,6 +699,92 @@ describe('heterogeneous direct invocation protocol', () => {
     );
     expect(events.slice(events.indexOf(terminalEvents[0]) + 1)).toEqual([
       { data: '[DONE]', type: undefined },
+    ]);
+  });
+
+  it('encodes complete Responses usage details without stringifying null chunks', async () => {
+    const events = parseSseEvents(
+      await readText(
+        responsesSse(
+          protocolStream([
+            { data: 'answer', type: 'text' },
+            { data: null, type: 'text' },
+            { data: null, type: 'reasoning' },
+            {
+              data: {
+                inputCachedTokens: 3,
+                outputReasoningTokens: 2,
+                totalInputTokens: 7,
+                totalOutputTokens: 4,
+              },
+              type: 'usage',
+            },
+          ]),
+        ),
+      ),
+    );
+    const textDeltas = events
+      .filter(({ type }) => type === 'response.output_text.delta')
+      .map(({ data }) => data.delta);
+    const reasoningDeltas = events.filter(
+      ({ type }) => type === 'response.reasoning_summary_text.delta',
+    );
+    const completed = events.find(({ type }) => type === 'response.completed');
+
+    expect(textDeltas).toEqual(['answer']);
+    expect(reasoningDeltas).toHaveLength(0);
+    expect(completed?.data.response.output[0].content[0].text).toBe('answer');
+    expect(completed?.data.response.usage).toEqual({
+      input_tokens: 7,
+      input_tokens_details: { cached_tokens: 3 },
+      output_tokens: 4,
+      output_tokens_details: { reasoning_tokens: 2 },
+      total_tokens: 11,
+    });
+  });
+
+  it('encodes Gemini text and reasoning parts as Responses output', async () => {
+    const events = parseSseEvents(
+      await readText(
+        responsesSse(
+          protocolStream([
+            {
+              data: { content: 'thinking', inReasoning: true, partType: 'text' },
+              type: 'reasoning_part',
+            },
+            { data: { content: 'answer', partType: 'text' }, type: 'content_part' },
+            {
+              data: { content: 'base64-image', mimeType: 'image/png', partType: 'image' },
+              type: 'content_part',
+            },
+          ]),
+        ),
+      ),
+    );
+    const textDeltas = events
+      .filter(({ type }) => type === 'response.output_text.delta')
+      .map(({ data }) => data.delta);
+    const reasoningDeltas = events
+      .filter(({ type }) => type === 'response.reasoning_summary_text.delta')
+      .map(({ data }) => data.delta);
+    const completed = events.find(({ type }) => type === 'response.completed');
+
+    expect(textDeltas).toEqual(['answer']);
+    expect(reasoningDeltas).toEqual(['thinking']);
+    expect(completed?.data.response.output).toEqual([
+      {
+        id: expect.any(String),
+        status: 'completed',
+        summary: [{ text: 'thinking', type: 'summary_text' }],
+        type: 'reasoning',
+      },
+      {
+        content: [{ annotations: [], text: 'answer', type: 'output_text' }],
+        id: expect.any(String),
+        role: 'assistant',
+        status: 'completed',
+        type: 'message',
+      },
     ]);
   });
 

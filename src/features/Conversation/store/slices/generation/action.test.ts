@@ -8,7 +8,6 @@ import * as agentDispatcher from '@/store/chat/slices/agentRun/actions/dispatch/
 import * as heterogeneousAgentExecutor from '@/store/chat/slices/agentRun/actions/transports/hetero/heterogeneousAgentExecutor';
 import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
-import { useUserStore } from '@/store/user';
 
 import { type ConversationContext, type ConversationHooks } from '../../../types';
 import { createStore } from '../../index';
@@ -1803,14 +1802,7 @@ describe('Generation Actions', () => {
       );
     });
 
-    it('preserves a legacy subscription resume when the Provider Binding Lab is enabled', async () => {
-      const previousLab = useUserStore.getState().preference.lab;
-      useUserStore.setState((state) => ({
-        preference: {
-          ...state.preference,
-          lab: { ...state.preference.lab, enableAgentProviderBinding: true },
-        },
-      }));
+    it('preserves a legacy subscription resume', async () => {
       await setupHeteroChatStore({
         topicDataMap: {
           test: {
@@ -1837,22 +1829,16 @@ describe('Generation Actions', () => {
         displayMessages: [{ content: 'Retry me', id: 'msg-1', role: 'user' }],
       } as any);
 
-      try {
-        await store.getState().regenerateUserMessage('msg-1');
+      await store.getState().regenerateUserMessage('msg-1');
 
-        expect(executeHeterogeneousAgentSpy).toHaveBeenCalledWith(
-          expect.any(Function),
-          expect.objectContaining({
-            resumeBindingKey: undefined,
-            resumeSessionId: 'legacy-session',
-            workingDirectory: '/repo',
-          }),
-        );
-      } finally {
-        useUserStore.setState((state) => ({
-          preference: { ...state.preference, lab: previousLab },
-        }));
-      }
+      expect(executeHeterogeneousAgentSpy).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.objectContaining({
+          resumeBindingKey: undefined,
+          resumeSessionId: 'legacy-session',
+          workingDirectory: '/repo',
+        }),
+      );
     });
 
     it('creates the child execHeterogeneousAgent op as a child of the parent regenerate op', async () => {

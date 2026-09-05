@@ -4,6 +4,7 @@ import { isDesktop } from '@lobechat/const';
 import {
   isHeterogeneousProviderBindingSupported,
   isRemoteHeterogeneousType,
+  isServerDefaultHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
 import type { HeterogeneousApiConfig, HeterogeneousAuthMode } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
@@ -15,6 +16,7 @@ import { Wrench } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { resolveServerDefaultAgentModels } from '@/features/HeterogeneousAgent/modelPicker';
 import ModelSelect from '@/features/ModelSelect';
 import RunPriorityHint from '@/features/ProfileEditor/AgentUserTools/RunPriorityHint';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
@@ -22,8 +24,6 @@ import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
 import EditorCanvas from '../EditorCanvas';
 import AgentHeader from './AgentHeader';
@@ -120,7 +120,6 @@ const ProfileEditor = memo(() => {
     !!heterogeneousProvider &&
     isRemoteHeterogeneousType(heterogeneousProvider.type);
   const showCloudHeterogeneousTab = heterogeneousProvider?.type === 'claude-code';
-  const apiModeLabEnabled = useUserStore(labPreferSelectors.enableAgentProviderBinding);
   const localDesktopAvailable =
     isDesktop &&
     !!heterogeneousProvider &&
@@ -140,37 +139,32 @@ const ProfileEditor = memo(() => {
   const useFetchServerDefaultCapability = useAgentStore(
     (s) => s.useFetchServerDefaultHeterogeneousCapability,
   );
-  // V1 wires only these two native protocol paths. Future client drivers may widen this gate,
-  // while model/runtime compatibility must continue to come from the server capability below.
+  // The shared matrix owns which native drivers can reach the deployment relay;
+  // model/runtime compatibility continues to come from the server capability below.
   const serverDefaultAgentType =
-    heterogeneousProvider?.type === 'claude-code' || heterogeneousProvider?.type === 'codex'
+    heterogeneousProvider && isServerDefaultHeterogeneousAgentType(heterogeneousProvider.type)
       ? heterogeneousProvider.type
       : undefined;
-  // Labs-gated with the rest of API mode: with the flag off we never fetch the
-  // capability, so the deployment-default option cannot surface anywhere.
-  const serverCapabilityEnabled =
-    apiModeLabEnabled && localDesktopAvailable && !!serverDefaultAgentType;
+  const serverCapabilityEnabled = localDesktopAvailable && !!serverDefaultAgentType;
   const serverCapability = useFetchServerDefaultCapability(serverCapabilityEnabled);
   const serverDefaultModels =
     serverCapability.data?.enabled === true && serverDefaultAgentType
-      ? serverCapability.data.models[serverDefaultAgentType]
+      ? resolveServerDefaultAgentModels(serverCapability.data.models, serverDefaultAgentType)
       : [];
   const serverDefaultAvailable = serverCapabilityEnabled && serverDefaultModels.length > 0;
-  const serverDefaultUnavailableReason = !apiModeLabEnabled
-    ? undefined
-    : !localDesktopAvailable
-      ? t('heterogeneousStatus.apiMode.localOnly')
-      : serverCapability.error
-        ? t('heterogeneousStatus.apiMode.serverDefault.loadFailed')
-        : serverCapability.data?.enabled === false
-          ? t(
-              serverCapability.data.reason === 'disabled'
-                ? 'heterogeneousStatus.apiMode.serverDefault.disabled'
-                : 'heterogeneousStatus.apiMode.serverDefault.invalidConfiguration',
-            )
-          : serverCapabilityEnabled && !serverCapability.isLoading && !serverDefaultAvailable
-            ? t('heterogeneousStatus.apiMode.serverDefault.unsupported')
-            : undefined;
+  const serverDefaultUnavailableReason = !localDesktopAvailable
+    ? t('heterogeneousStatus.apiMode.localOnly')
+    : serverCapability.error
+      ? t('heterogeneousStatus.apiMode.serverDefault.loadFailed')
+      : serverCapability.data?.enabled === false
+        ? t(
+            serverCapability.data.reason === 'disabled'
+              ? 'heterogeneousStatus.apiMode.serverDefault.disabled'
+              : 'heterogeneousStatus.apiMode.serverDefault.invalidConfiguration',
+          )
+        : serverCapabilityEnabled && !serverCapability.isLoading && !serverDefaultAvailable
+          ? t('heterogeneousStatus.apiMode.serverDefault.unsupported')
+          : undefined;
   const heterogeneousTabItems: TabsItem[] = heterogeneousProvider
     ? [
         ...(showCloudHeterogeneousTab
@@ -194,7 +188,6 @@ const ProfileEditor = memo(() => {
           children: (
             <HeterogeneousAgentStatusCard
               apiModeAvailable={apiModeAvailable}
-              apiModeLabEnabled={apiModeLabEnabled}
               apiModeWorkspaceBlocked={isWorkspaceAgent}
               provider={heterogeneousProvider}
               serverDefaultAvailable={serverDefaultAvailable}

@@ -492,10 +492,8 @@ export const CACHE_TIERS = {
   ],
   /** Small, frequently-changing list shells → localStorage (sync first paint). */
   local: [
-    'recent:list',
-    // Home's chat-mode recents. Matching is substring-based, so `recent:list`
-    // does not cover this sibling key — without its own entry the list is
-    // memory-only and every cold boot pays a skeleton for data we already had.
+    // Home's chat-mode recents still uses the SWR persistence tier. The mixed
+    // Recent projection is persisted by its Zustand localStorage snapshot.
     'recent:topicList',
     'fetchRecentTopics',
     'fetchRecentResources',

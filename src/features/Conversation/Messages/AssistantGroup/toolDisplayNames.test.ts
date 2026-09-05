@@ -59,9 +59,9 @@ describe('tool display names', () => {
     // total calls (15) leads, "calls total" / "共" wording is gone
     expect(summary.startsWith('15 calls:')).toBe(true);
     expect(summary).not.toContain('calls total');
-    // truncated tool list is followed by the kind count, then the failure count
+    // truncated tool list is followed by the kind count; failures stay in the details
     expect(summary).toContain('across 6 tools');
-    expect(summary).toContain('1 failed');
+    expect(summary).not.toContain('failed');
   });
 
   it('omits the total call count when each tool is called once', () => {
@@ -160,9 +160,33 @@ describe('reasoning headline extraction', () => {
 
     expect(state).toEqual({
       explicitStep: 'Searched the web: Searching release notes',
-      fallbackTool: 'Searched the web: Node.js 24',
+      fallbackTool: 'Searched the web Node.js 24',
       kind: 'tool',
     });
+  });
+
+  it('renders the running headline as action label + keyword, never the raw args', () => {
+    const state = getWorkflowStreamingHeadlineState([
+      blk({
+        id: '0',
+        tools: [
+          {
+            apiName: 'Bash',
+            arguments: JSON.stringify({
+              command: 'set -a && source .env && set +a && npx tsx scripts/gross-margin/monthly.ts',
+            }),
+            id: 't1',
+            identifier: 'claude-code',
+          } as any,
+        ],
+      }),
+    ]);
+
+    // the plugin i18n namespace is not registered in the test harness, so the
+    // label falls back to the apiName; the shape under test is label + keyword.
+    expect(state.kind).toBe('tool');
+    expect((state as any).fallbackTool).toMatch(/ monthly\.ts$/);
+    expect((state as any).fallbackTool).not.toContain('set -a');
   });
 
   it('uses prose state when the trailing block is prose', () => {
@@ -210,7 +234,7 @@ describe('reasoning headline extraction', () => {
 
     expect(state).toEqual({
       explicitStep: 'Searched the web: Searching release notes',
-      fallbackTool: 'Searched the web: Node.js 24',
+      fallbackTool: 'Searched the web Node.js 24',
       kind: 'tool',
     });
   });

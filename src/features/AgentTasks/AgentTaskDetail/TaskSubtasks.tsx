@@ -9,6 +9,7 @@ import type { Key, MouseEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { showContextMenu } from '@/libs/contextMenu';
@@ -19,13 +20,16 @@ import { taskDetailSelectors } from '@/store/task/selectors';
 import CreateTaskInlineEntry from '../AgentTaskList/CreateTaskInlineEntry';
 import AssigneeAgentSelector from '../features/AssigneeAgentSelector';
 import AssigneeAvatar from '../features/AssigneeAvatar';
+import AssigneeMemberSelector from '../features/AssigneeMemberSelector';
 import AssigneeUserAvatar from '../features/AssigneeUserAvatar';
 import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskStatusTag from '../features/TaskStatusTag';
 import TaskSubtaskProgressTag from '../features/TaskSubtaskProgressTag';
 import TaskTriggerTag from '../features/TaskTriggerTag';
+import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
 import { useTaskContextMenuActions } from '../features/useTaskItemContextMenu';
 import AccordionArrowIcon from '../shared/AccordionArrowIcon';
+import { shouldShowMemberAssignee } from '../shared/memberAssigneeMode';
 import { styles } from '../shared/style';
 import { taskDetailPath } from '../shared/taskDetailPath';
 import RunSubtasksPreview from './RunSubtasksPreview';
@@ -61,6 +65,7 @@ const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
   const isRunning = status === 'running';
   const hasRunningTopic = Boolean(task.runningTopic);
   const hasName = !!task.name;
+  const activeWorkspaceId = useActiveWorkspaceId();
 
   return (
     <Flexbox
@@ -105,30 +110,49 @@ const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
           />
         </span>
       ) : null}
-      <AssigneeAgentSelector
-        currentAgentId={task.assignee?.id ?? null}
-        currentUserId={task.assigneeUserId ?? null}
-        disabled={isRunning}
-        hideMembers={Boolean(task.automationMode)}
-        taskCreatorId={task.createdByUserId}
-        taskIdentifier={task.identifier}
-        taskVisibility={task.visibility}
-      >
-        <span
-          style={{
-            alignItems: 'center',
-            cursor: isRunning ? 'not-allowed' : 'pointer',
-            display: 'inline-flex',
-            flex: 'none',
-          }}
+      <Flexbox horizontal align={'center'} flex={'none'} gap={4}>
+        {shouldShowMemberAssignee(activeWorkspaceId, task.assigneeUserId) && (
+          <AssigneeMemberSelector
+            currentUserId={task.assigneeUserId ?? null}
+            disabled={isRunning}
+            taskCreatorId={task.createdByUserId}
+            taskIdentifier={task.identifier}
+            taskVisibility={task.visibility}
+          >
+            <span
+              style={{
+                alignItems: 'center',
+                cursor: isRunning ? 'not-allowed' : 'pointer',
+                display: 'inline-flex',
+                flex: 'none',
+              }}
+            >
+              {task.assigneeUserId ? (
+                <AssigneeUserAvatar size={18} userId={task.assigneeUserId} />
+              ) : (
+                <UnassignedAssigneeIcon kind={'human'} />
+              )}
+            </span>
+          </AssigneeMemberSelector>
+        )}
+        <AssigneeAgentSelector
+          currentAgentId={task.assignee?.id ?? null}
+          disabled={isRunning}
+          taskIdentifier={task.identifier}
+          taskVisibility={task.visibility}
         >
-          {!task.assignee?.id && task.assigneeUserId ? (
-            <AssigneeUserAvatar size={18} userId={task.assigneeUserId} />
-          ) : (
+          <span
+            style={{
+              alignItems: 'center',
+              cursor: isRunning ? 'not-allowed' : 'pointer',
+              display: 'inline-flex',
+              flex: 'none',
+            }}
+          >
             <AssigneeAvatar agentId={task.assignee?.id} size={18} />
-          )}
-        </span>
-      </AssigneeAgentSelector>
+          </span>
+        </AssigneeAgentSelector>
+      </Flexbox>
     </Flexbox>
   );
 });

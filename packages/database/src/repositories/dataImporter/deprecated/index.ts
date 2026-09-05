@@ -1,6 +1,7 @@
 import type { ImporterEntryData } from '@lobechat/types';
 import { and, inArray, sql } from 'drizzle-orm';
 
+import { clampToolIdentifier } from '@/utils/clampToolIdentifier';
 import { sanitizeUTF8 } from '@/utils/sanitizeUTF8';
 
 import {
@@ -306,10 +307,10 @@ export class DeprecatedDataImporterRepos {
           if (pluginInserts.length > 0) {
             await trx.insert(messagePlugins).values(
               pluginInserts.map((msg) => ({
-                apiName: msg.plugin?.apiName,
+                apiName: clampToolIdentifier(msg.plugin?.apiName),
                 arguments: msg.plugin?.arguments,
                 id: messageIdMap[msg.id],
-                identifier: msg.plugin?.identifier,
+                identifier: clampToolIdentifier(msg.plugin?.identifier),
                 state: msg.pluginState,
                 toolCallId: msg.tool_call_id,
                 type: msg.plugin?.type,

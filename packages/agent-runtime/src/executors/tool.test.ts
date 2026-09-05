@@ -169,6 +169,9 @@ describe('tool executors', () => {
     );
     expect(result.nextContext?.phase).toBe('tool_result');
     expect(result.nextContext?.payload).toMatchObject({ parentMessageId: 'tool-msg-1' });
+    expect(result.newState.messages).toContainEqual(
+      expect.objectContaining({ id: 'tool-msg-1', role: 'tool' }),
+    );
     expect(result.newState.usage.tools.totalCalls).toBe(1);
   });
 

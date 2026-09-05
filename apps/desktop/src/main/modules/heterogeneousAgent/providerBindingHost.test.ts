@@ -155,47 +155,50 @@ describe('prepareHostedProviderBinding', () => {
     expect(await readFile(path.join(second.profileDir, 'models.json'), 'utf8')).toBe('model-b');
   });
 
-  it('isolates Grok profiles by model because the managed catalog is profile-scoped', async () => {
-    const driver: HeterogeneousAgentDriver = {
-      buildSpawnPlan: async () => ({ args: [] }),
-      prepareProviderBinding: ({ profileDir }) => ({
-        args: [],
-        env: { GROK_HOME: profileDir },
-      }),
-    };
-    const base = await makeParams(driver);
-    const firstParams = {
-      ...base,
-      agentType: 'grok-build',
-      reference: {
-        ...base.reference,
-        apiConfig: { ...base.reference.apiConfig, model: 'model-a' },
-      },
-      resolution: {
-        ...base.resolution,
-        agentType: 'grok-build' as const,
-        apiConfig: { ...base.resolution.apiConfig, model: 'model-a' },
-      },
-    };
-    const secondParams = {
-      ...firstParams,
-      reference: {
-        ...firstParams.reference,
-        apiConfig: { ...firstParams.reference.apiConfig, model: 'model-b' },
-      },
-      resolution: {
-        ...firstParams.resolution,
-        apiConfig: { ...firstParams.resolution.apiConfig, model: 'model-b' },
-      },
-      sessionId: 'session-test-2',
-    };
+  it.each(['grok-build', 'trae'] as const)(
+    'isolates %s profiles by model because the managed catalog is profile-scoped',
+    async (agentType) => {
+      const driver: HeterogeneousAgentDriver = {
+        buildSpawnPlan: async () => ({ args: [] }),
+        prepareProviderBinding: ({ profileDir }) => ({
+          args: [],
+          env: { PROFILE_HOME: profileDir },
+        }),
+      };
+      const base = await makeParams(driver);
+      const firstParams = {
+        ...base,
+        agentType,
+        reference: {
+          ...base.reference,
+          apiConfig: { ...base.reference.apiConfig, model: 'model-a' },
+        },
+        resolution: {
+          ...base.resolution,
+          agentType,
+          apiConfig: { ...base.resolution.apiConfig, model: 'model-a' },
+        },
+      };
+      const secondParams = {
+        ...firstParams,
+        reference: {
+          ...firstParams.reference,
+          apiConfig: { ...firstParams.reference.apiConfig, model: 'model-b' },
+        },
+        resolution: {
+          ...firstParams.resolution,
+          apiConfig: { ...firstParams.resolution.apiConfig, model: 'model-b' },
+        },
+        sessionId: 'session-test-2',
+      };
 
-    const first = await prepareHostedProviderBinding(firstParams);
-    const second = await prepareHostedProviderBinding(secondParams);
+      const first = await prepareHostedProviderBinding(firstParams);
+      const second = await prepareHostedProviderBinding(secondParams);
 
-    expect(second.profileDir).not.toBe(first.profileDir);
-    expect(second.bindingKey).not.toBe(first.bindingKey);
-  });
+      expect(second.profileDir).not.toBe(first.profileDir);
+      expect(second.bindingKey).not.toBe(first.bindingKey);
+    },
+  );
 });
 
 describe('prepareHostedServerDefaultBinding', () => {
@@ -207,6 +210,7 @@ describe('prepareHostedServerDefaultBinding', () => {
     prepareServerDefaultBinding: ({ profileDir }) => ({
       args: [],
       env: { CLAUDE_CONFIG_DIR: profileDir },
+      operationTokenEnvKey: 'ANTHROPIC_AUTH_TOKEN',
     }),
   };
 
@@ -229,6 +233,7 @@ describe('prepareHostedServerDefaultBinding', () => {
 
     expect((await stat(binding.profileDir)).mode & 0o777).toBe(0o700);
     expect((await stat(binding.runDir)).mode & 0o777).toBe(0o700);
+    expect(binding.operationTokenEnvKey).toBe('ANTHROPIC_AUTH_TOKEN');
 
     await binding.cleanup();
     await expect(stat(binding.runDir)).rejects.toThrow();

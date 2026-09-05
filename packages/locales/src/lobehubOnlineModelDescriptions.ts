@@ -8,6 +8,8 @@
  * Consumed by both `default/models.ts` (Node) and `default/models.vite.ts` (Vite SPA).
  */
 export const lobeHubOnlineModelDescriptions = {
+  'lobehub.claude-fable-5-1.description':
+    'Stronger than Fable 5 on long-running coding and research — 55.8% on Terminal-Bench 4.0 versus 42.0%, at the same $10/$50 with cache reads at a quarter of the cost.',
   'lobehub.claude-fable-5.description':
     "Claude Fable 5 is the world's strongest model for demanding reasoning, long-horizon agentic work, and complex coding. It is also the most expensive model.",
   'lobehub.claude-haiku-4-5-20251001.description':
@@ -76,6 +78,8 @@ export const lobeHubOnlineModelDescriptions = {
     'Gemini 3.6 Flash balances speed with intelligence for strong agentic, coding, and multimodal performance with improved token efficiency.',
   'lobehub.gemini-3.7-flash.description':
     "Gemini 3.7 Flash is Google's most capable Flash model, built for complex coding, agentic workflows, and reliable multi-step execution.",
+  'lobehub.gemini-3.8-flash.description':
+    "Google's most intelligent Flash model, tuned for long-horizon coding and autonomous agents — faster first token and less verbose than 3.7 Flash at the same price.",
   'lobehub.glm-5.1.description':
     "Zai's latest flagship model, aligned with Claude Opus 4.6 on overall and coding capabilities. Excels at long-horizon tasks with autonomous work up to 8 hours, an ideal foundation for Autonomous Agents and long-horizon Coding Agents.",
   'lobehub.glm-5.2.description':
@@ -125,6 +129,8 @@ export const lobeHubOnlineModelDescriptions = {
     'GPT-5.6 Terra balances intelligence and cost for everyday professional work, competitive with GPT-5.5 at about half the price.',
   'lobehub.gpt-5.description':
     'The best model for cross-domain coding and agent tasks, with strong accuracy, speed, reasoning, and problem-solving capabilities.',
+  'lobehub.gpt-6-astra.description':
+    "OpenAI's most intelligent and aligned model, state of the art on computer use and 3D work.",
   'lobehub.gpt-image-1.5.description':
     'An enhanced GPT Image 1 model with 4× faster generation, more precise editing, and improved text rendering.',
   'lobehub.gpt-image-1.description': 'ChatGPT native multimodal image generation model.',
@@ -180,6 +186,8 @@ export const lobeHubOnlineModelDescriptions = {
     "Qwen3.7-Max is Alibaba Cloud's flagship agent-era model for complex coding, reasoning, office automation, and long-horizon autonomous workflows.",
   'lobehub.qwen3.7-plus.description':
     'Qwen3.7-Plus is a cost-effective multimodal model in the Qwen3.7 series, combining strong text capabilities with upgraded vision-language understanding for coding, tool use, GUI tasks, and productivity workflows.',
+  'lobehub.qwen3.8-max-0902.description':
+    'A free coding upgrade over Qwen3.8 Max at the same price — TerminalBench 3.0 more than doubles (11.3 → 29.0), tops the front-end CodeArena leaderboard, and beats Opus 5 on repo-level code understanding.',
   'lobehub.qwen3.8-max-preview.description':
     "Qwen3.8-Max-Preview is a preview of Alibaba's next-generation 2.4T-parameter flagship model, with major gains over Qwen3.7-Max in coding and professional productivity, and leading performance on complex long-horizon tasks such as full-stack development and data analysis.",
   'lobehub.qwen3.8-max.description':

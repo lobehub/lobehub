@@ -4,11 +4,13 @@ import type { FileListItem } from '@/types/files';
 
 import { resourceService } from './index';
 
-const { mockUpdateDocument, mockGetKnowledgeItem, mockUpdateFile } = vi.hoisted(() => ({
-  mockGetKnowledgeItem: vi.fn(),
-  mockUpdateDocument: vi.fn(),
-  mockUpdateFile: vi.fn(),
-}));
+const { mockGetKnowledgeItem, mockGetKnowledgeItems, mockUpdateDocument, mockUpdateFile } =
+  vi.hoisted(() => ({
+    mockGetKnowledgeItem: vi.fn(),
+    mockGetKnowledgeItems: vi.fn(),
+    mockUpdateDocument: vi.fn(),
+    mockUpdateFile: vi.fn(),
+  }));
 
 vi.mock('../document', () => ({
   documentService: {
@@ -19,6 +21,7 @@ vi.mock('../document', () => ({
 vi.mock('../file', () => ({
   fileService: {
     getKnowledgeItem: mockGetKnowledgeItem,
+    getKnowledgeItems: mockGetKnowledgeItems,
     updateFile: mockUpdateFile,
   },
 }));
@@ -100,5 +103,35 @@ describe('resourceService.updateResource', () => {
       parentId: undefined,
       title: 'Updated title',
     });
+  });
+});
+
+describe('resourceService.queryResources', () => {
+  it('defaults current list callers to metadata-only responses', async () => {
+    mockGetKnowledgeItems.mockResolvedValue({ hasMore: false, items: [] });
+
+    await resourceService.queryResources({ libraryId: 'library-1' });
+
+    expect(mockGetKnowledgeItems).toHaveBeenCalledWith({
+      includeContentPreview: false,
+      knowledgeBaseId: 'library-1',
+      libraryId: undefined,
+    });
+  });
+
+  it('preserves the server-generated content preview', async () => {
+    mockGetKnowledgeItems.mockResolvedValue({
+      hasMore: false,
+      items: [createKnowledgeItem({ contentPreview: 'Server-generated preview' })],
+    });
+
+    const result = await resourceService.queryResources({ includeContentPreview: true });
+
+    expect(mockGetKnowledgeItems).toHaveBeenCalledWith({
+      includeContentPreview: true,
+      knowledgeBaseId: undefined,
+      libraryId: undefined,
+    });
+    expect(result.items[0].contentPreview).toBe('Server-generated preview');
   });
 });

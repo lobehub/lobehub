@@ -72,6 +72,7 @@ const SearchResultsOverlay = memo(() => {
       ? resourceKeys.search(
           {
             category: libraryId ? undefined : category,
+            includeContentPreview: viewMode === 'masonry',
             libraryId,
             q: searchQuery,
             // Search narrows the list the user is looking at, so it has to honour
@@ -89,6 +90,7 @@ const SearchResultsOverlay = memo(() => {
       string,
       {
         category?: string;
+        includeContentPreview?: boolean;
         libraryId?: string;
         q: string;
         sourceFilter?: ResourceSourceFilter;

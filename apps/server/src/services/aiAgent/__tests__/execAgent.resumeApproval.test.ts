@@ -550,6 +550,70 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
     );
   });
 
+  it('marks a reused ready continuation as a normal runtime', async () => {
+    const approvalResolutionRequestId = '018fbd8e-7baf-7c6d-8000-000000000099';
+    const identity = { resolutionRequestId: approvalResolutionRequestId, userId: 'user-1' };
+    const continuationOperationId = deriveAgentInterventionContinuationOperationId(identity);
+    const assistantMessageId = deriveAgentInterventionContinuationMessageId(identity);
+    const provenance = {
+      resolutionRequestId: approvalResolutionRequestId,
+      sourceOperationId: 'op-parked',
+      sourceToolMessageIds: ['tool-msg-1'],
+    };
+    mockFindMessagePlugin.mockResolvedValue({
+      ...pendingToolPlugin,
+      intervention: { operationId: 'op-parked', status: 'pending' },
+    });
+    mockLoadInterventionContinuationState.mockResolvedValue({
+      metadata: {
+        agentId: 'agent-1',
+        agentInterventionContinuation: provenance,
+        agentInterventionPreparation: {
+          resolutionRequestId: approvalResolutionRequestId,
+          state: 'ready',
+        },
+        sourceMessageId: 'tool-msg-1',
+        topicId: 'topic-1',
+        userId: 'user-1',
+      },
+      operationId: continuationOperationId,
+      status: 'idle',
+    });
+    mockFindOperationById.mockResolvedValue({
+      agentId: 'agent-1',
+      appContext: { sourceMessageId: 'tool-msg-1' },
+      metadata: { agentInterventionContinuation: provenance },
+      topicId: 'topic-1',
+    });
+    mockFindById.mockImplementation(async (id: string) =>
+      id === assistantMessageId
+        ? { id, role: 'assistant', topicId: 'topic-1' }
+        : id === pendingToolMessage.id
+          ? pendingToolMessage
+          : undefined,
+    );
+
+    await expect(
+      service.execAgent({
+        ...baseParams,
+        approvalResolutionRequestId,
+        approvalSourceOperationId: 'op-parked',
+        resumeApproval: {
+          decision: 'approved',
+          parentMessageId: 'tool-msg-1',
+          toolCallId: 'call_xyz',
+        },
+      }),
+    ).resolves.toMatchObject({
+      heteroType: null,
+      operationId: continuationOperationId,
+      success: true,
+    });
+
+    expect(mockEnsureInterventionContinuationStarted).toHaveBeenCalledWith(continuationOperationId);
+    expect(mockCreateOperation).not.toHaveBeenCalled();
+  });
+
   it('uses a non-reentrant short fence for a thread continuation without replacing the main anchor', async () => {
     const approvalResolutionRequestId = '018fbd8e-7baf-7c6d-8000-000000000095';
     const reservationId = deriveAgentInterventionContinuationOperationId({

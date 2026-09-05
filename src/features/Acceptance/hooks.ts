@@ -6,10 +6,15 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { useClientDataSWR } from '@/libs/swr';
 import { verifyKeys } from '@/libs/swr/keys';
 import { documentService } from '@/services/document';
-import type { VerifyReportSummaryPage } from '@/services/verify';
+import type {
+  AcceptanceListFilter,
+  AcceptanceListPage,
+  VerifyReportSummaryPage,
+} from '@/services/verify';
 import { verifyService } from '@/services/verify';
 
 const VERIFY_REPORT_PAGE_SIZE = 30;
+const ACCEPTANCE_PAGE_SIZE = 30;
 const VERIFY_REPORT_SWR_CONFIG = {
   revalidateIfStale: false,
   revalidateOnFocus: false,
@@ -85,23 +90,108 @@ export const useAcceptanceBySubject = (
  * panel. `limit` widens the recency window for surfaces that must reach further
  * back than the panel does (the merge target picker).
  *
- * A widened window is its own SWR key, and the list's invalidations
- * (`mutate(verifyKeys.acceptances())`) target the panel's key — so a surface
- * that opens on demand asks for `revalidateOnMount` rather than deciding from a
- * cache nothing refreshes.
+ * A widened window is its own SWR key. Mutations invalidate the whole
+ * `verify:acceptances` key family so every filter / limit / search variant
+ * revalidates together.
  */
 export const useAcceptanceList = (
   enabled: boolean,
-  options?: { limit?: number; revalidateOnMount?: boolean },
+  options?: {
+    filter?: 'active' | 'all' | 'completed';
+    limit?: number;
+    projectId?: string;
+    q?: string;
+    revalidateOnMount?: boolean;
+  },
 ) =>
   useClientDataSWR(
-    enabled ? verifyKeys.acceptances(options?.limit) : null,
-    () => verifyService.listAcceptances({ limit: options?.limit }),
+    enabled
+      ? verifyKeys.acceptances(options?.limit, options?.q, options?.filter, options?.projectId)
+      : null,
+    () =>
+      verifyService.listAcceptances({
+        filter: options?.filter,
+        limit: options?.limit,
+        projectId: options?.projectId,
+        q: options?.q,
+      }),
     {
       ...VERIFY_REPORT_SWR_CONFIG,
       ...(options?.revalidateOnMount ? { revalidateOnMount: true } : {}),
     },
   );
+
+/**
+ * The panel's scroll feed: keyset pages, newest first, with the in-progress /
+ * completed split applied server-side (see `acceptance.listPage`).
+ *
+ * A `null` filter disables the feed entirely — that is how the panel hands off
+ * to the flat search read. Changing the filter starts a fresh key series, so the
+ * loaded depth collapses back to one page rather than cascading a refetch of as
+ * many pages as the previous view had open.
+ */
+export const useAcceptanceListInfinite = (
+  filter: AcceptanceListFilter | null,
+  projectId?: string,
+) => {
+  const workspaceId = useActiveWorkspaceId();
+
+  const getKey = useCallback(
+    (_index: number, previous: AcceptanceListPage | null) => {
+      if (previous && previous.nextCursor === null) return null;
+      if (!filter) return null;
+      return verifyKeys.acceptancePage(
+        workspaceId ?? undefined,
+        filter,
+        projectId,
+        previous?.nextCursor ?? undefined,
+      );
+    },
+    [filter, projectId, workspaceId],
+  );
+
+  const { data, error, isLoading, mutate, setSize, size } = useSWRInfinite(
+    getKey,
+    ([, , , scopedProjectId, cursor]: readonly [string, string, string, string, string]) =>
+      verifyService.listAcceptancePage({
+        cursor: cursor || undefined,
+        filter: filter ?? undefined,
+        limit: ACCEPTANCE_PAGE_SIZE,
+        projectId: scopedProjectId || undefined,
+      }),
+    { ...VERIFY_REPORT_SWR_CONFIG, revalidateFirstPage: false },
+  );
+
+  useEffect(() => {
+    setSize(1);
+  }, [filter, projectId, workspaceId, setSize]);
+
+  const loadMore = useCallback(() => {
+    void setSize((s) => s + 1);
+  }, [setSize]);
+
+  // SWR leaves a failed/pending page's slot `undefined`, so guard the holes.
+  const items = data?.flatMap((page) => page?.items ?? []) ?? [];
+  const lastLoadedPage = data?.findLast(Boolean);
+  const reachedEnd = lastLoadedPage ? lastLoadedPage.nextCursor === null : false;
+  const hasLoadedPages = data !== undefined;
+
+  const isLoadingInitial = !error && isLoading && !hasLoadedPages;
+  const isLoadingMore =
+    !error && hasLoadedPages && size > 0 && typeof data[size - 1] === 'undefined';
+
+  return {
+    error,
+    // Pause the sentinel while an error is showing so it cannot hot-loop the
+    // failed page; the panel offers a manual retry instead.
+    hasMore: !reachedEnd && !error,
+    isLoadingInitial,
+    isLoadingMore,
+    items,
+    loadMore,
+    mutate,
+  };
+};
 
 /**
  * Acceptance status for a known subject set — one read for a whole list.

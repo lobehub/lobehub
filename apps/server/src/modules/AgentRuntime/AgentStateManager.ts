@@ -39,9 +39,24 @@ export interface AgentOperationMetadata {
   mirrorToOperationId?: string;
   modelRuntimeConfig?: any;
   status: AgentState['status'];
+  /**
+   * Gateway WS channel owner when it differs from the executing user. For
+   * shared-agent visitor runs the operation EXECUTES as the creator
+   * (`userId`), but only the visitor may subscribe to its stream — the
+   * gateway registers the channel under this id and rejects other subs.
+   */
+  streamOwnerUserId?: string;
   totalCost: number;
   totalSteps: number;
   userId?: string;
+  /**
+   * Visitor-facing redaction policy for a shared-agent visitor run, mirrored
+   * from the share's `AgentShareConfig`. Persisted alongside
+   * {@link streamOwnerUserId} so a queue worker that never ran this op's init
+   * can still apply the OWNER-configured policy instead of falling back to the
+   * fail-closed full strip.
+   */
+  visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
   /**
    * Workspace the operation runs in (null/undefined = personal). Persisted so
    * queue workers (e.g. QStash `runStep`) can reconstruct a workspace-scoped
@@ -57,6 +72,7 @@ export class AgentStateManager {
   private readonly STEPS_PREFIX = 'agent_runtime_steps';
   private readonly METADATA_PREFIX = 'agent_runtime_meta';
   private readonly EVENTS_PREFIX = 'agent_runtime_events';
+  private readonly INTERRUPT_PREFIX = 'agent_runtime_interrupt';
   private readonly DEFAULT_TTL = 2 * 3600; // 2h
 
   constructor() {
@@ -146,6 +162,24 @@ export class AgentStateManager {
       console.error('Failed to load agent state:', error);
       throw error;
     }
+  }
+
+  /**
+   * Set the interrupt sentinel. The full state blob can run to hundreds of
+   * KB (tool manifests, user memory, …), so the step-abort poller checks
+   * this tiny key instead of re-downloading the blob every interval — the
+   * blob's `status: 'interrupted'` stays the authoritative record.
+   */
+  async markInterrupted(operationId: string): Promise<void> {
+    await this.redis.setex(`${this.INTERRUPT_PREFIX}:${operationId}`, this.DEFAULT_TTL, '1');
+  }
+
+  /**
+   * Check the interrupt sentinel without loading the state blob.
+   */
+  async isInterrupted(operationId: string): Promise<boolean> {
+    const exists = await this.redis.exists(`${this.INTERRUPT_PREFIX}:${operationId}`);
+    return exists === 1;
   }
 
   /**
@@ -249,6 +283,9 @@ export class AgentStateManager {
 
       return {
         agentConfig: metadata.agentConfig ? JSON.parse(metadata.agentConfig) : undefined,
+        visitorRedaction: metadata.visitorRedaction
+          ? JSON.parse(metadata.visitorRedaction)
+          : undefined,
         createdAt: metadata.createdAt,
         lastActiveAt: metadata.lastActiveAt,
         modelRuntimeConfig: metadata.modelRuntimeConfig
@@ -256,6 +293,7 @@ export class AgentStateManager {
           : undefined,
         mirrorToOperationId: metadata.mirrorToOperationId || undefined,
         status: metadata.status as AgentState['status'],
+        streamOwnerUserId: metadata.streamOwnerUserId || undefined,
         totalCost: parseFloat(metadata.totalCost) || 0,
         totalSteps: parseInt(metadata.totalSteps) || 0,
         userId: metadata.userId,
@@ -274,8 +312,10 @@ export class AgentStateManager {
     operationId: string,
     data: {
       agentConfig?: any;
+      visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
       mirrorToOperationId?: string;
       modelRuntimeConfig?: any;
+      streamOwnerUserId?: string;
       userId?: string;
       workspaceId?: string;
     },
@@ -285,11 +325,13 @@ export class AgentStateManager {
     try {
       const metadata: AgentOperationMetadata = {
         agentConfig: data.agentConfig,
+        visitorRedaction: data.visitorRedaction,
         createdAt: new Date().toISOString(),
         lastActiveAt: new Date().toISOString(),
         mirrorToOperationId: data.mirrorToOperationId,
         modelRuntimeConfig: data.modelRuntimeConfig,
         status: 'idle',
+        streamOwnerUserId: data.streamOwnerUserId,
         totalCost: 0,
         totalSteps: 0,
         userId: data.userId,
@@ -306,12 +348,15 @@ export class AgentStateManager {
       };
 
       if (metadata.userId) redisData.userId = metadata.userId;
+      if (metadata.streamOwnerUserId) redisData.streamOwnerUserId = metadata.streamOwnerUserId;
       if (metadata.workspaceId) redisData.workspaceId = metadata.workspaceId;
       if (metadata.mirrorToOperationId)
         redisData.mirrorToOperationId = metadata.mirrorToOperationId;
       if (metadata.modelRuntimeConfig)
         redisData.modelRuntimeConfig = JSON.stringify(metadata.modelRuntimeConfig);
       if (metadata.agentConfig) redisData.agentConfig = JSON.stringify(metadata.agentConfig);
+      if (metadata.visitorRedaction)
+        redisData.visitorRedaction = JSON.stringify(metadata.visitorRedaction);
 
       await this.redis.hmset(metaKey, redisData);
       await this.redis.expire(metaKey, this.DEFAULT_TTL);
@@ -363,6 +408,7 @@ export class AgentStateManager {
       `${this.STEPS_PREFIX}:${operationId}`,
       `${this.METADATA_PREFIX}:${operationId}`,
       `${this.EVENTS_PREFIX}:${operationId}`,
+      `${this.INTERRUPT_PREFIX}:${operationId}`,
     ];
 
     try {

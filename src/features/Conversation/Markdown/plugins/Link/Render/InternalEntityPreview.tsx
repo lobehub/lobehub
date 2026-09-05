@@ -1,7 +1,7 @@
 'use client';
 
 import type { VerifyCodingScope } from '@lobechat/types';
-import { Flexbox, Icon, Popover, Skeleton } from '@lobehub/ui';
+import { Flexbox, Icon, Popover } from '@lobehub/ui';
 import { Avatar, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import type { TFunction } from 'i18next';
@@ -15,6 +15,7 @@ import {
 import { memo, type PropsWithChildren, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ArticleSkeleton } from '@/components/Skeleton';
 import { useClientDataSWR } from '@/libs/swr';
 import { agentService } from '@/services/agent';
 import { documentService } from '@/services/document';
@@ -108,7 +109,17 @@ const getVerifyStatusLabel = (status: string | null | undefined, t: TFunction<'c
   }
 };
 
-const getPreviewData = async (
+/**
+ * One cache entry per entity, shared between the hover preview and the eager
+ * title resolution on the link itself — whichever fires first warms the other.
+ */
+export const internalEntityPreviewKey = (reference: InternalLinkReference) => [
+  'internal-entity-preview',
+  reference.type,
+  reference.pathname,
+];
+
+export const getPreviewData = async (
   reference: InternalLinkReference,
   t: TFunction<'chat'>,
 ): Promise<PreviewData | null> => {
@@ -204,7 +215,7 @@ export const InternalEntityPreview = memo<InternalEntityPreviewProps>(
     const { t } = useTranslation('chat');
     const [open, setOpen] = useState(false);
     const { data, isLoading } = useClientDataSWR(
-      open ? ['internal-entity-preview', reference.type, reference.pathname] : null,
+      open ? internalEntityPreviewKey(reference) : null,
       () => getPreviewData(reference, t),
       { revalidateOnFocus: false },
     );
@@ -223,7 +234,7 @@ export const InternalEntityPreview = memo<InternalEntityPreviewProps>(
 
     const content = isLoading ? (
       <div className={styles.content}>
-        <Skeleton active avatar paragraph={{ rows: 2 }} />
+        <ArticleSkeleton avatar rows={2} />
       </div>
     ) : (
       <Flexbox className={styles.content} gap={12}>

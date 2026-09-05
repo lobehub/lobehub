@@ -7,8 +7,14 @@ import {
   BusinessMobileRoutesWithoutMainLayout,
 } from '@/business/client/BusinessMobileRoutes';
 import AppsSkeleton from '@/components/Skeleton/Apps';
+import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
+import { delayed } from '@/components/Skeleton/Delayed';
 import { acceptanceRouteMeta } from '@/features/Acceptance/routeMeta';
+import AgentRouteSwitch from '@/features/AgentRoute/AgentRouteSwitch';
+import AgentShareLegacyRedirect from '@/features/AgentShareVisitor/LegacyRedirect';
+import { agentShareVisitorRouteMeta } from '@/features/AgentShareVisitor/routeMeta';
 import { mobileAgentSettingsRouteMeta } from '@/features/RouteMeta/mobileRouteMeta';
+import WorkspaceProviderRedirect from '@/features/WorkspaceSetting/ProviderRedirect';
 import { agentRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
 import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
@@ -53,10 +59,24 @@ export const sharedMainAreaChildren: RouteObject[] = [
             path: 'settings',
           },
         ],
-        element: dynamicLayout(
-          () => import('@/routes/(mobile)/chat/_layout'),
-          'Mobile > Chat > Layout',
-          { preloadId: 'mobile-agent' },
+        // `/agent/:aid` serves both the creator's own agent and the agent-share
+        // visitor surface; the param decides which — see `AgentRouteSwitch`.
+        element: (
+          <AgentRouteSwitch
+            fallback={<ConversationLayoutSkeleton />}
+            // Mobile has no share settings page; the agent itself is the closest stop.
+            ownShareRedirect={(agentId) => `/agent/${agentId}`}
+            ownElement={dynamicLayout(
+              () => import('@/routes/(mobile)/chat/_layout'),
+              'Mobile > Chat > Layout',
+              { preloadId: 'mobile-agent' },
+            )}
+            shareElement={dynamicElement(
+              () => import('@/features/AgentShareVisitor/Page'),
+              'Mobile > Share > Agent',
+              { fallback: delayed(<ConversationLayoutSkeleton />) },
+            )}
+          />
         ),
         errorElement: <ErrorBoundary />,
         path: ':aid',
@@ -292,7 +312,7 @@ export const mobileRoutes: RouteObject[] = [
       // Apps page (personal-only — never mirrored under /:workspaceSlug)
       {
         element: dynamicElement(() => import('@/routes/(main)/apps'), 'Mobile > Apps', {
-          fallback: <AppsSkeleton />,
+          fallback: delayed(<AppsSkeleton />),
         }),
         errorElement: <ErrorBoundary />,
         path: 'apps',
@@ -487,6 +507,25 @@ export const mobileRoutes: RouteObject[] = [
               },
               {
                 element: dynamicElement(
+                  () =>
+                    import('@/routes/(main)/[workspaceSlug]/settings/provider').then(
+                      (m) => m.WorkspaceProviderSettingMobile,
+                    ),
+                  'Mobile > Workspace > Settings > Provider',
+                ),
+                path: 'provider',
+              },
+              // Path-shaped provider deep-links (`/:slug/settings/provider/:id`)
+              // redirect to the query form the workspace provider page uses, so
+              // they don't fall through to the catch-all and leave the workspace.
+              // Static element: the redirect is tiny and lazy-loading it would
+              // flash the generic brand loader before redirecting.
+              {
+                element: <WorkspaceProviderRedirect />,
+                path: 'provider/:providerId',
+              },
+              {
+                element: dynamicElement(
                   () => import('@/routes/(main)/[workspaceSlug]/settings/plans'),
                   'Mobile > Workspace > Settings > Plans',
                 ),
@@ -586,7 +625,17 @@ export const mobileRoutes: RouteObject[] = [
   },
   ...BusinessMobileRoutesWithoutMainLayout,
 
-  // `/share/*` is served by the standalone Share app (apps/share), not this router.
+  // `/share/*` is served by the standalone Share app (apps/share), not this
+  // router. The agent-share visitor surface moved to `/agent/:aid` (it needs
+  // the full chat runtime, so it stays in the main SPA on every platform), but
+  // old links must keep working: without this entry a phone opening one falls
+  // through to `*` and gets bounced home instead of redirected.
+  {
+    element: <AgentShareLegacyRedirect />,
+    errorElement: <ErrorBoundary />,
+    handle: { meta: agentShareVisitorRouteMeta },
+    path: '/share/agent/:slugOrId',
+  },
 
   // Messenger verify route (outside main layout)
   {

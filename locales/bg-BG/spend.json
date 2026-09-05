@@ -12,6 +12,7 @@
   "table.columns.spend": "Кредити",
   "table.columns.time": "Време",
   "table.columns.totalTokens": "Използвани токени",
+  "table.columns.trigger.enums.agent_share": "Споделяне от агент",
   "table.columns.trigger.enums.agent_signal": "Сигнал от агент",
   "table.columns.trigger.enums.api": "API Обаждане",
   "table.columns.trigger.enums.bot": "Съобщение от бот",

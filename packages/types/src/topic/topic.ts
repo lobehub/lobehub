@@ -234,7 +234,7 @@ export interface ChatTopicMetadata {
       deviceId?: string;
       deviceUserId?: string;
       deviceWorkspaceId?: string;
-      heteroType?: string;
+      heteroType?: string | null;
       hooks?: SerializedAgentHook[];
       operationId: string;
       orchestrationRole?: 'supervisor' | 'member';
@@ -248,7 +248,7 @@ export interface ChatTopicMetadata {
     /** Workspace principal used for a workspace-enrolled device. */
     deviceWorkspaceId?: string;
     /** Notify-based platform type used to select the cancellation protocol. */
-    heteroType?: string;
+    heteroType?: string | null;
     /**
      * Serialized lifecycle hooks (onComplete / onError) registered for this run.
      *
@@ -524,7 +524,7 @@ export const chatTopicMetadataUpdateSchema = z.object({
             deviceId: z.string().optional(),
             deviceUserId: z.string().optional(),
             deviceWorkspaceId: z.string().optional(),
-            heteroType: z.string().optional(),
+            heteroType: z.string().nullable().optional(),
             hooks: z.array(serializedAgentHookSchema).optional(),
             operationId: z.string(),
             orchestrationRole: z.enum(['supervisor', 'member']).optional(),
@@ -536,7 +536,7 @@ export const chatTopicMetadataUpdateSchema = z.object({
       deviceId: z.string().optional(),
       deviceUserId: z.string().optional(),
       deviceWorkspaceId: z.string().optional(),
-      heteroType: z.string().optional(),
+      heteroType: z.string().nullable().optional(),
       hooks: z.array(serializedAgentHookSchema).optional(),
       operationId: z.string(),
       orchestrationRole: z.enum(['supervisor', 'member']).optional(),

@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, SkeletonAvatar, SkeletonTitle } from '@lobehub/ui';
-import { ActionIcon, Avatar, Tag, Text } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Avatar, SkeletonAvatar, SkeletonText, Tag, Text } from '@lobehub/ui/base-ui';
 import { Popconfirm } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { XIcon } from 'lucide-react';
@@ -56,7 +56,7 @@ const CollaboratorList = memo<CollaboratorListProps>(({ resourceId, resourceType
         {[0, 1].map((key) => (
           <Flexbox horizontal align={'center'} className={styles.row} gap={12} key={key}>
             <SkeletonAvatar size={32} />
-            <SkeletonTitle style={{ marginBottom: 0, width: 160 }} />
+            <SkeletonText style={{ marginBottom: 0, width: 160 }} />
           </Flexbox>
         ))}
       </Flexbox>

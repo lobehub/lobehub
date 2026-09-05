@@ -5,29 +5,21 @@ import { FileItemHeader } from '../FileItem';
 
 const mockRevealInFilesTab = vi.fn();
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>;
-  return {
-    ...actual,
-    ActionIcon: ({ icon: _icon, title, onClick, ...rest }: any) => (
-      <button aria-label={title} type="button" onClick={onClick} {...rest} />
-    ),
-  };
-});
-
 vi.mock('@/store/global', () => ({
   useGlobalStore: (selector: (s: any) => any) =>
     selector({ revealInFilesTab: mockRevealInFilesTab }),
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
-
 vi.mock('@/components/AntdStaticMethods', () => ({
   message: { error: vi.fn(), success: vi.fn() },
+}));
+
+vi.mock('@lobehub/ui/base-ui', () => ({
+  ActionIcon: ({ onClick, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+    <button type="button" {...props} onClick={onClick} />
+  ),
+  confirmModal: vi.fn(),
+  toast: { error: vi.fn(), success: vi.fn() },
 }));
 
 vi.mock('@/services/git', () => ({

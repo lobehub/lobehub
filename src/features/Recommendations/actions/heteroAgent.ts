@@ -1,4 +1,7 @@
-import type { HeterogeneousAgentClientConfig } from '@lobechat/heterogeneous-agents/client';
+import {
+  DroidIcon,
+  type HeterogeneousAgentClientConfig,
+} from '@lobechat/heterogeneous-agents/client';
 import {
   Amp,
   ClaudeCode,
@@ -22,6 +25,7 @@ const avatarIcons = {
   'codebuddy': CodeBuddy.Avatar,
   'codex': Codex.Avatar,
   'cursor': Cursor.Avatar,
+  'droid': DroidIcon.Avatar,
   'grok-build': Grok.Avatar,
   'kimi-code': Kimi.Avatar,
   'opencode': OpenCode.Avatar,

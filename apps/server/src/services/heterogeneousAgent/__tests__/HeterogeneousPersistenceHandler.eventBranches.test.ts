@@ -68,6 +68,7 @@ const createHarness = (
     operationId?: string;
     topicAgentId?: string | null;
     topicId?: string;
+    userId?: string | null;
   } = {},
 ) => {
   const operationId = params.operationId ?? 'op-test';
@@ -215,7 +216,7 @@ const createHarness = (
     messageModel: messageModel as any,
     threadModel: threadModel as any,
     topicModel: topicModel as any,
-    userId: 'user-test',
+    userId: params.userId === null ? undefined : (params.userId ?? 'user-test'),
   });
 
   return {
@@ -950,6 +951,153 @@ describe('HeterogeneousPersistenceHandler — event branch coverage', () => {
   });
 
   describe('agent_intervention producer ACK', () => {
+    const materializeAskUserTool = async (
+      h: ReturnType<typeof createHarness>,
+      toolCallId: string,
+    ) =>
+      ingest(h, [
+        buildEvent('stream_chunk', 0, {
+          chunkType: 'tools_calling',
+          toolsCalling: [
+            {
+              apiName: 'askUserQuestion',
+              arguments: '{}',
+              id: toolCallId,
+              identifier: 'claude-code',
+              type: 'default',
+            },
+          ],
+        }),
+      ]);
+
+    const missingProviderRequest = (toolCallId: string) =>
+      buildEvent('agent_intervention_request', 1, {
+        apiName: 'askUserQuestion',
+        arguments: JSON.stringify({
+          questions: [
+            {
+              header: 'Question',
+              options: [{ label: 'Continue' }, { label: 'Stop' }],
+              question: 'Proceed?',
+            },
+          ],
+        }),
+        deadline: 1_900_000_000_000,
+        identifier: 'claude-code',
+        interactionKind: 'question',
+        toolCallId,
+      });
+
+    it('rejects an invalid first Cloud review before any intervention side effect', async () => {
+      const h = createHarness({ topicAgentId: 'agent-test' });
+      const toolCallId = 'invalid-cloud-question';
+      await materializeAskUserTool(h, toolCallId);
+      h.messageModel.updateMessagePlugin.mockClear();
+      h.messageModel.updatePluginState.mockClear();
+
+      await expect(ingest(h, [missingProviderRequest(toolCallId)])).rejects.toThrow(
+        `Unsafe heterogeneous intervention review payload toolCallId=${toolCallId}`,
+      );
+
+      expect(h.messageModel.updateMessagePlugin).not.toHaveBeenCalled();
+      expect(h.messageModel.updatePluginState).not.toHaveBeenCalled();
+      expect(notifyAgentInterventionRequired).not.toHaveBeenCalled();
+      expect(acknowledgeAgentInterventionProducerResolution).not.toHaveBeenCalled();
+      const toolMessage = [...h.messages.values()].find(
+        (message) => message.tool_call_id === toolCallId,
+      );
+      expect(toolMessage?.plugin).not.toHaveProperty('intervention');
+      expect(toolMessage?.pluginState).toBeUndefined();
+    });
+
+    it('preserves legacy intervention persistence without a userId', async () => {
+      const h = createHarness({ topicAgentId: 'agent-test', userId: null });
+      const toolCallId = 'legacy-question';
+      await materializeAskUserTool(h, toolCallId);
+      h.messageModel.updateMessagePlugin.mockClear();
+      h.messageModel.updatePluginState.mockClear();
+
+      await expect(ingest(h, [missingProviderRequest(toolCallId)])).resolves.toBeUndefined();
+
+      expect(h.messageModel.updateMessagePlugin).toHaveBeenCalledTimes(1);
+      expect(h.messageModel.updatePluginState).toHaveBeenCalledTimes(1);
+      expect(notifyAgentInterventionRequired).not.toHaveBeenCalled();
+      expect(acknowledgeAgentInterventionProducerResolution).not.toHaveBeenCalled();
+      const toolMessage = [...h.messages.values()].find(
+        (message) => message.tool_call_id === toolCallId,
+      );
+      expect(toolMessage?.plugin?.intervention).toEqual({ status: 'pending' });
+      expect(toolMessage?.pluginState?.heterogeneousIntervention).toMatchObject({
+        transition: 'pending',
+      });
+    });
+
+    it('canonicalizes an omitted Claude multiSelect before durable review notification', async () => {
+      const h = createHarness({ topicAgentId: 'agent-test' });
+
+      await ingest(h, [
+        buildEvent('agent_intervention_request', 0, {
+          apiName: 'askUserQuestion',
+          arguments: JSON.stringify({
+            questions: [
+              {
+                header: 'Producer ACK E2E',
+                options: [
+                  { description: 'Proceed with validation.', label: 'Continue' },
+                  { description: 'Halt validation.', label: 'Stop' },
+                ],
+                question: 'Continue read only validation?',
+              },
+            ],
+          }),
+          deadline: 1_900_000_000_000,
+          identifier: 'claude-code',
+          interactionKind: 'question',
+          provider: 'claude-code',
+          toolCallId: 'claude-question-1',
+        }),
+      ]);
+
+      expect(notifyAgentInterventionRequired).toHaveBeenCalledTimes(1);
+      expect(notifyAgentInterventionRequired.mock.calls[0][0].items[0]).toMatchObject({
+        detail: {
+          questions: [
+            {
+              header: 'Producer ACK E2E',
+              id: 'question_1',
+              multiple: false,
+              options: [
+                {
+                  description: 'Proceed with validation.',
+                  id: 'Continue',
+                  label: 'Continue',
+                },
+                {
+                  description: 'Halt validation.',
+                  id: 'Stop',
+                  label: 'Stop',
+                },
+              ],
+              question: 'Continue read only validation?',
+            },
+          ],
+          title: 'Producer ACK E2E',
+          type: 'question',
+        },
+        interactionKind: 'question',
+        provider: 'claude-code',
+      });
+      expect(h.messageModel.updatePluginState).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          heterogeneousIntervention: expect.objectContaining({
+            interactionKind: 'question',
+            provider: 'claude-code',
+          }),
+        }),
+      );
+    });
+
     it('notifies pending once, ignores the publish leg, and notifies terminal only on ACK', async () => {
       const h = createHarness({ topicAgentId: 'agent-test' });
       const requestId = '018fbd8e-7baf-7c6d-8000-000000000001';
@@ -1040,14 +1188,14 @@ describe('HeterogeneousPersistenceHandler — event branch coverage', () => {
       expect(notifyAgentInterventionRequired).toHaveBeenCalledTimes(1);
       expect(acknowledgeAgentInterventionProducerResolution).not.toHaveBeenCalled();
 
-      await ingest(h, [
-        buildEvent('agent_intervention_response', 2, {
-          producerAck: true,
-          resolutionRequestId: requestId,
-          result: { 'Run command?': 'allow' },
-          toolCallId: 'permission-1',
-        }),
-      ]);
+      const producerAck = buildEvent('agent_intervention_response', 2, {
+        producerAck: true,
+        resolutionRequestId: requestId,
+        result: { 'Run command?': 'allow' },
+        toolCallId: 'permission-1',
+      });
+      await ingest(h, [producerAck]);
+      await ingest(h, [{ ...producerAck, timestamp: producerAck.timestamp + 1 }]);
 
       expect(notifyAgentInterventionRequired).toHaveBeenCalledTimes(1);
       expect(acknowledgeAgentInterventionProducerResolution).toHaveBeenCalledTimes(1);

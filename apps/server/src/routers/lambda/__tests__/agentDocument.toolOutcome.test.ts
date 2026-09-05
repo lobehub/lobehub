@@ -32,7 +32,7 @@ vi.mock('@/database/models/agentDocuments', async (importOriginal) => {
 
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(() => ({
-    findById: agentDocumentMocks.findTopicById,
+    findOwnTopicById: agentDocumentMocks.findTopicById,
   })),
 }));
 

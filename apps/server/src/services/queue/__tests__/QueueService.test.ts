@@ -246,25 +246,46 @@ describe('QueueService', () => {
       expect(qstashMocks.publishJSON.mock.calls[0][0]).toMatchObject({ delay: 2 });
     });
 
-    it('passes the stable intervention deduplication key to QStash', async () => {
+    it('encodes logical deduplication keys as stable QStash-safe opaque IDs', async () => {
       qstashMocks.publishJSON.mockResolvedValue({ messageId: 'msg-test' });
 
       const { QStashQueueServiceImpl } = await import('../impls/qstash');
       const impl = new QStashQueueServiceImpl({ qstashToken: 'test-qstash-token' });
 
-      await impl.scheduleMessage({
-        context: { phase: 'user_input' } as any,
-        deduplicationId: 'agent-intervention:op-stable:0',
-        delay: 0,
-        endpoint: 'https://example.com/api/agent/run',
-        operationId: 'op-stable',
-        priority: 'high',
-        stepIndex: 0,
-      });
+      const publish = async (deduplicationId: string) => {
+        await impl.scheduleMessage({
+          context: { phase: 'user_input' } as any,
+          deduplicationId,
+          delay: 0,
+          endpoint: 'https://example.com/api/agent/run',
+          operationId: 'op-stable',
+          priority: 'high',
+          stepIndex: 0,
+        });
 
-      expect(qstashMocks.publishJSON).toHaveBeenCalledWith(
-        expect.objectContaining({ deduplicationId: 'agent-intervention:op-stable:0' }),
-      );
+        return qstashMocks.publishJSON.mock.calls.at(-1)![0].deduplicationId;
+      };
+
+      const logicalId = 'agent-intervention:op_intervention_9979660c87f7db5cdac6836bc90e9038:0';
+      const first = await publish(logicalId);
+      const retry = await publish(logicalId);
+      const different = await publish(`${logicalId}:retry`);
+
+      expect(first).toBe('a2d899f251f8376646eb59522e64e447805aaf2e7b97d80b2935d2e0d293ffcb');
+      expect(retry).toBe(first);
+      expect(different).not.toBe(first);
+
+      for (const unsafeOrBoundaryId of [
+        'unsafe id/with?characters=#and-non-ascii-审批',
+        'x'.repeat(63),
+        'x'.repeat(64),
+        'x'.repeat(65),
+      ]) {
+        const providerId = await publish(unsafeOrBoundaryId);
+
+        expect(providerId).toHaveLength(64);
+        expect(providerId).toMatch(/^[a-f\d]{64}$/);
+      }
     });
   });
 

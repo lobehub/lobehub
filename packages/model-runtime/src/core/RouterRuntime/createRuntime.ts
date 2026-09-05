@@ -39,7 +39,10 @@ import type {
   TextToSpeechPayload,
 } from '../../types';
 import { AgentRuntimeError } from '../../utils/createError';
-import { isNonRetryableRequestError } from '../../utils/isNonRetryableRequestError';
+import {
+  isImageDecodingRequestError,
+  isNonRetryableRequestError,
+} from '../../utils/isNonRetryableRequestError';
 import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
 import { postProcessModelList } from '../../utils/postProcessModelList';
 import { safeParseJSON } from '../../utils/safeParseJSON';
@@ -110,6 +113,8 @@ export interface RouteAttemptResult {
   error?: unknown;
   metadata?: Record<string, unknown>;
   model: string;
+  nonRetryable?: boolean;
+  nonRetryableReason?: 'imageDecode';
   optionIndex: number;
   providerId: string;
   remark?: string;
@@ -754,6 +759,12 @@ export const createRouterRuntime = ({
             );
           }
 
+          const nonRetryable = isNonRetryableRequestError(error);
+          const nonRetryableReason =
+            nonRetryable && isImageDecodingRequestError(error)
+              ? ('imageDecode' as const)
+              : undefined;
+
           params
             .onRouteAttempt?.({
               apiType: resolvedApiType,
@@ -762,6 +773,8 @@ export const createRouterRuntime = ({
               error,
               metadata,
               model,
+              nonRetryable,
+              nonRetryableReason,
               optionIndex: index,
               providerId: id,
               remark,
@@ -773,7 +786,7 @@ export const createRouterRuntime = ({
               log('onRouteAttempt callback error: %O', e);
             });
 
-          if (isNonRetryableRequestError(error)) {
+          if (nonRetryable) {
             throw error;
           }
 

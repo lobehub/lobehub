@@ -401,9 +401,6 @@ export default {
   // Heterogeneous agent CLI status (shown on agent profile page in integration mode)
   'heterogeneousStatus.account.label': 'Account',
   'heterogeneousStatus.apiMode.configureProvider': 'Go to provider settings',
-  'heterogeneousStatus.apiMode.enableInLabs': 'Enable in Labs',
-  'heterogeneousStatus.apiMode.labDisabled':
-    'API mode is a Labs experiment. Enable it to use the LobeHub default provider or a configured API provider instead of the agent subscription.',
   'heterogeneousStatus.apiMode.localOnly': 'Available only for Desktop local execution',
   'heterogeneousStatus.apiMode.defaultProvider': 'LobeHub',
   'heterogeneousStatus.apiMode.model': 'Model',
@@ -846,6 +843,9 @@ export default {
   'notification.item.subscription_payment_failed': 'Subscription renewal payment failed',
   'notification.item.subscription_plan_changed': 'Subscription plan changed',
   'notification.item.subscription_renewed': 'Subscription renewed',
+  'notification.item.task_assigned': 'Task assigned to you',
+  'notification.item.task_comment_activity': 'Task comment activity',
+  'notification.item.task_comment_mentioned': 'Mentioned in a task comment',
   'notification.item.topic_comment_activity': 'Comment activity',
   'notification.item.topic_comment_mentioned': 'Mentioned in a comment',
   'notification.item.video_generation_completed': 'Video generation completed',
@@ -1088,6 +1088,8 @@ export default {
   'settingChatAppearance.autoScrollOnStreaming.desc':
     'Automatically scroll to bottom when AI is generating response',
   'settingChatAppearance.autoScrollOnStreaming.title': 'Auto-scroll During AI Response',
+  'settingChatAppearance.chatBehavior.title': 'Chat Behavior',
+  'settingChatAppearance.workflowStreamingExpand.title': 'Expand Tool Steps While Running',
   'settingChatAppearance.fontSize.desc': 'Font size of messages',
   'settingChatAppearance.fontSize.marks.normal': 'Standard',
   'settingChatAppearance.fontSize.title': 'Font Size',
@@ -3378,7 +3380,7 @@ When I am ___, I need ___
     'Configure agent metadata, model settings, plugins, and the system prompt',
   'tools.builtins.lobe-agent-builder.title': 'Agent Builder',
   'tools.builtins.lobe-agent-documents.description':
-    'Manage agent-scoped documents (list, create, read, edit, remove, rename) and load rules',
+    'Manage agent-scoped documents (list, create, read, edit, remove, rename) and load rules. Not for your uploaded files — see Knowledge Base for those.',
   'tools.builtins.lobe-agent-documents.title': 'Documents',
   'tools.builtins.lobe-agent-management.description': 'Create, manage, and orchestrate AI agents',
   'tools.builtins.lobe-agent-management.title': 'Agent Management',
@@ -3398,7 +3400,7 @@ When I am ___, I need ___
     'Orchestrate and manage multi-agent group conversations',
   'tools.builtins.lobe-group-management.title': 'Group Management',
   'tools.builtins.lobe-knowledge-base.description':
-    'Search uploaded documents and domain knowledge via semantic vector search — for persistent, reusable reference',
+    'Find, browse, and read your uploaded files, and search organized knowledge bases via semantic vector search',
   'tools.builtins.lobe-knowledge-base.title': 'Knowledge Base',
   'tools.builtins.lobe-message.description':
     'Send, read, edit, and manage messages across multiple messaging platforms with a unified interface',
@@ -3524,11 +3526,6 @@ When I am ___, I need ___
 
   'tools.composio.servers.figma.readme':
     'Connect to Figma to access design files and collaborate on projects. View designs, export assets, browse components, and manage your design workflow through natural conversation.',
-
-  'tools.composio.servers.github.description': 'Enhanced GitHub MCP Server',
-
-  'tools.composio.servers.github.readme':
-    'Connect to GitHub to manage repositories, issues, pull requests, and code. Search code, review changes, create branches, and collaborate on software development projects through conversational AI.',
 
   // Composio Servers i18n
   'tools.composio.servers.gmail.description': 'Gmail is a free email service provided by Google',

@@ -56,7 +56,7 @@ export interface ListHeterogeneousAgentModelsParams {
   command?: string;
   cwd?: string;
   env?: Record<string, string>;
-  type: 'codebuddy' | 'cursor' | 'grok-build' | 'opencode' | 'pi' | 'qoder' | 'trae';
+  type: 'codebuddy' | 'cursor' | 'droid' | 'grok-build' | 'opencode' | 'pi' | 'qoder' | 'trae';
 }
 
 export interface HeterogeneousAgentModelCatalogSuccess {
@@ -108,10 +108,35 @@ export const isServerDefaultHeterogeneousModel = (
   operationModel: string,
 ): boolean => requestModel === formatServerDefaultHeterogeneousModel(operationModel);
 
+export interface ServerDefaultHeterogeneousRelayInvocation {
+  acceptedAt: string;
+  agentType: string;
+  ingress: 'anthropic-messages' | 'openai-responses';
+  model: string;
+  operationId: string;
+  provider: string;
+}
+
+/** Durable proof written only after the official relay accepts a model invocation. */
+export const isServerDefaultHeterogeneousRelayInvocation = (
+  value: unknown,
+): value is ServerDefaultHeterogeneousRelayInvocation => {
+  if (!value || typeof value !== 'object') return false;
+  const invocation = value as Partial<ServerDefaultHeterogeneousRelayInvocation>;
+  return (
+    typeof invocation.acceptedAt === 'string' &&
+    typeof invocation.agentType === 'string' &&
+    ['anthropic-messages', 'openai-responses'].includes(invocation.ingress ?? '') &&
+    typeof invocation.model === 'string' &&
+    typeof invocation.operationId === 'string' &&
+    typeof invocation.provider === 'string'
+  );
+};
+
 /**
  * Map a CLI-reported server-default model back to the catalog id.
  *
- * Both CLIs request `lobehub/${catalogId}`. Older Claude Code sessions used
+ * Supported CLIs request `lobehub/${catalogId}`. Older Claude Code sessions used
  * {@link SERVER_DEFAULT_HETEROGENEOUS_MODEL_ALIAS}. Neither is the catalog id
  * the user picked.
  */
@@ -153,7 +178,7 @@ export type HeterogeneousApiConfig =
  * Two families of hetero agents are supported:
  *
  * - **Local CLI** (`amp` | `claude-code` | `codebuddy` | `codex` |
- *   `cursor` | `grok-build` | `kimi-code` | `opencode` | `pi` | `qoder` | `trae`):
+ *   `cursor` | `droid` | `grok-build` | `kimi-code` | `opencode` | `pi` | `qoder` | `trae`):
  *   spawned as a child process on the desktop or a connected device; uses
  *   `command`, `args`, `env`, `systemContext`.
  *
@@ -470,6 +495,7 @@ export const buildHeteroSpawnArgs = (
     provider.type !== 'codebuddy' &&
     provider.type !== 'codex' &&
     provider.type !== 'cursor' &&
+    provider.type !== 'droid' &&
     provider.type !== 'grok-build' &&
     provider.type !== 'kimi-code' &&
     provider.type !== 'opencode' &&
@@ -605,6 +631,7 @@ export const buildHeteroExecArgs = (
     provider.type !== 'codebuddy' &&
     provider.type !== 'codex' &&
     provider.type !== 'cursor' &&
+    provider.type !== 'droid' &&
     provider.type !== 'grok-build' &&
     provider.type !== 'kimi-code' &&
     provider.type !== 'opencode' &&
@@ -734,7 +761,7 @@ export const buildHeteroExecArgs = (
     }
   }
 
-  if (provider.type === 'trae') {
+  if (provider.type === 'droid' || provider.type === 'trae') {
     const model = provider.model?.trim();
     if (model && model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION) {
       selectorArgs.push('--model', model);
@@ -1013,6 +1040,41 @@ export const canPublishAgentTopicLink = (
 };
 
 /**
+ * The raw override merge behind {@link resolveAgencyConfig}, without the
+ * `fixed`-policy short-circuit. The owner path of
+ * {@link resolveAgentAgencyConfig} needs it directly: the stored selection
+ * policy constrains members, not the owner, so the owner's own override
+ * applies even while the shared policy is `fixed`.
+ */
+const applyAgencyConfigOverride = (
+  base: LobeAgentAgencyConfig | undefined,
+  override:
+    | Pick<
+        LobeAgentAgencyConfig,
+        'boundDeviceId' | 'executionTarget' | 'localSandbox' | 'localSandboxNetwork'
+      >
+    | null
+    | undefined,
+): LobeAgentAgencyConfig | undefined => {
+  if (!override) return base;
+  const hasTarget = override.executionTarget !== undefined;
+  const hasDevice = override.boundDeviceId !== undefined;
+  // `false` is a real value here — a member turning the sandbox (or its network
+  // allowance) back off must override a shared `true`, so test for presence,
+  // not truthiness.
+  const hasLocalSandbox = override.localSandbox !== undefined;
+  const hasLocalSandboxNetwork = override.localSandboxNetwork !== undefined;
+  if (!hasTarget && !hasDevice && !hasLocalSandbox && !hasLocalSandboxNetwork) return base;
+  return {
+    ...base,
+    ...(hasTarget ? { executionTarget: override.executionTarget } : {}),
+    ...(hasDevice ? { boundDeviceId: override.boundDeviceId } : {}),
+    ...(hasLocalSandbox ? { localSandbox: override.localSandbox } : {}),
+    ...(hasLocalSandboxNetwork ? { localSandboxNetwork: override.localSandboxNetwork } : {}),
+  };
+};
+
+/**
  * The workspace-shared `agencyConfig` on the agent row is one row per agent —
  * inherently a *single* execution decision for the whole workspace. Real users
  * want each member to pick their own machine independently (see
@@ -1047,22 +1109,7 @@ export const resolveAgencyConfig = (
 ): LobeAgentAgencyConfig | undefined => {
   const base = normalizeAgencyConfigHeterogeneousProvider(agencyConfig);
   if (base?.executionTargetSelectionPolicy === 'fixed') return base;
-  if (!override) return base;
-  const hasTarget = override.executionTarget !== undefined;
-  const hasDevice = override.boundDeviceId !== undefined;
-  // `false` is a real value here — a member turning the sandbox (or its network
-  // allowance) back off must override a shared `true`, so test for presence,
-  // not truthiness.
-  const hasLocalSandbox = override.localSandbox !== undefined;
-  const hasLocalSandboxNetwork = override.localSandboxNetwork !== undefined;
-  if (!hasTarget && !hasDevice && !hasLocalSandbox && !hasLocalSandboxNetwork) return base;
-  return {
-    ...base,
-    ...(hasTarget ? { executionTarget: override.executionTarget } : {}),
-    ...(hasDevice ? { boundDeviceId: override.boundDeviceId } : {}),
-    ...(hasLocalSandbox ? { localSandbox: override.localSandbox } : {}),
-    ...(hasLocalSandboxNetwork ? { localSandboxNetwork: override.localSandboxNetwork } : {}),
-  };
+  return applyAgencyConfigOverride(base, override);
 };
 
 export interface AgentAgencyConfigContext {
@@ -1075,10 +1122,15 @@ export interface AgentAgencyConfigContext {
 /**
  * Resolve an Agent's effective agency config in its ownership context.
  *
- * Member execution-target policies and overrides apply only after a Workspace
- * Agent is public. A Private Agent remains owner-configurable: its shared
- * execution target is used directly, while the stored selection policy is
- * retained only as the policy that will take effect if the Agent is published.
+ * Member execution-target policies apply only after a Workspace Agent is
+ * public. The caller's per-user override, however, merges for EVERY workspace
+ * agent — member, manager, or private owner alike: a `local` / this-machine
+ * pick is inherently per-user (the shared row must never carry a personal
+ * device — the server rejects it), so managers and private-agent owners store
+ * that pick in the same `agentDeviceOverrides` slot members use. The owner
+ * path bypasses the `fixed` short-circuit (the policy constrains members, not
+ * the owner) and keeps stripping the stored selection policy, which is
+ * retained only as the policy that takes effect once the Agent is published.
  */
 export const resolveAgentAgencyConfig = (
   agencyConfig: LobeAgentAgencyConfig | null | undefined,
@@ -1097,10 +1149,12 @@ export const resolveAgentAgencyConfig = (
 
   if (isPublicWorkspaceAgent) return resolveAgencyConfig(base, override);
 
-  if (!base?.executionTargetSelectionPolicy) return base;
+  const merged = context.workspaceId ? applyAgencyConfigOverride(base, override) : base;
 
-  const { executionTargetSelectionPolicy, ...ownerConfig } = base;
-  return executionTargetSelectionPolicy ? ownerConfig : base;
+  if (!merged?.executionTargetSelectionPolicy) return merged;
+
+  const { executionTargetSelectionPolicy, ...ownerConfig } = merged;
+  return executionTargetSelectionPolicy ? ownerConfig : merged;
 };
 
 /**

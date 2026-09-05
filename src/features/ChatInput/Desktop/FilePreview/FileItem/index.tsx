@@ -38,12 +38,6 @@ const styles = createStaticStyles(({ css }) => ({
   image: css`
     margin-block: 0 !important;
   `,
-  status: css`
-    &.ant-tag {
-      padding-inline: 0;
-      background: none;
-    }
-  `,
 }));
 
 type FileItemProps = UploadFileItem;

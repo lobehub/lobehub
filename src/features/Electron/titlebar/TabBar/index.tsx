@@ -200,15 +200,18 @@ const TabBar = () => {
     }
   });
 
-  const handleNewTab = useCallback(() => {
-    if (!canCreate) return;
+  const handleNewTab = useCallback(
+    (path?: string) => {
+      if (!canCreate) return;
 
-    // Always open a fresh Home tab, even if a Home tab already exists.
-    addNewTab(newTabUrl);
-  }, [canCreate, addNewTab, newTabUrl]);
+      // Always open a fresh tab, even if one with the same target already exists.
+      addNewTab(path ?? newTabUrl);
+    },
+    [canCreate, addNewTab, newTabUrl],
+  );
 
-  useWatchBroadcast('createNewTab', () => {
-    handleNewTab();
+  useWatchBroadcast('createNewTab', (data) => {
+    handleNewTab(data?.path);
   });
 
   const overflowItems = useCallback((): DropdownItem[] => {
@@ -285,7 +288,7 @@ const TabBar = () => {
         icon={Plus}
         size="small"
         title={canCreate ? t('tab.newTab') : reason}
-        onClick={canCreate ? handleNewTab : undefined}
+        onClick={canCreate ? () => handleNewTab() : undefined}
       />
       {layout.hiddenCount > 0 && (
         <DropdownMenu items={overflowItems} placement={'bottomRight'}>

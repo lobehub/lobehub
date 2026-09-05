@@ -12,27 +12,6 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Skeleton: {
-    Avatar: () => <div data-testid="avatar-skeleton" />,
-  },
-}));
-
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>;
-  return {
-    ...actual,
-    Avatar: ({ avatar, onClick }: { avatar?: string | null; onClick?: () => void }) => (
-      <button data-avatar={avatar ?? ''} data-testid="community-user-avatar" onClick={onClick} />
-    ),
-    Button: ({ children }: { children?: string }) => <button>{children}</button>,
-  };
-});
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 vi.mock('@/business/client/hooks/useCommunityWorkspaceProfile', () => ({
   useCommunityWorkspaceProfile: () => mocks.communityWorkspaceProfile,
 }));
@@ -69,6 +48,6 @@ describe('Community UserAvatar', () => {
   it('uses the provided avatar override before workspace fallback', () => {
     render(<UserAvatar avatarOverride={'🏢'} />);
 
-    expect(screen.getByTestId('community-user-avatar')).toHaveAttribute('data-avatar', '🏢');
+    expect(screen.getByRole('img', { name: '🏢' })).toBeInTheDocument();
   });
 });

@@ -2,7 +2,7 @@
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@lobechat/const';
 import { ActionIcon } from '@lobehub/ui/base-ui';
-import { PanelRightOpenIcon } from 'lucide-react';
+import { LayoutDashboardIcon, PanelRightOpenIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router';
@@ -13,9 +13,19 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 const WorkingPanelToggle = memo(() => {
   const { t } = useTranslation('chat');
   const { pathname } = useLocation();
-  const [showRightPanel, toggleRightPanel, isStatusInit] = useGlobalStore((s) => [
+  const [
+    showRightPanel,
+    showWorkingOverview,
+    toggleRightPanel,
+    openWorkingSidebar,
+    updateSystemStatus,
+    isStatusInit,
+  ] = useGlobalStore((s) => [
     systemStatusSelectors.showRightPanel(s),
+    s.status.showWorkingOverview ?? !s.status.showRightPanel,
     s.toggleRightPanel,
+    s.openWorkingSidebar,
+    s.updateSystemStatus,
     systemStatusSelectors.isStatusInit(s),
   ]);
 
@@ -27,19 +37,30 @@ const WorkingPanelToggle = memo(() => {
   // !isStatusInit, so clicks here would otherwise be silently dropped.
   if (!isStatusInit) return null;
 
-  if (showRightPanel) return null;
-
-  // Open the panel without touching the tab preference — the sidebar's own
-  // resolveActiveTab will pick the right default (and honor the user's last
-  // explicit click). Force-setting `review` here would overwrite a previously
-  // picked Space/Files tab every time the panel is re-opened.
   return (
-    <ActionIcon
-      icon={PanelRightOpenIcon}
-      size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-      title={t('workingPanel.title')}
-      onClick={() => toggleRightPanel(true)}
-    />
+    <>
+      {!showWorkingOverview && (
+        <ActionIcon
+          aria-label={t('workingPanel.overview.title')}
+          icon={LayoutDashboardIcon}
+          size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+          title={t('workingPanel.overview.title')}
+          onClick={() => {
+            toggleRightPanel(false);
+            updateSystemStatus({ showWorkingOverview: true });
+          }}
+        />
+      )}
+      {!showRightPanel && (
+        <ActionIcon
+          aria-label={t('workingPanel.title')}
+          icon={PanelRightOpenIcon}
+          size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+          title={t('workingPanel.title')}
+          onClick={() => openWorkingSidebar()}
+        />
+      )}
+    </>
   );
 });
 

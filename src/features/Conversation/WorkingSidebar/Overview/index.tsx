@@ -1,7 +1,7 @@
 'use client';
 
-import { Center, Empty, Flexbox, Icon, type IconProps, Skeleton } from '@lobehub/ui';
-import { Button, Tag, Text } from '@lobehub/ui/base-ui';
+import { Center, Empty, Flexbox, Icon, type IconProps } from '@lobehub/ui';
+import { Button, Skeleton, Tag, Text } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
@@ -208,7 +208,7 @@ const Overview = memo<OverviewProps>(
 
             {repoType && workingDirectory && isGitLoading ? (
               <div className={styles.skeleton}>
-                <Skeleton active paragraph={{ rows: 2 }} title={false} />
+                <Skeleton.Text rows={2} />
               </div>
             ) : gitError ? (
               <Center className={styles.error} gap={8}>

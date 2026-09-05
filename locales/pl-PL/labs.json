@@ -16,6 +16,8 @@
   "features.codexAppServer.title": "Środowisko wykonawcze serwera aplikacji Codex",
   "features.desktopSplitView.desc": "Wyświetl dwa zakładki pulpitu obok siebie, z niezależną nawigacją i regulowanym dzielnikiem.",
   "features.desktopSplitView.title": "Widok Podzielonych Zakładek",
+  "features.evalCapture.desc": "Dodaje akcję wiadomości, która zapisuje fragment rozmowy — jego wcześniejszy kontekst, wejście i odpowiedź, którą wygenerował — jako przypadek testowy oceny.",
+  "features.evalCapture.title": "Zapisz fragment jako przypadek oceny",
   "features.groupChat.desc": "Włącz koordynację czatu grupowego z wieloma agentami.",
   "features.groupChat.title": "Czat Grupowy (Wielu Agentów)",
   "features.heteroSessionImport.desc": "Dodaj opcję „Importuj sesje lokalnego agenta” do menu listy tematów: skanuj lokalne transkrypcje Claude Code / Codex CLI i importuj je jako tematy, z możliwością incrementalnej synchronizacji przy ponownym imporcie.",

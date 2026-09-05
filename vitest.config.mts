@@ -32,6 +32,9 @@ const alias = {
   '@/utils/errorResponse': resolve(__dirname, './src/utils/errorResponse'),
   '@/utils/unzipFile': resolve(__dirname, './src/utils/unzipFile'),
   '@/utils/server': resolve(__dirname, './src/utils/server'),
+  // apps/auth sits outside the root tsconfig's include, so its files get no path
+  // mapping from tsconfigPaths — pin the one server util its worker shares.
+  '@/server/utils/serializeForHtml': resolve(__dirname, './apps/server/src/utils/serializeForHtml'),
   '@/utils/identifier': resolve(__dirname, './src/utils/identifier'),
   '@/utils/electron': resolve(__dirname, './src/utils/electron'),
   '@/utils/markdownToTxt': resolve(__dirname, './src/utils/markdownToTxt'),
@@ -162,6 +165,69 @@ export default defineConfig({
       '**/packages/**',
       '**/e2e/**',
     ],
+    /**
+     * `@lobehub/ui` is inlined below, so without prebundling every test file
+     * re-transforms and re-evaluates its whole ESM graph (~5s collect per file,
+     * the bulk of the suite's runtime). Prebundling it once via esbuild lets all
+     * workers share the cached chunk. The resolveId hacks from `plugins` are
+     * mirrored as esbuild plugins because dep optimization bypasses vite plugins.
+     */
+    deps: {
+      optimizer: {
+        web: {
+          enabled: true,
+          esbuildOptions: {
+            // CJS deps bundled into the chunk (antd-style) `require('react/jsx-runtime')`;
+            // esbuild's ESM __require shim only works if a real `require` is in scope
+            banner: {
+              js: 'import { createRequire as __vitestCreateRequire } from "node:module"; const require = __vitestCreateRequire(import.meta.url);',
+            },
+            jsx: 'automatic',
+            plugins: [
+              {
+                name: 'stub-lobehub-ui-motion-provider-esbuild',
+                setup(build: {
+                  onResolve: (
+                    options: { filter: RegExp },
+                    callback: (args: { importer: string }) => { path: string } | null,
+                  ) => void;
+                }) {
+                  build.onResolve({ filter: /MotionProvider\/index\.m?js$/ }, (args) => {
+                    if (!args.importer.includes('/@lobehub/ui/')) return null;
+                    return {
+                      path: resolve(__dirname, './tests/mocks/lobehubUiMotionProvider.tsx'),
+                    };
+                  });
+                  build.onResolve({ filter: /^\.\/style\/index\.js$/ }, (args) => {
+                    if (!args.importer.endsWith('/FluentEmoji/index.js')) return null;
+                    return { path: resolve(dirname(args.importer), 'style.js') };
+                  });
+                },
+              },
+            ],
+          },
+          // Setting `exclude` here replaces the root optimizeDeps.exclude; the node
+          // builtins must stay listed or vite swaps them for browser shims
+          exclude: ['crypto', 'util', 'tty'],
+          // Every imported subpath must be prebundled together: a subpath left to
+          // vite-node loads a second copy of the library whose MotionProvider /
+          // modal-stack contexts don't match the chunk's
+          include: [
+            '@lobehub/ui',
+            '@lobehub/ui/base-ui',
+            '@lobehub/ui/icons',
+            '@lobehub/ui/mobile',
+            '@lobehub/ui/chat',
+            '@lobehub/ui/awesome',
+            '@lobehub/ui/brand',
+            '@lobehub/ui/mdx',
+            '@lobehub/fluent-emoji',
+            'motion',
+            'motion/react',
+          ],
+        },
+      },
+    },
     globals: true,
     server: {
       deps: {

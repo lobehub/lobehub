@@ -36,7 +36,7 @@ const TaskList = memo<TaskListProps>(({ itemKey }) => {
   const { data, isLoading } = useClientDataSWR<{ data: TaskGroupItem[]; success: boolean }>(
     enabled ? taskKeys.sidebarGroups(agentId) : null,
     async ([, id]: [string, string]) =>
-      taskService.groupList({ assigneeAgentId: id, groups: SIDEBAR_GROUPS, hasGoal: false }),
+      taskService.groupList({ assigneeAgentId: id, groups: SIDEBAR_GROUPS }),
     {
       fallbackData: { data: [], success: true },
       revalidateOnFocus: false,

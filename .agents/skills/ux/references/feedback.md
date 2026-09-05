@@ -74,7 +74,7 @@ one sidebar — a header read as 44 was really 36, a search box read as 32 was 3
 title read as 28 was 26.9 — and each error propagated into every anchor below it. Open the
 real surface, read `getBoundingClientRect()` on each anchor, and build the skeleton from
 those values. (To hold a route's pending state on screen long enough to measure, see the
-agent-testing skill's probe pattern for parking a lazy chunk.)
+acceptance skill's probe pattern for parking a lazy chunk.)
 
 **Branch the skeleton wherever the real chrome branches.** Platform and feature conditions
 that remove an element change the container's height: on macOS desktop

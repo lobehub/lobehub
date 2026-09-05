@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import type { PipelineContext } from '../../types';
-import { ToolMessageReorder } from '../ToolMessageReorder';
+import {
+  SYNTHETIC_TOOL_FAILURE_HINTS,
+  syntheticToolFailureContent,
+  ToolMessageReorder,
+} from '../ToolMessageReorder';
 
 const createContext = (messages: any[]): PipelineContext => ({
   initialState: { messages: [] } as any,
@@ -222,7 +226,7 @@ describe('ToolMessageReorder', () => {
         ],
       },
       {
-        content: '{"error":"Tool call failed","success":false,"synthetic":true}',
+        content: syntheticToolFailureContent('tool_result_missing', 'test-plugin____testApi'),
         name: 'test-plugin____testApi',
         role: 'tool',
         tool_call_id: 'call_missing',
@@ -305,5 +309,128 @@ describe('ToolMessageReorder', () => {
         tool_call_id: 'call_1',
       },
     ]);
+  });
+
+  // Regression: MessageContentProcessor turns a tool result that produced an
+  // image into multimodal parts for vision models. The old string-only guard
+  // here replaced those parts with the synthetic "Tool call failed" payload, so
+  // a successful `readFile` on a screenshot reached the model as a failure and
+  // the image was dropped from the request.
+  it('should keep multimodal tool result parts produced for vision models', async () => {
+    const proc = new ToolMessageReorder();
+    const multimodalContent = [
+      { text: '[Image: screenshot.png]', type: 'text' },
+      {
+        image_url: { detail: 'auto', url: 'https://app.lobehub.com/f/file_abc' },
+        type: 'image_url',
+      },
+    ];
+    const ctx = createContext([
+      {
+        id: 'a1',
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          { function: { arguments: '{}', name: 'readFile' }, id: 'call_1', type: 'function' },
+        ],
+      },
+      {
+        id: 't1',
+        role: 'tool',
+        content: multimodalContent,
+        tool_call_id: 'call_1',
+      },
+    ]);
+
+    const result = await proc.process(ctx);
+
+    expect(result.messages[1].content).toEqual(multimodalContent);
+  });
+
+  it('should fall back to the synthetic failure when tool content is empty or unusable', async () => {
+    const proc = new ToolMessageReorder();
+    const ctx = createContext([
+      {
+        id: 'a1',
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          { function: { arguments: '{}', name: 'readFile' }, id: 'call_1', type: 'function' },
+          { function: { arguments: '{}', name: 'readFile' }, id: 'call_2', type: 'function' },
+        ],
+      },
+      { id: 't1', role: 'tool', content: [], tool_call_id: 'call_1' },
+      { id: 't2', role: 'tool', content: undefined, tool_call_id: 'call_2' },
+    ]);
+
+    const result = await proc.process(ctx);
+
+    const failure = JSON.stringify({
+      error: 'Tool call failed',
+      hint: SYNTHETIC_TOOL_FAILURE_HINTS.tool_result_unusable,
+      reason: 'tool_result_unusable',
+      success: false,
+      synthetic: true,
+      tool: 'readFile',
+    });
+    expect(result.messages[1].content).toBe(failure);
+    expect(result.messages[2].content).toBe(failure);
+  });
+
+  it('should mark a missing tool result with the tool name and the missing reason', async () => {
+    const proc = new ToolMessageReorder();
+    const ctx = createContext([
+      {
+        id: 'a1',
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          {
+            function: { arguments: '{}', name: 'lobe-local-system____runCommand' },
+            id: 'call_1',
+            type: 'function',
+          },
+        ],
+      },
+      // No tool message at all — e.g. the result was lost to a gateway 503/504
+      // while the tool may well have executed on the device.
+    ]);
+
+    const result = await proc.process(ctx);
+
+    const failure = result.messages[1].content as string;
+    expect(typeof failure).toBe('string');
+
+    const parsed = JSON.parse(failure);
+    expect(parsed).toEqual({
+      error: 'Tool call failed',
+      hint: SYNTHETIC_TOOL_FAILURE_HINTS.tool_result_missing,
+      reason: 'tool_result_missing',
+      success: false,
+      synthetic: true,
+      tool: 'lobe-local-system____runCommand',
+    });
+    // Structured fields must stay machine-readable, not flattened into prose.
+    expect(parsed.reason).toBeDefined();
+  });
+
+  it('should give the two failure reasons distinct, actionable hints', async () => {
+    const missing = JSON.parse(syntheticToolFailureContent('tool_result_missing', 'runCommand'));
+    const unusable = JSON.parse(syntheticToolFailureContent('tool_result_unusable', 'runCommand'));
+
+    // The missing-result hint must carry the retry-safety warning the old
+    // payload lacked: a lost result says nothing about whether the call
+    // executed, so the model is told to check observable state first.
+    expect(missing.hint).toContain('executed is unknown');
+    expect(missing.hint).toContain('check observable state');
+    expect(missing.hint).toContain('side effects');
+
+    // The unusable-result hint must not imply the call may not have run —
+    // a result row exists, the call definitely executed and returned empty.
+    expect(unusable.hint).not.toContain('executed is unknown');
+    expect(unusable.hint).toContain('check the inputs');
+
+    // The hints must be distinguishable, or the field adds noise.
+    expect(missing.hint).not.toBe(unusable.hint);
   });
 });

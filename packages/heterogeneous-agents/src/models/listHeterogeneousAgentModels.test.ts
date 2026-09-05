@@ -4,7 +4,8 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { listTraeAcpModelsMock } = vi.hoisted(() => ({
+const { listDroidAcpModelsMock, listTraeAcpModelsMock } = vi.hoisted(() => ({
+  listDroidAcpModelsMock: vi.fn(),
   listTraeAcpModelsMock: vi.fn(),
 }));
 
@@ -20,6 +21,10 @@ vi.mock('node:child_process', () => ({
 
 vi.mock('../spawn/traeAcpSession', () => ({
   listTraeAcpModels: listTraeAcpModelsMock,
+}));
+
+vi.mock('../spawn/droidAcpSession', () => ({
+  listDroidAcpModels: listDroidAcpModelsMock,
 }));
 
 const execFileMock = vi.mocked(childProcess.execFile);
@@ -43,6 +48,7 @@ const importModule = () => import('./listHeterogeneousAgentModels');
 describe('heterogeneous agent model discovery', () => {
   beforeEach(() => {
     execFileMock.mockReset();
+    listDroidAcpModelsMock.mockReset();
     listTraeAcpModelsMock.mockReset();
   });
 
@@ -559,6 +565,35 @@ describe('heterogeneous agent model discovery', () => {
         commandPath: '/custom/traecli',
         cwd: '/repo',
         env: { TRAE_CONFIG_DIR: '/config' },
+      }),
+    );
+    expect(execFileMock).not.toHaveBeenCalled();
+  });
+
+  it('discovers Factory Droid models through ACP and forwards only safe provider arguments', async () => {
+    listDroidAcpModelsMock.mockResolvedValue([
+      { id: 'gpt-5.4', modelId: 'gpt-5.4', providerId: 'droid' },
+    ]);
+    const { listHeterogeneousAgentModels } = await importModule();
+
+    await expect(
+      listHeterogeneousAgentModels({
+        args: ['--tag', 'lobe'],
+        command: '/custom/droid',
+        cwd: '/repo',
+        env: { FACTORY_API_KEY: 'test-key' },
+        type: 'droid',
+      }),
+    ).resolves.toMatchObject({
+      models: [{ id: 'gpt-5.4', modelId: 'gpt-5.4', providerId: 'droid' }],
+      status: 'success',
+    });
+    expect(listDroidAcpModelsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        args: ['--tag', 'lobe'],
+        commandPath: '/custom/droid',
+        cwd: '/repo',
+        env: { FACTORY_API_KEY: 'test-key' },
       }),
     );
     expect(execFileMock).not.toHaveBeenCalled();

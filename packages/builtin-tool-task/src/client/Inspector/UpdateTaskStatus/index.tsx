@@ -58,14 +58,10 @@ export const UpdateTaskStatusInspector = memo<
   const tone = status ? STATUS_TONE[status] : undefined;
 
   return (
-    <div
-      style={{ flexWrap: 'wrap', gap: 4 }}
-      className={cx(
-        inspectorTextStyles.root,
-        (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-      )}
-    >
-      <span>{t('builtins.lobe-task.apiName.updateTaskStatus')}</span>
+    <div className={inspectorTextStyles.root} style={{ flexWrap: 'wrap', gap: 4 }}>
+      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+        {t('builtins.lobe-task.apiName.updateTaskStatus')}
+      </span>
       {identifier && <span className={styles.identifierChip}>{identifier}</span>}
       {status && (
         <>

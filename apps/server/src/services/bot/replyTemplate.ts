@@ -587,6 +587,11 @@ export function renderAgentError(
     }
   }
 
+  // Legacy tier: nothing friendly matched. The raw `errorMessage` deliberately
+  // stays out of the reply — IM channels can hold arbitrary members, so runtime
+  // error text is server-side triage material only (b4aa51baa, #13998). Callers
+  // that hold a thrown error should classify it first (see
+  // `renderThrownAgentError`) so it lands on one of the tiers above instead.
   return operationId ? strings.errorWithId(operationId) : strings.error;
 }
 

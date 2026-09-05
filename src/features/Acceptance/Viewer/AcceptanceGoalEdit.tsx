@@ -5,7 +5,7 @@ import { PencilLine } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { mutate as globalMutate } from '@/libs/swr';
-import { verifyKeys } from '@/libs/swr/keys';
+import { isAcceptanceListKey } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
 
 import { useAcceptanceScope } from './AcceptanceScope';
@@ -15,6 +15,13 @@ const AcceptanceGoalEdit = () => {
   const { t } = useTranslation('verify');
   const { acceptanceId } = useAcceptanceScope();
   const { data, mutate } = useAcceptanceBundle(acceptanceId);
+  /**
+   * Authoring the standing checklist and the goal writes through the SUBJECT
+   * (`ensureForSubject`), which is still resolved in the caller's own scope — it
+   * cannot reach a teammate's row, and the workspace-unique insert fallback then
+   * fails. Until that path is reviewer-aware these stay the creator's, so the page
+   * never offers an action that is guaranteed to answer `NOT_FOUND`.
+   */
   if (!data?.isOwner) return null;
 
   const handleEdit = async () => {
@@ -30,7 +37,7 @@ const AcceptanceGoalEdit = () => {
           throw cause;
         }
         await mutate();
-        void globalMutate(verifyKeys.acceptances());
+        void globalMutate(isAcceptanceListKey);
       },
     });
   };

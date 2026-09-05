@@ -119,6 +119,7 @@
   "KeyValueEditor.keyPlaceholder": "Ключ",
   "KeyValueEditor.valuePlaceholder": "Стойност",
   "LocalFile.action.open": "Отвори",
+  "LocalFile.action.preview": "Преглед",
   "LocalFile.action.showInFolder": "Покажи в папката",
   "MaxTokenSlider.unlimited": "Неограничено",
   "ModelSelect.featureTag.audio": "Този модел поддържа разпознаване на аудио вход.",

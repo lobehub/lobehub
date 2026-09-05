@@ -29,23 +29,29 @@ export const normalizeOrigin = (url?: string) => {
   }
 };
 
+const parseTrustedOrigins = (value?: string) =>
+  value
+    ?.split(',')
+    .map((item) => normalizeOrigin(item.trim()))
+    .filter((origin): origin is string => Boolean(origin));
+
+const mergeTrustedOrigins = (...originGroups: Array<string[] | undefined>) => {
+  const mergedOrigins = new Set(originGroups.flatMap((origins) => origins ?? []));
+
+  return mergedOrigins.size > 0 ? Array.from(mergedOrigins) : undefined;
+};
+
 /**
- * Build trusted origins with env override and Vercel-aware defaults.
+ * Build trusted origins with Vercel-aware defaults and optional additions.
+ * AUTH_TRUSTED_ORIGINS keeps its replacement semantics, while
+ * AUTH_ADDITIONAL_TRUSTED_ORIGINS is merged into either the override or the defaults.
  */
 export const getTrustedOrigins = (enabledSSOProviders: string[]) => {
-  if (authEnv.AUTH_TRUSTED_ORIGINS) {
-    const originsFromEnv = authEnv.AUTH_TRUSTED_ORIGINS.split(',')
-      .map((item) => {
-        const trimmed = item.trim();
-        // Handle custom schemes directly
-        if (trimmed.includes('://') && !trimmed.startsWith('http')) {
-          return trimmed;
-        }
-        return normalizeOrigin(trimmed);
-      })
-      .filter(Boolean) as string[];
+  const additionalOrigins = parseTrustedOrigins(authEnv.AUTH_ADDITIONAL_TRUSTED_ORIGINS);
+  const originsFromEnv = parseTrustedOrigins(authEnv.AUTH_TRUSTED_ORIGINS);
 
-    if (originsFromEnv.length > 0) return Array.from(new Set(originsFromEnv));
+  if (originsFromEnv?.length) {
+    return mergeTrustedOrigins(originsFromEnv, additionalOrigins);
   }
 
   const defaults = [
@@ -57,14 +63,11 @@ export const getTrustedOrigins = (enabledSSOProviders: string[]) => {
     ...(isDev ? [EXPO_DEV_SCHEME] : []),
   ].filter(Boolean) as string[];
 
-  const baseTrustedOrigins = defaults.length > 0 ? Array.from(new Set(defaults)) : undefined;
+  const providerOrigins = enabledSSOProviders.includes('apple')
+    ? [APPLE_TRUSTED_ORIGIN]
+    : undefined;
 
-  if (!enabledSSOProviders.includes('apple')) return baseTrustedOrigins;
-
-  const mergedOrigins = new Set(baseTrustedOrigins || []);
-  mergedOrigins.add(APPLE_TRUSTED_ORIGIN);
-
-  return Array.from(mergedOrigins);
+  return mergeTrustedOrigins(defaults, providerOrigins, additionalOrigins);
 };
 
 /**

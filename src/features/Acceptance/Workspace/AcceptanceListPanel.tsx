@@ -12,49 +12,87 @@ import {
   Icon,
 } from '@lobehub/ui';
 import type { DropdownItem } from '@lobehub/ui/base-ui';
-import { ActionIcon, DropdownMenu, Text } from '@lobehub/ui/base-ui';
+import {
+  ActionIcon,
+  Button,
+  Checkbox,
+  confirmModal,
+  DropdownMenu,
+  Text,
+  toast,
+} from '@lobehub/ui/base-ui';
+import { useDebounce } from 'ahooks';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import {
   ArrowLeft,
   Check,
+  CircleDashed,
   FolderClosed,
+  Group,
+  ListChecks,
   ListFilter,
+  MoreHorizontal,
   PanelLeftClose,
-  ScrollText,
   Search,
   TriangleAlert,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { memo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router';
 
 import { SkeletonList } from '@/features/NavPanel/components/SkeletonList';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
+import { mutate as globalMutate } from '@/libs/swr';
+import { verifyKeys } from '@/libs/swr/keys';
+import type { AcceptanceStatusOverride } from '@/services/verify';
+import { verifyService } from '@/services/verify';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
-import { useAcceptanceList } from '../hooks';
+import { useAcceptanceList, useAcceptanceListInfinite } from '../hooks';
 import { acceptanceHomePath } from '../Viewer/routes';
+import type { AcceptanceStatusAction } from '../Viewer/statusActions';
+import AcceptanceBatchBar from './AcceptanceBatchBar';
 import {
+  acceptanceListEmptyVariant,
   type AcceptanceListFilter,
   DEFAULT_ACCEPTANCE_LIST_FILTER,
-  filterAcceptanceList,
   normalizeAcceptanceListFilter,
 } from './acceptanceListFilter';
 import AcceptanceRow from './AcceptanceRow';
 import {
+  acceptanceBatchTargets,
+  acceptanceProjectTargets,
+  acceptanceSelectAllState,
+  chunkAcceptanceBatch,
+  nextAcceptanceSelectAll,
+  toggleAcceptanceSelection,
+  visibleAcceptanceSelection,
+} from './batchSelection';
+import {
+  type AcceptanceGroupMode,
+  DEFAULT_ACCEPTANCE_GROUP_MODE,
   expandedAcceptanceGroupKeys,
   groupAcceptanceList,
-  hasProjectAcceptanceGroups,
   nextCollapsedGroupKeys,
+  normalizeAcceptanceGroupMode,
+  shouldRenderAcceptanceGroups,
 } from './groupAcceptanceList';
 import type { ReportPanelExpand } from './useReportPanelExpand';
 
 const PANEL_MIN = 260;
 const PANEL_MAX = 420;
 const ACCEPTANCE_LIST_FILTER_STORAGE_KEY = 'lobehub-acceptance-list-filter';
+const ACCEPTANCE_GROUP_MODE_STORAGE_KEY = 'lobehub-acceptance-group-mode';
+/** Pull the next page before the sentinel is actually on screen. */
+const LOAD_MORE_ROOT_MARGIN = '240px';
+type BatchSuccessKey =
+  | 'acceptance.workspace.batch.deleteSuccess'
+  | 'acceptance.workspace.batch.projectRemoveSuccess'
+  | 'acceptance.workspace.batch.projectSuccess'
+  | 'acceptance.workspace.batch.statusSuccess';
 const EMPTY_FILTER_KEYS = {
   active: 'acceptance.workspace.filters.empty.active',
   completed: 'acceptance.workspace.filters.empty.completed',
@@ -159,6 +197,16 @@ const styles = createStaticStyles(({ css }) => ({
   filterButton: css`
     flex: none;
   `,
+  selectionRow: css`
+    display: flex;
+    gap: 6px;
+    align-items: center;
+
+    margin-block: 2px 4px;
+    margin-inline: 4px;
+
+    font-size: 12px;
+  `,
   searchEmpty: css`
     display: flex;
     flex-direction: column;
@@ -189,11 +237,10 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   groupTitle: css`
     display: inline-flex;
-    gap: 6px;
+    gap: 8px;
     align-items: center;
 
-    font-size: 12px;
-    font-weight: 500;
+    font-size: 14px;
     color: ${cssVar.colorTextSecondary};
   `,
   emptyState: css`
@@ -225,12 +272,21 @@ const styles = createStaticStyles(({ css }) => ({
 interface AcceptanceListPanelProps extends ReportPanelExpand {
   headerLeading?: ReactNode;
   /**
-   * Renders the per-project action menu. Injected by the main app rather than
-   * imported here: the actions open the create-project modal and navigate to
-   * `/project/:id`, neither of which exists in the standalone workbench app —
-   * and a direct import would drag the project store into its bundle.
+   * Rendered inside a host that already supplies the collection title and the
+   * way to dismiss it (the shell top bar plus its drawer). Drops the panel's
+   * own resizable frame and title row so the title is not stated twice.
    */
-  renderProjectActions?: (projectId?: string) => ReactNode;
+  hosted?: boolean;
+  /**
+   * The per-project entries, as MENU ITEMS. Injected by the main app rather
+   * than imported here: they open the create-project modal and navigate to
+   * `/project/:id`, neither of which exists in the standalone workbench app —
+   * and a direct import would drag the project store into its bundle. The menu
+   * chrome stays here so the header can carry ONE overflow menu for everything
+   * it offers, the multi-select toggle included.
+   */
+  projectActionItems?: (projectId?: string) => DropdownItem[];
+  projectId?: string;
 }
 
 /**
@@ -239,15 +295,11 @@ interface AcceptanceListPanelProps extends ReportPanelExpand {
  * same persisted panel-width preference so the two surfaces read as one family.
  */
 const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
-  ({ expand, headerLeading, isNarrow, renderProjectActions, setExpand }) => {
+  ({ expand, headerLeading, hosted, isNarrow, projectActionItems, projectId, setExpand }) => {
     const { t } = useTranslation('verify');
     const navigate = useNavigate();
     const { acceptanceId } = useParams<{ acceptanceId: string }>();
 
-    const { data, error, isLoading, mutate } = useAcceptanceList(true);
-
-    // Client-side filter: the list endpoint returns the caller's full recent set
-    // (bounded, no pagination), so filtering the loaded rows IS filtering the set.
     const [query, setQuery] = useState('');
     const [storedFilter, setStoredFilter] = useLocalStorageState<AcceptanceListFilter>(
       ACCEPTANCE_LIST_FILTER_STORAGE_KEY,
@@ -256,24 +308,357 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
     // Collapsed (not expanded) is the tracked set: a group that appears after
     // mount — the project a delivery was just filed into — must come in open.
     const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
+    const [storedGroupMode, setStoredGroupMode] = useLocalStorageState<AcceptanceGroupMode>(
+      ACCEPTANCE_GROUP_MODE_STORAGE_KEY,
+      DEFAULT_ACCEPTANCE_GROUP_MODE,
+    );
     const filter = normalizeAcceptanceListFilter(storedFilter);
-    const filtered = filterAcceptanceList(data ?? [], filter, query);
-    const groups = groupAcceptanceList(filtered);
-    const showGroups = hasProjectAcceptanceGroups(groups);
+    const groupMode = normalizeAcceptanceGroupMode(storedGroupMode);
+    const debouncedQuery = useDebounce(query.trim(), { wait: 300 });
     const trimmedQuery = query.trim();
+    const searching = Boolean(debouncedQuery);
 
-    const filterItems: DropdownItem[] = (
-      [
-        ['active', t('acceptance.workspace.filters.active')],
-        ['all', t('acceptance.workspace.filters.all')],
-        ['completed', t('acceptance.workspace.filters.completed')],
-      ] as const
-    ).map(([key, label]) => ({
-      icon: <Icon icon={Check} style={{ opacity: filter === key ? 1 : 0 }} />,
-      key,
-      label,
-      onClick: () => setStoredFilter(key),
-    }));
+    // Two feeds, one at a time. Browsing scrolls a keyset-paged feed; searching
+    // hands off to the flat read, which resolves every subject title across the
+    // WHOLE owned set — a paged search would only ever match what had scrolled
+    // in, and would report an exhausted list while the match sat on page four.
+    const search = useAcceptanceList(searching, {
+      filter,
+      projectId,
+      q: debouncedQuery || undefined,
+    });
+    const {
+      hasMore,
+      isLoadingInitial,
+      isLoadingMore,
+      items: pagedItems,
+      loadMore,
+      ...pagedRest
+    } = useAcceptanceListInfinite(searching ? null : filter, projectId);
+
+    const items = searching ? (search.data ?? []) : pagedItems;
+    const error = searching ? search.error : pagedRest.error;
+    const isLoading = searching ? search.isLoading : isLoadingInitial;
+    const mutate = searching ? search.mutate : pagedRest.mutate;
+
+    // Deduped against the workspace shell's own `filter: 'all'` read, so this
+    // probe costs no extra request — it only answers whether a zero-result
+    // filter is hiding anything at all (see acceptanceListEmptyVariant).
+    const allProbe = useAcceptanceList(!error && !isLoading && items.length === 0, {
+      filter: 'all',
+      projectId,
+    });
+    const emptyVariant = acceptanceListEmptyVariant({
+      allListEmpty: allProbe.data ? allProbe.data.length === 0 : undefined,
+      filter,
+      searching: Boolean(trimmedQuery),
+    });
+
+    const groups = groupAcceptanceList(items, groupMode);
+    const showGroups = shouldRenderAcceptanceGroups(groupMode, groups);
+
+    // Auto-load the next page as the sentinel nears the viewport.
+    //
+    // The sentinel node is STATE, not a ref: on first paint the list is still a
+    // skeleton, so a ref would be null when the effect runs — and since none of
+    // `hasMore` / `isLoadingMore` / `loadMore` changes when the rows finally
+    // replace the skeleton, the effect would never re-run and the observer
+    // would never attach. Scrolling to the bottom then loads nothing, silently.
+    const [sentinel, setSentinel] = useState<HTMLDivElement | null>(null);
+    const autoLoad = !searching && hasMore;
+    useEffect(() => {
+      // Re-created once each page settles, so a reader already parked at the
+      // bottom keeps pulling instead of stalling on a no-longer-firing observer.
+      if (!sentinel || !autoLoad || isLoadingMore) return;
+      const observer = new IntersectionObserver(
+        (entries) => {
+          if (entries[0]?.isIntersecting) loadMore();
+        },
+        { rootMargin: LOAD_MORE_ROOT_MARGIN },
+      );
+      observer.observe(sentinel);
+      return () => observer.disconnect();
+    }, [autoLoad, isLoadingMore, loadMore, sentinel]);
+
+    const [selecting, setSelecting] = useState(false);
+    const [selected, setSelected] = useState<string[]>([]);
+    const [batchPending, setBatchPending] = useState(false);
+    const selectedVisible = visibleAcceptanceSelection(selected, items);
+    const selectAllState = acceptanceSelectAllState(items.length, selectedVisible.length);
+
+    const leaveSelecting = () => {
+      setSelecting(false);
+      setSelected([]);
+    };
+
+    /**
+     * Re-read the list, refresh the bundles the sweep touched, and leave the
+     * rows that did NOT move selected — a partial sweep hands back exactly the
+     * remainder to retry instead of making the user re-pick it.
+     *
+     * `attemptedIds` is what the sweep actually acted on, which is only ever the
+     * VISIBLE selection. Picks the user made under another filter were never
+     * attempted, so they survive untouched — dropping them here would contradict
+     * the rule that clearing the filter brings earlier picks back.
+     */
+    const settleBatch = async (
+      attemptedIds: string[],
+      changedIds: string[],
+      failedIds: string[],
+    ) => {
+      await mutate();
+      await Promise.all(changedIds.map((id) => globalMutate(verifyKeys.acceptanceBundle(id))));
+
+      const attempted = new Set(attemptedIds);
+      let remaining: string[] = [];
+      setSelected((previous) => {
+        remaining = [...previous.filter((id) => !attempted.has(id)), ...failedIds];
+        return remaining;
+      });
+      // Only a sweep that leaves nothing selected at all is finished.
+      if (remaining.length === 0) setSelecting(false);
+    };
+
+    // "Unchanged" covers both halves of a mixed sweep — rows the transition
+    // could not take, and rows the server refused — because to the reviewer
+    // they mean the same thing: that one did not move.
+    const reportBatch = (changed: number, attempted: number, successKey: BatchSuccessKey) => {
+      const unchanged = attempted - changed;
+      if (unchanged > 0) {
+        toast.warning({
+          title: t('acceptance.workspace.batch.partial', { count: changed, failed: unchanged }),
+        });
+        return;
+      }
+      toast.success(t(successKey, { count: changed }));
+    };
+
+    const sweepStatus = async (
+      action: AcceptanceStatusAction,
+      status: AcceptanceStatusOverride,
+    ) => {
+      // Only the rows the transition can actually move — an accepted delivery
+      // cannot be accepted twice, and a running one is not decidable at all.
+      const targets = acceptanceBatchTargets(items, selectedVisible, action);
+      if (targets.length === 0) return;
+
+      const attempted = selectedVisible.length;
+      setBatchPending(true);
+      try {
+        // The endpoint caps one request, so a long selection goes in chunks —
+        // otherwise select-all after enough scrolling is refused wholesale and
+        // nothing moves at all.
+        //
+        // `allSettled`, never `all`: a sibling chunk that rejects must not hide
+        // the chunks that already committed. Skipping the refresh there would
+        // leave the list showing rows the server has already moved.
+        const chunks = chunkAcceptanceBatch(targets);
+        const settled = await Promise.allSettled(
+          chunks.map((chunk) => verifyService.updateAcceptanceStatusBatch(chunk, status)),
+        );
+
+        let updated = 0;
+        const failedIds: string[] = [];
+        settled.forEach((part, index) => {
+          if (part.status === 'fulfilled') {
+            updated += part.value.updated;
+            failedIds.push(...part.value.failedIds);
+            return;
+          }
+          // A chunk that never reached the server: every id in it is unchanged.
+          console.error('[acceptance:batchStatus]', part.reason);
+          failedIds.push(...chunks[index]);
+        });
+
+        const failedSet = new Set(failedIds);
+        await settleBatch(
+          selectedVisible,
+          targets.filter((id) => !failedSet.has(id)),
+          selectedVisible.filter((id) => !targets.includes(id) || failedSet.has(id)),
+        );
+        reportBatch(updated, attempted, 'acceptance.workspace.batch.statusSuccess');
+      } catch (cause) {
+        console.error('[acceptance:batchStatus]', cause);
+        toast.error(t('acceptance.workspace.batch.error'));
+      } finally {
+        setBatchPending(false);
+      }
+    };
+
+    /**
+     * File the visible selection under one project (`null` takes it out of
+     * any). Rows already where they are headed count as "unchanged" in the
+     * report, same as a status sweep — so moving a mixed pick states honestly
+     * how many actually moved.
+     */
+    const sweepProject = async (projectId: string | null) => {
+      const targets = acceptanceProjectTargets(items, selectedVisible, projectId);
+      const attempted = selectedVisible.length;
+      const successKey: BatchSuccessKey = projectId
+        ? 'acceptance.workspace.batch.projectSuccess'
+        : 'acceptance.workspace.batch.projectRemoveSuccess';
+      // Every selected row is already in place: nothing to send, but silence
+      // would read as a broken button — report the unchanged sweep instead.
+      if (targets.length === 0) {
+        reportBatch(0, attempted, successKey);
+        return;
+      }
+
+      setBatchPending(true);
+      try {
+        const chunks = chunkAcceptanceBatch(targets);
+        const settled = await Promise.allSettled(
+          chunks.map((chunk) => verifyService.setAcceptanceProjectBatch(chunk, projectId)),
+        );
+
+        let updated = 0;
+        const failedIds: string[] = [];
+        settled.forEach((part, index) => {
+          if (part.status === 'fulfilled') {
+            updated += part.value.updated;
+            failedIds.push(...part.value.failedIds);
+            return;
+          }
+          // A chunk that never reached the server: every id in it is unchanged.
+          console.error('[acceptance:batchProject]', part.reason);
+          failedIds.push(...chunks[index]);
+        });
+
+        const failedSet = new Set(failedIds);
+        await settleBatch(
+          selectedVisible,
+          targets.filter((id) => !failedSet.has(id)),
+          selectedVisible.filter((id) => !targets.includes(id) || failedSet.has(id)),
+        );
+        reportBatch(updated, attempted, successKey);
+      } catch (cause) {
+        console.error('[acceptance:batchProject]', cause);
+        toast.error(t('acceptance.workspace.batch.error'));
+      } finally {
+        setBatchPending(false);
+      }
+    };
+
+    const deleteSelected = () => {
+      const targets = selectedVisible;
+      if (targets.length === 0) return;
+
+      confirmModal({
+        cancelText: t('actions.cancel'),
+        content: t('acceptance.workspace.batch.deleteConfirmDescription', {
+          count: targets.length,
+        }),
+        okButtonProps: { danger: true },
+        okText: t('actions.delete'),
+        title: t('acceptance.workspace.batch.deleteConfirmTitle', { count: targets.length }),
+        onOk: async () => {
+          setBatchPending(true);
+          try {
+            // `allSettled`, never `all`: a rejected chunk must not hide the ones
+            // that already deleted. Bailing out here would skip the refresh AND
+            // the navigate-away, leaving the route pointed at a row a sibling
+            // chunk had just removed.
+            const chunks = chunkAcceptanceBatch(targets);
+            const settled = await Promise.allSettled(
+              chunks.map((chunk) => verifyService.deleteAcceptanceBatch(chunk)),
+            );
+
+            let deleted = 0;
+            const failedIds: string[] = [];
+            settled.forEach((part, index) => {
+              if (part.status === 'fulfilled') {
+                deleted += part.value.deleted;
+                failedIds.push(...part.value.failedIds);
+                return;
+              }
+              console.error('[acceptance:batchDelete]', part.reason);
+              failedIds.push(...chunks[index]);
+            });
+
+            // The open acceptance just stopped existing — leave its dead route
+            // rather than letting the detail pane render a 404.
+            if (acceptanceId && targets.includes(acceptanceId) && !failedIds.includes(acceptanceId))
+              navigate(acceptanceHomePath(), { replace: true });
+            await settleBatch(targets, [], failedIds);
+            reportBatch(deleted, targets.length, 'acceptance.workspace.batch.deleteSuccess');
+          } catch (cause) {
+            console.error('[acceptance:batchDelete]', cause);
+            toast.error(t('acceptance.workspace.batch.error'));
+          } finally {
+            setBatchPending(false);
+          }
+        },
+      });
+    };
+
+    // Grouping by project already names it in the header; every other mode has
+    // to carry it on the row or the affiliation is simply not on screen.
+    const showRowProject = groupMode !== 'project';
+
+    const rowSelectionProps = (id: string) =>
+      selecting
+        ? {
+            selectable: true,
+            selected: selectedVisible.includes(id),
+            onToggleSelect: () =>
+              setSelected((previous) => toggleAcceptanceSelection(previous, id)),
+          }
+        : undefined;
+
+    // Grouping shares the filter's popover rather than taking a fourth icon in a
+    // 260px header: both answer "what does this list show me", and one of them
+    // is a preference the user sets once.
+    const filterItems: DropdownItem[] = [
+      ...(
+        [
+          ['active', t('acceptance.workspace.filters.active')],
+          ['all', t('acceptance.workspace.filters.all')],
+          ['completed', t('acceptance.workspace.filters.completed')],
+        ] as const
+      ).map(([key, label]) => ({
+        icon: <Icon icon={Check} style={{ opacity: filter === key ? 1 : 0 }} />,
+        key,
+        label,
+        onClick: () => setStoredFilter(key),
+      })),
+      { type: 'divider' as const },
+      {
+        children: (
+          [
+            ['project', t('acceptance.workspace.groups.byProject')],
+            ['status', t('acceptance.workspace.groups.byStatus')],
+            ['time', t('acceptance.workspace.groups.byTime')],
+            ['none', t('acceptance.workspace.groups.byNone')],
+          ] as const
+        ).map(([key, label]) => ({
+          icon: <Icon icon={Check} style={{ opacity: groupMode === key ? 1 : 0 }} />,
+          key,
+          label,
+          onClick: () => setStoredGroupMode(key),
+        })),
+        icon: <Icon icon={Group} />,
+        key: 'group-mode',
+        label: t('acceptance.workspace.groups.mode'),
+      },
+    ];
+
+    // One overflow menu for everything the header offers. Multi-select used to
+    // sit outside as its own icon; a 260px header cannot carry a fourth control
+    // without crowding the search field, and "enter selection mode" is a rare
+    // deliberate act, not something to keep one tap away at all times. The
+    // project entries join it only when they have nowhere better to live —
+    // under project grouping each group header carries its own.
+    const overflowItems: DropdownItem[] = [
+      {
+        icon: <Icon icon={ListChecks} />,
+        key: 'select',
+        label: t('acceptance.workspace.batch.enter'),
+        onClick: () => (selecting ? leaveSelecting() : setSelecting(true)),
+      },
+      ...(showGroups || !projectActionItems
+        ? []
+        : [{ type: 'divider' as const }, ...projectActionItems()]),
+    ];
 
     const [panelWidth, updateSystemStatus] = useGlobalStore((s) => [
       systemStatusSelectors.verifyReportPanelWidth(s),
@@ -287,21 +672,10 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
       updateSystemStatus({ verifyReportPanelWidth: w });
     };
 
-    return (
-      <DraggablePanel
-        className={styles.panel}
-        defaultSize={{ width: panelWidth }}
-        expand={expand}
-        maxWidth={PANEL_MAX}
-        minWidth={PANEL_MIN}
-        mode={isNarrow ? 'float' : 'fixed'}
-        placement={'left'}
-        size={{ height: '100%', width: panelWidth }}
-        onExpandChange={setExpand}
-        onSizeChange={handleSizeChange}
-      >
-        <DraggablePanelContainer style={{ flex: 'none', height: '100%', minWidth: PANEL_MIN }}>
-          <div className={headerLeading ? styles.headWithBrand : styles.head}>
+    const body = (
+      <>
+        <div className={headerLeading ? styles.headWithBrand : styles.head}>
+          {!hosted && (
             <div className={headerLeading ? styles.titleRowWithBrand : styles.titleRow}>
               <Flexbox
                 horizontal
@@ -332,132 +706,227 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                 <Icon icon={PanelLeftClose} size={16} />
               </button>
             </div>
-            <div className={styles.searchRow}>
-              <label className={styles.search}>
-                <Icon icon={Search} size={13} />
-                <input
-                  placeholder={t('workspace.search')}
-                  type={'search'}
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-              </label>
-              <DropdownMenu items={filterItems} placement={'bottomRight'}>
-                <ActionIcon
-                  active={filter !== 'all'}
-                  className={styles.filterButton}
-                  icon={ListFilter}
-                  size={'small'}
-                  title={t('acceptance.workspace.filters.title')}
-                />
-              </DropdownMenu>
-              {!showGroups && renderProjectActions?.()}
-            </div>
+          )}
+          <div className={styles.searchRow}>
+            <label className={styles.search}>
+              <Icon icon={Search} size={13} />
+              <input
+                placeholder={t('workspace.search')}
+                type={'search'}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </label>
+            <DropdownMenu items={filterItems} placement={'bottomRight'}>
+              <ActionIcon
+                active={filter !== 'all'}
+                className={styles.filterButton}
+                icon={ListFilter}
+                size={'small'}
+                title={t('acceptance.workspace.filters.title')}
+              />
+            </DropdownMenu>
+            <DropdownMenu items={overflowItems} placement={'bottomRight'}>
+              <ActionIcon
+                active={selecting}
+                className={styles.filterButton}
+                icon={MoreHorizontal}
+                size={'small'}
+                title={t('acceptance.workspace.actions.more')}
+              />
+            </DropdownMenu>
           </div>
+          {selecting && (
+            <div className={styles.selectionRow}>
+              <Checkbox
+                checked={selectAllState === 'all'}
+                disabled={items.length === 0}
+                indeterminate={selectAllState === 'partial'}
+                onChange={() => setSelected((previous) => nextAcceptanceSelectAll(previous, items))}
+              >
+                {t('acceptance.workspace.batch.selectAll')}
+              </Checkbox>
+              <Flexbox flex={1} />
+              <Text fontSize={12} type={'secondary'}>
+                {t('acceptance.workspace.batch.selected', { count: selectedVisible.length })}
+              </Text>
+              <Button size={'small'} type={'text'} onClick={leaveSelecting}>
+                {t('acceptance.workspace.batch.exit')}
+              </Button>
+            </div>
+          )}
+        </div>
 
-          <Flexbox flex={1} style={{ minHeight: 0, overflowX: 'hidden', overflowY: 'auto' }}>
-            {error ? (
-              // A failed fetch must read as an error with a retry — never as an
-              // empty "no acceptances" page.
-              <Center className={styles.emptyState} gap={12}>
-                <Empty
-                  description={t('workspace.loadError')}
-                  icon={TriangleAlert}
-                  title={t('workspace.loadErrorTitle')}
-                />
-                <button className={styles.retryBtn} type={'button'} onClick={() => void mutate()}>
-                  {t('workspace.retry')}
+        <Flexbox flex={1} style={{ minHeight: 0, overflowX: 'hidden', overflowY: 'auto' }}>
+          {error ? (
+            // A failed fetch must read as an error with a retry — never as an
+            // empty "no acceptances" page.
+            <Center className={styles.emptyState} gap={12}>
+              <Empty
+                description={t('workspace.loadError')}
+                icon={TriangleAlert}
+                title={t('workspace.loadErrorTitle')}
+              />
+              <button className={styles.retryBtn} type={'button'} onClick={() => void mutate()}>
+                {t('workspace.retry')}
+              </button>
+            </Center>
+          ) : isLoading ? (
+            <SkeletonList rows={6} style={{ paddingBlock: 6, paddingInline: 8 }} />
+          ) : items.length === 0 ? (
+            emptyVariant === 'filtered' ? (
+              // A zero-result FILTER must read as "no match for this query",
+              // never as the first-run empty state.
+              <div className={styles.searchEmpty}>
+                <span className={styles.searchEmptyMsg}>
+                  {trimmedQuery
+                    ? t('acceptance.workspace.filters.noSearchResults', { query: trimmedQuery })
+                    : filter === 'all'
+                      ? null
+                      : t(EMPTY_FILTER_KEYS[filter])}
+                </span>
+                <button
+                  className={styles.retryBtn}
+                  type={'button'}
+                  onClick={() => {
+                    setQuery('');
+                    setStoredFilter('all');
+                  }}
+                >
+                  {t('acceptance.workspace.filters.showAll')}
                 </button>
-              </Center>
-            ) : isLoading ? (
-              <SkeletonList rows={6} style={{ paddingBlock: 6, paddingInline: 8 }} />
-            ) : filtered.length === 0 ? (
-              trimmedQuery || filter !== 'all' ? (
-                // A zero-result FILTER must read as "no match for this query",
-                // never as the first-run empty state.
-                <div className={styles.searchEmpty}>
-                  <span className={styles.searchEmptyMsg}>
-                    {trimmedQuery
-                      ? t('acceptance.workspace.filters.noSearchResults', { query: trimmedQuery })
-                      : filter === 'all'
-                        ? null
-                        : t(EMPTY_FILTER_KEYS[filter])}
-                  </span>
-                  <button
-                    className={styles.retryBtn}
-                    type={'button'}
-                    onClick={() => {
-                      setQuery('');
-                      setStoredFilter('all');
-                    }}
-                  >
-                    {t('acceptance.workspace.filters.showAll')}
-                  </button>
-                </div>
-              ) : (
-                <Center className={styles.emptyState}>
-                  <Empty
-                    description={t('acceptance.workspace.listEmpty')}
-                    icon={ScrollText}
-                    title={t('acceptance.workspace.listEmptyTitle')}
-                  />
-                </Center>
-              )
-            ) : (
-              <div className={styles.list}>
-                {showGroups ? (
-                  <Accordion
-                    expandedKeys={expandedAcceptanceGroupKeys(groups, collapsedGroups)}
-                    gap={4}
-                    onExpandedChange={(keys) =>
-                      setCollapsedGroups((previous) =>
-                        nextCollapsedGroupKeys(previous, groups, keys.map(String)),
-                      )
-                    }
-                  >
-                    {groups.map((group) => (
-                      <AccordionItem
-                        action={renderProjectActions?.(group.projectName ? group.key : undefined)}
-                        itemKey={group.key}
-                        key={group.key}
-                        paddingBlock={4}
-                        paddingInline={8}
-                        title={
-                          <span className={styles.groupTitle}>
-                            <Icon icon={FolderClosed} size={14} />
-                            <span>
-                              {group.projectName ?? t('acceptance.workspace.groups.ungrouped')} ·{' '}
-                              {group.items.length}
-                            </span>
-                          </span>
-                        }
-                      >
-                        <div className={styles.groupList}>
-                          {group.items.map((item) => (
-                            <AcceptanceRow
-                              active={item.id === acceptanceId}
-                              item={item}
-                              key={item.id}
-                              onChanged={mutate}
-                            />
-                          ))}
-                        </div>
-                      </AccordionItem>
-                    ))}
-                  </Accordion>
-                ) : (
-                  filtered.map((item) => (
-                    <AcceptanceRow
-                      active={item.id === acceptanceId}
-                      item={item}
-                      key={item.id}
-                      onChanged={mutate}
-                    />
-                  ))
-                )}
               </div>
-            )}
-          </Flexbox>
+            ) : (
+              <Center className={styles.emptyState}>
+                {/* The dashed circle is the acceptance "awaiting" glyph
+                      (AcceptanceStatusPill) — the domain's own mark, not the
+                      generic inbox. */}
+                <Empty
+                  description={t('acceptance.workspace.listEmpty')}
+                  icon={CircleDashed}
+                  title={t('acceptance.workspace.listEmptyTitle')}
+                />
+              </Center>
+            )
+          ) : (
+            <div className={styles.list}>
+              {showGroups ? (
+                <Accordion
+                  expandedKeys={expandedAcceptanceGroupKeys(groups, collapsedGroups)}
+                  gap={4}
+                  onExpandedChange={(keys) =>
+                    setCollapsedGroups((previous) =>
+                      nextCollapsedGroupKeys(previous, groups, keys.map(String)),
+                    )
+                  }
+                >
+                  {groups.map((group) => (
+                    <AccordionItem
+                      itemKey={group.key}
+                      key={group.key}
+                      paddingBlock={4}
+                      paddingInline={8}
+                      action={
+                        groupMode === 'project' && projectActionItems ? (
+                          <DropdownMenu
+                            items={projectActionItems(group.projectName ? group.key : undefined)}
+                            placement={'bottomRight'}
+                          >
+                            <ActionIcon
+                              icon={MoreHorizontal}
+                              size={'small'}
+                              title={t('acceptance.workspace.groups.actions')}
+                            />
+                          </DropdownMenu>
+                        ) : undefined
+                      }
+                      title={
+                        <span className={styles.groupTitle}>
+                          {/* The folder reads as "project"; a status or age
+                                bucket is not a folder and must not wear one. */}
+                          {groupMode === 'project' && <Icon icon={FolderClosed} size={14} />}
+                          <span>
+                            {group.name ??
+                              t(group.labelKey as 'acceptance.workspace.groups.ungrouped')}
+                          </span>
+                        </span>
+                      }
+                    >
+                      <div className={styles.groupList}>
+                        {group.items.map((item) => (
+                          <AcceptanceRow
+                            active={item.id === acceptanceId}
+                            item={item}
+                            key={item.id}
+                            showProject={showRowProject}
+                            onChanged={mutate}
+                            {...rowSelectionProps(item.id)}
+                          />
+                        ))}
+                      </div>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              ) : (
+                items.map((item) => (
+                  <AcceptanceRow
+                    active={item.id === acceptanceId}
+                    item={item}
+                    key={item.id}
+                    showProject={showRowProject}
+                    onChanged={mutate}
+                    {...rowSelectionProps(item.id)}
+                  />
+                ))
+              )}
+              {!searching && (
+                <>
+                  <div ref={setSentinel} style={{ height: 1 }} />
+                  {isLoadingMore && (
+                    <SkeletonList rows={2} style={{ paddingBlock: 4, paddingInline: 0 }} />
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </Flexbox>
+        {selecting && (
+          <AcceptanceBatchBar
+            acceptCount={acceptanceBatchTargets(items, selectedVisible, 'accept').length}
+            canRemoveProject={acceptanceProjectTargets(items, selectedVisible, null).length > 0}
+            closeCount={acceptanceBatchTargets(items, selectedVisible, 'close').length}
+            pending={batchPending || selectedVisible.length === 0}
+            onAccept={() => void sweepStatus('accept', 'accepted')}
+            onClose={() => void sweepStatus('close', 'closed')}
+            onDelete={deleteSelected}
+            onMoveToProject={(projectId) => void sweepProject(projectId)}
+          />
+        )}
+      </>
+    );
+
+    if (hosted)
+      return (
+        <Flexbox height={'100%'} style={{ overflow: 'hidden' }} width={'100%'}>
+          {body}
+        </Flexbox>
+      );
+
+    return (
+      <DraggablePanel
+        className={styles.panel}
+        defaultSize={{ width: panelWidth }}
+        expand={expand}
+        maxWidth={PANEL_MAX}
+        minWidth={PANEL_MIN}
+        mode={isNarrow ? 'float' : 'fixed'}
+        placement={'left'}
+        size={{ height: '100%', width: panelWidth }}
+        onExpandChange={setExpand}
+        onSizeChange={handleSizeChange}
+      >
+        <DraggablePanelContainer style={{ flex: 'none', height: '100%', minWidth: PANEL_MIN }}>
+          {body}
         </DraggablePanelContainer>
       </DraggablePanel>
     );

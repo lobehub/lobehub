@@ -7,6 +7,7 @@
   },
   "dependencies": {
     "@lobechat/agent-gateway-client": "workspace:*",
+    "@lobechat/const": "workspace:*",
     "@lobechat/database": "workspace:*",
     "@lobechat/model-runtime": "workspace:*",
     "@lobechat/trpc": "workspace:*",

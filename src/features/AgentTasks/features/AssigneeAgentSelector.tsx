@@ -1,5 +1,4 @@
 import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
-import { canWorkspaceRoleBeTaskAssignee } from '@lobechat/const/rbac';
 import { agentDisplayName } from '@lobechat/types';
 import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
@@ -10,9 +9,6 @@ import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useFetchWorkspaceMembers } from '@/business/client/hooks/useFetchWorkspaceMembers';
-import { useWorkspaceMembers } from '@/business/client/hooks/useWorkspaceMembers';
-import Avatar from '@/components/Avatar';
 import { type SidebarAgentItem } from '@/database/repositories/home';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
@@ -24,53 +20,18 @@ import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import { useTaskStore } from '@/store/task';
-import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/selectors';
-
-/**
- * What the picker commits: exactly one of the two ids is set, or both are null
- * (Unassigned). The DB allows the pair to coexist, but every UI write keeps
- * them mutually exclusive so "who is this task assigned to" has one answer.
- */
-export interface TaskAssigneePayload {
-  assigneeAgentId: string | null;
-  assigneeUserId: string | null;
-}
 
 interface AssigneeAgentSelectorProps {
   children: ReactNode;
   currentAgentId?: string | null;
-  currentUserId?: string | null;
   disabled?: boolean;
-  /**
-   * Hide the Members section entirely. Used for tasks where a human assignee
-   * makes no sense regardless of who it is — e.g. automated
-   * (heartbeat/schedule) tasks, which always execute through an agent.
-   */
-  hideMembers?: boolean;
-  onChange?: (assignee: TaskAssigneePayload) => void;
-  /**
-   * Creator of the task being reassigned. Only meaningful together with
-   * `taskVisibility`; defaults to the signed-in user (create flows).
-   */
-  taskCreatorId?: string | null;
+  onChange?: (agentId: string | null) => void;
   taskIdentifier?: string;
-  /**
-   * Visibility of the task being assigned. A private task is visible to its
-   * creator only, so every other member row is hidden — assigning someone a
-   * task they can never see is a dead end the server rejects anyway. A public
-   * task conversely hides the Private agents section.
-   */
   taskVisibility?: 'private' | 'public' | null;
 }
 
-// Derive the member row from the hook so the selector stays aligned with its
-// public data contract without duplicating an implementation-specific type.
-type WorkspaceMemberRow = ReturnType<typeof useWorkspaceMembers>[number];
-
-type AssigneeOption =
+type AgentOption =
   | { key: 'unassigned'; kind: 'unassigned' }
-  | { key: string; kind: 'member'; member: WorkspaceMemberRow }
   | { agent: SidebarAgentItem; key: string; kind: 'agent' };
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -102,21 +63,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-// Both labels rendered on a row are searchable: the name and the role shown
-// beside it, so typing a role ("设计") finds the agent the user sees.
-const matchesSearch = (agent: SidebarAgentItem, q: string) =>
-  [agentDisplayName(agent), agent.title].some((label) => (label ?? '').toLowerCase().includes(q));
-
-// Same display-name fallback chain the workspace member table uses.
-const memberName = (member: WorkspaceMemberRow) =>
-  member.user?.fullName?.trim() ||
-  member.user?.username?.trim() ||
-  member.user?.email?.trim() ||
-  member.userId;
-
-const matchesMemberSearch = (member: WorkspaceMemberRow, q: string) =>
-  [member.user?.fullName, member.user?.username, member.user?.email].some((label) =>
-    (label ?? '').toLowerCase().includes(q),
+const matchesSearch = (agent: SidebarAgentItem, query: string) =>
+  [agentDisplayName(agent), agent.title].some((label) =>
+    (label ?? '').toLowerCase().includes(query),
   );
 
 const triggerStyle: CSSProperties = {
@@ -124,24 +73,12 @@ const triggerStyle: CSSProperties = {
   display: 'inline-flex',
   justifyContent: 'center',
   lineHeight: 1,
-  // Bound the trigger to its row so a chip inside it can cap at `max-width:
-  // 100%` and ellipsis its label, instead of overflowing a narrow column.
   maxWidth: '100%',
   minWidth: 0,
 };
 
 const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
-  ({
-    children,
-    currentAgentId,
-    currentUserId,
-    disabled,
-    hideMembers,
-    onChange,
-    taskCreatorId,
-    taskIdentifier,
-    taskVisibility,
-  }) => {
+  ({ children, currentAgentId, disabled, onChange, taskIdentifier, taskVisibility }) => {
     const { t } = useTranslation(['chat', 'common', 'topic']);
     const { allowed: canEditTask, reason } = usePermission('create_content');
     const [key, setKey] = useState(0);
@@ -168,31 +105,7 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
     );
 
     useFetchAgentList();
-    // Member discovery is optional; implementations that do not provide a
-    // member list return an empty collection and omit the section naturally.
-    useFetchWorkspaceMembers();
-    const allMembers = useWorkspaceMembers();
 
-    // A private task can only be assigned to its creator (create flows have no
-    // creator yet, so the signed-in user stands in) — every other member row
-    // is hidden, matching the hidden Members section on automated tasks.
-    const selfUserId = useUserStore(userProfileSelectors.userId);
-    const creatorId = taskCreatorId ?? selfUserId;
-    const isPrivateTask = taskVisibility === 'private';
-    const members = useMemo(() => {
-      if (hideMembers) return [];
-      const assignableMembers = allMembers.filter((member) =>
-        canWorkspaceRoleBeTaskAssignee(member.role),
-      );
-      if (isPrivateTask) {
-        return assignableMembers.filter((member) => member.userId === creatorId);
-      }
-      return assignableMembers;
-    }, [hideMembers, isPrivateTask, creatorId, allMembers]);
-
-    // Workspace bucket: pinned + grouped + ungrouped. In personal mode this is the
-    // entire list (private buckets stay empty). The inbox agent is shared content,
-    // so it is injected at the top of this bucket when missing.
     const workspaceAgents = useMemo<SidebarAgentItem[]>(() => {
       const groupedItems = agentGroups.flatMap((group) => group.items);
       const available = [...pinnedAgents, ...groupedItems, ...ungroupedAgents].filter(
@@ -218,107 +131,80 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
       return available;
     }, [pinnedAgents, agentGroups, ungroupedAgents, inboxAgentId, inboxMeta, t]);
 
-    // A public (workspace-visible) task can never be assigned to a private
-    // agent — the server rejects the pair — so hide the Private section for
-    // existing public tasks instead of offering dead rows. Create flows keep
-    // it: picking a private agent there flips the new task to private.
-    const hidePrivateAgents = taskVisibility === 'public';
-
     const privateAgents = useMemo<SidebarAgentItem[]>(() => {
-      if (hidePrivateAgents) return [];
+      if (taskVisibility === 'public') return [];
       const groupedItems = privateAgentGroups.flatMap((group) => group.items);
       return [...privatePinnedAgents, ...groupedItems, ...privateUngroupedAgents].filter(
         (agent) => agent.type === 'agent',
       );
-    }, [hidePrivateAgents, privateAgentGroups, privatePinnedAgents, privateUngroupedAgents]);
+    }, [privateAgentGroups, privatePinnedAgents, privateUngroupedAgents, taskVisibility]);
 
     const query = search.trim().toLowerCase();
-
-    const filteredPrivate = useMemo(() => {
-      if (!query) return privateAgents;
-      return privateAgents.filter((agent) => matchesSearch(agent, query));
-    }, [privateAgents, query]);
-
-    const filteredWorkspace = useMemo(() => {
-      if (!query) return workspaceAgents;
-      return workspaceAgents.filter((agent) => matchesSearch(agent, query));
-    }, [workspaceAgents, query]);
-
-    const filteredMembers = useMemo(() => {
-      if (!query) return members;
-      return members.filter((member) => matchesMemberSearch(member, query));
-    }, [members, query]);
+    const filteredPrivate = useMemo(
+      () => (query ? privateAgents.filter((agent) => matchesSearch(agent, query)) : privateAgents),
+      [privateAgents, query],
+    );
+    const filteredWorkspace = useMemo(
+      () =>
+        query ? workspaceAgents.filter((agent) => matchesSearch(agent, query)) : workspaceAgents,
+      [workspaceAgents, query],
+    );
 
     const unassignedLabel = t('taskList.unassigned', { ns: 'chat' });
     const showUnassigned = !query || unassignedLabel.toLowerCase().includes(query);
-
-    // Flat order for keyboard navigation and activeIndex: Unassigned, then
-    // members, then agents (private before workspace, mirroring the sections).
-    const flatOptions = useMemo<AssigneeOption[]>(() => {
-      const agents = hasPrivateAgents
-        ? [...filteredPrivate, ...filteredWorkspace]
-        : filteredWorkspace;
-      return [
+    const flatOptions = useMemo<AgentOption[]>(
+      () => [
         ...(showUnassigned ? [{ key: 'unassigned', kind: 'unassigned' } as const] : []),
-        ...filteredMembers.map(
-          (member) => ({ key: `member:${member.userId}`, kind: 'member', member }) as const,
+        ...filteredPrivate.map(
+          (agent) => ({ agent, key: `agent:${agent.id}`, kind: 'agent' }) as const,
         ),
-        ...agents.map((agent) => ({ agent, key: `agent:${agent.id}`, kind: 'agent' }) as const),
-      ];
-    }, [showUnassigned, filteredMembers, hasPrivateAgents, filteredPrivate, filteredWorkspace]);
-
-    const selectedKey = currentAgentId
-      ? `agent:${currentAgentId}`
-      : currentUserId
-        ? `member:${currentUserId}`
-        : 'unassigned';
+        ...filteredWorkspace.map(
+          (agent) => ({ agent, key: `agent:${agent.id}`, kind: 'agent' }) as const,
+        ),
+      ],
+      [filteredPrivate, filteredWorkspace, showUnassigned],
+    );
+    const selectedKey = currentAgentId ? `agent:${currentAgentId}` : 'unassigned';
 
     useEffect(() => {
-      if (search.trim()) {
+      if (query) {
         setActiveIndex(0);
         return;
       }
-      const selectedIdx = flatOptions.findIndex((option) => option.key === selectedKey);
-      setActiveIndex(selectedIdx >= 0 ? selectedIdx : 0);
-    }, [search, flatOptions, selectedKey]);
+      const selectedIndex = flatOptions.findIndex((option) => option.key === selectedKey);
+      setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0);
+    }, [flatOptions, query, selectedKey]);
 
-    const handleSelect = useCallback(
-      (option: AssigneeOption) => {
-        if (!canEditTask) return;
-        if (option.key === selectedKey) return;
-
-        const payload: TaskAssigneePayload =
-          option.kind === 'agent'
-            ? { assigneeAgentId: option.agent.id, assigneeUserId: null }
-            : option.kind === 'member'
-              ? { assigneeAgentId: null, assigneeUserId: option.member.userId }
-              : { assigneeAgentId: null, assigneeUserId: null };
-
-        setKey((k) => k + 1);
+    const handleAgentChange = useCallback(
+      (agentId: string | null) => {
+        if (!canEditTask || agentId === (currentAgentId ?? null)) return;
+        setKey((value) => value + 1);
         setSearch('');
         if (onChange) {
-          onChange(payload);
+          onChange(agentId);
           return;
         }
-        if (taskIdentifier) {
-          void updateTask(taskIdentifier, payload);
-        }
+        if (taskIdentifier) void updateTask(taskIdentifier, { assigneeAgentId: agentId });
       },
-      [canEditTask, selectedKey, onChange, taskIdentifier, updateTask],
+      [canEditTask, currentAgentId, onChange, taskIdentifier, updateTask],
+    );
+
+    const handleSelect = useCallback(
+      (option: AgentOption) => handleAgentChange(option.kind === 'agent' ? option.agent.id : null),
+      [handleAgentChange],
     );
 
     const handleSearchKeyDown = useCallback(
-      (e: KeyboardEvent<HTMLInputElement>) => {
+      (event: KeyboardEvent<HTMLInputElement>) => {
         if (flatOptions.length === 0) return;
-
-        if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          setActiveIndex((i) => (i + 1) % flatOptions.length);
-        } else if (e.key === 'ArrowUp') {
-          e.preventDefault();
-          setActiveIndex((i) => (i - 1 + flatOptions.length) % flatOptions.length);
-        } else if (e.key === 'Enter') {
-          e.preventDefault();
+        if (event.key === 'ArrowDown') {
+          event.preventDefault();
+          setActiveIndex((index) => (index + 1) % flatOptions.length);
+        } else if (event.key === 'ArrowUp') {
+          event.preventDefault();
+          setActiveIndex((index) => (index - 1 + flatOptions.length) % flatOptions.length);
+        } else if (event.key === 'Enter') {
+          event.preventDefault();
           const target = flatOptions[activeIndex];
           if (target) handleSelect(target);
         }
@@ -327,86 +213,60 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
     );
 
     useEffect(() => {
-      const list = listRef.current;
-      if (!list) return;
-      const active = list.querySelector<HTMLElement>(`[data-agent-index="${activeIndex}"]`);
+      const active = listRef.current?.querySelector<HTMLElement>(
+        `[data-assignee-index="${activeIndex}"]`,
+      );
       active?.scrollIntoView({ block: 'nearest' });
     }, [activeIndex]);
 
-    const flatIndexByKey = useMemo(() => {
-      const map = new Map<string, number>();
-      flatOptions.forEach((option, index) => map.set(option.key, index));
-      return map;
-    }, [flatOptions]);
-
-    const renderOption = (option: AssigneeOption) => {
-      const flatIndex = flatIndexByKey.get(option.key) ?? 0;
-      const active = flatIndex === activeIndex;
-      const row =
-        option.kind === 'agent' ? (
-          <AgentItem
-            active={active}
-            agent={option.agent}
-            agentId={option.agent.id}
-            agentTitle={agentDisplayName(option.agent, t('untitledAgent', { ns: 'chat' }))}
-            avatar={option.agent.avatar}
-            onAgentChange={() => handleSelect(option)}
-            onClose={() => setKey((k) => k + 1)}
-          />
-        ) : (
-          <NavItem
-            active={active}
-            style={{ flexShrink: 0 }}
-            title={option.kind === 'member' ? memberName(option.member) : unassignedLabel}
-            icon={
-              option.kind === 'member' ? (
-                <Avatar
-                  avatar={option.member.user?.avatar || undefined}
-                  name={memberName(option.member)}
-                  shape={'circle'}
-                  size={22}
-                />
-              ) : (
-                <Icon color={cssVar.colorTextDescription} icon={UserRoundX} size={18} />
-              )
-            }
-            onClick={() => handleSelect(option)}
-          />
-        );
-
+    const optionIndexByKey = useMemo(
+      () => new Map(flatOptions.map((option, index) => [option.key, index])),
+      [flatOptions],
+    );
+    const renderOption = (option: AgentOption) => {
+      const optionIndex = optionIndexByKey.get(option.key) ?? 0;
+      const active = optionIndex === activeIndex;
       return (
         <div
-          data-agent-index={flatIndex}
+          data-assignee-index={optionIndex}
           key={option.key}
-          onMouseEnter={() => setActiveIndex(flatIndex)}
+          onMouseEnter={() => setActiveIndex(optionIndex)}
         >
-          {row}
+          {option.kind === 'agent' ? (
+            <AgentItem
+              active={active}
+              agent={option.agent}
+              agentId={option.agent.id}
+              agentTitle={agentDisplayName(option.agent, t('untitledAgent', { ns: 'chat' }))}
+              avatar={option.agent.avatar}
+              onAgentChange={() => handleSelect(option)}
+              onClose={() => setKey((value) => value + 1)}
+            />
+          ) : (
+            <NavItem
+              active={active}
+              icon={<Icon color={cssVar.colorTextDescription} icon={UserRoundX} size={18} />}
+              style={{ flexShrink: 0 }}
+              title={unassignedLabel}
+              onClick={() => handleSelect(option)}
+            />
+          )}
         </div>
       );
     };
-
-    const renderAgents = (list: SidebarAgentItem[]) =>
-      list.map((agent) => renderOption({ agent, key: `agent:${agent.id}`, kind: 'agent' }));
-
-    const hasMemberSection = filteredMembers.length > 0;
-    const agentSectionHeader = hasPrivateAgents
-      ? t('taskManager.agentSelector.workspaceGroup', { ns: 'topic' })
-      : hasMemberSection
-        ? t('taskList.assigneeSelector.agentGroup', { ns: 'chat' })
-        : null;
 
     const blocked = disabled || !canEditTask;
     const trigger = blocked ? (
       <Tooltip title={disabled ? t('taskDetail.reassignDisabled', { ns: 'chat' }) : reason}>
         <div
           style={{ ...triggerStyle, cursor: 'not-allowed', opacity: 0.5 }}
-          onClick={(e) => e.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
         >
           <span style={{ pointerEvents: 'none' }}>{children}</span>
         </div>
       </Tooltip>
     ) : (
-      <div style={triggerStyle} onClick={(e) => e.stopPropagation()}>
+      <div style={triggerStyle} onClick={(event) => event.stopPropagation()}>
         {children}
       </div>
     );
@@ -415,25 +275,25 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
       <Popover
         disabled={blocked}
         key={key}
-        placement="bottomLeft"
+        placement={'bottomLeft'}
         styles={{ content: { padding: 0, width: 260 } }}
-        trigger="click"
+        trigger={'click'}
         content={
           <Suspense fallback={<SkeletonList rows={6} />}>
             {isAgentListInit ? (
-              <Flexbox onClick={(e) => e.stopPropagation()}>
+              <Flexbox onClick={(event) => event.stopPropagation()}>
                 <input
                   autoFocus
                   className={styles.searchInput}
-                  placeholder={t('taskList.assigneeSearch.placeholder', { ns: 'chat' })}
+                  placeholder={t('taskList.assigneeSearch.agentPlaceholder', { ns: 'chat' })}
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(event) => setSearch(event.target.value)}
                   onKeyDown={handleSearchKeyDown}
                 />
                 {flatOptions.length === 0 ? (
                   <Flexbox align={'center'} justify={'center'} padding={16}>
                     <Text fontSize={12} type={'secondary'}>
-                      {t('taskList.assigneeSearch.empty', { ns: 'chat' })}
+                      {t('taskList.assigneeSearch.agentEmpty', { ns: 'chat' })}
                     </Text>
                   </Flexbox>
                 ) : (
@@ -444,30 +304,26 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
                     style={{ maxHeight: '50vh', overflowY: 'auto', width: '100%' }}
                   >
                     {showUnassigned && renderOption({ key: 'unassigned', kind: 'unassigned' })}
-                    {hasMemberSection && (
-                      <>
-                        <div className={styles.sectionHeader}>
-                          {t('taskList.assigneeSelector.memberGroup', { ns: 'chat' })}
-                        </div>
-                        {filteredMembers.map((member) =>
-                          renderOption({ key: `member:${member.userId}`, kind: 'member', member }),
-                        )}
-                      </>
-                    )}
-                    {hasPrivateAgents && filteredPrivate.length > 0 && (
+                    {filteredPrivate.length > 0 && (
                       <>
                         <div className={styles.sectionHeader}>
                           {t('taskManager.agentSelector.privateGroup', { ns: 'topic' })}
                         </div>
-                        {renderAgents(filteredPrivate)}
+                        {filteredPrivate.map((agent) =>
+                          renderOption({ agent, key: `agent:${agent.id}`, kind: 'agent' }),
+                        )}
                       </>
                     )}
                     {filteredWorkspace.length > 0 && (
                       <>
-                        {agentSectionHeader && (
-                          <div className={styles.sectionHeader}>{agentSectionHeader}</div>
+                        {hasPrivateAgents && (
+                          <div className={styles.sectionHeader}>
+                            {t('taskManager.agentSelector.workspaceGroup', { ns: 'topic' })}
+                          </div>
                         )}
-                        {renderAgents(filteredWorkspace)}
+                        {filteredWorkspace.map((agent) =>
+                          renderOption({ agent, key: `agent:${agent.id}`, kind: 'agent' }),
+                        )}
                       </>
                     )}
                   </Flexbox>

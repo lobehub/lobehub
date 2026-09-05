@@ -54,6 +54,29 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
   initModelRuntimeFromDB: vi.fn(),
 }));
 
+// Mock the assignment-notification business slot (default impl is a no-op;
+// the router must fire it only on an actual assignee change to someone else).
+const mockNotifyTaskAssigned = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/business/server/task/notifyTaskAssigned', () => ({
+  notifyTaskAssigned: (...args: unknown[]) => mockNotifyTaskAssigned(...args),
+}));
+
+// Mock the comment-notification business slot (default impl is a no-op).
+const mockNotifyTaskCommentActivity = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/business/server/task/notifyTaskCommentActivity', () => ({
+  notifyTaskCommentActivity: (...args: unknown[]) => mockNotifyTaskCommentActivity(...args),
+}));
+
+// Notifications are retained past the response through `after()`; run that
+// work eagerly here and flush it before asserting on the slots above.
+const afterResponseTasks = vi.hoisted(() => [] as Promise<unknown>[]);
+vi.mock('@/server/utils/scheduleAfterResponse', () => ({
+  after: (work: () => unknown) => void afterResponseTasks.push(Promise.resolve().then(work)),
+}));
+const flushAfterResponse = async () => {
+  while (afterResponseTasks.length > 0) await Promise.all(afterResponseTasks.splice(0));
+};
+
 describe('Task Router Integration', () => {
   let serverDB: LobeChatDatabase;
   let userId: string;
@@ -186,6 +209,73 @@ describe('Task Router Integration', () => {
     });
   });
 
+  describe('coexisting assignees (agent + member)', () => {
+    // The executing agent and the human owner are independent sides that can
+    // coexist on one task — the tool layer and the UI both rely on the router
+    // never cross-clearing them.
+    const setupWorkspace = async () => {
+      const workspaceId = 'task-assignee-coexist-workspace';
+      const { agents, workspaces, workspaceMembers } = await import('@/database/schemas');
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Assignee Coexist Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId },
+        { role: 'member', userId: otherUserId!, workspaceId },
+      ]);
+      const wsAgentId = 'agt_assignee_coexist_ws';
+      await serverDB
+        .insert(agents)
+        .values({ id: wsAgentId, slug: wsAgentId, userId, workspaceId })
+        .onConflictDoNothing();
+      return {
+        workspaceId,
+        wsAgentId,
+        wsCaller: taskRouter.createCaller({ ...createTestContext(userId), workspaceId }),
+      };
+    };
+
+    it('creates a task with an executing agent AND a human owner, notifying the member once', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const { wsAgentId, wsCaller } = await setupWorkspace();
+
+      const task = await wsCaller.create({
+        assigneeAgentId: wsAgentId,
+        assigneeUserId: otherUserId,
+        instruction: 'Coexisting assignees',
+      });
+
+      expect(task.data.assigneeAgentId).toBe(wsAgentId);
+      expect(task.data.assigneeUserId).toBe(otherUserId);
+      await flushAfterResponse();
+      expect(mockNotifyTaskAssigned).toHaveBeenCalledTimes(1);
+      expect(mockNotifyTaskAssigned).toHaveBeenCalledWith(
+        expect.objectContaining({ assigneeUserId: otherUserId, taskId: task.data.id }),
+      );
+    });
+
+    it('updating one assignee side never clears the other', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const { wsAgentId, wsCaller } = await setupWorkspace();
+      const task = await wsCaller.create({ assigneeAgentId: wsAgentId, instruction: 'Sides' });
+
+      const withMember = await wsCaller.update({ assigneeUserId: otherUserId, id: task.data.id });
+      expect(withMember.data.assigneeAgentId).toBe(wsAgentId);
+      expect(withMember.data.assigneeUserId).toBe(otherUserId);
+
+      const agentCleared = await wsCaller.update({ assigneeAgentId: null, id: task.data.id });
+      expect(agentCleared.data.assigneeAgentId).toBeNull();
+      expect(agentCleared.data.assigneeUserId).toBe(otherUserId);
+
+      const memberCleared = await wsCaller.update({ assigneeUserId: null, id: task.data.id });
+      expect(memberCleared.data.assigneeUserId).toBeNull();
+      expect(memberCleared.data.assigneeAgentId).toBeNull();
+    });
+  });
+
   describe('subtasks + dependencies', () => {
     it('should create subtasks and set dependencies', async () => {
       const parent = await caller.create({
@@ -311,16 +401,15 @@ describe('Task Router Integration', () => {
       expect(completed.data.status).toBe('completed');
     });
 
-    it('updates the bound goal when addressed by task identifier', async () => {
-      const task = await caller.create({
-        goal: { title: 'Identifier lifecycle goal' },
-        instruction: 'Test goal lifecycle',
+    it('resolves a task identifier to its row when changing status', async () => {
+      const task = await caller.create({ instruction: 'Test identifier resolution' });
+
+      const running = await caller.updateStatus({
+        id: task.data.identifier,
+        status: 'running',
       });
 
-      await caller.updateStatus({ id: task.data.identifier, status: 'running' });
-
-      const goal = await serverDB.query.goals.findFirst();
-      expect(goal).toMatchObject({ status: 'running', subjectId: task.data.id });
+      expect(running.data).toMatchObject({ id: task.data.id, status: 'running' });
     });
   });
 
@@ -396,6 +485,221 @@ describe('Task Router Integration', () => {
 
       expect(richTextUpdate.data.content).toBe('Rich comment');
       expect(richTextUpdate.data.editorData).toEqual(nextEditorData);
+    });
+  });
+
+  describe('comment notifications', () => {
+    const mentionNode = (userId: string) => ({
+      label: 'Member',
+      metadata: { id: userId, type: 'member' },
+      type: 'mention',
+    });
+    const editorDataWith = (...userIds: string[]) => ({
+      root: { children: [{ children: userIds.map(mentionNode), type: 'paragraph' }] },
+    });
+
+    const setupWorkspace = async () => {
+      const workspaceId = 'task-comment-notify-workspace';
+      const { workspaces, workspaceMembers } = await import('@/database/schemas');
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Task Comment Notify Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId },
+        { role: 'member', userId: otherUserId!, workspaceId },
+      ]);
+      return {
+        wsCaller: taskRouter.createCaller({ ...createTestContext(userId), workspaceId }),
+        wsOtherCaller: taskRouter.createCaller({
+          ...createTestContext(otherUserId!),
+          workspaceId,
+        }),
+        workspaceId,
+      };
+    };
+
+    it('should ping the task creator and @mentioned members on a new member comment', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const { wsCaller, wsOtherCaller, workspaceId } = await setupWorkspace();
+      const task = await wsCaller.create({ instruction: 'Discuss', name: 'Discuss' });
+
+      // The creator commenting on their own task with no mentions pings nobody.
+      await wsCaller.addComment({ content: 'note to self', id: task.data.id });
+      await flushAfterResponse();
+      expect(mockNotifyTaskCommentActivity).not.toHaveBeenCalled();
+
+      // Another member commenting pings the creator as ambient activity.
+      const comment = await wsOtherCaller.addComment({ content: 'hello', id: task.data.id });
+      await flushAfterResponse();
+      expect(mockNotifyTaskCommentActivity).toHaveBeenCalledTimes(1);
+      expect(mockNotifyTaskCommentActivity).toHaveBeenCalledWith({
+        actorUserId: otherUserId,
+        commentId: comment.data.id,
+        recipients: [{ kind: 'commented', userId }],
+        taskId: task.data.id,
+        workspaceId,
+      });
+
+      // The creator @mentioning the other member pings them as mentioned;
+      // unknown ids and self-mentions are dropped.
+      const mentioned = await wsCaller.addComment({
+        content: '@Member look',
+        editorData: editorDataWith(otherUserId!, userId, 'not-a-member'),
+        id: task.data.id,
+      });
+      await flushAfterResponse();
+      expect(mockNotifyTaskCommentActivity).toHaveBeenLastCalledWith({
+        actorUserId: userId,
+        commentId: mentioned.data.id,
+        recipients: [{ kind: 'mentioned', userId: otherUserId }],
+        taskId: task.data.id,
+        workspaceId,
+      });
+    });
+
+    it('should upgrade the assignee to mentioned and skip agent-authored comments', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const { wsCaller, workspaceId } = await setupWorkspace();
+      const task = await wsCaller.create({
+        assigneeUserId: otherUserId,
+        instruction: 'Assigned',
+      });
+      await flushAfterResponse();
+      mockNotifyTaskCommentActivity.mockClear();
+
+      await wsCaller.addComment({ content: 'ping', id: task.data.id });
+      await flushAfterResponse();
+      expect(mockNotifyTaskCommentActivity).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          recipients: [{ kind: 'commented', userId: otherUserId }],
+          workspaceId,
+        }),
+      );
+
+      await wsCaller.addComment({
+        content: '@Member',
+        editorData: editorDataWith(otherUserId!),
+        id: task.data.id,
+      });
+      await flushAfterResponse();
+      expect(mockNotifyTaskCommentActivity).toHaveBeenLastCalledWith(
+        expect.objectContaining({ recipients: [{ kind: 'mentioned', userId: otherUserId }] }),
+      );
+
+      // Agent-authored progress notes never ping members, even with mentions.
+      const { agents } = await import('@/database/schemas');
+      const wsAgentId = 'agt_task_comment_ws';
+      await serverDB
+        .insert(agents)
+        .values({ id: wsAgentId, slug: wsAgentId, userId, workspaceId })
+        .onConflictDoNothing();
+      await flushAfterResponse();
+      mockNotifyTaskCommentActivity.mockClear();
+      await wsCaller.addComment({
+        authorAgentId: wsAgentId,
+        content: 'Agent progress note',
+        editorData: editorDataWith(otherUserId!),
+        id: task.data.id,
+      });
+      await flushAfterResponse();
+      expect(mockNotifyTaskCommentActivity).not.toHaveBeenCalled();
+    });
+
+    it('should only ping newly added mentions when a comment is edited', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const thirdUserId = await createTestUser(serverDB);
+      const { wsCaller, workspaceId } = await setupWorkspace();
+      const { workspaceMembers } = await import('@/database/schemas');
+      await serverDB
+        .insert(workspaceMembers)
+        .values({ role: 'member', userId: thirdUserId, workspaceId });
+      const task = await wsCaller.create({ instruction: 'Edit mentions' });
+      const comment = await wsCaller.addComment({
+        content: '@Member',
+        editorData: editorDataWith(otherUserId!),
+        id: task.data.id,
+      });
+      await flushAfterResponse();
+      mockNotifyTaskCommentActivity.mockClear();
+
+      // Keeping the same mention does not re-notify.
+      await wsCaller.updateComment({
+        commentId: comment.data.id,
+        content: '@Member edited',
+        editorData: editorDataWith(otherUserId!),
+      });
+      await flushAfterResponse();
+      expect(mockNotifyTaskCommentActivity).not.toHaveBeenCalled();
+
+      // Adding a new mention pings only the new member.
+      await wsCaller.updateComment({
+        commentId: comment.data.id,
+        content: '@Member @Third',
+        editorData: editorDataWith(otherUserId!, thirdUserId),
+      });
+      await flushAfterResponse();
+      expect(mockNotifyTaskCommentActivity).toHaveBeenCalledTimes(1);
+      expect(mockNotifyTaskCommentActivity).toHaveBeenCalledWith({
+        actorUserId: userId,
+        commentId: comment.data.id,
+        recipients: [{ kind: 'mentioned', userId: thirdUserId }],
+        taskId: task.data.id,
+        workspaceId,
+      });
+
+      // Content-only edits never notify.
+      await wsCaller.updateComment({ commentId: comment.data.id, content: 'plain' });
+      await flushAfterResponse();
+      expect(mockNotifyTaskCommentActivity).toHaveBeenCalledTimes(1);
+    });
+
+    it('should never notify members who cannot open a private task', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const thirdUserId = await createTestUser(serverDB);
+      const { wsCaller, workspaceId } = await setupWorkspace();
+      const { workspaceMembers } = await import('@/database/schemas');
+      await serverDB
+        .insert(workspaceMembers)
+        .values({ role: 'member', userId: thirdUserId, workspaceId });
+      // A private task is visible to its creator only (assigning it to another
+      // member is rejected upstream), yet the creator can still @mention anyone.
+      const task = await wsCaller.create({
+        instruction: 'Secret',
+        name: 'Secret',
+        visibility: 'private',
+      });
+
+      // The mention must not leak the task's title and link to a member who
+      // cannot open it — neither on a new comment nor on an edit.
+      const comment = await wsCaller.addComment({
+        content: '@Member',
+        editorData: editorDataWith(otherUserId!),
+        id: task.data.id,
+      });
+      await flushAfterResponse();
+      expect(mockNotifyTaskCommentActivity).not.toHaveBeenCalled();
+
+      await wsCaller.updateComment({
+        commentId: comment.data.id,
+        content: '@Member @Third',
+        editorData: editorDataWith(otherUserId!, thirdUserId),
+      });
+      await flushAfterResponse();
+      expect(mockNotifyTaskCommentActivity).not.toHaveBeenCalled();
+    });
+
+    it('should never notify in personal mode', async () => {
+      const task = await caller.create({ instruction: 'Personal' });
+      await caller.addComment({
+        content: '@someone',
+        editorData: editorDataWith('someone'),
+        id: task.data.id,
+      });
+      await flushAfterResponse();
+      expect(mockNotifyTaskCommentActivity).not.toHaveBeenCalled();
     });
   });
 
@@ -562,17 +866,16 @@ describe('Task Router Integration', () => {
   });
 
   describe('run idempotency', () => {
-    it('starts the bound goal when addressed by task identifier', async () => {
+    it('resolves a task identifier to its row when starting a run', async () => {
       const task = await caller.create({
         assigneeAgentId: testAgentId,
-        goal: { title: 'Identifier run goal' },
         instruction: 'Test',
       });
 
       await caller.run({ id: task.data.identifier });
 
-      const goal = await serverDB.query.goals.findFirst();
-      expect(goal).toMatchObject({ status: 'running', subjectId: task.data.id });
+      const updated = await caller.detail({ id: task.data.id });
+      expect(updated.data?.status).toBe('running');
     });
 
     it('should reject run when a topic is already running', async () => {
@@ -1109,7 +1412,147 @@ describe('Task Router Integration', () => {
     });
   });
 
+  describe('list scope (my tasks)', () => {
+    it('should narrow the list to tasks assigned to or created by the caller', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const workspaceId = 'task-list-scope-workspace';
+      const { workspaces, workspaceMembers } = await import('@/database/schemas');
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Task List Scope Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId },
+        { role: 'member', userId: otherUserId!, workspaceId },
+      ]);
+      const wsCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
+      const wsOtherCaller = taskRouter.createCaller({
+        ...createTestContext(otherUserId),
+        workspaceId,
+      });
+
+      const mineForOther = await wsCaller.create({
+        assigneeUserId: otherUserId,
+        instruction: 'Mine for other',
+        name: 'Mine for other',
+      });
+      const othersForMe = await wsOtherCaller.create({
+        assigneeUserId: userId,
+        instruction: 'Others for me',
+        name: 'Others for me',
+      });
+      await wsOtherCaller.create({ instruction: 'Others unassigned', name: 'Others unassigned' });
+
+      const assigned = await wsCaller.list({ scope: 'assigned' });
+      expect(assigned.total).toBe(1);
+      expect(assigned.data.map((t) => t.id)).toEqual([othersForMe.data.id]);
+
+      const created = await wsCaller.list({ scope: 'created' });
+      expect(created.total).toBe(1);
+      expect(created.data.map((t) => t.id)).toEqual([mineForOther.data.id]);
+
+      const all = await wsCaller.list({});
+      expect(all.total).toBe(3);
+    });
+  });
+
   describe('human assignee (assigneeUserId)', () => {
+    it('should persist agent and member assignments independently', async () => {
+      const created = await caller.create({
+        assigneeAgentId: testAgentId,
+        assigneeUserId: userId,
+        instruction: 'Dual-assigned task',
+      });
+
+      expect(created.data.assigneeAgentId).toBe(testAgentId);
+      expect(created.data.assigneeUserId).toBe(userId);
+
+      const memberCleared = await caller.update({
+        assigneeUserId: null,
+        id: created.data.id,
+      });
+      expect(memberCleared.data.assigneeAgentId).toBe(testAgentId);
+      expect(memberCleared.data.assigneeUserId).toBeNull();
+
+      const memberRestored = await caller.update({
+        assigneeUserId: userId,
+        id: created.data.id,
+      });
+      const agentCleared = await caller.update({
+        assigneeAgentId: null,
+        id: memberRestored.data.id,
+      });
+      expect(agentCleared.data.assigneeAgentId).toBeNull();
+      expect(agentCleared.data.assigneeUserId).toBe(userId);
+    });
+
+    it('should notify the assignee only on an actual assignment to someone else', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const workspaceId = 'task-assign-notify-workspace';
+      const { workspaces, workspaceMembers } = await import('@/database/schemas');
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Task Assign Notify Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId },
+        { role: 'member', userId: otherUserId!, workspaceId },
+      ]);
+      const wsCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
+
+      // Create without assignee, then assign another member → notifies once.
+      const task = await wsCaller.create({ instruction: 'Notify target', name: 'Notify target' });
+      await flushAfterResponse();
+      expect(mockNotifyTaskAssigned).not.toHaveBeenCalled();
+
+      await wsCaller.update({ assigneeUserId: otherUserId, id: task.data.id });
+      await flushAfterResponse();
+      expect(mockNotifyTaskAssigned).toHaveBeenCalledTimes(1);
+      expect(mockNotifyTaskAssigned).toHaveBeenCalledWith({
+        actorUserId: userId,
+        assigneeUserId: otherUserId,
+        taskId: task.data.id,
+        taskIdentifier: task.data.identifier,
+        taskName: 'Notify target',
+        workspaceId,
+      });
+
+      // Re-saving the same assignee is a no-op → no second notification.
+      await wsCaller.update({ assigneeUserId: otherUserId, id: task.data.id });
+      await flushAfterResponse();
+      expect(mockNotifyTaskAssigned).toHaveBeenCalledTimes(1);
+
+      // Self-assignment never notifies.
+      await wsCaller.update({ assigneeUserId: userId, id: task.data.id });
+      await flushAfterResponse();
+      expect(mockNotifyTaskAssigned).toHaveBeenCalledTimes(1);
+
+      // Clearing the assignee never notifies.
+      await wsCaller.update({ assigneeUserId: null, id: task.data.id });
+      await flushAfterResponse();
+      expect(mockNotifyTaskAssigned).toHaveBeenCalledTimes(1);
+
+      // Creating a task already assigned to another member notifies too.
+      const created = await wsCaller.create({
+        assigneeUserId: otherUserId,
+        instruction: 'Assigned at creation',
+      });
+      await flushAfterResponse();
+      expect(mockNotifyTaskAssigned).toHaveBeenCalledTimes(2);
+      expect(mockNotifyTaskAssigned).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          actorUserId: userId,
+          assigneeUserId: otherUserId,
+          taskId: created.data.id,
+          workspaceId,
+        }),
+      );
+    });
+
     it('should allow assigning to self in personal mode', async () => {
       const created = await caller.create({
         assigneeUserId: userId,
@@ -1148,7 +1591,7 @@ describe('Task Router Integration', () => {
       });
       await serverDB.insert(workspaceMembers).values([
         { role: 'owner', userId, workspaceId },
-        { role: 'member', userId: otherUserId, workspaceId },
+        { role: 'member', userId: otherUserId!, workspaceId },
         { deletedAt: new Date(), role: 'member', userId: removedId, workspaceId },
       ]);
       const wsCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
@@ -1281,7 +1724,7 @@ describe('Task Router Integration', () => {
       });
       await serverDB.insert(workspaceMembers).values([
         { role: 'owner', userId, workspaceId },
-        { role: 'member', userId: otherUserId, workspaceId },
+        { role: 'member', userId: otherUserId!, workspaceId },
       ]);
       const wsCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
 
@@ -1322,52 +1765,42 @@ describe('Task Router Integration', () => {
       expect(demoted.data.visibility).toBe('private');
     });
 
-    it('should keep automation and a human assignee mutually exclusive', async () => {
-      // Creating an automated task with a human assignee is rejected.
-      await expect(
-        caller.create({
-          assigneeUserId: userId,
-          automationMode: 'schedule',
-          instruction: 'Automated cross-assign',
-          schedulePattern: '0 9 * * *',
-        }),
-      ).rejects.toThrow('An automated task cannot be assigned to a member');
+    it('should preserve the responsible assignee independently of automation', async () => {
+      const createdScheduled = await caller.create({
+        assigneeUserId: userId,
+        automationMode: 'schedule',
+        instruction: 'Automated assigned task',
+        schedulePattern: '0 9 * * *',
+      });
+      expect(createdScheduled.data.assigneeUserId).toBe(userId);
+      expect(createdScheduled.data.automationMode).toBe('schedule');
 
-      // Assigning a member to an existing automated task is rejected.
       const automated = await caller.create({
         automationMode: 'schedule',
         instruction: 'Automated task',
         schedulePattern: '0 9 * * *',
       });
-      await expect(
-        caller.update({ assigneeUserId: userId, id: automated.data.id }),
-      ).rejects.toThrow('An automated task cannot be assigned to a member');
+      const assignedAutomated = await caller.update({
+        assigneeUserId: userId,
+        id: automated.data.id,
+      });
+      expect(assignedAutomated.data.assigneeUserId).toBe(userId);
+      expect(assignedAutomated.data.automationMode).toBe('schedule');
 
-      // Scheduling a member-assigned task is rejected until unassigned.
       const humanTask = await caller.create({
         assigneeUserId: userId,
         instruction: 'Human task',
       });
-      await expect(
-        caller.update({
-          automationMode: 'schedule',
-          id: humanTask.data.id,
-          schedulePattern: '0 9 * * *',
-        }),
-      ).rejects.toThrow('An automated task cannot be assigned to a member');
-
-      // Clearing the human assignee in the same update makes scheduling legal.
       const scheduled = await caller.update({
-        assigneeUserId: null,
         automationMode: 'schedule',
         id: humanTask.data.id,
         schedulePattern: '0 9 * * *',
       });
       expect(scheduled.data.automationMode).toBe('schedule');
-      expect(scheduled.data.assigneeUserId).toBeNull();
+      expect(scheduled.data.assigneeUserId).toBe(userId);
     });
 
-    it('should not persist the inbox fallback agent when running a human-assigned task', async () => {
+    it('should keep inbox fallback ephemeral without clearing an explicit inbox assignment', async () => {
       // Seed the builtin inbox agent so the runner's fallback path can resolve it.
       const inboxAgentId = await createTestAgent(serverDB, userId, 'inbox');
 
@@ -1381,19 +1814,19 @@ describe('Task Router Integration', () => {
       expect(afterHumanRun.data.assigneeUserId).toBe(userId);
       expect(afterHumanRun.data.assigneeAgentId).toBeNull();
 
-      // Released clients did not understand assigneeUserId and persisted the
-      // inbox fallback immediately before starting the run. The server must
-      // recognize and remove that legacy fallback without losing the member.
-      const legacyClientTask = await caller.create({
+      // Inbox is also a valid explicit agent assignment. Once a member and an
+      // agent can be selected independently, the persisted pair must survive
+      // execution because it is indistinguishable from any historical fallback.
+      const dualAssignedTask = await caller.create({
         assigneeUserId: userId,
-        instruction: 'Legacy-client human-assigned task',
+        instruction: 'Inbox-and-member-assigned task',
       });
-      await caller.update({ assigneeAgentId: inboxAgentId, id: legacyClientTask.data.id });
-      await caller.run({ id: legacyClientTask.data.id });
+      await caller.update({ assigneeAgentId: inboxAgentId, id: dualAssignedTask.data.id });
+      await caller.run({ id: dualAssignedTask.data.id });
 
-      const afterLegacyClientRun = await caller.find({ id: legacyClientTask.data.id });
-      expect(afterLegacyClientRun.data.assigneeUserId).toBe(userId);
-      expect(afterLegacyClientRun.data.assigneeAgentId).toBeNull();
+      const afterDualAssignedRun = await caller.find({ id: dualAssignedTask.data.id });
+      expect(afterDualAssignedRun.data.assigneeUserId).toBe(userId);
+      expect(afterDualAssignedRun.data.assigneeAgentId).toBe(inboxAgentId);
 
       // Control: a fully unassigned task still gets the fallback persisted.
       const unassignedTask = await caller.create({ instruction: 'Unassigned task' });

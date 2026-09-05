@@ -12,12 +12,11 @@ import { DiscoverTab } from '@/types/discover';
 import ProviderEmpty from '../../features/ProviderEmpty';
 import Pagination from '../features/Pagination';
 import List from './features/List';
-import Loading from './loading';
 
 const ProviderPage = memo(() => {
   const { q, page, sort, order } = useQuery() as ProviderQueryParams;
   const useProviderList = useDiscoverStore((s) => s.useProviderList);
-  const { data, isLoading, error, mutate } = useProviderList({
+  const { data, error, mutate } = useProviderList({
     order,
     page,
     pageSize: 21,
@@ -34,8 +33,6 @@ const ProviderPage = memo(() => {
       error={error}
       errorVariant={'page'}
       isEmpty={items.length === 0}
-      isLoading={isLoading}
-      loading={<Loading />}
       onRetry={() => mutate()}
     >
       {data && (

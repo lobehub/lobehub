@@ -6,6 +6,7 @@ import urlJoin from 'url-join';
 
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
 import { useDeferredMount } from '@/hooks/useDeferredMount';
+import { useFetchActiveTopicDetail } from '@/hooks/useFetchActiveTopicDetail';
 import { useFetchChatTopics } from '@/hooks/useFetchChatTopics';
 import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
@@ -36,6 +37,7 @@ const TopicList = memo(() => {
   const { topicGroupMode } = useAgentTopicGroupMode();
 
   useFetchChatTopics();
+  useFetchActiveTopicDetail();
 
   // Route transitions must paint instantly: the mount commit shows a skeleton
   // frame and the real list renders in a deferred (interruptible) follow-up

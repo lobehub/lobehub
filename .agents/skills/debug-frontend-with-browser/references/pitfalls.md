@@ -1,6 +1,6 @@
 # Frontend Diagnosis Supplements
 
-Read this only after the mandatory `agent-testing` workflow has selected and
+Read this only after the mandatory `acceptance` workflow has selected and
 approved an isolated execution surface.
 
 ## Contents

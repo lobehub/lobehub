@@ -9,8 +9,8 @@ const code = `sequenceDiagram
 
 const MermaidPreview = ({ theme }: { theme?: MermaidProps['theme'] }) => {
   return (
-    <Center height={280}>
-      <Flexbox width={480}>
+    <Center>
+      <Flexbox style={{ maxWidth: '100%' }} width={480}>
         <Mermaid theme={theme}>{code}</Mermaid>
       </Flexbox>
     </Center>

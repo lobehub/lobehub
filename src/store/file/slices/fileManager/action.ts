@@ -243,6 +243,7 @@ export class FileManageActionImpl {
     try {
       const response = await serverFileService.getKnowledgeItems({
         ...queryListParams,
+        includeContentPreview: queryListParams.includeContentPreview ?? false,
         limit: queryListParams.limit ?? 50,
         offset: fileListOffset,
       });
@@ -526,10 +527,6 @@ export class FileManageActionImpl {
     this.#set({ pendingRenameItemId: id }, false, 'setPendingRenameItemId');
   };
 
-  setUploadDockExpanded = (expanded: boolean): void => {
-    this.#set({ uploadDockExpanded: expanded }, false, 'setUploadDockExpanded');
-  };
-
   toggleEmbeddingIds = (ids: string[], loading?: boolean): void => {
     this.#set((state) => {
       const nextValue = new Set(state.creatingEmbeddingTaskIds);
@@ -773,6 +770,7 @@ export class FileManageActionImpl {
     return useClientDataSWR<FileListItem[]>(fileKeys.knowledgeItems(params), async () => {
       const response = await serverFileService.getKnowledgeItems({
         ...params,
+        includeContentPreview: params.includeContentPreview ?? false,
         limit: params.limit ?? 50,
         offset: 0,
       });

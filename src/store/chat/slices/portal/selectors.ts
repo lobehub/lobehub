@@ -249,6 +249,15 @@ const taskDetailId = (s: ChatStoreState): string | undefined => {
   return view?.taskId;
 };
 
+const taskResultId = (s: ChatStoreState): string | undefined => {
+  const view = getViewData(s, PortalViewType.TaskResult);
+  return view?.taskId;
+};
+
+// Goal detail drill-down selectors
+const goalNodeView = (s: ChatStoreState) => getViewData(s, PortalViewType.GoalNode);
+const goalMetricView = (s: ChatStoreState) => getViewData(s, PortalViewType.GoalMetric);
+
 // Topic chat selectors — the second, side-by-side topic opened in the portal
 const portalTopicId = (s: ChatStoreState): string | undefined => {
   const view = getViewData(s, PortalViewType.Topic);
@@ -329,6 +338,10 @@ export const chatPortalSelectors = {
   previewFileId,
   chunkText,
 
+  // Goal drill-down data
+  goalMetricView,
+  goalNodeView,
+
   // Local file data
   activeLocalFileId,
   activeLocalFilePath,
@@ -345,6 +358,7 @@ export const chatPortalSelectors = {
 
   // Task detail data
   taskDetailId,
+  taskResultId,
 
   // Topic chat data
   portalTopicId,

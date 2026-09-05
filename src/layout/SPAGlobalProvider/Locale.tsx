@@ -1,4 +1,5 @@
 import { ConfigProvider } from 'antd';
+import enUS from 'antd/locale/en_US';
 import dayjs from 'dayjs';
 import type { PropsWithChildren } from 'react';
 import { memo, useEffect, useState } from 'react';
@@ -106,7 +107,10 @@ const Locale = memo<LocaleLayoutProps>(({ children, defaultLang, antdLocale }) =
   return (
     <ConfigProvider
       direction={documentDir}
-      locale={locale}
+      // antd only wraps children in `LocaleProvider` when `locale` is truthy. Going
+      // from undefined to a resolved locale therefore inserts a node into the tree and
+      // remounts every provider below — the whole app boots twice. Keep the shape stable.
+      locale={locale ?? enUS}
       theme={{
         components: {
           Button: {

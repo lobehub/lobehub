@@ -252,6 +252,40 @@ completion whose `content` is parsed as the object. A text-only evidence check i
 Assert the round from three places together: the toast copy (a MutationObserver on
 `document.body`), the rows' `status`/`action`/`created_at`, and the card count.
 
+#### Structured generation crashes on the deepseek provider path — stub via openai instead
+
+**Situation:** driving a server-side `generateObject` scenario (e.g. `verify_plan_gen`)
+through `llm-stub.mjs` when the resolved model config is `deepseek` (the OSS default).
+
+**Doesn't work:** pointing the deepseek provider's keyVaults at the stub. The chat
+turn streams fine, but `generateObject` fails with `TypeError: Cannot read properties
+of undefined (reading '0')` (visible in `llm_generation_tracing.error_detail`), and
+the caller silently falls back (verify plan gen → holistic single check), which reads
+as "my feature didn't run".
+
+**Works:** route the generation through the openai protocol path — e.g. point the
+resolver's agent (for verify: `update agents set model='gpt-5.6-luna', provider='openai'
+where slug='verify-agent'`) at the stubbed openai provider. The server-side openai
+provider calls `/v1/responses`, which the stub answers correctly for `stream:false`
+structured generation (`llm_generation_tracing.success=t` is the confirmation probe).
+
+#### Forcing the goal frontier 失联 state needs >15 min, not the server's 5
+
+**Situation:** A/B-forcing the goal page's 失联 (lost-heartbeat) banner by backdating
+`goal_nodes.updated_at` / `agent_operations.updated_at` with SQL.
+
+**Doesn't work:** backdating by ~10 minutes because the server reclaim default
+(`resolveOperationLeaseTimeout`) is 5 minutes. The frontier still shows 运行中: the
+client view model has its own `DEFAULT_LEASE_TIMEOUT_MS = 15 min` and only honors
+`goal.config.recovery.operationLeaseTimeoutMs` when the goal sets one.
+
+**Works:** backdate past the client's window (25 min is comfortable), or create the
+goal with an explicit `--operation-lease-timeout-ms`. Liveness = the newer of the
+node row and `runHeartbeats` (the running operation's `updated_at` served by
+`goal.graph`), so the A/B is: node stale + op fresh → 运行中; both stale → 失联.
+Restore the forced rows (node/task/task_topics/operation status + timestamps) after
+capturing.
+
 #### A CLI-created topic has no trigger/status and is filtered out of the Agent paged view
 
 **Situation:** building a topic fixture with `lh topic create`, writing fields such as
@@ -433,7 +467,79 @@ renders. Seed the history and the ledger, but never assert on the live window's 
 percentage — read it back from `agent_quota_snapshots` and report what the run
 actually rendered.
 
+#### Shared-viewer (non-owner) evidence needs a second signed-in user — signed-out hits /signin
+
+**Situation:** capturing how a page renders for someone who is NOT the owner of the
+object (a shared acceptance link, a workspace-member view), on the local full stack.
+
+**Doesn't work:** a fresh storage-empty agent-browser session. The SPA's `/acceptance`
+(and the rest of the main layout) sits behind the client auth gate, so a signed-out
+context redirects to `/signin` before the route mounts — `location.pathname` lands on
+`/signin` and every "the notice never renders" reading is an artifact of the gate, not
+the change under test.
+
+**Works:** seed a second user directly (mirror what `seed-user` writes: a `users` row
+with `onboarding` finished + an `accounts` row with a bcryptjs password hash), then
+sign that user in from INSIDE the visitor session so the cookies land in it:
+
+```js
+await fetch('/api/auth/sign-in/email', {
+  body: JSON.stringify({ email, password }),
+  credentials: 'include',
+  headers: { 'Content-Type': 'application/json' },
+  method: 'POST',
+});
+```
+
+Reload and assert identity with `app-probe.sh auth` before capturing. Use a
+run-specific session name, never `lobehub-dev` (that one is the owner).
+
+#### Ambient `LOBEHUB_TOPIC_ID` hijacks a local CLI ingest — strip it for fixture creation
+
+**Situation:** creating a fixture acceptance on the LOCAL dev server with
+`bun src/index.ts acceptance run ingest` while running inside a LobeHub conversation
+(Claude Code sessions launched from a Topic export `LOBEHUB_TOPIC_ID` /
+`LOBEHUB_AGENT_ID` / `LOBEHUB_OPERATION_ID`).
+
+**Doesn't work:** plain ingest. The CLI auto-attaches to the ambient conversation, and
+that topic id belongs to PRODUCTION — the local server answers
+`topic "tpc_…" not found in the current workspace`, which reads like broken fixture
+data rather than an env leak.
+
+**Works:** strip the ambient ids only for the local fixture ingest
+(`env -u LOBEHUB_TOPIC_ID -u LOBEHUB_AGENT_ID -u LOBEHUB_OPERATION_ID …`) so it lands
+standalone. Keep them for the final PRODUCTION publish of the verification round —
+there the auto-attach to the current conversation is exactly what you want.
+
 ### Driving the UI
+
+#### Driving a 资源库 upload with agent-browser: use the Add-menu input, and a same-build A/B for the hashing thread
+
+**Situation:** uploading a multi-GB fixture through the resource library (`/resource`)
+to verify the upload/hash pipeline without a real drag-and-drop.
+
+**Doesn't work:** `agent-browser upload` on the first `input[type=file][multiple]` the
+page exposes. That input belongs to another surface; `dockUploadFileList` stays empty
+and nothing errors, which reads as "the upload never started".
+
+**Works:** open the header `Add` menu first (`find role button click --name "Add"`),
+then upload into the antd input it mounts:
+`agent-browser upload '.ant-upload input[type=file][multiple]' <file>`. Poll
+`window.__LOBE_STORES.file().dockUploadFileList` for `status` / `uploadState.progress`;
+the hash phase is `pending` with a climbing `progress`, upload is `uploading`, and the
+row auto-clears \~3 s after `success`, so screenshot on the first `success` sample.
+Note the `eval` output is a JSON-encoded string — `\"status\":\"success\"` — so a
+`rg` trigger must not assume bare quotes (`'status.{2,6}success'`).
+
+To prove the hash left the main thread without checking out old code, run the same
+file twice in the same build: once after `window.Worker = undefined` (the shared
+`hashFile` then falls back to its inline streaming path, byte-for-byte the pre-worker
+behaviour) and once untouched. A 16 ms `setInterval` sampler's longest gap is the
+stall metric (measured: 16.4 s vs 61 ms for 1.1 GB); wrap `window.Worker` to record
+the constructed script URL and `window.fetch` to timestamp `file.checkFileHash`, which
+marks the end of hashing. A re-upload of the same file still hashes and then dedups
+(only `checkFileHash` + `createFile`), so it is a cheap way to re-capture the progress
+UI without another transfer.
 
 #### The composer's slash menu needs real key events — `keyboard type` never opens it
 
@@ -549,6 +655,39 @@ items present with only the list area shimmering is ordinary data loading. Do NO
 identify the fallback by a row count — it is shaped per navKey now
 (`NAV_SKELETON_SHAPES`), so memory/discover render header plus a nav list and no body
 at all, while settings renders a search box plus four accordion groups.
+
+#### Hold a route's Suspense fallback by parking its data request
+
+**Situation:** the route skeleton is now held by data (`SWRConfig{ suspense: true }`
+at the layout), not only by the lazy module, so parking the chunk no longer keeps it
+on screen once the module is cached. The fallback lasts a few hundred ms.
+
+**Works:** park the route's own tRPC call with raw CDP `Fetch.enable` — the skeleton
+stays up until the request is released, so it can be measured and screenshotted at
+leisure. `.agents/acceptance/scripts/park-request.cjs <browser-ws> <urlPattern> <holdMs>`
+does this against an `agent-browser` session:
+
+```bash
+node .agents/acceptance/scripts/park-request.cjs \
+  "$(agent-browser --session lobehub-dev get cdp-url)" '*trpc/lambda/aiProvider*' 25000
+```
+
+Name the route's **own** query in the pattern (`aiProvider*` for the provider page).
+A broad `*trpc*` parks the shell's queries too and the route never mounts, which reads
+as a product hang. For the error state, prefer `agent-browser network route <pattern> --abort` — an aborted request settles, so the boundary renders instead of hanging.
+
+#### `SWRConfig` reaches hooks below it, never the component that renders it
+
+**Situation:** opting one page out of a subtree's suspense (a page whose sections are
+gated independently and must keep their own Retry).
+
+**Doesn't work:** wrapping that page's own JSX in `<SWRConfig value={{ suspense: false }}>`.
+The page's hooks run in its component body, which is _above_ the element it returns, so
+they still read the subtree's config and the page keeps suspending. The symptom is a
+whole route thrown to the error boundary the first time one section's fetch fails.
+
+**Works:** move the hooks into a child component and wrap that child. Verify by failing
+one section's request and confirming the rest of the page still renders.
 
 #### Park a route's lazy chunk to hold its pending sidebar on screen
 
@@ -863,6 +1002,84 @@ code A/B, re-dispatch after each edit rather than expecting react-refresh to kee
 the messages — and re-run the identical dispatch + expand + scroll sequence on both
 sides so the two frames differ only by the change.
 
+#### A client bucket that keeps reverting mid-run is the gateway `uiMessages` snapshot, not your write
+
+**Situation:** a store bucket (`dbMessagesMap[<key>]`) holds the right messages right
+after a gateway send, then silently loses them a second or two later and stays wrong
+for the rest of the session — while the database is correct the whole time.
+
+**Doesn't work:** treating it as a race in your own write and adding another
+`replaceMessages` / refetch earlier in the flow. The overwrite happens _after_ every
+write you control, so each new attempt is undone the same way. It also looks like a
+stale SWR tier (which it is not — a manual `refreshMessages()` fixes it, so the
+server clearly has the data).
+
+**Works:** the server pushes a canonical `uiMessages` snapshot at `step_start` and
+`agent_runtime_end`, and `gatewayEventHandler` applies it as source of truth. That
+snapshot is built by `AgentRuntimeService.queryUiMessages` from the operation's
+`state.metadata`, so it is only as scoped as that metadata — a field the run needs
+but the snapshot query omits makes every step boundary overwrite the bucket with a
+_differently scoped_ message list. Identify the writer instead of guessing: record
+every `replaceMessages` call with `new Error().stack` into a `window.__RM` ring
+buffer, run the flow once, and read `action` (`gateway/step_start`,
+`gateway/agent_runtime_end`) plus the frame. The `action` label alone names the
+culprit. Verified in this catalogue: a subtopic run whose snapshot lacked `threadId`
+kept replacing the thread's bucket with the topic's main spine.
+
+**Corollary — use the non-gateway path as the control.** The same UI action with
+`chatConfig.disableGatewayMode = true` runs through `sendMessageInServer` and never
+applies a pushed snapshot. If the behavior is correct there and wrong in gateway
+mode, the defect is in the gateway transport or in the server snapshot, and you have
+halved the search space before reading any code.
+
+#### `curl /health` does not prove the local agent-gateway trusts your key — run the JWT probe
+
+**Situation:** restarting the local agent-gateway between acceptance rounds and
+gating on `curl -s -o /dev/null -w '%{http_code}' http://localhost:<port>/health`.
+
+**Doesn't work:** treating a 200 as "the closed loop is up". `/health` answers before
+any key is checked, so it is equally 200 when `.dev.vars` carries a JWKS that has
+nothing to do with the app's. The failure then surfaces far from its cause: runs
+complete server-side (`agent_operations` = `done`, full content in `messages`) while
+the browser's `execServerAgentRuntime` op ends after \~100ms, the assistant bubble
+stays on the `...` placeholder for the rest of the session, and a cold reload shows
+the reply — reading exactly like a client-side streaming regression in the branch
+under test. The tells are `chat().gatewayConnections === {}`, no `GET /ws` in the
+gateway log (only server→gateway `push-event` lines, which use the static service
+token and keep working), and `[Gateway] Auth failed ... signature verification
+failed` in the browser console.
+
+**Works:** after every gateway (re)start, run the decisive handshake and require
+`auth_success` before collecting any evidence:
+
+```bash
+GATEWAY_PORT= < port > .agents/acceptance/scripts/agent-gateway/local-gateway-setup.sh
+GATEWAY_WS=ws://localhost: .agents/acceptance/scripts/agent-gateway/local-gateway-probe.mjs < port > node
+```
+
+`.dev.vars` is regenerated per app instance, so restoring it at teardown (or another
+worktree regenerating it) silently invalidates it for the next run — compare the
+`kid` in `agent-gateway/.dev.vars` against `.records/env/agent-testing-jwks.json`
+when in doubt.
+
+#### A required local service can be someone else's, and `preflight` will not tell you
+
+**Situation:** starting QStash / s3rver for a run through `init-dev-env.sh` in a
+worktree while another agent-testing session is already active on the machine.
+
+**Doesn't work:** trusting that a backgrounded `init-dev-env.sh qstash` (or `s3`)
+came up because `preflight` then reports the service reachable. Both use fixed ports
+(8080 / 29000), so the second starter dies immediately with
+`address already in use` while the sibling session's process keeps answering — and
+`preflight` is a reachability check, so it passes. The run works, but on services it
+does not own.
+
+**Works:** read the start log before assuming ownership
+(`.records/logs/qstash.log`, `.records/logs/s3.log`), and treat "already in use" as
+"this is not mine". It matters at teardown: stopping a service you did not start
+kills the other session's run. Only the dev server (`stop-dev`, which verifies PID
+ownership) and anything you launched on a port you chose yourself are yours to stop.
+
 #### Infinite-scroll failure states
 
 When the fixture is too short for the observer to fire, call the real load-more
@@ -880,6 +1097,34 @@ error shapes through a window flag (e.g. plain `Error` vs
 `{ data: { code: 'FORBIDDEN' } }`) and prove HMR liveness with a module-level
 marker before clicking. Snapshot the dirty file first and restore byte-identically
 (cmp), never `git checkout --`.
+
+#### Render Gallery shows "No builtin tool renders registered." after a reload
+
+**Situation:** driving DevDock → Render Gallery to capture builtin-tool
+Inspector/Render evidence, after a renderer reload or an HMR update.
+
+**Doesn't work:** waiting. The gallery reads the builtin registries once through a
+`useMemo` with an empty dependency list, so a panel that mounts before the builtin
+tools finish registering caches an empty list for the lifetime of that mount. It
+renders "No builtin tool renders registered." indefinitely, which reads like the
+registries themselves broke.
+
+**Works:** remount the panel — click the dock's `Render Gallery` button twice
+(close, reopen) and re-select the toolset; the entries appear immediately. To land
+on the gallery straight after a reload, pre-seed the dock instead of clicking
+through it:
+
+```js
+localStorage.setItem(
+  'LOBE_DEV_DOCK_UI',
+  JSON.stringify({
+    ...JSON.parse(localStorage.getItem('LOBE_DEV_DOCK_UI') || '{}'),
+    activePanelId: 'render-gallery',
+    expanded: true,
+    maximized: true,
+  }),
+);
+```
 
 ### Capturing and publishing evidence
 
@@ -1719,12 +1964,81 @@ unrelated dirty files, while the intended worktree change stays uncommitted. The
 only tell is an unexpected diffstat / parent commit; `push <branch>` then reports
 "Everything up-to-date" because the worktree branch ref never moved.
 
+The same reset has a second, harder-to-spot consequence: it also retargets
+`init-dev-env.sh dev`, so the dev server and its Vite serve the MAIN checkout while
+every health signal stays green — see `common-mistakes.md` L-S17.
+
 **Works:** in any worktree session, prefix every git/check command with an explicit
 `cd <worktree> &&`, and read the commit output's diffstat + `git log -1` parent
 before pushing. Recovery for a mistaken main-repo commit: `git reset --mixed HEAD~1`
 restores the user's branch and leaves their working tree as it was (verify against
 the session-start `gitStatus` snapshot); nothing needs force-pushing because the
 wrong-branch push was a no-op.
+
+#### Proving which prompt version the running server holds
+
+**Situation:** verifying a change to a prompt under `packages/prompts` — the assertion is
+about the model's behaviour, so the run is only meaningful if the server is executing the
+new prompt.
+
+**Doesn't work:** trusting the Vite HMR line (`page reload packages/prompts/src/...`).
+That is the client reloading; the Next server keeps the workspace package it started
+with, so it answers with the old prompt indefinitely. Reading the model's output and
+judging "this looks like the new behaviour" is circular — the whole point of the change
+is that the output should differ, so any difference confirms the hypothesis either way.
+
+**Works:** every traced generation records the version it ran. After one call, read it
+back:
+
+```bash
+docker exec lobehub-agent-testing-postgres psql -U postgres -d postgres -tAc \
+  "select prompt_version, model, created_at from llm_generation_tracing \
+   where scenario='<scenario>' order by created_at desc limit 1"
+```
+
+A stale version means the server needs a real process restart (PROJECT.md §6), not a
+reload. Gate the first evidence-bearing call on this row, not on the edit's timestamp —
+otherwise the round publishes new-prompt claims backed by old-prompt output.
+
+#### The user's Vite serves a `node_modules` that a reinstall already replaced — every `.vite/deps` 504s, the page is black
+
+**Situation:** the user's own `bun run dev` is up (Next answers, auth is green), but
+the SPA never mounts: `#root` has 0 children, no console error, and every
+`/node_modules/.vite/deps/*.js` request returns 504. `ls node_modules/.vite` shows no
+`deps/` directory and a sibling `node_modules/.old_modules-<hash>/` exists.
+
+**Doesn't work:** waiting for the optimizer, reloading, or blaming the change under
+test. That Vite process predates a `pnpm install` that moved the old tree aside; its
+dep cache is gone for good and HMR cannot recover it.
+
+**Works:** leave the user's process alone and start an isolated SPA on a free port
+against the same backend — `PORT=3010 SPA_PORT=<free> bun run dev:spa` from the repo
+root. `localhost` cookies are port-agnostic, so the seeded `lobehub-dev` session is
+already signed in there. Prove identity before capturing (fetch the changed module from
+the new Vite origin and grep the change's marker), stop only that pid at teardown, and
+tell the user to restart their `dev:spa`.
+
+#### Every agent/topic read returns 500 `Failed query: select … from "agents"` — the `.env` database is behind the repo's migrations
+
+**Situation:** with the user's `.env` backend, opening a conversation shows
+"Failed to load agent settings"; `agent.getBuiltinAgent` and `topic.queryTopics`
+are 500 with a `Failed query` whose column list includes fields the table lacks.
+
+**Doesn't work:** reading the error tail (the pg cause is not included) or assuming
+the change under test broke the server.
+
+**Works:** compare the database's migration count with the repo's:
+
+```bash
+docker exec -c 'echo $POSTGRES_USER $POSTGRES_DB' < pg-container > sh # never read .env for this
+docker exec -U "select count(*) from drizzle.__drizzle_migrations" < pg-container > psql < user > -d < db > -Atc
+ls packages/database/migrations | grep -c '\.sql$'
+```
+
+A gap means the running canary server expects columns the DB never got. This is the
+user's database: surface it at the plan gate and run `bun run db:migrate` (it loads
+`.env` itself) only with their authorization; the isolated alternative is a worktree
+with a second Next against the managed `:5434` test DB.
 
 #### Server-side reads of local S3 evidence are blocked by SSRF protection — private IPs must be allowed explicitly
 
@@ -1747,6 +2061,31 @@ followed by `Error converting image to base64`. Production uses a real object-st
 domain and is unaffected, so this is purely a local verification-environment gate and
 not a product defect — do not report it as a bug, and do not work around it by
 switching to inline base64, which would verify a path the product never takes.
+
+#### Real web-search evidence needs local SearXNG — the on-disk search1api keys are dead
+
+**Situation:** a check needs the product's real web-search pipeline (builtin
+`lobe-web-browsing____search` executing an actual HTTP search and rendering result
+cards), e.g. "ask the agent a weather question".
+
+**Doesn't work:** `SEARCH_PROVIDERS=search1api` with any `SEARCH1API_SEARCH_API_KEY`
+found in sibling repo `.env` files — they all return 401 (verify with a direct
+`curl api.search1api.com/search` before blaming the product). Keyless fallbacks
+don't exist: with no `SEARCH_PROVIDERS` the impl list is empty and every search
+returns "all configured providers returned errors"; public SearXNG instances
+rate-limit (429) or ship JSON-disabled (HTML back).
+
+**Works:** run a local SearXNG:
+`docker run -d -p 8888:8080 -v <dir>:/etc/searxng searxng/searxng` with a
+`settings.yml` of `use_default_settings: true`, `server.limiter: false`, and
+`search.formats: [html, json]`, then start the dev server with
+`SEARCH_PROVIDERS=searxng SEARXNG_URL=http://localhost:8888`. It aggregates real
+engines, so the whole product path (server search impl → result cards → tool
+message persistence) is genuine. English queries return results more reliably
+than Chinese ones. One trap when the model is a tool_call-emitting stub AND a
+synthetic context injector is active (e.g. `getGoalContext`): "last message is a
+tool result → answer" fires on the injected pair and skips the search — key the
+stub's answer-mode off the NAME of the last `function_call` instead.
 
 ## Detailed references
 

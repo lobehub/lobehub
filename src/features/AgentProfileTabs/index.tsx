@@ -4,6 +4,7 @@ import { Segmented } from '@lobehub/ui/base-ui';
 import { type CSSProperties, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAgentShareSupported } from '@/features/AgentShareSettings/useAgentShareSupported';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
@@ -50,11 +51,11 @@ interface AgentProfileTabsProps {
 
 /**
  * Segmented switcher shared by the agent profile group — Profile / Channels /
- * Statistics. The three surfaces are separate routes, so a segment writes the
+ * Statistics / Share. The surfaces are separate routes, so a segment writes the
  * URL rather than holding local state: deep links and back/forward keep working.
  */
 const AgentProfileTabs = memo<AgentProfileTabsProps>(({ active, agentId }) => {
-  const { t } = useTranslation(['chat', 'spend']);
+  const { t } = useTranslation(['chat', 'common', 'spend']);
   const navigate = useWorkspaceAwareNavigate();
 
   const heterogeneousProviderType = useAgentStore(
@@ -66,6 +67,7 @@ const AgentProfileTabs = memo<AgentProfileTabsProps>(({ active, agentId }) => {
 
   const canConfigure = !!isAgentEditable && isAccessResolved && canEditContent && canEditResource;
   const channelsSupported = supportsMessageChannels(heterogeneousProviderType);
+  const { visible: shareVisible } = useAgentShareSupported(agentId);
 
   const options = useMemo(
     () =>
@@ -79,10 +81,12 @@ const AgentProfileTabs = memo<AgentProfileTabsProps>(({ active, agentId }) => {
           // so the first segment is the "basic" tab, not "Agent Profile" again —
           // that broader name stays on the sidebar entry that opens the group.
           profile: t('tab.profileBasic'),
+          share: t('share', { ns: 'common' }),
           statistics: t('usageStats.title', { ns: 'spend' }),
         },
+        shareSupported: shareVisible === true,
       }),
-    [active, canConfigure, channelsSupported, t],
+    [active, canConfigure, channelsSupported, shareVisible, t],
   );
 
   // A lone segment is a label, not a switcher.

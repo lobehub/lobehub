@@ -20,6 +20,7 @@ import { TopicDoctorRepo } from '@/database/repositories/topicDoctor';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
+import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 import { type MessageBatchOperation, MessageService } from '@/server/services/message';
 
 import {
@@ -29,6 +30,10 @@ import {
   assertCanUseTopicTargets,
 } from './_helpers/conversationResourceGuard';
 import { resolveAgentIdFromSession, resolveContext } from './_helpers/resolveContext';
+import {
+  assertCreatorMessageTargets,
+  assertCreatorTopicTargets,
+} from './_helpers/shareVisitorTargetGuard';
 import { basicContextSchema } from './_schema/context';
 
 const { logTiming, runTimedStage } = createTimingHelpers('lobe-server:chat:lobehub:timing');
@@ -51,6 +56,23 @@ const messageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
       messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
       messageService: new MessageService(ctx.serverDB, ctx.userId, wsId),
       topicDoctorRepo: new TopicDoctorRepo(ctx.serverDB, ctx.userId, wsId),
+    },
+  });
+});
+
+const messageSearchProcedure = messageProcedure.use(async (opts) => {
+  const { ctx } = opts;
+  const workspaceId = ctx.workspaceId ?? undefined;
+  const ftsSearchRepo = await createFtsSearchRepo({
+    db: ctx.serverDB,
+    userId: ctx.userId,
+    usage: 'message_search',
+    workspaceId,
+  });
+
+  return opts.next({
+    ctx: {
+      messageModel: new MessageModel(ctx.serverDB, ctx.userId, workspaceId, ftsSearchRepo),
     },
   });
 });
@@ -111,6 +133,11 @@ export const messageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { id, fileIds, agentId, ...options } = input;
       await assertCanUseMessageTargets(guardCtx(ctx), [id]);
+      // Agent-share visitor messages live under the creator's `userId`;
+      // attaching files to one on the creator's behalf would leak into the
+      // visitor's transcript — see `assertCreatorMessageTargets` for why this
+      // guard sits at the RPC boundary rather than in the model defaults.
+      await assertCreatorMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -157,13 +184,23 @@ export const messageRouter = router({
         }),
       );
 
-      await assertCanUseMessageTargets(
-        guardCtx(ctx),
-        operations.flatMap((op) => (op.type === 'createMessage' ? [] : [op.id])),
-      );
+      const targetedIds = operations.flatMap((op) => (op.type === 'createMessage' ? [] : [op.id]));
+      await assertCanUseMessageTargets(guardCtx(ctx), targetedIds);
+      // Same visitor exclusion the single-message update RPCs apply — the
+      // batch path reaches the ownership-only model writes directly.
+      await assertCreatorMessageTargets(guardCtx(ctx), targetedIds);
       await assertCanUseCreateMessageTargets(
         guardCtx(ctx),
         operations.flatMap((op) => (op.type === 'createMessage' ? [op.message] : [])),
+      );
+      // Creates carry no message id, but they DO name a topic: refuse to
+      // append creator rows into a visitor transcript (the workspace guard
+      // above is a no-op in personal mode, where every share lives).
+      await assertCreatorTopicTargets(
+        guardCtx(ctx),
+        operations.flatMap((op) =>
+          op.type === 'createMessage' && op.message.topicId ? [op.message.topicId] : [],
+        ),
       );
 
       return ctx.messageService.batchMutate(operations);
@@ -187,6 +224,8 @@ export const messageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { messageGroupId, agentId, groupId, threadId, topicId } = input;
       await assertCanUseTopicTargets(guardCtx(ctx), [topicId]);
+      // Same visitor guard as `addFilesToMessage` above.
+      await assertCreatorTopicTargets(guardCtx(ctx), [topicId]);
 
       return ctx.messageService.cancelCompression(messageGroupId, {
         agentId,
@@ -198,8 +237,8 @@ export const messageRouter = router({
 
   listAll: messageProcedure
     .input(
-      z
-        .object({
+      messageAnalyticsSchema
+        .extend({
           current: z.number().optional(),
           pageSize: z.number().optional(),
         })
@@ -256,6 +295,10 @@ export const messageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { topicId, messageIds, agentId, groupId, threadId } = input;
       await assertCanUseTopicTargets(guardCtx(ctx), [topicId]);
+      // Same visitor guard as `addFilesToMessage` above, plus the message ids
+      // themselves — compression reads and rewrites their content.
+      await assertCreatorTopicTargets(guardCtx(ctx), [topicId]);
+      await assertCreatorMessageTargets(guardCtx(ctx), messageIds);
 
       return ctx.messageService.createCompressionGroup(topicId, messageIds, {
         agentId,
@@ -286,6 +329,9 @@ export const messageRouter = router({
       // DB-resolved target as well.
       if (input.topicId) {
         await assertCanUseTopicTargets(guardCtx(ctx), [input.topicId]);
+        // Visitor topics carry the creator's userId, so ownership alone would
+        // let the creator write into a visitor's private transcript.
+        await assertCreatorTopicTargets(guardCtx(ctx), [input.topicId]);
       }
 
       // Create message with the resolved agentId
@@ -310,6 +356,8 @@ export const messageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { messageGroupId, content, ...params } = input;
       await assertCanUseTopicTargets(guardCtx(ctx), [params.topicId]);
+      // Same visitor guard as `addFilesToMessage` above.
+      await assertCreatorTopicTargets(guardCtx(ctx), [params.topicId]);
 
       return ctx.messageService.finalizeCompression(messageGroupId, content, params);
     }),
@@ -381,6 +429,10 @@ export const messageRouter = router({
         // it the ownership filter degrades to `workspace_id IS NULL` and returns
         // no messages for workspace topics.
         const shareWorkspaceId = share.workspaceId ?? undefined;
+        // Legacy `share.topicId` (chat share) is a creator topic. Agent-share
+        // visitor topics have their own router (`shareChat.ts`), and this
+        // path is only entered when a creator publishes their own conversation
+        // via the classic share link — so we do NOT opt into visitor scope.
         const messageModel = new MessageModel(ctx.serverDB, share.ownerId, shareWorkspaceId);
         const fileService = new FileService(ctx.serverDB, share.ownerId, shareWorkspaceId);
 
@@ -399,6 +451,20 @@ export const messageRouter = router({
       // Authenticated access - require userId
       if (!ctx.userId) {
         throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Authentication required' });
+      }
+
+      // Align with every other topic-scoped procedure in this router: a raw
+      // `topicId` from the client must still pass the conversation
+      // General-access guard before its messages are read.
+      if (queryParams.topicId) {
+        await assertCanUseTopicTargets(
+          guardCtx({
+            serverDB: ctx.serverDB,
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId,
+          }),
+          [queryParams.topicId],
+        );
       }
 
       const wsId = ctx.workspaceId ?? undefined;
@@ -494,6 +560,8 @@ export const messageRouter = router({
       if (options.topicId) await assertCanUseTopicTargets(guardCtx(ctx), [options.topicId]);
       else
         await assertCanUseConversationTargets(guardCtx(ctx), [{ agentId, groupId: input.groupId }]);
+      // Same visitor guard as `addFilesToMessage` above.
+      if (options.topicId) await assertCreatorTopicTargets(guardCtx(ctx), [options.topicId]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -519,11 +587,13 @@ export const messageRouter = router({
     .mutation(async ({ input, ctx }) => {
       if (input.topicId) await assertCanUseTopicTargets(guardCtx(ctx), [input.topicId]);
       else await assertCanUseConversationTargets(guardCtx(ctx), [{ groupId: input.groupId }]);
+      // Same visitor guard as `addFilesToMessage` above.
+      if (input.topicId) await assertCreatorTopicTargets(guardCtx(ctx), [input.topicId]);
 
       return ctx.messageModel.deleteMessagesBySession(null, input.topicId, input.groupId);
     }),
 
-  searchMessages: messageProcedure
+  searchMessages: messageSearchProcedure
     .input(z.object({ keywords: z.string() }))
     .query(async ({ input, ctx }) => {
       return ctx.messageModel.queryByKeyword(input.keywords);
@@ -542,6 +612,11 @@ export const messageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { id, value, agentId, ...options } = input;
       await assertCanUseMessageTargets(guardCtx(ctx), [id]);
+      // Agent-share visitor messages live under the creator's `userId`, so the
+      // ownership predicate alone would let a creator edit a visitor's turn —
+      // see `assertCreatorMessageTargets` for why the guard sits here and not
+      // in the model defaults (the runtime writes visitor turns through them).
+      await assertCreatorMessageTargets(guardCtx(ctx), [id]);
       const timingContext = { requestId: createTimingRequestId(), startedAt: Date.now() };
       logTiming(timingContext, 'lambda.message.update:start', {
         hasAgentId: !!agentId,
@@ -601,6 +676,8 @@ export const messageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { messageGroupId, expanded, context } = input;
       await assertCanUseTopicTargets(guardCtx(ctx), [context.topicId]);
+      // Same visitor guard as `addFilesToMessage` above.
+      await assertCreatorTopicTargets(guardCtx(ctx), [context.topicId]);
 
       return ctx.messageService.updateMessageGroupMetadata(messageGroupId, { expanded }, context);
     }),
@@ -618,6 +695,7 @@ export const messageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { id, value, agentId, ...options } = input;
       await assertCanUseMessageTargets(guardCtx(ctx), [id]);
+      await assertCreatorMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -634,6 +712,7 @@ export const messageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { id, value, agentId, ...options } = input;
       await assertCanUseMessageTargets(guardCtx(ctx), [id]);
+      await assertCreatorMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -657,6 +736,7 @@ export const messageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { id, value, agentId, ...options } = input;
       await assertCanUseMessageTargets(guardCtx(ctx), [id]);
+      await assertCreatorMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -680,6 +760,7 @@ export const messageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { id, value, agentId, ...options } = input;
       await assertCanUseMessageTargets(guardCtx(ctx), [id]);
+      await assertCreatorMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -703,6 +784,7 @@ export const messageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { id, value, agentId, ...options } = input;
       await assertCanUseMessageTargets(guardCtx(ctx), [id]);
+      await assertCreatorMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -729,6 +811,7 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       await assertCanUseMessageTargets(guardCtx(ctx), [input.id]);
+      await assertCreatorMessageTargets(guardCtx(ctx), [input.id]);
       if (input.value === false) {
         return ctx.messageModel.deleteMessageTTS(input.id);
       }
@@ -755,6 +838,9 @@ export const messageRouter = router({
         await assertCanUseConversationTargets(guardCtx(ctx), [
           { agentId, groupId: options.groupId },
         ]);
+      // Same visitor guard as `addFilesToMessage` above — no message id here,
+      // so it's applied to the resolved topic instead.
+      if (options.topicId) await assertCreatorTopicTargets(guardCtx(ctx), [options.topicId]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -788,6 +874,7 @@ export const messageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { id, value, agentId, ...options } = input;
       await assertCanUseMessageTargets(guardCtx(ctx), [id]);
+      await assertCreatorMessageTargets(guardCtx(ctx), [id]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
@@ -813,6 +900,7 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       await assertCanUseMessageTargets(guardCtx(ctx), [input.id]);
+      await assertCreatorMessageTargets(guardCtx(ctx), [input.id]);
       if (input.value === false) {
         return ctx.messageModel.deleteMessageTranslate(input.id);
       }

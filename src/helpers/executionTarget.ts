@@ -81,7 +81,7 @@ export interface ResolveExecutionTargetOptions {
   isHetero?: boolean;
   /**
    * Whether this heterogeneous provider can execute in the server cloud
-   * sandbox. Defaults to `false` for Amp, CodeBuddy, OpenCode, Pi, and Qoder
+   * sandbox. Defaults to `false` for Amp, CodeBuddy, Droid, OpenCode, Pi, and Qoder
    * (which currently
    * require a local or connected device) and `true` otherwise. Callers that only
    * know the provider through a legacy model discriminator can override the
@@ -117,6 +117,7 @@ export const isHeterogeneousSandboxExecutionAvailable = (type: string | undefine
   type !== 'amp' &&
   type !== 'codebuddy' &&
   type !== 'cursor' &&
+  type !== 'droid' &&
   type !== 'kimi-code' &&
   type !== 'hermes' &&
   type !== 'opencode' &&
@@ -249,6 +250,24 @@ export const isLocalSandboxEnabled = (
 ): boolean => effectiveTarget === 'local' && agencyConfig?.localSandbox === true;
 
 /**
+ * Whether a run resolved to `target` executes somewhere that can read absolute
+ * paths on THIS machine — the gate for inserting `<localFile>` path references
+ * (drag-drop) instead of uploading the file. Only `local` (in-process on this
+ * desktop) or a `device` target whose bound device IS this machine qualifies.
+ * `sandbox` runs in a cloud container where the user's filesystem does not
+ * exist, and `auto` / a foreign `device` may land on another machine — a path
+ * reference dragged from here would be unreadable there, so those runs must
+ * fall back to attachment upload.
+ */
+export const canExecutionTargetReadLocalPaths = (
+  target: DeviceExecutionTarget,
+  agencyConfig: LobeAgentAgencyConfig | undefined,
+  currentDeviceId: string | undefined,
+): boolean =>
+  target === 'local' ||
+  (target === 'device' && !!currentDeviceId && agencyConfig?.boundDeviceId === currentDeviceId);
+
+/**
  * Derive the `runtimeMode` tool gate from the unified execution target:
  * `local` → local-system tools, `sandbox` → cloud sandbox, `device`/`auto` →
  * gateway routing, `none` → no run tools (plain chat). `device`/`auto`/`none`
@@ -326,6 +345,23 @@ export type ExecutionPlan = { target: DeviceExecutionTarget } &
     | { kind: 'sandbox' }
   );
 
+export type ExecutionManifestEnvironment = ExecutionPlan['kind'] | 'local';
+
+/**
+ * Preserve the desktop-local capability signal after the server resolves that
+ * target to the caller's registered desktop. A per-request device override can
+ * keep `target: local` while routing to another machine, so the device IDs must
+ * match before the manifest advertises desktop-only image reads. Unrouted local
+ * targets keep their plan kind so manifests describe the sandbox degradation.
+ */
+export const executionPlanToManifestExecutionEnv = (
+  plan: ExecutionPlan,
+  localDeviceId?: string,
+): ExecutionManifestEnvironment =>
+  plan.kind === 'device' && plan.target === 'local' && plan.deviceId === localDeviceId
+    ? 'local'
+    : plan.kind;
+
 /** Device tools (local-system / remote-device proxy) only exist in device-capable sessions. */
 export const isDeviceCapablePlan = (plan: ExecutionPlan): boolean =>
   plan.kind === 'device' || plan.kind === 'device-unrouted';
@@ -384,6 +420,16 @@ export interface ResolveExecutionPlanParams {
   /** See {@link ResolveExecutionTargetOptions.sandboxExecutionAvailable}. */
   sandboxExecutionAvailable?: boolean;
   /**
+   * Resolve to the cloud sandbox instead of `none` whenever the run cannot
+   * route to a device (a device-capable target denied by `canUseDevice`, or a
+   * stored `none` target). Set by the aiAgent caller for Agent Share visitor
+   * runs the creator granted `lobe-cloud-sandbox`: a visitor can never reach
+   * the creator's device, so the sandbox is the only surface that grant can
+   * mean, and it only materializes when the plan resolves to `sandbox`. Chat
+   * mode still wins — it means "no tools", not "no device".
+   */
+  sandboxFallback?: boolean;
+  /**
    * What initiated this run. Bot triggers have no UI to pick a device, so a
    * stored `local` target (in-process IPC, unreachable from the cloud bot
    * server) is upgraded to `auto` and auto-activates an online device. `none`
@@ -405,7 +451,8 @@ export interface ResolveExecutionPlanParams {
  * 2. `none` / `sandbox` NEVER route to a device — no auto-activation, no
  *    step-level re-injection, no exceptions.
  * 3. `canUseDevice === false` degrades any device-capable target to `none`
- *    (sandbox stays available — it never touches the user's machines).
+ *    (sandbox stays available — it never touches the user's machines). With
+ *    `sandboxFallback` the degraded run resolves to the sandbox instead.
  * 4. With online info: a bound device is used only if online (an offline
  *    binding stays unrouted rather than guessing another machine). An UNBOUND
  *    run auto-activates ONLY in the opt-in `auto` mode (single device → use it;
@@ -427,6 +474,7 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
     onlineDeviceIds,
     requestedDeviceId,
     sandboxExecutionAvailable,
+    sandboxFallback,
     trigger,
     workspaceScoped,
   } = params;
@@ -463,6 +511,10 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
     // no device can run. Device-only providers stay pending at `none` so the
     // caller can require an explicit local/connected-device selection.
     if (isHetero && sandboxAvailable) return { kind: 'sandbox', target: 'sandbox' };
+    // Share-visitor runs granted the cloud sandbox land here for every
+    // device-capable target (visitors never pass `canUseDevice`); the grant
+    // is honoured with the sandbox rather than dropped with `none`.
+    if (sandboxFallback) return { kind: 'sandbox', target: 'sandbox' };
     // a device-capable target denied by the access policy degrades to plain
     // chat — the effective target is `none`, not the stored one
     return { kind: 'none', target: 'none' };

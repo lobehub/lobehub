@@ -13,14 +13,13 @@ export type LabStage = 'alpha' | 'beta';
  */
 type LabFeatureI18nKey =
   | 'agentGraphConfig'
-  | 'agentProviderBinding'
   | 'artifactDeployment'
   | 'claudeCodeSdk'
   | 'codexAppServer'
   | 'desktopSplitView'
+  | 'evalCapture'
   | 'heteroSessionImport'
   | 'imessage'
-  | 'inAppBrowser'
   | 'inputMarkdown'
   | 'messageTextSelectionActions'
   | 'oauthApps'
@@ -72,6 +71,12 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     stage: 'alpha',
   },
   {
+    flag: 'enableEvalCapture',
+    i18nKey: 'evalCapture',
+    searchKeywords: ['eval', 'test case', 'capture', 'regression', 'benchmark'],
+    stage: 'alpha',
+  },
+  {
     flag: 'enableTopicAcceptance',
     i18nKey: 'topicAcceptance',
     searchKeywords: ['acceptance', 'checklist'],
@@ -111,13 +116,6 @@ export const LAB_FEATURES: LabFeatureItem[] = [
   },
   {
     desktopOnly: true,
-    flag: 'enableAgentProviderBinding',
-    i18nKey: 'agentProviderBinding',
-    searchKeywords: ['agent provider binding', 'claude code api', 'codex api', 'api provider'],
-    stage: 'alpha',
-  },
-  {
-    desktopOnly: true,
     flag: 'enableClaudeCodeSdk',
     i18nKey: 'claudeCodeSdk',
     searchKeywords: ['claude code', 'claude sdk'],
@@ -137,13 +135,6 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     flag: 'enableHeteroSessionImport',
     i18nKey: 'heteroSessionImport',
     searchKeywords: ['import session', 'claude code', 'codex'],
-    stage: 'beta',
-  },
-  {
-    desktopOnly: true,
-    flag: 'enableInAppBrowser',
-    i18nKey: 'inAppBrowser',
-    searchKeywords: ['in-app browser', 'inapp browser', 'embedded browser', 'browser tab'],
     stage: 'beta',
   },
 ];

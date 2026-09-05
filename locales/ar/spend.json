@@ -12,6 +12,7 @@
   "table.columns.spend": "الاعتمادات",
   "table.columns.time": "الوقت",
   "table.columns.totalTokens": "استخدام الرموز",
+  "table.columns.trigger.enums.agent_share": "مشاركة الوكيل",
   "table.columns.trigger.enums.agent_signal": "إشارة الوكيل",
   "table.columns.trigger.enums.api": "استدعاء API",
   "table.columns.trigger.enums.bot": "رسالة بوت",

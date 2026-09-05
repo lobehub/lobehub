@@ -1,6 +1,6 @@
 import { CUSTOM_FOLDER_FILE_TYPE, DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
 import type { SFSymbol } from '@lobechat/electron-client-ipc';
-import { copyToClipboard, Icon, Tooltip } from '@lobehub/ui';
+import { copyToClipboard, Icon } from '@lobehub/ui';
 import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { type ItemType } from 'antd/es/menu/interface';
 import {
@@ -25,7 +25,6 @@ import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { usePermission } from '@/hooks/usePermission';
-import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { documentService } from '@/services/document';
 import { useFileStore } from '@/store/file';
 import { useKnowledgeBaseStore } from '@/store/library';
@@ -33,7 +32,6 @@ import { useTreeStore } from '@/store/tree';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 import { downloadFile } from '@/utils/client/downloadFile';
-import { isForbiddenError } from '@/utils/forbiddenError';
 
 import { openMoveToFolderModal } from '../MoveToFolderModal';
 
@@ -86,9 +84,6 @@ export const useFileItemDropdown = ({
   const appOrigin = useAppOrigin();
   const { allowed: canEditResources } = usePermission('edit_own_content');
   const currentUserId = useUserStore(userProfileSelectors.userId);
-  // Row-level ownership: only the creator or a workspace owner may rename or
-  // delete a shared resource — mirrors the server-side enforcement.
-  const canManage = useResourceManageable(userId);
 
   const {
     deleteResource,
@@ -418,19 +413,11 @@ export const useFileItemDropdown = ({
           },
         canEditResources &&
           isFolder && {
-            disabled: !canManage,
             icon: <Icon icon={PencilIcon} />,
             key: 'rename',
-            label: canManage ? (
-              t('FileManager.actions.rename')
-            ) : (
-              <Tooltip title={t('manageOnlyCreator', { ns: 'common' })}>
-                <span>{t('FileManager.actions.rename')}</span>
-              </Tooltip>
-            ),
+            label: t('FileManager.actions.rename'),
             onClick: async ({ domEvent }) => {
               domEvent.stopPropagation();
-              if (!canManage) return;
               onRenameStart?.();
             },
             sfSymbol: 'pencil',
@@ -440,44 +427,37 @@ export const useFileItemDropdown = ({
         },
         canEditResources && {
           danger: true,
-          disabled: !canManage,
           icon: <Icon icon={Trash} />,
           key: 'delete',
-          label: canManage ? (
-            t('delete', { ns: 'common' })
-          ) : (
-            <Tooltip title={t('manageOnlyCreator', { ns: 'common' })}>
-              <span>{t('delete', { ns: 'common' })}</span>
-            </Tooltip>
-          ),
+          label: t('delete', { ns: 'common' }),
           onClick: async ({ domEvent }) => {
             domEvent.stopPropagation();
-            if (!canManage) return;
             confirmModal({
               content: isFolder
                 ? t('FileManager.actions.confirmDeleteFolder')
                 : t('FileManager.actions.confirmDelete'),
               okButtonProps: { danger: true },
               title: t('delete', { ns: 'common' }),
-              onOk: async () => {
-                try {
-                  // Use optimistic delete - instant UI update, sync in background
-                  await deleteResource(id);
+              onOk: () => {
+                // The store removes the row optimistically. Do not hold the
+                // confirmation dialog open while the network mutation and
+                // reconciliation finish; failures roll back and surface a toast.
+                void (async () => {
+                  try {
+                    await deleteResource(id);
 
-                  // Revalidate tree for the parent folder
-                  const { queryParams } = useFileStore.getState();
-                  const parentId = queryParams?.parentId ?? '';
-                  void useTreeStore.getState().revalidate(parentId);
-                  await refreshFileList({ revalidateResources: false });
+                    // Revalidate tree for the parent folder
+                    const { queryParams } = useFileStore.getState();
+                    const parentId = queryParams?.parentId ?? '';
+                    void useTreeStore.getState().revalidate(parentId);
+                    await refreshFileList({ revalidateResources: false });
 
-                  toast.success(t('FileManager.actions.deleteSuccess'));
-                } catch (error) {
-                  toast.error(
-                    isForbiddenError(error)
-                      ? t('manageOnlyCreator', { ns: 'common' })
-                      : t('operationFailed', { ns: 'common' }),
-                  );
-                }
+                    toast.success(t('FileManager.actions.deleteSuccess'));
+                  } catch (error) {
+                    console.error('Failed to delete resource:', error);
+                    toast.error(t('operationFailed', { ns: 'common' }));
+                  }
+                })();
               },
             });
           },
@@ -489,7 +469,6 @@ export const useFileItemDropdown = ({
     addFilesToKnowledgeBase,
     appOrigin,
     canEditResources,
-    canManage,
     currentUserId,
     deleteResource,
     filename,

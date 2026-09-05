@@ -1,4 +1,5 @@
 import { INBOX_SESSION_ID } from '@lobechat/const';
+import { MessageGroupType } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -14,6 +15,7 @@ import {
   embeddings,
   fileChunks,
   files,
+  messageGroups,
   messageQueries,
   messageQueryChunks,
   messages,
@@ -26,7 +28,7 @@ import {
   users,
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
-import { MessageModel } from '../../message';
+import { MessageModel, toVisitorMessage } from '../../message';
 import { codeEmbedding } from '../fixtures/embedding';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -303,7 +305,15 @@ describe('MessageModel Query Tests', () => {
           },
         ]);
         await trx.insert(files).values([
-          { id: 'f-0', url: 'abc', name: 'file-1', userId, fileType: 'image/png', size: 1000 },
+          {
+            id: 'f-0',
+            url: 'abc',
+            name: 'file-1',
+            userId,
+            fileType: 'image/png',
+            metadata: { height: 600, ratio: 1.3333, width: 800 },
+            size: 1000,
+          },
           { id: 'f-1', url: 'abc', name: 'file-1', userId, fileType: 'image/png', size: 100 },
           { id: 'f-3', url: 'abc', name: 'file-3', userId, fileType: 'image/png', size: 400 },
         ]);
@@ -329,7 +339,14 @@ describe('MessageModel Query Tests', () => {
       expect(result).toHaveLength(2);
       expect(result[0].id).toBe('1');
       expect(result[0].imageList).toEqual([
-        { alt: 'file-1', id: 'f-0', url: `${domain}/f-0/abc` },
+        {
+          alt: 'file-1',
+          height: 600,
+          id: 'f-0',
+          ratio: 1.3333,
+          url: `${domain}/f-0/abc`,
+          width: 800,
+        },
         { alt: 'file-3', id: 'f-3', url: `${domain}/f-3/abc` },
       ]);
       expect(postProcessUrl).toHaveBeenCalledWith(
@@ -360,6 +377,7 @@ describe('MessageModel Query Tests', () => {
           name: 'query-by-id.png',
           userId,
           fileType: 'image/png',
+          metadata: { height: 720, ratio: 1.7778, width: 1280 },
           size: 1000,
         });
         await trx.insert(messagesFiles).values({
@@ -378,8 +396,11 @@ describe('MessageModel Query Tests', () => {
       expect(result[0].imageList).toEqual([
         {
           alt: 'query-by-id.png',
+          height: 720,
           id: 'query-by-id-file',
+          ratio: 1.7778,
           url: '/f/query-by-id-file/files/query-by-id.png',
+          width: 1280,
         },
       ]);
       expect(postProcessUrl).toHaveBeenCalledWith(
@@ -1489,6 +1510,248 @@ describe('MessageModel Query Tests', () => {
     });
   });
 
+  describe('agent-share visitor isolation', () => {
+    const visitorUserId = 'message-query-visitor';
+    const visitorTopicId = 'topic-visitor-direct-read';
+
+    beforeEach(async () => {
+      // A visitor topic is stored under the CREATOR's userId; only `senderId`
+      // marks it as belonging to a share visitor.
+      await serverDB.insert(topics).values([
+        { id: visitorTopicId, senderId: visitorUserId, title: 'visitor topic', userId },
+        { id: 'topic-creator-own', title: 'creator topic', userId },
+      ]);
+      await serverDB.insert(messages).values([
+        {
+          content: 'visitor secret',
+          id: 'visitor-direct-msg',
+          role: 'user',
+          topicId: visitorTopicId,
+          userId,
+        },
+        {
+          content: 'creator message',
+          id: 'creator-direct-msg',
+          role: 'user',
+          topicId: 'topic-creator-own',
+          userId,
+        },
+      ]);
+    });
+
+    it('hides visitor messages when the creator reads the visitor topic by id', async () => {
+      const result = await messageModel.query({ topicId: visitorTopicId });
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('still returns the creator’s own topic messages', async () => {
+      const result = await messageModel.query({ topicId: 'topic-creator-own' });
+
+      expect(result.map((item) => item.id)).toEqual(['creator-direct-msg']);
+    });
+
+    it('keeps serving the visitor through queryForVisitor', async () => {
+      const result = await messageModel.queryForVisitor({ topicId: visitorTopicId });
+
+      expect(result.map((item) => item.id)).toEqual(['visitor-direct-msg']);
+    });
+
+    it('honours an explicit allowShareVisitor opt-in (agent runtime path)', async () => {
+      const result = await messageModel.query(
+        { topicId: visitorTopicId },
+        { allowShareVisitor: true },
+      );
+
+      expect(result.map((item) => item.id)).toEqual(['visitor-direct-msg']);
+    });
+
+    it('excludes visitor messages from queryTopicTranscript', async () => {
+      const visitorTranscript = await messageModel.queryTopicTranscript({
+        limit: 50,
+        offset: 0,
+        topicId: visitorTopicId,
+      });
+
+      expect(visitorTranscript.items).toHaveLength(0);
+      expect(visitorTranscript.total).toBe(0);
+
+      const ownTranscript = await messageModel.queryTopicTranscript({
+        limit: 50,
+        offset: 0,
+        topicId: 'topic-creator-own',
+      });
+
+      expect(ownTranscript.items.map((item) => item.id)).toEqual(['creator-direct-msg']);
+    });
+
+    it('keeps countByTopic working for the visitor turn cap when the runtime opts in', async () => {
+      // The per-topic turn cap depends on counting visitor messages, and after
+      // the ownership() flip the default scope excludes visitor rows. The
+      // share runtime (`reserveShareVisitorTurn` in
+      // `shareVisitorAbuseGuards.ts`) constructs `MessageModel` with
+      // `includeShareVisitor: true`; mirror that opt-in here.
+      const defaultCount = await messageModel.countByTopic({
+        role: 'user',
+        topicId: visitorTopicId,
+      });
+      expect(defaultCount).toBe(0);
+
+      const shareRuntimeMessageModel = new MessageModel(serverDB, userId, undefined, undefined, {
+        includeShareVisitor: true,
+      });
+      const optedInCount = await shareRuntimeMessageModel.countByTopic({
+        role: 'user',
+        topicId: visitorTopicId,
+      });
+      expect(optedInCount).toBe(1);
+    });
+
+    it('hides synthetic message-group nodes when the creator reads a visitor topic', async () => {
+      // Regression for `queryMessageGroupNodes`: a creator's default
+      // `query({ topicId })` on a visitor topic returned no messages but
+      // still emitted the group's `compressedGroup` node (with its `content`
+      // summary) or `compareGroup` node, leaking the visitor's conversation
+      // shape.
+      await serverDB.insert(messageGroups).values([
+        {
+          content: 'visitor compression summary',
+          createdAt: new Date('2024-01-01T10:00:00Z'),
+          id: 'visitor-group-compress',
+          topicId: visitorTopicId,
+          type: MessageGroupType.Compression,
+          userId,
+        },
+        {
+          createdAt: new Date('2024-01-01T10:01:00Z'),
+          id: 'visitor-group-compare',
+          topicId: visitorTopicId,
+          type: MessageGroupType.Parallel,
+          userId,
+        },
+      ]);
+
+      const creatorResult = await messageModel.query({ topicId: visitorTopicId });
+      expect(creatorResult).toHaveLength(0);
+
+      const shareRuntimeModel = new MessageModel(serverDB, userId, undefined, undefined, {
+        includeShareVisitor: true,
+      });
+      const runtimeResult = await shareRuntimeModel.query({ topicId: visitorTopicId });
+      const visitorResult = await messageModel.queryForVisitor({ topicId: visitorTopicId });
+
+      // Both visitor-facing paths still see the group nodes — this fix
+      // scopes the leak to the CREATOR's default read.
+      const runtimeIds = new Set(runtimeResult.map((m) => m.id));
+      expect(runtimeIds.has('visitor-group-compress')).toBe(true);
+      expect(runtimeIds.has('visitor-group-compare')).toBe(true);
+
+      const visitorIds = new Set(visitorResult.map((m) => m.id));
+      expect(visitorIds.has('visitor-group-compress')).toBe(true);
+      expect(visitorIds.has('visitor-group-compare')).toBe(true);
+    });
+  });
+
+  describe('toVisitorMessage', () => {
+    it('recursively sanitizes assistantGroup children in a compressedGroup node', async () => {
+      // Regression: `children` on an assistantGroup node inside
+      // `compressedMessages` carries full AssistantContentBlock data
+      // (`usage`, `error`, `tools`, `metadata`, `performance`, plus nested
+      // `council` messages with `sender`). The previous narrow snapshot
+      // sanitize only cleared `model`/`provider`, letting the rest leak.
+      const compressedGroupNode = {
+        compressedMessages: [
+          {
+            children: [
+              {
+                content: 'assistant reply',
+                error: {
+                  message: 'raw provider payload',
+                  type: 'ProviderBizError',
+                } as any,
+                id: 'assistant-child-1',
+                metadata: { usage: { totalTokens: 42 } } as any,
+                model: 'gpt-4o',
+                performance: { latency: 100 } as any,
+                provider: 'openai',
+                sender: { fullName: 'Creator', id: 'creator-user-id' } as any,
+                tools: [{ id: 't1', identifier: 'search' }] as any,
+                usage: { totalTokens: 42 } as any,
+                council: [
+                  {
+                    content: 'member reply',
+                    id: 'council-member-1',
+                    model: 'gpt-4o',
+                    provider: 'openai',
+                    role: 'assistant',
+                    sender: { fullName: 'Member', id: 'member-user-id' } as any,
+                    usage: { totalTokens: 7 } as any,
+                  },
+                ] as any,
+              } as any,
+            ],
+            content: '',
+            id: 'assistant-group-1',
+            role: 'assistantGroup',
+          } as any,
+        ],
+        content: 'summary',
+        id: 'compressed-group-1',
+        role: 'compressedGroup',
+      } as any;
+
+      const stripped = toVisitorMessage(compressedGroupNode);
+      const child = (stripped.compressedMessages as any[])[0].children[0];
+
+      expect(child.sender).toBeNull();
+      expect(child.usage).toBeUndefined();
+      expect(child.model).toBeUndefined();
+      expect(child.provider).toBeUndefined();
+      expect(child.metadata?.usage).toBeUndefined();
+      expect(child.error.type).not.toBe('ProviderBizError');
+      // council members must be recursed, not passed through verbatim
+      expect(child.council).toHaveLength(1);
+      expect(child.council[0].sender).toBeNull();
+      expect(child.council[0].usage).toBeUndefined();
+      expect(child.council[0].model).toBeUndefined();
+
+      // With `showModelInfo` the model snapshot survives on both the child
+      // and the recursed council members, and children stay attached.
+      const kept = toVisitorMessage(compressedGroupNode, { showModelInfo: true });
+      const keptChild = (kept.compressedMessages as any[])[0].children[0];
+      expect(keptChild.model).toBe('gpt-4o');
+      expect(keptChild.usage).toEqual({ totalTokens: 42 });
+      expect(keptChild.council[0].model).toBe('gpt-4o');
+      expect(keptChild.council[0].usage).toEqual({ totalTokens: 7 });
+    });
+
+    it('keeps the narrow snapshot for compareGroup children in both modes', async () => {
+      const compareGroupNode = {
+        children: [
+          {
+            content: 'variant',
+            createdAt: new Date('2024-01-01T10:00:00Z'),
+            id: 'variant-1',
+            model: 'gpt-4o',
+            provider: 'openai',
+            role: 'assistant',
+          },
+        ],
+        id: 'compare-group-1',
+        role: 'compareGroup',
+      } as any;
+
+      const stripped = toVisitorMessage(compareGroupNode);
+      expect((stripped.children as any[])[0].model).toBeNull();
+      expect((stripped.children as any[])[0].provider).toBeNull();
+      expect((stripped.children as any[])[0].content).toBe('variant');
+
+      const kept = toVisitorMessage(compareGroupNode, { showModelInfo: true });
+      expect((kept.children as any[])[0].model).toBe('gpt-4o');
+      expect((kept.children as any[])[0].provider).toBe('openai');
+    });
+  });
+
   describe('queryAll', () => {
     it('should return all messages belonging to the user in descending order', async () => {
       // Create test data
@@ -1523,6 +1786,92 @@ describe('MessageModel Query Tests', () => {
       expect(result).toHaveLength(2);
       expect(result[0].id).toBe('2');
       expect(result[1].id).toBe('1');
+    });
+
+    it('should filter by role and date range on the server side', async () => {
+      await serverDB.insert(messages).values([
+        {
+          id: 'q-user-old',
+          userId,
+          role: 'user',
+          content: 'old user message',
+          createdAt: new Date('2023-01-01'),
+        },
+        {
+          id: 'q-user-new',
+          userId,
+          role: 'user',
+          content: 'recent user message',
+          createdAt: new Date('2023-02-01'),
+        },
+        {
+          id: 'q-assistant-new',
+          userId,
+          role: 'assistant',
+          content: 'recent assistant message',
+          createdAt: new Date('2023-02-01'),
+        },
+      ]);
+
+      const byRole = await messageModel.queryAll({ role: 'user' });
+      expect(byRole.map((m) => m.id)).toEqual(['q-user-new', 'q-user-old']);
+
+      const byRoleAndDate = await messageModel.queryAll({
+        role: 'user',
+        startDate: '2023-01-15',
+      });
+      expect(byRoleAndDate.map((m) => m.id)).toEqual(['q-user-new']);
+    });
+
+    it('should include agent name/title for messages bound to an agent', async () => {
+      await serverDB
+        .insert(agents)
+        .values([{ id: 'q-agent', name: 'Lobe', title: 'Diary Agent', userId }]);
+      await serverDB.insert(messages).values([
+        {
+          agentId: 'q-agent',
+          content: 'assistant reply',
+          id: 'q-with-agent',
+          role: 'assistant',
+          userId,
+        },
+        { content: 'user question', id: 'q-without-agent', role: 'user', userId },
+      ]);
+
+      const result = await messageModel.queryAll();
+      const withAgent = result.find((m) => m.id === 'q-with-agent');
+      const withoutAgent = result.find((m) => m.id === 'q-without-agent');
+
+      expect(withAgent?.agentName).toBe('Lobe');
+      expect(withAgent?.agentTitle).toBe('Diary Agent');
+      expect(withoutAgent?.agentName).toBeNull();
+      expect(withoutAgent?.agentTitle).toBeNull();
+    });
+
+    it('excludes messages inside an agent-share visitor topic', async () => {
+      // Visitor topics keep the creator's userId, so a bare ownership filter
+      // would dump visitor conversations into the creator's full export.
+      await serverDB.insert(topics).values({
+        id: 'topic-visitor-query-all',
+        userId,
+        senderId: 'visitor-user-x',
+        title: 'visitor topic',
+      });
+      await serverDB.insert(messages).values([
+        {
+          id: 'visitor-msg',
+          userId,
+          role: 'user',
+          content: 'visitor message',
+          topicId: 'topic-visitor-query-all',
+        },
+        { id: 'creator-msg', userId, role: 'user', content: 'creator message' },
+      ]);
+
+      const result = await messageModel.queryAll();
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('creator-msg');
     });
   });
 
@@ -1631,6 +1980,32 @@ describe('MessageModel Query Tests', () => {
       expect(result[1].id).toBe('inbox-msg-2');
     });
 
+    it('excludes agent-share visitor messages from the null-session branch', async () => {
+      // Visitor messages carry no sessionId, so without the visitor predicate
+      // the inbox (null-session) branch would sweep them in.
+      await serverDB.insert(topics).values({
+        id: 'topic-visitor-session',
+        userId,
+        senderId: 'visitor-user-x',
+        title: 'visitor topic',
+      });
+      await serverDB.insert(messages).values([
+        {
+          id: 'visitor-inbox-msg',
+          userId,
+          role: 'user',
+          content: 'visitor message',
+          topicId: 'topic-visitor-session',
+        },
+        { id: 'creator-inbox-msg', userId, role: 'user', content: 'creator message' },
+      ]);
+
+      const result = await messageModel.queryBySessionId(null);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('creator-inbox-msg');
+    });
+
     it('should query inbox messages when sessionId is undefined', async () => {
       await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
 
@@ -1734,6 +2109,84 @@ describe('MessageModel Query Tests', () => {
 
       // Assert result
       expect(result).toHaveLength(0);
+    });
+  });
+
+  describe('queryByKeyword with external candidates', () => {
+    it('hydrates current-scope messages in the legacy recency order', async () => {
+      await serverDB.insert(messages).values([
+        {
+          content: 'Own older message',
+          createdAt: new Date('2026-08-20T00:00:00.000Z'),
+          id: 'candidate-message-old',
+          role: 'user',
+          userId,
+        },
+        {
+          content: 'Own recent message',
+          createdAt: new Date('2026-08-25T00:00:00.000Z'),
+          id: 'candidate-message-recent',
+          role: 'assistant',
+          userId,
+        },
+        {
+          content: 'Other user message',
+          id: 'candidate-message-other',
+          role: 'user',
+          userId: otherUserId,
+        },
+      ]);
+      const ftsSearchCandidates = vi.fn().mockResolvedValue({
+        candidates: [
+          { id: 'candidate-message-other', score: 12 },
+          { id: 'candidate-message-deleted', score: 10 },
+          { id: 'candidate-message-old', score: 8 },
+          { id: 'candidate-message-recent', score: 6 },
+        ],
+        total: 4,
+      });
+      const model = new MessageModel(serverDB, userId, undefined, {
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates,
+      });
+
+      const result = await model.queryByKeyword('candidate');
+
+      expect(result.map(({ id }) => id)).toEqual([
+        'candidate-message-recent',
+        'candidate-message-old',
+      ]);
+      expect(ftsSearchCandidates).toHaveBeenCalledWith({
+        entity: 'messages',
+        filters: {},
+        pagination: {},
+        query: { fields: ['content'], text: 'candidate' },
+      });
+    });
+
+    it('hydrates candidate sets larger than the PostgreSQL bind-parameter limit', async () => {
+      await serverDB.insert(messages).values({
+        content: 'Matching message',
+        id: 'candidate-message-match',
+        role: 'user',
+        userId,
+      });
+      const candidates = Array.from({ length: 65_536 }, (_, index) => ({
+        id: `candidate-stale-${index}`,
+        score: 1,
+      }));
+      candidates.push({ id: 'candidate-message-match', score: 2 });
+      const model = new MessageModel(serverDB, userId, undefined, {
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates: vi.fn().mockResolvedValue({
+          candidates,
+          total: candidates.length,
+        }),
+      });
+
+      const result = await model.queryByKeyword('candidate');
+
+      expect(result.map(({ id }) => id)).toEqual(['candidate-message-match']);
     });
   });
 

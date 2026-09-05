@@ -23,6 +23,7 @@ const mapToResourceItem = (item: FileListItem): ResourceItem => {
     chunkingStatus: item.chunkingStatus,
     // Document-specific fields
     content: item.content,
+    contentPreview: item.contentPreview,
 
     createdAt: item.createdAt,
 
@@ -109,6 +110,7 @@ export class ResourceService {
     // Map frontend parameter names to backend parameter names
     const backendParams = {
       ...params,
+      includeContentPreview: params.includeContentPreview ?? false,
       knowledgeBaseId: params.libraryId, // Map libraryId to knowledgeBaseId
       libraryId: undefined, // Remove the frontend-specific parameter
     };

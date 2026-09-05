@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import GitStatus from '../GitStatus';
 
 const globalStoreMock = vi.hoisted(() => ({
-  setWorkingSidebarTab: vi.fn(),
+  openWorkingSidebar: vi.fn(),
   status: {
     showRightPanel: false,
     workingSidebarTab: 'resources',
@@ -84,24 +84,8 @@ vi.mock('@/components/AntdStaticMethods', () => ({
   message: { error: vi.fn(), info: vi.fn(), success: vi.fn() },
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() },
-}));
-
 vi.mock('@/components/RingLoading', () => ({
   default: () => <span data-testid="ring-loading" />,
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  Icon: () => <span data-testid="icon" />,
-  Tooltip: ({ children, title }: { children: ReactNode; title?: ReactNode }) => (
-    <div data-title={typeof title === 'string' ? title : undefined}>{children}</div>
-  ),
-}));
-
-vi.mock('antd-style', () => ({
-  createStaticStyles: () => ({}),
-  cssVar: new Proxy({}, { get: () => 'var(--mock)' }),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -168,8 +152,7 @@ describe('GitStatus', () => {
 
     fireEvent.click(screen.getByRole('button'));
 
-    expect(globalStoreMock.setWorkingSidebarTab).toHaveBeenCalledWith('review');
-    expect(globalStoreMock.toggleRightPanel).toHaveBeenCalledWith(true);
+    expect(globalStoreMock.openWorkingSidebar).toHaveBeenCalledWith('review');
   });
 
   it('renders the linked GitHub PR number as a live display (no topic write)', async () => {

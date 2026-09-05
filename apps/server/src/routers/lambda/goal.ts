@@ -1,4 +1,5 @@
 import { goalStatuses } from '@lobechat/const/goal';
+import { MAX_GOAL_METRIC_CRITERIA } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -8,6 +9,10 @@ import { GoalModel } from '@/database/models/goal';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { GoalService } from '@/server/services/goal';
+import { advanceGoal } from '@/server/services/goal/advanceGoal';
+import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
+
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
 
 const goalProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
   opts.next({
@@ -75,7 +80,7 @@ export const goalRouter = router({
     .input(
       idInput.extend({
         description: z.string().optional(),
-        kind: z.enum(['problem', 'work', 'finding', 'decision']),
+        kind: z.enum(['problem', 'task', 'finding', 'decision']),
         priority: z.number().int().optional(),
         status: z
           .enum(['proposed', 'active', 'waiting', 'resolved', 'rejected', 'retired'])
@@ -95,32 +100,82 @@ export const goalRouter = router({
     .input(
       z.object({
         agentId: z.string().optional(),
+        /** Set by the `/goal` tool so the seeded graph is authored by the agent. */
+        createdByAgentId: z.string().optional(),
         config: z
           .object({
+            acceptance: z
+              .object({
+                /** Numeric clauses gating acceptance; keyed by a series on this goal. */
+                metrics: z
+                  .array(
+                    z.object({
+                      key: z.string().min(1).max(255),
+                      op: z.enum(['gte', 'lte', 'gt', 'lt', 'eq']).optional(),
+                      target: z.number(),
+                    }),
+                  )
+                  .max(MAX_GOAL_METRIC_CRITERIA)
+                  .optional(),
+              })
+              .optional(),
+            // Bounds mirror `resolveMaxConcurrentTasks`, so a rejected value and
+            // a clamped one cannot disagree about what the cap may be.
+            maxConcurrentTasks: z.number().int().min(1).max(10).nullable().optional(),
             recovery: z
               .object({
-                maxAttemptsPerWork: z.number().int().positive().optional(),
+                maxAttemptsPerTask: z.number().int().positive().optional(),
                 maxStepsPerRun: z.number().int().positive().nullable().optional(),
                 operationLeaseTimeoutMs: z.number().int().min(60_000).optional(),
+              })
+              .optional(),
+            schedule: z
+              .object({
+                /** ISO-8601 instant; past it the coordinator stops dispatching. */
+                deadline: z.string().datetime().nullable().optional(),
               })
               .optional(),
           })
           .optional(),
         maxRounds: z.number().int().positive().optional(),
         maxTotalCost: z.number().positive().optional(),
+        /** Structured acceptance criteria — persisted rows that gate the terminal acceptance. */
+        criteria: z
+          .array(
+            z.object({
+              description: z.string().optional(),
+              instruction: z.string().optional(),
+              title: z.string().min(1),
+            }),
+          )
+          .optional(),
+        problemDescription: z.string().optional(),
         projectId: z.string().optional(),
         requirement: z.string().optional(),
         title: z.string().min(1),
-        work: z.array(z.string().min(1)).optional(),
+        /** Seed task nodes, in dependency-free order. */
+        tasks: z
+          .array(
+            z.union([
+              z.string().min(1),
+              z.object({ description: z.string().optional(), title: z.string().min(1) }),
+            ]),
+          )
+          .optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        return {
-          data: await ctx.goalService.create(input),
-          message: 'Goal created',
-          success: true,
-        };
+        const data = await ctx.goalService.create(input);
+        // A goal is not a document — creating one means starting it. The
+        // coordinator takes it from here without a client holding a loop open.
+        await scheduleGoalAdvance({
+          goalId: data.goal.id,
+          trigger: 'create',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+        return { data, message: 'Goal created', success: true };
       } catch (error) {
         mapGoalError(error, 'create');
       }
@@ -136,20 +191,142 @@ export const goalRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        return {
-          data: await ctx.goalService.decide(
-            input.id,
-            input.decisionId,
-            input.optionId,
-            input.resolution,
-          ),
-          message: 'Decision resolved',
-          success: true,
-        };
+        const data = await ctx.goalService.decide(
+          input.id,
+          input.decisionId,
+          input.optionId,
+          input.resolution,
+        );
+        // Answering the gate is what unblocks the Task; carry on from here.
+        await scheduleGoalAdvance({
+          goalId: input.id,
+          trigger: 'decide',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+        return { data, message: 'Decision resolved', success: true };
       } catch (error) {
         mapGoalError(error, 'decide');
       }
     }),
+
+  /** Declare or clear the numeric clauses gating this goal's acceptance. */
+  setMetricCriteria: goalWriteProcedure
+    .input(
+      idInput.extend({
+        metrics: z
+          .array(
+            z.object({
+              key: z.string().min(1).max(255),
+              op: z.enum(['gte', 'lte', 'gt', 'lt', 'eq']).optional(),
+              target: z.number(),
+            }),
+          )
+          .max(MAX_GOAL_METRIC_CRITERIA),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const goal = await ctx.goalModel.findById(input.id);
+        if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+        assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
+        const data = await ctx.goalService.setMetricCriteria(input.id, input.metrics);
+        // Relaxing a clause can free a goal parked short of acceptance.
+        await scheduleGoalAdvance({
+          goalId: input.id,
+          trigger: 'observe',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+        return { data, message: 'Metric criteria updated', success: true };
+      } catch (error) {
+        mapGoalError(error, 'setMetricCriteria');
+      }
+    }),
+
+  /**
+   * Record a measurement against this goal and let the coordinator react.
+   *
+   * The graph otherwise only moves when a Task settles, but a long-horizon
+   * goal advances when the *world* changes — a follower count, a conversion
+   * rate. This is that entry point: it writes to the generic metrics layer
+   * (subject = this goal) and schedules an advance, so a goal whose numeric
+   * acceptance was the last thing outstanding closes on the observation
+   * instead of waiting up to a sweep window.
+   */
+  recordObservation: goalWriteProcedure
+    .input(
+      idInput.extend({
+        key: z.string().min(1).max(255),
+        kind: z.enum(['gauge', 'counter']).optional(),
+        observedAt: z.coerce.date().optional(),
+        title: z.string().optional(),
+        unit: z.string().optional(),
+        value: z.number(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const { id, ...observation } = input;
+        const { shouldAdvance, ...data } = await ctx.goalService.recordObservation(id, observation);
+        // A goal parked short of its measured acceptance is only worth waking
+        // when the measurement actually cleared the gate; otherwise the advance
+        // would tick straight back out as `goal_paused`.
+        if (shouldAdvance) {
+          await scheduleGoalAdvance({
+            goalId: id,
+            trigger: 'observe',
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId ?? undefined,
+          });
+        }
+        return { data, message: 'Observation recorded', success: true };
+      } catch (error) {
+        mapGoalError(error, 'recordObservation');
+      }
+    }),
+
+  /**
+   * Run the coordinator now and report where it stopped.
+   *
+   * The goal advances on its own — this is the "don't wait for the next event"
+   * nudge, so the surface can hand off in one call instead of holding a tick
+   * loop open in the browser.
+   */
+  advance: goalWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
+    try {
+      const { result, ticks } = await advanceGoal({
+        goalId: input.id,
+        trigger: 'manual',
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+      return { data: { ...result, ticks }, message: result.message, success: true };
+    } catch (error) {
+      mapGoalError(error, 'advance');
+    }
+  }),
+
+  /**
+   * Delete a goal and, by FK cascade, its whole graph. Anything still running
+   * is stopped first; the graph Tasks themselves are deliberately left in place
+   * — they are ordinary tasks with their own history and acceptance.
+   */
+  delete: goalWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
+    try {
+      // `agent:update` says the member may change goals; it does not say whose.
+      // Without this any member could delete a colleague's goal and cascade its
+      // whole graph away, which is the same rule tasks already enforce.
+      const goal = await ctx.goalModel.findById(input.id);
+      if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+      assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
+
+      await ctx.goalService.delete(input.id);
+      return { message: 'Goal deleted', success: true };
+    } catch (error) {
+      mapGoalError(error, 'delete');
+    }
+  }),
 
   graph: goalProcedure.input(idInput).query(async ({ ctx, input }) => {
     try {
@@ -160,9 +337,8 @@ export const goalRouter = router({
   }),
 
   /**
-   * List goals. Each item is the execution-carrier task with the goal row
-   * attached (`goal`) plus subtree run statistics (`totalRunCost` /
-   * `totalRunDuration`), shaped TaskItem-compatible for the existing goal UI.
+   * List goals with their graph roll-up: how many Tasks are done, how many
+   * decision gates wait on a human, and what the exploration has cost.
    */
   list: goalProcedure
     .input(
@@ -186,30 +362,52 @@ export const goalRouter = router({
 
   resume: goalWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
     try {
-      return {
-        data: await ctx.goalService.resume(input.id),
-        message: 'Goal resumed',
-        success: true,
-      };
+      const data = await ctx.goalService.resume(input.id);
+      await scheduleGoalAdvance({
+        goalId: input.id,
+        trigger: 'resume',
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+      return { data, message: 'Goal resumed', success: true };
     } catch (error) {
       mapGoalError(error, 'resume');
     }
   }),
 
+  /** Rebind which persisted verify criteria gate this goal's terminal acceptance. */
+  setAcceptanceCriteria: goalWriteProcedure
+    .input(idInput.extend({ criteriaIds: z.array(z.string()) }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await ctx.goalService.setAcceptanceCriteria(input.id, input.criteriaIds);
+        return { success: true };
+      } catch (error) {
+        mapGoalError(error, 'setAcceptanceCriteria');
+      }
+    }),
+
   setBudget: goalWriteProcedure
     .input(
       idInput.extend({
+        /** ISO-8601 calendar-time budget; null clears the deadline. */
+        deadline: z.string().datetime().nullable().optional(),
         maxRounds: z.number().int().positive().nullable().optional(),
         maxTotalCost: z.number().positive().nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input: { id, ...budget } }) => {
       try {
-        return {
-          data: await ctx.goalService.setBudget(id, budget),
-          message: 'Goal budget updated',
-          success: true,
-        };
+        const data = await ctx.goalService.setBudget(id, budget);
+        // Raising a budget is how a user un-sticks a goal that stopped on one;
+        // it should start moving again without a second gesture.
+        await scheduleGoalAdvance({
+          goalId: id,
+          trigger: 'budget',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+        return { data, message: 'Goal budget updated', success: true };
       } catch (error) {
         mapGoalError(error, 'setBudget');
       }
@@ -222,4 +420,14 @@ export const goalRouter = router({
       mapGoalError(error, 'tick');
     }
   }),
+
+  updateRequirement: goalWriteProcedure
+    .input(idInput.extend({ requirement: z.string().min(1) }))
+    .mutation(async ({ ctx, input: { id, requirement } }) => {
+      try {
+        return { data: await ctx.goalService.updateRequirement(id, requirement), success: true };
+      } catch (error) {
+        mapGoalError(error, 'updateRequirement');
+      }
+    }),
 });

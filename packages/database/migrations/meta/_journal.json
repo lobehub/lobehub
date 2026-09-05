@@ -1064,6 +1064,48 @@
       "when": 1787815769048,
       "tag": "0151_document_comments",
       "breakpoints": true
+    },
+    {
+      "idx": 152,
+      "version": "7",
+      "when": 1788016606062,
+      "tag": "0152_trash_goal_traces_eval_dataset",
+      "breakpoints": true
+    },
+    {
+      "idx": 153,
+      "version": "7",
+      "when": 1788108760793,
+      "tag": "0153_fts_search_sync_outbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 154,
+      "version": "7",
+      "when": 1788141397076,
+      "tag": "0154_goal_node_task_kind",
+      "breakpoints": true
+    },
+    {
+      "idx": 155,
+      "version": "7",
+      "when": 1788177029327,
+      "tag": "0155_document_likes",
+      "breakpoints": true
+    },
+    {
+      "idx": 156,
+      "version": "7",
+      "when": 1788281814640,
+      "tag": "0156_project_working_directories",
+      "breakpoints": true
+    },
+    {
+      "idx": 157,
+      "version": "7",
+      "when": 1788399005304,
+      "tag": "0157_add_metrics_tables",
+      "breakpoints": true
     }
   ],
   "version": "6"

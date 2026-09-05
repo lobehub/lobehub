@@ -12,9 +12,6 @@ import { messageMapKey } from '../../../../utils/messageMapKey';
 import { createMockMessage, createMockResolvedAgentConfig, TEST_IDS } from './fixtures';
 import { resetTestEnvironment } from './helpers';
 
-// Keep zustand mock as it's needed globally
-vi.mock('zustand/traditional');
-
 // Mock the tRPC client & agentRuntimeService so the import chain doesn't pull
 // server-only code (cloud business packages, redis envs) into the test env.
 vi.mock('@/libs/trpc/client', () => ({

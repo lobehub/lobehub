@@ -275,3 +275,18 @@ describe('Google Gemini 3.1 Flash Image models', () => {
     );
   });
 });
+
+describe('vendor provider cards', () => {
+  it('advertises native search, image and video input for GLM-5.3-Flash', () => {
+    // Without `video: true` the chat pipeline falls back to media analysis instead of sending
+    // video to the model natively, even though the official card lists video input.
+    const glm53Flash = LOBE_DEFAULT_MODEL_LIST.find(
+      (m) => m.providerId === 'zhipu' && m.id === 'glm-5.3-flash',
+    );
+
+    expect(glm53Flash?.abilities).toEqual(
+      expect.objectContaining({ reasoning: true, search: true, video: true, vision: true }),
+    );
+    expect(glm53Flash?.settings?.searchImpl).toBe('params');
+  });
+});

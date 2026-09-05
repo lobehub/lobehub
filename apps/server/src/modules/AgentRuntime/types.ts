@@ -36,8 +36,16 @@ export interface IAgentStateManager {
     operationId: string,
     data: {
       agentConfig?: any;
+      visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
       mirrorToOperationId?: string;
       modelRuntimeConfig?: any;
+      /**
+       * Agent Share visitor runs only: the visitor's id, under which the
+       * gateway WS channel is registered (the op itself executes as the
+       * creator, `userId`). Its presence also marks the op as a share run for
+       * a queue worker that never saw `publishAgentRuntimeInit`.
+       */
+      streamOwnerUserId?: string;
       userId?: string;
       workspaceId?: string;
     },
@@ -79,9 +87,21 @@ export interface IAgentStateManager {
   }>;
 
   /**
+   * Check the interrupt sentinel written by `markInterrupted`. Cheap enough
+   * to poll, unlike `loadAgentState` which pulls the whole state blob.
+   */
+  isInterrupted: (operationId: string) => Promise<boolean>;
+
+  /**
    * Load Agent state
    */
   loadAgentState: (operationId: string) => Promise<AgentState | null>;
+
+  /**
+   * Set the interrupt sentinel for the operation, alongside the
+   * authoritative `status: 'interrupted'` in the persisted state.
+   */
+  markInterrupted: (operationId: string) => Promise<void>;
 
   /**
    * Extend the step execution lock if it is still owned by the caller.

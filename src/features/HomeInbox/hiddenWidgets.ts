@@ -13,6 +13,8 @@ interface ColumnWidgetInput {
   hideNeedsYou?: boolean;
   hideRunning?: boolean;
   hideUnread?: boolean;
+  /** Business-slot widget: only counts once the slot says it exists here. */
+  usageActive?: boolean;
 }
 
 export const hasVisibleRailWidget = ({
@@ -20,11 +22,13 @@ export const hasVisibleRailWidget = ({
   hideNeedsYou,
   hideRunning,
   hideUnread,
+  usageActive,
 }: ColumnWidgetInput): boolean =>
   HOME_INBOX_WIDGET_KEYS.some((key) => {
     if (hideNeedsYou && key === 'needsYou') return false;
     if (hideRunning && key === 'running') return false;
     if (hideUnread && key === 'unread') return false;
+    if (!usageActive && key === 'usage') return false;
 
     return !hiddenWidgets.includes(key);
   });

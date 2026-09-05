@@ -119,6 +119,7 @@
   "KeyValueEditor.keyPlaceholder": "키",
   "KeyValueEditor.valuePlaceholder": "값",
   "LocalFile.action.open": "열기",
+  "LocalFile.action.preview": "미리보기",
   "LocalFile.action.showInFolder": "폴더에서 보기",
   "MaxTokenSlider.unlimited": "제한 없음",
   "ModelSelect.featureTag.audio": "이 모델은 오디오 입력 인식을 지원합니다.",

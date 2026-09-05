@@ -11,7 +11,8 @@ const mockUseApp = {
   notification: { open: vi.fn() },
 };
 
-vi.mock('antd', () => ({
+vi.mock('antd', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   App: {
     useApp: vi.fn(() => mockUseApp),
   },

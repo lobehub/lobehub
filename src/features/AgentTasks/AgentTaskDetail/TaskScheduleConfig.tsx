@@ -194,7 +194,6 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
   const detail = useTaskStore(taskDetailSelectors.activeTaskDetail);
   const schedulePattern = useTaskStore(taskDetailSelectors.activeTaskSchedulePattern);
   const scheduleTimezone = useTaskStore(taskDetailSelectors.activeTaskScheduleTimezone);
-  const assigneeUserId = useTaskStore(taskDetailSelectors.activeTaskAssigneeUserId);
 
   const finalTaskId = taskId ?? activeTaskId;
   const finalCurrentInterval = currentInterval ?? activeTaskInterval;
@@ -307,15 +306,6 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
         </Flexbox>
         <Switch checked={enabled} disabled={!canEditTask} onChange={handleEnableChange} />
       </Flexbox>
-
-      {!enabled && !!assigneeUserId && (
-        <Flexbox horizontal align="center" className={styles.preview} gap={10}>
-          <Icon color={cssVar.colorTextDescription} icon={TimerIcon} size={16} />
-          <Text style={{ color: cssVar.colorTextSecondary, fontSize: 12 }}>
-            {t('taskSchedule.memberAssigneeHint')}
-          </Text>
-        </Flexbox>
-      )}
 
       {enabled && nextRunText && (
         <Flexbox horizontal align="center" className={styles.preview} gap={10}>

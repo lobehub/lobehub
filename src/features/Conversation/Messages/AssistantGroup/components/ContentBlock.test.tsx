@@ -15,15 +15,6 @@ const retryFailedAssistantStepMock = vi.fn();
 const navigateMock = vi.fn();
 let isInReasoningMock = false;
 
-vi.mock('@lobehub/ui', () => ({
-  Block: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Highlighter: ({ children }: { children?: ReactNode }) => <pre>{children}</pre>,
-  Skeleton: {
-    Button: () => <div>loading</div>,
-  },
-}));
-
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     i18n: {
@@ -67,10 +58,6 @@ vi.mock('@/features/Electron/HeterogeneousAgent/StatusGuide', () => ({
       </button>
     </div>
   ),
-}));
-
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ allowed: true }),
 }));
 
 vi.mock('@/hooks/useProviderName', () => ({

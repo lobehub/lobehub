@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox, Skeleton } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { Button, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useEffect, useState } from 'react';
@@ -145,8 +145,6 @@ const MessengerSettings = memo(() => {
               error={platformsSWR.error}
               errorVariant={'block'}
               isEmpty={platforms.length === 0}
-              isLoading={platformsSWR.isLoading}
-              loading={<Skeleton active paragraph={{ rows: 3 }} title={false} />}
               empty={
                 <div className={styles.emptyState}>{t('messenger.noPlatformsConfigured')}</div>
               }

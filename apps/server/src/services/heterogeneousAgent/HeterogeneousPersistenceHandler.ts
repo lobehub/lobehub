@@ -284,6 +284,7 @@ const INTERVENTION_KINDS = new Set<AgentInterventionInteractionKind>([
 const INTERVENTION_PROVIDERS = new Set<AgentInterventionProvider>([
   'claude-code',
   'cursor',
+  'droid',
   'qoder',
 ]);
 
@@ -409,21 +410,26 @@ export class HeterogeneousPersistenceHandler {
   }
 
   /**
-   * Flush trailing accumulators, persist the CLI's native session id (when
-   * present) for next-turn resume, and drop the per-operation state.
+   * Flush trailing accumulators and drop the per-operation state.
    *
    * Resume id source: CC's `--resume <sessionId>` token comes from the
-   * adapter's cached `system:init.session_id`. The CLI surfaces it here as a
-   * `heteroFinish` argument; we write it to `topic.metadata.heteroSessionId`
-   * (the same field the desktop renderer uses), so the next CLI spawn for
-   * this topic can include `--resume <id>`.
+   * adapter's cached `system:init.session_id`. The heterogeneous-agent service
+   * settles topic-level resume ownership after this flush.
+   *
+   * Use when:
+   * - A heterogeneous operation reaches a terminal producer callback.
+   *
+   * Expects:
+   * - The operation state was created by ingest or can be bootstrapped from the topic marker.
+   *
+   * Returns:
+   * - A promise that resolves after final message state is flushed and released.
    */
   async finish(params: {
     assistantMessageId?: string;
     error?: { body?: Record<string, unknown>; message: string; type: string };
     operationId: string;
     result: 'success' | 'error' | 'cancelled';
-    sessionId?: string;
     /**
      * Needed to bootstrap state for a failed run that never ingested: a
      * process-level failure (spawn ENOENT, auth printed straight to stderr)
@@ -463,20 +469,6 @@ export class HeterogeneousPersistenceHandler {
 
     try {
       await this.flushFinalState(state, params.error, params.result);
-      if (params.sessionId) {
-        await this.persistSessionId(state.topicId, params.sessionId);
-      } else if (params.result === 'error') {
-        // No new session id was produced and the run failed. The most common
-        // cause in cloud sandboxes is `--resume <staleId>` failing because the
-        // container was recycled and session files are gone. Clear any persisted
-        // `heteroSessionId` so the next turn starts a fresh CC session instead
-        // of looping on the same stale id.
-        //
-        // When CC ran (system.init was emitted) but produced an error result,
-        // `params.sessionId` is set — so this branch is NOT reached and the
-        // valid session id is kept for resume on the next turn.
-        await this.clearSessionId(state.topicId);
-      }
     } finally {
       operationStates.delete(params.operationId);
     }
@@ -493,21 +485,6 @@ export class HeterogeneousPersistenceHandler {
       log('persisted sessionId topic=%s sessionId=%s', topicId, sessionId);
     } catch (err) {
       log('persistSessionId failed topic=%s err=%O', topicId, err);
-    }
-  }
-
-  /**
-   * Remove a stale `heteroSessionId` from topic metadata. Called when a run
-   * fails without producing a new session id (e.g. `--resume` rejected because
-   * the sandbox was recycled). Prevents the next turn from inheriting a session
-   * id that will never succeed.
-   */
-  private async clearSessionId(topicId: string): Promise<void> {
-    try {
-      await this.deps.topicModel.updateMetadata(topicId, { heteroSessionId: undefined });
-      log('cleared stale sessionId topic=%s', topicId);
-    } catch (err) {
-      log('clearSessionId failed topic=%s err=%O', topicId, err);
     }
   }
 
@@ -1064,8 +1041,8 @@ export class HeterogeneousPersistenceHandler {
         // produced a valid session id but got killed before finishing would
         // otherwise leave `topic.metadata.heteroSessionId` empty, forcing the
         // next turn to spawn a fresh CC session and drop all `--resume` history.
-        // Writing it here makes resume survive abandon. finish() still overwrites
-        // with its own sessionId (or clears a stale one on a resume failure).
+        // Writing it here makes resume survive abandon. The terminal service
+        // path may still overwrite it after verifying topic ownership.
         await this.persistSessionId(state.topicId, sid);
       }
     }
@@ -1324,6 +1301,20 @@ export class HeterogeneousPersistenceHandler {
 
     const summary = interventionSummary(intent.request);
     const reviewRequest = sanitizeAgentInterventionRequestForReview(intent.request);
+    const transitionKey = `${state.operationId}:${intent.toolCallId}:${intent.transition}`;
+    const pendingTransitionKey = `${state.operationId}:${intent.toolCallId}:pending`;
+    const requiresPendingReviewNotification =
+      !!this.deps.userId &&
+      !state.notifiedInterventionTransitions.has(transitionKey) &&
+      !state.notifiedInterventionTransitions.has(pendingTransitionKey);
+    if (
+      requiresPendingReviewNotification &&
+      (!reviewRequest?.interactionKind || !reviewRequest.provider)
+    ) {
+      throw new Error(
+        `Unsafe heterogeneous intervention review payload toolCallId=${intent.toolCallId}`,
+      );
+    }
     const durableState: StoredHeterogeneousIntervention = {
       deadline: intent.request?.deadline,
       interactionKind: intent.request?.interactionKind,
@@ -1342,10 +1333,8 @@ export class HeterogeneousPersistenceHandler {
       [HETEROGENEOUS_INTERVENTION_STATE_KEY]: durableState,
     });
 
-    const transitionKey = `${state.operationId}:${intent.toolCallId}:${intent.transition}`;
     if (!this.deps.userId || state.notifiedInterventionTransitions.has(transitionKey)) return;
 
-    const pendingTransitionKey = `${state.operationId}:${intent.toolCallId}:pending`;
     if (!state.notifiedInterventionTransitions.has(pendingTransitionKey)) {
       if (!reviewRequest?.interactionKind || !reviewRequest.provider) {
         throw new Error(

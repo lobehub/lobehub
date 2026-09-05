@@ -1,6 +1,6 @@
 import { type UIChatMessage } from '@lobechat/types';
 import { TraceEventType } from '@lobechat/types';
-import * as lobeUIModules from '@lobehub/ui';
+import { copyToClipboard } from '@lobehub/ui';
 import { act, renderHook } from '@testing-library/react';
 import { type Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -20,6 +20,11 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useChatStore } from '../../store';
 
 // Mock @/libs/swr mutate
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  copyToClipboard: vi.fn(),
+}));
+
 vi.mock('@/libs/swr', async () => {
   const actual = await vi.importActual('@/libs/swr');
   return {
@@ -34,7 +39,6 @@ vi.stubGlobal(
   vi.fn(() => Promise.resolve(new Response('mock'))),
 );
 
-vi.mock('zustand/traditional');
 // Mock service
 vi.mock('@/services/message', () => ({
   messageService: {
@@ -452,13 +456,12 @@ describe('chatMessage actions', () => {
       const messageId = 'message-id';
       const content = 'Test content';
       const { result } = renderHook(() => useChatStore());
-      const copyToClipboardSpy = vi.spyOn(lobeUIModules, 'copyToClipboard');
 
       await act(async () => {
         await result.current.copyMessage(messageId, content);
       });
 
-      expect(copyToClipboardSpy).toHaveBeenCalledWith(content);
+      expect(copyToClipboard).toHaveBeenCalledWith(content);
     });
 
     it('should call internal_traceMessage with correct parameters', async () => {

@@ -138,6 +138,8 @@ export interface ProjectFileIndexResult {
 }
 
 export interface ProjectFileSearchParams extends ProjectFileIndexParams {
+  changedOnly?: boolean;
+  excludeIgnored?: boolean;
   limit?: number;
   query: string;
 }
@@ -242,7 +244,7 @@ export interface ListHeterogeneousAgentModelsParams {
   command?: string;
   cwd?: string;
   env?: Record<string, string>;
-  type: 'codebuddy' | 'cursor' | 'grok-build' | 'opencode' | 'pi' | 'qoder' | 'trae';
+  type: 'codebuddy' | 'cursor' | 'droid' | 'grok-build' | 'opencode' | 'pi' | 'qoder' | 'trae';
 }
 
 export interface HeterogeneousAgentModelCatalogItem {

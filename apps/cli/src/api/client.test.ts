@@ -13,11 +13,8 @@ vi.mock('../auth/refresh', () => ({
 }));
 
 vi.mock('../settings', () => ({
+  loadActiveWorkspace: () => undefined,
   resolveServerUrl: () => 'https://app.lobehub.com',
-}));
-
-vi.mock('../utils/logger', () => ({
-  log: { error: vi.fn() },
 }));
 
 const headersOfLastLink = () => (mockHttpLink.mock.calls.at(-1)![0] as any).headers;

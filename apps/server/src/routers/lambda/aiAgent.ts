@@ -4,9 +4,12 @@ import { type AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { LOADING_FLAT } from '@lobechat/const';
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { parse } from '@lobechat/conversation-flow';
+import { getServerDefaultHeterogeneousAgentConfig } from '@lobechat/heterogeneous-agents';
 import type { ExecAgentResult, TaskCurrentActivity, TaskStatusResult } from '@lobechat/types';
 import {
+  CreateThreadWithMessageSchema,
   entityIdPattern,
+  isServerDefaultHeterogeneousRelayInvocation,
   LocalHeterogeneousAgentTypeSchema,
   RequestTrigger,
   ThreadStatus,
@@ -53,6 +56,7 @@ import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import { agentOperations, topics, workspaceMembers } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { notShareVisitorTopicRef } from '@/database/utils/shareVisitor';
 import { heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { signHeteroOperationJWT, signUserJWT } from '@/libs/trpc/utils/internalJwt';
@@ -752,6 +756,63 @@ const assertCanUseOperationAgent = async (params: {
 };
 
 /**
+ * Ownership guard for operation-keyed READ endpoints (`getOperationStatus`,
+ * `getPendingInterventions`). The runtime coordinator keys operations purely
+ * by id and returns the raw operation metadata — including the executing
+ * user's full `agentConfig` and `modelRuntimeConfig` — so the id itself must
+ * not act as a bearer token.
+ *
+ * Historically that was inert: an operation id was only ever known to the
+ * user who started it. Agent Share breaks the assumption on purpose — a share
+ * run executes under the CREATOR's identity while the VISITOR receives the
+ * `operationId` (to attach to the Gateway stream, which redacts creator
+ * details). Without this guard the visitor could replay that id here and read
+ * the unredacted creator config the stream path deliberately hides.
+ *
+ * Visible to: the operation's owner, or (workspace runs) a member with `use`
+ * access to the operation's agent in the SAME workspace as the caller.
+ * Everything else — share visitors, AND the creator looking at a visitor's
+ * run — resolves as NOT_FOUND so the endpoint does not confirm which ids
+ * exist.
+ */
+const assertOperationVisibleToCaller = async (params: {
+  db: LobeChatDatabase;
+  operationId: string;
+  userId: string;
+  workspaceId?: string | null;
+}) => {
+  const { db, operationId, userId, workspaceId } = params;
+
+  // Share-visitor runs are ALSO excluded (`notShareVisitorTopicRef`): they
+  // execute under the creator's userId, so the owner shortcut below would
+  // otherwise hand the creator the visitor's run metadata, history and
+  // stream events — the same exclusion `findOwnOperationById` applies to
+  // the trace reads.
+  const [row] = await db
+    .select({
+      agentId: agentOperations.agentId,
+      userId: agentOperations.userId,
+      workspaceId: agentOperations.workspaceId,
+    })
+    .from(agentOperations)
+    .where(
+      and(eq(agentOperations.id, operationId), notShareVisitorTopicRef(agentOperations.topicId)),
+    )
+    .limit(1);
+
+  const notFound = () => new TRPCError({ code: 'NOT_FOUND', message: 'Operation not found' });
+
+  if (!row) throw notFound();
+  if (row.userId === userId) return;
+
+  if (!row.workspaceId || !workspaceId || row.workspaceId !== workspaceId || !row.agentId) {
+    throw notFound();
+  }
+
+  await assertCanUseWorkspaceAgent({ agentId: row.agentId, db, userId, workspaceId });
+};
+
+/**
  * Resolve client-supplied conversation ids before an agent run writes through
  * AiAgentService. Checking only the requested agent/group is insufficient: an
  * existing topic or parent message can belong to a different, view-only
@@ -895,6 +956,13 @@ const ExecAgentSchema = z
             workingDirectoryConfig: workingDirConfigSchema.optional(),
           })
           .optional(),
+        /**
+         * Branch this run into a new thread (subtopic) under the resolved topic.
+         * The gateway path never calls `aiChat.sendMessageInServer`, so this is
+         * the only way the composer's "start a new subtopic" intent reaches the
+         * server — without it the turn lands on the topic's main spine.
+         */
+        newThread: CreateThreadWithMessageSchema.optional(),
         /**
          * Group orchestration role of the run, stamped onto the assistant
          * message's `metadata.orchestrationRole` so the supervisor/member
@@ -1769,13 +1837,28 @@ export const aiAgentRouter = router({
         operationId: input.operationId,
         userId: ctx.userId,
       });
+      const relayInvocation = operation.metadata?.serverDefaultRelayInvocation;
+      const agentType = operation.metadata?.agentType;
+      const agentConfig =
+        typeof agentType === 'string'
+          ? getServerDefaultHeterogeneousAgentConfig(agentType)
+          : undefined;
+      const verifiedRelayInvocation =
+        isServerDefaultHeterogeneousRelayInvocation(relayInvocation) &&
+        agentConfig?.ingress === relayInvocation.ingress &&
+        relayInvocation.operationId === input.operationId &&
+        relayInvocation.agentType === agentType &&
+        relayInvocation.model === operation.model &&
+        relayInvocation.provider === operation.provider
+          ? relayInvocation
+          : null;
       await settleServerDefaultControlOperation({
         currentStatus: operation.status,
         model,
         operationId: input.operationId,
         targetStatus: input.result,
       });
-      return { success: true as const };
+      return { relayInvocation: verifiedRelayInvocation, success: true as const };
     }),
 
   cancelServerDefaultHeterogeneousOperation: aiAgentBaseProcedure
@@ -2066,6 +2149,9 @@ export const aiAgentRouter = router({
         messageIds: [
           ...existingMessageIds,
           parentMessageId,
+          // A new subtopic branches off an existing message — authorize that
+          // anchor too, or a caller could fork a thread off someone else's turn.
+          appContext?.newThread?.sourceMessageId,
           resumeApproval?.parentMessageId,
           // Every batch target is authorized too — a caller must not be able to
           // slip a message it doesn't own into the list behind an owned anchor.
@@ -2566,6 +2652,13 @@ export const aiAgentRouter = router({
 
       log('Getting operation status for %s', operationId);
 
+      await assertOperationVisibleToCaller({
+        db: ctx.serverDB,
+        operationId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+
       // Get operation status using AgentRuntimeService
       const operationStatus = await ctx.agentRuntimeService.getOperationStatus({
         historyLimit,
@@ -2583,10 +2676,28 @@ export const aiAgentRouter = router({
 
       log('Getting pending interventions for operationId: %s, userId: %s', operationId, userId);
 
+      // Same bearer-token hazard as `getOperationStatus`: an operation id must
+      // resolve to a run the caller may see, and the user-wide listing may only
+      // ever enumerate the CALLER's own runs — `input.userId` is not a way to
+      // read another user's pending interventions.
+      if (operationId) {
+        await assertOperationVisibleToCaller({
+          db: ctx.serverDB,
+          operationId,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+      } else if (userId && userId !== ctx.userId) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Cannot list operations of another user',
+        });
+      }
+
       // Get pending interventions using AgentRuntimeService
       const result = await ctx.agentRuntimeService.getPendingInterventions({
         operationId: operationId || undefined,
-        userId: userId || undefined,
+        userId: operationId ? undefined : ctx.userId,
       });
 
       return result;
@@ -3583,10 +3694,20 @@ export const aiAgentRouter = router({
   refreshGatewayToken: aiAgentProcedure
     .input(z.object({ topicId: z.string() }))
     .query(async ({ input, ctx }) => {
-      // Verify the topic belongs to this user and has a running operation
-      const topic = await ctx.topicModel.findById(input.topicId);
+      // Verify the topic belongs to this user and has a running operation.
+      // Use the creator-facing finder: a creator must not mint a token
+      // against a visitor's running operation; visitors use
+      // `shareChat.refreshGatewayToken` instead.
+      const topic = await ctx.topicModel.findOwnTopicById(input.topicId);
 
-      if (!topic?.metadata?.runningOperation) {
+      // Same liveness check as `shareChat.refreshGatewayToken`: the marker is
+      // cleared best-effort, so refuse to reconnect a client to a run that has
+      // already ended — the client treats NOT_FOUND as "stale marker, clear it".
+      const runningOperation = topic?.metadata?.runningOperation;
+      if (
+        !runningOperation ||
+        !(await ctx.topicModel.isRunningOperationAlive(ctx.serverDB, runningOperation))
+      ) {
         throw new TRPCError({
           code: 'NOT_FOUND',
           message: 'No running operation found on this topic',

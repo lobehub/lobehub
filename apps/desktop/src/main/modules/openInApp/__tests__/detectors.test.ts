@@ -6,16 +6,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { detectAllApps, detectApp } from '../detectors';
 import { extractAllIcons } from '../iconExtractor';
 
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 // Mock node:fs/promises
 vi.mock('node:fs/promises', () => ({
   access: vi.fn(),

@@ -644,6 +644,26 @@ export class DocumentService {
         throw new Error(`Document not found: ${id}`);
       }
 
+      // Optimistic-concurrency predicate for the client's CONFLICT recovery:
+      // the retry asserts the exact version it verified. Re-read the row with
+      // FOR UPDATE so the check-and-write is atomic inside this transaction —
+      // an interleaved save from another session either commits first (and
+      // fails this predicate) or blocks until we commit.
+      if (params.expectedUpdatedAt !== undefined) {
+        const [row] = await transactionDb
+          .select({ updatedAt: documents.updatedAt })
+          .from(documents)
+          .where(eq(documents.id, id))
+          .for('update');
+        if (!row?.updatedAt || row.updatedAt.getTime() !== params.expectedUpdatedAt.getTime()) {
+          throw new TRPCError({
+            cause: { data: { code: 'DocumentVersionMismatch' } },
+            code: 'CONFLICT',
+            message: 'Document has been updated by another session',
+          });
+        }
+      }
+
       // Accepted-view projections used only for historyAppended comparison and
       // for the "before" snapshot written into history. The persisted editorData
       // keeps any pending diff nodes — they're only normalized when the user

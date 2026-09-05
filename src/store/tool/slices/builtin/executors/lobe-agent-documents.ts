@@ -102,11 +102,20 @@ const runtime = new AgentDocumentsExecutionRuntime(
       });
       return doc;
     },
-    createDocument: async ({ agentId, content, hintIsSkill, title, toolContext, trigger }) => {
+    createDocument: async ({
+      agentId,
+      content,
+      hintIsSkill,
+      parentId,
+      title,
+      toolContext,
+      trigger,
+    }) => {
       const doc = await agentDocumentService.createDocument({
         agentId,
         content,
         hintIsSkill,
+        parentId,
         title,
         toolContext,
         trigger,
@@ -126,6 +135,7 @@ const runtime = new AgentDocumentsExecutionRuntime(
       agentId,
       content,
       hintIsSkill,
+      parentId,
       title,
       toolContext,
       topicId,
@@ -135,6 +145,7 @@ const runtime = new AgentDocumentsExecutionRuntime(
         agentId,
         content,
         hintIsSkill,
+        parentId,
         title,
         toolContext,
         topicId,

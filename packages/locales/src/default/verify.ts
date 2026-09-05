@@ -54,6 +54,7 @@ export default {
   'acceptance.checks.viewTrace': 'View verification run',
   'acceptance.checks.finalRoundHint':
     'The final result and evidence come from this round — click to locate it.',
+  'acceptance.checks.holisticTitle': 'Task delivery acceptance',
   'acceptance.checks.introduced': 'Added in round {{round}}',
   'acceptance.checks.introducedHint':
     'This check first appeared in that round — click to locate it.',
@@ -234,6 +235,12 @@ export default {
   'acceptance.roundStatus.repairing': 'Repairing',
   'acceptance.roundStatus.uncertain': 'Verify uncertain',
   'acceptance.roundStatus.verifying': 'In progress',
+  'acceptance.sharedNotice.readOnlyDescription':
+    'You can browse every check and its evidence, but only the author can act on this acceptance.',
+  'acceptance.sharedNotice.reviewableDescription':
+    'You can browse every check and its evidence, and review them on behalf of your workspace.',
+  'acceptance.sharedNotice.title': 'Shared with you',
+  'acceptance.sharedNotice.titleWithName': 'Shared by {{name}}',
   'acceptance.stats.failed': '{{count}} failed',
   'acceptance.stats.notExecuted': '{{count}} not executed',
   'acceptance.stats.passed': '{{count}} passed',
@@ -248,6 +255,8 @@ export default {
   'acceptance.status.rejected': 'Delivery rejected',
   'acceptance.status.repairing': 'Repair in progress',
   'acceptance.status.verifying': 'Verification in progress',
+  'acceptance.shell.back': 'Back',
+  'acceptance.shell.menu': 'Show deliveries',
   'acceptance.subject.document': 'Document',
   'acceptance.subject.standalone': 'Standalone',
   'acceptance.subject.task': 'Task',
@@ -294,6 +303,23 @@ export default {
   'acceptance.workspace.actions.rename': 'Rename',
   'acceptance.workspace.actions.reopen': 'Reopen for review',
   'acceptance.workspace.actions.status': 'Status',
+  'acceptance.workspace.batch.accept': 'Accept',
+  'acceptance.workspace.batch.close': 'Close',
+  'acceptance.workspace.batch.deleteConfirmDescription':
+    'Delete the {{count}} selected acceptance(s)? Their verification rounds are kept — they detach into standalone reports.',
+  'acceptance.workspace.batch.deleteConfirmTitle': 'Delete {{count}} acceptance(s)',
+  'acceptance.workspace.batch.deleteSuccess': '{{count}} acceptance(s) deleted',
+  'acceptance.workspace.batch.enter': 'Select multiple',
+  'acceptance.workspace.batch.error': 'The batch action failed. Try again.',
+  'acceptance.workspace.batch.exit': 'Done',
+  'acceptance.workspace.batch.move': 'Move to',
+  'acceptance.workspace.batch.partial': '{{count}} updated, {{failed}} unchanged',
+  'acceptance.workspace.batch.projectRemoveSuccess':
+    '{{count}} acceptance(s) removed from their projects',
+  'acceptance.workspace.batch.projectSuccess': '{{count}} acceptance(s) moved to the project',
+  'acceptance.workspace.batch.selectAll': 'Select all',
+  'acceptance.workspace.batch.selected': '{{count}} selected',
+  'acceptance.workspace.batch.statusSuccess': '{{count}} acceptance(s) updated',
   'acceptance.workspace.checkCount': '{{count}} checks',
   'acceptance.workspace.deleteConfirmDescription':
     'Delete the acceptance “{{title}}”? Its verification rounds are kept — they detach into standalone reports.',
@@ -301,7 +327,7 @@ export default {
   'acceptance.workspace.deleteError': 'Failed to delete acceptance',
   'acceptance.workspace.deleteSuccess': 'Acceptance deleted',
   'acceptance.workspace.emptyDetail.description':
-    'Pick an acceptance on the left to review its checks, rounds and evidence.',
+    'Open the deliveries menu to pick a record and inspect its checks, rounds and evidence.',
   'acceptance.workspace.emptyDetail.title': 'Select an acceptance',
   'acceptance.workspace.filters.active': 'In progress',
   'acceptance.workspace.filters.all': 'All acceptances',
@@ -316,9 +342,49 @@ export default {
   'acceptance.workspace.groups.actions': 'Project actions',
   'acceptance.workspace.groups.createProject': 'Create project',
   'acceptance.workspace.groups.viewProject': 'View project',
+  'acceptance.workspace.groups.byNone': 'No grouping',
+  'acceptance.workspace.groups.byProject': 'By project',
+  'acceptance.workspace.groups.byStatus': 'By status',
+  'acceptance.workspace.groups.byTime': 'By time',
+  'acceptance.workspace.groups.mode': 'Group by',
+  'acceptance.workspace.groups.status.accepted': 'Accepted',
+  'acceptance.workspace.groups.status.closed': 'Closed',
+  'acceptance.workspace.groups.status.rejected': 'Sent back',
+  'acceptance.workspace.groups.status.review': 'Awaiting your review',
+  'acceptance.workspace.groups.status.running': 'Verifying',
+  'acceptance.workspace.groups.time.earlier': 'Earlier',
+  'acceptance.workspace.groups.time.month': 'Last 30 days',
+  'acceptance.workspace.groups.time.today': 'Today',
+  'acceptance.workspace.groups.time.week': 'Last 7 days',
+  'acceptance.workspace.groups.time.yesterday': 'Yesterday',
+  'acceptance.workspace.searchDeeper': 'Search further back',
+  'acceptance.workspace.searchScope': 'Searched the {{count}} loaded acceptance(s).',
   'acceptance.workspace.listEmpty':
     'Ingest a verification report with the CLI and its acceptance will show up here.',
   'acceptance.workspace.listEmptyTitle': 'No acceptances yet',
+  'acceptance.workspace.onboarding.description':
+    'Add the Acceptance skill to your project, then start a review from your coding agent.',
+  'acceptance.workspace.onboarding.agent.description':
+    'Copy this prompt to your coding agent and let it complete the setup.',
+  'acceptance.workspace.onboarding.agent.prompt':
+    'Read https://lobehub.com/acceptance/skill.md and follow the instructions to install Acceptance.',
+  'acceptance.workspace.onboarding.agent.title': 'Install with an Agent',
+  'acceptance.workspace.onboarding.enable.description': 'Run this from your project root.',
+  'acceptance.workspace.onboarding.enable.title': 'Enable Acceptance',
+  'acceptance.workspace.onboarding.install.description': 'Install the CLI once on this device.',
+  'acceptance.workspace.onboarding.install.title': 'Install the LobeHub CLI',
+  'acceptance.workspace.onboarding.installSection': 'Install Acceptance',
+  'acceptance.workspace.onboarding.manual.description':
+    'Run both commands yourself from the project root.',
+  'acceptance.workspace.onboarding.manual.title': 'Install manually',
+  'acceptance.workspace.onboarding.example.command':
+    '/acceptance Review the current changes, focusing on the core flow, empty states, and error states',
+  'acceptance.workspace.onboarding.example.description':
+    'After installation, send this example to your coding agent to create the first review.',
+  'acceptance.workspace.onboarding.example.title': 'Try your first acceptance',
+  'acceptance.workspace.onboarding.run.description': 'Enter this in your coding agent chat.',
+  'acceptance.workspace.onboarding.run.title': 'Start an acceptance run',
+  'acceptance.workspace.onboarding.title': 'Set up Acceptance',
   'acceptance.workspace.project.add': 'Add to project',
   'acceptance.workspace.project.addSuccess': 'Added to the project',
   'acceptance.workspace.project.create': 'New project with this delivery',
@@ -345,7 +411,8 @@ export default {
   'acceptance.workspace.merge.confirm': 'Merge',
   'acceptance.workspace.merge.success': '{{count}} checks merged',
   'acceptance.workspace.merge.error': 'Failed to merge acceptance',
-  'acceptance.workspace.renameEmpty': 'The title cannot be empty',
+  'acceptance.workspace.renameModal.description':
+    'Renames this entry only. The source topic, task or document keeps its own title.',
   'acceptance.workspace.renameError': 'Failed to rename',
   'acceptance.workspace.renameSuccess': 'Renamed',
   'acceptance.workspace.statusError': 'Failed to update status',
@@ -417,10 +484,8 @@ export default {
 
   'dock.confirm': 'Confirm & run',
   'dock.edit': 'Adjust checks',
-  'dock.forceDeliver': 'Ignore & deliver',
   'dock.repairHint':
     'The next round is fixing the failed checks. A new result is produced and the checker re-runs when it finishes.',
-  'dock.saveAndRepair': 'Save input & repair now',
   'dock.skip': 'Skip checks',
   'dock.title': 'Delivery Checker',
 
@@ -428,11 +493,6 @@ export default {
   'editor.cancel': 'Cancel',
   'editor.placeholder': 'Check title',
   'editor.save': 'Save',
-
-  'input.hint':
-    'This goes to the next repair round as checker input — it will not appear as a chat message.',
-  'input.label': 'Extra input for the next repair round',
-  'input.placeholder': 'e.g. run type-check first; if it still fails, just add a risk note.',
 
   'list.failedCount': '{{count}} failed',
   'list.running': 'Verifying…',

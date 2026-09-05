@@ -92,8 +92,10 @@ export class AgentRuntimeCoordinator {
     operationId: string,
     data: {
       agentConfig?: any;
+      visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
       mirrorToOperationId?: string;
       modelRuntimeConfig?: any;
+      streamOwnerUserId?: string;
       userId?: string;
       workspaceId?: string;
     },
@@ -243,6 +245,21 @@ export class AgentRuntimeCoordinator {
    */
   async loadAgentState(operationId: string): Promise<AgentState | null> {
     return this.stateManager.loadAgentState(operationId);
+  }
+
+  /**
+   * Set the interrupt sentinel so pollers can observe the stop request
+   * without loading the full state blob.
+   */
+  async markInterrupted(operationId: string): Promise<void> {
+    return this.stateManager.markInterrupted(operationId);
+  }
+
+  /**
+   * Check the interrupt sentinel.
+   */
+  async isInterrupted(operationId: string): Promise<boolean> {
+    return this.stateManager.isInterrupted(operationId);
   }
 
   /**

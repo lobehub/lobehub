@@ -67,6 +67,20 @@ afterEach(() => {
 });
 
 describe('RichTextMessage', () => {
+  it('should allow document comments to use the default 16px renderer scale', async () => {
+    const { container } = render(
+      <RichTextMessage editorState={mentionEditorState} variant={'default'} />,
+    );
+
+    await act(async () => {
+      await moment();
+    });
+
+    expect(
+      (container.firstElementChild as HTMLElement).style.getPropertyValue('--common-font-size'),
+    ).toBe('16px');
+  });
+
   it('should render mention nodes from editor state', async () => {
     const { container } = render(<RichTextMessage editorState={mentionEditorState} />);
 

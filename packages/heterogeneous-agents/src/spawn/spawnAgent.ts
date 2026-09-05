@@ -11,6 +11,7 @@ import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStrea
 import { isPathLikeCommand, resolveCliSpawnPlan } from './cliSpawn';
 import { readCodexSessionModel, resolveCodexInitialModel } from './codexModel';
 import { buildCursorAcpPrompt, CursorAcpSession } from './cursorAcpSession';
+import { buildDroidAcpPrompt, DroidAcpSession } from './droidAcpSession';
 import { buildGrokAcpPrompt, GrokAcpSession } from './grokAcpSession';
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { buildAgentInput } from './input';
@@ -41,7 +42,7 @@ export interface SpawnAgentOptions {
    * connected client renders live token streaming.
    */
   includePartialMessages?: boolean;
-  /** Initial model selected through the agent protocol after session setup (TRAE ACP only). */
+  /** Initial model selected through the agent protocol after session setup (Droid/TRAE ACP). */
   initialModel?: string;
   /**
    * Image normalization options (URL fetch + on-disk cache + path
@@ -561,9 +562,50 @@ const spawnCursorAcpAgent = async (
   };
 };
 
+const spawnDroidAcpAgent = async (
+  options: SpawnAgentOptions,
+  command: string,
+  cwd: string,
+): Promise<SpawnAgentHandle> => {
+  const prompt = await buildDroidAcpPrompt(options.prompt, options.inputOptions);
+  const bridge = createAcpSpawnBridge();
+  const session = new DroidAcpSession({
+    args: options.extraArgs ?? [],
+    askUserBridge: options.askUserBridge,
+    clientVersion: 'lobehub-cli',
+    commandPath: command,
+    cwd,
+    env: { ...process.env, ...options.env },
+    initialModel: options.initialModel,
+    onEvents: bridge.onEvents,
+    onRawMessage: teeAcpRawStdout(options.onRawStdout),
+    onRuntimeStatus: () => {},
+    onSessionId: () => {},
+    onStderr: bridge.onStderr,
+    operationId: options.operationId,
+    prompt,
+    resumeSessionId: options.resumeSessionId,
+    sessionId: options.operationId,
+  });
+  const { exit, kill } = bridge.attach(session);
+
+  return {
+    events: bridge.events,
+    exit,
+    kill,
+    get pid() {
+      return session.pid;
+    },
+    get sessionId() {
+      return session.nativeSessionId;
+    },
+    stderr: bridge.stderr,
+  };
+};
+
 /**
  * Spawn an external agent CLI (Amp, Claude Code, CodeBuddy, Codex, Cursor,
- * Kimi Code, OpenCode, Pi, Qoder, or TRAE) and yield its stream as unified
+ * Factory Droid, Kimi Code, OpenCode, Pi, Qoder, or TRAE) and yield its stream as unified
  * `AgentStreamEvent`s. Used by `lh hetero exec` for both standalone
  * terminal runs and (later) sandbox-driven runs that ingest into the server.
  *
@@ -587,6 +629,9 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
   }
   if (options.agentType === 'cursor') {
     return spawnCursorAcpAgent(options, command, cwd);
+  }
+  if (options.agentType === 'droid') {
+    return spawnDroidAcpAgent(options, command, cwd);
   }
 
   const inputPlan = await buildAgentInput(options.agentType, options.prompt, options.inputOptions);

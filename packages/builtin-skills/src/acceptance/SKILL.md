@@ -1,15 +1,17 @@
 ---
 name: acceptance
+version: 0.1.0
 description: >
-  Self-evidence for delivery verification in any repository, with or without
-  LOBE_OPERATION_ID or a preconfigured verify plan. Discover an existing plan
-  when present; otherwise author checks and publish a standalone acceptance.
-  Pick the proving surface (CLI / web / desktop / iOS Simulator), capture real
-  evidence, and submit it with the lh CLI. Triggers on 'verify the task',
-  'collect evidence',
-  'prove it works', 'upload evidence', 'verify plan', 'requiredEvidence', or any
-  run that must self-certify its delivery. Missing LobeHub environment IDs never
-  make this skill inapplicable.
+  End-to-end verification and self-evidence for a delivery in any repository,
+  with or without a preconfigured verify plan. Discover an existing plan when
+  one was handed to this run; otherwise author checks and publish a standalone
+  acceptance. Pick the proving surface (CLI / web / desktop / iOS Simulator),
+  drive the real product, capture visually confirmed evidence, and publish a
+  round with the lh CLI. Triggers on 'verify the task', 'collect evidence',
+  'prove it works', 'upload evidence', 'verify plan', 'requiredEvidence',
+  'local test', 'manual test', 'test report', 'test with cli', 'test in
+  electron', 'test desktop', or any local end-to-end verification task. Needs no
+  ambient ids, and never depends on running inside a LobeHub conversation.
 ---
 
 # Verify (Builder Self-Evidence)
@@ -21,23 +23,54 @@ criterion that declares `requiredEvidence` **cannot pass on your text alone**:
 if the artifact is missing, the structural gate marks it `uncertain` and the
 delivery is held.
 
+## Read the project layer first (when the repository has one)
+
+Before touching an environment, check for `.agents/acceptance/`. A repository
+that verifies itself keeps its own layer there, and it outranks any guess you
+would otherwise make:
+
+| File                     | What it owns                                                 |
+| ------------------------ | ------------------------------------------------------------ |
+| `PROJECT.md`             | Start/stop commands, ports, services, auth, surfaces, probes |
+| `PROCESS.md`             | The run process: approval gate, execution rules, teardown    |
+| `common-mistakes.md`     | Project living log — what earlier rounds got wrong here      |
+| `probe-mock-patterns.md` | Project living log — how to force state on this product      |
+
+**The division of labor:** the project layer owns _how this repository is run_;
+this skill owns _what a valid acceptance round is_ (plan, evidence, report,
+immutable round, the hard rule below). Where they disagree on running, the
+project layer wins. Where they disagree on what may be published, this skill
+wins. Never invent a start command, a port, or an auth flow that `PROJECT.md`
+already answers, and never work around a divergence silently — fix the adapter
+in place during the run.
+
+No `.agents/acceptance/` means the repository has no project layer yet. Continue
+with the portable path below; if the run needs an adapter, bootstrap one first —
+[project-adapter.md](references/project-adapter.md).
+
+Read both living-log layers before executing a round that drives a product
+surface: this skill's generic
+[common-mistakes.md](references/common-mistakes.md) and
+[probe-mock-patterns.md](references/probe-mock-patterns.md), plus the project's
+own copies. Record new project-specific learnings in the project layer only.
+
 ## Applicability invariant
 
-This skill applies whenever the delivery needs real verification. Environment
-IDs select a path; they are not prerequisites:
+This skill applies whenever the delivery needs real verification. **It requires
+no ids at all** — nothing about it is conditional on where it runs:
 
-- `$LOBE_OPERATION_ID` means a verify plan already exists. Discover and satisfy
-  it.
-- No `$LOBE_OPERATION_ID` means you author the checks and publish a structured
-  report round.
-- `$LOBEHUB_TOPIC_ID` or `--subject` groups rounds under an existing LobeHub
-  object.
-- No topic or subject means `lh acceptance run ingest` creates a standalone
-  acceptance automatically.
+- **Were you handed an operation id** (a verify plan already exists for this
+  run)? Discover that plan and satisfy it.
+- **Otherwise** — the normal case — author the checks yourself and publish a
+  structured report round.
+- **Attaching to something specific?** Pass `--subject` (`task:<id>`,
+  `topic:<id>`, or `document:<id>`) when the caller named one. Otherwise omit it:
+  `lh acceptance run ingest` attaches the round itself when it can, and creates a
+  standalone acceptance when it cannot.
 
-Never report that this skill is inapplicable merely because
-`$LOBE_OPERATION_ID`, `$LOBEHUB_TOPIC_ID`, or a Task ID is absent. Continue with
-the standalone path.
+Never report this skill inapplicable, and never go hunting through the
+environment for an id to make it applicable. Missing ids are the default state,
+not a degraded one.
 
 So while you do the work, capture the proof and submit it. The loop:
 
@@ -47,26 +80,30 @@ discover or author plan  →  pick the surface  →  capture evidence  →  publ
 
 The skill package is portable, but execution capabilities are surface-specific:
 `agent-browser` serves Web/Electron, while native macOS and iOS Simulator require
-a local macOS display and their platform tools. No repository-specific scripts
-or fixed report directory are required.
+a local macOS display and their platform tools. No repository-specific scripts are
+required; rounds land under `.acceptances/`, which the CLI keeps out of git for
+you (see [report.md](./references/report.md#directory-layout)).
 
 ## Two entry points — an operation id is NOT required
 
-Every evidence command targets a **verification session** (a round). How you
-name that session is a choice, not a prerequisite:
+Every evidence command targets a **verification session** (a round). How you name
+that session is a choice, not a prerequisite:
 
-| You have                                 | Target the round with                                                                                                     | Path                                                   |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| A verify plan (`$LOBE_OPERATION_ID` set) | `--operation "$LOBE_OPERATION_ID"`                                                                                        | This document: discover the plan, satisfy its criteria |
-| No plan — you author the checks          | Publish a whole directory with `lh acceptance run ingest`; it creates the round and, when needed, a standalone acceptance | [references/report.md](references/report.md)           |
+| You have                        | Target the round with                                                                                                     | Path                                                   |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| An operation id you were given  | `--operation "$OPERATION_ID"`                                                                                             | This document: discover the plan, satisfy its criteria |
+| No plan — you author the checks | Publish a whole directory with `lh acceptance run ingest`; it creates the round and, when needed, a standalone acceptance | [references/report.md](references/report.md)           |
+
+**The authored path is the default.** You have an operation id only when the
+invocation names one — a task, a caller, or the user hands it to you. Do not read
+the environment looking for one, and do not treat its absence as a problem to
+solve: a round created without an operation is simply recorded as `standalone`.
 
 `--operation` and `--run` are interchangeable on `result submit` and
-`result list`; a round created without an operation is simply recorded as
-`standalone`. (`evidence list` takes neither — it keys off a positional
-`<checkResultId>` you read from `result list`.) **A missing operation id never
-means "skip the acceptance"** — it only means you author the plan instead of
-discovering it. On a later repair round, pass the previously printed
-`--acceptance <acceptanceId>` so the new snapshot joins the same history.
+`result list`. (`evidence list` takes neither — it keys off a positional
+`<checkResultId>` you read from `result list`.) On a later repair round, pass the
+previously printed `--acceptance <acceptanceId>` so the new snapshot joins the
+same history.
 
 On the first ingest, always supply `--requirement "<one-sentence business goal>"`.
 The requirement describes what the whole acceptance judges, not the narrower
@@ -129,9 +166,8 @@ stay internal.
 
 - **`lh` is authed.** Confirm with `lh acceptance run list --json` (an empty `[]`
   means authed; an auth error means stop and surface it).
-- **A round path.** Use `$LOBE_OPERATION_ID` when supplied. Otherwise author a
-  structured report; ingest creates both its round and, outside LobeHub, its
-  standalone acceptance.
+- **A round path.** Use the operation id when this run was given one. Otherwise
+  author a structured report; ingest creates both its round and its acceptance.
 - **Install only the UI driver required by the selected surface.** Web/Electron
   use `agent-browser`; native iOS uses Xcode/`simctl` plus a Simulator HID/AX CLI
   such as AXe, or the repository's existing UI-test driver. Probe installed tools
@@ -146,10 +182,10 @@ stay internal.
 > recipes below to capture its evidence. Publish that authored plan and its
 > cases together with `lh acceptance run ingest`.
 
-One read tells you what to prove:
+One read tells you what to prove (`$OPERATION_ID` is the id this run was given):
 
 ```bash
-lh verify plan state "$LOBE_OPERATION_ID" --json
+lh verify plan state "$OPERATION_ID" --json
 ```
 
 Each `verifyPlan[]` item carries `id` (the **checkItemId**), `title`, `required`,
@@ -203,6 +239,12 @@ Rules of thumb:
   Simulator HID/Accessibility CLI for taps, long press, swipe, pan, and UI-tree
   inspection; use `simctl` for lifecycle/framebuffer capture. If the available
   CLI cannot express the planned touch sequence, mark the case `blocked`.
+- **A UI round may also price its interaction cost.** While driving the product,
+  record each action's raw KLM operator counts into `interaction-trace.jsonl` in
+  the report directory; ingest prices them with the platform's pinned timing
+  model. It is an optional overlay — a CLI round, or a machine with no UI driver
+  installed, records no trace and publishes normally. Never hand-write the
+  numbers. See [interaction-cost.md](references/interaction-cost.md).
 - **Auth is a gate, scoped to the surface.** If the state under test is behind a
   login, authenticate that surface first or every capture lands on the sign-in
   page. Follow the selected surface's Auth section; load
@@ -220,12 +262,12 @@ lazily creates/updates the result row, and attaches the evidence — one call, n
 ```bash
 # CHECK_ITEM_ID is the plan item id for this criterion (from Step 1).
 # file artifact already captured by the selected surface
-lh acceptance run result submit --operation "$LOBE_OPERATION_ID" --item "$CHECK_ITEM_ID" \
+lh acceptance run result submit --operation "$OPERATION_ID" --item "$CHECK_ITEM_ID" \
   --type "$EVIDENCE_TYPE" --file "$ARTIFACT_PATH" --by "$PROVENANCE" \
   --desc "Observed state after the planned action"
 
 # inline text artifact (stdout / computed value) — no file
-lh acceptance run result submit --operation "$LOBE_OPERATION_ID" --item "$CHECK_ITEM_ID" \
+lh acceptance run result submit --operation "$OPERATION_ID" --item "$CHECK_ITEM_ID" \
   --type text --content "$(your-cli command --json)" --by cli \
   --desc "command reports success after the change"
 ```
@@ -246,7 +288,7 @@ is present. After submitting, the result rows exist, so map each `checkItemId` t
 its `checkResultId` and list that row's evidence:
 
 ```bash
-lh acceptance run result list --operation "$LOBE_OPERATION_ID" --json # checkItemId → checkResultId
+lh acceptance run result list --operation "$OPERATION_ID" --json # checkItemId → checkResultId
 lh acceptance run evidence list "$CHECK_RESULT_ID" --json
 ```
 
@@ -289,8 +331,12 @@ Load detailed references only after selecting the applicable path:
 
 | Need                                                   | Reference                                                           |
 | ------------------------------------------------------ | ------------------------------------------------------------------- |
+| The project layer, and bootstrapping an adapter        | [project-adapter.md](references/project-adapter.md)                 |
+| Verification mistakes to self-check against            | [common-mistakes.md](references/common-mistakes.md)                 |
+| Forcing state, error injection, runtime probes         | [probe-mock-patterns.md](references/probe-mock-patterns.md)         |
 | Existing verify-plan schema and join keys              | [plan-format.md](references/plan-format.md)                         |
 | Shared media, provenance, submission, and safety rules | [evidence.md](references/evidence.md)                               |
+| Interaction cost for a UI round (optional overlay)     | [interaction-cost.md](references/interaction-cost.md)               |
 | Authored structured rounds and `result.json`           | [report.md](references/report.md)                                   |
 | Web/Electron Chromium CLI commands                     | [agent-browser.md](references/agent-browser.md)                     |
 | Authenticated Web session                              | [auth-web.md](references/auth-web.md)                               |

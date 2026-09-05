@@ -129,12 +129,8 @@ ProgressRing.displayName = 'AcceptanceProgressRing';
 interface DecisionBarProps {
   /** Checks the user has signed off, of `totalCount` reviewable ones. */
   acceptedCount: number;
-  /**
-   * Rendered as the in-chat portal embed. The send-back there drafts the repair
-   * prompt straight into the composer sitting beside it, which makes "copy the
-   * review" a redundant second way to move the same text — drop it and leave
-   * one send-back path.
-   */
+  /** Rendered inside the conversation portal — the composer beside the bar
+      receives the repair draft, so the copy handoff stays standalone-only. */
   embedded?: boolean;
   /** Active (not-yet-consumed) feedback recorded this round. */
   feedbackCount: number;
@@ -150,7 +146,8 @@ interface DecisionBarProps {
   onOpenFeedback: () => void;
   /** Open the aggregate reject dialog (comment required). */
   onRejectComment: () => void;
-  /** Dispatch the repair prompt straight into the origin agent conversation. */
+  /** Start the repair round: embedded, drafts the prompt into the composer
+      beside the bar; standalone, dispatches it to the origin conversation. */
   onRerun: () => void;
   pending: boolean;
   /** A live round that is a dispatched repair — coloured as an in-progress task
@@ -170,7 +167,9 @@ interface DecisionBarProps {
  * The floating decision strip (P-12): review progress, the feedback
  * clearing-list opener, and the closing actions. What the actions are follows
  * the review state — feedback queued for the next round turns the bar into a
- * repair dispatcher (copy the prompt / send it back to the origin agent);
+ * repair handoff (打回重跑: embedded drafts the prompt into the composer
+ * beside the bar, standalone dispatches to the origin conversation, with copy
+ * as the standalone-only manual fallback);
  * a clean review offers reject-with-comment and accept, with accept gaining
  * primary weight only once every check is signed off.
  */

@@ -12,23 +12,9 @@ const tokenMocks = vi.hoisted(() => ({
   useTokenBreakdown: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui', () => {
-  const Primitive = ({ children }: { children?: ReactNode }) => createElement('div', {}, children);
-
-  return { Center: Primitive, Flexbox: Primitive, Tooltip: Primitive };
-});
-
 vi.mock('@lobehub/ui/chat', () => ({
   TokenTag: ({ value }: { value: number }) =>
     createElement('div', { 'data-testid': 'token-tag' }, value),
-}));
-
-vi.mock('antd-style', () => ({
-  cssVar: new Proxy({}, { get: (_, key) => String(key) }),
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
 }));
 
 vi.mock('@/store/user', () => ({
@@ -78,9 +64,8 @@ describe('filterChatOnlyActions', () => {
     ).toEqual(['agentMode', 'model', 'fileUpload', 'voiceDictation', '---', ['typo', 'clear']]);
   });
 
-  it('keeps the icon model trigger for chat-only members instead of degrading to the text label', () => {
+  it('keeps the model chip for chat-only members', () => {
     expect(filterChatOnlyActions(['model', 'plus'])).toEqual(['model', 'plus']);
-    expect(filterChatOnlyActions(['modelLabel', 'plus'])).toEqual(['modelLabel', 'plus']);
   });
 });
 

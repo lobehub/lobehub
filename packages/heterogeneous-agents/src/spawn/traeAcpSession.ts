@@ -30,12 +30,45 @@ export interface TraeAcpImagePromptBlock {
 
 export type TraeAcpPromptBlock = TraeAcpImagePromptBlock | TraeAcpTextPromptBlock;
 
-export const buildTraeAcpArgs = (extraArgs: string[] = []): string[] => [
-  'acp',
-  'serve',
-  '--yolo',
-  ...extraArgs,
-];
+const TRAE_GLOBAL_VALUE_FLAGS = new Set(['--config', '--permission-mode', '--profile', '-c', '-p']);
+
+const isInlineTraeGlobalArg = (arg: string): boolean =>
+  arg.startsWith('--config=') ||
+  arg.startsWith('--permission-mode=') ||
+  arg.startsWith('--profile=') ||
+  arg.startsWith('-c=') ||
+  arg.startsWith('-p=');
+
+/**
+ * TRAE requires configuration flags before `acp serve`, while ACP Server flags
+ * belong after it. Keep unknown/user server flags in their historical position
+ * and move only the documented global flags plus their values.
+ * @see https://docs.trae.cn/cli_agent-client-protocol
+ */
+export const buildTraeAcpArgs = (args: string[] = []): string[] => {
+  const globalArgs: string[] = [];
+  const serverArgs: string[] = [];
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (TRAE_GLOBAL_VALUE_FLAGS.has(arg)) {
+      globalArgs.push(arg);
+      const value = args[index + 1];
+      if (value !== undefined) {
+        globalArgs.push(value);
+        index += 1;
+      }
+      continue;
+    }
+    if (isInlineTraeGlobalArg(arg)) {
+      globalArgs.push(arg);
+      continue;
+    }
+    serverArgs.push(arg);
+  }
+
+  return [...globalArgs, 'acp', 'serve', '--yolo', ...serverArgs];
+};
 
 export const buildTraeAcpPrompt = async (
   prompt: AgentPromptInput,

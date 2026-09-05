@@ -85,6 +85,12 @@ const useRefLazyInitRestrictedSyntax = [
   },
 ];
 
+const electronIpcRemoveListenerRestrictedSyntax = {
+  message:
+    'Do not use removeListener in renderer code. Electron contextBridge does not preserve listener identity across calls; use the disposer returned by ipcRenderer.on().',
+  selector: "CallExpression > MemberExpression.callee[property.name='removeListener']",
+};
+
 export default eslint(
   {
     ignores: [
@@ -147,6 +153,56 @@ export default eslint(
     files: ['src/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': createRestrictedImportRule(),
+    },
+  },
+  {
+    // Boot-path trees are statically reachable from the SPA entry. A heavy
+    // @lobehub/ui member imported here lands in the first-screen chunk together
+    // with shiki / katex / elkjs / emoji data; the CI entry-graph gate catches
+    // the regression, this rule explains it at the import site.
+    files: [
+      'src/layout/**/*.{ts,tsx}',
+      'src/spa/**/*.{ts,tsx}',
+      'src/store/**/*.{ts,tsx}',
+      'src/utils/**/*.{ts,tsx}',
+    ],
+    ignores: ['src/**/*.test.{ts,tsx}', 'src/layout/AuthProvider/MarketAuth/ProfileSetupModal.tsx'],
+    rules: {
+      'no-restricted-imports': createRestrictedImportRule({
+        paths: [
+          {
+            importNames: [
+              'CodeDiff',
+              'CodeEditor',
+              'EmojiPicker',
+              'Highlighter',
+              'HtmlPreview',
+              'Markdown',
+              'Mermaid',
+              'PatchDiff',
+              'Snippet',
+              'SortableList',
+              'SyntaxHighlighter',
+              'SyntaxMermaid',
+            ],
+            message:
+              'Boot-path modules must not statically import heavy @lobehub/ui members. Load them with lazy(() => import("@lobehub/ui/es/<Member>/index")) or move the consumer into a route tree.',
+            name: '@lobehub/ui',
+          },
+          {
+            message:
+              'Boot-path modules must load EmojiPicker with lazy(); it carries the emoji-mart dataset.',
+            name: '@/components/EmojiPicker',
+          },
+        ],
+        patterns: [
+          {
+            message:
+              'The builtin tool client barrel exports the whole render registry. Import the dedicated subpath (e.g. "/client/displayControls") or resolve renders lazily.',
+            regex: '^@lobechat/builtin-tool-[^/]+/client(?:$|/index$)',
+          },
+        ],
+      }),
     },
   },
   {
@@ -358,6 +414,21 @@ export default eslint(
         },
       ],
       'no-restricted-syntax': ['error', ...useRefLazyInitRestrictedSyntax],
+    },
+  },
+  {
+    files: [
+      'apps/desktop/src/overlay/**/*.{ts,tsx}',
+      'packages/electron-client-ipc/src/**/*.{ts,tsx}',
+      'src/**/*.{ts,tsx}',
+    ],
+    ignores: ['src/hooks/usePWAInstall.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...useRefLazyInitRestrictedSyntax,
+        electronIpcRemoveListenerRestrictedSyntax,
+      ],
     },
   },
   // MDX files

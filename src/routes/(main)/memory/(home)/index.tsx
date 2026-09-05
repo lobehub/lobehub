@@ -3,7 +3,6 @@ import { Flexbox } from '@lobehub/ui';
 import { type FC } from 'react';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
-import MemorySkeleton from '@/components/Skeleton/Memory';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
@@ -23,15 +22,9 @@ const Home: FC = () => {
   const roles = useUserMemoryStore((s) => s.roles);
   const persona = useUserMemoryStore((s) => s.persona);
 
-  const { isLoading: isTagsLoading, error: tagsError, mutate: mutateTags } = useFetchTags();
-  const {
-    isLoading: isPersonaLoading,
-    error: personaError,
-    mutate: mutatePersona,
-  } = useFetchPersona();
+  const { error: tagsError, mutate: mutateTags } = useFetchTags();
+  const { error: personaError, mutate: mutatePersona } = useFetchPersona();
   // const { EditorModalElement, openEditor } = usePersonaEditor();
-
-  if (isTagsLoading || isPersonaLoading) return <MemorySkeleton />;
 
   // Persona / tags feed the store, so a failed fetch left the render falling
   // through to the "analyze to get started" onboarding — telling the user they

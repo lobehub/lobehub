@@ -7,6 +7,7 @@ export const APPLICATION_DEFAULT_FONT = '__application_default__';
 
 interface UseSystemFontOptionsParams {
   defaultLabel: string;
+  enabled?: boolean;
   monospaceOnly?: boolean;
   unavailableLabel: (font: string) => string;
   value?: string;
@@ -14,16 +15,23 @@ interface UseSystemFontOptionsParams {
 
 export const useSystemFontOptions = ({
   defaultLabel,
+  enabled = true,
   monospaceOnly,
   unavailableLabel,
   value,
 }: UseSystemFontOptionsParams) => {
   const [systemFonts, setSystemFonts] = useState<SystemFont[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(enabled);
   const [hasLoadError, setHasLoadError] = useState(false);
 
   useEffect(() => {
+    if (!enabled) {
+      setIsLoading(false);
+      return;
+    }
+
     let active = true;
+    setIsLoading(true);
 
     const load = monospaceOnly
       ? electronSystemService.getSystemMonospaceFonts()
@@ -49,7 +57,7 @@ export const useSystemFontOptions = ({
     return () => {
       active = false;
     };
-  }, [monospaceOnly]);
+  }, [enabled, monospaceOnly]);
 
   const options = useMemo(() => {
     const fontOptions = [...systemFonts];

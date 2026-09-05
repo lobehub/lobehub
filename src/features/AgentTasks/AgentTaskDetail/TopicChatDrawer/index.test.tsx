@@ -59,7 +59,8 @@ const mocks = vi.hoisted(() => ({
 const serializeSize = (size: unknown) =>
   size === undefined ? '' : typeof size === 'string' ? size : JSON.stringify(size);
 
-vi.mock('@lobehub/ui', () => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   copyToClipboard: vi.fn(),
   DropdownMenu: ({
     children,
@@ -79,19 +80,10 @@ vi.mock('@lobehub/ui', () => ({
       )}
     </>
   ),
-  Flexbox: ({
-    children,
-    flex,
-    style,
-  }: {
-    children?: ReactNode;
-    flex?: CSSProperties['flex'];
-    style?: CSSProperties;
-  }) => <div style={{ flex, ...style }}>{children}</div>,
-  Freeze: ({ children }: { children?: ReactNode; frozen?: boolean }) => <>{children}</>,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   ActionIcon: ({
     disabled,
     icon,
@@ -116,19 +108,6 @@ vi.mock('@lobehub/ui/base-ui', () => ({
       {title}
     </button>
   ),
-  Tag: ({ children, title }: { children?: ReactNode; title?: string }) => (
-    <span title={title}>{children}</span>
-  ),
-  Text: ({ children, style }: { children?: ReactNode; style?: CSSProperties }) => (
-    <span style={style}>{children}</span>
-  ),
-  confirmModal: vi.fn(),
-  toast: {
-    error: vi.fn(),
-    info: vi.fn(),
-    success: vi.fn(),
-    warning: vi.fn(),
-  },
   FloatingPanel: ({
     actions,
     children,
@@ -183,12 +162,6 @@ vi.mock('next/dynamic', () => ({
     function DynamicComponent({ children }: { children?: ReactNode }) {
       return <>{children}</>;
     },
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
 }));
 
 vi.mock('@/features/Conversation/ChatList', () => ({
@@ -302,7 +275,11 @@ describe('TopicChatDrawer', () => {
   it('reconnects a running topic against the drawer agent', () => {
     mocks.taskState.taskDetailMap['T-1'].activities[0] = {
       id: 'topic-1',
-      runningOperation: { assistantMessageId: 'ast-1', operationId: 'op-1' },
+      runningOperation: {
+        assistantMessageId: 'ast-1',
+        heteroType: 'claude-code',
+        operationId: 'op-1',
+      },
       status: 'running',
       time: '2026-04-29T00:00:00.000Z',
       title: 'Topic 1',
@@ -313,7 +290,7 @@ describe('TopicChatDrawer', () => {
 
     expect(useGatewayReconnect).toHaveBeenCalledWith(
       'topic-1',
-      expect.objectContaining({ operationId: 'op-1' }),
+      expect.objectContaining({ heteroType: 'claude-code', operationId: 'op-1' }),
       'agt_assignee',
     );
   });

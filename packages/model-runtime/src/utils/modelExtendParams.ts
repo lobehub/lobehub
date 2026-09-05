@@ -110,6 +110,10 @@ const MODEL_THINKING_LEVEL_DEFAULTS: Partial<
     thinkingLevel: 'medium',
     thinkingLevel3: 'medium',
   },
+  'gemini-3.8-flash': {
+    thinkingLevel: 'medium',
+    thinkingLevel3: 'medium',
+  },
   'gemini-3.5-flash': {
     thinkingLevel: 'medium',
   },
@@ -301,6 +305,10 @@ export const applyModelExtendParams = (ctx: ApplyModelExtendParamsContext): Mode
 
   if (modelExtendParams.includes('gpt5_6ReasoningEffort') && chatConfig.gpt5_6ReasoningEffort) {
     extendParams.reasoning_effort = chatConfig.gpt5_6ReasoningEffort;
+  }
+
+  if (modelExtendParams.includes('gpt6ReasoningEffort') && chatConfig.gpt6ReasoningEffort) {
+    extendParams.reasoning_effort = chatConfig.gpt6ReasoningEffort;
   }
 
   if (modelExtendParams.includes('reasoningMode') && chatConfig.reasoningMode === 'pro') {

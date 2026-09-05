@@ -45,6 +45,7 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
       { label: t('taskList.groupBy.none'), value: 'none' },
       { label: t('taskList.groupBy.status'), value: 'status' },
       { label: t('taskList.groupBy.assignee'), value: 'assignee' },
+      { label: t('taskList.groupBy.member'), value: 'member' },
       { label: t('taskList.groupBy.priority'), value: 'priority' },
     ],
     [t],

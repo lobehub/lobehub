@@ -36,6 +36,7 @@ describe('claudeCodeDriver', () => {
       ANTHROPIC_SMALL_FAST_MODEL: 'lobehub/claude-sonnet-4-6',
       CLAUDE_CODE_SUBAGENT_MODEL: 'lobehub/claude-sonnet-4-6',
     });
+    expect(plan.operationTokenEnvKey).toBe('ANTHROPIC_AUTH_TOKEN');
     expect(plan.env.ANTHROPIC_AUTH_TOKEN).toBeUndefined();
   });
   it('omits --mcp-config when mcpConfigPath is undefined', async () => {

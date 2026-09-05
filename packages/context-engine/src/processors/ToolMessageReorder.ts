@@ -15,11 +15,60 @@ declare module '../types' {
 
 const log = debug('context-engine:processor:ToolMessageReorder');
 
-const DEFAULT_TOOL_FAILURE_CONTENT = JSON.stringify({
-  error: 'Tool call failed',
-  success: false,
-  synthetic: true,
-});
+/**
+ * Why a synthetic failure payload was injected. The model sees these fields,
+ * so the wording doubles as a diagnosis: it can tell whether the tool may
+ * still have executed (result lost in transport) versus ran and produced
+ * nothing usable — instead of guessing from an opaque "Tool call failed".
+ */
+type SyntheticToolFailureReason = 'tool_result_missing' | 'tool_result_unusable';
+
+/**
+ * Model-readable hint per reason. The retry-safety distinction is the point:
+ * a missing result says nothing about whether the call executed — it may well
+ * have — so blindly retrying a side-effecting tool can repeat its effects.
+ * Kept to one sentence each: this payload rides along in every request until
+ * the failed call ages out of context.
+ */
+export const SYNTHETIC_TOOL_FAILURE_HINTS: Record<SyntheticToolFailureReason, string> = {
+  tool_result_missing:
+    'No result arrived, so whether the call actually executed is unknown; check observable state before retrying tools with side effects.',
+  tool_result_unusable:
+    'The call returned no readable content and no error message; check the inputs before retrying, as a retry may return the same.',
+};
+
+export const syntheticToolFailureContent = (reason: SyntheticToolFailureReason, tool?: string) =>
+  JSON.stringify({
+    error: 'Tool call failed',
+    hint: SYNTHETIC_TOOL_FAILURE_HINTS[reason],
+    reason,
+    success: false,
+    synthetic: true,
+    ...(tool ? { tool } : {}),
+  });
+
+/**
+ * Whether a tool result still carries something the model can read.
+ *
+ * `MessageContentProcessor` rewrites a tool result that produced images (e.g.
+ * `readFile` on a screenshot, which uploads the file and carries the URL on
+ * `pluginState.images`) into multimodal parts — `[{ type: 'text' }, { type:
+ * 'image_url' }]` — whenever the model supports vision. A bare
+ * `typeof content === 'string'` guard therefore rejects exactly the results
+ * that carry an image: this pass would drop the parts and hand the model
+ * {@link syntheticToolFailureContent} instead, so a successful screenshot read
+ * arrived as "Tool call failed" and the image never reached the request at all.
+ */
+const hasUsableToolContent = (content: unknown, pluginErrorMessage?: string): boolean => {
+  // Multimodal parts (text + image_url / video_url / audio_url).
+  if (Array.isArray(content)) return content.length > 0;
+  if (typeof content !== 'string') return false;
+
+  // An empty string is a legitimate result for a tool that produced no output —
+  // unless the row also recorded an error, in which case the error text is the
+  // more useful thing to show the model.
+  return content.length > 0 || !pluginErrorMessage;
+};
 
 /**
  * Reorder tool messages to ensure that tool messages are displayed in the correct order.
@@ -149,20 +198,24 @@ export class ToolMessageReorder extends BaseProcessor {
               ? matchedToolMessage.pluginError.message
               : undefined;
 
+          const toolName = toolCall.function?.name;
+
           reorderedMessages.push({
             ...matchedToolMessage,
-            content:
-              typeof matchedToolMessage.content === 'string' &&
-              (matchedToolMessage.content.length > 0 || !pluginErrorMessage)
-                ? matchedToolMessage.content
-                : pluginErrorMessage || DEFAULT_TOOL_FAILURE_CONTENT,
+            content: hasUsableToolContent(matchedToolMessage.content, pluginErrorMessage)
+              ? matchedToolMessage.content
+              : pluginErrorMessage || syntheticToolFailureContent('tool_result_unusable', toolName),
           });
           toolMessages.delete(toolCall.id);
           continue;
         }
 
         reorderedMessages.push({
-          content: DEFAULT_TOOL_FAILURE_CONTENT,
+          // The tool result never arrived (transport loss, gateway error,
+          // crash). Flag it explicitly so the model can tell this apart from a
+          // tool that ran and returned something unusable — and so retry
+          // decisions are not made blind.
+          content: syntheticToolFailureContent('tool_result_missing', toolCall.function?.name),
           ...(toolCall.function?.name && { name: toolCall.function.name }),
           role: 'tool',
           tool_call_id: toolCall.id,

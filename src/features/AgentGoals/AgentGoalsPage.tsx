@@ -1,5 +1,6 @@
 'use client';
 
+import type { GoalStatus } from '@lobechat/const/goal';
 import { Block, Empty, Flexbox } from '@lobehub/ui';
 import { ActionIcon, Button, Segmented, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -11,6 +12,7 @@ import GoalSkeleton from '@/components/Skeleton/Goal';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { goalSelectors, useGoalStore } from '@/store/goal';
 
 import { createGoalModal } from './CreateGoalModal';
@@ -18,7 +20,6 @@ import { GoalCardItem } from './GoalCardItem';
 import GoalEmptyState from './GoalEmptyState';
 import type { GoalExampleSeed } from './goalExamples';
 import { GoalListItem } from './GoalListItem';
-import { shouldShowGoal } from './goalViewModel';
 
 const styles = createStaticStyles(({ css }) => ({
   countBadge: css`
@@ -62,6 +63,9 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
+/** Goals whose loop has stopped for good — hidden by the default "open" filter. */
+const TERMINAL_GOAL_STATUSES = new Set<GoalStatus>(['achieved', 'failed', 'canceled']);
+
 interface AgentGoalsPageProps {
   agentId?: string;
   projectId?: string;
@@ -69,6 +73,7 @@ interface AgentGoalsPageProps {
 
 const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
   const { t } = useTranslation('chat');
+  const navigate = useWorkspaceAwareNavigate();
   const scopeId = projectId ? `project:${projectId}` : agentId!;
   const useFetchGoals = useGoalStore((s) => s.useFetchGoals);
   const refreshGoals = useGoalStore((s) => s.refreshGoals);
@@ -82,14 +87,14 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
   const loadMoreGoals = useGoalStore((s) => s.loadMoreGoals);
   const { error, isLoading } = useFetchGoals(agentId, projectId);
   const summary = useMemo(() => {
-    const delivered = goals.filter((goal) => goal.goal?.status === 'review').length;
+    const delivered = goals.filter(({ goal }) => goal.status === 'review').length;
 
     return { delivered, pursuing: goals.length - delivered, total: goals.length };
   }, [goals]);
   const filteredGoals = useMemo(() => {
     if (filter === 'all') return goals;
 
-    return goals.filter((goal) => shouldShowGoal(goal.goal?.status ?? 'planning', 'active'));
+    return goals.filter(({ goal }) => !TERMINAL_GOAL_STATUSES.has(goal.status));
   }, [filter, goals]);
   const visibleGoalCount = filteredGoals.length;
   const GoalItem = viewMode === 'list' ? GoalListItem : GoalCardItem;
@@ -100,7 +105,14 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
       initialRoundBudget: seed?.roundBudget,
       initialTitle: seed?.title,
       projectId,
-      onCreated: () => void refreshGoals(scopeId),
+      // Land the user inside the goal right away: the detail page polls while
+      // the goal is still planning, so the exploration graph grows in place
+      // instead of the modal blocking on it.
+      onCreated: (goal) => {
+        void refreshGoals(scopeId);
+        const ownerId = goal.agentId ?? agentId;
+        navigate(ownerId ? `/agent/${ownerId}/goal/${goal.goalId}` : `/goal/${goal.goalId}`);
+      },
     });
   };
 
@@ -237,13 +249,8 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
                 ) : (
                   filteredGoals
                     .slice(0, visibleLimit)
-                    .map((goal) => (
-                      <GoalItem
-                        hideAchieved={filter === 'active'}
-                        key={goal.id}
-                        projectId={projectId}
-                        task={goal}
-                      />
+                    .map((item) => (
+                      <GoalItem goal={item} key={item.goal.id} projectId={projectId} />
                     ))
                 )}
               </div>

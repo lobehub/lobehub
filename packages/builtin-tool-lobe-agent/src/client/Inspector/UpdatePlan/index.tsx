@@ -29,15 +29,19 @@ export const UpdatePlanInspector = memo<BuiltinInspectorProps<UpdatePlanParams, 
 
     if (isArgumentsStreaming && !planId) {
       return (
-        <div className={cx(oneLineEllipsis, shinyTextStyles.shinyText)}>
-          <span>{t('builtins.lobe-agent.apiName.updatePlan')}</span>
+        <div className={oneLineEllipsis}>
+          <span className={shinyTextStyles.shinyText}>
+            {t('builtins.lobe-agent.apiName.updatePlan')}
+          </span>
         </div>
       );
     }
 
     return (
-      <div className={cx(oneLineEllipsis, isArgumentsStreaming && shinyTextStyles.shinyText)}>
-        <span className={styles.title}>{t('builtins.lobe-agent.apiName.updatePlan')}</span>
+      <div className={oneLineEllipsis}>
+        <span className={cx(styles.title, isArgumentsStreaming && shinyTextStyles.shinyText)}>
+          {t('builtins.lobe-agent.apiName.updatePlan')}
+        </span>
         {completed && (
           <Text code as={'span'} color={cssVar.colorSuccess} fontSize={12}>
             <Icon icon={CheckCircle} size={12} />

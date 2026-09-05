@@ -171,6 +171,32 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config).enableDevDock).toBe(false);
   });
 
+  it('should keep agent share off by default and narrow it to listed user IDs', () => {
+    expect(DEFAULT_FEATURE_FLAGS.agent_share).toBe(false);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableAgentShare).toBe(false);
+
+    const config = { agent_share: ['creator-123'] };
+
+    expect(mapFeatureFlagsEnvToState(config, 'creator-123').enableAgentShare).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableAgentShare).toBe(false);
+    expect(mapFeatureFlagsEnvToState(config).enableAgentShare).toBe(false);
+  });
+
+  it('should gate agent share visitors with the same `agent_share` allowlist', () => {
+    // One flag drives both capabilities, so a visitor is admitted by exactly
+    // the same user ID that would let them publish a share.
+    expect(DEFAULT_FEATURE_FLAGS.agent_share).toBe(false);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'visitor-1').enableAgentShare).toBe(
+      false,
+    );
+
+    const config = { agent_share: ['visitor-123'] };
+
+    expect(mapFeatureFlagsEnvToState(config, 'visitor-123').enableAgentShare).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableAgentShare).toBe(false);
+    expect(mapFeatureFlagsEnvToState(config).enableAgentShare).toBe(false);
+  });
+
   it('should correctly map boolean feature flags to state', () => {
     const config = {
       provider_settings: true,

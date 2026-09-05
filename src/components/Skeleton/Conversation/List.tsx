@@ -1,6 +1,9 @@
 'use client';
 
-import { Flexbox, Skeleton } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui/base-ui';
+
+import { ArticleSkeleton } from '@/components/Skeleton';
 
 import ConversationSkeletonContainer from './Container';
 
@@ -13,13 +16,16 @@ const ConversationListSkeleton = () => (
     style={{ marginTop: 24 }}
   >
     <Flexbox gap={8} style={{ paddingLeft: '25%' }} width={'100%'}>
-      <Skeleton.Paragraph active rows={3} style={{ alignItems: 'flex-end' }} />
+      <Skeleton.Text rows={3} style={{ alignItems: 'flex-end' }} />
     </Flexbox>
     {Array.from({ length: 2 }).map((_, index) => (
       <Flexbox gap={8} key={index} width={'100%'}>
-        <Skeleton active avatar={{ shape: 'square', size: 28 }} paragraph={false} />
-        <Skeleton.Paragraph />
-        <Skeleton.Tags count={2} />
+        <ArticleSkeleton avatar={28} rows={0} />
+        <Skeleton.Text />
+        <Flexbox horizontal gap={8}>
+          <Skeleton height={22} radius={4} width={48} />
+          <Skeleton height={22} radius={4} width={48} />
+        </Flexbox>
       </Flexbox>
     ))}
   </ConversationSkeletonContainer>

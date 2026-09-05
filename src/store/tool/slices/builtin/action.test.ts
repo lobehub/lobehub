@@ -7,8 +7,6 @@ import { userService } from '@/services/user';
 
 import { useToolStore } from '../../store';
 
-vi.mock('zustand/traditional');
-
 describe('createBuiltinToolSlice', () => {
   describe('transformApiArgumentsToAiState', () => {
     it('should return early if the tool is already loading', async () => {

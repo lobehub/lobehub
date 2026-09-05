@@ -8,13 +8,6 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  toast: {
-    loading: vi.fn(() => ({ close: vi.fn() })),
-    success: vi.fn(),
-  },
-}));
-
 describe('createSessionGroupSlice', () => {
   describe('addSessionGroup', () => {
     it('should add a session group and refresh sessions', async () => {
