@@ -157,6 +157,20 @@ describe('xlsxOperations lifecycle', () => {
     ).toEqual([2, 10, 3, 5]);
 
     bytes = await editXlsx(bytes, {
+      from: 'B2:C3',
+      sheet: 'Sales',
+      to: 'A5:B6',
+      toSheet: 'Assumptions',
+      type: 'copyRange',
+    });
+    reopened = await loadXlsx(bytes);
+    expect(
+      ['A5', 'B5', 'A6', 'B6'].map(
+        (address) => reopened.getWorksheet('Assumptions')?.getCell(address).value,
+      ),
+    ).toEqual([2, 10, 3, 5]);
+
+    bytes = await editXlsx(bytes, {
       ranges: ['A8', 'C8:D8', 'F8'],
       sheet: 'Sales',
       type: 'clearAreas',

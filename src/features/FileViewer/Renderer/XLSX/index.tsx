@@ -1,15 +1,43 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Button } from '@lobehub/ui/base-ui';
+import { ActionIcon, Button, Select } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { Bold, Download, Plus, Redo2, Save, Undo2 } from 'lucide-react';
+import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
+  Bold,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardPaste,
+  Copy,
+  Download,
+  Eraser,
+  Italic,
+  Plus,
+  Redo2,
+  Save,
+  Trash2,
+  Undo2,
+} from 'lucide-react';
+import type { CSSProperties } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 
 import { loadXlsxDraft, saveXlsxDraft } from './draftStorage';
+import {
+  columnName,
+  formatCellNumber,
+  isInBounds,
+  parseCellAddress,
+  rangeAddress,
+  rangeAnchoredAt,
+  rangeBetween,
+  rangeSize,
+} from './gridUtils';
 import { editXlsx, loadXlsx, XLSX_MIME_TYPE } from './xlsxOperations';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -25,6 +53,9 @@ const styles = createStaticStyles(({ css }) => ({
     border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
 
     white-space: nowrap;
+  `,
+  cellInRange: css`
+    background: ${cssVar.colorPrimaryBg};
   `,
   cellSelected: css`
     outline: 2px solid ${cssVar.colorPrimary};
@@ -102,6 +133,8 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextSecondary};
   `,
   toolbar: css`
+    flex-wrap: wrap;
+
     min-height: 48px;
     padding-block: 8px;
     padding-inline: 12px;
@@ -115,18 +148,24 @@ interface XLSXEditorProps {
   url: string;
 }
 
-interface SheetView {
-  name: string;
-  rows: Array<Array<{ formula?: string; text: string }>>;
+interface CellView {
+  formula?: string;
+  numeric?: number;
+  style?: CSSProperties;
+  text: string;
 }
 
-const columnName = (index: number) => {
-  let name = '';
-  for (let value = index + 1; value > 0; value = Math.floor((value - 1) / 26)) {
-    name = String.fromCharCode(65 + ((value - 1) % 26)) + name;
-  }
-  return name;
-};
+interface SheetView {
+  name: string;
+  rows: CellView[][];
+}
+
+const NUMBER_FORMATS = [
+  { key: 'general', value: 'General' },
+  { key: 'number', value: '#,##0.00' },
+  { key: 'currency', value: '$#,##0.00' },
+  { key: 'percent', value: '0.00%' },
+] as const;
 
 const readViews = async (bytes: ArrayBuffer): Promise<SheetView[]> => {
   const workbook = await loadXlsx(bytes);
@@ -136,12 +175,31 @@ const readViews = async (bytes: ArrayBuffer): Promise<SheetView[]> => {
       Array.from({ length: Math.max(12, sheet.actualColumnCount) }, (_, columnIndex) => {
         const cell = sheet.getCell(rowIndex + 1, columnIndex + 1);
         const value = cell.value;
+        const rawNumeric =
+          typeof value === 'number'
+            ? value
+            : value && typeof value === 'object' && 'result' in value
+              ? Number(value.result)
+              : undefined;
+        const numeric =
+          rawNumeric !== undefined && Number.isFinite(rawNumeric) ? rawNumeric : undefined;
+        const fill =
+          cell.fill?.type === 'pattern' && cell.fill.fgColor?.argb
+            ? `#${cell.fill.fgColor.argb.slice(-6)}`
+            : undefined;
         return {
           formula:
             value && typeof value === 'object' && 'formula' in value
               ? `=${value.formula}`
               : undefined,
-          text: cell.text,
+          numeric,
+          style: {
+            background: fill,
+            fontStyle: cell.font?.italic ? 'italic' : undefined,
+            fontWeight: cell.font?.bold ? 600 : undefined,
+            textAlign: cell.alignment?.horizontal as CSSProperties['textAlign'],
+          },
+          text: (numeric !== undefined && formatCellNumber(numeric, cell.numFmt)) || cell.text,
         };
       }),
     ),
@@ -164,7 +222,9 @@ const XLSXEditor = memo<XLSXEditorProps>(({ fileId, fileName, url }) => {
   const [bytes, setBytes] = useState<ArrayBuffer>();
   const [views, setViews] = useState<SheetView[]>();
   const [activeSheet, setActiveSheet] = useState(0);
-  const [selected, setSelected] = useState('A1');
+  const [anchor, setAnchor] = useState('A1');
+  const [focus, setFocus] = useState('A1');
+  const [clipboard, setClipboard] = useState<{ range: string; sheet: string }>();
   const [input, setInput] = useState('');
   const [status, setStatus] = useState<'xlsxEditor.status.saved' | 'xlsxEditor.status.unsaved'>(
     'xlsxEditor.status.saved',
@@ -202,32 +262,63 @@ const XLSXEditor = memo<XLSXEditorProps>(({ fileId, fileName, url }) => {
   );
 
   const view = views?.[activeSheet];
-  const selectedCell = useMemo(() => {
-    const match = selected.match(/^([A-Z]+)(\d+)$/u);
-    if (!match || !view) return undefined;
-    const column = [...match[1]].reduce((sum, value) => sum * 26 + value.charCodeAt(0) - 64, 0) - 1;
-    return view.rows[Number(match[2]) - 1]?.[column];
-  }, [selected, view]);
+  const selection = useMemo(() => rangeBetween(anchor, focus), [anchor, focus]);
+  const selectedRange = rangeAddress(selection);
+  const anchorCell = useMemo(() => {
+    if (!view) return undefined;
+    const { column, row } = parseCellAddress(anchor);
+    return view.rows[row - 1]?.[column - 1];
+  }, [anchor, view]);
 
-  useEffect(() => setInput(selectedCell?.formula || selectedCell?.text || ''), [selectedCell]);
+  useEffect(() => setInput(anchorCell?.formula || anchorCell?.text || ''), [anchorCell]);
+
+  // Structural edits can leave the selection or active tab out of bounds.
+  useEffect(() => {
+    if (views && activeSheet >= views.length) setActiveSheet(views.length - 1);
+  }, [activeSheet, views]);
+
+  const restore = useCallback(
+    async (previous: ArrayBuffer) => {
+      await refresh(previous);
+      await saveXlsxDraft(fileId, url, previous);
+      setStatus('xlsxEditor.status.unsaved');
+    },
+    [fileId, refresh, url],
+  );
 
   const undo = useCallback(async () => {
     if (!bytes) return;
     const previous = undoRef.current.pop();
     if (!previous) return;
     redoRef.current.push(bytes);
-    await refresh(previous);
-  }, [bytes, refresh]);
+    await restore(previous);
+  }, [bytes, restore]);
 
   const redo = useCallback(async () => {
     if (!bytes) return;
     const next = redoRef.current.pop();
     if (!next) return;
     undoRef.current.push(bytes);
-    await refresh(next);
-  }, [bytes, refresh]);
+    await restore(next);
+  }, [bytes, restore]);
+
+  const paste = useCallback(() => {
+    if (!clipboard || !view) return;
+    const [from, to = from] = clipboard.range.split(':');
+    const size = rangeSize(rangeBetween(from, to));
+    void apply({
+      from: clipboard.range,
+      sheet: clipboard.sheet,
+      to: rangeAnchoredAt(anchor, size),
+      toSheet: view.name,
+      type: 'copyRange',
+    });
+  }, [anchor, apply, clipboard, view]);
 
   if (!bytes || !views || !view) return <NeuralNetworkLoading size={36} />;
+
+  const selectionRows = rangeSize(selection).rows;
+  const selectionColumns = rangeSize(selection).columns;
 
   return (
     <Flexbox className={styles.editor}>
@@ -248,10 +339,150 @@ const XLSXEditor = memo<XLSXEditorProps>(({ fileId, fileName, url }) => {
           icon={Bold}
           title={t('xlsxEditor.actions.bold')}
           onClick={() =>
-            apply({ range: selected, sheet: view.name, style: { bold: true }, type: 'setStyle' })
+            apply({
+              range: selectedRange,
+              sheet: view.name,
+              style: { bold: true },
+              type: 'setStyle',
+            })
           }
         />
-        <span>{selected}</span>
+        <ActionIcon
+          icon={Italic}
+          title={t('xlsxEditor.actions.italic')}
+          onClick={() =>
+            apply({
+              range: selectedRange,
+              sheet: view.name,
+              style: { italic: true },
+              type: 'setStyle',
+            })
+          }
+        />
+        <ActionIcon
+          icon={AlignLeft}
+          title={t('xlsxEditor.actions.alignLeft')}
+          onClick={() =>
+            apply({
+              range: selectedRange,
+              sheet: view.name,
+              style: { horizontal: 'left' },
+              type: 'setStyle',
+            })
+          }
+        />
+        <ActionIcon
+          icon={AlignCenter}
+          title={t('xlsxEditor.actions.alignCenter')}
+          onClick={() =>
+            apply({
+              range: selectedRange,
+              sheet: view.name,
+              style: { horizontal: 'center' },
+              type: 'setStyle',
+            })
+          }
+        />
+        <ActionIcon
+          icon={AlignRight}
+          title={t('xlsxEditor.actions.alignRight')}
+          onClick={() =>
+            apply({
+              range: selectedRange,
+              sheet: view.name,
+              style: { horizontal: 'right' },
+              type: 'setStyle',
+            })
+          }
+        />
+        <Select
+          placeholder={t('xlsxEditor.actions.numberFormat')}
+          size={'small'}
+          style={{ width: 120 }}
+          value={null}
+          options={NUMBER_FORMATS.map((format) => ({
+            label: t(`xlsxEditor.formats.${format.key}`),
+            value: format.value,
+          }))}
+          onChange={(format) => {
+            if (typeof format !== 'string') return;
+            void apply({
+              range: selectedRange,
+              sheet: view.name,
+              style: { numberFormat: format },
+              type: 'setStyle',
+            });
+          }}
+        />
+        <ActionIcon
+          icon={Copy}
+          title={t('xlsxEditor.actions.copy')}
+          onClick={() => setClipboard({ range: selectedRange, sheet: view.name })}
+        />
+        <ActionIcon
+          disabled={!clipboard}
+          icon={ClipboardPaste}
+          title={t('xlsxEditor.actions.paste')}
+          onClick={paste}
+        />
+        <ActionIcon
+          icon={Eraser}
+          title={t('xlsxEditor.actions.clear')}
+          onClick={() => apply({ range: selectedRange, sheet: view.name, type: 'clearRange' })}
+        />
+        <Button
+          size={'small'}
+          onClick={() =>
+            apply({
+              at: selection.start.row,
+              count: selectionRows,
+              sheet: view.name,
+              type: 'insertRows',
+            })
+          }
+        >
+          {t('xlsxEditor.actions.insertRow')}
+        </Button>
+        <Button
+          size={'small'}
+          onClick={() =>
+            apply({
+              at: selection.start.row,
+              count: selectionRows,
+              sheet: view.name,
+              type: 'deleteRows',
+            })
+          }
+        >
+          {t('xlsxEditor.actions.deleteRow')}
+        </Button>
+        <Button
+          size={'small'}
+          onClick={() =>
+            apply({
+              at: selection.start.column,
+              count: selectionColumns,
+              sheet: view.name,
+              type: 'insertColumns',
+            })
+          }
+        >
+          {t('xlsxEditor.actions.insertColumn')}
+        </Button>
+        <Button
+          size={'small'}
+          onClick={() =>
+            apply({
+              at: selection.start.column,
+              count: selectionColumns,
+              sheet: view.name,
+              type: 'deleteColumns',
+            })
+          }
+        >
+          {t('xlsxEditor.actions.deleteColumn')}
+        </Button>
+        <span>{selectedRange}</span>
         <input
           className={styles.formula}
           value={input}
@@ -259,7 +490,7 @@ const XLSXEditor = memo<XLSXEditorProps>(({ fileId, fileName, url }) => {
           onKeyDown={(event) => {
             if (event.key === 'Enter')
               void apply({
-                range: selected,
+                range: anchor,
                 sheet: view.name,
                 type: 'setCells',
                 values: [[input]],
@@ -288,7 +519,7 @@ const XLSXEditor = memo<XLSXEditorProps>(({ fileId, fileName, url }) => {
               <th className={`${styles.header} ${styles.rowHeader}`} />
               {view.rows[0].map((_, index) => (
                 <th className={styles.header} key={index}>
-                  {columnName(index)}
+                  {columnName(index + 1)}
                 </th>
               ))}
             </tr>
@@ -298,13 +529,29 @@ const XLSXEditor = memo<XLSXEditorProps>(({ fileId, fileName, url }) => {
               <tr key={rowIndex}>
                 <th className={`${styles.header} ${styles.rowHeader}`}>{rowIndex + 1}</th>
                 {row.map((cell, columnIndex) => {
-                  const address = `${columnName(columnIndex)}${rowIndex + 1}`;
+                  const address = `${columnName(columnIndex + 1)}${rowIndex + 1}`;
+                  const inRange =
+                    selectedRange !== anchor &&
+                    isInBounds(selection, rowIndex + 1, columnIndex + 1);
                   return (
                     <td
-                      className={`${styles.cell} ${selected === address ? styles.cellSelected : ''}`}
                       key={address}
-                      onClick={() => setSelected(address)}
+                      style={cell.style}
+                      className={[
+                        styles.cell,
+                        address === anchor ? styles.cellSelected : '',
+                        inRange ? styles.cellInRange : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
                       onDoubleClick={() => setInput(cell.formula || cell.text)}
+                      onClick={(event) => {
+                        if (event.shiftKey) setFocus(address);
+                        else {
+                          setAnchor(address);
+                          setFocus(address);
+                        }
+                      }}
                     >
                       {cell.text}
                     </td>
@@ -335,6 +582,33 @@ const XLSXEditor = memo<XLSXEditorProps>(({ fileId, fileName, url }) => {
           icon={Plus}
           title={t('xlsxEditor.actions.addSheet')}
           onClick={() => void apply({ name: `Sheet${views.length + 1}`, type: 'addSheet' })}
+        />
+        <ActionIcon
+          disabled={activeSheet === 0}
+          icon={ChevronLeft}
+          title={t('xlsxEditor.actions.moveSheetLeft')}
+          onClick={() => {
+            void apply({ fromIndex: activeSheet, toIndex: activeSheet - 1, type: 'moveSheet' });
+            setActiveSheet(activeSheet - 1);
+          }}
+        />
+        <ActionIcon
+          disabled={activeSheet === views.length - 1}
+          icon={ChevronRight}
+          title={t('xlsxEditor.actions.moveSheetRight')}
+          onClick={() => {
+            void apply({ fromIndex: activeSheet, toIndex: activeSheet + 1, type: 'moveSheet' });
+            setActiveSheet(activeSheet + 1);
+          }}
+        />
+        <ActionIcon
+          disabled={views.length === 1}
+          icon={Trash2}
+          title={t('xlsxEditor.actions.deleteSheet')}
+          onClick={() => {
+            if (confirm(t('xlsxEditor.prompts.deleteSheet', { name: view.name })))
+              void apply({ name: view.name, type: 'deleteSheet' });
+          }}
         />
       </Flexbox>
     </Flexbox>

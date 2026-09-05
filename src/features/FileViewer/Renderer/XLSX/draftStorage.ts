@@ -1,6 +1,12 @@
 const DATABASE_NAME = 'lobehub-xlsx-editor';
 const STORE_NAME = 'drafts';
 
+/**
+ * Presigned file URLs rotate their query string on every fetch; only the path
+ * identifies the stored object, so drafts must not be invalidated by the query.
+ */
+export const normalizeSourceUrl = (url: string) => url.split(/[#?]/u)[0];
+
 interface XlsxDraftRecord {
   bytes: ArrayBuffer;
   sourceUrl: string;
@@ -40,12 +46,15 @@ export const loadXlsxDraft = async (key: string, sourceUrl: string) => {
       request.onsuccess = () => resolve(request.result as XlsxDraftRecord | undefined);
     },
   );
-  return record?.sourceUrl === sourceUrl ? record.bytes : undefined;
+  return record?.sourceUrl === normalizeSourceUrl(sourceUrl) ? record.bytes : undefined;
 };
 
 export const saveXlsxDraft = (key: string, sourceUrl: string, bytes: ArrayBuffer) =>
   transact<void>('readwrite', (store, resolve, reject) => {
-    const request = store.put({ bytes, sourceUrl } satisfies XlsxDraftRecord, key);
+    const request = store.put(
+      { bytes, sourceUrl: normalizeSourceUrl(sourceUrl) } satisfies XlsxDraftRecord,
+      key,
+    );
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve();
   });

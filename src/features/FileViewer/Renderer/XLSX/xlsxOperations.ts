@@ -18,7 +18,7 @@ export type XlsxEditOperation =
       sheet: string;
       type: 'setAreas';
     }
-  | { from: string; sheet: string; to: string; type: 'copyRange' }
+  | { from: string; sheet: string; to: string; toSheet?: string; type: 'copyRange' }
   | { at: number; count?: number; sheet: string; type: 'insertRows' | 'deleteRows' }
   | { at: number; count?: number; sheet: string; type: 'insertColumns' | 'deleteColumns' }
   | { name: string; type: 'addSheet' }
@@ -294,10 +294,13 @@ export const editXlsx = async (bytes: ArrayBuffer, operation: XlsxEditOperation)
       break;
     }
     case 'copyRange': {
-      const sheet = sheetOrThrow(workbook, operation.sheet);
+      const sourceSheet = sheetOrThrow(workbook, operation.sheet);
+      const targetSheet = operation.toSheet
+        ? sheetOrThrow(workbook, operation.toSheet)
+        : sourceSheet;
       const sourceBounds = rangeBounds(operation.from);
-      eachRangeCell(sheet, operation.to, (cell, row, column) => {
-        const source = sheet.getCell(
+      eachRangeCell(targetSheet, operation.to, (cell, row, column) => {
+        const source = sourceSheet.getCell(
           sourceBounds.start.row + row - 1,
           sourceBounds.start.column + column - 1,
         );
