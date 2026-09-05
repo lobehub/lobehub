@@ -55,11 +55,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     color: ${cssVar.colorTextQuaternary};
   `,
-  // The mark carries the fade, not the whole stack: multiplying it into the
-  // caption too leaves quaternary text at ~0.2 alpha, which is unreadable.
-  mark: css`
-    opacity: 0.48;
-  `,
   // Floated rather than stacked in flow: a caption that joins the column would
   // push the brand mark off the center it shares with the app that replaces it.
   hint: css`
@@ -68,7 +63,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     inset-inline-start: 50%;
 
     font-size: 13px;
-    color: ${cssVar.colorTextTertiary};
     white-space: nowrap;
 
     animation: ${slideUp} 0.42s ${cssVar.motionEaseOut} both;
@@ -157,9 +151,7 @@ const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
           >
             <div className={styles.contentBrand}>
               <div className={styles.brand}>
-                <div className={styles.mark}>
-                  <LobeHub size={40} type={'text'} />
-                </div>
+                <LobeHub size={40} type={'text'} />
                 {waiting && <LoadingHint />}
               </div>
             </div>
