@@ -1,0 +1,712 @@
+[
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Save",
+        "Download",
+        "HelloPage11",
+        "WordPage22",
+        "?",
+        "?",
+        "↑",
+        "↓",
+        "?",
+        "?",
+        "?"
+      ],
+      "statusTexts": [
+        "Saved"
+      ],
+      "text": "SavedSaveDownloadHelloPage11WordPage22↑↓Slide 1Slide 2Slide 3Slide 4Slide 5Slide 6Slide 7Slide 8Slide 9Slide 10Slide 11Slide 12Slide 13Slide 14Slide 15Slide 16Slide 17HelloPage1"
+    },
+    "key": "pptx",
+    "stage": "1-import",
+    "time": "2026-09-05T04:12:01.636Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-325-office-baseline/r4/pptx-1-import.png"
+    },
+    "key": "pptx",
+    "stage": "1-import-shot",
+    "time": "2026-09-05T04:12:01.800Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Save",
+        "Download",
+        "HelloPage11",
+        "HelloPage12",
+        "WordPage23",
+        "?",
+        "?",
+        "↑",
+        "↓",
+        "?",
+        "?",
+        "?",
+        "?"
+      ],
+      "statusTexts": [
+        "Unsaved changes"
+      ],
+      "text": "Unsaved changesSaveDownloadHelloPage11HelloPage12WordPage23↑↓Slide 1Slide 2Slide 3Slide 4Slide 5Slide 6Slide 7Slide 8Slide 9Slide 10Slide 11Slide 12Slide 13Slide 14Slide 15Slide 16Slide 17HelloPage1"
+    },
+    "key": "pptx",
+    "stage": "2-edit",
+    "time": "2026-09-05T04:12:09.915Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-325-office-baseline/r4/pptx-2-edited.png"
+    },
+    "key": "pptx",
+    "stage": "2-edit-shot",
+    "time": "2026-09-05T04:12:09.970Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Save",
+        "Download",
+        "HelloPage11",
+        "WordPage22",
+        "?",
+        "?",
+        "↑",
+        "↓",
+        "?",
+        "?",
+        "?",
+        "?"
+      ],
+      "statusTexts": [
+        "Unsaved changes"
+      ],
+      "text": "Unsaved changesSaveDownloadHelloPage11WordPage22↑↓Slide 1Slide 2Slide 3Slide 4Slide 5Slide 6Slide 7Slide 8Slide 9Slide 10Slide 11Slide 12Slide 13Slide 14Slide 15Slide 16Slide 17HelloPage1"
+    },
+    "key": "pptx",
+    "stage": "2-undo",
+    "time": "2026-09-05T04:12:12.102Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Save",
+        "Download",
+        "HelloPage11",
+        "HelloPage12",
+        "WordPage23",
+        "?",
+        "?",
+        "↑",
+        "↓",
+        "?",
+        "?",
+        "?",
+        "?"
+      ],
+      "statusTexts": [
+        "Unsaved changes"
+      ],
+      "text": "Unsaved changesSaveDownloadHelloPage11HelloPage12WordPage23↑↓Slide 1Slide 2Slide 3Slide 4Slide 5Slide 6Slide 7Slide 8Slide 9Slide 10Slide 11Slide 12Slide 13Slide 14Slide 15Slide 16Slide 17HelloPage1"
+    },
+    "key": "pptx",
+    "stage": "2-redo",
+    "time": "2026-09-05T04:12:14.226Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Save",
+        "Download",
+        "HelloPage11",
+        "HelloPage12",
+        "WordPage23",
+        "?",
+        "?",
+        "↑",
+        "↓",
+        "?",
+        "?",
+        "?",
+        "?"
+      ],
+      "statusTexts": [
+        "Saved"
+      ],
+      "text": "SavedSaveDownloadHelloPage11HelloPage12WordPage23↑↓Slide 1Slide 2Slide 3Slide 4Slide 5Slide 6Slide 7Slide 8Slide 9Slide 10Slide 11Slide 12Slide 13Slide 14Slide 15Slide 16Slide 17HelloPage1"
+    },
+    "key": "pptx",
+    "stage": "3-save",
+    "time": "2026-09-05T04:12:14.846Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-325-office-baseline/r4/pptx-3-saved.png"
+    },
+    "key": "pptx",
+    "stage": "3-save-shot",
+    "time": "2026-09-05T04:12:14.886Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Save",
+        "Download",
+        "HelloPage11",
+        "HelloPage12",
+        "WordPage23",
+        "?",
+        "?",
+        "↑",
+        "↓",
+        "?",
+        "?",
+        "?",
+        "?"
+      ],
+      "statusTexts": [
+        "Unsaved changes"
+      ],
+      "text": "Unsaved changesSaveDownloadHelloPage11HelloPage12WordPage23↑↓Slide 1Slide 2Slide 3Slide 4Slide 5Slide 6Slide 7Slide 8Slide 9Slide 10Slide 11Slide 12Slide 13Slide 14Slide 15Slide 16Slide 17HelloPage1"
+    },
+    "key": "pptx",
+    "stage": "4-reopen",
+    "time": "2026-09-05T04:12:21.898Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-325-office-baseline/r4/pptx-4-reopened.png"
+    },
+    "key": "pptx",
+    "stage": "4-reopen-shot",
+    "time": "2026-09-05T04:12:22.241Z"
+  },
+  {
+    "data": {
+      "exportPath": "artifacts/t-325-office-baseline/r4/export-T-325-R4-pptx.pptx",
+      "inputBytes": 39304,
+      "inputSha256": "7338a6c2978a9fdaf6575af3dd6e8681d5fc589f91e19e731bc2012e143b8111",
+      "outputBytes": 40047,
+      "outputSha256": "9089fb6f1849dd0e0b5ca3d90cafac70bbe35fe69f4f007dbd66315d6d1bdb26",
+      "shaChanged": true
+    },
+    "key": "pptx",
+    "stage": "5-export",
+    "time": "2026-09-05T04:12:23.073Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Format",
+        "?",
+        "?",
+        "?",
+        "Insert row",
+        "Delete row",
+        "Insert column",
+        "Delete column",
+        "Save",
+        "Download",
+        "表1",
+        "表2 - 表格 2",
+        "?",
+        "?",
+        "?",
+        "?"
+      ],
+      "statusTexts": [
+        "Saved"
+      ],
+      "text": "FormatInsert rowDelete rowInsert columnDelete columnA1SaveDownloadSavedABCDEFGHIJKL1表格 1表格 1表格 1表格 1表格 12类别 A类别 B3项目 1574项目 21085项目 39156项目 47127项目 5162189101112131415161718192021222324252627282930表1表2 - 表格 2"
+    },
+    "key": "xlsx",
+    "stage": "1-import",
+    "time": "2026-09-05T04:12:33.308Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-325-office-baseline/r4/xlsx-1-import.png"
+    },
+    "key": "xlsx",
+    "stage": "1-import-shot",
+    "time": "2026-09-05T04:12:33.469Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Format",
+        "?",
+        "?",
+        "?",
+        "Insert row",
+        "Delete row",
+        "Insert column",
+        "Delete column",
+        "Save",
+        "Download",
+        "表1",
+        "表2 - 表格 2",
+        "Sheet3",
+        "?",
+        "?",
+        "?",
+        "?"
+      ],
+      "statusTexts": [
+        "Unsaved changes"
+      ],
+      "text": "FormatInsert rowDelete rowInsert columnDelete columnL30SaveDownloadUnsaved changesABCDEFGHIJKL1表格 1表格 1表格 1表格 1表格 12类别 A类别 B3项目 1574项目 21085项目 39156项目 47127项目 5162189101112131415161718192021222324252627282930表1表2 - 表格 2Sheet3"
+    },
+    "key": "xlsx",
+    "stage": "2-edit",
+    "time": "2026-09-05T04:12:41.331Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-325-office-baseline/r4/xlsx-2-edited.png"
+    },
+    "key": "xlsx",
+    "stage": "2-edit-shot",
+    "time": "2026-09-05T04:12:41.486Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Format",
+        "?",
+        "?",
+        "?",
+        "Insert row",
+        "Delete row",
+        "Insert column",
+        "Delete column",
+        "Save",
+        "Download",
+        "表1",
+        "表2 - 表格 2",
+        "?",
+        "?",
+        "?",
+        "?"
+      ],
+      "statusTexts": [
+        "Unsaved changes"
+      ],
+      "text": "FormatInsert rowDelete rowInsert columnDelete columnL30SaveDownloadUnsaved changesABCDEFGHIJKL1表格 1表格 1表格 1表格 1表格 12类别 A类别 B3项目 1574项目 21085项目 39156项目 47127项目 5162189101112131415161718192021222324252627282930表1表2 - 表格 2"
+    },
+    "key": "xlsx",
+    "stage": "2-undo",
+    "time": "2026-09-05T04:12:43.005Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Format",
+        "?",
+        "?",
+        "?",
+        "Insert row",
+        "Delete row",
+        "Insert column",
+        "Delete column",
+        "Save",
+        "Download",
+        "表1",
+        "表2 - 表格 2",
+        "Sheet3",
+        "?",
+        "?",
+        "?",
+        "?"
+      ],
+      "statusTexts": [
+        "Unsaved changes"
+      ],
+      "text": "FormatInsert rowDelete rowInsert columnDelete columnL30SaveDownloadUnsaved changesABCDEFGHIJKL1表格 1表格 1表格 1表格 1表格 12类别 A类别 B3项目 1574项目 21085项目 39156项目 47127项目 5162189101112131415161718192021222324252627282930表1表2 - 表格 2Sheet3"
+    },
+    "key": "xlsx",
+    "stage": "2-redo",
+    "time": "2026-09-05T04:12:44.517Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Format",
+        "?",
+        "?",
+        "?",
+        "Insert row",
+        "Delete row",
+        "Insert column",
+        "Delete column",
+        "Save",
+        "Download",
+        "表1",
+        "表2 - 表格 2",
+        "Sheet3",
+        "?",
+        "?",
+        "?",
+        "?"
+      ],
+      "statusTexts": [
+        "Saved"
+      ],
+      "text": "FormatInsert rowDelete rowInsert columnDelete columnL30SaveDownloadSavedABCDEFGHIJKL1表格 1表格 1表格 1表格 1表格 12类别 A类别 B3项目 1574项目 21085项目 39156项目 47127项目 5162189101112131415161718192021222324252627282930表1表2 - 表格 2Sheet3"
+    },
+    "key": "xlsx",
+    "stage": "3-save",
+    "time": "2026-09-05T04:12:45.163Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-325-office-baseline/r4/xlsx-3-saved.png"
+    },
+    "key": "xlsx",
+    "stage": "3-save-shot",
+    "time": "2026-09-05T04:12:45.216Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Format",
+        "?",
+        "?",
+        "?",
+        "Insert row",
+        "Delete row",
+        "Insert column",
+        "Delete column",
+        "Save",
+        "Download",
+        "表1",
+        "表2 - 表格 2",
+        "Sheet3",
+        "?",
+        "?",
+        "?",
+        "?"
+      ],
+      "statusTexts": [
+        "Saved"
+      ],
+      "text": "FormatInsert rowDelete rowInsert columnDelete columnA1SaveDownloadSavedABCDEFGHIJKL1表格 1表格 1表格 1表格 1表格 12类别 A类别 B3项目 1574项目 21085项目 39156项目 47127项目 5162189101112131415161718192021222324252627282930表1表2 - 表格 2Sheet3"
+    },
+    "key": "xlsx",
+    "stage": "4-reopen",
+    "time": "2026-09-05T04:12:50.946Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-325-office-baseline/r4/xlsx-4-reopened.png"
+    },
+    "key": "xlsx",
+    "stage": "4-reopen-shot",
+    "time": "2026-09-05T04:12:51.100Z"
+  },
+  {
+    "data": {
+      "exportPath": "artifacts/t-325-office-baseline/r4/export-T-325-R4-xlsx.xlsx",
+      "inputBytes": 7101,
+      "inputSha256": "019597d1701adb261b922d8a66e0f6f0db7d0bfd10659b8e822a8b6f4277db06",
+      "outputBytes": 9002,
+      "outputSha256": "92335719386a2f9ed11c4bc3546c035d408ee45d1f08a8668edd98877375b51b",
+      "shaChanged": true
+    },
+    "key": "xlsx",
+    "stage": "5-export",
+    "time": "2026-09-05T04:12:51.822Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Save",
+        "Download"
+      ],
+      "statusTexts": [
+        "Saved"
+      ],
+      "text": "NormalHeading 1Heading 2Heading 3SaveDownloadSaved简单报告副标题轻点或点按此占位符文本并开始键入即可开始。你可以在 Mac、iPad、iPhone 或 iCloud.com 上查看和编辑此文稿。轻松编辑文本、更改字体以及添加精美的图形。使用段落样式来使整篇文稿保持一致的风格。例如，此段落使用“正文”样式。你可以在“格式”控制的“文本”标签页中更改样式。若要添加照片、图像画廊、音频片段、视频、图表或任意 700 多种可自定义形状，请在工具栏中轻点或点按其中一个插入按钮，或者将对象拖放到页面中。你可以分层放置对象、调整其大小以及将其放在页面中的任意位置。若要更改对象随文本移动的方式，请选择对象并随后轻点或点按“格式”控制中的“排列”标签页。小标题Pages 文稿可用于文字处理和页面布局。此“简单报告”模板为文字处理而设置，如此一来，文本便会随着你的键入而从某一页流向下一页，到达页面末尾时会自动创建新的页面。在页面布局文稿中，你可以手动重新排列页面并随意调整页面中的文本框、图像和其他对象的位置。若要创建页面布局文稿，请在模板选取器中选取一种页面布局模板。你也可以在 Mac、iPad 或 iPhone 上将此文稿改为页面布局，方法是在“文稿”控制中关闭“文稿正文”。“这是一个引用（报告中的关键短语）的例子。轻点或点按此文本添加你自己的内容。"
+    },
+    "key": "docx",
+    "stage": "1-import",
+    "time": "2026-09-05T04:13:01.147Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-325-office-baseline/r4/docx-1-import.png"
+    },
+    "key": "docx",
+    "stage": "1-import-shot",
+    "time": "2026-09-05T04:13:01.692Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Save",
+        "Download",
+        "|  | \n |  | \n |  |"
+      ],
+      "statusTexts": [
+        "Unsaved changes"
+      ],
+      "text": "NormalHeading 1Heading 2Heading 3SaveDownloadUnsaved changesT-325-R4-WORD 简单报告（已编辑）List item副标题轻点或点按此占位符文本并开始键入即可开始。你可以在 Mac、iPad、iPhone 或 iCloud.com 上查看和编辑此文稿。轻松编辑文本、更改字体以及添加精美的图形。使用段落样式来使整篇文稿保持一致的风格。例如，此段落使用“正文”样式。你可以在“格式”控制的“文本”标签页中更改样式。若要添加照片、图像画廊、音频片段、视频、图表或任意 700 多种可自定义形状，请在工具栏中轻点或点按其中一个插入按钮，或者将对象拖放到页面中。你可以分层放置对象、调整其大小以及将其放在页面中的任意位置。若要更改对象随文本移动的方式，请选择对象并随后轻点或点按“格式”控制中的“排列”标签页。小标题Pages 文稿可用于文字处理和页面布局。此“简单报告”模板为文字处理而设置，如此一来，文本便会随着你的键入而从某一页流向下一页，到达页面末尾时会自动创建新的页面。在页面布局文稿中，你可以手动重新排列页面并随意调整页面中的文本框、图像和其他对象的位置。若要创建页面布局文稿，请在模板选取器中选取一种页面布局模板。你也可以在 Mac、iPad 或 iPhone 上将此文稿改为页面布局，方法是在“文稿”控制中关闭“文稿正文”。"
+    },
+    "key": "docx",
+    "stage": "2-edit",
+    "time": "2026-09-05T04:13:09.129Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-325-office-baseline/r4/docx-2-edited.png"
+    },
+    "key": "docx",
+    "stage": "2-edit-shot",
+    "time": "2026-09-05T04:13:09.300Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Save",
+        "Download"
+      ],
+      "statusTexts": [
+        "Unsaved changes"
+      ],
+      "text": "NormalHeading 1Heading 2Heading 3SaveDownloadUnsaved changesT-325-R4-WORD 简单报告（已编辑）List item副标题轻点或点按此占位符文本并开始键入即可开始。你可以在 Mac、iPad、iPhone 或 iCloud.com 上查看和编辑此文稿。轻松编辑文本、更改字体以及添加精美的图形。使用段落样式来使整篇文稿保持一致的风格。例如，此段落使用“正文”样式。你可以在“格式”控制的“文本”标签页中更改样式。若要添加照片、图像画廊、音频片段、视频、图表或任意 700 多种可自定义形状，请在工具栏中轻点或点按其中一个插入按钮，或者将对象拖放到页面中。你可以分层放置对象、调整其大小以及将其放在页面中的任意位置。若要更改对象随文本移动的方式，请选择对象并随后轻点或点按“格式”控制中的“排列”标签页。小标题Pages 文稿可用于文字处理和页面布局。此“简单报告”模板为文字处理而设置，如此一来，文本便会随着你的键入而从某一页流向下一页，到达页面末尾时会自动创建新的页面。在页面布局文稿中，你可以手动重新排列页面并随意调整页面中的文本框、图像和其他对象的位置。若要创建页面布局文稿，请在模板选取器中选取一种页面布局模板。你也可以在 Mac、iPad 或 iPhone 上将此文稿改为页面布局，方法是在“文稿”控制中关闭“文稿正文”。"
+    },
+    "key": "docx",
+    "stage": "2-undo",
+    "time": "2026-09-05T04:13:10.751Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Save",
+        "Download",
+        "|  | \n |  | \n |  |"
+      ],
+      "statusTexts": [
+        "Unsaved changes"
+      ],
+      "text": "NormalHeading 1Heading 2Heading 3SaveDownloadUnsaved changesT-325-R4-WORD 简单报告（已编辑）List item副标题轻点或点按此占位符文本并开始键入即可开始。你可以在 Mac、iPad、iPhone 或 iCloud.com 上查看和编辑此文稿。轻松编辑文本、更改字体以及添加精美的图形。使用段落样式来使整篇文稿保持一致的风格。例如，此段落使用“正文”样式。你可以在“格式”控制的“文本”标签页中更改样式。若要添加照片、图像画廊、音频片段、视频、图表或任意 700 多种可自定义形状，请在工具栏中轻点或点按其中一个插入按钮，或者将对象拖放到页面中。你可以分层放置对象、调整其大小以及将其放在页面中的任意位置。若要更改对象随文本移动的方式，请选择对象并随后轻点或点按“格式”控制中的“排列”标签页。小标题Pages 文稿可用于文字处理和页面布局。此“简单报告”模板为文字处理而设置，如此一来，文本便会随着你的键入而从某一页流向下一页，到达页面末尾时会自动创建新的页面。在页面布局文稿中，你可以手动重新排列页面并随意调整页面中的文本框、图像和其他对象的位置。若要创建页面布局文稿，请在模板选取器中选取一种页面布局模板。你也可以在 Mac、iPad 或 iPhone 上将此文稿改为页面布局，方法是在“文稿”控制中关闭“文稿正文”。"
+    },
+    "key": "docx",
+    "stage": "2-redo",
+    "time": "2026-09-05T04:13:12.191Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Save",
+        "Download",
+        "|  | \n |  | \n |  |"
+      ],
+      "statusTexts": [
+        "Saved"
+      ],
+      "text": "NormalHeading 1Heading 2Heading 3SaveDownloadSavedT-325-R4-WORD 简单报告（已编辑）List item副标题轻点或点按此占位符文本并开始键入即可开始。你可以在 Mac、iPad、iPhone 或 iCloud.com 上查看和编辑此文稿。轻松编辑文本、更改字体以及添加精美的图形。使用段落样式来使整篇文稿保持一致的风格。例如，此段落使用“正文”样式。你可以在“格式”控制的“文本”标签页中更改样式。若要添加照片、图像画廊、音频片段、视频、图表或任意 700 多种可自定义形状，请在工具栏中轻点或点按其中一个插入按钮，或者将对象拖放到页面中。你可以分层放置对象、调整其大小以及将其放在页面中的任意位置。若要更改对象随文本移动的方式，请选择对象并随后轻点或点按“格式”控制中的“排列”标签页。小标题Pages 文稿可用于文字处理和页面布局。此“简单报告”模板为文字处理而设置，如此一来，文本便会随着你的键入而从某一页流向下一页，到达页面末尾时会自动创建新的页面。在页面布局文稿中，你可以手动重新排列页面并随意调整页面中的文本框、图像和其他对象的位置。若要创建页面布局文稿，请在模板选取器中选取一种页面布局模板。你也可以在 Mac、iPad 或 iPhone 上将此文稿改为页面布局，方法是在“文稿”控制中关闭“文稿正文”。“这是一个引用（报告"
+    },
+    "key": "docx",
+    "stage": "3-save",
+    "time": "2026-09-05T04:13:12.842Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-325-office-baseline/r4/docx-3-saved.png"
+    },
+    "key": "docx",
+    "stage": "3-save-shot",
+    "time": "2026-09-05T04:13:12.934Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Save",
+        "Download",
+        "|  | \n |  | \n |  |"
+      ],
+      "statusTexts": [
+        "Unsaved changes"
+      ],
+      "text": "NormalHeading 1Heading 2Heading 3SaveDownloadUnsaved changesT-325-R4-WORD 简单报告（已编辑）List item副标题轻点或点按此占位符文本并开始键入即可开始。你可以在 Mac、iPad、iPhone 或 iCloud.com 上查看和编辑此文稿。轻松编辑文本、更改字体以及添加精美的图形。使用段落样式来使整篇文稿保持一致的风格。例如，此段落使用“正文”样式。你可以在“格式”控制的“文本”标签页中更改样式。若要添加照片、图像画廊、音频片段、视频、图表或任意 700 多种可自定义形状，请在工具栏中轻点或点按其中一个插入按钮，或者将对象拖放到页面中。你可以分层放置对象、调整其大小以及将其放在页面中的任意位置。若要更改对象随文本移动的方式，请选择对象并随后轻点或点按“格式”控制中的“排列”标签页。小标题Pages 文稿可用于文字处理和页面布局。此“简单报告”模板为文字处理而设置，如此一来，文本便会随着你的键入而从某一页流向下一页，到达页面末尾时会自动创建新的页面。在页面布局文稿中，你可以手动重新排列页面并随意调整页面中的文本框、图像和其他对象的位置。若要创建页面布局文稿，请在模板选取器中选取一种页面布局模板。你也可以在 Mac、iPad 或 iPhone 上将此文稿改为页面布局，方法是在“文稿”控制中关闭“文稿正文”。"
+    },
+    "key": "docx",
+    "stage": "4-reopen",
+    "time": "2026-09-05T04:13:17.819Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-325-office-baseline/r4/docx-4-reopened.png"
+    },
+    "key": "docx",
+    "stage": "4-reopen-shot",
+    "time": "2026-09-05T04:13:19.190Z"
+  },
+  {
+    "data": {
+      "exportPath": "artifacts/t-325-office-baseline/r4/export-T-325-R4-docx.docx",
+      "inputBytes": 9387,
+      "inputSha256": "25ee9d2f05861810b44f6d866869f329b079a9a4d08b9ba7ec25cbeb06f62433",
+      "outputBytes": 61482,
+      "outputSha256": "7b747ccef2fe9315dcbce76e4855cf03ce2da7c82de7b99e262ada48c8c2929d",
+      "shaChanged": true
+    },
+    "key": "docx",
+    "stage": "5-export",
+    "time": "2026-09-05T04:13:19.824Z"
+  }
+]
