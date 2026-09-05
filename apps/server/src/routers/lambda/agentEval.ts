@@ -514,107 +514,106 @@ export const agentEvalRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const upload = await ctx.fileUploadService.assertActiveOrLegacy(input.pathname);
-      const format = input.format || 'auto';
-      const resolvedFilename = input.filename || input.pathname;
-      const isXlsx = format === 'xlsx' || resolvedFilename?.match(/\.xlsx?$/i);
+      let imported = false;
 
-      let parsed;
       try {
-        const content = isXlsx
-          ? await ctx.fileService.getFileByteArray(input.pathname)
-          : await ctx.fileService.getFileContent(input.pathname);
-        parsed = parseDataset(content, {
-          filename: resolvedFilename,
-          format: format === 'auto' ? undefined : format,
-        });
-      } catch (error: any) {
-        if (upload) await ctx.fileUploadService.releaseBestEffort(input.pathname);
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: `Failed to parse file: ${error.message}`,
-        });
-      }
+        const format = input.format || 'auto';
+        const resolvedFilename = input.filename || input.pathname;
+        const isXlsx = format === 'xlsx' || resolvedFilename?.match(/\.xlsx?$/i);
 
-      const { fieldMapping } = input;
+        let parsed;
+        try {
+          const content = isXlsx
+            ? await ctx.fileService.getFileByteArray(input.pathname)
+            : await ctx.fileService.getFileContent(input.pathname);
+          parsed = parseDataset(content, {
+            filename: resolvedFilename,
+            format: format === 'auto' ? undefined : format,
+          });
+        } catch (error: any) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Failed to parse file: ${error.message}`,
+          });
+        }
 
-      // Get the current max sortOrder so new imports continue from there
-      const existingCount = await ctx.testCaseModel.countByDatasetId(input.datasetId);
+        const { fieldMapping } = input;
 
-      const testCases = parsed.rows.map((row, index) => {
-        let expectedStr: string | undefined;
+        // Get the current max sortOrder so new imports continue from there
+        const existingCount = await ctx.testCaseModel.countByDatasetId(input.datasetId);
 
-        if (fieldMapping.expected) {
-          const raw = row[fieldMapping.expected];
-          if (raw != null) {
-            // Split multi-candidate answers by delimiter
-            if (fieldMapping.expectedDelimiter) {
-              const candidates = String(raw)
-                .split(fieldMapping.expectedDelimiter)
-                .map((s: string) => s.trim())
-                .filter(Boolean);
-              expectedStr = candidates.length > 1 ? JSON.stringify(candidates) : String(raw);
-            } else {
-              expectedStr = String(raw);
+        const testCases = parsed.rows.map((row, index) => {
+          let expectedStr: string | undefined;
+
+          if (fieldMapping.expected) {
+            const raw = row[fieldMapping.expected];
+            if (raw != null) {
+              // Split multi-candidate answers by delimiter
+              if (fieldMapping.expectedDelimiter) {
+                const candidates = String(raw)
+                  .split(fieldMapping.expectedDelimiter)
+                  .map((s: string) => s.trim())
+                  .filter(Boolean);
+                expectedStr = candidates.length > 1 ? JSON.stringify(candidates) : String(raw);
+              } else {
+                expectedStr = String(raw);
+              }
             }
           }
-        }
 
-        // Handle choices field (array or JSON string)
-        let choices: string[] | undefined;
-        if (fieldMapping.choices) {
-          const rawChoices = row[fieldMapping.choices];
-          if (Array.isArray(rawChoices)) {
-            choices = rawChoices.map(String);
-          } else if (typeof rawChoices === 'string') {
-            try {
-              const parsed = JSON.parse(rawChoices);
-              if (Array.isArray(parsed)) choices = parsed.map(String);
-            } catch {
-              // Not JSON, skip
+          // Handle choices field (array or JSON string)
+          let choices: string[] | undefined;
+          if (fieldMapping.choices) {
+            const rawChoices = row[fieldMapping.choices];
+            if (Array.isArray(rawChoices)) {
+              choices = rawChoices.map(String);
+            } else if (typeof rawChoices === 'string') {
+              try {
+                const parsed = JSON.parse(rawChoices);
+                if (Array.isArray(parsed)) choices = parsed.map(String);
+              } catch {
+                // Not JSON, skip
+              }
             }
           }
-        }
 
-        // Compute sortOrder: use CSV column value if mapped, otherwise auto-increment from 1
-        let sortOrder: number;
-        if (fieldMapping.sortOrder) {
-          const raw = Number(row[fieldMapping.sortOrder]);
-          sortOrder = Number.isFinite(raw) ? raw : existingCount + index + 1;
-        } else {
-          sortOrder = existingCount + index + 1;
-        }
+          // Compute sortOrder: use CSV column value if mapped, otherwise auto-increment from 1
+          let sortOrder: number;
+          if (fieldMapping.sortOrder) {
+            const raw = Number(row[fieldMapping.sortOrder]);
+            sortOrder = Number.isFinite(raw) ? raw : existingCount + index + 1;
+          } else {
+            sortOrder = existingCount + index + 1;
+          }
 
-        return {
-          datasetId: input.datasetId,
-          content: {
-            input: String(row[fieldMapping.input] ?? ''),
-            expected: expectedStr,
-            choices,
-            category: fieldMapping.category ? String(row[fieldMapping.category]) : undefined,
-          },
-          metadata: fieldMapping.metadata
-            ? Object.fromEntries(
-                Object.entries(fieldMapping.metadata).map(([key, col]) => [
-                  key,
-                  row[col as string],
-                ]),
-              )
-            : {},
-          sortOrder,
-        };
-      });
+          return {
+            datasetId: input.datasetId,
+            content: {
+              input: String(row[fieldMapping.input] ?? ''),
+              expected: expectedStr,
+              choices,
+              category: fieldMapping.category ? String(row[fieldMapping.category]) : undefined,
+            },
+            metadata: fieldMapping.metadata
+              ? Object.fromEntries(
+                  Object.entries(fieldMapping.metadata).map(([key, col]) => [
+                    key,
+                    row[col as string],
+                  ]),
+                )
+              : {},
+            sortOrder,
+          };
+        });
 
-      let result;
-      try {
-        result = await ctx.testCaseModel.batchCreate(testCases);
-      } catch (error) {
+        const result = await ctx.testCaseModel.batchCreate(testCases);
+        imported = true;
+
+        return { count: result.length, data: result };
+      } finally {
         if (upload) await ctx.fileUploadService.releaseBestEffort(input.pathname);
-        throw error;
+        else if (imported) await ctx.fileService.deleteFile(input.pathname);
       }
-      if (upload) await ctx.fileUploadService.releaseBestEffort(input.pathname);
-      else await ctx.fileService.deleteFile(input.pathname);
-
-      return { count: result.length, data: result };
     }),
 
   // ============================================

@@ -126,9 +126,10 @@ class UploadService {
     // Create file object
     const file = new File([blob], fileName, { type: mimeType });
 
+    const hash = await hashFile(file, options.abortController?.signal);
+
     // Use unified upload method
     const { data: metadata } = await this.uploadFileToS3(file, options);
-    const hash = await hashFile(file, options.abortController?.signal);
 
     return {
       fileType: mimeType,
