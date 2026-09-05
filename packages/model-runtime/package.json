@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "exports": {
+    "./errors/specs": "./src/errors/specs.ts",
     ".": "./src/index.ts",
     "./errors": "./src/errors/index.ts",
     "./getModelPropertyWithFallback": "./src/utils/getFallbackModelProperty.ts",

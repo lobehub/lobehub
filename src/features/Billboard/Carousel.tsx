@@ -1,6 +1,5 @@
 'use client';
 
-import { useAnalytics } from '@lobehub/analytics/react';
 import { Flexbox, Tooltip } from '@lobehub/ui';
 import { ActionIcon, Button } from '@lobehub/ui/base-ui';
 import { Carousel as AntCarousel } from 'antd';
@@ -19,6 +18,7 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAnalytics } from '@/libs/analytics/client';
 import type { GlobalBillboard, GlobalBillboardItem } from '@/types/serverConfig';
 
 import { resolveBillboardAction, runBillboardAction } from './actions';

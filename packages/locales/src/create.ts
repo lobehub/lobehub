@@ -4,16 +4,9 @@ import resourcesToBackend from 'i18next-resources-to-backend';
 import { initReactI18next } from 'react-i18next';
 import { isRtlLang } from 'rtl-detect';
 
-import chat from '@/../locales/en-US/chat.json';
-import common from '@/../locales/en-US/common.json';
-import error from '@/../locales/en-US/error.json';
-import home from '@/../locales/en-US/home.json';
 import { DEFAULT_LANG } from '@/const/locale';
 import { getDebugConfig } from '@/envs/debug';
 // Sync load bundled fallback resources without Suspense on first render.
-// Use src/locales/default/*.ts as the runtime fallback source, then overlay
-// locales/en-US/*.json so dev-preview JSON can still customize English copy
-// without dropping newly added default keys.
 import defaultChat from '@/locales/default/chat';
 import defaultCommon from '@/locales/default/common';
 import defaultError from '@/locales/default/error';
@@ -23,20 +16,30 @@ import { isOnServerSide } from '@/utils/env';
 import { unwrapESMModule } from '@/utils/esm/unwrapESMModule';
 import { loadI18nNamespaceModule } from '@/utils/i18n/loadI18nNamespaceModule';
 
-const mergeNamespace = (
-  fallbackResources: Record<string, unknown>,
-  localeResources: Record<string, unknown>,
-) => ({
-  ...fallbackResources,
-  ...localeResources,
+const createBundledResources = () => ({
+  chat: defaultChat,
+  common: defaultCommon,
+  error: defaultError,
+  home: defaultHome,
 });
 
-const createBundledResources = () => ({
-  chat: mergeNamespace(defaultChat, chat),
-  common: mergeNamespace(defaultCommon, common),
-  error: mergeNamespace(defaultError, error),
-  home: mergeNamespace(defaultHome, home),
-});
+// locales/en-US/*.json mirrors src/default/*.ts, so production ships only the
+// source. In dev the JSON is overlaid asynchronously so a preview edit to the
+// English copy still shows up without a rebuild.
+const overlayDevEnglishCopy = async (instance: typeof i18n) => {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  const overlays = {
+    chat: import('@/../locales/en-US/chat.json'),
+    common: import('@/../locales/en-US/common.json'),
+    error: import('@/../locales/en-US/error.json'),
+    home: import('@/../locales/en-US/home.json'),
+  };
+
+  for (const [ns, loading] of Object.entries(overlays)) {
+    instance.addResourceBundle(DEFAULT_LANG, ns, unwrapESMModule(await loading), true, true);
+  }
+};
 
 const defaultResources = createBundledResources();
 const bundledNamespaces = Object.keys(defaultResources);
@@ -115,6 +118,8 @@ export const createI18nNext = (lang?: string) => {
         // Silence the Locize promotional console.info printed on init (i18next >= 25)
         showSupportNotice: false,
       });
+
+      void initPromise.then(() => overlayDevEnglishCopy(instance));
 
       if (initialLang !== DEFAULT_LANG) {
         initPromise.then(async () => {

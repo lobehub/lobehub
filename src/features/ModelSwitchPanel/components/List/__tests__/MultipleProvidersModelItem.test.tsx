@@ -41,6 +41,7 @@ vi.mock('@lobehub/ui', async (importOriginal) => ({
 
 vi.mock('@lobehub/ui/base-ui', () => ({
   Avatar: () => <span />,
+  Skeleton: () => <span />,
   Tag: ({ children }: { children: ReactNode }) => <span>{children}</span>,
   Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }));

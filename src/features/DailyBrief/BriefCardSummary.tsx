@@ -1,11 +1,13 @@
-import { Flexbox, Markdown, MaskShadow } from '@lobehub/ui';
+import { Flexbox, MaskShadow } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { useSize } from 'ahooks';
 import { ChevronsDownUpIcon, ChevronsUpDownIcon } from 'lucide-react';
-import { memo, useEffect, useRef, useState } from 'react';
+import { lazy, memo, Suspense, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { styles } from './style';
+
+const Markdown = lazy(() => import('@lobehub/ui/es/Markdown/index'));
 
 export const COLLAPSED_MAX_HEIGHT = 180;
 
@@ -26,9 +28,11 @@ const BriefCardSummary = memo<BriefCardSummaryProps>(({ summary }) => {
   }, [size]);
 
   const content = (
-    <Markdown ref={ref} style={{ overflow: 'unset' }} variant={'chat'}>
-      {summary}
-    </Markdown>
+    <Suspense fallback={null}>
+      <Markdown ref={ref} style={{ overflow: 'unset' }} variant={'chat'}>
+        {summary}
+      </Markdown>
+    </Suspense>
   );
 
   return (

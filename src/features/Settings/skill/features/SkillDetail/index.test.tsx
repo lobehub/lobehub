@@ -69,6 +69,7 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('@lobechat/const', () => ({
   COMPOSIO_APP_TYPES: [],
+  isDesktop: false,
   getLobehubSkillProviderById: (identifier: string) =>
     identifier === 'notion'
       ? {

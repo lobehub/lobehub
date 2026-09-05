@@ -4,7 +4,7 @@ export * from './agentIntervention';
 export * from './chatConfig';
 export * from './displayName';
 export * from './document';
-export * from './graph';
+export type * from './graph';
 export * from './heteroCliArgs';
 export * from './heterogeneousAgent';
 export * from './heterogeneousIntervention';

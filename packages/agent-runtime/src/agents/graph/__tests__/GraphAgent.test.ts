@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { ToolNameResolver } from '@lobechat/context-engine';
 import type { AgentGraph, RuntimeAdditionalContextFragment } from '@lobechat/types';
-import { AGENT_GRAPH_ROOT_NODE_ID, AgentGraphSchema } from '@lobechat/types';
+import { AGENT_GRAPH_ROOT_NODE_ID, AgentGraphSchema } from '@lobechat/types/agent/graph';
 import { describe, expect, it } from 'vitest';
 
 import type { AgentInstruction, AgentRuntimeContext, AgentState } from '../../../types';

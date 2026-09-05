@@ -1,17 +1,14 @@
 'use client';
 
-import {
-  type GoogleAnalyticsProviderConfig,
-  type PostHogProviderAnalyticsConfig,
-  type XAdsProviderAnalyticsConfig,
+import type {
+  GoogleAnalyticsProviderConfig,
+  PostHogProviderAnalyticsConfig,
+  XAdsProviderAnalyticsConfig,
 } from '@lobehub/analytics';
-import { createSingletonAnalytics } from '@lobehub/analytics';
-import { AnalyticsProvider } from '@lobehub/analytics/react';
 import { type ReactNode } from 'react';
-import { memo, useRef } from 'react';
+import { memo, useEffect } from 'react';
 
-import { BUSINESS_LINE } from '@/const/analytics';
-import { isDesktop } from '@/const/version';
+import { loadAnalytics } from '@/libs/analytics/client';
 
 type Props = {
   children: ReactNode;
@@ -20,52 +17,30 @@ type Props = {
   xAdsConfig: XAdsProviderAnalyticsConfig;
 };
 
-let analyticsInstance: ReturnType<typeof createSingletonAnalytics> | null = null;
+type RequestIdleCallback = (callback: () => void, options?: { timeout?: number }) => number;
+
+const scheduleIdle = (task: () => void) => {
+  const requestIdleCallback = (
+    window as typeof window & { requestIdleCallback?: RequestIdleCallback }
+  ).requestIdleCallback;
+
+  if (typeof requestIdleCallback === 'function') {
+    requestIdleCallback(task, { timeout: 3000 });
+    return;
+  }
+
+  window.setTimeout(task, 0);
+};
 
 export const LobeAnalyticsProvider = memo(
   ({ children, ga4Config, postHogConfig, xAdsConfig }: Props) => {
-    const analyticsRef = useRef<ReturnType<typeof createSingletonAnalytics> | null>(null);
+    useEffect(() => {
+      scheduleIdle(() => {
+        void loadAnalytics({ ga4: ga4Config, posthog: postHogConfig, xAds: xAdsConfig });
+      });
+    }, [ga4Config, postHogConfig, xAdsConfig]);
 
-    if (!analyticsRef.current) {
-      analyticsRef.current =
-        analyticsInstance ||
-        createSingletonAnalytics({
-          business: BUSINESS_LINE,
-          // Keep the manager-level logs (`[AnalyticsManager] ...`) quiet even in dev
-          debug: false,
-          providers: {
-            ga4: ga4Config,
-            posthog: postHogConfig,
-            xAds: xAdsConfig,
-          },
-        });
-
-      analyticsInstance = analyticsRef.current;
-    }
-
-    const analytics = analyticsRef.current;
-
-    if (!analytics) return children;
-
-    return (
-      <AnalyticsProvider
-        client={analytics}
-        onInitializeSuccess={() => {
-          analyticsInstance?.setGlobalContext({
-            platform: isDesktop ? 'desktop' : 'web',
-          });
-
-          analyticsInstance
-            ?.getProvider('posthog')
-            ?.getNativeInstance()
-            ?.register({
-              platform: isDesktop ? 'desktop' : 'web',
-            });
-        }}
-      >
-        {children}
-      </AnalyticsProvider>
-    );
+    return children;
   },
   () => true,
 );

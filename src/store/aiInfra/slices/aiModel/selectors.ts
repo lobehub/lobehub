@@ -1,6 +1,8 @@
-import type { ExtendParamsType } from 'model-bank';
-import { MODEL_REASONING_EXTEND_PARAMS } from 'model-bank';
-import { AiModelSourceEnum } from 'model-bank/aiModel';
+import {
+  AiModelSourceEnum,
+  type ExtendParamsType,
+  MODEL_REASONING_EXTEND_PARAMS,
+} from 'model-bank/aiModel';
 
 import { type AIProviderStoreState } from '@/store/aiInfra/initialState';
 import { ModelSearchImplement } from '@/types/search';

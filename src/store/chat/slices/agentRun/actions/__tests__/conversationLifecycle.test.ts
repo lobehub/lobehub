@@ -60,6 +60,14 @@ vi.mock('@/services/electron/localFileService', () => ({
   localFileService: mockLocalFileService,
 }));
 
+vi.mock('@/store/tool/slices/builtin/loadBuiltinSkills', () => ({
+  loadBuiltinSkill: async (identifier: string) =>
+    toolStoreModule
+      .getToolStoreState()
+      .builtinSkills.find((skill: any) => skill.identifier === identifier),
+  loadBuiltinSkills: async () => toolStoreModule.getToolStoreState().builtinSkills,
+}));
+
 // Mock lambdaClient to prevent network requests
 vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {

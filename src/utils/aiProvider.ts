@@ -1,5 +1,5 @@
 import type { BuiltinModelIdentifier, EnabledAiModel } from 'model-bank';
-import { isAiModelVisible } from 'model-bank';
+import { isAiModelVisible } from 'model-bank/aiModel';
 
 const getBuiltinModelIdentifierKey = ({ id, providerId }: BuiltinModelIdentifier) =>
   `${providerId}\u0000${id}`;

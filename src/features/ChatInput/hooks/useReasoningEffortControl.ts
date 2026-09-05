@@ -2,7 +2,7 @@
 
 import isEqual from 'fast-deep-equal';
 import type { AiModelReasoningConfig } from 'model-bank';
-import { MODEL_REASONING_PARAM_DEFAULTS, MODEL_REASONING_PARAM_LEVELS } from 'model-bank';
+import { MODEL_REASONING_PARAM_DEFAULTS, MODEL_REASONING_PARAM_LEVELS } from 'model-bank/aiModel';
 import { useCallback } from 'react';
 
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';

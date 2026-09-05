@@ -7,6 +7,7 @@ import debug from 'debug';
 import { isBuiltinSkillAvailableInCurrentEnv } from '@/helpers/toolAvailability';
 import { agentSkillService } from '@/services/skill';
 import { getToolStoreState } from '@/store/tool';
+import { loadBuiltinSkills } from '@/store/tool/slices/builtin/loadBuiltinSkills';
 
 const log = debug('context-engine:resolveClientSkills');
 
@@ -47,13 +48,12 @@ export const resolveClientSkills = async (
   const pinnedIds = new Set(pluginIds ?? []);
   const disabledIdSet = new Set(disabledIds ?? []);
 
-  // Builtin skills keep their full content in the store, so it is always cheap
-  // to carry along. Pinned skills are marked `activated` so SkillContextProvider
-  // injects their content directly; non-pinned ones stay in <available_skills>.
-  // Disabled skills are dropped from the candidate pool entirely — not just
-  // left unpinned — so a disabled skill is neither listed nor resolvable by
-  // name via `activateSkill`.
-  const builtinMetas = (toolState.builtinSkills || [])
+  // Pinned skills are marked `activated` so SkillContextProvider injects their
+  // content directly; non-pinned ones stay in <available_skills>. Disabled
+  // skills are dropped from the candidate pool entirely — not just left
+  // unpinned — so a disabled skill is neither listed nor resolvable by name via
+  // `activateSkill`.
+  const builtinMetas = (await loadBuiltinSkills())
     .filter((s) => !disabledIdSet.has(s.identifier))
     .map((s) => ({
       activated: pinnedIds.has(s.identifier) && !!s.content,

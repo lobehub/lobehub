@@ -156,6 +156,40 @@ export default eslint(
     },
   },
   {
+    // Catalog barrels: any static import drags the whole model catalog or the
+    // whole brand-icon set into the importing route's closure.
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: [
+      'src/**/*.test.{ts,tsx}',
+      'src/components/EmojiPicker/index.tsx',
+      'src/components/LobeIcons/index.tsx',
+    ],
+    rules: {
+      'no-restricted-imports': createRestrictedImportRule({
+        paths: [
+          {
+            allowTypeImports: true,
+            message:
+              'Do not import the model-bank root barrel; it re-exports the full aiModels catalog. Use a subpath such as "model-bank/aiModel", "model-bank/modelProvider", "model-bank/standardParameters" or "model-bank/utils".',
+            name: 'model-bank',
+          },
+          {
+            importNames: ['ModelIcon', 'ModelTag', 'ProviderCombine', 'ProviderIcon'],
+            message:
+              'These features statically import every brand icon. Import them from "@/components/LobeIcons", which mounts them through lazy().',
+            name: '@lobehub/icons',
+          },
+          {
+            importNames: ['EmojiPicker'],
+            message:
+              'EmojiPicker carries the emoji-mart dataset. Use "@/components/EmojiPicker", which mounts it through lazy().',
+            name: '@lobehub/ui',
+          },
+        ],
+      }),
+    },
+  },
+  {
     // Boot-path trees are statically reachable from the SPA entry. A heavy
     // @lobehub/ui member imported here lands in the first-screen chunk together
     // with shiki / katex / elkjs / emoji data; the CI entry-graph gate catches
@@ -165,6 +199,12 @@ export default eslint(
       'src/spa/**/*.{ts,tsx}',
       'src/store/**/*.{ts,tsx}',
       'src/utils/**/*.{ts,tsx}',
+      // The main layout and the home route are the first navigation's closure.
+      'src/routes/**/_layout/**/*.{ts,tsx}',
+      'src/routes/(main)/home/**/*.{ts,tsx}',
+      'src/features/Home/**/*.{ts,tsx}',
+      'src/features/HomeSidebar/**/*.{ts,tsx}',
+      'src/features/NavPanel/**/*.{ts,tsx}',
     ],
     ignores: ['src/**/*.test.{ts,tsx}', 'src/layout/AuthProvider/MarketAuth/ProfileSetupModal.tsx'],
     rules: {
@@ -193,6 +233,30 @@ export default eslint(
             message:
               'Boot-path modules must load EmojiPicker with lazy(); it carries the emoji-mart dataset.',
             name: '@/components/EmojiPicker',
+          },
+          {
+            allowTypeImports: true,
+            message:
+              'Boot-path modules must not import @lobehub/analytics; it bundles posthog-js. Use "@/libs/analytics/client", which loads it after first paint and queues events.',
+            name: '@lobehub/analytics',
+          },
+          {
+            allowTypeImports: true,
+            message:
+              'Boot-path modules must not import @lobehub/analytics/react; use useAnalytics from "@/libs/analytics/client".',
+            name: '@lobehub/analytics/react',
+          },
+          {
+            allowTypeImports: true,
+            message:
+              'Boot-path modules must not import @lobehub/editor; it carries lexical, yjs and fuse. Mount editors inside route chunks, and for the locale provider import ../node_modules/@lobehub/editor/es/react/EditorProvider as GlobalProvider/Editor.tsx does.',
+            name: '@lobehub/editor',
+          },
+          {
+            allowTypeImports: true,
+            message:
+              'Boot-path modules must not import @lobehub/editor/react; it carries lexical, yjs and fuse. Mount editors inside route chunks.',
+            name: '@lobehub/editor/react',
           },
         ],
         patterns: [

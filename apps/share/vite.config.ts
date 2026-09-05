@@ -32,6 +32,7 @@ export default defineConfig({
     reportCompressedSize: false,
     rolldownOptions: {
       output: createSharedRolldownOutput({ strictExecutionOrder: true }),
+      preserveEntrySignatures: 'allow-extension',
     },
   },
   define: {

@@ -1,5 +1,5 @@
 import type { LobeAgentAgencyConfig, LobeAgentChatConfig } from '@lobechat/types';
-import { AgentGraphSchema } from '@lobechat/types';
+import { AgentGraphSchema } from '@lobechat/types/agent/graph';
 import { z } from 'zod';
 
 import type { PublicAgent, PublicFile, PublicKnowledgeBase } from '../helpers/public-fields';

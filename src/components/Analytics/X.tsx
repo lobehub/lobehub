@@ -1,6 +1,6 @@
 'use client';
 
-import { createAnalytics, getSingletonAnalyticsOptional } from '@lobehub/analytics';
+import type { AnalyticsManager } from '@lobehub/analytics';
 import { memo, useEffect, useRef } from 'react';
 
 import { BUSINESS_LINE } from '@/const/analytics';
@@ -13,33 +13,38 @@ interface XAdsProps {
 }
 
 const XAds = memo<XAdsProps>(({ eventIds, pixelId, purchaseEventId }) => {
-  const analyticsRef = useRef<ReturnType<typeof createAnalytics> | null>(null);
+  const analyticsRef = useRef<AnalyticsManager | null>(null);
 
   useEffect(() => {
-    const singletonAnalytics = getSingletonAnalyticsOptional();
-    if (singletonAnalytics?.getProvider('xAds')) {
-      return;
-    }
+    let cancelled = false;
 
-    if (!analyticsRef.current) {
-      analyticsRef.current = createAnalytics({
-        business: BUSINESS_LINE,
-        debug: isDev,
-        providers: {
-          xAds: {
-            debug: isDev,
-            eventIds,
-            enabled: !!pixelId,
-            pixelId: pixelId ?? '',
-            purchaseEventId,
+    void import('@lobehub/analytics').then(({ createAnalytics, getSingletonAnalyticsOptional }) => {
+      if (cancelled || getSingletonAnalyticsOptional()?.getProvider('xAds')) return;
+
+      if (!analyticsRef.current) {
+        analyticsRef.current = createAnalytics({
+          business: BUSINESS_LINE,
+          debug: isDev,
+          providers: {
+            xAds: {
+              debug: isDev,
+              eventIds,
+              enabled: !!pixelId,
+              pixelId: pixelId ?? '',
+              purchaseEventId,
+            },
           },
-        },
-      });
-    }
+        });
+      }
 
-    analyticsRef.current.initialize().catch((error) => {
-      console.error('[X Ads Bootstrap] Initialization failed:', error);
+      analyticsRef.current.initialize().catch((error) => {
+        console.error('[X Ads Bootstrap] Initialization failed:', error);
+      });
     });
+
+    return () => {
+      cancelled = true;
+    };
   }, [eventIds, pixelId, purchaseEventId]);
 
   return null;
