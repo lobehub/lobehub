@@ -1,0 +1,209 @@
+[
+  {
+    "data": {
+      "images": 1,
+      "listItems": [],
+      "paragraphs": [
+        "T-339 Word fidelity fixture",
+        "Section overview",
+        "This body paragraph exists to be edited, copied, and re-styled by the LobeHub Word editor battery. Sentinel: T339-BODY-ORIGINAL.",
+        "中文保真段落：排版与导出必须无损。Sentinel: T339-CJK。",
+        "Formatting targets",
+        "Bullet alpha",
+        "Bullet beta",
+        "Numbered one",
+        "Numbered two",
+        "Reference material follows.",
+        "LobeHub repository",
+        "",
+        "Closing sentinel: T339-DOC-END."
+      ],
+      "status": "Saved",
+      "tables": [
+        "Item | Owner | Status\nImport | Ada | Done\nExport | Bo | Pending"
+      ]
+    },
+    "stage": "1-import",
+    "time": "2026-09-05T11:27:22.405Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-339-word/r1/docx-1-import.png"
+    },
+    "stage": "1-import-shot",
+    "time": "2026-09-05T11:27:22.435Z"
+  },
+  {
+    "data": {
+      "cjkCopies": 2
+    },
+    "stage": "2-list-pre",
+    "time": "2026-09-05T11:27:47.895Z"
+  },
+  {
+    "data": {
+      "deletedParagraphRestored": true
+    },
+    "stage": "2-undo",
+    "time": "2026-09-05T11:28:26.310Z"
+  },
+  {
+    "data": {
+      "deletedParagraphGone": true
+    },
+    "stage": "2-redo",
+    "time": "2026-09-05T11:28:28.813Z"
+  },
+  {
+    "data": {
+      "images": 2,
+      "listItems": [
+        "中文保真段落：排版与导出必须无损。Sentinel: T339-CJK。",
+        "T339-NUMBERED-ITEM"
+      ],
+      "paragraphs": [
+        "T-339 Word fidelity fixture",
+        "Section overview",
+        "T339-BODY-EDITED line-A\nT339-BODY-EDITED line-B",
+        "中文保真段落：排版与导出必须无损。Sentinel: T339-CJK。",
+        "中文保真段落：排版与导出必须无损。Sentinel: T339-CJK。",
+        "T339-NUMBERED-ITEM",
+        "Formatting targets",
+        "Bullet alpha",
+        "Bullet beta",
+        "Numbered one",
+        "Numbered two",
+        "Reference material follows.",
+        "LobeHub repository",
+        "",
+        "Closing sentinel: T339-DOC-END.",
+        "",
+        "LobeHub site"
+      ],
+      "status": "Unsaved changes",
+      "tables": [
+        "Item | Owner | Status\nImport | Ada | Done\nExport | Bo | Ready T339",
+        " |  | \n |  | \n |  | "
+      ]
+    },
+    "stage": "2-edited",
+    "time": "2026-09-05T11:28:28.813Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-339-word/r1/docx-2-edited.png"
+    },
+    "stage": "2-edited-shot",
+    "time": "2026-09-05T11:28:28.845Z"
+  },
+  {
+    "data": {
+      "images": 2,
+      "listItems": [
+        "中文保真段落：排版与导出必须无损。Sentinel: T339-CJK。",
+        "T339-NUMBERED-ITEM"
+      ],
+      "paragraphs": [
+        "T-339 Word fidelity fixture",
+        "Section overview",
+        "T339-BODY-EDITED line-A\nT339-BODY-EDITED line-B",
+        "中文保真段落：排版与导出必须无损。Sentinel: T339-CJK。",
+        "中文保真段落：排版与导出必须无损。Sentinel: T339-CJK。",
+        "T339-NUMBERED-ITEM",
+        "Formatting targets",
+        "Bullet alpha",
+        "Bullet beta",
+        "Numbered one",
+        "Numbered two",
+        "Reference material follows.",
+        "LobeHub repository",
+        "",
+        "Closing sentinel: T339-DOC-END.",
+        "",
+        "LobeHub site"
+      ],
+      "status": "Saved",
+      "tables": [
+        "Item | Owner | Status\nImport | Ada | Done\nExport | Bo | Ready T339",
+        " |  | \n |  | \n |  | "
+      ]
+    },
+    "stage": "3-saved",
+    "time": "2026-09-05T11:28:31.357Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-339-word/r1/docx-3-saved.png"
+    },
+    "stage": "3-saved-shot",
+    "time": "2026-09-05T11:28:31.385Z"
+  },
+  {
+    "data": {
+      "images": 2,
+      "listItems": [
+        "中文保真段落：排版与导出必须无损。Sentinel: T339-CJK。",
+        "T339-NUMBERED-ITEM"
+      ],
+      "paragraphs": [
+        "T-339 Word fidelity fixture",
+        "Section overview",
+        "T339-BODY-EDITED line-A\nT339-BODY-EDITED line-B",
+        "中文保真段落：排版与导出必须无损。Sentinel: T339-CJK。",
+        "中文保真段落：排版与导出必须无损。Sentinel: T339-CJK。",
+        "T339-NUMBERED-ITEM",
+        "Formatting targets",
+        "Bullet alpha",
+        "Bullet beta",
+        "Numbered one",
+        "Numbered two",
+        "Reference material follows.",
+        "LobeHub repository",
+        "",
+        "Closing sentinel: T339-DOC-END.",
+        "",
+        "LobeHub site"
+      ],
+      "status": "Saved",
+      "tables": [
+        "Item | Owner | Status\nImport | Ada | Done\nExport | Bo | Ready T339",
+        " |  | \n |  | \n |  | "
+      ]
+    },
+    "stage": "4-reopened",
+    "time": "2026-09-05T11:28:37.632Z"
+  },
+  {
+    "data": {
+      "bulletOnPastedCjk": true,
+      "numberedListMarked": true,
+      "editedBodyPresent": true,
+      "imageCount": 2,
+      "multilinePreserved": true,
+      "numberedItemPresent": true,
+      "tableCellEdited": true,
+      "throwawayStillDeleted": true
+    },
+    "stage": "4-reopened-checks",
+    "time": "2026-09-05T11:28:37.632Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-339-word/r1/docx-4-reopened.png"
+    },
+    "stage": "4-reopened-shot",
+    "time": "2026-09-05T11:28:37.661Z"
+  },
+  {
+    "data": {
+      "exportPath": "artifacts/t-339-word/r1/export-t339-word.docx",
+      "inputBytes": 37772,
+      "inputSha256": "d29b96123f35aa34d2329747a0348d105e2edd79c869154db7ec4ea9608f457a",
+      "outputBytes": 38570,
+      "outputSha256": "9e723374176044f092fe58081b52375879337085152830d52cede664bb96afe5",
+      "shaChanged": true
+    },
+    "stage": "5-export",
+    "time": "2026-09-05T11:28:40.167Z"
+  }
+]
