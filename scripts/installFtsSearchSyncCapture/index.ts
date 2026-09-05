@@ -27,23 +27,7 @@ type Logger = (...arguments_: unknown[]) => void;
 
 interface FtsSearchSyncCaptureEnvironment {
   DATABASE_URL?: string;
-  FTS_SEARCH_PROVIDER?: string;
 }
-
-const ELASTICSEARCH_PROVIDER = 'elasticsearch';
-
-/**
- * The outbox capture only feeds the Elasticsearch sync worker. Deployments that
- * explicitly select another provider (`pg_search`, `pg_like`) skip it so the
- * migrate chain succeeds without Elasticsearch-specific database objects.
- *
- * An unset provider still installs capture: the only distribution wiring this
- * script into its migrate chain defaults to Elasticsearch.
- */
-export const shouldInstallFtsSearchSyncCapture = (
-  environment: FtsSearchSyncCaptureEnvironment,
-): boolean =>
-  !environment.FTS_SEARCH_PROVIDER || environment.FTS_SEARCH_PROVIDER === ELASTICSEARCH_PROVIDER;
 
 export type InstallFtsSearchSyncCaptureOptions = {
   env?: FtsSearchSyncCaptureEnvironment;
@@ -64,25 +48,16 @@ const loadRepository: LoadRepository = async () => {
   return ftsSearchSyncOutboxRepository;
 };
 
-const defaultEnvironment = (): FtsSearchSyncCaptureEnvironment => ({
-  DATABASE_URL: process.env.DATABASE_URL,
-  FTS_SEARCH_PROVIDER: process.env.FTS_SEARCH_PROVIDER,
-});
-
-/** Resolves to `false` when capture installation was skipped for the selected provider. */
 export const installFtsSearchSyncCapture = async ({
-  env: environment = defaultEnvironment(),
+  env: environment = { DATABASE_URL: process.env.DATABASE_URL },
   loadRepository: load = loadRepository,
   runWithLockRetry = defaultRunWithLockRetry,
-}: InstallFtsSearchSyncCaptureOptions = {}): Promise<boolean> => {
-  if (!shouldInstallFtsSearchSyncCapture(environment)) return false;
+}: InstallFtsSearchSyncCaptureOptions = {}) => {
   if (!environment.DATABASE_URL) throw new Error('DATABASE_URL is required');
 
   const repository = await load();
 
   await runWithLockRetry(() => repository.installCaptureInfrastructure());
-
-  return true;
 };
 
 export const runFtsSearchSyncCaptureCli = async ({
@@ -91,12 +66,8 @@ export const runFtsSearchSyncCaptureCli = async ({
   ...options
 }: FtsSearchSyncCaptureCliOptions = {}) => {
   try {
-    const installed = await installFtsSearchSyncCapture(options);
-    logSuccess(
-      installed
-        ? '✅ full-text search sync capture infrastructure installed'
-        : `⏭️ full-text search sync capture skipped: FTS_SEARCH_PROVIDER=${options.env?.FTS_SEARCH_PROVIDER ?? process.env.FTS_SEARCH_PROVIDER} does not use Elasticsearch`,
-    );
+    await installFtsSearchSyncCapture(options);
+    logSuccess('✅ full-text search sync capture infrastructure installed');
     return 0;
   } catch (error) {
     logError(

@@ -1,3 +1,4 @@
+import type { SQLWrapper } from 'drizzle-orm';
 import { and, desc, eq, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
 
 import { DOCUMENT_FOLDER_TYPE, documents, knowledgeBaseFiles } from '../../../schemas';
@@ -37,6 +38,10 @@ export async function searchFolders(
   const { db, dialect } = context;
   const preparedQuery = dialect.prepare(query);
   const score = dialect.score(documents.id, FOLDER_FIELDS, preparedQuery);
+  const excludeKb = (column: SQLWrapper) =>
+    excludeKbIds && excludeKbIds.length > 0
+      ? or(isNull(column), notInArray(column, excludeKbIds))
+      : undefined;
 
   const hits = db
     .select({
@@ -56,6 +61,7 @@ export async function searchFolders(
       and(
         context.scanScopeWhere(documents),
         eq(documents.fileType, DOCUMENT_FOLDER_TYPE),
+        context.liftsExclusionFilter ? undefined : excludeKb(documents.knowledgeBaseId),
         dialect.match(FOLDER_FIELDS, preparedQuery),
       ),
     )
@@ -79,9 +85,7 @@ export async function searchFolders(
     .where(
       and(
         context.liftedScopeWhere(hits.workspaceId),
-        excludeKbIds && excludeKbIds.length > 0
-          ? or(isNull(hits.knowledgeBaseId), notInArray(hits.knowledgeBaseId, excludeKbIds))
-          : undefined,
+        context.liftsExclusionFilter ? excludeKb(hits.knowledgeBaseId) : undefined,
       ),
     )
     .orderBy(desc(hits.score))
@@ -113,6 +117,24 @@ export async function searchPages(
   const { db, dialect } = context;
   const preparedQuery = dialect.prepare(query);
   const score = dialect.score(documents.id, PAGE_FIELDS, preparedQuery);
+  const excludeKb = (knowledgeBaseId: SQLWrapper, fileId: SQLWrapper) =>
+    excludeKbIds && excludeKbIds.length > 0
+      ? and(
+          or(isNull(knowledgeBaseId), notInArray(knowledgeBaseId, excludeKbIds)),
+          // Parsed-file pages store KB membership on file_id instead of the
+          // document row, so check the join table as well.
+          or(
+            isNull(fileId),
+            notInArray(
+              fileId,
+              db
+                .select({ fileId: knowledgeBaseFiles.fileId })
+                .from(knowledgeBaseFiles)
+                .where(inArray(knowledgeBaseFiles.knowledgeBaseId, excludeKbIds)),
+            ),
+          ),
+        )
+      : undefined;
 
   const hits = db
     .select({
@@ -131,6 +153,9 @@ export async function searchPages(
       and(
         context.scanScopeWhere(documents),
         eq(documents.fileType, 'custom/document'),
+        context.liftsExclusionFilter
+          ? undefined
+          : excludeKb(documents.knowledgeBaseId, documents.fileId),
         dialect.match(PAGE_FIELDS, preparedQuery),
       ),
     )
@@ -152,23 +177,7 @@ export async function searchPages(
       and(
         context.liftedScopeWhere(hits.workspaceId),
         notAgentShareFileReference(db, hits.fileId),
-        excludeKbIds && excludeKbIds.length > 0
-          ? or(isNull(hits.knowledgeBaseId), notInArray(hits.knowledgeBaseId, excludeKbIds))
-          : undefined,
-        // Parsed-file pages store KB membership on file_id instead of the
-        // document row, so check the join table as well.
-        excludeKbIds && excludeKbIds.length > 0
-          ? or(
-              isNull(hits.fileId),
-              notInArray(
-                hits.fileId,
-                db
-                  .select({ fileId: knowledgeBaseFiles.fileId })
-                  .from(knowledgeBaseFiles)
-                  .where(inArray(knowledgeBaseFiles.knowledgeBaseId, excludeKbIds)),
-              ),
-            )
-          : undefined,
+        context.liftsExclusionFilter ? excludeKb(hits.knowledgeBaseId, hits.fileId) : undefined,
       ),
     )
     .orderBy(desc(hits.score))
