@@ -8,6 +8,15 @@ import { useTranslation } from 'react-i18next';
 
 const MAX_FALLBACK_LENGTH = 500;
 
+/**
+ * Prompts are not files, so the "No newline at end of file" marker CodeDiff emits
+ * for content without a trailing newline is pure noise. Worse, when only one side
+ * ends with a newline the last line shows up as deleted + re-added. Normalising
+ * both sides to end with exactly one newline keeps the diff about the words.
+ */
+const withTrailingNewline = (value: string) =>
+  value === '' || value.endsWith('\n') ? value : `${value}\n`;
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     font-size: 13px;
@@ -99,8 +108,8 @@ const PromptDiffView = memo<PromptDiffViewProps>(({ newPrompt = '', previousProm
         <div className={styles.diffCard}>
           <CodeDiff
             language={'markdown'}
-            newContent={newPrompt}
-            oldContent={previousPrompt}
+            newContent={withTrailingNewline(newPrompt)}
+            oldContent={withTrailingNewline(previousPrompt)}
             showHeader={false}
             variant={'borderless'}
             viewMode={'unified'}
