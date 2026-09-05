@@ -22,7 +22,7 @@ import {
   Undo2,
 } from 'lucide-react';
 import type { CSSProperties } from 'react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
@@ -38,6 +38,7 @@ import {
   rangeBetween,
   rangeSize,
 } from './gridUtils';
+import { useWorkbookQueue } from './useWorkbookQueue';
 import { editXlsx, loadXlsx, XLSX_MIME_TYPE } from './xlsxOperations';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -151,6 +152,8 @@ interface XLSXEditorProps {
 interface CellView {
   formula?: string;
   numeric?: number;
+  /** Unformatted value for the formula bar — editing must round-trip raw data, not display text. */
+  raw: string;
   style?: CSSProperties;
   text: string;
 }
@@ -199,6 +202,7 @@ const readViews = async (bytes: ArrayBuffer): Promise<SheetView[]> => {
             fontWeight: cell.font?.bold ? 600 : undefined,
             textAlign: cell.alignment?.horizontal as CSSProperties['textAlign'],
           },
+          raw: numeric !== undefined ? String(numeric) : cell.text,
           text: (numeric !== undefined && formatCellNumber(numeric, cell.numFmt)) || cell.text,
         };
       }),
@@ -217,8 +221,6 @@ const download = (bytes: ArrayBuffer, fileName: string) => {
 
 const XLSXEditor = memo<XLSXEditorProps>(({ fileId, fileName, url }) => {
   const { t } = useTranslation('file');
-  const undoRef = useRef<ArrayBuffer[]>([]);
-  const redoRef = useRef<ArrayBuffer[]>([]);
   const [bytes, setBytes] = useState<ArrayBuffer>();
   const [views, setViews] = useState<SheetView[]>();
   const [activeSheet, setActiveSheet] = useState(0);
@@ -235,30 +237,44 @@ const XLSXEditor = memo<XLSXEditorProps>(({ fileId, fileName, url }) => {
     setViews(await readViews(nextBytes));
   }, []);
 
+  const onWorkbookChange = useCallback(
+    async (nextBytes: ArrayBuffer) => {
+      await refresh(nextBytes);
+      await saveXlsxDraft(fileId, url, nextBytes);
+      setStatus('xlsxEditor.status.unsaved');
+    },
+    [fileId, refresh, url],
+  );
+
+  const {
+    apply: applyEdit,
+    initialize,
+    redo,
+    redoStackRef,
+    undo,
+    undoStackRef,
+    withCurrent,
+  } = useWorkbookQueue(onWorkbookChange);
+
   useEffect(() => {
     let active = true;
     void (async () => {
       const draft = await loadXlsxDraft(fileId, url);
       const source = draft ?? (await fetch(url).then((response) => response.arrayBuffer()));
       if (!source) throw new Error('XLSX source is empty');
-      if (active) await refresh(source);
+      if (!active) return;
+      initialize(source);
+      await refresh(source);
     })().catch((error) => console.error('[XLSXEditor] load failed:', error));
     return () => {
       active = false;
     };
-  }, [fileId, refresh, url]);
+  }, [fileId, initialize, refresh, url]);
 
   const apply = useCallback(
-    async (operation: Parameters<typeof editXlsx>[1]) => {
-      if (!bytes) return;
-      undoRef.current.push(bytes);
-      redoRef.current = [];
-      const next = await editXlsx(bytes, operation);
-      await refresh(next);
-      await saveXlsxDraft(fileId, url, next);
-      setStatus('xlsxEditor.status.unsaved');
-    },
-    [bytes, fileId, refresh, url],
+    (operation: Parameters<typeof editXlsx>[1]) =>
+      applyEdit((current) => editXlsx(current, operation)),
+    [applyEdit],
   );
 
   const view = views?.[activeSheet];
@@ -270,37 +286,12 @@ const XLSXEditor = memo<XLSXEditorProps>(({ fileId, fileName, url }) => {
     return view.rows[row - 1]?.[column - 1];
   }, [anchor, view]);
 
-  useEffect(() => setInput(anchorCell?.formula || anchorCell?.text || ''), [anchorCell]);
+  useEffect(() => setInput(anchorCell?.formula || anchorCell?.raw || ''), [anchorCell]);
 
   // Structural edits can leave the selection or active tab out of bounds.
   useEffect(() => {
     if (views && activeSheet >= views.length) setActiveSheet(views.length - 1);
   }, [activeSheet, views]);
-
-  const restore = useCallback(
-    async (previous: ArrayBuffer) => {
-      await refresh(previous);
-      await saveXlsxDraft(fileId, url, previous);
-      setStatus('xlsxEditor.status.unsaved');
-    },
-    [fileId, refresh, url],
-  );
-
-  const undo = useCallback(async () => {
-    if (!bytes) return;
-    const previous = undoRef.current.pop();
-    if (!previous) return;
-    redoRef.current.push(bytes);
-    await restore(previous);
-  }, [bytes, restore]);
-
-  const redo = useCallback(async () => {
-    if (!bytes) return;
-    const next = redoRef.current.pop();
-    if (!next) return;
-    undoRef.current.push(bytes);
-    await restore(next);
-  }, [bytes, restore]);
 
   const paste = useCallback(() => {
     if (!clipboard || !view) return;
@@ -324,13 +315,13 @@ const XLSXEditor = memo<XLSXEditorProps>(({ fileId, fileName, url }) => {
     <Flexbox className={styles.editor}>
       <Flexbox horizontal align={'center'} className={styles.toolbar} gap={8}>
         <ActionIcon
-          disabled={!undoRef.current.length}
+          disabled={!undoStackRef.current.length}
           icon={Undo2}
           title={t('xlsxEditor.actions.undo')}
           onClick={undo}
         />
         <ActionIcon
-          disabled={!redoRef.current.length}
+          disabled={!redoStackRef.current.length}
           icon={Redo2}
           title={t('xlsxEditor.actions.redo')}
           onClick={redo}
@@ -488,26 +479,35 @@ const XLSXEditor = memo<XLSXEditorProps>(({ fileId, fileName, url }) => {
           value={input}
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter')
-              void apply({
-                range: anchor,
-                sheet: view.name,
-                type: 'setCells',
-                values: [[input]],
-              });
+            if (event.key !== 'Enter') return;
+            // Numeric entry must persist as a number, or exported SUM/aggregate
+            // functions in real Excel would skip it as text.
+            const numericInput = input.trim() === '' ? Number.NaN : Number(input);
+            void apply({
+              range: anchor,
+              sheet: view.name,
+              type: 'setCells',
+              values: [[Number.isFinite(numericInput) ? numericInput : input]],
+            });
           }}
         />
         <Button
           icon={Save}
           size={'small'}
-          onClick={() => {
-            void saveXlsxDraft(fileId, url, bytes);
-            setStatus('xlsxEditor.status.saved');
-          }}
+          onClick={() =>
+            withCurrent(async (current) => {
+              await saveXlsxDraft(fileId, url, current);
+              setStatus('xlsxEditor.status.saved');
+            })
+          }
         >
           {t('xlsxEditor.actions.save')}
         </Button>
-        <Button icon={Download} size={'small'} onClick={() => download(bytes, fileName)}>
+        <Button
+          icon={Download}
+          size={'small'}
+          onClick={() => withCurrent((current) => download(current, fileName))}
+        >
           {t('xlsxEditor.actions.download')}
         </Button>
         <span className={styles.status}>{t(status)}</span>
@@ -544,7 +544,7 @@ const XLSXEditor = memo<XLSXEditorProps>(({ fileId, fileName, url }) => {
                       ]
                         .filter(Boolean)
                         .join(' ')}
-                      onDoubleClick={() => setInput(cell.formula || cell.text)}
+                      onDoubleClick={() => setInput(cell.formula || cell.raw)}
                       onClick={(event) => {
                         if (event.shiftKey) setFocus(address);
                         else {
