@@ -56,6 +56,28 @@ interface EarlierHistoryState {
 
 const earlierHistoryStates = new Map<string, EarlierHistoryState>();
 
+/**
+ * Each entry can hold thousands of full message rows, so the cap is much
+ * tighter than `MAX_MESSAGE_LIST_CLIENT_STATES`. Insertion order doubles as
+ * recency: `touchEarlierHistoryState` re-appends on every merge, and pruning
+ * evicts the least-recently-merged identities that are not mid-fetch.
+ */
+const MAX_EARLIER_HISTORY_STATES = 30;
+
+const touchEarlierHistoryState = (identity: string, state: EarlierHistoryState) => {
+  earlierHistoryStates.delete(identity);
+  earlierHistoryStates.set(identity, state);
+};
+
+const pruneEarlierHistoryStates = () => {
+  if (earlierHistoryStates.size <= MAX_EARLIER_HISTORY_STATES) return;
+  for (const [identity, state] of earlierHistoryStates.entries()) {
+    if (earlierHistoryStates.size <= MAX_EARLIER_HISTORY_STATES) return;
+    if (state.loading) continue;
+    earlierHistoryStates.delete(identity);
+  }
+};
+
 /** Synthetic MessageGroup nodes are injected by the query, not DB rows — they
  *  can never serve as a round cursor. */
 const isSyntheticGroupNode = (message: UIChatMessage) =>
@@ -78,6 +100,7 @@ const mergeEarlierHistory = (identity: string, fresh: UIChatMessage[]): UIChatMe
 
   const freshIds = new Set(fresh.map((message) => message.id));
   const prefix = state.messages.filter((message) => !freshIds.has(message.id));
+  touchEarlierHistoryState(identity, state);
   // Stable sort: group nodes carried by the fresh window can predate the whole
   // prefix, and rows inside each list keep their relative order.
   return [...prefix, ...fresh].sort(byCreatedAtAscending);
@@ -115,7 +138,8 @@ export const loadEarlierMessagePage = async (
     messages: [],
   };
   state.loading = true;
-  earlierHistoryStates.set(identity, state);
+  touchEarlierHistoryState(identity, state);
+  pruneEarlierHistoryStates();
 
   try {
     const page = await fetcher({ createdAt: new Date(cursor.createdAt), id: cursor.id });

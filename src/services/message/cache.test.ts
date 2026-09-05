@@ -345,4 +345,29 @@ describe('earlier history (round-cursor pages, LOBE-13716)', () => {
     const revalidated = await runMessageListQuery(context, async () => window);
     expect(revalidated).toBe(window);
   });
+
+  it('evicts the least-recently-used identity once the earlier-history cache is full', async () => {
+    const window = [message('u2', 10, 'user')];
+    const oldest = { ...context, topicId: 'topic-evicted' };
+    // Exhaust the first identity, then flood the cache with 30 more.
+    await loadEarlierMessagePage(oldest, window, async () => []);
+    expect(getEarlierHistoryStatus(oldest).exhausted).toBe(true);
+
+    for (let i = 0; i < 30; i++) {
+      await loadEarlierMessagePage({ ...context, topicId: `topic-fill-${i}` }, window, async () => [
+        message('u1', 1, 'user'),
+      ]);
+    }
+
+    // The exhausted marker was evicted with the entry: the identity fetches again.
+    expect(getEarlierHistoryStatus(oldest).exhausted).toBe(false);
+    const fetcher = vi.fn().mockResolvedValue([]);
+    await loadEarlierMessagePage(oldest, window, fetcher);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+
+    // The most recent identity survives: its cached page still re-attaches.
+    const survivor = { ...context, topicId: 'topic-fill-29' };
+    const revalidated = await runMessageListQuery(survivor, async () => window);
+    expect(ids(revalidated)).toEqual(['u1', 'u2']);
+  });
 });
