@@ -56,28 +56,39 @@ export class TopicDoctorRepo {
     const { patch } = diagnosis;
     if (patch.length === 0) return { applied: 0, restoredMessageIds: [] };
 
+    // `diagnoseTopic()` appends one patch for each repairable issue, in issue order.
+    // Keep them paired so a repair rejected by the write-side validation cannot still be
+    // reported to the client as restored.
+    const repairableIssues = diagnosis.issues.filter((issue) => issue.repairable);
+    if (repairableIssues.length !== patch.length) {
+      throw new Error('Topic Doctor diagnosis returned mismatched issues and repair operations');
+    }
+    const repairs = patch.map((op, index) => ({ issue: repairableIssues[index]!, op }));
+
     // Only ever touch real rows of this topic that the caller owns. The synthetic group
     // nodes `query()` splices into the list are not messages and must never be written to.
-    const targets = await this.db
+    const rowIds = [
+      ...new Set(
+        patch.flatMap((op) =>
+          op.type === 'reparent' ? [op.messageId, op.parentId] : [op.messageId],
+        ),
+      ),
+    ];
+    const rows = await this.db
       .select({ id: messages.id, metadata: messages.metadata, parentId: messages.parentId })
       .from(messages)
       .where(
-        and(
-          eq(messages.topicId, scope.topicId),
-          this.ws(messages),
-          inArray(
-            messages.id,
-            patch.map((op) => op.messageId),
-          ),
-        ),
+        and(eq(messages.topicId, scope.topicId), this.ws(messages), inArray(messages.id, rowIds)),
       );
 
-    const targetById = new Map(targets.map((row) => [row.id, row]));
-    const writable = patch.filter((op) => targetById.has(op.messageId));
+    const rowById = new Map(rows.map((row) => [row.id, row]));
+    const writable = repairs.filter(
+      ({ op }) => rowById.has(op.messageId) && (op.type !== 'reparent' || rowById.has(op.parentId)),
+    );
 
     await this.db.transaction(async (tx) => {
-      for (const op of writable) {
-        const current = targetById.get(op.messageId)!;
+      for (const { op } of writable) {
+        const current = rowById.get(op.messageId)!;
         const metadata = (current.metadata ?? {}) as Record<string, any>;
 
         // Keep what the row looked like before, so a bad repair can be walked back.
@@ -107,7 +118,10 @@ export class TopicDoctorRepo {
     // from the model's context — putting them back in the chain is the point of the fix.
     const restoredMessageIds = [
       ...new Set(
-        diagnosis.issues.flatMap((i) => [...i.hiddenMessageIds, ...(i.reattachedMessageIds ?? [])]),
+        writable.flatMap(({ issue }) => [
+          ...issue.hiddenMessageIds,
+          ...(issue.reattachedMessageIds ?? []),
+        ]),
       ),
     ];
 

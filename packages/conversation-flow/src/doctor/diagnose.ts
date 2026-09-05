@@ -68,9 +68,22 @@ const isEmptyShell = (message: Message): boolean =>
   !message.usage &&
   !(message.metadata as { usage?: unknown } | null | undefined)?.usage;
 
-/** Mirrors the write-side anchor rule: tool messages and toolless signal turns are never a spine tail. */
-const canAnchor = (message: Message): boolean =>
-  message.role !== 'tool' && !getSignal(message) && !isEmptyShell(message);
+/**
+ * Return the real message id a repair can safely use as a parent.
+ *
+ * Compression groups are synthetic display nodes, but their last message remains a real row
+ * and is the write-side parent for turns that continue after the group. Compare groups have no
+ * single equivalent parent, so they must not be used as repair anchors.
+ */
+const getAnchorId = (message: Message): string | undefined => {
+  if (message.role === 'compressedGroup') {
+    const lastMessageId = (message as Message & { lastMessageId?: unknown }).lastMessageId;
+    return typeof lastMessageId === 'string' ? lastMessageId : undefined;
+  }
+  if (message.role === 'compareGroup') return undefined;
+  if (message.role === 'tool' || getSignal(message) || isEmptyShell(message)) return undefined;
+  return message.id;
+};
 
 const timeSpan = (messages: Message[]): [number, number] => [
   Math.min(...messages.map((m) => m.createdAt)),
@@ -99,12 +112,30 @@ export const diagnoseTopic = (
   const sorted = [...mainFlow].sort((a, b) => a.createdAt - b.createdAt);
   const byId = new Map(sorted.map((m) => [m.id, m]));
 
+  // The renderer redirects children of the last compressed message to the synthetic group.
+  // Mirror that relationship here so a repaired, FK-valid parentId is not diagnosed as a
+  // dangling parent on the next pass.
+  const compressedGroupByLastMessageId = new Map<string, string>();
+  for (const message of sorted) {
+    if (message.role !== 'compressedGroup') continue;
+    const lastMessageId = (message as Message & { lastMessageId?: unknown }).lastMessageId;
+    if (typeof lastMessageId === 'string') {
+      compressedGroupByLastMessageId.set(lastMessageId, message.id);
+    }
+  }
+  const resolveParentId = (parentId?: string | null): string | undefined => {
+    if (!parentId) return undefined;
+    if (byId.has(parentId)) return parentId;
+    return compressedGroupByLastMessageId.get(parentId);
+  };
+
   const childrenOf = new Map<string, Message[]>();
   for (const message of sorted) {
-    if (!message.parentId || !byId.has(message.parentId)) continue;
-    const siblings = childrenOf.get(message.parentId) ?? [];
+    const parentId = resolveParentId(message.parentId);
+    if (!parentId) continue;
+    const siblings = childrenOf.get(parentId) ?? [];
     siblings.push(message);
-    childrenOf.set(message.parentId, siblings);
+    childrenOf.set(parentId, siblings);
   }
 
   const subtreeOf = (rootId: string): Message[] => {
@@ -157,7 +188,7 @@ export const diagnoseTopic = (
   //    message is stranded". It is disjoint from the fork/branch rules by construction: those
   //    walk `childrenOf`, which only links messages to a parent that exists, so a root is
   //    never one of their branches.
-  const roots = sorted.filter((m) => !m.parentId || !byId.has(m.parentId));
+  const roots = sorted.filter((m) => !resolveParentId(m.parentId));
   if (roots.length > 1) {
     // The earliest root is the conversation's real start and stays put; the rest are splits.
     const [, ...strandedRoots] = roots;
@@ -174,9 +205,10 @@ export const diagnoseTopic = (
       // a message inside this very section can't anchor it.
       const sectionIds = new Set(section.map((m) => m.id));
       const anchor = sorted
-        .filter((m) => canAnchor(m) && m.createdAt < root.createdAt && !sectionIds.has(m.id))
+        .filter((m) => getAnchorId(m) && m.createdAt < root.createdAt && !sectionIds.has(m.id))
         .sort((a, b) => b.createdAt - a.createdAt)[0];
-      if (!anchor) continue;
+      const anchorId = anchor && getAnchorId(anchor);
+      if (!anchorId) continue;
 
       report(
         {
@@ -186,7 +218,7 @@ export const diagnoseTopic = (
           reattachedMessageIds: section.map((m) => m.id),
           repairable: true,
         },
-        { messageId: root.id, parentId: anchor.id, type: 'reparent' },
+        { messageId: root.id, parentId: anchorId, type: 'reparent' },
       );
     }
   }
@@ -215,8 +247,9 @@ export const diagnoseTopic = (
         // anchor. The user's message belongs after that run, on the tail of its spine.
         const runIds = new Set(runSubtree.map((m) => m.id));
         const anchor = [...runSubtree]
-          .filter((m) => canAnchor(m))
+          .filter((m) => getAnchorId(m))
           .sort((a, b) => b.createdAt - a.createdAt)[0];
+        const anchorId = anchor && getAnchorId(anchor);
 
         // The shape is wrong, but if the reader still gets everything on screen there is
         // nothing to fix and no reason to rewrite the user's history.
@@ -228,10 +261,10 @@ export const diagnoseTopic = (
             hiddenMessageIds: hiddenHere,
             kind: 'concurrent-fork',
             messageId: parentId,
-            repairable: !!anchor && !runIds.has(userTurn.id),
+            repairable: !!anchorId && !runIds.has(userTurn.id),
           },
-          anchor && !runIds.has(userTurn.id)
-            ? { messageId: userTurn.id, parentId: anchor.id, type: 'reparent' }
+          anchorId && !runIds.has(userTurn.id)
+            ? { messageId: userTurn.id, parentId: anchorId, type: 'reparent' }
             : undefined,
         );
       }
