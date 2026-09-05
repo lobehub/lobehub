@@ -258,7 +258,9 @@ The live official-provider model matrix belongs to the
 `testing-heterogeneous-agents` project skill
 (`.agents/skills/testing-heterogeneous-agents/`). It extends Acceptance with the
 matrix semantics and harness while reusing the Electron environment, auth, and
-CDP commands above. Route periodic or release-time compatibility runs there.
+CDP commands above. It is manual-only: the user must explicitly invoke
+`/testing-heterogeneous-agents` in Claude Code or `$testing-heterogeneous-agents`
+in Codex. Do not automatically load or run it during other acceptance tasks.
 
 ### Bot channels (project skill)
 

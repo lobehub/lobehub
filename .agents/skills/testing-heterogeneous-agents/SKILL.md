@@ -1,6 +1,7 @@
 ---
 name: testing-heterogeneous-agents
-description: 'Runs the live LobeHub official-provider compatibility matrix across Claude Code, Codex, Grok Build, Kimi Code, Pi, and TRAE. Use for periodic model checks, release smoke tests, new official model validation, or investigating which heterogeneous agent and model combinations currently pass.'
+description: 'Manually runs the live LobeHub official-provider compatibility matrix across Claude Code, Codex, Grok Build, Kimi Code, Pi, and TRAE when explicitly invoked by the user.'
+disable-model-invocation: true
 ---
 
 # Testing Heterogeneous Agents
@@ -14,6 +15,14 @@ evidence contract, immutable rounds, publishing, and teardown. Use
 `.agents/acceptance/PROJECT.md` for LobeHub's Electron launch, auth, CDP, and
 multi-instance commands. This skill owns only the compatibility-matrix semantics
 and its executable harness.
+
+## Manual Invocation Only
+
+The user invokes this skill with `/testing-heterogeneous-agents` in Claude Code
+or `$testing-heterogeneous-agents` in Codex. Do not automatically load or execute
+it as part of development, debugging, acceptance, or release tasks, and do not
+schedule it. A reference from another skill is not permission to invoke it.
+Manual invocation still requires scope and cost approval before live requests.
 
 ## Scope
 
@@ -90,14 +99,13 @@ personal topic or pass `--topic-id`. Never trigger an interactive OAuth flow.
 
 ### 4. Confirm scope, cost, and history
 
-For the first live run, present the discovered agents/models and obtain the
+For each live run, present the discovered agents/models and obtain the
 Acceptance plan approval before passing `--confirm-live`. Run sequentially; do
 not parallelize cells because the CLIs share profiles and provider quota.
 
-For periodic runs, reuse one stable Acceptance subject so every execution becomes
-another immutable round in the same history. Put that subject and the authorized
-agent/model scope in the schedule prompt. A schedule owns when to run; this skill
-continues to own how each run is executed and evidenced.
+For repeated manual runs of the same compatibility scope, reuse one stable
+Acceptance subject so every execution becomes another immutable round in the
+same history. Previous runs do not authorize another live run.
 
 ### 5. Execute once
 
