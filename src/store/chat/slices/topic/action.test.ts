@@ -441,6 +441,78 @@ describe('topic action', () => {
     });
   });
 
+  describe('updateTopicHeteroPin', () => {
+    const KEY = topicMapKey({ agentId: 'hetero-agent' });
+    const seed = () => {
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: 'hetero-agent',
+          activeTopicId: 'hetero-topic',
+          topicDataMap: {
+            [KEY]: {
+              currentPage: 0,
+              hasMore: false,
+              items: [
+                {
+                  id: 'hetero-topic',
+                  metadata: { heteroEffort: 'high' },
+                  model: 'old-model',
+                  provider: 'codex',
+                  title: 'Hetero',
+                } as ChatTopic,
+              ],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+      });
+    };
+
+    it('undoes the model switch when the paired effort reset fails', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const updateTopicSpy = vi
+        .spyOn(topicService, 'updateTopic')
+        .mockResolvedValue(undefined as any);
+      vi.spyOn(topicService, 'updateTopicMetadata').mockRejectedValue(new Error('offline'));
+      seed();
+
+      await expect(
+        result.current.updateTopicHeteroPin('hetero-topic', {
+          effort: 'default',
+          model: 'new-model',
+          provider: 'codex',
+        }),
+      ).rejects.toThrow('offline');
+
+      expect(updateTopicSpy).toHaveBeenLastCalledWith('hetero-topic', {
+        model: 'old-model',
+        provider: 'codex',
+      });
+    });
+
+    it('writes only the effort when no model is selected', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const updateTopicSpy = vi
+        .spyOn(topicService, 'updateTopic')
+        .mockResolvedValue(undefined as any);
+      const metadataSpy = vi
+        .spyOn(topicService, 'updateTopicMetadata')
+        .mockResolvedValue(undefined as any);
+      seed();
+
+      await act(async () => {
+        await result.current.updateTopicHeteroPin('hetero-topic', {
+          effort: 'low',
+          provider: 'codex',
+        });
+      });
+
+      expect(updateTopicSpy).not.toHaveBeenCalled();
+      expect(metadataSpy).toHaveBeenCalledWith('hetero-topic', { heteroEffort: 'low' });
+    });
+  });
+
   describe('updateTopicReasoningConfig', () => {
     const KEY = topicMapKey({ agentId: 'agent-1' });
     const seedTopic = () => {

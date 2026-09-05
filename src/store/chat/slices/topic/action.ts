@@ -504,6 +504,37 @@ export class ChatTopicActionImpl {
   };
 
   /**
+   * Apply a heterogeneous (Claude Code / Codex) model + effort selection to one
+   * topic. The two pins live in different columns, so when the selector pairs
+   * a model switch with an effort reset (the new model does not support the
+   * current effort) and the effort write fails, the model switch is undone —
+   * otherwise the topic would carry a model with an effort it cannot run.
+   */
+  updateTopicHeteroPin = async (
+    id: string,
+    {
+      effort,
+      model,
+      provider,
+    }: { effort?: HeterogeneousReasoningEffort; model?: string; provider: string },
+  ): Promise<void> => {
+    const previous = topicSelectors.getTopicById(id)(this.#get());
+    if (model !== undefined) await this.#get().updateTopicModel(id, { model, provider });
+    if (effort === undefined) return;
+    try {
+      await this.#get().updateTopicHeteroEffort(id, effort);
+    } catch (error) {
+      if (model !== undefined && previous) {
+        await this.#get().internal_updateTopic(id, {
+          model: previous.model,
+          provider: previous.provider,
+        });
+      }
+      throw error;
+    }
+  };
+
+  /**
    * `updateTopicMetadata` shows the new value optimistically and has no
    * rollback, so a failed effort write would leave the picker (and client-side
    * generation) on a value that was never persisted. Revalidate and tell the

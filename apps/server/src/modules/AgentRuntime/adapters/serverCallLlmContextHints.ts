@@ -65,15 +65,19 @@ export interface ResolvedModelExtendParams {
  */
 export const resolveModelExtendParamsForUser = async ({
   aiModelModel,
+  builtinModels: preloadedModels,
   model,
   provider,
 }: {
   aiModelModel: AiModelModel | undefined;
+  /** Already-loaded model bank; callers on a hot path pass it to avoid a second load. */
+  builtinModels?: LobeDefaultAiModelListItem[];
   model: string;
   provider: string;
 }): Promise<ResolvedModelExtendParams> => {
-  const { loadModels } = await import('@/business/client/model-bank/loadModels');
-  const builtinModels = await loadModels();
+  const builtinModels =
+    preloadedModels ??
+    (await (await import('@/business/client/model-bank/loadModels')).loadModels());
 
   const readExtendParams = (card: LobeDefaultAiModelListItem | undefined): string[] | undefined =>
     card &&
@@ -165,7 +169,7 @@ export const resolveServerCallLlmContextHints = async ({
     modelExtendParams,
     modelHasReasoningExtendParams,
     userModelRow,
-  } = await resolveModelExtendParamsForUser({ aiModelModel, model, provider });
+  } = await resolveModelExtendParamsForUser({ aiModelModel, builtinModels, model, provider });
 
   const modelKnowledgeCutoff =
     modelCard?.knowledgeCutoff ??

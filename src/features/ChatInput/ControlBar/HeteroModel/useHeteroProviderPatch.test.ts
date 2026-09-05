@@ -7,8 +7,7 @@ const state = vi.hoisted(() => ({
   agent: { updateAgentConfigById: vi.fn() },
   chat: {
     activeTopicId: 'topic-a' as string | null,
-    updateTopicHeteroEffort: vi.fn(),
-    updateTopicModel: vi.fn(),
+    updateTopicHeteroPin: vi.fn(),
   },
 }));
 
@@ -24,8 +23,7 @@ describe('useHeteroProviderPatch', () => {
   beforeEach(() => {
     state.agent.updateAgentConfigById.mockReset();
     state.chat.activeTopicId = 'topic-a';
-    state.chat.updateTopicHeteroEffort.mockReset();
-    state.chat.updateTopicModel.mockReset();
+    state.chat.updateTopicHeteroPin.mockReset();
   });
 
   it('writes a model selection to the active topic without changing the Agent default', async () => {
@@ -39,7 +37,8 @@ describe('useHeteroProviderPatch', () => {
 
     await act(() => result.current({ model: 'topic-model' }));
 
-    expect(state.chat.updateTopicModel).toHaveBeenCalledWith('topic-a', {
+    expect(state.chat.updateTopicHeteroPin).toHaveBeenCalledWith('topic-a', {
+      effort: undefined,
       model: 'topic-model',
       provider: 'cursor',
     });
@@ -57,11 +56,11 @@ describe('useHeteroProviderPatch', () => {
 
     await act(() => result.current({ effort: 'default', model: 'topic-model' }));
 
-    expect(state.chat.updateTopicModel).toHaveBeenCalledWith('topic-a', {
+    expect(state.chat.updateTopicHeteroPin).toHaveBeenCalledWith('topic-a', {
+      effort: 'default',
       model: 'topic-model',
       provider: 'codex',
     });
-    expect(state.chat.updateTopicHeteroEffort).toHaveBeenCalledWith('topic-a', 'default');
     expect(state.agent.updateAgentConfigById).not.toHaveBeenCalled();
   });
 
@@ -76,8 +75,11 @@ describe('useHeteroProviderPatch', () => {
 
     await act(() => result.current({ effort: 'medium', speed: 'fast' }));
 
-    expect(state.chat.updateTopicHeteroEffort).toHaveBeenCalledWith('topic-a', 'medium');
-    expect(state.chat.updateTopicModel).not.toHaveBeenCalled();
+    expect(state.chat.updateTopicHeteroPin).toHaveBeenCalledWith('topic-a', {
+      effort: 'medium',
+      model: undefined,
+      provider: 'codex',
+    });
     expect(state.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-a', {
       agencyConfig: {
         heterogeneousProvider: { args: undefined, speed: 'fast' },
@@ -97,7 +99,7 @@ describe('useHeteroProviderPatch', () => {
 
     await act(() => result.current({ effort: 'default' }));
 
-    expect(state.chat.updateTopicHeteroEffort).not.toHaveBeenCalled();
+    expect(state.chat.updateTopicHeteroPin).not.toHaveBeenCalled();
     expect(state.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-a', {
       agencyConfig: {
         heterogeneousProvider: { args: undefined, effort: 'default' },
@@ -117,7 +119,7 @@ describe('useHeteroProviderPatch', () => {
 
     await act(() => result.current({ model: 'next-default' }));
 
-    expect(state.chat.updateTopicModel).not.toHaveBeenCalled();
+    expect(state.chat.updateTopicHeteroPin).not.toHaveBeenCalled();
     expect(state.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-a', {
       agencyConfig: {
         heterogeneousProvider: { args: undefined, model: 'next-default' },

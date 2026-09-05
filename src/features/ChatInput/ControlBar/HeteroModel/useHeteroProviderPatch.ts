@@ -16,8 +16,7 @@ export const useHeteroProviderPatch = ({
 }) => {
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const activeTopicId = useChatStore((s) => s.activeTopicId);
-  const updateTopicModel = useChatStore((s) => s.updateTopicModel);
-  const updateTopicHeteroEffort = useChatStore((s) => s.updateTopicHeteroEffort);
+  const updateTopicHeteroPin = useChatStore((s) => s.updateTopicHeteroPin);
 
   return useCallback(
     async (selection: HeteroSelection) => {
@@ -28,10 +27,9 @@ export const useHeteroProviderPatch = ({
       // the remaining dimensions (mode, speed) still write the shared agent config.
       const { effort, model, ...agentSelection } = selection;
       if (activeTopicId) {
-        if (model !== undefined) {
-          await updateTopicModel(activeTopicId, { model, provider: provider.type });
+        if (model !== undefined || effort !== undefined) {
+          await updateTopicHeteroPin(activeTopicId, { effort, model, provider: provider.type });
         }
-        if (effort !== undefined) await updateTopicHeteroEffort(activeTopicId, effort);
         if (Object.keys(agentSelection).length === 0) return;
       }
       await updateAgentConfigById(agentId, {
@@ -43,14 +41,6 @@ export const useHeteroProviderPatch = ({
         },
       });
     },
-    [
-      activeTopicId,
-      agentId,
-      enabled,
-      provider,
-      updateAgentConfigById,
-      updateTopicHeteroEffort,
-      updateTopicModel,
-    ],
+    [activeTopicId, agentId, enabled, provider, updateAgentConfigById, updateTopicHeteroPin],
   );
 };
