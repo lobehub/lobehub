@@ -324,6 +324,8 @@ ENV \
     STEPFUN_API_KEY="" STEPFUN_MODEL_LIST="" \
     # Taichu
     TAICHU_API_KEY="" TAICHU_MODEL_LIST="" \
+    # The Grid
+    THEGRID_API_KEY="" THEGRID_MODEL_LIST="" \
     # TogetherAI
     TOGETHERAI_API_KEY="" TOGETHERAI_MODEL_LIST="" \
     # Upstage

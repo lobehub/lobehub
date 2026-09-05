@@ -68,6 +68,7 @@
   "supergrok.description": "通过您的 SuperGrok 或 X 高级订阅访问 Grok 模型，无需 API 密钥。",
   "taichu.description": "太初是中科院自动化所与武汉人工智能研究院联合研发的新一代多模态模型，支持多轮问答、写作、图像生成、3D 理解与信号分析，具备更强的认知与创造力。",
   "tencentcloud.description": "腾讯云大模型知识引擎原子能力为企业与开发者提供端到端知识问答服务，支持文档解析、切分、向量化、多轮重写等模块化服务，助力构建定制 AI 方案。",
+  "thegrid.description": "The Grid 是一个推理市场，通过统一的 OpenAI 兼容 API 提供来自多个实验室的模型，按能力等级而非具体模型名称进行调用。",
   "togetherai.description": "Together AI 提供领先性能的创新模型，支持广泛定制、快速扩展与简便部署，满足企业需求。",
   "upstage.description": "Upstage 构建面向商业需求的 AI 模型，包括 Solar LLM 与文档 AI，其聊天 API 支持函数调用、翻译、向量化与行业场景应用。",
   "v0.description": "v0 是一款配对编程助手，可将自然语言想法转化为项目中的代码与界面。",

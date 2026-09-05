@@ -68,6 +68,7 @@
   "supergrok.description": "Access Grok models with your SuperGrok or X Premium subscription, no API key required.",
   "taichu.description": "A next-generation multimodal model from CASIA and the Wuhan Institute of AI, supporting multi-turn QA, writing, image generation, 3D understanding, and signal analysis with stronger cognition and creativity.",
   "tencentcloud.description": "LLM Knowledge Engine Atomic Power provides end-to-end knowledge QA for enterprises and developers, with modular services like document parsing, chunking, embeddings, and multi-turn rewriting to assemble custom AI solutions.",
+  "thegrid.description": "The Grid is an inference marketplace that serves models from several labs behind one OpenAI-compatible API, addressing capability tiers rather than a specific model name.",
   "togetherai.description": "Together AI delivers leading performance with innovative models, broad customization, rapid scaling, and straightforward deployment for enterprise needs.",
   "upstage.description": "Upstage builds AI models for business needs, including Solar LLM and Document AI, with chat APIs that support function calling, translation, embeddings, and domain-specific use cases.",
   "v0.description": "v0 is a pair-programming assistant that turns natural-language ideas into code and UI for your project.",
