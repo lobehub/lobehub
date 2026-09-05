@@ -963,6 +963,45 @@ describe('TopicModel', () => {
     });
   });
 
+  describe('updateModelPin', () => {
+    it('switches model and replaces the reasoning pin in one write', async () => {
+      const topic = await topicModel.create({
+        metadata: { reasoningConfig: { glm5_2ReasoningEffort: 'max' }, workingDirectory: '/w' },
+        model: 'glm-5.2',
+        provider: 'lobehub',
+        title: 'pin',
+      });
+
+      const [updated] = await topicModel.updateModelPin(topic.id, {
+        metadata: { reasoningConfig: { deepseekV4GAReasoningEffort: 'low' } },
+        model: 'deepseek-v4-flash',
+        provider: 'lobehub',
+      });
+
+      expect(updated.model).toBe('deepseek-v4-flash');
+      expect(updated.metadata).toEqual({
+        reasoningConfig: { deepseekV4GAReasoningEffort: 'low' },
+        workingDirectory: '/w',
+      });
+    });
+
+    it('drops a stale reasoning pin and keeps heteroEffort when not given', async () => {
+      const topic = await topicModel.create({
+        metadata: { heteroEffort: 'high', reasoningConfig: { effort: 'max' } },
+        model: 'a',
+        provider: 'claude-code',
+        title: 'pin',
+      });
+
+      const [updated] = await topicModel.updateModelPin(topic.id, {
+        model: 'b',
+        provider: 'claude-code',
+      });
+
+      expect(updated.metadata).toEqual({ heteroEffort: 'high' });
+    });
+  });
+
   describe('updateMetadata', () => {
     it('merges new metadata into existing metadata', async () => {
       const topic = await topicModel.create({

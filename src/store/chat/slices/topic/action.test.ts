@@ -48,6 +48,7 @@ vi.mock('@/services/topic', () => ({
     createTopic: vi.fn(),
     updateTopicFavorite: vi.fn(),
     updateTopicMetadata: vi.fn(),
+    updateTopicModel: vi.fn(),
     updateTopicTitle: vi.fn(),
     updateTopic: vi.fn(),
     batchRemoveTopics: vi.fn(),
@@ -343,7 +344,7 @@ describe('topic action', () => {
 
     it('applies the switch to the bucket that owns the topic', async () => {
       const { result } = renderHook(() => useChatStore());
-      vi.spyOn(topicService, 'updateTopic').mockResolvedValue(undefined as any);
+      vi.spyOn(topicService, 'updateTopicModel').mockResolvedValue(undefined as any);
       seedBuilderTopic();
 
       await act(async () => {
@@ -361,7 +362,7 @@ describe('topic action', () => {
 
     it('revalidates the owning bucket instead of the active agent bucket', async () => {
       const { result } = renderHook(() => useChatStore());
-      vi.spyOn(topicService, 'updateTopic').mockResolvedValue(undefined as any);
+      vi.spyOn(topicService, 'updateTopicModel').mockResolvedValue(undefined as any);
       (mutate as Mock).mockClear();
       seedBuilderTopic();
 
@@ -377,14 +378,9 @@ describe('topic action', () => {
       expect(matcherFn(['topic:list', topicMapKey({ agentId: 'edited-agent' }), {}])).toBe(false);
     });
 
-    it('re-pins the reasoning config of the new model together with the switch', async () => {
+    it('writes model and the re-pinned reasoning config in one request', async () => {
       const { result } = renderHook(() => useChatStore());
-      const updateTopicSpy = vi
-        .spyOn(topicService, 'updateTopic')
-        .mockResolvedValue(undefined as any);
-      const updateMetadataSpy = vi
-        .spyOn(topicService, 'updateTopicMetadata')
-        .mockResolvedValue(undefined as any);
+      const spy = vi.spyOn(topicService, 'updateTopicModel').mockResolvedValue(undefined as any);
       seedBuilderTopic();
       act(() => {
         useChatStore.setState({
@@ -401,42 +397,57 @@ describe('topic action', () => {
         });
       });
 
-      expect(updateTopicSpy).toHaveBeenCalledWith('builder-topic', {
+      expect(spy).toHaveBeenCalledWith('builder-topic', {
+        metadata: { reasoningConfig: { deepseekV4GAReasoningEffort: 'high' } },
         model: 'deepseek-v4-flash',
         provider: 'lobehub',
       });
-      expect(updateMetadataSpy).toHaveBeenCalledWith('builder-topic', {
-        reasoningConfig: { deepseekV4GAReasoningEffort: 'high' },
+      expect(useChatStore.getState().topicDataMap[BUILDER_KEY].items[0]).toMatchObject({
+        metadata: { reasoningConfig: { deepseekV4GAReasoningEffort: 'high' } },
+        model: 'deepseek-v4-flash',
       });
     });
 
-    it('rolls the model switch back when the reasoning pin cannot be written', async () => {
+    it('drops the previous pin when the new model has no reasoning params', async () => {
       const { result } = renderHook(() => useChatStore());
-      const updateTopicSpy = vi
-        .spyOn(topicService, 'updateTopic')
-        .mockResolvedValue(undefined as any);
-      vi.spyOn(topicService, 'updateTopicMetadata').mockRejectedValue(new Error('offline'));
+      const spy = vi.spyOn(topicService, 'updateTopicModel').mockResolvedValue(undefined as any);
       seedBuilderTopic();
       act(() => {
+        const key = BUILDER_KEY;
+        const state = useChatStore.getState();
         useChatStore.setState({
-          internal_resolveTopicReasoningSnapshot: vi
-            .fn()
-            .mockResolvedValue({ deepseekV4GAReasoningEffort: 'high' }),
+          internal_resolveTopicReasoningSnapshot: vi.fn().mockResolvedValue(undefined),
+          topicDataMap: {
+            [key]: {
+              ...state.topicDataMap[key],
+              items: [
+                {
+                  ...state.topicDataMap[key].items[0],
+                  metadata: {
+                    reasoningConfig: { glm5_2ReasoningEffort: 'max' },
+                    workingDirectory: '/w',
+                  },
+                },
+              ],
+            },
+          },
         });
       });
 
-      await expect(
-        result.current.updateTopicModel('builder-topic', {
-          model: 'deepseek-v4-flash',
+      await act(async () => {
+        await result.current.updateTopicModel('builder-topic', {
+          model: 'plain-model',
           provider: 'lobehub',
-        }),
-      ).rejects.toThrow('offline');
+        });
+      });
 
-      // second write restores the previous model so the topic never carries
-      // the new model with the old model's pin
-      expect(updateTopicSpy).toHaveBeenLastCalledWith('builder-topic', {
-        model: 'glm-5.2',
+      expect(spy).toHaveBeenCalledWith('builder-topic', {
+        metadata: undefined,
+        model: 'plain-model',
         provider: 'lobehub',
+      });
+      expect(useChatStore.getState().topicDataMap[BUILDER_KEY].items[0].metadata).toEqual({
+        workingDirectory: '/w',
       });
     });
   });
@@ -469,24 +480,22 @@ describe('topic action', () => {
       });
     };
 
-    it('undoes the model switch when the paired effort reset fails', async () => {
+    it('writes model and effort reset in one request', async () => {
       const { result } = renderHook(() => useChatStore());
-      const updateTopicSpy = vi
-        .spyOn(topicService, 'updateTopic')
-        .mockResolvedValue(undefined as any);
-      vi.spyOn(topicService, 'updateTopicMetadata').mockRejectedValue(new Error('offline'));
+      const spy = vi.spyOn(topicService, 'updateTopicModel').mockResolvedValue(undefined as any);
       seed();
 
-      await expect(
-        result.current.updateTopicHeteroPin('hetero-topic', {
+      await act(async () => {
+        await result.current.updateTopicHeteroPin('hetero-topic', {
           effort: 'default',
           model: 'new-model',
           provider: 'codex',
-        }),
-      ).rejects.toThrow('offline');
+        });
+      });
 
-      expect(updateTopicSpy).toHaveBeenLastCalledWith('hetero-topic', {
-        model: 'old-model',
+      expect(spy).toHaveBeenCalledWith('hetero-topic', {
+        metadata: { heteroEffort: 'default' },
+        model: 'new-model',
         provider: 'codex',
       });
     });

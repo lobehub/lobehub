@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 
 import { resolveServerDefaultAgentModels } from '@/features/HeterogeneousAgent/modelPicker';
 import ModelSelect from '@/features/ModelSelect';
+import ReasoningEffortSelect from '@/features/ModelSelect/ReasoningEffortSelect';
 import RunPriorityHint from '@/features/ProfileEditor/AgentUserTools/RunPriorityHint';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
@@ -30,7 +31,6 @@ import AgentHeader from './AgentHeader';
 import AgentTool from './AgentTool';
 import CloudHeterogeneousConfig from './CloudHeterogeneousConfig';
 import HeterogeneousAgentStatusCard from './HeterogeneousAgentStatusCard';
-import ReasoningEffortSelect from './ReasoningEffortSelect';
 import RemoteAgentConfigCard from './RemoteAgentConfigCard';
 import WorkspaceAgentDevicePolicy from './WorkspaceAgentDevicePolicy';
 import { WorkspaceAgentModelPolicy } from './WorkspaceAgentModelPolicy';

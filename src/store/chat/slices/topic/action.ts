@@ -431,31 +431,50 @@ export class ChatTopicActionImpl {
     id: string,
     { model, provider }: { model: string; provider: string },
   ): Promise<void> => {
-    const previous = topicSelectors.getTopicById(id)(this.#get());
     // The effort pin belongs to the model it was taken for (the param names
     // are model-specific), so switching model re-snapshots it from the user's
     // config for the new model — same "remembers what it started with" rule.
-    // Resolve that config BEFORE touching the row so the two writes are not
-    // separated by a network fetch that could leave the topic half-switched.
     const reasoningConfig = await this.#get().internal_resolveTopicReasoningSnapshot({
       model,
       provider,
     });
-    await this.#get().internal_updateTopic(id, { model, provider });
-    if (!reasoningConfig) return;
-    try {
-      await this.#get().updateTopicMetadata(id, { reasoningConfig });
-    } catch (error) {
-      // A topic that carries the new model but the previous model's pin would
-      // apply the wrong effort on the next run, so undo the model switch too.
-      if (previous) {
-        await this.#get().internal_updateTopic(id, {
-          model: previous.model,
-          provider: previous.provider,
-        });
-      }
-      throw error;
-    }
+    await this.#writeTopicModelPin(id, {
+      metadata: reasoningConfig ? { reasoningConfig } : undefined,
+      model,
+      provider,
+    });
+  };
+
+  /**
+   * Model + pin land in one server write (`topic.updateTopicModel`) so a run or
+   * a concurrent switch can never see the new model with the old model's pin.
+   * Optimistically mirrors the server merge: `reasoningConfig` is replaced,
+   * `heteroEffort` only when given.
+   */
+  #writeTopicModelPin = async (
+    id: string,
+    value: {
+      metadata?: Pick<ChatTopicMetadata, 'heteroEffort' | 'reasoningConfig'>;
+      model: string;
+      provider: string;
+    },
+  ): Promise<void> => {
+    const containerKey = topicSelectors.getTopicContainerKeyById(id)(this.#get());
+    const { reasoningConfig: _stale, ...rest } =
+      topicSelectors.getTopicById(id)(this.#get())?.metadata ?? {};
+    this.#get().internal_dispatchTopic({
+      containerKey,
+      id,
+      type: 'updateTopic',
+      value: {
+        metadata: { ...rest, ...value.metadata },
+        model: value.model,
+        provider: value.provider,
+      },
+    });
+
+    await topicService.updateTopicModel(id, value);
+    await this.#get().refreshTopic(containerKey);
   };
 
   /**
@@ -505,10 +524,9 @@ export class ChatTopicActionImpl {
 
   /**
    * Apply a heterogeneous (Claude Code / Codex) model + effort selection to one
-   * topic. The two pins live in different columns, so when the selector pairs
-   * a model switch with an effort reset (the new model does not support the
-   * current effort) and the effort write fails, the model switch is undone —
-   * otherwise the topic would carry a model with an effort it cannot run.
+   * topic. When the selector pairs a model switch with an effort reset (the new
+   * model does not support the current effort) both land in the same write, so
+   * the topic never carries a model with an effort it cannot run.
    */
   updateTopicHeteroPin = async (
     id: string,
@@ -518,20 +536,15 @@ export class ChatTopicActionImpl {
       provider,
     }: { effort?: HeterogeneousReasoningEffort; model?: string; provider: string },
   ): Promise<void> => {
-    const previous = topicSelectors.getTopicById(id)(this.#get());
-    if (model !== undefined) await this.#get().updateTopicModel(id, { model, provider });
-    if (effort === undefined) return;
-    try {
-      await this.#get().updateTopicHeteroEffort(id, effort);
-    } catch (error) {
-      if (model !== undefined && previous) {
-        await this.#get().internal_updateTopic(id, {
-          model: previous.model,
-          provider: previous.provider,
-        });
-      }
-      throw error;
+    if (model === undefined) {
+      if (effort !== undefined) await this.#get().updateTopicHeteroEffort(id, effort);
+      return;
     }
+    await this.#writeTopicModelPin(id, {
+      metadata: effort === undefined ? undefined : { heteroEffort: effort },
+      model,
+      provider,
+    });
   };
 
   /**

@@ -1073,6 +1073,28 @@ export const topicRouter = router({
       return ctx.topicModel.update(input.id, { ...restValue, sessionId: resolvedSessionId });
     }),
 
+  /**
+   * Switch the topic's pinned model and its effort pin atomically — see
+   * `TopicModel.updateModelPin`. Same co-editing rules as `updateTopic`.
+   */
+  updateTopicModel: topicProcedure
+    .use(withScopedPermission('topic:update'))
+    .input(
+      z.object({
+        id: z.string(),
+        metadata: chatTopicCreateMetadataSchema.optional(),
+        model: z.string(),
+        provider: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      await assertCanUseTopicTargets(guardCtx(ctx), [input.id]);
+      await assertCreatorTopicTargets(guardCtx(ctx), [input.id]);
+
+      const { id, ...value } = input;
+      return ctx.topicModel.updateModelPin(id, value);
+    }),
+
   updateTopicMetadata: topicProcedure
     .use(withScopedPermission('topic:update'))
     .input(
