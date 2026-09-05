@@ -12,6 +12,7 @@ import { AiAgentService } from '../index';
 
 const {
   mockCreateOperation,
+  mockExecuteToolCall,
   mockFindById,
   mockFindMessagePlugin,
   mockMessageCreate,
@@ -22,6 +23,7 @@ const {
   mockUpdateMessagePlugin,
   mockUpdateTopicMetadata,
   mockUpdateToolMessage,
+  mockTopicFindById,
   mockFindOperationById,
   mockRecordCompletion,
   mockRepairAgentInterventionContinuation,
@@ -32,6 +34,7 @@ const {
   mockTryReserveTaskCallback,
 } = vi.hoisted(() => ({
   mockEnsureInterventionContinuationStarted: vi.fn(),
+  mockExecuteToolCall: vi.fn(),
   mockFindOperationById: vi.fn(),
   mockRecordCompletion: vi.fn(),
   mockRepairAgentInterventionContinuation: vi.fn(),
@@ -49,6 +52,7 @@ const {
   mockUpdateMessagePlugin: vi.fn(),
   mockUpdateTopicMetadata: vi.fn(),
   mockUpdateToolMessage: vi.fn(),
+  mockTopicFindById: vi.fn(),
   mockTryReserveTaskCallback: vi.fn(),
 }));
 
@@ -104,7 +108,7 @@ vi.mock('@/database/models/topic', () => ({
     repairAgentInterventionContinuation: mockRepairAgentInterventionContinuation,
     tryReserveTaskCallback: mockTryReserveTaskCallback,
     create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
-    findById: vi.fn().mockResolvedValue(null),
+    findById: mockTopicFindById,
     updateMetadata: mockUpdateTopicMetadata,
   })),
 }));
@@ -169,7 +173,11 @@ vi.mock('@/server/modules/Mecha', () => ({
 }));
 
 vi.mock('@/server/services/deviceGateway', () => ({
-  deviceGateway: { isConfigured: false, queryDeviceList: vi.fn().mockResolvedValue([]) },
+  deviceGateway: {
+    executeToolCall: mockExecuteToolCall,
+    isConfigured: false,
+    queryDeviceList: vi.fn().mockResolvedValue([]),
+  },
 }));
 
 vi.mock('@/server/modules/ModelRuntime', () => ({
@@ -1103,7 +1111,108 @@ describe('AiAgentService.stopPendingApproval', () => {
     });
     mockRecordCompletion.mockResolvedValue(undefined);
     mockInterruptOperation.mockResolvedValue(true);
+    mockTopicFindById.mockResolvedValue(null);
+    mockExecuteToolCall.mockResolvedValue({ success: true });
     service = new AiAgentService({} as unknown as LobeChatDatabase, 'user-1');
+  });
+
+  it('stops a pending batch owned by a running heterogeneous operation', async () => {
+    mockFindOperationById.mockResolvedValue({
+      id: 'op-parked-1',
+      status: 'running',
+      topicId: 'topic-1',
+    });
+    mockTopicFindById.mockResolvedValue({
+      metadata: {
+        runningOperation: {
+          deviceId: 'device-1',
+          deviceUserId: 'device-user-1',
+          deviceWorkspaceId: 'workspace-1',
+          heteroType: 'openclaw',
+          operationId: 'op-parked-1',
+        },
+      },
+    });
+
+    await expect(
+      service.stopPendingApproval({
+        batchId: 'batch-1',
+        operationId: 'op-parked-1',
+        toolMessageIds: ['tool-msg-1', 'tool-msg-2'],
+        topicId: 'topic-1',
+      }),
+    ).resolves.toEqual({
+      operationId: 'op-parked-1',
+      settledToolMessageIds: ['tool-msg-1', 'tool-msg-2'],
+      success: true,
+    });
+
+    expect(mockExecuteToolCall).toHaveBeenCalledWith(
+      {
+        deviceId: 'device-1',
+        userId: 'device-user-1',
+        workspaceId: 'workspace-1',
+      },
+      {
+        apiName: 'cancelHeteroTask',
+        arguments: JSON.stringify({ signal: 'SIGINT', taskId: 'op-parked-1' }),
+        identifier: 'cancelHeteroTask',
+      },
+      10_000,
+    );
+    expect(mockInterruptOperation).toHaveBeenCalledWith('op-parked-1');
+    expect(mockRecordCompletion).toHaveBeenCalledWith(
+      'op-parked-1',
+      expect.objectContaining({ completionReason: 'interrupted', status: 'interrupted' }),
+    );
+  });
+
+  it('treats a repeated Stop for the same batch as idempotent', async () => {
+    const params = {
+      batchId: 'batch-1',
+      operationId: 'op-parked-1',
+      toolMessageIds: ['tool-msg-1', 'tool-msg-2'],
+      topicId: 'topic-1',
+    };
+
+    await service.stopPendingApproval(params);
+
+    const firstResolutions = mockResolveHumanApproval.mock.calls[0][0];
+    const resolutionRequestId = firstResolutions[0].intervention.resolutionRequestId;
+    expect(resolutionRequestId).toEqual(expect.any(String));
+
+    const abortedIntervention = {
+      batchId: 'batch-1',
+      operationId: 'op-parked-1',
+      resolutionRequestId,
+      status: 'aborted',
+    };
+    mockFindOperationById.mockResolvedValue({
+      id: 'op-parked-1',
+      status: 'interrupted',
+      topicId: 'topic-1',
+    });
+    mockFindMessagePlugin.mockResolvedValue({ intervention: abortedIntervention });
+    mockListMessagePluginsByTopic.mockResolvedValue(
+      ['tool-msg-1', 'tool-msg-2'].map((id) => ({
+        id,
+        intervention: abortedIntervention,
+      })),
+    );
+
+    mockResolveHumanApproval.mockClear();
+    mockInterruptOperation.mockClear();
+    mockRecordCompletion.mockClear();
+
+    await expect(service.stopPendingApproval(params)).resolves.toEqual({
+      operationId: 'op-parked-1',
+      settledToolMessageIds: ['tool-msg-1', 'tool-msg-2'],
+      success: true,
+    });
+
+    expect(mockResolveHumanApproval).not.toHaveBeenCalled();
+    expect(mockInterruptOperation).not.toHaveBeenCalled();
+    expect(mockRecordCompletion).not.toHaveBeenCalled();
   });
 
   it('settles every pending row in place and retires the parked operation', async () => {
@@ -1121,12 +1230,12 @@ describe('AiAgentService.stopPendingApproval', () => {
       {
         content: 'Tool execution was aborted by user.',
         id: 'tool-msg-1',
-        intervention: { status: 'aborted' },
+        intervention: { resolutionRequestId: 'legacy_stop_batch-1', status: 'aborted' },
       },
       {
         content: 'Tool execution was aborted by user.',
         id: 'tool-msg-2',
-        intervention: { status: 'aborted' },
+        intervention: { resolutionRequestId: 'legacy_stop_batch-1', status: 'aborted' },
       },
     ]);
 

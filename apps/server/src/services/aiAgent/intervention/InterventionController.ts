@@ -258,13 +258,17 @@ export class InterventionController {
     settledToolMessageIds: string[];
     success: boolean;
   }> {
-    const { approvalResolutionRequestId, batchId, operationId, toolMessageIds, topicId } = params;
+    const { batchId, operationId, toolMessageIds, topicId } = params;
+    const approvalResolutionRequestId =
+      params.approvalResolutionRequestId ?? `legacy_stop_${batchId}`;
 
     const operation = await this.deps.agentOperationModel.findById(operationId);
     if (
       !operation ||
       operation.topicId !== topicId ||
-      (operation.status !== 'waiting_for_human' && operation.status !== 'interrupted')
+      (operation.status !== 'running' &&
+        operation.status !== 'waiting_for_human' &&
+        operation.status !== 'interrupted')
     ) {
       throw new Error('stopPendingApproval: operation is not the parked owner of this topic');
     }
@@ -344,7 +348,7 @@ export class InterventionController {
     }
 
     if (operation.status !== 'interrupted') {
-      await this.deps.agentRuntimeService.interruptOperation(operationId);
+      await this.interruptTask({ operationId, topicId });
       await this.deps.agentOperationModel.recordCompletion(operationId, {
         completedAt: new Date(),
         completionReason: 'interrupted',
