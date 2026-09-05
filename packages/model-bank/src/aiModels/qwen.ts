@@ -11,6 +11,76 @@ const qwenChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+      video: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'The September update to Qwen3.8 Max improves coding, multi-tool orchestration, and visual understanding.',
+    displayName: 'Qwen3.8 Max 0902',
+    enabled: true,
+    family: 'qwen',
+    generation: 'qwen3.8',
+    id: 'qwen3.8-max-0902',
+    maxOutput: 131_072,
+    /** @see https://help.aliyun.com/zh/model-studio/qwen3-8-max */
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 36, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheWrite', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-09-02',
+    settings: {
+      extendParams: ['reasoningBudgetToken'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+      video: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'Qwen3.8 Max supports complex coding, multimodal understanding, and long-horizon agentic workflows with a 1M context window.',
+    displayName: 'Qwen3.8 Max',
+    enabled: true,
+    family: 'qwen',
+    generation: 'qwen3.8',
+    id: 'qwen3.8-max',
+    maxOutput: 131_072,
+    /** @see https://help.aliyun.com/zh/model-studio/qwen3-8-max */
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 36, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheWrite', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-08-02',
+    settings: {
+      extendParams: ['reasoningBudgetToken'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
       vision: true,
     },
     contextWindowTokens: 262_144,

@@ -290,3 +290,39 @@ describe('vendor provider cards', () => {
     expect(glm53Flash?.settings?.searchImpl).toBe('params');
   });
 });
+
+describe('recent direct-provider models', () => {
+  it.each([
+    ['openai', 'gpt-6-astra', 'gpt6ReasoningEffort'],
+    ['google', 'gemini-3.8-flash', 'thinkingLevel3'],
+    ['vertexai', 'gemini-3.8-flash', 'thinkingLevel3'],
+    ['xai', 'grok-4.6', 'grok4_6ReasoningEffort'],
+    ['qwen', 'qwen3.8-max', 'reasoningBudgetToken'],
+    ['qwen', 'qwen3.8-max-0902', 'reasoningBudgetToken'],
+  ])('exposes %s/%s with its reasoning controls', (providerId, id, reasoningParam) => {
+    const model = LOBE_DEFAULT_MODEL_LIST.find(
+      (entry) => entry.providerId === providerId && entry.id === id,
+    );
+
+    expect(model).toMatchObject({
+      abilities: { functionCall: true, reasoning: true, vision: true },
+      enabled: true,
+      type: 'chat',
+    });
+    expect(model?.settings?.extendParams).toContain(reasoningParam);
+  });
+});
+
+describe('Gemini 3.8 introductory pricing', () => {
+  it.each(['google', 'vertexai'])('uses the published output rate for %s', (providerId) => {
+    const model = LOBE_DEFAULT_MODEL_LIST.find(
+      (entry) => entry.providerId === providerId && entry.id === 'gemini-3.8-flash',
+    );
+    expect(model?.pricing?.units).toContainEqual({
+      name: 'textOutput',
+      rate: 3.75,
+      strategy: 'fixed',
+      unit: 'millionTokens',
+    });
+  });
+});

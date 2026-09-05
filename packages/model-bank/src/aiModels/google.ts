@@ -162,6 +162,53 @@ const googleChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576 + 65_536,
     description:
+      'Gemini 3.8 Flash improves long-horizon software engineering, autonomous agents, and complex multi-step reasoning.',
+    displayName: 'Gemini 3.8 Flash',
+    enabled: true,
+    family: 'gemini',
+    generation: 'gemini-3.8',
+    id: 'gemini-3.8-flash',
+    maxOutput: 65_536,
+    /** Introductory rates through 2026-12-31; standard token rates double afterward.
+     * @see https://ai.google.dev/gemini-api/docs/pricing
+     */
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.075, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'videoInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3.75, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 0.5 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-09-02',
+    settings: {
+      disabledParams: ['temperature', 'top_p'],
+      extendParams: ['thinkingLevel3', 'urlContext'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      audio: true,
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576 + 65_536,
+    description:
       'Gemini 3.7 Flash is the next iteration in the Gemini 3 series of highly-capable, natively multimodal, reasoning models, with support for computer use and file search.',
     displayName: 'Gemini 3.7 Flash',
     enabled: true,
