@@ -3,6 +3,11 @@ import type { DeviceGitPullRequestCiStatus, DeviceGitWorktreeListItem } from '@l
 
 import { normalizeDisplayPath } from '@/features/ChatInput/ControlBar/worktreeHelpers';
 
+/** macOS aliases `/tmp` & `/var` onto `/private/...`; git reports the real path
+ * while the picked working directory keeps the alias, so strip the prefix
+ * before comparing or a main-worktree checkout under /tmp reads as linked. */
+const stripPrivateAlias = (path: string) => path.replace(/^\/private(?=\/(?:tmp|var)\/)/, '');
+
 export interface OverviewChangeStats {
   additions: number;
   deletions: number;
@@ -41,7 +46,8 @@ export const isLinkedWorktreeCheckout = (
     !!workingDirectory &&
     !!mainWorktree &&
     (!!mainWorktree.bare ||
-      normalizeDisplayPath(workingDirectory) !== normalizeDisplayPath(mainWorktree.path))
+      stripPrivateAlias(normalizeDisplayPath(workingDirectory)) !==
+        stripPrivateAlias(normalizeDisplayPath(mainWorktree.path)))
   );
 };
 

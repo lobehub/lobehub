@@ -45,6 +45,14 @@ describe('isLinkedWorktreeCheckout', () => {
     ).toBe(true);
   });
 
+  it('is false when the only difference is the macOS /private/tmp alias', () => {
+    expect(
+      isLinkedWorktreeCheckout('/tmp/scratch', [
+        { current: true, path: '/private/tmp/scratch' },
+      ] as never[]),
+    ).toBe(false);
+  });
+
   it('is false without a directory or without worktree data', () => {
     expect(isLinkedWorktreeCheckout(undefined, [main])).toBe(false);
     expect(isLinkedWorktreeCheckout('/repo-wt', [])).toBe(false);
