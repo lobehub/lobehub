@@ -84,6 +84,133 @@ describe('DOCX round-trip operations', () => {
     expect(await zip.file('word/footer1.xml')?.async('text')).toContain('LH-OFFICE-V1-DOC-FOOTER');
   });
 
+  it('deletes paragraphs and tables and keeps the body non-empty', async () => {
+    let bytes = await makeFixture();
+    bytes = await editDocx(bytes, { index: 0, kind: 'table', type: 'deleteBlock' });
+    bytes = await editDocx(bytes, { index: 2, kind: 'paragraph', type: 'deleteBlock' });
+    const blocks = await inspectDocx(bytes);
+    expect(blocks.filter((block) => block.kind === 'table')).toHaveLength(0);
+    expect(blocks.map((block) => block.text)).not.toContain('中文保真检查 ✅');
+
+    // Deleting everything must still leave one valid paragraph behind.
+    let remaining = blocks.filter((block) => block.kind === 'paragraph').length;
+    while (remaining > 0) {
+      bytes = await editDocx(bytes, { index: 0, kind: 'paragraph', type: 'deleteBlock' });
+      remaining--;
+    }
+    const emptied = await inspectDocx(bytes);
+    expect(emptied).toHaveLength(1);
+    expect(emptied[0]).toMatchObject({ kind: 'paragraph', text: '' });
+  });
+
+  it('toggles lists and materializes numbering definitions for Word', async () => {
+    let bytes = await makeFixture();
+    bytes = await editDocx(bytes, { index: 2, list: 'number', type: 'setParagraphList' });
+    bytes = await editDocx(bytes, {
+      afterIndex: 2,
+      list: 'bullet',
+      text: 'Bullet item',
+      type: 'insertParagraph',
+    });
+
+    let blocks = await inspectDocx(bytes);
+    expect(blocks.find((block) => block.text === '中文保真检查 ✅')?.list).toBe('number');
+    expect(blocks.find((block) => block.text === 'Bullet item')?.list).toBe('bullet');
+
+    const zip = await JSZip.loadAsync(bytes);
+    const numbering = await zip.file('word/numbering.xml')?.async('text');
+    expect(numbering).toContain('w:numFmt w:val="decimal"');
+    expect(numbering).toContain('w:numFmt w:val="bullet"');
+    expect(await zip.file('[Content_Types].xml')?.async('text')).toContain('/word/numbering.xml');
+    expect(await zip.file('word/_rels/document.xml.rels')?.async('text')).toContain(
+      'numbering.xml',
+    );
+
+    bytes = await editDocx(bytes, { index: 2, list: null, type: 'setParagraphList' });
+    blocks = await inspectDocx(bytes);
+    expect(blocks.find((block) => block.text === '中文保真检查 ✅')?.list).toBeUndefined();
+  });
+
+  it('inserts a new PNG image with media part, relationship, and content type', async () => {
+    // Minimal 2x3 PNG header: signature + IHDR width=2 height=3.
+    const png = new Uint8Array(32);
+    png.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 73, 72, 68, 82]);
+    new DataView(png.buffer).setUint32(16, 2);
+    new DataView(png.buffer).setUint32(20, 3);
+
+    const bytes = await editDocx(await makeFixture(), {
+      afterIndex: 2,
+      bytes: png.buffer,
+      type: 'insertImage',
+    });
+    const zip = await JSZip.loadAsync(bytes);
+    const media = Object.keys(zip.files).filter(
+      (name) => name.startsWith('word/media/') && !name.endsWith('/'),
+    );
+    expect(media.length).toBe(2);
+    const rels = await zip.file('word/_rels/document.xml.rels')?.async('text');
+    expect(rels).toContain('media/lobehub-image-');
+    expect(await zip.file('[Content_Types].xml')?.async('text')).toContain('image/png');
+    const documentXml = await zip.file('word/document.xml')?.async('text');
+    expect(documentXml).toContain('wp:inline');
+    expect(documentXml).toContain(`cx="${2 * 9525}" cy="${3 * 9525}"`);
+
+    const blocks = await inspectDocx(bytes);
+    const withImage = blocks.filter((block) => block.images?.length);
+    expect(withImage.length).toBeGreaterThanOrEqual(1);
+    expect(withImage.at(-1)?.images?.[0].src).toMatch(/^data:image\/png;base64,/);
+  });
+
+  it('encodes multi-line text as w:br and reads it back losslessly', async () => {
+    const bytes = await editDocx(await makeFixture(), {
+      index: 2,
+      text: 'line one\nline two',
+      type: 'setParagraphText',
+    });
+    const zip = await JSZip.loadAsync(bytes);
+    const documentXml = await zip.file('word/document.xml')?.async('text');
+    expect(documentXml).toContain('<w:br');
+    expect(documentXml).not.toContain('line one\nline two');
+    expect((await inspectDocx(bytes))[2].text).toBe('line one\nline two');
+  });
+
+  it('reports formatting state so the toolbar can toggle it', async () => {
+    let bytes = await makeFixture();
+    bytes = await editDocx(bytes, { alignment: 'justify', index: 2, type: 'setAlignment' });
+    bytes = await editDocx(bytes, {
+      fontFamily: 'Georgia',
+      fontSize: 14,
+      index: 2,
+      type: 'formatParagraph',
+    });
+    const blocks = await inspectDocx(bytes);
+    expect(blocks[2]).toMatchObject({
+      alignment: 'justify',
+      fontFamily: 'Georgia',
+      fontSize: 14,
+    });
+    expect(blocks[1].bold).toBe(true);
+    const linkBlock = blocks.find((block) => block.link);
+    expect(linkBlock?.link).toMatchObject({
+      index: 0,
+      target: 'https://github.com/lobehub/lobehub',
+    });
+  });
+
+  it('styles appended hyperlinks so they render as links without a style part', async () => {
+    const bytes = await editDocx(await makeFixture(), {
+      displayText: 'OpenAI',
+      target: 'https://openai.com/',
+      type: 'appendHyperlink',
+    });
+    const zip = await JSZip.loadAsync(bytes);
+    const documentXml = (await zip.file('word/document.xml')?.async('text')) || '';
+    const appended = documentXml.slice(documentXml.indexOf('OpenAI') - 400);
+    expect(appended).toContain('w:color');
+    expect(appended).toContain('0563C1');
+    expect(appended).toContain('w:u');
+  });
+
   it('adds paragraphs, tables, and external links without corrupting the package', async () => {
     let bytes = await makeFixture();
     bytes = await editDocx(bytes, {

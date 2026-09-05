@@ -389,6 +389,7 @@
     "js-sha256": "^0.11.1",
     "jsondiffpatch": "^0.7.6",
     "jsonl-parse-stringify": "^1.0.3",
+    "jszip": "^3.10.1",
     "keygrip": "^1.1.0",
     "langfuse": "^3.38.20",
     "langfuse-core": "^3.38.20",
