@@ -3,6 +3,7 @@ import type { FtsSearchDocumentEntity } from '@lobechat/types';
 import { FTS_SEARCH_DOCUMENT_ENTITIES } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getFtsSearchIndexSchemaFingerprint } from '../../../../packages/database/src/repositories/ftsSearchDocument';
 import type { FtsSearchReindexFailure, FtsSearchReindexRunState } from '../checkpointRepository';
 import type {
   FtsSearchReindexElasticsearchClient,
@@ -228,7 +229,11 @@ describe('FtsSearchReindexService', () => {
       'test-agents-v1',
       expect.objectContaining({
         mappings: expect.objectContaining({
-          _meta: { reindex_run_id: 'run-1', schema_version: 1 },
+          _meta: {
+            reindex_run_id: 'run-1',
+            schema_fingerprint: getFtsSearchIndexSchemaFingerprint('agents'),
+            schema_version: 1,
+          },
         }),
       }),
       { createIfMissing: true },

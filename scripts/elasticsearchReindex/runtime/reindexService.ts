@@ -2,11 +2,16 @@ import type { FtsSearchDocumentEntity } from '@lobechat/types';
 import { FTS_SEARCH_DOCUMENT_ENTITIES } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 
-import type { FtsSearchDocumentBuilder } from '../../../packages/database/src/repositories/ftsSearchDocument';
+import type {
+  FtsSearchDocumentBuilder,
+  FtsSearchIndexMeta,
+} from '../../../packages/database/src/repositories/ftsSearchDocument';
 import {
+  buildFtsSearchIndexMeta,
   FTS_SEARCH_INDEX_ANALYSIS,
   FTS_SEARCH_INDEX_DEFINITIONS,
   getFtsSearchIndexAlias,
+  getFtsSearchIndexSchemaVersion,
 } from '../../../packages/database/src/repositories/ftsSearchDocument';
 import type {
   FtsSearchReindexBatchFailure,
@@ -37,7 +42,7 @@ export interface FtsSearchReindexIndexOptions {
 
 export interface FtsSearchReindexIndexBody {
   mappings: (typeof FTS_SEARCH_INDEX_DEFINITIONS)[FtsSearchDocumentEntity]['mappings'] & {
-    _meta: { reindex_run_id: string; schema_version: number };
+    _meta: Required<FtsSearchIndexMeta>;
   };
   settings: { analysis: typeof FTS_SEARCH_INDEX_ANALYSIS };
 }
@@ -373,15 +378,21 @@ export class FtsSearchReindexService {
       this.options.entityConcurrency,
       async ({ entity, physicalIndex, status }) => {
         try {
+          /**
+           * The checkpoint still tracks one generation for the whole run, so a checkpoint written
+           * for an older declared version must not silently stamp the new version onto its index.
+           */
+          if (getFtsSearchIndexSchemaVersion(entity) !== state.run.schemaVersion) {
+            throw new Error(
+              `Checkpoint targets schema version ${state.run.schemaVersion} but the code declares v${getFtsSearchIndexSchemaVersion(entity)} for ${entity}; start a new run for the declared generation`,
+            );
+          }
           await this.client.ensureIndex(
             physicalIndex,
             {
               mappings: {
                 ...FTS_SEARCH_INDEX_DEFINITIONS[entity].mappings,
-                _meta: {
-                  reindex_run_id: state.run.id,
-                  schema_version: state.run.schemaVersion,
-                },
+                _meta: buildFtsSearchIndexMeta(entity, state.run.id),
               },
               settings: { analysis: FTS_SEARCH_INDEX_ANALYSIS },
             },
