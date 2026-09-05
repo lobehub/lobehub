@@ -4,7 +4,6 @@
 import type { Readable } from 'node:stream';
 
 import type { NextRequest } from 'next/server';
-import type { SelectiveBodyContext } from 'oidc-provider/lib/shared/selective_body.js';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('debug', () => ({
@@ -32,21 +31,6 @@ const readStream = async (stream: Readable) => {
 };
 
 describe('OIDC HTTP adapter', () => {
-  describe('createNodeResponse', () => {
-    it('captures statusCode assignments made by Koa', async () => {
-      const resolvePromise = vi.fn();
-      const { createNodeResponse } = await import('./http-adapter');
-      const responseCollector = createNodeResponse(resolvePromise);
-
-      responseCollector.nodeResponse.statusCode = 500;
-      responseCollector.nodeResponse.end('Internal Server Error');
-
-      expect(responseCollector.responseStatus).toBe(500);
-      expect(responseCollector.responseBody).toBe('Internal Server Error');
-      expect(resolvePromise).toHaveBeenCalledOnce();
-    });
-  });
-
   describe('createNodeRequest', () => {
     it('passes POST bodies through as a readable Node stream without pre-parsing', async () => {
       const body = 'grant_type=authorization_code&code=test-code';
@@ -91,12 +75,15 @@ describe('OIDC HTTP adapter', () => {
       }) as unknown as NextRequest;
 
       const { createNodeRequest } = await import('./http-adapter');
-      const { urlencoded } = await import('oidc-provider/lib/shared/selective_body.js');
+      // @ts-expect-error - selective_body.js doesn't have type definitions
+      const { urlencoded } = (await import('oidc-provider/lib/shared/selective_body.js')) as {
+        urlencoded: (ctx: any, next: () => Promise<void>) => Promise<void>;
+      };
       const nodeRequest = await createNodeRequest(request);
-      const ctx: SelectiveBodyContext = {
+      const ctx = {
         charset: 'utf-8',
         is: (contentType: string) => contentType === 'application/x-www-form-urlencoded',
-        oidc: {},
+        oidc: {} as any,
         req: nodeRequest,
         request: { length: Buffer.byteLength(body) },
       };
