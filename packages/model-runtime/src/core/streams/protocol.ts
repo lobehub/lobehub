@@ -687,36 +687,61 @@ export const createFirstErrorHandleTransformer = (
 /**
  * create a transformer to remove SSE format data
  */
-export const createSSEDataExtractor = () =>
-  new TransformStream({
+export const createSSEDataExtractor = () => {
+  // A single decoder instance is reused across chunks so a multi-byte UTF-8
+  // character split over a network chunk boundary is buffered (via
+  // `stream: true`) instead of being decoded into replacement characters.
+  const decoder = new TextDecoder();
+  // Holds the trailing partial line until its terminating newline arrives in
+  // a later chunk, so a `data:` line split across chunks is not dropped.
+  let buffer = '';
+
+  const processLine = (line: string, controller: TransformStreamDefaultController) => {
+    // Only process lines starting with "data: "
+    if (!line.startsWith('data: ')) return;
+
+    // Extract the actual data after "data: "
+    const jsonText = line.slice(6);
+
+    // Skip heartbeat messages
+    if (jsonText === '[DONE]') return;
+
+    try {
+      // Parse JSON data
+      const data = JSON.parse(jsonText);
+      // Pass parsed data to the next processor
+      controller.enqueue(data);
+    } catch {
+      console.warn('Failed to parse SSE data:', jsonText);
+    }
+  };
+
+  return new TransformStream({
+    flush(controller) {
+      // Flush any bytes still buffered in the decoder, then process the final
+      // line, which may not be newline-terminated.
+      buffer += decoder.decode();
+      if (buffer) processLine(buffer, controller);
+      buffer = '';
+    },
     transform(chunk: Uint8Array, controller) {
-      // Convert Uint8Array to string
-      const text = new TextDecoder().decode(chunk, { stream: true });
+      // Convert Uint8Array to string, buffering incomplete multi-byte sequences
+      buffer += decoder.decode(chunk, { stream: true });
 
-      // Handle multi-line data case
-      const lines = text.split('\n');
+      // Only process complete (newline-terminated) lines; keep the remainder
+      // buffered until the rest of that line arrives in a later chunk.
+      const lastNewline = buffer.lastIndexOf('\n');
+      if (lastNewline === -1) return;
 
-      for (const line of lines) {
-        // Only process lines starting with "data: "
-        if (line.startsWith('data: ')) {
-          // Extract the actual data after "data: "
-          const jsonText = line.slice(6);
+      const completeLines = buffer.slice(0, lastNewline);
+      buffer = buffer.slice(lastNewline + 1);
 
-          // Skip heartbeat messages
-          if (jsonText === '[DONE]') continue;
-
-          try {
-            // Parse JSON data
-            const data = JSON.parse(jsonText);
-            // Pass parsed data to the next processor
-            controller.enqueue(data);
-          } catch {
-            console.warn('Failed to parse SSE data:', jsonText);
-          }
-        }
+      for (const line of completeLines.split('\n')) {
+        processLine(line, controller);
       }
     },
   });
+};
 
 export const TOKEN_SPEED_CHUNK_ID = 'output_speed';
 
