@@ -38,3 +38,8 @@ Feature: Core Routes Accessibility
       | proxy        |
       | storage      |
       | tts          |
+
+  @ROUTES-003 @P2
+  Scenario: Return home from an agent share using the keyboard
+    When I navigate to "/a/e2e-missing-share"
+    Then I can return home from the agent share page using the keyboard

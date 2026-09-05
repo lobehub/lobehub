@@ -1,7 +1,7 @@
 import { Given, Then } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 
-import { CustomWorld } from '../../support/world';
+import type { CustomWorld } from '../../support/world';
 
 // ============================================
 // Given Steps (Preconditions)
@@ -16,6 +16,18 @@ Given('the application is running', async function (this: CustomWorld) {
   // Store the response for later assertions
   this.testContext.lastResponse = response;
 });
+
+Then(
+  'I can return home from the agent share page using the keyboard',
+  async function (this: CustomWorld) {
+    const home = this.page.getByRole('link', { name: 'Go to my LobeHub' }).first();
+    await expect(home).toBeVisible();
+    await this.page.keyboard.press('Tab');
+    await expect(home).toBeFocused();
+    await this.page.keyboard.press('Enter');
+    await expect(this.page).toHaveURL(/\/$/);
+  },
+);
 
 // ============================================
 // Then Steps (Assertions)

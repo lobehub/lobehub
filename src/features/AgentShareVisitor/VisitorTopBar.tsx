@@ -4,7 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
+import { Link } from 'react-router';
 
 import { ProductLogo } from '@/components/Branding';
 import UserAvatar from '@/features/User/UserAvatar';
@@ -23,6 +23,11 @@ const styles = createStaticStyles(({ css }) => ({
     inline-size: 26px;
     block-size: 26px;
     border-radius: ${cssVar.borderRadius};
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimary};
+      outline-offset: 3px;
+    }
   `,
   root: css`
     flex: none;
@@ -49,24 +54,15 @@ interface VisitorTopBarProps {
  * uses, so a shared agent reads as "a LobeHub page I was linked to", not as an
  * inner pane of someone else's console.
  *
- * The visitor page lives inside the main layout but hides the nav rail (the
- * rail shows the CREATOR's workspace, which a visitor has no access to), so
- * this bar is the only way for the visitor to get back to their own LobeHub:
+ * The visitor page has its own layout without the main navigation rail, so
+ * this bar lets visitors get back to their own LobeHub:
  * both the logo and the avatar go home, or to sign-in when there is no
  * session yet.
  */
 const VisitorTopBar = memo<VisitorTopBarProps>(({ slugOrId }) => {
   const { t } = useTranslation('agent');
-  const navigate = useNavigate();
   const isSignedIn = useUserStore(authSelectors.isLogin);
-
-  const goHome = () => {
-    if (isSignedIn) {
-      navigate('/');
-      return;
-    }
-    window.location.href = buildAgentShareSignInUrl(slugOrId ?? '');
-  };
+  const homePath = isSignedIn ? '/' : buildAgentShareSignInUrl(slugOrId ?? '');
 
   return (
     <Flexbox
@@ -77,21 +73,24 @@ const VisitorTopBar = memo<VisitorTopBarProps>(({ slugOrId }) => {
       justify={'space-between'}
       width={'100%'}
     >
-      <div
+      <Link
         aria-label={t('share.visitor.topBar.home')}
         className={styles.brand}
-        role={'link'}
-        onClick={goHome}
+        reloadDocument={!isSignedIn}
+        to={homePath}
       >
         <ProductLogo size={22} />
-      </div>
-      <UserAvatar
-        clickable
-        size={26}
-        style={{ cursor: 'pointer' }}
-        title={isSignedIn ? t('share.visitor.topBar.home') : t('share.visitor.access.signInCta')}
-        onClick={goHome}
-      />
+      </Link>
+      <Link
+        className={styles.brand}
+        reloadDocument={!isSignedIn}
+        to={homePath}
+        aria-label={
+          isSignedIn ? t('share.visitor.topBar.home') : t('share.visitor.access.signInCta')
+        }
+      >
+        <UserAvatar size={26} />
+      </Link>
     </Flexbox>
   );
 });
