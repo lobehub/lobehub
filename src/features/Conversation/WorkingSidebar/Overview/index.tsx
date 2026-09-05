@@ -22,8 +22,7 @@ import { useTranslation } from 'react-i18next';
 
 import RingLoadingIcon from '@/components/RingLoading';
 import {
-  CI_STATUS_VISUAL,
-  getCiStatusKey,
+  getCiVisual,
   getPullRequestState,
   PR_STATE_VISUAL,
 } from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
@@ -352,8 +351,8 @@ const Overview = memo<OverviewProps>(
     }, [deviceId, refreshGit, syncBusy, tDevice, workingDirectory]);
 
     const pullRequest = prData?.pullRequest;
-    const ciKey = pullRequest ? getCiStatusKey(pullRequest.ciStatus) : undefined;
-    const ci = ciKey ? CI_STATUS_VISUAL[ciKey] : undefined;
+    const ciStatus = pullRequest?.ciStatus;
+    const ci = pullRequest ? getCiVisual(ciStatus) : undefined;
     const prVisual = pullRequest ? PR_STATE_VISUAL[getPullRequestState(pullRequest)] : undefined;
 
     const showAhead = !!aheadBehind?.hasUpstream && aheadBehind.ahead > 0;
@@ -468,8 +467,10 @@ const Overview = memo<OverviewProps>(
                 trailing={
                   <>
                     <Icon icon={ci.icon} size={14} style={{ color: ci.color }} />
-                    {ciKey && shouldShowCiLabel(ciKey)
-                      ? t(`workingPanel.overview.ci.${ciKey}` as 'workingPanel.overview.ci.failure')
+                    {shouldShowCiLabel(ciStatus)
+                      ? t(
+                          `workingPanel.overview.ci.${ciStatus as 'failure' | 'pending'}` as 'workingPanel.overview.ci.failure',
+                        )
                       : null}
                   </>
                 }

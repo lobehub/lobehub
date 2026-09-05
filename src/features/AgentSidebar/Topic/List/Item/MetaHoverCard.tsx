@@ -11,9 +11,7 @@ import DirIcon from '@/features/ChatInput/ControlBar/DirIcon';
 import { useChatStore } from '@/store/chat';
 
 import {
-  CI_STATUS_VISUAL,
-  type CiStatusKey,
-  getCiStatusKey,
+  getCiVisual,
   getPullRequestState,
   getTopicMetaCard,
   PR_STATE_VISUAL,
@@ -90,13 +88,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const CI_LABEL_KEY: Record<CiStatusKey, string> = {
-  failure: 'metaCard.ci.failure',
-  pending: 'metaCard.ci.pending',
-  success: 'metaCard.ci.success',
-  unknown: 'metaCard.ci.none',
-};
-
 interface DetailRowProps {
   children: ReactNode;
   icon: typeof Clock;
@@ -147,8 +138,7 @@ const MetaHoverCard = memo<MetaHoverCardProps>(({ metadata, title, time, topicId
   if (!card) return null;
 
   const { repoName, repoType, branch, detached, worktreeName, pullRequest } = card;
-  const ciKey = pullRequest ? getCiStatusKey(pullRequest.ciStatus) : undefined;
-  const ci = ciKey ? { ...CI_STATUS_VISUAL[ciKey], labelKey: CI_LABEL_KEY[ciKey] } : undefined;
+  const ci = pullRequest ? getCiVisual(pullRequest.ciStatus) : undefined;
 
   return (
     <div className={styles.card}>
@@ -224,7 +214,7 @@ const MetaHoverCard = memo<MetaHoverCardProps>(({ metadata, title, time, topicId
 
       {ci && (
         <DetailRow icon={ci.icon} iconColor={ci.color}>
-          {t(ci.labelKey as 'metaCard.ci.none')}
+          {t(ci.labelKey)}
         </DetailRow>
       )}
     </div>

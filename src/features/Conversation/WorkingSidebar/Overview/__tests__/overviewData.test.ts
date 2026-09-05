@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { getCiStatusKey } from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
-
 import { collectChangeStats, isLinkedWorktreeCheckout, shouldShowCiLabel } from '../overviewData';
 
 describe('collectChangeStats', () => {
@@ -59,14 +57,6 @@ describe('shouldShowCiLabel', () => {
     expect(shouldShowCiLabel('pending')).toBe(true);
     expect(shouldShowCiLabel('success')).toBe(false);
     expect(shouldShowCiLabel('unknown')).toBe(false);
-  });
-});
-
-describe('getCiStatusKey', () => {
-  it('maps a missing or unrecognized status to unknown', () => {
-    expect(getCiStatusKey(undefined)).toBe('unknown');
-    expect(getCiStatusKey('success')).toBe('success');
-    expect(getCiStatusKey('failure')).toBe('failure');
-    expect(getCiStatusKey('pending')).toBe('pending');
+    expect(shouldShowCiLabel(undefined)).toBe(false);
   });
 });

@@ -1,7 +1,6 @@
 import type { GitWorkingTreePatches } from '@lobechat/electron-client-ipc';
-import type { DeviceGitWorktreeListItem } from '@lobechat/types';
+import type { DeviceGitPullRequestCiStatus, DeviceGitWorktreeListItem } from '@lobechat/types';
 
-import type { CiStatusKey } from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
 import { normalizeDisplayPath } from '@/features/ChatInput/ControlBar/worktreeHelpers';
 
 export interface OverviewChangeStats {
@@ -50,5 +49,5 @@ export const isLinkedWorktreeCheckout = (
  * Passing checks are the steady state and stay icon-only; only a failing or
  * still-running rollup earns a text label next to the PR row.
  */
-export const shouldShowCiLabel = (ciKey: CiStatusKey): boolean =>
-  ciKey === 'failure' || ciKey === 'pending';
+export const shouldShowCiLabel = (status?: DeviceGitPullRequestCiStatus): boolean =>
+  status === 'failure' || status === 'pending';
