@@ -34,7 +34,11 @@ export async function GET(request: NextRequest) {
   // Resolve the caller the same way the lambda tRPC context does (Better Auth
   // session cookie, `Oidc-Auth` JWT, or `X-API-Key`) so the CLI's existing
   // `getAgentStreamAuthInfo` headers keep working unchanged.
-  const { userId: callerUserId } = await createLambdaContext(request);
+  const {
+    apiKeyScopes,
+    userId: callerUserId,
+    workspaceId: callerWorkspaceId,
+  } = await createLambdaContext(request);
 
   if (!callerUserId) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
@@ -62,6 +66,15 @@ export async function GET(request: NextRequest) {
   // 404 rather than 403 so an unauthorized caller cannot distinguish "not mine"
   // from "does not exist".
   if (metadata.userId !== callerUserId) {
+    return NextResponse.json({ error: 'operation_not_found' }, { status: 404 });
+  }
+
+  // API keys are capability-bound to their own workspace. Do not let a key read
+  // another workspace's operation merely because both belong to the same user.
+  if (
+    apiKeyScopes !== undefined &&
+    (metadata.workspaceId ?? null) !== (callerWorkspaceId ?? null)
+  ) {
     return NextResponse.json({ error: 'operation_not_found' }, { status: 404 });
   }
 
