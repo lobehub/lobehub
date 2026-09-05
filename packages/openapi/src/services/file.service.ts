@@ -668,7 +668,7 @@ export class FileUploadService extends BaseService {
   private async assertStorageQuota(
     size: number,
     url: string,
-    transaction: Transaction,
+    transaction?: Transaction,
   ): Promise<void> {
     try {
       await businessFileUploadCheck({
@@ -819,14 +819,24 @@ export class FileUploadService extends BaseService {
         userId: this.userId,
       };
 
-      const createResult = await this.db.transaction(async (tx) => {
-        await this.assertStorageQuota(file.size, metadata.path, tx);
+      // Reject an obviously over-quota upload before spending the transfer. The
+      // authoritative check runs again under the owner lock once the bytes land,
+      // because only that one is atomic with the row it authorizes.
+      await this.assertStorageQuota(file.size, metadata.path);
 
-        // 5. Upload to S3
-        await this.s3Service.uploadBuffer(metadata.path, fileBuffer, file.type);
+      // 5. Upload to S3
+      await this.s3Service.uploadBuffer(metadata.path, fileBuffer, file.type);
 
-        return this.fileModel.create(fileRecord, true, tx);
-      });
+      const createResult = await this.db
+        .transaction(async (tx) => {
+          await this.assertStorageQuota(file.size, metadata.path, tx);
+
+          return this.fileModel.create(fileRecord, true, tx);
+        })
+        .catch(async (error) => {
+          await this.s3Service.deleteFile(metadata.path).catch(() => {});
+          throw error;
+        });
 
       // If sessionId is provided (supports agentId resolution), create file-session association
       if (resolvedSessionId) {

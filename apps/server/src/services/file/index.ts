@@ -26,7 +26,7 @@ export interface FileAccessUrlItem {
  * Provides file operation services using a modular implementation approach
  */
 export class FileService {
-  readonly db: LobeChatDatabase;
+  private db: LobeChatDatabase;
 
   private userId: string;
   private fileModel: FileModel;
@@ -395,7 +395,12 @@ export class FileService {
     buffer: Buffer,
     mimeType: string,
     pathname: string,
-    trx?: Transaction,
+    /**
+     * Runs inside the transaction that writes the file row, so an admission check
+     * can hold its owner lock without spanning the upload itself. The stored object
+     * is removed again when it rejects.
+     */
+    beforeRecord?: (trx: Transaction) => Promise<void>,
   ): Promise<{ fileId: string; key: string; url: string }> {
     // Use uploadBuffer with explicit contentType so S3 Content-Type matches
     // the actual bytes (e.g. PNG buffer won't get image/jpeg from .jpg pathname)
@@ -413,23 +418,32 @@ export class FileService {
     const filename = parts.pop() || name;
     const dirname = parts.join('/');
 
-    const { fileId: createdId, url } = await this.createFileRecord(
-      {
-        fileHash: hash,
-        fileType: mimeType,
-        id: fileId,
-        metadata: {
-          date: new Date().toISOString().slice(0, 10),
-          dirname,
-          filename,
-          path: pathname,
-        },
-        name,
-        size,
-        url: key,
-      },
-      trx,
-    );
+    const { fileId: createdId, url } = await this.db
+      .transaction(async (trx) => {
+        await beforeRecord?.(trx);
+
+        return this.createFileRecord(
+          {
+            fileHash: hash,
+            fileType: mimeType,
+            id: fileId,
+            metadata: {
+              date: new Date().toISOString().slice(0, 10),
+              dirname,
+              filename,
+              path: pathname,
+            },
+            name,
+            size,
+            url: key,
+          },
+          trx,
+        );
+      })
+      .catch(async (error) => {
+        await this.deleteFile(key).catch(() => {});
+        throw error;
+      });
 
     return { fileId: createdId, key, url };
   }

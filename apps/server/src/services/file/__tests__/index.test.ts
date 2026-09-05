@@ -52,7 +52,7 @@ vi.mock('@lobechat/utils', async (importOriginal) => {
 
 describe('FileService', () => {
   let service: FileService;
-  const mockDb = {} as any;
+  const mockDb = { transaction: (run: (tx: unknown) => unknown) => run({}) } as any;
   const mockUserId = 'test-user';
   let mockFileModel: any;
   let mockTempManager: any;
@@ -408,7 +408,7 @@ describe('FileService', () => {
           }),
         }),
         expect.any(Boolean),
-        undefined,
+        expect.anything(),
       );
     });
 
