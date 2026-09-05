@@ -113,10 +113,10 @@ export function classify(title: string, body: string): Classification {
     /\b(?:market-)?cli\b.+(?:fail|error|issue|problem|bug|not work|can'?t|cannot|unable|reject)/s.test(
       text,
     ) ||
-    /(?:fail|error|unable|can'?t|cannot|reject).*(?:add|list|submit|publish|login|connect|claim|verify ownership)/s.test(
+    /(?:fail|error|unable|can'?t|cannot|reject).*(?:add|submit|publish|login|connect|claim|verify ownership)/s.test(
       text,
     ) ||
-    /(?:add|list|submit|publish|login|connect|claim|verify ownership).*(?:fail|error|unable|can'?t|cannot|reject)/s.test(
+    /(?:add|\blist\b|submit|publish|login|connect|claim|verify ownership).*(?:fail|error|unable|can'?t|cannot|reject)/s.test(
       text,
     );
 
