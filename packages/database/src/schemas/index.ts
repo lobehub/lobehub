@@ -21,6 +21,7 @@ export * from './documentComment';
 export * from './documentHistory';
 export * from './documentLike';
 export * from './documentShare';
+export * from './evolution';
 export * from './expertise';
 export * from './file';
 export * from './ftsSearchSyncOutbox';

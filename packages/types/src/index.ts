@@ -21,6 +21,7 @@ export * from './documentComment';
 export * from './documentLike';
 export * from './entityId';
 export * from './eval';
+export * from './evolution';
 export * from './expertise';
 export * from './export';
 export * from './fetch';

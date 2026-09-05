@@ -1259,6 +1259,59 @@ table document_shares {
   }
 }
 
+table evolution_nodes {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  tree_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  parent_id uuid
+  seq integer [not null]
+  content text [not null]
+  summary text
+  status text [not null, default: 'pending']
+  score "numeric(20, 6)"
+  error text
+  visits integer [not null, default: 0]
+  operation_id text
+  metadata jsonb
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (tree_id, seq) [name: 'evolution_nodes_tree_seq_unique', unique]
+    (tree_id, score) [name: 'evolution_nodes_tree_score_idx']
+    (tree_id, parent_id) [name: 'evolution_nodes_tree_parent_idx']
+    user_id [name: 'evolution_nodes_user_id_idx']
+    workspace_id [name: 'evolution_nodes_workspace_id_idx']
+    
+  }
+}
+
+table evolution_trees {
+  id text [pk, not null]
+  user_id text [not null]
+  workspace_id text
+  subject_type text [not null]
+  subject_id text
+  title text [not null]
+  objective text [not null]
+  scorer jsonb [not null]
+  config jsonb
+  status text [not null, default: 'pending']
+  operation_id text
+  metadata jsonb
+  started_at "timestamp with time zone"
+  completed_at "timestamp with time zone"
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'evolution_trees_user_id_idx']
+    workspace_id [name: 'evolution_trees_workspace_id_idx']
+    (subject_type, subject_id) [name: 'evolution_trees_subject_idx']
+    status [name: 'evolution_trees_status_idx']
+  }
+}
+
 table expertise_bindings {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   domain_id varchar(255) [not null]
