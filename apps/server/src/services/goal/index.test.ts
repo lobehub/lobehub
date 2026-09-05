@@ -478,6 +478,71 @@ describe('GoalService', () => {
     await expect(service.updateRequirement('goal_missing', 'x')).rejects.toThrow();
   });
 
+  it('hands the goal and its unfinished tasks to a new agent', async () => {
+    await serverDB.insert(agents).values([
+      { id: 'agt_old', slug: 'agt-old', userId },
+      { id: 'agt_new', slug: 'agt-new', userId },
+    ]);
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({
+      agentId: 'agt_old',
+      tasks: ['Only task'],
+      title: 'Handover',
+    });
+    const created = await service.tick(graph.goal.id);
+    expect((await taskModel.findById(created.taskId!))?.assigneeAgentId).toBe('agt_old');
+
+    const handed = await service.setAgent(graph.goal.id, 'agt_new');
+
+    expect(handed.goal.agentId).toBe('agt_new');
+    expect(handed.reassignedTaskIds).toEqual([created.taskId]);
+    expect((await taskModel.findById(created.taskId!))?.assigneeAgentId).toBe('agt_new');
+
+    // A finished task keeps the agent that did the work, and `goalOnly` limits
+    // the change to future coordinator-created tasks.
+    await taskModel.updateStatus(created.taskId!, 'completed');
+    const back = await service.setAgent(graph.goal.id, 'agt_old');
+    expect(back.reassignedTaskIds).toEqual([]);
+    expect((await taskModel.findById(created.taskId!))?.assigneeAgentId).toBe('agt_new');
+
+    await expect(service.setAgent(graph.goal.id, 'agt_missing')).rejects.toThrow();
+  });
+
+  it('restarts unfinished tasks under a new agent and cancels the stale runs they hold', async () => {
+    const cancelSpy = vi.spyOn(TaskService.prototype, 'cancelTopic').mockResolvedValue();
+    await serverDB.insert(agents).values({ id: 'agt_restart', slug: 'agt-restart', userId });
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({ tasks: ['Stuck task'], title: 'Restartable' });
+    const created = await service.tick(graph.goal.id);
+    await serverDB.insert(topics).values({ id: 'tpc_restart', userId });
+    await new TaskTopicModel(serverDB, userId).add(created.taskId!, 'tpc_restart', { seq: 1 });
+    await new TaskTopicModel(serverDB, userId).updateStatus(
+      created.taskId!,
+      'tpc_restart',
+      'running',
+    );
+    await taskModel.update(created.taskId!, { error: 'lease expired', status: 'running' });
+
+    const result = await service.restart(graph.goal.id, { agentId: 'agt_restart' });
+
+    expect(cancelSpy).toHaveBeenCalledWith('tpc_restart');
+    expect(result.goal.agentId).toBe('agt_restart');
+    expect(result.restartedTaskIds).toEqual([created.taskId]);
+    expect(await taskModel.findById(created.taskId!)).toMatchObject({
+      assigneeAgentId: 'agt_restart',
+      error: null,
+      status: 'backlog',
+    });
+
+    // "Start over" on a parked goal must begin ticking again without a second
+    // Resume gesture.
+    await service.pause(graph.goal.id);
+    const resumed = await service.restart(graph.goal.id);
+    expect(resumed.goal.status).not.toBe('paused');
+  });
+
   it('leaves a deliberately paused goal paused when its budget changes', async () => {
     // Nothing distinguishes a user pause from a budget pause on the row, so the
     // reopen is limited to goals whose budget was actually binding.

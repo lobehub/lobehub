@@ -709,6 +709,95 @@ export class GoalService {
     return goal;
   };
 
+  /**
+   * Hand the goal to a different responsible agent. Every Task the
+   * coordinator creates from here on is assigned to the new agent, and —
+   * unless the caller opts out — the graph's unfinished Tasks move with it.
+   * A Task mid-run keeps its current operation; the reassignment takes effect
+   * on its next dispatched attempt, because `runTask` reads the assignee at
+   * dispatch time.
+   */
+  setAgent = async (
+    goalId: string,
+    agentId: string,
+    options?: { goalOnly?: boolean },
+  ): Promise<{ goal: GoalItem; reassignedTaskIds: string[] }> => {
+    await assertAgentUsableBy(this.db, agentId, {
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    });
+    const graph = await this.requireGraph(goalId);
+    const goal = await this.goalModel.update(goalId, { agentId });
+    if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+
+    const reassignedTaskIds: string[] = [];
+    if (!options?.goalOnly) {
+      const taskIds = graph.nodes.flatMap((node) => (node.taskId ? [node.taskId] : []));
+      for (const task of await this.taskModel.findByIds(taskIds)) {
+        if (task.status === 'completed' || task.status === 'canceled') continue;
+        if (task.assigneeAgentId === agentId) continue;
+        await this.taskModel.update(task.id, { assigneeAgentId: agentId });
+        reassignedTaskIds.push(task.id);
+      }
+    }
+    return { goal, reassignedTaskIds };
+  };
+
+  /**
+   * Start every unfinished Task node over: interrupt the run it may still be
+   * holding, clear the failure it may be parked on, and return the Task to
+   * `backlog` so the next coordinator tick dispatches it afresh. Optionally
+   * hands the goal (and the restarted Tasks) to a different agent in the same
+   * gesture. Resolved nodes and their completed Tasks are left untouched.
+   */
+  restart = async (
+    goalId: string,
+    options?: { agentId?: string },
+  ): Promise<{ goal: GoalItem; restartedTaskIds: string[] }> => {
+    if (options?.agentId) {
+      await assertAgentUsableBy(this.db, options.agentId, {
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      });
+    }
+    const graph = await this.requireGraph(goalId);
+    let goal = graph.goal;
+    if (options?.agentId) {
+      const updated = await this.goalModel.update(goalId, { agentId: options.agentId });
+      if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+      goal = updated;
+    }
+
+    const unfinishedTaskIds = graph.nodes.flatMap((node) =>
+      node.kind === 'task' && node.taskId && !TERMINAL_NODE_STATUSES.has(node.status)
+        ? [node.taskId]
+        : [],
+    );
+    const restartedTaskIds: string[] = [];
+    if (unfinishedTaskIds.length > 0) {
+      const runningTopics = await this.taskTopicModel.findRunningByTaskIds(unfinishedTaskIds);
+      for (const topic of runningTopics) {
+        if (topic.topicId) await this.taskService.cancelTopic(topic.topicId);
+      }
+      for (const task of await this.taskModel.findByIds(unfinishedTaskIds)) {
+        if (task.status === 'completed') continue;
+        await this.taskModel.update(task.id, {
+          ...(options?.agentId && { assigneeAgentId: options.agentId }),
+          error: null,
+          status: 'backlog',
+        });
+        restartedTaskIds.push(task.id);
+      }
+    }
+
+    // A restart is an explicit "start over": a goal parked by a budget stop or
+    // a manual pause must begin ticking again without a second gesture.
+    if (goal.status === 'paused') {
+      goal = (await this.resume(goalId)) ?? goal;
+    }
+    return { goal, restartedTaskIds };
+  };
+
   setBudget = async (
     goalId: string,
     budget: {

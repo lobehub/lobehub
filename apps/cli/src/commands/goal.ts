@@ -402,6 +402,28 @@ export function registerGoalCommand(program: Command) {
     });
 
   goal
+    .command('set-agent <id> <agent>')
+    .description('Hand the goal to a different responsible agent (unfinished tasks follow)')
+    .option('--goal-only', 'Only change the goal-level agent; leave existing tasks as assigned')
+    .action(async (id: string, agentId: string, options: { goalOnly?: boolean }) => {
+      const result = await (
+        await getTrpcClient()
+      ).goal.setAgent.mutate({ agentId, goalOnly: options.goalOnly, id });
+      log.info(result.message);
+    });
+
+  goal
+    .command('restart <id>')
+    .description('Start every unfinished task over (cancel stale runs, reset to backlog)')
+    .option('--agent <id>', 'Also hand the goal and restarted tasks to this agent')
+    .action(async (id: string, options: { agent?: string }) => {
+      const result = await (
+        await getTrpcClient()
+      ).goal.restart.mutate({ agentId: options.agent, id });
+      log.info(`${result.message}. Resume ticking with: lh goal run ${id}`);
+    });
+
+  goal
     .command('decisions <id>')
     .description('List durable decision gates')
     .option('--json [fields]', 'Output JSON')
