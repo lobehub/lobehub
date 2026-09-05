@@ -55,7 +55,7 @@ const ReasoningTokenSlider80k = memo<ReasoningTokenSlider80kProps>(
 
     return (
       <Flexbox horizontal align={'center'} gap={12} paddingInline={'4px 0'}>
-        <Flexbox flex={1} style={{ minWidth: 200, maxWidth: 320 }}>
+        <Flexbox flex={1} style={{ minWidth: 200, maxWidth: 360 }}>
           <DiscreteSlider
             options={options}
             value={sliderIndex}
