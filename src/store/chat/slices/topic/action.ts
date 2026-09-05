@@ -615,8 +615,15 @@ export class ChatTopicActionImpl {
   ): Promise<void> => {
     const containerKey = topicSelectors.getTopicContainerKeyById(id)(this.#get());
     const previous = topicSelectors.getTopicById(id)(this.#get());
+    if (!previous) return;
+    this.#get().internal_dispatchTopic({
+      containerKey,
+      id,
+      type: 'updateTopic',
+      value: { metadata: { ...previous.metadata, ...metadata } },
+    });
     try {
-      await this.#get().updateTopicMetadata(id, metadata);
+      await topicService.updateTopicMetadata(id, metadata);
     } catch (error) {
       if (previous) {
         this.#get().internal_dispatchTopic({
@@ -628,6 +635,7 @@ export class ChatTopicActionImpl {
       }
       await this.#recoverTopicPinWrite(containerKey, error);
     }
+    await this.#get().refreshTopic(containerKey);
   };
 
   /** Local rollback must survive an offline refresh and preserve the original write failure. */

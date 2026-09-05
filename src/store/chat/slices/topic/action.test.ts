@@ -662,6 +662,28 @@ describe('topic action', () => {
       });
     };
 
+    it('keeps a persisted effort when only the follow-up refresh fails', async () => {
+      seedTopic();
+      vi.spyOn(topicService, 'updateTopicMetadata').mockResolvedValue([]);
+      vi.spyOn(useChatStore.getState(), 'refreshTopic').mockRejectedValue(
+        new Error('refresh failed'),
+      );
+      await act(async () => {
+        await expect(
+          useChatStore
+            .getState()
+            .updateTopicReasoningConfig('topic-1', { reasoningEffort: 'high' }),
+        ).rejects.toThrow('refresh failed');
+      });
+      expect(useChatStore.getState().topicDataMap[KEY]?.items[0].metadata?.reasoningConfig).toEqual(
+        {
+          reasoningEffort: 'high',
+          reasoningMode: 'standard',
+        },
+      );
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
     it('serializes consecutive selections through persistence and refresh', async () => {
       seedTopic();
       let finishFirst!: () => void;

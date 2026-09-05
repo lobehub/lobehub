@@ -95,6 +95,7 @@ vi.mock('@/database/models/topic', () => ({
     releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
     tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
     create: mockTopicCreate,
+    armScheduledRun: vi.fn().mockResolvedValue(undefined),
     findById: mockTopicFindById,
   })),
 }));
@@ -209,28 +210,39 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     expect(callArgs.agentConfig.provider).toBe('openai');
   });
 
-  it('pins the member-selected model when precreating a group topic', async () => {
-    mockGetAgentConfig.mockResolvedValue({
-      ...defaultAgentConfig,
-      agencyConfig: { modelSelectionPolicy: 'member' },
-      userId: 'agent-author',
-      visibility: 'public',
-      workspaceId: 'workspace-1',
-    });
-    mockGetPreference.mockResolvedValue({
-      agentModelOverrides: { 'agent-1': { model: 'claude-sonnet-4-6', provider: 'anthropic' } },
-    });
-    service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
-    const runSpy = vi
-      .spyOn(service, 'execAgent')
-      .mockResolvedValue({} as Awaited<ReturnType<AiAgentService['execAgent']>>);
-    await service.execGroupAgent({ agentId: 'agent-1', groupId: 'group-1', message: 'Group' });
-    expect(mockTopicCreate.mock.calls[0][0]).toMatchObject({
-      model: 'claude-sonnet-4-6',
-      provider: 'anthropic',
-    });
-    runSpy.mockRestore();
-  });
+  it.each(['group', 'scheduled'])(
+    'pins the member-selected model when precreating a %s topic',
+    async (kind) => {
+      mockGetAgentConfig.mockResolvedValue({
+        ...defaultAgentConfig,
+        agencyConfig: { modelSelectionPolicy: 'member' },
+        userId: 'agent-author',
+        visibility: 'public',
+        workspaceId: 'workspace-1',
+      });
+      mockGetPreference.mockResolvedValue({
+        agentModelOverrides: { 'agent-1': { model: 'claude-sonnet-4-6', provider: 'anthropic' } },
+      });
+      service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+      const runSpy = vi
+        .spyOn(service, 'execAgent')
+        .mockResolvedValue({} as Awaited<ReturnType<AiAgentService['execAgent']>>);
+      if (kind === 'group') {
+        await service.execGroupAgent({ agentId: 'agent-1', groupId: 'group-1', message: 'Group' });
+      } else {
+        await service.scheduleAgentRun({
+          agentId: 'agent-1',
+          prompt: 'Scheduled',
+          runAt: new Date(Date.now() + 60_000).toISOString(),
+        });
+      }
+      expect(mockTopicCreate.mock.calls[0][0]).toMatchObject({
+        model: 'claude-sonnet-4-6',
+        provider: 'anthropic',
+      });
+      runSpy.mockRestore();
+    },
+  );
 
   it('should override model when model param is provided', async () => {
     mockGetAgentConfig.mockResolvedValue({ ...defaultAgentConfig });
