@@ -1674,9 +1674,26 @@ export class TopicModel {
   // **************** Update *************** //
 
   update = async (id: string, data: Partial<TopicItem>) => {
+    /**
+     * Older clients switch models through the general update endpoint. Clear
+     * the old model's reasoning pin in the same statement, comparing against
+     * the persisted row so partial writes and concurrent switches stay safe.
+     * Explicit metadata remains the caller's replacement snapshot.
+     */
+    const modelChanged = or(
+      data.model !== undefined ? sql`${topics.model} is distinct from ${data.model}` : undefined,
+      data.provider !== undefined
+        ? sql`${topics.provider} is distinct from ${data.provider}`
+        : undefined,
+    );
+    const metadata =
+      data.metadata === undefined && modelChanged
+        ? sql`case when ${modelChanged} then coalesce(${topics.metadata}, '{}'::jsonb) - 'reasoningConfig' else ${topics.metadata} end`
+        : data.metadata;
+
     return this.db
       .update(topics)
-      .set({ ...data, updatedAt: new Date() })
+      .set({ ...data, metadata, updatedAt: new Date() })
       .where(and(eq(topics.id, id), this.ownership()))
       .returning();
   };

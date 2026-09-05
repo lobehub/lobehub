@@ -93,7 +93,7 @@ import {
 } from '@/store/chat/utils/compression';
 import { isLocalOnlyMessage } from '@/store/chat/utils/localMessages';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
-import { snapshotAgentModel } from '@/store/chat/utils/snapshotAgentModel';
+import { snapshotAgentModel, snapshotAgentReasoning } from '@/store/chat/utils/snapshotAgentModel';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { deviceSelectors, getDeviceStoreState } from '@/store/device';
 import { getElectronStoreState } from '@/store/electron';
@@ -1059,6 +1059,9 @@ export class ConversationLifecycleActionImpl {
     const newTopicModelSnapshot = willCreateNewTopic
       ? snapshotAgentModel(operationContext.agentId)
       : undefined;
+    const newTopicReasoningSnapshot = newTopicModelSnapshot
+      ? snapshotAgentReasoning(operationContext.agentId, newTopicModelSnapshot)
+      : undefined;
 
     // Adopt the minted topic id NOW, synchronously with the optimistic message
     // dispatch above: insert the sidebar row and point `activeTopicId` at it in
@@ -1194,7 +1197,7 @@ export class ConversationLifecycleActionImpl {
         : [];
     // Example: a pending repo topic without this metadata renders under "No
     // directory" until the server row lands.
-    const optimisticTopicMetadata: ChatTopicMetadata | undefined =
+    const workingDirectoryMetadata: ChatTopicMetadata | undefined =
       pendingTopicRepos.length > 0
         ? {
             repos: pendingTopicRepos,
@@ -1207,6 +1210,10 @@ export class ConversationLifecycleActionImpl {
               ...(workingDirectoryConfig ? { workingDirectoryConfig } : {}),
             }
           : undefined;
+    /** First-send persistence bypasses turnSetup, so both runtime paths must carry the effort snapshot. */
+    const optimisticTopicMetadata = newTopicReasoningSnapshot
+      ? { ...workingDirectoryMetadata, ...newTopicReasoningSnapshot }
+      : workingDirectoryMetadata;
 
     // The sidebar row was already inserted (title + model) before the awaits
     // above; the cwd/repos metadata only resolves here, so patch it on now.
@@ -1365,12 +1372,7 @@ export class ConversationLifecycleActionImpl {
               ? {
                   // Same id the optimistic sidebar row already uses.
                   id: optimisticTopic?.id,
-                  metadata: workingDirectory
-                    ? {
-                        workingDirectory,
-                        ...(workingDirectoryConfig ? { workingDirectoryConfig } : {}),
-                      }
-                    : undefined,
+                  metadata: optimisticTopicMetadata,
                   ...newTopicModelSnapshot,
                   title: newTopicTitle,
                   topicMessageIds: messages.map((m) => m.id),

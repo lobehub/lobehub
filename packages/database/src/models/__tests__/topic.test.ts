@@ -713,6 +713,41 @@ describe('TopicModel', () => {
   });
 
   describe('update', () => {
+    it.each([{ model: 'b' }, { provider: 'other' }, { model: null }])(
+      'clears stale reasoning on a legacy model update %j',
+      async (patch) => {
+        const topic = await topicModel.create({
+          metadata: {
+            reasoningConfig: { reasoningEffort: 'high' },
+            heteroEffort: 'low',
+            workingDirectory: '/w',
+          },
+          model: 'a',
+          provider: 'openai',
+          title: 'legacy',
+        });
+        const [updated] = await topicModel.update(topic.id, { ...patch, title: 'changed' });
+        expect(updated.metadata).toEqual({ heteroEffort: 'low', workingDirectory: '/w' });
+        expect(updated.title).toBe('changed');
+        expect(updated).toMatchObject(patch);
+      },
+    );
+
+    it.each([{ title: 'renamed' }, { model: 'a', provider: 'openai' }])(
+      'preserves reasoning when the model does not change %j',
+      async (patch) => {
+        const metadata = { reasoningConfig: { reasoningEffort: 'high' as const } };
+        const topic = await topicModel.create({
+          metadata,
+          model: 'a',
+          provider: 'openai',
+          title: 'pin',
+        });
+        const [updated] = await topicModel.update(topic.id, patch);
+        expect(updated.metadata).toEqual(metadata);
+      },
+    );
+
     it('updates status and bumps updatedAt', async () => {
       const topic = await topicModel.create({ title: 'to update' });
       const before = topic.updatedAt.getTime();

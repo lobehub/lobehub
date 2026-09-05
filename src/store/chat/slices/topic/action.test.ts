@@ -536,7 +536,11 @@ describe('topic action', () => {
               items: [
                 {
                   id: 'topic-1',
-                  metadata: { reasoningConfig: { reasoningEffort: 'low', reasoningMode: 'fast' } },
+                  metadata: {
+                    reasoningConfig: { reasoningEffort: 'low', reasoningMode: 'standard' },
+                  },
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
                   title: 'Topic',
                 } as ChatTopic,
               ],
@@ -558,7 +562,7 @@ describe('topic action', () => {
       });
 
       expect(spy).toHaveBeenCalledWith('topic-1', {
-        reasoningConfig: { reasoningEffort: 'high', reasoningMode: 'fast' },
+        reasoningConfig: { reasoningEffort: 'high', reasoningMode: 'standard' },
       });
     });
 
