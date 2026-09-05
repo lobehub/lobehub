@@ -39,6 +39,7 @@ import type { ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { getFileStoreState } from '@/store/file/store';
+import { getServerConfigStoreState } from '@/store/serverConfig';
 import type { StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import {
@@ -465,7 +466,10 @@ export class GatewayActionImpl {
    * has not disabled it. `disableGatewayMode: undefined` means enabled.
    */
   isGatewayModeEnabled = (agentId?: string): boolean => {
-    const serverConfig = window.global_serverConfigStore?.getState()?.serverConfig;
+    const serverConfig =
+      (typeof window !== 'undefined'
+        ? window.global_serverConfigStore?.getState()?.serverConfig
+        : undefined) ?? getServerConfigStoreState()?.serverConfig;
     const agentState = getAgentStoreState();
     const resolvedAgentId = agentId ?? agentState.activeAgentId;
     const agentDisableGatewayMode = resolvedAgentId

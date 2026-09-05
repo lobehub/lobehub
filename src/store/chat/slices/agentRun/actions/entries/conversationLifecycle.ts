@@ -449,12 +449,12 @@ export class ConversationLifecycleActionImpl {
     });
     const isGatewayMode = this.#get().isGatewayModeEnabled(agentId);
     // Legacy agents may only carry `model: '<cli-type>'`. Keep gateway routing
-    // unchanged when it is available, but recover the provider before the
-    // desktop-only local fallback so both runtime selection and the executor
-    // receive the same heterogeneous identity.
+    // unchanged when it is available. Recover the provider when gateway mode is
+    // off so desktop can still spawn locally and non-desktop (Android/web) still
+    // routes through Gateway instead of the Provider API.
     const heterogeneousProvider =
       agencyConfig?.heterogeneousProvider ??
-      (isDesktop && !isGatewayMode && isHeterogeneousAgentModelId(agentConfig?.model)
+      (!isGatewayMode && isHeterogeneousAgentModelId(agentConfig?.model)
         ? { type: agentConfig.model }
         : undefined);
     const runtimeType = selectRuntimeType({

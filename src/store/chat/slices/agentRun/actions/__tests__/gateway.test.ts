@@ -8,6 +8,7 @@ import { messageService } from '@/services/message';
 import { shareChatService } from '@/services/shareChat';
 import { topicService } from '@/services/topic';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import * as serverConfigStore from '@/store/serverConfig';
 
 import type { GatewayConnection } from '../transports/gateway/gateway';
 import { GatewayActionImpl } from '../transports/gateway/gateway';
@@ -241,6 +242,21 @@ describe('GatewayActionImpl', () => {
       });
 
       expect(action.isGatewayModeEnabled('agent-1')).toBe(false);
+    });
+
+    it('reads serverConfig from the module store when window.global_serverConfigStore is missing', () => {
+      // Android / React Native hydrates createServerConfigStore but does not
+      // always attach it to `window`. Dispatch must still see ENABLE_AGENT_GATEWAY.
+      const { action } = createTestAction();
+      (globalThis as any).window = {};
+      vi.spyOn(serverConfigStore, 'getServerConfigStoreState').mockReturnValue({
+        serverConfig: {
+          agentGatewayUrl: 'wss://gateway.test.com',
+          enableGatewayMode: true,
+        },
+      } as ReturnType<typeof serverConfigStore.getServerConfigStoreState>);
+
+      expect(action.isGatewayModeEnabled('agent-1')).toBe(true);
     });
   });
 
