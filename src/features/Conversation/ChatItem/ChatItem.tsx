@@ -39,6 +39,7 @@ const ChatItem = memo<ChatItemProps>(
     onDoubleClick,
     aboveMessage,
     belowMessage,
+    headerAddon,
     showAvatar = true,
     titleAddon,
     disabled = false,
@@ -86,6 +87,7 @@ const ChatItem = memo<ChatItemProps>(
         >
           {showAvatar &&
             (customAvatarRender ? customAvatarRender(avatar, avatarContent) : avatarContent)}
+          {headerAddon}
           <Title avatar={avatar} showTitle={showTitle} time={time} titleAddon={titleAddon} />
         </Flexbox>
         <Flexbox

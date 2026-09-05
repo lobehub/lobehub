@@ -12,6 +12,7 @@ import SafeBoundary from '@/components/ErrorBoundary';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
+import type { ChatRowContinuation } from '../ChatList/utils/chatRows';
 import History from '../components/History';
 import { useChatItemContextMenu } from '../hooks/useChatItemContextMenu';
 import MessageSelectionWrapper from '../MessageForward/MessageSelectionWrapper';
@@ -49,6 +50,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 export interface MessageItemProps {
   className?: string;
+  continuations?: ChatRowContinuation[];
   defaultWorkflowExpandLevel?: WorkflowExpandLevelDefault;
   disableEditing?: boolean;
   enableHistoryDivider?: boolean;
@@ -56,6 +58,7 @@ export interface MessageItemProps {
   footerRender?: ReactNode;
   id: string;
   index: number;
+  inlineSteer?: boolean;
   inPortalThread?: boolean;
   isLatestItem?: boolean;
 }
@@ -63,6 +66,7 @@ export interface MessageItemProps {
 const MessageItem = memo<MessageItemProps>(
   ({
     className,
+    continuations,
     defaultWorkflowExpandLevel,
     enableHistoryDivider,
     id,
@@ -71,6 +75,7 @@ const MessageItem = memo<MessageItemProps>(
     disableEditing,
     inPortalThread = false,
     index,
+    inlineSteer,
     isLatestItem,
   }) => {
     const topic = useConversationStore((s) => s.context.topicId);
@@ -170,11 +175,13 @@ const MessageItem = memo<MessageItemProps>(
         case 'assistantGroup': {
           return (
             <AssistantGroupMessage
+              continuations={continuations}
               defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
               disableEditing={effectiveDisableEditing}
               footerRender={footerRender}
               id={id}
               index={index}
+              inlineSteer={inlineSteer}
               isLatestItem={isLatestItem}
             />
           );
@@ -187,11 +194,13 @@ const MessageItem = memo<MessageItemProps>(
           // turn. Keeps a single code path instead of a thinner duplicate.
           return (
             <AssistantGroupMessage
+              continuations={continuations}
               defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
               disableEditing={effectiveDisableEditing}
               footerRender={footerRender}
               id={id}
               index={index}
+              inlineSteer={inlineSteer}
               isLatestItem={isLatestItem}
             />
           );
@@ -239,11 +248,13 @@ const MessageItem = memo<MessageItemProps>(
       return null;
     }, [
       role,
+      continuations,
       defaultWorkflowExpandLevel,
       effectiveDisableEditing,
       footerRender,
       id,
       index,
+      inlineSteer,
       isLatestItem,
     ]);
 
