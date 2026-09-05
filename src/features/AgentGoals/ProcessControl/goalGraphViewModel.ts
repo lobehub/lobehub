@@ -23,6 +23,9 @@ import type {
 /** Mirrors the reclaim window the coordinator uses when a Task holds no lease. */
 const DEFAULT_LEASE_TIMEOUT_MS = 15 * 60 * 1000;
 
+/** Mirrors the coordinator's grace period for a delivered task's verification. */
+const VERIFY_SETTLE_GRACE_MS = 60 * 60 * 1000;
+
 /** How many just-finished tasks stay visible so the list fades instead of items vanishing. */
 export const RECENT_DONE = 2;
 
@@ -88,6 +91,8 @@ export interface GoalNodeView {
   humanTouches: GoalGraphDecision[];
   /** Active for longer than the lease window with no heartbeat — the coordinator would reclaim it. */
   isStale: boolean;
+  /** Delivered and waiting for its Acceptance judgment to settle. */
+  isVerifying: boolean;
   node: GoalGraphNode;
   /** The Task that produced this finding. */
   producedBy?: GoalGraphNode;
@@ -113,7 +118,7 @@ export const isTroubledTaskNode = (view: GoalNodeView): boolean => {
   return view.attempts.at(-1)?.outcome === 'failed';
 };
 
-export type FrontierItemKind = 'gate' | 'stale' | 'running' | 'ready' | 'done';
+export type FrontierItemKind = 'gate' | 'stale' | 'verifying' | 'running' | 'ready' | 'done';
 
 export interface FrontierItem {
   key: string;
@@ -344,7 +349,11 @@ export const buildGoalGraphView = (
       heartbeatAt,
       humanTouches: nodeDecisions.filter((d) => d.status === 'resolved' && !!d.resolvedByUserId),
       isStale:
-        node.kind === 'task' && node.status === 'active' && now - heartbeatAt.getTime() > lease,
+        node.kind === 'task' &&
+        node.status === 'active' &&
+        !isVerifying &&
+        now - heartbeatAt.getTime() > lease,
+      isVerifying,
       node,
       producedBy: producedByFinding.get(node.id),
       seq: node.kind === 'task' ? ++seq : undefined,
@@ -367,7 +376,7 @@ export const buildGoalGraphView = (
     if (node.status === 'active') {
       frontier.push({
         key: node.id,
-        kind: view.isStale ? 'stale' : 'running',
+        kind: view.isStale ? 'stale' : view.isVerifying ? 'verifying' : 'running',
         rank: view.isStale ? 0 : 1,
         view,
       });

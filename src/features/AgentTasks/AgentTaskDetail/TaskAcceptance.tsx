@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import {
   type AcceptanceCheck,
+  AcceptanceCheckRow,
   checkDisplayTitle,
   checkHeadMeta,
   CriterionList,
@@ -59,6 +60,8 @@ const styles = createStaticStyles(({ css }) => ({
     padding-inline: 12px;
   `,
 }));
+
+const readOnlyReview = async () => false;
 
 interface AcceptanceErrorProps {
   onRetry: () => void;
@@ -338,23 +341,47 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
                               />
                             </Flexbox>
                             {!collapsed &&
-                              group.checks.map((check) => (
-                                <CompactCheckRow
-                                  check={check}
-                                  key={check.id}
-                                  onOpen={() => openCheck(bundle.acceptance.id, check.id)}
-                                />
-                              ))}
+                              group.checks.map((check) =>
+                                variant === 'result' ? (
+                                  <AcceptanceCheckRow
+                                    canReview={false}
+                                    check={check}
+                                    expanded={false}
+                                    key={check.id}
+                                    reviewPending={false}
+                                    onReview={readOnlyReview}
+                                    onToggle={() => openCheck(bundle.acceptance.id, check.id)}
+                                  />
+                                ) : (
+                                  <CompactCheckRow
+                                    check={check}
+                                    key={check.id}
+                                    onOpen={() => openCheck(bundle.acceptance.id, check.id)}
+                                  />
+                                ),
+                              )}
                           </Flexbox>
                         );
                       })
-                    : checks.map((check) => (
-                        <CompactCheckRow
-                          check={check}
-                          key={check.id}
-                          onOpen={() => openCheck(bundle.acceptance.id, check.id)}
-                        />
-                      ))}
+                    : checks.map((check) =>
+                        variant === 'result' ? (
+                          <AcceptanceCheckRow
+                            canReview={false}
+                            check={check}
+                            expanded={false}
+                            key={check.id}
+                            reviewPending={false}
+                            onReview={readOnlyReview}
+                            onToggle={() => openCheck(bundle.acceptance.id, check.id)}
+                          />
+                        ) : (
+                          <CompactCheckRow
+                            check={check}
+                            key={check.id}
+                            onOpen={() => openCheck(bundle.acceptance.id, check.id)}
+                          />
+                        ),
+                      )}
                 </CriterionList>
               </Flexbox>
             </>

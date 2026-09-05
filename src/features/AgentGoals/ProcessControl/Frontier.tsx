@@ -376,8 +376,8 @@ const FrontierRow = memo<{
                 node.status === 'resolved'
                   ? t('goalProcess.tag.done')
                   : t('goalProcess.tag.retired'),
-             }
-           : null;
+            }
+          : null;
 
   const stop = (event: React.MouseEvent) => event.stopPropagation();
 
