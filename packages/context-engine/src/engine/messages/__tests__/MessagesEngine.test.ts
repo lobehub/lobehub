@@ -87,8 +87,39 @@ describe('MessagesEngine', () => {
           createBasicParams({ stepContext: { todos: messageTodos } }),
         ).process();
 
-        expect(result.messages[0].content).toContain('<todo_context>');
-        expect(result.messages[0].content).toContain('Message task');
+        expect(result.messages[0].content).toBe('Hello');
+        expect(result.messages.at(-1)?.content).toContain('<todo_context>');
+        expect(result.messages.at(-1)?.content).toContain('Message task');
+      });
+
+      it('keeps goal context after the real user and TODO context at the tail', async () => {
+        const result = await new MessagesEngine(
+          createBasicParams({
+            initialContext: {
+              goalOverview: {
+                findings: [],
+                goal: { status: 'running', title: 'Demo goal' },
+                pendingDecisions: [],
+                tasks: [],
+              },
+            },
+            stepContext: { todos: messageTodos },
+          }),
+        ).process();
+
+        expect(result.messages.map(({ role }) => role)).toEqual([
+          'user',
+          'assistant',
+          'tool',
+          'assistant',
+          'user',
+        ]);
+        expect(result.messages[0].content).toBe('Hello');
+        expect(result.messages[1].tool_calls?.[0].function.name).toBe('getGoalContext');
+        expect(result.messages[2].tool_call_id).toBe(result.messages[1].tool_calls?.[0].id);
+        expect(result.messages[2].content).toContain('Demo goal');
+        expect(result.messages[3].content).toBe('Hi there!');
+        expect(result.messages[4].content).toContain('<todo_context>');
       });
 
       it('prefers message state over plan metadata', async () => {
@@ -99,8 +130,9 @@ describe('MessagesEngine', () => {
           }),
         ).process();
 
-        expect(result.messages[0].content).toContain('Message task');
-        expect(result.messages[0].content).not.toContain('Metadata task');
+        expect(result.messages[0].content).toBe('Hello');
+        expect(result.messages.at(-1)?.content).toContain('Message task');
+        expect(result.messages.at(-1)?.content).not.toContain('Metadata task');
       });
 
       it('uses an empty message tombstone to suppress non-empty metadata', async () => {
@@ -111,8 +143,11 @@ describe('MessagesEngine', () => {
           }),
         ).process();
 
-        expect(result.messages[0].content).not.toContain('<todo_context>');
-        expect(result.messages[0].content).not.toContain('Metadata task');
+        expect(result.messages).toHaveLength(2);
+        expect(result.messages[0].content).toBe('Hello');
+        expect(
+          result.messages.some((message) => String(message.content).includes('<todo_context>')),
+        ).toBe(false);
       });
 
       it('falls back to enabled plan metadata when message state is undefined', async () => {
@@ -120,7 +155,70 @@ describe('MessagesEngine', () => {
           createBasicParams({ planTodo: { enabled: true, todos: metadataTodos } }),
         ).process();
 
-        expect(result.messages[0].content).toContain('Metadata task');
+        expect(result.messages[0].content).toBe('Hello');
+        expect(result.messages.at(-1)?.content).toContain('Metadata task');
+      });
+
+      it('keeps the historical prefix stable across create, update, and clear', async () => {
+        const createResult = await new MessagesEngine(
+          createBasicParams({ stepContext: { todos: metadataTodos } }),
+        ).process();
+        const updateResult = await new MessagesEngine(
+          createBasicParams({ stepContext: { todos: messageTodos } }),
+        ).process();
+        const clearResult = await new MessagesEngine(
+          createBasicParams({ stepContext: { todos: { items: [], updatedAt: 'cleared' } } }),
+        ).process();
+
+        const signatures = (messages: typeof createResult.messages) =>
+          messages.map(({ content, role }) => JSON.stringify({ content, role }));
+
+        expect(signatures(updateResult.messages.slice(0, -1))).toEqual(
+          signatures(createResult.messages.slice(0, -1)),
+        );
+        expect(signatures(clearResult.messages)).toEqual(
+          signatures(createResult.messages.slice(0, -1)),
+        );
+      });
+
+      it('keeps tool-call history stable when a plain user follow-up is added', async () => {
+        const toolTurnMessages = [
+          { content: 'Run the requested tools', role: 'user' },
+          {
+            content: '',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: { arguments: '{}', name: 'runTool' },
+                id: 'call-1',
+                type: 'function',
+              },
+            ],
+          },
+          { content: 'Tool completed', role: 'tool', tool_call_id: 'call-1' },
+        ] as UIChatMessage[];
+        const toolTurnResult = await new MessagesEngine(
+          createBasicParams({
+            messages: toolTurnMessages,
+            stepContext: { todos: messageTodos },
+          }),
+        ).process();
+        const followUpResult = await new MessagesEngine(
+          createBasicParams({
+            messages: [
+              ...toolTurnMessages,
+              { content: 'All tools are complete', role: 'assistant' } as UIChatMessage,
+              { content: 'Reply with received', role: 'user' } as UIChatMessage,
+            ],
+            stepContext: { todos: messageTodos },
+          }),
+        ).process();
+
+        expect(followUpResult.messages.slice(0, toolTurnMessages.length)).toEqual(
+          toolTurnResult.messages.slice(0, toolTurnMessages.length),
+        );
+        expect(toolTurnResult.messages.at(-1)?.content).toContain('<todo_context>');
+        expect(followUpResult.messages.at(-1)?.content).toContain('<todo_context>');
       });
     });
 

@@ -58,7 +58,11 @@ export class ReactionFeedbackProcessor extends BaseProcessor {
       }
 
       // Inject accumulated feedback into the next user message
-      if (message.role === 'user' && pendingEmojis.length > 0) {
+      if (
+        message.role === 'user' &&
+        message.meta?.virtualLastUser !== true &&
+        pendingEmojis.length > 0
+      ) {
         const originalContent = message.content;
 
         if (typeof originalContent === 'string') {
