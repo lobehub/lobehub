@@ -5,7 +5,7 @@ import { ActionIcon, Checkbox, Popover, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { SlidersHorizontalIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { Fragment, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PluginTag from '@/features/ProfileEditor/PluginTag';
@@ -16,12 +16,17 @@ import {
   getShareApiAvailability,
   getShareToolAvailability,
   getShareToolGrantForIdentifier,
+  sortBlockedLast,
   toggleShareToolApi,
   toggleShareToolsetGrant,
 } from './toolVisitorAvailability';
 import type { AgentShareConfigPatch, AgentShareConfigState } from './useAgentShare';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  divider: css`
+    margin-block: 6px;
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+  `,
   header: css`
     padding-block: 10px;
     padding-inline: 12px;
@@ -68,6 +73,11 @@ interface ToolRowProps {
  * plugin/MCP manifest), the same source the server gate reads, so a tool this
  * build does not yet know the APIs of simply never offers the button rather
  * than stale/guessed entries.
+ *
+ * Inside the popover the APIs are grouped rather than listed in plain manifest
+ * order: everything the owner can actually grant comes first, then — below a
+ * thin separator — the APIs the gate always strips, greyed out and disabled
+ * with the reason in their tooltip (see {@link sortBlockedLast}).
  */
 const ToolRow = memo<ToolRowProps>(({ agentId, toolId, selected, shareConfig, onChange }) => {
   const { t } = useTranslation('agent');
@@ -95,6 +105,19 @@ const ToolRow = memo<ToolRowProps>(({ agentId, toolId, selected, shareConfig, on
     )
     .map((api) => api.name);
   const canConfigure = !blocked && grantableApiNames.length > 1;
+
+  // Grantable APIs first (manifest order preserved), then the ones the gate
+  // always strips — see `sortBlockedLast` for why they trail instead of sitting
+  // where the manifest put them.
+  const orderedApis = sortBlockedLast(
+    apis,
+    (api) => getShareApiAvailability(toolId, api.name, api.humanIntervention) !== 'available',
+  );
+  // Where the blocked group starts, i.e. where the separator goes.
+  // `grantableApiNames` is filtered with the same predicate, so its length IS
+  // that boundary; when nothing is blocked it equals `orderedApis.length` and
+  // no row ever matches it.
+  const firstBlockedApiIndex = grantableApiNames.length;
 
   const grant = getShareToolGrantForIdentifier(shareConfig.toolGrants, toolId);
   const grantedCount =
@@ -136,40 +159,49 @@ const ToolRow = memo<ToolRowProps>(({ agentId, toolId, selected, shareConfig, on
         </Text>
       </Flexbox>
       <Flexbox className={styles.list}>
-        {apis.map((api) => {
+        {orderedApis.map((api, index) => {
           const apiAvailability = getShareApiAvailability(toolId, api.name, api.humanIntervention);
           const apiBlocked = apiAvailability !== 'available';
           const apiSelected = grant === 'all' || (grant instanceof Set && grant.has(api.name));
 
           return (
-            <Tooltip
-              key={api.name}
-              placement={'left'}
-              title={
-                apiAvailability === 'writesOwnerData'
-                  ? t('share.settings.tools.apiWritesOwnerData')
-                  : apiBlocked
-                    ? t('share.settings.tools.apiNotAvailableToVisitors')
-                    : undefined
-              }
-            >
-              <Flexbox className={styles.row}>
-                <Checkbox
-                  checked={!apiBlocked && apiSelected}
-                  disabled={apiBlocked}
-                  onChange={() => toggleApi(api.name)}
-                >
-                  <Flexbox gap={0} style={{ minWidth: 0 }}>
-                    <Text fontSize={13}>{api.name}</Text>
-                    {api.description && (
-                      <Text ellipsis={{ rows: 2 }} fontSize={12} type={'secondary'}>
-                        {api.description}
+            <Fragment key={api.name}>
+              {/* Only when BOTH groups exist: a line above the very first row
+                  (everything blocked) would read as a clipped list. */}
+              {index === firstBlockedApiIndex && index > 0 && <div className={styles.divider} />}
+              <Tooltip
+                placement={'left'}
+                title={
+                  apiAvailability === 'writesOwnerData'
+                    ? t('share.settings.tools.apiWritesOwnerData')
+                    : apiBlocked
+                      ? t('share.settings.tools.apiNotAvailableToVisitors')
+                      : undefined
+                }
+              >
+                <Flexbox className={styles.row}>
+                  <Checkbox
+                    checked={!apiBlocked && apiSelected}
+                    disabled={apiBlocked}
+                    onChange={() => toggleApi(api.name)}
+                  >
+                    <Flexbox gap={0} style={{ minWidth: 0 }}>
+                      {/* `disabled` dims the Checkbox's own label, but this
+                          nested Text re-asserts `colorText` — so grey it
+                          explicitly, or a blocked API reads as fully enabled. */}
+                      <Text fontSize={13} type={apiBlocked ? 'secondary' : undefined}>
+                        {api.name}
                       </Text>
-                    )}
-                  </Flexbox>
-                </Checkbox>
-              </Flexbox>
-            </Tooltip>
+                      {api.description && (
+                        <Text ellipsis={{ rows: 2 }} fontSize={12} type={'secondary'}>
+                          {api.description}
+                        </Text>
+                      )}
+                    </Flexbox>
+                  </Checkbox>
+                </Flexbox>
+              </Tooltip>
+            </Fragment>
           );
         })}
       </Flexbox>

@@ -238,3 +238,22 @@ export const runtimeManagedShareCandidateToolIds: string[] = runtimeManagedToolI
  */
 export const getShareToolCandidateIds = (pluginIds: string[]): string[] =>
   Array.from(new Set([...pluginIds, ...runtimeManagedShareCandidateToolIds]));
+
+/**
+ * Stable partition that moves every item `isBlocked` accepts to the END of the
+ * list, keeping the original (manifest / configuration) order inside each
+ * group.
+ *
+ * Presentation only, and the reason is UX rather than logic: a control the
+ * owner can never tick is information, not an action. Interleaved with the
+ * grantable ones it reads as a broken checkbox and forces the owner to re-check
+ * every row before trusting the list; collected at the end — still rendered,
+ * greyed out, with the refusal explained in its tooltip — the actionable set
+ * stays scannable while the "why is this missing?" answer remains one hover
+ * away. Used at both levels of the picker (toolset chips and the per-API
+ * popover) so the two behave identically.
+ */
+export const sortBlockedLast = <T>(items: T[], isBlocked: (item: T) => boolean): T[] => [
+  ...items.filter((item) => !isBlocked(item)),
+  ...items.filter((item) => isBlocked(item)),
+];
