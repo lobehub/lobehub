@@ -58,6 +58,15 @@ export function resolveWorkspaceScope(explicit?: string): WorkspaceScope {
   const fromEnv = process.env.LOBEHUB_WORKSPACE_ID;
   if (fromEnv && fromEnv.length > 0) return { source: 'env', workspaceId: fromEnv };
 
+  // A server-dispatched execution (operation-scoped `LOBEHUB_JWT`) carries its
+  // complete scope in env: `LOBEHUB_WORKSPACE_ID` when the run is
+  // workspace-scoped, nothing when personal. The persisted `workspace use`
+  // scope belongs to whoever sits at this machine's terminal; letting it leak
+  // into a dispatched run stamps every heteroIngest/heteroFinish call with a
+  // workspace the run's topic is not in, and the server rejects the entire
+  // event stream ("Topic is outside the caller scope").
+  if (process.env.LOBEHUB_JWT) return { source: 'personal' };
+
   return resolvePersistedScope() ?? { source: 'personal' };
 }
 

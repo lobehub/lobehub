@@ -332,13 +332,13 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
                 {attempts}
               </span>
             </Tooltip>
-            {view.artifactCount > 0 && (
+            {view.artifacts.length > 0 && (
               <Tooltip
-                title={t('goalProcess.node.artifactsTooltip', { count: view.artifactCount })}
+                title={t('goalProcess.node.artifactsTooltip', { count: view.artifacts.length })}
               >
                 <span className={styles.metric}>
                   <Icon icon={FileBox} size={13} />
-                  {view.artifactCount}
+                  {view.artifacts.length}
                 </span>
               </Tooltip>
             )}

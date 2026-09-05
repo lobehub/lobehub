@@ -36,8 +36,8 @@ import AppsSkeleton from '@/components/Skeleton/Apps';
 import CommunityListSkeleton from '@/components/Skeleton/CommunityList';
 import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
 import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
+import { delayed } from '@/components/Skeleton/Delayed';
 import GenerationSkeleton from '@/components/Skeleton/Generation';
-import HomeSkeleton from '@/components/Skeleton/Home';
 import MemorySkeleton from '@/components/Skeleton/Memory';
 import ResourceHomeSkeleton from '@/components/Skeleton/ResourceHome';
 import RouteSegmentSkeleton from '@/components/Skeleton/RouteSegment';
@@ -72,7 +72,7 @@ import {
 } from '@/routes/(main)/group/features/routeMeta';
 import AppShellSkeleton, { APP_SHELL_FALLBACK_ID } from '@/spa/BootShell/AppShellSkeleton';
 import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces';
-import { routeMeta, type RouteSkeletonProps } from '@/spa/router/routeMeta';
+import { NoRouteSkeleton, routeMeta, type RouteSkeletonProps } from '@/spa/router/routeMeta';
 import { SettingsTabs } from '@/store/global/initialState';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
@@ -87,13 +87,13 @@ export const ResourceCategorySkeleton = (props: RouteSkeletonProps) => (
 const agentChatElement = dynamicElement(
   () => loadRouteWithBuiltinToolSurfaces(() => import('@/routes/(main)/agent')),
   'Desktop > Chat',
-  { fallback: <ConversationSegmentSkeleton />, preloadId: 'agent' },
+  { fallback: delayed(<ConversationSegmentSkeleton />), preloadId: 'agent' },
 );
 
 const groupChatElement = dynamicElement(
   () => loadRouteWithBuiltinToolSurfaces(() => import('@/routes/(main)/group')),
   'Desktop > Agent Group',
-  { fallback: <ConversationLayoutSkeleton />, preloadId: 'group' },
+  { fallback: delayed(<ConversationLayoutSkeleton />), preloadId: 'group' },
 );
 
 const resourceCategoryRoutes: RouteObject[] = [
@@ -157,7 +157,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
             element: dynamicLayout(
               () => import('@/routes/(main)/agent/(chat)/_layout'),
               'Desktop > Chat > ChatLayout',
-              { fallback: <ConversationLayoutSkeleton />, preloadId: 'agent' },
+              { fallback: delayed(<ConversationLayoutSkeleton />), preloadId: 'agent' },
             ),
           },
           {
@@ -362,7 +362,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
             shareElement={dynamicElement(
               () => import('@/features/AgentShareVisitor/Page'),
               'Desktop > Share > Agent',
-              { fallback: <ConversationLayoutSkeleton /> },
+              { fallback: delayed(<ConversationLayoutSkeleton />) },
             )}
           />
         ),
@@ -1474,7 +1474,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
     handle: {
       meta: routeMeta({
         icon: HomeIcon,
-        Skeleton: HomeSkeleton,
+        Skeleton: NoRouteSkeleton,
         tabTitleKey: 'navigation.home',
         titleKey: 'navigation.home',
       }),

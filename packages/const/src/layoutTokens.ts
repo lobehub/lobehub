@@ -17,6 +17,12 @@ export const CHAT_PORTAL_TASK_WIDTH = 640;
 /** For portal views that read as a document (acceptance report, evidence, screenshots) */
 export const CHAT_PORTAL_WIDE_WIDTH = 840;
 /**
+ * Drag ceiling for a side conversation hosted in the portal panel (e.g. the
+ * goal page's "ask about progress" chat). A conversation column must never
+ * grow into a work surface, so it caps far below the work-view 1280.
+ */
+export const CHAT_PORTAL_CONVERSATION_MAX_WIDTH = 560;
+/**
  * Width the conversation column needs to stay usable next to an open portal.
  * Below this the working sidebar yields, leaving conversation + portal.
  */

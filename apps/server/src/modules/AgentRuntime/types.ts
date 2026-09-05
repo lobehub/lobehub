@@ -87,9 +87,21 @@ export interface IAgentStateManager {
   }>;
 
   /**
+   * Check the interrupt sentinel written by `markInterrupted`. Cheap enough
+   * to poll, unlike `loadAgentState` which pulls the whole state blob.
+   */
+  isInterrupted: (operationId: string) => Promise<boolean>;
+
+  /**
    * Load Agent state
    */
   loadAgentState: (operationId: string) => Promise<AgentState | null>;
+
+  /**
+   * Set the interrupt sentinel for the operation, alongside the
+   * authoritative `status: 'interrupted'` in the persisted state.
+   */
+  markInterrupted: (operationId: string) => Promise<void>;
 
   /**
    * Extend the step execution lock if it is still owned by the caller.

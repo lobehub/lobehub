@@ -5,6 +5,7 @@ import { memo, Suspense } from 'react';
 import { useParams } from 'react-router';
 import { createStoreUpdater } from 'zustand-utils';
 
+import { delayed } from '@/components/Skeleton/Delayed';
 import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import PageExplorer from '@/features/PageExplorer';
 import { usePageStore } from '@/store/page';
@@ -23,7 +24,7 @@ const PagesPage = memo(() => {
   storeUpdater('selectedPageId', pageId);
 
   return (
-    <Suspense fallback={<SurfaceSkeleton variant={'editor'} />}>
+    <Suspense fallback={delayed(<SurfaceSkeleton variant={'editor'} />)}>
       <PageExplorer pageId={pageId} />
     </Suspense>
   );

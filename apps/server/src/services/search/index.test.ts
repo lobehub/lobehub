@@ -672,6 +672,32 @@ describe('SearchService', () => {
       expect(result.results[0]).toBe(failedResult);
     });
 
+    it('should not retry a failed result the crawler marked non-retryable (dead link / invalid url)', async () => {
+      vi.mocked(toolsEnv).CRAWLER_RETRY = 3;
+
+      const deadLink = {
+        crawler: 'search1api',
+        data: {
+          content: 'Dead link: the server confirmed this page does not exist (HTTP 404).',
+          errorMessage: 'Not Found',
+          errorType: 'PageNotFoundError',
+          retryable: false,
+        },
+        originalUrl: 'https://raw.githubusercontent.com/foo/bar/main/env.release',
+      };
+
+      const mockCrawler = {
+        crawl: vi.fn().mockResolvedValue(deadLink),
+      };
+      vi.mocked(Crawler).mockImplementation(() => mockCrawler as any);
+
+      searchService = new SearchService();
+      const result = await searchService.crawlPages({ urls: [deadLink.originalUrl] });
+
+      expect(mockCrawler.crawl).toHaveBeenCalledTimes(1);
+      expect(result.results[0]).toBe(deadLink);
+    });
+
     it('should not retry when CRAWLER_RETRY is 0', async () => {
       vi.mocked(toolsEnv).CRAWLER_RETRY = 0;
 

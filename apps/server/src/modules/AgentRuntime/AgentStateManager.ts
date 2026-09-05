@@ -72,6 +72,7 @@ export class AgentStateManager {
   private readonly STEPS_PREFIX = 'agent_runtime_steps';
   private readonly METADATA_PREFIX = 'agent_runtime_meta';
   private readonly EVENTS_PREFIX = 'agent_runtime_events';
+  private readonly INTERRUPT_PREFIX = 'agent_runtime_interrupt';
   private readonly DEFAULT_TTL = 2 * 3600; // 2h
 
   constructor() {
@@ -161,6 +162,24 @@ export class AgentStateManager {
       console.error('Failed to load agent state:', error);
       throw error;
     }
+  }
+
+  /**
+   * Set the interrupt sentinel. The full state blob can run to hundreds of
+   * KB (tool manifests, user memory, …), so the step-abort poller checks
+   * this tiny key instead of re-downloading the blob every interval — the
+   * blob's `status: 'interrupted'` stays the authoritative record.
+   */
+  async markInterrupted(operationId: string): Promise<void> {
+    await this.redis.setex(`${this.INTERRUPT_PREFIX}:${operationId}`, this.DEFAULT_TTL, '1');
+  }
+
+  /**
+   * Check the interrupt sentinel without loading the state blob.
+   */
+  async isInterrupted(operationId: string): Promise<boolean> {
+    const exists = await this.redis.exists(`${this.INTERRUPT_PREFIX}:${operationId}`);
+    return exists === 1;
   }
 
   /**
@@ -389,6 +408,7 @@ export class AgentStateManager {
       `${this.STEPS_PREFIX}:${operationId}`,
       `${this.METADATA_PREFIX}:${operationId}`,
       `${this.EVENTS_PREFIX}:${operationId}`,
+      `${this.INTERRUPT_PREFIX}:${operationId}`,
     ];
 
     try {

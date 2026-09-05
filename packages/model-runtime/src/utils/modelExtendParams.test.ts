@@ -182,6 +182,16 @@ describe('applyModelExtendParams', () => {
     expect(result.reasoning_effort).toBe('max');
   });
 
+  it('resolves GPT-6 xhigh reasoning effort', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({ gpt6ReasoningEffort: 'xhigh' }),
+      extendParams: ['gpt6ReasoningEffort'],
+      model: 'gpt-6-astra',
+    });
+
+    expect(result.reasoning_effort).toBe('xhigh');
+  });
+
   it('resolves Kimi K3 reasoning effort', () => {
     const result = applyModelExtendParams({
       chatConfig: chatConfig({ kimiK3ReasoningEffort: 'high' }),
@@ -362,6 +372,43 @@ describe('applyModelExtendParams', () => {
 
     expect(result.reasoning_effort).toBe('high');
     expect(result.thinking).toEqual({ type: 'enabled' });
+  });
+
+  it('maps qwen38ReasoningEffort none to disabled thinking', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({ qwen38ReasoningEffort: 'none' }),
+      extendParams: ['qwen38ReasoningEffort'],
+      model: 'qwen3.8-max',
+    });
+
+    expect(result.reasoning_effort).toBeUndefined();
+    expect(result.thinking).toEqual({ type: 'disabled' });
+  });
+
+  it('maps qwen38ReasoningEffort medium to enabled thinking and reasoning_effort', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({ qwen38ReasoningEffort: 'medium' }),
+      extendParams: ['qwen38ReasoningEffort'],
+      model: 'qwen3.8-max',
+    });
+
+    expect(result).toEqual({
+      reasoning_effort: 'medium',
+      thinking: { type: 'enabled' },
+    });
+  });
+
+  it('maps qwen38ReasoningEffort xhigh to enabled thinking and reasoning_effort', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({ qwen38ReasoningEffort: 'xhigh' }),
+      extendParams: ['qwen38ReasoningEffort'],
+      model: 'qwen3.8-max',
+    });
+
+    expect(result).toEqual({
+      reasoning_effort: 'xhigh',
+      thinking: { type: 'enabled' },
+    });
   });
 
   it('respects Claude Sonnet 5 adaptive thinking default when unset', () => {

@@ -201,6 +201,83 @@ const doubaoChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
       search: true,
+    },
+    config: {
+      deploymentName: 'deepseek-v4-pro-ga-260813',
+    },
+    contextWindowTokens: 1_048_576,
+    description:
+      'DeepSeek-V4-Pro-GA is DeepSeek’s generally available flagship model on Volcano Ark, with stronger Agent capabilities for code editing, tool use, and multi-step task execution. It supports both thinking and non-thinking modes with a 1M-token context window.',
+    displayName: 'DeepSeek V4 Pro 0813',
+    family: 'deepseek',
+    generation: 'deepseek-v4',
+    id: 'deepseek-v4-pro-ga',
+    maxOutput: 393_216,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 27, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 0.017 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-08-13',
+    settings: {
+      extendParams: ['deepseekV4GAReasoningEffort'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+    },
+    config: {
+      deploymentName: 'deepseek-v4-flash-ga-260731',
+    },
+    contextWindowTokens: 1_048_576,
+    description:
+      'DeepSeek-V4-Flash GA is the general availability release of DeepSeek’s efficient model on Volcano Ark, with significantly enhanced agent capabilities, balanced speed and cost, and strong reasoning for daily Q&A, lightweight agents, and high-concurrency scenarios.',
+    displayName: 'DeepSeek V4 Flash 0731',
+    family: 'deepseek',
+    generation: 'deepseek-v4',
+    id: 'deepseek-v4-flash-ga',
+    maxOutput: 393_216,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 0.017 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-07-31',
+    settings: {
+      extendParams: ['deepseekV4GAReasoningEffort'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
       structuredOutput: true,
     },
     config: {
@@ -210,7 +287,6 @@ const doubaoChatModels: AIChatModelCard[] = [
     description:
       'GLM-5.2 is Zhipu AI’s flagship model for long-horizon tasks on Volcano Ark, with major improvements in coding, long-context understanding, planning, and tool collaboration. It supports a 1M-token context window and flexible reasoning effort control for complex development, mobile full-stack work, code migration, and research reproduction.',
     displayName: 'GLM-5.2',
-    enabled: true,
     family: 'glm',
     generation: 'glm-5.2',
     id: 'glm-5-2',
@@ -250,7 +326,6 @@ const doubaoChatModels: AIChatModelCard[] = [
     description:
       'DeepSeek-V4-Pro is DeepSeek’s flagship MoE model on Volcano Ark, supporting both non-thinking and thinking modes for advanced reasoning, code generation, and complex agent workflows.',
     displayName: 'DeepSeek V4 Pro',
-    enabled: true,
     family: 'deepseek',
     generation: 'deepseek-v4',
     id: 'deepseek-v4-pro',
@@ -284,7 +359,6 @@ const doubaoChatModels: AIChatModelCard[] = [
     description:
       'DeepSeek-V4-Flash is DeepSeek’s efficient 1M-context model on Volcano Ark, balancing speed and cost while keeping strong reasoning and agent capabilities.',
     displayName: 'DeepSeek V4 Flash',
-    enabled: true,
     family: 'deepseek',
     generation: 'deepseek-v4',
     id: 'deepseek-v4-flash',

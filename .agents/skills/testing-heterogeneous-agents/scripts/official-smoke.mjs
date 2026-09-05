@@ -8,8 +8,8 @@
  * `--confirm-live` because every matrix cell makes a real model request.
  *
  * Usage:
- *   node .agents/acceptance/scripts/heterogeneous-agent-official-smoke.mjs list
- *   node .agents/acceptance/scripts/heterogeneous-agent-official-smoke.mjs run \
+ *   node .agents/skills/testing-heterogeneous-agents/scripts/official-smoke.mjs list
+ *   node .agents/skills/testing-heterogeneous-agents/scripts/official-smoke.mjs run \
  *     --confirm-live [--topic-id <id>] [--cdp 9222]
  */
 
@@ -40,8 +40,8 @@ const POLL_INTERVAL_MS = 500;
 const sleep = (durationMs) => new Promise((resolve) => setTimeout(resolve, durationMs));
 
 const usage = `Usage:
-  node .agents/acceptance/scripts/heterogeneous-agent-official-smoke.mjs list [options]
-  node .agents/acceptance/scripts/heterogeneous-agent-official-smoke.mjs run --confirm-live [options]
+  node .agents/skills/testing-heterogeneous-agents/scripts/official-smoke.mjs list [options]
+  node .agents/skills/testing-heterogeneous-agents/scripts/official-smoke.mjs run --confirm-live [options]
 
 Commands:
   list                 Read the server model matrix and detect existing CLIs. No model calls.
@@ -67,7 +67,7 @@ Safety:
 `;
 
 const fail = (message, exitCode = 1) => {
-  console.error(`heterogeneous-agent-official-smoke: ${message}`);
+  console.error(`official-smoke: ${message}`);
   process.exit(exitCode);
 };
 
@@ -739,7 +739,7 @@ const writeReport = ({ cases, createdAt, dir, matrix, options, plan, preflight }
     cases: reportCases,
     commit: gitValue(['rev-parse', '--short=12', 'HEAD']),
     createdAt,
-    entry: `node .agents/acceptance/scripts/heterogeneous-agent-official-smoke.mjs run --confirm-live --cdp ${options.cdp}`,
+    entry: `node .agents/skills/testing-heterogeneous-agents/scripts/official-smoke.mjs run --confirm-live --cdp ${options.cdp}`,
     plan,
     scenario: 'coding',
     subject: options.subject ?? null,

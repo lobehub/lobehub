@@ -129,6 +129,8 @@ export const lobeHubOnlineModelDescriptions = {
     'GPT-5.6 Terra balances intelligence and cost for everyday professional work, competitive with GPT-5.5 at about half the price.',
   'lobehub.gpt-5.description':
     'The best model for cross-domain coding and agent tasks, with strong accuracy, speed, reasoning, and problem-solving capabilities.',
+  'lobehub.gpt-6-astra.description':
+    "OpenAI's most intelligent and aligned model, state of the art on computer use and 3D work.",
   'lobehub.gpt-image-1.5.description':
     'An enhanced GPT Image 1 model with 4× faster generation, more precise editing, and improved text rendering.',
   'lobehub.gpt-image-1.description': 'ChatGPT native multimodal image generation model.',

@@ -262,8 +262,8 @@ const GHOST_HEIGHT = 88;
 const Canvas = memo<
   Pick<GraphProps, 'graph' | 'onSelect' | 'planning' | 'selectedId'> & {
     className: string;
+    fullscreen: boolean;
     hiddenKinds: ReadonlySet<GoalNodeKind>;
-    interactive: boolean;
     /** Bump to refit after the frame around the canvas changes size. */
     refitKey?: boolean;
     view: GraphViewMode;
@@ -271,9 +271,9 @@ const Canvas = memo<
 >(
   ({
     className,
+    fullscreen,
     graph,
     hiddenKinds,
-    interactive,
     onSelect,
     planning,
     refitKey,
@@ -446,7 +446,7 @@ const Canvas = memo<
 
     // The inline map is a framed overview, so keep it fitted to the space left by
     // the detail panel. Fullscreen keeps its existing user-navigation behavior.
-    useFitViewOnResize(containerRef, fitView, FIT_VIEW_OPTIONS, !interactive);
+    useFitViewOnResize(containerRef, fitView, FIT_VIEW_OPTIONS, !fullscreen);
 
     useEffect(() => {
       const timer = setTimeout(() => fitView(FIT_VIEW_OPTIONS), 30);
@@ -465,30 +465,26 @@ const Canvas = memo<
       <div
         className={className}
         ref={containerRef}
-        style={interactive ? undefined : { height: inlineHeight }}
+        style={fullscreen ? undefined : { height: inlineHeight }}
       >
-        {/* Inline, the map is a picture: it settles on `fitView` and stays
-            there. Panning or zooming it inside a scrolling page moves the graph
-            under the cursor while the page moves too, and leaves no way back to
-            the framing the layout chose. Fullscreen is where it is navigable. */}
+        {/* Embedded graphs keep ordinary scrolling available to the page.
+            Both views support drag, pinch, double-click and zoom controls;
+            fullscreen also uses two-finger scrolling to pan. */}
         <ReactFlow
           fitView
+          panOnDrag
+          zoomOnDoubleClick
+          zoomOnPinch
           edges={allEdges}
-          maxZoom={interactive ? 1.5 : 1}
+          maxZoom={1.5}
           minZoom={0.3}
           nodeTypes={nodeTypes}
           nodes={allNodes}
           nodesConnectable={false}
           nodesDraggable={false}
-          panOnDrag={interactive}
-          // Fullscreen reads like Figma on a trackpad: two-finger scroll pans
-          // and pinch (ctrl+wheel) zooms. Wheel-to-zoom is off — on a mouse,
-          // zooming stays on pinch/double-click and the +/- controls.
-          panOnScroll={interactive}
-          preventScrolling={interactive}
+          panOnScroll={fullscreen}
+          preventScrolling={fullscreen}
           proOptions={{ hideAttribution: true }}
-          zoomOnDoubleClick={interactive}
-          zoomOnPinch={interactive}
           zoomOnScroll={false}
           onNodeClick={(_, node) => {
             if (node.type !== 'goalGhost') onSelect(node.id);
@@ -500,7 +496,7 @@ const Canvas = memo<
             size={1}
             variant={BackgroundVariant.Dots}
           />
-          {interactive && <Controls position={'bottom-right'} showInteractive={false} />}
+          <Controls position={'bottom-right'} showInteractive={false} />
         </ReactFlow>
       </div>
     );
@@ -583,7 +579,7 @@ const Graph = memo<GraphProps>(({ fullscreen, onFullscreenChange, ...props }) =>
           <ReactFlowProvider>
             <Canvas
               {...props}
-              interactive
+              fullscreen
               className={cx(styles.canvas, styles.full)}
               hiddenKinds={hiddenKinds}
               refitKey={showPortal}
@@ -631,8 +627,8 @@ const Graph = memo<GraphProps>(({ fullscreen, onFullscreenChange, ...props }) =>
         <Canvas
           {...props}
           className={styles.canvas}
+          fullscreen={false}
           hiddenKinds={hiddenKinds}
-          interactive={false}
           view={view}
         />
       </ReactFlowProvider>

@@ -119,6 +119,34 @@ export class TaskTopicModel {
     return updated;
   }
 
+  /**
+   * Cancel every still-running topic under the given tasks in one statement,
+   * returning the rows that were actually flipped. Used by the family status
+   * cascade so a topic that started after the caller's snapshot is still
+   * marked canceled inside the same transaction as the status update.
+   */
+  async cancelRunningByTaskIds(taskIds: string[]): Promise<TaskTopicItem[]> {
+    if (taskIds.length === 0) return [];
+
+    const canceled = await this.db
+      .update(taskTopics)
+      .set({ status: 'canceled' })
+      .where(
+        and(
+          inArray(taskTopics.taskId, taskIds),
+          eq(taskTopics.status, 'running'),
+          this.ownership(),
+        ),
+      )
+      .returning();
+
+    for (const topic of canceled) {
+      if (topic.topicId) await this.markTopicEnded(topic.topicId, 'canceled');
+    }
+
+    return canceled;
+  }
+
   async updateOperationId(taskId: string, topicId: string, operationId?: string): Promise<void> {
     await this.db
       .update(taskTopics)
@@ -312,6 +340,55 @@ export class TaskTopicModel {
       .where(and(eq(taskTopics.taskId, taskId), this.ownership()))
       .orderBy(desc(taskTopics.seq))
       .limit(limit);
+  }
+
+  /**
+   * A goal's spend and round count in one aggregate: how many runs those tasks
+   * produced and what they cost.
+   *
+   * The Goal page renders these numbers and the coordinator enforces the budget
+   * against them, so both read them from here — a second definition of "what
+   * this goal has spent" would let the header disagree with the move that
+   * parks the goal on `budget_exhausted`.
+   *
+   * `topics.totalCost` is NULL for a run that has not settled yet; those count
+   * as a round but contribute nothing to the sum.
+   */
+  async sumRunCostByTaskIds(taskIds: string[]): Promise<{
+    byTask: { runs: number; taskId: string; totalCost: number; totalTokens: number }[];
+    runs: number;
+    totalCost: number;
+    totalTokens: number;
+  }> {
+    if (taskIds.length === 0) return { byTask: [], runs: 0, totalCost: 0, totalTokens: 0 };
+
+    // Grouped once, then folded — one round trip serves both the enforced
+    // total and the per-Task breakdown the cost panel lists.
+    const rows = await this.db
+      .select({
+        runs: count(),
+        taskId: taskTopics.taskId,
+        totalCost: sql<string>`coalesce(sum(${topics.totalCost}), 0)`,
+        totalTokens: sql<string>`coalesce(sum(${topics.totalTokens}), 0)`,
+      })
+      .from(taskTopics)
+      .leftJoin(topics, eq(taskTopics.topicId, topics.id))
+      .where(and(inArray(taskTopics.taskId, taskIds), this.ownership()))
+      .groupBy(taskTopics.taskId);
+
+    const byTask = rows.map((row) => ({
+      runs: row.runs,
+      taskId: row.taskId,
+      totalCost: Number(row.totalCost ?? 0),
+      totalTokens: Number(row.totalTokens ?? 0),
+    }));
+
+    return {
+      byTask,
+      runs: byTask.reduce((sum, row) => sum + row.runs, 0),
+      totalCost: byTask.reduce((sum, row) => sum + row.totalCost, 0),
+      totalTokens: byTask.reduce((sum, row) => sum + row.totalTokens, 0),
+    };
   }
 
   async findWithHandoffByTaskIds(taskIds: string[], limit: number) {

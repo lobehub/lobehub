@@ -22,6 +22,7 @@ export { checkDisplayTitle, countResults, isDraftUnconfirmed, phaseFromStatus } 
 export { default as AcceptanceViewer } from './Viewer';
 export type { AcceptanceCheck, CheckReviewInput } from './Viewer/CheckList';
 export {
+  AcceptanceCheckRow,
   checkHeadMeta,
   FocusedCheckDetails,
   groupChecks,

@@ -84,6 +84,27 @@ export class GoalModel {
     return row?.goal;
   };
 
+  /**
+   * Patch only `config.pausedBy`, leaving every other key in the column alone.
+   *
+   * The coordinator writes this marker from a tick while the user edits budget
+   * and acceptance criteria on the same JSONB column from the goal page. A
+   * read-modify-write of the whole config would let whichever landed second
+   * discard the other's work — the user's new criteria, or the marker a
+   * measured-acceptance goal needs to ever reopen.
+   */
+  updatePauseReason = async (id: string, reason: string | undefined): Promise<void> => {
+    await this.db
+      .update(goals)
+      .set({
+        config: reason
+          ? sql`jsonb_set(COALESCE(${goals.config}, '{}'::jsonb), '{pausedBy}', ${JSON.stringify(reason)}::jsonb)`
+          : sql`COALESCE(${goals.config}, '{}'::jsonb) - 'pausedBy'`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(goals.id, id), this.ownership()));
+  };
+
   update = async (id: string, value: Partial<Omit<GoalItem, 'id' | 'userId'>>) => {
     const [row] = await this.db
       .update(goals)

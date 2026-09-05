@@ -397,42 +397,6 @@ const anthropicChatModels: AIChatModelCard[] = [
     },
     type: 'chat',
   },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-      vision: true,
-    },
-    contextWindowTokens: 200_000,
-    description:
-      'Claude Opus 4.1 is Anthropic’s newest and most powerful model for highly complex tasks, excelling in performance, intelligence, fluency, and comprehension.',
-    displayName: 'Claude Opus 4.1',
-    family: 'claude-opus',
-    generation: 'claude-4.1',
-    id: 'claude-opus-4-1-20250805',
-    knowledgeCutoff: '2025-01',
-    maxOutput: 32_000,
-    pricing: {
-      units: [
-        { name: 'textInput_cacheRead', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 75, strategy: 'fixed', unit: 'millionTokens' },
-        {
-          lookup: { prices: { '1h': 30, '5m': 18.75 }, pricingParams: ['ttl'] },
-          name: 'textInput_cacheWrite',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-      ],
-    },
-    releasedAt: '2025-08-05',
-    settings: {
-      extendParams: ['disableContextCaching', 'enableReasoning', 'reasoningBudgetToken'],
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
 ];
 
 export const allModels = [...anthropicChatModels];

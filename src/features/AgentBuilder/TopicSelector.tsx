@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import NavHeader from '@/features/NavHeader';
+import { useFetchAgentChatTopics } from '@/hooks/useFetchChatTopics';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 
@@ -37,9 +38,7 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId, disabled }) => {
   const { t } = useTranslation('topic');
 
   // Fetch topics for the agent builder
-  const useFetchTopics = useChatStore((s) => s.useFetchTopics);
-
-  useFetchTopics(true, { agentId });
+  useFetchAgentChatTopics(agentId);
 
   const [activeTopicId, switchTopic, topics] = useChatStore((s) => [
     s.activeTopicId,

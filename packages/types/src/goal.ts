@@ -1,4 +1,6 @@
 import type { InitialGoalOverviewContext } from './stepContext';
+import type { AcceptanceStatus } from './verify';
+import type { WorkType } from './work';
 
 // ============================================
 // Goal — independent target entity (`goals` table)
@@ -73,6 +75,13 @@ export interface GoalMetricCriterion {
   target: number;
 }
 
+/**
+ * Upper bound on declared numeric clauses. Every clause is read on each
+ * terminal tick, and an unbounded list would let one goal's acceptance payload
+ * pace the coordinator (and its database pool) for everyone else.
+ */
+export const MAX_GOAL_METRIC_CRITERIA = 20;
+
 export interface GoalAcceptancePolicy {
   criteriaIds?: string[];
   /**
@@ -84,6 +93,17 @@ export interface GoalAcceptancePolicy {
   metrics?: GoalMetricCriterion[];
 }
 
+/**
+ * Who a goal's current pause belongs to, recorded whenever one is taken.
+ *
+ * Runtime bookkeeping rather than policy: without it, an event that clears the
+ * coordinator's reason cannot tell a park it owns from a pause a person chose,
+ * and would restart a goal somebody deliberately stopped. A person's claim is
+ * stored explicitly rather than as the absence of a marker, because pausing an
+ * already-paused goal is a no-op that leaves no other trace of who asked.
+ */
+export type GoalPauseReason = 'measured_acceptance' | 'user';
+
 export interface GoalConfig {
   acceptance?: GoalAcceptancePolicy;
   /**
@@ -93,6 +113,8 @@ export interface GoalConfig {
    * before the first result came back. Null/undefined uses the default.
    */
   maxConcurrentTasks?: number | null;
+  /** Who the current pause belongs to; cleared when the goal runs again. */
+  pausedBy?: GoalPauseReason;
   recovery?: GoalRecoveryPolicy;
   schedule?: GoalSchedulePolicy;
 }
@@ -240,11 +262,63 @@ export interface GoalGraphWorkVersionLink {
   id: string;
   nodeId: string;
   relation: GoalNodeWorkVersionRelation;
+  /**
+   * Display snapshot of the linked Work version, joined at read time so the
+   * graph can name a deliverable instead of counting it. Absent only when the
+   * version row is gone — the link is kept so the count stays honest.
+   */
+  work?: GoalGraphWorkVersionDisplay;
   workVersionId: string;
 }
 
+/**
+ * What a linked Work version shows without a second round-trip. Taken from the
+ * immutable version row rather than the live Work: the graph records what the
+ * task delivered at that moment, and a title edited later does not rewrite the
+ * goal's history.
+ */
+export interface GoalGraphWorkVersionDisplay {
+  /**
+   * Proof that a `document` Work is bound to an agent, and therefore openable
+   * in-app. It is the binding row's id, NOT a route parameter — the document
+   * route resolves {@link resourceId}.
+   */
+  agentDocumentId?: string;
+  /** Durable download target of a `file` Work, which keeps it out of `url`. */
+  fileUrl?: string;
+  identifier: string | null;
+  /** Canonical resource identity — the document id an in-app link addresses. */
+  resourceId: string | null;
+  status: string | null;
+  title: string | null;
+  type: WorkType;
+  /** Canonical http(s) open target, for Works that live outside the app. */
+  url: string | null;
+  workId: string;
+}
+
+/** Where a task node's own verification stands, for a reader scanning the goal. */
+export interface GoalNodeAcceptance {
+  id: string;
+  status: AcceptanceStatus;
+}
+
 export interface GoalGraphSnapshot {
+  /**
+   * Verification state per task node, keyed by node id. Every dispatched task
+   * gets its own Acceptance, but the goal used to show only the standard it was
+   * judged against and never the judgment — so the page could say a task
+   * finished without saying whether it held up.
+   */
+  acceptances?: Record<string, GoalNodeAcceptance>;
   decisions: GoalGraphDecision[];
+  /**
+   * When an active task node's newest run delivered, present only while that
+   * node is waiting on verification to settle. A verify-bound task holds its
+   * node `active` with an already-`completed` topic, which contributes no
+   * heartbeat — without this the client reads the wait as lost.
+   */
+  deliveredAt?: Record<string, Date>;
   edges: GoalGraphEdge[];
   events: GoalGraphEvent[];
   goal: GoalItem;
@@ -256,7 +330,36 @@ export interface GoalGraphSnapshot {
    * liveness judgements must use whichever of the two is newer.
    */
   runHeartbeats?: Record<string, Date>;
+  /**
+   * Rounds run and dollars spent so far, by the definition the coordinator
+   * enforces the budget against. Present on a fetched graph; absent on the
+   * snapshots the write paths return.
+   */
+  spend?: GoalSpend;
   workVersions: GoalGraphWorkVersionLink[];
+}
+
+/** What a goal has spent against what it is allowed to spend. */
+export interface GoalSpend {
+  /**
+   * The same spend split per Task node, so the cost panel can say WHERE the
+   * money went rather than only how much is left.
+   */
+  byTask: GoalTaskSpend[];
+  /** Runs the graph's Task nodes produced — what `maxRounds` is counted in. */
+  runs: number;
+  /** USD across those runs; a run that has not settled contributes 0. */
+  totalCost: number;
+  /** Tokens across those runs; a run that has not settled contributes 0. */
+  totalTokens: number;
+}
+
+/** One Task's share of a goal's spend. */
+export interface GoalTaskSpend {
+  runs: number;
+  taskId: string;
+  totalCost: number;
+  totalTokens: number;
 }
 
 /**

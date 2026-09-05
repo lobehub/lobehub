@@ -145,6 +145,13 @@ const STEP_LOCK_TTL_SECONDS = 120;
  * is the only way a running tool learns it should stop.
  */
 const STEP_ABORT_POLL_INTERVAL_MS = 2_000;
+/**
+ * Temporary compatibility cadence for interrupts written by pre-sentinel
+ * workers during a rolling deployment. Remove after every worker writes the
+ * sentinel; keeping this much slower than the sentinel poll preserves most of
+ * the Redis bandwidth reduction in the meantime.
+ */
+const LEGACY_INTERRUPT_STATE_POLL_INTERVAL_MS = 30_000;
 /** Cap on the exponential backoff multiplier after consecutive poll failures. */
 const STEP_ABORT_POLL_MAX_BACKOFF = 8;
 const STEP_LOCK_HEARTBEAT_MS = 30_000;
@@ -583,6 +590,17 @@ export class AgentRuntimeService {
     if (state.status === 'done' || state.status === 'error' || state.status === 'interrupted') {
       return false;
     }
+
+    // Sentinel FIRST: the poller and the step-boundary check read only the
+    // sentinel, so it must become visible no later than the interrupted
+    // state — otherwise a boundary check landing between the two writes
+    // reads false and the following saveStepResult clobbers the
+    // interruption. Writing it first also keeps failure atomic: if the
+    // sentinel write throws, the state below is never marked either, so the
+    // two never diverge. A sentinel that lands without the state save
+    // (crash between the writes) only stops the op earlier than the record
+    // shows — the step-boundary check then persists the interrupted state.
+    await this.coordinator.markInterrupted(operationId);
 
     await this.coordinator.saveAgentState(operationId, {
       ...state,
@@ -1745,9 +1763,9 @@ export class AgentRuntimeService {
         // Create Agent and Runtime instances
         // Use agentState.metadata which contains the full app context (topicId, agentId, etc.)
         // operationMetadata only contains basic fields (agentConfig, modelRuntimeConfig, userId)
-        // Interrupts arrive as a flag on the persisted state — the request that
-        // asked for the stop runs in a different invocation, so there is no
-        // in-process controller to share. Poll for it while the step is alive
+        // Interrupts arrive as a sentinel key beside the persisted state — the
+        // request that asked for the stop runs in a different invocation, so
+        // there is no in-process controller to share. Poll while the step is alive
         // and cancel locally, otherwise a multi-minute tool would keep running
         // long after the user asked it to stop.
         const stepAbortController = new AbortController();
@@ -1757,11 +1775,25 @@ export class AgentRuntimeService {
         // spikes exactly when the store is already struggling. Each read is
         // scheduled only after the previous one settles, and failures back off.
         let abortPollFailures = 0;
+        let lastLegacyInterruptStatePollAt = Date.now();
         const pollForAbort = async () => {
           try {
-            const latest = await this.coordinator.loadAgentState(operationId);
+            // Prefer the sentinel. During the first rolling deployment, an old
+            // worker can still write only the authoritative state, so sample
+            // that large blob at a much lower cadence until all writers have
+            // sentinel support.
+            let interrupted = await this.coordinator.isInterrupted(operationId);
+            const now = Date.now();
+            if (
+              !interrupted &&
+              now - lastLegacyInterruptStatePollAt >= LEGACY_INTERRUPT_STATE_POLL_INTERVAL_MS
+            ) {
+              lastLegacyInterruptStatePollAt = now;
+              interrupted =
+                (await this.coordinator.loadAgentState(operationId))?.status === 'interrupted';
+            }
             abortPollFailures = 0;
-            if (latest?.status === 'interrupted') {
+            if (interrupted) {
               stepAbortController.abort();
               return;
             }
@@ -1903,12 +1935,18 @@ export class AgentRuntimeService {
         }));
 
         // Check if the operation was interrupted while the step was executing
-        // (e.g., user clicked abort during a long LLM call)
-        const latestState = await this.coordinator.loadAgentState(operationId);
+        // (e.g., user clicked abort during a long LLM call). Prefer the tiny
+        // sentinel, but fall back to the state once at the step boundary while
+        // old workers that only write `status: 'interrupted'` may still be
+        // running during a rolling deployment.
+        const sentinelInterrupted = await this.coordinator.isInterrupted(operationId);
+        const wasInterrupted = sentinelInterrupted
+          ? true
+          : (await this.coordinator.loadAgentState(operationId))?.status === 'interrupted';
         logToolCallPc(operationId, stepIndex, 'post.latest_state_loaded', () => ({
-          interrupted: latestState?.status === 'interrupted',
+          interrupted: wasInterrupted,
         }));
-        if (latestState?.status === 'interrupted') {
+        if (wasInterrupted) {
           // Stop can be persisted after a client-tool executor's last local
           // signal check but before this reconciliation read. If that executor
           // just returned a parked state, run the agent's existing abort path
@@ -2626,6 +2664,10 @@ export class AgentRuntimeService {
 
       if (currentState.status === 'error') {
         throw new Error(`Operation ${operationId} is in error state`);
+      }
+
+      if (currentState.status === 'interrupted') {
+        throw new Error(`Operation ${operationId} is interrupted`);
       }
 
       // Build execution context

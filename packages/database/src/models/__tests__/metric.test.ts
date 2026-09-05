@@ -124,6 +124,66 @@ describe('MetricModel', () => {
     });
   });
 
+  describe('findByKeys', () => {
+    it('fetches only the named series, not everything the subject has sampled', async () => {
+      await seed('declared.one');
+      await seed('declared.two');
+      await seed('sampled.noise');
+
+      const found = await model.findByKeys('goal', 'goal_metric_test', [
+        'declared.one',
+        'declared.two',
+        'never.created',
+      ]);
+
+      expect(found.map((item) => item.key)).toEqual(['declared.one', 'declared.two']);
+      expect(await model.findByKeys('goal', 'goal_metric_test', [])).toEqual([]);
+    });
+
+    it('scopes to the owner', async () => {
+      await seed('declared.one');
+      expect(await otherModel.findByKeys('goal', 'goal_metric_test', ['declared.one'])).toEqual([]);
+    });
+  });
+
+  describe('latestPointsByMetricIds', () => {
+    it('returns one newest row per series in a single read', async () => {
+      const a = (await seed('a.metric'))!;
+      const b = (await seed('b.metric'))!;
+      for (const [series, at, value] of [
+        [a, '2026-09-01T00:00:00Z', 1],
+        [a, '2026-09-03T00:00:00Z', 3],
+        // Written last but observed earlier: newest means observed, not inserted.
+        [a, '2026-09-02T00:00:00Z', 2],
+        [b, '2026-09-01T00:00:00Z', 10],
+      ] as const) {
+        await model.addPoint(series.id, {
+          actorType: 'system',
+          observedAt: new Date(at),
+          sourceType: 'probe',
+          value,
+        });
+      }
+
+      const latest = await model.latestPointsByMetricIds([a.id, b.id]);
+      expect(latest.get(a.id)?.value).toBe(3);
+      expect(latest.get(b.id)?.value).toBe(10);
+    });
+
+    it('is empty for no ids and skips series outside the owner scope', async () => {
+      const series = (await seed())!;
+      await model.addPoint(series.id, {
+        actorType: 'user',
+        observedAt: new Date(),
+        sourceType: 'manual',
+        value: 1,
+      });
+
+      expect((await model.latestPointsByMetricIds([])).size).toBe(0);
+      expect((await otherModel.latestPointsByMetricIds([series.id])).size).toBe(0);
+    });
+  });
+
   describe('listPoints', () => {
     const day = (d: number, h = 0) => new Date(Date.UTC(2026, 8, d, h));
 

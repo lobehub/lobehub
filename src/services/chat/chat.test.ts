@@ -594,6 +594,69 @@ describe('ChatService', () => {
         );
       });
 
+      it('should map Qwen3.8 Max reasoning effort to enabled thinking', async () => {
+        const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
+        const messages = [
+          { content: 'Test Qwen3.8 Max reasoning effort', role: 'user' },
+        ] as UIChatMessage[];
+
+        vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
+        vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'qwen38ReasoningEffort',
+        ]);
+
+        await chatService.createAssistantMessage({
+          messages,
+          model: 'qwen3.8-max',
+          provider: 'qwen',
+          resolvedAgentConfig: createMockResolvedConfig({
+            agentConfig: { model: 'qwen3.8-max', provider: 'qwen' },
+            chatConfig: { qwen38ReasoningEffort: 'medium' },
+          }),
+        });
+
+        expect(getChatCompletionSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            reasoning_effort: 'medium',
+            thinking: {
+              type: 'enabled',
+            },
+          }),
+          expect.anything(),
+        );
+      });
+
+      it('should map Qwen3.8 Max reasoning effort none to disabled thinking', async () => {
+        const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
+        const messages = [
+          { content: 'Test Qwen3.8 Max reasoning disabled', role: 'user' },
+        ] as UIChatMessage[];
+
+        vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
+        vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'qwen38ReasoningEffort',
+        ]);
+
+        await chatService.createAssistantMessage({
+          messages,
+          model: 'qwen3.8-max',
+          provider: 'qwen',
+          resolvedAgentConfig: createMockResolvedConfig({
+            agentConfig: { model: 'qwen3.8-max', provider: 'qwen' },
+            chatConfig: { qwen38ReasoningEffort: 'none' },
+          }),
+        });
+
+        expect(getChatCompletionSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            thinking: {
+              type: 'disabled',
+            },
+          }),
+          expect.anything(),
+        );
+      });
+
       it('should set thinkingBudget when model supports thinkingBudget and user configures it', async () => {
         const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
         const messages = [{ content: 'Test thinking budget', role: 'user' }] as UIChatMessage[];

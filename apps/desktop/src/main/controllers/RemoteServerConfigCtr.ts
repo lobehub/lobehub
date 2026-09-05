@@ -480,9 +480,12 @@ export default class RemoteServerConfigCtr extends ControllerModule {
       if (!response.ok) {
         // Try to parse error response
         const errorData = await response.json().catch(() => ({}));
-        const errorMessage = `Token refresh failed: ${response.status} ${response.statusText} ${
-          errorData.error_description || errorData.error || ''
-        }`.trim();
+        // Keep the OIDC code so AuthCtr can distinguish revoked grants from transient failures.
+        const errorDetail = [errorData.error, errorData.error_description]
+          .filter(Boolean)
+          .join(' ');
+        const errorMessage =
+          `Token refresh failed: ${response.status} ${response.statusText} ${errorDetail}`.trim();
         logger.error(errorMessage, errorData);
         return { error: errorMessage, success: false };
       }

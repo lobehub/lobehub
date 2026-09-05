@@ -80,6 +80,22 @@ git log --since="3 months ago" -- .agents/skills/ < skill > /SKILL.md # is it be
 
 If the underlying surface is gone and the skill hasn't been edited in 3+ months → flag for archival.
 
+### 5b — Living-log freshness (`common-mistakes.md`, `probe-mock-patterns.md`)
+
+Both layers (`.agents/skills/acceptance/references/` generic, `.agents/acceptance/`
+project) are injected into every acceptance round, so a stale entry is a stale
+instruction. For each entry:
+
+```bash
+rg -n '^`since|holds-while' .agents/acceptance/common-mistakes.md        # every entry must carry both
+rg -n 'holds-while: (?!always)' -P .agents/acceptance/common-mistakes.md # the mechanism-bound ones
+```
+
+- Missing `since` / `holds-while` → the entry predates the admission rule; either add them or move it to field-notes.
+- For every non-`always` `holds-while`, check whether the named mechanism still exists (the script default, the ingest gap, the platform behavior). Gone → delete the entry (PROCESS.md Step 0 exit rule); the field notes keep history.
+- An entry that names a project script from the generic layer, or a product noun, is in the wrong layer.
+- Duplicate ids (`rg -o '^### [ML]-?[A-Z]?\d+' | sort | uniq -d`).
+
 ### 6 — Cross-reference integrity
 
 Any skill body mentioning another skill by name:

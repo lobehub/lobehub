@@ -919,7 +919,7 @@ const IterationTimeline = memo<{
   );
 });
 
-const CheckRow = memo<{
+export const AcceptanceCheckRow = memo<{
   canReview: boolean;
   check: AcceptanceCheck;
   detailMode?: boolean;
@@ -1618,7 +1618,7 @@ interface FocusedCheckDetailsProps {
 /** Full check content for the dedicated second-level acceptance workspace. */
 export const FocusedCheckDetails = memo<FocusedCheckDetailsProps>(
   ({ canReview, check, onDismissProposal, onOpenTrace, onReview, onRound, reviewPending }) => (
-    <CheckRow
+    <AcceptanceCheckRow
       detailMode
       expanded
       canReview={canReview}
@@ -1816,7 +1816,7 @@ const CheckList = memo<CheckListProps>(
       return (
         <Flexbox className={styles.groupCard}>
           {visibleRows.map((check) => (
-            <CheckRow
+            <AcceptanceCheckRow
               canReview={canReview}
               check={check}
               expanded={expanded.has(check.id)}
@@ -2055,7 +2055,7 @@ const CheckList = memo<CheckListProps>(
               )}
               {!collapsed &&
                 rows.map((check) => (
-                  <CheckRow
+                  <AcceptanceCheckRow
                     canReview={canReview}
                     check={check}
                     expanded={expanded.has(check.id)}

@@ -25,6 +25,7 @@ vi.mock('@/server/modules/AgentRuntime', () => ({
     saveStepResult: vi.fn(),
     createAgentOperation: vi.fn(),
     getOperationMetadata: vi.fn(),
+    isInterrupted: vi.fn().mockResolvedValue(false),
     tryClaimStep: vi.fn().mockResolvedValue(true),
     releaseStepLock: vi.fn().mockResolvedValue(undefined),
     refreshStepLock: vi.fn().mockResolvedValue(true),

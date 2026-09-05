@@ -68,6 +68,23 @@ describe('api/workspace scope resolution', () => {
     expect(resolveWorkspaceScope()).toEqual({ source: 'env', workspaceId: 'ws_env' });
   });
 
+  // A goal/task dispatch spawns `hetero exec` with an operation-scoped
+  // LOBEHUB_JWT and states its scope solely through LOBEHUB_WORKSPACE_ID. The
+  // machine's `workspace use` scope must not leak into that run: it FORBIDDENs
+  // every ingest call of a personal-scope topic.
+  it('ignores the persisted workspace when running under an injected LOBEHUB_JWT', () => {
+    process.env.LOBEHUB_JWT = 'jwt-from-dispatch';
+    mockLoadActiveWorkspace.mockReturnValue(stored());
+    try {
+      expect(resolveWorkspaceScope()).toEqual({ source: 'personal' });
+
+      process.env.LOBEHUB_WORKSPACE_ID = 'ws_env';
+      expect(resolveWorkspaceScope()).toEqual({ source: 'env', workspaceId: 'ws_env' });
+    } finally {
+      delete process.env.LOBEHUB_JWT;
+    }
+  });
+
   it('prefers an explicit argument over everything else', () => {
     process.env.LOBEHUB_WORKSPACE_ID = 'ws_env';
     mockLoadActiveWorkspace.mockReturnValue(stored());

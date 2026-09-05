@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agents, goalNodes, users } from '../../schemas';
+import { agents, goalNodes, goals, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { GoalModel } from '../goal';
 import { GoalGraphModel } from '../goalGraph';
@@ -223,7 +223,50 @@ describe('GoalGraphModel', () => {
     );
 
     expect(link).toMatchObject({ nodeId: node!.id, relation: 'produced' });
-    expect((await graphModel.getGraph(goal.id))?.workVersions).toHaveLength(1);
+    const links = (await graphModel.getGraph(goal.id))?.workVersions;
+    expect(links).toHaveLength(1);
+    // Personal mode: the Work ownership predicate the workspace case needs must
+    // not hide the owner's own deliverable from their own goal.
+    expect(links?.[0].work).toMatchObject({ type: 'task', workId: work!.id });
+  });
+
+  it('hydrates a linked Work only for a viewer allowed to see it', async () => {
+    // A workspace goal is readable by every member (`goals` has no visibility
+    // column), but a Work is owner-scoped. Hydrating the link without the Work
+    // ownership predicate handed another member the owner's private title,
+    // status, url and document binding.
+    const workspaceId = 'goal-graph-workspace';
+    await serverDB.insert(workspaces).values({
+      id: workspaceId,
+      name: 'Goal graph workspace',
+      primaryOwnerId: userId,
+      slug: 'goal-graph-workspace',
+    });
+    const ownerGoals = new GoalModel(serverDB, userId, workspaceId);
+    const ownerGraph = new GoalGraphModel(serverDB, userId, workspaceId);
+    const goal = await ownerGoals.create({ subjectType: 'standalone', title: 'Shared goal' });
+    await serverDB.update(goals).set({ workspaceId }).where(eq(goals.id, goal.id));
+    const node = await ownerGraph.createNode(goal.id, { kind: 'task', title: 'Produce evidence' });
+
+    const work = await new WorkModel(serverDB, userId, workspaceId).registerExternal({
+      changeType: 'created',
+      resourceId: 'lobehub/lobehub#1',
+      resourceType: 'github_issue',
+      title: 'Private follow-up issue',
+      toolIdentifier: 'goal-test',
+      toolName: 'createIssue',
+      url: 'https://github.com/lobehub/lobehub/issues/1',
+    });
+    await ownerGraph.attachWorkVersion(goal.id, node!.id, work!.currentVersionId!, 'produced');
+
+    const asOwner = await ownerGraph.getGraph(goal.id);
+    expect(asOwner?.workVersions[0].work).toMatchObject({ title: 'Private follow-up issue' });
+
+    // The other member reaches the same goal and the same link…
+    const asMember = await new GoalGraphModel(serverDB, otherUserId, workspaceId).getGraph(goal.id);
+    expect(asMember?.workVersions).toHaveLength(1);
+    // …but the Work behind it stays unresolved rather than naming itself.
+    expect(asMember?.workVersions[0].work).toBeUndefined();
   });
 
   it('does not expose or mutate another user graph', async () => {

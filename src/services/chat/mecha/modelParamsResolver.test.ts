@@ -440,6 +440,50 @@ describe('resolveModelExtendParams', () => {
       });
     });
 
+    describe('qwen38ReasoningEffort param', () => {
+      beforeEach(() => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
+          () => true,
+        );
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'qwen38ReasoningEffort',
+        ]);
+      });
+
+      it('should enable thinking and set reasoning_effort for Qwen3.8 Max', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            qwen38ReasoningEffort: 'xhigh',
+          } as any,
+          model: 'qwen3.8-max',
+          provider: 'qwen',
+        });
+
+        expect(result).toEqual({
+          reasoning_effort: 'xhigh',
+          thinking: {
+            type: 'enabled',
+          },
+        });
+      });
+
+      it('should disable thinking and omit reasoning_effort for Qwen3.8 Max when configured as none', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            qwen38ReasoningEffort: 'none',
+          } as any,
+          model: 'qwen3.8-max',
+          provider: 'qwen',
+        });
+
+        expect(result).toEqual({
+          thinking: {
+            type: 'disabled',
+          },
+        });
+      });
+    });
+
     describe('gpt5ReasoningEffort param', () => {
       beforeEach(() => {
         vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(

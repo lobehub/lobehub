@@ -62,6 +62,14 @@ const loadGetExecutor = async () => {
  * Fetch messages from DB and replace them in the chat store's dbMessagesMap.
  * This updates the ConversationArea component via React subscription:
  *   dbMessagesMap → ConversationArea (messages prop) → ConversationStore → UI
+ *
+ * `snapshotGeneration` drops a fetch that lost the race against a newer
+ * snapshot on the same handler (unqueued `step_start` vs in-flight `tool_end`).
+ * Last-write-wins would otherwise paint the older list over the next step.
+ *
+ * A dropped fetch returns `undefined` so callers that resolve an assistant id
+ * from the result (hetero / old-server `stream_start`) keep the current id
+ * instead of steering later chunks onto a row the store no longer has.
  */
 const fetchAndReplaceMessages = async (
   get: () => ChatStore,
@@ -75,12 +83,17 @@ const fetchAndReplaceMessages = async (
      * agent_runtime_end refetch recomputes them for real.
      */
     skipWorks?: boolean;
+    snapshotGeneration?: { current: number };
   },
-) => {
+): Promise<UIChatMessage[] | undefined> => {
   const skipWorks = options?.skipWorks;
+  const snapshotGeneration = options?.snapshotGeneration;
+  const started = snapshotGeneration?.current;
   const messages = await messageService.getMessages(
     skipWorks ? { ...context, skipWorks } : context,
   );
+  if (snapshotGeneration && snapshotGeneration.current !== started) return undefined;
+  if (snapshotGeneration) snapshotGeneration.current += 1;
   get().replaceMessages(messages, { context, preserveWorks: skipWorks });
   return messages;
 };
@@ -500,6 +513,22 @@ export const createGatewayEventHandler = (
     return processingChain;
   };
 
+  // Bumped on every snapshot this handler applies. `step_start` is not queued,
+  // so an earlier `tool_end` getMessages can still resolve after it and would
+  // otherwise last-write-wins the older list over the next step.
+  const snapshotGeneration = { current: 0 };
+
+  const refreshMessagesFromDb = (options?: { skipWorks?: boolean }) =>
+    fetchAndReplaceMessages(get, context, { ...options, snapshotGeneration });
+
+  const applyPushedSnapshot = (
+    messages: UIChatMessage[],
+    params: { action?: string; preserveWorks?: boolean },
+  ) => {
+    snapshotGeneration.current += 1;
+    get().replaceMessages(messages, { context, ...params });
+  };
+
   const writeTopicStatus = (status: 'running' | 'waitingForHuman') => {
     if (!context.topicId) return;
     const statusWrite = get().updateTopicStatus?.({
@@ -602,7 +631,7 @@ export const createGatewayEventHandler = (
     const bootstrapPromise = enqueue(async () => {
       // A preceding queued tools_calling handler may have brought the row in.
       if (!getToolMessageByCallId(data.toolCallId)) {
-        await fetchAndReplaceMessages(get, context, { skipWorks: true }).catch(console.error);
+        await refreshMessagesFromDb({ skipWorks: true }).catch(console.error);
       }
       reconciled = applyLatestToolState(data.toolCallId, true);
     });
@@ -695,9 +724,7 @@ export const createGatewayEventHandler = (
                 // Older servers send only `{ id }` — fall back to a DB read.
                 // The row is inserted before stream_start is published, so the
                 // fetch is guaranteed to bring it into the store.
-                await fetchAndReplaceMessages(get, context, { skipWorks: true }).catch(
-                  console.error,
-                );
+                await refreshMessagesFromDb({ skipWorks: true }).catch(console.error);
               }
             }
           }
@@ -726,7 +753,7 @@ export const createGatewayEventHandler = (
           // dispatch to it, and (b) resolves the next-step assistant id for
           // the `newStep` fallback.
           if (!newAssistantMessageId) {
-            const messages = await fetchAndReplaceMessages(get, context, {
+            const messages = await refreshMessagesFromDb({
               skipWorks: true,
             }).catch((error) => {
               console.error(error);
@@ -870,7 +897,7 @@ export const createGatewayEventHandler = (
             // lands — a fire-and-forget fetch would let the next event overtake
             // it and dispatch onto a message the store doesn't have yet.
             if ((data as any).toolMessageIds) {
-              await fetchAndReplaceMessages(get, context, { skipWorks: true }).catch(console.error);
+              await refreshMessagesFromDb({ skipWorks: true }).catch(console.error);
             }
           }
         });
@@ -959,7 +986,7 @@ export const createGatewayEventHandler = (
         // both the inline tool and global InterventionBar see `pending`, even
         // when this request raced ahead of the provider's tools_calling event.
         enqueue(async () => {
-          await fetchAndReplaceMessages(get, context, { skipWorks: true }).catch(console.error);
+          await refreshMessagesFromDb({ skipWorks: true }).catch(console.error);
           hasStreamedContent = true;
         });
         break;
@@ -1018,7 +1045,7 @@ export const createGatewayEventHandler = (
           // Successful Web submits, explicit cancellation, producer timeout,
           // and session teardown all converge on the durable tool row before
           // this refresh. Do not infer the terminal state from identifier.
-          await fetchAndReplaceMessages(get, context, { skipWorks: true }).catch(console.error);
+          await refreshMessagesFromDb({ skipWorks: true }).catch(console.error);
           if (pendingInterventionToolCallIds.size === 0) writeTopicStatus('running');
         });
         break;
@@ -1047,9 +1074,8 @@ export const createGatewayEventHandler = (
         if (Array.isArray(data?.uiMessages)) {
           // step_start snapshots are fetched with `skipWorks` server-side —
           // graft the already-rendered works back so chips don't flicker.
-          get().replaceMessages(data.uiMessages, {
+          applyPushedSnapshot(data.uiMessages, {
             action: 'gateway/step_start',
-            context,
             preserveWorks: true,
           });
         }
@@ -1094,7 +1120,7 @@ export const createGatewayEventHandler = (
         enqueue(async () => {
           const maybeRefresh = shouldSkipMessageFetch(event, runtimeType)
             ? Promise.resolve()
-            : fetchAndReplaceMessages(get, context, { skipWorks: true }).catch(console.error);
+            : refreshMessagesFromDb({ skipWorks: true }).catch(console.error);
           const payload = unwrapToolPayload(data?.payload);
           const result = data?.result as
             { state?: unknown; workRegistration?: unknown } | undefined;
@@ -1175,7 +1201,7 @@ export const createGatewayEventHandler = (
               sourceType: 'client.gateway.step_complete',
             });
             if (!shouldSkipMessageFetch(event, runtimeType)) {
-              await fetchAndReplaceMessages(get, context, { skipWorks: true }).catch(console.error);
+              await refreshMessagesFromDb({ skipWorks: true }).catch(console.error);
             }
           });
         }
@@ -1227,9 +1253,8 @@ export const createGatewayEventHandler = (
             // turn's optimistic rows until refresh. Keep terminalMessages for
             // this run's notification, but do not mutate its successor's store.
             if (!isSuperseded) {
-              get().replaceMessages(data.uiMessages, {
+              applyPushedSnapshot(data.uiMessages, {
                 action: 'gateway/agent_runtime_end',
-                context,
               });
             }
           } else if (
@@ -1255,7 +1280,7 @@ export const createGatewayEventHandler = (
             // messages are the only in-memory state and they need the
             // refetch to be reconciled with the server-side rows.
           } else if (!isSuperseded) {
-            await fetchAndReplaceMessages(get, context).catch(console.error);
+            await refreshMessagesFromDb().catch(console.error);
           }
 
           if (runtimeType === 'gateway' && shouldRefreshWorkViews) {
@@ -1325,7 +1350,7 @@ export const createGatewayEventHandler = (
         // Remote hetero agent (openclaw / hermes) wrote a message to DB via
         // `lh notify`. DB is the source of truth — just refresh the message list.
         enqueue(async () => {
-          await fetchAndReplaceMessages(get, context).catch(console.error);
+          await refreshMessagesFromDb().catch(console.error);
         });
         break;
       }
@@ -1384,7 +1409,7 @@ export const createGatewayEventHandler = (
             get().replaceMessages(updateResult.messages, { context });
           } else {
             // Fallback when the mutation response doesn't include messages.
-            await fetchAndReplaceMessages(get, context).catch(console.error);
+            await refreshMessagesFromDb().catch(console.error);
           }
 
           // Then overlay the inline error. This ensures the UI always shows the

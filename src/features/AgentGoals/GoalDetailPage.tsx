@@ -4,28 +4,33 @@ import { Flexbox } from '@lobehub/ui';
 import { Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { PauseIcon, PlayIcon } from 'lucide-react';
-import { memo, type ReactNode, useEffect, useMemo, useState } from 'react';
+import { memo, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router';
 
 import NotFound from '@/components/404';
 import AsyncError from '@/components/AsyncError';
 import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
+import { useAgentRoutePath } from '@/features/AgentBreadcrumb/useAgentRoutePath';
 import NavHeader from '@/features/NavHeader';
 import { PortalContent } from '@/features/Portal/router';
 import { usePortalPanelWidth } from '@/features/Portal/usePortalPanelWidth';
 import RightPanel from '@/features/RightPanel';
+import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { type GoalMetricKind } from '@/store/chat/slices/portal/initialState';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
 import { goalSelectors, useGoalStore } from '@/store/goal';
 
 import GoalChat from './GoalChat';
 import GoalDetailActions from './GoalDetailActions';
-import { formatSpan, goalStatusKey } from './goalPresentation';
+import { formatSpan, formatUsd, goalStatusKey, summarizeGoalBudget } from './goalPresentation';
 import GoalRequirement from './GoalRequirement';
 import GoalStatusGlyph from './GoalStatusGlyph';
 import ProcessControl from './ProcessControl';
@@ -111,6 +116,8 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const pauseGoal = useGoalStore((s) => s.pauseGoal);
   const resumeGoal = useGoalStore((s) => s.resumeGoal);
 
+  const buildAgentPath = useAgentRoutePath(agentId ?? '');
+
   const showPortal = useChatStore(chatPortalSelectors.showPortal);
   const currentViewType = useChatStore(chatPortalSelectors.currentViewType);
   const [chatOpen, setChatOpen] = useState(true);
@@ -124,6 +131,50 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   // Same per-view width grammar as the conversation portal, but remembered
   // under the 'goal' scope: resizing here never affects the chat surface.
   const { maxWidth, minWidth, updateWidth, width } = usePortalPanelWidth(currentViewType, 'goal');
+
+  /**
+   * Give a drill-down its reading room by folding the app rail, not the goal.
+   *
+   * Opened beside the goal, the Portal used to leave both panes cramped — the
+   * goal's title wrapping to four lines, its task rows truncated to a few
+   * characters. Folding the goal pane itself was tried and is wrong: it hides
+   * the task's own verification state, which is exactly what the reader drilled
+   * in to check. The rail is the one thing on screen that no one is reading.
+   *
+   * `showLeftPanel` is a persisted preference, so this only ever restores what
+   * it collapsed: a user who already works with the rail folded is left alone,
+   * and one who folds or opens it themselves while a drill-down is up keeps
+   * that choice.
+   */
+  const showLeftPanel = useGlobalStore(systemStatusSelectors.showLeftPanel);
+  const toggleLeftPanel = useGlobalStore((s) => s.toggleLeftPanel);
+  const collapsedRailRef = useRef(false);
+
+  useEffect(() => {
+    if (showPortal) {
+      if (showLeftPanel && !collapsedRailRef.current) {
+        collapsedRailRef.current = true;
+        toggleLeftPanel(false);
+      }
+      return;
+    }
+    if (collapsedRailRef.current) {
+      collapsedRailRef.current = false;
+      toggleLeftPanel(true);
+    }
+  }, [showPortal, showLeftPanel, toggleLeftPanel]);
+
+  // Leaving the page with the rail still folded would strand it on every other
+  // surface, so give it back on the way out.
+  useEffect(
+    () => () => {
+      if (collapsedRailRef.current) {
+        collapsedRailRef.current = false;
+        useGlobalStore.getState().toggleLeftPanel(true);
+      }
+    },
+    [],
+  );
 
   // The portal stack belongs to this goal's inspection session — leaving the
   // page (or switching goals) must not leak it into the conversation surface.
@@ -151,6 +202,11 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const findings = nodes.filter((node) => node.kind === 'finding').length;
   const open = (metric: GoalMetricKind) => () => openGoalMetric(goalId, metric);
 
+  // The panel hosts the goal conversation only when the goal has a
+  // responsible agent; without one it is drill-down-only.
+  const panelExpandable = !!agentId;
+  const chatVisible = chatOpen && panelExpandable;
+
   const paused = goal.status === 'paused';
   // Pace control exists only while the coordinator loop is actually moving (or
   // explicitly paused). A goal in review awaits the human, and a closed goal
@@ -163,12 +219,25 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const durationText = goal.startedAt
     ? formatSpan((goal.completedAt ?? new Date()).getTime() - goal.startedAt.getTime())
     : '—';
-  const budgetText =
-    goal.maxTotalCost === null
-      ? goal.maxRounds === null
-        ? t('goalProcess.metrics.uncapped')
-        : t('goalProcess.metrics.roundsValue', { count: goal.maxRounds })
-      : `$${goal.maxTotalCost}`;
+  // Spend is the metric; the cap is the context it is read against — see
+  // `summarizeGoalBudget`. The label names only the number in the lead, and the
+  // cap trails it at secondary weight rather than sharing top billing.
+  const budget = summarizeGoalBudget(goal, snapshot.spend);
+  const budgetLabel = t(
+    budget.kind === 'rounds' ? 'goalProcess.metrics.rounds' : 'goalProcess.metrics.spend',
+  );
+  const budgetLead =
+    budget.kind === 'cost'
+      ? formatUsd(budget.spent)
+      : budget.kind === 'rounds'
+        ? String(budget.runs)
+        : formatUsd(budget.spent);
+  const budgetTrail =
+    budget.kind === 'cost'
+      ? `/ ${formatUsd(budget.cap)}`
+      : budget.kind === 'rounds'
+        ? `/ ${t('goalProcess.metrics.roundsValue', { count: budget.cap })}`
+        : t('goalProcess.metrics.uncapped');
 
   return (
     <Flexbox horizontal flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
@@ -180,7 +249,9 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                 <AgentBreadcrumb
                   agentId={agentId}
                   extraItems={[goal.title]}
-                  title={t('goalList.title')}
+                  // The goal title owns the last crumb, so this one is a way back
+                  // to the agent's goal list rather than a label for this page.
+                  title={<Link to={buildAgentPath('goals')}>{t('goalList.title')}</Link>}
                 />
               ) : (
                 <Text fontSize={14} weight={500}>
@@ -191,6 +262,26 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                   be deletable, and this menu is the only place that can do it. */}
               <GoalDetailActions agentId={agentId} goalId={goal.id} projectId={goal.projectId} />
             </Flexbox>
+          }
+          right={
+            graphFullscreen ? undefined : (
+              /* Re-entry point for a collapsed panel: the GoalChat toolbar's
+                 close button (or a drag under the collapse threshold) hides
+                 the panel, and with `expandable={false}` on the panel itself
+                 this header button is the only way back. Hidden while a
+                 drill-down owns the panel — its header carries the close. */
+              <ToggleRightPanelButton
+                hideWhenExpanded
+                expand={showPortal || chatVisible}
+                onToggle={() => {
+                  if (showPortal) {
+                    clearPortalStack();
+                    return;
+                  }
+                  if (panelExpandable) setChatOpen(true);
+                }}
+              />
+            )
           }
         />
         <Flexbox flex={1} style={{ overflowY: 'auto' }}>
@@ -231,11 +322,16 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                   onClick={open('findings')}
                 />
                 <Metric
-                  label={t('goalProcess.metrics.budget')}
+                  label={budgetLabel}
                   value={
-                    <Text fontSize={16} weight={600}>
-                      {budgetText}
-                    </Text>
+                    <>
+                      <Text fontSize={16} weight={600}>
+                        {budgetLead}
+                      </Text>
+                      <Text fontSize={12} type={'secondary'}>
+                        {budgetTrail}
+                      </Text>
+                    </>
                   }
                   onClick={open('budget')}
                 />
@@ -293,7 +389,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
           open, the panel hosts the conversation with the goal's responsible
           agent so a user can just ask about progress. */}
       <RightPanel
-        expand={(showPortal || (chatOpen && !!agentId)) && !graphFullscreen}
+        expand={(showPortal || chatVisible) && !graphFullscreen}
         maxWidth={maxWidth}
         minWidth={minWidth}
         width={width}

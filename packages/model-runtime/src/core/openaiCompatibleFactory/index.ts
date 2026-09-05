@@ -10,9 +10,9 @@ import type { Stream } from 'openai/streaming';
 
 import { ErrorClassifier, refineErrorCode } from '../../errors';
 import {
-  isGPT5ProResponsesModel,
+  isGPTProResponsesModel,
   isResponsesAPIModel,
-  supportsGPT5ResponsesReasoningEffortNone,
+  supportsGPTResponsesReasoningEffortNone,
 } from '../../providers/openai/modelId';
 import type {
   ASROptions,
@@ -164,12 +164,12 @@ const getGenerateObjectResponsesReasoningParams = ({
   reasoning_effort,
   thinking,
 }: GenerateObjectReasoningParams & { model: string }) => {
-  if (isGPT5ProResponsesModel(model)) {
+  if (isGPTProResponsesModel(model)) {
     return reasoning_effort && reasoning_effort !== 'max' ? { reasoning: { effort: 'high' } } : {};
   }
 
   if (thinking?.type === 'disabled') {
-    return supportsGPT5ResponsesReasoningEffortNone(model) ? { reasoning: { effort: 'none' } } : {};
+    return supportsGPTResponsesReasoningEffortNone(model) ? { reasoning: { effort: 'none' } } : {};
   }
 
   return reasoning_effort && reasoning_effort !== 'max'

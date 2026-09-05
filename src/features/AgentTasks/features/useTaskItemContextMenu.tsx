@@ -27,7 +27,8 @@ import { useTaskStore } from '@/store/task';
 import { taskDetailPath } from '../shared/taskDetailPath';
 import { renderMenuExtra } from './menuExtra';
 import { PRIORITY_META } from './TaskPriorityTag';
-import { STATUS_META, USER_SELECTABLE_STATUSES } from './TaskStatusTag';
+import { STATUS_META, USER_SELECTABLE_STATUSES } from './taskStatusMeta';
+import { useTaskStatusChange } from './useTaskStatusChange';
 
 const PRIORITY_LEVELS = [0, 1, 2, 3, 4];
 
@@ -63,7 +64,7 @@ export const useTaskContextMenuActions = (
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const { allowed: canEditTask } = usePermission('create_content');
 
-  const updateTaskStatus = useTaskStore((s) => s.updateTaskStatus);
+  const changeTaskStatus = useTaskStatusChange();
   const updateTask = useTaskStore((s) => s.updateTask);
   const refreshTaskList = useTaskStore((s) => s.refreshTaskList);
   const deleteTask = useTaskStore((s) => s.deleteTask);
@@ -106,7 +107,7 @@ export const useTaskContextMenuActions = (
             domEvent.stopPropagation();
             if (!canEditTask) return;
             if (status === currentStatus) return;
-            void updateTaskStatus(task.identifier, status);
+            void changeTaskStatus(task.identifier, status);
           },
         } as ContextMenuItem;
       });
@@ -275,7 +276,7 @@ export const useTaskContextMenuActions = (
           event.stopPropagation();
           const nextStatus = USER_SELECTABLE_STATUSES[idx];
           if (nextStatus !== currentStatus) {
-            void updateTaskStatus(task.identifier, nextStatus);
+            void changeTaskStatus(task.identifier, nextStatus);
           }
           closeContextMenu();
           cleanup();
@@ -303,7 +304,7 @@ export const useTaskContextMenuActions = (
     t,
     appOrigin,
     activeWorkspaceSlug,
-    updateTaskStatus,
+    changeTaskStatus,
     updateTask,
     refreshTaskList,
     deleteTask,

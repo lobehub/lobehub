@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import {
   type AcceptanceCheck,
+  AcceptanceCheckRow,
   checkDisplayTitle,
   checkHeadMeta,
   CriterionList,
@@ -59,6 +60,8 @@ const styles = createStaticStyles(({ css }) => ({
     padding-inline: 12px;
   `,
 }));
+
+const readOnlyReview = async () => false;
 
 interface AcceptanceErrorProps {
   onRetry: () => void;
@@ -103,7 +106,18 @@ const CompactCheckRow = memo<CompactCheckRowProps>(({ check, onOpen }) => {
 
 CompactCheckRow.displayName = 'TaskAcceptanceCompactCheckRow';
 
-const TaskAcceptance = memo(() => {
+interface TaskAcceptanceProps {
+  /**
+   * `result` — the task result panel. The reader there has just read the
+   * delivery and wants one thing from this block: the checklist and how each
+   * check came out. The round timeline and the 验收目标 contract answer "how
+   * was this judged", which the full report keeps; leading with them buried
+   * the verdicts they came for.
+   */
+  variant?: 'default' | 'result';
+}
+
+const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
   const { t } = useTranslation(['chat', 'verify']);
   const openAcceptance = useChatStore((state) => state.openAcceptance);
   const openAcceptanceCheck = useChatStore((state) => state.openAcceptanceCheck);
@@ -114,6 +128,7 @@ const TaskAcceptance = memo(() => {
   const verify = useTaskStore(taskDetailSelectors.activeTaskVerifyConfig);
   const [sectionExpanded, setSectionExpanded] = useState(true);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
+  const [requirementExpanded, setRequirementExpanded] = useState(false);
 
   const {
     data: acceptanceSubject,
@@ -246,36 +261,49 @@ const TaskAcceptance = memo(() => {
           {bundleError && <AcceptanceError onRetry={() => void mutateBundle()} />}
           {bundle && (
             <>
-              <GoalRoundTimeline rounds={bundle.rounds} />
-              {requirement && (
+              {variant !== 'result' && <GoalRoundTimeline rounds={bundle.rounds} />}
+              {variant !== 'result' && requirement && (
                 <Flexbox gap={6}>
                   <Text fontSize={12} type={'secondary'}>
                     {t('taskDetail.acceptance.goal')}
                   </Text>
-                  <Text>{requirement}</Text>
+                  {/* The contract, not the result. A goal-dispatched task carries
+                      a generated paragraph here, and printing it in full pushed
+                      the checks — the thing the reader came for — below the
+                      fold. Two lines, and the rest on demand. */}
+                  <Text
+                    ellipsis={requirementExpanded ? undefined : { rows: 2 }}
+                    style={{ cursor: 'pointer' }}
+                    title={requirement}
+                    onClick={() => setRequirementExpanded((open) => !open)}
+                  >
+                    {requirement}
+                  </Text>
                 </Flexbox>
               )}
               <Flexbox gap={7}>
-                <Flexbox horizontal align={'center'} gap={8}>
-                  <Text fontSize={12} type={'secondary'}>
-                    {t('taskDetail.acceptance.checklist')}
-                  </Text>
-                  <Flexbox flex={1} />
-                  {grouped && groupKeys.length > 0 && (
-                    <ActionIcon
-                      icon={allGroupsCollapsed ? ChevronsUpDown : ChevronsDownUp}
-                      size={'small'}
-                      title={
-                        allGroupsCollapsed
-                          ? t('taskDetail.acceptance.expandAll')
-                          : t('taskDetail.acceptance.collapseAll')
-                      }
-                      onClick={() =>
-                        setCollapsedGroups(allGroupsCollapsed ? new Set() : new Set(groupKeys))
-                      }
-                    />
-                  )}
-                </Flexbox>
+                {(variant !== 'result' || (grouped && groupKeys.length > 0)) && (
+                  <Flexbox horizontal align={'center'} gap={8}>
+                    <Text fontSize={12} type={'secondary'}>
+                      {t('taskDetail.acceptance.checklist')}
+                    </Text>
+                    <Flexbox flex={1} />
+                    {grouped && groupKeys.length > 0 && (
+                      <ActionIcon
+                        icon={allGroupsCollapsed ? ChevronsUpDown : ChevronsDownUp}
+                        size={'small'}
+                        title={
+                          allGroupsCollapsed
+                            ? t('taskDetail.acceptance.expandAll')
+                            : t('taskDetail.acceptance.collapseAll')
+                        }
+                        onClick={() =>
+                          setCollapsedGroups(allGroupsCollapsed ? new Set() : new Set(groupKeys))
+                        }
+                      />
+                    )}
+                  </Flexbox>
+                )}
                 <CriterionList>
                   {grouped
                     ? groups.map((group) => {
@@ -313,23 +341,47 @@ const TaskAcceptance = memo(() => {
                               />
                             </Flexbox>
                             {!collapsed &&
-                              group.checks.map((check) => (
-                                <CompactCheckRow
-                                  check={check}
-                                  key={check.id}
-                                  onOpen={() => openCheck(bundle.acceptance.id, check.id)}
-                                />
-                              ))}
+                              group.checks.map((check) =>
+                                variant === 'result' ? (
+                                  <AcceptanceCheckRow
+                                    canReview={false}
+                                    check={check}
+                                    expanded={false}
+                                    key={check.id}
+                                    reviewPending={false}
+                                    onReview={readOnlyReview}
+                                    onToggle={() => openCheck(bundle.acceptance.id, check.id)}
+                                  />
+                                ) : (
+                                  <CompactCheckRow
+                                    check={check}
+                                    key={check.id}
+                                    onOpen={() => openCheck(bundle.acceptance.id, check.id)}
+                                  />
+                                ),
+                              )}
                           </Flexbox>
                         );
                       })
-                    : checks.map((check) => (
-                        <CompactCheckRow
-                          check={check}
-                          key={check.id}
-                          onOpen={() => openCheck(bundle.acceptance.id, check.id)}
-                        />
-                      ))}
+                    : checks.map((check) =>
+                        variant === 'result' ? (
+                          <AcceptanceCheckRow
+                            canReview={false}
+                            check={check}
+                            expanded={false}
+                            key={check.id}
+                            reviewPending={false}
+                            onReview={readOnlyReview}
+                            onToggle={() => openCheck(bundle.acceptance.id, check.id)}
+                          />
+                        ) : (
+                          <CompactCheckRow
+                            check={check}
+                            key={check.id}
+                            onOpen={() => openCheck(bundle.acceptance.id, check.id)}
+                          />
+                        ),
+                      )}
                 </CriterionList>
               </Flexbox>
             </>

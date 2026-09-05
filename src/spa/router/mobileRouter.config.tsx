@@ -8,6 +8,7 @@ import {
 } from '@/business/client/BusinessMobileRoutes';
 import AppsSkeleton from '@/components/Skeleton/Apps';
 import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
+import { delayed } from '@/components/Skeleton/Delayed';
 import { acceptanceRouteMeta } from '@/features/Acceptance/routeMeta';
 import AgentRouteSwitch from '@/features/AgentRoute/AgentRouteSwitch';
 import AgentShareLegacyRedirect from '@/features/AgentShareVisitor/LegacyRedirect';
@@ -73,7 +74,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
             shareElement={dynamicElement(
               () => import('@/features/AgentShareVisitor/Page'),
               'Mobile > Share > Agent',
-              { fallback: <ConversationLayoutSkeleton /> },
+              { fallback: delayed(<ConversationLayoutSkeleton />) },
             )}
           />
         ),
@@ -311,7 +312,7 @@ export const mobileRoutes: RouteObject[] = [
       // Apps page (personal-only — never mirrored under /:workspaceSlug)
       {
         element: dynamicElement(() => import('@/routes/(main)/apps'), 'Mobile > Apps', {
-          fallback: <AppsSkeleton />,
+          fallback: delayed(<AppsSkeleton />),
         }),
         errorElement: <ErrorBoundary />,
         path: 'apps',

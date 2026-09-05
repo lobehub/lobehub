@@ -1,4 +1,5 @@
 import { goalStatuses } from '@lobechat/const/goal';
+import { MAX_GOAL_METRIC_CRITERIA } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -114,6 +115,7 @@ export const goalRouter = router({
                       target: z.number(),
                     }),
                   )
+                  .max(MAX_GOAL_METRIC_CRITERIA)
                   .optional(),
               })
               .optional(),
@@ -212,13 +214,15 @@ export const goalRouter = router({
   setMetricCriteria: goalWriteProcedure
     .input(
       idInput.extend({
-        metrics: z.array(
-          z.object({
-            key: z.string().min(1).max(255),
-            op: z.enum(['gte', 'lte', 'gt', 'lt', 'eq']).optional(),
-            target: z.number(),
-          }),
-        ),
+        metrics: z
+          .array(
+            z.object({
+              key: z.string().min(1).max(255),
+              op: z.enum(['gte', 'lte', 'gt', 'lt', 'eq']).optional(),
+              target: z.number(),
+            }),
+          )
+          .max(MAX_GOAL_METRIC_CRITERIA),
       }),
     )
     .mutation(async ({ ctx, input }) => {

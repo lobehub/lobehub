@@ -48,6 +48,7 @@ const GuideShell = ({
               background={cssVar.colorFillQuaternary}
               shape={'square'}
               size={compact ? 32 : 48}
+              style={{ color: cssVar.colorText }}
             />
             <Flexbox gap={2} style={{ minWidth: 0 }}>
               <Text ellipsis={compact} style={{ fontSize: compact ? 14 : 16, fontWeight: 600 }}>

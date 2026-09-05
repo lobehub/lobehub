@@ -307,6 +307,10 @@ export const applyModelExtendParams = (ctx: ApplyModelExtendParamsContext): Mode
     extendParams.reasoning_effort = chatConfig.gpt5_6ReasoningEffort;
   }
 
+  if (modelExtendParams.includes('gpt6ReasoningEffort') && chatConfig.gpt6ReasoningEffort) {
+    extendParams.reasoning_effort = chatConfig.gpt6ReasoningEffort;
+  }
+
   if (modelExtendParams.includes('reasoningMode') && chatConfig.reasoningMode === 'pro') {
     extendParams.reasoning = { ...extendParams.reasoning, mode: 'pro' };
   }
@@ -378,6 +382,27 @@ export const applyModelExtendParams = (ctx: ApplyModelExtendParamsContext): Mode
         ...extendParams.thinking,
         type: 'enabled',
       };
+    }
+  }
+
+  // Qwen3.8 Max: none disables thinking; otherwise enable thinking + set effort.
+  if (modelExtendParams.includes('qwen38ReasoningEffort')) {
+    const qwen38ReasoningEffort = chatConfig.qwen38ReasoningEffort;
+
+    if (typeof qwen38ReasoningEffort === 'string') {
+      if (qwen38ReasoningEffort === 'none') {
+        delete extendParams.reasoning_effort;
+        extendParams.thinking = {
+          ...extendParams.thinking,
+          type: 'disabled',
+        };
+      } else {
+        extendParams.reasoning_effort = qwen38ReasoningEffort;
+        extendParams.thinking = {
+          ...extendParams.thinking,
+          type: 'enabled',
+        };
+      }
     }
   }
 

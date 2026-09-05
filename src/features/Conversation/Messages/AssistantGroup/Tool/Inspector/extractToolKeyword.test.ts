@@ -28,10 +28,14 @@ describe('extractToolKeyword', () => {
       );
     });
 
-    it('prefers command over the model-written description', () => {
+    it('prefers the model-written description over command fragments', () => {
       expect(
         extractToolKeyword({ command: 'ls -la', description: 'List files in current directory' }),
-      ).toBe('ls');
+      ).toBe('List files in current directory');
+    });
+
+    it('falls back to the command program when no description exists', () => {
+      expect(extractToolKeyword({ command: 'ls -la' })).toBe('ls');
     });
   });
 
