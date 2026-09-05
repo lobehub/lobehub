@@ -25,6 +25,9 @@ import { useTranslation } from 'react-i18next';
 import AsyncError from '@/components/AsyncError';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 
+import OfficeSaveError from '../Office/OfficeSaveError';
+import { useOfficeDocumentQueue } from '../Office/useOfficeDocumentQueue';
+import { useOfficeEditorShortcuts } from '../Office/useOfficeEditorShortcuts';
 import {
   DOCX_MIME_TYPE,
   type DocxBlock,
@@ -118,8 +121,6 @@ const download = (bytes: ArrayBuffer, fileName: string) => {
 
 const DOCXEditor = memo<DOCXEditorProps>(({ fileId, fileName, url }) => {
   const { t } = useTranslation('file');
-  const undoRef = useRef<ArrayBuffer[]>([]);
-  const redoRef = useRef<ArrayBuffer[]>([]);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [bytes, setBytes] = useState<ArrayBuffer>();
   const [blocks, setBlocks] = useState<DocxBlock[]>();
@@ -132,62 +133,74 @@ const DOCXEditor = memo<DOCXEditorProps>(({ fileId, fileName, url }) => {
     setBlocks(await inspectDocx(next));
   }, []);
 
+  const onDocumentChange = useCallback(
+    async (next: ArrayBuffer) => {
+      setStatus('saving');
+      await refresh(next);
+      try {
+        await saveDocxDraft(fileId, url, next);
+        setStatus('unsaved');
+        setError(undefined);
+      } catch (cause) {
+        setStatus('failed');
+        throw cause;
+      }
+    },
+    [fileId, refresh, url],
+  );
+  const onQueueError = useCallback((cause: unknown) => {
+    setStatus('failed');
+    setError(cause);
+  }, []);
+  const {
+    apply: applyQueued,
+    initialize,
+    redo,
+    redoStackRef,
+    undo,
+    undoStackRef,
+    withCurrent,
+  } = useOfficeDocumentQueue(onDocumentChange, onQueueError);
+
   const load = useCallback(async () => {
     setError(undefined);
     const draft = await loadDocxDraft(fileId, url);
     const source = draft || (await (await fetch(url)).arrayBuffer());
+    initialize(source);
     await refresh(source);
-    setStatus(draft ? 'unsaved' : 'saved');
-  }, [fileId, refresh, url]);
+    setStatus('saved');
+  }, [fileId, initialize, refresh, url]);
 
   useEffect(() => {
     void load().catch(setError);
   }, [load]);
 
   const apply = useCallback(
-    async (operation: DocxEditOperation) => {
-      if (!bytes) return;
-      undoRef.current.push(bytes);
-      redoRef.current = [];
+    (operation: DocxEditOperation) => {
       setStatus('saving');
-      try {
-        const next = await editDocx(bytes, operation);
-        await refresh(next);
-        await saveDocxDraft(fileId, url, next);
-        setStatus('unsaved');
-      } catch (cause) {
-        undoRef.current.pop();
-        setStatus('failed');
-        setError(cause);
-      }
+      return applyQueued((current) => editDocx(current, operation));
     },
-    [bytes, fileId, refresh, url],
+    [applyQueued],
   );
 
-  const restore = useCallback(
-    async (next: ArrayBuffer) => {
-      setStatus('saving');
-      await refresh(next);
-      await saveDocxDraft(fileId, url, next);
-      setStatus('unsaved');
-    },
-    [fileId, refresh, url],
-  );
+  const save = useCallback(() => {
+    setStatus('saving');
+    void withCurrent(async (current) => {
+      await saveDocxDraft(fileId, url, current);
+      setStatus('saved');
+      setError(undefined);
+    }).catch(onQueueError);
+  }, [fileId, onQueueError, url, withCurrent]);
+  const downloadCurrent = useCallback(() => {
+    void withCurrent((current) => download(current, fileName));
+  }, [fileName, withCurrent]);
 
-  const undo = useCallback(async () => {
-    if (!bytes) return;
-    const previous = undoRef.current.pop();
-    if (!previous) return;
-    redoRef.current.push(bytes);
-    await restore(previous);
-  }, [bytes, restore]);
-  const redo = useCallback(async () => {
-    if (!bytes) return;
-    const next = redoRef.current.pop();
-    if (!next) return;
-    undoRef.current.push(bytes);
-    await restore(next);
-  }, [bytes, restore]);
+  useOfficeEditorShortcuts({
+    dirty: status !== 'saved',
+    onRedo: () => void redo(),
+    onSave: save,
+    onUndo: () => void undo(),
+  });
 
   const selectedParagraph = blocks?.find(
     (block) => block.kind === 'paragraph' && block.index === selected,
@@ -200,13 +213,13 @@ const DOCXEditor = memo<DOCXEditorProps>(({ fileId, fileName, url }) => {
     <Flexbox className={styles.editor}>
       <Flexbox horizontal align={'center'} className={styles.toolbar} gap={6}>
         <ActionIcon
-          disabled={!undoRef.current.length}
+          disabled={!undoStackRef.current.length}
           icon={Undo2}
           title={t('docxEditor.actions.undo')}
           onClick={() => void undo()}
         />
         <ActionIcon
-          disabled={!redoRef.current.length}
+          disabled={!redoStackRef.current.length}
           icon={Redo2}
           title={t('docxEditor.actions.redo')}
           onClick={() => void redo()}
@@ -334,26 +347,16 @@ const DOCXEditor = memo<DOCXEditorProps>(({ fileId, fileName, url }) => {
             event.target.value = '';
           }}
         />
-        <Button
-          icon={Save}
-          size={'small'}
-          onClick={() => {
-            setStatus('saving');
-            void saveDocxDraft(fileId, url, bytes).then(
-              () => setStatus('saved'),
-              () => setStatus('failed'),
-            );
-          }}
-        >
+        <Button icon={Save} size={'small'} onClick={save}>
           {t('docxEditor.actions.save')}
         </Button>
-        <Button icon={Download} size={'small'} onClick={() => download(bytes, fileName)}>
+        <Button icon={Download} size={'small'} onClick={downloadCurrent}>
           {t('docxEditor.actions.download')}
         </Button>
         <span className={styles.status}>{t(`docxEditor.status.${status}`)}</span>
       </Flexbox>
       {Boolean(error) && (
-        <AsyncError error={error} variant={'block'} onRetry={() => setError(undefined)} />
+        <OfficeSaveError error={error} onDownloadRecovery={downloadCurrent} onRetry={save} />
       )}
       <Flexbox align={'center'} className={styles.canvas} gap={8}>
         {blocks.map((block) =>

@@ -25,8 +25,11 @@ import type { CSSProperties } from 'react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 
+import OfficeSaveError from '../Office/OfficeSaveError';
+import { useOfficeEditorShortcuts } from '../Office/useOfficeEditorShortcuts';
 import { loadXlsxDraft, saveXlsxDraft } from './draftStorage';
 import {
   columnName,
@@ -228,9 +231,8 @@ const XLSXEditor = memo<XLSXEditorProps>(({ fileId, fileName, url }) => {
   const [focus, setFocus] = useState('A1');
   const [clipboard, setClipboard] = useState<{ range: string; sheet: string }>();
   const [input, setInput] = useState('');
-  const [status, setStatus] = useState<'xlsxEditor.status.saved' | 'xlsxEditor.status.unsaved'>(
-    'xlsxEditor.status.saved',
-  );
+  const [status, setStatus] = useState<'failed' | 'saved' | 'saving' | 'unsaved'>('saved');
+  const [error, setError] = useState<unknown>();
 
   const refresh = useCallback(async (nextBytes: ArrayBuffer) => {
     setBytes(nextBytes);
@@ -239,9 +241,16 @@ const XLSXEditor = memo<XLSXEditorProps>(({ fileId, fileName, url }) => {
 
   const onWorkbookChange = useCallback(
     async (nextBytes: ArrayBuffer) => {
+      setStatus('saving');
       await refresh(nextBytes);
-      await saveXlsxDraft(fileId, url, nextBytes);
-      setStatus('xlsxEditor.status.unsaved');
+      try {
+        await saveXlsxDraft(fileId, url, nextBytes);
+        setStatus('unsaved');
+        setError(undefined);
+      } catch (cause) {
+        setStatus('failed');
+        throw cause;
+      }
     },
     [fileId, refresh, url],
   );
@@ -254,7 +263,10 @@ const XLSXEditor = memo<XLSXEditorProps>(({ fileId, fileName, url }) => {
     undo,
     undoStackRef,
     withCurrent,
-  } = useWorkbookQueue(onWorkbookChange);
+  } = useWorkbookQueue(onWorkbookChange, (cause) => {
+    setStatus('failed');
+    setError(cause);
+  });
 
   useEffect(() => {
     let active = true;
@@ -265,7 +277,9 @@ const XLSXEditor = memo<XLSXEditorProps>(({ fileId, fileName, url }) => {
       if (!active) return;
       initialize(source);
       await refresh(source);
-    })().catch((error) => console.error('[XLSXEditor] load failed:', error));
+      setStatus('saved');
+      setError(undefined);
+    })().catch(setError);
     return () => {
       active = false;
     };
@@ -306,6 +320,30 @@ const XLSXEditor = memo<XLSXEditorProps>(({ fileId, fileName, url }) => {
     });
   }, [anchor, apply, clipboard, view]);
 
+  const save = useCallback(() => {
+    setStatus('saving');
+    void withCurrent(async (current) => {
+      await saveXlsxDraft(fileId, url, current);
+      setStatus('saved');
+      setError(undefined);
+    }).catch((cause) => {
+      setStatus('failed');
+      setError(cause);
+    });
+  }, [fileId, url, withCurrent]);
+  const downloadCurrent = useCallback(() => {
+    void withCurrent((current) => download(current, fileName));
+  }, [fileName, withCurrent]);
+
+  useOfficeEditorShortcuts({
+    dirty: status !== 'saved',
+    onRedo: () => void redo(),
+    onSave: save,
+    onUndo: () => void undo(),
+  });
+
+  if (error && !bytes)
+    return <AsyncError error={error} variant={'block'} onRetry={() => window.location.reload()} />;
   if (!bytes || !views || !view) return <NeuralNetworkLoading size={36} />;
 
   const selectionRows = rangeSize(selection).rows;
@@ -491,27 +529,17 @@ const XLSXEditor = memo<XLSXEditorProps>(({ fileId, fileName, url }) => {
             });
           }}
         />
-        <Button
-          icon={Save}
-          size={'small'}
-          onClick={() =>
-            withCurrent(async (current) => {
-              await saveXlsxDraft(fileId, url, current);
-              setStatus('xlsxEditor.status.saved');
-            })
-          }
-        >
+        <Button icon={Save} size={'small'} onClick={save}>
           {t('xlsxEditor.actions.save')}
         </Button>
-        <Button
-          icon={Download}
-          size={'small'}
-          onClick={() => withCurrent((current) => download(current, fileName))}
-        >
+        <Button icon={Download} size={'small'} onClick={downloadCurrent}>
           {t('xlsxEditor.actions.download')}
         </Button>
-        <span className={styles.status}>{t(status)}</span>
+        <span className={styles.status}>{t(`xlsxEditor.status.${status}`)}</span>
       </Flexbox>
+      {Boolean(error) && (
+        <OfficeSaveError error={error} onDownloadRecovery={downloadCurrent} onRetry={save} />
+      )}
       <div className={styles.grid}>
         <table>
           <thead>

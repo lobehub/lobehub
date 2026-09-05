@@ -1,0 +1,838 @@
+[
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Save",
+        "Download",
+        "HelloPage11",
+        "WordPage22",
+        "?",
+        "?",
+        "↑",
+        "↓",
+        "?",
+        "?",
+        "?"
+      ],
+      "statusTexts": ["Saved"],
+      "text": "SavedSaveDownloadHelloPage11WordPage22↑↓Slide 1Slide 2Slide 3Slide 4Slide 5Slide 6Slide 7Slide 8Slide 9Slide 10Slide 11Slide 12Slide 13Slide 14Slide 15Slide 16Slide 17HelloPage1"
+    },
+    "key": "pptx",
+    "stage": "1-import",
+    "time": "2026-09-05T09:47:48.961Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-336-office-consistency/r2-failure/pptx-1-import.png"
+    },
+    "key": "pptx",
+    "stage": "1-import-shot",
+    "time": "2026-09-05T09:47:48.982Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Save",
+        "Download",
+        "HelloPage1T-336-R2-PPT 新增文本1",
+        "HelloPage1T-336-R2-PPT 新增文本2",
+        "WordPage23",
+        "?",
+        "?",
+        "↑",
+        "↓",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?"
+      ],
+      "statusTexts": ["Unsaved changes"],
+      "text": "Unsaved changesSaveDownloadHelloPage1T-336-R2-PPT 新增文本1HelloPage1T-336-R2-PPT 新增文本2WordPage23↑↓Slide 1Slide 2Slide 3Slide 4Slide 5Slide 6Slide 7Slide 8Slide 9Slide 10Slide 11Slide 12Slide 13Slide 14Slide 15Slide 16Slide 17HelloPage1T-336-R2-PPT 新增文本"
+    },
+    "key": "pptx",
+    "stage": "2-edit",
+    "time": "2026-09-05T09:47:52.737Z"
+  },
+  {
+    "data": {
+      "ariaLabels": [
+        "Slide 1",
+        "Slide 2",
+        "Slide 3",
+        "作者和日期",
+        "Hello",
+        "Page1",
+        "TextBox 174",
+        "Shape 175",
+        "Chart Fallback 176",
+        "Chart 176"
+      ]
+    },
+    "key": "pptx",
+    "stage": "2-edit-nodes",
+    "time": "2026-09-05T09:47:52.738Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-336-office-consistency/r2-failure/pptx-2-edited.png"
+    },
+    "key": "pptx",
+    "stage": "2-edit-shot",
+    "time": "2026-09-05T09:47:52.758Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Save",
+        "Download",
+        "HelloPage1T-336-R2-PPT 新增文本1",
+        "WordPage22",
+        "?",
+        "?",
+        "↑",
+        "↓",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?"
+      ],
+      "statusTexts": ["Unsaved changes"],
+      "text": "Unsaved changesSaveDownloadHelloPage1T-336-R2-PPT 新增文本1WordPage22↑↓Slide 1Slide 2Slide 3Slide 4Slide 5Slide 6Slide 7Slide 8Slide 9Slide 10Slide 11Slide 12Slide 13Slide 14Slide 15Slide 16Slide 17HelloPage1T-336-R2-PPT 新增文本"
+    },
+    "key": "pptx",
+    "stage": "2-undo",
+    "time": "2026-09-05T09:47:54.316Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Save",
+        "Download",
+        "HelloPage1T-336-R2-PPT 新增文本1",
+        "HelloPage1T-336-R2-PPT 新增文本2",
+        "WordPage23",
+        "?",
+        "?",
+        "↑",
+        "↓",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?"
+      ],
+      "statusTexts": ["Unsaved changes"],
+      "text": "Unsaved changesSaveDownloadHelloPage1T-336-R2-PPT 新增文本1HelloPage1T-336-R2-PPT 新增文本2WordPage23↑↓Slide 1Slide 2Slide 3Slide 4Slide 5Slide 6Slide 7Slide 8Slide 9Slide 10Slide 11Slide 12Slide 13Slide 14Slide 15Slide 16Slide 17HelloPage1T-336-R2-PPT 新增文本"
+    },
+    "key": "pptx",
+    "stage": "2-redo",
+    "time": "2026-09-05T09:47:55.872Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Save",
+        "Download",
+        "Retry save",
+        "Download recovery copy",
+        "HelloPage1T-336-R2-PPT 新增文本1",
+        "HelloPage1T-336-R2-PPT 新增文本2",
+        "WordPage23",
+        "?",
+        "?",
+        "↑",
+        "↓",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?"
+      ],
+      "statusTexts": [],
+      "text": "Save failedSaveDownloadSave failedInjected recoverable save failureRetry saveDownload recovery copyHelloPage1T-336-R2-PPT 新增文本1HelloPage1T-336-R2-PPT 新增文本2WordPage23↑↓Slide 1Slide 2Slide 3Slide 4Slide 5Slide 6Slide 7Slide 8Slide 9Slide 10Slide 11Slide 12Slide 13Slide 14Slide 15Slide 16Slide 17HelloPage1T-336-R2-PPT 新增文本"
+    },
+    "key": "pptx",
+    "stage": "2-save-failed",
+    "time": "2026-09-05T09:47:55.934Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-336-office-consistency/r2-failure/pptx-save-failed.png"
+    },
+    "key": "pptx",
+    "stage": "2-save-failed-shot",
+    "time": "2026-09-05T09:47:55.959Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Save",
+        "Download",
+        "HelloPage1T-336-R2-PPT 新增文本1",
+        "HelloPage1T-336-R2-PPT 新增文本2",
+        "WordPage23",
+        "?",
+        "?",
+        "↑",
+        "↓",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?"
+      ],
+      "statusTexts": ["Saved"],
+      "text": "SavedSaveDownloadHelloPage1T-336-R2-PPT 新增文本1HelloPage1T-336-R2-PPT 新增文本2WordPage23↑↓Slide 1Slide 2Slide 3Slide 4Slide 5Slide 6Slide 7Slide 8Slide 9Slide 10Slide 11Slide 12Slide 13Slide 14Slide 15Slide 16Slide 17HelloPage1T-336-R2-PPT 新增文本"
+    },
+    "key": "pptx",
+    "stage": "3-save",
+    "time": "2026-09-05T09:47:56.020Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-336-office-consistency/r2-failure/pptx-3-saved.png"
+    },
+    "key": "pptx",
+    "stage": "3-save-shot",
+    "time": "2026-09-05T09:47:56.040Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Save",
+        "Download",
+        "HelloPage1T-336-R2-PPT 新增文本1",
+        "HelloPage1T-336-R2-PPT 新增文本2",
+        "WordPage23",
+        "?",
+        "?",
+        "↑",
+        "↓",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?"
+      ],
+      "statusTexts": ["Saved"],
+      "text": "SavedSaveDownloadHelloPage1T-336-R2-PPT 新增文本1HelloPage1T-336-R2-PPT 新增文本2WordPage23↑↓Slide 1Slide 2Slide 3Slide 4Slide 5Slide 6Slide 7Slide 8Slide 9Slide 10Slide 11Slide 12Slide 13Slide 14Slide 15Slide 16Slide 17HelloPage1T-336-R2-PPT 新增文本"
+    },
+    "key": "pptx",
+    "stage": "4-reopen",
+    "time": "2026-09-05T09:48:05.039Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-336-office-consistency/r2-failure/pptx-4-reopened.png"
+    },
+    "key": "pptx",
+    "stage": "4-reopen-shot",
+    "time": "2026-09-05T09:48:05.054Z"
+  },
+  {
+    "data": {
+      "exportPath": "artifacts/t-336-office-consistency/r2-failure/export-T-336-R2-pptx.pptx",
+      "inputBytes": 39304,
+      "inputSha256": "7338a6c2978a9fdaf6575af3dd6e8681d5fc589f91e19e731bc2012e143b8111",
+      "outputBytes": 42241,
+      "outputSha256": "081875e221e4c7cfbdd5e2c4d0ac4d64b1ee73a8cf35864d58c1970110a579c6",
+      "shaChanged": true
+    },
+    "key": "pptx",
+    "stage": "5-export",
+    "time": "2026-09-05T09:48:05.110Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Format",
+        "?",
+        "?",
+        "?",
+        "Insert row",
+        "Delete row",
+        "Insert column",
+        "Delete column",
+        "Save",
+        "Download",
+        "表1",
+        "表2 - 表格 2",
+        "?",
+        "?",
+        "?",
+        "?"
+      ],
+      "statusTexts": ["Saved"],
+      "text": "FormatInsert rowDelete rowInsert columnDelete columnA1SaveDownloadSavedABCDEFGHIJKL1表格 1表格 1表格 1表格 1表格 12类别 A类别 B3项目 1574项目 21085项目 39156项目 47127项目 5162189101112131415161718192021222324252627282930表1表2 - 表格 2"
+    },
+    "key": "xlsx",
+    "stage": "1-import",
+    "time": "2026-09-05T09:48:12.590Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-336-office-consistency/r2-failure/xlsx-1-import.png"
+    },
+    "key": "xlsx",
+    "stage": "1-import-shot",
+    "time": "2026-09-05T09:48:12.699Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Format",
+        "?",
+        "?",
+        "?",
+        "Insert row",
+        "Delete row",
+        "Insert column",
+        "Delete column",
+        "Save",
+        "Download",
+        "表1",
+        "表2 - 表格 2",
+        "?",
+        "?",
+        "?",
+        "?"
+      ],
+      "statusTexts": ["Unsaved changes"],
+      "text": "FormatInsert rowDelete rowInsert columnDelete columnL30SaveDownloadUnsaved changesABCDEFGHIJKL1T-336-R2 数据T-336-R2 数据T-336-R2 数据T-336-R2 数据T-336-R2 数据2类别 A类别 B3项目 1574项目 21085项目 39156项目 47127项目 516218910111213141516171819202122232425262728293010表1表2 - 表格 2"
+    },
+    "key": "xlsx",
+    "stage": "2-formula-grid",
+    "time": "2026-09-05T09:48:19.548Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Format",
+        "?",
+        "?",
+        "?",
+        "Insert row",
+        "Delete row",
+        "Insert column",
+        "Delete column",
+        "Save",
+        "Download",
+        "表1",
+        "表2 - 表格 2",
+        "Sheet3",
+        "?",
+        "?",
+        "?",
+        "?"
+      ],
+      "statusTexts": ["Unsaved changes"],
+      "text": "FormatInsert rowDelete rowInsert columnDelete columnL30SaveDownloadUnsaved changesABCDEFGHIJKL1T-336-R2 数据T-336-R2 数据T-336-R2 数据T-336-R2 数据T-336-R2 数据2类别 A类别 B3项目 1574项目 21085项目 39156项目 47127项目 516218910111213141516171819202122232425262728293010表1表2 - 表格 2Sheet3"
+    },
+    "key": "xlsx",
+    "stage": "2-edit",
+    "time": "2026-09-05T09:48:20.465Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-336-office-consistency/r2-failure/xlsx-2-edited.png"
+    },
+    "key": "xlsx",
+    "stage": "2-edit-shot",
+    "time": "2026-09-05T09:48:20.488Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Format",
+        "?",
+        "?",
+        "?",
+        "Insert row",
+        "Delete row",
+        "Insert column",
+        "Delete column",
+        "Save",
+        "Download",
+        "表1",
+        "表2 - 表格 2",
+        "?",
+        "?",
+        "?",
+        "?"
+      ],
+      "statusTexts": ["Unsaved changes"],
+      "text": "FormatInsert rowDelete rowInsert columnDelete columnL30SaveDownloadUnsaved changesABCDEFGHIJKL1T-336-R2 数据T-336-R2 数据T-336-R2 数据T-336-R2 数据T-336-R2 数据2类别 A类别 B3项目 1574项目 21085项目 39156项目 47127项目 516218910111213141516171819202122232425262728293010表1表2 - 表格 2"
+    },
+    "key": "xlsx",
+    "stage": "2-undo",
+    "time": "2026-09-05T09:48:21.346Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Format",
+        "?",
+        "?",
+        "?",
+        "Insert row",
+        "Delete row",
+        "Insert column",
+        "Delete column",
+        "Save",
+        "Download",
+        "表1",
+        "表2 - 表格 2",
+        "Sheet3",
+        "?",
+        "?",
+        "?",
+        "?"
+      ],
+      "statusTexts": ["Unsaved changes"],
+      "text": "FormatInsert rowDelete rowInsert columnDelete columnL30SaveDownloadUnsaved changesABCDEFGHIJKL1T-336-R2 数据T-336-R2 数据T-336-R2 数据T-336-R2 数据T-336-R2 数据2类别 A类别 B3项目 1574项目 21085项目 39156项目 47127项目 516218910111213141516171819202122232425262728293010表1表2 - 表格 2Sheet3"
+    },
+    "key": "xlsx",
+    "stage": "2-redo",
+    "time": "2026-09-05T09:48:22.203Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Format",
+        "?",
+        "?",
+        "?",
+        "Insert row",
+        "Delete row",
+        "Insert column",
+        "Delete column",
+        "Save",
+        "Download",
+        "Retry save",
+        "Download recovery copy",
+        "表1",
+        "表2 - 表格 2",
+        "Sheet3",
+        "?",
+        "?",
+        "?",
+        "?"
+      ],
+      "statusTexts": [],
+      "text": "FormatInsert rowDelete rowInsert columnDelete columnL30SaveDownloadSave failedSave failedInjected recoverable save failureRetry saveDownload recovery copyABCDEFGHIJKL1T-336-R2 数据T-336-R2 数据T-336-R2 数据T-336-R2 数据T-336-R2 数据2类别 A类别 B3项目 1574项目 21085项目 39156项目 47127项目 516218910111213141516171819202122232425262728293010表1表2 - 表格 2Sheet3"
+    },
+    "key": "xlsx",
+    "stage": "2-save-failed",
+    "time": "2026-09-05T09:48:22.278Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-336-office-consistency/r2-failure/xlsx-save-failed.png"
+    },
+    "key": "xlsx",
+    "stage": "2-save-failed-shot",
+    "time": "2026-09-05T09:48:22.303Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Format",
+        "?",
+        "?",
+        "?",
+        "Insert row",
+        "Delete row",
+        "Insert column",
+        "Delete column",
+        "Save",
+        "Download",
+        "表1",
+        "表2 - 表格 2",
+        "Sheet3",
+        "?",
+        "?",
+        "?",
+        "?"
+      ],
+      "statusTexts": ["Saved"],
+      "text": "FormatInsert rowDelete rowInsert columnDelete columnL30SaveDownloadSavedABCDEFGHIJKL1T-336-R2 数据T-336-R2 数据T-336-R2 数据T-336-R2 数据T-336-R2 数据2类别 A类别 B3项目 1574项目 21085项目 39156项目 47127项目 516218910111213141516171819202122232425262728293010表1表2 - 表格 2Sheet3"
+    },
+    "key": "xlsx",
+    "stage": "3-save",
+    "time": "2026-09-05T09:48:22.377Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-336-office-consistency/r2-failure/xlsx-3-saved.png"
+    },
+    "key": "xlsx",
+    "stage": "3-save-shot",
+    "time": "2026-09-05T09:48:22.403Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Format",
+        "?",
+        "?",
+        "?",
+        "Insert row",
+        "Delete row",
+        "Insert column",
+        "Delete column",
+        "Save",
+        "Download",
+        "表1",
+        "表2 - 表格 2",
+        "Sheet3",
+        "?",
+        "?",
+        "?",
+        "?"
+      ],
+      "statusTexts": ["Saved"],
+      "text": "FormatInsert rowDelete rowInsert columnDelete columnA1SaveDownloadSavedABCDEFGHIJKL1T-336-R2 数据T-336-R2 数据T-336-R2 数据T-336-R2 数据T-336-R2 数据2类别 A类别 B3项目 1574项目 21085项目 39156项目 47127项目 516218910111213141516171819202122232425262728293010表1表2 - 表格 2Sheet3"
+    },
+    "key": "xlsx",
+    "stage": "4-reopen",
+    "time": "2026-09-05T09:48:29.314Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-336-office-consistency/r2-failure/xlsx-4-reopened.png"
+    },
+    "key": "xlsx",
+    "stage": "4-reopen-shot",
+    "time": "2026-09-05T09:48:29.433Z"
+  },
+  {
+    "data": {
+      "exportPath": "artifacts/t-336-office-consistency/r2-failure/export-T-336-R2-xlsx.xlsx",
+      "inputBytes": 7101,
+      "inputSha256": "019597d1701adb261b922d8a66e0f6f0db7d0bfd10659b8e822a8b6f4277db06",
+      "outputBytes": 9024,
+      "outputSha256": "dacbb8073162b0fc97cd1ac20c88f35ad8c8c935e313954fdb0cfa937d4ee2a3",
+      "shaChanged": true
+    },
+    "key": "xlsx",
+    "stage": "5-export",
+    "time": "2026-09-05T09:48:29.490Z"
+  },
+  {
+    "data": {
+      "buttons": ["?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "Save", "Download"],
+      "statusTexts": ["Saved"],
+      "text": "NormalHeading 1Heading 2Heading 3SaveDownloadSaved简单报告副标题轻点或点按此占位符文本并开始键入即可开始。你可以在 Mac、iPad、iPhone 或 iCloud.com 上查看和编辑此文稿。轻松编辑文本、更改字体以及添加精美的图形。使用段落样式来使整篇文稿保持一致的风格。例如，此段落使用“正文”样式。你可以在“格式”控制的“文本”标签页中更改样式。若要添加照片、图像画廊、音频片段、视频、图表或任意 700 多种可自定义形状，请在工具栏中轻点或点按其中一个插入按钮，或者将对象拖放到页面中。你可以分层放置对象、调整其大小以及将其放在页面中的任意位置。若要更改对象随文本移动的方式，请选择对象并随后轻点或点按“格式”控制中的“排列”标签页。小标题Pages 文稿可用于文字处理和页面布局。此“简单报告”模板为文字处理而设置，如此一来，文本便会随着你的键入而从某一页流向下一页，到达页面末尾时会自动创建新的页面。在页面布局文稿中，你可以手动重新排列页面并随意调整页面中的文本框、图像和其他对象的位置。若要创建页面布局文稿，请在模板选取器中选取一种页面布局模板。你也可以在 Mac、iPad 或 iPhone 上将此文稿改为页面布局，方法是在“文稿”控制中关闭“文稿正文”。“这是一个引用（报告中的关键短语）的例子。轻点或点按此文本添加你自己的内容。"
+    },
+    "key": "docx",
+    "stage": "1-import",
+    "time": "2026-09-05T09:48:37.089Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-336-office-consistency/r2-failure/docx-1-import.png"
+    },
+    "key": "docx",
+    "stage": "1-import-shot",
+    "time": "2026-09-05T09:48:37.220Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Save",
+        "Download",
+        "|  | \n |  | \n |  |"
+      ],
+      "statusTexts": ["Unsaved changes"],
+      "text": "NormalHeading 1Heading 2Heading 3SaveDownloadUnsaved changesT-336-R2-WORD 简单报告（已编辑）List item副标题轻点或点按此占位符文本并开始键入即可开始。你可以在 Mac、iPad、iPhone 或 iCloud.com 上查看和编辑此文稿。轻松编辑文本、更改字体以及添加精美的图形。使用段落样式来使整篇文稿保持一致的风格。例如，此段落使用“正文”样式。你可以在“格式”控制的“文本”标签页中更改样式。若要添加照片、图像画廊、音频片段、视频、图表或任意 700 多种可自定义形状，请在工具栏中轻点或点按其中一个插入按钮，或者将对象拖放到页面中。你可以分层放置对象、调整其大小以及将其放在页面中的任意位置。若要更改对象随文本移动的方式，请选择对象并随后轻点或点按“格式”控制中的“排列”标签页。小标题Pages 文稿可用于文字处理和页面布局。此“简单报告”模板为文字处理而设置，如此一来，文本便会随着你的键入而从某一页流向下一页，到达页面末尾时会自动创建新的页面。在页面布局文稿中，你可以手动重新排列页面并随意调整页面中的文本框、图像和其他对象的位置。若要创建页面布局文稿，请在模板选取器中选取一种页面布局模板。你也可以在 Mac、iPad 或 iPhone 上将此文稿改为页面布局，方法是在“文稿”控制中关闭“文稿正文”。"
+    },
+    "key": "docx",
+    "stage": "2-edit",
+    "time": "2026-09-05T09:48:45.756Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-336-office-consistency/r2-failure/docx-2-edited.png"
+    },
+    "key": "docx",
+    "stage": "2-edit-shot",
+    "time": "2026-09-05T09:48:45.789Z"
+  },
+  {
+    "data": {
+      "buttons": ["?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "Save", "Download"],
+      "statusTexts": ["Unsaved changes"],
+      "text": "NormalHeading 1Heading 2Heading 3SaveDownloadUnsaved changesT-336-R2-WORD 简单报告（已编辑）List item副标题轻点或点按此占位符文本并开始键入即可开始。你可以在 Mac、iPad、iPhone 或 iCloud.com 上查看和编辑此文稿。轻松编辑文本、更改字体以及添加精美的图形。使用段落样式来使整篇文稿保持一致的风格。例如，此段落使用“正文”样式。你可以在“格式”控制的“文本”标签页中更改样式。若要添加照片、图像画廊、音频片段、视频、图表或任意 700 多种可自定义形状，请在工具栏中轻点或点按其中一个插入按钮，或者将对象拖放到页面中。你可以分层放置对象、调整其大小以及将其放在页面中的任意位置。若要更改对象随文本移动的方式，请选择对象并随后轻点或点按“格式”控制中的“排列”标签页。小标题Pages 文稿可用于文字处理和页面布局。此“简单报告”模板为文字处理而设置，如此一来，文本便会随着你的键入而从某一页流向下一页，到达页面末尾时会自动创建新的页面。在页面布局文稿中，你可以手动重新排列页面并随意调整页面中的文本框、图像和其他对象的位置。若要创建页面布局文稿，请在模板选取器中选取一种页面布局模板。你也可以在 Mac、iPad 或 iPhone 上将此文稿改为页面布局，方法是在“文稿”控制中关闭“文稿正文”。"
+    },
+    "key": "docx",
+    "stage": "2-undo",
+    "time": "2026-09-05T09:48:46.645Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Save",
+        "Download",
+        "|  | \n |  | \n |  |"
+      ],
+      "statusTexts": ["Unsaved changes"],
+      "text": "NormalHeading 1Heading 2Heading 3SaveDownloadUnsaved changesT-336-R2-WORD 简单报告（已编辑）List item副标题轻点或点按此占位符文本并开始键入即可开始。你可以在 Mac、iPad、iPhone 或 iCloud.com 上查看和编辑此文稿。轻松编辑文本、更改字体以及添加精美的图形。使用段落样式来使整篇文稿保持一致的风格。例如，此段落使用“正文”样式。你可以在“格式”控制的“文本”标签页中更改样式。若要添加照片、图像画廊、音频片段、视频、图表或任意 700 多种可自定义形状，请在工具栏中轻点或点按其中一个插入按钮，或者将对象拖放到页面中。你可以分层放置对象、调整其大小以及将其放在页面中的任意位置。若要更改对象随文本移动的方式，请选择对象并随后轻点或点按“格式”控制中的“排列”标签页。小标题Pages 文稿可用于文字处理和页面布局。此“简单报告”模板为文字处理而设置，如此一来，文本便会随着你的键入而从某一页流向下一页，到达页面末尾时会自动创建新的页面。在页面布局文稿中，你可以手动重新排列页面并随意调整页面中的文本框、图像和其他对象的位置。若要创建页面布局文稿，请在模板选取器中选取一种页面布局模板。你也可以在 Mac、iPad 或 iPhone 上将此文稿改为页面布局，方法是在“文稿”控制中关闭“文稿正文”。"
+    },
+    "key": "docx",
+    "stage": "2-redo",
+    "time": "2026-09-05T09:48:47.502Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Save",
+        "Download",
+        "Retry save",
+        "Download recovery copy",
+        "|  | \n |  | \n |  |"
+      ],
+      "statusTexts": [],
+      "text": "NormalHeading 1Heading 2Heading 3SaveDownloadSave failedSave failedInjected recoverable save failureRetry saveDownload recovery copyT-336-R2-WORD 简单报告（已编辑）List item副标题轻点或点按此占位符文本并开始键入即可开始。你可以在 Mac、iPad、iPhone 或 iCloud.com 上查看和编辑此文稿。轻松编辑文本、更改字体以及添加精美的图形。使用段落样式来使整篇文稿保持一致的风格。例如，此段落使用“正文”样式。你可以在“格式”控制的“文本”标签页中更改样式。若要添加照片、图像画廊、音频片段、视频、图表或任意 700 多种可自定义形状，请在工具栏中轻点或点按其中一个插入按钮，或者将对象拖放到页面中。你可以分层放置对象、调整其大小以及将其放在页面中的任意位置。若要更改对象随文本移动的方式，请选择对象并随后轻点或点按“格式”控制中的“排列”标签页。小标题Pages 文稿可用于文字处理和页面布局。此“简单报告”模板为文字处理而设置，如此一来，文本便会随着你的键入而从某一页流向下一页，到达页面末尾时会自动创建新的页面。在页面布局文稿中，你可以手动重新排列页面并随意调整页面中的文本框、图像和其他对象的位置。若要创建页面布局文稿，请在模"
+    },
+    "key": "docx",
+    "stage": "2-save-failed",
+    "time": "2026-09-05T09:48:47.564Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-336-office-consistency/r2-failure/docx-save-failed.png"
+    },
+    "key": "docx",
+    "stage": "2-save-failed-shot",
+    "time": "2026-09-05T09:48:47.599Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Save",
+        "Download",
+        "|  | \n |  | \n |  |"
+      ],
+      "statusTexts": ["Saved"],
+      "text": "NormalHeading 1Heading 2Heading 3SaveDownloadSavedT-336-R2-WORD 简单报告（已编辑）List item副标题轻点或点按此占位符文本并开始键入即可开始。你可以在 Mac、iPad、iPhone 或 iCloud.com 上查看和编辑此文稿。轻松编辑文本、更改字体以及添加精美的图形。使用段落样式来使整篇文稿保持一致的风格。例如，此段落使用“正文”样式。你可以在“格式”控制的“文本”标签页中更改样式。若要添加照片、图像画廊、音频片段、视频、图表或任意 700 多种可自定义形状，请在工具栏中轻点或点按其中一个插入按钮，或者将对象拖放到页面中。你可以分层放置对象、调整其大小以及将其放在页面中的任意位置。若要更改对象随文本移动的方式，请选择对象并随后轻点或点按“格式”控制中的“排列”标签页。小标题Pages 文稿可用于文字处理和页面布局。此“简单报告”模板为文字处理而设置，如此一来，文本便会随着你的键入而从某一页流向下一页，到达页面末尾时会自动创建新的页面。在页面布局文稿中，你可以手动重新排列页面并随意调整页面中的文本框、图像和其他对象的位置。若要创建页面布局文稿，请在模板选取器中选取一种页面布局模板。你也可以在 Mac、iPad 或 iPhone 上将此文稿改为页面布局，方法是在“文稿”控制中关闭“文稿正文”。“这是一个引用（报告"
+    },
+    "key": "docx",
+    "stage": "3-save",
+    "time": "2026-09-05T09:48:47.661Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-336-office-consistency/r2-failure/docx-3-saved.png"
+    },
+    "key": "docx",
+    "stage": "3-save-shot",
+    "time": "2026-09-05T09:48:47.691Z"
+  },
+  {
+    "data": {
+      "buttons": [
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "?",
+        "Save",
+        "Download",
+        "|  | \n |  | \n |  |"
+      ],
+      "statusTexts": ["Saved"],
+      "text": "NormalHeading 1Heading 2Heading 3SaveDownloadSavedT-336-R2-WORD 简单报告（已编辑）List item副标题轻点或点按此占位符文本并开始键入即可开始。你可以在 Mac、iPad、iPhone 或 iCloud.com 上查看和编辑此文稿。轻松编辑文本、更改字体以及添加精美的图形。使用段落样式来使整篇文稿保持一致的风格。例如，此段落使用“正文”样式。你可以在“格式”控制的“文本”标签页中更改样式。若要添加照片、图像画廊、音频片段、视频、图表或任意 700 多种可自定义形状，请在工具栏中轻点或点按其中一个插入按钮，或者将对象拖放到页面中。你可以分层放置对象、调整其大小以及将其放在页面中的任意位置。若要更改对象随文本移动的方式，请选择对象并随后轻点或点按“格式”控制中的“排列”标签页。小标题Pages 文稿可用于文字处理和页面布局。此“简单报告”模板为文字处理而设置，如此一来，文本便会随着你的键入而从某一页流向下一页，到达页面末尾时会自动创建新的页面。在页面布局文稿中，你可以手动重新排列页面并随意调整页面中的文本框、图像和其他对象的位置。若要创建页面布局文稿，请在模板选取器中选取一种页面布局模板。你也可以在 Mac、iPad 或 iPhone 上将此文稿改为页面布局，方法是在“文稿”控制中关闭“文稿正文”。“这是一个引用（报告"
+    },
+    "key": "docx",
+    "stage": "4-reopen",
+    "time": "2026-09-05T09:48:53.252Z"
+  },
+  {
+    "data": {
+      "screenshot": "artifacts/t-336-office-consistency/r2-failure/docx-4-reopened.png"
+    },
+    "key": "docx",
+    "stage": "4-reopen-shot",
+    "time": "2026-09-05T09:48:53.307Z"
+  },
+  {
+    "data": {
+      "exportPath": "artifacts/t-336-office-consistency/r2-failure/export-T-336-R2-docx.docx",
+      "inputBytes": 9387,
+      "inputSha256": "25ee9d2f05861810b44f6d866869f329b079a9a4d08b9ba7ec25cbeb06f62433",
+      "outputBytes": 61482,
+      "outputSha256": "370b80154f8f478d9151acb1ba0f90eac781001a6eb40ce024f2fcd273afad5d",
+      "shaChanged": true
+    },
+    "key": "docx",
+    "stage": "5-export",
+    "time": "2026-09-05T09:48:53.365Z"
+  }
+]

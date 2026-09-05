@@ -20,11 +20,16 @@ const {
 } = require('../../../node_modules/.pnpm/playwright@1.62.1/node_modules/playwright');
 
 const root = path.resolve(import.meta.dirname, '../../..');
-const outputDir = path.join(root, 'artifacts/t-325-office-baseline/r4');
+const outputDir = path.resolve(
+  root,
+  process.env.OFFICE_EVIDENCE_DIR || 'artifacts/t-325-office-baseline/r4',
+);
 await mkdir(outputDir, { recursive: true });
 
-const BASE = 'http://localhost:9876';
-const MARKER = 'T-325-R4';
+const BASE = process.env.OFFICE_BASE_URL || 'http://localhost:9876';
+const MARKER = process.env.OFFICE_MARKER || 'T-325-R4';
+const ACTION_WAIT_MS = Number(process.env.OFFICE_ACTION_WAIT_MS || 3500);
+const INJECT_SAVE_FAILURE = process.env.OFFICE_INJECT_SAVE_FAILURE === '1';
 const sha256 = (buffer) => createHash('sha256').update(buffer).digest('hex');
 
 const cases = {
@@ -57,29 +62,37 @@ const note = (key, stage, data) => {
 const mount = async (page, key, { resetDrafts = false } = {}) => {
   const item = cases[key];
   await page.goto(`${BASE}/`, { timeout: 120_000, waitUntil: 'domcontentloaded' });
+  // The SPA shell may perform one startup navigation while resolving its base
+  // route. Mount only after that navigation settles so the execution context is
+  // not replaced between fixture setup and React.render.
+  await page.waitForTimeout(2000);
   if (resetDrafts)
-    await page.evaluate(
-      () =>
-        Promise.all(
-          ['lobehub-pptx-editor', 'lobehub-xlsx-editor', 'lobehub-office-drafts'].map(
-            (name) =>
-              new Promise((resolve) => {
-                const request = indexedDB.deleteDatabase(name);
-                request.onsuccess = request.onerror = request.onblocked = () => resolve(null);
-              }),
-          ),
+    await page.evaluate(() =>
+      Promise.all(
+        ['lobehub-pptx-editor', 'lobehub-xlsx-editor', 'lobehub-office-drafts'].map(
+          (name) =>
+            new Promise((resolve) => {
+              const request = indexedDB.deleteDatabase(name);
+              request.onsuccess = request.onerror = request.onblocked = () => resolve(null);
+            }),
         ),
+      ),
     );
   await page.evaluate(
     async ({ fileId, fileName, rendererPath, url }) => {
-      const [{ default: React }, { default: ReactDOMClient }, { default: Editor }, ui, motionReact] =
-        await Promise.all([
-          import('/node_modules/.vite/deps/react.js'),
-          import('/node_modules/.vite/deps/react-dom_client.js'),
-          import(rendererPath),
-          import('/node_modules/.vite/deps/@lobehub_ui.js'),
-          import('/node_modules/.vite/deps/motion_react.js'),
-        ]);
+      const [
+        { default: React },
+        { default: ReactDOMClient },
+        { default: Editor },
+        ui,
+        motionReact,
+      ] = await Promise.all([
+        import('/node_modules/.vite/deps/react.js'),
+        import('/node_modules/.vite/deps/react-dom_client.js'),
+        import(rendererPath),
+        import('/node_modules/.vite/deps/@lobehub_ui.js'),
+        import('/node_modules/.vite/deps/motion_react.js'),
+      ]);
       document.body.innerHTML =
         '<main style="height:900px;padding:16px"><header style="height:32px;font:600 16px sans-serif">T-325 R4 · ' +
         fileName +
@@ -121,7 +134,7 @@ const clickAction = async (page, candidates) => {
     return null;
   }, candidates);
   if (!found) throw new Error(`No control matched: ${candidates.join(' | ')}`);
-  await page.waitForTimeout(3500);
+  await page.waitForTimeout(ACTION_WAIT_MS);
   return found;
 };
 
@@ -181,6 +194,28 @@ const waitStatus = async (page, kind, extraKeys = []) => {
   );
 };
 
+const exerciseSaveFailure = async (page, key) => {
+  if (!INJECT_SAVE_FAILURE) return;
+  await page.evaluate(() => {
+    window.__officeOriginalPut = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function () {
+      throw new DOMException('Injected recoverable save failure', 'QuotaExceededError');
+    };
+  });
+  await clickAction(page, ['Save', '保存']);
+  await page.waitForFunction(
+    () => document.querySelector('#editor')?.textContent?.includes('Save failed'),
+    undefined,
+    { timeout: 10_000 },
+  );
+  note(key, '2-save-failed', await uiState(page));
+  note(key, '2-save-failed-shot', { screenshot: await shot(page, `${key}-save-failed.png`) });
+  await page.evaluate(() => {
+    IDBObjectStore.prototype.put = window.__officeOriginalPut;
+    delete window.__officeOriginalPut;
+  });
+};
+
 /* ------------------------------------------------------------------ PPTX */
 {
   const key = 'pptx';
@@ -200,9 +235,15 @@ const waitStatus = async (page, kind, extraKeys = []) => {
   await clickAction(page, ['svg:lucide-copy']);
   await page.waitForTimeout(3500);
   note(key, '2-edit', await uiState(page));
-  note(key, '2-edit-nodes', await page.evaluate(() => ({
-    ariaLabels: [...document.querySelectorAll('button[aria-label]')].map((b) => b.getAttribute('aria-label')),
-  })));
+  note(
+    key,
+    '2-edit-nodes',
+    await page.evaluate(() => ({
+      ariaLabels: [...document.querySelectorAll('button[aria-label]')].map((b) =>
+        b.getAttribute('aria-label'),
+      ),
+    })),
+  );
   note(key, '2-edit-shot', { screenshot: await shot(page, 'pptx-2-edited.png') });
 
   await clickAction(page, ['svg:lucide-undo-2']);
@@ -212,6 +253,7 @@ const waitStatus = async (page, kind, extraKeys = []) => {
   await page.waitForTimeout(1500);
   note(key, '2-redo', await uiState(page));
 
+  await exerciseSaveFailure(page, key);
   await clickAction(page, ['Save', '保存']);
   await waitStatus(page, 'saved', ['pptxEditor.status.saved']);
   note(key, '3-save', await uiState(page));
@@ -223,13 +265,7 @@ const waitStatus = async (page, kind, extraKeys = []) => {
   note(key, '4-reopen', await uiState(page));
   note(key, '4-reopen-shot', { screenshot: await shot(page, 'pptx-4-reopened.png') });
 
-  note(
-    key,
-    '5-export',
-    await download(page, key, () =>
-      clickAction(page, ['Download', '下载']),
-    ),
-  );
+  note(key, '5-export', await download(page, key, () => clickAction(page, ['Download', '下载'])));
   await page.close();
 }
 
@@ -278,6 +314,7 @@ const waitStatus = async (page, kind, extraKeys = []) => {
   await page.waitForTimeout(800);
   note(key, '2-redo', await uiState(page));
 
+  await exerciseSaveFailure(page, key);
   await clickAction(page, ['Save', '保存']);
   await waitStatus(page, 'saved', ['xlsxEditor.status.saved']);
   note(key, '3-save', await uiState(page));
@@ -289,13 +326,7 @@ const waitStatus = async (page, kind, extraKeys = []) => {
   note(key, '4-reopen', await uiState(page));
   note(key, '4-reopen-shot', { screenshot: await shot(page, 'xlsx-4-reopened.png') });
 
-  note(
-    key,
-    '5-export',
-    await download(page, key, () =>
-      clickAction(page, ['Download', '下载']),
-    ),
-  );
+  note(key, '5-export', await download(page, key, () => clickAction(page, ['Download', '下载'])));
   await page.close();
 }
 
@@ -332,6 +363,7 @@ const waitStatus = async (page, kind, extraKeys = []) => {
   await page.waitForTimeout(800);
   note(key, '2-redo', await uiState(page));
 
+  await exerciseSaveFailure(page, key);
   await clickAction(page, ['Save', '保存']);
   await waitStatus(page, 'saved', ['docxEditor.status.saved']);
   note(key, '3-save', await uiState(page));
@@ -343,13 +375,7 @@ const waitStatus = async (page, kind, extraKeys = []) => {
   note(key, '4-reopen', await uiState(page));
   note(key, '4-reopen-shot', { screenshot: await shot(page, 'docx-4-reopened.png') });
 
-  note(
-    key,
-    '5-export',
-    await download(page, key, () =>
-      clickAction(page, ['Download', '下载']),
-    ),
-  );
+  note(key, '5-export', await download(page, key, () => clickAction(page, ['Download', '下载'])));
   await page.close();
 }
 

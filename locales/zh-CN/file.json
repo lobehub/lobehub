@@ -121,6 +121,9 @@
   "notSupportGuide.features.libraries.desc": "支持创建资源库，允许添加不同类型的文件，构建属于你的领域资源",
   "notSupportGuide.features.libraries.title": "资源库",
   "notSupportGuide.title": "当前部署模式不支持文件管理",
+  "officeEditor.downloadRecovery": "下载恢复副本",
+  "officeEditor.retrySave": "重试保存",
+  "officeEditor.saveFailed": "保存失败",
   "pageEditor.addIcon": "添加图标",
   "pageEditor.autoSaveMessage": "文稿会自动保存，无需手动保存",
   "pageEditor.chooseIcon": "选择图标",
@@ -286,6 +289,7 @@
   "pptxEditor.prompts.chartCategories": "图表分类，以逗号分隔",
   "pptxEditor.prompts.chartValues": "图表数值，以逗号分隔",
   "pptxEditor.prompts.text": "文本",
+  "pptxEditor.status.failed": "保存失败",
   "pptxEditor.status.saved": "已保存",
   "pptxEditor.status.saving": "正在保存…",
   "pptxEditor.status.unsaved": "有未保存的更改",
@@ -405,6 +409,8 @@
   "xlsxEditor.formats.percent": "百分比",
   "xlsxEditor.prompts.deleteSheet": "删除工作表 \"{{name}}\"？",
   "xlsxEditor.prompts.renameSheet": "工作表名称",
+  "xlsxEditor.status.failed": "保存失败",
   "xlsxEditor.status.saved": "已保存",
+  "xlsxEditor.status.saving": "正在保存…",
   "xlsxEditor.status.unsaved": "有未保存的更改"
 }

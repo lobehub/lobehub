@@ -31,6 +31,9 @@ import { useTranslation } from 'react-i18next';
 import AsyncError from '@/components/AsyncError';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 
+import OfficeSaveError from '../Office/OfficeSaveError';
+import { useOfficeDocumentQueue } from '../Office/useOfficeDocumentQueue';
+import { useOfficeEditorShortcuts } from '../Office/useOfficeEditorShortcuts';
 import { loadPptxDraft, savePptxDraft } from './draftStorage';
 import {
   type AddImageOperation,
@@ -60,15 +63,6 @@ const styles = createStaticStyles(({ css }) => ({
     min-width: 0;
     height: 100%;
     background: ${cssVar.colorBgLayout};
-  `,
-  error: css`
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorErrorBorder};
-
-    color: ${cssVar.colorError};
-
-    background: ${cssVar.colorErrorBg};
   `,
   overlay: css`
     cursor: move;
@@ -255,17 +249,48 @@ const PPTXEditor = memo<PPTXEditorProps>(({ fileId, fileName, url }) => {
   const canvasRef = useRef<HTMLDivElement>(null);
   const renderHostRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const undoRef = useRef<ArrayBuffer[]>([]);
-  const redoRef = useRef<ArrayBuffer[]>([]);
   const [bytes, setBytes] = useState<ArrayBuffer>();
   const [deck, setDeck] = useState<RenderedDeck>();
   const [slideIndex, setSlideIndex] = useState(0);
   const [selectedNodeId, setSelectedNodeId] = useState<string>();
   const [busy, setBusy] = useState(true);
-  const [dirty, setDirty] = useState(false);
+  const [status, setStatus] = useState<'failed' | 'saved' | 'saving' | 'unsaved'>('saved');
   const [error, setError] = useState<unknown>();
   const [historyVersion, setHistoryVersion] = useState(0);
   const [canvasScale, setCanvasScale] = useState(1);
+
+  const onDocumentChange = useCallback(
+    async (next: ArrayBuffer) => {
+      setBusy(true);
+      setStatus('saving');
+      setBytes(next);
+      try {
+        await savePptxDraft(fileId, url, next.slice(0));
+        setStatus('unsaved');
+        setError(undefined);
+      } catch (cause) {
+        setStatus('failed');
+        throw cause;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [fileId, url],
+  );
+  const onQueueError = useCallback((cause: unknown) => {
+    setBusy(false);
+    setStatus('failed');
+    setError(cause);
+  }, []);
+  const {
+    apply: applyQueued,
+    initialize,
+    redo,
+    redoStackRef,
+    undo,
+    undoStackRef,
+    withCurrent,
+  } = useOfficeDocumentQueue(onDocumentChange, onQueueError);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -276,8 +301,10 @@ const PPTXEditor = memo<PPTXEditorProps>(({ fileId, fileName, url }) => {
         const source =
           draft?.bytes || (await (await fetch(url, { signal: controller.signal })).arrayBuffer());
         if (!controller.signal.aborted) {
-          setBytes(await preparePptxForEditing(source));
-          setDirty(Boolean(draft));
+          const prepared = await preparePptxForEditing(source);
+          initialize(prepared);
+          setBytes(prepared);
+          setStatus('saved');
           setError(undefined);
         }
       } catch (loadError) {
@@ -288,7 +315,7 @@ const PPTXEditor = memo<PPTXEditorProps>(({ fileId, fileName, url }) => {
     };
     void load();
     return () => controller.abort();
-  }, [fileId, url]);
+  }, [fileId, initialize, url]);
 
   useEffect(() => {
     if (!bytes) return;
@@ -340,58 +367,42 @@ const PPTXEditor = memo<PPTXEditorProps>(({ fileId, fileName, url }) => {
   }, [deck, slideIndex]);
 
   const apply = useCallback(
-    async (operation: PptxEditOperation | AddImageOperation, history = true) => {
-      if (!bytes) return;
+    (operation: PptxEditOperation | AddImageOperation) => {
       setBusy(true);
-      try {
-        const next = await editPptx(bytes.slice(0), operation);
-        if (history) {
-          undoRef.current = [...undoRef.current.slice(-19), bytes];
-          redoRef.current = [];
-        }
-        setBytes(next);
-        setDirty(true);
+      setStatus('saving');
+      return applyQueued(async (current) => {
+        const next = await editPptx(current, operation);
         setHistoryVersion((value) => value + 1);
-        await savePptxDraft(fileId, url, next.slice(0));
-        setError(undefined);
-      } catch (operationError) {
-        setError(operationError);
-      } finally {
-        setBusy(false);
-      }
+        return next;
+      });
     },
-    [bytes, fileId, url],
+    [applyQueued],
   );
 
-  const restoreHistory = useCallback(
-    async (direction: 'redo' | 'undo') => {
-      if (!bytes) return;
-      const source = direction === 'undo' ? undoRef : redoRef;
-      const target = direction === 'undo' ? redoRef : undoRef;
-      const next = source.current.pop();
-      if (!next) return;
-      target.current.push(bytes);
-      setBytes(next);
-      setDirty(true);
-      setHistoryVersion((value) => value + 1);
-      await savePptxDraft(fileId, url, next.slice(0));
-    },
-    [bytes, fileId, url],
-  );
+  const undoEdit = useCallback(() => void undo(), [undo]);
+  const redoEdit = useCallback(() => void redo(), [redo]);
 
-  const save = useCallback(async () => {
-    if (!bytes) return;
+  const save = useCallback(() => {
     setBusy(true);
-    try {
-      await savePptxDraft(fileId, url, bytes.slice(0));
-      setDirty(false);
+    setStatus('saving');
+    void withCurrent(async (current) => {
+      await savePptxDraft(fileId, url, current.slice(0));
+      setStatus('saved');
       setError(undefined);
-    } catch (saveError) {
-      setError(saveError);
-    } finally {
       setBusy(false);
-    }
-  }, [bytes, fileId, url]);
+    }).catch(onQueueError);
+  }, [fileId, onQueueError, url, withCurrent]);
+
+  const downloadCurrent = useCallback(() => {
+    void withCurrent((current) => downloadBuffer(current, fileName));
+  }, [fileName, withCurrent]);
+
+  useOfficeEditorShortcuts({
+    dirty: status === 'failed' || status === 'saving' || status === 'unsaved',
+    onRedo: redoEdit,
+    onSave: save,
+    onUndo: undoEdit,
+  });
 
   const selectedNode = deck?.presentation.slides[slideIndex]?.nodes.find(
     (node) => node.id === selectedNodeId,
@@ -485,16 +496,16 @@ const PPTXEditor = memo<PPTXEditorProps>(({ fileId, fileName, url }) => {
       <Flexbox horizontal align="center" className={styles.toolbar} gap={4} justify="space-between">
         <Flexbox horizontal align="center" gap={4}>
           <ActionIcon
-            disabled={undoRef.current.length === 0 || busy}
+            disabled={undoStackRef.current.length === 0 || busy}
             icon={Undo2}
             title={t('pptxEditor.actions.undo')}
-            onClick={() => void restoreHistory('undo')}
+            onClick={undoEdit}
           />
           <ActionIcon
-            disabled={redoRef.current.length === 0 || busy}
+            disabled={redoStackRef.current.length === 0 || busy}
             icon={Redo2}
             title={t('pptxEditor.actions.redo')}
-            onClick={() => void restoreHistory('redo')}
+            onClick={redoEdit}
           />
           <ActionIcon
             icon={Type}
@@ -600,29 +611,18 @@ const PPTXEditor = memo<PPTXEditorProps>(({ fileId, fileName, url }) => {
         </Flexbox>
         <Flexbox horizontal align="center" gap={8}>
           <span className={styles.status} key={historyVersion}>
-            {busy
-              ? t('pptxEditor.status.saving')
-              : dirty
-                ? t('pptxEditor.status.unsaved')
-                : t('pptxEditor.status.saved')}
+            {t(`pptxEditor.status.${busy && status !== 'failed' ? 'saving' : status}`)}
           </span>
-          <Button icon={Save} loading={busy} size="small" onClick={() => void save()}>
+          <Button icon={Save} loading={busy} size="small" onClick={save}>
             {t('pptxEditor.actions.save')}
           </Button>
-          <Button
-            icon={Download}
-            size="small"
-            type="primary"
-            onClick={() => bytes && downloadBuffer(bytes, fileName)}
-          >
+          <Button icon={Download} size="small" type="primary" onClick={downloadCurrent}>
             {t('pptxEditor.actions.download')}
           </Button>
         </Flexbox>
       </Flexbox>
       {error !== undefined && (
-        <div className={styles.error} role="alert">
-          {error instanceof Error ? error.message : String(error)}
-        </div>
+        <OfficeSaveError error={error} onDownloadRecovery={downloadCurrent} onRetry={save} />
       )}
       <Flexbox horizontal flex={1} style={{ minHeight: 0 }}>
         <Flexbox className={styles.thumbnails} gap={12}>

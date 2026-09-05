@@ -12,13 +12,14 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const setup = () => {
   const changes: string[] = [];
+  const onError = vi.fn();
   const { result } = renderHook(() =>
     useWorkbookQueue(async (bytes) => {
       changes.push(decode(bytes));
-    }),
+    }, onError),
   );
   result.current.initialize(encode('base'));
-  return { changes, queue: result.current };
+  return { changes, onError, queue: result.current };
 };
 
 describe('useWorkbookQueue', () => {
@@ -62,10 +63,9 @@ describe('useWorkbookQueue', () => {
   });
 
   it('keeps accepting operations after a failed edit', async () => {
-    const { changes, queue } = setup();
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { changes, onError, queue } = setup();
 
-    void queue.apply(async () => {
+    await queue.apply(async () => {
       throw new Error('corrupt operation');
     });
     await queue.apply(async (current) => encode(`${decode(current)}+ok`));
@@ -73,7 +73,6 @@ describe('useWorkbookQueue', () => {
     // The failed edit pushed history but produced no bytes; the next edit still
     // starts from the last good state.
     expect(changes).toEqual(['base+ok']);
-    expect(consoleError).toHaveBeenCalled();
-    consoleError.mockRestore();
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'corrupt operation' }));
   });
 });
