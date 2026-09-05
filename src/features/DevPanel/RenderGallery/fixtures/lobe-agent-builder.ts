@@ -83,7 +83,10 @@ export default defineFixtures({
     updatePrompt: single({
       pluginState: {
         newPrompt:
-          'Be concise, keep teammates unblocked, and prefer reusable preview infrastructure over one-off screenshots.',
+          '# Role\n\nYou are a devtools copilot.\n\n- Be concise and keep teammates unblocked.\n- Prefer reusable preview infrastructure over one-off screenshots.',
+        previousPrompt:
+          '# Role\n\nYou are a workspace helper.\n\n- Be concise and keep teammates unblocked.',
+        success: true,
       },
     }),
   },
