@@ -105,6 +105,12 @@ const modelContextWindowTokens = (id: string, provider: string) => (s: AIProvide
   return model?.contextWindowTokens;
 };
 
+const modelMaxOutput = (id: string, provider: string) => (s: AIProviderStoreState) => {
+  const model = getEnabledModelById(id, provider)(s);
+
+  return model?.maxOutput;
+};
+
 const modelExtendParams = (id: string, provider: string) => (s: AIProviderStoreState) => {
   const model = getEnabledModelById(id, provider)(s);
 
@@ -224,6 +230,7 @@ export const aiModelSelectors = {
   modelContextWindowTokens,
   modelDisabledParams,
   modelExtendParams,
+  modelMaxOutput,
   modelReasoningConfig,
   modelReasoningExtendParams,
   totalAiProviderModelList,

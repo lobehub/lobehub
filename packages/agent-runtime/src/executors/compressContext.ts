@@ -7,6 +7,7 @@ import type {
   GeneralAgentCompressionResultPayload,
   InstructionExecutor,
 } from '../types';
+import { collectPreservedMessageIds, selectPreservedTail } from '../utils/preserveTail';
 
 const getErrorMessage = (error: unknown): string => {
   if (error instanceof Error && error.message) return error.message;
@@ -42,7 +43,7 @@ export const compressContext =
   (host: AgentRuntimeHost): InstructionExecutor =>
   async (instruction, state) => {
     const { payload } = instruction as Extract<AgentInstruction, { type: 'compress_context' }>;
-    const { messages, currentTokenCount, existingSummary } = payload;
+    const { messages, currentTokenCount, existingSummary, preserveTailTokens } = payload;
     const { operation, transports } = host;
     const { operationId, stepIndex, userId } = operation;
     const events: AgentEvent[] = [];
@@ -54,18 +55,33 @@ export const compressContext =
     const threadId = operation.threadId ?? state.metadata?.threadId;
     const compression = transports.compression;
     const llm = transports.llm;
-    // The latest user turn is the active contract even after assistant/tool steps have followed it.
-    // Keep it verbatim and re-inject it after the summary so compression can never demote a Task's
-    // Current Work instruction into historical prose or reactivate an older objective.
+    // Preservation is the UNION of two independent rules:
+    //
+    // 1. The latest user turn is the active contract even after assistant/tool
+    //    steps have followed it — keeping it verbatim stops compression from
+    //    demoting a Task's Current Work instruction into historical prose or
+    //    reactivating an older objective. It is found by scanning backwards, so
+    //    it may sit BEFORE the trailing slice.
+    // 2. The trailing slice within `preserveTailTokens` — without it a
+    //    mid-loop compaction drops the tool results and edits the model is
+    //    actively working from, and it goes back to re-reading the same files.
+    //
+    // Neither subsumes the other, and the union is not necessarily a contiguous
+    // suffix, so membership (not slicing) decides what gets compressed.
+    const preservedTail = selectPreservedTail(messages, preserveTailTokens ?? 0);
     const latestUserMessage =
       messages.length > 1 ? messages.findLast((message) => message.role === 'user') : undefined;
-    const preservedMessages = latestUserMessage ? [latestUserMessage] : [];
-    const preservedMessageIds = new Set(
-      preservedMessages.map((message) => message.id).filter((id): id is string => Boolean(id)),
-    );
-    const messagesToCompress = latestUserMessage
-      ? messages.filter((message) => message !== latestUserMessage)
-      : messages;
+
+    const preservedSet = new Set(preservedTail);
+    if (latestUserMessage) preservedSet.add(latestUserMessage);
+
+    // Filter the source array so both lists keep their original order.
+    const preservedMessages = messages.filter((message) => preservedSet.has(message));
+    const messagesToCompress = messages.filter((message) => !preservedSet.has(message));
+    // Expands folded containers: on the server path a preserved tool round is
+    // one virtual `assistantGroup`, and its child rows must be protected from
+    // the raw-row filter below by their own ids, not the wrapper's.
+    const preservedMessageIds = collectPreservedMessageIds(preservedMessages);
     const createNextContext = ({
       groupId,
       parentMessageId,
@@ -229,17 +245,24 @@ export const compressContext =
         compressionResult.messagesToSummarize;
       const compressedMessages = [...compressedMessagesBase];
 
+      // Persisted rows already represented in the compressed list. Compared on
+      // expanded ids because a container's synthetic wrapper id (`tasks-*`,
+      // `agentCouncil-*`, `compare-*`) matches no row: a top-level id check
+      // would re-append the wrapper on top of the raw children the DB just
+      // returned, and the next LLM call would see that task / council output
+      // twice. An `assistantGroup` dedupes either way — its id is its first
+      // assistant's — so this keeps every container on the same rule.
+      const presentRowIds = collectPreservedMessageIds(compressedMessages);
+
       for (const preservedMessage of preservedMessages) {
-        if (
-          !compressedMessages.some(
-            (message) =>
-              message === preservedMessage ||
-              (Boolean(message.id) &&
-                Boolean(preservedMessage.id) &&
-                message.id === preservedMessage.id),
-          )
-        ) {
+        const rowIds = collectPreservedMessageIds([preservedMessage]);
+        const alreadyPresent =
+          compressedMessages.includes(preservedMessage) ||
+          [...rowIds].some((id) => presentRowIds.has(id));
+
+        if (!alreadyPresent) {
           compressedMessages.push(preservedMessage);
+          for (const id of rowIds) presentRowIds.add(id);
         }
       }
 

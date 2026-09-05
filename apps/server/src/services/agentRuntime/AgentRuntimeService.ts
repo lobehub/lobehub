@@ -3704,20 +3704,32 @@ export class AgentRuntimeService {
     stepIndex: number;
     tracingContextEngine?: (input: unknown, output: unknown) => void;
   }) {
-    const contextWindowTokens =
-      metadata?.modelRuntimeConfig?.model && metadata?.modelRuntimeConfig?.provider
-        ? await getModelPropertyWithFallback<number | undefined>(
+    const hasModelIdentity = Boolean(
+      metadata?.modelRuntimeConfig?.model && metadata?.modelRuntimeConfig?.provider,
+    );
+    // Both feed the compression threshold: the window is the budget, maxOutput
+    // sizes the room reserved for the summary the compression call emits.
+    const [contextWindowTokens, maxOutputTokens] = hasModelIdentity
+      ? await Promise.all([
+          getModelPropertyWithFallback<number | undefined>(
             metadata.modelRuntimeConfig.model,
             'contextWindowTokens',
             metadata.modelRuntimeConfig.provider,
-          )
-        : undefined;
+          ),
+          getModelPropertyWithFallback<number | undefined>(
+            metadata.modelRuntimeConfig.model,
+            'maxOutput',
+            metadata.modelRuntimeConfig.provider,
+          ),
+        ])
+      : [undefined, undefined];
 
     // Create Agent instance — use custom factory if provided, otherwise default to GeneralChatAgent
     const generalConfig = {
       agentConfig: metadata?.agentConfig,
       compressionConfig: {
         enabled: metadata?.agentConfig?.chatConfig?.enableContextCompression ?? true,
+        maxOutputToken: maxOutputTokens ?? undefined,
         maxWindowToken: contextWindowTokens ?? undefined,
       },
       dynamicInterventionAudits,

@@ -74,6 +74,7 @@ describe('GeneralChatAgent', () => {
       currentTokenCount: expect.any(Number),
       existingSummary: undefined,
       messages,
+      preserveTailTokens: expect.any(Number),
     },
   });
 
@@ -219,6 +220,7 @@ describe('GeneralChatAgent', () => {
           currentTokenCount: expect.any(Number),
           existingSummary: 'Outdated decisions\n\nEarlier decisions and constraints',
           messages: state.messages,
+          preserveTailTokens: expect.any(Number),
         },
         type: 'compress_context',
       });
@@ -1038,6 +1040,7 @@ describe('GeneralChatAgent', () => {
           currentTokenCount: expect.any(Number),
           existingSummary: 'Existing summary',
           messages: state.messages,
+          preserveTailTokens: expect.any(Number),
         },
         type: 'compress_context',
       });
