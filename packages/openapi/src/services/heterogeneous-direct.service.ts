@@ -38,7 +38,7 @@ const textFromParts = (content: unknown, transformFirst = (text: string) => text
         return '';
       }
       const text = foundText ? part.text : transformFirst(part.text);
-      foundText = true;
+      if (part.text) foundText = true;
       return text;
     })
     .join('');

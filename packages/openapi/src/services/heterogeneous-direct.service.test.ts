@@ -321,6 +321,18 @@ describe('heterogeneous direct invocation protocol', () => {
   it.each([
     {
       expected: 'Claude Code system prompt',
+      name: 'an array block preceded by an empty text block',
+      system: [
+        { text: '', type: 'text' },
+        {
+          text: 'x-anthropic-billing-header: cc_version=2.1.231; cc_entrypoint=sdk-cli;',
+          type: 'text',
+        },
+        { text: 'Claude Code system prompt', type: 'text' },
+      ],
+    },
+    {
+      expected: 'Claude Code system prompt',
       name: 'a standalone array block',
       system: [
         {
