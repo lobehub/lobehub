@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../core/getTestDB';
 import { agents } from '../../schemas/agent';
 import { chatGroups } from '../../schemas/chatGroup';
+import { documents, files, knowledgeBaseFiles, knowledgeBases } from '../../schemas/file';
 import { messages } from '../../schemas/message';
 import { sessions } from '../../schemas/session';
 import { topics } from '../../schemas/topic';
@@ -85,6 +86,128 @@ describe('FtsSearchRepo (pg_like)', () => {
       const results = await repo.search({ query: 'agent plain', type: 'agent' });
       expect(results.map((item) => item.title)).toEqual(['Plain agent']);
     });
+  });
+
+  describe('restricted knowledge base exclusions', () => {
+    const restrictedKb = 'pg-like-restricted-kb';
+    const allowedKb = 'pg-like-allowed-kb';
+
+    beforeEach(async () => {
+      await serverDB.delete(users);
+      await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
+      await serverDB.insert(knowledgeBases).values([
+        // whole-name match: outranks the allowed knowledge base
+        { id: restrictedKb, name: 'Kubernetes', userId },
+        { id: allowedKb, name: 'Kubernetes docs', userId },
+      ]);
+      await serverDB.insert(files).values([
+        {
+          fileType: 'application/pdf',
+          id: 'pg-like-restricted-file',
+          name: 'kubernetes',
+          size: 1,
+          url: 's3://bucket/restricted.pdf',
+          userId,
+        },
+        {
+          fileType: 'application/pdf',
+          id: 'pg-like-allowed-file',
+          name: 'kubernetes notes',
+          size: 1,
+          url: 's3://bucket/allowed.pdf',
+          userId,
+        },
+      ]);
+      await serverDB
+        .insert(knowledgeBaseFiles)
+        .values([{ fileId: 'pg-like-restricted-file', knowledgeBaseId: restrictedKb, userId }]);
+      await serverDB.insert(documents).values([
+        {
+          content: '',
+          fileType: 'custom/folder',
+          filename: 'restricted folder',
+          id: 'pg-like-restricted-folder',
+          knowledgeBaseId: restrictedKb,
+          source: 'internal://folder/restricted',
+          sourceType: 'api',
+          title: 'Kubernetes',
+          totalCharCount: 0,
+          totalLineCount: 0,
+          userId,
+        },
+        {
+          content: '',
+          fileType: 'custom/folder',
+          filename: 'allowed folder',
+          id: 'pg-like-allowed-folder',
+          source: 'internal://folder/allowed',
+          sourceType: 'api',
+          title: 'Kubernetes runbooks',
+          totalCharCount: 0,
+          totalLineCount: 0,
+          userId,
+        },
+        {
+          content: 'restricted page',
+          fileType: 'custom/document',
+          filename: 'restricted page',
+          id: 'pg-like-restricted-page',
+          knowledgeBaseId: restrictedKb,
+          source: 'internal://page/restricted',
+          sourceType: 'api',
+          title: 'Kubernetes',
+          totalCharCount: 15,
+          totalLineCount: 1,
+          userId,
+        },
+        {
+          content: 'page bound to a restricted file',
+          fileId: 'pg-like-restricted-file',
+          fileType: 'custom/document',
+          filename: 'restricted file page',
+          id: 'pg-like-restricted-file-page',
+          source: 'internal://page/restricted-file',
+          sourceType: 'api',
+          title: 'Kubernetes',
+          totalCharCount: 30,
+          totalLineCount: 1,
+          userId,
+        },
+        {
+          content: 'allowed page',
+          fileType: 'custom/document',
+          filename: 'allowed page',
+          id: 'pg-like-allowed-page',
+          source: 'internal://page/allowed',
+          sourceType: 'api',
+          title: 'Kubernetes upgrade page',
+          totalCharCount: 12,
+          totalLineCount: 1,
+          userId,
+        },
+      ]);
+    });
+
+    it.each([
+      ['knowledgeBase', 'Kubernetes docs'],
+      ['file', 'kubernetes notes'],
+      ['folder', 'Kubernetes runbooks'],
+      ['page', 'Kubernetes upgrade page'],
+    ] as const)(
+      'does not let a restricted %s hit consume the only slot',
+      async (type, expectedTitle) => {
+        const repo = createRepo(serverDB, userId);
+
+        const results = await repo.search({
+          excludeKnowledgeBaseIds: [restrictedKb],
+          limitPerType: 1,
+          query: 'kubernetes',
+          type,
+        });
+
+        expect(results.map((item) => item.title)).toEqual([expectedTitle]);
+      },
+    );
   });
 
   describe('candidates mode', () => {
@@ -512,6 +635,40 @@ describe('FtsSearchRepo (pg_like)', () => {
 
       expect(response.candidates.map((candidate) => candidate.id)).toEqual([context.id]);
       expect(response.total).toBe(1);
+    });
+
+    it('collapses multi-parent contexts before applying the candidate limit', async () => {
+      const parents = await serverDB
+        .insert(userMemories)
+        .values(
+          Array.from({ length: 8 }, (_, index) => ({
+            lastAccessedAt: now,
+            title: `Kubernetes parent ${index}`,
+            userId,
+          })),
+        )
+        .returning({ id: userMemories.id });
+      const [heavy, light] = await serverDB
+        .insert(userMemoriesContexts)
+        .values([
+          { title: 'Heavily linked', userId, userMemoryIds: parents.map((parent) => parent.id) },
+          { title: 'Lightly linked', userId, userMemoryIds: [parents[0].id] },
+        ])
+        .returning({ id: userMemoriesContexts.id });
+
+      const repo = createRepo(serverDB, userId);
+      const response = await repo.ftsSearchCandidates({
+        entity: 'memoryContexts',
+        filters: {},
+        // pool of 4 rows: without grouping, the heavy context's 8 joined rows fill it
+        pagination: { limit: 1 },
+        query: { fields: ['parent_text', 'title'], text: 'kubernetes' },
+      });
+
+      expect(response.candidates.map((candidate) => candidate.id).sort()).toEqual(
+        [heavy.id, light.id].sort(),
+      );
+      expect(response.total).toBe(2);
     });
 
     it('over-fetches bounded requests so hydration can fill the page', async () => {

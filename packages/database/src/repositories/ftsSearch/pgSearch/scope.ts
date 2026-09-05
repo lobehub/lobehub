@@ -27,6 +27,13 @@ export interface PgSearchFtsSearchContext {
   dialect: PgFtsSearchDialect;
   liftedScopeWhere: (workspaceIdColumn: SQLWrapper) => SQL | undefined;
   liftsAgentFilter: boolean;
+  /**
+   * Whether non-indexed exclusions (restricted knowledge bases) sit above the
+   * scored scan. ParadeDB keeps them out of its TopN scan and lets restricted
+   * rows consume pool slots; plain PostgreSQL applies them inside the exact
+   * scan so a restricted top hit cannot take a slot from an authorized one.
+   */
+  liftsExclusionFilter: boolean;
   liftsWorkspaceFilter: boolean;
   scanCandidateLimit: (limit: number) => number;
   scanScopeWhere: (cols: PgSearchFtsSearchWorkspaceScopedColumns) => SQL;
@@ -91,6 +98,7 @@ export function createPgSearchFtsSearchContext(
     liftedScopeWhere: (workspaceIdColumn) =>
       liftsWorkspaceFilter ? (isNull(workspaceIdColumn) as SQL) : undefined,
     liftsAgentFilter,
+    liftsExclusionFilter: dialect.isolatesScoredScan,
     liftsWorkspaceFilter,
     scanCandidateLimit: (limit) =>
       liftsWorkspaceFilter

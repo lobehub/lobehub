@@ -1,4 +1,5 @@
 import { LIBRARY_HIDDEN_FILE_SOURCES } from '@lobechat/types';
+import type { SQLWrapper } from 'drizzle-orm';
 import { and, desc, eq, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
 
 import {
@@ -356,6 +357,18 @@ export async function searchFiles(
   const { db, dialect } = context;
   const preparedQuery = dialect.prepare(query);
   const score = dialect.score(files.id, FILE_FIELDS, preparedQuery);
+  // A file linked to any restricted KB is fully hidden. The subquery avoids
+  // leaking it through a different joined membership row.
+  const excludeKb = (fileId: SQLWrapper) =>
+    excludeKbIds && excludeKbIds.length > 0
+      ? notInArray(
+          fileId,
+          db
+            .select({ fileId: knowledgeBaseFiles.fileId })
+            .from(knowledgeBaseFiles)
+            .where(inArray(knowledgeBaseFiles.knowledgeBaseId, excludeKbIds)),
+        )
+      : undefined;
 
   const hits = db
     .select({
@@ -376,6 +389,7 @@ export async function searchFiles(
         ne(files.fileType, 'custom/document'),
         // Hidden acceptance evidence must stay out of library search too.
         or(isNull(files.source), notInArray(files.source, LIBRARY_HIDDEN_FILE_SOURCES)),
+        context.liftsExclusionFilter ? undefined : excludeKb(files.id),
         dialect.match(FILE_FIELDS, preparedQuery),
       ),
     )
@@ -402,17 +416,7 @@ export async function searchFiles(
     .where(
       and(
         context.liftedScopeWhere(hits.workspaceId),
-        // A file linked to any restricted KB is fully hidden. The subquery
-        // avoids leaking it through a different joined membership row.
-        excludeKbIds && excludeKbIds.length > 0
-          ? notInArray(
-              hits.id,
-              db
-                .select({ fileId: knowledgeBaseFiles.fileId })
-                .from(knowledgeBaseFiles)
-                .where(inArray(knowledgeBaseFiles.knowledgeBaseId, excludeKbIds)),
-            )
-          : undefined,
+        context.liftsExclusionFilter ? excludeKb(hits.id) : undefined,
       ),
     )
     .orderBy(desc(hits.score))
@@ -501,6 +505,8 @@ export async function searchKnowledgeBases(
   const { db, dialect } = context;
   const preparedQuery = dialect.prepare(query);
   const score = dialect.score(knowledgeBases.id, KNOWLEDGE_BASE_FIELDS, preparedQuery);
+  const excludeIdsWhere = (id: SQLWrapper) =>
+    excludeIds && excludeIds.length > 0 ? notInArray(id, excludeIds) : undefined;
 
   const hits = db
     .select({
@@ -517,6 +523,7 @@ export async function searchKnowledgeBases(
     .where(
       and(
         context.scanScopeWhere(knowledgeBases),
+        context.liftsExclusionFilter ? undefined : excludeIdsWhere(knowledgeBases.id),
         dialect.match(KNOWLEDGE_BASE_FIELDS, preparedQuery),
       ),
     )
@@ -538,9 +545,9 @@ export async function searchKnowledgeBases(
     .where(
       and(
         context.liftedScopeWhere(hits.workspaceId),
-        // Keep excluded knowledge bases out of the inner scored scan so TopN
-        // ranking remains intact; restricted rows only consume pool slots.
-        excludeIds && excludeIds.length > 0 ? notInArray(hits.id, excludeIds) : undefined,
+        // ParadeDB keeps excluded knowledge bases out of the inner scored scan so
+        // TopN ranking remains intact; restricted rows only consume pool slots.
+        context.liftsExclusionFilter ? excludeIdsWhere(hits.id) : undefined,
       ),
     )
     .orderBy(desc(hits.score))

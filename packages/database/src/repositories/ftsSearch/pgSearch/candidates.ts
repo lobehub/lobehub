@@ -427,9 +427,15 @@ export async function searchCandidates(
   const { db, dialect } = context;
   const preparedQuery = dialect.prepare(request.query.text);
   const fields = resolveFields(target, request.query.fields);
-  const score = dialect.score(target.id, fields, preparedQuery);
+  const rowScore = dialect.score(target.id, fields, preparedQuery);
+  // A multi-parent join (memory contexts) repeats a row per matching parent, so
+  // collapse to one row per id with its best score before any limit applies;
+  // otherwise one heavily linked row could fill the whole bounded pool.
+  const score = target.parentJoin ? sql<number>`max(${rowScore})` : rowScore;
   let query = db.select({ id: target.id, score }).from(target.table).$dynamic();
-  if (target.parentJoin) query = query.leftJoin(userMemories, target.parentJoin);
+  if (target.parentJoin) {
+    query = query.leftJoin(userMemories, target.parentJoin).groupBy(target.id);
+  }
   query = query
     .where(
       and(...target.where(request.scope, request.filters), dialect.match(fields, preparedQuery)),
@@ -441,13 +447,10 @@ export async function searchCandidates(
     query = query.limit(request.pagination.limit * CANDIDATE_MULTIPLIER);
 
   const rows = await query;
+  const candidates: FtsSearchBackendCandidate[] = rows.map((row) => ({
+    id: String(row.id),
+    score: row.score,
+  }));
 
-  // A multi-parent join (memory contexts) can repeat a row; keep the best-scored one.
-  const candidates = new Map<string, FtsSearchBackendCandidate>();
-  for (const row of rows) {
-    const id = String(row.id);
-    if (!candidates.has(id)) candidates.set(id, { id, score: row.score });
-  }
-
-  return { candidates: [...candidates.values()], items: [], total: candidates.size };
+  return { candidates, items: [], total: candidates.length };
 }
