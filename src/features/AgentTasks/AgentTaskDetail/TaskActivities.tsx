@@ -204,13 +204,11 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
   // The Portal header already names the task and the report is the only thing
   // in this section, so a collapsible "运行结果" band above it labels a section
   // of one and eats the top of the reading surface.
-  if (variant === 'result')
-    return (
-      <Flexbox gap={12}>
-        {rows}
-        {commentInput}
-      </Flexbox>
-    );
+  // No comment composer here: the result panel is for reading what came back.
+  // Leaving a note for the next run is one of the report's own actions, which
+  // opens the editor on demand instead of parking an empty box under every
+  // report.
+  if (variant === 'result') return <Flexbox gap={12}>{rows}</Flexbox>;
 
   return (
     <Accordion defaultExpandedKeys={['activities']} gap={0}>
