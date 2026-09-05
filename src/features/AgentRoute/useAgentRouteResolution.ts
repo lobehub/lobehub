@@ -3,7 +3,6 @@ import useSWR from 'swr';
 
 import type { AgentRouteResolution } from '@/server/routers/lambda/agent';
 import { agentService } from '@/services/agent';
-import { isTrpcErrorCode } from '@/utils/trpcError';
 
 type AgentRouteResolutionKind = AgentRouteResolution['kind'];
 
@@ -29,43 +28,25 @@ export const isBuiltinAgentSlug = (routeAgentId?: string) =>
 export const needsAgentRouteLookup = (routeAgentId?: string) =>
   !isBuiltinAgentSlug(routeAgentId) && looksLikeSlug(routeAgentId);
 
-export type AgentRouteBranch = 'loading' | 'own' | 'ownShare' | 'share';
+export type AgentRouteBranch = 'loading' | 'own';
 
 /**
- * Which surface `/agent/:slugOrId` renders for a given resolution state.
+ * Which surface `/agent/:slugOrId` renders for a given resolution state: the
+ * creator's own agent, once the param has been resolved.
  *
- * A not-found param falls back to the creator surface, which already owns the
- * agent not-found card — the visitor page has no better story for a dead link.
- *
- * An UNAUTHORIZED lookup is different: `resolveAgentRoute` is auth-gated, so
- * an anonymous visitor on a share URL fails the lookup itself, before `kind`
- * is ever known. Falling back to 'own' would show the creator's not-found
- * shell instead of a sign-in prompt, so this routes straight to 'share' and
- * lets `AgentShareVisitor`'s own `getSharedAgent` call (and its `signIn`
- * branch in `resolveShareAccessState`) render the CTA. Any other error keeps
- * the existing not-found fallback.
+ * A not-found param renders the creator surface too, which already owns the
+ * agent not-found card — and so does a failed lookup, since there is nowhere
+ * better for a dead link to land.
  */
 export const resolveAgentRouteBranch = ({
-  error,
   isLoading,
-  kind,
 }: {
-  error?: unknown;
   isLoading: boolean;
   kind?: AgentRouteResolutionKind;
-}): AgentRouteBranch => {
-  if (isLoading) return 'loading';
-
-  if (isTrpcErrorCode(error, 'UNAUTHORIZED')) return 'share';
-
-  if (kind === 'share' || kind === 'ownShare') return kind;
-
-  return 'own';
-};
+}): AgentRouteBranch => (isLoading ? 'loading' : 'own');
 
 /**
- * Resolve a `/agent/:slugOrId` param, which serves two surfaces: the creator's
- * own agent and the agent-share visitor page.
+ * Resolve a `/agent/:slugOrId` param to the creator's own agent id.
  *
  * Id-shaped params and builtin slugs are decided locally, so an ordinary
  * `/agent/<id>` route never pays for a request. Only a user-chosen slug asks
@@ -75,19 +56,17 @@ export const resolveAgentRouteBranch = ({
 export const useAgentRouteResolution = (routeAgentId?: string) => {
   const needsLookup = needsAgentRouteLookup(routeAgentId);
 
-  const { data, error, isLoading } = useSWR(
+  const { data, isLoading } = useSWR(
     needsLookup ? ['agent-route', routeAgentId] : null,
     () => agentService.resolveAgentRoute(routeAgentId!),
     { revalidateOnFocus: false },
   );
 
   return {
-    /** The lookup's failure, if any — see `resolveAgentRouteBranch` for how UNAUTHORIZED is handled. */
-    error: needsLookup ? error : undefined,
     /** True only while a slug lookup is in flight, i.e. the kind is unknown yet. */
     isLoading: needsLookup && isLoading,
     kind: needsLookup ? data?.kind : ('own' as const),
-    /** The id behind a user-chosen agent slug (or the caller's own share slug), once known. */
-    resolvedAgentId: data?.kind === 'own' || data?.kind === 'ownShare' ? data.agentId : undefined,
+    /** The id behind a user-chosen agent slug, once known. */
+    resolvedAgentId: data?.kind === 'own' ? data.agentId : undefined,
   };
 };

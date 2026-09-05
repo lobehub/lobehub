@@ -126,8 +126,7 @@ const AgentShareVisitorPage = memo(() => {
 
   // The creator is never a visitor of their own share: the visitor chrome
   // (empty topic list, "runs on the creator's account" notice) is meaningless
-  // to them, and the legacy `/agent/<share-slug>` entry already sends them to
-  // the settings — keep the canonical `/a/<slug>` link consistent with it.
+  // to them, so send them to the share settings instead.
   if (data.isOwner)
     return <Navigate replace to={buildAgentShareOwnerPath(data.agentId, { mobile: isMobile })} />;
 

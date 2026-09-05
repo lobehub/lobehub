@@ -15,7 +15,7 @@ describe('needsAgentRouteLookup', () => {
     }
   });
 
-  it('looks up a user-chosen slug, which may be an agent or a share', () => {
+  it('looks up a user-chosen slug, whose target only the server knows', () => {
     expect(needsAgentRouteLookup('my-bot')).toBe(true);
   });
 
@@ -26,43 +26,18 @@ describe('needsAgentRouteLookup', () => {
 });
 
 describe('resolveAgentRouteBranch', () => {
-  it('waits instead of guessing a surface while the slug resolves', () => {
+  it('waits instead of rendering the shell while the slug resolves', () => {
     expect(resolveAgentRouteBranch({ isLoading: true })).toBe('loading');
     // Even with a stale kind in hand, an in-flight resolution wins.
-    expect(resolveAgentRouteBranch({ isLoading: true, kind: 'share' })).toBe('loading');
+    expect(resolveAgentRouteBranch({ isLoading: true, kind: 'own' })).toBe('loading');
   });
 
   it('renders the creator surface for an own agent', () => {
     expect(resolveAgentRouteBranch({ isLoading: false, kind: 'own' })).toBe('own');
   });
 
-  it('renders the visitor surface for a share', () => {
-    expect(resolveAgentRouteBranch({ isLoading: false, kind: 'share' })).toBe('share');
-  });
-
-  it("redirects the creator's own share link instead of rendering the visitor surface", () => {
-    expect(resolveAgentRouteBranch({ isLoading: false, kind: 'ownShare' })).toBe('ownShare');
-  });
-
   it('falls back to the creator surface, which owns the not-found card', () => {
     expect(resolveAgentRouteBranch({ isLoading: false, kind: 'notFound' })).toBe('own');
     expect(resolveAgentRouteBranch({ isLoading: false })).toBe('own');
-  });
-
-  it('routes an UNAUTHORIZED lookup to the share surface, which owns the sign-in CTA', () => {
-    const unauthorized = { data: { code: 'UNAUTHORIZED' } };
-
-    expect(resolveAgentRouteBranch({ error: unauthorized, isLoading: false })).toBe('share');
-    // Even with a stale/unset kind, an UNAUTHORIZED error wins over the fallback.
-    expect(
-      resolveAgentRouteBranch({ error: unauthorized, isLoading: false, kind: 'notFound' }),
-    ).toBe('share');
-  });
-
-  it('keeps the creator fallback for a non-401 lookup failure', () => {
-    const notFound = { data: { code: 'NOT_FOUND' } };
-
-    expect(resolveAgentRouteBranch({ error: notFound, isLoading: false })).toBe('own');
-    expect(resolveAgentRouteBranch({ error: new Error('network'), isLoading: false })).toBe('own');
   });
 });

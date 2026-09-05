@@ -284,12 +284,9 @@ describe('desktop router shared definition', () => {
     expect(webPaths).not.toContain('/share/page');
     // …and the agent-share visitor surface lives at `/a/:slugOrId`, a sibling
     // of the main layout on every platform (Web, Electron, and the mobile
-    // router — see mobileRouter.test.tsx). The original `/share/agent` pattern
-    // stays registered only to redirect legacy links.
+    // router — see mobileRouter.test.tsx).
     expect(webPaths).toContain('/a/:slugOrId');
     expect(electronPaths).toContain('/a/:slugOrId');
-    expect(webPaths).toContain('/share/agent/:slugOrId');
-    expect(electronPaths).toContain('/share/agent/:slugOrId');
     expect(webPaths).not.toContain('/verify');
     expect(webPaths).toContain('/acceptance');
     expect(webPaths).toContain('/onboarding');
@@ -519,8 +516,6 @@ describe('desktop router shared definition', () => {
     (_, factory) => {
       const matches = matchRoutes(createMainAreaRoutes(factory), '/agent/agt_1');
 
-      // Legacy share slugs also land on this route; `AgentRouteSwitch` forwards
-      // them to `/a/:slugOrId` after resolving the param server-side.
       expect(matches?.some((match) => match.route.path === ':aid')).toBe(true);
       expect(matches?.at(-1)?.params).toMatchObject({ aid: 'agt_1' });
     },
@@ -539,17 +534,6 @@ describe('desktop router shared definition', () => {
       expect(matches?.[0]?.params).toMatchObject({ slugOrId: 'my-bot' });
     },
   );
-
-  it.each([
-    ['Web', webDesktopRoutes],
-    ['Electron', electronDesktopRoutes],
-  ])('%s redirects legacy /share/agent links to /a', (_, routes) => {
-    const matches = matchRoutes(routes, '/share/agent/my-bot');
-    const element = matches?.at(-1)?.route.element as ReactElement;
-
-    expect(matches?.at(-1)?.params).toMatchObject({ slugOrId: 'my-bot' });
-    expect((element.type as { displayName?: string }).displayName).toBe('AgentShareLegacyRedirect');
-  });
 
   it('keeps business resource and task routes in the shared definition', async () => {
     const [sharedSource] = await readRouterSources();

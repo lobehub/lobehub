@@ -1,7 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import type { ReactElement } from 'react';
 import { matchRoutes } from 'react-router';
 import { describe, expect, it } from 'vitest';
 
@@ -16,21 +15,11 @@ describe('mobileRouter agent share route', () => {
     expect(matches?.[0]?.params).toMatchObject({ slugOrId: 'my-agent' });
   });
 
-  it('keeps the creator agent surface on /agent/:aid, where legacy share slugs are forwarded', () => {
+  it('keeps the creator agent surface on /agent/:aid', () => {
     const matches = matchRoutes(mobileRoutes, '/agent/my-agent');
 
-    // A legacy share slug also lands here; `AgentRouteSwitch` forwards it to `/a`.
     expect(matches?.some((match) => match.route.path === ':aid')).toBe(true);
     expect(matches?.at(-1)?.params).toMatchObject({ aid: 'my-agent' });
-  });
-
-  it('redirects legacy /share/agent links instead of bouncing to the catch-all', () => {
-    const matches = matchRoutes(mobileRoutes, '/share/agent/my-agent');
-    const element = matches?.at(-1)?.route.element as ReactElement;
-
-    expect(matches?.at(-1)?.route.path).toBe('/share/agent/:slugOrId');
-    expect(matches?.at(-1)?.params).toMatchObject({ slugOrId: 'my-agent' });
-    expect((element.type as { displayName?: string }).displayName).toBe('AgentShareLegacyRedirect');
   });
 });
 

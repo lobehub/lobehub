@@ -12,12 +12,8 @@ import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layou
 import { delayed } from '@/components/Skeleton/Delayed';
 import { acceptanceRouteMeta } from '@/features/Acceptance/routeMeta';
 import AgentRouteSwitch from '@/features/AgentRoute/AgentRouteSwitch';
-import AgentShareLegacyRedirect from '@/features/AgentShareVisitor/LegacyRedirect';
 import { agentShareVisitorRouteMeta } from '@/features/AgentShareVisitor/routeMeta';
-import {
-  AGENT_SHARE_VISITOR_PATH,
-  buildAgentShareOwnerPath,
-} from '@/features/AgentShareVisitor/visitorPath';
+import { AGENT_SHARE_VISITOR_PATH } from '@/features/AgentShareVisitor/visitorPath';
 import { mobileAgentSettingsRouteMeta } from '@/features/RouteMeta/mobileRouteMeta';
 import WorkspaceProviderRedirect from '@/features/WorkspaceSetting/ProviderRedirect';
 import { agentRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
@@ -64,13 +60,11 @@ export const sharedMainAreaChildren: RouteObject[] = [
             path: 'settings',
           },
         ],
-        // `/agent/:aid` is the creator's own agent; a legacy share slug landing
-        // here is forwarded to `/a/:slugOrId` — see `AgentRouteSwitch`.
+        // `/agent/:aid` is the creator's own agent, by id or by agent slug;
+        // `AgentRouteSwitch` holds the skeleton while a slug resolves.
         element: (
           <AgentRouteSwitch
             fallback={<ConversationLayoutSkeleton />}
-            // Mobile has no share settings page; the agent itself is the closest stop.
-            ownShareRedirect={(agentId) => buildAgentShareOwnerPath(agentId, { mobile: true })}
             ownElement={dynamicLayout(
               () => import('@/routes/(mobile)/chat/_layout'),
               'Mobile > Chat > Layout',
@@ -637,15 +631,6 @@ export const mobileRoutes: RouteObject[] = [
     errorElement: <ErrorBoundary />,
     handle: { meta: agentShareVisitorRouteMeta },
     path: `${AGENT_SHARE_VISITOR_PATH}/:slugOrId`,
-  },
-  // Legacy `/share/agent/*` links must keep working: without this entry a
-  // phone opening one falls through to `*` and gets bounced home instead of
-  // redirected.
-  {
-    element: <AgentShareLegacyRedirect />,
-    errorElement: <ErrorBoundary />,
-    handle: { meta: agentShareVisitorRouteMeta },
-    path: '/share/agent/:slugOrId',
   },
 
   // Messenger verify route (outside main layout)
