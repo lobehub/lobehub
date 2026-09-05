@@ -1,10 +1,13 @@
 import type { ErrorResponse } from '@lobechat/types';
+import { t } from 'i18next';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getMessageError } from '../parseError';
 
 // Mock i18next
+const loadNamespaces = vi.fn(async () => {});
 vi.mock('i18next', () => ({
+  default: { loadNamespaces: (...args: unknown[]) => loadNamespaces(...(args as [])) },
   t: vi.fn((key) => `translated_${key}`),
 }));
 
@@ -93,6 +96,106 @@ describe('getMessageError', () => {
       message: 'translated_response.RemoteServerTimeout',
       type: 'RemoteServerTimeout',
     });
+  });
+
+  it('should look runtime error codes up in the modelRuntime namespace', async () => {
+    // Regression: these keys live under `modelRuntime:<code>`, not the legacy
+    // `error:response.<code>` map, so the old lookup echoed the raw key back and
+    // users saw literal `response.InvalidProviderAPIKey` in the failure toast.
+    const mockErrorResponse: ErrorResponse = {
+      body: { provider: 'meta' },
+      errorType: 'InvalidProviderAPIKey',
+    };
+    const mockResponse = createMockResponse(mockErrorResponse, false, 401);
+
+    const error = await getMessageError(mockResponse as any);
+
+    // `provider` is resolved from the id on the body to the provider's display name.
+    expect(t).toHaveBeenCalledWith('InvalidProviderAPIKey', {
+      defaultValue: 'translated_response.UnknownChatFetchError',
+      ns: 'modelRuntime',
+      provider: 'Meta',
+    });
+    expect(error.message).toBe('translated_InvalidProviderAPIKey');
+  });
+
+  it('should fall back to the raw provider id when it is not a known provider', async () => {
+    const mockResponse = createMockResponse(
+      { body: { provider: 'not-a-provider' }, errorType: 'InvalidProviderAPIKey' },
+      false,
+      401,
+    );
+
+    await getMessageError(mockResponse as any);
+
+    expect(t).toHaveBeenCalledWith(
+      'InvalidProviderAPIKey',
+      expect.objectContaining({ ns: 'modelRuntime', provider: 'not-a-provider' }),
+    );
+  });
+
+  it('should translate deprecated alias codes under their canonical key', async () => {
+    // `getErrorCodeSpec('PipelineError')` resolves through CODE_ALIASES, but the
+    // locale file only has the canonical `ContextEnginePipelineError` key.
+    const mockResponse = createMockResponse(
+      { body: {}, errorType: 'PipelineError' } as ErrorResponse,
+      false,
+      500,
+    );
+
+    await getMessageError(mockResponse as any);
+
+    expect(t).toHaveBeenCalledWith(
+      'ContextEnginePipelineError',
+      expect.objectContaining({ ns: 'modelRuntime' }),
+    );
+  });
+
+  it('should prefer the backend message as the fallback for codes without a locale entry', async () => {
+    // `NoAvailableProvider` is a registered runtime code with no `modelRuntime`
+    // key yet; without a defaultValue the toast would show the bare code.
+    const mockResponse = createMockResponse(
+      { body: { message: 'empty providers', provider: 'meta' }, errorType: 'NoAvailableProvider' },
+      false,
+      500,
+    );
+
+    await getMessageError(mockResponse as any);
+
+    expect(t).toHaveBeenCalledWith('NoAvailableProvider', {
+      defaultValue: 'empty providers',
+      ns: 'modelRuntime',
+      provider: 'Meta',
+    });
+  });
+
+  it('should load both namespaces before translating', async () => {
+    // Namespaces are route-lazy and this path runs outside React, so without an
+    // explicit load i18next echoes the key back instead of the message.
+    const mockResponse = createMockResponse(
+      { body: {}, errorType: 'InvalidProviderAPIKey' } satisfies ErrorResponse,
+      false,
+      401,
+    );
+
+    await getMessageError(mockResponse as any);
+
+    expect(loadNamespaces).toHaveBeenCalledWith(['error', 'modelRuntime']);
+  });
+
+  it('should keep app-only error types on the legacy error namespace', async () => {
+    const mockErrorResponse: ErrorResponse = {
+      body: 'Error occurred',
+      errorType: 'InvalidAccessCode',
+    };
+    const mockResponse = createMockResponse(mockErrorResponse, false, 401);
+
+    await getMessageError(mockResponse as any);
+
+    expect(t).toHaveBeenCalledWith(
+      'response.InvalidAccessCode',
+      expect.objectContaining({ ns: 'error', provider: '' }),
+    );
   });
 
   it('should handle timeout error correctly', async () => {

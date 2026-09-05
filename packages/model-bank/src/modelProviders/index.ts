@@ -242,6 +242,14 @@ export const isProviderDisableBrowserRequest = (id: string) => {
   return !!provider;
 };
 
+/**
+ * Human-readable provider name for a provider id (`meta` → `Meta`). Unknown ids
+ * (custom providers, typos) fall back to the id itself so callers always get a
+ * non-empty label.
+ */
+export const getProviderDisplayName = (id: string) =>
+  DEFAULT_MODEL_PROVIDER_LIST.find((provider) => provider.id === id)?.name || id;
+
 export const isProviderOAuthDeviceFlow = (id?: string) =>
   DEFAULT_MODEL_PROVIDER_LIST.some(
     (provider) => provider.id === id && provider.settings?.authType === 'oauthDeviceFlow',
