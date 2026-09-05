@@ -6,7 +6,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-HARNESS="$SCRIPT_DIR/heterogeneous-agent-official-smoke.mjs"
+HARNESS="$SCRIPT_DIR/official-smoke.mjs"
 TEST_TMP="$(mktemp -d)"
 trap 'rm -rf "$TEST_TMP"' EXIT
 
