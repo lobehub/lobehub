@@ -16,11 +16,14 @@ import RunReplyEditor from './RunReplyEditor';
 /**
  * What the agent reported for this task, presented as a report.
  *
- * Deliberately NOT the activity card: no avatar, no run chips, no attempt
- * number, no status glyph, no collapse chevron, no overflow menu, no outline.
- * Every one of those answers "which row of the list is this", and the reader of
- * a result panel already knows — the panel header names the task. What is left
- * is the delivery itself, which is the only thing they came for.
+ * Deliberately NOT the activity card: no run chips, no attempt number, no
+ * status glyph, no collapse chevron, no overflow menu, no outline. Every one of
+ * those answers "which row of the list is this", and the reader of a result
+ * panel already knows — the panel header names the task. What is left is the
+ * delivery itself, which is the only thing they came for.
+ *
+ * The author does stay, at the head: a report names who wrote it, and that is a
+ * different job from the avatar's job in a list row.
  *
  * The two actions stay because reading a report is not the end of the job: you
  * either ask the agent about it or leave a note for the next run. They sit under
