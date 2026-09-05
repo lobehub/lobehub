@@ -1,7 +1,6 @@
 import { and, desc, eq, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
 
 import { DOCUMENT_FOLDER_TYPE, documents, knowledgeBaseFiles } from '../../../schemas';
-import { sanitizeBm25Query } from '../../../utils/bm25';
 import { notAgentShareFileReference } from '../../../utils/fileVisibility';
 import { buildWorkspaceWhere } from '../../../utils/workspace';
 import type {
@@ -10,8 +9,23 @@ import type {
   FtsSearchKnowledgeBaseDocumentHit,
   FtsSearchPageResult,
 } from '../types';
+import type { PgFtsSearchField } from './dialect';
 import { buildResponse, truncate } from './results';
 import type { PgSearchFtsSearchContext } from './scope';
+
+const FOLDER_FIELDS: PgFtsSearchField[] = [
+  { column: documents.title, weight: 4 },
+  { column: documents.slug, weight: 3 },
+  { column: documents.description, weight: 2 },
+];
+
+const PAGE_FIELDS: PgFtsSearchField[] = [
+  { column: documents.title, weight: 4 },
+  { column: documents.slug, weight: 3 },
+  { column: documents.content },
+];
+
+const KNOWLEDGE_BASE_DOCUMENT_FIELDS = PAGE_FIELDS;
 
 /** Search folders (documents with `file_type=DOCUMENT_FOLDER_TYPE`). */
 export async function searchFolders(
@@ -20,8 +34,9 @@ export async function searchFolders(
   limit: number,
   excludeKbIds?: string[],
 ): Promise<FtsSearchBackendResponse<FtsSearchFolderResult>> {
-  const bm25Query = sanitizeBm25Query(query);
-  const { db } = context;
+  const { db, dialect } = context;
+  const preparedQuery = dialect.prepare(query);
+  const score = dialect.score(documents.id, FOLDER_FIELDS, preparedQuery);
 
   const hits = db
     .select({
@@ -30,7 +45,7 @@ export async function searchFolders(
       filename: documents.filename,
       id: documents.id,
       knowledgeBaseId: documents.knowledgeBaseId,
-      score: sql<number>`paradedb.score(${documents.id})`.as('score'),
+      score: score.as('score'),
       slug: documents.slug,
       title: documents.title,
       updatedAt: documents.updatedAt,
@@ -41,10 +56,10 @@ export async function searchFolders(
       and(
         context.scanScopeWhere(documents),
         eq(documents.fileType, DOCUMENT_FOLDER_TYPE),
-        sql`(${documents.title} @@@ ${bm25Query} OR ${documents.slug} @@@ ${bm25Query} OR ${documents.description} @@@ ${bm25Query})`,
+        dialect.match(FOLDER_FIELDS, preparedQuery),
       ),
     )
-    .orderBy(sql`paradedb.score(${documents.id}) DESC`)
+    .orderBy(sql`${score} DESC`)
     .limit(context.scanCandidateLimit(limit))
     .as('folder_hits');
 
@@ -95,8 +110,9 @@ export async function searchPages(
   limit: number,
   excludeKbIds?: string[],
 ): Promise<FtsSearchBackendResponse<FtsSearchPageResult>> {
-  const bm25Query = sanitizeBm25Query(query);
-  const { db } = context;
+  const { db, dialect } = context;
+  const preparedQuery = dialect.prepare(query);
+  const score = dialect.score(documents.id, PAGE_FIELDS, preparedQuery);
 
   const hits = db
     .select({
@@ -105,7 +121,7 @@ export async function searchPages(
       filename: documents.filename,
       id: documents.id,
       knowledgeBaseId: documents.knowledgeBaseId,
-      score: sql<number>`paradedb.score(${documents.id})`.as('score'),
+      score: score.as('score'),
       title: documents.title,
       updatedAt: documents.updatedAt,
       workspaceId: documents.workspaceId,
@@ -115,10 +131,10 @@ export async function searchPages(
       and(
         context.scanScopeWhere(documents),
         eq(documents.fileType, 'custom/document'),
-        sql`(${documents.title} @@@ ${bm25Query} OR ${documents.slug} @@@ ${bm25Query} OR ${documents.content} @@@ ${bm25Query})`,
+        dialect.match(PAGE_FIELDS, preparedQuery),
       ),
     )
-    .orderBy(sql`paradedb.score(${documents.id}) DESC`)
+    .orderBy(sql`${score} DESC`)
     .limit(context.scanCandidateLimit(limit))
     .as('page_hits');
 
@@ -189,9 +205,10 @@ export async function searchKnowledgeBaseDocuments(
     return { candidates: [], items: [] };
   }
 
-  const bm25Query = sanitizeBm25Query(query);
-  const { db } = context;
-  const matchClause = sql`(${documents.title} @@@ ${bm25Query} OR ${documents.slug} @@@ ${bm25Query} OR ${documents.content} @@@ ${bm25Query})`;
+  const { db, dialect } = context;
+  const preparedQuery = dialect.prepare(query);
+  const score = dialect.score(documents.id, KNOWLEDGE_BASE_DOCUMENT_FIELDS, preparedQuery);
+  const matchClause = dialect.match(KNOWLEDGE_BASE_DOCUMENT_FIELDS, preparedQuery);
   const folderClause = ne(documents.fileType, DOCUMENT_FOLDER_TYPE);
   const userClause = buildWorkspaceWhere(context.scope, documents);
 
@@ -202,7 +219,7 @@ export async function searchKnowledgeBaseDocuments(
       filename: documents.filename,
       id: documents.id,
       knowledgeBaseId: documents.knowledgeBaseId,
-      score: sql<number>`paradedb.score(${documents.id})`,
+      score,
       title: documents.title,
       updatedAt: documents.updatedAt,
     })
@@ -216,7 +233,7 @@ export async function searchKnowledgeBaseDocuments(
         matchClause,
       ),
     )
-    .orderBy(sql`paradedb.score(${documents.id}) DESC`)
+    .orderBy(sql`${score} DESC`)
     .limit(limit);
 
   const fileBackedRowsPromise = db
@@ -226,7 +243,7 @@ export async function searchKnowledgeBaseDocuments(
       filename: documents.filename,
       id: documents.id,
       knowledgeBaseId: knowledgeBaseFiles.knowledgeBaseId,
-      score: sql<number>`paradedb.score(${documents.id})`,
+      score,
       title: documents.title,
       updatedAt: documents.updatedAt,
     })
@@ -242,7 +259,7 @@ export async function searchKnowledgeBaseDocuments(
     .where(
       and(userClause, folderClause, notAgentShareFileReference(db, documents.fileId), matchClause),
     )
-    .orderBy(sql`paradedb.score(${documents.id}) DESC`)
+    .orderBy(sql`${score} DESC`)
     .limit(limit);
 
   const [inlineRows, fileBackedRows] = await Promise.all([
