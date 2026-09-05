@@ -22,10 +22,40 @@ describe('installFtsSearchSyncCapture', () => {
         loadRepository,
         runWithLockRetry,
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe(true);
 
     expect(loadRepository).toHaveBeenCalledOnce();
     expect(runWithLockRetry).toHaveBeenCalledOnce();
+    expect(repository.installCaptureInfrastructure).toHaveBeenCalledOnce();
+  });
+
+  it.each(['pg_search', 'pg_like'])(
+    'skips capture without touching the database when FTS_SEARCH_PROVIDER=%s',
+    async (provider) => {
+      const loadRepository = vi.fn();
+
+      await expect(
+        installFtsSearchSyncCapture({
+          env: { DATABASE_URL: 'postgres://test', FTS_SEARCH_PROVIDER: provider },
+          loadRepository,
+        }),
+      ).resolves.toBe(false);
+
+      expect(loadRepository).not.toHaveBeenCalled();
+    },
+  );
+
+  it('installs capture when FTS_SEARCH_PROVIDER is elasticsearch', async () => {
+    const repository = createRepository();
+
+    await expect(
+      installFtsSearchSyncCapture({
+        env: { DATABASE_URL: 'postgres://test', FTS_SEARCH_PROVIDER: 'elasticsearch' },
+        loadRepository: vi.fn().mockResolvedValue(repository),
+        runWithLockRetry: vi.fn(async (operation: () => Promise<void>) => operation()),
+      }),
+    ).resolves.toBe(true);
+
     expect(repository.installCaptureInfrastructure).toHaveBeenCalledOnce();
   });
 
@@ -59,6 +89,25 @@ describe('runFtsSearchSyncCaptureCli', () => {
     expect(logSuccess).toHaveBeenCalledWith(
       '✅ full-text search sync capture infrastructure installed',
     );
+    expect(logError).not.toHaveBeenCalled();
+  });
+
+  it('exits successfully and reports the skip for non-Elasticsearch providers', async () => {
+    const logError = vi.fn();
+    const logSuccess = vi.fn();
+    const loadRepository = vi.fn();
+
+    await expect(
+      runFtsSearchSyncCaptureCli({
+        env: { DATABASE_URL: 'postgres://test', FTS_SEARCH_PROVIDER: 'pg_like' },
+        loadRepository,
+        logError,
+        logSuccess,
+      }),
+    ).resolves.toBe(0);
+
+    expect(loadRepository).not.toHaveBeenCalled();
+    expect(logSuccess).toHaveBeenCalledWith(expect.stringContaining('skipped'));
     expect(logError).not.toHaveBeenCalled();
   });
 

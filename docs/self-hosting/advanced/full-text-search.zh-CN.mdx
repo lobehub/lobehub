@@ -1,6 +1,6 @@
 ---
 title: 全文搜索
-description: 为 LobeHub 产品搜索选择并运行 pg_search 或 Elasticsearch 后端。
+description: 为 LobeHub 产品搜索选择并运行 pg_search、Elasticsearch 或 pg_like 后端。
 tags:
   - 全文搜索
   - Elasticsearch
@@ -12,15 +12,16 @@ tags:
 
 LobeHub 使用全文搜索检索助手、话题、消息、文件、知识库、群聊和记忆等产品数据。这里的全文搜索与助手可调用的联网搜索工具无关。
 
-LobeHub 支持两种产品搜索后端：
+LobeHub 支持三种产品搜索后端：
 
-| 后端              | 适用场景                                              | 额外运维工作                                                                                     |
-| --------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `pg_search`     | PostgreSQL 已支持 ParadeDB `pg_search` 扩展，希望部署结构尽量简单 | BM25 索引由 PostgreSQL 维护，不需要单独运行搜索同步任务                                                       |
-| `elasticsearch` | 希望搜索服务独立扩容，或者数据库服务即将停止支持 `pg_search`              | 需要 Elasticsearch 服务（外部服务，或官方 Docker Compose 附带的可选单节点服务）、首次全量回填、PostgreSQL 变更采集和持续运行的增量消费任务 |
+| 后端              | 适用场景                                                          | 额外运维工作                                                                                     |
+| --------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `pg_search`     | PostgreSQL 已支持 ParadeDB `pg_search` 扩展，希望部署结构尽量简单             | BM25 索引由 PostgreSQL 维护，不需要单独运行搜索同步任务                                                       |
+| `elasticsearch` | 希望搜索服务独立扩容，或者数据库服务即将停止支持 `pg_search`                          | 需要 Elasticsearch 服务（外部服务，或官方 Docker Compose 附带的可选单节点服务）、首次全量回填、PostgreSQL 变更采集和持续运行的增量消费任务 |
+| `pg_like`       | 数据库是无法安装 `pg_search` 的普通 PostgreSQL，且规模较小、不想再运维 Elasticsearch | 无；直接在现有数据表上做子串匹配，不需要扩展、索引或同步任务                                                             |
 
-`FTS_SEARCH_PROVIDER` 为整个部署选择唯一的后端，可用值为 `pg_search` 和
-`elasticsearch`，默认值是 `pg_search`。选中的后端不可用时，LobeHub 不会静默切换到另一个后端。
+`FTS_SEARCH_PROVIDER` 为整个部署选择唯一的后端，可用值为 `pg_search`、`elasticsearch` 和
+`pg_like`，默认值是 `pg_search`。选中的后端不可用时，LobeHub 不会静默切换到另一个后端。
 
 <Callout type="warning">
   设置 `FTS_SEARCH_PROVIDER=elasticsearch` 不会让历史数据库迁移跳过 `pg_search`。当前
@@ -41,6 +42,22 @@ LobeHub 支持两种产品搜索后端：
 ```bash
 FTS_SEARCH_PROVIDER=pg_search
 ```
+
+### 在普通 PostgreSQL 上使用 `pg_like`
+
+如果 PostgreSQL 服务无法安装 `pg_search`（很多托管数据库都是如此），而部署规模又小到不值得单独运维一套搜索服务，可以选择 `pg_like`。它不需要扩展、不需要额外索引、也不需要同步任务：所有搜索都以不区分大小写的子串匹配（`ILIKE`）直接在与 `pg_search` 相同的数据表和权限范围上执行。
+
+```bash
+FTS_SEARCH_PROVIDER=pg_like
+```
+
+与其他后端相比需要注意：
+
+- **匹配方式。** 查询中的每个词都出现在同一个可搜索字段里时才算命中；没有词干还原、拼写容错和短语距离。中日韩文本无需分词即可匹配，因为匹配基于子串。
+- **排序。** 结果按简单的相关度打分排序：整字段完全匹配高于前缀匹配，前缀匹配高于短语包含，短语包含高于仅包含全部词语；标题类字段的权重高于正文。
+- **性能。** 查询会扫描权限范围内的数据行而不是走搜索索引。个人和小团队实例完全够用；消息或记忆表很大时，请优先考虑 `pg_search` 或 Elasticsearch。
+
+迁移限制与 Elasticsearch 相同：`pg_like` 不会移除历史 `pg_search` 迁移，在这些迁移变为可选之前，全新建库仍必须运行在能提供该扩展的镜像上。
 
 ### 使用 Elasticsearch
 
@@ -188,7 +205,7 @@ Cloud，请不要在 `COMPOSE_PROFILES` 中启用 `elasticsearch` profile，在 
 
 | 变量                        | 用途                                                                                                                |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `FTS_SEARCH_PROVIDER`     | 整个部署使用的搜索后端：`pg_search` 或 `elasticsearch`                                                                         |
+| `FTS_SEARCH_PROVIDER`     | 整个部署使用的搜索后端：`pg_search`、`elasticsearch` 或 `pg_like`                                                               |
 | `ES_URL`                  | Elasticsearch 地址。使用 HTTPS；明文 HTTP 只允许用于回环地址，或在 `ES_ALLOW_INSECURE_HTTP=true` 时用于 `elasticsearch` 这类 Compose 内部主机名 |
 | `ES_API_KEY`              | 具备建索引、批量写入、刷新、统计、别名和搜索权限的 Elasticsearch 密钥；除 `ES_ALLOW_INSECURE_HTTP=true` 外均为必需                                  |
 | `ES_ALLOW_INSECURE_HTTP`  | 设为 `true` 时显式允许对只能在私有容器网络访问的 Elasticsearch 节点使用无 API 密钥的明文 HTTP；永远不会通过 HTTP 发送密钥                                  |

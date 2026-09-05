@@ -7,6 +7,8 @@ import {
   searchMessages,
   searchTopics,
 } from './pgSearch/command-menu';
+import type { PgFtsSearchDialect } from './pgSearch/dialect';
+import { pgSearchDialect } from './pgSearch/dialect';
 import { searchFolders, searchKnowledgeBaseDocuments, searchPages } from './pgSearch/documents';
 import { searchMemories } from './pgSearch/memories';
 import type { PgSearchFtsSearchContext } from './pgSearch/scope';
@@ -18,14 +20,21 @@ import type {
   FtsSearchBackendScope,
 } from './types';
 
-/** pg_search adapter that preserves the existing query and hydration shape. */
-export class PgSearchFtsSearchBackend implements FtsSearchBackend {
-  readonly key = 'pg_search';
+/**
+ * Product search over the shared PostgreSQL query modules. Each subclass only
+ * supplies the dialect; query shape, permissions, and hydration stay identical.
+ */
+export abstract class PostgresFtsSearchBackend implements FtsSearchBackend {
+  abstract readonly key: string;
 
-  private readonly context: PgSearchFtsSearchContext;
+  protected readonly context: PgSearchFtsSearchContext;
 
-  constructor(db: LobeChatDatabase, scope: FtsSearchBackendScope) {
-    this.context = createPgSearchFtsSearchContext(db, scope);
+  protected constructor(
+    db: LobeChatDatabase,
+    scope: FtsSearchBackendScope,
+    dialect: PgFtsSearchDialect,
+  ) {
+    this.context = createPgSearchFtsSearchContext(db, scope, dialect);
   }
 
   async search(request: FtsSearchBackendRequest): Promise<FtsSearchBackendResponse> {
@@ -34,7 +43,7 @@ export class PgSearchFtsSearchBackend implements FtsSearchBackend {
 
     const { entity, filters, pagination } = request;
     const limit = pagination.limit;
-    if (!limit) throw new Error('pg_search product search requires a positive limit');
+    if (!limit) throw new Error(`${this.key} product search requires a positive limit`);
 
     if (entity === 'agents') return searchAgents(this.context, query, limit);
     if (entity === 'chatGroups') return searchChatGroups(this.context, query, limit);
@@ -65,6 +74,15 @@ export class PgSearchFtsSearchBackend implements FtsSearchBackend {
       }
     }
 
-    throw new Error(`Unsupported pg_search entity: ${entity}`);
+    throw new Error(`Unsupported ${this.key} entity: ${entity}`);
+  }
+}
+
+/** pg_search adapter that preserves the existing query and hydration shape. */
+export class PgSearchFtsSearchBackend extends PostgresFtsSearchBackend {
+  readonly key = 'pg_search';
+
+  constructor(db: LobeChatDatabase, scope: FtsSearchBackendScope) {
+    super(db, scope, pgSearchDialect);
   }
 }
