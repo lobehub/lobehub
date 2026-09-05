@@ -11,9 +11,9 @@ import { useTranslation } from 'react-i18next';
 import { Navigate, useNavigate, useParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
-import AgentShareVisitorSkeleton from '@/components/Skeleton/AgentShareVisitor';
 import { RouteMetaBridge } from '@/features/RouteMeta';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { useRouteSkeleton } from '@/spa/router/useRouteSkeleton';
 
 import { resolveShareAccessState, SHARE_ACCESS_ERROR_KEYS } from './resolveShareAccessState';
 import { isShareInteractive } from './shareInteractivity';
@@ -64,13 +64,16 @@ const AgentShareVisitorPage = memo(() => {
   const { slugOrId } = useParams<{ slugOrId: string }>();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const RouteSkeleton = useRouteSkeleton();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const { data, error, isLoading, mutate } = useSharedAgent(slugOrId);
 
-  // Same skeleton the route already showed for the chunk load, so the page
-  // does not swap shapes between "loading the code" and "loading the share".
-  if (isLoading && !data) return <AgentShareVisitorSkeleton />;
+  /**
+   * Reuse the route-owned fallback while data loads. Importing that skeleton
+   * back into this lazy page changes the initial shell's shared chunk graph.
+   */
+  if (isLoading && !data) return RouteSkeleton ? <RouteSkeleton /> : null;
 
   if (error || !data) {
     const state = resolveShareAccessState(error);

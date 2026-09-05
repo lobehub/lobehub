@@ -3,7 +3,6 @@
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 
-import { ProductLogo } from '@/components/Branding';
 import { useIsMobile } from '@/hooks/useIsMobile';
 
 import SkeletonBar from './Bar';
@@ -32,10 +31,9 @@ const styles = createStaticStyles(({ css }) => ({
  * on top, the topic list on the left, the shared agent's header row and
  * conversation on the right.
  *
- * The real logo is drawn rather than a placeholder bar: it needs no data, and
- * a visitor arriving from a link should see whose product this is from the
- * very first frame. Everything that depends on the share (agent name, topics,
- * messages) is a bar.
+ * Keep this synchronously imported fallback structural: the real brand logo
+ * pulls image and icon modules onto every route's first-screen import graph.
+ * The visitor page renders the logo after its lazy chunk has loaded.
  *
  * Used at every step of the visitor's arrival — the chunk load and the share
  * fetch — so the page does not swap skeleton shapes on the way in.
@@ -52,7 +50,7 @@ const AgentShareVisitorSkeleton = () => {
         justify={'space-between'}
         paddingInline={12}
       >
-        <ProductLogo size={22} />
+        <SkeletonBar height={22} radius={cssVar.borderRadius} width={22} />
         <SkeletonBar height={26} radius={cssVar.borderRadius} width={26} />
       </Flexbox>
       <Flexbox horizontal flex={1} style={{ minHeight: 0, overflow: 'hidden' }} width={'100%'}>
