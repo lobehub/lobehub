@@ -583,6 +583,32 @@ describe('topic action', () => {
       expect(toast.error).toHaveBeenCalled();
     });
 
+    it.each(['model', 'effort'])(
+      'rolls back a failed %s pin even when revalidation fails',
+      async (kind) => {
+        seed();
+        const previous = useChatStore.getState().topicDataMap[KEY]?.items[0];
+        vi.spyOn(topicService, 'updateTopicModel').mockRejectedValue(new Error('write failed'));
+        vi.spyOn(topicService, 'updateTopicMetadata').mockRejectedValue(new Error('write failed'));
+        vi.spyOn(useChatStore.getState(), 'refreshTopic').mockRejectedValue(
+          new Error('refresh failed'),
+        );
+        await act(async () => {
+          await expect(
+            useChatStore.getState().updateTopicHeteroPin('hetero-topic', {
+              ...(kind === 'model' ? { model: 'new-model' } : {}),
+              provider: 'codex',
+              effort: 'low',
+            }),
+          ).rejects.toThrow('write failed');
+        });
+        const restored = useChatStore.getState().topicDataMap[KEY]?.items[0];
+        expect(restored?.model).toEqual(previous?.model);
+        expect(restored?.metadata).toEqual(previous?.metadata);
+        expect(toast.error).toHaveBeenCalled();
+      },
+    );
+
     it('writes only the effort when no model is selected', async () => {
       const { result } = renderHook(() => useChatStore());
       const updateTopicSpy = vi

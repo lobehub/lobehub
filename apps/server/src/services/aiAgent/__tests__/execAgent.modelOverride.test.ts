@@ -31,6 +31,13 @@ vi.mock('@/libs/trusted-client', () => ({
   isTrustedClientEnabled: vi.fn().mockReturnValue(false),
 }));
 
+vi.mock('@/database/models/chatGroup', () => ({
+  ChatGroupModel: class {
+    findById = vi.fn().mockResolvedValue(undefined);
+    getGroupAgentsWithMeta = vi.fn().mockResolvedValue([]);
+  },
+}));
+
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn().mockImplementation(() => ({
     create: mockMessageCreate,
@@ -269,6 +276,33 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     const callArgs = mockCreateOperation.mock.calls[0][0];
     expect(callArgs.agentConfig.model).toBe('claude-sonnet-4-6');
     expect(callArgs.agentConfig.provider).toBe('anthropic');
+  });
+
+  it('keeps group members on their own model instead of the supervisor topic pin', async () => {
+    mockGetAgentConfig.mockResolvedValue({ ...defaultAgentConfig });
+    mockTopicFindById.mockResolvedValue({
+      agentId: 'supervisor',
+      groupId: 'group-1',
+      model: 'supervisor-model',
+      provider: 'anthropic',
+      metadata: { heteroEffort: 'high' },
+    });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: {
+        topicId: 'topic-1',
+        groupId: 'group-1',
+        orchestrationRole: 'member',
+        scope: 'group',
+      },
+      prompt: 'Hello',
+    });
+
+    expect(mockCreateOperation.mock.calls[0][0].agentConfig).toMatchObject({
+      model: 'gpt-4',
+      provider: 'openai',
+    });
   });
 
   it('keeps an explicit model override over the topic model', async () => {

@@ -462,8 +462,8 @@ export class ChatTopicActionImpl {
     },
   ): Promise<void> => {
     const containerKey = topicSelectors.getTopicContainerKeyById(id)(this.#get());
-    const { reasoningConfig: _stale, ...rest } =
-      topicSelectors.getTopicById(id)(this.#get())?.metadata ?? {};
+    const previous = topicSelectors.getTopicById(id)(this.#get());
+    const { reasoningConfig: _stale, ...rest } = previous?.metadata ?? {};
     this.#get().internal_dispatchTopic({
       containerKey,
       id,
@@ -478,10 +478,19 @@ export class ChatTopicActionImpl {
     try {
       await topicService.updateTopicModel(id, value);
     } catch (error) {
-      /** Revalidate the optimistic model and effort together before another queued selection. */
-      await this.#get().refreshTopic(containerKey);
-      toast.error(t('reasoningEffort.updateFailed', { ns: 'chat' }));
-      throw error;
+      if (previous) {
+        this.#get().internal_dispatchTopic({
+          containerKey,
+          id,
+          type: 'updateTopic',
+          value: {
+            model: previous.model,
+            provider: previous.provider,
+            metadata: previous.metadata,
+          },
+        });
+      }
+      await this.#recoverTopicPinWrite(containerKey, error);
     }
     await this.#get().refreshTopic(containerKey);
   };
@@ -604,13 +613,35 @@ export class ChatTopicActionImpl {
     id: string,
     metadata: Pick<ChatTopicMetadata, 'heteroEffort' | 'reasoningConfig'>,
   ): Promise<void> => {
+    const containerKey = topicSelectors.getTopicContainerKeyById(id)(this.#get());
+    const previous = topicSelectors.getTopicById(id)(this.#get());
     try {
       await this.#get().updateTopicMetadata(id, metadata);
     } catch (error) {
-      await this.#get().refreshTopic(topicSelectors.getTopicContainerKeyById(id)(this.#get()));
-      toast.error(t('reasoningEffort.updateFailed', { ns: 'chat' }));
-      throw error;
+      if (previous) {
+        this.#get().internal_dispatchTopic({
+          containerKey,
+          id,
+          type: 'updateTopic',
+          value: { metadata: previous.metadata },
+        });
+      }
+      await this.#recoverTopicPinWrite(containerKey, error);
     }
+  };
+
+  /** Local rollback must survive an offline refresh and preserve the original write failure. */
+  #recoverTopicPinWrite = async (
+    containerKey: string | undefined,
+    error: unknown,
+  ): Promise<never> => {
+    toast.error(t('reasoningEffort.updateFailed', { ns: 'chat' }));
+    try {
+      await this.#get().refreshTopic(containerKey);
+    } catch (refreshError) {
+      console.error('[topicPin] Failed to revalidate after rollback:', refreshError);
+    }
+    throw error;
   };
 
   /**

@@ -204,7 +204,11 @@ export const resolveServerCallLlmContextHints = async ({
         const topic = await new TopicModel(ctx.serverDB, ctx.userId, ctx.workspaceId, undefined, {
           includeShareVisitor: true,
         }).findById(ctx.topicId);
-        if (topic?.model === model && topic.provider === provider) {
+        if (
+          topic?.model === model &&
+          topic.provider === provider &&
+          (!topic.groupId || topic.agentId === ctx.agentConfig?.id)
+        ) {
           modelReasoningConfig = topic.metadata?.reasoningConfig;
         }
       } catch (error) {

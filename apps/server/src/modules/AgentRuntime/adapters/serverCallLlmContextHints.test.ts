@@ -86,6 +86,27 @@ beforeEach(() => {
 describe('resolveServerCallLlmContextHints - topic reasoning pin', () => {
   const ctxWithTopic = (agentConfig: any) => ({ ...createCtx(agentConfig), topicId: 'topic-1' });
 
+  it.each([
+    ['supervisor', 'high'],
+    ['member', 'low'],
+  ])('uses group topic reasoning only for its owning agent (%s)', async (id, effort) => {
+    getModelReasoningConfigMock.mockResolvedValue({ reasoningEffort: 'low' });
+    findTopicByIdMock.mockResolvedValue({
+      agentId: 'supervisor',
+      groupId: 'group-1',
+      metadata: { reasoningConfig: { reasoningEffort: 'high' } },
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+    const hints = await resolveServerCallLlmContextHints({
+      ctx: ctxWithTopic({ id, chatConfig: {} }),
+      llmPayload,
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+    expect(hints.resolvedExtendParams).toEqual({ reasoning_effort: effort });
+  });
+
   it('should let the topic pin win over the model-instance config', async () => {
     getModelReasoningConfigMock.mockResolvedValue({ reasoningEffort: 'low' });
     findTopicByIdMock.mockResolvedValue({

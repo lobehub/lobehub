@@ -569,7 +569,9 @@ export const setupTurn = async (
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic not found' });
     }
 
-    const pinnedModel = existingTopic?.model;
+    /** A group topic pins its owning agent; member runs keep their own model and effort. */
+    const canUseTopicPin = !existingTopic?.groupId || existingTopic.agentId === resolvedAgentId;
+    const pinnedModel = canUseTopicPin ? existingTopic?.model : undefined;
     if (pinnedModel) {
       model = modelOverride || pinnedModel;
       provider = providerOverride || existingTopic?.provider || provider;
@@ -583,7 +585,7 @@ export const setupTurn = async (
     }
     // The heterogeneous effort pin lives in metadata and is independent of the
     // model pin (a runtime without a model selector can still pin an effort).
-    const pinnedHeteroEffort = existingTopic?.metadata?.heteroEffort;
+    const pinnedHeteroEffort = canUseTopicPin ? existingTopic?.metadata?.heteroEffort : undefined;
     if (pinnedHeteroEffort !== undefined) {
       pinnedHeterogeneousTopicModel = {
         ...pinnedHeterogeneousTopicModel,
