@@ -13,6 +13,7 @@ import { useChatStore } from '@/store/chat';
 import { LOCAL_MESSAGE_SCOPE } from '@/store/chat/utils/localMessages';
 
 import { createStore } from '../../index';
+import { createEphemeralResetState } from '../../initialState';
 import { dataSelectors } from './selectors';
 
 // Mock conversation-flow parse function
@@ -299,7 +300,9 @@ describe('DataSlice', () => {
       });
       store.getState().replaceMessages(windowMessages);
       vi.mocked(messageService.getEarlierMessages).mockImplementationOnce(async () => {
+        // Mimic the real switch path (StoreUpdater): ephemeral reset + context.
         store.setState({
+          ...createEphemeralResetState(),
           context: { agentId: 'agent-earlier', topicId: 'topic-earlier-other', threadId: null },
         } as any);
         return earlierPage;
@@ -309,6 +312,44 @@ describe('DataSlice', () => {
 
       expect(store.getState().dbMessages.map((m) => m.id)).toEqual(['u2', 'a2']);
       expect(store.getState().isLoadingEarlierMessages).toBe(false);
+    });
+
+    it('swallows a failed page fetch, resets the flag, and allows a retry', async () => {
+      const store = createStore({
+        context: { agentId: 'agent-earlier', topicId: 'topic-earlier-4', threadId: null },
+      });
+      store.getState().replaceMessages(windowMessages);
+      vi.mocked(messageService.getEarlierMessages)
+        .mockRejectedValueOnce(new Error('network down'))
+        .mockResolvedValueOnce(earlierPage);
+
+      await expect(store.getState().loadEarlierMessages()).resolves.toBeUndefined();
+      expect(store.getState().isLoadingEarlierMessages).toBe(false);
+
+      await store.getState().loadEarlierMessages();
+
+      expect(messageService.getEarlierMessages).toHaveBeenCalledTimes(2);
+      expect(store.getState().dbMessages.map((m) => m.id)).toEqual(['u1', 'a1', 'u2', 'a2']);
+    });
+
+    it('does not clear the loading flag of the next conversation on late settle', async () => {
+      const store = createStore({
+        context: { agentId: 'agent-earlier', topicId: 'topic-earlier-5', threadId: null },
+      });
+      store.getState().replaceMessages(windowMessages);
+      vi.mocked(messageService.getEarlierMessages).mockImplementationOnce(async () => {
+        store.setState({
+          ...createEphemeralResetState(),
+          context: { agentId: 'agent-earlier', topicId: 'topic-earlier-next', threadId: null },
+        } as any);
+        // The next conversation starts its own page load while ours is in flight.
+        store.setState({ isLoadingEarlierMessages: true });
+        return earlierPage;
+      });
+
+      await store.getState().loadEarlierMessages();
+
+      expect(store.getState().isLoadingEarlierMessages).toBe(true);
     });
   });
 
