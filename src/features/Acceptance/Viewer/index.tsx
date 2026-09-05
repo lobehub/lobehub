@@ -89,12 +89,17 @@ const AcceptanceBody = ({ onDraftToComposer }: Pick<AcceptancePageProps, 'onDraf
             topicSlot={<AcceptanceOriginTopic />}
           />
           <AcceptanceGoal editSlot={<AcceptanceGoalEdit />} />
-          <AcceptanceTabs
-            active={tab}
-            checkCount={data?.checks.length ?? 0}
-            resourceCount={resourceCount}
-            onChange={setTab}
-          />
+          {/* The requirement needs room to land before the tabs start a new
+              thought — at the band's uniform gap it read as another row of
+              the same list. */}
+          <Flexbox style={{ paddingBlockStart: 16 }}>
+            <AcceptanceTabs
+              active={tab}
+              checkCount={data?.checks.length ?? 0}
+              resourceCount={resourceCount}
+              onChange={setTab}
+            />
+          </Flexbox>
         </Flexbox>
       </Flexbox>
 
