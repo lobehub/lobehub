@@ -365,6 +365,118 @@ describe('heterogeneous direct invocation protocol', () => {
     expect(payload.messages).toEqual([{ content: system, role: 'system' }]);
   });
 
+  it('preserves an Anthropic billing header in a later system text block', () => {
+    const payload = normalizeAnthropicRequest(
+      {
+        messages: [],
+        system: [
+          { text: 'Keep this text\n', type: 'text' },
+          { text: 'x-anthropic-billing-header: this later block is user content', type: 'text' },
+        ],
+      },
+      'lobehub-default',
+    );
+
+    expect(payload.messages).toEqual([
+      {
+        content: 'Keep this text\nx-anthropic-billing-header: this later block is user content',
+        role: 'system',
+      },
+    ]);
+  });
+
+  it('unwraps a leading Claude Code system reminder for GPT relay models', () => {
+    const payload = normalizeAnthropicRequest(
+      {
+        messages: [
+          {
+            content: [
+              {
+                text: [
+                  '<system-reminder>',
+                  'As you answer the user, you can use the following context:',
+                  '# currentDate',
+                  "Today's date is 2026-09-05.",
+                  '</system-reminder>',
+                  '',
+                ].join('\r\n'),
+                type: 'text',
+              },
+              { text: 'Reply with exactly LOBEHUB_HETERO_SMOKE_OK.', type: 'text' },
+            ],
+            role: 'user',
+          },
+        ],
+      },
+      'lobehub-default',
+      { unwrapSystemReminders: true },
+    );
+
+    expect(payload.messages).toEqual([
+      {
+        content: [
+          '',
+          'As you answer the user, you can use the following context:',
+          '# currentDate',
+          "Today's date is 2026-09-05.",
+          '',
+          'Reply with exactly LOBEHUB_HETERO_SMOKE_OK.',
+        ].join('\r\n'),
+        role: 'user',
+      },
+    ]);
+  });
+
+  it('preserves system reminder markup unless unwrapping is explicitly enabled', () => {
+    const content = 'Preface\n<system-reminder>user-authored text</system-reminder>';
+    const payload = normalizeAnthropicRequest(
+      { messages: [{ content, role: 'user' }] },
+      'lobehub-default',
+      { unwrapSystemReminders: true },
+    );
+    const defaultPayload = normalizeAnthropicRequest(
+      {
+        messages: [
+          { content: '<system-reminder>Claude context</system-reminder>\n\nPrompt', role: 'user' },
+        ],
+      },
+      'lobehub-default',
+    );
+
+    expect(payload.messages).toEqual([{ content, role: 'user' }]);
+    expect(defaultPayload.messages).toEqual([
+      {
+        content: '<system-reminder>Claude context</system-reminder>\n\nPrompt',
+        role: 'user',
+      },
+    ]);
+  });
+
+  it('does not unwrap a system reminder in a later text block', () => {
+    const payload = normalizeAnthropicRequest(
+      {
+        messages: [
+          {
+            content: [
+              { text: 'User preface\n', type: 'text' },
+              { text: '<system-reminder>user-authored text</system-reminder>', type: 'text' },
+            ],
+            role: 'user',
+          },
+        ],
+      },
+      'lobehub-default',
+      { unwrapSystemReminders: true },
+    );
+
+    expect(payload.messages).toEqual([
+      {
+        content: 'User preface\n<system-reminder>user-authored text</system-reminder>',
+        role: 'user',
+      },
+    ]);
+  });
+
   it('preserves Anthropic thinking history across tool rounds', () => {
     const payload = normalizeAnthropicRequest(
       {
