@@ -283,10 +283,10 @@ export class FtsSearchReindexHttpClient implements FtsSearchReindexElasticsearch
       }
 
       /**
-       * Incremental sync writes only through the stable alias. Moving that alias while a resumable
-       * backfill is running could acknowledge a change in the old index without replaying it into
-       * the new one. Online schema upgrades therefore require a separate durable dual-write
-       * protocol; this initial migration fails closed instead of pretending the cutover is safe.
+       * Incremental sync writes every change to all live generations of an entity, so a newer
+       * generation can be backfilled while the alias keeps serving the old one. Promotion is still
+       * a separate explicit step gated on the backfill and the Outbox catching up; this command
+       * never moves an existing alias and fails closed instead.
        */
       throw new FtsSearchReindexRequestError(
         `Elasticsearch alias ${alias} already points to a different index`,
