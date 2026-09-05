@@ -61,6 +61,12 @@ describe('SandboxMiddlewareService file initialization', () => {
       1,
       'runCommand',
       expect.objectContaining({ command: expect.stringContaining('curl') }),
+      {
+        reserveFor: {
+          params: { directoryPath: '/mnt/data' },
+          toolName: 'listFiles',
+        },
+      },
     );
     expect(provider.callTool).toHaveBeenNthCalledWith(2, 'listFiles', {
       directoryPath: '/mnt/data',

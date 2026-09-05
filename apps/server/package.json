@@ -8,5 +8,8 @@
     "dev": "vite-node --watch --config viteNodeServer.config.ts src/router-hono/dev.ts",
     "start": "node dist/standalone.js",
     "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@e2b/code-interpreter": "^2.7.0"
   }
 }

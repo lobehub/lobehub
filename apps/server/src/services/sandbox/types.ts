@@ -1,5 +1,6 @@
 import type {
   ISandboxService,
+  SandboxCallToolResult,
   SandboxExportFileResult,
 } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { LobeChatDatabase } from '@lobechat/database';
@@ -7,7 +8,7 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import type { FileService } from '@/server/services/file';
 import type { MarketService } from '@/server/services/market';
 
-export type SandboxProviderKind = 'market' | 'onlyboxes';
+export type SandboxProviderKind = 'market' | 'onlyboxes' | 'tencent';
 
 export interface SandboxSessionContext {
   topicId: string;
@@ -31,7 +32,25 @@ export interface SandboxProviderCapabilities {
   skillScripts: boolean;
 }
 
-export interface SandboxProvider extends Pick<ISandboxService, 'callTool'> {
+export interface SandboxProviderCallContext {
+  /**
+   * Describes the user-facing tool call that will immediately follow an
+   * internal middleware call. Providers can use it when sizing resources for
+   * that follow-up without changing the internal call's own timeout.
+   */
+  reserveFor?: {
+    params: Record<string, unknown>;
+    toolName: string;
+  };
+}
+
+export interface SandboxProvider {
+  callTool: (
+    toolName: string,
+    params: Record<string, unknown>,
+    context?: SandboxProviderCallContext,
+  ) => Promise<SandboxCallToolResult>;
+
   readonly capabilities: SandboxProviderCapabilities;
 
   exportFileToUploadUrl: (
