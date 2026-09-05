@@ -20,9 +20,7 @@ const styles = createStaticStyles(({ css }) => {
       border-radius: 10px;
     `,
     popoverContent: css`
-      --lobe-popover-viewport-inline-padding: 0px;
-
-      padding-block: 0;
+      padding: 0;
     `,
   };
 });
