@@ -8,10 +8,18 @@ import { describe, expect, it } from 'vitest';
 import { mobileRoutes } from './mobileRouter.config';
 
 describe('mobileRouter agent share route', () => {
-  it('serves the agent-share visitor surface on mobile through the shared /agent/:aid route', () => {
+  it('serves the agent-share visitor page on /a/:slugOrId outside the main layout', () => {
+    const matches = matchRoutes(mobileRoutes, '/a/my-agent');
+
+    expect(matches).toHaveLength(1);
+    expect(matches?.[0]?.route.path).toBe('/a/:slugOrId');
+    expect(matches?.[0]?.params).toMatchObject({ slugOrId: 'my-agent' });
+  });
+
+  it('keeps the creator agent surface on /agent/:aid, where legacy share slugs are forwarded', () => {
     const matches = matchRoutes(mobileRoutes, '/agent/my-agent');
 
-    // Visitor and creator surfaces share this route; `AgentRouteSwitch` picks.
+    // A legacy share slug also lands here; `AgentRouteSwitch` forwards it to `/a`.
     expect(matches?.some((match) => match.route.path === ':aid')).toBe(true);
     expect(matches?.at(-1)?.params).toMatchObject({ aid: 'my-agent' });
   });

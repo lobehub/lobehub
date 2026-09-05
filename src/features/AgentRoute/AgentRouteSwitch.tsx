@@ -1,7 +1,9 @@
 'use client';
 
 import { memo, type ReactElement, type ReactNode } from 'react';
-import { Navigate, useParams } from 'react-router';
+import { Navigate, useLocation, useParams } from 'react-router';
+
+import { buildAgentShareVisitorPath } from '@/features/AgentShareVisitor/visitorPath';
 
 import { resolveAgentRouteBranch, useAgentRouteResolution } from './useAgentRouteResolution';
 
@@ -16,26 +18,25 @@ interface AgentRouteSwitchProps {
    * at the agent itself.
    */
   ownShareRedirect?: (agentId: string) => string;
-  /** The agent-share visitor surface. */
-  shareElement: ReactElement;
 }
 
 const defaultOwnShareRedirect = (agentId: string) => `/agent/${agentId}/share`;
 
 /**
- * `/agent/:slugOrId` serves two surfaces: the creator's own agent (by id or by
- * agent slug) and the agent-share visitor page (by share slug or share id).
- * React Router cannot tell them apart from the pattern alone, so the branch is
- * decided here, after the param is resolved server-side.
+ * `/agent/:slugOrId` is the creator's own agent, by id or by agent slug — but
+ * share slugs used to live on this route too, and links handed out then are
+ * permanent. React Router cannot tell an agent slug from a share slug by the
+ * pattern alone, so the param is resolved server-side and a share slug is
+ * forwarded to the visitor page at `/a/:slugOrId`.
  *
  * A not-found param renders the own-agent shell, which already owns the agent
- * not-found card — the visitor page has no better story for an unknown link.
- * The share branch does not render an `Outlet`, so the nested creator routes
- * (`/agent/:aid/docs` …) stay unmounted for a visitor.
+ * not-found card. An UNAUTHORIZED lookup also forwards to the visitor page
+ * (see `resolveAgentRouteBranch`): the sign-in prompt lives there.
  */
 const AgentRouteSwitch = memo<AgentRouteSwitchProps>(
-  ({ fallback, ownElement, ownShareRedirect = defaultOwnShareRedirect, shareElement }) => {
+  ({ fallback, ownElement, ownShareRedirect = defaultOwnShareRedirect }) => {
     const { aid } = useParams<{ aid?: string }>();
+    const { hash, search } = useLocation();
     const { error, isLoading, kind, resolvedAgentId } = useAgentRouteResolution(aid);
     const branch = resolveAgentRouteBranch({ error, isLoading, kind });
 
@@ -46,7 +47,10 @@ const AgentRouteSwitch = memo<AgentRouteSwitchProps>(
     if (branch === 'ownShare' && resolvedAgentId)
       return <Navigate replace to={ownShareRedirect(resolvedAgentId)} />;
 
-    return branch === 'share' ? shareElement : ownElement;
+    if (branch === 'share' && aid)
+      return <Navigate replace to={`${buildAgentShareVisitorPath(aid)}${search}${hash}`} />;
+
+    return ownElement;
   },
 );
 

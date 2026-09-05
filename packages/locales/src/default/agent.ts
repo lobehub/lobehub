@@ -487,6 +487,7 @@ export default {
   'share.visitor.input.stop': 'Stop',
   'share.visitor.privacyNotice':
     'This conversation runs on the owner’s account and may be visible to them. Avoid sharing sensitive information.',
+  'share.visitor.topBar.home': 'Go to my LobeHub',
   'share.visitor.topics.empty': 'No conversations yet',
   'share.visitor.topics.new': 'New conversation',
   'share.visitor.topics.title': 'Conversations',

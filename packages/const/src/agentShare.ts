@@ -68,12 +68,13 @@ export const AGENT_SHARE_SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/;
 /**
  * Slugs a share may not claim. Two groups:
  *
- * 1. words that collide with existing (or foreseeable) static routes under the
- *    agent surface (e.g. `/agent/<slug>`, `/agent/new`), or that would
- *    otherwise confuse a share URL;
- * 2. every builtin agent slug — a share lives at `/agent/<slug>`, the same
- *    route the creator's own agents use, and an own agent always wins the
- *    lookup, so a share taking a builtin slug would be permanently unreachable.
+ * 1. words that collide with existing (or foreseeable) static routes next to
+ *    the share URL (`/a/<slug>`) or the agent surface (`/agent/new`), or that
+ *    would otherwise confuse a share URL;
+ * 2. every builtin agent slug — share links used to live at `/agent/<slug>`,
+ *    the same route the creator's own agents use, and such legacy links are
+ *    still resolved there, where an own agent always wins the lookup. A share
+ *    on a builtin slug would be unreachable from any of those links.
  *
  * The builtin slugs are duplicated here rather than imported: `@lobechat/const`
  * sits *below* `@lobechat/builtin-agents` in the dependency graph. The copy is

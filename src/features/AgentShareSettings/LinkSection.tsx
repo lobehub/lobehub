@@ -6,6 +6,7 @@ import { CopyIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { AGENT_SHARE_VISITOR_PATH } from '@/features/AgentShareVisitor/visitorPath';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 
 import { Section } from './SectionLayout';
@@ -183,7 +184,7 @@ const LinkSection = memo<LinkSectionProps>((props) => {
               // The raw share id is the fallback path, so the empty field shows
               // exactly where visitors would land.
               placeholder={share?.id}
-              prefix={`${appOrigin}/agent/`}
+              prefix={`${appOrigin}${AGENT_SHARE_VISITOR_PATH}/`}
               status={slugError ? 'error' : undefined}
               style={{ flex: 1 }}
               value={slugDraft}

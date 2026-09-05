@@ -372,6 +372,7 @@
   "share.visitor.input.send": "发送",
   "share.visitor.input.stop": "停止",
   "share.visitor.privacyNotice": "本次会话运行在创建者的账号下，内容可能对创建者可见，请勿发送敏感信息。",
+  "share.visitor.topBar.home": "回到我的 LobeHub",
   "share.visitor.topics.empty": "还没有会话",
   "share.visitor.topics.new": "新建会话",
   "share.visitor.topics.title": "会话",
