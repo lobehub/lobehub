@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { FTS_SEARCH_INDEX_DEFINITIONS } from '@/database/repositories/ftsSearchDocument';
 import type {
   FtsSearchSyncFailure,
   FtsSearchSyncWork,
@@ -8,6 +9,14 @@ import type {
 
 import { ElasticsearchFtsSearchRequestError } from '../ftsSearch/elasticsearch';
 import { FtsSearchSyncService } from './service';
+
+const ALL_DECLARED_FIELDS = [
+  ...new Set(
+    Object.values(FTS_SEARCH_INDEX_DEFINITIONS).flatMap(({ mappings }) =>
+      Object.keys(mappings.properties),
+    ),
+  ),
+];
 
 const work = (documentId: string, revision: number = 1): FtsSearchSyncWork => ({
   documentId,
@@ -43,6 +52,10 @@ const createHarness = (
     bulk: vi.fn(),
     getFtsSearchSyncGenerationTargets: vi.fn(async (aliases: string[]) =>
       Object.fromEntries(aliases.map((alias) => [alias, [`${alias}-v1`]])),
+    ),
+    /** Every generation maps every declared field unless a test narrows one. */
+    getFtsSearchSyncIndexFields: vi.fn(async (indexes: string[]) =>
+      Object.fromEntries(indexes.map((index) => [index, ALL_DECLARED_FIELDS])),
     ),
   };
 
@@ -158,6 +171,70 @@ describe('FtsSearchSyncService', () => {
         result: 'response_error',
       }),
     ]);
+  });
+
+  it('prunes each document to the fields its generation maps', async () => {
+    const works = [work('a', 3)];
+    const harness = createHarness(
+      works,
+      new Map([['a', { id: 'a', summary: 'added in v2', title: 'title' }]]),
+    );
+    harness.client.getFtsSearchSyncGenerationTargets.mockResolvedValue({
+      'lobehub-test-agents': ['lobehub-test-agents-v1', 'lobehub-test-agents-v2'],
+    });
+    harness.client.getFtsSearchSyncIndexFields.mockResolvedValue({
+      'lobehub-test-agents-v1': ['id', 'title'],
+      'lobehub-test-agents-v2': ['id', 'summary', 'title'],
+    });
+    harness.client.bulk.mockResolvedValue({
+      errors: false,
+      items: [201, 201].map((status) => ({ index: { status } })),
+    });
+    const service = new FtsSearchSyncService(
+      harness.builder as never,
+      harness.outbox as never,
+      harness.client,
+      'lobehub-test',
+    );
+
+    await service.drainOnce();
+
+    expect(harness.client.getFtsSearchSyncIndexFields).toHaveBeenCalledWith([
+      'lobehub-test-agents-v1',
+      'lobehub-test-agents-v2',
+    ]);
+    const sources = (harness.client.bulk.mock.calls[0][0] as string)
+      .trim()
+      .split('\n')
+      .filter((_, index) => index % 2 === 1)
+      .map((line) => JSON.parse(line));
+    expect(sources).toEqual([
+      { id: 'a', title: 'title' },
+      { id: 'a', summary: 'added in v2', title: 'title' },
+    ]);
+    expect(harness.outbox.acknowledgeMany).toHaveBeenCalledWith(works);
+  });
+
+  it('retries the whole batch durably when generation fields cannot be resolved', async () => {
+    const works = [work('a', 3)];
+    const harness = createHarness(works, new Map([['a', { id: 'a', title: 'title' }]]));
+    harness.client.getFtsSearchSyncIndexFields.mockRejectedValueOnce(
+      new ElasticsearchFtsSearchRequestError('field lookup failed', 503),
+    );
+    const service = new FtsSearchSyncService(
+      harness.builder as never,
+      harness.outbox as never,
+      harness.client,
+      'lobehub-test',
+    );
+
+    const result = await service.drainOnce();
+
+    expect(harness.client.bulk).not.toHaveBeenCalled();
+    expect(harness.outbox.markFailures).toHaveBeenCalledWith([
+      expect.not.objectContaining({ permanent: true }),
+    ]);
+    expect(result).toMatchObject({ acknowledged: 0, dead: 0, failed: 1 });
   });
 
   it('writes every change to each live generation and settles it only when all of them hold it', async () => {

@@ -25,6 +25,8 @@ interface FtsSearchSyncElasticsearchClient {
   bulk: (body: string) => Promise<ElasticsearchFtsSearchBulkResponse>;
   /** Live physical generations per alias; every change is written to all of them. */
   getFtsSearchSyncGenerationTargets: (aliases: string[]) => Promise<Record<string, string[]>>;
+  /** Mapped top-level fields per physical index, used to prune documents per generation. */
+  getFtsSearchSyncIndexFields: (indexes: string[]) => Promise<Record<string, string[]>>;
 }
 
 /** One Outbox change expanded into one bulk action per live generation of its entity. */
@@ -92,14 +94,21 @@ const buildOperation = (
   work: FtsSearchSyncWork,
   targets: string[],
   source: Record<string, unknown>,
+  fieldsByIndex: ReadonlyMap<string, ReadonlySet<string>>,
 ): FtsSearchSyncOperation => {
-  const sourceLine = JSON.stringify(source);
   /**
    * The same revision goes to every generation with `version_type: external`, so a generation that
    * a concurrent rebuild already filled with a newer revision answers 409 and is settled as done.
+   * Each generation only receives the fields it maps: the document is projected by the deployed
+   * code, which may already declare fields an older generation lacks, and every generation is
+   * `dynamic: strict`.
    */
   const body = targets
     .map((target) => {
+      const fields = fieldsByIndex.get(target);
+      const projected = fields
+        ? Object.fromEntries(Object.entries(source).filter(([field]) => fields.has(field)))
+        : source;
       const metadata = {
         index: {
           _id: work.documentId,
@@ -108,7 +117,7 @@ const buildOperation = (
           version_type: 'external',
         },
       };
-      return `${JSON.stringify(metadata)}\n${sourceLine}\n`;
+      return `${JSON.stringify(metadata)}\n${JSON.stringify(projected)}\n`;
     })
     .join('');
   return { body, bytes: Buffer.byteLength(body), items: targets.length, work };
@@ -384,6 +393,7 @@ export class FtsSearchSyncService {
        * Elasticsearch read that can fail for the same transient reasons.
        */
       const targetsByEntity = new Map<FtsSearchSyncWork['entity'], string[]>();
+      const fieldsByIndex = new Map<string, ReadonlySet<string>>();
       const pendingEntities = [
         ...new Set(works.filter((work) => unsettled.has(workKey(work))).map((work) => work.entity)),
       ];
@@ -404,6 +414,14 @@ export class FtsSearchSyncService {
             }
             targetsByEntity.set(entity, entityTargets);
           }
+          const indexes = [...new Set([...targetsByEntity.values()].flat())].sort();
+          const fields = await this.client.getFtsSearchSyncIndexFields(indexes);
+          for (const index of indexes) {
+            if (!fields[index]) {
+              throw new Error(`Elasticsearch returned no mapped fields for index ${index}`);
+            }
+            fieldsByIndex.set(index, new Set(fields[index]));
+          }
         } catch (error) {
           await fail(
             works
@@ -422,7 +440,12 @@ export class FtsSearchSyncService {
         const source =
           projectedSources.get(sourceKey(work.entity, work.documentId)) ??
           ({ id: work.documentId, fts_search_sync_deleted: true } as Record<string, unknown>);
-        const operation = buildOperation(work, targetsByEntity.get(work.entity)!, source);
+        const operation = buildOperation(
+          work,
+          targetsByEntity.get(work.entity)!,
+          source,
+          fieldsByIndex,
+        );
 
         if (operation.bytes > this.options.bulkMaxBytes) {
           await fail([

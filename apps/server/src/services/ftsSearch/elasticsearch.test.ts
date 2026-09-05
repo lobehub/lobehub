@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  FTS_SEARCH_INDEX_DEFINITIONS,
   getFtsSearchIndexSchemaFingerprint,
   getFtsSearchIndexSchemaVersion,
 } from '@/database/repositories/ftsSearchDocument';
@@ -663,7 +664,43 @@ describe('ElasticsearchFtsSearchHttpClient', () => {
     await expect(request).rejects.not.toThrow(/test-api-key|must-not-leak/);
   });
 
-  it('rejects an alias whose live index implements a different schema version', async () => {
+  it('accepts an alias that still serves an older generation while the upgrade is in progress', async () => {
+    const liveVersion = getFtsSearchIndexSchemaVersion('topics');
+    const definition = FTS_SEARCH_INDEX_DEFINITIONS.topics as unknown as { schemaVersion: number };
+    // Every entity declares v1 today; pretend the deployed code moved topics one generation ahead.
+    definition.schemaVersion = liveVersion + 1;
+    try {
+      vi.stubGlobal(
+        'fetch',
+        vi
+          .fn()
+          .mockResolvedValueOnce(
+            Response.json({ 'lobehub-topics-v1': { aliases: { 'lobehub-topics': {} } } }),
+          )
+          .mockResolvedValueOnce(
+            Response.json({
+              'lobehub-topics-v1': identityIndex('topics', 'topics-index-uuid', {
+                schema_fingerprint: 'older-generation',
+                schema_version: liveVersion,
+              }),
+            }),
+          ),
+      );
+      const client = new ElasticsearchFtsSearchHttpClient({
+        apiKey: 'test-api-key',
+        indexNamespace: 'lobehub',
+        url: 'https://search.example.com',
+      });
+
+      await expect(
+        client.getFtsSearchSyncIndexIdentities(['lobehub-topics']),
+      ).resolves.toMatchObject({ 'lobehub-topics': { schemaVersion: liveVersion } });
+    } finally {
+      definition.schemaVersion = liveVersion;
+    }
+  });
+
+  it('rejects an alias whose live index implements a newer schema version than the code', async () => {
     vi.stubGlobal(
       'fetch',
       vi
@@ -688,6 +725,59 @@ describe('ElasticsearchFtsSearchHttpClient', () => {
     await expect(client.getFtsSearchSyncIndexIdentities(['lobehub-topics'])).rejects.toThrow(
       `Elasticsearch full-text search alias lobehub-topics implements schema version ${getFtsSearchIndexSchemaVersion('topics') + 1} but the deployed code declares v${getFtsSearchIndexSchemaVersion('topics')}`,
     );
+  });
+
+  it('lists the mapped fields of every generation index', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      Response.json({
+        'lobehub-topics-v1': {
+          mappings: { properties: { id: { type: 'keyword' }, title: { type: 'text' } } },
+        },
+        'lobehub-topics-v2': {
+          mappings: {
+            properties: {
+              id: { type: 'keyword' },
+              summary: { type: 'text' },
+              title: { type: 'text' },
+            },
+          },
+        },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new ElasticsearchFtsSearchHttpClient({
+      apiKey: 'test-api-key',
+      url: 'https://search.example.com',
+    });
+
+    await expect(
+      client.getFtsSearchSyncIndexFields(['lobehub-topics-v1', 'lobehub-topics-v2']),
+    ).resolves.toEqual({
+      'lobehub-topics-v1': ['id', 'title'],
+      'lobehub-topics-v2': ['id', 'summary', 'title'],
+    });
+    expect(fetchMock.mock.calls[0][0].toString()).toBe(
+      'https://search.example.com/lobehub-topics-v1,lobehub-topics-v2/_mapping?filter_path=*.mappings.properties',
+    );
+  });
+
+  it('rejects a field lookup that omits a requested generation index', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce(
+        Response.json({
+          'lobehub-topics-v1': { mappings: { properties: { id: { type: 'keyword' } } } },
+        }),
+      ),
+    );
+    const client = new ElasticsearchFtsSearchHttpClient({
+      apiKey: 'test-api-key',
+      url: 'https://search.example.com',
+    });
+
+    await expect(
+      client.getFtsSearchSyncIndexFields(['lobehub-topics-v1', 'lobehub-topics-v2']),
+    ).rejects.toThrow('field lookup is missing index lobehub-topics-v2');
   });
 
   it('rejects an alias whose live index was built from a drifted mapping of the same version', async () => {

@@ -408,6 +408,53 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
     return targets;
   }
 
+  /**
+   * Mapped top-level fields of each physical index. Generations differ in their field sets, and
+   * every generation is `dynamic: strict`, so a document must be pruned to the target's fields
+   * before it is written there.
+   */
+  async getFtsSearchSyncIndexFields(indexes: string[]): Promise<Record<string, string[]>> {
+    if (indexes.length === 0) return {};
+
+    const response = await fetch(
+      new URL(
+        `/${indexes.map(encodeURIComponent).join(',')}/_mapping?filter_path=*.mappings.properties`,
+        this.url,
+      ),
+      {
+        headers: this.headers(),
+        method: 'GET',
+        signal: AbortSignal.timeout(this.requestTimeoutMs),
+      },
+    );
+    if (!response.ok) {
+      throw new ElasticsearchFtsSearchRequestError(
+        `Elasticsearch full-text search sync field lookup failed (${response.status})`,
+        response.status,
+      );
+    }
+    const payload = syncMappingResponseSchema.safeParse(await response.json());
+    if (!payload.success) {
+      throw new ElasticsearchFtsSearchRequestError(
+        'Elasticsearch full-text search sync field lookup response has an invalid shape',
+        response.status,
+        payload.error,
+      );
+    }
+
+    const fields: Record<string, string[]> = {};
+    for (const index of indexes) {
+      const properties = payload.data[index]?.mappings.properties;
+      if (!properties) {
+        throw new ElasticsearchFtsSearchRequestError(
+          `Elasticsearch full-text search sync field lookup is missing index ${index}`,
+        );
+      }
+      fields[index] = Object.keys(properties).sort();
+    }
+    return fields;
+  }
+
   /** Returns each alias's unique writable physical index after validating tombstone support. */
   async getFtsSearchSyncWriteTargets(aliases: string[]): Promise<Record<string, string>> {
     if (aliases.length === 0) return {};
@@ -523,9 +570,15 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
         aliasEntities.get(alias)!,
         index.mappings._meta,
       );
-      if (mismatch?.kind === 'version') {
+      /**
+       * An alias still serving an older generation is the normal state while the declared
+       * generation is being built and promoted; sync keeps writing, pruned to each generation's
+       * fields. A newer generation than the code declares means the deployment was rolled back
+       * without moving the alias, which this code cannot serve safely.
+       */
+      if (mismatch?.kind === 'version' && mismatch.actual > mismatch.expected) {
         throw new ElasticsearchFtsSearchRequestError(
-          `Elasticsearch full-text search alias ${alias} implements schema version ${mismatch.actual} but the deployed code declares v${mismatch.expected}; promote the matching generation or roll the deployment back`,
+          `Elasticsearch full-text search alias ${alias} implements schema version ${mismatch.actual} but the deployed code declares v${mismatch.expected}; promote the v${mismatch.expected} generation or deploy matching code`,
         );
       }
       if (mismatch?.kind === 'fingerprint') {
