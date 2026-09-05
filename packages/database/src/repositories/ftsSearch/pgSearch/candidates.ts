@@ -1,10 +1,29 @@
+import { LIBRARY_HIDDEN_FILE_SOURCES } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
-import { and, arrayContains, eq, gte, inArray, isNull, lte, not, or, sql } from 'drizzle-orm';
+import {
+  and,
+  arrayContains,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  lte,
+  ne,
+  not,
+  notInArray,
+  or,
+  sql,
+} from 'drizzle-orm';
 import type { AnyPgColumn, PgTable } from 'drizzle-orm/pg-core';
 
 import {
   agents,
   chatGroups,
+  DOCUMENT_FOLDER_TYPE,
+  documents,
+  files,
+  knowledgeBaseFiles,
+  knowledgeBases,
   messages,
   topics,
   userMemories,
@@ -41,14 +60,18 @@ type MemoryTimeColumns = Partial<Record<MemoryTimeField, AnyPgColumn>>;
 
 interface CandidateTarget {
   /** Field names used when the request does not narrow `query.fields`. */
-  defaultFields: string[];
+  defaultFields: string[] | ((filters: FtsSearchBackendFilters) => string[]);
   /** Elasticsearch document field name → searchable columns backing it. */
   fields: Record<string, PgFtsSearchField[]>;
   id: AnyPgColumn;
   /** Join predicate for layer tables whose document embeds parent memory text. */
   parentJoin?: SQL;
   table: PgTable;
-  where: (scope: FtsSearchBackendScope, filters: FtsSearchBackendFilters) => (SQL | undefined)[];
+  where: (
+    scope: FtsSearchBackendScope,
+    filters: FtsSearchBackendFilters,
+    db: PgSearchFtsSearchContext['db'],
+  ) => (SQL | undefined)[];
 }
 
 const parentMemoryFields = {
@@ -61,13 +84,14 @@ const parentMemoryJoin = (layer: { userId: AnyPgColumn; userMemoryId: AnyPgColum
   and(eq(userMemories.id, layer.userMemoryId), eq(userMemories.userId, layer.userId)) as SQL;
 
 /**
- * Mirrors the Elasticsearch tag clause: each requested tag may come from the
- * layer row or its parent memory, and a layer whose parent carries no tags is not
- * excluded. `all` requires every tag (AND of per-tag clauses); `any` requires one.
+ * Each requested tag may come from the layer row or its parent memory, matching
+ * the SQL the memory models apply after hydration. `all` requires every tag
+ * (AND of per-tag clauses); `any` requires one.
  *
- * The search document stores an untagged parent as an empty `parent_tags` array,
- * which Elasticsearch treats as a missing field, so an empty SQL array counts as
- * "no parent tags" too.
+ * Elasticsearch additionally admits layers whose document has no `parent_tags`
+ * field, an allowance for documents indexed before that field existed. This
+ * provider reads live rows, so that branch would only add untagged false
+ * positives that consume bounded pool slots.
  */
 const memoryTagFilter = (
   layerTags: AnyPgColumn,
@@ -79,11 +103,7 @@ const memoryTagFilter = (
 
   const clauses = tags.map((tag) =>
     parentTags
-      ? (or(
-          arrayContains(layerTags, [tag]),
-          arrayContains(parentTags, [tag]),
-          sql`coalesce(cardinality(${parentTags}), 0) = 0`,
-        ) as SQL)
+      ? (or(arrayContains(layerTags, [tag]), arrayContains(parentTags, [tag])) as SQL)
       : arrayContains(layerTags, [tag]),
   );
 
@@ -186,6 +206,67 @@ const memoryLayerWhere =
     memoryTimeFilter(layer.timeColumns, filters),
   ];
 
+/** Files whose membership in a restricted knowledge base hides them entirely. */
+const restrictedKnowledgeBaseFileIds = (db: PgSearchFtsSearchContext['db'], kbIds: string[]) =>
+  db
+    .select({ fileId: knowledgeBaseFiles.fileId })
+    .from(knowledgeBaseFiles)
+    .where(inArray(knowledgeBaseFiles.knowledgeBaseId, kbIds));
+
+/**
+ * Mirrors the Elasticsearch `knowledge_base_ids` exclusion: a document is hidden
+ * when its own knowledge base or the knowledge base of its backing file is
+ * restricted.
+ */
+const documentKnowledgeBaseExclusion = (
+  db: PgSearchFtsSearchContext['db'],
+  filters: FtsSearchBackendFilters,
+): SQL | undefined => {
+  const kbIds = filters.excludeKnowledgeBaseIds;
+  if (!kbIds?.length) return;
+
+  return and(
+    or(isNull(documents.knowledgeBaseId), notInArray(documents.knowledgeBaseId, kbIds)),
+    or(
+      isNull(documents.fileId),
+      notInArray(documents.fileId, restrictedKnowledgeBaseFileIds(db, kbIds)),
+    ),
+  );
+};
+
+const documentKindWhere = (
+  db: PgSearchFtsSearchContext['db'],
+  filters: FtsSearchBackendFilters,
+): (SQL | undefined)[] => {
+  const { documentKind } = filters;
+  if (documentKind === 'folder') {
+    return [
+      eq(documents.fileType, DOCUMENT_FOLDER_TYPE),
+      documentKnowledgeBaseExclusion(db, filters),
+    ];
+  }
+  if (documentKind === 'page') {
+    return [eq(documents.fileType, 'custom/document'), documentKnowledgeBaseExclusion(db, filters)];
+  }
+  if (documentKind === 'knowledgeBaseDocument') {
+    const kbIds = filters.knowledgeBaseIds ?? [];
+    return [
+      ne(documents.fileType, DOCUMENT_FOLDER_TYPE),
+      kbIds.length > 0
+        ? (or(
+            inArray(documents.knowledgeBaseId, kbIds),
+            inArray(documents.fileId, restrictedKnowledgeBaseFileIds(db, kbIds)),
+          ) as SQL)
+        : sql`false`,
+    ];
+  }
+
+  throw new Error(`Unsupported document kind: ${String(documentKind)}`);
+};
+
+const DOCUMENT_FOLDER_DEFAULT_FIELDS = ['title', 'slug', 'description'];
+const DOCUMENT_PAGE_DEFAULT_FIELDS = ['title', 'slug', 'content'];
+
 const CANDIDATE_TARGETS: Record<FtsSearchBackendEntity, CandidateTarget | undefined> = {
   agents: {
     defaultFields: ['title', 'slug', 'tags', 'description', 'system_role'],
@@ -214,9 +295,59 @@ const CANDIDATE_TARGETS: Record<FtsSearchBackendEntity, CandidateTarget | undefi
     table: chatGroups,
     where: (scope) => [buildWorkspaceWhere(scope, chatGroups)],
   },
-  documents: undefined,
-  files: undefined,
-  knowledgeBases: undefined,
+  documents: {
+    defaultFields: (filters) =>
+      filters.documentKind === 'folder'
+        ? DOCUMENT_FOLDER_DEFAULT_FIELDS
+        : DOCUMENT_PAGE_DEFAULT_FIELDS,
+    fields: {
+      content: [{ column: documents.content }],
+      description: [{ column: documents.description, weight: 2 }],
+      slug: [{ column: documents.slug, weight: 3 }],
+      title: [{ column: documents.title, weight: 4 }],
+    },
+    id: documents.id,
+    table: documents,
+    where: (scope, filters, db) => [
+      buildWorkspaceWhere(scope, documents),
+      ...documentKindWhere(db, filters),
+    ],
+  },
+  files: {
+    defaultFields: ['name'],
+    fields: {
+      // Elasticsearch scores the raw, analyzed, and word-split name separately;
+      // one substring predicate covers all three here.
+      'name': [{ column: files.name, weight: 4 }],
+      'name.raw': [{ column: files.name, weight: 8 }],
+      'name.words': [{ column: files.name, weight: 2 }],
+    },
+    id: files.id,
+    table: files,
+    where: (scope, filters, db) => [
+      buildWorkspaceWhere(scope, files),
+      ne(files.fileType, 'custom/document'),
+      or(isNull(files.source), notInArray(files.source, LIBRARY_HIDDEN_FILE_SOURCES)),
+      filters.excludeKnowledgeBaseIds?.length
+        ? notInArray(files.id, restrictedKnowledgeBaseFileIds(db, filters.excludeKnowledgeBaseIds))
+        : undefined,
+    ],
+  },
+  knowledgeBases: {
+    defaultFields: ['name', 'description'],
+    fields: {
+      description: [{ column: knowledgeBases.description }],
+      name: [{ column: knowledgeBases.name, weight: 4 }],
+    },
+    id: knowledgeBases.id,
+    table: knowledgeBases,
+    where: (scope, filters) => [
+      buildWorkspaceWhere(scope, knowledgeBases),
+      filters.excludeKnowledgeBaseIds?.length
+        ? notInArray(knowledgeBases.id, filters.excludeKnowledgeBaseIds)
+        : undefined,
+    ],
+  },
   memoryActivities: {
     defaultFields: [
       'parent_title',
@@ -401,15 +532,19 @@ const CANDIDATE_TARGETS: Record<FtsSearchBackendEntity, CandidateTarget | undefi
 };
 
 /** Requested field names may carry Elasticsearch boost suffixes such as `title^5`. */
-const resolveFields = (target: CandidateTarget, requested?: string[]): PgFtsSearchField[] => {
-  const names = (requested?.length ? requested : target.defaultFields).map(
-    (name) => name.split('^')[0],
-  );
+const resolveFields = (
+  target: CandidateTarget,
+  filters: FtsSearchBackendFilters,
+  requested?: string[],
+): PgFtsSearchField[] => {
+  const defaultFields =
+    typeof target.defaultFields === 'function'
+      ? target.defaultFields(filters)
+      : target.defaultFields;
+  const names = (requested?.length ? requested : defaultFields).map((name) => name.split('^')[0]);
   const fields = names.flatMap((name) => target.fields[name] ?? []);
 
-  return fields.length > 0
-    ? fields
-    : target.defaultFields.flatMap((name) => target.fields[name] ?? []);
+  return fields.length > 0 ? fields : defaultFields.flatMap((name) => target.fields[name] ?? []);
 };
 
 /**
@@ -426,7 +561,7 @@ export async function searchCandidates(
 
   const { db, dialect } = context;
   const preparedQuery = dialect.prepare(request.query.text);
-  const fields = resolveFields(target, request.query.fields);
+  const fields = resolveFields(target, request.filters, request.query.fields);
   const rowScore = dialect.score(target.id, fields, preparedQuery);
   // A multi-parent join (memory contexts) repeats a row per matching parent, so
   // collapse to one row per id with its best score before any limit applies;
@@ -438,7 +573,10 @@ export async function searchCandidates(
   }
   query = query
     .where(
-      and(...target.where(request.scope, request.filters), dialect.match(fields, preparedQuery)),
+      and(
+        ...target.where(request.scope, request.filters, db),
+        dialect.match(fields, preparedQuery),
+      ),
     )
     .orderBy(sql`${score} DESC`);
   // An omitted limit is the unbounded contract: consumers filter and order the
