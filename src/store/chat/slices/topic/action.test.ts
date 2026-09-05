@@ -525,6 +525,7 @@ describe('topic action', () => {
   describe('updateTopicReasoningConfig', () => {
     const KEY = topicMapKey({ agentId: 'agent-1' });
     const seedTopic = () => {
+      const timestamp = Date.now();
       act(() => {
         useChatStore.setState({
           activeAgentId: 'agent-1',
@@ -539,10 +540,10 @@ describe('topic action', () => {
                   metadata: {
                     reasoningConfig: { reasoningEffort: 'low', reasoningMode: 'standard' },
                   },
-                  createdAt: new Date(),
-                  updatedAt: new Date(),
+                  createdAt: timestamp,
+                  updatedAt: timestamp,
                   title: 'Topic',
-                } as ChatTopic,
+                } satisfies ChatTopic,
               ],
               pageSize: 20,
               total: 1,
