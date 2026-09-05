@@ -1,6 +1,7 @@
 import { PERMISSION_ACTIONS } from '@lobechat/const/rbac';
 import {
   canPublishAgentTopicLink,
+  chatTopicCreateMetadataSchema,
   chatTopicMetadataUpdateSchema,
   chatTopicStatusSchema,
   type HeteroSessionImportPayload,
@@ -496,6 +497,9 @@ export const topicRouter = router({
           favorite: z.boolean().optional(),
           groupId: z.string().nullish(),
           messages: z.array(z.string()).optional(),
+          // The pinned reasoning snapshot taken next to the pinned model
+          // (`snapshotAgentReasoning`); other metadata keys are server-owned.
+          metadata: chatTopicCreateMetadataSchema.optional(),
           // The topic's pinned model snapshot, persisted to the top-level
           // `topics.model`/`provider` columns (config source of truth).
           model: z.string().optional(),

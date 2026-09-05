@@ -865,6 +865,7 @@
   "settingAgent.role.label": "Role",
   "settingAgent.role.placeholder": "What it is responsible for, e.g. Health Assistant",
   "settingAgent.role.unset": "No role set yet",
+  "settingAgent.runtimeConfig.reasoningEffortHint": "Your default reasoning effort for this model. Shared by every agent using it; each topic keeps the effort it started with and can change it from the chat input.",
   "settingAgent.runtimeConfig.title": "Model & Tools",
   "settingAgent.selectionPolicy.membersCanSwitch": "Can switch",
   "settingAgent.selectionPolicy.membersCanSwitchWhenShared": "Can switch when shared",

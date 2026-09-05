@@ -1782,6 +1782,44 @@ describe('model-instance reasoning config migration', () => {
     expect(result.verbosity).toBe('concise');
   });
 
+  it('should let the topic pin win over the model-instance config', () => {
+    mockModelReasoningConfig({ reasoningEffort: 'low' });
+
+    const result = resolveModelExtendParams({
+      chatConfig: { reasoningEffort: 'medium' } as any,
+      model: 'gpt-4',
+      provider: 'openai',
+      topicReasoningConfig: { reasoningEffort: 'high' },
+    });
+
+    expect(result.reasoning_effort).toBe('high');
+  });
+
+  it('should treat an empty topic pin as "model defaults", not as a missing pin', () => {
+    mockModelReasoningConfig({ reasoningEffort: 'low' });
+
+    const result = resolveModelExtendParams({
+      chatConfig: {} as any,
+      model: 'gpt-4',
+      provider: 'openai',
+      topicReasoningConfig: {},
+    });
+
+    expect(result.reasoning_effort).toBeUndefined();
+  });
+
+  it('should let explicit sub-agent overrides win over the topic pin', () => {
+    const result = resolveModelExtendParams({
+      chatConfig: {} as any,
+      model: 'gpt-4',
+      provider: 'openai',
+      subAgentChatConfigOverride: { reasoningEffort: 'medium' },
+      topicReasoningConfig: { reasoningEffort: 'high' },
+    });
+
+    expect(result.reasoning_effort).toBe('medium');
+  });
+
   it('should let explicit sub-agent overrides win over model-instance config', () => {
     mockModelReasoningConfig({ reasoningEffort: 'low' });
 

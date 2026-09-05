@@ -19,6 +19,14 @@ vi.mock('@/database/models/aiModel', () => ({
   },
 }));
 
+const findTopicByIdMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@/database/models/topic', () => ({
+  TopicModel: class {
+    findById = findTopicByIdMock;
+  },
+}));
+
 const createCtx = (agentConfig: any): RuntimeExecutorContext =>
   ({
     agentConfig,
@@ -68,6 +76,114 @@ beforeEach(() => {
   ]);
   findByIdAndProviderMock.mockResolvedValue(undefined);
   getModelReasoningConfigMock.mockResolvedValue(undefined);
+  findTopicByIdMock.mockResolvedValue(undefined);
+});
+
+describe('resolveServerCallLlmContextHints - topic reasoning pin', () => {
+  const ctxWithTopic = (agentConfig: any) => ({ ...createCtx(agentConfig), topicId: 'topic-1' });
+
+  it('should let the topic pin win over the model-instance config', async () => {
+    getModelReasoningConfigMock.mockResolvedValue({ reasoningEffort: 'low' });
+    findTopicByIdMock.mockResolvedValue({
+      metadata: { reasoningConfig: { reasoningEffort: 'high' } },
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    const hints = await resolveServerCallLlmContextHints({
+      ctx: ctxWithTopic({ chatConfig: {} }),
+      llmPayload,
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    expect(findTopicByIdMock).toHaveBeenCalledWith('topic-1');
+    expect(getModelReasoningConfigMock).not.toHaveBeenCalled();
+    expect(hints.resolvedExtendParams).toEqual({ reasoning_effort: 'high' });
+  });
+
+  it('should treat an empty topic pin as the model defaults', async () => {
+    getModelReasoningConfigMock.mockResolvedValue({ reasoningEffort: 'low' });
+    findTopicByIdMock.mockResolvedValue({
+      metadata: { reasoningConfig: {} },
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    const hints = await resolveServerCallLlmContextHints({
+      ctx: ctxWithTopic({ chatConfig: {} }),
+      llmPayload,
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    expect(getModelReasoningConfigMock).not.toHaveBeenCalled();
+    expect(hints.resolvedExtendParams).toEqual({});
+  });
+
+  it('should ignore a topic pin taken for another model (sub-agent modelOverride)', async () => {
+    getModelReasoningConfigMock.mockResolvedValue({ reasoningEffort: 'low' });
+    findTopicByIdMock.mockResolvedValue({
+      metadata: { reasoningConfig: { reasoningEffort: 'high' } },
+      model: 'other-model',
+      provider: 'openai',
+    });
+
+    const hints = await resolveServerCallLlmContextHints({
+      ctx: ctxWithTopic({ chatConfig: {} }),
+      llmPayload,
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    expect(getModelReasoningConfigMock).toHaveBeenCalledWith('gpt-4', 'openai');
+    expect(hints.resolvedExtendParams).toEqual({ reasoning_effort: 'low' });
+  });
+
+  it('should fall back to the model-instance config for a legacy topic without a pin', async () => {
+    getModelReasoningConfigMock.mockResolvedValue({ reasoningEffort: 'low' });
+    findTopicByIdMock.mockResolvedValue({ metadata: {}, model: 'gpt-4', provider: 'openai' });
+
+    const hints = await resolveServerCallLlmContextHints({
+      ctx: ctxWithTopic({ chatConfig: {} }),
+      llmPayload,
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    expect(hints.resolvedExtendParams).toEqual({ reasoning_effort: 'low' });
+  });
+
+  it('should still let explicit sub-agent overrides win over the topic pin', async () => {
+    findTopicByIdMock.mockResolvedValue({
+      metadata: { reasoningConfig: { reasoningEffort: 'high' } },
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    const hints = await resolveServerCallLlmContextHints({
+      ctx: ctxWithTopic({
+        chatConfig: {},
+        subAgentChatConfigOverride: { reasoningEffort: 'medium' },
+      }),
+      llmPayload,
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    expect(hints.resolvedExtendParams).toEqual({ reasoning_effort: 'medium' });
+  });
+
+  it('should not read the topic for models without reasoning extend params', async () => {
+    await resolveServerCallLlmContextHints({
+      ctx: ctxWithTopic({ chatConfig: {} }),
+      llmPayload,
+      model: 'gpt-4o-mini',
+      provider: 'openai',
+    });
+
+    expect(findTopicByIdMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('resolveServerCallLlmContextHints - model-instance reasoning config', () => {

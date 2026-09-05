@@ -35,6 +35,7 @@ import {
 } from '@/store/agent/selectors';
 import { aiModelSelectors, aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 import { getChatStoreState } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 import { getToolStoreState } from '@/store/tool';
 import {
   builtinToolSelectors,
@@ -340,6 +341,15 @@ class ChatService {
       model: payload.model,
       provider: payload.provider!,
       subAgentChatConfigOverride: resolvedAgentConfig.subAgentChatConfigOverride,
+      // The topic's own effort pin (only when pinned for this very model — a
+      // sub-agent modelOverride must not inherit the parent topic's effort).
+      topicReasoningConfig: topicId
+        ? topicSelectors.getTopicReasoningConfigForModel(
+            topicId,
+            payload.model,
+            payload.provider!,
+          )(getChatStoreState())
+        : undefined,
     });
 
     // For models governed by the reasoning extend-params family the user-level

@@ -30,6 +30,7 @@ import AgentHeader from './AgentHeader';
 import AgentTool from './AgentTool';
 import CloudHeterogeneousConfig from './CloudHeterogeneousConfig';
 import HeterogeneousAgentStatusCard from './HeterogeneousAgentStatusCard';
+import ReasoningEffortSelect from './ReasoningEffortSelect';
 import RemoteAgentConfigCard from './RemoteAgentConfigCard';
 import WorkspaceAgentDevicePolicy from './WorkspaceAgentDevicePolicy';
 import { WorkspaceAgentModelPolicy } from './WorkspaceAgentModelPolicy';
@@ -270,6 +271,13 @@ const ProfileEditor = memo(() => {
                     void updateAgentConfigById(agentId, value);
                   }}
                 />
+                {config?.model && config.provider && (
+                  <ReasoningEffortSelect
+                    disabled={!canEdit}
+                    model={config.model}
+                    provider={config.provider}
+                  />
+                )}
               </Flexbox>
               <AgentTool />
             </Flexbox>

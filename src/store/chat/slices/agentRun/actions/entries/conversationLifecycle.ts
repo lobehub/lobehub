@@ -80,6 +80,7 @@ import {
 } from '@/store/chat/slices/operation/types';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { chatPortalSelectors } from '@/store/chat/slices/portal/selectors';
+import { resolveTopicHeteroPin } from '@/store/chat/slices/topic/selectors';
 import { type ChatStore } from '@/store/chat/store';
 import {
   mergeAgentRuntimeInitialContexts,
@@ -1617,7 +1618,7 @@ export class ConversationLifecycleActionImpl {
         }
         const effectiveHeterogeneousProvider = applyTopicModelToHeterogeneousProvider(
           heterogeneousProvider,
-          topic?.model ? { model: topic.model, provider: topic.provider || '' } : undefined,
+          resolveTopicHeteroPin(topic),
         );
 
         await executeHeterogeneousAgent(() => this.#get(), {

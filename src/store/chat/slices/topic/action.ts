@@ -6,10 +6,16 @@ import {
   TOPIC_TITLE_JSON_SCHEMA,
   TOPIC_TITLE_PROMPT_VERSION,
 } from '@lobechat/prompts';
-import { type ChatTopicMetadata, type MessageMapScope, type UIChatMessage } from '@lobechat/types';
+import {
+  type ChatTopicMetadata,
+  type HeterogeneousReasoningEffort,
+  type MessageMapScope,
+  type UIChatMessage,
+} from '@lobechat/types';
 import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
+import type { AiModelReasoningConfig } from 'model-bank';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
@@ -21,9 +27,11 @@ import { type GitLinkedPRSummary, gitService } from '@/services/git';
 import { messageService } from '@/services/message';
 import type { TopicBatchDeleteScope } from '@/services/topic';
 import { topicService } from '@/services/topic';
+import { getAiInfraStoreState } from '@/store/aiInfra';
+import { aiModelSelectors } from '@/store/aiInfra/slices/aiModel/selectors';
 import { type ChatStore } from '@/store/chat';
 import { evictMessageCache } from '@/store/chat/utils/evictMessageCache';
-import { snapshotAgentModel } from '@/store/chat/utils/snapshotAgentModel';
+import { snapshotAgentModel, snapshotAgentReasoning } from '@/store/chat/utils/snapshotAgentModel';
 import { topicMapKey, type TopicMapScope } from '@/store/chat/utils/topicMapKey';
 import {
   canReadTopicGitTransport,
@@ -202,8 +210,11 @@ export class ChatTopicActionImpl {
 
     this.#set({ creatingTopic: true }, false, n('creatingTopic/start'));
     const targetSessionId = sessionId || activeAgentId;
+    const modelSnapshot = snapshotAgentModel(targetSessionId);
+    const reasoningSnapshot = snapshotAgentReasoning(targetSessionId, modelSnapshot);
     const topicId = await internal_createTopic({
-      ...snapshotAgentModel(targetSessionId),
+      ...modelSnapshot,
+      ...(reasoningSnapshot ? { metadata: reasoningSnapshot } : {}),
       title: t('defaultTitle', { ns: 'topic' }),
       messages: messages.map((m) => m.id),
       sessionId: targetSessionId,
@@ -222,8 +233,11 @@ export class ChatTopicActionImpl {
     const targetSessionId = sessionId || activeAgentId;
 
     // 1. create topic and bind these messages
+    const modelSnapshot = snapshotAgentModel(targetSessionId);
+    const reasoningSnapshot = snapshotAgentReasoning(targetSessionId, modelSnapshot);
     const topicId = await internal_createTopic({
-      ...snapshotAgentModel(targetSessionId),
+      ...modelSnapshot,
+      ...(reasoningSnapshot ? { metadata: reasoningSnapshot } : {}),
       title: t('defaultTitle', { ns: 'topic' }),
       messages: messages.map((m) => m.id),
       sessionId: targetSessionId,
@@ -418,6 +432,55 @@ export class ChatTopicActionImpl {
     { model, provider }: { model: string; provider: string },
   ): Promise<void> => {
     await this.#get().internal_updateTopic(id, { model, provider });
+    // The effort pin belongs to the model it was taken for (the param names
+    // are model-specific), so switching model re-snapshots it from the user's
+    // config for the new model — same "remembers what it started with" rule.
+    await this.#get().internal_snapshotTopicReasoningConfig(id, { model, provider });
+  };
+
+  /**
+   * Pin the user-level reasoning config of `model` to a topic
+   * (`metadata.reasoningConfig`). No-op for models without reasoning extend
+   * params — a stale pin for another model is harmless because generation only
+   * honors it when the pinned model matches (see `getTopicReasoningConfigForModel`).
+   */
+  internal_snapshotTopicReasoningConfig = async (
+    id: string,
+    { model, provider }: { model: string; provider: string },
+  ): Promise<void> => {
+    const aiInfraStore = getAiInfraStoreState();
+    if (!aiModelSelectors.isModelHasReasoningExtendParams(model, provider)(aiInfraStore)) return;
+
+    await aiInfraStore.ensureModelReasoningConfig(model, provider);
+    const reasoningConfig =
+      aiModelSelectors.modelReasoningConfig(model, provider)(getAiInfraStoreState()) ?? {};
+    await this.#get().updateTopicMetadata(id, { reasoningConfig });
+  };
+
+  /**
+   * Change the reasoning effort / mode of one topic without touching the
+   * user-level model-instance config. The patch is merged over the topic's
+   * current pin (seeded with `base` — normally the user-level config — when the
+   * topic has no pin yet), so a topic that only ever changed its effort still
+   * keeps the user's reasoning mode.
+   */
+  updateTopicReasoningConfig = async (
+    id: string,
+    patch: AiModelReasoningConfig,
+    base?: AiModelReasoningConfig,
+  ): Promise<void> => {
+    const current = topicSelectors.getTopicById(id)(this.#get())?.metadata?.reasoningConfig;
+    await this.#get().updateTopicMetadata(id, {
+      reasoningConfig: { ...(current ?? base), ...patch },
+    });
+  };
+
+  /** Pin a heterogeneous agent's reasoning effort to one topic (`metadata.heteroEffort`). */
+  updateTopicHeteroEffort = async (
+    id: string,
+    effort: HeterogeneousReasoningEffort,
+  ): Promise<void> => {
+    await this.#get().updateTopicMetadata(id, { heteroEffort: effort });
   };
 
   /**

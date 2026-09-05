@@ -1002,6 +1002,8 @@ export default {
   'settingAgent.modelPolicy.fixedTip':
     'The model is fixed in Agent Profile and cannot be switched while chatting.',
   'settingAgent.modelPolicy.title': 'Model',
+  'settingAgent.runtimeConfig.reasoningEffortHint':
+    'Your default reasoning effort for this model. Shared by every agent using it; each topic keeps the effort it started with and can change it from the chat input.',
   'settingAgent.runtimeConfig.title': 'Model & Tools',
   'settingAgent.selectionPolicy.membersCannotSwitch': 'Locked',
   'settingAgent.selectionPolicy.membersCannotSwitchWhenShared': 'Locked when shared',

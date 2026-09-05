@@ -1099,3 +1099,56 @@ describe('canPublishAgentTopicLink', () => {
     );
   });
 });
+
+describe('applyTopicModelToHeterogeneousProvider - effort pin', () => {
+  it('applies a topic effort pin without a model pin', () => {
+    const effective = applyTopicModelToHeterogeneousProvider(
+      { command: 'claude', effort: 'low', type: 'claude-code' },
+      { effort: 'high' },
+    );
+
+    expect(effective).toEqual({ command: 'claude', effort: 'high', type: 'claude-code' });
+    expect(buildHeteroSpawnArgs(effective)).toEqual(['--effort', 'high']);
+  });
+
+  it('applies the model pin and the effort pin together', () => {
+    const effective = applyTopicModelToHeterogeneousProvider(
+      { args: ['--effort', 'low'], model: 'global-model', type: 'claude-code' },
+      { effort: 'max', model: 'topic-model', provider: 'claude-code' },
+    );
+
+    expect(effective).toEqual({
+      args: [],
+      effort: 'max',
+      model: 'topic-model',
+      type: 'claude-code',
+    });
+  });
+
+  it("treats 'default' as a real pin that drops the agent effort flag", () => {
+    const effective = applyTopicModelToHeterogeneousProvider(
+      { command: 'claude', effort: 'high', type: 'claude-code' },
+      { effort: 'default' },
+    );
+
+    expect(effective.effort).toBe('default');
+    expect(buildHeteroSpawnArgs(effective)).toEqual([]);
+  });
+
+  it('keeps the agent effort when the topic pins none', () => {
+    const config = { command: 'claude', effort: 'high', type: 'claude-code' } as const;
+
+    expect(applyTopicModelToHeterogeneousProvider(config, undefined)).toBe(config);
+    expect(
+      applyTopicModelToHeterogeneousProvider(config, { model: 'default', provider: 'claude-code' }),
+    ).toMatchObject({
+      effort: 'high',
+    });
+  });
+
+  it('ignores an effort pin for runtimes without an effort selector', () => {
+    const config = { model: 'global-model', type: 'cursor' } as const;
+
+    expect(applyTopicModelToHeterogeneousProvider(config, { effort: 'high' })).toBe(config);
+  });
+});

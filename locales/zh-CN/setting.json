@@ -865,6 +865,7 @@
   "settingAgent.role.label": "角色",
   "settingAgent.role.placeholder": "负责领域，例如：健康助手",
   "settingAgent.role.unset": "暂未设定角色",
+  "settingAgent.runtimeConfig.reasoningEffortHint": "你在该模型上的默认推理强度。所有使用该模型的 Agent 共享；每个话题会记住创建时的强度，并可在输入框中单独调整。",
   "settingAgent.runtimeConfig.title": "模型与工具",
   "settingAgent.selectionPolicy.membersCanSwitch": "可切换",
   "settingAgent.selectionPolicy.membersCanSwitchWhenShared": "公开后可切换",

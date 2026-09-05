@@ -1,12 +1,29 @@
 import { DEFAULT_PROVIDER } from '@lobechat/business-const';
 import { DEFAULT_MODEL } from '@lobechat/const';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { snapshotAgentModel } from './snapshotAgentModel';
+import { snapshotAgentModel, snapshotAgentReasoning } from './snapshotAgentModel';
 
 const agentMap: Record<string, any> = {};
 
 vi.mock('@/store/agent', () => ({ getAgentStoreState: () => ({ agentMap }) }));
+
+const aiInfra = vi.hoisted(() => ({
+  state: {
+    loaded: false,
+    reasoningConfig: undefined as Record<string, string> | undefined,
+    reasoningParams: false,
+  },
+}));
+
+vi.mock('@/store/aiInfra', () => ({ getAiInfraStoreState: () => aiInfra.state }));
+vi.mock('@/store/aiInfra/slices/aiModel/selectors', () => ({
+  aiModelSelectors: {
+    isModelHasReasoningExtendParams: () => (s: typeof aiInfra.state) => s.reasoningParams,
+    isModelReasoningConfigLoaded: () => (s: typeof aiInfra.state) => s.loaded,
+    modelReasoningConfig: () => (s: typeof aiInfra.state) => s.reasoningConfig,
+  },
+}));
 
 const seedAgent = (id: string, config: Record<string, any>) => {
   agentMap[id] = config;
@@ -103,5 +120,57 @@ describe('snapshotAgentModel', () => {
     });
 
     expect(snapshotAgentModel(id)).toEqual({});
+  });
+});
+
+describe('snapshotAgentReasoning', () => {
+  const modelSnapshot = { model: 'gpt-5.5', provider: 'openai' };
+
+  beforeEach(() => {
+    aiInfra.state = { loaded: false, reasoningConfig: undefined, reasoningParams: false };
+  });
+
+  it('returns nothing without an agent', () => {
+    expect(snapshotAgentReasoning(undefined, modelSnapshot)).toBeUndefined();
+  });
+
+  it("pins a heterogeneous agent's effort, and nothing when it has none", () => {
+    const withEffort = seedAgent('hetero-effort', {
+      agencyConfig: { heterogeneousProvider: { effort: 'high', type: 'claude-code' } },
+    });
+    const without = seedAgent('hetero-plain', {
+      agencyConfig: { heterogeneousProvider: { type: 'claude-code' } },
+    });
+
+    expect(snapshotAgentReasoning(withEffort, {})).toEqual({ heteroEffort: 'high' });
+    expect(snapshotAgentReasoning(without, {})).toBeUndefined();
+  });
+
+  it('skips models without reasoning extend params', () => {
+    const id = seedAgent('plain', { model: 'gpt-4o', provider: 'openai' });
+
+    expect(snapshotAgentReasoning(id, modelSnapshot)).toBeUndefined();
+  });
+
+  it('pins the loaded user-level config, an empty object when nothing is saved', () => {
+    const id = seedAgent('reasoning', { model: 'gpt-5.5', provider: 'openai' });
+    aiInfra.state = {
+      loaded: true,
+      reasoningConfig: { gpt5_2ReasoningEffort: 'high' },
+      reasoningParams: true,
+    };
+    expect(snapshotAgentReasoning(id, modelSnapshot)).toEqual({
+      reasoningConfig: { gpt5_2ReasoningEffort: 'high' },
+    });
+
+    aiInfra.state = { loaded: true, reasoningConfig: undefined, reasoningParams: true };
+    expect(snapshotAgentReasoning(id, modelSnapshot)).toEqual({ reasoningConfig: {} });
+  });
+
+  it('does not pin while the user-level config is still loading', () => {
+    const id = seedAgent('loading', { model: 'gpt-5.5', provider: 'openai' });
+    aiInfra.state = { loaded: false, reasoningConfig: undefined, reasoningParams: true };
+
+    expect(snapshotAgentReasoning(id, modelSnapshot)).toBeUndefined();
   });
 });

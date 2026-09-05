@@ -1,7 +1,10 @@
+import type { ChatTopicMetadata } from '@lobechat/types';
 import { resolveHeterogeneousProviderTopicModel } from '@lobechat/types';
 
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import { getAiInfraStoreState } from '@/store/aiInfra';
+import { aiModelSelectors } from '@/store/aiInfra/slices/aiModel/selectors';
 
 /**
  * Snapshot the given agent's current model/provider so a newly created topic
@@ -36,5 +39,47 @@ export const snapshotAgentModel = (
   return {
     model: agentByIdSelectors.getAgentModelById(agentId)(agentState),
     provider: agentByIdSelectors.getAgentModelProviderById(agentId)(agentState),
+  };
+};
+
+export type TopicReasoningSnapshot = Pick<ChatTopicMetadata, 'heteroEffort' | 'reasoningConfig'>;
+
+/**
+ * Snapshot the reasoning effort that goes with {@link snapshotAgentModel} so a
+ * new topic also remembers the effort it was started with (persisted to
+ * `topics.metadata.reasoningConfig` / `heteroEffort`, see `ChatTopicMetadata`).
+ *
+ * - Heterogeneous agents pin the agent's `heterogeneousProvider.effort`.
+ * - API models pin the user's model-instance reasoning config for the
+ *   snapshotted model — an empty object when nothing is saved, which pins the
+ *   topic to the model's own defaults. Nothing is pinned while that config is
+ *   still loading (`isModelReasoningConfigLoaded`), so generation falls back to
+ *   the user-level value instead of freezing a wrong "defaults" snapshot.
+ *
+ * Returns undefined when there is nothing to pin, so callers can spread it
+ * into `metadata` without leaving empty keys behind.
+ */
+export const snapshotAgentReasoning = (
+  agentId: string | null | undefined,
+  modelSnapshot: { model?: string; provider?: string },
+): TopicReasoningSnapshot | undefined => {
+  if (!agentId) return undefined;
+
+  const heterogeneousProvider =
+    agentByIdSelectors.getAgencyConfigById(agentId)(getAgentStoreState())?.heterogeneousProvider;
+  if (heterogeneousProvider) {
+    const effort = heterogeneousProvider.effort;
+    return effort === undefined ? undefined : { heteroEffort: effort };
+  }
+
+  const { model, provider } = modelSnapshot;
+  if (!model || !provider) return undefined;
+
+  const aiInfraState = getAiInfraStoreState();
+  if (!aiModelSelectors.isModelHasReasoningExtendParams(model, provider)(aiInfraState)) return;
+  if (!aiModelSelectors.isModelReasoningConfigLoaded(model, provider)(aiInfraState)) return;
+
+  return {
+    reasoningConfig: aiModelSelectors.modelReasoningConfig(model, provider)(aiInfraState) ?? {},
   };
 };

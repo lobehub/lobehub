@@ -17,14 +17,21 @@ export const useHeteroProviderPatch = ({
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const activeTopicId = useChatStore((s) => s.activeTopicId);
   const updateTopicModel = useChatStore((s) => s.updateTopicModel);
+  const updateTopicHeteroEffort = useChatStore((s) => s.updateTopicHeteroEffort);
 
   return useCallback(
     async (selection: HeteroSelection) => {
       if (!enabled || !agentId || !provider) return;
 
-      const { model, ...agentSelection } = selection;
-      if (activeTopicId && model !== undefined) {
-        await updateTopicModel(activeTopicId, { model, provider: provider.type });
+      // Model and effort are topic-scoped once a topic exists (the topic keeps
+      // its own pins, see `ChatTopic.model` / `ChatTopicMetadata.heteroEffort`);
+      // the remaining dimensions (mode, speed) still write the shared agent config.
+      const { effort, model, ...agentSelection } = selection;
+      if (activeTopicId) {
+        if (model !== undefined) {
+          await updateTopicModel(activeTopicId, { model, provider: provider.type });
+        }
+        if (effort !== undefined) await updateTopicHeteroEffort(activeTopicId, effort);
         if (Object.keys(agentSelection).length === 0) return;
       }
       await updateAgentConfigById(agentId, {
@@ -36,6 +43,14 @@ export const useHeteroProviderPatch = ({
         },
       });
     },
-    [activeTopicId, agentId, enabled, provider, updateAgentConfigById, updateTopicModel],
+    [
+      activeTopicId,
+      agentId,
+      enabled,
+      provider,
+      updateAgentConfigById,
+      updateTopicHeteroEffort,
+      updateTopicModel,
+    ],
   );
 };
