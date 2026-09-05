@@ -1,6 +1,8 @@
 import type * as ModelBankModule from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import * as modelHints from '@/server/modules/AgentRuntime/adapters/serverCallLlmContextHints';
+
 import { AiAgentService } from '../index';
 
 // Use vi.hoisted to ensure mock functions are available before vi.mock runs
@@ -29,6 +31,13 @@ vi.mock('@/database/models/message', () => ({
     getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
     query: vi.fn().mockResolvedValue([]),
     update: vi.fn().mockResolvedValue({}),
+  })),
+}));
+
+vi.mock('@/database/models/aiModel', () => ({
+  AiModelModel: vi.fn().mockImplementation(() => ({
+    findByIdAndProvider: vi.fn().mockResolvedValue(undefined),
+    getModelReasoningConfig: vi.fn().mockResolvedValue({ reasoningEffort: 'high' }),
   })),
 }));
 
@@ -75,6 +84,7 @@ vi.mock('@/database/models/plugin', () => ({
 // Mock TopicModel
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(() => ({
+    armScheduledRun: vi.fn().mockResolvedValue(undefined),
     create: mockTopicCreate,
     findById: vi.fn().mockResolvedValue(undefined),
     releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
@@ -197,6 +207,73 @@ describe('AiAgentService.execAgent - client-minted ids', () => {
   afterEach(() => {
     mockMessageCreate.mockClear();
     mockTopicCreate.mockClear();
+  });
+
+  it.each(['scheduled', 'group'] as const)(
+    'snapshots the model and reasoning for a precreated %s topic',
+    async (kind) => {
+      const hintsSpy = vi.spyOn(modelHints, 'resolveModelExtendParamsForUser').mockResolvedValue({
+        modelHasReasoningExtendParams: true,
+        modelExtendParams: ['reasoningEffort'],
+      });
+
+      const runSpy = vi
+        .spyOn(service, 'execAgent')
+        .mockResolvedValue({} as Awaited<ReturnType<AiAgentService['execAgent']>>);
+      if (kind === 'scheduled') {
+        await service.scheduleAgentRun({
+          agentId: 'agent-1',
+          prompt: 'Scheduled',
+          runAt: new Date(Date.now() + 60000).toISOString(),
+        });
+      } else {
+        await service.execGroupAgent({ agentId: 'agent-1', groupId: 'group-1', message: 'Group' });
+      }
+      expect(mockTopicCreate.mock.calls[0][0]).toMatchObject({
+        model: 'gpt-4',
+        provider: 'openai',
+        metadata: { reasoningConfig: { reasoningEffort: 'high' } },
+      });
+      hintsSpy.mockRestore();
+      runSpy.mockRestore();
+    },
+  );
+
+  it('snapshots an explicit model override when scheduling', async () => {
+    const hintsSpy = vi.spyOn(modelHints, 'resolveModelExtendParamsForUser').mockResolvedValue({
+      modelHasReasoningExtendParams: true,
+      modelExtendParams: ['reasoningEffort'],
+    });
+    await service.scheduleAgentRun({
+      agentId: 'agent-1',
+      model: 'override-model',
+      provider: 'override-provider',
+      prompt: 'Scheduled',
+      runAt: new Date(Date.now() + 60000).toISOString(),
+    });
+    expect(mockTopicCreate.mock.calls[0][0]).toMatchObject({
+      model: 'override-model',
+      provider: 'override-provider',
+      metadata: { reasoningConfig: { reasoningEffort: 'high' } },
+    });
+    hintsSpy.mockRestore();
+  });
+
+  it('does not recreate or snapshot an existing group topic', async () => {
+    const runSpy = vi
+      .spyOn(service, 'execAgent')
+      .mockResolvedValue({} as Awaited<ReturnType<AiAgentService['execAgent']>>);
+    const hintsSpy = vi.spyOn(modelHints, 'resolveModelExtendParamsForUser');
+    await service.execGroupAgent({
+      agentId: 'agent-1',
+      groupId: 'group-1',
+      topicId: 'legacy-topic',
+      message: 'Continue',
+    });
+    expect(mockTopicCreate).not.toHaveBeenCalled();
+    expect(hintsSpy).not.toHaveBeenCalled();
+    hintsSpy.mockRestore();
+    runSpy.mockRestore();
   });
 
   it('should forward client-minted ids to topic and message creation on a fresh send', async () => {

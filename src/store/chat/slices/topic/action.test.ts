@@ -514,6 +514,7 @@ describe('topic action', () => {
         const modelSpy = vi.spyOn(topicService, 'updateTopicModel').mockImplementation(async () => {
           await modelPending;
           persistedEffort = 'default';
+          return [];
         });
         vi.spyOn(topicService, 'updateTopicMetadata').mockImplementation(async () => {
           persistedEffort = 'low';
@@ -558,6 +559,29 @@ describe('topic action', () => {
         expect(useChatStore.getState().topicEffortUpdatingIds).not.toContain('hetero-topic');
       },
     );
+
+    it('restores the persisted topic after a model pin fails', async () => {
+      seed();
+      const saved = useChatStore.getState().topicDataMap[KEY];
+      vi.spyOn(topicService, 'updateTopicModel').mockRejectedValue(new Error('offline'));
+      const refresh = vi
+        .spyOn(useChatStore.getState(), 'refreshTopic')
+        .mockImplementation(async () => {
+          useChatStore.setState({ topicDataMap: { [KEY]: saved } });
+        });
+      await act(async () => {
+        await expect(
+          useChatStore.getState().updateTopicHeteroPin('hetero-topic', {
+            model: 'new-model',
+            provider: 'codex',
+            effort: 'low',
+          }),
+        ).rejects.toThrow('offline');
+      });
+      expect(refresh).toHaveBeenCalledWith(KEY);
+      expect(useChatStore.getState().topicDataMap[KEY]?.items[0].model).toBe('old-model');
+      expect(toast.error).toHaveBeenCalled();
+    });
 
     it('writes only the effort when no model is selected', async () => {
       const { result } = renderHook(() => useChatStore());

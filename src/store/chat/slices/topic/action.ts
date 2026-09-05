@@ -475,7 +475,14 @@ export class ChatTopicActionImpl {
       },
     });
 
-    await topicService.updateTopicModel(id, value);
+    try {
+      await topicService.updateTopicModel(id, value);
+    } catch (error) {
+      /** Revalidate the optimistic model and effort together before another queued selection. */
+      await this.#get().refreshTopic(containerKey);
+      toast.error(t('reasoningEffort.updateFailed', { ns: 'chat' }));
+      throw error;
+    }
     await this.#get().refreshTopic(containerKey);
   };
 

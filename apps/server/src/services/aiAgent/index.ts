@@ -67,7 +67,7 @@ import { createHistoryMessagesLoader, prepareOperation } from './pipeline/operat
 import { resolveRunAgentConfig } from './pipeline/resolveRunAgentConfig';
 import { startOperation } from './pipeline/startOperation';
 import { discoverTools } from './pipeline/toolDiscovery';
-import { setupTurn } from './pipeline/turnSetup';
+import { resolveNewTopicSnapshot, setupTurn } from './pipeline/turnSetup';
 import { applyShareGateToAgentConfig } from './shareGate';
 import type { SubAgentRunDeps } from './subAgentRuns';
 import { execAgentMember, execAgentThreadRun } from './subAgentRuns';
@@ -381,7 +381,13 @@ export class AiAgentService {
     const resolvedAgentId = agentConfig.id;
 
     const titleSource = markdownToTxt(prompt);
+    const snapshot = await resolveNewTopicSnapshot(
+      { db: this.db, userId: this.userId, workspaceId: this.workspaceId },
+      agentConfig,
+      { model, provider },
+    );
     const topic = await this.topicModel.create({
+      ...snapshot,
       agentId: resolvedAgentId,
       groupId,
       // A scheduled run is still an ordinary user chat, just deferred — so it
@@ -1334,7 +1340,13 @@ export class AiAgentService {
       const topicTitle =
         newTopic?.title ||
         fallbackTitleSource.slice(0, 50) + (fallbackTitleSource.length > 50 ? '...' : '');
+      const agentConfig = await this.resolveAgentConfigOrThrow(agentId);
+      const snapshot = await resolveNewTopicSnapshot(
+        { db: this.db, userId: this.userId, workspaceId: this.workspaceId },
+        agentConfig,
+      );
       const topicItem = await this.topicModel.create({
+        ...snapshot,
         agentId,
         groupId,
         messages: newTopic?.topicMessageIds,

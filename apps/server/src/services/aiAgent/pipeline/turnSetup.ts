@@ -97,6 +97,33 @@ const resolveTopicReasoningSnapshot = async ({
   }
 };
 
+/** Snapshot only newly created topics, including callers that pre-create before setupTurn. */
+export const resolveNewTopicSnapshot = async (
+  deps: Pick<TurnSetupDeps, 'db' | 'userId' | 'workspaceId'>,
+  agentConfig: AgentConfigWithId,
+  overrides?: { model?: string; provider?: string },
+) => {
+  const model = overrides?.model ?? agentConfig.model!;
+  const provider = overrides?.provider ?? agentConfig.provider!;
+  const heterogeneousProvider = agentConfig.agencyConfig?.heterogeneousProvider;
+  const heteroType =
+    heterogeneousProvider?.type ?? (isHeterogeneousAgentModelId(model) ? model : undefined);
+  const heteroModel = heterogeneousProvider
+    ? resolveHeterogeneousProviderTopicModel(heterogeneousProvider)
+    : undefined;
+  return {
+    metadata: await resolveTopicReasoningSnapshot({
+      deps,
+      heterogeneousProvider,
+      isHeteroTopic: !!heteroType,
+      model,
+      provider,
+    }),
+    model: heteroModel?.model ?? (heteroType ? undefined : model),
+    provider: heteroModel?.provider ?? heteroType ?? provider,
+  };
+};
+
 /**
  * Resolve a run's attachments into the lists the message + context layers
  * consume. This is the single standard ingestion path shared by BOTH branches
@@ -403,9 +430,6 @@ export const setupTurn = async (
   let model = agentConfig.model!;
   let provider = agentConfig.provider!;
   const heterogeneousProvider = agentConfig.agencyConfig?.heterogeneousProvider;
-  const heterogeneousTopicModelSnapshot = heterogeneousProvider
-    ? resolveHeterogeneousProviderTopicModel(heterogeneousProvider)
-    : undefined;
   let pinnedHeterogeneousTopicModel: HeterogeneousTopicPin | undefined;
 
   // Share-visitor fail-closed gate — reject a heterogeneous (Claude Code /
@@ -462,28 +486,9 @@ export const setupTurn = async (
         : undefined;
 
     const fallbackTitleSource = markdownToTxt(prompt);
-    // Heterogeneous topics use the same snapshot rule as the client: persist
-    // the selected CLI model (including `default`) or user-provider API binding.
-    // Runtimes without a model selector, legacy rows, and Agent-scoped
-    // server-default API configs still pin only the runtime type.
-    const heteroSnapshotType =
-      heterogeneousProvider?.type ?? (isHeterogeneousAgentModelId(model) ? model : undefined);
-    // The reasoning effort is snapshotted next to the model (see
-    // `ChatTopicMetadata.reasoningConfig` / `heteroEffort`): heterogeneous
-    // topics pin the agent's effort, API-model topics pin the user's
-    // model-instance reasoning config for the snapshotted model (an empty
-    // object pins the model's own defaults). Same rule as the client
-    // `snapshotAgentReasoning`, so a topic keeps the effort it started with
-    // whichever runtime created it.
-    const reasoningSnapshot = await resolveTopicReasoningSnapshot({
-      deps,
-      heterogeneousProvider,
-      isHeteroTopic: !!heteroSnapshotType,
-      model,
-      provider,
-    });
+    const snapshot = await resolveNewTopicSnapshot(deps, agentConfig);
     const metadataWithSnapshot: ChatTopicMetadata | undefined =
-      metadata || reasoningSnapshot ? { ...metadata, ...reasoningSnapshot } : undefined;
+      metadata || snapshot.metadata ? { ...metadata, ...snapshot.metadata } : undefined;
     // Second argument: the id the client already rendered this topic under
     // (sidebar row, message bucket). Absent → the model mints one as before.
     const newTopicParams = {
@@ -498,8 +503,8 @@ export const setupTurn = async (
       groupId: appContext?.groupId,
       metadata: metadataWithSnapshot,
       // Snapshot the effective model as the topic's pinned model (config).
-      model: heterogeneousTopicModelSnapshot?.model ?? (heteroSnapshotType ? undefined : model),
-      provider: heterogeneousTopicModelSnapshot?.provider ?? heteroSnapshotType ?? provider,
+      model: snapshot.model,
+      provider: snapshot.provider,
       // Share-visitor runs: the topic row belongs to the creator
       // (`deps.userId`), but stamping the visitor's id here is what
       // `TopicModel`'s creator-facing reads (`query`, `count`, `queryTopics`,
