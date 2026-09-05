@@ -53,29 +53,22 @@ export const PR_STATE_VISUAL: Record<PullRequestState, PullRequestStateVisual> =
   open: { color: cssVar.colorSuccess, icon: GitPullRequestArrow, labelKey: 'metaCard.pr.open' },
 };
 
-export interface CiVisual {
-  color: string;
-  icon: LucideIcon;
-  labelKey:
-    'metaCard.ci.failure' | 'metaCard.ci.none' | 'metaCard.ci.pending' | 'metaCard.ci.success';
-}
+export type CiStatusKey = DeviceGitPullRequestCiStatus;
 
-export const getCiVisual = (status?: DeviceGitPullRequestCiStatus): CiVisual => {
-  switch (status) {
-    case 'success': {
-      return { color: cssVar.colorSuccess, icon: CircleCheck, labelKey: 'metaCard.ci.success' };
-    }
-    case 'failure': {
-      return { color: cssVar.colorError, icon: CircleX, labelKey: 'metaCard.ci.failure' };
-    }
-    case 'pending': {
-      return { color: cssVar.colorWarning, icon: LoaderCircle, labelKey: 'metaCard.ci.pending' };
-    }
-    default: {
-      return { color: cssVar.colorTextTertiary, icon: CircleSlash, labelKey: 'metaCard.ci.none' };
-    }
-  }
+/**
+ * Icon + color per CI rollup status, shared by every surface that renders the
+ * linked PR's check state (topic hover card, working-panel overview). Labels
+ * stay with each surface — they live in different i18n namespaces.
+ */
+export const CI_STATUS_VISUAL: Record<CiStatusKey, { color: string; icon: LucideIcon }> = {
+  failure: { color: cssVar.colorError, icon: CircleX },
+  pending: { color: cssVar.colorWarning, icon: LoaderCircle },
+  success: { color: cssVar.colorSuccess, icon: CircleCheck },
+  unknown: { color: cssVar.colorTextTertiary, icon: CircleSlash },
 };
+
+export const getCiStatusKey = (status?: DeviceGitPullRequestCiStatus): CiStatusKey =>
+  status && status in CI_STATUS_VISUAL ? status : 'unknown';
 
 /**
  * Read the git / worktree / linked-PR context off a topic's persisted

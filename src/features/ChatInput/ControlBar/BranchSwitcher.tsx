@@ -233,6 +233,8 @@ interface BranchSwitcherProps {
   onOptimisticCheckout?: (branch: string) => void;
   open: boolean;
   path: string;
+  /** Dropdown placement — the runtime bar opens upward, embedding panels open downward. */
+  placement?: 'topLeft' | 'bottomLeft' | 'bottomRight';
   /** The repo the conversation is anchored to (worktrees hang off it). */
   sourcePath: string;
   /** Used to route a checkout into the worktree that already holds the branch. */
@@ -251,6 +253,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
     onAfterCheckout,
     onExternalRefresh,
     onOptimisticCheckout,
+    placement = 'topLeft',
     sourcePath,
     worktrees,
     children,
@@ -478,7 +481,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
           <div>{children}</div>
         </DropdownMenuTrigger>
         <DropdownMenuPortal>
-          <DropdownMenuPositioner placement="topLeft" sideOffset={8}>
+          <DropdownMenuPositioner placement={placement} sideOffset={8}>
             <DropdownMenuPopup>
               <div className={styles.container}>
                 <div className={styles.searchBar}>
