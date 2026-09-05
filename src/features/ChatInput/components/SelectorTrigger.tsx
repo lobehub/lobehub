@@ -1,7 +1,7 @@
 import { Icon } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDownIcon, ZapIcon } from 'lucide-react';
-import type { ComponentPropsWithRef, ReactNode } from 'react';
+import type { ComponentPropsWithRef } from 'react';
 import { memo } from 'react';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -10,11 +10,6 @@ const styles = createStaticStyles(({ css }) => ({
     max-width: 200px;
     text-overflow: ellipsis;
     white-space: nowrap;
-  `,
-  icon: css`
-    display: flex;
-    flex: none;
-    align-items: center;
   `,
   secondary: css`
     flex: none;
@@ -52,9 +47,8 @@ const styles = createStaticStyles(({ css }) => ({
 
 /**
  * The chip both composer model selectors open from — the heterogeneous one and
- * the standard model + reasoning-effort one. An optional leading `icon` lets a
- * selector badge the model (see LOBE-13826); it stays out of the truncation so
- * the model is still recognisable once its name is ellipsised.
+ * the standard model + reasoning-effort one. Text only by design: the label
+ * already names the model, so an icon would only add noise next to Send.
  *
  * The chip reads as two halves, the way the Codex composer does ("5.6 Sol 极高"):
  * `text` is the model, `secondaryText` the reasoning effort. Only the model half
@@ -69,15 +63,13 @@ const styles = createStaticStyles(({ css }) => ({
 interface TriggerProps extends ComponentPropsWithRef<'div'> {
   ariaLabel: string;
   fast?: boolean;
-  icon?: ReactNode;
   secondaryText?: string;
   text: string;
 }
 
 const SelectorTrigger = memo<TriggerProps>(
-  ({ ariaLabel, className, fast, icon, secondaryText, text, ...rest }) => (
+  ({ ariaLabel, className, fast, secondaryText, text, ...rest }) => (
     <div {...rest} aria-label={ariaLabel} className={cx(styles.trigger, className)}>
-      {icon && <span className={styles.icon}>{icon}</span>}
       {fast && <Icon icon={ZapIcon} size={12} />}
       <span className={styles.label}>{text}</span>
       {secondaryText && (

@@ -1,4 +1,3 @@
-import { ModelIcon } from '@lobehub/icons';
 import { Tooltip } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -69,7 +68,6 @@ const ModelSwitch = memo(() => {
     <SelectorTrigger
       aria-disabled={!interactive}
       ariaLabel={triggerText}
-      icon={<ModelIcon model={model} size={14} />}
       secondaryText={effortLabel}
       text={displayName}
       {...(interactive ? {} : { style: { cursor: 'default' } })}
