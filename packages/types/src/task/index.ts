@@ -10,6 +10,19 @@ export type TaskPriority = 0 | 1 | 2 | 3 | 4;
 
 export type TaskActivityType = 'brief' | 'comment' | 'created' | 'topic';
 
+/**
+ * Persisted event kinds in `task_activities`. Kept as a plain union (the column
+ * is `text`) so onboarding a new event — status, priority, … — is a type-only
+ * change with no migration.
+ */
+export type TaskActivityLogType = 'assignee_agent' | 'assignee_user';
+
+/** Payload of a `task_activities` row: the before/after ids of the change. */
+export interface TaskActivityLogPayload {
+  fromId?: string | null;
+  toId?: string | null;
+}
+
 // null = no automation
 export type TaskAutomationMode = 'heartbeat' | 'schedule';
 
