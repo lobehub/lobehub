@@ -51,6 +51,7 @@ import { LobeOllamaCloudAI } from './providers/ollamacloud';
 import { LobeOpenAI } from './providers/openai';
 import { LobeOpenCodeCodingPlanAI } from './providers/opencodeCodingPlan';
 import { LobeOpenCodeZenAI } from './providers/opencodeZen';
+import { LobeOfoxAI } from './providers/ofoxai';
 import { LobeOpenRouterAI } from './providers/openrouter';
 import { LobePerplexityAI } from './providers/perplexity';
 import { LobePPIOAI } from './providers/ppio';
@@ -137,6 +138,7 @@ export const providerRuntimeMap = {
   opencodecodingplan: LobeOpenCodeCodingPlanAI,
   opencodezen: LobeOpenCodeZenAI,
   openai: LobeOpenAI,
+  ofoxai: LobeOfoxAI,
   openrouter: LobeOpenRouterAI,
   perplexity: LobePerplexityAI,
   ppio: LobePPIOAI,

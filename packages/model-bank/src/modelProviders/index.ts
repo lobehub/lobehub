@@ -51,6 +51,7 @@ import NovitaProvider from './novita';
 import NvidiaProvider from './nvidia';
 import OllamaProvider from './ollama';
 import OllamaCloudProvider from './ollamacloud';
+import OfoxAIProvider from './ofoxai';
 import OpenAIProvider from './openai';
 import OpenCodeCodingPlanProvider from './opencodeCodingPlan';
 import OpenCodeZenProvider from './opencodeZen';
@@ -91,6 +92,7 @@ import ZhiPuProvider from './zhipu';
  * @deprecated
  */
 export const LOBE_DEFAULT_MODEL_LIST: ChatModelCard[] = [
+  OfoxAIProvider.chatModels,
   OpenAIProvider.chatModels,
   QwenProvider.chatModels,
   ZhiPuProvider.chatModels,
@@ -149,6 +151,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   GoogleProvider,
   GLMCodingPlanProvider,
   KimiCodingPlanProvider,
+  OfoxAIProvider,
   OpenAIProvider,
   ChatGPTProvider,
   DeepSeekProvider,
@@ -305,6 +308,7 @@ export { default as NovitaProviderCard } from './novita';
 export { default as NvidiaProviderCard } from './nvidia';
 export { default as OllamaProviderCard } from './ollama';
 export { default as OllamaCloudProviderCard } from './ollamacloud';
+export { default as OfoxAIProviderCard } from './ofoxai';
 export { default as OpenAIProviderCard } from './openai';
 export { default as OpenCodeCodingPlanProviderCard } from './opencodeCodingPlan';
 export { default as OpenCodeZenProviderCard } from './opencodeZen';
