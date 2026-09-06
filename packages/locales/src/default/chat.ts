@@ -1284,6 +1284,7 @@ export default {
   'sendPlaceholderWithAgentAssignment':
     'Ask, create, or start a task. @ to assign tasks to other agents.',
   'sender.unknownMember': 'Member',
+  'steer.tag': 'Steered',
   'sessionGroup.config': 'Category Management',
   'sessionGroup.manageCategory': 'Manage Category',
   'sessionGroup.confirmRemoveGroupAlert':
@@ -1560,9 +1561,6 @@ export default {
   'taskDetail.runVerify.round': 'Round {{index}}',
   'taskDetail.runVerify.running': 'Verifying',
   'taskDetail.runExpand': 'Expand run',
-  'taskDetail.openRunChat': 'Open this run’s conversation',
-  'taskDetail.reportedBy': 'Reported by {{name}}',
-  'taskDetail.reportedByAgent': 'the agent',
   'taskDetail.runFollowUp': 'Ask a follow-up',
   'taskDetail.runFollowUpPlaceholder': 'Ask a follow-up about this run...',
   'taskDetail.collapseReply': 'Collapse',
@@ -1902,13 +1900,6 @@ export default {
   'goalProcess.planning.description':
     'The coordinator is breaking the goal into executable tasks — they will appear here shortly.',
   'goalProcess.tag.needsDecision': 'Needs your decision',
-  'goalProcess.acceptance.repairing': 'Repairing',
-  'goalProcess.acceptance.verifying': 'Verifying',
-  'goalProcess.acceptance.accepted': 'Accepted',
-  'goalProcess.acceptance.delivered': 'Awaiting your call',
-  'goalProcess.acceptance.errored': 'Verification error',
-  'goalProcess.acceptance.rejected': 'Rejected',
-  'goalProcess.tag.verifying': 'Verifying',
   'goalProcess.tag.lost': 'Lost',
   'goalProcess.tag.done': 'Done',
   'goalProcess.tag.retired': 'Retired',

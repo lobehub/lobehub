@@ -226,6 +226,7 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   scope: z.string().optional(),
   // External-signal lineage for Monitor-style callback turns ().
   signal: MessageSignalSchema.optional(),
+  steer: z.boolean().optional(),
   subAgentId: z.string().optional(),
   // role='taskCallback' card: which task delivered its handoff back to this
   // conversation, and the run outcome. The card header + jump link read this.
@@ -456,6 +457,11 @@ export interface MessageMetadata {
    * `@lobechat/types` stays free of an adapter-package dependency.
    */
   signal?: MessageSignal;
+  /**
+   * User message sent from the input queue while the previous turn was still
+   * running. Renders as a continuation of that turn instead of a new one.
+   */
+  steer?: boolean;
   /**
    * Sub Agent ID - behavior depends on scope
    * - scope: 'sub_agent': conversation-flow will transform message.agentId to this value for display

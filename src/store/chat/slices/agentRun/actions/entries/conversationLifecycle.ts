@@ -782,7 +782,7 @@ export class ConversationLifecycleActionImpl {
                   : undefined,
             ...(merged.forceRuntime ? { forceRuntime: merged.forceRuntime } : {}),
             message: merged.content,
-            metadata: merged.metadata,
+            metadata: { ...merged.metadata, steer: true },
           })
           .catch((error: unknown) => {
             console.error('[sendMessage] restarting queued content after Stop failed:', error);

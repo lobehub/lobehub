@@ -2568,7 +2568,7 @@ export const executeHeterogeneousAgent = async (
               files: mergedFiles,
               ...(merged.forceRuntime ? { forceRuntime: merged.forceRuntime } : {}),
               message: merged.content,
-              metadata: merged.metadata,
+              metadata: { ...merged.metadata, steer: true },
             })
             .catch((e: unknown) => {
               console.error(

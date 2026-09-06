@@ -421,7 +421,7 @@ export const buildRunLifecycle = (
                 files: mergedFiles,
                 ...(merged.forceRuntime ? { forceRuntime: merged.forceRuntime } : {}),
                 message: mergedContent,
-                metadata: merged.metadata,
+                metadata: { ...merged.metadata, steer: true },
               })
               .catch((e: unknown) => {
                 console.error('[executeClientAgent] sendMessage for queued content failed:', e);
