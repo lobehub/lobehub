@@ -2,7 +2,6 @@
 
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { AES_GCM_URL, BASE_PROVIDER_DOC_URL, FORM_STYLE } from '@lobechat/const';
-import { ProviderCombine, ProviderIcon } from '@lobehub/icons';
 import { type FormGroupItemType, type FormItemProps } from '@lobehub/ui';
 import { Center, Flexbox, Form, Icon, stopPropagation, Tooltip } from '@lobehub/ui';
 import { Avatar, Skeleton, Switch } from '@lobehub/ui/base-ui';
@@ -19,6 +18,7 @@ import urlJoin from 'url-join';
 import { FormInput, FormPassword } from '@/components/FormInput';
 import { SkeletonInput, SkeletonSwitch } from '@/components/Skeleton';
 import { usePermission } from '@/hooks/usePermission';
+import { ProviderCombine, ProviderIcon } from '@/libs/providerIcon';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';

@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import UsageTable from './UsageTable';
 
-vi.mock('@lobehub/icons', () => ({
+vi.mock('@/libs/providerIcon', () => ({
   ProviderIcon: ({ provider }: { provider: string }) => <span>{provider}</span>,
 }));
 

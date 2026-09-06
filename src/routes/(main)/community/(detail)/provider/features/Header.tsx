@@ -1,6 +1,6 @@
 'use client';
 
-import { Github, ProviderCombine } from '@lobehub/icons';
+import { Github } from '@lobehub/icons';
 import { Flexbox, stopPropagation } from '@lobehub/ui';
 import { ActionIcon } from '@lobehub/ui/base-ui';
 import { cssVar, useResponsive } from 'antd-style';
@@ -8,6 +8,8 @@ import { GlobeIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
+
+import { ProviderCombine } from '@/libs/providerIcon';
 
 import { useDetailContext } from './DetailProvider';
 

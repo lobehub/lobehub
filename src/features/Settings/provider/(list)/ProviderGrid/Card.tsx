@@ -1,5 +1,4 @@
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
-import { ProviderCombine, ProviderIcon } from '@lobehub/icons';
 import { Flexbox } from '@lobehub/ui';
 import { Avatar, Skeleton, Tag, Text } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
@@ -9,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { BrandingProviderCard } from '@/business/client/features/BrandingProviderCard';
 import { useIsDark } from '@/hooks/useIsDark';
+import { ProviderCombine, ProviderIcon } from '@/libs/providerIcon';
 import { type AiProviderListItem } from '@/types/aiProvider';
 
 import EnableSwitch from './EnableSwitch';
