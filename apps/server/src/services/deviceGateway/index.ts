@@ -1004,13 +1004,14 @@ export class DeviceGateway {
       );
 
       if (!result.success || !result.data) {
-        log('browseDirectory: failed for deviceId=%s — %s', deviceId, result.error);
+        log('browseDirectory: failed for deviceId=%s', deviceId);
         return undefined;
       }
 
       return result.data;
     } catch (error) {
-      log('browseDirectory: error for deviceId=%s — %O', deviceId, error);
+      const errorType = error instanceof Error ? error.name : typeof error;
+      log('browseDirectory: error for deviceId=%s (%s)', deviceId, errorType);
       return undefined;
     }
   }
