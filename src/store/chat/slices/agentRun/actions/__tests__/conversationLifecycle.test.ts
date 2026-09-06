@@ -1568,6 +1568,77 @@ describe('ConversationLifecycle actions', () => {
         );
       });
 
+      it('should persist the topic-pinned model on the assistant message, not the agent default', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const topicId = TEST_IDS.TOPIC_ID;
+        const topicKey = topicMapKey({ agentId });
+        const topicModel = 'claude-opus-5';
+        const topicProvider = 'anthropic';
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: topicId,
+            executeClientAgent: vi.fn().mockResolvedValue(undefined),
+            topicDataMap: {
+              [topicKey]: {
+                currentPage: 0,
+                hasMore: false,
+                isExpandingPageSize: false,
+                isLoadingMore: false,
+                items: [
+                  {
+                    createdAt: 0,
+                    id: topicId,
+                    model: topicModel,
+                    provider: topicProvider,
+                    title: 'pinned topic',
+                    updatedAt: 0,
+                  },
+                ],
+                pageSize: 20,
+                total: 1,
+              },
+            },
+          });
+        });
+
+        const sendMessageInServerSpy = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockResolvedValue({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            messages: [
+              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user', topicId }),
+              createMockMessage({
+                id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+                model: topicModel,
+                provider: topicProvider,
+                role: 'assistant',
+                topicId,
+              }),
+            ],
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          } as any);
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: { agentId, threadId: null, topicId },
+            message: TEST_CONTENT.USER_MESSAGE,
+          });
+        });
+
+        expect(sendMessageInServerSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            newAssistantMessage: expect.objectContaining({
+              model: topicModel,
+              provider: topicProvider,
+            }),
+          }),
+          expect.any(AbortController),
+        );
+      });
+
       it('should stop the sidebar spinner after a gateway send creates the topic', async () => {
         const { result } = renderHook(() => useChatStore());
         const agentId = TEST_IDS.SESSION_ID;

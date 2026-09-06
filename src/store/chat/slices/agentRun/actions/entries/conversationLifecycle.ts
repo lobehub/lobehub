@@ -1824,9 +1824,16 @@ export class ConversationLifecycleActionImpl {
 
     try {
       throwIfSendAborted(signal);
-      const { model, provider } = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
-
       const topicId = operationContext.topicId;
+      // Mirror generation (`internal_createAgentState`): the topic pins its own
+      // model, otherwise the agent default. Writing the agent default here left
+      // the Usage card showing a stale model after a per-topic switch, while the
+      // request already ran on the topic's model.
+      const topicModel = topicId
+        ? topicSelectors.getTopicModelById(topicId)(this.#get())
+        : undefined;
+      const { model, provider } =
+        topicModel ?? agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
 
       // Persist selected skill/tool context into user message content so it survives across turns.
       // Deduplicate: skip skills/tools already @mentioned in earlier messages (via editorData).
