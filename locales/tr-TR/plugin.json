@@ -471,7 +471,7 @@
   "builtins.lobe-task.goal.addCriterion": "Kabul kriteri ekle",
   "builtins.lobe-task.goal.costBudget": "Toplam maliyet bütçesi",
   "builtins.lobe-task.goal.criteria": "Kabul kriterleri",
-  "builtins.lobe-task.goal.editCriterion": "Kriteri düzenle C{{seq}}",
+  "builtins.lobe-task.goal.editCriterion": "Kriteri düzenle",
   "builtins.lobe-task.goal.phase.accepted": "Kabul edildi",
   "builtins.lobe-task.goal.phase.awaitingDecision": "Geçmedi — sizin kararınız",
   "builtins.lobe-task.goal.phase.awaitingReview": "İncelemenizi bekliyor",
