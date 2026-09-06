@@ -6,6 +6,7 @@ import { codeBuddyDriver } from './drivers/codeBuddy';
 import { codexDriver } from './drivers/codex';
 import { cursorDriver } from './drivers/cursor';
 import { droidDriver } from './drivers/droid';
+import { devinDriver } from './drivers/devin';
 import { grokBuildDriver } from './drivers/grokBuild';
 import { kimiCodeDriver } from './drivers/kimiCode';
 import { opencodeDriver } from './drivers/opencode';
@@ -21,6 +22,7 @@ const heterogeneousAgentDrivers = {
   'codex': codexDriver,
   'cursor': cursorDriver,
   'droid': droidDriver,
+  'devin': devinDriver,
   'grok-build': grokBuildDriver,
   'kimi-code': kimiCodeDriver,
   'opencode': opencodeDriver,

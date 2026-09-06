@@ -130,6 +130,7 @@ const topicMock = {
   appendRunningOperationChild: vi.fn().mockResolvedValue(true),
   create: vi.fn().mockResolvedValue({ id: 'topic-1', metadata: undefined }),
   findById: vi.fn().mockResolvedValue(undefined),
+  patchRunningOperation: vi.fn().mockResolvedValue(true),
   releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
   tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
   updateMetadata: vi.fn().mockResolvedValue(undefined),
@@ -224,6 +225,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     topicMock.appendRunningOperationChild.mockResolvedValue(true);
     topicMock.create.mockResolvedValue({ id: 'topic-1', metadata: undefined });
     topicMock.findById.mockResolvedValue(undefined);
+    topicMock.patchRunningOperation.mockResolvedValue(true);
     topicMock.releaseTaskCallbackReservation.mockResolvedValue(undefined);
     topicMock.tryReserveTaskCallback.mockResolvedValue(true);
     topicMock.updateMetadata.mockResolvedValue(undefined);
@@ -1708,6 +1710,29 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
         expect.objectContaining({ operationId: expect.stringContaining('op_') }),
       );
       // Not claimed as the topic's own root marker.
+      expect(findRunningOpSeed()).toBeUndefined();
+    });
+
+    it('patches device info onto an isolation child without replacing the parent marker', async () => {
+      heteroAgentConfig.agencyConfig = {
+        boundDeviceId: 'device-1',
+        executionTarget: 'device',
+        heterogeneousProvider: { type: 'claude-code' },
+      } as any;
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { isolationThread: true, topicId: 'topic-1' },
+        parentOperationId: 'parent-operation',
+        prompt: 'run this callAgent child on the device',
+      } as any);
+
+      const childOperation = topicMock.appendRunningOperationChild.mock.calls.at(-1)?.[2];
+      expect(topicMock.patchRunningOperation).toHaveBeenCalledWith(
+        'topic-1',
+        childOperation.operationId,
+        expect.objectContaining({ deviceId: 'device-1', heteroType: 'claude-code' }),
+      );
       expect(findRunningOpSeed()).toBeUndefined();
     });
 

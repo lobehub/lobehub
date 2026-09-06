@@ -118,6 +118,7 @@ export const isHeterogeneousSandboxExecutionAvailable = (type: string | undefine
   type !== 'codebuddy' &&
   type !== 'cursor' &&
   type !== 'droid' &&
+  type !== 'devin' &&
   type !== 'kimi-code' &&
   type !== 'hermes' &&
   type !== 'opencode' &&

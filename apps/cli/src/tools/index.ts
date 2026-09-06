@@ -70,7 +70,7 @@ export async function executeToolCall(
     const result = await handler(finalArgs);
     const content = typeof result === 'string' ? result : JSON.stringify(result);
 
-    return { content, success: true };
+    return { content, state: apiName === 'cancelHeteroTask' ? result : undefined, success: true };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     log.error(`Tool call failed: ${apiName} - ${errorMsg}`);

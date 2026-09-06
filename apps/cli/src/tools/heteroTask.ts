@@ -4,7 +4,12 @@ import os from 'node:os';
 import path from 'node:path';
 
 import type { RemoteHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+import type {
+  HeterogeneousAgentCancellationResult,
+  HeterogeneousAgentCancellationSignal,
+} from '@lobechat/heterogeneous-agents/protocol';
 import { resolveRemotePlatformRuntime } from '@lobechat/heterogeneous-agents/scanHost';
+import { sleep } from '@lobechat/utils/sleep';
 
 import { getTrpcClient } from '../api/client';
 import { CLI_PRODUCT_NAME, resolveCliDirName } from '../constants/identity';
@@ -80,9 +85,22 @@ export interface RunHeteroTaskParams {
 }
 
 export interface CancelHeteroTaskParams {
-  signal?: 'SIGINT' | 'SIGKILL' | 'SIGTERM';
+  signal?: HeterogeneousAgentCancellationSignal;
   taskId: string;
 }
+
+export interface CancelHeteroTaskResult extends HeterogeneousAgentCancellationResult {
+  taskId: string;
+}
+
+export interface CancelHeteroTaskNotFoundResult {
+  message: string;
+  success: false;
+}
+
+const CANCEL_GRACE_MS = 2000;
+const CANCEL_FORCE_MS = 3000;
+const PROCESS_GROUP_POLL_MS = 50;
 
 async function sendAutoNotify(
   topicId: string,
@@ -414,22 +432,65 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
   throw new Error(`Unsupported agentType: ${agentType as string}`);
 }
 
-export async function cancelHeteroTask(params: CancelHeteroTaskParams): Promise<string> {
+function isUnixProcessGroupAlive(pid: number): boolean {
+  try {
+    process.kill(-pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== 'ESRCH';
+  }
+}
+
+async function waitForUnixProcessGroupExit(pid: number, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (isUnixProcessGroupAlive(pid)) {
+    if (Date.now() >= deadline) return false;
+    await sleep(PROCESS_GROUP_POLL_MS);
+  }
+
+  return true;
+}
+
+async function killWindowsProcessTree(pid: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const killer = spawn('taskkill', ['/pid', String(pid), '/T', '/F'], {
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    killer.once('error', () => resolve(false));
+    killer.once('exit', (code) => resolve(code === 0));
+  });
+}
+
+export async function cancelHeteroTask(
+  params: CancelHeteroTaskParams,
+): Promise<CancelHeteroTaskNotFoundResult | CancelHeteroTaskResult> {
   const { signal = 'SIGINT', taskId } = params;
   const entry = getTask(taskId);
 
   if (!entry) {
-    return JSON.stringify({ message: `No task found with taskId: ${taskId}`, success: false });
+    return { message: `No task found with taskId: ${taskId}`, success: false };
   }
 
-  // Both openclaw and hermes: kill by PID and let the child's close handler send the notify.
+  // Kill the whole process group so the CLI wrapper, its inherited-group agent,
+  // and tool subprocesses all receive the signal. `detached: true` at wrapper
+  // spawn time made this negative-PID signal safe for the connect daemon. On
+  // Windows there is no process-group signal, so use `taskkill /T /F`.
+  if (process.platform === 'win32') {
+    const exited = await killWindowsProcessTree(entry.pid);
+    return { exited, pid: entry.pid, signal, taskId };
+  }
+
   try {
-    process.kill(entry.pid, signal);
+    process.kill(-entry.pid, signal);
   } catch (err) {
-    // Process already exited — exit handler won't fire; clean up manually.
+    const processGone = (err as NodeJS.ErrnoException).code === 'ESRCH';
     log.warn(
       `Failed to send ${signal} to pid ${entry.pid}: ${err instanceof Error ? err.message : String(err)}`,
     );
+    if (!processGone) return { exited: false, pid: entry.pid, signal, taskId };
+
+    // Process already exited — exit handler won't fire; clean up manually.
     removeTask(taskId);
     await sendAutoNotify(
       entry.topicId,
@@ -439,7 +500,21 @@ export async function cancelHeteroTask(params: CancelHeteroTaskParams): Promise<
       entry.operationId,
       entry.workspaceId,
     );
+    return { exited: true, pid: entry.pid, signal, taskId };
   }
 
-  return JSON.stringify({ pid: entry.pid, signal, taskId });
+  let exited = await waitForUnixProcessGroupExit(
+    entry.pid,
+    signal === 'SIGKILL' ? CANCEL_FORCE_MS : CANCEL_GRACE_MS,
+  );
+  if (!exited && signal !== 'SIGKILL') {
+    try {
+      process.kill(-entry.pid, 'SIGKILL');
+    } catch {
+      // The complete process group exited between the bounded wait and escalation.
+    }
+    exited = await waitForUnixProcessGroupExit(entry.pid, CANCEL_FORCE_MS);
+  }
+
+  return { exited, pid: entry.pid, signal, taskId };
 }

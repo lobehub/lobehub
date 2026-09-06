@@ -32,6 +32,8 @@ export interface AcpStdioClientOptions {
   args: string[];
   commandPath: string;
   cwd: string;
+  /** Create a dedicated Unix process group. Disable beneath a detached wrapper. */
+  detached?: boolean;
   env: NodeJS.ProcessEnv;
   onMessage: (message: AcpRpcMessage) => Promise<void> | void;
   onRawMessage: (line: string) => Promise<void> | void;
@@ -100,9 +102,10 @@ export class AcpStdioClient {
 
     const spawnPlan = await resolveCliSpawnPlan(this.options.commandPath, this.options.args);
     if (this.closed) throw new Error('ACP stdio client is closed');
+    const detached = process.platform !== 'win32' && (this.options.detached ?? true);
     const child = spawn(spawnPlan.command, spawnPlan.args, {
       cwd: this.options.cwd,
-      detached: process.platform !== 'win32',
+      detached,
       env: this.options.env,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -314,14 +317,20 @@ export class AcpStdioClient {
       return;
     }
 
-    try {
-      process.kill(-child.pid, signal);
-    } catch {
+    const detached = this.options.detached ?? true;
+    if (detached) {
       try {
-        child.kill(signal);
+        process.kill(-child.pid, signal);
+        return;
       } catch {
-        // already gone
+        // Fall through to a direct signal when the process group is gone.
       }
+    }
+
+    try {
+      child.kill(signal);
+    } catch {
+      // already gone
     }
   }
 

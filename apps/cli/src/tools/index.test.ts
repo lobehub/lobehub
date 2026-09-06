@@ -125,6 +125,25 @@ describe('executeToolCall', () => {
     expect(result.error).toContain('Unknown tool API');
   });
 
+  it('should expose cancellation confirmation as structured state', async () => {
+    const result = await executeToolCall(
+      'cancelHeteroTask',
+      JSON.stringify({ taskId: 'missing-operation' }),
+    );
+
+    expect(result).toEqual({
+      content: JSON.stringify({
+        message: 'No task found with taskId: missing-operation',
+        success: false,
+      }),
+      state: {
+        message: 'No task found with taskId: missing-operation',
+        success: false,
+      },
+      success: true,
+    });
+  });
+
   it('should carry structured state on file reads', async () => {
     const filePath = path.join(tmpDir, 'str.txt');
     await writeFile(filePath, 'content');

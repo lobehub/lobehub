@@ -12,6 +12,7 @@ import {
 } from '@lobechat/heterogeneous-agents';
 import { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import { LobeBuiltinMcpServer } from '@lobechat/heterogeneous-agents/builtinMcp';
+import { HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV } from '@lobechat/heterogeneous-agents/protocol';
 import { resolveHeteroSpawnCommand } from '@lobechat/heterogeneous-agents/resolveCliCommand';
 import type {
   AgentContentBlock,
@@ -157,6 +158,7 @@ const buildExtraArgs = (
                 ...(options.effort ? ['--effort', options.effort] : []),
               ]
             : options.type === 'cursor' ||
+                options.type === 'devin' ||
                 options.type === 'kimi-code' ||
                 options.type === 'opencode' ||
                 options.type === 'pi'
@@ -503,6 +505,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     (agentType === 'claude-code' ||
       agentType === 'cursor' ||
       agentType === 'droid' ||
+      agentType === 'devin' ||
       agentType === 'qoder') &&
     serverIngester
   ) {
@@ -510,6 +513,11 @@ const exec = async (options: ExecOptions): Promise<void> => {
       askBridge = new AskUserBridge(operationId, {
         identifier: agentType === 'cursor' ? 'claude-code' : agentType,
         provider: agentType,
+      });
+    } else if (agentType === 'devin') {
+      askBridge = new AskUserBridge(operationId, {
+        identifier: 'devin',
+        provider: 'devin',
       });
     } else {
       askServer = new LobeBuiltinMcpServer();
@@ -724,10 +732,17 @@ const exec = async (options: ExecOptions): Promise<void> => {
       return { code: 1, signal: null as NodeJS.Signals | null };
     });
 
-    // Ctrl-C → SIGINT to the child's process group.
-    // Repeated Ctrl-C escalates to SIGKILL.
+    // Direct CLI runs own a detached child group and forward terminal signals.
+    // Device-dispatched wrappers share their outer detached group, so the
+    // gateway cancellation owner signals that group directly instead.
+    const inheritsWrapperProcessGroup =
+      process.platform !== 'win32' && process.env[HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV] === '1';
     let interrupted = false;
     const onSigint = () => {
+      if (inheritsWrapperProcessGroup) {
+        interrupted = true;
+        return;
+      }
       if (interrupted) {
         handle.kill('SIGKILL');
         return;
@@ -737,7 +752,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     };
     const onSigterm = () => {
       interrupted = true;
-      handle.kill('SIGTERM');
+      if (!inheritsWrapperProcessGroup) handle.kill('SIGTERM');
     };
     process.on('SIGINT', onSigint);
     process.on('SIGTERM', onSigterm);
@@ -869,6 +884,10 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // ENOENT on a stale global install. Custom commands are used verbatim.
   const resolvedCommand = await resolveHeteroSpawnCommand(agentType, options.command);
   const commandEnv = resolvedCommand.pathEnv ? { PATH: resolvedCommand.pathEnv } : undefined;
+  // Devin ACP's `--permission-mode` is a global flag; default to bypass so
+  // headless connected-device runs do not block on permission prompts. The mode
+  // response must not overwrite the model selected by `initialModel`.
+  const permissionMode = options.type === 'devin' ? 'bypass' : undefined;
 
   const first = await runOneAgent(
     {
@@ -876,14 +895,19 @@ const exec = async (options: ExecOptions): Promise<void> => {
       askUserBridge: askBridge,
       command: resolvedCommand.command,
       cwd: options.cwd || process.cwd(),
+      detached: process.env[HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV] !== '1',
       env: commandEnv,
       extraArgs,
+      permissionMode,
       // Device and sandbox executions are observed through the same gateway
       // stream as native server agents. Ask Claude Code for content-block
       // deltas so the current conversation receives text while the process is
       // running instead of seeing only the terminal assistant snapshot.
       includePartialMessages: options.type === 'claude-code',
-      initialModel: options.type === 'droid' || options.type === 'trae' ? options.model : undefined,
+      initialModel:
+        options.type === 'droid' || options.type === 'devin' || options.type === 'trae'
+          ? options.model
+          : undefined,
       operationId,
       prompt: resolved.prompt,
       resumeSessionId: options.resume,
@@ -915,12 +939,16 @@ const exec = async (options: ExecOptions): Promise<void> => {
         askUserBridge: askBridge,
         command: resolvedCommand.command,
         cwd: options.cwd || process.cwd(),
+        detached: process.env[HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV] !== '1',
         env: commandEnv,
         extraArgs,
         includePartialMessages: options.type === 'claude-code',
         initialModel:
-          options.type === 'droid' || options.type === 'trae' ? options.model : undefined,
+          options.type === 'droid' || options.type === 'devin' || options.type === 'trae'
+            ? options.model
+            : undefined,
         operationId,
+        permissionMode,
         prompt: resolved.resumeFallbackPrompt ?? resolved.prompt,
         uploadImage,
         // No resumeSessionId — start fresh

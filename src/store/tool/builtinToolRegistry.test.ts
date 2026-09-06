@@ -164,6 +164,11 @@ describe('builtin tool registry', () => {
     expect(getBuiltinRender('droid', UserInteractionApiName.askUserQuestion)).toBeDefined();
     expect(getBuiltinIntervention('droid', UserInteractionApiName.askUserQuestion)).toBeDefined();
     expect(getBuiltinRender('droid', 'Read')).toBeUndefined();
+    expect(getBuiltinInspector('devin', UserInteractionApiName.askUserQuestion)).toBeDefined();
+    expect(getBuiltinRender('devin', UserInteractionApiName.askUserQuestion)).toBeDefined();
+    expect(getBuiltinIntervention('devin', UserInteractionApiName.askUserQuestion)).toBe(
+      ClaudeCodeInterventions[UserInteractionApiName.askUserQuestion],
+    );
     expect(getBuiltinIntervention('qoder', UserInteractionApiName.askUserQuestion)).toBeDefined();
   });
 

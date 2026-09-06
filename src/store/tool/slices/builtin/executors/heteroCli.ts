@@ -110,6 +110,7 @@ export const cursorExecutor = new HeteroCliExecutor('cursor', new Set(['shellToo
 // Droid's ACP shell tool name is not a documented protocol guarantee. Keep this
 // hook inert rather than guessing and recording unrelated tool calls.
 export const droidExecutor = new HeteroCliExecutor('droid', new Set());
+export const devinExecutor = new HeteroCliExecutor('devin', new Set(['exec']));
 export const grokBuildExecutor = new HeteroCliExecutor('grok-build', new Set(['execute']));
 export const kimiCodeExecutor = new HeteroCliExecutor('kimi-code', new Set(['Shell']));
 export const openCodeExecutor = new HeteroCliExecutor('opencode', new Set(['bash']));

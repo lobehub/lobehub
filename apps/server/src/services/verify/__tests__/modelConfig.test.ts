@@ -1,6 +1,10 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { DEFAULT_PROVIDER } from '@lobechat/business-const';
 import { DEFAULT_MODEL } from '@lobechat/const';
+import {
+  LOCAL_HETEROGENEOUS_AGENT_TYPES,
+  REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
+} from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -30,10 +34,14 @@ describe('resolveVerifyModelConfig', () => {
   });
 
   it('recognizes heterogeneous providers that cannot run Verify LLM calls', () => {
-    expect(isHeterogeneousVerifyProvider('claude-code')).toBe(true);
-    expect(isHeterogeneousVerifyProvider('codex')).toBe(true);
-    expect(isHeterogeneousVerifyProvider('cursor')).toBe(true);
-    expect(isHeterogeneousVerifyProvider('droid')).toBe(true);
+    const heterogeneousProviders = [
+      ...LOCAL_HETEROGENEOUS_AGENT_TYPES,
+      ...REMOTE_HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type),
+    ];
+
+    for (const provider of heterogeneousProviders) {
+      expect(isHeterogeneousVerifyProvider(provider)).toBe(true);
+    }
     expect(isHeterogeneousVerifyProvider('openai')).toBe(false);
     expect(isHeterogeneousVerifyProvider(null)).toBe(false);
   });
@@ -61,22 +69,25 @@ describe('resolveVerifyModelConfig', () => {
     expect(getBuiltinAgentMock).not.toHaveBeenCalled();
   });
 
-  it('filters a heterogeneous parent and falls back to the builtin verifier model', async () => {
-    getAgentModelConfigMock.mockResolvedValueOnce({
-      model: 'deepseek-v4-pro',
-      provider: 'lobehub',
-    });
+  it.each(['claude-code', 'devin'])(
+    'filters a %s parent and falls back to the builtin verifier model',
+    async (parentProvider) => {
+      getAgentModelConfigMock.mockResolvedValueOnce({
+        model: 'deepseek-v4-pro',
+        provider: 'lobehub',
+      });
 
-    await expect(
-      resolveVerifyModelConfig(db, 'u', {
-        parentModel: 'claude-opus-4-8',
-        parentProvider: 'claude-code',
-      }),
-    ).resolves.toEqual({ model: 'deepseek-v4-pro', provider: 'lobehub' });
+      await expect(
+        resolveVerifyModelConfig(db, 'u', {
+          parentModel: 'claude-opus-4-8',
+          parentProvider,
+        }),
+      ).resolves.toEqual({ model: 'deepseek-v4-pro', provider: 'lobehub' });
 
-    expect(getBuiltinAgentMock).toHaveBeenCalledWith(BUILTIN_AGENT_SLUGS.verifyAgent);
-    expect(getAgentModelConfigMock).toHaveBeenCalledWith(BUILTIN_AGENT_SLUGS.verifyAgent);
-  });
+      expect(getBuiltinAgentMock).toHaveBeenCalledWith(BUILTIN_AGENT_SLUGS.verifyAgent);
+      expect(getAgentModelConfigMock).toHaveBeenCalledWith(BUILTIN_AGENT_SLUGS.verifyAgent);
+    },
+  );
 
   it('keeps a normal parent model when no verifier agent is pinned', async () => {
     await expect(

@@ -56,7 +56,16 @@ export interface ListHeterogeneousAgentModelsParams {
   command?: string;
   cwd?: string;
   env?: Record<string, string>;
-  type: 'codebuddy' | 'cursor' | 'droid' | 'grok-build' | 'opencode' | 'pi' | 'qoder' | 'trae';
+  type:
+    | 'codebuddy'
+    | 'cursor'
+    | 'devin'
+    | 'droid'
+    | 'grok-build'
+    | 'opencode'
+    | 'pi'
+    | 'qoder'
+    | 'trae';
 }
 
 export interface HeterogeneousAgentModelCatalogSuccess {
@@ -496,6 +505,7 @@ export const buildHeteroSpawnArgs = (
     provider.type !== 'codex' &&
     provider.type !== 'cursor' &&
     provider.type !== 'droid' &&
+    provider.type !== 'devin' &&
     provider.type !== 'grok-build' &&
     provider.type !== 'kimi-code' &&
     provider.type !== 'opencode' &&
@@ -568,7 +578,7 @@ export const buildHeteroSpawnArgs = (
     }
   }
 
-  if (provider.type === 'cursor' || provider.type === 'kimi-code') {
+  if (provider.type === 'cursor' || provider.type === 'devin' || provider.type === 'kimi-code') {
     const model = provider.model?.trim();
     if (
       model &&
@@ -632,6 +642,7 @@ export const buildHeteroExecArgs = (
     provider.type !== 'codex' &&
     provider.type !== 'cursor' &&
     provider.type !== 'droid' &&
+    provider.type !== 'devin' &&
     provider.type !== 'grok-build' &&
     provider.type !== 'kimi-code' &&
     provider.type !== 'opencode' &&
@@ -724,7 +735,7 @@ export const buildHeteroExecArgs = (
     }
   }
 
-  if (provider.type === 'cursor' || provider.type === 'kimi-code') {
+  if (provider.type === 'cursor' || provider.type === 'devin' || provider.type === 'kimi-code') {
     const model = provider.model?.trim();
     if (
       model &&

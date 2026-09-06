@@ -2,13 +2,24 @@ import { EventEmitter } from 'node:events';
 import { statSync } from 'node:fs';
 import os from 'node:os';
 
+import { HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV } from '@lobechat/heterogeneous-agents/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { spawnHeteroAgentRun } from './agentRun';
 
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }));
+const { saveTaskMock, getTaskMock, removeTaskMock } = vi.hoisted(() => ({
+  getTaskMock: vi.fn(),
+  removeTaskMock: vi.fn(),
+  saveTaskMock: vi.fn(),
+}));
 
 vi.mock('node:child_process', () => ({ spawn: spawnMock }));
+vi.mock('../daemon/taskRegistry', () => ({
+  getTask: getTaskMock,
+  removeTask: removeTaskMock,
+  saveTask: saveTaskMock,
+}));
 // `resolveHeteroSpawnCwd` stats the candidate directories; treat every path as
 // an existing directory unless a test says otherwise.
 vi.mock('node:fs', async (importOriginal) => {
@@ -43,6 +54,9 @@ const baseParams = {
 describe('spawnHeteroAgentRun', () => {
   beforeEach(() => {
     vi.mocked(statSync).mockReturnValue(asDirectory);
+    saveTaskMock.mockReset();
+    getTaskMock.mockReset();
+    removeTaskMock.mockReset();
   });
 
   afterEach(() => {
@@ -85,11 +99,14 @@ describe('spawnHeteroAgentRun', () => {
     ]);
     expect(opts).toMatchObject({
       cwd: '/work/dir',
+      detached: true,
       env: expect.objectContaining({
+        [HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV]: '1',
         LOBEHUB_ASSISTANT_MESSAGE_ID: 'asst',
         LOBEHUB_JWT: 'jwt-token',
         LOBEHUB_SERVER: 'https://app.lobehub.com',
       }),
+      windowsHide: true,
     });
     expect(opts.env).not.toHaveProperty('LOBEHUB_WORKSPACE_ID');
 
@@ -242,5 +259,77 @@ describe('spawnHeteroAgentRun', () => {
         { source: { id: 'file-1', type: 'url', url: 'https://signed/a.png' }, type: 'image' },
       ]),
     );
+  });
+
+  // ─── Cancel regression: process registration ───
+  // The connect daemon must register the spawned CLI child into the task
+  // registry so `cancelHeteroTask` dispatched from the server can resolve it
+  // by operationId and signal the whole process group.
+
+  it('registers the spawned child PID into the task registry on spawn', async () => {
+    const child = makeFakeChild();
+    Object.defineProperty(child, 'pid', { value: 12345 });
+    spawnMock.mockReturnValue(child);
+
+    const ackPromise = spawnHeteroAgentRun({
+      ...baseParams,
+      agentType: 'devin',
+      operationId: 'op-cancel-reg',
+      topicId: 'tpc-cancel-reg',
+      workspaceId: 'ws-reg',
+    });
+    child.emit('spawn');
+    await ackPromise;
+
+    expect(saveTaskMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'devin',
+        operationId: 'op-cancel-reg',
+        pid: 12345,
+        taskId: 'op-cancel-reg',
+        topicId: 'tpc-cancel-reg',
+        workspaceId: 'ws-reg',
+      }),
+    );
+  });
+
+  it('removes the task registry entry on child exit when the PID still matches', async () => {
+    const child = makeFakeChild();
+    Object.defineProperty(child, 'pid', { value: 9988 });
+    spawnMock.mockReturnValue(child);
+    // The exit handler checks getTask to guard against stale exits clearing a
+    // newer entry — simulate the registry still owning this PID.
+    getTaskMock.mockReturnValue({ pid: 9988 });
+
+    const ackPromise = spawnHeteroAgentRun({
+      ...baseParams,
+      operationId: 'op-exit-cleanup',
+    });
+    child.emit('spawn');
+    await ackPromise;
+
+    child.emit('exit', 0, null);
+
+    expect(getTaskMock).toHaveBeenCalledWith('op-exit-cleanup');
+    expect(removeTaskMock).toHaveBeenCalledWith('op-exit-cleanup');
+  });
+
+  it('does not remove the registry entry on exit when a newer PID replaced it', async () => {
+    const child = makeFakeChild();
+    Object.defineProperty(child, 'pid', { value: 7777 });
+    spawnMock.mockReturnValue(child);
+    // A newer run reused the same operationId with a different PID.
+    getTaskMock.mockReturnValue({ pid: 8888 });
+
+    const ackPromise = spawnHeteroAgentRun({
+      ...baseParams,
+      operationId: 'op-stale-exit',
+    });
+    child.emit('spawn');
+    await ackPromise;
+
+    child.emit('exit', 0, null);
+
+    expect(removeTaskMock).not.toHaveBeenCalled();
   });
 });

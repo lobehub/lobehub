@@ -5,6 +5,10 @@ import {
   DEFAULT_REVIEW_PREDICT_PROVIDER,
 } from '@lobechat/business-const';
 import { DEFAULT_MODEL } from '@lobechat/const';
+import {
+  LOCAL_HETEROGENEOUS_AGENT_TYPES,
+  REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
+} from '@lobechat/types';
 
 import { AgentModel } from '@/database/models/agent';
 import type { LobeChatDatabase } from '@/database/type';
@@ -20,15 +24,9 @@ interface ResolveVerifyModelConfigParams {
   verifierAgentId?: string | null;
 }
 
-const HETEROGENEOUS_PROVIDER_IDS = new Set([
-  'amp',
-  'claude-code',
-  'codex',
-  'cursor',
-  'droid',
-  'hermes',
-  'opencode',
-  'openclaw',
+const HETEROGENEOUS_PROVIDER_IDS = new Set<string>([
+  ...LOCAL_HETEROGENEOUS_AGENT_TYPES,
+  ...REMOTE_HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type),
 ]);
 
 export const isHeterogeneousVerifyProvider = (provider?: string | null): boolean =>

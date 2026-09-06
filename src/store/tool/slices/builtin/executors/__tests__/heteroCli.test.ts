@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   claudeCodeExecutor,
   codexExecutor,
+  devinExecutor,
   droidExecutor,
   grokBuildExecutor,
   kimiCodeExecutor,
@@ -40,6 +41,7 @@ describe('heteroCli executors', () => {
     expect(claudeCodeExecutor.identifier).toBe('claude-code');
     expect(codexExecutor.identifier).toBe('codex');
     expect(droidExecutor.identifier).toBe('droid');
+    expect(devinExecutor.identifier).toBe('devin');
     expect(grokBuildExecutor.identifier).toBe('grok-build');
     expect(kimiCodeExecutor.identifier).toBe('kimi-code');
     expect(openCodeExecutor.identifier).toBe('opencode');
@@ -73,6 +75,22 @@ describe('heteroCli executors', () => {
     );
     expect(detectMocks.recordGitCommandEffects).toHaveBeenCalledWith({
       command: ['git', 'worktree', 'add', '/tmp/my wt'],
+      resultContent: '',
+      topicId: 't1',
+    });
+  });
+
+  it('observes Devin exec calls for worktree side effects', async () => {
+    await devinExecutor.onAfterCall!(
+      call({
+        apiName: 'exec',
+        identifier: 'devin',
+        params: { command: 'git worktree add /tmp/devin-wt' },
+      }),
+    );
+
+    expect(detectMocks.recordGitCommandEffects).toHaveBeenCalledWith({
+      command: 'git worktree add /tmp/devin-wt',
       resultContent: '',
       topicId: 't1',
     });

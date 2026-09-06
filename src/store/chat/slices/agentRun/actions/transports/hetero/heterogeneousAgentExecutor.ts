@@ -1937,7 +1937,7 @@ export const executeHeterogeneousAgent = async (
       cwd: workingDirectory,
       env: sessionEnv,
       initialModel:
-        (adapterType === 'droid' || adapterType === 'trae') &&
+        (adapterType === 'devin' || adapterType === 'droid' || adapterType === 'trae') &&
         !providerBindingActive &&
         heterogeneousProvider.model &&
         heterogeneousProvider.model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION

@@ -903,6 +903,26 @@ export const dispatchHeteroAgent = async (
           userMessageId: userMessageId ?? parentMessageId ?? '',
         };
       }
+
+      // Local CLI hetero agents dispatch to a device just like remote platform
+      // agents, so persist the device route after the dispatch is accepted.
+      // interruptTask uses these fields to find and stop the native process.
+      try {
+        const patched = await deps.topicModel.patchRunningOperation(topicId, operationId, {
+          deviceId: dispatchDeviceId,
+          deviceWorkspaceId: dispatchWorkspaceId,
+          heteroType,
+        });
+        log(
+          'execAgent: patch runningOperation device info=%s deviceId=%s heteroType=%s op=%s',
+          patched,
+          dispatchDeviceId,
+          heteroType,
+          operationId,
+        );
+      } catch (err) {
+        log('execAgent: failed to patch runningOperation with device info: %O', err);
+      }
     } else {
       if (!supportsCloudHeterogeneousSandbox(heteroType)) {
         const message = `${getHeterogeneousAgentTitle(heteroType)} requires a local or connected device; cloud sandbox execution is not supported.`;

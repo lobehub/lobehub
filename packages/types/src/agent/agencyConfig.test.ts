@@ -308,6 +308,34 @@ describe('buildHeteroSpawnArgs', () => {
     ).toEqual(['--model', 'gpt-5']);
   });
 
+  it('forwards Devin native arguments and model through direct ACP and device execution', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--agent-type', 'coding'],
+      model: 'claude-sonnet-4-6-thinking',
+      type: 'devin',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual([
+      '--agent-type',
+      'coding',
+      '--model',
+      'claude-sonnet-4-6-thinking',
+    ]);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--agent-type',
+      '--agent-arg=coding',
+      '--model',
+      'claude-sonnet-4-6-thinking',
+    ]);
+    expect(
+      buildHeteroSpawnArgs({
+        args: ['--model', 'native-model'],
+        model: 'selector-model',
+        type: 'devin',
+      }),
+    ).toEqual(['--model', 'native-model']);
+  });
+
   it('forwards Grok Build model and effort through direct ACP and device execution', () => {
     const provider: HeterogeneousProviderConfig = {
       args: ['--no-subagents'],

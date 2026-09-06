@@ -59,6 +59,8 @@ import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { recomputeTopicUsage } from './topicUsage';
 
 type OnboardingSessionMetadataPatch = Partial<NonNullable<ChatTopicMetadata['onboardingSession']>>;
+type RunningOperation = NonNullable<ChatTopicMetadata['runningOperation']>;
+type RunningOperationPatch = Omit<Partial<RunningOperation>, 'childOperations' | 'operationId'>;
 type TopicMetadataPatch = Omit<Partial<ChatTopicMetadata>, 'onboardingSession'> & {
   onboardingSession?: OnboardingSessionMetadataPatch;
 };
@@ -1918,7 +1920,7 @@ export class TopicModel {
   appendRunningOperationChild = async (
     id: string,
     parentOperationId: string,
-    child: NonNullable<ChatTopicMetadata['runningOperation']>,
+    child: RunningOperation,
   ): Promise<boolean> =>
     this.db.transaction(async (tx) => {
       const [existing] = await tx
@@ -1944,6 +1946,43 @@ export class TopicModel {
               ],
             },
           },
+        })
+        .where(and(eq(topics.id, id), this.ownership()));
+      return true;
+    });
+
+  patchRunningOperation = async (
+    id: string,
+    operationId: string,
+    patch: RunningOperationPatch,
+  ): Promise<boolean> =>
+    this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: topics.metadata })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()))
+        .for('update');
+      const runningOperation = existing?.metadata?.runningOperation;
+      if (!existing || !runningOperation) return false;
+
+      let nextRunningOperation: RunningOperation;
+      if (runningOperation.operationId === operationId) {
+        nextRunningOperation = { ...runningOperation, ...patch };
+      } else {
+        let matched = false;
+        const childOperations = runningOperation.childOperations?.map((child) => {
+          if (child.operationId !== operationId) return child;
+          matched = true;
+          return { ...child, ...patch };
+        });
+        if (!matched) return false;
+        nextRunningOperation = { ...runningOperation, childOperations };
+      }
+
+      await tx
+        .update(topics)
+        .set({
+          metadata: { ...existing.metadata, runningOperation: nextRunningOperation },
         })
         .where(and(eq(topics.id, id), this.ownership()));
       return true;

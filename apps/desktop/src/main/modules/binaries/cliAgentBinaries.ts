@@ -104,6 +104,13 @@ export const droidBinary: BinarySpec = {
   priority: 3,
 };
 
+export const devinBinary: BinarySpec = {
+  description: 'Devin - Cognition agentic coding CLI',
+  detect: () => detectHeterogeneousCliCommand('devin', 'devin'),
+  name: 'devin',
+  priority: 3,
+};
+
 /** xAI Grok Build CLI @see https://docs.x.ai/build/overview */
 export const grokBuildBinary: BinarySpec = {
   description: 'Grok Build - xAI agentic coding CLI',
@@ -216,6 +223,7 @@ export const heterogeneousCliAgentBinaries = {
   'codex': codexBinary,
   'cursor': cursorBinary,
   'droid': droidBinary,
+  'devin': devinBinary,
   'grok-build': grokBuildBinary,
   'kimi-code': kimiCliBinary,
   'opencode': opencodeBinary,

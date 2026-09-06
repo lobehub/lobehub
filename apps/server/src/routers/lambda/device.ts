@@ -311,6 +311,7 @@ export const deviceRouter = router({
           'codebuddy',
           'cursor',
           'droid',
+          'devin',
           'grok-build',
           'opencode',
           'pi',

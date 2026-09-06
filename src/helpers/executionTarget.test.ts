@@ -62,6 +62,7 @@ describe('isHeterogeneousSandboxExecutionAvailable', () => {
 
   it('keeps local-only CLIs on local or connected devices', () => {
     expect(isHeterogeneousSandboxExecutionAvailable('droid')).toBe(false);
+    expect(isHeterogeneousSandboxExecutionAvailable('devin')).toBe(false);
     expect(isHeterogeneousSandboxExecutionAvailable('qoder')).toBe(false);
     expect(isHeterogeneousSandboxExecutionAvailable('trae')).toBe(false);
   });

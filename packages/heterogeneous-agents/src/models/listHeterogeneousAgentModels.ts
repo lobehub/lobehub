@@ -8,6 +8,7 @@ import type {
   HeterogeneousAgentModelCatalogErrorCode,
   ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
+import { isRecord } from '@lobechat/utils/object';
 
 import { getHeterogeneousTypeLabel } from '../labels';
 import { resolveCliSpawnPlan } from '../spawn/cliSpawn';
@@ -77,6 +78,39 @@ export const parseCursorModelCatalog = (stdout: string): HeterogeneousAgentModel
 
     seen.add(id);
     models.push({ id, label, modelId: id, providerId: 'cursor' });
+  }
+
+  return models;
+};
+
+export const parseDevinModelCatalog = (stdout: string): HeterogeneousAgentModel[] => {
+  let result: unknown;
+  try {
+    result = JSON.parse(stdout);
+  } catch {
+    return [];
+  }
+  if (!isRecord(result) || !Array.isArray(result.families)) return [];
+
+  const seen = new Set<string>();
+  const models: HeterogeneousAgentModel[] = [];
+  for (const family of result.families) {
+    if (!isRecord(family) || !Array.isArray(family.variants)) continue;
+    for (const variant of family.variants) {
+      if (!isRecord(variant) || typeof variant.model_uid !== 'string' || !variant.model_uid)
+        continue;
+      if (seen.has(variant.model_uid)) continue;
+
+      seen.add(variant.model_uid);
+      models.push({
+        id: variant.model_uid,
+        ...(typeof variant.label === 'string' && variant.label
+          ? { label: variant.label }
+          : undefined),
+        modelId: variant.model_uid,
+        providerId: 'devin',
+      });
+    }
   }
 
   return models;
@@ -264,9 +298,11 @@ export const listHeterogeneousAgentModels = async (
     const args =
       params.type === 'codebuddy'
         ? ['--help']
-        : params.type === 'grok-build' || params.type === 'opencode'
-          ? ['models']
-          : ['--list-models'];
+        : params.type === 'devin'
+          ? ['models', 'list', '--format', 'json']
+          : params.type === 'grok-build' || params.type === 'opencode'
+            ? ['models']
+            : ['--list-models'];
     const spawnPlan = await resolveCliSpawnPlan(resolved.command, args);
     const { stderr, stdout } = await execFilePromise(spawnPlan.command, spawnPlan.args, {
       cwd: params.cwd,
@@ -299,13 +335,15 @@ export const listHeterogeneousAgentModels = async (
       models:
         params.type === 'cursor'
           ? parseCursorModelCatalog(String(stdout))
-          : params.type === 'grok-build'
-            ? parseGrokBuildModelCatalog(String(stdout))
-            : params.type === 'pi'
-              ? parsePiModelCatalog(String(stdout))
-              : params.type === 'qoder'
-                ? parseQoderModelCatalog(String(stdout))
-                : parseOpenCodeModelCatalog(String(stdout)),
+          : params.type === 'devin'
+            ? parseDevinModelCatalog(String(stdout))
+            : params.type === 'grok-build'
+              ? parseGrokBuildModelCatalog(String(stdout))
+              : params.type === 'pi'
+                ? parsePiModelCatalog(String(stdout))
+                : params.type === 'qoder'
+                  ? parseQoderModelCatalog(String(stdout))
+                  : parseOpenCodeModelCatalog(String(stdout)),
       status: 'success',
       updatedAt,
     };

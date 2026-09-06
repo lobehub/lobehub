@@ -7,6 +7,7 @@ import { PassThrough } from 'node:stream';
 
 import type { CodexQuotaSnapshot } from '@lobechat/electron-client-ipc';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
+import { HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV } from '@lobechat/heterogeneous-agents/protocol';
 import { AcpRpcResponseError } from '@lobechat/heterogeneous-agents/spawn';
 // `electron` is mocked below; this binding is the mock object so tests can
 // flip `isPackaged` to exercise the packaged-build tracing gate.
@@ -146,6 +147,10 @@ const {
   droidAcpSessionConstructMock,
   droidAcpSessionInterruptMock,
   droidAcpSessionRunMock,
+  devinAcpSessionCloseMock,
+  devinAcpSessionConstructMock,
+  devinAcpSessionInterruptMock,
+  devinAcpSessionRunMock,
   grokAcpSessionCloseMock,
   grokAcpSessionConstructMock,
   grokAcpSessionInterruptMock,
@@ -176,6 +181,10 @@ const {
   droidAcpSessionConstructMock: vi.fn(),
   droidAcpSessionInterruptMock: vi.fn(),
   droidAcpSessionRunMock: vi.fn(),
+  devinAcpSessionCloseMock: vi.fn(),
+  devinAcpSessionConstructMock: vi.fn(),
+  devinAcpSessionInterruptMock: vi.fn(),
+  devinAcpSessionRunMock: vi.fn(),
   grokAcpSessionCloseMock: vi.fn(),
   grokAcpSessionConstructMock: vi.fn(),
   grokAcpSessionInterruptMock: vi.fn(),
@@ -387,6 +396,54 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
     }
   }
 
+  class MockDevinAcpSession {
+    constructor(private readonly options: any) {
+      devinAcpSessionConstructMock(options);
+    }
+
+    close() {
+      devinAcpSessionCloseMock();
+    }
+
+    interrupt() {
+      devinAcpSessionInterruptMock();
+    }
+
+    async run() {
+      if (devinAcpSessionRunMock.getMockImplementation()) {
+        return devinAcpSessionRunMock(this.options);
+      }
+      const now = Date.now();
+      this.options.onRuntimeStatus({
+        activeTasks: [],
+        lastEventAt: now,
+        operationId: this.options.operationId,
+        sessionId: this.options.sessionId,
+        state: 'running',
+        transport: 'devin-acp',
+      });
+      this.options.onSessionId('devin-session-1');
+      this.options.onModel?.('claude-sonnet-4-6-thinking');
+      await this.options.onEvents([
+        {
+          data: { stopReason: 'end_turn' },
+          operationId: this.options.operationId,
+          stepIndex: 0,
+          timestamp: now,
+          type: 'agent_runtime_end',
+        },
+      ]);
+      this.options.onRuntimeStatus({
+        activeTasks: [],
+        lastEventAt: now,
+        operationId: this.options.operationId,
+        sessionId: this.options.sessionId,
+        state: 'closed',
+        transport: 'devin-acp',
+      });
+    }
+  }
+
   class MockTraeAcpSession {
     constructor(private readonly options: any) {
       traeAcpSessionConstructMock(options);
@@ -480,6 +537,7 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
     CodexThreadSession: MockCodexThreadSession,
     CursorAcpSession: MockCursorAcpSession,
     DroidAcpSession: MockDroidAcpSession,
+    DevinAcpSession: MockDevinAcpSession,
     isCodexAppServerCompatibilityError: (error: Error) =>
       error.name === 'CodexAppServerConnectionError',
     GrokAcpSession: MockGrokAcpSession,
@@ -597,6 +655,10 @@ describe('HeterogeneousAgentCtr', () => {
     cursorAcpSessionConstructMock.mockReset();
     cursorAcpSessionInterruptMock.mockReset();
     cursorAcpSessionRunMock.mockReset();
+    devinAcpSessionCloseMock.mockReset();
+    devinAcpSessionConstructMock.mockReset();
+    devinAcpSessionInterruptMock.mockReset();
+    devinAcpSessionRunMock.mockReset();
     grokAcpSessionCloseMock.mockReset();
     grokAcpSessionConstructMock.mockReset();
     grokAcpSessionInterruptMock.mockReset();
@@ -1599,6 +1661,195 @@ describe('HeterogeneousAgentCtr', () => {
       const { sessionId } = await ctr.startSession({ agentType: 'cursor', command: 'agent' });
       const run = ctr.sendPrompt({ operationId: 'op-cursor', prompt: 'work', sessionId });
       await vi.waitFor(() => expect(cursorAcpSessionConstructMock).toHaveBeenCalledOnce());
+
+      await ctr[action]({ sessionId });
+
+      expect(expectedMock).toHaveBeenCalledOnce();
+      resolveRun?.();
+      await run;
+    });
+  });
+
+  describe('sendPrompt (devin ACP)', () => {
+    beforeEach(() => {
+      spawnCalls.length = 0;
+      execFileMock.mockReset();
+    });
+
+    it('routes Devin through ACP and persists its native session and model', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'devin',
+        args: ['--model', 'claude-sonnet-4-6-thinking'],
+        command: 'devin',
+        initialModel: 'claude-sonnet-4-6-thinking',
+        resumeSessionId: 'devin-session-old',
+      });
+
+      await ctr.sendPrompt({
+        operationId: 'op-devin',
+        prompt: 'private user request',
+        sessionId,
+        systemContext: 'private selected workspace context',
+      });
+
+      expect(spawnCalls).toHaveLength(0);
+      expect(devinAcpSessionConstructMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ['--model', 'claude-sonnet-4-6-thinking'],
+          askUserBridge: expect.any(Object),
+          clientVersion: '1.0.0-test',
+          commandPath: 'devin',
+          cwd: FAKE_DESKTOP_PATH,
+          initialModel: 'claude-sonnet-4-6-thinking',
+          operationId: 'op-devin',
+          prompt: [
+            { text: 'private selected workspace context', type: 'text' },
+            { text: 'private user request', type: 'text' },
+          ],
+          resumeSessionId: 'devin-session-old',
+          sessionId,
+        }),
+      );
+      await expect(ctr.getSessionInfo({ sessionId })).resolves.toEqual({
+        agentSessionId: 'devin-session-1',
+      });
+      expect(send).toHaveBeenCalledWith(
+        'heteroAgentRuntimeStatus',
+        expect.objectContaining({ state: 'running', transport: 'devin-acp' }),
+      );
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
+
+    it('forwards Devin permission choices through the intervention bridge', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      let receivedAnswer: unknown;
+      devinAcpSessionRunMock.mockImplementation(async (options) => {
+        receivedAnswer = await options.askUserBridge.pending({
+          arguments: {
+            questions: [
+              {
+                header: 'Permission required',
+                multiSelect: false,
+                options: [{ label: 'Allow' }, { label: 'Reject' }],
+                question: 'Run tests?',
+              },
+            ],
+          },
+          toolCallId: 'devin-permission-1',
+        });
+      });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({ agentType: 'devin', command: 'devin' });
+      const run = ctr.sendPrompt({ operationId: 'op-devin-question', prompt: 'work', sessionId });
+
+      await vi.waitFor(() =>
+        expect(send).toHaveBeenCalledWith(
+          'heteroAgentEvent',
+          expect.objectContaining({
+            event: expect.objectContaining({
+              data: expect.objectContaining({
+                identifier: 'devin',
+                provider: 'devin',
+                toolCallId: 'devin-permission-1',
+              }),
+              type: 'agent_intervention_request',
+            }),
+            sessionId,
+          }),
+        ),
+      );
+      await ctr.submitIntervention({
+        operationId: 'op-devin-question',
+        result: { 'Run tests?': 'Allow' },
+        toolCallId: 'devin-permission-1',
+      });
+      await run;
+
+      expect(receivedAnswer).toEqual({ result: { 'Run tests?': 'Allow' } });
+    });
+
+    it('classifies a missing resumed Devin ACP session', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      const missingSessionError = new AcpRpcResponseError('session/load', {
+        code: -32_016,
+        data: {
+          'cognition.ai/errorKind': 'session_not_found',
+          'cognition.ai/retryable': false,
+        },
+        message: 'Session not found',
+      });
+      devinAcpSessionRunMock.mockRejectedValue(missingSessionError);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'devin',
+        command: 'devin',
+        cwd: '/Users/fake/projects/repo',
+        resumeSessionId: 'missing-devin-session',
+      });
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-devin-resume', prompt: 'continue', sessionId }),
+      ).rejects.toThrow(
+        'The saved Devin session could not be found, so a new conversation will start.',
+      );
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionError', {
+        error: expect.objectContaining({
+          agentType: 'devin',
+          code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+          command: 'devin',
+          resumeSessionId: 'missing-devin-session',
+        }),
+        sessionId,
+      });
+    });
+
+    it.each([
+      ['cancelSession', devinAcpSessionInterruptMock],
+      ['stopSession', devinAcpSessionCloseMock],
+    ] as const)('%s delegates to the active Devin ACP session', async (action, expectedMock) => {
+      let resolveRun: (() => void) | undefined;
+      devinAcpSessionRunMock.mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveRun = resolve;
+          }),
+      );
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({ agentType: 'devin', command: 'devin' });
+      const run = ctr.sendPrompt({ operationId: 'op-devin', prompt: 'work', sessionId });
+      await vi.waitFor(() => expect(devinAcpSessionConstructMock).toHaveBeenCalledOnce());
 
       await ctr[action]({ sessionId });
 
@@ -3896,6 +4147,14 @@ describe('HeterogeneousAgentCtr', () => {
         useCodexAppServer: false,
       },
       {
+        agentType: 'devin',
+        command: 'devin',
+        constructMock: devinAcpSessionConstructMock,
+        label: 'Devin ACP',
+        runMock: devinAcpSessionRunMock,
+        useCodexAppServer: false,
+      },
+      {
         agentType: 'trae',
         command: 'traecli',
         constructMock: traeAcpSessionConstructMock,
@@ -4002,9 +4261,11 @@ describe('HeterogeneousAgentCtr', () => {
         'op-gateway',
       ]);
       expect(spawnCall.options.cwd).toBe(process.cwd());
+      expect(spawnCall.options.windowsHide).toBe(true);
       expect(spawnCall.options.env).toEqual(
         expect.objectContaining({
           ELECTRON_RUN_AS_NODE: '1',
+          [HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV]: '1',
           LOBEHUB_ASSISTANT_MESSAGE_ID: 'asst-gateway',
           LOBEHUB_JWT: 'device-jwt',
           LOBEHUB_SERVER: 'https://server.example.com',
@@ -4156,9 +4417,9 @@ describe('HeterogeneousAgentCtr', () => {
     });
 
     /**
-     * @example A replacement waits until operation A's wrapper exits before operation B starts.
+     * @example A replacement waits until operation A's process group exits before operation B starts.
      */
-    it('waits for the gateway CLI wrapper to exit when cancelling its operation', async () => {
+    it('waits for the complete gateway CLI process group before confirming cancellation', async () => {
       // ROOT CAUSE:
       //
       // Device-dispatched Codex wrappers were not registered by operation id, so
@@ -4166,7 +4427,17 @@ describe('HeterogeneousAgentCtr', () => {
       // writer. A replacement resume then failed with `already has an active writer`.
       //
       // Before: spawnLhHeteroExec acknowledged the child and discarded its handle.
-      // After: cancelLhHeteroExec signals that handle and resolves only after exit.
+      // After: cancelLhHeteroExec signals the wrapper-owned process group and
+      // resolves only after the complete group disappears.
+      vi.useFakeTimers();
+      let groupAlive = true;
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation((_pid, signal) => {
+        if (signal === 'SIGKILL') groupAlive = false;
+        if (signal === 0 && !groupAlive) {
+          throw Object.assign(new Error('No such process'), { code: 'ESRCH' });
+        }
+        return true;
+      });
       const proc = createGatewayCliProc();
       nextFakeProc = proc;
       const ctr = new HeterogeneousAgentCtr({
@@ -4174,29 +4445,39 @@ describe('HeterogeneousAgentCtr', () => {
         storeManager: { get: vi.fn() },
       } as any);
 
-      const ack = ctr.spawnLhHeteroExec(params);
-      proc.emit('spawn');
-      await ack;
+      try {
+        const ack = ctr.spawnLhHeteroExec(params);
+        proc.emit('spawn');
+        await ack;
 
-      let cancellationSettled = false;
-      const cancellation = ctr
-        .cancelLhHeteroExec({ operationId: params.operationId })
-        .then((result) => {
-          cancellationSettled = true;
-          return result;
+        let cancellationSettled = false;
+        const cancellation = ctr
+          .cancelLhHeteroExec({ operationId: params.operationId })
+          .then((result) => {
+            cancellationSettled = true;
+            return result;
+          });
+        await Promise.resolve();
+
+        expect(killSpy).toHaveBeenCalledWith(-4321, 'SIGINT');
+        expect(cancellationSettled).toBe(false);
+
+        // The wrapper can exit while a native agent or tool descendant remains.
+        proc.emit('exit', 130, 'SIGINT');
+        await vi.advanceTimersByTimeAsync(1950);
+        expect(cancellationSettled).toBe(false);
+
+        await vi.advanceTimersByTimeAsync(100);
+        expect(killSpy).toHaveBeenCalledWith(-4321, 'SIGKILL');
+        await expect(cancellation).resolves.toEqual({
+          exited: true,
+          pid: 4321,
+          signal: 'SIGINT',
         });
-      await Promise.resolve();
-
-      expect(proc.kill).toHaveBeenCalledWith('SIGINT');
-      expect(cancellationSettled).toBe(false);
-
-      proc.emit('exit', 130, 'SIGINT');
-
-      await expect(cancellation).resolves.toEqual({
-        exited: true,
-        pid: 4321,
-        signal: 'SIGINT',
-      });
+      } finally {
+        killSpy.mockRestore();
+        vi.useRealTimers();
+      }
     });
   });
 
