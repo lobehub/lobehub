@@ -23,6 +23,7 @@ import HomeModeContent from './HomeModeContent';
 import HomePortrait from './HomePortrait';
 import InputArea from './InputArea';
 import PortraitBubble from './PortraitBubble';
+import { HOME_PORTRAIT_INSET, HOME_PORTRAIT_WIDTH } from './portraitFraming';
 import { RAIL_INBOX_PROPS, resolveRailVisibility } from './railVisibility';
 import type { HomeMode } from './types';
 
@@ -66,20 +67,9 @@ const RAIL_RECLAIMED_WIDTH = RAIL_CARD_WIDTH + RAIL_GUTTER + RAIL_COLUMN_GAP;
 const COLLAPSED_CONTENT_GAIN = 140;
 const COLLAPSED_CONTENT_OFFSET = (RAIL_RECLAIMED_WIDTH - COLLAPSED_CONTENT_GAIN) / 2;
 /** Portrait width plus its inline inset and the gap the bubble keeps from it. */
-const PORTRAIT_LANE = 152 + 12 + 16;
-const BUBBLE_MAX_WIDTH = 360;
-const BUBBLE_GAP = 16;
-/**
- * What the greeting must leave alone so the bubble never lands on it, measured
- * in the tighter of the two states: the collapsed content is inset by
- * COLLAPSED_CONTENT_OFFSET on both sides, and the bubble occupies the portrait's
- * lane plus its own width. Subtracted from the *container* width, because the
- * bubble tracks the container's trailing edge while the greeting starts at its
- * leading edge — a fixed measure only happens to clear it at full width.
- */
-const GREETING_LANE = COLLAPSED_CONTENT_OFFSET * 2 + PORTRAIT_LANE + BUBBLE_MAX_WIDTH + BUBBLE_GAP;
-/** Under this the greeting, the bubble and the portrait cannot share a line. */
-const BUBBLE_INLINE_MIN = 1080;
+const PORTRAIT_LANE = HOME_PORTRAIT_WIDTH + HOME_PORTRAIT_INSET + 16;
+/** Keep at least 400px for text before retaining decorative artwork in the main column. */
+const COLLAPSED_PORTRAIT_MIN = COLLAPSED_CONTENT_OFFSET * 2 + PORTRAIT_LANE + 400;
 const MINIMAL_STACK_GAP = 24;
 /**
  * The minimal header stacks the agent switcher (24px avatar + 2px paddings,
@@ -141,55 +131,35 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
   header: css`
-    --home-greeting-measure: none;
-
     position: relative;
+
+    display: flex;
     grid-area: 1 / 1;
+    flex-direction: column;
+    gap: 16px;
+    align-items: flex-start;
 
-    @container home (width >= ${BUBBLE_INLINE_MIN}px) {
-      --home-greeting-measure: calc(100cqw - ${GREETING_LANE}px);
-    }
+    min-width: 0;
   `,
-  // Parks beside the portrait when the row is wide enough for the three of them;
-  // otherwise it drops below the greeting, where it is just another line and
-  // needs no anchoring.
-  bubbleSlot: css`
-    --home-bubble-tail: none;
-
-    margin-block-start: 16px;
-
-    @container home (width >= ${BUBBLE_INLINE_MIN}px) {
-      --home-bubble-tail: block;
-
-      position: absolute;
-      inset-block-end: 4px;
-
-      /* Anchored to the header's trailing edge, which itself widens and slides
-         on collapse — so the slot only has to make up the difference, and it
-         makes it up with a transform, in step with the portrait it belongs to. */
-      inset-inline-end: ${PORTRAIT_LANE - RAIL_RECLAIMED_WIDTH}px;
-
-      display: flex;
-      justify-content: flex-end;
-
-      max-width: ${BUBBLE_MAX_WIDTH}px;
-      margin-block-start: 0;
-
-      transition: transform ${RAIL_TRANSITION_DURATION}ms ease-out;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-  bubbleSlotCollapsed: css`
-    @container home (width >= ${BUBBLE_INLINE_MIN}px) {
-      transform: translateX(-${RAIL_RECLAIMED_WIDTH}px);
-
-      &:dir(rtl) {
-        transform: translateX(${RAIL_RECLAIMED_WIDTH}px);
+  headerWithPortrait: css`
+    /* Only the collapsed rail puts the artwork inside the content column.
+       Keep the greeting and announcement in a stable vertical flow, with
+       decorative artwork yielding first when the text lane gets narrow. */
+    @media (width > 1100px) {
+      @container home (width >= ${COLLAPSED_PORTRAIT_MIN}px) {
+        padding-inline-end: ${PORTRAIT_LANE}px;
       }
     }
+  `,
+  identity: css`
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+  `,
+  bubbleSlot: css`
+    flex: 0 1 auto;
+    width: max-content;
+    max-width: 100%;
   `,
   inputArea: css`
     position: relative;
@@ -231,6 +201,10 @@ const styles = createStaticStyles(({ css }) => ({
   // composer instead of disappearing with the cards — keeping the same dip, so
   // the same half of it stays behind the surface it leans on.
   portraitCollapsed: css`
+    @container home (width < ${COLLAPSED_PORTRAIT_MIN}px) {
+      display: none;
+    }
+
     @media (width > 1100px) {
       transform: translateX(-${COLLAPSED_CONTENT_OFFSET}px);
 
@@ -361,12 +335,21 @@ const Home = memo(() => {
 
   return (
     <Flexbox className={styles.grid}>
-      <div className={cx(styles.header, styles.content, railCollapsed && styles.contentCollapsed)}>
-        <HomeHeader />
+      <div
+        className={cx(
+          styles.header,
+          styles.content,
+          railCollapsed && styles.contentCollapsed,
+          portraitVisible && railCollapsed && styles.headerWithPortrait,
+        )}
+      >
+        <div className={styles.identity}>
+          <HomeHeader />
+        </div>
         {/* The portrait has one voice: a live campaign temporarily speaks in
             place of the daily brief, which returns when the campaign leaves. */}
         {portraitVisible && (
-          <div className={cx(styles.bubbleSlot, railCollapsed && styles.bubbleSlotCollapsed)}>
+          <div className={styles.bubbleSlot}>
             <PortraitBubble promo={promo} />
           </div>
         )}

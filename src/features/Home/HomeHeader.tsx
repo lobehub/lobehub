@@ -10,17 +10,12 @@ import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/se
 import AgentSelect from './AgentSelect';
 
 const styles = createStaticStyles(({ css }) => ({
-  // The measure comes from the layout (`--home-greeting-measure`), which derives
-  // it from the container width: it has to clear the portrait's bubble, and it
-  // must not depend on the rail, or collapsing would re-wrap the headline and
-  // shove the composer and the whole task list down by a line.
   greeting: css`
     overflow: hidden;
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
 
-    max-width: var(--home-greeting-measure, none);
     margin: 0;
 
     font-size: 22px;

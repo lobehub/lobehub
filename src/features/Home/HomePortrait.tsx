@@ -7,6 +7,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
 import { useResolvedHomeAgentId } from './AgentSelect/useResolvedHomeAgentId';
+import { HOME_PORTRAIT_INSET, HOME_PORTRAIT_WIDTH } from './portraitFraming';
 
 const styles = createStaticStyles(({ css }) => ({
   /**
@@ -26,9 +27,9 @@ const styles = createStaticStyles(({ css }) => ({
 
     position: absolute;
     inset-block-end: -94px;
-    inset-inline-end: 12px;
+    inset-inline-end: ${HOME_PORTRAIT_INSET}px;
 
-    width: 176px;
+    width: ${HOME_PORTRAIT_WIDTH}px;
     height: 200px;
 
     object-fit: contain;
