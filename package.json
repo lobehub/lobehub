@@ -345,7 +345,7 @@
     "@xterm/addon-webgl": "^0.18.0",
     "@xterm/xterm": "^5.5.0",
     "@xyflow/react": "^12.11.5",
-    "@zumer/snapdom": "^1.9.14",
+    "@zumer/snapdom": "^2.24.15",
     "ahooks": "^3.9.7",
     "antd": "6.3.5",
     "antd-style": "4.1.0",
