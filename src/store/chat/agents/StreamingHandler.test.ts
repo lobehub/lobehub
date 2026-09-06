@@ -32,7 +32,9 @@ describe('StreamingHandler', () => {
       handler.handleChunk({ type: 'text', text: 'World' });
 
       expect(handler.getOutput()).toBe('Hello World');
-      expect(callbacks.onContentUpdate).toHaveBeenCalledTimes(2);
+      // Content updates are throttled: the leading chunk paints immediately,
+      // rapid follow-up chunks are coalesced and flushed on finish.
+      expect(callbacks.onContentUpdate).toHaveBeenCalledTimes(1);
     });
 
     it('should clean speaker tag from output', () => {
@@ -379,6 +381,31 @@ describe('StreamingHandler', () => {
   });
 
   describe('handleFinish', () => {
+    it('should coalesce rapid text updates and flush the final content on finish', async () => {
+      vi.useFakeTimers();
+      try {
+        const callbacks = createMockCallbacks();
+        const handler = new StreamingHandler(mockContext, callbacks);
+
+        for (let i = 0; i < 50; i += 1) {
+          handler.handleChunk({ type: 'text', text: `token${i} ` });
+        }
+
+        // Coalesced: strictly fewer store updates than tokens — before the
+        // throttling fix this was one dispatch per token (50).
+        expect(callbacks.onContentUpdate.mock.calls.length).toBeLessThan(50);
+
+        await handler.handleFinish({ type: 'stop' });
+
+        // The final accumulated content always reaches the store (flush on finish).
+        const lastCall = callbacks.onContentUpdate.mock.calls.at(-1);
+        expect(lastCall?.[0]).toBe(handler.getOutput());
+        expect(lastCall?.[0]).toContain('token49');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('should return correct result for text-only content', async () => {
       const callbacks = createMockCallbacks();
       const handler = new StreamingHandler(mockContext, callbacks);

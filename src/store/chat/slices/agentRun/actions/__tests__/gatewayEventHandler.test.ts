@@ -207,6 +207,8 @@ describe('createGatewayEventHandler', () => {
       // New stream_start resets
       handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-step2' } }));
       handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'world' }));
+      // Flush the throttled content update so the reset value reaches the store.
+      handler(makeEvent('step_complete', {}));
       await flush();
 
       // Content should be 'world', not 'helloworld'
@@ -227,6 +229,7 @@ describe('createGatewayEventHandler', () => {
 
       handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'Hello' }));
       handler(makeEvent('stream_chunk', { chunkType: 'text', content: ' world' }));
+      handler(makeEvent('step_complete', {}));
       await flush();
 
       expect(store.internal_dispatchMessage).toHaveBeenLastCalledWith(
@@ -271,6 +274,7 @@ describe('createGatewayEventHandler', () => {
           snapshotSeq: 2,
         }),
       );
+      handler(makeEvent('step_complete', {}));
       await flush();
 
       expect(store.internal_dispatchMessage).toHaveBeenLastCalledWith(
@@ -340,6 +344,7 @@ describe('createGatewayEventHandler', () => {
           snapshotSeq: 1,
         }),
       );
+      handler(makeEvent('step_complete', {}));
       await flush();
 
       // Replace, not append — appending would render "HelHello world".

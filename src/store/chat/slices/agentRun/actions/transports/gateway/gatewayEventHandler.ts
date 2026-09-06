@@ -19,6 +19,7 @@ import type {
 } from '@lobechat/types';
 import { AgentRuntimeErrorType } from '@lobechat/types';
 import { isRecord, pickNonEmptyString, toRecord } from '@lobechat/utils/object';
+import { throttle } from 'es-toolkit/compat';
 
 import { messageService } from '@/services/message';
 import { didToolMutateWorkView, workService } from '@/services/work';
@@ -460,6 +461,27 @@ export const createGatewayEventHandler = (
 
   // Accumulated content from stream chunks (reset on each stream_start)
   let accumulatedContent = '';
+  // Throttle streamed text dispatches. Without this every text chunk re-runs
+  // the whole conversation `parse()` and re-renders the markdown per token; on
+  // long content or long tool chains this saturates the main thread and the UI
+  // freezes while the (independent, async) DB persistence still completes. The
+  // leading edge paints the first token immediately; the trailing edge (plus
+  // the flush in step_complete / agent_runtime_end / error) guarantees the
+  // final accumulated content always reaches the store.
+  const throttledUpdateContent = throttle(
+    () => {
+      get().internal_dispatchMessage(
+        {
+          id: currentAssistantMessageId,
+          type: 'updateMessage',
+          value: { content: accumulatedContent },
+        },
+        dispatchContext,
+      );
+    },
+    120,
+    { leading: true, trailing: true },
+  );
   let accumulatedReasoning = '';
   // Last applied `replace`-snapshot seqs. Operation-monotonic (the producer
   // never resets them across messages), so unlike the accumulators they are
@@ -820,14 +842,7 @@ export const createGatewayEventHandler = (
                 accumulatedContent = data.content;
               }
               hasStreamedContent = true;
-              get().internal_dispatchMessage(
-                {
-                  id: currentAssistantMessageId,
-                  type: 'updateMessage',
-                  value: { content: accumulatedContent },
-                },
-                dispatchContext,
-              );
+              throttledUpdateContent();
             }
           }
 
@@ -1148,6 +1163,14 @@ export const createGatewayEventHandler = (
 
       case 'step_complete': {
         const data = event.data as StepCompleteData | undefined;
+        // Ensure the completed step's final content reaches the store even if
+        // its last chunk is still sitting in the throttle's trailing window.
+        // Enqueued so it runs after any stream_chunk work queued ahead of it —
+        // a synchronous burst of events would otherwise flush before the chunks
+        // had been processed.
+        enqueue(() => {
+          throttledUpdateContent.flush();
+        });
 
         // A parked `callSubAgent` child reporting its running totals. Patch them
         // onto the placeholder tool message in memory only — the persisted values
@@ -1229,6 +1252,12 @@ export const createGatewayEventHandler = (
           });
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
           endReasoningIfNeeded();
+
+          // Push the final streamed content into the store and drop any pending
+          // trailing throttle call — otherwise it could fire after the terminal
+          // snapshot/refetch below and overwrite server-finalized content.
+          throttledUpdateContent.flush();
+          throttledUpdateContent.cancel();
 
           // The terminal snapshot, when the server pushed one — the reconciled
           // Source of Truth for this run's final assistant text.
@@ -1373,6 +1402,11 @@ export const createGatewayEventHandler = (
 
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
           endReasoningIfNeeded();
+
+          // Flush and drop any pending trailing content update so the last
+          // streamed text lands in the store before the error is applied.
+          throttledUpdateContent.flush();
+          throttledUpdateContent.cancel();
 
           // An errored run is a FAILED run, not a completed one — failed runs
           // receive no unread badge, no queue drain, and no notification.
