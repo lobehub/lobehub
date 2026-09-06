@@ -4,13 +4,15 @@ export interface StaticModelOption {
 }
 
 const CLAUDE_CODE_MODEL_OPTIONS: StaticModelOption[] = [
-  { label: 'Fable 5', value: 'fable' },
-  { label: 'Opus 4.8', value: 'opus' },
-  { label: 'Sonnet 4.6', value: 'sonnet' },
-  { label: 'Haiku 4.5', value: 'haiku' },
+  // Aliases resolve by CLI version and provider, so do not promise a fixed version.
+  { label: 'Fable', value: 'fable' },
+  { label: 'Opus', value: 'opus' },
+  { label: 'Sonnet', value: 'sonnet' },
+  { label: 'Haiku', value: 'haiku' },
 ];
 
 const CODEX_MODEL_OPTIONS: StaticModelOption[] = [
+  { label: 'GPT-6 Astra', value: 'gpt-6-astra' },
   { label: 'GPT-5.6 Sol', value: 'gpt-5.6-sol' },
   { label: 'GPT-5.6 Terra', value: 'gpt-5.6-terra' },
   { label: 'GPT-5.6 Luna', value: 'gpt-5.6-luna' },
