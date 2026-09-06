@@ -41,7 +41,7 @@ jobs:
           fi
 
       - name: Auto Comment on Pull Request Merged
-        uses: actions-cool/pr-welcome@main
+        uses: actions-cool/pr-welcome@db204e23d550b47b449c97f19ddd13367936ffd7 # v1.5.0
         if: github.event.pull_request.merged == true && steps.maintainer-check.outputs.skip != 'true'
         with:
           token: ${{ secrets.GH_TOKEN }}
