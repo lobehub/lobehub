@@ -350,6 +350,14 @@ const buildOpenAIPayload = (
   });
 
   const { reasoning_effort, thinking, ...restPayload } = payload;
+  const {
+    frequency_penalty: _frequencyPenalty,
+    presence_penalty: _presencePenalty,
+    temperature: _temperature,
+    top_p: _topP,
+    ...kimiRestPayload
+  } = restPayload;
+  const sanitizedPayload = isKimiReasoningEffortModel(model) ? kimiRestPayload : restPayload;
 
   // Sanitize response_format for Kimi models
   const response_format =
@@ -381,7 +389,7 @@ const buildOpenAIPayload = (
       : restPayload.tools;
 
   return {
-    ...restPayload,
+    ...sanitizedPayload,
     messages,
     response_format,
     tools,
