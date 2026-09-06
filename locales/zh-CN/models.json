@@ -1039,6 +1039,7 @@
   "moonshotai/kimi-k2.description": "Kimi K2 是 Moonshot AI 推出的超大规模 MoE 模型，拥有 1 万亿总参数和每次前向传播 320 亿激活参数，专为高级工具使用、推理和代码合成等智能体能力优化。",
   "morph/morph-v3-fast.description": "Morph 提供专用模型，将前沿模型（如 Claude 或 GPT-4o）建议的代码更改快速应用于现有文件，速度达 4500+ tokens/秒，是 AI 编程流程的最后一步，支持 16k 输入/输出。",
   "morph/morph-v3-large.description": "Morph 提供专用模型，将前沿模型（如 Claude 或 GPT-4o）建议的代码更改快速应用于现有文件，速度达 2500+ tokens/秒，是 AI 编程流程的最后一步，支持 16k 输入/输出。",
+  "muse-spark-1.3.description": "Meta 的前沿推理模型，针对智能体工作流训练，并优化了竞赛编程表现。Muse Spark 1.3 能跟踪上下文和先前结果，处理杂乱或相互矛盾的输入，并在需要时请求补充信息。",
   "musesteamer-2.0-lite-i2v.description": "与Turbo相比，性能更优，性价比更高。",
   "musesteamer-2.0-pro-i2v.description": "基于Turbo，支持1080P动态视频生成，提供更高的视觉质量和增强的视频表现力。",
   "musesteamer-2.0-turbo-i2v-audio.description": "支持5秒和10秒720P动态视频生成并带有声音。实现多人对话音视频创作，声音与画面同步，画质达到电影级别，摄像机运动达到大师级水平。",

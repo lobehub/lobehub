@@ -4,6 +4,7 @@ import type { Mock } from 'vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testProvider } from '../../providerTestUtils';
+import type { OnFinishData } from '../../types';
 import { LobeMetaAI } from './index';
 
 vi.mock('@lobechat/business-model-bank/model-config', () => ({
@@ -37,6 +38,90 @@ describe('LobeMetaAI - custom features', () => {
   });
 
   describe('Responses API routing', () => {
+    it.each([true, false])(
+      'should preserve every encrypted reasoning item for the next turn (stream=%s)',
+      async (stream) => {
+        const reasoningItems = ['first', 'second'].map((part) => ({
+          encrypted_content: `encrypted-${part}`,
+          id: `rs_${part}`,
+          summary: [],
+          type: 'reasoning' as const,
+        }));
+        const response = {
+          id: 'resp_first',
+          model: 'muse-spark-1.3',
+          output: [
+            ...reasoningItems,
+            {
+              content: [{ annotations: [], text: 'Paris', type: 'output_text' }],
+              id: 'msg_first',
+              role: 'assistant',
+              status: 'completed',
+              type: 'message',
+            },
+          ],
+          status: 'completed',
+        };
+        const events = [
+          ...reasoningItems.map((item, output_index) => ({
+            item,
+            output_index,
+            sequence_number: output_index,
+            type: 'response.output_item.done',
+          })),
+          { delta: 'Paris', type: 'response.output_text.delta' },
+          { response, sequence_number: 3, type: 'response.completed' },
+        ];
+        (instance['client'].responses.create as Mock).mockResolvedValueOnce(
+          stream
+            ? new ReadableStream({
+                start(controller) {
+                  events.forEach((event) => controller.enqueue(event));
+                  controller.close();
+                },
+              })
+            : response,
+        );
+        const onFinal = vi.fn<(data: OnFinishData) => void>();
+        const firstTurn = await instance.chat(
+          {
+            messages: [{ content: 'What is the capital of France?', role: 'user' }],
+            model: 'muse-spark-1.3',
+            stream,
+            temperature: 1,
+          },
+          { callback: { onFinal } },
+        );
+        await firstTurn.text();
+
+        expect(onFinal).toHaveBeenCalledOnce();
+        const completed = onFinal.mock.calls[0][0];
+        expect(completed.text).toBe('Paris');
+        expect(completed.reasoning?.responseItems).toHaveLength(2);
+
+        await instance.chat({
+          messages: [
+            { content: 'What is the capital of France?', role: 'user' },
+            { content: completed.text, reasoning: completed.reasoning, role: 'assistant' },
+            { content: 'What is its population?', role: 'user' },
+          ],
+          model: 'muse-spark-1.3',
+          temperature: 1,
+        });
+
+        const request = (instance['client'].responses.create as Mock).mock.calls[1][0];
+        expect(request.input).toEqual([
+          { content: 'What is the capital of France?', role: 'user' },
+          ...reasoningItems,
+          { content: 'Paris', role: 'assistant' },
+          { content: 'What is its population?', role: 'user' },
+        ]);
+        expect(request.include).toEqual(['reasoning.encrypted_content']);
+        expect(request.store).toBe(false);
+        expect(request.previous_response_id).toBeUndefined();
+      },
+    );
+
     it('should send every request through the Responses API', async () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
@@ -74,6 +159,29 @@ describe('LobeMetaAI - custom features', () => {
       expect(createCall.include).toEqual(['reasoning.encrypted_content']);
       expect(createCall.store).toBe(false);
       expect(createCall.previous_response_id).toBeUndefined();
+    });
+  });
+
+  describe('models', () => {
+    it('should fetch the Meta model catalog through the SDK models endpoint', async () => {
+      const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+        Response.json({
+          data: [
+            { created: 1788652800, id: 'muse-spark-future', object: 'model', owned_by: 'meta' },
+          ],
+          object: 'list',
+        }),
+      );
+      const runtime = new LobeMetaAI({ apiKey: 'test_api_key', fetch });
+
+      const models = await runtime.models();
+
+      expect(fetch).toHaveBeenCalledOnce();
+      const [input, init] = fetch.mock.calls[0];
+      const request = new Request(input, init);
+      expect(request.url).toBe('https://api.meta.ai/v1/models');
+      expect(request.method).toBe('GET');
+      expect(models).toEqual([expect.objectContaining({ id: 'muse-spark-future' })]);
     });
   });
 

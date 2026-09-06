@@ -71,6 +71,58 @@ beforeEach(() => {
 });
 
 describe('resolveServerCallLlmContextHints - model-instance reasoning config', () => {
+  it.each([
+    { preserveThinking: undefined, provider: 'meta', replay: true },
+    { preserveThinking: false, provider: 'meta', replay: true },
+    { preserveThinking: true, provider: 'meta', replay: true },
+    { preserveThinking: undefined, provider: 'openai', replay: false },
+    { preserveThinking: false, provider: 'openai', replay: false },
+    { preserveThinking: true, provider: 'openai', replay: false },
+  ])(
+    'should preserve opaque Meta replay without changing other providers ($provider, preserveThinking=$preserveThinking)',
+    async ({ preserveThinking, provider, replay }) => {
+      const model = 'muse-spark-1.3';
+      loadModelsMock.mockResolvedValue([
+        { abilities: { reasoning: true }, id: model, providerId: provider, settings: {} },
+      ]);
+      const reasoning = {
+        responseItems: [
+          {
+            encrypted_content:
+              'lobe-scoped-state-v1:reasoning:0123456789abcdef0123456789abcdef:opaque',
+            id: 'rs_meta',
+            summary: [],
+            type: 'reasoning',
+          },
+        ],
+      };
+      const messages = [
+        { content: 'Hello', id: 'user-1', role: 'user' },
+        { content: 'Hi', id: 'assistant-1', reasoning, role: 'assistant' },
+        { content: 'Continue', id: 'user-2', role: 'user' },
+      ];
+      const hints = await resolveServerCallLlmContextHints({
+        ctx: createCtx({ chatConfig: { preserveThinking } }),
+        llmPayload: { messages } as unknown as CallLLMPayload,
+        model,
+        provider,
+      });
+
+      expect(hints.shouldReplayAssistantReasoning).toBe(replay);
+      expect(hints.messagesForContext).toEqual([
+        messages[0],
+        {
+          content: 'Hi',
+          id: 'assistant-1',
+          ...(replay && { reasoning }),
+          role: 'assistant',
+        },
+        messages[2],
+      ]);
+      expect(messages[1].reasoning).toEqual(reasoning);
+    },
+  );
+
   it('should apply the user model-instance reasoning config', async () => {
     getModelReasoningConfigMock.mockResolvedValue({ reasoningEffort: 'high' });
 

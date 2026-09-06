@@ -37,6 +37,7 @@
   "lmstudio.description": "LM Studio 是一款桌面应用，支持在本地开发与实验大语言模型。",
   "lobehub.description": "LobeHub Cloud 通过官方 API 接入 AI 模型，并按模型令牌用量消耗积分。",
   "longcat.description": "LongCat 是由美团自主研发的生成式 AI 大模型系列，旨在通过高效的计算架构和强大的多模态能力，提升企业内部工作效率并推动创新应用的发展。",
+  "meta.description": "Meta 构建 AI 模型与产品，帮助人们交流、创作和完成任务，旗下包括 Llama 和 Muse 模型系列。",
   "minimax.description": "MiniMax 成立于 2021 年，致力于构建通用 AI，拥有多模态基础模型，包括万亿参数的 MoE 文本模型、语音模型与视觉模型，并推出海螺 AI 等应用。",
   "minimaxcodingplan.description": "MiniMax Token Plan 提供对 MiniMax 模型（包括 M2.7）的访问，适用于编程任务，采用固定月费订阅模式。",
   "mistral.description": "Mistral 提供先进的通用、专业与研究型模型，支持复杂推理、多语言任务与代码生成，具备函数调用能力以实现定制集成。",

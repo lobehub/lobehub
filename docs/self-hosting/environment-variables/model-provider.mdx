@@ -66,6 +66,33 @@ The above example adds `qwen-7b-chat` and `glm-6b` to the model list, removes `g
 
 You can find all current model names in [modelProviders](https://github.com/lobehub/lobehub/tree/main/src/config/modelProviders).
 
+## Meta
+
+Use the official [Meta Model API](https://dev.meta.ai/). See [Using Meta in LobeHub](/docs/usage/providers/meta) for setup instructions.
+
+### `META_API_KEY`
+
+- Type: Optional for the deployment; required when providing a shared server key. Users can instead enter their own key in Meta provider settings.
+- Description: A key created in the [Model API dashboard](https://dev.meta.ai/). Setting a non-empty key automatically enables Meta in the server configuration. `ENABLED_META` is derived from this key, not a separate environment switch. LobeHub uses `META_API_KEY`, rather than the `MODEL_API_KEY` name in Meta's SDK examples.
+- Default: Unset; no shared server key.
+- Example: `your-meta-model-api-key`
+
+### `META_PROXY_URL`
+
+- Type: Optional
+- Description: Overrides the Meta API base URL. The proxy must support the Responses API. Supply the base URL, not the full `/responses` endpoint.
+- Default: `https://api.meta.ai/v1`
+- Example: `https://meta-proxy.example.com/v1`
+
+### `META_MODEL_LIST`
+
+- Type: Optional
+- Description: Customizes the model list using the shared [model-list syntax][model-list]: `+` adds a model, `-` hides a model, and `model_id=display_name` renames a model. Separate entries with commas. This does not grant access to models unavailable to your Meta account.
+- Default: Unset; uses the built-in model list.
+- Example: `-all,+muse-spark-1.3`
+
+The example hides all default models and adds `muse-spark-1.3`. See the [Muse Spark product page](https://developer.meta.com/ai/models/muse-spark/) and Meta's [Muse Spark 1.3 announcement](https://www.threads.com/@metafordevelopers/post/Dcy9DWLmfVn) for version information. Model availability depends on your account's API access.
+
 ## Azure OpenAI
 
 If you need to use Azure OpenAI to provide model services, you can refer to the [Deploying with Azure OpenAI](/docs/self-hosting/examples/azure-openai) section for detailed steps. Here, we will list the environment variables related to Azure OpenAI.

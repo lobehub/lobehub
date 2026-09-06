@@ -183,7 +183,16 @@ export const resolveServerCallLlmContextHints = async ({
       effectiveChatConfig?.deepseekV4ReasoningEffort === 'none');
   const deepseekForcesPreserveThinking =
     isDeepSeekThinkingEligibleModel(model) && !deepseekV4ThinkingDisabled;
-  const modelForcesPreserveThinking = kimiForcesPreserveThinking || deepseekForcesPreserveThinking;
+  /**
+   * Meta always uses Responses with stateless encrypted reasoning replay. This
+   * opaque continuation state must survive history building and agent tool loops,
+   * independently of the user's optional visible-thinking preservation setting.
+   * The model runtime still validates the replay scope before sending the state.
+   * @see https://dev.meta.ai/docs/features/responses#reasoning-items
+   */
+  const metaForcesPreserveThinking = provider === ModelProvider.Meta;
+  const modelForcesPreserveThinking =
+    kimiForcesPreserveThinking || deepseekForcesPreserveThinking || metaForcesPreserveThinking;
   const providerSupportsPreserveThinkingFallback =
     provider === 'qwen' || provider === 'zhipu' || provider === 'moonshot';
   const modelSupportsPreserveThinking =
