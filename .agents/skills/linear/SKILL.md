@@ -6,19 +6,19 @@ user-invocable: false
 
 # Linear Issue Management
 
-Before using Linear workflows, search for `linear` MCP tools. If not found, treat as not installed.
+Before using Linear workflows, discover the available Linear tools, including deferred tools, and inspect their current schemas. Select tools by capability (issue lookup, images, sub-issues, create/update, comments), not a fixed MCP prefix or historical tool name. Report a missing capability only after discovery.
 
 ## Workflow
 
-1. **Retrieve issue details** before starting: `mcp__linear-server__get_issue`
-2. **Read images** — issue descriptions often contain screenshots with critical context (mockups, error states, before/after). Use `mcp__linear-server__extract_images` so you actually see them; reading raw markdown alone misses what the reporter was looking at.
-3. **Check for sub-issues**: `mcp__linear-server__list_issues` with `parentId` filter
+1. **Retrieve issue details** before starting using the issue lookup capability.
+2. **Read images** — issue descriptions often contain screenshots with critical context (mockups, error states, before/after). Use the available image extraction or viewing capability; reading raw markdown alone misses what the reporter was looking at.
+3. **Check for sub-issues** using the available parent filter or issue relation fields.
 4. **Mark as In Progress** at the moment you start planning or implementing — this signals to teammates the issue is owned, so they don't double-pick it up.
 5. Follow [Per-Issue Completion](#per-issue-completion) before moving to the next issue.
 
 ## Creating Issues
 
-When creating issues with `mcp__linear-server__create_issue`, add the `claude code` label. Reason: the label is how the team filters/audits AI-generated issues; without it those issues vanish into the general backlog and the team loses visibility into AI contribution patterns.
+When creating issues, add the `claude code` label. Reason: the label is how the team filters/audits AI-generated issues; without it those issues vanish into the general backlog and the team loses visibility into AI contribution patterns.
 
 Unless the user explicitly specifies another assignee or asks for the issue to remain unassigned, pass `assignee: "me"` so the issue is assigned to the authenticated Linear user. Always honor explicit assignment instructions over this default.
 
@@ -35,11 +35,11 @@ Specifics:
 
 ## Creating Sub-issue Trees
 
-When breaking a parent issue into a tree of sub-issues (e.g., task decomposition for LOBE-xxx), follow these rules — they work around real limitations of the Linear MCP tools.
+When breaking a parent issue into a tree of sub-issues (e.g., task decomposition for LOBE-xxx), follow these conventions and check the available tool capabilities.
 
 ### 1. Prefix titles with an ordering index
 
-Linear itself supports sub-issue ordering: its public API exposes `subIssueSortOrder` on both `IssueCreateInput` and `IssueUpdateInput`, and the app offers per-user sub-issue sorting. The limitation is the current Linear MCP `save_issue` tool, which exposes neither `subIssueSortOrder` nor `sortOrder`; therefore, an agent cannot set sub-issue order through this MCP at create or update time.
+Linear supports sub-issue ordering, but tool support varies. Check the discovered create/update schema for ordering fields rather than assuming a particular MCP tool exposes them.
 
 Workaround: encode execution order in the title itself:
 
@@ -63,7 +63,7 @@ Linear supports **unlimited sub-issue depth**. A flat list of 8+ siblings under 
 - Core service → its SDK → SDK consumers
 - Don't create a sibling when a child is more accurate
 
-Use `parentId: "LOBE-xxxx"` at creation (or `save_issue` to move). Moving an issue's parent does not disturb its `blockedBy` relations.
+Set the parent relation when creating or moving an issue using the discovered schema (for example, `parentId: "LOBE-xxxx"` when supported). Moving the parent does not require rewriting `blockedBy` relations.
 
 ### 3. Sub-issue creation order is dictated by `blockedBy`
 
@@ -74,9 +74,9 @@ Use `parentId: "LOBE-xxxx"` at creation (or `save_issue` to move). Moving an iss
 3. Create dependent issues only after collecting the blocker IDs from prior responses
 4. `blockedBy` is **append-only**; passing it again does not overwrite — safe to re-run
 
-### 4. Don't waste rounds trying to parallelize
+### 4. Respect dependency order
 
-MCP tool calls in a single message look parallel but execute sequentially on the server, and you still need blocker IDs from earlier responses. Just issue calls in dependency order; optimizing for parallelism gains nothing here.
+Collect blocker IDs before creating dependent issues. Do not assume parallel execution from how tool calls appear in a message; use the active tool's supported execution behavior.
 
 ### 5. Keep each sub-issue description self-contained
 
