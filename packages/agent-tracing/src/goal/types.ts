@@ -21,6 +21,7 @@ export type GoalAdvanceTrigger =
   | 'settle'
   | 'sweep'
   | 'resume'
+  | 'restart'
   | 'budget'
   | 'manual'
   /** A measurement landed — the goal moves on observation, not only on work. */
