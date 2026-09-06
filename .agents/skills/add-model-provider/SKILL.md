@@ -13,7 +13,7 @@ Paths below are relative to the open-source repository root. In a Cloud checkout
 
 For a documentation-only request, inspect the implemented configuration and follow [Provider documentation](references/documentation.md); do not add runtime code merely to satisfy this checklist.
 
-For a model-only request on an existing provider, use the metadata research and focused validation below, then update that provider's existing model cards. Skip new provider registration, authentication configuration, and provider-list reordering unless the requested model exposes a confirmed gap in those paths.
+For a model-only request on an existing provider, follow [model-bank-metadata](../model-bank-metadata/SKILL.md) for `knowledgeCutoff`, `family`, and `generation`, using its single-model guidance rather than the repo-wide sweep. Use the research and focused validation below for other model-card fields, including capabilities, pricing, and context limits. Skip new provider registration, authentication configuration, and provider-list reordering unless the requested model exposes a confirmed gap in those paths.
 
 ## Establish the Integration Contract
 
