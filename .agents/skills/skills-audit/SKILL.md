@@ -28,7 +28,7 @@ Group by domain in a mental table (DB / state / UI / agent / testing / workflow 
 For each pair within the same domain, ask:
 
 - **Same description**? → likely duplicate (one is probably a stale rename leftover, or a global-vs-local collision).
-- **Trigger keywords substantially overlap**? → either merge, OR tighten one description so the model can choose unambiguously.
+- **The same task fits multiple descriptions**? → check whether the skills are complementary or actually compete; clarify the boundary only when selection is ambiguous.
 - **One skill's body says "see also: foo"**? → confirm `foo` still exists, AND confirm the cross-reference is still meaningful (the referenced skill may have absorbed the referrer's concerns).
 - **Skill duplicates content from `AGENTS.md`**? → fold into AGENTS.md or slim the skill to just the delta.
 
@@ -52,8 +52,8 @@ For narrow domain skills (e.g. `response-compliance`, one-off CLI workflows):
 
 ```bash
 # Confirm the referenced code surface still exists
-rg -l "response-compliance|openresponses" packages/ src/              # adjust per skill
-git log --since="3 months ago" -- .agents/skills/ < skill > /SKILL.md # is it being maintained?
+rg -l "response-compliance|openresponses" packages/ src/            # adjust per skill
+git log --since="3 months ago" -- '.agents/skills/<skill>/SKILL.md' # replace <skill>
 ```
 
 If the underlying surface is gone and the skill hasn't been edited in 3+ months → flag for archival.
@@ -76,20 +76,13 @@ rg -n 'holds-while: (?!always)' -P .agents/acceptance/common-mistakes.md # the m
 
 ### 5 — Cross-reference integrity
 
-Any skill body mentioning another skill by name:
-
-```bash
-# Scan all skill bodies for skill-name references
-rg -o '`[a-z][a-z0-9-]+`' .agents/skills/*/SKILL.md | grep -v ':\s*$' | sort -u
-```
-
-For each name extracted, confirm `.agents/skills/<name>/SKILL.md` exists. Broken references happen after renames — fix them in the same audit pass.
+Check actual skill links, named handoffs, and referenced files against their owning root, including symlink targets. A code symbol or CLI command in backticks is not automatically a skill reference. Resolve renamed or moved targets before reporting a broken link, and fix confirmed references when edits are authorized.
 
 ### 6 — Output report
 
 Report actionable findings with file references, evidence, and the proposed change. Distinguish confirmed defects from uncertain candidates. Include inventory totals or an execution order only when they help the user decide; no fixed headings, template, or line-count estimates are required.
 
-End by asking the user which actions to apply — do NOT auto-apply unless the user passed `--apply` and even then confirm destructive deletes individually.
+An audit-only request produces recommendations. When the user authorizes fixes, through `--apply` or ordinary language, apply safe changes within that scope without asking again. Deletions require authorization covering the target; do not request it again when already provided.
 
 ## Output rules
 
@@ -101,7 +94,7 @@ End by asking the user which actions to apply — do NOT auto-apply unless the u
 ## What NOT to do
 
 - ❌ Don't rename skill directories without checking for cross-references AND user memory entries that name the old slug.
-- ❌ Don't normalize a description by removing trigger keywords just to fit the template — the keywords are the routing signal.
+- ❌ Don't remove meaningful selection boundaries merely to shorten a description or fit a template.
 - ❌ Don't fold a heavy 200+ line skill into another just because they share a domain — large skills get loaded selectively and merging makes everything load.
 - ❌ Don't propose `.agents/skills/INDEX.md` or `<domain>-<skill>` prefix renames unless the user explicitly asks — costs > benefits for cosmetic reorgs.
 
