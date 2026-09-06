@@ -13,6 +13,12 @@ import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 import { DocumentService } from '../document';
 import { KnowledgeBaseSearchService } from './index';
 
+const knowledgeBaseAccessMocks = vi.hoisted(() => ({
+  assertContentsNotInRestrictedKnowledgeBase: vi.fn(),
+  assertContentsNotInTrashedKnowledgeBase: vi.fn(),
+  filterLiveKnowledgeBaseIds: vi.fn(),
+}));
+
 vi.mock('@/database/models/chunk', () => ({ ChunkModel: vi.fn() }));
 vi.mock('@/database/models/document', () => ({ DocumentModel: vi.fn() }));
 vi.mock('@/database/models/file', () => ({ FileModel: vi.fn() }));
@@ -20,6 +26,7 @@ vi.mock('@/server/services/ftsSearch', () => ({ createFtsSearchRepo: vi.fn() }))
 vi.mock('../document', () => ({ DocumentService: vi.fn() }));
 vi.mock('@/server/globalConfig', () => ({ getServerDefaultFilesConfig: vi.fn() }));
 vi.mock('@/server/modules/ModelRuntime', () => ({ initModelRuntimeFromDB: vi.fn() }));
+vi.mock('@/server/services/knowledgeBaseAccess', () => knowledgeBaseAccessMocks);
 vi.mock('@/database/utils/workspace', () => ({
   buildWorkspaceWhere: vi.fn(() => 'WORKSPACE_SCOPE'),
 }));
@@ -36,6 +43,14 @@ describe('KnowledgeBaseSearchService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+
+    knowledgeBaseAccessMocks.assertContentsNotInRestrictedKnowledgeBase.mockResolvedValue(
+      undefined,
+    );
+    knowledgeBaseAccessMocks.assertContentsNotInTrashedKnowledgeBase.mockResolvedValue(undefined);
+    knowledgeBaseAccessMocks.filterLiveKnowledgeBaseIds.mockImplementation(
+      async (_ctx, ids: string[]) => ids,
+    );
 
     chunkModelMock = { semanticSearchForChat: vi.fn() };
     documentModelMock = { findById: vi.fn(), findByFileId: vi.fn() };
@@ -58,6 +73,25 @@ describe('KnowledgeBaseSearchService', () => {
   });
 
   describe('getFileContents', () => {
+    it('checks the full mixed batch before resolving any content rows', async () => {
+      knowledgeBaseAccessMocks.assertContentsNotInRestrictedKnowledgeBase.mockRejectedValue(
+        new Error('trashed knowledge base'),
+      );
+
+      await expect(service.getFileContents(['docs_blocked', 'file_blocked'])).rejects.toThrow(
+        'trashed knowledge base',
+      );
+
+      expect(
+        knowledgeBaseAccessMocks.assertContentsNotInRestrictedKnowledgeBase,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({ serverDB, userId, workspaceId: undefined }),
+        ['docs_blocked', 'file_blocked'],
+      );
+      expect(documentModelMock.findById).not.toHaveBeenCalled();
+      expect(fileModelMock.findById).not.toHaveBeenCalled();
+    });
+
     it('reads docs_* directly from documents table without touching files', async () => {
       documentModelMock.findById.mockResolvedValue({
         content: '# Title\n\nBody.',
@@ -208,6 +242,48 @@ describe('KnowledgeBaseSearchService', () => {
         userId,
         workspaceId: 'workspace-1',
       });
+    });
+
+    it('drops stale or trashed knowledge-base ids before vector and BM25 retrieval', async () => {
+      knowledgeBaseAccessMocks.filterLiveKnowledgeBaseIds.mockResolvedValue(['kb_live']);
+      serverDB.query.knowledgeBaseFiles.findMany.mockResolvedValue([{ fileId: 'file_live' }]);
+      chunkModelMock.semanticSearchForChat.mockResolvedValue([]);
+      searchRepoMock.searchKnowledgeBaseDocuments.mockResolvedValue([]);
+
+      await service.semanticSearchForChat({
+        knowledgeIds: ['kb_trashed', 'kb_live'],
+        query: 'hello',
+      });
+
+      expect(knowledgeBaseAccessMocks.filterLiveKnowledgeBaseIds).toHaveBeenCalledWith(
+        expect.objectContaining({ serverDB, userId, workspaceId: undefined }),
+        ['kb_trashed', 'kb_live'],
+      );
+      expect(searchRepoMock.searchKnowledgeBaseDocuments).toHaveBeenCalledWith(
+        'hello',
+        ['kb_live'],
+        20,
+      );
+      expect(chunkModelMock.semanticSearchForChat).toHaveBeenCalledWith(
+        expect.objectContaining({ fileIds: ['file_live'] }),
+      );
+    });
+
+    it('checks caller-supplied file ids against trashed knowledge bases before searching', async () => {
+      knowledgeBaseAccessMocks.assertContentsNotInTrashedKnowledgeBase.mockRejectedValue(
+        new Error('trashed knowledge base'),
+      );
+
+      await expect(
+        service.semanticSearchForChat({ fileIds: ['file_stale'], query: 'hello' }),
+      ).rejects.toThrow('trashed knowledge base');
+
+      expect(knowledgeBaseAccessMocks.assertContentsNotInTrashedKnowledgeBase).toHaveBeenCalledWith(
+        expect.objectContaining({ serverDB, userId, workspaceId: undefined }),
+        ['file_stale'],
+      );
+      expect(initModelRuntimeFromDB).not.toHaveBeenCalled();
+      expect(chunkModelMock.semanticSearchForChat).not.toHaveBeenCalled();
     });
 
     it('groups chunks by file and ranks them by average top-3 similarity', async () => {

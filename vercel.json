@@ -1,5 +1,11 @@
 {
   "buildCommand": "bun run build:vercel",
+  "crons": [
+    {
+      "path": "/api/workflows/trash/purge",
+      "schedule": "0 * * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/_spa/(.*)",

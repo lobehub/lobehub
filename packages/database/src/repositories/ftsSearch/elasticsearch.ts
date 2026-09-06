@@ -30,7 +30,10 @@ import type {
   FtsSearchBackend,
   FtsSearchBackendRequest,
   FtsSearchBackendResponse,
+  FtsSearchFileResult,
+  FtsSearchFolderResult,
   FtsSearchMessageResult,
+  FtsSearchPageResult,
   FtsSearchTopicResult,
 } from './types';
 
@@ -58,8 +61,10 @@ export type {
   ElasticsearchFtsSearchResponse,
 } from './elasticsearch/types';
 
-/** Prevent parent authorization misses from turning one product search into an unbounded scan. */
+/** Prevent PostgreSQL authorization misses from turning one product search into an unbounded scan. */
 const MAX_PRODUCT_CANDIDATE_PAGES = 5;
+
+type FtsSearchResourceResult = FtsSearchFileResult | FtsSearchFolderResult | FtsSearchPageResult;
 
 const normalizeQuery = (query: string) =>
   query.trim().replaceAll('-', ' ').split(/\s+/).filter(Boolean).join(' ');
@@ -186,18 +191,18 @@ export class ElasticsearchFtsSearchBackend implements FtsSearchBackend {
       };
     }
     if (entity === 'files') {
-      return {
-        candidates,
-        items: await this.observe(entity, 'pg_hydration', () =>
+      return this.searchResourceProduct(request, target, query, candidateResult, (pageHits) =>
+        this.observe(entity, 'pg_hydration', () =>
           hydrateFiles(
             this.db,
-            hits,
+            pageHits,
             request.scope,
-            limit,
+            pageHits.length,
             request.filters.excludeKnowledgeBaseIds,
+            request.filters.excludeTrashedKnowledgeBaseIds,
           ),
         ),
-      };
+      );
     }
     if (entity === 'knowledgeBases') {
       return {
@@ -217,32 +222,32 @@ export class ElasticsearchFtsSearchBackend implements FtsSearchBackend {
       throw new Error(`Unsupported Elasticsearch search entity: ${target.entity}`);
     }
     if (target.documentKind === 'folder') {
-      return {
-        candidates,
-        items: await this.observe(entity, 'pg_hydration', () =>
+      return this.searchResourceProduct(request, target, query, candidateResult, (pageHits) =>
+        this.observe(entity, 'pg_hydration', () =>
           hydrateFolders(
             this.db,
-            hits,
+            pageHits,
             request.scope,
-            limit,
+            pageHits.length,
             request.filters.excludeKnowledgeBaseIds,
+            request.filters.excludeTrashedKnowledgeBaseIds,
           ),
         ),
-      };
+      );
     }
     if (target.documentKind === 'page') {
-      return {
-        candidates,
-        items: await this.observe(entity, 'pg_hydration', () =>
+      return this.searchResourceProduct(request, target, query, candidateResult, (pageHits) =>
+        this.observe(entity, 'pg_hydration', () =>
           hydratePages(
             this.db,
-            hits,
+            pageHits,
             request.scope,
-            limit,
+            pageHits.length,
             request.filters.excludeKnowledgeBaseIds,
+            request.filters.excludeTrashedKnowledgeBaseIds,
           ),
         ),
-      };
+      );
     }
     if (target.documentKind === 'knowledgeBaseDocument') {
       return {
@@ -261,6 +266,76 @@ export class ElasticsearchFtsSearchBackend implements FtsSearchBackend {
 
     target.documentKind satisfies never;
     throw new Error(`Unsupported Elasticsearch document kind: ${String(target.documentKind)}`);
+  }
+
+  /**
+   * Resource membership visibility is authoritative in PostgreSQL. Continue after a page contains
+   * only resources owned by trashed or newly restricted libraries, but keep the same bounded 20x
+   * candidate budget as conversation parent authorization.
+   */
+  private async searchResourceProduct<Result extends FtsSearchResourceResult>(
+    request: FtsSearchBackendRequest,
+    target: ElasticsearchFtsSearchCandidateTarget,
+    query: string,
+    firstPage: Awaited<ReturnType<typeof searchElasticsearchCandidates>>,
+    hydrate: (hits: FtsSearchCandidateHit[]) => Promise<Result[]>,
+  ): Promise<FtsSearchBackendResponse<Result>> {
+    const limit = request.pagination.limit;
+    if (!limit) throw new Error('Elasticsearch product search requires a positive limit');
+
+    const hits: FtsSearchCandidateHit[] = [];
+    const seen = new Set<string>();
+    const visibleItems = new Map<string, Result>();
+    let page = firstPage;
+    let pageCount = 0;
+
+    while (pageCount < MAX_PRODUCT_CANDIDATE_PAGES) {
+      pageCount += 1;
+      const pageHits: FtsSearchCandidateHit[] = [];
+      for (const hit of page.hits) {
+        if (seen.has(hit.id)) continue;
+        seen.add(hit.id);
+        const candidate = { ...hit, rank: hits.length };
+        hits.push(candidate);
+        pageHits.push(candidate);
+      }
+
+      for (const item of await hydrate(pageHits)) visibleItems.set(item.id, item);
+      if (
+        visibleItems.size >= limit ||
+        page.exhausted ||
+        pageCount >= MAX_PRODUCT_CANDIDATE_PAGES
+      ) {
+        break;
+      }
+      if (!page.nextFtsSearchAfter) {
+        throw new Error('Elasticsearch bounded candidate search requires hit sort values');
+      }
+      page = await this.observe(request.entity, 'candidate_query', () =>
+        searchElasticsearchCandidates(
+          { client: this.client, indexNamespace: this.indexNamespace },
+          request,
+          target,
+          query,
+          { searchAfter: page.nextFtsSearchAfter, singlePage: true },
+        ),
+      );
+    }
+
+    const hitById = new Map(hits.map((hit) => [hit.id, hit]));
+    const maxScore = Math.max(0, ...[...visibleItems].map(([id]) => hitById.get(id)?.score ?? 0));
+    const items = [...visibleItems.values()]
+      .sort((left, right) => (hitById.get(left.id)?.rank ?? 0) - (hitById.get(right.id)?.rank ?? 0))
+      .slice(0, limit)
+      .map((item) => {
+        const score = hitById.get(item.id)?.score ?? 0;
+        return { ...item, relevance: maxScore > 0 ? 1 + 2 * (1 - score / maxScore) : 3 };
+      });
+
+    return {
+      candidates: hits.map(({ id, score }) => ({ id, score })),
+      items,
+    };
   }
 
   /**

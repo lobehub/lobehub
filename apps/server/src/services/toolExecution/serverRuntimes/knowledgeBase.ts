@@ -9,6 +9,7 @@ import { KnowledgeRepo } from '@/database/repositories/knowledge';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { KnowledgeBaseSearchService } from '@/server/services/knowledgeBase';
+import { TrashService } from '@/server/services/trash';
 
 import { type ServerRuntimeRegistration } from './types';
 
@@ -31,6 +32,7 @@ export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
       workspaceId,
       agentVisibility,
     );
+    const trashService = new TrashService(serverDB, userId, workspaceId);
     const agentModel = agentId ? new AgentModel(serverDB, userId, workspaceId) : null;
 
     const resolveAgentKnowledgeBaseIds = async (override?: string[]): Promise<string[]> => {
@@ -136,7 +138,7 @@ export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
         removeFilesFromKnowledgeBase: (knowledgeBaseId, ids) =>
           knowledgeBaseModel.removeFilesFromKnowledgeBase(knowledgeBaseId, ids),
         removeKnowledgeBase: async (id) => {
-          await knowledgeBaseModel.deleteWithFiles(id);
+          await trashService.trashKnowledgeBases([id]);
         },
       },
       {

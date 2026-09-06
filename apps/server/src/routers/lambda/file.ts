@@ -4,6 +4,7 @@ import {
   MARKDOWN_MIME_TYPES,
   MAX_UPLOAD_FILE_SIZE,
   RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH,
+  TRASH_MUTATION_BATCH_SIZE,
   UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE,
 } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
@@ -26,9 +27,9 @@ import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { KnowledgeRepo } from '@/database/repositories/knowledge';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
+import { TrashService } from '@/server/services/trash';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { createResourceContentPreview } from '@/server/utils/resourceContentPreview';
 import { AsyncTaskStatus, AsyncTaskType, type IAsyncTaskError } from '@/types/asyncTask';
@@ -45,7 +46,7 @@ import {
   assertContentsNotInRestrictedKnowledgeBase,
   assertFileNotInRestrictedKnowledgeBase,
   assertKnowledgeBaseBrowsable,
-  getRestrictedKnowledgeBaseIds,
+  getRestrictedKnowledgeBasePolicy,
 } from './_helpers/knowledgeBaseAccess';
 
 const fileTransferEntityTypeSchema = z.enum(['document', 'file', 'folder']);
@@ -57,6 +58,16 @@ const KNOWLEDGE_ITEM_RESOLUTION_CONCURRENCY = 8;
 
 const isMarkdownFile = (item: { fileType: string; name: string }) =>
   markdownPreviewTypes.has(item.fileType) || /\.md(?:arkdown)?$/i.test(item.name);
+
+const getRestrictedResourceFilters = async (
+  ctx: Parameters<typeof getRestrictedKnowledgeBasePolicy>[0],
+) => {
+  const policy = await getRestrictedKnowledgeBasePolicy(ctx);
+  return {
+    excludeKnowledgeBaseIds: policy.liveRestrictedKnowledgeBaseIds,
+    excludeTrashedKnowledgeBaseIds: policy.trashedKnowledgeBaseIds,
+  };
+};
 
 const assertAllFilesAccessible = (requestedIds: string[], files: Array<{ id: string }>): void => {
   const accessibleIds = new Set(files.map((file) => file.id));
@@ -191,11 +202,11 @@ const fileProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => 
       asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId, wsId),
       chunkModel: new ChunkModel(ctx.serverDB, ctx.userId, wsId),
       documentModel: new DocumentModel(ctx.serverDB, ctx.userId, wsId),
-      documentService: new DocumentService(ctx.serverDB, ctx.userId, wsId),
       fileModel: new FileModel(ctx.serverDB, ctx.userId, wsId),
       fileService: new FileService(ctx.serverDB, ctx.userId, wsId),
       knowledgeBaseModel: new KnowledgeBaseModel(ctx.serverDB, ctx.userId, wsId),
       knowledgeRepo: new KnowledgeRepo(ctx.serverDB, ctx.userId, wsId),
+      trashService: new TrashService(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
@@ -413,12 +424,12 @@ export const fileRouter = router({
 
   getFiles: fileProcedure.input(QueryFileListSchema).query(async ({ ctx, input }) => {
     if (input.knowledgeBaseId) await assertKnowledgeBaseBrowsable(ctx, input.knowledgeBaseId);
-    const excludeKnowledgeBaseIds =
+    const restrictedFilters =
       !input.knowledgeBaseId && input.showFilesInKnowledgeBase
-        ? await getRestrictedKnowledgeBaseIds(ctx)
-        : undefined;
+        ? await getRestrictedResourceFilters(ctx)
+        : {};
 
-    const fileList = await ctx.fileModel.query({ ...input, excludeKnowledgeBaseIds });
+    const fileList = await ctx.fileModel.query({ ...input, ...restrictedFilters });
     const statusMap = await getKnowledgeItemStatusMap(ctx, fileList);
 
     const resultFiles = [] as any[];
@@ -457,9 +468,7 @@ export const fileRouter = router({
 
   getKnowledgeItems: fileProcedure.input(QueryFileListSchema).query(async ({ ctx, input }) => {
     if (input.knowledgeBaseId) await assertKnowledgeBaseBrowsable(ctx, input.knowledgeBaseId);
-    const excludeKnowledgeBaseIds = input.knowledgeBaseId
-      ? undefined
-      : await getRestrictedKnowledgeBaseIds(ctx);
+    const restrictedFilters = input.knowledgeBaseId ? {} : await getRestrictedResourceFilters(ctx);
 
     // Request one more item than limit to check if there are more items
     const limit = input.limit ?? 50;
@@ -469,7 +478,7 @@ export const fileRouter = router({
     const includeContentPreview = input.includeContentPreview === true;
     const knowledgeItems = await ctx.knowledgeRepo.query({
       ...input,
-      excludeKnowledgeBaseIds,
+      ...restrictedFilters,
       includeContent,
       includeContentPreview,
       limit: limit + 1,
@@ -588,9 +597,9 @@ export const fileRouter = router({
     .input(QueryFileListSchema)
     .query(async ({ ctx, input }): Promise<{ ids: string[]; total: number }> => {
       if (input.knowledgeBaseId) await assertKnowledgeBaseBrowsable(ctx, input.knowledgeBaseId);
-      const excludeKnowledgeBaseIds = input.knowledgeBaseId
-        ? undefined
-        : await getRestrictedKnowledgeBaseIds(ctx);
+      const restrictedFilters = input.knowledgeBaseId
+        ? {}
+        : await getRestrictedResourceFilters(ctx);
 
       const ids: string[] = [];
       const batchSize = 500;
@@ -600,7 +609,7 @@ export const fileRouter = router({
       while (hasMore) {
         const knowledgeItems = await ctx.knowledgeRepo.query({
           ...input,
-          excludeKnowledgeBaseIds,
+          ...restrictedFilters,
           includeContent: false,
           includeContentPreview: false,
           limit: batchSize + 1,
@@ -624,12 +633,15 @@ export const fileRouter = router({
     .use(withScopedPermission('file:delete'))
     .input(deleteKnowledgeItemsByQuerySchema)
     .mutation(async ({ ctx, input }): Promise<{ count: number }> => {
-      if (input.knowledgeBaseId) await assertKnowledgeBaseBrowsable(ctx, input.knowledgeBaseId);
-      const excludeKnowledgeBaseIds = input.knowledgeBaseId
-        ? undefined
-        : await getRestrictedKnowledgeBaseIds(ctx);
       const { excludedIds = [], ...query } = input;
       const excludedIdSet = new Set(excludedIds);
+
+      if (query.knowledgeBaseId) {
+        await assertKnowledgeBaseBrowsable(ctx, query.knowledgeBaseId);
+      }
+      const restrictedFilters = query.knowledgeBaseId
+        ? {}
+        : await getRestrictedResourceFilters(ctx);
 
       const fileIds: string[] = [];
       const documentIds: string[] = [];
@@ -640,7 +652,7 @@ export const fileRouter = router({
       while (hasMore) {
         const knowledgeItems = await ctx.knowledgeRepo.query({
           ...query,
-          excludeKnowledgeBaseIds,
+          ...restrictedFilters,
           includeContent: false,
           includeContentPreview: false,
           limit: batchSize + 1,
@@ -671,20 +683,33 @@ export const fileRouter = router({
         hasMore = currentHasMore;
       }
 
-      await assertContentsNotInRestrictedKnowledgeBase(ctx, [...documentIds, ...fileIds]);
-
       if (documentIds.length > 0) {
-        await ctx.documentService.deleteDocuments(documentIds);
+        if (
+          ctx.workspaceId &&
+          !(await hasWorkspaceScopedPermission({
+            action: 'DOCUMENT_DELETE',
+            db: ctx.serverDB,
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId,
+          }))
+        ) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'No permission to delete documents',
+          });
+        }
+        for (let index = 0; index < documentIds.length; index += TRASH_MUTATION_BATCH_SIZE) {
+          await ctx.trashService.trashDocuments(
+            documentIds.slice(index, index + TRASH_MUTATION_BATCH_SIZE),
+          );
+        }
       }
 
       if (fileIds.length > 0) {
-        const needToRemoveFileList = await ctx.fileModel.deleteMany(
-          fileIds,
-          serverDBEnv.REMOVE_GLOBAL_FILE,
-        );
-
-        if (needToRemoveFileList && needToRemoveFileList.length > 0) {
-          await ctx.fileService.deleteFiles(needToRemoveFileList.map((file) => file.url!));
+        for (let index = 0; index < fileIds.length; index += TRASH_MUTATION_BATCH_SIZE) {
+          await ctx.trashService.trashFiles(
+            fileIds.slice(index, index + TRASH_MUTATION_BATCH_SIZE),
+          );
         }
       }
 
@@ -780,12 +805,7 @@ export const fileRouter = router({
       if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
       await assertFileNotInRestrictedKnowledgeBase(ctx, input.id);
 
-      const file = await ctx.fileModel.delete(input.id, serverDBEnv.REMOVE_GLOBAL_FILE);
-
-      if (!file) return;
-
-      // delete the file from S3 if it is not used by other files
-      await ctx.fileService.deleteFile(file.url!);
+      await ctx.trashService.trashFiles([input.id]);
     }),
 
   removeUnreferencedFile: fileProcedure
@@ -828,21 +848,21 @@ export const fileRouter = router({
     .input(z.object({ ids: z.array(z.string()) }))
     .mutation(async ({ input, ctx }) => {
       const ids = [...new Set(input.ids)];
-      const targets = await ctx.fileModel.findByIds(ids);
-      assertAllFilesAccessible(ids, targets);
-      await Promise.all(
-        targets.map((target) => assertFileNotInRestrictedKnowledgeBase(ctx, target.id)),
-      );
+      const batches: string[][] = [];
+      for (let index = 0; index < ids.length; index += TRASH_MUTATION_BATCH_SIZE) {
+        batches.push(ids.slice(index, index + TRASH_MUTATION_BATCH_SIZE));
+      }
 
-      const needToRemoveFileList = await ctx.fileModel.deleteMany(
-        ids,
-        serverDBEnv.REMOVE_GLOBAL_FILE,
-      );
+      // Validate the complete legacy request before mutating any batch.
+      for (const batch of batches) {
+        const targets = await ctx.fileModel.findByIds(batch);
+        assertAllFilesAccessible(batch, targets);
+        await Promise.all(
+          targets.map((target) => assertFileNotInRestrictedKnowledgeBase(ctx, target.id)),
+        );
+      }
 
-      if (!needToRemoveFileList || needToRemoveFileList.length === 0) return;
-
-      // remove from S3
-      await ctx.fileService.deleteFiles(needToRemoveFileList.map((file) => file.url!));
+      for (const batch of batches) await ctx.trashService.trashFiles(batch);
     }),
 
   updateFile: fileProcedure

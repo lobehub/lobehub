@@ -55,6 +55,7 @@ export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   // deep-links still land on `/:slug/settings/statistics`.
   'stats',
   'storage',
+  'trash',
   'usage',
 ]);
 

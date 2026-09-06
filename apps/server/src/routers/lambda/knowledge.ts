@@ -13,7 +13,7 @@ import { QueryFileListSchema } from '@/types/files';
 
 import {
   assertKnowledgeBaseBrowsable,
-  getRestrictedKnowledgeBaseIds,
+  getRestrictedKnowledgeBasePolicy,
 } from './_helpers/knowledgeBaseAccess';
 
 const knowledgeProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
@@ -34,12 +34,16 @@ const knowledgeProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts
 
 export const knowledgeRouter = router({
   getKnowledgeItems: knowledgeProcedure.input(QueryFileListSchema).query(async ({ ctx, input }) => {
-    const excludeKnowledgeBaseIds = input.knowledgeBaseId
+    const restrictedPolicy = input.knowledgeBaseId
       ? undefined
-      : await getRestrictedKnowledgeBaseIds(ctx);
+      : await getRestrictedKnowledgeBasePolicy(ctx);
     if (input.knowledgeBaseId) await assertKnowledgeBaseBrowsable(ctx, input.knowledgeBaseId);
 
-    const knowledgeItems = await ctx.knowledgeRepo.query({ ...input, excludeKnowledgeBaseIds });
+    const knowledgeItems = await ctx.knowledgeRepo.query({
+      ...input,
+      excludeKnowledgeBaseIds: restrictedPolicy?.liveRestrictedKnowledgeBaseIds,
+      excludeTrashedKnowledgeBaseIds: restrictedPolicy?.trashedKnowledgeBaseIds,
+    });
 
     // Process files (add chunk info and async task status)
     const fileItems = knowledgeItems.filter((item) => item.sourceType === 'file');

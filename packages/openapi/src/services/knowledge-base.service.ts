@@ -4,7 +4,7 @@ import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import type { KnowledgeBaseItem } from '@/database/schemas';
 import { knowledgeBases } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
-import { FileService as CoreFileService } from '@/server/services/file';
+import { TrashService } from '@/server/services/trash';
 
 import { BaseService } from '../common/base.service';
 import { processPaginationConditions } from '../helpers/pagination';
@@ -27,10 +27,12 @@ import type {
  */
 export class KnowledgeBaseService extends BaseService {
   private knowledgeBaseModel: KnowledgeBaseModel;
+  private trashService: TrashService;
 
   constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     super(db, userId, workspaceId);
     this.knowledgeBaseModel = new KnowledgeBaseModel(db, userId, workspaceId);
+    this.trashService = new TrashService(db, userId, workspaceId);
   }
 
   /**
@@ -250,20 +252,9 @@ export class KnowledgeBaseService extends BaseService {
         throw this.createNotFoundError('Knowledge base not found or access denied');
       }
 
-      const result = await this.knowledgeBaseModel.deleteWithFiles(id);
+      await this.trashService.trashKnowledgeBases([id]);
 
-      if (result.deletedFiles.length > 0) {
-        const fileService = new CoreFileService(this.db, this.userId, this.workspaceId);
-        const urls = result.deletedFiles
-          .map((f: { url: string | null }) => f.url)
-          .filter(Boolean) as string[];
-
-        if (urls.length > 0) {
-          await fileService.deleteFiles(urls);
-        }
-      }
-
-      this.log('info', 'Knowledge base deleted successfully', { id });
+      this.log('info', 'Knowledge base moved to Trash successfully', { id });
 
       return {
         message: 'Knowledge base deleted successfully',

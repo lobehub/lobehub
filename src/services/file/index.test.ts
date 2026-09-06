@@ -4,9 +4,10 @@ import { isPdfFile } from '@/features/FileViewer/fileType';
 
 import { FileService } from './index';
 
-const { mockGetDocumentById, mockGetFileItemById } = vi.hoisted(() => ({
+const { mockGetDocumentById, mockGetFileItemById, mockRemoveFiles } = vi.hoisted(() => ({
   mockGetDocumentById: vi.fn(),
   mockGetFileItemById: vi.fn(),
+  mockRemoveFiles: vi.fn(),
 }));
 
 vi.mock('@/libs/trpc/client', () => ({
@@ -16,6 +17,7 @@ vi.mock('@/libs/trpc/client', () => ({
     },
     file: {
       getFileItemById: { query: mockGetFileItemById },
+      removeFiles: { mutate: mockRemoveFiles },
     },
   },
 }));
@@ -94,5 +96,15 @@ describe('FileService.getKnowledgeItem', () => {
     expect(
       isPdfFile({ fileName: result?.name, fileType: result?.fileType, path: result?.url }),
     ).toBe(false);
+  });
+
+  it('sends the complete bulk removal request for atomic validation on the server', async () => {
+    mockRemoveFiles.mockResolvedValue(undefined);
+    const ids = Array.from({ length: 401 }, (_, index) => `file-${index}`);
+
+    await service.removeFiles(ids);
+
+    expect(mockRemoveFiles).toHaveBeenCalledOnce();
+    expect(mockRemoveFiles).toHaveBeenCalledWith({ ids });
   });
 });

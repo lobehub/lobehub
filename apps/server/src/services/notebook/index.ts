@@ -3,7 +3,7 @@ import { type LobeChatDatabase } from '@lobechat/database';
 import type { AgentDocumentSourceType } from '@/database/models/agentDocuments/types';
 import { DocumentModel } from '@/database/models/document';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
-import { DocumentService } from '@/server/services/document';
+import { TrashService } from '@/server/services/trash';
 
 interface DocumentServiceResult {
   content: string | null;
@@ -55,19 +55,13 @@ const toServiceResult = (doc: {
 });
 
 export class NotebookRuntimeService {
-  private documentService: DocumentService;
   private documentModel: DocumentModel;
   private topicDocumentModel: TopicDocumentModel;
+  private trashService: TrashService;
   private callerAgentVisibility?: 'private' | 'public' | null;
 
   constructor(options: NotebookRuntimeServiceOptions) {
     this.callerAgentVisibility = options.callerAgentVisibility;
-    this.documentService = new DocumentService(
-      options.serverDB,
-      options.userId,
-      options.workspaceId,
-      options.callerAgentVisibility,
-    );
     this.documentModel = new DocumentModel(
       options.serverDB,
       options.userId,
@@ -79,6 +73,7 @@ export class NotebookRuntimeService {
       options.userId,
       options.workspaceId,
     );
+    this.trashService = new TrashService(options.serverDB, options.userId, options.workspaceId);
   }
 
   associateDocumentWithTopic = async (documentId: string, topicId: string): Promise<void> => {
@@ -104,8 +99,7 @@ export class NotebookRuntimeService {
   };
 
   deleteDocument = async (id: string, options?: { restrictToCreator?: boolean }): Promise<void> => {
-    await this.topicDocumentModel.deleteByDocumentId(id);
-    await this.documentService.deleteDocument(id, options);
+    await this.trashService.trashDocuments([id], options);
   };
 
   getDocument = async (id: string): Promise<DocumentServiceResult | undefined> => {

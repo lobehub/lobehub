@@ -1,0 +1,71 @@
+import { serverDBEnv } from '@/config/db';
+import { FileModel } from '@/database/models/file';
+import { TrashModel } from '@/database/models/trash';
+import type { TrashItemRow } from '@/database/schemas';
+
+import type { TrashHandlerContext } from './types';
+
+const STORAGE_DELETE_BATCH_SIZE = 1000;
+
+const toStorageFiles = (files: { fileHash: string | null; url: string }[]) => [
+  ...new Map(
+    files.flatMap((file) =>
+      file.fileHash && file.url
+        ? [[`${file.fileHash}:${file.url}`, { fileHash: file.fileHash, url: file.url }] as const]
+        : [],
+    ),
+  ).values(),
+];
+
+const deleteStorageFiles = async (ctx: TrashHandlerContext, urls: string[]) => {
+  for (let index = 0; index < urls.length; index += STORAGE_DELETE_BATCH_SIZE) {
+    await ctx.fileService.deleteFiles(urls.slice(index, index + STORAGE_DELETE_BATCH_SIZE));
+  }
+};
+
+export const purgeFileRecords = async (
+  ctx: TrashHandlerContext,
+  ids: string[],
+  options: { onlyTrashed?: boolean; root: TrashItemRow },
+) => {
+  const pendingFiles = options.root.meta?.storageCleanup?.files;
+  if (pendingFiles?.length) return;
+
+  await new FileModel(ctx.db, ctx.userId, ctx.workspaceId).deleteMany(
+    ids,
+    serverDBEnv.REMOVE_GLOBAL_FILE,
+    {
+      beforeCommitGlobalFileDelete: async (trx, files) => {
+        await TrashModel.markStorageCleanupPending(trx, options.root.id, toStorageFiles(files));
+      },
+      onlyTrashed: options.onlyTrashed,
+    },
+  );
+};
+
+export const purgeFiles = async (
+  ctx: TrashHandlerContext,
+  ids: string[],
+  options: { onlyTrashed?: boolean; root: TrashItemRow },
+) => {
+  const trashModel = new TrashModel(ctx.db, ctx.userId, ctx.workspaceId);
+  const pendingFiles = options.root.meta?.storageCleanup?.files;
+  if (pendingFiles?.length) {
+    await deleteStorageFiles(
+      ctx,
+      pendingFiles.map(({ url }) => url),
+    );
+    return;
+  }
+
+  await purgeFileRecords(ctx, ids, options);
+
+  // A concurrent purge may have entered with a stale root object, waited for
+  // the first file transaction, and then observed no source rows. Re-read the
+  // registry after commit so that invocation cannot skip the retry hand-off
+  // written by its peer and remove the root prematurely.
+  const latestRoot = await trashModel.findByIdIncludingQueued(options.root.id);
+  const filesToDelete = latestRoot?.meta?.storageCleanup?.files ?? [];
+  const urls = filesToDelete.map(({ url }) => url);
+  await deleteStorageFiles(ctx, urls);
+};

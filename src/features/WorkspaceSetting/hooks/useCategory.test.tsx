@@ -68,31 +68,29 @@ describe('workspace settings useCategory', () => {
     });
 
     const { result } = renderHook(() => useWorkspaceSettingCategory());
-    const developerGroup = result.current.find(
-      (group) => group.key === WorkspaceSettingsGroupKey.Developer,
+    const systemGroup = result.current.find(
+      (group) => group.key === WorkspaceSettingsGroupKey.System,
     );
     const agentGroup = result.current.find(
       (group) => group.key === WorkspaceSettingsGroupKey.Agent,
     );
 
-    expect(developerGroup?.items.map((item) => item.key)).toContain(
-      WorkspaceSettingsTabs.OAuthApps,
-    );
+    expect(systemGroup?.items.map((item) => item.key)).toContain(WorkspaceSettingsTabs.OAuthApps);
     expect(agentGroup?.items.map((item) => item.key)).not.toContain(
       WorkspaceSettingsTabs.OAuthApps,
     );
   });
 
-  it('places API Key in the Developer group', () => {
+  it('places API Key in the System group', () => {
     const { result } = renderHook(() => useWorkspaceSettingCategory());
     const adminGroup = result.current.find(
       (group) => group.key === WorkspaceSettingsGroupKey.Admin,
     );
-    const developerGroup = result.current.find(
-      (group) => group.key === WorkspaceSettingsGroupKey.Developer,
+    const systemGroup = result.current.find(
+      (group) => group.key === WorkspaceSettingsGroupKey.System,
     );
 
-    expect(developerGroup?.items.map((item) => item.key)).toContain(WorkspaceSettingsTabs.APIKey);
+    expect(systemGroup?.items.map((item) => item.key)).toContain(WorkspaceSettingsTabs.APIKey);
     expect(adminGroup?.items.map((item) => item.key)).not.toContain(WorkspaceSettingsTabs.APIKey);
   });
 
@@ -109,22 +107,36 @@ describe('workspace settings useCategory', () => {
   });
 
   // Viewers hold no `API_KEY_*` grant, so the tab would open onto a list
-  // request that immediately 403s.
-  it('hides API Key from viewers, and drops the empty Developer group', () => {
+  // request that immediately 403s. Trash remains available as a read-only page.
+  it('hides API Key from viewers and keeps Trash in the System group', () => {
     mocks.canCreateContent = false;
     mocks.canManageWorkspace = false;
 
     const { result } = renderHook(() => useWorkspaceSettingCategory());
+    const systemGroup = result.current.find(
+      (group) => group.key === WorkspaceSettingsGroupKey.System,
+    );
 
     expect(result.current.flatMap((group) => group.items.map((item) => item.key))).not.toContain(
       WorkspaceSettingsTabs.APIKey,
     );
-    expect(result.current.some((group) => group.key === WorkspaceSettingsGroupKey.Developer)).toBe(
-      false,
-    );
+    expect(systemGroup?.items.map((item) => item.key)).toEqual([WorkspaceSettingsTabs.Trash]);
   });
 
-  it('keeps the Developer group for viewers when OAuth Apps is enabled', () => {
+  it('keeps Trash visible to viewers in the System group', () => {
+    mocks.canCreateContent = false;
+    mocks.canManageWorkspace = false;
+    mocks.canViewBilling = false;
+
+    const { result } = renderHook(() => useWorkspaceSettingCategory());
+    const systemGroup = result.current.find(
+      (group) => group.key === WorkspaceSettingsGroupKey.System,
+    );
+
+    expect(systemGroup?.items.map((item) => item.key)).toContain(WorkspaceSettingsTabs.Trash);
+  });
+
+  it('keeps the System group for viewers when OAuth Apps is enabled', () => {
     mocks.canCreateContent = false;
     mocks.canManageWorkspace = false;
     useUserStore.setState({
@@ -135,12 +147,13 @@ describe('workspace settings useCategory', () => {
     });
 
     const { result } = renderHook(() => useWorkspaceSettingCategory());
-    const developerGroup = result.current.find(
-      (group) => group.key === WorkspaceSettingsGroupKey.Developer,
+    const systemGroup = result.current.find(
+      (group) => group.key === WorkspaceSettingsGroupKey.System,
     );
 
-    expect(developerGroup?.items.map((item) => item.key)).toEqual([
+    expect(systemGroup?.items.map((item) => item.key)).toEqual([
       WorkspaceSettingsTabs.OAuthApps,
+      WorkspaceSettingsTabs.Trash,
     ]);
   });
 

@@ -123,7 +123,7 @@ describe('DocumentService', () => {
     mockFileModel = {
       create: vi.fn(),
       delete: vi.fn(),
-      findById: vi.fn(),
+      findById: vi.fn().mockResolvedValue({ id: 'file-1' }),
       update: vi.fn(),
     };
 
@@ -1696,6 +1696,7 @@ describe('DocumentService', () => {
           source: 's3://bucket/test.pdf',
           sourceType: 'file',
         }),
+        mockDb,
       );
       expect(mockCleanup).toHaveBeenCalled();
       expect(result).toEqual({ id: 'doc-1', title: 'My Doc' });
@@ -1721,6 +1722,7 @@ describe('DocumentService', () => {
 
       expect(mockDocumentModel.create).toHaveBeenCalledWith(
         expect.objectContaining({ title: 'document' }),
+        mockDb,
       );
     });
 
@@ -1746,7 +1748,28 @@ describe('DocumentService', () => {
         expect.objectContaining({
           content: 'Page one contentPage two content',
         }),
+        mockDb,
       );
+    });
+
+    it('should not create a page after its source file was trashed', async () => {
+      vi.mocked(loadFile).mockResolvedValue({
+        content: 'Content',
+        fileType: 'pdf',
+        metadata: {},
+        pages: undefined,
+        totalCharCount: 7,
+        totalLineCount: 1,
+      } as any);
+      mockFileModel.findById.mockResolvedValue(undefined);
+
+      await expect(service.parseDocument('file-1')).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+        message: 'File not found',
+      });
+
+      expect(mockDocumentModel.create).not.toHaveBeenCalled();
+      expect(mockCleanup).toHaveBeenCalled();
     });
 
     it('should call cleanup even when parsing fails', async () => {
@@ -1796,6 +1819,7 @@ describe('DocumentService', () => {
           source: 's3://bucket/readme.md',
           sourceType: 'file',
         }),
+        mockDb,
       );
       expect(mockCleanup).toHaveBeenCalled();
       expect(result).toEqual({ id: 'doc-1', title: 'Readme' });
@@ -1816,6 +1840,7 @@ describe('DocumentService', () => {
 
       expect(mockDocumentModel.create).toHaveBeenCalledWith(
         expect.objectContaining({ title: 'readme' }),
+        mockDb,
       );
     });
 
@@ -1888,10 +1913,10 @@ describe('DocumentService', () => {
 
       const result = await scopedService.parseFile('file-1');
 
-      expect(executeSpy).toHaveBeenCalledTimes(1);
+      expect(executeSpy).toHaveBeenCalledTimes(2);
       // Render the statement the way the driver receives it, so the assertion
       // covers the real SQL and its bound parameter.
-      const lockStatement = new PgDialect().sqlToQuery(executeSpy.mock.calls[0][0]);
+      const lockStatement = new PgDialect().sqlToQuery(executeSpy.mock.calls[1][0]);
       expect(lockStatement.sql).toContain('pg_advisory_xact_lock');
       // The key is derived from the file, so different files take different keys.
       expect(lockStatement.params).toEqual(['parseFile:file-1']);
@@ -1908,13 +1933,33 @@ describe('DocumentService', () => {
       expect(mockDocumentModel.create).not.toHaveBeenCalled();
       // Both have to happen after the lock is held — re-checking before it would
       // leave the same window open.
-      expect(executeSpy.mock.invocationCallOrder[0]).toBeLessThan(
+      expect(executeSpy.mock.invocationCallOrder[1]).toBeLessThan(
         transactionModel.findByFileId.mock.invocationCallOrder[0],
       );
-      expect(executeSpy.mock.invocationCallOrder[0]).toBeLessThan(
+      expect(executeSpy.mock.invocationCallOrder[1]).toBeLessThan(
         transactionModel.create.mock.invocationCallOrder[0],
       );
       expect(result).toEqual({ id: 'doc-1' });
+    });
+
+    it('does not publish a parse result after the source file was trashed', async () => {
+      vi.mocked(loadFile).mockResolvedValue({
+        content: 'Content',
+        fileType: 'markdown',
+        metadata: {},
+        pages: undefined,
+        totalCharCount: 7,
+        totalLineCount: 1,
+      } as any);
+      mockFileModel.findById.mockResolvedValue(undefined);
+
+      await expect(service.parseFile('file-1')).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+        message: 'File not found',
+      });
+
+      expect(mockDocumentModel.create).not.toHaveBeenCalled();
+      expect(mockCleanup).toHaveBeenCalled();
     });
 
     it('should return the document another request published while this parse ran', async () => {
@@ -1967,6 +2012,7 @@ describe('DocumentService', () => {
         expect.objectContaining({
           content: contentWithPageTags,
         }),
+        mockDb,
       );
     });
   });

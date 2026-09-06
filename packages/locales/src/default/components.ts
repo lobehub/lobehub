@@ -21,25 +21,25 @@ export default {
     'Split the file into multiple text chunks and embedding them for semantic search and file dialogue.',
   'FileManager.actions.chunkingUnsupported': 'This file does not support chunking.',
   'FileManager.actions.confirmDelete':
-    'You are about to delete this file. Once deleted, it cannot be recovered. Please confirm your action.',
+    'Move this file to Trash? It can be restored for 30 days before it is permanently deleted.',
   'FileManager.actions.confirmDeleteFolder':
-    'You are about to delete this folder and all of its contents. This action cannot be undone. Please confirm your decision.',
+    'Move this folder and its contents to Trash? They can be restored for 30 days before permanent deletion.',
   'FileManager.actions.confirmDeleteAllFiles':
-    'You are about to delete all results in the current view. Once deleted, they cannot be recovered. Please confirm your action.',
+    'Move all results in the current view to Trash? They can be restored for 30 days.',
   'FileManager.actions.confirmDeleteAllOwnFiles':
-    'You are about to delete all results you created in the current view. Items created by other Workspace members will remain. Once deleted, they cannot be recovered.',
+    'Move all results you created in the current view to Trash? Items created by other Workspace members will remain, and yours can be restored for 30 days.',
   'FileManager.actions.confirmDeleteAllWorkspaceAcknowledge':
-    "I understand that this permanently deletes other members' data.",
+    "I understand that this moves other members' data to Trash.",
   'FileManager.actions.confirmDeleteAllWorkspaceFiles':
-    'You are about to delete every result in the current Workspace view, including items uploaded by other members. This action cannot be undone.',
+    'Move every result in the current Workspace view to Trash, including items uploaded by other members? They can be restored for 30 days.',
   'FileManager.actions.confirmDeleteMultiFiles':
-    'You are about to delete the selected {{count}} files. Once deleted, they cannot be recovered. Please confirm your action.',
+    'Move the selected {{count}} item(s) to Trash? They can be restored for 30 days.',
   'FileManager.actions.confirmRemoveFromLibrary':
     "You're about to remove {{count}} selected file(s) from the Library. They'll still be available in All Files. Confirm to continue.",
   'FileManager.actions.copyUrl': 'Copy Link',
   'FileManager.actions.copyUrlSuccess': 'File url copied successfully.',
   'FileManager.actions.createChunkingTask': 'Preparing...',
-  'FileManager.actions.deleteSuccess': 'File deleted successfully.',
+  'FileManager.actions.deleteSuccess': 'Moved to Trash.',
   'FileManager.actions.deleteAll': 'Delete All Items',
   'FileManager.actions.deleteAllOwn': 'Delete All Items I Created',
   'FileManager.actions.downloading': 'Downloading file...',

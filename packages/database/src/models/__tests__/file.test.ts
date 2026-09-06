@@ -17,6 +17,7 @@ import {
   knowledgeBases,
   messages,
   messagesFiles,
+  resourcePermissions,
   sessions,
   topics,
   users,
@@ -229,6 +230,54 @@ describe('FileModel', () => {
         where: eq(documents.userId, userId),
       });
       expect(remainingDocs).toHaveLength(0);
+    });
+
+    it('removes ACL rows for a mirror document deleted with a workspace file', async () => {
+      const workspaceId = 'file-delete-acl-workspace';
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Delete ACL',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      const workspaceFileModel = new FileModel(serverDB, userId, workspaceId);
+      const file = await workspaceFileModel.create({
+        fileType: 'application/pdf',
+        name: 'delete-acl.pdf',
+        size: 100,
+        url: 'https://example.com/delete-acl.pdf',
+        visibility: 'public',
+      });
+      const [document] = await serverDB
+        .insert(documents)
+        .values({
+          fileId: file.id,
+          fileType: 'application/pdf',
+          source: 'delete-acl.pdf',
+          sourceType: 'file',
+          totalCharCount: 0,
+          totalLineCount: 0,
+          userId,
+          visibility: 'public',
+          workspaceId,
+        })
+        .returning();
+      await serverDB.insert(resourcePermissions).values({
+        accessLevel: 'edit',
+        createdBy: userId,
+        resourceId: document.id,
+        resourceType: 'document',
+        workspaceId,
+      });
+
+      await workspaceFileModel.delete(file.id);
+
+      expect(
+        await serverDB
+          .select()
+          .from(resourcePermissions)
+          .where(eq(resourcePermissions.resourceId, document.id)),
+      ).toEqual([]);
     });
 
     it('should NOT delete non-mirror documents, only null out their fileId', async () => {
@@ -524,6 +573,60 @@ describe('FileModel', () => {
       expect(exclusiveGlobalFile).toBeUndefined();
     });
 
+    it('keeps database rows intact when persisting cleanup state fails', async () => {
+      await fileModel.createGlobalFile({
+        creator: userId,
+        fileType: 'text/plain',
+        hashId: 'retryable-hash',
+        size: 100,
+        url: 'https://example.com/retryable.txt',
+      });
+      const file = await fileModel.create({
+        fileHash: 'retryable-hash',
+        fileType: 'text/plain',
+        name: 'retryable.txt',
+        size: 100,
+        url: 'https://example.com/retryable.txt',
+      });
+      const persistCleanup = vi.fn().mockRejectedValue(new Error('registry unavailable'));
+
+      await expect(
+        fileModel.deleteMany([file.id], true, {
+          beforeCommitGlobalFileDelete: persistCleanup,
+        }),
+      ).rejects.toThrow('registry unavailable');
+
+      expect(persistCleanup).toHaveBeenCalledWith(expect.anything(), [
+        expect.objectContaining({ id: file.id, url: 'https://example.com/retryable.txt' }),
+      ]);
+      expect(await serverDB.query.files.findFirst({ where: eq(files.id, file.id) })).toBeDefined();
+      expect(
+        await serverDB.query.globalFiles.findFirst({
+          where: eq(globalFiles.hashId, 'retryable-hash'),
+        }),
+      ).toBeDefined();
+    });
+
+    it('only hard-deletes files that are still trashed when required', async () => {
+      const liveFile = await fileModel.create({
+        fileType: 'text/plain',
+        name: 'restored.txt',
+        size: 100,
+        url: 'https://example.com/restored.txt',
+      });
+
+      expect(await fileModel.deleteMany([liveFile.id], false, { onlyTrashed: true })).toEqual([]);
+      expect(
+        await serverDB.query.files.findFirst({ where: eq(files.id, liveFile.id) }),
+      ).toBeDefined();
+
+      await fileModel.softDelete([liveFile.id], { deletedAt: new Date() });
+      await fileModel.deleteMany([liveFile.id], false, { onlyTrashed: true });
+      expect(
+        await serverDB.query.files.findFirst({ where: eq(files.id, liveFile.id) }),
+      ).toBeUndefined();
+    });
+
     it('should delete mirror documents and asyncTasks for all files in batch', async () => {
       const [chunkTask1] = await serverDB
         .insert(asyncTasks)
@@ -580,6 +683,54 @@ describe('FileModel', () => {
       });
       expect(remainingDocs).toHaveLength(0);
       expect(remainingTasks).toHaveLength(0);
+    });
+
+    it('removes ACL rows for mirror documents deleted with a workspace file batch', async () => {
+      const workspaceId = 'file-batch-acl-workspace';
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Batch ACL',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      const workspaceFileModel = new FileModel(serverDB, userId, workspaceId);
+      const file = await workspaceFileModel.create({
+        fileType: 'application/pdf',
+        name: 'batch-acl.pdf',
+        size: 100,
+        url: 'https://example.com/batch-acl.pdf',
+        visibility: 'public',
+      });
+      const [document] = await serverDB
+        .insert(documents)
+        .values({
+          fileId: file.id,
+          fileType: 'application/pdf',
+          source: 'batch-acl.pdf',
+          sourceType: 'file',
+          totalCharCount: 0,
+          totalLineCount: 0,
+          userId,
+          visibility: 'public',
+          workspaceId,
+        })
+        .returning();
+      await serverDB.insert(resourcePermissions).values({
+        accessLevel: 'edit',
+        createdBy: userId,
+        resourceId: document.id,
+        resourceType: 'document',
+        workspaceId,
+      });
+
+      await workspaceFileModel.deleteMany([file.id]);
+
+      expect(
+        await serverDB
+          .select()
+          .from(resourcePermissions)
+          .where(eq(resourcePermissions.resourceId, document.id)),
+      ).toEqual([]);
     });
   });
 
@@ -1685,6 +1836,18 @@ describe('FileModel', () => {
       const result = await FileModel.getFileById(serverDB, 'non-existent');
       expect(result).toBeUndefined();
     });
+
+    it('hides trashed files from public lookup', async () => {
+      const { id } = await fileModel.create({
+        fileType: 'text/plain',
+        name: 'trashed-file.txt',
+        size: 100,
+        url: 'https://example.com/trashed-file.txt',
+      });
+      await fileModel.softDelete([id], { deletedAt: new Date() });
+
+      expect(await FileModel.getFileById(serverDB, id)).toBeUndefined();
+    });
   });
 
   describe('findByIds', () => {
@@ -1786,6 +1949,23 @@ describe('FileModel', () => {
     it('returns an empty array when the topic has no associated files', async () => {
       const result = await fileModel.findFilesToInitInSandbox(topicId);
       expect(result).toEqual([]);
+    });
+
+    it.each([
+      ['message', 'sf-msg'],
+      ['session', 'sf-sess'],
+    ] as const)('excludes a trashed %s attachment', async (association, fileId) => {
+      if (association === 'message') {
+        await serverDB.insert(messagesFiles).values({ fileId, messageId: 'sandbox-msg-1', userId });
+      } else {
+        await serverDB.insert(filesToSessions).values({ fileId, sessionId, userId });
+      }
+      await serverDB
+        .update(files)
+        .set({ deletedAt: new Date(), isDeleted: true })
+        .where(eq(files.id, fileId));
+
+      await expect(fileModel.findFilesToInitInSandbox(topicId)).resolves.toEqual([]);
     });
 
     it('does not return files belonging to another user', async () => {

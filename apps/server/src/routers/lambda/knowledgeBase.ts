@@ -4,7 +4,6 @@ import { z } from 'zod';
 import { businessFileTransferStorageCheck } from '@/business/server/lambda-routers/file';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
-import { serverDBEnv } from '@/config/db';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
@@ -12,7 +11,7 @@ import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { FileService } from '@/server/services/file';
+import { TrashService } from '@/server/services/trash';
 import {
   getWorkspaceScopedPermissionMatches,
   hasWorkspaceScopedPermission,
@@ -96,6 +95,7 @@ const knowledgeBaseProcedure = wsCompatProcedure.use(serverDatabase).use(async (
       documentModel: new DocumentModel(ctx.serverDB, ctx.userId, wsId),
       fileModel: new FileModel(ctx.serverDB, ctx.userId, wsId),
       knowledgeBaseModel: new KnowledgeBaseModel(ctx.serverDB, ctx.userId, wsId),
+      trashService: new TrashService(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
@@ -330,26 +330,9 @@ export const knowledgeBaseRouter = router({
         ctx,
         await ctx.knowledgeBaseModel.query(),
       );
-      // Delete sequentially so a file shared by multiple target libraries is
-      // re-evaluated after each membership disappears. Parallel preflights can
-      // classify it as shared in every call and leave it orphaned.
-      const results = [];
-      for (const knowledgeBase of knowledgeBases) {
-        results.push(
-          await ctx.knowledgeBaseModel.deleteWithFiles(
-            knowledgeBase.id,
-            serverDBEnv.REMOVE_GLOBAL_FILE,
-          ),
-        );
-      }
-      const urls = results
-        .flatMap((result) => result.deletedFiles)
-        .map((file) => file.url)
-        .filter(Boolean) as string[];
-      if (urls.length > 0) {
-        const fileService = new FileService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
-        await fileService.deleteFiles(urls);
-      }
+      await ctx.trashService.trashKnowledgeBases(
+        knowledgeBases.map((knowledgeBase) => knowledgeBase.id),
+      );
     }),
 
   removeFilesFromKnowledgeBase: knowledgeBaseProcedure
@@ -381,18 +364,7 @@ export const knowledgeBaseRouter = router({
         workspaceId: existing.workspaceId ?? null,
       });
 
-      const result = await ctx.knowledgeBaseModel.deleteWithFiles(
-        input.id,
-        serverDBEnv.REMOVE_GLOBAL_FILE,
-      );
-
-      if (result.deletedFiles.length > 0) {
-        const fileService = new FileService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
-        const urls = result.deletedFiles.map((f) => f.url).filter(Boolean) as string[];
-        if (urls.length > 0) {
-          await fileService.deleteFiles(urls);
-        }
-      }
+      await ctx.trashService.trashKnowledgeBases([input.id]);
     }),
 
   transferKnowledgeBase: knowledgeBaseProcedure

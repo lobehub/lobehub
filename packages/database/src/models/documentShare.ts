@@ -4,6 +4,7 @@ import { and, eq, sql } from 'drizzle-orm';
 
 import { documents, documentShares, users } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { notTrashed } from '../utils/softDelete';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export interface DocumentShareAccessResult {
@@ -137,7 +138,7 @@ export class DocumentShareModel {
       .from(documents)
       .leftJoin(documentShares, eq(documentShares.documentId, documents.id))
       .leftJoin(users, eq(users.id, documents.userId))
-      .where(eq(documents.id, documentId))
+      .where(and(eq(documents.id, documentId), notTrashed(documents.isDeleted)))
       .limit(1);
 
     return result[0] || null;

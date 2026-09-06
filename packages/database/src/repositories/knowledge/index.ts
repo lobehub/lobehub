@@ -35,6 +35,10 @@ import { FileModel } from '../../models/file';
 import { DOCUMENT_FOLDER_TYPE, documents, files, knowledgeBaseFiles, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { buildDocumentCategoryFilter, buildFileCategoryFilter } from '../../utils/fileTypeCategory';
+import {
+  excludeRestrictedDocument,
+  excludeRestrictedFile,
+} from '../../utils/restrictedKnowledgeBase';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
 /**
@@ -243,6 +247,8 @@ interface KnowledgeQueryParams extends QueryFileListParams {
    * dropped from cross-KB listings; never populated from client input.
    */
   excludeKnowledgeBaseIds?: string[];
+  /** Deleted KBs; only otherwise-unshared resources are hidden. */
+  excludeTrashedKnowledgeBaseIds?: string[];
   /**
    * Include full document bodies in the result. List and bulk-operation callers
    * should disable this and load content through the document detail endpoint.
@@ -427,6 +433,7 @@ export class KnowledgeRepo {
     sortType,
     sorter,
     excludeKnowledgeBaseIds,
+    excludeTrashedKnowledgeBaseIds,
     includeContent = true,
     includeContentPreview = false,
     knowledgeBaseId,
@@ -473,6 +480,11 @@ export class KnowledgeRepo {
         !knowledgeBaseId && excludeKnowledgeBaseIds?.length
           ? this.notInKnowledgeBases(excludeKnowledgeBaseIds)
           : undefined,
+        !knowledgeBaseId && excludeTrashedKnowledgeBaseIds?.length
+          ? excludeRestrictedFile(this.db, f.id, this.scope(), {
+              trashedKnowledgeBaseIds: excludeTrashedKnowledgeBaseIds,
+            })
+          : undefined,
       ],
       knowledgeBaseId,
       sourceFilter,
@@ -497,6 +509,14 @@ export class KnowledgeRepo {
         knowledgeBaseId ? eq(d.knowledgeBaseId, knowledgeBaseId) : undefined,
         !knowledgeBaseId && excludeKnowledgeBaseIds?.length
           ? or(isNull(d.knowledgeBaseId), notInArray(d.knowledgeBaseId, excludeKnowledgeBaseIds))
+          : undefined,
+        !knowledgeBaseId && excludeTrashedKnowledgeBaseIds?.length
+          ? excludeRestrictedDocument(
+              this.db,
+              { fileId: d.fileId, knowledgeBaseId: d.knowledgeBaseId },
+              this.scope(),
+              { trashedKnowledgeBaseIds: excludeTrashedKnowledgeBaseIds },
+            )
           : undefined,
       ],
       includeContent,

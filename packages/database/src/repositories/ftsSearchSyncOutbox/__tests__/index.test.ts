@@ -8,7 +8,14 @@ import { PgDialect } from 'drizzle-orm/pg-core';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { agents, ftsSearchSyncOutbox, users } from '../../../schemas';
+import {
+  agents,
+  documents,
+  files,
+  ftsSearchSyncOutbox,
+  knowledgeBases,
+  users,
+} from '../../../schemas';
 import { FtsSearchDocumentBuilder } from '../../ftsSearchDocument';
 import { FtsSearchSyncOutboxRepository } from '..';
 import {
@@ -561,6 +568,66 @@ describe.sequential('FtsSearchSyncOutboxRepository', () => {
         .select({ documentId: ftsSearchSyncOutbox.documentId, entity: ftsSearchSyncOutbox.entity })
         .from(ftsSearchSyncOutbox),
     ).resolves.toEqual([{ documentId: 'updated-at-agent', entity: 'agents' }]);
+  });
+
+  it('prioritizes Resource soft deletes so Elasticsearch receives tombstones promptly', async () => {
+    await db.insert(files).values({
+      fileType: 'text/plain',
+      id: 'soft-deleted-file',
+      name: 'file.txt',
+      size: 1,
+      url: 'https://example.com/file.txt',
+      userId: USER_ID,
+    });
+    await db.insert(knowledgeBases).values({
+      id: 'soft-deleted-knowledge-base',
+      name: 'Knowledge base',
+      userId: USER_ID,
+    });
+    await db.insert(documents).values({
+      fileType: 'text/plain',
+      id: 'soft-deleted-document',
+      source: 'https://example.com/document.txt',
+      sourceType: 'file',
+      title: 'Document',
+      totalCharCount: 0,
+      totalLineCount: 0,
+      userId: USER_ID,
+    });
+    await db.delete(ftsSearchSyncOutbox);
+
+    const deletedAt = new Date('2026-09-04T00:00:00.000Z');
+    await db
+      .update(files)
+      .set({ deletedAt, isDeleted: true })
+      .where(eq(files.id, 'soft-deleted-file'));
+    await db
+      .update(knowledgeBases)
+      .set({ deletedAt, isDeleted: true })
+      .where(eq(knowledgeBases.id, 'soft-deleted-knowledge-base'));
+    await db
+      .update(documents)
+      .set({ deletedAt, isDeleted: true })
+      .where(eq(documents.id, 'soft-deleted-document'));
+
+    await expect(
+      db
+        .select({
+          documentId: ftsSearchSyncOutbox.documentId,
+          entity: ftsSearchSyncOutbox.entity,
+          priority: ftsSearchSyncOutbox.priority,
+        })
+        .from(ftsSearchSyncOutbox)
+        .orderBy(ftsSearchSyncOutbox.entity),
+    ).resolves.toEqual([
+      { documentId: 'soft-deleted-document', entity: 'documents', priority: 0 },
+      { documentId: 'soft-deleted-file', entity: 'files', priority: 0 },
+      {
+        documentId: 'soft-deleted-knowledge-base',
+        entity: 'knowledgeBases',
+        priority: 0,
+      },
+    ]);
   });
 
   it('rolls the outbox entry back with the source transaction', async () => {

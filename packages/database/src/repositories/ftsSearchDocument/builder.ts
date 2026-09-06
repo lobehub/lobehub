@@ -18,6 +18,7 @@ import {
   userPersonaDocuments,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { notTrashed } from '../../utils/softDelete';
 import type {
   FtsSearchBuiltDocument,
   FtsSearchDocumentEntity,
@@ -370,11 +371,14 @@ export class FtsSearchDocumentBuilder {
       })
       .from(files)
       .where(
-        selection.ids
-          ? inArray(files.id, selection.ids)
-          : selection.afterId
-            ? gt(files.id, selection.afterId)
-            : undefined,
+        and(
+          selection.ids
+            ? inArray(files.id, selection.ids)
+            : selection.afterId
+              ? gt(files.id, selection.afterId)
+              : undefined,
+          notTrashed(files.isDeleted),
+        ),
       )
       .orderBy(asc(files.id))
       .limit(selection.limit);
@@ -425,11 +429,14 @@ export class FtsSearchDocumentBuilder {
       })
       .from(knowledgeBases)
       .where(
-        selection.ids
-          ? inArray(knowledgeBases.id, selection.ids)
-          : selection.afterId
-            ? gt(knowledgeBases.id, selection.afterId)
-            : undefined,
+        and(
+          selection.ids
+            ? inArray(knowledgeBases.id, selection.ids)
+            : selection.afterId
+              ? gt(knowledgeBases.id, selection.afterId)
+              : undefined,
+          notTrashed(knowledgeBases.isDeleted),
+        ),
       )
       .orderBy(asc(knowledgeBases.id))
       .limit(selection.limit);
@@ -928,16 +935,19 @@ export class FtsSearchDocumentBuilder {
       })
       .from(documents)
       .where(
-        selection.ids
-          ? inArray(documents.id, selection.ids)
-          : and(
-              selection.afterId
-                ? gt(documents.id, selection.afterId)
-                : selection.fromId
-                  ? gte(documents.id, selection.fromId)
-                  : undefined,
-              selection.beforeId ? lt(documents.id, selection.beforeId) : undefined,
-            ),
+        and(
+          selection.ids
+            ? inArray(documents.id, selection.ids)
+            : and(
+                selection.afterId
+                  ? gt(documents.id, selection.afterId)
+                  : selection.fromId
+                    ? gte(documents.id, selection.fromId)
+                    : undefined,
+                selection.beforeId ? lt(documents.id, selection.beforeId) : undefined,
+              ),
+          notTrashed(documents.isDeleted),
+        ),
       )
       .orderBy(asc(documents.id))
       .limit(selection.limit);

@@ -3,8 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DocumentService as DocumentServiceType } from './index';
 
 const mockMutate = vi.fn();
+const mockDeleteDocuments = vi.fn();
 
-describe('DocumentService.updateDocument', () => {
+describe('DocumentService', () => {
   let DocumentService: typeof DocumentServiceType;
   let service: DocumentServiceType;
 
@@ -13,6 +14,9 @@ describe('DocumentService.updateDocument', () => {
     vi.doMock('@/libs/trpc/client', () => ({
       lambdaClient: {
         document: {
+          deleteDocuments: {
+            mutate: mockDeleteDocuments,
+          },
           updateDocument: {
             mutate: mockMutate,
           },
@@ -86,5 +90,15 @@ describe('DocumentService.updateDocument', () => {
       2,
       expect.objectContaining({ breakAutosaveWindow: true, id: 'doc-4' }),
     );
+  });
+
+  it('sends the complete bulk deletion request for atomic validation on the server', async () => {
+    mockDeleteDocuments.mockResolvedValue(undefined);
+    const ids = Array.from({ length: 401 }, (_, index) => `document-${index}`);
+
+    await service.deleteDocuments(ids);
+
+    expect(mockDeleteDocuments).toHaveBeenCalledOnce();
+    expect(mockDeleteDocuments).toHaveBeenCalledWith({ ids });
   });
 });

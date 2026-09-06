@@ -203,18 +203,18 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
   },
   {
     createSql: `CREATE TRIGGER fts_search_sync_files
-      AFTER INSERT OR DELETE OR UPDATE OF file_type, name, size, source, updated_at, user_id, visibility, workspace_id ON public.files
+      AFTER INSERT OR DELETE OR UPDATE OF file_type, is_deleted, name, size, source, updated_at, user_id, visibility, workspace_id ON public.files
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
-        'files', 'user_id', 'visibility', 'workspace_id'
+        'files', 'is_deleted', 'user_id', 'visibility', 'workspace_id'
       )`,
     name: 'fts_search_sync_files',
     table: 'files',
   },
   {
     createSql: `CREATE TRIGGER fts_search_sync_knowledge_bases
-      AFTER INSERT OR DELETE OR UPDATE OF description, is_public, name, type, updated_at, user_id, visibility, workspace_id ON public.knowledge_bases
+      AFTER INSERT OR DELETE OR UPDATE OF description, is_deleted, is_public, name, type, updated_at, user_id, visibility, workspace_id ON public.knowledge_bases
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
-        'knowledgeBases', 'is_public', 'user_id', 'visibility', 'workspace_id'
+        'knowledgeBases', 'is_deleted', 'is_public', 'user_id', 'visibility', 'workspace_id'
       )`,
     name: 'fts_search_sync_knowledge_bases',
     table: 'knowledge_bases',
@@ -230,9 +230,9 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
   },
   {
     createSql: `CREATE TRIGGER fts_search_sync_documents
-      AFTER INSERT OR DELETE OR UPDATE OF content, description, file_id, file_type, knowledge_base_id, parent_id, slug, source_type, title, total_char_count, updated_at, user_id, visibility, workspace_id ON public.documents
+      AFTER INSERT OR DELETE OR UPDATE OF content, description, file_id, file_type, is_deleted, knowledge_base_id, parent_id, slug, source_type, title, total_char_count, updated_at, user_id, visibility, workspace_id ON public.documents
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
-        'documents', 'user_id', 'visibility', 'workspace_id'
+        'documents', 'is_deleted', 'user_id', 'visibility', 'workspace_id'
       )`,
     name: 'fts_search_sync_documents',
     table: 'documents',
@@ -343,16 +343,27 @@ export const normalizeFtsSearchSyncCaptureDefinition = (definition: string) => {
   });
 };
 
-/** Reconstructs the only earlier trigger revision installed before this feature ships. */
-const toPreviousCaptureTriggerDefinition = (definition: string) =>
-  definition.replace(/UPDATE OF ([\w, ]+) ON /, (_, columns: string) => {
-    const previousColumns = columns
-      .split(',')
-      .map((column) => column.trim())
-      .filter((column) => column !== 'updated_at')
-      .join(', ');
-    return `UPDATE OF ${previousColumns} ON `;
-  });
+const withoutCaptureColumn = (definition: string, columnToRemove: string) =>
+  definition
+    .replace(/UPDATE OF ([\w, ]+) ON /, (_, columns: string) => {
+      const previousColumns = columns
+        .split(',')
+        .map((column) => column.trim())
+        .filter((column) => column !== columnToRemove)
+        .join(', ');
+      return `UPDATE OF ${previousColumns} ON `;
+    })
+    .replaceAll(`'${columnToRemove}', `, '');
+
+/** Reconstructs every known earlier trigger revision that may already be installed. */
+const toPreviousCaptureTriggerDefinitions = (definition: string) => {
+  const withoutTrash = withoutCaptureColumn(definition, 'is_deleted');
+  const previousDefinitions = definition.includes('is_deleted')
+    ? [withoutTrash, withoutCaptureColumn(withoutTrash, 'updated_at')]
+    : [withoutCaptureColumn(definition, 'updated_at')];
+
+  return [...new Set(previousDefinitions.map(normalizeFtsSearchSyncCaptureDefinition))];
+};
 
 const createCaptureTriggerStatement = ({ createSql }: CaptureTriggerDefinition) =>
   sql.raw(`${createSql};`);
@@ -360,14 +371,14 @@ const createCaptureTriggerStatement = ({ createSql }: CaptureTriggerDefinition) 
 export const FTS_SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS = CAPTURE_TRIGGER_DEFINITIONS.map(
   ({ createSql, name, table }) => {
     const definition = normalizeFtsSearchSyncCaptureDefinition(createSql);
-    const previousDefinition = normalizeFtsSearchSyncCaptureDefinition(
-      toPreviousCaptureTriggerDefinition(createSql),
+    const previousDefinitions = toPreviousCaptureTriggerDefinitions(createSql).filter(
+      (previousDefinition) => previousDefinition !== definition,
     );
 
     return {
       definition,
       name,
-      previousDefinitions: previousDefinition === definition ? [] : [previousDefinition],
+      previousDefinitions,
       table,
     };
   },

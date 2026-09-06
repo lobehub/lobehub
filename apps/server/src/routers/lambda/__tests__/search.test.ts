@@ -13,6 +13,15 @@ vi.mock('@/database/core/db-adaptor', () => ({
 
 vi.mock('@/server/services/ftsSearch', () => ({ createFtsSearchRepo: vi.fn() }));
 
+vi.mock('@/server/routers/lambda/_helpers/knowledgeBaseAccess', () => ({
+  getRestrictedKnowledgeBasePolicy: vi.fn().mockResolvedValue({
+    allRestrictedKnowledgeBaseIds: [],
+    liveRestrictedKnowledgeBaseIds: [],
+    trashedKnowledgeBaseIds: [],
+    trashedRestrictedKnowledgeBaseIds: [],
+  }),
+}));
+
 vi.mock('@/database/models/user', () => ({
   UserModel: Object.assign(vi.fn(), { findById: vi.fn() }),
 }));

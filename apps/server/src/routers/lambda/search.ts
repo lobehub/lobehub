@@ -7,7 +7,7 @@ import { resolveMarketUserContext, serverDatabase } from '@/libs/trpc/lambda/mid
 import { DiscoverService } from '@/server/services/discover';
 import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 
-import { getRestrictedKnowledgeBaseIds } from './_helpers/knowledgeBaseAccess';
+import { getRestrictedKnowledgeBasePolicy } from './_helpers/knowledgeBaseAccess';
 
 const MARKETPLACE_SEARCH_TYPES = new Set(['communityAgent', 'mcp', 'plugin']);
 
@@ -128,8 +128,8 @@ export const searchRouter = router({
         // this debounced search-as-you-type path.
         const needsKbExclusion =
           !type || ['file', 'folder', 'knowledgeBase', 'page'].includes(type);
-        const [excludeKnowledgeBaseIds, ftsSearchRepo] = await Promise.all([
-          needsKbExclusion ? getRestrictedKnowledgeBaseIds(ctx) : [],
+        const [restrictedPolicy, ftsSearchRepo] = await Promise.all([
+          needsKbExclusion ? getRestrictedKnowledgeBasePolicy(ctx) : undefined,
           createFtsSearchRepo({
             db: ctx.serverDB,
             userId: ctx.userId,
@@ -137,7 +137,27 @@ export const searchRouter = router({
             workspaceId: ctx.workspaceId ?? undefined,
           }),
         ]);
-        searchPromises.push(ftsSearchRepo.search({ ...input, excludeKnowledgeBaseIds }));
+        const excludeKnowledgeBaseRootIds = restrictedPolicy
+          ? [
+              ...new Set([
+                ...restrictedPolicy.liveRestrictedKnowledgeBaseIds,
+                ...restrictedPolicy.trashedKnowledgeBaseIds,
+              ]),
+            ]
+          : [];
+        const restrictedFilters = restrictedPolicy
+          ? {
+              excludeKnowledgeBaseIds: restrictedPolicy.liveRestrictedKnowledgeBaseIds,
+              excludeTrashedKnowledgeBaseIds: restrictedPolicy.trashedKnowledgeBaseIds,
+              ...(excludeKnowledgeBaseRootIds.length > 0 ? { excludeKnowledgeBaseRootIds } : {}),
+            }
+          : { excludeKnowledgeBaseIds: [] };
+        searchPromises.push(
+          ftsSearchRepo.search({
+            ...input,
+            ...restrictedFilters,
+          }),
+        );
       }
 
       // Marketplace searches: see `includeMarketplace` on the input schema —

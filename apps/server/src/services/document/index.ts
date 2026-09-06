@@ -7,12 +7,17 @@ import { documents, files } from '@lobechat/database/schemas';
 import { loadFile, UnsupportedFileTypeError } from '@lobechat/file-loaders';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import isEqual from 'fast-deep-equal';
 
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
+import type { Transaction } from '@/database/type';
+import {
+  lockDocumentHierarchy,
+  lockFileDocumentRelation,
+} from '@/database/utils/documentHierarchy';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { isValidEditorData } from '@/libs/editor/isValidEditorData';
 import { normalizeEditorDataDiffNodes } from '@/libs/editor/normalizeDiffNodes';
@@ -166,13 +171,17 @@ export class DocumentService {
     }
     if (!resolvedVisibility && this.workspaceId) resolvedVisibility = 'private';
 
-    let fileId: string | null = null;
+    const createRows = async (db: LobeChatDatabase, trx?: Transaction) => {
+      const fileModel = trx ? new FileModel(db, this.userId, this.workspaceId) : this.fileModel;
+      const documentModel = trx
+        ? new DocumentModel(db, this.userId, this.workspaceId, this.callerAgentVisibility)
+        : this.documentModel;
+      let fileId: string | null = null;
 
-    // If creating in a knowledge base, create a corresponding file record
-    // BUT skip for folders - folders should only exist in the documents table
-    if (knowledgeBaseId && fileType !== CUSTOM_FOLDER_FILE_TYPE) {
-      const file = await this.fileModel.create(
-        {
+      // If creating in a knowledge base, create a corresponding file record
+      // BUT skip for folders - folders should only exist in the documents table
+      if (knowledgeBaseId && fileType !== CUSTOM_FOLDER_FILE_TYPE) {
+        const fileParams = {
           fileType,
           knowledgeBaseId,
           metadata,
@@ -181,38 +190,42 @@ export class DocumentService {
           size: totalCharCount,
           url: `internal://document/placeholder`, // Placeholder URL
           ...(resolvedVisibility ? { visibility: resolvedVisibility } : {}),
-        },
-        false, // Do not insert to global files
-      );
-      fileId = file.id;
-    }
+        };
+        const file = await fileModel.create(fileParams, false);
+        fileId = file.id;
+      }
 
-    // Store knowledgeBaseId in metadata for folders (which don't have fileId)
-    const finalMetadata =
-      knowledgeBaseId && fileType === CUSTOM_FOLDER_FILE_TYPE
-        ? { ...metadata, knowledgeBaseId }
-        : metadata;
+      // Store knowledgeBaseId in metadata for folders (which don't have fileId)
+      const finalMetadata =
+        knowledgeBaseId && fileType === CUSTOM_FOLDER_FILE_TYPE
+          ? { ...metadata, knowledgeBaseId }
+          : metadata;
 
-    const document = await this.documentModel.create({
-      content,
-      editorData,
-      fileId,
-      fileType,
-      filename: title,
-      knowledgeBaseId, // Set knowledge_base_id column for all document types
-      metadata: finalMetadata,
-      pages: undefined,
-      parentId,
-      slug,
-      source: 'document',
-      sourceType: 'api',
-      title,
-      totalCharCount,
-      totalLineCount,
-      ...(resolvedVisibility ? { visibility: resolvedVisibility } : {}),
-    });
+      const documentParams = {
+        content,
+        editorData,
+        fileId,
+        fileType,
+        filename: title,
+        knowledgeBaseId, // Set knowledge_base_id column for all document types
+        metadata: finalMetadata,
+        pages: undefined,
+        parentId,
+        slug,
+        source: 'document' as const,
+        sourceType: 'api' as const,
+        title,
+        totalCharCount,
+        totalLineCount,
+        ...(resolvedVisibility ? { visibility: resolvedVisibility } : {}),
+      };
+      return documentModel.create(documentParams);
+    };
 
-    return document;
+    if (!parentId) return createRows(this.db);
+    return this.db.transaction((tx) =>
+      createRows(tx as unknown as LobeChatDatabase, tx as unknown as Transaction),
+    );
   }
 
   /**
@@ -277,6 +290,7 @@ export class DocumentService {
   async queryDocuments(params?: {
     current?: number;
     excludeKnowledgeBaseIds?: string[];
+    excludeTrashedKnowledgeBaseIds?: string[];
     fileTypes?: string[];
     pageSize?: number;
     sourceTypes?: string[];
@@ -806,7 +820,7 @@ export class DocumentService {
         cleanContent = cleanContent.replaceAll(/<page[^>]*>([\S\s]*?)<\/page>/g, '$1').trim();
       }
 
-      const document = await this.documentModel.create({
+      const documentParams = {
         content: cleanContent,
         fileId,
         fileType: CUSTOM_DOCUMENT_FILE_TYPE,
@@ -814,10 +828,20 @@ export class DocumentService {
         metadata: fileDocument.metadata,
         parentId: file.parentId,
         source: file.url,
-        sourceType: 'file',
+        sourceType: 'file' as const,
         title,
         totalCharCount: cleanContent.length,
         totalLineCount: cleanContent.split('\n').length,
+      };
+      const document = await this.db.transaction(async (tx) => {
+        const transactionDb = tx as unknown as LobeChatDatabase;
+        await lockDocumentHierarchy(transactionDb, this.userId, this.workspaceId);
+        await lockFileDocumentRelation(transactionDb, fileId);
+        if (!(await this.fileModel.findById(fileId, tx))) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
+        }
+
+        return this.documentModel.create(documentParams, tx);
       });
 
       return document as LobeDocument;
@@ -876,11 +900,14 @@ export class DocumentService {
         // itself stays outside the transaction: it downloads and reads the whole
         // file, and holding a connection that long would turn every large upload
         // into pool pressure.
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${`parseFile:${fileId}`})::bigint)`,
-        );
-
         const transactionDb = tx as unknown as LobeChatDatabase;
+        await lockDocumentHierarchy(transactionDb, this.userId, this.workspaceId);
+        await lockFileDocumentRelation(transactionDb, fileId);
+
+        if (!(await this.fileModel.findById(fileId, tx))) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
+        }
+
         const transactionDocumentModel = new DocumentModel(
           transactionDb,
           this.userId,
@@ -893,7 +920,7 @@ export class DocumentService {
         const raced = await transactionDocumentModel.findByFileId(fileId);
         if (raced) return raced;
 
-        return transactionDocumentModel.create({
+        const documentParams = {
           content: fileDocument.content,
           fileId,
           fileType: CUSTOM_DOCUMENT_FILE_TYPE, // Use custom/document for all parsed files
@@ -902,11 +929,12 @@ export class DocumentService {
           pages: fileDocument.pages,
           parentId: file.parentId,
           source: file.url,
-          sourceType: 'file',
+          sourceType: 'file' as const,
           title,
           totalCharCount: fileDocument.totalCharCount,
           totalLineCount: fileDocument.totalLineCount,
-        });
+        };
+        return transactionDocumentModel.create(documentParams, tx);
       });
 
       return document as LobeDocument;

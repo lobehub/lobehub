@@ -1,5 +1,5 @@
 import { LIBRARY_HIDDEN_FILE_SOURCES } from '@lobechat/types';
-import { and, desc, eq, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
 
 import {
   agents,
@@ -13,6 +13,7 @@ import {
 } from '../../../schemas';
 import { sanitizeBm25Query } from '../../../utils/bm25';
 import { normalizeInboxAgentMeta, normalizeInboxAgentTitle } from '../../../utils/inboxAgent';
+import { excludeRestrictedFile } from '../../../utils/restrictedKnowledgeBase';
 import { notShareVisitorMessage, notShareVisitorTopic } from '../../../utils/shareVisitor';
 import { buildWorkspaceWhere } from '../../../utils/workspace';
 import type {
@@ -322,6 +323,8 @@ export async function searchFiles(
   query: string,
   limit: number,
   excludeKbIds?: string[],
+  excludeTrashedKbIds?: string[],
+  excludeIds?: string[],
 ): Promise<FtsSearchBackendResponse<FtsSearchFileResult>> {
   const bm25Query = sanitizeBm25Query(query);
   const { db } = context;
@@ -331,6 +334,7 @@ export async function searchFiles(
       createdAt: files.createdAt,
       fileType: files.fileType,
       id: files.id,
+      isDeleted: files.isDeleted,
       name: files.name,
       score: sql<number>`paradedb.score(${files.id})`.as('score'),
       size: files.size,
@@ -345,6 +349,13 @@ export async function searchFiles(
         ne(files.fileType, 'custom/document'),
         // Hidden acceptance evidence must stay out of library search too.
         or(isNull(files.source), notInArray(files.source, LIBRARY_HIDDEN_FILE_SOURCES)),
+        excludeIds?.length ? notInArray(files.id, excludeIds) : undefined,
+        // Apply relational visibility before TopN so hidden high-scoring rows
+        // cannot consume the complete workspace candidate budget.
+        excludeRestrictedFile(db, files.id, context.scope, {
+          liveKnowledgeBaseIds: excludeKbIds,
+          trashedKnowledgeBaseIds: excludeTrashedKbIds,
+        }),
         sql`${files.name} @@@ ${bm25Query}`,
       ),
     )
@@ -369,20 +380,7 @@ export async function searchFiles(
     .leftJoin(documents, eq(hits.id, documents.fileId))
     .leftJoin(knowledgeBaseFiles, eq(hits.id, knowledgeBaseFiles.fileId))
     .where(
-      and(
-        context.liftedScopeWhere(hits.workspaceId),
-        // A file linked to any restricted KB is fully hidden. The subquery
-        // avoids leaking it through a different joined membership row.
-        excludeKbIds && excludeKbIds.length > 0
-          ? notInArray(
-              hits.id,
-              db
-                .select({ fileId: knowledgeBaseFiles.fileId })
-                .from(knowledgeBaseFiles)
-                .where(inArray(knowledgeBaseFiles.knowledgeBaseId, excludeKbIds)),
-            )
-          : undefined,
-      ),
+      and(context.liftedScopeWhere(hits.workspaceId), context.liftedTrashWhere(hits.isDeleted)),
     )
     .orderBy(desc(hits.score))
     .limit(limit);
@@ -480,6 +478,7 @@ export async function searchKnowledgeBases(
       createdAt: knowledgeBases.createdAt,
       description: knowledgeBases.description,
       id: knowledgeBases.id,
+      isDeleted: knowledgeBases.isDeleted,
       name: knowledgeBases.name,
       score: sql<number>`paradedb.score(${knowledgeBases.id})`.as('score'),
       updatedAt: knowledgeBases.updatedAt,
@@ -489,6 +488,7 @@ export async function searchKnowledgeBases(
     .where(
       and(
         context.scanScopeWhere(knowledgeBases),
+        excludeIds && excludeIds.length > 0 ? notInArray(knowledgeBases.id, excludeIds) : undefined,
         sql`(${knowledgeBases.name} @@@ ${bm25Query} OR ${knowledgeBases.description} @@@ ${bm25Query})`,
       ),
     )
@@ -508,12 +508,7 @@ export async function searchKnowledgeBases(
     })
     .from(hits)
     .where(
-      and(
-        context.liftedScopeWhere(hits.workspaceId),
-        // Keep excluded knowledge bases out of the inner BM25 scan so TopN
-        // ranking remains intact; restricted rows only consume pool slots.
-        excludeIds && excludeIds.length > 0 ? notInArray(hits.id, excludeIds) : undefined,
-      ),
+      and(context.liftedScopeWhere(hits.workspaceId), context.liftedTrashWhere(hits.isDeleted)),
     )
     .orderBy(desc(hits.score))
     .limit(limit);

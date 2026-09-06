@@ -1,5 +1,5 @@
 import { CUSTOM_DOCUMENT_FILE_TYPE } from '@lobechat/const';
-import { type DocumentItem } from '@lobechat/database/schemas';
+import type { DocumentItem } from '@lobechat/database/schemas';
 
 import { lambdaClient } from '@/libs/trpc/client';
 import type {

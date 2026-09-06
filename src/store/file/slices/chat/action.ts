@@ -174,7 +174,7 @@ export class FileActionImpl {
 
     if (skipRemoveFile) return;
 
-    await fileService.removeFile(id);
+    await fileService.removeUnreferencedFile(id);
   };
 
   retryChatUploadFile = async (id: string): Promise<void> => {

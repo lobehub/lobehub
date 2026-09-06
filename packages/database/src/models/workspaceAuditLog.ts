@@ -83,7 +83,7 @@ export type WorkspaceAuditAction =
   | 'billing.payment_method_removed'
   | 'billing.default_payment_method_changed';
 
-interface CreateAuditLogParams {
+export interface CreateAuditLogParams {
   action: WorkspaceAuditAction;
   ipAddress?: string;
   metadata?: Record<string, any>;
@@ -113,19 +113,32 @@ export class WorkspaceAuditLogModel {
   }
 
   create = async (params: CreateAuditLogParams, trx?: Transaction) => {
-    const [row] = await (trx ?? this.db)
-      .insert(workspaceAuditLogs)
-      .values({
-        action: params.action,
-        ipAddress: params.ipAddress,
-        metadata: params.metadata ?? {},
-        resourceId: params.resourceId,
-        resourceType: params.resourceType,
-        userId: params.userId,
-        workspaceId: params.workspaceId,
-      })
-      .returning();
+    const [row] = await this.createMany([params], trx);
     return row;
+  };
+
+  createMany = async (paramsList: CreateAuditLogParams[], trx?: Transaction) => {
+    if (paramsList.length === 0) return [];
+    const db = trx ?? this.db;
+    const rows: (typeof workspaceAuditLogs.$inferSelect)[] = [];
+    for (let index = 0; index < paramsList.length; index += 500) {
+      const inserted = await db
+        .insert(workspaceAuditLogs)
+        .values(
+          paramsList.slice(index, index + 500).map((params) => ({
+            action: params.action,
+            ipAddress: params.ipAddress,
+            metadata: params.metadata ?? {},
+            resourceId: params.resourceId,
+            resourceType: params.resourceType,
+            userId: params.userId,
+            workspaceId: params.workspaceId,
+          })),
+        )
+        .returning();
+      rows.push(...inserted);
+    }
+    return rows;
   };
 
   list = async (params: ListAuditLogParams) => {

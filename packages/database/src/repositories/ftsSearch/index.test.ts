@@ -43,6 +43,30 @@ beforeEach(async () => {
 });
 
 describe('FtsSearchRepo candidate search', () => {
+  it('forwards caller-relative relational KB filters to each resource search', async () => {
+    const backendFtsSearch = vi.fn().mockResolvedValue({ candidates: [], items: [] });
+    const repo = new FtsSearchRepo(serverDB, userId, undefined, undefined, {
+      backend: { key: 'policy', search: backendFtsSearch },
+    });
+
+    await repo.search({
+      excludeKnowledgeBaseIds: ['kb-live-restricted'],
+      excludeTrashedKnowledgeBaseIds: ['kb-trashed-restricted'],
+      query: 'secret',
+      type: 'file',
+    });
+
+    expect(backendFtsSearch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entity: 'files',
+        filters: {
+          excludeKnowledgeBaseIds: ['kb-live-restricted'],
+          excludeTrashedKnowledgeBaseIds: ['kb-trashed-restricted'],
+        },
+      }),
+    );
+  });
+
   it('forwards candidate-only requests through the selected backend without product hydration', async () => {
     const backendFtsSearch = vi.fn().mockResolvedValue({
       candidates: [{ id: 'memory-context-1', score: 8 }],
@@ -1569,6 +1593,16 @@ describe.skipIf(!isServerDB)('FtsSearchRepo', () => {
           userId,
           workspaceId,
         },
+        {
+          deletedAt: new Date(),
+          fileType: 'text/plain',
+          isDeleted: true,
+          name: 'kubernetes-trashed-personal.txt',
+          size: 10,
+          url: 'file://kubernetes-trashed-personal.txt',
+          userId,
+          workspaceId: null,
+        },
       ]);
 
       await serverDB.insert(documents).values([
@@ -1618,6 +1652,33 @@ describe.skipIf(!isServerDB)('FtsSearchRepo', () => {
           userId,
           workspaceId,
         },
+        {
+          content: 'Kubernetes trashed personal page body',
+          deletedAt: new Date(),
+          fileType: 'custom/document',
+          filename: 'kubernetes-trashed-personal-page',
+          isDeleted: true,
+          source: 'internal://ws-page-trashed',
+          sourceType: 'file',
+          title: 'Kubernetes trashed personal page',
+          totalCharCount: 0,
+          totalLineCount: 0,
+          userId,
+          workspaceId: null,
+        },
+        {
+          deletedAt: new Date(),
+          fileType: DOCUMENT_FOLDER_TYPE,
+          filename: 'kubernetes-trashed-personal-folder',
+          isDeleted: true,
+          source: 'internal://ws-folder-trashed',
+          sourceType: 'file',
+          title: 'Kubernetes trashed personal folder',
+          totalCharCount: 0,
+          totalLineCount: 0,
+          userId,
+          workspaceId: null,
+        },
       ]);
 
       await serverDB.insert(chatGroups).values([
@@ -1628,6 +1689,13 @@ describe.skipIf(!isServerDB)('FtsSearchRepo', () => {
       await serverDB.insert(knowledgeBases).values([
         { name: 'Kubernetes personal base', userId, workspaceId: null },
         { name: 'Kubernetes workspace base', userId, workspaceId },
+        {
+          deletedAt: new Date(),
+          isDeleted: true,
+          name: 'Kubernetes trashed personal base',
+          userId,
+          workspaceId: null,
+        },
       ]);
     });
 
@@ -1657,6 +1725,14 @@ describe.skipIf(!isServerDB)('FtsSearchRepo', () => {
       expectEveryHitScopedTo(results, 'personal');
     });
 
+    it('should never surface trashed resource rows in personal mode', async () => {
+      const results = await new FtsSearchRepo(serverDB, userId).search({ query: 'Kubernetes' });
+
+      expect(results.map((result) => result.title.toLowerCase())).not.toContainEqual(
+        expect.stringContaining('trashed'),
+      );
+    });
+
     it('should never surface personal rows in workspace mode', async () => {
       const results = await new FtsSearchRepo(serverDB, userId, workspaceId).search({
         query: 'Kubernetes',
@@ -1664,6 +1740,89 @@ describe.skipIf(!isServerDB)('FtsSearchRepo', () => {
 
       expectEveryHitScopedTo(results, 'workspace');
     });
+
+    it.each([
+      ['file', 'fts-live-ranked-file'],
+      ['page', 'fts-live-ranked-page'],
+      ['folder', 'fts-live-ranked-folder'],
+    ] as const)(
+      'filters trashed-KB-linked %s candidates before applying the workspace limit',
+      async (type, liveId) => {
+        const trashedKnowledgeBaseId = `fts-trashed-ranked-kb-${type}`;
+        await serverDB.insert(knowledgeBases).values({
+          deletedAt: new Date(),
+          id: trashedKnowledgeBaseId,
+          isDeleted: true,
+          name: `Saturation probe ${type} bin`,
+          userId,
+          workspaceId,
+        });
+
+        if (type === 'file') {
+          await serverDB.insert(files).values([
+            {
+              fileType: 'text/plain',
+              id: 'fts-blocked-ranked-file',
+              name: 'saturationprobe',
+              size: 10,
+              url: 'file://blocked-ranked-file',
+              userId,
+              workspaceId,
+            },
+            {
+              fileType: 'text/plain',
+              id: liveId,
+              name: 'saturationprobe eligible result with deliberately longer filler words',
+              size: 10,
+              url: 'file://live-ranked-file',
+              userId,
+              workspaceId,
+            },
+          ]);
+          await serverDB.insert(knowledgeBaseFiles).values({
+            fileId: 'fts-blocked-ranked-file',
+            knowledgeBaseId: trashedKnowledgeBaseId,
+            userId,
+          });
+        } else {
+          const fileType = type === 'page' ? 'custom/document' : DOCUMENT_FOLDER_TYPE;
+          await serverDB.insert(documents).values([
+            {
+              fileType,
+              id: `fts-blocked-ranked-${type}`,
+              knowledgeBaseId: trashedKnowledgeBaseId,
+              source: `internal://blocked-ranked-${type}`,
+              sourceType: 'file',
+              title: 'saturationprobe',
+              totalCharCount: 0,
+              totalLineCount: 0,
+              userId,
+              workspaceId,
+            },
+            {
+              fileType,
+              id: liveId,
+              source: `internal://live-ranked-${type}`,
+              sourceType: 'file',
+              title: 'saturationprobe eligible result with deliberately longer filler words',
+              totalCharCount: 0,
+              totalLineCount: 0,
+              userId,
+              workspaceId,
+            },
+          ]);
+        }
+
+        const results = await new FtsSearchRepo(serverDB, userId, workspaceId).search({
+          excludeTrashedKnowledgeBaseIds: [trashedKnowledgeBaseId],
+          limitPerType: 1,
+          query: 'saturationprobe',
+          type,
+        });
+
+        expect(results.map((result) => result.id)).toEqual([liveId]);
+      },
+    );
 
     it('keeps agent-scoped search exact in workspace mode', async () => {
       const results = await new FtsSearchRepo(serverDB, userId, workspaceId).search({

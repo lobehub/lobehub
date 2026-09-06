@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, inArray, isNull, ne, notInArray, or, sum } from 'drizzle-orm';
 
-import type { DocumentItem, NewDocument } from '../schemas';
+import type { DocumentItem, NewDocument, TrashDetachedEdge } from '../schemas';
 import {
   DOCUMENT_FOLDER_TYPE,
   documentCommentMentions,
@@ -8,10 +8,18 @@ import {
   documentLikes,
   documents,
   files,
-  knowledgeBaseFiles,
   works,
 } from '../schemas';
-import type { LobeChatDatabase } from '../type';
+import type { LobeChatDatabase, Transaction } from '../type';
+import { lockDocumentHierarchy } from '../utils/documentHierarchy';
+import { excludeRestrictedDocument } from '../utils/restrictedKnowledgeBase';
+import {
+  isTrashed,
+  notTrashed,
+  restoreStamp,
+  type SoftDeleteOptions,
+  trashStamp,
+} from '../utils/softDelete';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export interface QueryDocumentParams {
@@ -22,6 +30,8 @@ export interface QueryDocumentParams {
    * pagination and totals stay correct.
    */
   excludeKnowledgeBaseIds?: string[];
+  /** Deleted restricted KBs; only otherwise-unshared content is hidden. */
+  excludeTrashedKnowledgeBaseIds?: string[];
   fileTypes?: string[];
   pageSize?: number;
   sourceTypes?: string[];
@@ -29,6 +39,7 @@ export interface QueryDocumentParams {
 
 export const DOCUMENT_TRANSFER_FOREIGN_ROWS =
   'Document subtree contains content created by other users';
+export const DOCUMENT_PARENT_NOT_FOUND = 'Parent document not found';
 
 export class DocumentModel {
   private userId: string;
@@ -57,10 +68,11 @@ export class DocumentModel {
     this.callerAgentVisibility = callerAgentVisibility;
   }
 
-  private ownership = () =>
+  private ownership = (includeTrashed?: boolean) =>
     buildWorkspaceWhere(
       {
         callerAgentVisibility: this.callerAgentVisibility,
+        includeTrashed,
         userId: this.userId,
         workspaceId: this.workspaceId,
       },
@@ -92,7 +104,10 @@ export class DocumentModel {
     });
   };
 
-  create = async (params: Omit<NewDocument, 'userId'>): Promise<DocumentItem> => {
+  create = async (
+    params: Omit<NewDocument, 'userId'>,
+    trx?: Transaction,
+  ): Promise<DocumentItem> => {
     // Workspace-mode default for visibility:
     //   - explicit visibility wins
     //   - user-authored Pages (`sourceType: 'api'`) default to
@@ -108,21 +123,43 @@ export class DocumentModel {
       visibility = 'private';
     }
 
-    const result = (await this.db
-      .insert(documents)
-      .values(
-        buildWorkspacePayload(
-          { userId: this.userId, workspaceId: this.workspaceId },
-          { ...params, ...(visibility ? { visibility } : {}) },
-        ),
-      )
-      .returning()) as DocumentItem[];
+    const insert = async (db: LobeChatDatabase): Promise<DocumentItem> => {
+      if (params.parentId) {
+        await lockDocumentHierarchy(db, this.userId, this.workspaceId);
+        const parent = await db.query.documents.findFirst({
+          where: and(eq(documents.id, params.parentId), notTrashed(documents.isDeleted)),
+        });
+        if (!parent) throw new Error(DOCUMENT_PARENT_NOT_FOUND);
+      }
 
-    return result[0]!;
+      const result = (await db
+        .insert(documents)
+        .values(
+          buildWorkspacePayload(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            { ...params, ...(visibility ? { visibility } : {}) },
+          ),
+        )
+        .returning()) as DocumentItem[];
+
+      return result[0]!;
+    };
+
+    if (trx) return insert(trx as unknown as LobeChatDatabase);
+    if (!params.parentId) return insert(this.db);
+    return this.db.transaction((tx) => insert(tx as unknown as LobeChatDatabase));
   };
 
   delete = async (id: string) => {
     return this.db.delete(documents).where(and(eq(documents.id, id), this.ownership()));
+  };
+
+  deleteMany = async (ids: string[]) => {
+    if (ids.length === 0) return [];
+    return this.db
+      .delete(documents)
+      .where(and(inArray(documents.id, ids), this.ownership()))
+      .returning({ id: documents.id });
   };
 
   deleteAll = async () => {
@@ -133,6 +170,7 @@ export class DocumentModel {
     current = 0,
     pageSize = 9999,
     excludeKnowledgeBaseIds,
+    excludeTrashedKnowledgeBaseIds,
     fileTypes,
     sourceTypes,
   }: QueryDocumentParams = {}): Promise<{
@@ -146,26 +184,16 @@ export class DocumentModel {
       conditions.push(inArray(documents.fileType, fileTypes));
     }
 
-    if (excludeKnowledgeBaseIds?.length) {
-      conditions.push(
-        or(
-          isNull(documents.knowledgeBaseId),
-          notInArray(documents.knowledgeBaseId, excludeKnowledgeBaseIds),
-        )!,
-        // Parsed-file documents leave `knowledgeBaseId` null — their KB
-        // membership lives on `fileId` → `knowledge_base_files`.
-        or(
-          isNull(documents.fileId),
-          notInArray(
-            documents.fileId,
-            this.db
-              .select({ fileId: knowledgeBaseFiles.fileId })
-              .from(knowledgeBaseFiles)
-              .where(inArray(knowledgeBaseFiles.knowledgeBaseId, excludeKnowledgeBaseIds)),
-          ),
-        )!,
-      );
-    }
+    const restrictedFilter = excludeRestrictedDocument(
+      this.db,
+      { fileId: documents.fileId, knowledgeBaseId: documents.knowledgeBaseId },
+      { userId: this.userId, workspaceId: this.workspaceId },
+      {
+        liveKnowledgeBaseIds: excludeKnowledgeBaseIds,
+        trashedKnowledgeBaseIds: excludeTrashedKnowledgeBaseIds,
+      },
+    );
+    if (restrictedFilter) conditions.push(restrictedFilter);
 
     if (sourceTypes?.length) {
       conditions.push(
@@ -244,6 +272,216 @@ export class DocumentModel {
     });
   };
 
+  findTrashedByIds = async (ids: string[]): Promise<DocumentItem[]> => {
+    if (ids.length === 0) return [];
+    return this.db
+      .select()
+      .from(documents)
+      .where(and(this.ownership(true), inArray(documents.id, ids), isTrashed(documents.isDeleted)));
+  };
+
+  /**
+   * Whether a parent is trashed inside this model's exact personal/workspace scope.
+   * This intentionally ignores workspace visibility because restoring a visible
+   * child beneath any trashed parent would create a live orphaned subtree. It
+   * returns only a boolean and must not be used to authorize or expose the parent.
+   */
+  isTrashedParent = async (id: string): Promise<boolean> => {
+    return this.hasTrashedParents([id]);
+  };
+
+  hasTrashedParents = async (ids: string[]): Promise<boolean> => {
+    if (ids.length === 0) return false;
+    const [row] = await this.db
+      .select({ id: documents.id })
+      .from(documents)
+      .where(
+        and(
+          inArray(documents.id, ids),
+          isTrashed(documents.isDeleted),
+          this.workspaceId
+            ? eq(documents.workspaceId, this.workspaceId)
+            : and(isNull(documents.workspaceId), eq(documents.userId, this.userId)),
+        ),
+      )
+      .limit(1);
+
+    return Boolean(row);
+  };
+
+  /**
+   * Whether every referenced parent still exists as a live document in this exact scope.
+   * Restore paths use this after locking the hierarchy: a parent transferred out of scope is as
+   * unusable as a trashed parent because retaining that parentId would create an unreachable row.
+   */
+  hasUnrestorableParents = async (ids: string[]): Promise<boolean> => {
+    const uniqueIds = [...new Set(ids)];
+    if (uniqueIds.length === 0) return false;
+    const rows = await this.db
+      .select({ id: documents.id })
+      .from(documents)
+      .where(
+        and(
+          inArray(documents.id, uniqueIds),
+          notTrashed(documents.isDeleted),
+          this.workspaceId
+            ? eq(documents.workspaceId, this.workspaceId)
+            : and(isNull(documents.workspaceId), eq(documents.userId, this.userId)),
+        ),
+      );
+
+    return rows.length !== uniqueIds.length;
+  };
+
+  findByFileIds = async (fileIds: string[]): Promise<DocumentItem[]> => {
+    if (fileIds.length === 0) return [];
+    return this.db
+      .select()
+      .from(documents)
+      .where(and(this.ownership(), inArray(documents.fileId, fileIds)));
+  };
+
+  softDelete = async (ids: string[], options: SoftDeleteOptions): Promise<DocumentItem[]> => {
+    if (ids.length === 0) return [];
+    return this.db
+      .update(documents)
+      .set(trashStamp(options.deletedAt))
+      .where(
+        and(
+          this.ownership(),
+          inArray(documents.id, ids),
+          options.restrictToCreator ? eq(documents.userId, this.userId) : undefined,
+        ),
+      )
+      .returning();
+  };
+
+  softDeleteSubtree = async (
+    rootId: string,
+    options: SoftDeleteOptions,
+  ): Promise<{ detachedEdges: TrashDetachedEdge[]; documents: DocumentItem[] }> => {
+    return this.softDeleteSubtrees([rootId], options);
+  };
+
+  /**
+   * Soft-delete several document trees under one hierarchy lock. Descendants
+   * shared by overlapping roots are collected and stamped only once.
+   */
+  softDeleteSubtrees = async (
+    rootIds: string[],
+    options: SoftDeleteOptions,
+  ): Promise<{ detachedEdges: TrashDetachedEdge[]; documents: DocumentItem[] }> => {
+    if (rootIds.length === 0) return { detachedEdges: [], documents: [] };
+    await lockDocumentHierarchy(this.db, this.userId, this.workspaceId);
+    const subtree = await this.collectSubtrees(rootIds);
+    if (subtree.length === 0) return { detachedEdges: [], documents: [] };
+    const ids = subtree
+      .filter((document) => !options.restrictToCreator || document.userId === this.userId)
+      .map((document) => document.id);
+    if (ids.length === 0) return { detachedEdges: [], documents: [] };
+
+    let detachedEdges: TrashDetachedEdge[] = [];
+    if (this.workspaceId) {
+      // A public folder may contain another member's private subtree. Keep
+      // retained boundary nodes reachable without reading or exposing them to
+      // the actor: move only their roots to the workspace top level, remember
+      // the original edges for restore, and leave each private subtree intact.
+      const boundaryDocuments = await this.db
+        .select({ originalParentId: documents.parentId, resourceId: documents.id })
+        .from(documents)
+        .where(
+          and(
+            buildWorkspaceWhere(
+              { userId: this.userId, workspaceId: this.workspaceId },
+              {
+                isDeleted: documents.isDeleted,
+                userId: documents.userId,
+                workspaceId: documents.workspaceId,
+              },
+            ),
+            inArray(documents.parentId, ids),
+            notInArray(documents.id, ids),
+          ),
+        )
+        .for('update');
+
+      detachedEdges = boundaryDocuments
+        .filter((edge): edge is { originalParentId: string; resourceId: string } =>
+          Boolean(edge.originalParentId),
+        )
+        .map((edge) => ({ ...edge, resourceType: 'document' }));
+
+      if (detachedEdges.length > 0) {
+        await this.db
+          .update(documents)
+          .set({ parentId: null })
+          .where(
+            inArray(
+              documents.id,
+              detachedEdges.map((edge) => edge.resourceId),
+            ),
+          );
+      }
+    }
+
+    const trashedDocuments = await this.db
+      .update(documents)
+      .set(trashStamp(options.deletedAt))
+      .where(and(this.ownership(), inArray(documents.id, ids)))
+      .returning();
+
+    return { detachedEdges, documents: trashedDocuments };
+  };
+
+  restoreDetachedParents = async (edges: TrashDetachedEdge[]): Promise<void> => {
+    if (!this.workspaceId || edges.length === 0) return;
+
+    const byParent = new Map<string, string[]>();
+    for (const edge of edges) {
+      if (edge.resourceType !== 'document') continue;
+      const ids = byParent.get(edge.originalParentId) ?? [];
+      ids.push(edge.resourceId);
+      byParent.set(edge.originalParentId, ids);
+    }
+
+    for (const [parentId, ids] of byParent) {
+      await this.db
+        .update(documents)
+        .set({ parentId })
+        .where(
+          and(
+            buildWorkspaceWhere(
+              { userId: this.userId, workspaceId: this.workspaceId },
+              {
+                isDeleted: documents.isDeleted,
+                userId: documents.userId,
+                workspaceId: documents.workspaceId,
+              },
+            ),
+            inArray(documents.id, ids),
+            isNull(documents.parentId),
+          ),
+        );
+    }
+  };
+
+  restore = async (ids: string[]): Promise<DocumentItem[]> => {
+    if (ids.length === 0) return [];
+    return this.db
+      .update(documents)
+      .set(restoreStamp())
+      .where(and(this.ownership(true), inArray(documents.id, ids), isTrashed(documents.isDeleted)))
+      .returning();
+  };
+
+  purge = async (ids: string[]) => {
+    if (ids.length === 0) return [];
+    return this.db
+      .delete(documents)
+      .where(and(this.ownership(true), inArray(documents.id, ids), isTrashed(documents.isDeleted)))
+      .returning({ id: documents.id });
+  };
+
   findByFileId = async (fileId: string) => {
     return this.db.query.documents.findFirst({
       // A file can legitimately own more than one document: `parseDocument`
@@ -282,16 +520,40 @@ export class DocumentModel {
     });
   };
 
-  update = async (id: string, value: Partial<DocumentItem>) => {
+  update = async (id: string, value: Partial<DocumentItem>, trx?: Transaction) => {
     // visibility is intentionally not updatable via this path. The only legal
     // transition is `private → public` via `publishToWorkspace`; strip any
     // incoming value so callers can't sneak around the one-way rule.
     const { visibility: _ignored, ...patch } = value;
 
-    return this.db
-      .update(documents)
-      .set({ ...patch, updatedAt: new Date() })
-      .where(and(this.ownership(), eq(documents.id, id)));
+    const update = async (db: LobeChatDatabase) => {
+      if (value.parentId !== undefined) {
+        await lockDocumentHierarchy(db, this.userId, this.workspaceId);
+        const scopedModel = new DocumentModel(
+          db,
+          this.userId,
+          this.workspaceId,
+          this.callerAgentVisibility,
+        );
+        const current = await scopedModel.findById(id);
+        if (!current) throw new Error('Document not found');
+        if (value.parentId) {
+          const parent = await db.query.documents.findFirst({
+            where: and(eq(documents.id, value.parentId), notTrashed(documents.isDeleted)),
+          });
+          if (!parent) throw new Error(DOCUMENT_PARENT_NOT_FOUND);
+        }
+      }
+
+      return db
+        .update(documents)
+        .set({ ...patch, updatedAt: new Date() })
+        .where(and(this.ownership(), eq(documents.id, id)));
+    };
+
+    if (trx) return update(trx as unknown as LobeChatDatabase);
+    if (value.parentId === undefined) return update(this.db);
+    return this.db.transaction((tx) => update(tx as unknown as LobeChatDatabase));
   };
 
   /**
@@ -334,7 +596,7 @@ export class DocumentModel {
             eq(works.resourceId, rootId),
             buildWorkspaceWhere(
               { userId: this.userId, workspaceId: this.workspaceId },
-              { userId: works.userId, workspaceId: works.workspaceId },
+              { isDeleted: works.isDeleted, userId: works.userId, workspaceId: works.workspaceId },
             ),
           ),
         );
@@ -347,28 +609,40 @@ export class DocumentModel {
    * Collect a document and all its descendants (folders + leaves) via BFS.
    * Honors the current ownership scope.
    */
-  private collectSubtree = async (
+  collectSubtree = async (
     rootId: string,
     runner: LobeChatDatabase = this.db,
   ): Promise<DocumentItem[]> => {
-    const root = await runner.query.documents.findFirst({
-      where: and(this.ownership(), eq(documents.id, rootId)),
-    });
-    if (!root) return [];
+    return this.collectSubtrees([rootId], runner);
+  };
 
-    const collected: DocumentItem[] = [root];
-    let frontier: string[] = [root.id];
+  /** Collect several document trees with one query per depth, not per root. */
+  collectSubtrees = async (
+    rootIds: string[],
+    runner: LobeChatDatabase = this.db,
+  ): Promise<DocumentItem[]> => {
+    const uniqueRootIds = [...new Set(rootIds)];
+    if (uniqueRootIds.length === 0) return [];
+
+    const roots = await runner.query.documents.findMany({
+      where: and(this.ownership(), inArray(documents.id, uniqueRootIds)),
+    });
+    if (roots.length === 0) return [];
+
+    const collected = new Map(roots.map((root) => [root.id, root]));
+    let frontier = roots.map((root) => root.id);
 
     while (frontier.length > 0) {
       const children = await runner.query.documents.findMany({
         where: and(this.ownership(), inArray(documents.parentId, frontier)),
       });
-      if (children.length === 0) break;
-      collected.push(...children);
-      frontier = children.map((c) => c.id);
+      const unseen = children.filter((child) => !collected.has(child.id));
+      if (unseen.length === 0) break;
+      for (const child of unseen) collected.set(child.id, child);
+      frontier = unseen.map((child) => child.id);
     }
 
-    return collected;
+    return [...collected.values()];
   };
 
   countFileUsageInSubtree = async (
@@ -466,6 +740,7 @@ export class DocumentModel {
     },
   ): Promise<{ documentIds: string[] }> => {
     return this.db.transaction(async (trx) => {
+      await lockDocumentHierarchy(trx as LobeChatDatabase, this.userId, this.workspaceId);
       const scopedTrx = new DocumentModel(trx as LobeChatDatabase, this.userId, this.workspaceId);
       const subtree = await scopedTrx.collectSubtree(documentId, trx as LobeChatDatabase);
       if (subtree.length === 0) throw new Error('Document not found');
@@ -578,6 +853,7 @@ export class DocumentModel {
     targetVisibility?: 'private' | 'public',
   ): Promise<{ rootId: string }> => {
     return this.db.transaction(async (trx) => {
+      await lockDocumentHierarchy(trx as LobeChatDatabase, this.userId, this.workspaceId);
       const scopedTrx = new DocumentModel(trx as LobeChatDatabase, this.userId, this.workspaceId);
       const subtree = await scopedTrx.collectSubtree(documentId, trx as LobeChatDatabase);
       if (subtree.length === 0) throw new Error('Document not found');
