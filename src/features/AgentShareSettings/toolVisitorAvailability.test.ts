@@ -10,6 +10,7 @@ import {
   getVisitorVisibleGrantedToolIds,
   runtimeManagedShareCandidateToolIds,
   setShareToolGrant,
+  sortBlockedLast,
   toggleShareToolApi,
   toggleShareToolsetGrant,
 } from './toolVisitorAvailability';
@@ -44,6 +45,34 @@ describe('runtimeManagedShareCandidateToolIds', () => {
   it('never suggests a tool the gate always blocks', () => {
     expect(runtimeManagedShareCandidateToolIds).not.toContain(KnowledgeBaseIdentifier);
     expect(runtimeManagedShareCandidateToolIds).not.toContain('lobe-local-system');
+  });
+});
+
+describe('sortBlockedLast', () => {
+  const isBlocked = (id: string) => id.startsWith('blocked-');
+
+  // Stability matters: the grantable chips/APIs must stay in the order the
+  // owner configured them (or the manifest declares them), not be reshuffled
+  // just because a blocked one sat between them.
+  it('moves blocked items last while keeping the order inside each group', () => {
+    expect(sortBlockedLast(['a', 'blocked-1', 'b', 'blocked-2', 'c'], isBlocked)).toEqual([
+      'a',
+      'b',
+      'c',
+      'blocked-1',
+      'blocked-2',
+    ]);
+  });
+
+  it('returns an empty list untouched', () => {
+    expect(sortBlockedLast([], isBlocked)).toEqual([]);
+  });
+
+  it('keeps the original order when every item is blocked', () => {
+    expect(sortBlockedLast(['blocked-1', 'blocked-2'], isBlocked)).toEqual([
+      'blocked-1',
+      'blocked-2',
+    ]);
   });
 });
 

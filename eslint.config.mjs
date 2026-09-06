@@ -206,6 +206,25 @@ export default eslint(
     },
   },
   {
+    files: ['src/components/Skeleton/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': createRestrictedImportRule({
+        paths: [
+          {
+            name: '@/components/Skeleton',
+            message:
+              'Skeleton internals must import sibling components directly to avoid a cycle through their own barrel.',
+          },
+          {
+            name: '@/components/Skeleton/index',
+            message:
+              'Skeleton internals must import sibling components directly to avoid a cycle through their own barrel.',
+          },
+        ],
+      }),
+    },
+  },
+  {
     files: ['src/features/Conversation/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': createRestrictedImportRule({

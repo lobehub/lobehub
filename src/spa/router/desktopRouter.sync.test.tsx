@@ -282,11 +282,11 @@ describe('desktop router shared definition', () => {
     // `/share/*` moved to the standalone Share app (apps/share).
     expect(webPaths).not.toContain('/share/t');
     expect(webPaths).not.toContain('/share/page');
-    // …and the agent-share visitor surface moved to `/agent/:aid`, so the old
-    // pattern stays registered on every platform only to redirect legacy links
-    // (Web, Electron, and the mobile router — see mobileRouter.test.tsx).
-    expect(webPaths).toContain('/share/agent/:slugOrId');
-    expect(electronPaths).toContain('/share/agent/:slugOrId');
+    // …and the agent-share visitor surface lives at `/a/:slugOrId`, a sibling
+    // of the main layout on every platform (Web, Electron, and the mobile
+    // router — see mobileRouter.test.tsx).
+    expect(webPaths).toContain('/a/:slugOrId');
+    expect(electronPaths).toContain('/a/:slugOrId');
     expect(webPaths).not.toContain('/verify');
     expect(webPaths).toContain('/acceptance');
     expect(webPaths).toContain('/onboarding');
@@ -516,8 +516,6 @@ describe('desktop router shared definition', () => {
     (_, factory) => {
       const matches = matchRoutes(createMainAreaRoutes(factory), '/agent/agt_1');
 
-      // The agent-share visitor page now shares this route; the branch is
-      // decided by `AgentRouteSwitch`, not by a second route pattern.
       expect(matches?.some((match) => match.route.path === ':aid')).toBe(true);
       expect(matches?.at(-1)?.params).toMatchObject({ aid: 'agt_1' });
     },
@@ -526,13 +524,16 @@ describe('desktop router shared definition', () => {
   it.each([
     ['Web', webDesktopRoutes],
     ['Electron', electronDesktopRoutes],
-  ])('%s redirects legacy /share/agent links to /agent', (_, routes) => {
-    const matches = matchRoutes(routes, '/share/agent/my-bot');
-    const element = matches?.at(-1)?.route.element as ReactElement;
+  ])(
+    '%s serves the agent-share visitor page on /a/:slugOrId outside the main layout',
+    (_, routes) => {
+      const matches = matchRoutes(routes, '/a/my-bot');
 
-    expect(matches?.at(-1)?.params).toMatchObject({ slugOrId: 'my-bot' });
-    expect((element.type as { displayName?: string }).displayName).toBe('AgentShareLegacyRedirect');
-  });
+      expect(matches).toHaveLength(1);
+      expect(matches?.[0]?.route.path).toBe('/a/:slugOrId');
+      expect(matches?.[0]?.params).toMatchObject({ slugOrId: 'my-bot' });
+    },
+  );
 
   it('keeps business resource and task routes in the shared definition', async () => {
     const [sharedSource] = await readRouterSources();

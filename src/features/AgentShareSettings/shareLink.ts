@@ -1,5 +1,7 @@
 import { AGENT_SHARE_SLUG_PATTERN, RESERVED_AGENT_SHARE_SLUGS } from '@lobechat/const';
 
+import { buildAgentShareVisitorPath } from '@/features/AgentShareVisitor/visitorPath';
+
 /**
  * Client mirror of `AgentShareModel.updateSlug`'s UUID rejection: a
  * UUID-shaped slug would be unreachable because `findBySlugOrId` resolves
@@ -43,4 +45,4 @@ export const buildAgentShareUrl = ({
   origin: string;
   shareId: string;
   slug?: string;
-}): string => `${origin}/agent/${slug || shareId}`;
+}): string => `${origin}${buildAgentShareVisitorPath(slug || shareId)}`;

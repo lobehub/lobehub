@@ -18,6 +18,9 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorFillQuaternary};
   `,
+  tabs: css`
+    border-block-end: 1px solid ${cssVar.colorBorder};
+  `,
 }));
 
 /** Breadcrumb on the left, the profile tab switcher centred — same as `NavHeader` on the page. */
@@ -75,10 +78,12 @@ const SectionSkeleton = ({
 );
 
 /**
- * Body of the share settings page: the warning notice, then the outlined
- * sections (`Section` in `AgentShareSettings/SectionLayout.tsx`) — link,
- * usage stats, permissions, limits. Reused by the page's own data-loading
- * state so the layout does not jump between route load and share fetch.
+ * Body of the share settings page: the warning notice, the link card, the
+ * access/stats tab strip, then the outlined sections of the default (access)
+ * tab — permissions and limits (`Section` in
+ * `AgentShareSettings/SectionLayout.tsx`). Reused by the page's own
+ * data-loading state so the layout does not jump between route load and share
+ * fetch.
  */
 export const AgentShareSettingsBodySkeleton = () => (
   <Flexbox aria-busy gap={16} paddingBlock={16}>
@@ -99,16 +104,11 @@ export const AgentShareSettingsBodySkeleton = () => (
       <SettingRowSkeleton control={'switch'} index={0} />
       <SkeletonBar height={36} width={'100%'} />
     </SectionSkeleton>
-    <SectionSkeleton descWidth={200} titleWidth={72}>
-      <Flexbox horizontal gap={16}>
-        {Array.from({ length: 3 }).map((_, index) => (
-          <Flexbox flex={1} gap={8} key={index}>
-            <SkeletonBar height={12} width={64} />
-            <SkeletonBar height={24} width={48 + index * 12} />
-          </Flexbox>
-        ))}
-      </Flexbox>
-    </SectionSkeleton>
+    {/* Mirrors `ShareTabs`: two underline tabs on a hairline. */}
+    <Flexbox horizontal className={styles.tabs} gap={24} paddingBlock={10}>
+      <SkeletonBar height={14} width={64} />
+      <SkeletonBar height={14} width={64} />
+    </Flexbox>
     <SectionSkeleton titleWidth={104}>
       <SettingRowSkeleton control={'switch'} index={1} />
       <SettingRowSkeleton control={'switch'} index={2} />

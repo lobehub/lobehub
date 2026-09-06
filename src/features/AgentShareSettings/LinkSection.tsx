@@ -6,6 +6,7 @@ import { CopyIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { AGENT_SHARE_VISITOR_PATH } from '@/features/AgentShareVisitor/visitorPath';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 
 import { Section } from './SectionLayout';
@@ -173,40 +174,45 @@ const LinkSection = memo<LinkSectionProps>((props) => {
     >
       {isShared ? (
         <Flexbox gap={12}>
+          {/* ONE field is the link: the editable tail of the url, prefixed by
+              the fixed origin. While the draft matches what is saved, the
+              primary action copies the live url; the moment it differs, that
+              slot becomes "save" — an unsaved slug has no url to copy yet. */}
           <Flexbox horizontal align={'center'} gap={8}>
-            <Input readOnly style={{ flex: 1 }} value={shareUrl} variant={'filled'} />
-            <Button icon={CopyIcon} type={'primary'} onClick={handleCopy}>
-              {t('share.settings.link.copy')}
-            </Button>
-          </Flexbox>
-
-          <Flexbox gap={4}>
-            <Text fontSize={12} type={'secondary'}>
-              {t('share.settings.link.slugLabel')}
-            </Text>
-            <Flexbox horizontal align={'center'} gap={8}>
-              <Input
-                disabled={savingSlug}
-                placeholder={t('share.settings.link.slugPlaceholder')}
-                prefix={`${appOrigin}/agent/`}
-                status={slugError ? 'error' : undefined}
-                style={{ flex: 1 }}
-                value={slugDraft}
-                variant={'filled'}
-                onPressEnter={handleSaveSlug}
-                onChange={(e) => {
-                  setSlugDraft(e.target.value);
-                  setSlugError('');
-                }}
-              />
-              <Button disabled={!slugDirty} loading={savingSlug} onClick={handleSaveSlug}>
+            <Input
+              disabled={savingSlug}
+              // The raw share id is the fallback path, so the empty field shows
+              // exactly where visitors would land.
+              placeholder={share?.id}
+              prefix={`${appOrigin}${AGENT_SHARE_VISITOR_PATH}/`}
+              status={slugError ? 'error' : undefined}
+              style={{ flex: 1 }}
+              value={slugDraft}
+              variant={'filled'}
+              onPressEnter={handleSaveSlug}
+              onChange={(e) => {
+                setSlugDraft(e.target.value);
+                setSlugError('');
+              }}
+              onKeyDown={(e) => {
+                if (e.key !== 'Escape' || !slugDirty) return;
+                setSlugDraft(savedSlug);
+                setSlugError('');
+              }}
+            />
+            {slugDirty ? (
+              <Button loading={savingSlug} type={'primary'} onClick={handleSaveSlug}>
                 {t('save', { ns: 'common' })}
               </Button>
-            </Flexbox>
-            <Text fontSize={12} type={slugError ? 'danger' : 'secondary'}>
-              {slugError || t('share.settings.link.slugHint')}
-            </Text>
+            ) : (
+              <Button icon={CopyIcon} type={'primary'} onClick={handleCopy}>
+                {t('share.settings.link.copy')}
+              </Button>
+            )}
           </Flexbox>
+          <Text fontSize={12} type={slugError ? 'danger' : 'secondary'}>
+            {slugError || t('share.settings.link.slugHint')}
+          </Text>
 
           <Text fontSize={12} type={'secondary'}>
             {t('share.settings.link.viewCount', { views: String(share?.userViewCount ?? 0) })}

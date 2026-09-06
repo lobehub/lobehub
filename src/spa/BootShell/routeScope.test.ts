@@ -23,8 +23,8 @@ describe('isMainLayoutLocation', () => {
   // The shell would otherwise promise chrome these pages never render — the
   // exact "logo → app-shell skeleton → logo → page" sequence this guards.
   it.each([
-    ['Web', webDesktopRoutes, ['/onboarding', '/verify-im']],
-    ['Electron', electronDesktopRoutes, ['/desktop-onboarding']],
+    ['Web', webDesktopRoutes, ['/onboarding', '/verify-im', '/a/my-bot']],
+    ['Electron', electronDesktopRoutes, ['/desktop-onboarding', '/a/my-bot']],
   ])('%s excludes standalone routes outside the main layout', (_, routes, paths) => {
     for (const pathname of paths as string[]) {
       expect(isMainLayoutLocation(routes as never, pathname), `${pathname} is standalone`).toBe(

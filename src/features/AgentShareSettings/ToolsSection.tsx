@@ -36,22 +36,23 @@ const ToolsSection = memo<ToolsSectionProps>(({ agentId, onChange, shareConfig }
   const { t } = useTranslation('agent');
 
   const agentConfig = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
-  const candidateToolIds = getShareToolCandidateIds(getActivePluginIds(agentConfig?.plugins));
+  // Only tools the owner can actually tick right now. Tools the gate refuses
+  // outright never appear (the section copy already says so), and Memory
+  // stays hidden until "allow reading my memory" is on — a chip that cannot
+  // be toggled is a dead control, not information.
+  const candidateToolIds = getShareToolCandidateIds(
+    getActivePluginIds(agentConfig?.plugins),
+  ).filter(
+    (toolId) =>
+      getShareToolAvailability(toolId, { allowReadMemory: shareConfig.allowReadMemory }) ===
+      'available',
+  );
   const selectedToolIds = getVisitorVisibleGrantedToolIds(shareConfig.toolGrants);
 
   // Two buckets, extension-manager style: what visitors already get, then what
   // else could be granted. Toggling moves a tool between them, so the owner
   // reads the effective grant at a glance instead of scanning checkboxes.
-  const enabledIds = candidateToolIds.filter(
-    (toolId) =>
-      selectedToolIds.includes(toolId) &&
-      getShareToolAvailability(toolId, { allowReadMemory: shareConfig.allowReadMemory }) ===
-        'available',
-  );
-  // Includes tools the gate always refuses: they still render below as
-  // disabled chips (so the owner learns why a configured tool cannot be
-  // shared), and the group's count must match the chips actually rendered in
-  // it — a smaller "grantable only" count reads as a rendering bug.
+  const enabledIds = candidateToolIds.filter((toolId) => selectedToolIds.includes(toolId));
   const availableIds = candidateToolIds.filter((toolId) => !enabledIds.includes(toolId));
 
   const renderTool = (toolId: string, selected: boolean) => (

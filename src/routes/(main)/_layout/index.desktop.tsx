@@ -9,7 +9,6 @@ import { Suspense } from 'react';
 import { HotkeysProvider } from 'react-hotkeys-hook';
 
 import WorkspaceContextSlot from '@/business/client/WorkspaceContextSlot';
-import { useIsAgentShareVisitorRoute } from '@/features/AgentRoute/useAgentShareVisitorRoute';
 import DesktopBrowserGatewayBridge from '@/features/DesktopBrowserGatewayBridge';
 import DesktopFileMenuBridge from '@/features/DesktopFileMenuBridge';
 import DesktopLayoutContainer from '@/features/DesktopLayoutContainer';
@@ -49,12 +48,6 @@ const Layout: FC = () => {
   const { isPWA } = usePlatform();
   const { showCloudPromotion } = useServerConfigStore(featureFlagsSelectors);
 
-  // The nav lives outside `TabHost`, so it reads the active tab's location
-  // (mirrored into the electron store) rather than the root router's — see
-  // `useActiveLocation.desktop`. A visitor has no nav data, so the panel would
-  // stay a grey skeleton; unmount it for that branch of `/agent/:aid`.
-  const isShareVisitor = useIsAgentShareVisitorRoute();
-
   useSeedTabsOnBoot();
   useWindowUrlMirror();
   useLastWorkspaceSlugSync();
@@ -88,7 +81,7 @@ const Layout: FC = () => {
             height={`calc(100% - ${TITLE_BAR_HEIGHT}px)`}
             width={'100%'}
           >
-            {!isShareVisitor && <NavPanelShell />}
+            <NavPanelShell />
             <DesktopLayoutContainer>
               <Flexbox height={'100%'} style={tabHostContainer} width={'100%'}>
                 <TabHost />
