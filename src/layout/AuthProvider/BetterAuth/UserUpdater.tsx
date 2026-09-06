@@ -7,6 +7,8 @@ import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_PREFERENCE } from '@/const/user';
 import { useSession } from '@/libs/better-auth/auth-client';
+import { setAppPainted } from '@/spa/atoms/app';
+import { removeStaticLoadingScreen } from '@/spa/loadingScreen';
 import { useUserStore } from '@/store/user';
 import { readUserDisplaySnapshot } from '@/store/user/displaySnapshot';
 import { type LobeUser } from '@/types/user';
@@ -21,6 +23,14 @@ const UserUpdater = memo(({ children }: PropsWithChildren) => {
   const status = error?.status;
   const retryable = !!error && (!status || status >= 500 || status === 408 || status === 429);
   const failed = !!error && status !== 401 && (!retryable || retryAttempt >= 3);
+  const showRecovery = failed && !isPending && !isRefetching;
+
+  useLayoutEffect(() => {
+    if (!showRecovery) return;
+    /** The recovery screen replaces the hydration gate, so it must release boot overlays. */
+    setAppPainted(true);
+    removeStaticLoadingScreen();
+  }, [showRecovery]);
 
   const betterAuthUser = session?.user;
 
@@ -92,7 +102,7 @@ const UserUpdater = memo(({ children }: PropsWithChildren) => {
   }, [betterAuthUser, error, isPending, isRefetching]);
 
   /** Keep auth unresolved on transport failures; show recovery instead of a guest page. */
-  if (failed && !isPending && !isRefetching) {
+  if (showRecovery) {
     return (
       <Flexbox
         align="center"

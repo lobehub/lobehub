@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getAppPainted, setAppPainted } from '@/spa/atoms/app';
 import { useUserStore } from '@/store/user';
 import { writeUserDisplaySnapshot } from '@/store/user/displaySnapshot';
 
@@ -177,6 +178,25 @@ describe('UserUpdater', () => {
     expect(screen.getByText('Application')).toBeTruthy();
     expect(useUserStore.getState().isSignedIn).toBe(true);
     unmount();
+  });
+
+  it('releases boot overlays when recovery replaces the cache hydration gate', () => {
+    setAppPainted(false);
+    const overlay = document.createElement('div');
+    overlay.id = 'loading-screen';
+    document.body.append(overlay);
+    useSessionMock.mockReturnValue({
+      data: null,
+      error: { status: 403 },
+      isPending: false,
+      refetch: vi.fn(),
+    });
+    const { unmount } = render(<UserUpdater />);
+    expect(document.getElementById('loading-screen')).toBeNull();
+    expect(getAppPainted()).toBe(true);
+    expect(screen.getByRole('button')).toBeTruthy();
+    unmount();
+    setAppPainted(false);
   });
 
   it('does not clear a verified user while a retry is in flight without session data', () => {
