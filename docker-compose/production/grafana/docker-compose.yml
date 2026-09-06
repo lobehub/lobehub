@@ -20,7 +20,7 @@ services:
     image: paradedb/paradedb:latest-pg17
     container_name: lobe-postgres
     ports:
-      - '5432:5432'
+      - '127.0.0.1:5432:5432'
     volumes:
       - './data:/var/lib/postgresql/data'
     environment:
@@ -90,6 +90,7 @@ services:
       - './searxng-settings.yml:/etc/searxng/settings.yml'
     environment:
       - 'SEARXNG_SETTINGS_FILE=/etc/searxng/settings.yml'
+      - 'SEARXNG_SECRET=${SEARXNG_SECRET:?SEARXNG_SECRET must be set}'
     restart: always
     networks:
       - lobe-network

@@ -12,6 +12,45 @@ export { SUPPORTED_LANGUAGES, type SupportedLanguage } from './separators';
 interface SplitterConfig {
   chunkOverlap: number;
   chunkSize: number;
+  maxChunks?: number;
+}
+
+interface ChunkBudget {
+  count: number;
+  max?: number;
+}
+
+export class DocumentChunkLimitError extends Error {
+  constructor(maxChunks: number) {
+    super(`Document chunk count exceeds maximum allowed limit of ${maxChunks}`);
+    this.name = 'DocumentChunkLimitError';
+  }
+}
+
+const appendChunk = (chunks: string[], chunk: string, budget: ChunkBudget) => {
+  if (!chunk) return;
+  if (budget.max !== undefined && budget.count >= budget.max) {
+    throw new DocumentChunkLimitError(budget.max);
+  }
+
+  chunks.push(chunk);
+  budget.count += 1;
+};
+
+function* splitBySeparator(text: string, separator: string): Generator<string> {
+  if (!separator) {
+    yield* text;
+    return;
+  }
+
+  let start = 0;
+  let index = text.indexOf(separator, start);
+  while (index !== -1) {
+    yield text.slice(start, index);
+    start = index + separator.length;
+    index = text.indexOf(separator, start);
+  }
+  yield text.slice(start);
 }
 
 /**
@@ -22,6 +61,7 @@ function splitTextWithSeparators(
   text: string,
   separators: string[],
   config: SplitterConfig,
+  budget: ChunkBudget,
 ): string[] {
   const { chunkSize, chunkOverlap } = config;
 
@@ -42,94 +82,55 @@ function splitTextWithSeparators(
     }
   }
 
-  // Split the text by the chosen separator
-  const splits = separator ? text.split(separator) : [...text];
-
-  // Merge splits into chunks respecting chunkSize
-  const goodSplits: string[] = [];
   const finalChunks: string[] = [];
-
-  for (const s of splits) {
-    if (s.length < chunkSize) {
-      goodSplits.push(s);
-    } else {
-      if (goodSplits.length > 0) {
-        const merged = mergeSplits(goodSplits, separator, config);
-        finalChunks.push(...merged);
-        goodSplits.length = 0;
-      }
-      // If this piece is still too large and we have more separators, recurse
-      if (newSeparators && newSeparators.length > 0) {
-        const subChunks = splitTextWithSeparators(s, newSeparators, config);
-        finalChunks.push(...subChunks);
-      } else {
-        finalChunks.push(s);
-      }
-    }
-  }
-
-  if (goodSplits.length > 0) {
-    const merged = mergeSplits(goodSplits, separator, config);
-    finalChunks.push(...merged);
-  }
-
-  return finalChunks;
-}
-
-/**
- * Merge small splits into chunks respecting chunkSize and chunkOverlap.
- */
-function mergeSplits(splits: string[], separator: string, config: SplitterConfig): string[] {
-  const { chunkSize, chunkOverlap } = config;
-  const chunks: string[] = [];
   const currentChunk: string[] = [];
   let total = 0;
 
-  for (const s of splits) {
-    const len = s.length;
-    const sepLen = currentChunk.length > 0 ? separator.length : 0;
+  const flushCurrentChunk = () => {
+    appendChunk(finalChunks, currentChunk.join(separator), budget);
+  };
 
-    if (total + len + sepLen > chunkSize && currentChunk.length > 0) {
-      const chunk = currentChunk.join(separator);
-      if (chunk.length > 0) {
-        chunks.push(chunk);
+  // Split and merge incrementally so hostile inputs cannot allocate the complete
+  // split/chunk arrays before the configured chunk budget is enforced.
+  for (const s of splitBySeparator(text, separator)) {
+    if (s.length < chunkSize) {
+      const separatorLength = currentChunk.length > 0 ? separator.length : 0;
+      if (total + s.length + separatorLength > chunkSize && currentChunk.length > 0) {
+        flushCurrentChunk();
+
+        while (
+          total > chunkOverlap ||
+          (total + s.length + separator.length > chunkSize && total > 0)
+        ) {
+          if (currentChunk.length === 0) break;
+          const removed = currentChunk.shift()!;
+          total -= removed.length + (currentChunk.length > 0 ? separator.length : 0);
+        }
       }
 
-      // Keep overlap: drop from the start of currentChunk until we fit in overlap
-      while (total > chunkOverlap || (total + len + separator.length > chunkSize && total > 0)) {
-        if (currentChunk.length === 0) break;
-        const removed = currentChunk.shift()!;
-        total -= removed.length + (currentChunk.length > 0 ? separator.length : 0);
+      currentChunk.push(s);
+      total += s.length + (currentChunk.length > 1 ? separator.length : 0);
+    } else {
+      if (currentChunk.length > 0) {
+        flushCurrentChunk();
+        currentChunk.length = 0;
+        total = 0;
+      }
+      // If this piece is still too large and we have more separators, recurse
+      if (newSeparators && newSeparators.length > 0) {
+        const subChunks = splitTextWithSeparators(s, newSeparators, config, budget);
+        for (const chunk of subChunks) finalChunks.push(chunk);
+      } else {
+        appendChunk(finalChunks, s, budget);
       }
     }
-
-    currentChunk.push(s);
-    total += len + (currentChunk.length > 1 ? separator.length : 0);
   }
 
-  const lastChunk = currentChunk.join(separator);
-  if (lastChunk.length > 0) {
-    chunks.push(lastChunk);
+  if (currentChunk.length > 0) {
+    flushCurrentChunk();
   }
 
-  return chunks;
-}
-
-/**
- * Calculate line location metadata for a chunk within the original text.
- */
-function getLineLocation(fullText: string, chunk: string): { from: number; to: number } {
-  const index = fullText.indexOf(chunk);
-  if (index === -1) {
-    return { from: 1, to: 1 };
-  }
-
-  const beforeChunk = fullText.slice(0, index);
-  const from = beforeChunk.split('\n').length;
-  const chunkLines = chunk.split('\n').length;
-  const to = from + chunkLines - 1;
-
-  return { from, to };
+  return finalChunks;
 }
 
 /**
@@ -141,7 +142,10 @@ function createDocuments(
   config: SplitterConfig,
   baseMetadata?: Record<string, any>,
 ): DocumentChunk[] {
-  const chunks = splitTextWithSeparators(text, separators, config);
+  const chunks = splitTextWithSeparators(text, separators, config, {
+    count: 0,
+    max: config.maxChunks,
+  });
 
   // Track search position to handle duplicate chunks correctly
   let searchFrom = 0;
@@ -184,11 +188,12 @@ export function splitLatex(text: string, config: SplitterConfig): DocumentChunk[
 }
 
 export function splitPdf(text: string, config: SplitterConfig): DocumentChunk[] {
+  const budget = { count: 0, max: config.maxChunks };
   const pages: string[] = text
     ? text.split(/\f/).filter((page: string) => page.trim().length > 0)
     : [];
   return pages.flatMap((pageContent: string, index: number) => {
-    const stringChunks = splitTextWithSeparators(pageContent, DEFAULT_SEPARATORS, config);
+    const stringChunks = splitTextWithSeparators(pageContent, DEFAULT_SEPARATORS, config, budget);
     return stringChunks.map((chunkContent: string) => ({
       metadata: {
         loc: { pageNumber: index + 1 },

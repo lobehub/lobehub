@@ -1,9 +1,9 @@
 import { TempFileManager } from '@/server/utils/tempFileManager';
 import { nanoid } from '@/utils/uuid';
 
-import { splitText } from '../../splitter';
+import { DocumentChunkLimitError, splitText } from '../../splitter';
 import { type DocumentChunk } from '../../types';
-import { loaderConfig } from '../config';
+import { loaderConfig, MAX_DOCUMENT_CHUNKS } from '../config';
 
 export const EPubLoader = async (content: Uint8Array): Promise<DocumentChunk[]> => {
   const tempManager = new TempFileManager('epub-');
@@ -27,18 +27,23 @@ export const EPubLoader = async (content: Uint8Array): Promise<DocumentChunk[]> 
         });
 
         if (text.trim()) {
-          const chunks = splitText(text, loaderConfig);
+          const chunks = splitText(text, {
+            ...loaderConfig,
+            maxChunks: MAX_DOCUMENT_CHUNKS - documents.length,
+          });
           for (const chunk of chunks) {
             documents.push({
               metadata: {
                 ...chunk.metadata,
-                source: tempPath,
+                source: 'blob',
               },
               pageContent: chunk.pageContent,
             });
           }
         }
-      } catch {
+      } catch (error) {
+        if (error instanceof DocumentChunkLimitError) throw error;
+
         // Skip chapters that can't be parsed
       }
     }

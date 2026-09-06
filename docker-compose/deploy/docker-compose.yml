@@ -40,11 +40,10 @@ services:
   postgresql:
     image: paradedb/paradedb:latest-pg17
     container_name: lobe-postgres
-    # Optional: Remove or change these ports if:
-    # - You don't need external database access
-    # - The ports conflict with other services on your host
+    # Optional: remove this port if you don't need host-side database access.
+    # Keep the bind on 127.0.0.1 unless you also restrict access with a firewall.
     ports:
-      - '5432:5432'
+      - '127.0.0.1:5432:5432'
     volumes:
       - './data:/var/lib/postgresql/data'
     command: ['postgres', '-c', 'shared_preload_libraries=pg_search']
@@ -63,11 +62,10 @@ services:
   redis:
     image: redis:7-alpine
     container_name: lobe-redis
-    # Optional: Remove or change these ports if:
-    # - You don't need external access
-    # - The ports conflict with other services on your host
+    # Optional: remove this port if you don't need host-side Redis access.
+    # Keep the bind on 127.0.0.1 unless you also enable Redis auth and firewalling.
     ports:
-      - '6379:6379'
+      - '127.0.0.1:6379:6379'
     command: redis-server --save 60 1000 --appendonly yes
     volumes:
       - 'redis_data:/data'
@@ -128,6 +126,7 @@ services:
       - './searxng-settings.yml:/etc/searxng/settings.yml'
     environment:
       - 'SEARXNG_SETTINGS_FILE=/etc/searxng/settings.yml'
+      - 'SEARXNG_SECRET=${SEARXNG_SECRET:?SEARXNG_SECRET must be set}'
     restart: always
     networks:
       - lobe-network

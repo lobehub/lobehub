@@ -18,7 +18,7 @@ services:
     image: paradedb/paradedb:latest-pg17
     container_name: lobe-postgres
     ports:
-      - '5432:5432'
+      - '127.0.0.1:5432:5432'
     volumes:
       - './data:/var/lib/postgresql/data'
     command: ['postgres', '-c', 'shared_preload_libraries=pg_search']
@@ -40,7 +40,7 @@ services:
     image: redis:7-alpine
     container_name: lobe-redis
     ports:
-      - '6379:6379'
+      - '127.0.0.1:6379:6379'
     command: redis-server --save 60 1000 --appendonly yes
     volumes:
       - 'redis_data:/data'
@@ -106,6 +106,7 @@ services:
       - './searxng-settings.yml:/etc/searxng/settings.yml'
     environment:
       - 'SEARXNG_SETTINGS_FILE=/etc/searxng/settings.yml'
+      - 'SEARXNG_SECRET=${SEARXNG_SECRET:?SEARXNG_SECRET must be set}'
     restart: always
     networks:
       - lobe-network
