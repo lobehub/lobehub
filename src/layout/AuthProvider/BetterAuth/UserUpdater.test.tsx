@@ -29,6 +29,7 @@ const sampleSession = (overrides?: Record<string, unknown>) => ({
 
 describe('UserUpdater', () => {
   beforeEach(() => {
+    setAppPainted(true);
     localStorage.clear();
     useSessionMock.mockReset();
     useUserStore.setState({ user: undefined, isSignedIn: false, isLoaded: false });
@@ -166,7 +167,7 @@ describe('UserUpdater', () => {
         <span>Application</span>
       </UserUpdater>,
     );
-    expect(screen.queryByText('Application')).toBeNull();
+    expect(screen.getByText('Application').closest('[inert]')).toBeTruthy();
     fireEvent.click(screen.getByRole('button'));
     useSessionMock.mockReturnValue(sampleSession());
     rerender(
@@ -180,7 +181,7 @@ describe('UserUpdater', () => {
     unmount();
   });
 
-  it('releases boot overlays when recovery replaces the cache hydration gate', () => {
+  it('reveals recovery without falsely declaring the underlying application painted', () => {
     setAppPainted(false);
     const overlay = document.createElement('div');
     overlay.id = 'loading-screen';
@@ -193,10 +194,38 @@ describe('UserUpdater', () => {
     });
     const { unmount } = render(<UserUpdater />);
     expect(document.getElementById('loading-screen')).toBeNull();
-    expect(getAppPainted()).toBe(true);
+    expect(getAppPainted()).toBe(false);
     expect(screen.getByRole('button')).toBeTruthy();
     unmount();
     setAppPainted(false);
+  });
+
+  it('keeps recovery visible after retry succeeds until the underlying application paints', () => {
+    setAppPainted(false);
+    useSessionMock.mockReturnValue({
+      data: null,
+      error: { status: 403 },
+      isPending: false,
+      refetch: vi.fn(),
+    });
+    const { rerender, unmount } = render(
+      <UserUpdater>
+        <span>Application</span>
+      </UserUpdater>,
+    );
+    fireEvent.click(screen.getByRole('button'));
+    useSessionMock.mockReturnValue(sampleSession());
+    rerender(
+      <UserUpdater>
+        <span>Application</span>
+      </UserUpdater>,
+    );
+    expect(screen.getByRole('alert')).toBeTruthy();
+    expect(screen.getByText('Application').closest('[inert]')).toBeTruthy();
+    act(() => setAppPainted(true));
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByText('Application').closest('[inert]')).toBeNull();
+    unmount();
   });
 
   it('does not clear a verified user while a retry is in flight without session data', () => {

@@ -2,12 +2,13 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { Alert, Button } from '@lobehub/ui/base-ui';
+import { cssVar } from 'antd-style';
 import { memo, type PropsWithChildren, useEffect, useLayoutEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_PREFERENCE } from '@/const/user';
 import { useSession } from '@/libs/better-auth/auth-client';
-import { setAppPainted } from '@/spa/atoms/app';
+import { useAppPainted } from '@/spa/atoms/app';
 import { removeStaticLoadingScreen } from '@/spa/loadingScreen';
 import { useUserStore } from '@/store/user';
 import { readUserDisplaySnapshot } from '@/store/user/displaySnapshot';
@@ -20,16 +21,23 @@ const UserUpdater = memo(({ children }: PropsWithChildren) => {
   const { data: session, isPending, isRefetching, error, refetch } = useSession();
   const { t } = useTranslation(['auth', 'common']);
   const [retryAttempt, setRetryAttempt] = useState(0);
+  const [recoveryVisible, setRecoveryVisible] = useState(false);
+  const appPainted = useAppPainted();
   const status = error?.status;
   const retryable = !!error && (!status || status >= 500 || status === 408 || status === 429);
   const failed = !!error && status !== 401 && (!retryable || retryAttempt >= 3);
-  const showRecovery = failed && !isPending && !isRefetching;
+  const showRecovery =
+    status !== 401 &&
+    (failed || (recoveryVisible && (!!error || isPending || isRefetching || !appPainted)));
 
   useLayoutEffect(() => {
-    if (!showRecovery) return;
-    /** The recovery screen replaces the hydration gate, so it must release boot overlays. */
-    setAppPainted(true);
-    removeStaticLoadingScreen();
+    if (showRecovery) {
+      setRecoveryVisible(true);
+      /** Reveal recovery without claiming the application underneath has painted. */
+      removeStaticLoadingScreen();
+    } else {
+      setRecoveryVisible(false);
+    }
   }, [showRecovery]);
 
   const betterAuthUser = session?.user;
@@ -102,33 +110,43 @@ const UserUpdater = memo(({ children }: PropsWithChildren) => {
   }, [betterAuthUser, error, isPending, isRefetching]);
 
   /** Keep auth unresolved on transport failures; show recovery instead of a guest page. */
-  if (showRecovery) {
-    return (
-      <Flexbox
-        align="center"
-        gap={16}
-        justify="center"
-        style={{ minHeight: '100dvh', padding: 24 }}
-      >
-        <Alert
-          showIcon
-          description={t('auth:session.checkFailed.description')}
-          title={t('auth:session.checkFailed.title')}
-          type="error"
-        />
-        <Button
-          onClick={() => {
-            setRetryAttempt(0);
-            void refetch();
+  return (
+    <>
+      <div inert={showRecovery} style={{ display: 'contents' }}>
+        {children}
+      </div>
+      {showRecovery && (
+        <Flexbox
+          align="center"
+          gap={16}
+          justify="center"
+          style={{
+            background: cssVar.colorBgLayout,
+            inset: 0,
+            padding: 24,
+            position: 'fixed',
+            zIndex: 100000,
           }}
         >
-          {t('common:retry')}
-        </Button>
-      </Flexbox>
-    );
-  }
-
-  return children;
+          <Alert
+            showIcon
+            description={t('auth:session.checkFailed.description')}
+            title={t('auth:session.checkFailed.title')}
+            type="error"
+          />
+          <Button
+            loading={isPending || isRefetching || (!failed && recoveryVisible)}
+            onClick={() => {
+              setRetryAttempt(0);
+              void refetch();
+            }}
+          >
+            {t('common:retry')}
+          </Button>
+        </Flexbox>
+      )}
+    </>
+  );
 });
 
 export default UserUpdater;
