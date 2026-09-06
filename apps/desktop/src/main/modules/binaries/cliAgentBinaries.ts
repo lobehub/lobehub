@@ -25,7 +25,10 @@ interface ValidatedBinaryOptions {
   priority: number;
   validateFlag?: string;
   validateKeywords: string[];
+  validatePattern?: RegExp;
 }
+
+const BARE_SEMVER_PATTERN = /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/;
 
 /**
  * Binary spec that resolves a command path via which/where, then validates
@@ -171,6 +174,7 @@ export const geminiCliBinary: BinarySpec = defineValidatedBinary({
   name: 'gemini',
   priority: 8,
   validateKeywords: ['gemini'],
+  validatePattern: BARE_SEMVER_PATTERN,
 });
 
 /**
@@ -183,6 +187,7 @@ export const qwenCodeBinary: BinarySpec = defineValidatedBinary({
   name: 'qwen',
   priority: 9,
   validateKeywords: ['qwen'],
+  validatePattern: BARE_SEMVER_PATTERN,
 });
 
 /**
