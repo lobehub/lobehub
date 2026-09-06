@@ -98,7 +98,7 @@ describe('LobeUnslothAI - custom features', () => {
               JSON.stringify({ data: [{ id: 'unsloth/Qwen3-1.7B-GGUF', loaded: true }] }),
               { headers: { 'Content-Type': 'application/json' } },
             );
-          expect(String(input)).toBe('http://localhost:8000/proxy/props');
+          expect(String(input)).toBe('http://localhost:8000/proxy/v1/props');
           expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer test-key');
           return new Response(
             JSON.stringify({
@@ -116,7 +116,8 @@ describe('LobeUnslothAI - custom features', () => {
         const client = new OpenAI({ apiKey: 'test-key', baseURL, fetch: fetchMock });
         const models = await params.models({ client });
         expect(fetchMock).toHaveBeenCalledTimes(2);
-        expect(models[0]).toMatchObject({ functionCall: false, reasoning: false, vision: false });
+        // A template can use enable_thinking without supporting reasoning_effort.
+        expect(models[0]).toMatchObject({ functionCall: false, reasoning: true, vision: false });
       },
     );
 

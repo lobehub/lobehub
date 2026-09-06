@@ -1,8 +1,12 @@
 import type { ChatModelCard } from '@lobechat/types';
+import debug from 'debug';
 import { ModelProvider } from 'model-bank';
+import { APIConnectionTimeoutError, APIError } from 'openai';
 
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+
+const log = debug('lobe-model-runtime:unsloth');
 
 export interface UnslothModelCard {
   context_length?: number;
@@ -41,13 +45,18 @@ export const params = {
      */
     if (modelList.some((model) => model.loaded !== false)) {
       try {
-        const rootURL = client.baseURL.replace(/\/v1\/?$/, '').replace(/\/$/, '');
-        props = await client.get<UnslothModelProps>(`${rootURL}/props`, {
+        /** Keep the configured API prefix: a reverse proxy may expose only /v1 routes. */
+        props = await client.get<UnslothModelProps>(`${client.baseURL.replace(/\/$/, '')}/props`, {
           maxRetries: 0,
           timeout: 2000,
         });
-      } catch {
-        console.warn('Unsloth model properties unavailable; using catalog metadata.');
+      } catch (error) {
+        /** Error bodies and configured URLs can contain credentials; log only safe diagnostics. */
+        log('Model properties unavailable; using catalog metadata. %O', {
+          reason: error instanceof APIConnectionTimeoutError ? 'timeout' : 'request_failed',
+          route: 'props',
+          status: error instanceof APIError ? error.status : undefined,
+        });
       }
     }
 
@@ -69,6 +78,12 @@ export const params = {
         modelProps?.default_generation_settings?.n_ctx,
         knownModel?.contextWindowTokens,
       ].find((value) => typeof value === 'number' && Number.isFinite(value) && value > 0);
+      /** Effort-parameter support is a positive hint, not an exhaustive thinking capability.
+       * Templates using enable_thinking can report false here while still supporting reasoning.
+       * https://github.com/ggml-org/llama.cpp/blob/d59d455f/common/jinja/caps.cpp
+       */
+      const reasoning =
+        caps?.supports_reasoning_effort === true || knownModel?.abilities?.reasoning === true;
 
       return {
         contextWindowTokens,
@@ -76,7 +91,7 @@ export const params = {
         enabled: model.loaded ?? false,
         functionCall,
         id: model.id,
-        reasoning: caps?.supports_reasoning_effort ?? knownModel?.abilities?.reasoning ?? false,
+        reasoning,
         vision: modelProps?.modalities?.vision ?? knownModel?.abilities?.vision ?? false,
       };
     }) satisfies ChatModelCard[];
