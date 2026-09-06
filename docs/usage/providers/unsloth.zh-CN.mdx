@@ -10,38 +10,34 @@ tags:
 
 # 在 LobeHub 中使用 Unsloth
 
-[Unsloth](https://unsloth.ai/) 是一个流行的大语言模型（LLM）本地微调与运行框架。除了快速的 LoRA/QLoRA 微调之外，Unsloth 还可以将加载的任意 GGUF 模型（包括你自己微调的模型）通过 OpenAI 兼容 API 对外提供服务，让你可以在 LobeHub 中直接与本地或自定义模型对话。
-
-本文将指导你如何在 LobeHub 中使用 Unsloth：
+[Unsloth](https://unsloth.ai/) 可运行本地模型，并通过 Unsloth Studio 提供 OpenAI 兼容 API。LobeHub 连接到你已经启动的实例，不提供托管推理账号，也不会代你下载模型。下载前请检查模型许可证和硬件要求。
 
 <Steps>
-  ### 第一步：安装 Unsloth
+  ### 第一步：启动 Unsloth Studio
 
-  - 参考[官方安装指南](https://unsloth.ai/docs)安装或更新 Unsloth。旧版本不提供外部 API，请确保使用较新的版本。
+  - 参考[官方安装指南](https://unsloth.ai/docs)安装 Unsloth Studio，并启动桌面应用或 CLI 服务。
+  - 在 Studio 中下载模型并准备进行推理。[Unsloth 模型目录](https://huggingface.co/unsloth)列出的模型不代表已经安装在本地。
+  - 默认 API 基础地址为 `http://127.0.0.1:8888/v1`。如果启动时明确指定了其他端口，请将 `8888` 替换为实际端口，例如 `8000`。填写以 `/v1` 结尾的基础地址，不要填写完整的 `/chat/completions` 路径。
 
-  ### 第二步：加载模型并启动 API 服务
+  ### 第二步：选择连接方式
 
-  - 使用 `unsloth run` 命令加载一个 GGUF 模型：
+  - 服务端请求要求 LobeHub 服务器能够访问 Studio。`127.0.0.1` 指服务器自身；在 Docker 中则指容器自身。如果 Studio 运行在其他位置，请使用服务器或容器可访问的地址。
+  - 客户端请求模式由浏览器直接请求。Studio 必须通过 CORS 允许 LobeHub 页面来源，来自其他浏览器来源的请求还需要该 Studio 实例的真实 API 密钥。终端无密钥请求成功不代表浏览器也能访问，不要填写虚构密钥。
 
-  ```bash
-  unsloth run --model unsloth/Qwen3-1.7B-GGUF
-  ```
-
-  - 控制台会打印出服务地址（通常为 `http://localhost:8000` 或 `http://localhost:8888`）以及一个 `sk-unsloth-…` 格式的 API 密钥
-  - 你可以在 [Unsloth 的 Hugging Face 主页](https://huggingface.co/unsloth)找到更多模型，也可以直接部署你用 Unsloth 微调出来的模型
-
-  ### 第三步：在 LobeHub 中连接 Unsloth
+  ### 第三步：配置并检查连接
 
   - 打开 LobeHub 的 `应用设置`，进入 `AI 服务商` 板块
   - 在列表中找到并选择 `Unsloth` 服务商
-  - 开启 Unsloth 服务商，填入 API 服务地址（例如 `http://127.0.0.1:8000/v1`）并粘贴 `sk-unsloth-…` API 密钥
-
-  <Callout type={'warning'}>
-    如果 Unsloth 运行在本地，请确保开启「客户端请求模式」。
-  </Callout>
-
-  - 使用模型获取功能拉取 Unsloth 当前提供的模型，或手动添加模型
-  - 为你的助手选择一个模型，开始对话
+  - 开启服务商，填写 API 基础地址，并在需要认证时填写真实的 Studio API 密钥。只有端点支持浏览器访问时才开启客户端请求模式。
+  - 点击「获取模型列表」，选择当前 Studio 实例返回的模型。如果手动添加模型，请使用本地 API 返回的准确模型 ID。内置的两个示例模型默认不启用，也不保证已在本地安装；已有的模型选择会保留。
+  - 在 Studio 中加载模型后，再次获取列表，以读取该模型的工具调用和视觉能力。Studio 仅为已加载的模型提供这些能力信息，未加载模型的能力可能暂时无法获取。
+  - 在「连通性检查」中选择该模型并执行检查。成功后，为助手选择同一个模型。
 </Steps>
 
-至此，你已经可以在 LobeHub 中直接使用 Unsloth 运行的模型（包括你自己微调的模型）进行对话了。
+## 连接问题
+
+- CORS 或预检失败：截至 2026 年 9 月 6 日，Studio 桌面版 API-only 模式会拒绝来自其他本地端口的浏览器请求。上游修复 [unsloth#10084](https://github.com/unslothai/unsloth/pull/10084) 尚未合并，仅开启客户端请求模式不能解决此问题。请使用允许页面来源的 Studio 模式，或通过可访问 Studio 的服务器发起请求。
+- Not authenticated / Invalid token payload：即使终端无密钥请求成功，跨来源浏览器请求仍需要有效的 Studio 认证。请填写真实密钥，任意占位字符串都会被拒绝。
+- 连接被拒绝或模型不存在：检查实际监听端口、服务器或容器的网络可达性，以及该 Studio 实例返回的模型列表。获取列表成功不等于模型推理成功。
+
+共享服务端配置请参阅 [Unsloth 环境变量](/zh/docs/self-hosting/environment-variables/model-provider#unsloth)。本地推理使用你自己的硬件，此服务商不定义托管 API 的每 token 价格。产品可用性和商业服务请查看 [Unsloth 官网](https://unsloth.ai/)。

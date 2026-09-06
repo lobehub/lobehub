@@ -885,4 +885,29 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 - 默认值：`-`
 - 示例：`-all,+straico-model-1,+straico-model-2=straico-special`
 
+## Unsloth
+
+连接你自己的 Unsloth Studio 实例。浏览器认证和桌面版 CORS 限制请参阅[在 LobeHub 中使用 Unsloth](/zh/docs/usage/providers/unsloth)。
+
+### `UNSLOTH_API_KEY`
+
+- 类型：部署时可选；提供需要认证的共享服务端访问时，应填写真实的 Studio 密钥。用户也可以在服务商设置中自行配置密钥。
+- 描述：你的 Studio 实例的 API 密钥。非空值会在服务端配置中启用此服务商。`ENABLED_UNSLOTH` 由密钥派生，不是独立的环境变量开关。本地服务端无密钥访问取决于 Studio 的访问策略；跨来源浏览器请求需要有效认证。
+- 默认值：未设置，不提供共享服务端密钥。
+- 示例：`your-unsloth-studio-api-key`
+
+### `UNSLOTH_PROXY_URL`
+
+- 类型：可选
+- 描述：覆盖 OpenAI 兼容 API 的基础地址。请填写 LobeHub 服务器可访问的地址。在 Docker 内，`127.0.0.1` 指容器自身，不是运行 Studio 的宿主机。若启动 Studio 时明确指定端口，请使用该端口替代默认的 `8888`。
+- 默认值：`http://127.0.0.1:8888/v1`
+- 示例：`http://studio.example.com:8888/v1`
+
+### `UNSLOTH_MODEL_LIST`
+
+- 类型：可选
+- 描述：使用共享的[模型列表语法][model-list]配置模型列表：`+` 增加模型，`-` 隐藏模型，`模型ID=显示名称` 重命名模型，多个条目用英文逗号分隔。请使用 Studio 实例返回的模型 ID；此配置不会下载模型。
+- 默认值：未设置，使用内置示例模型列表，示例默认不启用；不保证这些模型已在本地安装，也不会改变已有的模型选择。
+- 示例：`-all,+your-local-model-id=Local Model`
+
 [model-list]: /zh/docs/self-hosting/advanced/model-list

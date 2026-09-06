@@ -10,7 +10,7 @@ const unslothChatModels: AIChatModelCard[] = [
     description:
       'Qwen3 is the latest generation of the Qwen series, supporting seamless switching between thinking and non-thinking modes.',
     displayName: 'Qwen3 1.7B',
-    enabled: true,
+    enabled: false,
     family: 'qwen',
     generation: 'qwen3',
     id: 'unsloth/Qwen3-1.7B-GGUF',
@@ -25,7 +25,7 @@ const unslothChatModels: AIChatModelCard[] = [
     description:
       'Gemma 3 is a lightweight open model family from Google, supporting multimodal input and strong instruction following.',
     displayName: 'Gemma 3 4B',
-    enabled: true,
+    enabled: false,
     family: 'gemma',
     generation: 'gemma-3',
     id: 'unsloth/gemma-3-4b-it-GGUF',

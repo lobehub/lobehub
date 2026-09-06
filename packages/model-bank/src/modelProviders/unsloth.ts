@@ -11,7 +11,7 @@ const Unsloth: ModelProviderCard = {
   settings: {
     defaultShowBrowserRequest: true,
     proxyUrl: {
-      placeholder: 'http://127.0.0.1:8000/v1',
+      placeholder: 'http://127.0.0.1:8888/v1',
     },
     responseAnimation: {
       speed: 2,

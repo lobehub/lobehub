@@ -884,4 +884,29 @@ NewAPI is a multi-provider model aggregation service that supports automatic mod
 - Default: `-`
 - Example: `-all,+straico-model-1,+straico-model-2=straico-special`
 
+## Unsloth
+
+Connect to your own Unsloth Studio instance. See [Using Unsloth in LobeHub](/docs/usage/providers/unsloth) for browser authentication and desktop CORS limitations.
+
+### `UNSLOTH_API_KEY`
+
+- Type: Optional for the deployment; set a real Studio key when providing authenticated server access. Users can instead configure their key in provider settings.
+- Description: The API key for your Studio instance. A non-empty value enables the provider in server configuration. `ENABLED_UNSLOTH` is derived from this key and is not an independent environment switch. Keyless local server access depends on Studio's access policy; cross-origin browser requests require valid authentication.
+- Default: Unset; no shared server key.
+- Example: `your-unsloth-studio-api-key`
+
+### `UNSLOTH_PROXY_URL`
+
+- Type: Optional
+- Description: Overrides the OpenAI-compatible API base URL. Use an address reachable from the LobeHub server. Inside Docker, `127.0.0.1` refers to the container, not the host running Studio. An explicitly configured Studio port overrides its default `8888`.
+- Default: `http://127.0.0.1:8888/v1`
+- Example: `http://studio.example.com:8888/v1`
+
+### `UNSLOTH_MODEL_LIST`
+
+- Type: Optional
+- Description: Customizes the model list using the shared [model-list syntax][model-list]: `+` adds a model, `-` hides a model, and `model_id=display_name` renames a model. Separate entries with commas. Use IDs returned by your Studio instance; this setting does not download models.
+- Default: Unset; uses the built-in example model list with the examples disabled. This does not guarantee local availability or change existing saved model selections.
+- Example: `-all,+your-local-model-id=Local Model`
+
 [model-list]: /docs/self-hosting/advanced/model-list
