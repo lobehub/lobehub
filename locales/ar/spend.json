@@ -6,6 +6,7 @@
   "duration.stage.end": "النهاية",
   "duration.stage.firstToken": "أول رمز",
   "duration.stage.start": "البداية",
+  "table.agentShareDesc": "كل نموذج يستدعي زائرًا لهذا المشاركة يتم تشغيله، ويتم خصمه من حسابك.",
   "table.columns.TTFT.tooltip": "الوقت حتى أول رمز، الوحدة: ثوانٍ",
   "table.columns.duration": "المدة",
   "table.columns.model": "النموذج",

@@ -6,6 +6,7 @@
   "duration.stage.end": "Einde",
   "duration.stage.firstToken": "Eerste token",
   "duration.stage.start": "Start",
+  "table.agentShareDesc": "Elke modeloproep die een bezoeker van dit gedeelde item activeert, wordt aan uw account gefactureerd.",
   "table.columns.TTFT.tooltip": "Tijd tot eerste token, eenheid: seconden",
   "table.columns.duration": "Duur",
   "table.columns.model": "Model",

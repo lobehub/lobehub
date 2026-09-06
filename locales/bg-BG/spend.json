@@ -6,6 +6,7 @@
   "duration.stage.end": "Край",
   "duration.stage.firstToken": "Първи токен",
   "duration.stage.start": "Начало",
+  "table.agentShareDesc": "Всяко извикване на модел от посетител на това споделяне се задейства и се таксува към вашия акаунт.",
   "table.columns.TTFT.tooltip": "Време до първия токен, единица: секунди",
   "table.columns.duration": "Продължителност",
   "table.columns.model": "Модел",

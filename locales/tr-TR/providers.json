@@ -37,6 +37,7 @@
   "lmstudio.description": "LM Studio, bilgisayarınızda büyük dil modelleriyle geliştirme ve denemeler yapmanızı sağlayan bir masaüstü uygulamasıdır.",
   "lobehub.description": "LobeHub Cloud, resmi API'leri kullanarak yapay zeka modellerine erişir ve kullanımını model jetonlarına bağlı Kredilerle ölçer.",
   "longcat.description": "LongCat, Meituan tarafından bağımsız olarak geliştirilen bir dizi üretken yapay zeka büyük modelidir. Verimli bir hesaplama mimarisi ve güçlü çok modlu yetenekler aracılığıyla kurumsal iç verimliliği artırmak ve yenilikçi uygulamaları mümkün kılmak için tasarlanmıştır.",
+  "meta.description": "Meta, Llama ve Muse model aileleri dahil olmak üzere, insanların bağlantı kurmasına, yaratıcı olmasına ve işlerini halletmesine yardımcı olan yapay zeka modelleri ve ürünleri geliştirir.",
   "minimax.description": "2021 yılında kurulan MiniMax, çok modlu temel modellerle genel amaçlı yapay zeka geliştirir. Trilyon parametreli MoE metin modelleri, ses ve görsel modellerin yanı sıra Hailuo AI gibi uygulamalar sunar.",
   "minimaxcodingplan.description": "MiniMax Token Planı, sabit ücretli bir abonelik aracılığıyla kodlama görevleri için M2.7 dahil olmak üzere MiniMax modellerine erişim sağlar.",
   "mistral.description": "Mistral, karmaşık akıl yürütme, çok dilli görevler ve kod üretimi için gelişmiş genel, özel ve araştırma modelleri sunar. Özelleştirilmiş entegrasyonlar için işlev çağrısını destekler.",

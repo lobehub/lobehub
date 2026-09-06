@@ -48,7 +48,20 @@ interface UseFileItemDropdownParams {
   fileType: string;
   id: string;
   libraryId?: string;
+  /**
+   * Runs once the row is gone, so a caller can leave a route that pointed at
+   * it. Fires before the sidebar tree forgets the subtree, so a caller may
+   * still inspect what is about to be removed.
+   */
+  onDeleted?: () => void;
   onRenameStart?: () => void;
+  /**
+   * Folder id the row hangs off in the sidebar tree, when the caller knows it.
+   * The explorer's current folder is not a substitute: the sidebar navigates
+   * into a folder on click, so deleting it from its own context menu would
+   * refresh the deleted folder rather than the list it was listed in.
+   */
+  parentId?: string;
   /** Byte size when available — powers the push modal's oversize pre-warning. */
   size?: number;
   sourceType?: string;
@@ -75,7 +88,9 @@ export const useFileItemDropdown = ({
   fileType,
   size,
   sourceType,
+  onDeleted,
   onRenameStart,
+  parentId,
   userId,
   visibility,
 }: UseFileItemDropdownParams): UseFileItemDropdownReturn => {
@@ -446,10 +461,17 @@ export const useFileItemDropdown = ({
                   try {
                     await deleteResource(id);
 
-                    // Revalidate tree for the parent folder
-                    const { queryParams } = useFileStore.getState();
-                    const parentId = queryParams?.parentId ?? '';
-                    void useTreeStore.getState().revalidate(parentId);
+                    // Drop the row from the sidebar tree and refresh the folder
+                    // that actually held it. The explorer's current folder is
+                    // only the fallback, for rows the tree never loaded.
+                    const treeParentKey =
+                      parentId ?? useFileStore.getState().queryParams?.parentId ?? '';
+
+                    // Before the purge, not after: a caller leaving a route
+                    // that pointed into this subtree still has to walk it, and
+                    // `dropNodes` forgets the whole subtree synchronously.
+                    onDeleted?.();
+                    void useTreeStore.getState().dropNodes([id], treeParentKey);
                     await refreshFileList({ revalidateResources: false });
 
                     toast.success(t('FileManager.actions.deleteSuccess'));
@@ -479,7 +501,9 @@ export const useFileItemDropdown = ({
     libraries,
     libraryId,
     moveResource,
+    onDeleted,
     onRenameStart,
+    parentId,
     publishFileToWorkspace,
     setFileVisibility,
     refreshFileList,

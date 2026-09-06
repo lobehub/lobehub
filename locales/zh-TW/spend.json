@@ -6,6 +6,7 @@
   "duration.stage.end": "結束",
   "duration.stage.firstToken": "第一個權杖",
   "duration.stage.start": "開始",
+  "table.agentShareDesc": "每次模型調用此分享的訪客，將計入您的帳戶費用。",
   "table.columns.TTFT.tooltip": "首次權杖時間，單位：秒",
   "table.columns.duration": "耗時",
   "table.columns.model": "模型",

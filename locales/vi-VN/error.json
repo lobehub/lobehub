@@ -111,6 +111,7 @@
   "response.SubscriptionPlanLimitUltimate": "Điểm gói đăng ký của bạn đã hết, bạn không thể sử dụng tính năng này. Vui lòng nạp thêm điểm hoặc cấu hình API mô hình tùy chỉnh.",
   "response.SystemTimeNotMatchError": "Xin lỗi, thời gian hệ thống của bạn không khớp với máy chủ. Vui lòng kiểm tra lại thời gian hệ thống và thử lại.",
   "response.UnknownChatFetchError": "Xin lỗi, đã xảy ra lỗi yêu cầu không xác định. Vui lòng kiểm tra thông tin bên dưới hoặc thử lại.",
+  "response.UnreadableServerResponse": "Máy chủ đã trả về một phản hồi mà ứng dụng không thể đọc được. Đây thường là một vấn đề tạm thời về mạng hoặc cổng — vui lòng thử lại sau một lúc.",
   "response.WorkspaceAgentRequiresWorkspaceDevice": "Tác nhân này hoạt động trong một không gian làm việc, vì vậy nó chỉ có thể liên kết với các thiết bị mà cả nhóm có thể truy cập. Các thiết bị cá nhân thuộc về người dùng đã đăng ký chúng — hãy chọn một thiết bị không gian làm việc khác hoặc đăng ký thiết bị này vào không gian làm việc trước.",
   "response.WorkspaceFrozenByAdmin": "Không gian làm việc này đã bị đóng băng bởi quản trị viên và không thể thực hiện yêu cầu. Vui lòng liên hệ với chủ sở hữu không gian làm việc để giải quyết vấn đề.",
   "response.WorkspaceFrozenByRiskControl": "Không gian làm việc này đã tự động bị đóng băng bởi kiểm soát rủi ro và không thể thực hiện yêu cầu. Vui lòng liên hệ với bộ phận hỗ trợ để xem xét trạng thái.",

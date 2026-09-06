@@ -320,6 +320,59 @@ export class TreeActionImpl {
     void Promise.all(folderKeys.map((key) => this.revalidate(key)));
   };
 
+  /**
+   * Forget rows another store has already deleted, then refresh what changed.
+   *
+   * The deleting caller (the explorer's optimistic `deleteResource`, the
+   * multi-select bulk delete) owns the network call; the tree only has to catch
+   * up. It cannot be told which folder to refresh by the explorer's current
+   * query: the shared row menu also runs on sidebar rows, and clicking a folder
+   * there navigates into it, so "delete the folder I just opened" would refresh
+   * the deleted folder instead of the parent list the sidebar renders. So find
+   * the rows where they actually live and refresh those parents; the fallback
+   * only covers rows the sidebar never loaded.
+   *
+   * The local removal is synchronous so the sidebar drops the row in the same
+   * tick as the explorer, instead of after a refetch round-trip.
+   */
+  dropNodes = async (itemIds: string[], fallbackParentKey = ''): Promise<void> => {
+    const ids = new Set(itemIds);
+    if (ids.size === 0) return;
+
+    const children = { ...this.#get().children };
+    const expanded = { ...this.#get().expanded };
+    const status = { ...this.#get().status };
+    const errors = { ...this.#get().errors };
+    const affectedParents: string[] = [];
+
+    for (const [parentKey, items] of Object.entries(children)) {
+      if (!items.some((item) => ids.has(item.id))) continue;
+      affectedParents.push(parentKey);
+      children[parentKey] = items.filter((item) => !ids.has(item.id));
+    }
+
+    // Drop the removed folders' own caches too, descendants included: a stale
+    // `children[id]` would otherwise survive as an orphan and be served as the
+    // folder's contents if that key ever came back.
+    const pending = [...ids];
+    while (pending.length > 0) {
+      const id = pending.pop()!;
+      const descendants = children[id];
+      if (descendants) pending.push(...descendants.filter((i) => i.isFolder).map((i) => i.id));
+      delete children[id];
+      delete expanded[id];
+      delete status[id];
+      delete errors[id];
+    }
+
+    this.#set({ children, errors, expanded, status }, false, 'tree/dropNodes');
+
+    // A parent that is itself being removed has no list left to refresh, and
+    // fetching it would recreate the orphan entry the purge just dropped.
+    const targets = affectedParents.filter((key) => !ids.has(key));
+    await this.#revalidateSettled(targets.length > 0 ? targets : [fallbackParentKey]);
+  };
+
   moveItem = async (itemId: string, fromParent: string, toParent: string): Promise<void> => {
     const { children } = this.#get();
     const item = children[fromParent]?.find((i) => i.id === itemId);
@@ -463,14 +516,6 @@ export class TreeActionImpl {
     };
 
     await tx.commit();
-
-    const expanded = { ...this.#get().expanded };
-    const children = { ...this.#get().children };
-    for (const id of itemIds) {
-      delete expanded[id];
-      delete children[id];
-    }
-    this.#set({ children, expanded }, false, 'tree/removeItems/cleanup');
-    await this.#revalidateSettled([parentId]);
+    await this.dropNodes(itemIds, parentId);
   };
 }

@@ -6,6 +6,7 @@
   "duration.stage.end": "Koniec",
   "duration.stage.firstToken": "Pierwszy token",
   "duration.stage.start": "Początek",
+  "table.agentShareDesc": "Każde wywołanie modelu przez odwiedzającego to udostępnienie, które jest rozliczane na Twoim koncie.",
   "table.columns.TTFT.tooltip": "Czas do pierwszego tokena, jednostka: sekundy",
   "table.columns.duration": "Czas trwania",
   "table.columns.model": "Model",

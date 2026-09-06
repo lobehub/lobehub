@@ -6,6 +6,7 @@
   "duration.stage.end": "Bitiş",
   "duration.stage.firstToken": "İlk Token",
   "duration.stage.start": "Başlangıç",
+  "table.agentShareDesc": "Bu paylaşımı ziyaret eden her model çağrısı hesabınıza faturalandırılır.",
   "table.columns.TTFT.tooltip": "İlk Token Süresi, birim: saniye",
   "table.columns.duration": "Süre",
   "table.columns.model": "Model",

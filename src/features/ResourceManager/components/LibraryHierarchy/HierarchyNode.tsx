@@ -26,7 +26,7 @@ import { useTreeStore } from '@/store/tree';
 import { useFileItemClick } from '../Explorer/hooks/useFileItemClick';
 import { useFileItemDropdown } from '../Explorer/ItemDropdown/useFileItemDropdown';
 import FolderAddButton from './FolderAddButton';
-import { isHierarchyNodeActive } from './selection';
+import { isHierarchyNodeActive, resolveDeletedFolderRedirect } from './selection';
 import { styles } from './styles';
 
 interface HierarchyNodeProps {
@@ -135,13 +135,58 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
       setRenamingValue(item.name);
     }, [item.name]);
 
+    /**
+     * Where the explorer sits right now, as of the last commit. The delete is
+     * async, so `handleDeleted` can run long after the context menu captured
+     * its closure — by then the user may have opened another folder or another
+     * library, and the captured values would send them back to a folder they
+     * have already left.
+     */
+    const live = useRef({ isMounted: true, libraryId, selectedKey });
+    useEffect(() => {
+      live.current.libraryId = libraryId;
+      live.current.selectedKey = selectedKey;
+    });
+    useEffect(
+      () => () => {
+        live.current.isMounted = false;
+      },
+      [],
+    );
+
+    /**
+     * Deleting a folder the explorer is sitting inside — the folder itself, or
+     * any ancestor of where it is parked — would leave it on a route that no
+     * longer resolves: an empty list under a breadcrumb naming a folder that
+     * was just removed. Step out to the deleted row's own parent instead.
+     *
+     * Runs before the tree purge, so the subtree is still walkable here. An
+     * unmounted row means the user navigated away mid-delete, which is reason
+     * enough to leave them alone.
+     */
+    const handleDeleted = useCallback(() => {
+      if (!live.current.isMounted) return;
+
+      const redirect = resolveDeletedFolderRedirect({
+        children: useTreeStore.getState().children,
+        item,
+        libraryId: live.current.libraryId,
+        parentKey,
+        selectedKey: live.current.selectedKey,
+      });
+
+      if (redirect) navigate(redirect);
+    }, [item, parentKey, navigate]);
+
     const { menuItems } = useFileItemDropdown({
       fileId: item.fileId,
       fileType: item.fileType,
       filename: item.name,
       id: item.id,
       libraryId,
+      onDeleted: handleDeleted,
       onRenameStart: item.isFolder ? handleRenameStart : undefined,
+      parentId: parentKey,
       size: item.size,
       sourceType: item.sourceType,
       url: item.url,

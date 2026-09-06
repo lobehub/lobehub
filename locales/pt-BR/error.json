@@ -111,6 +111,7 @@
   "response.SubscriptionPlanLimitUltimate": "Seus pontos de assinatura acabaram. Recarregue créditos ou configure uma API personalizada.",
   "response.SystemTimeNotMatchError": "Desculpe, o horário do seu sistema não corresponde ao do servidor. Verifique e tente novamente.",
   "response.UnknownChatFetchError": "Desculpe, ocorreu um erro desconhecido na solicitação. Verifique as informações abaixo ou tente novamente.",
+  "response.UnreadableServerResponse": "O servidor retornou uma resposta que o aplicativo não conseguiu ler. Isso geralmente é um problema temporário de rede ou gateway — tente novamente em um momento.",
   "response.WorkspaceAgentRequiresWorkspaceDevice": "Este agente está em um espaço de trabalho, então ele só pode vincular dispositivos que toda a equipe possa acessar. Dispositivos pessoais permanecem com o usuário que os registrou — escolha um dispositivo do espaço de trabalho ou registre este dispositivo no espaço de trabalho primeiro.",
   "response.WorkspaceFrozenByAdmin": "Este workspace foi congelado por um administrador e não pode executar solicitações. Por favor, entre em contato com o proprietário do workspace para resolver o problema.",
   "response.WorkspaceFrozenByRiskControl": "Este workspace foi automaticamente congelado pelo controle de risco e não pode executar solicitações. Por favor, entre em contato com o suporte para revisar o status.",

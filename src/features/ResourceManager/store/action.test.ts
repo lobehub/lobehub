@@ -6,9 +6,18 @@ import { useFileStore } from '@/store/file/store';
 import { useResourceManagerStore } from '.';
 import { initialState } from './initialState';
 
-const { mockDeleteResourcesByQuery, mockResolveSelectionIds } = vi.hoisted(() => ({
-  mockDeleteResourcesByQuery: vi.fn(),
-  mockResolveSelectionIds: vi.fn(),
+const { mockDeleteResourcesByQuery, mockDropNodes, mockResolveSelectionIds, mockRevalidateTree } =
+  vi.hoisted(() => ({
+    mockDeleteResourcesByQuery: vi.fn(),
+    mockDropNodes: vi.fn(async () => undefined),
+    mockResolveSelectionIds: vi.fn(),
+    mockRevalidateTree: vi.fn(async () => undefined),
+  }));
+
+vi.mock('@/store/tree', () => ({
+  useTreeStore: {
+    getState: () => ({ dropNodes: mockDropNodes, revalidate: mockRevalidateTree }),
+  },
 }));
 
 vi.mock('@/services/resource', () => ({
@@ -146,6 +155,43 @@ describe('resource manager store actions', () => {
       selectedFileIds: [],
       selectionTotal: undefined,
     });
+  });
+
+  // Regression: the explorer's own list is optimistic, but the sidebar tree
+  // keeps a separate per-folder cache that the bulk delete never touched, so
+  // deleted rows stayed in the sidebar until a full reload.
+  it('should drop the deleted rows from the sidebar tree', async () => {
+    const deleteResources = vi.fn().mockResolvedValue(undefined);
+
+    useResourceManagerStore.setState({
+      selectAllState: 'loaded',
+      selectedFileIds: ['file-1', 'file-2'],
+    });
+    useFileStore.setState({
+      deleteResources,
+      queryParams: { parentId: 'folder-a' } as any,
+    } as any);
+
+    await useResourceManagerStore.getState().onActionClick('delete');
+
+    expect(deleteResources).toHaveBeenCalledWith(['file-1', 'file-2']);
+    expect(mockDropNodes).toHaveBeenCalledWith(['file-1', 'file-2'], 'folder-a');
+  });
+
+  it('should refresh the listed folder when the deleted set is only known to the server', async () => {
+    useResourceManagerStore.setState({ selectAllState: 'all', selectedFileIds: [] });
+    useFileStore.setState({
+      clearCurrentQueryResources: vi.fn(),
+      deleteResources: vi.fn(),
+      queryParams: { parentId: 'folder-a' } as any,
+    } as any);
+    mockDeleteResourcesByQuery.mockResolvedValue({ count: 3 });
+
+    await useResourceManagerStore.getState().onActionClick('delete');
+
+    // Individual ids never reach the client here, so the whole folder is refetched.
+    expect(mockRevalidateTree).toHaveBeenCalledWith('folder-a');
+    expect(mockDropNodes).not.toHaveBeenCalled();
   });
 });
 

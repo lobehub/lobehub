@@ -7,6 +7,7 @@ import { ChevronDown } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { SWRConfig } from 'swr';
 
 import {
   type ActionsBarConfig,
@@ -130,7 +131,7 @@ export interface FloatingChatPanelProps {
  *
  * Single instance per page (see `./guard.ts`).
  */
-const FloatingChatPanel = memo<FloatingChatPanelProps>(
+const FloatingChatPanelInner = memo<FloatingChatPanelProps>(
   ({
     agentId,
     topicId,
@@ -304,6 +305,22 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
     );
   },
 );
+
+FloatingChatPanelInner.displayName = 'FloatingChatPanelInner';
+
+/**
+ * The panel's loading model is `messagesInit` gating inside ChatList — it was
+ * never designed for SWR suspense mode. Hosts that render under a
+ * `SWRConfig {suspense: true}` layout (e.g. the agent-doc page) would otherwise
+ * suspend the whole panel on any conversation-adjacent hook, and a fetcher that
+ * legitimately resolves `undefined` (SWR suspense never settles on undefined
+ * data) turns that into a permanent skeleton with an infinite refetch loop.
+ */
+const FloatingChatPanel = memo<FloatingChatPanelProps>((props) => (
+  <SWRConfig value={{ suspense: false }}>
+    <FloatingChatPanelInner {...props} />
+  </SWRConfig>
+));
 
 FloatingChatPanel.displayName = 'FloatingChatPanel';
 
