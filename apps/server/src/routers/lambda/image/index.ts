@@ -9,6 +9,7 @@ import { z } from 'zod';
 
 import { chargeAfterGenerate } from '@/business/server/image-generation/chargeAfterGenerate';
 import { chargeBeforeGenerate } from '@/business/server/image-generation/chargeBeforeGenerate';
+import { checkFileStorageUsage } from '@/business/server/trpc-middlewares/lambda';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
@@ -45,7 +46,13 @@ const imageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
   });
 });
 
-const imageCreateProcedure = imageProcedure.use(withScopedPermission('file:upload'));
+// Generated images land in storage through `FileService`, which has no quota
+// gate of its own — blocking there would fail after the model call is already
+// paid for. Admit at submission instead: refuse to start when storage is
+// already full, and let an in-flight generation finish.
+const imageCreateProcedure = imageProcedure
+  .use(withScopedPermission('file:upload'))
+  .use(checkFileStorageUsage);
 
 const createImageInputSchema = z.object({
   generationTopicId: z.string(),

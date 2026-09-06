@@ -37,11 +37,13 @@ const UploadSkillContent = memo(() => {
     if (!canCreate) return;
     setLoading(true);
     setError(null);
+    let uploadedPathname: string | undefined;
 
     try {
       const { data: metadata } = await uploadService.uploadFileToS3(file, {
         directory: 'skills',
       });
+      uploadedPathname = metadata.path;
 
       const hash = sha256(await file.arrayBuffer());
 
@@ -53,11 +55,13 @@ const UploadSkillContent = memo(() => {
         size: file.size,
         url: metadata.path,
       });
+      uploadedPathname = undefined;
 
       await importAgentSkillFromZip({ zipFileId: result.id });
       toast.success(t('agentSkillModal.importSuccess'));
       close();
     } catch (err: any) {
+      if (uploadedPathname) await uploadService.releaseUpload(uploadedPathname);
       setError(err?.message || String(err));
     } finally {
       setLoading(false);

@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { renderThrownAgentError } from '../renderThrownError';
 
-// LOBE-13787: the bot's startup / catch-all failure paths posted a bare
+// The bot's startup / catch-all failure paths posted a bare
 // "**Agent Execution Failed**" — with no operation id, that carried no
-// information at all. Classifying the thrown value first lets the tiered
-// renderer pick curated copy, WITHOUT ever emitting the raw message.
+// information at all (reported from a Discord thread). Classifying the thrown
+// value first lets the tiered renderer pick curated copy, WITHOUT ever
+// emitting the raw message.
 describe('renderThrownAgentError', () => {
   it('gives a plain thrown Error the harness-tier copy instead of a bare header', () => {
     const out = renderThrownAgentError(new Error('Topic not found'), 'op-1');

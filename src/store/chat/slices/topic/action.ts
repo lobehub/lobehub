@@ -6,10 +6,16 @@ import {
   TOPIC_TITLE_JSON_SCHEMA,
   TOPIC_TITLE_PROMPT_VERSION,
 } from '@lobechat/prompts';
-import { type ChatTopicMetadata, type MessageMapScope, type UIChatMessage } from '@lobechat/types';
+import {
+  type ChatTopicMetadata,
+  type HeterogeneousReasoningEffort,
+  type MessageMapScope,
+  type UIChatMessage,
+} from '@lobechat/types';
 import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
+import type { AiModelReasoningConfig } from 'model-bank';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
@@ -21,9 +27,11 @@ import { type GitLinkedPRSummary, gitService } from '@/services/git';
 import { messageService } from '@/services/message';
 import type { TopicBatchDeleteScope } from '@/services/topic';
 import { topicService } from '@/services/topic';
+import { getAiInfraStoreState } from '@/store/aiInfra';
+import { aiModelSelectors } from '@/store/aiInfra/slices/aiModel/selectors';
 import { type ChatStore } from '@/store/chat';
 import { evictMessageCache } from '@/store/chat/utils/evictMessageCache';
-import { snapshotAgentModel } from '@/store/chat/utils/snapshotAgentModel';
+import { snapshotAgentModel, snapshotAgentReasoning } from '@/store/chat/utils/snapshotAgentModel';
 import { topicMapKey, type TopicMapScope } from '@/store/chat/utils/topicMapKey';
 import {
   canReadTopicGitTransport,
@@ -202,8 +210,11 @@ export class ChatTopicActionImpl {
 
     this.#set({ creatingTopic: true }, false, n('creatingTopic/start'));
     const targetSessionId = sessionId || activeAgentId;
+    const modelSnapshot = snapshotAgentModel(targetSessionId);
+    const reasoningSnapshot = await snapshotAgentReasoning(targetSessionId, modelSnapshot);
     const topicId = await internal_createTopic({
-      ...snapshotAgentModel(targetSessionId),
+      ...modelSnapshot,
+      ...(reasoningSnapshot ? { metadata: reasoningSnapshot } : {}),
       title: t('defaultTitle', { ns: 'topic' }),
       messages: messages.map((m) => m.id),
       sessionId: targetSessionId,
@@ -222,8 +233,11 @@ export class ChatTopicActionImpl {
     const targetSessionId = sessionId || activeAgentId;
 
     // 1. create topic and bind these messages
+    const modelSnapshot = snapshotAgentModel(targetSessionId);
+    const reasoningSnapshot = await snapshotAgentReasoning(targetSessionId, modelSnapshot);
     const topicId = await internal_createTopic({
-      ...snapshotAgentModel(targetSessionId),
+      ...modelSnapshot,
+      ...(reasoningSnapshot ? { metadata: reasoningSnapshot } : {}),
       title: t('defaultTitle', { ns: 'topic' }),
       messages: messages.map((m) => m.id),
       sessionId: targetSessionId,
@@ -417,7 +431,225 @@ export class ChatTopicActionImpl {
     id: string,
     { model, provider }: { model: string; provider: string },
   ): Promise<void> => {
-    await this.#get().internal_updateTopic(id, { model, provider });
+    await this.#enqueueTopicEffortWrite(id, async () => {
+      // The effort pin belongs to the model it was taken for (the param names
+      // are model-specific), so switching model re-snapshots it from the user's
+      // config for the new model — same "remembers what it started with" rule.
+      const reasoningConfig = await this.#get().internal_resolveTopicReasoningSnapshot({
+        model,
+        provider,
+      });
+      await this.#writeTopicModelPin(id, {
+        metadata: reasoningConfig ? { reasoningConfig } : undefined,
+        model,
+        provider,
+      });
+    });
+  };
+
+  /**
+   * Model + pin land in one server write (`topic.updateTopicModel`) so a run or
+   * a concurrent switch can never see the new model with the old model's pin.
+   * Optimistically mirrors the server merge: `reasoningConfig` is replaced,
+   * `heteroEffort` only when given.
+   */
+  #writeTopicModelPin = async (
+    id: string,
+    value: {
+      metadata?: Pick<ChatTopicMetadata, 'heteroEffort' | 'reasoningConfig'>;
+      model: string;
+      provider: string;
+    },
+  ): Promise<void> => {
+    const containerKey = topicSelectors.getTopicContainerKeyById(id)(this.#get());
+    const previous = topicSelectors.getTopicById(id)(this.#get());
+    const { reasoningConfig: _stale, ...rest } = previous?.metadata ?? {};
+    this.#get().internal_dispatchTopic({
+      containerKey,
+      id,
+      type: 'updateTopic',
+      value: {
+        metadata: { ...rest, ...value.metadata },
+        model: value.model,
+        provider: value.provider,
+      },
+    });
+
+    try {
+      await topicService.updateTopicModel(id, value);
+    } catch (error) {
+      if (previous) {
+        this.#get().internal_dispatchTopic({
+          containerKey,
+          id,
+          type: 'updateTopic',
+          value: {
+            model: previous.model,
+            provider: previous.provider,
+            metadata: previous.metadata,
+          },
+        });
+      }
+      await this.#recoverTopicPinWrite(containerKey, error);
+    }
+    await this.#get().refreshTopic(containerKey);
+  };
+
+  /**
+   * Resolve the user-level reasoning config to pin for `model`, fetching it when
+   * not cached yet. Returns `undefined` for models without reasoning extend
+   * params (nothing to pin).
+   */
+  internal_resolveTopicReasoningSnapshot = async ({
+    model,
+    provider,
+  }: {
+    model: string;
+    provider: string;
+  }): Promise<AiModelReasoningConfig | undefined> => {
+    const aiInfraStore = getAiInfraStoreState();
+    if (!aiModelSelectors.isModelHasReasoningExtendParams(model, provider)(aiInfraStore)) return;
+
+    await aiInfraStore.ensureModelReasoningConfig(model, provider);
+    return aiModelSelectors.modelReasoningConfig(model, provider)(getAiInfraStoreState()) ?? {};
+  };
+
+  /**
+   * Change the reasoning effort / mode of one topic without touching the
+   * user-level model-instance config. The patch is merged over the topic's
+   * current pin (seeded with `base` — normally the user-level config — when the
+   * topic has no pin yet), so a topic that only ever changed its effort still
+   * keeps the user's reasoning mode.
+   */
+  updateTopicReasoningConfig = async (
+    id: string,
+    patch: AiModelReasoningConfig,
+    base?: AiModelReasoningConfig,
+  ): Promise<void> => {
+    await this.#enqueueTopicEffortWrite(id, async () => {
+      const current = topicSelectors.getTopicById(id)(this.#get())?.metadata?.reasoningConfig;
+      await this.#writeTopicEffortPin(id, {
+        reasoningConfig: { ...(current ?? base), ...patch },
+      });
+    });
+  };
+
+  /** Pin a heterogeneous agent's reasoning effort to one topic (`metadata.heteroEffort`). */
+  updateTopicHeteroEffort = async (
+    id: string,
+    effort: HeterogeneousReasoningEffort,
+  ): Promise<void> => {
+    await this.#enqueueTopicEffortWrite(id, () =>
+      this.#writeTopicEffortPin(id, { heteroEffort: effort }),
+    );
+  };
+
+  /**
+   * Apply a heterogeneous (Claude Code / Codex) model + effort selection to one
+   * topic. When the selector pairs a model switch with an effort reset (the new
+   * model does not support the current effort) both land in the same write, so
+   * the topic never carries a model with an effort it cannot run.
+   */
+  updateTopicHeteroPin = async (
+    id: string,
+    {
+      effort,
+      model,
+      provider,
+    }: { effort?: HeterogeneousReasoningEffort; model?: string; provider: string },
+  ): Promise<void> => {
+    if (model === undefined) {
+      if (effort !== undefined) await this.#get().updateTopicHeteroEffort(id, effort);
+      return;
+    }
+    /** Model resets and later effort selections must share one persistence order. */
+    await this.#enqueueTopicEffortWrite(id, () =>
+      this.#writeTopicModelPin(id, {
+        metadata: effort === undefined ? undefined : { heteroEffort: effort },
+        model,
+        provider,
+      }),
+    );
+  };
+
+  #topicEffortWrites = new Map<string, Promise<void>>();
+
+  /** Serialize the full optimistic write/RPC/refresh cycle so earlier selections cannot land last. */
+  #enqueueTopicEffortWrite = async (id: string, write: () => Promise<void>): Promise<void> => {
+    const previous = this.#topicEffortWrites.get(id);
+    /** Failures already revalidate and toast; a rejected write must not poison the next selection. */
+    const pending = (previous ? previous.catch(() => {}) : Promise.resolve()).then(write);
+    this.#topicEffortWrites.set(id, pending);
+    this.#set(
+      (s) => ({
+        topicEffortUpdatingIds: s.topicEffortUpdatingIds.includes(id)
+          ? s.topicEffortUpdatingIds
+          : [...s.topicEffortUpdatingIds, id],
+      }),
+      false,
+      n('topicEffort/start'),
+    );
+    try {
+      await pending;
+    } finally {
+      if (this.#topicEffortWrites.get(id) === pending) {
+        this.#topicEffortWrites.delete(id);
+        this.#set(
+          (s) => ({ topicEffortUpdatingIds: s.topicEffortUpdatingIds.filter((key) => key !== id) }),
+          false,
+          n('topicEffort/end'),
+        );
+      }
+    }
+  };
+
+  /**
+   * `updateTopicMetadata` shows the new value optimistically and has no
+   * rollback, so a failed effort write would leave the picker (and client-side
+   * generation) on a value that was never persisted. Revalidate and tell the
+   * user, mirroring `updateModelReasoningConfig` for the user-level default.
+   */
+  #writeTopicEffortPin = async (
+    id: string,
+    metadata: Pick<ChatTopicMetadata, 'heteroEffort' | 'reasoningConfig'>,
+  ): Promise<void> => {
+    const containerKey = topicSelectors.getTopicContainerKeyById(id)(this.#get());
+    const previous = topicSelectors.getTopicById(id)(this.#get());
+    if (!previous) return;
+    this.#get().internal_dispatchTopic({
+      containerKey,
+      id,
+      type: 'updateTopic',
+      value: { metadata: { ...previous.metadata, ...metadata } },
+    });
+    try {
+      await topicService.updateTopicMetadata(id, metadata);
+    } catch (error) {
+      if (previous) {
+        this.#get().internal_dispatchTopic({
+          containerKey,
+          id,
+          type: 'updateTopic',
+          value: { metadata: previous.metadata },
+        });
+      }
+      await this.#recoverTopicPinWrite(containerKey, error);
+    }
+    await this.#get().refreshTopic(containerKey);
+  };
+
+  /** Local rollback must survive an offline refresh and preserve the original write failure. */
+  #recoverTopicPinWrite = async (
+    containerKey: string | undefined,
+    error: unknown,
+  ): Promise<never> => {
+    toast.error(t('reasoningEffort.updateFailed', { ns: 'chat' }));
+    try {
+      await this.#get().refreshTopic(containerKey);
+    } catch (refreshError) {
+      console.error('[topicPin] Failed to revalidate after rollback:', refreshError);
+    }
+    throw error;
   };
 
   /**

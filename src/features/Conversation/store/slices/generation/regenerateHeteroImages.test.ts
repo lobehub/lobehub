@@ -70,6 +70,7 @@ vi.mock('@/store/agent/selectors', () => ({
 vi.mock('@/store/chat/selectors', () => ({
   topicSelectors: {
     getTopicById: () => () => undefined,
+    getTopicHeteroPinById: () => () => undefined,
     getTopicModelById: () => () => undefined,
   },
 }));

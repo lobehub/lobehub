@@ -218,6 +218,7 @@ describe('AiAgentService.execAgent - file upload handling', () => {
         expect.objectContaining({ name: 'photo.png', mimeType: 'image/png' }),
         expect.any(Object),
         'test-user-id',
+        undefined,
       );
 
       // Verify messageModel.create was called with files

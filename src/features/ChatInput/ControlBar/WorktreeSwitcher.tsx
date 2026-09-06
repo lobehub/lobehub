@@ -21,7 +21,16 @@ import {
   SearchIcon,
   Trash2Icon,
 } from 'lucide-react';
-import { memo, type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  memo,
+  type MouseEvent,
+  type ReactElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { gitService } from '@/services/git';
@@ -321,6 +330,16 @@ const styles = createStaticStyles(({ css }) => ({
     display: inline-flex;
     flex: none;
   `,
+  /* Custom row triggers (overview panel) must fill the stretched trigger, or the
+     popup-open background paints wider than the row's own hover background. */
+  triggerFill: css`
+    display: flex;
+    width: 100%;
+
+    > * {
+      flex: 1;
+    }
+  `,
 }));
 
 const TEMP_PATH_PREFIXES = ['/tmp', '/var/tmp', '/private/tmp'];
@@ -411,12 +430,16 @@ DirtyStat.displayName = 'DirtyStat';
 
 interface WorktreeSwitcherProps {
   agentId: string;
+  /** Custom trigger element; the default is the compact branch/fork icon chip. */
+  children?: ReactElement;
   currentBranch: string;
   detached?: boolean;
   deviceId?: string;
   isGithub: boolean;
   onWorktreesChange?: () => Promise<unknown> | unknown;
   path: string;
+  /** Dropdown placement — the runtime bar opens upward, embedding panels open downward. */
+  placement?: 'topLeft' | 'bottomLeft' | 'bottomRight';
   sourcePath: string;
   worktrees: DeviceGitWorktreeListItem[];
 }
@@ -424,12 +447,14 @@ interface WorktreeSwitcherProps {
 const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
   ({
     agentId,
+    children,
     currentBranch,
     detached,
     deviceId,
     isGithub,
     onWorktreesChange,
     path,
+    placement = 'topLeft',
     sourcePath,
     worktrees,
   }) => {
@@ -608,7 +633,7 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
         normalizeDisplayPath(currentPath) !== normalizeDisplayPath(mainWorktree.path));
     const triggerIcon = isLinkedWorktree ? GitForkIcon : GitBranchIcon;
 
-    const trigger = (
+    const trigger = children ?? (
       <div
         aria-label={t('workingDirectory.worktreesHeading')}
         className={styles.trigger}
@@ -621,10 +646,12 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
     return (
       <DropdownMenuRoot open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger className={styles.triggerAnchor}>
-          <div>{open ? trigger : <Tooltip title={triggerTitle}>{trigger}</Tooltip>}</div>
+          <div className={children ? styles.triggerFill : undefined}>
+            {open ? trigger : <Tooltip title={triggerTitle}>{trigger}</Tooltip>}
+          </div>
         </DropdownMenuTrigger>
         <DropdownMenuPortal>
-          <DropdownMenuPositioner placement="topLeft" sideOffset={8}>
+          <DropdownMenuPositioner placement={placement} sideOffset={8}>
             <DropdownMenuPopup>
               <div className={styles.container}>
                 <div className={styles.searchBar}>

@@ -10,17 +10,16 @@ import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/se
 import AgentSelect from './AgentSelect';
 
 const styles = createStaticStyles(({ css }) => ({
-  // The measure comes from the layout (`--home-greeting-measure`), which derives
-  // it from the container width: it has to clear the portrait's bubble, and it
-  // must not depend on the rail, or collapsing would re-wrap the headline and
-  // shove the composer and the whole task list down by a line.
+  root: css`
+    /* Unbroken names must stay inside the start-aligned header's text lane. */
+    max-width: 100%;
+  `,
   greeting: css`
     overflow: hidden;
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
 
-    max-width: var(--home-greeting-measure, none);
     margin: 0;
 
     font-size: 22px;
@@ -59,7 +58,7 @@ const HomeHeader = memo<HomeHeaderProps>(({ centered }) => {
     // who speaks, the greeting answers below — but drops the toolbar chrome and
     // its 48px lane, so the pair reads as one compact block flush with the
     // composer. The layout's lift math (MINIMAL_LIFT) counts on these heights.
-    <Flexbox gap={centered ? 8 : 16} justify={'center'}>
+    <Flexbox className={styles.root} gap={centered ? 8 : 16} justify={'center'}>
       {centered ? (
         <AgentSelect />
       ) : (

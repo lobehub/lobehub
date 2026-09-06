@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 
 import { resolveServerDefaultAgentModels } from '@/features/HeterogeneousAgent/modelPicker';
 import ModelSelect from '@/features/ModelSelect';
+import ReasoningEffortSelect from '@/features/ModelSelect/ReasoningEffortSelect';
 import RunPriorityHint from '@/features/ProfileEditor/AgentUserTools/RunPriorityHint';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
@@ -270,6 +271,13 @@ const ProfileEditor = memo(() => {
                     void updateAgentConfigById(agentId, value);
                   }}
                 />
+                {config?.model && config.provider && (
+                  <ReasoningEffortSelect
+                    disabled={!canEdit}
+                    model={config.model}
+                    provider={config.provider}
+                  />
+                )}
               </Flexbox>
               <AgentTool />
             </Flexbox>

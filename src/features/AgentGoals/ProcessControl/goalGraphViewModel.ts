@@ -118,6 +118,19 @@ export const isTroubledTaskNode = (view: GoalNodeView): boolean => {
   return view.attempts.at(-1)?.outcome === 'failed';
 };
 
+/**
+ * Whether a Task node has a delivery worth opening the result surface on: it
+ * settled successfully, or it delivered and its Acceptance is being judged.
+ * A Task that is still running (or was never dispatched) has no result yet —
+ * opening the result panel there shows an empty shell, so those open the
+ * original Task detail, where progress and configuration live.
+ */
+export const hasReviewableResult = (view: GoalNodeView): boolean => {
+  if (view.node.kind !== 'task') return false;
+  if (isTroubledTaskNode(view)) return false;
+  return view.node.status === 'resolved' || view.isVerifying;
+};
+
 export type FrontierItemKind = 'gate' | 'stale' | 'verifying' | 'running' | 'ready' | 'done';
 
 export interface FrontierItem {

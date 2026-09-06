@@ -223,6 +223,26 @@ vi.mock('@/server/services/file', () => ({
   })),
 }));
 
+const mockFileUploadFindLatest = vi.fn();
+const mockFileUploadHasAnyLiveSession = vi.fn();
+const mockFileUploadTouchActive = vi.fn();
+const mockFileUploadReleaseBestEffort = vi.fn();
+const mockFileUploadFindLatestForUpdate = vi.fn();
+const mockFileUploadSettle = vi.fn();
+
+vi.mock('@/server/services/fileUpload', () => ({
+  FileUploadService: vi.fn(() => ({
+    findLatest: mockFileUploadFindLatest,
+    hasAnyLiveSession: mockFileUploadHasAnyLiveSession,
+    model: {
+      findLatestByPathnameForUpdate: mockFileUploadFindLatestForUpdate,
+      settle: mockFileUploadSettle,
+    },
+    releaseBestEffort: mockFileUploadReleaseBestEffort,
+    touchActive: mockFileUploadTouchActive,
+  })),
+}));
+
 const mockKnowledgeRepoQuery = vi.fn().mockResolvedValue([]);
 const mockDocumentServiceDeleteDocuments = vi.fn();
 const mockDocumentModelCountFileUsageInSubtree = vi.fn();
@@ -300,6 +320,11 @@ describe('fileRouter', () => {
     mockFileServiceGetFileAccessUrl.mockImplementation(async (file: { id: string }) =>
       buildMockFileAccessUrl(file),
     );
+    mockFileUploadFindLatest.mockResolvedValue(undefined);
+    mockFileUploadHasAnyLiveSession.mockResolvedValue(false);
+    mockFileUploadTouchActive.mockResolvedValue(undefined);
+    mockFileUploadFindLatestForUpdate.mockResolvedValue(undefined);
+    mockFileUploadSettle.mockResolvedValue(undefined);
 
     // Use actual context with default mocks
     ({ ctx, caller } = createCallerWithCtx());
@@ -538,6 +563,131 @@ describe('fileRouter', () => {
         true,
         routerMocks.transactionClient,
       );
+    });
+
+    it('settles an active reservation without charging its bytes twice', async () => {
+      const upload = {
+        id: '00000000-0000-0000-0000-000000000001',
+        pathname: 'files/test.txt',
+        size: 100,
+        status: 'active',
+      };
+      mockFileModelCheckHash.mockResolvedValue({ isExist: false });
+      mockFileModelCreate.mockResolvedValue({ id: 'new-file-id' });
+      mockFileUploadFindLatest.mockResolvedValue(upload);
+      mockFileUploadTouchActive.mockResolvedValue(upload);
+      mockFileUploadFindLatestForUpdate.mockResolvedValue(upload);
+      mockFileUploadSettle.mockResolvedValue({
+        ...upload,
+        fileId: 'new-file-id',
+        status: 'settled',
+      });
+
+      await caller.createFile({
+        fileType: 'text/plain',
+        hash: 'test-hash',
+        metadata: {},
+        name: 'test.txt',
+        size: 100,
+        url: 'files/test.txt',
+      });
+
+      expect(routerMocks.businessFileUploadCheck).not.toHaveBeenCalled();
+      expect(mockFileUploadFindLatestForUpdate).toHaveBeenCalledWith(
+        'files/test.txt',
+        routerMocks.transactionClient,
+      );
+      expect(mockFileUploadSettle).toHaveBeenCalledWith(
+        upload.id,
+        'new-file-id',
+        routerMocks.transactionClient,
+      );
+    });
+
+    it('cleans an active reservation when the stored size does not match', async () => {
+      const upload = {
+        id: '00000000-0000-0000-0000-000000000001',
+        pathname: 'files/test.txt',
+        size: 100,
+        status: 'active',
+      };
+      mockFileModelCheckHash.mockResolvedValue({ isExist: false });
+      mockFileUploadFindLatest.mockResolvedValue(upload);
+      mockFileUploadTouchActive.mockResolvedValue(upload);
+      mockFileServiceGetFileMetadata.mockResolvedValue({ contentLength: 101 });
+
+      await expect(
+        caller.createFile({
+          fileType: 'text/plain',
+          hash: 'test-hash',
+          metadata: {},
+          name: 'test.txt',
+          size: 100,
+          url: 'files/test.txt',
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: 'Uploaded file size mismatch' });
+
+      expect(mockFileUploadReleaseBestEffort).toHaveBeenCalledWith('files/test.txt');
+      expect(mockFileModelCreate).not.toHaveBeenCalled();
+    });
+
+    it('rejects a pathname reserved by another upload owner', async () => {
+      mockFileModelCheckHash.mockResolvedValue({ isExist: false });
+      mockFileUploadHasAnyLiveSession.mockResolvedValue(true);
+
+      await expect(
+        caller.createFile({
+          fileType: 'text/plain',
+          hash: 'test-hash',
+          metadata: {},
+          name: 'test.txt',
+          size: 100,
+          url: 'files/other-user.txt',
+        }),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+
+      expect(mockFileServiceGetFileMetadata).not.toHaveBeenCalled();
+      expect(mockFileModelCreate).not.toHaveBeenCalled();
+    });
+
+    it('returns the settled file for an identical finalization retry', async () => {
+      mockFileModelCheckHash.mockResolvedValue({
+        isExist: true,
+        url: 'files/test.txt',
+      });
+      mockFileUploadFindLatest.mockResolvedValue({
+        fileId: 'settled-file-id',
+        pathname: 'files/test.txt',
+        status: 'settled',
+      });
+      mockFileModelFindById.mockResolvedValueOnce({
+        fileHash: 'test-hash',
+        fileType: 'text/plain',
+        id: 'settled-file-id',
+        metadata: {},
+        name: 'test.txt',
+        parentId: null,
+        size: 100,
+        source: null,
+        url: 'files/test.txt',
+      });
+
+      await expect(
+        caller.createFile({
+          fileType: 'text/plain',
+          hash: 'test-hash',
+          metadata: {},
+          name: 'test.txt',
+          size: 100,
+          url: 'files/test.txt',
+        }),
+      ).resolves.toEqual({
+        id: 'settled-file-id',
+        url: 'https://lobehub.com/f/settled-file-id',
+      });
+
+      expect(mockFileModelCreate).not.toHaveBeenCalled();
+      expect(routerMocks.businessFileUploadCheck).not.toHaveBeenCalled();
     });
 
     it('should pass workspace context into business upload check', async () => {

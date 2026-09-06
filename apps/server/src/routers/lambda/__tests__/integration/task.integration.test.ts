@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AcceptanceModel } from '@/database/models/acceptance';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { TaskService } from '@/server/services/task';
 
 import { taskRouter } from '../../task';
 import {
@@ -207,6 +208,35 @@ describe('Task Router Integration', () => {
 
       expect(richTextUpdate.data.instruction).toBe('Rich instruction');
       expect(richTextUpdate.data.editorData).toEqual(nextEditorData);
+    });
+
+    it('should apply field and status edits in one mutation', async () => {
+      const task = await caller.create({ instruction: 'Original', name: 'Original' });
+
+      const result = await caller.update({
+        id: task.data.id,
+        name: 'Updated',
+        status: 'completed',
+      });
+
+      expect(result.data.name).toBe('Updated');
+      expect(result.data.status).toBe('completed');
+    });
+
+    it('should roll back field edits when the status transition fails', async () => {
+      const task = await caller.create({ instruction: 'Original', name: 'Original' });
+      const statusError = vi
+        .spyOn(TaskService.prototype, 'updateStatus')
+        .mockRejectedValueOnce(new Error('status transition failed'));
+
+      await expect(
+        caller.update({ id: task.data.id, name: 'Updated', status: 'completed' }),
+      ).rejects.toThrow('Failed to update task');
+
+      statusError.mockRestore();
+      const persisted = await new TaskModel(serverDB, userId).findById(task.data.id);
+      expect(persisted?.name).toBe('Original');
+      expect(persisted?.status).toBe('backlog');
     });
   });
 

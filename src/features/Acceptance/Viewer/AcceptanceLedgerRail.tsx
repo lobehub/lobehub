@@ -1,7 +1,7 @@
 'use client';
 
-import { DraggablePanel, Flexbox } from '@lobehub/ui';
-import { ActionIcon, Drawer } from '@lobehub/ui/base-ui';
+import { DraggablePanel, Flexbox, Icon } from '@lobehub/ui';
+import { Drawer, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import { PanelRightOpen } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -18,18 +18,36 @@ import { useAcceptanceBundle } from './useAcceptanceBundle';
 import { canViewAcceptanceHistory } from './visibility';
 
 const styles = createStaticStyles(({ css }) => ({
+  chipCount: css`
+    font-size: 11px;
+    font-weight: 500;
+    color: ${cssVar.colorTextSecondary};
+  `,
+  /**
+   * Collapsed, the run ledger is a VERTICAL chip hugging the content's right
+   * edge: the rounds are the page's audit trail, not its reading material, so
+   * the affordance keeps the column it would otherwise occupy down to a
+   * thumb-width strip. The icon plus the round count carry it — spelling the
+   * label out sideways would cost the width the collapse just bought back.
+   */
   toggle: css`
+    cursor: pointer;
+
     position: absolute;
     z-index: 10;
     inset-block-start: 16px;
-    inset-inline-end: 16px;
+    inset-inline-end: 12px;
 
+    padding-block: 8px;
+    padding-inline: 5px;
     border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 99px;
 
     background: ${cssVar.colorBgContainer};
 
     &:hover {
       border-color: ${cssVar.colorBorder};
+      background: ${cssVar.colorFillQuaternary};
     }
   `,
 }));
@@ -44,7 +62,11 @@ const AcceptanceLedgerRail = () => {
   const { data } = useAcceptanceBundle(acceptanceId);
   const originConversation = useOriginConversation();
   const originTopicOpen = Boolean(originConversation?.isOpen);
-  const [expand, setExpand] = useState(!embedded);
+  /**
+   * Collapsed by default. The rounds are provenance — worth reaching for when
+   * a verdict is in question, not worth a permanent column beside every read.
+   */
+  const [expand, setExpand] = useState(false);
   const highlightRound = null;
   const focused = Boolean(params.checkId);
 
@@ -121,13 +143,16 @@ const AcceptanceLedgerRail = () => {
   return (
     <>
       {!focused && !expand && (
-        <ActionIcon
+        <Flexbox
+          align={'center'}
           className={styles.toggle}
-          icon={PanelRightOpen}
-          size={'small'}
+          gap={5}
           title={t('acceptance.ledger.expand')}
           onClick={() => setExpand(true)}
-        />
+        >
+          <Icon icon={PanelRightOpen} size={14} />
+          <Text className={styles.chipCount}>{data.rounds.length}</Text>
+        </Flexbox>
       )}
       {isNarrowViewport ? (
         <Drawer

@@ -1,4 +1,5 @@
 import type { SFSymbol } from '@lobechat/electron-client-ipc';
+import { getWorkingDirEffectivePath } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import { Flexbox, Icon, type IconProps } from '@lobehub/ui';
 import { ActionIcon, type DropdownItem, DropdownMenu, Skeleton } from '@lobehub/ui/base-ui';
@@ -48,6 +49,7 @@ import RightPanel from '@/features/RightPanel';
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
+import { getWorkingDirectoryPathString } from '@/helpers/workingDirectoryPath';
 import { useDeferredMount } from '@/hooks/useDeferredMount';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
@@ -56,9 +58,10 @@ import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { chatPortalSelectors, portalThreadSelectors } from '@/store/chat/selectors';
+import { chatPortalSelectors, portalThreadSelectors, topicSelectors } from '@/store/chat/selectors';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -310,6 +313,31 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     workspaceScoped,
   });
   const repoType = useRepoType(workingDirectory, targetDeviceId);
+  // The SOURCE repo, not the checkout — same fallback chain as
+  // WorkingDirectorySection: a persisted-worktree topic has no matching
+  // `workingDirs` entry, and committing the worktree path as sourcePath would
+  // rewrite the topic's repo source (see that component's comment).
+  const topicWorkingDirectoryConfig = useChatStore(
+    (s) => topicSelectors.currentTopicMetadata(s)?.workingDirectoryConfig,
+  );
+  const deviceDirs = useDeviceStore(deviceSelectors.getDeviceWorkingDirs(targetDeviceId));
+  const sourceWorkingDirectory = useMemo(() => {
+    if (!workingDirectory) return undefined;
+    const currentEntry = deviceDirs.find(
+      (entry) =>
+        (getWorkingDirectoryPathString(entry.git?.activeWorktree) ??
+          getWorkingDirectoryPathString(entry.path)) === workingDirectory,
+    );
+    const persistedConfig =
+      getWorkingDirEffectivePath(topicWorkingDirectoryConfig) === workingDirectory
+        ? topicWorkingDirectoryConfig
+        : undefined;
+    return (
+      getWorkingDirectoryPathString(currentEntry?.path) ??
+      getWorkingDirectoryPathString(persistedConfig?.path) ??
+      workingDirectory
+    );
+  }, [deviceDirs, topicWorkingDirectoryConfig, workingDirectory]);
   const deviceRoutingAvailable = useIsGatewayModeEnabled(activeAgentId);
   const effectiveTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
@@ -905,9 +933,11 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
         {contentReady && (
           <Overview
             active
+            agentId={activeAgentId}
             deviceId={remoteDeviceId}
             environmentAvailable={filesystemEnvironmentAvailable}
             repoType={environmentRepoType}
+            sourcePath={sourceWorkingDirectory}
             workingDirectory={environmentWorkingDirectory}
             onOpenTab={openTab}
           />

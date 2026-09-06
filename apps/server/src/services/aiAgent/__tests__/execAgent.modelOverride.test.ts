@@ -9,6 +9,7 @@ const {
   mockGetAgentConfig,
   mockGetPreference,
   mockMessageCreate,
+  mockTopicCreate,
   mockTopicFindById,
 } = vi.hoisted(() => ({
   mockIsResourceAuthorOrAdmin: vi.fn(),
@@ -16,6 +17,7 @@ const {
   mockGetAgentConfig: vi.fn(),
   mockGetPreference: vi.fn(),
   mockMessageCreate: vi.fn(),
+  mockTopicCreate: vi.fn().mockResolvedValue({ id: 'topic-1' }),
   mockTopicFindById: vi.fn(),
 }));
 
@@ -27,6 +29,13 @@ vi.mock('@/libs/trusted-client', () => ({
   generateTrustedClientToken: vi.fn().mockReturnValue(undefined),
   getTrustedClientTokenForSession: vi.fn().mockResolvedValue(undefined),
   isTrustedClientEnabled: vi.fn().mockReturnValue(false),
+}));
+
+vi.mock('@/database/models/chatGroup', () => ({
+  ChatGroupModel: class {
+    findById = vi.fn().mockResolvedValue(undefined);
+    getGroupAgentsWithMeta = vi.fn().mockResolvedValue([]);
+  },
 }));
 
 vi.mock('@/database/models/message', () => ({
@@ -85,7 +94,8 @@ vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(() => ({
     releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
     tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
-    create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
+    create: mockTopicCreate,
+    armScheduledRun: vi.fn().mockResolvedValue(undefined),
     findById: mockTopicFindById,
   })),
 }));
@@ -200,6 +210,40 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     expect(callArgs.agentConfig.provider).toBe('openai');
   });
 
+  it.each(['group', 'scheduled'])(
+    'pins the member-selected model when precreating a %s topic',
+    async (kind) => {
+      mockGetAgentConfig.mockResolvedValue({
+        ...defaultAgentConfig,
+        agencyConfig: { modelSelectionPolicy: 'member' },
+        userId: 'agent-author',
+        visibility: 'public',
+        workspaceId: 'workspace-1',
+      });
+      mockGetPreference.mockResolvedValue({
+        agentModelOverrides: { 'agent-1': { model: 'claude-sonnet-4-6', provider: 'anthropic' } },
+      });
+      service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+      const runSpy = vi
+        .spyOn(service, 'execAgent')
+        .mockResolvedValue({} as Awaited<ReturnType<AiAgentService['execAgent']>>);
+      if (kind === 'group') {
+        await service.execGroupAgent({ agentId: 'agent-1', groupId: 'group-1', message: 'Group' });
+      } else {
+        await service.scheduleAgentRun({
+          agentId: 'agent-1',
+          prompt: 'Scheduled',
+          runAt: new Date(Date.now() + 60_000).toISOString(),
+        });
+      }
+      expect(mockTopicCreate.mock.calls[0][0]).toMatchObject({
+        model: 'claude-sonnet-4-6',
+        provider: 'anthropic',
+      });
+      runSpy.mockRestore();
+    },
+  );
+
   it('should override model when model param is provided', async () => {
     mockGetAgentConfig.mockResolvedValue({ ...defaultAgentConfig });
 
@@ -244,6 +288,33 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     const callArgs = mockCreateOperation.mock.calls[0][0];
     expect(callArgs.agentConfig.model).toBe('claude-sonnet-4-6');
     expect(callArgs.agentConfig.provider).toBe('anthropic');
+  });
+
+  it('keeps group members on their own model instead of the supervisor topic pin', async () => {
+    mockGetAgentConfig.mockResolvedValue({ ...defaultAgentConfig });
+    mockTopicFindById.mockResolvedValue({
+      agentId: 'supervisor',
+      groupId: 'group-1',
+      model: 'supervisor-model',
+      provider: 'anthropic',
+      metadata: { heteroEffort: 'high' },
+    });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: {
+        topicId: 'topic-1',
+        groupId: 'group-1',
+        orchestrationRole: 'member',
+        scope: 'group',
+      },
+      prompt: 'Hello',
+    });
+
+    expect(mockCreateOperation.mock.calls[0][0].agentConfig).toMatchObject({
+      model: 'gpt-4',
+      provider: 'openai',
+    });
   });
 
   it('keeps an explicit model override over the topic model', async () => {

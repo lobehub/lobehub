@@ -1073,7 +1073,8 @@ export class CompletionLifecycle {
       //    provenance `call_llm` stamps on every assistant row it creates or
       //    reuses (`metadata.operationId`). Unlike "the latest assistant row in
       //    the topic", this is bound to THIS operation, so a topic that also
-      //    holds a concurrent run's rows cannot supply the answer (LOBE-13787).
+      //    holds a concurrent run's rows cannot supply the answer (root cause of
+      //    the Discord thread bug where the bot kept repeating the same reply).
       if (!extractTextFromMessage(row)?.trim() && topicId) {
         const byOperation = await messageModel.findLatestAssistantByOperationId({
           operationId,

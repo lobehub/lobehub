@@ -55,6 +55,16 @@ const styles = createStaticStyles(({ css }) => ({
     display: inline-flex;
     flex: none;
   `,
+  /* See WorktreeSwitcher.triggerFill — keeps a full-row custom trigger's hover
+     background aligned with the popup-open background. */
+  triggerFill: css`
+    display: flex;
+    width: 100%;
+
+    > * {
+      flex: 1;
+    }
+  `,
   container: css`
     display: flex;
     flex-direction: column;
@@ -233,6 +243,8 @@ interface BranchSwitcherProps {
   onOptimisticCheckout?: (branch: string) => void;
   open: boolean;
   path: string;
+  /** Dropdown placement — the runtime bar opens upward, embedding panels open downward. */
+  placement?: 'topLeft' | 'bottomLeft' | 'bottomRight';
   /** The repo the conversation is anchored to (worktrees hang off it). */
   sourcePath: string;
   /** Used to route a checkout into the worktree that already holds the branch. */
@@ -251,6 +263,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
     onAfterCheckout,
     onExternalRefresh,
     onOptimisticCheckout,
+    placement = 'topLeft',
     sourcePath,
     worktrees,
     children,
@@ -475,10 +488,10 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
     return (
       <DropdownMenuRoot open={open} onOpenChange={onOpenChange}>
         <DropdownMenuTrigger className={styles.triggerAnchor}>
-          <div>{children}</div>
+          <div className={styles.triggerFill}>{children}</div>
         </DropdownMenuTrigger>
         <DropdownMenuPortal>
-          <DropdownMenuPositioner placement="topLeft" sideOffset={8}>
+          <DropdownMenuPositioner placement={placement} sideOffset={8}>
             <DropdownMenuPopup>
               <div className={styles.container}>
                 <div className={styles.searchBar}>

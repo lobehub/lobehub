@@ -9,7 +9,7 @@ import {
 import type {
   ErrorType,
   ExecAgentResult,
-  HeterogeneousTopicModel,
+  HeterogeneousTopicPin,
   LobeAgentAgencyConfig,
   RequestTrigger,
   WorkingDirConfig,
@@ -182,7 +182,7 @@ export interface HeteroDispatchInput {
   memberDeviceOverride?: Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'>;
   operationTaskId?: string;
   parentOperationId?: string;
-  pinnedHeterogeneousTopicModel?: HeterogeneousTopicModel;
+  pinnedHeterogeneousTopicModel?: HeterogeneousTopicPin;
   requestedDeviceId?: string;
   requestTrigger?: RequestTrigger;
   runAttachments: { imageList?: Array<{ alt: string; id: string; url: string }> };

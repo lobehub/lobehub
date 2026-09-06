@@ -11,6 +11,24 @@ const testState = vi.hoisted(() => ({
     updateModelReasoningConfig: vi.fn(() => Promise.resolve()),
     updating: false,
   },
+  chat: {
+    topicEffortUpdatingIds: [] as string[],
+    /** keyed by `${topicId}/${provider}/${model}` — mirrors getTopicReasoningConfigForModel */
+    topicConfigs: {} as Record<string, AiModelReasoningConfig | undefined>,
+    updateTopicReasoningConfig: vi.fn(() => Promise.resolve()),
+  },
+}));
+
+vi.mock('@/store/chat', () => ({
+  useChatStore: <T>(selector: (state: typeof testState.chat) => T) => selector(testState.chat),
+}));
+
+vi.mock('@/store/chat/slices/topic/selectors', () => ({
+  topicSelectors: {
+    getTopicReasoningConfigForModel:
+      (topicId: string, model: string, provider: string) => (state: typeof testState.chat) =>
+        state.topicConfigs[`${topicId}/${provider}/${model}`],
+  },
 }));
 
 vi.mock('@/store/aiInfra', () => ({
@@ -29,6 +47,9 @@ beforeEach(() => {
   testState.ai.reasoningParams = [];
   testState.ai.updating = false;
   testState.ai.updateModelReasoningConfig.mockClear();
+  testState.chat.topicConfigs = {};
+  testState.chat.topicEffortUpdatingIds = [];
+  testState.chat.updateTopicReasoningConfig.mockClear();
 });
 
 describe('useReasoningEffortControl', () => {
@@ -62,6 +83,19 @@ describe('useReasoningEffortControl', () => {
     expect(other.current.effortValue).toBe('none');
   });
 
+  it.each([
+    ['thinkingLevel', 'gemini-3-flash-preview', ['minimal', 'low', 'medium', 'high'], 'high'],
+    ['thinkingLevel2', 'gemini-3-pro-preview', ['low', 'high'], 'high'],
+    ['thinkingLevel3', 'gemini-3.7-flash', ['low', 'medium', 'high'], 'medium'],
+    ['thinkingLevel4', 'gemini-3.1-flash-image', ['minimal', 'high'], 'minimal'],
+    ['thinkingLevel', 'gemini-3.1-flash-lite', ['minimal', 'low', 'medium', 'high'], 'minimal'],
+  ])('exposes %s choices and the runtime default for %s', (key, model, levels, fallback) => {
+    testState.ai.reasoningParams = [key as string];
+    const { result } = renderHook(() => useReasoningEffortControl(model as string, 'google'));
+    expect(result.current.effortLevels).toEqual(levels);
+    expect(result.current.effortValue).toBe(fallback);
+  });
+
   it('keeps the reasoning mode separate from the effort level', () => {
     testState.ai.reasoningParams = ['effort', 'reasoningMode'];
     testState.ai.config = { reasoningMode: 'pro' };
@@ -89,5 +123,62 @@ describe('useReasoningEffortControl', () => {
     result.current.select({ effort: 'low' });
 
     expect(testState.ai.updateModelReasoningConfig).toHaveBeenCalledTimes(1);
+  });
+
+  describe('topic scope', () => {
+    it('uses the topic in-flight state rather than the shared default mutation', () => {
+      testState.ai.updating = true;
+      const { result, rerender } = renderHook(() =>
+        useReasoningEffortControl('claude', 'anthropic', 'topic-1'),
+      );
+      expect(result.current.updating).toBe(false);
+      testState.chat.topicEffortUpdatingIds = ['topic-1'];
+      rerender();
+      expect(result.current.updating).toBe(true);
+      result.current.select({ effort: 'high' });
+      expect(testState.chat.updateTopicReasoningConfig).not.toHaveBeenCalled();
+    });
+
+    it('shows the topic pin over the user-level config when pinned for this model', () => {
+      testState.ai.reasoningParams = ['effort', 'reasoningMode'];
+      testState.ai.config = { effort: 'low', reasoningMode: 'pro' };
+      testState.chat.topicConfigs['topic-1/anthropic/claude'] = { effort: 'max' };
+
+      const { result } = renderHook(() =>
+        useReasoningEffortControl('claude', 'anthropic', 'topic-1'),
+      );
+
+      expect(result.current.effortValue).toBe('max');
+      // the pin replaces the whole config: an unset mode falls back to the param default
+      expect(result.current.modeValue).toBe('standard');
+    });
+
+    it('falls back to the user-level config when the topic has no pin for this model', () => {
+      testState.ai.reasoningParams = ['effort'];
+      testState.ai.config = { effort: 'low' };
+
+      const { result } = renderHook(() =>
+        useReasoningEffortControl('claude', 'anthropic', 'topic-1'),
+      );
+
+      expect(result.current.effortValue).toBe('low');
+    });
+
+    it('writes the topic pin (seeded from the user-level config) instead of the user config', () => {
+      testState.ai.reasoningParams = ['effort', 'reasoningMode'];
+      testState.ai.config = { effort: 'low', reasoningMode: 'pro' };
+
+      const { result } = renderHook(() =>
+        useReasoningEffortControl('claude', 'anthropic', 'topic-1'),
+      );
+      result.current.select({ effort: 'max' });
+
+      expect(testState.chat.updateTopicReasoningConfig).toHaveBeenCalledWith(
+        'topic-1',
+        { effort: 'max' },
+        { effort: 'low', reasoningMode: 'pro' },
+      );
+      expect(testState.ai.updateModelReasoningConfig).not.toHaveBeenCalled();
+    });
   });
 });

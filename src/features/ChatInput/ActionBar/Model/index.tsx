@@ -40,9 +40,10 @@ const ModelSwitch = memo(() => {
   const enabledModel = useAiInfraStore(aiModelSelectors.getEnabledModelById(model, provider));
   const displayName = enabledModel?.displayName || model;
   const lockTooltip = useModelLockTooltip(displayName, selectionLockReason);
-  // Reasoning effort is a per-model user preference, so it rides along with the
-  // model trigger instead of claiming a second action slot.
-  const effort = useReasoningEffortControl(model, provider);
+  // Reasoning effort rides along with the model trigger instead of claiming a
+  // second action slot. Like the model, it pins to the active topic when there
+  // is one and edits the user's per-model default otherwise.
+  const effort = useReasoningEffortControl(model, provider, activeTopicId ?? undefined);
   // A pinned model still opens the menu when there is an effort to pick there.
   const interactive = canSelectModel || effort.hasReasoningParams;
 

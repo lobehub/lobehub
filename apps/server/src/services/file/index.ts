@@ -1,4 +1,4 @@
-import { type LobeChatDatabase } from '@lobechat/database';
+import { type LobeChatDatabase, type Transaction } from '@lobechat/database';
 import { inferContentTypeFromImageUrl, nanoid, uuid } from '@lobechat/utils';
 import { TRPCError } from '@trpc/server';
 import { sha256 } from 'js-sha256';
@@ -26,12 +26,15 @@ export interface FileAccessUrlItem {
  * Provides file operation services using a modular implementation approach
  */
 export class FileService {
+  private db: LobeChatDatabase;
+
   private userId: string;
   private fileModel: FileModel;
 
   private impl: FileServiceImpl;
 
   constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+    this.db = db;
     this.userId = userId;
     this.fileModel = new FileModel(db, userId, workspaceId);
     this.impl = createFileServiceModule(db);
@@ -191,15 +194,18 @@ export class FileService {
    * @param params.id - Optional custom file ID (defaults to auto-generated)
    * @returns File record and proxy URL
    */
-  public async createFileRecord(params: {
-    fileHash: string;
-    fileType: string;
-    id?: string;
-    metadata?: Record<string, unknown>;
-    name: string;
-    size: number;
-    url: string;
-  }): Promise<{ fileId: string; url: string }> {
+  public async createFileRecord(
+    params: {
+      fileHash: string;
+      fileType: string;
+      id?: string;
+      metadata?: Record<string, unknown>;
+      name: string;
+      size: number;
+      url: string;
+    },
+    trx?: Transaction,
+  ): Promise<{ fileId: string; url: string }> {
     // Check if hash already exists in globalFiles
     const existingFile = await this.fileModel.checkHash(params.fileHash);
     const { isExist } = existingFile;
@@ -231,6 +237,7 @@ export class FileService {
         url: params.url,
       },
       !isExist, // insertToGlobalFiles
+      trx,
     );
 
     return {
@@ -388,6 +395,12 @@ export class FileService {
     buffer: Buffer,
     mimeType: string,
     pathname: string,
+    /**
+     * Runs inside the transaction that writes the file row, so an admission check
+     * can hold its owner lock without spanning the upload itself. The stored object
+     * is removed again when it rejects.
+     */
+    beforeRecord?: (trx: Transaction) => Promise<void>,
   ): Promise<{ fileId: string; key: string; url: string }> {
     // Use uploadBuffer with explicit contentType so S3 Content-Type matches
     // the actual bytes (e.g. PNG buffer won't get image/jpeg from .jpg pathname)
@@ -405,15 +418,32 @@ export class FileService {
     const filename = parts.pop() || name;
     const dirname = parts.join('/');
 
-    const { fileId: createdId, url } = await this.createFileRecord({
-      fileHash: hash,
-      fileType: mimeType,
-      id: fileId,
-      metadata: { date: new Date().toISOString().slice(0, 10), dirname, filename, path: pathname },
-      name,
-      size,
-      url: key,
-    });
+    const { fileId: createdId, url } = await this.db
+      .transaction(async (trx) => {
+        await beforeRecord?.(trx);
+
+        return this.createFileRecord(
+          {
+            fileHash: hash,
+            fileType: mimeType,
+            id: fileId,
+            metadata: {
+              date: new Date().toISOString().slice(0, 10),
+              dirname,
+              filename,
+              path: pathname,
+            },
+            name,
+            size,
+            url: key,
+          },
+          trx,
+        );
+      })
+      .catch(async (error) => {
+        await this.deleteFile(key).catch(() => {});
+        throw error;
+      });
 
     return { fileId: createdId, key, url };
   }

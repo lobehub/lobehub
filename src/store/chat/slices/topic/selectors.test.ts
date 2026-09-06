@@ -48,6 +48,81 @@ describe('topicSelectors', () => {
     });
   });
 
+  describe('reasoning + hetero pins', () => {
+    const pinTopicDataMap = createTopicDataMap('test');
+    pinTopicDataMap[topicMapKey({ agentId: 'test' })].items = [
+      {
+        id: 'pinned',
+        metadata: { reasoningConfig: { reasoningEffort: 'high' } },
+        model: 'gpt-5',
+        name: 'Pinned',
+        provider: 'openai',
+      },
+      { id: 'legacy', model: 'gpt-5', name: 'Legacy', provider: 'openai' },
+      { id: 'noModel', metadata: { reasoningConfig: {} }, name: 'No Model' },
+      {
+        id: 'heteroBoth',
+        metadata: { heteroEffort: 'max' },
+        model: 'opus',
+        name: 'Hetero',
+        provider: 'claude-code',
+      },
+      { id: 'heteroEffortOnly', metadata: { heteroEffort: 'default' }, name: 'Hetero effort' },
+      { id: 'heteroNone', name: 'Hetero none' },
+    ] as any;
+    const state = merge(initialStore, { topicDataMap: pinTopicDataMap, activeAgentId: 'test' });
+
+    it('getTopicReasoningPinById returns the pinned model with its reasoning config', () => {
+      expect(topicSelectors.getTopicReasoningPinById('pinned')(state)).toEqual({
+        model: 'gpt-5',
+        provider: 'openai',
+        reasoningConfig: { reasoningEffort: 'high' },
+      });
+      expect(topicSelectors.getTopicReasoningPinById('legacy')(state)).toEqual({
+        model: 'gpt-5',
+        provider: 'openai',
+        reasoningConfig: undefined,
+      });
+      expect(topicSelectors.getTopicReasoningPinById('noModel')(state)).toBeUndefined();
+    });
+
+    it('getTopicReasoningConfigForModel only honors a pin taken for the same model', () => {
+      expect(
+        topicSelectors.getTopicReasoningConfigForModel('pinned', 'gpt-5', 'openai')(state),
+      ).toEqual({ reasoningEffort: 'high' });
+      // a sub-agent modelOverride must not inherit the parent topic's effort
+      expect(
+        topicSelectors.getTopicReasoningConfigForModel('pinned', 'gpt-4', 'openai')(state),
+      ).toBeUndefined();
+      expect(
+        topicSelectors.getTopicReasoningConfigForModel('pinned', 'gpt-5', 'azure')(state),
+      ).toBeUndefined();
+      expect(
+        topicSelectors.getTopicReasoningConfigForModel('legacy', 'gpt-5', 'openai')(state),
+      ).toBeUndefined();
+    });
+
+    it('getTopicHeteroPinById combines the model columns with the effort pin', () => {
+      expect(topicSelectors.getTopicHeteroPinById('heteroBoth')(state)).toEqual({
+        effort: 'max',
+        model: 'opus',
+        provider: 'claude-code',
+      });
+      expect(topicSelectors.getTopicHeteroPinById('heteroEffortOnly')(state)).toEqual({
+        effort: 'default',
+      });
+      expect(topicSelectors.getTopicHeteroPinById('heteroNone')(state)).toBeUndefined();
+      expect(topicSelectors.getTopicHeteroPinById('missing')(state)).toBeUndefined();
+    });
+
+    it('activeTopicHeteroPin follows the active topic', () => {
+      expect(topicSelectors.activeTopicHeteroPin(state)).toBeUndefined();
+      expect(
+        topicSelectors.activeTopicHeteroPin(merge(state, { activeTopicId: 'heteroBoth' })),
+      ).toEqual({ effort: 'max', model: 'opus', provider: 'claude-code' });
+    });
+  });
+
   describe('getTopicModelById / activeTopicModel', () => {
     const modelTopicDataMap = createTopicDataMap('test');
     modelTopicDataMap[topicMapKey({ agentId: 'test' })].items = [

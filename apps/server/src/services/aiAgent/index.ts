@@ -67,7 +67,7 @@ import { createHistoryMessagesLoader, prepareOperation } from './pipeline/operat
 import { resolveRunAgentConfig } from './pipeline/resolveRunAgentConfig';
 import { startOperation } from './pipeline/startOperation';
 import { discoverTools } from './pipeline/toolDiscovery';
-import { setupTurn } from './pipeline/turnSetup';
+import { resolveNewTopicSnapshot, setupTurn } from './pipeline/turnSetup';
 import { applyShareGateToAgentConfig } from './shareGate';
 import type { SubAgentRunDeps } from './subAgentRuns';
 import { execAgentMember, execAgentThreadRun } from './subAgentRuns';
@@ -352,6 +352,28 @@ export class AiAgentService {
     return agentConfig;
   }
 
+  /** Resolve caller model policy before a pre-created topic permanently pins its model. */
+  private async resolvePrecreatedTopicConfig(
+    identifier: string,
+    overrides?: { model?: string; provider?: string },
+  ) {
+    const { agentConfig } = await resolveRunAgentConfig(
+      {
+        db: this.db,
+        resolveAgentConfigOrThrow: (id) => this.resolveAgentConfigOrThrow(id),
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      },
+      {
+        identifier,
+        modelOverride: overrides?.model,
+        providerOverride: overrides?.provider,
+        throwIfExecutionAborted: async () => {},
+      },
+    );
+    return agentConfig;
+  }
+
   /**
    * Defer an agent run to a future time ("send this in 3 hours").
    *
@@ -377,11 +399,20 @@ export class AiAgentService {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'runAt must be in the future' });
     }
 
-    const agentConfig = await this.resolveAgentConfigOrThrow(agentId || slug!);
+    const agentConfig = await this.resolvePrecreatedTopicConfig(agentId || slug!, {
+      model,
+      provider,
+    });
     const resolvedAgentId = agentConfig.id;
 
     const titleSource = markdownToTxt(prompt);
+    const snapshot = await resolveNewTopicSnapshot(
+      { db: this.db, userId: this.userId, workspaceId: this.workspaceId },
+      agentConfig,
+      { model, provider },
+    );
     const topic = await this.topicModel.create({
+      ...snapshot,
       agentId: resolvedAgentId,
       groupId,
       // A scheduled run is still an ordinary user chat, just deferred — so it
@@ -1334,7 +1365,13 @@ export class AiAgentService {
       const topicTitle =
         newTopic?.title ||
         fallbackTitleSource.slice(0, 50) + (fallbackTitleSource.length > 50 ? '...' : '');
+      const agentConfig = await this.resolvePrecreatedTopicConfig(agentId);
+      const snapshot = await resolveNewTopicSnapshot(
+        { db: this.db, userId: this.userId, workspaceId: this.workspaceId },
+        agentConfig,
+      );
       const topicItem = await this.topicModel.create({
+        ...snapshot,
         agentId,
         groupId,
         messages: newTopic?.topicMessageIds,

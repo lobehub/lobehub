@@ -157,6 +157,9 @@ export const getLLMConfig = () => {
       ENABLED_XAI: z.boolean(),
       XAI_API_KEY: z.string().optional(),
 
+      ENABLED_META: z.boolean(),
+      META_API_KEY: z.string().optional(),
+
       ENABLED_INTERNLM: z.boolean(),
       INTERNLM_API_KEY: z.string().optional(),
 
@@ -410,6 +413,9 @@ export const getLLMConfig = () => {
 
       ENABLED_XAI: !!process.env.XAI_API_KEY,
       XAI_API_KEY: process.env.XAI_API_KEY,
+
+      ENABLED_META: !!process.env.META_API_KEY,
+      META_API_KEY: process.env.META_API_KEY,
 
       ENABLED_INTERNLM: !!process.env.INTERNLM_API_KEY,
       INTERNLM_API_KEY: process.env.INTERNLM_API_KEY,

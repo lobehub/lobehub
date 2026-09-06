@@ -1674,9 +1674,26 @@ export class TopicModel {
   // **************** Update *************** //
 
   update = async (id: string, data: Partial<TopicItem>) => {
+    /**
+     * Older clients switch models through the general update endpoint. Clear
+     * the old model's reasoning pin in the same statement, comparing against
+     * the persisted row so partial writes and concurrent switches stay safe.
+     * Explicit metadata remains the caller's replacement snapshot.
+     */
+    const modelChanged = or(
+      data.model !== undefined ? sql`${topics.model} is distinct from ${data.model}` : undefined,
+      data.provider !== undefined
+        ? sql`${topics.provider} is distinct from ${data.provider}`
+        : undefined,
+    );
+    const metadata =
+      data.metadata === undefined && modelChanged
+        ? sql`case when ${modelChanged} then coalesce(${topics.metadata}, '{}'::jsonb) - 'reasoningConfig' else ${topics.metadata} end`
+        : data.metadata;
+
     return this.db
       .update(topics)
-      .set({ ...data, updatedAt: new Date() })
+      .set({ ...data, metadata, updatedAt: new Date() })
       .where(and(eq(topics.id, id), this.ownership()))
       .returning();
   };
@@ -1914,6 +1931,51 @@ export class TopicModel {
         .returning();
     });
   };
+
+  /**
+   * Switch a topic's pinned model together with its model-scoped effort pin
+   * (`metadata.reasoningConfig` / `metadata.heteroEffort`) in one row-locked
+   * statement, so neither a concurrent switch nor an in-flight run can observe
+   * the new model paired with the previous model's pin. `reasoningConfig` is
+   * model-keyed and therefore always replaced (dropped when not provided);
+   * `heteroEffort` is only touched when given.
+   */
+  updateModelPin = async (
+    id: string,
+    {
+      metadata,
+      model,
+      provider,
+    }: {
+      metadata?: Pick<ChatTopicMetadata, 'heteroEffort' | 'reasoningConfig'>;
+      model: string;
+      provider: string;
+    },
+  ) =>
+    this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: topics.metadata })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()))
+        .for('update');
+
+      if (!existing) return [];
+
+      const { reasoningConfig: _stale, ...rest } = existing.metadata ?? {};
+      const mergedMetadata: ChatTopicMetadata = {
+        ...rest,
+        ...(metadata?.heteroEffort !== undefined && { heteroEffort: metadata.heteroEffort }),
+        ...(metadata?.reasoningConfig !== undefined && {
+          reasoningConfig: metadata.reasoningConfig,
+        }),
+      };
+
+      return tx
+        .update(topics)
+        .set({ metadata: mergedMetadata, model, provider, updatedAt: new Date() })
+        .where(and(eq(topics.id, id), this.ownership()))
+        .returning();
+    });
 
   appendRunningOperationChild = async (
     id: string,

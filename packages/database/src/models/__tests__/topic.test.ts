@@ -713,6 +713,41 @@ describe('TopicModel', () => {
   });
 
   describe('update', () => {
+    it.each([{ model: 'b' }, { provider: 'other' }, { model: null }])(
+      'clears stale reasoning on a legacy model update %j',
+      async (patch) => {
+        const topic = await topicModel.create({
+          metadata: {
+            reasoningConfig: { reasoningEffort: 'high' },
+            heteroEffort: 'low',
+            workingDirectory: '/w',
+          },
+          model: 'a',
+          provider: 'openai',
+          title: 'legacy',
+        });
+        const [updated] = await topicModel.update(topic.id, { ...patch, title: 'changed' });
+        expect(updated.metadata).toEqual({ heteroEffort: 'low', workingDirectory: '/w' });
+        expect(updated.title).toBe('changed');
+        expect(updated).toMatchObject(patch);
+      },
+    );
+
+    it.each([{ title: 'renamed' }, { model: 'a', provider: 'openai' }])(
+      'preserves reasoning when the model does not change %j',
+      async (patch) => {
+        const metadata = { reasoningConfig: { reasoningEffort: 'high' as const } };
+        const topic = await topicModel.create({
+          metadata,
+          model: 'a',
+          provider: 'openai',
+          title: 'pin',
+        });
+        const [updated] = await topicModel.update(topic.id, patch);
+        expect(updated.metadata).toEqual(metadata);
+      },
+    );
+
     it('updates status and bumps updatedAt', async () => {
       const topic = await topicModel.create({ title: 'to update' });
       const before = topic.updatedAt.getTime();
@@ -960,6 +995,45 @@ describe('TopicModel', () => {
       const settled = await topicModel.settleRunningOperation(topic.id, 'op-old');
 
       expect(settled).toEqual({ assistantMessageId: 'msg-current', status: 'missing' });
+    });
+  });
+
+  describe('updateModelPin', () => {
+    it('switches model and replaces the reasoning pin in one write', async () => {
+      const topic = await topicModel.create({
+        metadata: { reasoningConfig: { glm5_2ReasoningEffort: 'max' }, workingDirectory: '/w' },
+        model: 'glm-5.2',
+        provider: 'lobehub',
+        title: 'pin',
+      });
+
+      const [updated] = await topicModel.updateModelPin(topic.id, {
+        metadata: { reasoningConfig: { deepseekV4GAReasoningEffort: 'low' } },
+        model: 'deepseek-v4-flash',
+        provider: 'lobehub',
+      });
+
+      expect(updated.model).toBe('deepseek-v4-flash');
+      expect(updated.metadata).toEqual({
+        reasoningConfig: { deepseekV4GAReasoningEffort: 'low' },
+        workingDirectory: '/w',
+      });
+    });
+
+    it('drops a stale reasoning pin and keeps heteroEffort when not given', async () => {
+      const topic = await topicModel.create({
+        metadata: { heteroEffort: 'high', reasoningConfig: { effort: 'max' } },
+        model: 'a',
+        provider: 'claude-code',
+        title: 'pin',
+      });
+
+      const [updated] = await topicModel.updateModelPin(topic.id, {
+        model: 'b',
+        provider: 'claude-code',
+      });
+
+      expect(updated.metadata).toEqual({ heteroEffort: 'high' });
     });
   });
 

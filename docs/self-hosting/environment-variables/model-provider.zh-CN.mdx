@@ -64,6 +64,33 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 
 你可以在 [modelProviders](https://github.com/lobehub/lobehub/tree/main/src/config/modelProviders) 查找到当前的所有模型名。
 
+## Meta
+
+连接官方 [Meta Model API](https://dev.meta.ai/)，设置步骤见[在 LobeHub 中使用 Meta](/zh/docs/usage/providers/meta)。
+
+### `META_API_KEY`
+
+- 类型：部署时可选；提供共享服务端密钥时必填。用户也可以在 Meta 服务商设置中填写自己的密钥。
+- 描述：在 [Model API 控制台](https://dev.meta.ai/) 创建的密钥。设置非空密钥后，服务端配置会自动启用 Meta。`ENABLED_META` 由此密钥派生，不是独立的环境变量开关。LobeHub 使用 `META_API_KEY`，与 Meta SDK 示例中的 `MODEL_API_KEY` 名称不同。
+- 默认值：未设置，不提供共享服务端密钥。
+- 示例：`your-meta-model-api-key`
+
+### `META_PROXY_URL`
+
+- 类型：可选
+- 描述：覆盖 Meta API 基础地址。代理必须支持 Responses API。请填写基础地址，而非完整的 `/responses` 接口地址。
+- 默认值：`https://api.meta.ai/v1`
+- 示例：`https://meta-proxy.example.com/v1`
+
+### `META_MODEL_LIST`
+
+- 类型：可选
+- 描述：使用通用[模型列表语法][model-list]自定义模型列表：`+` 增加模型，`-` 隐藏模型，`模型 ID=展示名` 修改展示名称，各项用英文逗号分隔。此配置不会授予 Meta 账户尚未拥有的模型访问权限。
+- 默认值：未设置，使用内置模型列表。
+- 示例：`-all,+muse-spark-1.3`
+
+上例隐藏所有默认模型，再添加 `muse-spark-1.3`。版本信息请参阅 [Muse Spark 产品页](https://developer.meta.com/ai/models/muse-spark/)和 Meta 的 [Muse Spark 1.3 发布公告](https://www.threads.com/@metafordevelopers/post/Dcy9DWLmfVn)，模型可用性以账户的 API 访问权限为准。
+
 ## Azure OpenAI
 
 如果你需要使用 Azure OpenAI 来提供模型服务，可以查阅 [使用 Azure OpenAI 部署](/zh/docs/self-hosting/examples/azure-openai) 章节查看详细步骤，这里将列举和 Azure OpenAI 相关的环境变量。

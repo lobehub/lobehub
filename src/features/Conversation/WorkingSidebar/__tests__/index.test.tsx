@@ -94,6 +94,8 @@ const chatStore = vi.hoisted(() => ({
   portalStack: [] as Array<{ startMessageId?: string; threadId?: string; type: string }>,
   showPortal: false,
   threadMaps: {} as Record<string, any[]>,
+  // read by the real topicSelectors.currentTopicMetadata (sourcePath resolution)
+  topicDataMap: {} as Record<string, unknown>,
 }));
 
 const globalStore = vi.hoisted(() => ({

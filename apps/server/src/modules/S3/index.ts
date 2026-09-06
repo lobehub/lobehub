@@ -151,15 +151,19 @@ export class S3 {
     };
   }
 
-  public async createPreSignedUrl(key: string): Promise<string> {
-    const upload = await this.createPreSignedUpload(key);
+  public async createPreSignedUrl(key: string, contentLength?: number): Promise<string> {
+    const upload = await this.createPreSignedUpload(key, contentLength);
     return upload.url;
   }
 
-  public async createPreSignedUpload(key: string): Promise<PreSignedUpload> {
+  public async createPreSignedUpload(
+    key: string,
+    contentLength?: number,
+  ): Promise<PreSignedUpload> {
     const command = new PutObjectCommand({
       ACL: this.setAcl ? PUBLIC_READ_ACL_HEADER : undefined,
       Bucket: this.bucket,
+      ...(contentLength === undefined ? {} : { ContentLength: contentLength }),
       Key: key,
     });
 
@@ -190,9 +194,11 @@ export class S3 {
     key: string,
     uploadId: string,
     partNumber: number,
+    contentLength?: number,
   ): Promise<string> {
     const command = new UploadPartCommand({
       Bucket: this.bucket,
+      ...(contentLength === undefined ? {} : { ContentLength: contentLength }),
       Key: key,
       PartNumber: partNumber,
       UploadId: uploadId,
@@ -206,17 +212,19 @@ export class S3 {
     uploadId: string,
     expectedPartCount: number,
     uploadedParts?: Array<{ ETag: string; PartNumber: number }>,
+    expectedFile?: { partSize: number; size: number },
   ) {
-    const parts = uploadedParts ? [...uploadedParts] : [];
+    const parts: Array<{ ETag: string; PartNumber: number; Size?: number }> =
+      uploadedParts && !expectedFile ? [...uploadedParts] : [];
 
-    if (!uploadedParts) {
+    if (!uploadedParts || expectedFile) {
       for await (const page of paginateListParts(
         { client: this.client },
         { Bucket: this.bucket, Key: key, UploadId: uploadId },
       )) {
         for (const part of page.Parts ?? []) {
           if (!part.ETag || !part.PartNumber) continue;
-          parts.push({ ETag: part.ETag, PartNumber: part.PartNumber });
+          parts.push({ ETag: part.ETag, PartNumber: part.PartNumber, Size: part.Size });
         }
       }
     }
@@ -232,11 +240,27 @@ export class S3 {
       );
     }
 
+    if (expectedFile) {
+      const hasExpectedSizes = parts.every((part, index) => {
+        const expectedSize =
+          index === expectedPartCount - 1
+            ? expectedFile.size - expectedFile.partSize * (expectedPartCount - 1)
+            : expectedFile.partSize;
+        return part.Size === expectedSize;
+      });
+
+      if (!hasExpectedSizes) {
+        throw new Error(`S3 multipart upload ${uploadId} has an unexpected part size`);
+      }
+    }
+
     return this.client.send(
       new CompleteMultipartUploadCommand({
         Bucket: this.bucket,
         Key: key,
-        MultipartUpload: { Parts: parts },
+        MultipartUpload: {
+          Parts: parts.map(({ ETag, PartNumber }) => ({ ETag, PartNumber })),
+        },
         UploadId: uploadId,
       }),
     );

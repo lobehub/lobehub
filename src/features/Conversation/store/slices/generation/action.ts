@@ -248,12 +248,12 @@ const runHeterogeneousFromExistingMessage = async (
   else if (reason === 'binding_changed')
     toast.info(t('heteroAgent.resumeReset.bindingChanged', { ns: 'chat' }));
 
-  const topicModel = context.topicId
-    ? topicSelectors.getTopicModelById(context.topicId)(chatStore)
+  const topicPin = context.topicId
+    ? topicSelectors.getTopicHeteroPinById(context.topicId)(chatStore)
     : undefined;
   const effectiveHeterogeneousProvider = applyTopicModelToHeterogeneousProvider(
     heterogeneousProvider,
-    topicModel,
+    topicPin,
   );
 
   const assistantMsg = await messageService.createMessage({

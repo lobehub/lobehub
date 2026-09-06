@@ -8,7 +8,7 @@ import type {
 } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { buildGoalGraphView, isTroubledTaskNode } from './goalGraphViewModel';
+import { buildGoalGraphView, hasReviewableResult, isTroubledTaskNode } from './goalGraphViewModel';
 
 const T0 = new Date('2026-08-01T00:00:00Z');
 const at = (minutes: number) => new Date(T0.getTime() + minutes * 60_000);
@@ -565,5 +565,78 @@ describe('isTroubledTaskNode', () => {
     );
 
     expect(isTroubledTaskNode(view.byId.p1)).toBe(false);
+  });
+});
+
+describe('hasReviewableResult', () => {
+  // The graph drill-down routes on this: only a Task with a delivery to read
+  // opens the result surface; everything else opens the original Task detail.
+  it('keeps a healthy running task on the detail surface — its result panel would be empty', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [event('w1', 'activated', 110)],
+        nodes: [node('w1', { status: 'active', taskId: 'task-1', updatedAt: at(115) })],
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1.isStale).toBe(false);
+    expect(hasReviewableResult(view.byId.w1)).toBe(false);
+  });
+
+  it('keeps an undispatched task on the detail surface', () => {
+    const view = buildGoalGraphView(
+      snapshot({ nodes: [node('w1', { status: 'proposed', taskId: 'task-1' })] }),
+      NOW,
+    );
+
+    expect(hasReviewableResult(view.byId.w1)).toBe(false);
+  });
+
+  it('opens the result surface once the task settled', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [event('w1', 'activated', 100), event('w1', 'resolved', 110)],
+        nodes: [
+          node('w1', {
+            resolvedAt: at(110),
+            status: 'resolved',
+            taskId: 'task-1',
+            updatedAt: at(110),
+          }),
+        ],
+      }),
+      NOW,
+    );
+
+    expect(hasReviewableResult(view.byId.w1)).toBe(true);
+  });
+
+  it('opens the result surface while a delivery is being judged — the acceptance lives there', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        acceptances: { w1: { id: 'acc-1', status: 'verifying' } },
+        deliveredAt: { w1: at(30) },
+        events: [event('w1', 'activated', 30)],
+        nodes: [node('w1', { status: 'active', taskId: 'task-1', updatedAt: at(30) })],
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1.isVerifying).toBe(true);
+    expect(hasReviewableResult(view.byId.w1)).toBe(true);
+  });
+
+  it('never opens the result surface on a troubled task, even a stale delivered one', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [event('w1', 'activated', 30)],
+        nodes: [node('w1', { status: 'active', taskId: 'task-1', updatedAt: at(0) })],
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1.isStale).toBe(true);
+    expect(hasReviewableResult(view.byId.w1)).toBe(false);
   });
 });

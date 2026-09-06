@@ -4,8 +4,10 @@ import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import type {
   ChatAudioItem,
   ChatFileItem,
+  ChatTopicMetadata,
   ChatVideoItem,
-  HeterogeneousTopicModel,
+  HeterogeneousProviderConfig,
+  HeterogeneousTopicPin,
 } from '@lobechat/types';
 import {
   ChatErrorType,
@@ -15,8 +17,10 @@ import {
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
+import { AiModelModel } from '@/database/models/aiModel';
 import type { MessageModel } from '@/database/models/message';
 import type { TopicModel } from '@/database/models/topic';
+import { resolveModelExtendParamsForUser } from '@/server/modules/AgentRuntime/adapters/serverCallLlmContextHints';
 import type { AgentConfigWithId } from '@/server/services/agent';
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { shouldSuppressSignal } from '@/server/services/agentSignal/suppressSignal';
@@ -50,6 +54,75 @@ export interface RunAttachments {
   videoList?: ChatVideoItem[];
   warnings: string[];
 }
+
+/**
+ * Build the reasoning snapshot for a topic being created — see
+ * `ChatTopicMetadata.reasoningConfig` / `heteroEffort`. Returns undefined when
+ * there is nothing to pin (non-reasoning model, hetero agent without an effort)
+ * so the caller leaves metadata untouched. Never throws: a failed lookup just
+ * means the topic follows the user-level config until the user pins one.
+ */
+const resolveTopicReasoningSnapshot = async ({
+  deps,
+  heterogeneousProvider,
+  isHeteroTopic,
+  model,
+  provider,
+}: {
+  deps: Pick<TurnSetupDeps, 'db' | 'userId' | 'workspaceId'>;
+  heterogeneousProvider: HeterogeneousProviderConfig | undefined;
+  isHeteroTopic: boolean;
+  model: string;
+  provider: string;
+}): Promise<Pick<ChatTopicMetadata, 'heteroEffort' | 'reasoningConfig'> | undefined> => {
+  if (isHeteroTopic) {
+    const effort = heterogeneousProvider?.effort;
+    return effort === undefined ? undefined : { heteroEffort: effort };
+  }
+
+  try {
+    const aiModelModel = new AiModelModel(deps.db, deps.userId, deps.workspaceId);
+    const { modelHasReasoningExtendParams } = await resolveModelExtendParamsForUser({
+      aiModelModel,
+      model,
+      provider,
+    });
+    if (!modelHasReasoningExtendParams) return undefined;
+
+    const reasoningConfig = await aiModelModel.getModelReasoningConfig(model, provider);
+    return { reasoningConfig: reasoningConfig ?? {} };
+  } catch (error) {
+    log('execAgent: failed to snapshot topic reasoning config for %s: %O', model, error);
+    return undefined;
+  }
+};
+
+/** Snapshot only newly created topics, including callers that pre-create before setupTurn. */
+export const resolveNewTopicSnapshot = async (
+  deps: Pick<TurnSetupDeps, 'db' | 'userId' | 'workspaceId'>,
+  agentConfig: AgentConfigWithId,
+  overrides?: { model?: string; provider?: string },
+) => {
+  const model = overrides?.model ?? agentConfig.model!;
+  const provider = overrides?.provider ?? agentConfig.provider!;
+  const heterogeneousProvider = agentConfig.agencyConfig?.heterogeneousProvider;
+  const heteroType =
+    heterogeneousProvider?.type ?? (isHeterogeneousAgentModelId(model) ? model : undefined);
+  const heteroModel = heterogeneousProvider
+    ? resolveHeterogeneousProviderTopicModel(heterogeneousProvider)
+    : undefined;
+  return {
+    metadata: await resolveTopicReasoningSnapshot({
+      deps,
+      heterogeneousProvider,
+      isHeteroTopic: !!heteroType,
+      model,
+      provider,
+    }),
+    model: heteroModel?.model ?? (heteroType ? undefined : model),
+    provider: heteroModel?.provider ?? heteroType ?? provider,
+  };
+};
 
 /**
  * Resolve a run's attachments into the lists the message + context layers
@@ -100,7 +173,7 @@ const resolveRunAttachments = async (
       await throwIfAborted('file upload');
 
       try {
-        const result = await ingestAttachment(file, fileService, deps.userId);
+        const result = await ingestAttachment(file, fileService, deps.userId, deps.workspaceId);
         fileIds.push(result.fileId);
 
         if (result.isImage) {
@@ -161,7 +234,13 @@ const resolveRunAttachments = async (
         });
       } catch (error) {
         log('execAgent: failed to ingest file %s: %O', file.name || file.url, error);
-        warnings.push(`File "${file.name || 'unknown'}" could not be uploaded and was skipped.`);
+        // A quota rejection is actionable, so name it rather than leaving the
+        // sender to guess why every attachment silently vanished.
+        warnings.push(
+          (error as { code?: string })?.code === 'FORBIDDEN'
+            ? `File "${file.name || 'unknown'}" was skipped: storage limit reached.`
+            : `File "${file.name || 'unknown'}" could not be uploaded and was skipped.`,
+        );
       }
     }
 
@@ -274,7 +353,8 @@ export interface TurnSetupResult {
   isHeteroAgent: boolean;
   /** Effective model/provider after the topic-pinned model is applied. */
   model: string;
-  pinnedHeterogeneousTopicModel?: HeterogeneousTopicModel;
+  /** Topic-pinned model + reasoning effort for a heterogeneous run (reused topics only). */
+  pinnedHeterogeneousTopicModel?: HeterogeneousTopicPin;
   provider: string;
   requestTriggerMetadata: {
     agentDispatch?: { kind: 'callAgent'; visibility: 'internal' };
@@ -356,10 +436,7 @@ export const setupTurn = async (
   let model = agentConfig.model!;
   let provider = agentConfig.provider!;
   const heterogeneousProvider = agentConfig.agencyConfig?.heterogeneousProvider;
-  const heterogeneousTopicModelSnapshot = heterogeneousProvider
-    ? resolveHeterogeneousProviderTopicModel(heterogeneousProvider)
-    : undefined;
-  let pinnedHeterogeneousTopicModel: HeterogeneousTopicModel | undefined;
+  let pinnedHeterogeneousTopicModel: HeterogeneousTopicPin | undefined;
 
   // Share-visitor fail-closed gate — reject a heterogeneous (Claude Code /
   // Codex / …) agent BEFORE any topic/message row is written. Heterogeneous
@@ -415,12 +492,9 @@ export const setupTurn = async (
         : undefined;
 
     const fallbackTitleSource = markdownToTxt(prompt);
-    // Heterogeneous topics use the same snapshot rule as the client: persist
-    // the selected CLI model (including `default`) or user-provider API binding.
-    // Runtimes without a model selector, legacy rows, and Agent-scoped
-    // server-default API configs still pin only the runtime type.
-    const heteroSnapshotType =
-      heterogeneousProvider?.type ?? (isHeterogeneousAgentModelId(model) ? model : undefined);
+    const snapshot = await resolveNewTopicSnapshot(deps, agentConfig);
+    const metadataWithSnapshot: ChatTopicMetadata | undefined =
+      metadata || snapshot.metadata ? { ...metadata, ...snapshot.metadata } : undefined;
     // Second argument: the id the client already rendered this topic under
     // (sidebar row, message bucket). Absent → the model mints one as before.
     const newTopicParams = {
@@ -433,10 +507,10 @@ export const setupTurn = async (
       // that reaches execAgent without a topicId (e.g. the async/queue run)
       // must carry the groupId through too (group topic sidebar + ownership fix).
       groupId: appContext?.groupId,
-      metadata,
+      metadata: metadataWithSnapshot,
       // Snapshot the effective model as the topic's pinned model (config).
-      model: heterogeneousTopicModelSnapshot?.model ?? (heteroSnapshotType ? undefined : model),
-      provider: heterogeneousTopicModelSnapshot?.provider ?? heteroSnapshotType ?? provider,
+      model: snapshot.model,
+      provider: snapshot.provider,
       // Share-visitor runs: the topic row belongs to the creator
       // (`deps.userId`), but stamping the visitor's id here is what
       // `TopicModel`'s creator-facing reads (`query`, `count`, `queryTopics`,
@@ -501,7 +575,9 @@ export const setupTurn = async (
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic not found' });
     }
 
-    const pinnedModel = existingTopic?.model;
+    /** A group topic pins its owning agent; member runs keep their own model and effort. */
+    const canUseTopicPin = !existingTopic?.groupId || existingTopic.agentId === resolvedAgentId;
+    const pinnedModel = canUseTopicPin ? existingTopic?.model : undefined;
     if (pinnedModel) {
       model = modelOverride || pinnedModel;
       provider = providerOverride || existingTopic?.provider || provider;
@@ -512,6 +588,15 @@ export const setupTurn = async (
         provider,
         topicId,
       );
+    }
+    // The heterogeneous effort pin lives in metadata and is independent of the
+    // model pin (a runtime without a model selector can still pin an effort).
+    const pinnedHeteroEffort = canUseTopicPin ? existingTopic?.metadata?.heteroEffort : undefined;
+    if (pinnedHeteroEffort !== undefined) {
+      pinnedHeterogeneousTopicModel = {
+        ...pinnedHeterogeneousTopicModel,
+        effort: pinnedHeteroEffort,
+      };
     }
 
     // Re-assert the share restriction after topic overrides are applied.

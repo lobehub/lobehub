@@ -16,7 +16,7 @@ import Activity from './Activity';
 import Deliverables from './Deliverables';
 import Findings from './Findings';
 import Frontier, { type FrontierActions } from './Frontier';
-import { buildGoalGraphView, isTroubledTaskNode } from './goalGraphViewModel';
+import { buildGoalGraphView, hasReviewableResult } from './goalGraphViewModel';
 import Graph from './Graph';
 
 /**
@@ -70,12 +70,11 @@ const ProcessControl = memo<ProcessControlProps>(
     );
 
     // Every click funnels here: keep the map highlight (spatial continuity) and
-    // open the drill-down — a dispatched Task lands on its result-focused
-    // review surface. The original editable Task remains one explicit step
-    // deeper, so Goal inspection does not begin with implementation metadata.
-    //
-    // A lost or failed Task inverts that: it has no result worth reviewing, and
-    // the question is what the run did, so it opens the original Task directly.
+    // open the drill-down. Only a Task with a delivery to read — settled, or
+    // delivered and under Acceptance judgment — lands on its result-focused
+    // review surface; a Task still running, waiting, or in trouble opens the
+    // original Task detail, because its result panel would be an empty shell
+    // and the question is what the run is doing, not what it produced.
     const select = useCallback(
       (nodeId: string) => {
         setSelectedId(nodeId);
@@ -85,8 +84,8 @@ const ProcessControl = memo<ProcessControlProps>(
           openGoalNode(goalId, nodeId);
           return;
         }
-        if (view && isTroubledTaskNode(view)) openTaskDetail(taskId);
-        else openTaskResult(taskId);
+        if (view && hasReviewableResult(view)) openTaskResult(taskId);
+        else openTaskDetail(taskId);
       },
       [goalId, graph, openGoalNode, openTaskDetail, openTaskResult],
     );

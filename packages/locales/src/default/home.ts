@@ -53,7 +53,6 @@ export default {
   'dashboard.chat.recents': 'Recent topics',
   'dashboard.chat.running': 'Running topics',
   'dashboard.customize.decrease': 'Decrease {{label}}',
-  'dashboard.customize.entry': 'Customize',
   'dashboard.customize.group.listSize': 'List size',
   'dashboard.customize.group.agent': 'Agent',
   'dashboard.customize.group.rail': 'Sidebar',
