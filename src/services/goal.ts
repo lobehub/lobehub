@@ -1,5 +1,11 @@
 import type { GoalStatus } from '@lobechat/const/goal';
-import type { GoalConfig, GoalGraphSnapshot, GoalNodeKind, GoalTickResult } from '@lobechat/types';
+import type {
+  GoalConfig,
+  GoalGraphSnapshot,
+  GoalMetricCriterion,
+  GoalNodeKind,
+  GoalTickResult,
+} from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -43,6 +49,14 @@ class GoalService {
   /** Rebind which persisted verify criteria gate this goal's terminal acceptance. */
   setAcceptanceCriteria = async (id: string, criteriaIds: string[]) =>
     lambdaClient.goal.setAcceptanceCriteria.mutate({ criteriaIds, id });
+
+  setMetricCriteria = async (id: string, metrics: GoalMetricCriterion[]) =>
+    lambdaClient.goal.setMetricCriteria.mutate({ id, metrics });
+
+  recordObservation = async (
+    id: string,
+    observation: { key: string; observedAt?: Date; title?: string; unit?: string; value: number },
+  ) => lambdaClient.goal.recordObservation.mutate({ id, ...observation });
 
   /** Delete a goal and its graph. The dispatched Work Tasks are left in place. */
   delete = async (id: string) => lambdaClient.goal.delete.mutate({ id });

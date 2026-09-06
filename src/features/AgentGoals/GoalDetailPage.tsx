@@ -33,6 +33,7 @@ import GoalDetailActions from './GoalDetailActions';
 import { formatSpan, formatUsd, goalStatusKey, summarizeGoalBudget } from './goalPresentation';
 import GoalRequirement from './GoalRequirement';
 import GoalStatusGlyph from './GoalStatusGlyph';
+import NorthStarMetrics from './NorthStarMetrics';
 import ProcessControl from './ProcessControl';
 
 /**
@@ -290,6 +291,10 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
               <Text as={'h1'} fontSize={22} weight={600}>
                 {goal.title}
               </Text>
+              {/* North-star strip above the execution metrics: how far the
+                  world is from the declared numbers outranks what the run
+                  cost. */}
+              <NorthStarMetrics canEdit={canEdit} goalId={goalId} />
               <Flexbox horizontal className={styles.metrics} gap={8} wrap={'wrap'}>
                 <Metric
                   label={t('goalProcess.metrics.status')}
