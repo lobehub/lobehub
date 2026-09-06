@@ -8,23 +8,13 @@ user-invocable: false
 
 Before using Linear workflows, search for `linear` MCP tools. If not found, treat as not installed.
 
-## PR Creation with Linear Issues
-
-A PR that fixes a Linear issue has **two separate jobs to do**, and both matter:
-
-1. **`Fixes LOBE-xxx` in the PR body** — Linear watches GitHub for these magic keywords and auto-links the PR and auto-closes the issue on merge. This is the machine-readable side.
-2. **A completion comment on the Linear issue** — gives the reviewer/PM/teammate landing in Linear a human-readable summary of what changed and why, without forcing them to click through to GitHub and read a diff.
-
-If you only do step 1, Linear watchers (often non-engineers) hit the issue and see no context. So pair PR creation with the Linear comment as part of the same task — finish both before considering the work done.
-
 ## Workflow
 
 1. **Retrieve issue details** before starting: `mcp__linear-server__get_issue`
 2. **Read images** — issue descriptions often contain screenshots with critical context (mockups, error states, before/after). Use `mcp__linear-server__extract_images` so you actually see them; reading raw markdown alone misses what the reporter was looking at.
 3. **Check for sub-issues**: `mcp__linear-server__list_issues` with `parentId` filter
 4. **Mark as In Progress** at the moment you start planning or implementing — this signals to teammates the issue is owned, so they don't double-pick it up.
-5. **Update issue status** when completing: `mcp__linear-server__update_issue`
-6. **Add completion comment** (see [format below](#completion-comment-format))
+5. Follow [Per-Issue Completion](#per-issue-completion) before moving to the next issue.
 
 ## Creating Issues
 
@@ -100,46 +90,11 @@ Each sub-issue should state:
 
 The implementer may open only the sub-issue, not the parent — don't rely on context that lives only in the parent description.
 
-## Completion Comment Format
+## Per-Issue Completion
 
-Each completed issue gets a comment summarizing the work, so reviewers and future readers don't have to reconstruct it from the PR diff:
+Close out each issue before starting the next; do not defer all Linear updates to the end. Reuse existing authorization for that issue's status updates and comments without asking again.
 
-```markdown
-## Changes Summary
-
-- **Feature**: Brief description of what was implemented
-- **Files Changed**: List key files modified
-- **PR**: #xxx or PR URL
-
-### Key Changes
-
-- Change 1
-- Change 2
-- ...
-```
-
-This gives team visibility, code-review context, and a paper trail for future reference.
-
-## PR Association
-
-When creating PRs for Linear issues, include magic keywords in the PR body:
-
-- `Fixes LOBE-123`
-- `Closes LOBE-123`
-- `Resolves LOBE-123`
-
-These trigger Linear's auto-link + auto-close on merge.
-
-## Per-Issue Completion Rule
-
-When working on multiple issues, close out **each one before starting the next** — don't batch all the Linear updates to the end. Batching is where comments get forgotten and issues stay stuck in "In Progress" days after the PR shipped.
-
-For each issue:
-
-1. Complete implementation
-2. Run `bun run type-check`
-3. Run related tests
-4. Create PR if needed
-5. Update status to **"In Review"** (not "Done" — "Done" is for after the PR merges)
-6. Add the completion comment
-7. Move to the next issue
+1. Complete implementation and the repository-required checks, including related tests; use the repository's **quality-check** skill for code changes.
+2. Create a PR when needed using the **pr** skill. Include `Fixes LOBE-123` (or `Closes` / `Resolves`) in the PR body so Linear can link it and close the issue on merge.
+3. Update the issue to **In Review** while its PR awaits merge, then **Done** after merge. For work that needs no PR, mark **Done** when its outcome and verification are complete.
+4. Proactively add or update a concise completion comment with the resulting behavior, important changes, validation, and PR link. PR linkage does not replace this human-readable summary. If an existing comment already covers the same result, do not post a duplicate.
