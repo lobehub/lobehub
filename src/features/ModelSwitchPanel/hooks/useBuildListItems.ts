@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
 import { isNewReleaseDate } from '@/utils/time';
 
+import { isAutoRouterModel } from '../const';
 import { type GroupMode, type ListItem, type ModelWithProviders } from '../types';
 
 /**
@@ -95,12 +96,18 @@ export const buildListItems = (
       });
     }
 
+    const isAutoRouterRow = (item: ModelWithProviders) =>
+      item.providers.some((provider) => isAutoRouterModel(item.model.id, provider.id));
+
     const sortedModels = modelArray.toSorted((a, b) => {
       if (sortModelLast) {
         const aLast = a.providers.every((provider) => sortModelLast(a.model.id, provider.id));
         const bLast = b.providers.every((provider) => sortModelLast(b.model.id, provider.id));
         if (aLast !== bLast) return Number(aLast) - Number(bLast);
       }
+      const autoRouterOrder = Number(isAutoRouterRow(b)) - Number(isAutoRouterRow(a));
+      if (autoRouterOrder !== 0) return autoRouterOrder;
+
       return compareNewness(a.model.releasedAt, b.model.releasedAt);
     });
 
@@ -126,6 +133,11 @@ export const buildListItems = (
             Number(sortModelLast(b.id, providerItem.id));
           if (diff !== 0) return diff;
         }
+        const autoRouterOrder =
+          Number(isAutoRouterModel(b.id, providerItem.id)) -
+          Number(isAutoRouterModel(a.id, providerItem.id));
+        if (autoRouterOrder !== 0) return autoRouterOrder;
+
         return compareNewness(a.releasedAt, b.releasedAt);
       });
 

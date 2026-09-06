@@ -24,3 +24,12 @@ export const ENABLE_RESIZING = {
   topLeft: false,
   topRight: false,
 } as const;
+
+const AUTO_ROUTER_MODEL_KEYS = new Set([
+  'newapi:auto',
+  'openrouter:openrouter/auto',
+  'zenmux:zenmux/auto',
+]);
+
+export const isAutoRouterModel = (modelId: string, providerId: string) =>
+  AUTO_ROUTER_MODEL_KEYS.has(`${providerId}:${modelId}`);
