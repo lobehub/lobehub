@@ -20,17 +20,19 @@ const styles = createStaticStyles(({ css }) => ({
    * character above the card (see ./portraitFraming), which clears the catalog
    * mascot's head — it is half its own height — and reaches the hem on a
    * standing figure, where 57% cut both at the collar and the waist. Change one
-   * and the studio's preview frame stops matching what home shows.
+   * and the studio's preview frame stops matching what home shows. The compact
+   * speech layout scales the image and recalculates overlap to retain that
+   * same visible ratio, including the gap above the supporting card.
    */
   image: css`
     pointer-events: none;
 
     position: absolute;
-    inset-block-end: -94px;
+    inset-block-end: var(--home-portrait-overlap, -94px);
     inset-inline-end: ${HOME_PORTRAIT_INSET}px;
 
-    width: ${HOME_PORTRAIT_WIDTH}px;
-    height: 200px;
+    width: var(--home-portrait-width, ${HOME_PORTRAIT_WIDTH}px);
+    height: var(--home-portrait-height, 200px);
 
     object-fit: contain;
     object-position: bottom;
