@@ -39,6 +39,9 @@ const CodeEditorPane = memo<CodeEditorPaneProps>(
     onChangeRef.current = onChange;
     onSaveRef.current = onSave;
 
+    // Capture initial values for first render to avoid exhaustive-deps on the mount effect
+    const initialConfigRef = useRef({ language, readOnly, value });
+
     useEffect(() => {
       if (!textareaRef.current) return;
       const dom = textareaRef.current;
@@ -49,10 +52,10 @@ const CodeEditorPane = memo<CodeEditorPaneProps>(
         const instance = CodeMirror.fromTextArea(dom, {
           lineNumbers: true,
           lineWrapping: true,
-          mode: language,
-          readOnly,
+          mode: initialConfigRef.current.language,
+          readOnly: initialConfigRef.current.readOnly,
           theme: 'default',
-          value,
+          value: initialConfigRef.current.value,
         });
         instance.view.dispatch({
           effects: instance.optionHelper.theme.reconfigure(
@@ -79,7 +82,6 @@ const CodeEditorPane = memo<CodeEditorPaneProps>(
           instanceRef.current = null;
         }
       };
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {
