@@ -38,6 +38,7 @@
     "./glmCodingPlan": "./src/aiModels/glmCodingPlan.ts",
     "./groq": "./src/aiModels/groq.ts",
     "./higress": "./src/aiModels/higress.ts",
+    "./hubris": "./src/aiModels/hubris.ts",
     "./huggingface": "./src/aiModels/huggingface.ts",
     "./hunyuan": "./src/aiModels/hunyuan.ts",
     "./infiniai": "./src/aiModels/infiniai.ts",
