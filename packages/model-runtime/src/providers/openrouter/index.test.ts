@@ -481,6 +481,119 @@ describe('LobeOpenRouterAI - custom features', () => {
     });
   });
 
+  describe('reasoning content normalization', () => {
+    it('should convert reasoning object to reasoning_content on assistant messages', async () => {
+      await instance.chat({
+        messages: [
+          { content: 'Hello', role: 'user' },
+          {
+            content: 'I think the answer is 42.',
+            role: 'assistant',
+            reasoning: { content: 'Let me think step by step...', duration: 1500 },
+          } as any,
+          { content: 'Why?', role: 'user' },
+        ],
+        model: 'deepseek/deepseek-r1',
+      });
+
+      const call = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      const assistantMsg = call.messages.find((m: any) => m.role === 'assistant');
+      expect(assistantMsg.reasoning_content).toBe('Let me think step by step...');
+      expect(assistantMsg.reasoning).toBeUndefined();
+    });
+
+    it('should preserve existing reasoning_content string', async () => {
+      await instance.chat({
+        messages: [
+          { content: 'Hello', role: 'user' },
+          {
+            content: 'Answer',
+            role: 'assistant',
+            reasoning_content: 'Already set reasoning',
+          } as any,
+          { content: 'Continue', role: 'user' },
+        ],
+        model: 'deepseek/deepseek-r1',
+      });
+
+      const call = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      const assistantMsg = call.messages.find((m: any) => m.role === 'assistant');
+      expect(assistantMsg.reasoning_content).toBe('Already set reasoning');
+    });
+
+    it('should not add reasoning_content when no reasoning exists', async () => {
+      await instance.chat({
+        messages: [
+          { content: 'Hello', role: 'user' },
+          { content: 'Hi there!', role: 'assistant' },
+          { content: 'How are you?', role: 'user' },
+        ],
+        model: 'openai/gpt-4',
+      });
+
+      const call = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      const assistantMsg = call.messages.find((m: any) => m.role === 'assistant');
+      expect(assistantMsg.reasoning_content).toBeUndefined();
+    });
+
+    it('should not modify user or system messages', async () => {
+      await instance.chat({
+        messages: [
+          { content: 'System', role: 'system', reasoning: { content: 'ignored' } } as any,
+          { content: 'Hello', role: 'user', reasoning: { content: 'ignored' } } as any,
+        ],
+        model: 'openai/gpt-4',
+      });
+
+      const call = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      // Non-assistant messages should not have reasoning_content added
+      for (const msg of call.messages) {
+        expect(msg.reasoning_content).toBeUndefined();
+      }
+    });
+
+    it('should strip reasoning object from assistant messages', async () => {
+      await instance.chat({
+        messages: [
+          { content: 'Hello', role: 'user' },
+          {
+            content: 'Response',
+            role: 'assistant',
+            reasoning: { content: 'thinking...', duration: 500 },
+          } as any,
+        ],
+        model: 'openai/gpt-4',
+      });
+
+      const call = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      const assistantMsg = call.messages.find((m: any) => m.role === 'assistant');
+      // reasoning object should be removed (converted to reasoning_content string)
+      expect(assistantMsg.reasoning).toBeUndefined();
+      expect(assistantMsg.reasoning_content).toBe('thinking...');
+    });
+
+    it('should not convert reasoning with signature to reasoning_content', async () => {
+      await instance.chat({
+        messages: [
+          { content: 'Hello', role: 'user' },
+          {
+            content: 'Response from Claude',
+            role: 'assistant',
+            reasoning: { content: 'thinking with signature...', signature: 'abc123' },
+          } as any,
+          { content: 'Continue', role: 'user' },
+        ],
+        model: 'anthropic/claude-sonnet-4',
+      });
+
+      const call = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      const assistantMsg = call.messages.find((m: any) => m.role === 'assistant');
+      // Reasoning with signature (Anthropic thinking) should NOT be converted to reasoning_content
+      expect(assistantMsg.reasoning_content).toBeUndefined();
+      expect(assistantMsg.reasoning).toBeUndefined();
+    });
+  });
+
   describe('models mapping', () => {
     it('should map extendParams for gpt-5.x reasoning and verbosity', async () => {
       const mockModels = [
