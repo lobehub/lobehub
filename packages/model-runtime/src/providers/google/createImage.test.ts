@@ -690,6 +690,160 @@ describe('createGoogleImage', () => {
       });
     });
 
+    it('should pass thinkingConfig when thinkingLevel is set', async () => {
+      // Arrange
+      const realBase64ImageData =
+        'iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==';
+      const mockContentResponse = {
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  inlineData: {
+                    data: realBase64ImageData,
+                    mimeType: 'image/png',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      };
+      vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(mockContentResponse as any);
+
+      const payload: CreateImagePayload = {
+        model: 'gemini-3-pro-image-preview:image',
+        params: {
+          prompt: 'A detailed architectural rendering',
+          aspectRatio: 'auto',
+          thinkingLevel: 'high',
+        },
+      };
+
+      // Act
+      await createGoogleImage(mockClient, provider, payload);
+
+      // Assert - thinkingLevel must reach Google inside thinkingConfig
+      expect(mockClient.models.generateContent).toHaveBeenCalledWith({
+        contents: [
+          {
+            role: 'user',
+            parts: [expectGoogleImagePromptPart('A detailed architectural rendering')],
+          },
+        ],
+        model: 'gemini-3-pro-image-preview',
+        config: {
+          responseModalities: ['TEXT', 'IMAGE'],
+          systemInstruction: GOOGLE_IMAGE_GENERATION_SYSTEM_PROMPT,
+          thinkingConfig: {
+            thinkingLevel: 'high',
+          },
+        },
+      });
+    });
+
+    it('should not include thinkingConfig when thinkingLevel is unset', async () => {
+      // Arrange
+      const realBase64ImageData =
+        'iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==';
+      const mockContentResponse = {
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  inlineData: {
+                    data: realBase64ImageData,
+                    mimeType: 'image/png',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      };
+      vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(mockContentResponse as any);
+
+      const payload: CreateImagePayload = {
+        model: 'gemini-3-pro-image-preview:image',
+        params: {
+          prompt: 'A detailed architectural rendering',
+          aspectRatio: 'auto',
+        },
+      };
+
+      // Act
+      await createGoogleImage(mockClient, provider, payload);
+
+      // Assert - the config must carry no thinkingConfig key at all
+      expect(mockClient.models.generateContent).toHaveBeenCalledWith({
+        contents: [
+          {
+            role: 'user',
+            parts: [expectGoogleImagePromptPart('A detailed architectural rendering')],
+          },
+        ],
+        model: 'gemini-3-pro-image-preview',
+        config: {
+          responseModalities: ['TEXT', 'IMAGE'],
+          systemInstruction: GOOGLE_IMAGE_GENERATION_SYSTEM_PROMPT,
+        },
+      });
+      const sentConfig = vi.mocked(mockClient.models.generateContent).mock.calls[0][0].config;
+      expect(sentConfig).not.toHaveProperty('thinkingConfig');
+    });
+
+    it('should ignore a non-string thinkingLevel value', async () => {
+      // Arrange
+      const realBase64ImageData =
+        'iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==';
+      const mockContentResponse = {
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  inlineData: {
+                    data: realBase64ImageData,
+                    mimeType: 'image/png',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      };
+      vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(mockContentResponse as any);
+
+      const payload: CreateImagePayload = {
+        model: 'gemini-3-pro-image-preview:image',
+        params: {
+          prompt: 'A detailed architectural rendering',
+          aspectRatio: 'auto',
+          thinkingLevel: 2 as any,
+        },
+      };
+
+      // Act
+      await createGoogleImage(mockClient, provider, payload);
+
+      // Assert - the string guard drops the value instead of forwarding it
+      expect(mockClient.models.generateContent).toHaveBeenCalledWith({
+        contents: [
+          {
+            role: 'user',
+            parts: [expectGoogleImagePromptPart('A detailed architectural rendering')],
+          },
+        ],
+        model: 'gemini-3-pro-image-preview',
+        config: {
+          responseModalities: ['TEXT', 'IMAGE'],
+          systemInstruction: GOOGLE_IMAGE_GENERATION_SYSTEM_PROMPT,
+        },
+      });
+    });
+
     it('should define image-only behavior in the image generation prompts', () => {
       expect(GOOGLE_IMAGE_GENERATION_SYSTEM_PROMPT).toContain('<image_generation_contract>');
       expect(GOOGLE_IMAGE_GENERATION_SYSTEM_PROMPT).toContain('Return an image whenever possible');
