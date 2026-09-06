@@ -30,16 +30,22 @@ const buildCoordinator = (
 });
 
 const messageUpdateMock = vi.fn().mockResolvedValue({ success: true });
+const latestSpineMessageIdMock = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn().mockImplementation(() => ({ update: messageUpdateMock })),
+  MessageModel: vi.fn().mockImplementation(() => ({
+    getLatestSpineMessageId: latestSpineMessageIdMock,
+    update: messageUpdateMock,
+  })),
 }));
 
 const findOperationMock = vi.fn().mockResolvedValue(null);
 const recordCompletionMock = vi.fn().mockResolvedValue(undefined);
+const settleRunningMock = vi.fn().mockResolvedValue(true);
 vi.mock('@/database/models/agentOperation', () => ({
   AgentOperationModel: vi.fn().mockImplementation(() => ({
     findById: findOperationMock,
     recordCompletion: recordCompletionMock,
+    settleRunning: settleRunningMock,
   })),
 }));
 
@@ -90,6 +96,12 @@ const buildDb = (overrides: { assistantRow?: any; operationRow?: any } = {}) =>
     },
   }) as any;
 
+const buildPartiallessStore = () => {
+  const store = buildStore();
+  store.loadPartial.mockResolvedValue(null);
+  return store;
+};
+
 describe('AbandonOperationService', () => {
   beforeEach(() => {
     messageUpdateMock.mockClear();
@@ -97,6 +109,8 @@ describe('AbandonOperationService', () => {
     findOperationMock.mockReset().mockResolvedValue(null);
     recordCompletionMock.mockClear();
     findThreadMock.mockReset().mockResolvedValue(null);
+    settleRunningMock.mockReset().mockResolvedValue(true);
+    latestSpineMessageIdMock.mockReset().mockResolvedValue(undefined);
     topicSettleRunningOperationMock
       .mockReset()
       .mockResolvedValue({ assistantMessageId: undefined, status: 'missing' });
@@ -641,6 +655,111 @@ describe('AbandonOperationService', () => {
     });
     expect(MessageModel).toHaveBeenCalledWith(expect.anything(), 'user_x', 'ws_1', undefined, {
       includeShareVisitor: true,
+    });
+  });
+
+  it('settles the durable row from the with-state branch too', async () => {
+    // Regression: only the no-state branch used to touch `agent_operations`,
+    // so an op whose Redis state was still inside its TTL when the watchdog
+    // fired stayed `running` forever — nothing else retires a non-Goal op.
+    const coord = buildCoordinator({
+      loadAgentState: vi.fn().mockResolvedValue(stateWith()),
+    });
+    const store = buildStore();
+    store.loadPartial.mockResolvedValue({ startedAt: 1, steps: [{ stepIndex: 0 }] });
+
+    await new AbandonOperationService(buildDb(), {
+      coordinator: coord as any,
+      snapshotStore: store as any,
+    }).finalizeAbandoned('op_x', 'inactivity_watchdog');
+
+    expect(settleRunningMock).toHaveBeenCalledWith('op_x', 'error');
+  });
+
+  it('still settles the durable row when the lifecycle dispatch is skipped', async () => {
+    // `dispatchHooks` — which owns the rich terminal write — is gated on the
+    // state being running/waiting_*. An `idle` step boundary skips it, and
+    // that used to mean nothing settled the row at all.
+    const coord = buildCoordinator({
+      loadAgentState: vi.fn().mockResolvedValue(stateWith({ status: 'idle' })),
+    });
+
+    await new AbandonOperationService(buildDb(), {
+      coordinator: coord as any,
+      snapshotStore: buildPartiallessStore() as any,
+    }).finalizeAbandoned('op_idle', 'stale_lease');
+
+    expect(dispatchHooksMock).not.toHaveBeenCalled();
+    expect(settleRunningMock).toHaveBeenCalledWith('op_idle', 'error');
+  });
+
+  it('errors the conversation tail when the dying step never created a placeholder', async () => {
+    // A host recycled mid-LLM-call leaves no assistant placeholder, so there
+    // was nothing carrying `error` — and the client keys its retry affordance
+    // off `message.error`, which is why the turn rendered as frozen.
+    latestSpineMessageIdMock.mockResolvedValue('msg_tail');
+    const coord = buildCoordinator({
+      loadAgentState: vi.fn().mockResolvedValue(
+        stateWith({
+          metadata: { agentId: 'agt_x', topicId: 'tpc_x', userId: 'user_x' },
+        }),
+      ),
+    });
+
+    const result = await new AbandonOperationService(buildDb(), {
+      coordinator: coord as any,
+      snapshotStore: buildPartiallessStore() as any,
+    }).finalizeAbandoned('op_no_placeholder', 'stale_lease');
+
+    expect(latestSpineMessageIdMock).toHaveBeenCalledWith({
+      threadId: null,
+      topicId: 'tpc_x',
+    });
+    expect(messageUpdateMock).toHaveBeenCalledWith(
+      'msg_tail',
+      expect.objectContaining({ error: expect.objectContaining({ message: expect.any(String) }) }),
+    );
+    expect(result.assistantMessageUpdated).toBe(true);
+  });
+
+  it('prefers the placeholder over the tail when the step did create one', async () => {
+    latestSpineMessageIdMock.mockResolvedValue('msg_tail');
+    const coord = buildCoordinator({
+      loadAgentState: vi.fn().mockResolvedValue(stateWith()),
+    });
+
+    await new AbandonOperationService(buildDb(), {
+      coordinator: coord as any,
+      snapshotStore: buildPartiallessStore() as any,
+    }).finalizeAbandoned('op_x', 'stale_lease');
+
+    expect(latestSpineMessageIdMock).not.toHaveBeenCalled();
+    expect(messageUpdateMock).toHaveBeenCalledWith('msg_assist_1', expect.anything());
+  });
+
+  it('scopes the tail lookup to the operation thread when it has one', async () => {
+    latestSpineMessageIdMock.mockResolvedValue('msg_thread_tail');
+    const coord = buildCoordinator({
+      loadAgentState: vi.fn().mockResolvedValue(
+        stateWith({
+          metadata: {
+            agentId: 'agt_x',
+            threadId: 'thr_x',
+            topicId: 'tpc_x',
+            userId: 'user_x',
+          },
+        }),
+      ),
+    });
+
+    await new AbandonOperationService(buildDb(), {
+      coordinator: coord as any,
+      snapshotStore: buildPartiallessStore() as any,
+    }).finalizeAbandoned('op_thread', 'stale_lease');
+
+    expect(latestSpineMessageIdMock).toHaveBeenCalledWith({
+      threadId: 'thr_x',
+      topicId: 'tpc_x',
     });
   });
 
