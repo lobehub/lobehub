@@ -28,41 +28,15 @@ user-invocable: false
 
 ## Imports
 
-- This project uses `simple-import-sort/imports` and `consistent-type-imports` (`fixStyle: 'separate-type-imports'`)
-
-- **Separate type imports**: always use `import type { ... }` for type-only imports, NOT `import { type ... }` inline syntax
-
-- When a file already has `import type { ... }` from a package and you need to add a value import, keep them as **two separate statements**:
-
-  ```ts
-  import type { ChatTopicBotContext } from '@lobechat/types';
-  import { RequestTrigger } from '@lobechat/types';
-  ```
-
-- Within each import statement, specifiers are sorted **alphabetically by name**
+- Let lint enforce `simple-import-sort/imports` and `consistent-type-imports` with separate `import type` statements (`fixStyle: 'separate-type-imports'`).
 
 ## Code Structure
 
-- Prefer object destructuring
-- Use consistent, descriptive naming; avoid obscure abbreviations
-- Replace magic numbers/strings with well-named constants
-- Defer formatting to tooling
 - Prefer **named exports** over `export default` — keeps refactor renames and IDE auto-import in sync, and avoids the `default` re-naming drift you get with `import Foo from './foo'`. Reserve `export default` for files where the framework requires it (Next.js page/route/layout, React.lazy targets, config files like `vitest.config.ts`). The codebase still has many `export default` occurrences — that's historical debt, not a pattern to copy; do not model new code on existing `export default` usage outside the framework-required cases above
-- Before adding local helpers for common guards/parsing/normalization (record checks, string extraction, empty-string handling, timing helpers, JSON-safe utilities, etc.), search `packages/utils` first. If the helper already exists or clearly belongs there, import it from `@lobechat/utils` (or the relevant `@lobechat/utils/*` subpath) instead of duplicating tiny helpers across feature files.
-
-## UI and Theming
-
-- Use `@lobehub/ui`, Ant Design components instead of raw HTML tags
-- Design for dark mode and mobile responsiveness
-- Use `antd-style` token system instead of hard-coded colors
-
-## Performance
-
-- Query only required columns from database
 
 ## Reusability
 
-- Reuse existing utils in `packages/utils` or installed npm packages
+- Before adding guards, parsing, normalization, timing, or JSON-safe helpers, search `packages/utils` and installed packages. Reuse `@lobechat/utils` or its relevant subpath instead of duplicating helpers across features.
 - Do not hand-roll reusable record/object-map guards such as `typeof value === 'object' && value !== null`; import helpers like `isRecord`, `isPlainRecord`, `isObjectLike`, `toRecord`, `pickString`, `UnknownRecord`, etc. from `@lobechat/utils/object`.
 - Assign `Date.now()` to a constant once and reuse for consistency
 
