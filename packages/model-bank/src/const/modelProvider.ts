@@ -28,6 +28,7 @@ export enum ModelProvider {
   Google = 'google',
   Groq = 'groq',
   Higress = 'higress',
+  Hubris = 'hubris',
   HuggingFace = 'huggingface',
   Hunyuan = 'hunyuan',
   InfiniAI = 'infiniai',

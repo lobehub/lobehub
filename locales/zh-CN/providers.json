@@ -28,6 +28,7 @@
   "google.description": "Google 的 Gemini 系列是其最先进的通用 AI，由 Google DeepMind 构建，支持文本、代码、图像、音频与视频的多模态应用，具备从数据中心到移动设备的高效扩展能力。",
   "groq.description": "Groq 的 LPU 推理引擎在基准测试中表现卓越，具备极高速度与效率，为低延迟云端大模型推理设立新标杆。",
   "higress.description": "Higress 是阿里巴巴内部打造的云原生 API 网关，解决 Tengine 重载对长连接的影响及 gRPC/Dubbo 负载均衡的不足。",
+  "hubris.description": "Hubris 是一个兼容 OpenAI 接口的模型网关，通过单个 API 密钥提供 Anthropic、OpenAI、Google、DeepSeek、Moonshot、xAI 等厂商的模型，并以俄罗斯卢布计费。",
   "huggingface.description": "Hugging Face 推理 API 提供快速访问数千个高性能模型，适用于原型开发与机器学习实验。",
   "hunyuan.description": "腾讯自研大模型，具备强大的中文写作能力、复杂语境下的推理能力与任务执行稳定性。",
   "infiniai.description": "为应用开发者提供高性能、易用、安全的大模型服务，覆盖从模型开发到生产部署的完整流程。",

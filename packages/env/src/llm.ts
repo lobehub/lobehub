@@ -148,6 +148,9 @@ export const getLLMConfig = () => {
       ENABLED_HUNYUAN: z.boolean(),
       HUNYUAN_API_KEY: z.string().optional(),
 
+      ENABLED_HUBRIS: z.boolean(),
+      HUBRIS_API_KEY: z.string().optional(),
+
       ENABLED_HUGGINGFACE: z.boolean(),
       HUGGINGFACE_API_KEY: z.string().optional(),
 
@@ -404,6 +407,9 @@ export const getLLMConfig = () => {
 
       ENABLED_HUNYUAN: !!process.env.HUNYUAN_API_KEY,
       HUNYUAN_API_KEY: process.env.HUNYUAN_API_KEY,
+
+      ENABLED_HUBRIS: !!process.env.HUBRIS_API_KEY,
+      HUBRIS_API_KEY: process.env.HUBRIS_API_KEY,
 
       ENABLED_HUGGINGFACE: !!process.env.HUGGINGFACE_API_KEY,
       HUGGINGFACE_API_KEY: process.env.HUGGINGFACE_API_KEY,

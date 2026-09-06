@@ -28,6 +28,7 @@
   "google.description": "Google's Gemini family is its most advanced general-purpose AI, built by Google DeepMind for multimodal use across text, code, images, audio, and video. It scales from data centers to mobile devices with strong efficiency and reach.",
   "groq.description": "Groq’s LPU inference engine delivers standout benchmark performance with exceptional speed and efficiency, setting a high bar for low-latency, cloud-based LLM inference.",
   "higress.description": "Higress is a cloud-native API gateway created inside Alibaba to address Tengine reload impact on long-lived connections and gaps in gRPC/Dubbo load balancing.",
+  "hubris.description": "Hubris is an OpenAI-compatible gateway that serves models from Anthropic, OpenAI, Google, DeepSeek, Moonshot, xAI and others behind one API key, with billing in Russian roubles.",
   "huggingface.description": "The Hugging Face Inference API offers a fast way to explore thousands of models for many tasks, giving instant access to high-performance models for prototyping and ML experimentation.",
   "hunyuan.description": "A Tencent-developed LLM with strong Chinese writing, solid reasoning in complex contexts, and reliable task execution.",
   "infiniai.description": "Provides app developers with high-performance, easy-to-use, secure LLM services across the full workflow from model development to production deployment.",

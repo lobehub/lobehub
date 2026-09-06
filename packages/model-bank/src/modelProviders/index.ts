@@ -30,6 +30,7 @@ import GLMCodingPlanProvider from './glmCodingPlan';
 import GoogleProvider from './google';
 import GroqProvider from './groq';
 import HigressProvider from './higress';
+import HubrisProvider from './hubris';
 import HuggingFaceProvider from './huggingface';
 import HunyuanProvider from './hunyuan';
 import InfiniAIProvider from './infiniai';
@@ -223,6 +224,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   VercelAIGatewayProvider,
   CerebrasProvider,
   ZenMuxProvider,
+  HubrisProvider,
   OpenCodeZenProvider,
   OpenCodeCodingPlanProvider,
   StraicoProvider,
@@ -284,6 +286,7 @@ export { default as GLMCodingPlanProviderCard } from './glmCodingPlan';
 export { default as GoogleProviderCard } from './google';
 export { default as GroqProviderCard } from './groq';
 export { default as HigressProviderCard } from './higress';
+export { default as HubrisProviderCard } from './hubris';
 export { default as HuggingFaceProviderCard } from './huggingface';
 export { default as HunyuanProviderCard } from './hunyuan';
 export { default as InfiniAIProviderCard } from './infiniai';
