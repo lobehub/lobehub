@@ -82,6 +82,19 @@ const resolveRuntimeProvider = (provider: string, sdkType?: string): string => {
 };
 
 /**
+ * Provider rows only persist user overrides. Builtin protocol defaults live in
+ * model-bank, so an empty persisted settings object must fall back to that card
+ * instead of silently selecting the runtime router's own default protocol.
+ */
+export const resolveProviderSdkType = (
+  provider: string,
+  configuredSdkType?: string,
+): string | undefined =>
+  configuredSdkType ??
+  DEFAULT_MODEL_PROVIDER_LIST.find((providerCard) => providerCard.id === provider)?.settings
+    ?.sdkType;
+
+/**
  * Build ClientSecretPayload from keyVaults stored in database
  *
  * This is the server-side equivalent of the frontend's getProviderAuthPayload function.
@@ -99,6 +112,7 @@ const resolveRuntimeProvider = (provider: string, sdkType?: string): string => {
 export const buildPayloadFromKeyVaults = (
   keyVaults: ProviderKeyVaults,
   runtimeProvider: string,
+  sdkType?: string,
 ): ClientSecretPayload => {
   // Use runtimeProvider to determine which fields to include
   // This handles both builtin providers and custom providers with sdkType
@@ -193,6 +207,7 @@ export const buildPayloadFromKeyVaults = (
         apiKey: keyVaults.apiKey,
         baseURL: keyVaults.baseURL,
         runtimeProvider,
+        ...(sdkType && { sdkType }),
       };
     }
   }
@@ -228,7 +243,11 @@ const getParamsFromPayload = (provider: string, payload: ClientSecretPayload) =>
       const apiKey = apiKeyManager.pick(payload?.apiKey || llmConfig[`${upperProvider}_API_KEY`]);
       const baseURL = payload?.baseURL || process.env[`${upperProvider}_PROXY_URL`];
 
-      return baseURL ? { apiKey, baseURL } : { apiKey };
+      return {
+        apiKey,
+        ...(baseURL && { baseURL }),
+        ...(payload.sdkType && { sdkType: payload.sdkType }),
+      };
     }
 
     case ModelProvider.Ollama: {
@@ -489,9 +508,9 @@ export const initModelRuntimeFromDB = async (
     KeyVaultsGateKeeper.getUserKeyVaults,
   );
 
-  // 2. Resolve the runtime provider for custom providers
-  // For custom providers, use sdkType from settings (defaults to 'openai')
-  const sdkType = providerConfig?.settings?.sdkType;
+  // 2. Resolve the protocol wrapper from a persisted override or the builtin
+  // provider card, then map custom providers to their runtime implementation.
+  const sdkType = resolveProviderSdkType(provider, providerConfig?.settings?.sdkType);
   const runtimeProvider = resolveRuntimeProvider(provider, sdkType);
 
   // 3. Build ClientSecretPayload from keyVaults based on runtimeProvider
@@ -517,7 +536,7 @@ export const initModelRuntimeFromDB = async (
     keyVaults = { ...keyVaults, ...freshKeyVaults } as ProviderKeyVaults;
   }
 
-  const payload = buildPayloadFromKeyVaults(keyVaults, runtimeProvider);
+  const payload = buildPayloadFromKeyVaults(keyVaults, runtimeProvider, sdkType);
 
   // 4. Get business hooks (billing in cloud, undefined in OSS)
   const businessHooks = getBusinessModelRuntimeHooks(userId, provider, workspaceId);

@@ -38,6 +38,11 @@ export interface ClientSecretPayload {
 
   runtimeProvider?: string;
   /**
+   * Selects the protocol wrapper for providers that expose more than one
+   * compatible API, for example DeepSeek's OpenAI and Anthropic endpoints.
+   */
+  sdkType?: string;
+  /**
    * user id
    * in client db mode it's a uuid
    * in server db mode it's a user id
