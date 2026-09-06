@@ -85,8 +85,9 @@ const TaskProperties = memo(() => {
       </TaskStatusTag>
 
       {/* The human layer: whether the delivery is accepted. Read-only here —
-          the decision itself is made on the acceptance page this links to. */}
-      <TaskAcceptanceStateRow />
+          the decision itself is made on the acceptance page this links to.
+          Recurring tasks have no delivery acceptance, so no state to show. */}
+      {!automationMode && <TaskAcceptanceStateRow />}
 
       <TaskPriorityTag priority={priority} taskIdentifier={taskId}>
         <Block

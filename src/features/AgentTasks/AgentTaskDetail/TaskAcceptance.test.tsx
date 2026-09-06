@@ -35,6 +35,7 @@ const mocks = vi.hoisted(() => ({
   openAcceptance: vi.fn(),
   openAcceptanceCheck: vi.fn(),
   subjectArgs: [] as unknown[],
+  taskDetailOverrides: {} as Record<string, unknown>,
   toggleTaskAgentPanel: vi.fn(),
   updateVerifyConfig: vi.fn(),
 }));
@@ -159,7 +160,9 @@ vi.mock('@/store/task', () => {
   const useTaskStore = (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       activeTaskId: 'T-231',
-      taskDetailMap: { 'T-231': { id: 'task-database-231', identifier: 'T-231' } },
+      taskDetailMap: {
+        'T-231': { id: 'task-database-231', identifier: 'T-231', ...mocks.taskDetailOverrides },
+      },
     });
   useTaskStore.getState = () => ({
     updateVerifyConfig: mocks.updateVerifyConfig,
@@ -178,6 +181,20 @@ describe('TaskAcceptance', () => {
     mocks.acceptanceSubject = null;
     mocks.bundle = undefined;
     mocks.currentPortalView = null;
+    mocks.taskDetailOverrides = {};
+  });
+
+  it('renders nothing for a recurring task — no Verifier config, no acceptance fetch', () => {
+    // Recurring tasks never get a verify plan on the server; the whole
+    // acceptance section (config editor included) must stay hidden.
+    mocks.taskDetailOverrides = { automationMode: 'schedule' };
+
+    const { container } = render(<TaskAcceptance />);
+
+    expect(screen.queryByTestId('task-acceptance-criteria')).not.toBeInTheDocument();
+    expect(container).toBeEmptyDOMElement();
+    // The acceptance subject fetch is skipped, not just its rendering.
+    expect(mocks.subjectArgs).toEqual(['task', null]);
   });
 
   it('renders the configured criteria in the same slot before an acceptance aggregate exists', () => {

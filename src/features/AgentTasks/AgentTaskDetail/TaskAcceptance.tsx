@@ -128,6 +128,7 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
   const { allowed: canEditTask } = usePermission('create_content');
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const taskDatabaseId = useTaskStore(taskDetailSelectors.activeTaskDatabaseId);
+  const automationMode = useTaskStore(taskDetailSelectors.activeTaskAutomationMode);
   const verify = useTaskStore(taskDetailSelectors.activeTaskVerifyConfig);
   const [sectionExpanded, setSectionExpanded] = useState(true);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
@@ -138,7 +139,7 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
     error: subjectError,
     isLoading: subjectLoading,
     mutate: mutateSubject,
-  } = useAcceptanceBySubject('task', taskDatabaseId ?? null);
+  } = useAcceptanceBySubject('task', automationMode ? null : (taskDatabaseId ?? null));
   const {
     data: bundle,
     error: bundleError,
@@ -175,6 +176,11 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
   const groupKeys = groups.map((group) => group.key);
   const allGroupsCollapsed =
     groupKeys.length > 0 && groupKeys.every((key) => collapsedGroups.has(key));
+  // A recurring task (schedule / heartbeat) never gets a verify plan on the
+  // server — its ticks are not deliveries. Offering the Verifier config or an
+  // acceptance section here would advertise a contract that never runs.
+  if (automationMode) return null;
+
   if (subjectLoading) return <NeuralNetworkLoading size={28} />;
   // Before the first Acceptance round exists, the configured criteria ARE the
   // delivery acceptance. Keep them in this single slot; once a round exists,
