@@ -225,6 +225,8 @@ export const goalRouter = router({
             }),
           )
           .max(MAX_GOAL_METRIC_CRITERIA),
+        /** `merge` upserts by key server-side; `replace` (default) swaps the list. */
+        mode: z.enum(['merge', 'replace']).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -232,7 +234,7 @@ export const goalRouter = router({
         const goal = await ctx.goalModel.findById(input.id);
         if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
         assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
-        const data = await ctx.goalService.setMetricCriteria(input.id, input.metrics);
+        const data = await ctx.goalService.setMetricCriteria(input.id, input.metrics, input.mode);
         // Relaxing a clause can free a goal parked short of acceptance.
         await scheduleGoalAdvance({
           goalId: input.id,

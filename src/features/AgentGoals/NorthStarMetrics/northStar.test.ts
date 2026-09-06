@@ -11,6 +11,10 @@ const series = (
   values: number[],
   overrides: Partial<MetricSeriesWithPoints> = {},
 ): MetricSeriesWithPoints => ({
+  firstPoint:
+    values.length > 0
+      ? { observedAt: new Date(NOW - (values.length - 1) * 60_000), value: values[0] }
+      : null,
   id: `mtr_${key}`,
   key,
   kind: 'gauge',
@@ -103,6 +107,33 @@ describe('buildNorthStarCards', () => {
       NOW,
     );
     expect(met).toMatchObject({ met: true, percent: 100 });
+  });
+});
+
+describe('scale and windowing', () => {
+  it('compares at the persisted numeric(20, 6) scale, matching the server gate', () => {
+    // Recorded 0.1234567 reads back as 0.123457; a raw-target comparison
+    // would keep this card unmet forever while the goal already advanced.
+    const [card] = buildNorthStarCards(
+      [{ key: 'precision', op: 'eq', target: 0.123_456_7 }],
+      [series('precision', [0.123_457])],
+      NOW,
+    );
+
+    expect(card.met).toBe(true);
+  });
+
+  it('takes the baseline from the true first observation, not the recent window', () => {
+    // A 0 → 95 / 100 trajectory whose window only retains [90, 95] must read
+    // 95%, not the 50% a window-rebased baseline would claim.
+    const windowed = {
+      ...series('long', [90, 95]),
+      firstPoint: { observedAt: new Date(NOW - 10 * 86_400_000), value: 0 },
+    };
+
+    const [card] = buildNorthStarCards([{ key: 'long', target: 100 }], [windowed], NOW);
+
+    expect(card.percent).toBeCloseTo(95);
   });
 });
 

@@ -50,8 +50,11 @@ class GoalService {
   setAcceptanceCriteria = async (id: string, criteriaIds: string[]) =>
     lambdaClient.goal.setAcceptanceCriteria.mutate({ criteriaIds, id });
 
-  setMetricCriteria = async (id: string, metrics: GoalMetricCriterion[]) =>
-    lambdaClient.goal.setMetricCriteria.mutate({ id, metrics });
+  setMetricCriteria = async (
+    id: string,
+    metrics: GoalMetricCriterion[],
+    mode?: 'merge' | 'replace',
+  ) => lambdaClient.goal.setMetricCriteria.mutate({ id, metrics, mode });
 
   recordObservation = async (
     id: string,

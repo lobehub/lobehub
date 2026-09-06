@@ -234,6 +234,41 @@ export class MetricModel {
    * evaluating a whole acceptance contract would otherwise issue one query per
    * clause and pace the connection pool with it.
    */
+  /**
+   * The earliest observation of many series at once, keyed by metric id.
+   *
+   * The counterpart of {@link latestPointsByMetricIds}: progress baselines
+   * read "where the series started", and a windowed recent read silently
+   * rebases once history outgrows the window — the true first point has to
+   * travel separately.
+   */
+  firstPointsByMetricIds = async (metricIds: string[]): Promise<Map<string, MetricPointItem>> => {
+    if (metricIds.length === 0) return new Map();
+
+    const rows = await this.db
+      .selectDistinctOn([metricPoints.metricId])
+      .from(metricPoints)
+      .where(and(inArray(metricPoints.metricId, metricIds), this.pointOwnership()))
+      .orderBy(metricPoints.metricId, asc(metricPoints.observedAt));
+
+    return new Map(rows.map((row) => [row.metricId, row]));
+  };
+
+  /**
+   * The newest `limit` raw points of one series, ascending, without resolving
+   * the series row — for callers that already hold it and must not pay the
+   * per-series double read of {@link listPoints}.
+   */
+  recentPoints = async (metricId: string, limit: number): Promise<MetricPointItem[]> => {
+    const rows = await this.db
+      .select()
+      .from(metricPoints)
+      .where(and(eq(metricPoints.metricId, metricId), this.pointOwnership()))
+      .orderBy(desc(metricPoints.observedAt))
+      .limit(limit);
+    return rows.reverse();
+  };
+
   latestPointsByMetricIds = async (metricIds: string[]): Promise<Map<string, MetricPointItem>> => {
     if (metricIds.length === 0) return new Map();
 

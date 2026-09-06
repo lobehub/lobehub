@@ -226,6 +226,54 @@ export const metricRouter = router({
       }
     }),
 
+  /**
+   * The chart bundle for a tracking surface, in one RPC: the named series of a
+   * subject, each with its recent point window and its true first observation.
+   *
+   * Exists because the per-series alternative amplifies: a polled surface
+   * calling listSeries + N x listPoints costs 1+N requests and ~3N queries
+   * for series that cannot even affect the view. Here the caller names its
+   * keys (a declared acceptance contract is capped), and the whole read is
+   * one request over K+2 bounded queries. `firstPoint` travels separately
+   * because the recent window silently rebases a progress baseline once
+   * history outgrows it.
+   */
+  listSeriesWithPoints: metricProcedure
+    .input(
+      subjectInput.extend({
+        keys: z.array(z.string().min(1).max(255)).min(1).max(50),
+        limit: z.number().int().min(2).max(1000).optional(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      try {
+        await assertSubjectVisible(ctx.serverDB, ctx, input.subjectType, input.subjectId);
+        const series = await ctx.metricModel.findByKeys(
+          input.subjectType,
+          input.subjectId,
+          input.keys,
+        );
+        const firstPoints = await ctx.metricModel.firstPointsByMetricIds(
+          series.map((item) => item.id),
+        );
+        const data = await Promise.all(
+          series.map(async (item) => ({
+            config: item.config,
+            firstPoint: firstPoints.get(item.id) ?? null,
+            id: item.id,
+            key: item.key,
+            kind: item.kind,
+            points: await ctx.metricModel.recentPoints(item.id, input.limit ?? 200),
+            title: item.title,
+            unit: item.unit,
+          })),
+        );
+        return { data, success: true };
+      } catch (error) {
+        mapMetricError(error, 'listSeriesWithPoints');
+      }
+    }),
+
   listSeries: metricProcedure.input(subjectInput).query(async ({ input, ctx }) => {
     try {
       await assertSubjectVisible(ctx.serverDB, ctx, input.subjectType, input.subjectId);

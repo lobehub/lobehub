@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Tag, Text, Tooltip } from '@lobehub/ui/base-ui';
+import { Button, Skeleton, Tag, Text, Tooltip } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import { Check, Plus, Target } from 'lucide-react';
@@ -67,12 +67,16 @@ const MetricCard = memo<{ canEdit: boolean; card: NorthStarCard; goalId: string 
           <Text ellipsis fontSize={12} type={'secondary'}>
             {card.label}
           </Text>
-          {card.met ? (
-            <Tag color={'success'} size={'small'}>
-              <Icon icon={Check} size={11} /> {t('goalProcess.northStar.met')}
-            </Tag>
-          ) : (
-            canEdit && (
+          <Flexbox horizontal align={'center'} gap={4}>
+            {card.met && (
+              <Tag color={'success'} size={'small'}>
+                <Icon icon={Check} size={11} /> {t('goalProcess.northStar.met')}
+              </Tag>
+            )}
+            {/* Recording stays available after the target is met: the world
+                can regress, and a card whose only refresh path disappeared
+                would stay falsely met forever. */}
+            {canEdit && (
               <Tooltip title={t('goalProcess.northStar.record.title')}>
                 <Button
                   icon={<Icon icon={Plus} size={13} />}
@@ -81,8 +85,8 @@ const MetricCard = memo<{ canEdit: boolean; card: NorthStarCard; goalId: string 
                   onClick={() => openRecordObservationModal(goalId, card.key, card.label)}
                 />
               </Tooltip>
-            )
-          )}
+            )}
+          </Flexbox>
         </Flexbox>
         <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
           <Flexbox horizontal align={'baseline'} gap={6}>
@@ -132,7 +136,9 @@ const NorthStarMetrics = memo<NorthStarMetricsProps>(({ canEdit, goalId }) => {
   const criteria = snapshot?.goal.config?.acceptance?.metrics;
   // Fetch only when there is something to join against — a goal without
   // declared clauses renders the guidance row and costs no series read.
-  const { error, mutate } = useFetchGoalMetricSeries(criteria?.length ? goalId : undefined);
+  const { error, isLoading, mutate } = useFetchGoalMetricSeries(
+    criteria?.length ? goalId : undefined,
+  );
 
   const cards = useMemo(
     () => (criteria?.length ? buildNorthStarCards(criteria, series ?? []) : []),
@@ -163,6 +169,17 @@ const NorthStarMetrics = memo<NorthStarMetricsProps>(({ canEdit, goalId }) => {
           void mutate();
         }}
       />
+    );
+
+  // First fetch still in flight: say nothing rather than confidently claiming
+  // "never measured" against an empty join — a false state, not feedback.
+  if (!series && isLoading)
+    return (
+      <Flexbox horizontal gap={10}>
+        {criteria.map((criterion) => (
+          <Skeleton height={96} key={criterion.key} width={236} />
+        ))}
+      </Flexbox>
     );
 
   return (

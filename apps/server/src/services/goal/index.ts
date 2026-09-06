@@ -418,17 +418,32 @@ export class GoalService {
     );
   };
 
-  setMetricCriteria = async (goalId: string, metrics: GoalMetricCriterion[]) => {
+  setMetricCriteria = async (
+    goalId: string,
+    metrics: GoalMetricCriterion[],
+    /**
+     * `merge` upserts by key into the list as it stands on the server —
+     * for callers declaring one clause, whose own snapshot may be stale.
+     * A client-built replacement array would silently drop whatever a
+     * concurrent editor or agent declared since that snapshot was read.
+     */
+    mode: 'merge' | 'replace' = 'replace',
+  ) => {
     const before = await this.coordinatorGraph.getGraph(goalId);
     if (!before) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
     const parkedOnGate = this.isParkedOnMeasuredGate(before);
     const goal = before.goal;
+    const current = goal.config?.acceptance?.metrics ?? [];
+    const next =
+      mode === 'merge'
+        ? [...current.filter((item) => !metrics.some((m) => m.key === item.key)), ...metrics]
+        : metrics;
     await this.goalModel.update(goalId, {
       config: {
         ...goal.config,
         acceptance: {
           ...goal.config?.acceptance,
-          metrics: metrics.length > 0 ? metrics : undefined,
+          metrics: next.length > 0 ? next : undefined,
         },
       },
     });

@@ -171,7 +171,19 @@ export class GoalActionImpl {
   useFetchGoalMetricSeries = (goalId?: string | null) =>
     useClientDataSWR(
       goalId ? goalKeys.metricSeries(goalId) : null,
-      () => metricService.listSeriesWithPoints('goal', goalId!),
+      // Only the declared keys are fetched — the same goal can accumulate any
+      // number of other sampled series, and none of them can affect this view.
+      // Keys are read at fetch time; the declare path revalidates this cache
+      // key right after refreshing the graph, so a newly declared clause is
+      // fetched against fresh criteria.
+      () =>
+        metricService.listSeriesWithPoints(
+          'goal',
+          goalId!,
+          (this.#get().goalGraphById[goalId!]?.goal.config?.acceptance?.metrics ?? []).map(
+            (criterion) => criterion.key,
+          ),
+        ),
       {
         onSuccess: (series) => {
           this.#set(
@@ -198,11 +210,10 @@ export class GoalActionImpl {
 
   /** Append one clause to the goal's measured acceptance and refresh both reads. */
   declareGoalMetric = async (goalId: string, criterion: GoalMetricCriterion): Promise<void> => {
-    const existing = this.#get().goalGraphById[goalId]?.goal.config?.acceptance?.metrics ?? [];
-    await goalService.setMetricCriteria(goalId, [
-      ...existing.filter((item) => item.key !== criterion.key),
-      criterion,
-    ]);
+    // Merged on the server against its current list — a replacement array
+    // built from this client's snapshot would silently drop whatever a
+    // concurrent editor or agent declared since the snapshot was read.
+    await goalService.setMetricCriteria(goalId, [criterion], 'merge');
     await this.refreshGoalGraph(goalId);
     await this.refreshGoalMetricSeries(goalId);
   };

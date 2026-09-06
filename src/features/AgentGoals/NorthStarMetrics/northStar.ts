@@ -1,4 +1,8 @@
-import type { GoalMetricComparison, GoalMetricCriterion } from '@lobechat/types';
+import {
+  type GoalMetricComparison,
+  type GoalMetricCriterion,
+  toMetricScale,
+} from '@lobechat/types';
 
 import type { MetricSeriesWithPoints } from '@/services/metric';
 
@@ -35,7 +39,13 @@ export const NORTH_STAR_STALE_AFTER_MS = 48 * 60 * 60 * 1000;
 
 const SPARKLINE_POINT_CAP = 60;
 
-const compare = (value: number, op: GoalMetricComparison, target: number): boolean => {
+const compare = (rawValue: number, op: GoalMetricComparison, rawTarget: number): boolean => {
+  // Both operands at the persisted numeric(20, 6) scale — the server's gate
+  // compares this way, and a raw-target comparison here could disagree with
+  // it at rounding boundaries (`eq 0.1234567` never holding while the goal
+  // already advanced).
+  const value = toMetricScale(rawValue);
+  const target = toMetricScale(rawTarget);
   switch (op) {
     case 'eq': {
       return value === target;
@@ -95,7 +105,10 @@ export const buildNorthStarCards = (
     const matched = byKey.get(criterion.key);
     const points = matched?.points ?? [];
     const latest = points.at(-1);
-    const baseline = points[0]?.value;
+    // The true first observation, not the window's oldest: `points` is a
+    // recent window, and rebasing on it would silently inflate or deflate
+    // progress once history outgrows the window.
+    const baseline = matched?.firstPoint?.value ?? points[0]?.value;
 
     const trendSource = points.map((point) => point.value);
     const step = Math.max(1, Math.ceil(trendSource.length / SPARKLINE_POINT_CAP));
