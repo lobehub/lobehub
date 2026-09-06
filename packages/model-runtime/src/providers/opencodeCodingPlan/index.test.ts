@@ -152,6 +152,41 @@ describe('sanitizeJsonSchema', () => {
   });
 });
 
+describe('Muse Spark Responses API routing', () => {
+  let chatCreateSpy: Mock;
+  let responsesCreateSpy: Mock;
+
+  beforeEach(() => {
+    loadModelsMock.mockResolvedValue([]);
+    chatCreateSpy = vi
+      .spyOn(OpenAI.Chat.Completions.prototype, 'create')
+      .mockResolvedValue(new ReadableStream() as any) as unknown as Mock;
+    responsesCreateSpy = vi
+      .spyOn(OpenAI.Responses.prototype, 'create')
+      .mockResolvedValue(new ReadableStream() as any) as unknown as Mock;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it.each(['muse-spark-1.2-contributor', 'muse-spark-1.3-contributor'])(
+    'routes %s through Responses even when the provider-level default is Chat Completions',
+    async (model) => {
+      const instance = new LobeOpenCodeCodingPlanAI({ apiKey: 'test' });
+
+      await instance.chat({
+        apiMode: 'chatCompletion',
+        messages: [{ content: 'Hello', role: 'user' }],
+        model,
+      });
+
+      expect(responsesCreateSpy).toHaveBeenCalledOnce();
+      expect(chatCreateSpy).not.toHaveBeenCalled();
+    },
+  );
+});
+
 describe('buildOpenAIPayload Kimi thinking semantics', () => {
   let instance: InstanceType<typeof LobeOpenCodeCodingPlanAI>;
   let createSpy: Mock;
