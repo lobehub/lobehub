@@ -609,6 +609,26 @@ describe('LobeAzureOpenAI', () => {
       expect(res).toEqual({ imageUrl: url });
     });
 
+    it('should strip background auto but forward transparent', async () => {
+      const url = 'https://example.com/gpt-image-2-bg.png';
+      const generateSpy = vi
+        .spyOn(instance['client'].images, 'generate')
+        .mockResolvedValue({ data: [{ url }] } as any);
+
+      await instance.createImage({
+        model: 'gpt-image-2',
+        params: { background: 'auto', prompt: 'a sticker' },
+      });
+      expect(vi.mocked(generateSpy).mock.calls[0][0]).not.toHaveProperty('background');
+
+      generateSpy.mockClear();
+      await instance.createImage({
+        model: 'gpt-image-2',
+        params: { background: 'transparent', prompt: 'a sticker' },
+      });
+      expect(vi.mocked(generateSpy).mock.calls[0][0]).toHaveProperty('background', 'transparent');
+    });
+
     it('should not send input_fidelity for gpt-image-2 edit requests', async () => {
       const url = 'https://example.com/gpt-image-2-edited.png';
       const editSpy = vi
