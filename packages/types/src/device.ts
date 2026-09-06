@@ -383,6 +383,25 @@ export interface DeviceListItem {
   workingDirs: WorkingDirEntry[];
 }
 
+export interface DeviceDirectoryBrowseEntry {
+  isSymlink: boolean;
+  name: string;
+  /** Canonical absolute path on the execution device. */
+  path: string;
+  readable: boolean;
+}
+
+export interface DeviceDirectoryBrowseResult {
+  entries: DeviceDirectoryBrowseEntry[];
+  nextCursor?: string;
+  parentPath: string | null;
+  /** Canonical absolute directory currently being browsed. */
+  path: string;
+  pathSeparator: '/' | '\\';
+  roots: string[];
+  truncated: boolean;
+}
+
 /**
  * Branch name + detached-HEAD flag for a working directory, returned by the
  * `getGitBranch` device RPC. Mirrors the desktop `GitBranchInfo`.

@@ -3,4 +3,4 @@ export { defaultGetLocalFilePreview } from './filePreview';
 export { defaultGetProjectFileIndex, defaultSearchProjectFiles } from './projectFileIndex';
 export { defaultSkillCacheRoot, prepareSkillDirectory } from './skillDirectory';
 export * from './types';
-export { initWorkspace, listProjectSkills, statPath } from './workspace';
+export { browseDirectory, initWorkspace, listProjectSkills, statPath } from './workspace';

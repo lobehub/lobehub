@@ -23,6 +23,7 @@ import {
 import { getClaudeCodeQuota, type GetClaudeCodeQuotaParams } from './claudeCodeQuota';
 import { prepareSkillDirectory } from './skillDirectory';
 import type {
+  BrowseDirectoryParams,
   DeviceControlDeps,
   EnrollWorkspaceParams,
   InitWorkspaceParams,
@@ -34,7 +35,7 @@ import type {
   ProjectFileSearchParams,
   UnenrollWorkspaceParams,
 } from './types';
-import { initWorkspace, listProjectSkills, statPath } from './workspace';
+import { browseDirectory, initWorkspace, listProjectSkills, statPath } from './workspace';
 
 /**
  * Every method name the device-control RPC dispatcher understands. Mirrors the
@@ -50,6 +51,7 @@ export const DEVICE_RPC_METHODS = [
   'getClaudeCodeQuota',
   'listProjectSkills',
   'prepareSkillDirectory',
+  'browseDirectory',
   'statPath',
   'getProjectFileIndex',
   'searchProjectFiles',
@@ -132,6 +134,10 @@ export const executeDeviceRpc = async (
 
     case 'prepareSkillDirectory': {
       return prepareSkillDirectory(params as PrepareSkillDirectoryParams, deps);
+    }
+
+    case 'browseDirectory': {
+      return browseDirectory(params as BrowseDirectoryParams);
     }
 
     case 'statPath': {
