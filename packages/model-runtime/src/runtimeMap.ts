@@ -57,6 +57,7 @@ import { LobePPIOAI } from './providers/ppio';
 import { LobeQiniuAI } from './providers/qiniu';
 import { LobeQwenAI } from './providers/qwen';
 import { LobeReplicateAI } from './providers/replicate';
+import { LobeSaggAI } from './providers/sagg';
 import { LobeSambaNovaAI } from './providers/sambanova';
 import { LobeSearch1API } from './providers/search1api';
 import { LobeSenseNovaAI } from './providers/sensenova';
@@ -145,6 +146,7 @@ export const providerRuntimeMap = {
   qwen: LobeQwenAI,
   replicate: LobeReplicateAI,
   router: LobeNewAPIAI,
+  sagg: LobeSaggAI,
   sambanova: LobeSambaNovaAI,
   search1api: LobeSearch1API,
   sensenova: LobeSenseNovaAI,
