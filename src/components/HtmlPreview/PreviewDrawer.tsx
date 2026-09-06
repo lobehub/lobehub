@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { isDesktop } from '@/const/version';
 
 import { extractHtmlTitle } from './htmlTagScanner';
+import { injectDialogInterceptor } from './dialogInterceptor';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
@@ -100,7 +101,7 @@ const HtmlPreviewDrawer = memo<HtmlPreviewDrawerProps>(({ content, open, onClose
             title={t('HtmlPreview.iframeTitle')}
             variant={'borderless'}
           >
-            {content}
+            {injectDialogInterceptor(content)}
           </HtmlPreview>
         </Block>
       ) : (
