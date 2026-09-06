@@ -661,6 +661,204 @@ describe('MessageModel Query Tests', () => {
       });
     });
 
+    describe('round-cursor before pages (LOBE-13716)', () => {
+      // Like seedRounds, but with a per-round step count so one round can dwarf
+      // the page size — the shape that amplifies the round-start trim.
+      const seedVariableRounds = async (topicId: string, stepsPerRound: number[]) => {
+        await serverDB.insert(topics).values([{ id: topicId, userId }]);
+        const rows: any[] = [];
+        let seq = 0;
+        let prevId: string | null = null;
+        stepsPerRound.forEach((steps, index) => {
+          const r = index + 1;
+          const uid = `${topicId}-u${r}`;
+          rows.push({
+            id: uid,
+            userId,
+            topicId,
+            role: 'user',
+            parentId: prevId,
+            content: `q${r}`,
+            createdAt: new Date(2023, 0, 1, 0, seq),
+          });
+          seq += 1;
+          prevId = uid;
+          for (let step = 1; step <= steps; step += 1) {
+            const sid = `${topicId}-a${r}-${step}`;
+            rows.push({
+              id: sid,
+              userId,
+              topicId,
+              role: 'assistant',
+              parentId: prevId,
+              content: `a${r}.${step}`,
+              createdAt: new Date(2023, 0, 1, 0, seq),
+            });
+            seq += 1;
+            prevId = sid;
+          }
+        });
+        await serverDB.insert(messages).values(rows);
+        return { allIds: rows.map((row) => row.id as string) };
+      };
+
+      const cursorOf = (message: { createdAt: Date | number | string; id: string }) => ({
+        createdAt: new Date(message.createdAt),
+        id: message.id,
+      });
+
+      it('reproduces the amplified trim: a giant mid-topic round shrinks page 0 to the last round', async () => {
+        const topicId = 't-lobe13716-repro';
+        // Rounds of 4 / 12 / 4 messages; page size 10. The newest 10 rows cut
+        // into the giant round 2, and the round-start trim jumps all the way to
+        // round 3 — page 0 keeps only 4 of the 20 messages.
+        await seedVariableRounds(topicId, [3, 11, 3]);
+
+        const page0 = await messageModel.query({ topicId, pageSize: 10 });
+
+        expect(page0).toHaveLength(4);
+        expect(page0[0].id).toBe(`${topicId}-u3`);
+        expect(page0.at(-1)!.id).toBe(`${topicId}-a3-3`);
+      });
+
+      it('walks the full history through before cursors with no gaps or duplicates', async () => {
+        const topicId = 't-lobe13716-walk';
+        const { allIds } = await seedVariableRounds(topicId, [3, 11, 3]);
+
+        const pageSize = 10;
+        const page0 = await messageModel.query({ topicId, pageSize });
+
+        // Page 1: the giant round's tail. A full page with no user message in
+        // view is kept whole (oversized-round guard), mid-round top and all.
+        const page1 = await messageModel.query({
+          topicId,
+          pageSize,
+          before: cursorOf(page0[0]),
+        });
+        expect(page1).toHaveLength(10);
+        // Contiguous join: page 1's newest row is the parent of page 0's oldest.
+        expect(page0[0].parentId).toBe(page1.at(-1)!.id);
+
+        // Page 2: everything left (6 rows < pageSize) — no trim on a partial page.
+        const page2 = await messageModel.query({
+          topicId,
+          pageSize,
+          before: cursorOf(page1[0]),
+        });
+        expect(page2).toHaveLength(6);
+        expect(page2[0].id).toBe(`${topicId}-u1`);
+        expect(page1[0].parentId).toBe(page2.at(-1)!.id);
+
+        // The three pages reassemble the exact full transcript, in order.
+        const walked = [...page2, ...page1, ...page0].map((m) => m.id);
+        expect(walked).toEqual(allIds);
+
+        // Walking past the beginning returns an empty page (the client's
+        // exhaustion signal alongside `page.length < pageSize`).
+        const page3 = await messageModel.query({
+          topicId,
+          pageSize,
+          before: cursorOf(page2[0]),
+        });
+        expect(page3).toHaveLength(0);
+      });
+
+      it('breaks createdAt ties by id so equal-timestamp rows are neither skipped nor duplicated', async () => {
+        const topicId = 't-lobe13716-tie';
+        await serverDB.insert(topics).values([{ id: topicId, userId }]);
+        const createdAt = new Date(2023, 0, 1, 0, 0);
+        await serverDB.insert(messages).values([
+          { id: `${topicId}-m1`, userId, topicId, role: 'user', content: 'q', createdAt },
+          { id: `${topicId}-m2`, userId, topicId, role: 'assistant', content: 'a1', createdAt },
+          { id: `${topicId}-m3`, userId, topicId, role: 'assistant', content: 'a2', createdAt },
+        ]);
+
+        const page0 = await messageModel.query({ topicId, pageSize: 2 });
+        expect(page0.map((m) => m.id)).toEqual([`${topicId}-m2`, `${topicId}-m3`]);
+
+        const page1 = await messageModel.query({
+          topicId,
+          pageSize: 2,
+          before: cursorOf(page0[0]),
+        });
+        expect(page1.map((m) => m.id)).toEqual([`${topicId}-m1`]);
+      });
+
+      it('windows group nodes to the before page instead of refetching the whole topic', async () => {
+        const topicId = 't-lobe13716-group';
+        await seedVariableRounds(topicId, [3, 11, 3]);
+
+        // One group inside the first before page's time window (minute 7.5) and
+        // one inside page 0's window (minute 18.5), each with a hidden member.
+        await serverDB.insert(messageGroups).values([
+          {
+            id: `${topicId}-g-old`,
+            content: 'old summary',
+            type: MessageGroupType.Compression,
+            topicId,
+            userId,
+            createdAt: new Date(2023, 0, 1, 0, 7, 30),
+          },
+          {
+            id: `${topicId}-g-new`,
+            content: 'new summary',
+            type: MessageGroupType.Compression,
+            topicId,
+            userId,
+            createdAt: new Date(2023, 0, 1, 0, 18, 30),
+          },
+        ]);
+        await serverDB.insert(messages).values([
+          {
+            id: `${topicId}-gm-old`,
+            userId,
+            topicId,
+            role: 'assistant',
+            content: 'grouped old',
+            messageGroupId: `${topicId}-g-old`,
+            createdAt: new Date(2023, 0, 1, 0, 7, 15),
+          },
+          {
+            id: `${topicId}-gm-new`,
+            userId,
+            topicId,
+            role: 'assistant',
+            content: 'grouped new',
+            messageGroupId: `${topicId}-g-new`,
+            createdAt: new Date(2023, 0, 1, 0, 18, 15),
+          },
+        ]);
+
+        const pageSize = 10;
+        const page0 = await messageModel.query({ topicId, pageSize });
+        // Page 0 keeps its existing behavior: every group node of the topic.
+        expect(page0.filter((m) => m.id.startsWith(`${topicId}-g-`)).map((m) => m.id)).toEqual([
+          `${topicId}-g-old`,
+          `${topicId}-g-new`,
+        ]);
+
+        const mainline = page0.find((m) => !m.id.startsWith(`${topicId}-g-`));
+        const page1 = await messageModel.query({
+          topicId,
+          pageSize,
+          before: cursorOf(mainline!),
+        });
+        const page1GroupIds = page1
+          .filter((m) => m.id.startsWith(`${topicId}-g-`))
+          .map((m) => m.id);
+        // Only the group inside this page's time window — not the whole topic's.
+        expect(page1GroupIds).toEqual([`${topicId}-g-old`]);
+
+        const page1Mainline = page1.find((m) => !m.id.startsWith(`${topicId}-g-`));
+        const page2 = await messageModel.query({
+          topicId,
+          pageSize,
+          before: cursorOf(page1Mainline!),
+        });
+        expect(page2.some((m) => m.id.startsWith(`${topicId}-g-`))).toBe(false);
+      });
+    });
+
     describe('query with messageQueries', () => {
       it('should include ragQuery, ragQueryId and ragRawQuery in query results', async () => {
         // Create test data

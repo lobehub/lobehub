@@ -58,6 +58,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  lt,
   lte,
   ne,
   not,
@@ -185,6 +186,11 @@ export interface QueryMessagesOptions {
    * true }`).
    */
   allowShareVisitor?: boolean;
+  /**
+   * Round-cursor for loading older history (see `QueryMessageParams.before`):
+   * only rows strictly older than this `(createdAt, id)` tuple are fetched.
+   */
+  before?: { createdAt: Date; id: string };
   /**
    * Current page number (0-indexed)
    */
@@ -1043,6 +1049,7 @@ export class MessageModel {
   query = async (
     {
       agentId,
+      before,
       current = 0,
       includeFileWorks,
       pageSize = 1000,
@@ -1141,6 +1148,7 @@ export class MessageModel {
       const threadScopeCondition = topicId ? this.matchTopic(topicId) : agentCondition;
       const messageItems = await this.queryWithWhere({
         allowShareVisitor: effectiveIncludeVisitor,
+        before,
         current,
         includeFileWorks,
         pageSize,
@@ -1169,6 +1177,7 @@ export class MessageModel {
 
       const messageItems = await this.queryWithWhere({
         allowShareVisitor: effectiveIncludeVisitor,
+        before,
         current,
         includeFileWorks,
         pageSize,
@@ -1201,6 +1210,7 @@ export class MessageModel {
 
     const messageItems = await this.queryWithWhere({
       allowShareVisitor: effectiveIncludeVisitor,
+      before,
       current,
       includeFileWorks,
       pageSize,
@@ -1369,6 +1379,7 @@ export class MessageModel {
   queryWithWhere = async (options: QueryMessagesOptions = {}): Promise<UIChatMessage[]> => {
     const {
       where,
+      before,
       current = 0,
       includeFileWorks,
       pageSize = 1000,
@@ -1384,6 +1395,16 @@ export class MessageModel {
     // instance's `includeShareVisitor` so either widens the scope.
     const scope =
       allowShareVisitor || this.includeShareVisitor ? this.workspaceScope() : this.ownership();
+
+    // Round-cursor paging: only rows strictly older than the `(createdAt, id)`
+    // tuple. The id tie-break mirrors the sort order below, so rows sharing a
+    // createdAt with the cursor are neither skipped nor duplicated.
+    const beforeCondition = before
+      ? or(
+          lt(messages.createdAt, before.createdAt),
+          and(eq(messages.createdAt, before.createdAt), lt(messages.id, before.id)),
+        )
+      : undefined;
 
     // 1. get basic messages with joins, excluding messages that belong to MessageGroups
     const result = await runTimedStage(
@@ -1460,6 +1481,7 @@ export class MessageModel {
               // Filter out messages that belong to MessageGroups
               isNull(messages.messageGroupId),
               where,
+              beforeCondition,
             ),
           )
           .leftJoin(messagePlugins, eq(messagePlugins.id, messages.id))
@@ -1494,15 +1516,14 @@ export class MessageModel {
     // round with no user message in view is kept whole (the proper fix for those
     // is lazy step loading). Thread queries pass no `topicId` and are untouched.
     //
-    // Scope: this only serves the single "most recent page" load (`current === 0`),
-    // which is the only page the chat read path ever requests — `current`/`pageSize`
-    // offset paging is dead code here (the very premise of). The trim is
-    // deliberately NOT offset-exact: the rows it drops from page 0 also fall outside
-    // page 1's `offset = pageSize` window, so a hypothetical offset walk would skip
-    // them. That is acceptable because nothing offset-walks this path; loading older
-    // history is round-cursor based (see the follow-up), which supersedes offset
-    // paging entirely and closes that gap by construction.
-    if (topicId && current === 0 && result.length >= pageSize) {
+    // Scope: this serves the single "most recent page" load (`current === 0`)
+    // and the round-cursor `before` pages that walk older history — the only
+    // shapes the chat read path requests; `current`/`pageSize` offset paging is
+    // dead code here (the very premise of). The trim is deliberately NOT
+    // offset-exact: rows dropped from one page reappear at the TOP of the next
+    // `before` page (its cursor is the trimmed page's oldest kept row), so the
+    // round-cursor walk loses nothing by construction.
+    if (topicId && (current === 0 || before) && result.length >= pageSize) {
       const firstRoundStart = result.findIndex((message) => message.role === 'user');
       if (firstRoundStart > 0) result.splice(0, firstRoundStart);
     }
@@ -1512,6 +1533,7 @@ export class MessageModel {
     const messageGroupNodesPromise = this.queryMessageGroupNodesForPage({
       allowShareVisitor: allowShareVisitor || this.includeShareVisitor,
       current,
+      hasBeforeCursor: !!before,
       postProcessUrl,
       result,
       timing,
@@ -1686,6 +1708,7 @@ export class MessageModel {
   private queryMessageGroupNodesForPage = async ({
     allowShareVisitor,
     current,
+    hasBeforeCursor,
     postProcessUrl,
     result,
     timing,
@@ -1702,6 +1725,13 @@ export class MessageModel {
      */
     allowShareVisitor?: boolean;
     current: number;
+    /**
+     * The page was fetched with a round-cursor (`before`): scope group nodes to
+     * the page's time window instead of the whole topic — page 0 already
+     * returned every group node, so an unwindowed fetch here would only
+     * duplicate them.
+     */
+    hasBeforeCursor?: boolean;
     postProcessUrl?: (
       path: string | null,
       file: { fileType: string; id?: string | null },
@@ -1713,7 +1743,7 @@ export class MessageModel {
     if (!topicId) return [];
 
     if (result.length === 0) {
-      if (current !== 0) return [];
+      if (current !== 0 || hasBeforeCursor) return [];
 
       return runTimedStage(
         timing,
@@ -1726,7 +1756,7 @@ export class MessageModel {
       );
     }
 
-    if (current === 0) {
+    if (current === 0 && !hasBeforeCursor) {
       return runTimedStage(
         timing,
         'db.message.queryWithWhere.messageGroups',

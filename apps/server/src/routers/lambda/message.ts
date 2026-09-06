@@ -398,6 +398,10 @@ export const messageRouter = router({
     .input(
       z.object({
         agentId: z.string().nullish(),
+        // Round-cursor for loading older history: only rows strictly older than
+        // this (createdAt, id) tuple, round-aligned like page 0. See
+        // `QueryMessageParams.before`.
+        before: z.object({ createdAt: z.date(), id: z.string() }).optional(),
         current: z.number().optional(),
         groupId: z.string().nullish(),
         // Opt-in for `file` work summaries in the payload. Absent → the legacy
