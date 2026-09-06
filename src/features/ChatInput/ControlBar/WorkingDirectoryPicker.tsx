@@ -1,7 +1,7 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import type { WorkingDirEntry } from '@lobechat/types';
+import type { DeviceScope, WorkingDirEntry } from '@lobechat/types';
 import { getWorkingDirSourcePath } from '@lobechat/types';
 import { Flexbox, Icon, Input, Popover, Tooltip } from '@lobehub/ui';
 import { ActionIcon, toast } from '@lobehub/ui/base-ui';
@@ -28,6 +28,7 @@ import {
 import {
   getWorkingDirectoryName,
   getWorkingDirectoryPathString,
+  resolveRemoteWorkingDirectory,
 } from '@/helpers/workingDirectoryPath';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { deviceService } from '@/services/device';
@@ -225,13 +226,14 @@ const ChooseLocalFolderRow = memo<{ defaultPath?: string; onPick: (entry: Folder
 );
 ChooseLocalFolderRow.displayName = 'ChooseLocalFolderRow';
 
-/** Web / remote device: filesystem isn't browsable here — enter an absolute path. */
+/** Web / remote device: filesystem isn't browsable here — enter a device-local path. */
 const AddRemoteFolderRow = memo<{
   defaultCwd?: string;
-  deviceId?: string;
+  deviceId: string;
   onBeforeOpen: () => void;
   onPick: (entry: FolderEntry) => void;
-}>(({ defaultCwd, deviceId, onBeforeOpen, onPick }) => {
+  scope: DeviceScope;
+}>(({ defaultCwd, deviceId, onBeforeOpen, onPick, scope }) => {
   const { t } = useTranslation('device');
 
   // Stat the entered path on the target device (it can't be browsed here): block
@@ -239,12 +241,12 @@ const AddRemoteFolderRow = memo<{
   // recent entry shows the right (git / github) icon. An unreachable device
   // (null) is treated as "can't verify" and allowed through without a repoType.
   const handleSubmit = async (path: string): Promise<string | undefined> => {
-    const result = deviceId ? await deviceService.statPath(deviceId, path) : undefined;
+    const result = await deviceService.statPath(deviceId, scope, path);
     if (result) {
       if (!result.exists) return t('workingDirectory.pathNotExist');
       if (!result.isDirectory) return t('workingDirectory.pathNotDirectory');
     }
-    onPick({ path, repoType: result?.repoType });
+    onPick(resolveRemoteWorkingDirectory(path, result));
     return undefined;
   };
 
@@ -307,6 +309,7 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
   });
   // The local machine's filesystem is browsable; a remote device's is not.
   const isLocalDevice = isDesktop && !!targetDeviceId && targetDeviceId === currentDeviceId;
+  const targetDevice = useDeviceStore(deviceSelectors.getDeviceById(targetDeviceId));
 
   const rawRecents = useDeviceStore(deviceSelectors.getDeviceWorkingDirs(targetDeviceId));
   const recents = useMemo(() => rawRecents.filter(isValidWorkingDirEntry), [rawRecents]);
@@ -528,14 +531,15 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
 
       {isLocalDevice ? (
         <ChooseLocalFolderRow defaultPath={selectedDir} onPick={pick} />
-      ) : (
+      ) : targetDeviceId && targetDevice ? (
         <AddRemoteFolderRow
           defaultCwd={deviceDefaultCwd}
           deviceId={targetDeviceId}
+          scope={targetDevice.scope}
           onBeforeOpen={() => setOpen(false)}
           onPick={pick}
         />
-      )}
+      ) : null}
     </Flexbox>
   );
 

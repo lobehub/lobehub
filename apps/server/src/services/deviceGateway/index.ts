@@ -30,6 +30,7 @@ import type {
   DeviceGitWorkingTreePatches,
   DeviceGitWorkingTreeStatus,
   DeviceGitWorktreeListItem,
+  DeviceListDirResult,
   DeviceListProjectSkillsResult,
   DeviceLocalFilePreviewResult,
   DeviceMoveProjectFileItem,
@@ -37,6 +38,7 @@ import type {
   DeviceProjectFileIndexResult,
   DeviceProjectFileSearchResult,
   DeviceRenameProjectFileResult,
+  DeviceStatPathResult,
   DeviceWriteProjectFileResult,
   HeterogeneousAgentModelCatalog,
   ProjectSkillMeta,
@@ -47,6 +49,18 @@ import debug from 'debug';
 import { gatewayEnv } from '@/envs/gateway';
 
 const log = debug('lobe-server:device-gateway');
+
+const createUnavailableListDirResult = (requestedPath?: string): DeviceListDirResult => {
+  const path = requestedPath?.trim() ?? '';
+  return {
+    code: 'UNAVAILABLE',
+    home: '',
+    path,
+    pathStyle: /^[A-Z]:[/\\]/i.test(path) || path.includes('\\') ? 'windows' : 'posix',
+    roots: [],
+    success: false,
+  };
+};
 
 /**
  * Is `target` the same as, or nested inside, `root`?
@@ -1295,11 +1309,45 @@ export class DeviceGateway {
   }
 
   /**
+   * List one directory on a device for the remote working-directory picker.
+   * Filesystem failures are returned by the device as typed results; transport,
+   * offline and old-client failures collapse only to `UNAVAILABLE`.
+   */
+  async listDir(params: {
+    deviceId: string;
+    path?: string;
+    timeout?: number;
+    userId: string;
+    workspaceId?: string;
+  }): Promise<DeviceListDirResult> {
+    const { userId, deviceId, path, timeout = 8000, workspaceId } = params;
+    const client = this.getClient();
+    if (!client) return createUnavailableListDirResult(path);
+
+    try {
+      const result = await client.invokeRpc<DeviceListDirResult>(
+        { deviceId, timeout, userId, workspaceId },
+        { method: 'listDir', params: { path } },
+      );
+
+      if (!result.success || !result.data) {
+        log('listDir: failed for deviceId=%s — %s', deviceId, result.error);
+        return createUnavailableListDirResult(path);
+      }
+
+      return result.data;
+    } catch (error) {
+      log('listDir: error for deviceId=%s — %O', deviceId, error);
+      return createUnavailableListDirResult(path);
+    }
+  }
+
+  /**
    * Check whether a path exists on the device and is a directory, via the same
    * generic `invokeRpc` channel as `gitInfo`. Lets a web / remote client
    * validate a manually-entered working directory before binding it. Returns
    * `undefined` when the gateway is unconfigured or the device is unreachable
-   * (the caller treats "can't verify" as non-blocking).
+   * so the caller can fail closed instead of persisting an unverified path.
    */
   async statPath(params: {
     deviceId: string;
@@ -1307,17 +1355,16 @@ export class DeviceGateway {
     timeout?: number;
     userId: string;
     workspaceId?: string;
-  }): Promise<{ exists: boolean; isDirectory: boolean; repoType?: 'git' | 'github' } | undefined> {
+  }): Promise<DeviceStatPathResult | undefined> {
     const { userId, deviceId, path, timeout = 8000, workspaceId } = params;
     const client = this.getClient();
     if (!client) return undefined;
 
     try {
-      const result = await client.invokeRpc<{
-        exists: boolean;
-        isDirectory: boolean;
-        repoType?: 'git' | 'github';
-      }>({ deviceId, timeout, userId, workspaceId }, { method: 'statPath', params: { path } });
+      const result = await client.invokeRpc<DeviceStatPathResult>(
+        { deviceId, timeout, userId, workspaceId },
+        { method: 'statPath', params: { path } },
+      );
 
       if (!result.success || !result.data) {
         log('statPath: failed for deviceId=%s — %s', deviceId, result.error);

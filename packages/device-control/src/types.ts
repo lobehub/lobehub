@@ -58,9 +58,47 @@ export interface ListProjectSkillsResult {
   source: ProjectSkillSource | null;
 }
 
+export type DevicePathStyle = 'posix' | 'windows';
+
+export type ListDirErrorCode =
+  'NOT_DIRECTORY' | 'NOT_FOUND' | 'PERMISSION_DENIED' | 'UNAVAILABLE' | 'UNKNOWN';
+
+export interface ListDirEntry {
+  hidden: boolean;
+  isSymlink: boolean;
+  name: string;
+  path: string;
+  type: 'directory' | 'file';
+}
+
+interface ListDirBaseResult {
+  /** Device home directory. Present on filesystem errors so the UI can recover. */
+  home: string;
+  path: string;
+  pathStyle: DevicePathStyle;
+  roots: string[];
+}
+
+export interface ListDirSuccessResult extends ListDirBaseResult {
+  entries: ListDirEntry[];
+  parent: string | null;
+  success: true;
+  /** True when a safety limit stopped discovery before the directory was exhausted. */
+  truncated: boolean;
+}
+
+export interface ListDirErrorResult extends ListDirBaseResult {
+  code: ListDirErrorCode;
+  success: false;
+}
+
+export type ListDirResult = ListDirErrorResult | ListDirSuccessResult;
+
 export interface StatPathResult {
   exists: boolean;
   isDirectory: boolean;
+  /** Device-normalized absolute path after expanding a leading `~`. */
+  path: string;
   repoType?: 'git' | 'github';
 }
 

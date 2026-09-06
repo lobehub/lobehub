@@ -90,9 +90,9 @@ const AddWorkingDirContent = memo<AddWorkingDirContentProps>(({ onSubmit, placeh
 AddWorkingDirContent.displayName = 'AddWorkingDirContent';
 
 /**
- * Manual absolute-path entry for the working directory. Used when the target
- * filesystem isn't browsable from here (web, or a remote device) — the browser
- * has no way to resolve an absolute path from its sandboxed folder picker.
+ * Manual device-local path entry for the working directory. Used when the target
+ * filesystem isn't browsable from here (web, or a remote device) — validation
+ * resolves the submitted value on that device before it is persisted.
  */
 export const openAddWorkingDirModal = (options: {
   onSubmit: (path: string) => Promise<string | undefined>;

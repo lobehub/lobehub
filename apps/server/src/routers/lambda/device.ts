@@ -27,7 +27,11 @@ import { signWorkspaceDeviceToken } from '@/libs/trpc/utils/internalJwt';
 import { type DeviceAttachment, deviceGateway } from '@/server/services/deviceGateway';
 
 import { preserveWorkspaceCache } from './deviceWorkingDirs';
-import { assertWorkspaceDeviceVisible, assertWorkspaceRootApproved } from './deviceWorkspaceGuard';
+import {
+  assertWorkspaceDeviceVisible,
+  assertWorkspaceRootApproved,
+  resolveDeviceGatewayWorkspaceId,
+} from './deviceWorkspaceGuard';
 
 // Derive the zod enum from the canonical config so new platforms are
 // automatically covered without touching this file.
@@ -37,6 +41,7 @@ const remotePlatformEnum = z.enum(
     ...(typeof REMOTE_HETEROGENEOUS_AGENT_CONFIGS)[number]['type'][],
   ],
 );
+const deviceScopeEnum = z.enum(['personal', 'workspace']);
 
 const CAPABILITY_TIMEOUT_MS = 5_000;
 const PROFILE_TIMEOUT_MS = 5_000;
@@ -143,7 +148,7 @@ export const deviceRouter = router({
       z.object({
         deviceId: z.string(),
         platform: remotePlatformEnum,
-        scope: z.enum(['personal', 'workspace']).optional(),
+        scope: deviceScopeEnum.optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -151,7 +156,7 @@ export const deviceRouter = router({
         {
           deviceId: input.deviceId,
           userId: ctx.userId,
-          workspaceId: input.scope === 'personal' ? undefined : ctx.workspaceId,
+          workspaceId: resolveDeviceGatewayWorkspaceId(input.scope, ctx.workspaceId),
         },
         {
           apiName: 'checkPlatformCapability',
@@ -754,19 +759,40 @@ export const deviceRouter = router({
     }),
 
   /**
+   * List one device-local directory for the remote working-directory picker.
+   * The response contains metadata only; the picker filters it to directories.
+   */
+  listDir: deviceProcedure
+    .input(
+      z.object({
+        deviceId: z.string(),
+        path: z.string().optional(),
+        scope: deviceScopeEnum.optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      return deviceGateway.listDir({
+        deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+        workspaceId: resolveDeviceGatewayWorkspaceId(input.scope, ctx.workspaceId),
+      });
+    }),
+
+  /**
    * Check whether a path exists on a remote device and is a directory, via the
    * device's `statPath` RPC. Lets a web client validate a manually-entered
    * working directory before binding it. Returns `null` when the device is
-   * unreachable (caller treats "can't verify" as non-blocking).
+   * unreachable so callers can fail closed instead of binding an unverified path.
    */
   statPath: deviceProcedure
-    .input(z.object({ deviceId: z.string(), path: z.string() }))
+    .input(z.object({ deviceId: z.string(), path: z.string(), scope: deviceScopeEnum.optional() }))
     .query(async ({ ctx, input }) => {
       const result = await deviceGateway.statPath({
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,
-        workspaceId: ctx.workspaceId,
+        workspaceId: resolveDeviceGatewayWorkspaceId(input.scope, ctx.workspaceId),
       });
       return result ?? null;
     }),

@@ -1,7 +1,14 @@
+import type { DeviceScope } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 
 import type { DeviceModel } from '@/database/models/device';
 import { isPathWithinRoot } from '@/server/services/deviceGateway';
+
+/** Personal devices always live in the user gateway pool, even inside a workspace UI. */
+export const resolveDeviceGatewayWorkspaceId = (
+  scope: DeviceScope | undefined,
+  workspaceId: string | undefined,
+): string | undefined => (scope === 'personal' ? undefined : workspaceId);
 
 /**
  * Validate that a client-supplied workspace root is actually one the user has

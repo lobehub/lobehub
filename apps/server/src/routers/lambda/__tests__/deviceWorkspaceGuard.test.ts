@@ -3,12 +3,30 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { DeviceModel } from '@/database/models/device';
 
-import { assertWorkspaceDeviceVisible, assertWorkspaceRootApproved } from '../deviceWorkspaceGuard';
+import {
+  assertWorkspaceDeviceVisible,
+  assertWorkspaceRootApproved,
+  resolveDeviceGatewayWorkspaceId,
+} from '../deviceWorkspaceGuard';
 
 const mockModel = (row: { defaultCwd?: string | null; workingDirs?: { path: string }[] } | null) =>
   ({
     findByDeviceId: vi.fn().mockResolvedValue(row),
   }) as unknown as DeviceModel;
+
+describe('resolveDeviceGatewayWorkspaceId', () => {
+  it('keeps personal devices in the user gateway pool inside a workspace', () => {
+    expect(resolveDeviceGatewayWorkspaceId('personal', 'workspace-1')).toBeUndefined();
+  });
+
+  it('routes workspace devices through the active workspace gateway pool', () => {
+    expect(resolveDeviceGatewayWorkspaceId('workspace', 'workspace-1')).toBe('workspace-1');
+  });
+
+  it('preserves the active gateway pool for backwards-compatible calls without a scope', () => {
+    expect(resolveDeviceGatewayWorkspaceId(undefined, 'workspace-1')).toBe('workspace-1');
+  });
+});
 
 describe('assertWorkspaceRootApproved', () => {
   it('allows a root that exactly matches a bound workingDir', async () => {

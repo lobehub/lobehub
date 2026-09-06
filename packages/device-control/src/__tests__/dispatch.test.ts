@@ -135,9 +135,25 @@ describe('executeDeviceRpc', () => {
     const result = (await executeDeviceRpc('statPath', { path: root }, makeDeps())) as {
       exists: boolean;
       isDirectory: boolean;
+      path: string;
     };
     expect(result.exists).toBe(true);
     expect(result.isDirectory).toBe(true);
+    expect(result.path).toBe(root);
+  });
+
+  it('routes listDir through the device filesystem', async () => {
+    const result = (await executeDeviceRpc('listDir', { path: root }, makeDeps())) as {
+      entries: { name: string }[];
+      path: string;
+      success: boolean;
+      truncated: boolean;
+    };
+
+    expect(result.success).toBe(true);
+    expect(result.path).toBe(root);
+    expect(result.entries.map((entry) => entry.name)).toContain('.agents');
+    expect(result.truncated).toBe(false);
   });
 
   it('routes heterogeneous agent model discovery to the execution host', async () => {
