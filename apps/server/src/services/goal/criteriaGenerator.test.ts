@@ -46,6 +46,35 @@ describe('GoalCriteriaGeneratorService', () => {
     );
   });
 
+  it('traces executable decomposition with its updated prompt cohort and validates the output', async () => {
+    const service = new GoalCriteriaGeneratorService({} as never, 'user-1');
+    const draft = {
+      problemStatement: 'Deliver editable office documents.',
+      tasks: [
+        { dependsOn: [], instruction: 'Document current gaps.', title: 'Investigate' },
+        { dependsOn: [0], instruction: 'Implement editing and persistence.', title: 'Implement' },
+      ],
+    };
+    generateObject.mockResolvedValueOnce(draft);
+    await expect(service.decompose({ requirement: 'Upgrade office editing' })).resolves.toEqual(
+      draft,
+    );
+    expect(generateObject).toHaveBeenLastCalledWith(
+      expect.objectContaining({ schema: expect.objectContaining({ name: 'goal_decomposition' }) }),
+      expect.objectContaining({
+        tracing: {
+          promptVersion: 'v4',
+          scenario: 'goal_decompose',
+          schemaName: 'goal_decomposition',
+        },
+      }),
+    );
+    generateObject.mockResolvedValueOnce({ ...draft, tasks: [{ title: 'Missing instruction' }] });
+    await expect(
+      service.decompose({ requirement: 'Upgrade office editing' }),
+    ).resolves.toBeUndefined();
+  });
+
   it('rejects criteria containing evidence values outside the supported enums', async () => {
     generateObject.mockResolvedValue({
       criteria: [

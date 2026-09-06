@@ -840,6 +840,16 @@ describe('GoalService', () => {
       'Current Task contract (authoritative execution scope): Generate training data',
     );
     expect(task?.instruction).toContain('Do not implement, validate, or pre-empt any sibling');
+    expect(task?.instruction).toContain(
+      'missing or broken capabilities within its scope are work to implement or repair',
+    );
+    expect(task?.instruction).toContain(
+      'resolve the prerequisite before repeating the same checks',
+    );
+    expect(task?.instruction).toContain(
+      'For an investigation-only Task, deliver supported findings',
+    );
+    expect(task?.instruction).toContain('do not silently expand into implementation');
     expect(task?.instruction).toContain('run it inside this Task');
     expect(task?.instruction).toContain(
       'Include the relevant artifact contents or exact excerpts and the raw outputs of decisive verification commands',
