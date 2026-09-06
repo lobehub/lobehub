@@ -200,33 +200,40 @@ describe('UserUpdater', () => {
     setAppPainted(false);
   });
 
-  it('keeps recovery visible after retry succeeds until the underlying application paints', () => {
-    setAppPainted(false);
-    useSessionMock.mockReturnValue({
-      data: null,
-      error: { status: 403 },
-      isPending: false,
-      refetch: vi.fn(),
-    });
-    const { rerender, unmount } = render(
-      <UserUpdater>
-        <span>Application</span>
-      </UserUpdater>,
-    );
-    fireEvent.click(screen.getByRole('button'));
-    useSessionMock.mockReturnValue(sampleSession());
-    rerender(
-      <UserUpdater>
-        <span>Application</span>
-      </UserUpdater>,
-    );
-    expect(screen.getByRole('alert')).toBeTruthy();
-    expect(screen.getByText('Application').closest('[inert]')).toBeTruthy();
-    act(() => setAppPainted(true));
-    expect(screen.queryByRole('alert')).toBeNull();
-    expect(screen.getByText('Application').closest('[inert]')).toBeNull();
-    unmount();
-  });
+  it.each(['authenticated', 'unauthorized'])(
+    'keeps recovery visible after an %s retry until the underlying application paints',
+    (outcome) => {
+      setAppPainted(false);
+      useSessionMock.mockReturnValue({
+        data: null,
+        error: { status: 403 },
+        isPending: false,
+        refetch: vi.fn(),
+      });
+      const { rerender, unmount } = render(
+        <UserUpdater>
+          <span>Application</span>
+        </UserUpdater>,
+      );
+      fireEvent.click(screen.getByRole('button'));
+      useSessionMock.mockReturnValue(
+        outcome === 'authenticated'
+          ? sampleSession()
+          : { data: null, error: { status: 401 }, isPending: false, refetch: vi.fn() },
+      );
+      rerender(
+        <UserUpdater>
+          <span>Application</span>
+        </UserUpdater>,
+      );
+      expect(screen.getByRole('alert')).toBeTruthy();
+      expect(screen.getByText('Application').closest('[inert]')).toBeTruthy();
+      act(() => setAppPainted(true));
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(screen.getByText('Application').closest('[inert]')).toBeNull();
+      unmount();
+    },
+  );
 
   it('does not clear a verified user while a retry is in flight without session data', () => {
     useUserStore.setState({ user: { id: 'u1' }, isSignedIn: true, isLoaded: true });

@@ -26,9 +26,10 @@ const UserUpdater = memo(({ children }: PropsWithChildren) => {
   const status = error?.status;
   const retryable = !!error && (!status || status >= 500 || status === 408 || status === 429);
   const failed = !!error && status !== 401 && (!retryable || retryAttempt >= 3);
+  /** A confirmed sign-out still needs a painted destination after recovery removed the splash. */
   const showRecovery =
-    status !== 401 &&
-    (failed || (recoveryVisible && (!!error || isPending || isRefetching || !appPainted)));
+    failed ||
+    (recoveryVisible && ((!!error && status !== 401) || isPending || isRefetching || !appPainted));
 
   useLayoutEffect(() => {
     if (showRecovery) {
