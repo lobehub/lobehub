@@ -299,6 +299,7 @@ describe('FtsSearchReindexService', () => {
     });
     vi.mocked(client.ensureAlias).mockImplementation(async () => {
       lifecycle.push('create-alias');
+      return 'created';
     });
     const service = new FtsSearchReindexService(builder, repository, client, {
       onProgress: (event) => {
