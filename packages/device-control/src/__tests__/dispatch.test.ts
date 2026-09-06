@@ -140,6 +140,34 @@ describe('executeDeviceRpc', () => {
     expect(result.isDirectory).toBe(true);
   });
 
+  it('browses one directory level with pagination and excludes files and hidden folders', async () => {
+    const browseRoot = await mkdtemp(path.join(tmpdir(), 'device-control-browse-'));
+    try {
+      await mkdir(path.join(browseRoot, '.hidden'));
+      await mkdir(path.join(browseRoot, 'alpha'));
+      await mkdir(path.join(browseRoot, 'beta'));
+      await writeFile(path.join(browseRoot, 'notes.txt'), 'not a directory');
+
+      const first = (await executeDeviceRpc(
+        'browseDirectory',
+        { limit: 1, path: browseRoot },
+        makeDeps(),
+      )) as { entries: { name: string }[]; nextCursor?: string; truncated: boolean };
+      expect(first.entries.map((entry) => entry.name)).toEqual(['alpha']);
+      expect(first.truncated).toBe(true);
+
+      const second = (await executeDeviceRpc(
+        'browseDirectory',
+        { cursor: first.nextCursor, limit: 1, path: browseRoot },
+        makeDeps(),
+      )) as { entries: { name: string }[]; truncated: boolean };
+      expect(second.entries.map((entry) => entry.name)).toEqual(['beta']);
+      expect(second.truncated).toBe(false);
+    } finally {
+      await rm(browseRoot, { force: true, recursive: true });
+    }
+  });
+
   it('routes heterogeneous agent model discovery to the execution host', async () => {
     const deps = makeDeps();
     deps.listHeterogeneousAgentModels = vi.fn(async () => ({

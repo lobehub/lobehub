@@ -13,6 +13,7 @@ import {
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import type { ClaudeCodeQuotaSnapshot } from '@lobechat/heterogeneous-agents/quota';
 import type {
+  DeviceDirectoryBrowseResult,
   DeviceGitAddWorktreeResult,
   DeviceGitAheadBehind,
   DeviceGitBranchDiffPatches,
@@ -967,6 +968,49 @@ export class DeviceGateway {
       return result.data;
     } catch (error) {
       log('getProjectFileIndex: error for deviceId=%s — %O', deviceId, error);
+      return undefined;
+    }
+  }
+
+  /** List one directory level on a remote execution device for folder pickers. */
+  async browseDirectory(params: {
+    cursor?: string;
+    deviceId: string;
+    limit?: number;
+    path?: string;
+    timeout?: number;
+    userId: string;
+    workspaceId?: string;
+  }): Promise<DeviceDirectoryBrowseResult | undefined> {
+    const {
+      cursor,
+      deviceId,
+      limit,
+      path: directoryPath,
+      timeout = 10_000,
+      userId,
+      workspaceId,
+    } = params;
+    const client = this.getClient();
+    if (!client) return undefined;
+
+    try {
+      const result = await client.invokeRpc<DeviceDirectoryBrowseResult>(
+        { deviceId, timeout, userId, workspaceId },
+        {
+          method: 'browseDirectory',
+          params: { cursor, limit, path: directoryPath },
+        },
+      );
+
+      if (!result.success || !result.data) {
+        log('browseDirectory: failed for deviceId=%s — %s', deviceId, result.error);
+        return undefined;
+      }
+
+      return result.data;
+    } catch (error) {
+      log('browseDirectory: error for deviceId=%s — %O', deviceId, error);
       return undefined;
     }
   }

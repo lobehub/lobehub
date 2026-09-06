@@ -64,6 +64,29 @@ export interface StatPathResult {
   repoType?: 'git' | 'github';
 }
 
+export interface BrowseDirectoryParams {
+  cursor?: string;
+  limit?: number;
+  path?: string;
+}
+
+export interface BrowseDirectoryEntry {
+  isSymlink: boolean;
+  name: string;
+  path: string;
+  readable: boolean;
+}
+
+export interface BrowseDirectoryResult {
+  entries: BrowseDirectoryEntry[];
+  nextCursor?: string;
+  parentPath: string | null;
+  path: string;
+  pathSeparator: '/' | '\\';
+  roots: string[];
+  truncated: boolean;
+}
+
 // ─── File preview ───
 
 export type LocalFilePreviewAccept = 'image';
