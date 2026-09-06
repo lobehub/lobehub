@@ -249,6 +249,7 @@ function createMockStore(overrides: Record<string, any> = {}) {
     internal_dispatchMessage: vi.fn(),
     internal_toggleToolCallingStreaming: vi.fn(),
     markTopicUnread: vi.fn(),
+    messagesMap: {},
     operations: {
       'op-1': {
         context: { agentId: 'agent-1', scope: 'main', topicId: 'topic-1' },
@@ -266,6 +267,7 @@ function createMockStore(overrides: Record<string, any> = {}) {
         operationId: `sub-op-${subOpCounter}`,
       };
     }),
+    topicDataMap: {},
     updateTopicMetadata: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   } as any;
@@ -6139,6 +6141,45 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
       expect(mockShowNotification).not.toHaveBeenCalled();
       expect(mockSetBadgeCount).not.toHaveBeenCalled();
+    });
+
+    it('summarizes an audio-first topic after heterogeneous completion', async () => {
+      const messages = [
+        {
+          audioList: [{ alt: 'voice.webm', id: 'audio-1', url: 'https://example.com/voice.webm' }],
+          content: '',
+          id: 'user-1',
+          role: 'user',
+        },
+        {
+          children: [
+            {
+              content: 'Analyzing the recording.',
+              id: 'assistant-tool',
+              tools: [{ apiName: 'analyzeMedia', id: 'tool-1' }],
+            },
+            { content: 'The recording asks how to list files.', id: 'assistant-answer' },
+          ],
+          content: '',
+          id: 'assistant-group',
+          role: 'assistantGroup',
+        },
+      ];
+      const summaryTopicTitle = vi.fn().mockResolvedValue(undefined);
+      const store = createMockStore({
+        messagesMap: { 'main_agent-1_topic-1': messages },
+        summaryTopicTitle,
+        topicDataMap: {
+          'agent-1__main': {
+            items: [{ id: 'topic-1', title: 'defaultTitle' }],
+            total: 1,
+          },
+        },
+      });
+
+      await runToComplete(store, [ccInit(), ccText('msg_01', 'done'), ccResult()]);
+
+      expect(summaryTopicTitle).toHaveBeenCalledWith('topic-1', messages);
     });
 
     // ── 2. metadata-save failure isolation (guarded) ──

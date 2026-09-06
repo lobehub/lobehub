@@ -2370,6 +2370,7 @@ export const executeHeterogeneousAgent = async (
               runId: operationId,
               runScope,
               runtimeType: 'hetero',
+              status: 'completed',
             });
 
             // Shell Work scan for this LOCAL run: no server operation exists, so
