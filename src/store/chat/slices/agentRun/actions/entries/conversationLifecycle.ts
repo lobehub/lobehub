@@ -1782,6 +1782,15 @@ export class ConversationLifecycleActionImpl {
 
         notifyMessagePersisted();
 
+        // Clear editor temp state — the user's message is persisted by the
+        // time executeGatewayAgent resolves (execAgentTask persists both rows),
+        // so a later Stop click must NOT restore it into the input (would feel
+        // like the app re-sent the message). The hetero branch clears this at
+        // line 1532 for the same reason, and the client path's `if (data)` clear
+        // below covers its own; the gateway branch returns early here and never
+        // reached either, which is exactly what LOBE-13794 reproduced.
+        this.#get().updateOperationMetadata(operationId, { inputEditorTempState: null });
+
         return {
           assistantMessageId: result.assistantMessageId,
           createdThreadId: result.createdThreadId,
