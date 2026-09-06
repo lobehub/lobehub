@@ -8,7 +8,11 @@ import debug from 'debug';
 import urlJoin from 'url-join';
 
 import { type SearchServiceImpl } from '../type';
-import { type FirecrawlResponse, type FirecrawlSearchParameters } from './type';
+import {
+  type FirecrawlResponse,
+  type FirecrawlSearchParameters,
+  type FirecrawlSource,
+} from './type';
 
 const log = debug('lobe-search:Firecrawl');
 
@@ -18,6 +22,17 @@ const timeRangeMapping = {
   week: 'qdr:w',
   year: 'qdr:y',
 };
+
+// Map LobeHub search categories to Firecrawl sources. Categories without a
+// Firecrawl equivalent (e.g. science, videos) are ignored, falling back to the
+// default web + news sources below.
+const categorySourceMapping: Record<string, FirecrawlSource> = {
+  general: { type: 'web' },
+  images: { type: 'images' },
+  news: { type: 'news' },
+};
+
+const defaultSources: FirecrawlSource[] = [{ type: 'web' }, { type: 'news' }];
 
 /**
  * Firecrawl implementation of the search service
@@ -37,6 +52,10 @@ export class FirecrawlImpl implements SearchServiceImpl {
     log('Starting Firecrawl query with query: "%s", params: %o', query, params);
     const endpoint = urlJoin(this.baseUrl, '/search');
 
+    const requestedSources = params?.searchCategories
+      ?.map((category) => categorySourceMapping[category])
+      .filter((source): source is FirecrawlSource => Boolean(source));
+
     const defaultQueryParams: FirecrawlSearchParameters = {
       limit: 20,
       query,
@@ -45,7 +64,7 @@ export class FirecrawlImpl implements SearchServiceImpl {
         formats: ["markdown"]
       },
       */
-      sources: [{ type: 'web' }, { type: 'news' }],
+      sources: requestedSources?.length ? requestedSources : defaultSources,
     };
 
     const body: FirecrawlSearchParameters = {
