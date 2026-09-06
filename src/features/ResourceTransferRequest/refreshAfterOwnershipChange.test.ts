@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
 // a hook-BOUND `mutate` (which treats a key as replacement data for its own
 // cache). The refresh must go through the GLOBAL mutator from `@/libs/swr`.
 vi.mock('@/libs/swr', () => ({ mutate: (...args: unknown[]) => mocks.globalMutate(...args) }));
+vi.mock('@/libs/swr/useCacheScope', () => ({ getCacheScope: () => 'user:workspace' }));
 vi.mock('@/store/home', () => ({
   useHomeStore: { getState: () => ({ refreshAgentList: mocks.refreshAgentList }) },
 }));
@@ -26,7 +27,9 @@ describe('refreshCachesAfterOwnershipChange', () => {
     await refreshCachesAfterOwnershipChange('agent', 'agent-1');
 
     expect(mocks.globalMutate).toHaveBeenCalledTimes(1);
-    expect(mocks.globalMutate).toHaveBeenCalledWith(agentConfigKeys.config('agent-1'));
+    expect(mocks.globalMutate).toHaveBeenCalledWith(
+      agentConfigKeys.config('agent-1', 'user:workspace'),
+    );
     expect(mocks.refreshAgentList).toHaveBeenCalled();
   });
 

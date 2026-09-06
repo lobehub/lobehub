@@ -27,9 +27,8 @@ export const useAgentIdentityForm = ({ agentId, onSaved }: UseAgentIdentityFormO
 
   const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId));
   const slug = useAgentStore(agentSelectors.getAgentSlugById(agentId));
-  const updateMetaById = useAgentStore((s) => s.updateAgentMetaById);
   const refreshAgentConfig = useAgentStore((s) => s.internal_refreshAgentConfig);
-  const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
+  const updateAgentMeta = useHomeStore((s) => s.updateAgentMeta);
 
   const [name, setName] = useState(meta.name || '');
   const [title, setTitle] = useState(meta.title || '');
@@ -56,11 +55,7 @@ export const useAgentIdentityForm = ({ agentId, onSaved }: UseAgentIdentityFormO
         await refreshAgentConfig(agentId);
       }
 
-      await updateMetaById(agentId, { name: name.trim(), title: title.trim() });
-      // The sidebar holds its own copy of the label — without this the list keeps
-      // showing the old name until something else revalidates. Same convention as
-      // the sidebar's own rename popover.
-      await refreshAgentList();
+      await updateAgentMeta(agentId, { name: name.trim(), title: title.trim() });
       onSaved();
     } catch {
       setError(t('settingAgent.identity.saveFailed'));

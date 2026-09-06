@@ -24,23 +24,19 @@ const RenameProjectContent = ({ project }: RenameProjectContentProps) => {
   const { t } = useTranslation(['project', 'common']);
   const { close } = useModalContext();
   const updateProject = useProjectStore((s) => s.updateProject);
-  const [loading, setLoading] = useState(false);
   const [name, setName] = useState(project.name);
   const normalizedName = name.trim();
 
-  const handleRename = async () => {
-    if (!normalizedName || normalizedName === project.name || loading) return;
-    setLoading(true);
-    try {
-      await updateProject(project.id, { name: normalizedName });
-      close();
-      toast.success(t('rename.success'));
-    } catch (error) {
-      console.error('Failed to rename project', error);
-      toast.error(t('rename.error'));
-    } finally {
-      setLoading(false);
-    }
+  const handleRename = () => {
+    if (!normalizedName || normalizedName === project.name) return;
+    const operation = updateProject(project.id, { name: normalizedName });
+    close();
+    void operation
+      .then(() => toast.success(t('rename.success')))
+      .catch((error) => {
+        console.error('Failed to rename project', error);
+        toast.error(t('rename.error'));
+      });
   };
 
   return (
@@ -61,7 +57,6 @@ const RenameProjectContent = ({ project }: RenameProjectContentProps) => {
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>
         <Button
           disabled={!normalizedName || normalizedName === project.name}
-          loading={loading}
           type={'primary'}
           onClick={handleRename}
         >

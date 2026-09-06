@@ -1,16 +1,19 @@
-import isEqual from 'fast-deep-equal';
+import type { SidebarAgentItem, SidebarAgentListResponse } from '@lobechat/types';
 import { type SWRResponse } from 'swr';
 
-import { type SidebarAgentItem, type SidebarAgentListResponse } from '@/database/repositories/home';
-import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
-import { agentConfigKeys, agentKeys } from '@/libs/swr/keys';
+import { mutate, useClientDataSWR } from '@/libs/swr';
+import { agentConfigKeys, agentKeys, agentProjectionKeys, isAgentListKey } from '@/libs/swr/keys';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
 import { homeService } from '@/services/home';
 import { getAgentStoreState } from '@/store/agent';
 import { type HomeStore } from '@/store/home/store';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { mapResponseToState } from './initialState';
+import type { SidebarAgentMetaPatch } from './initialState';
+import { AGENT_LIST_QUERY, agentListProjection, agentListWriteQueue } from './projection';
+import type { AgentListDispatchAction } from './reducer';
+import { agentListReducer } from './reducer';
 
 const n = setNamespace('agentList');
 
@@ -21,6 +24,7 @@ export const createAgentListSlice = (set: Setter, get: () => HomeStore, _api?: u
 export class AgentListActionImpl {
   readonly #get: () => HomeStore;
   readonly #set: Setter;
+  #updateMutationId = 0;
 
   constructor(set: Setter, get: () => HomeStore, _api?: unknown) {
     void _api;
@@ -37,40 +41,56 @@ export class AgentListActionImpl {
   };
 
   refreshAgentList = async (): Promise<void> => {
+    const scope = getCacheScope();
     getAgentStoreState().invalidateAvailableAgents();
-    await mutate(agentKeys.list(true));
+    await mutate((key) => isAgentListKey(key, scope));
+  };
+
+  internal_dispatchAgentList = (action: AgentListDispatchAction): void => {
+    const transition = agentListReducer(this.#get(), action);
+    this.#set(transition.state, false, n(`dispatch/${action.type}`));
+    for (const effect of transition.effects) {
+      agentListWriteQueue.set(
+        { queryKey: AGENT_LIST_QUERY, scope: effect.scope },
+        { data: effect.data, updatedAt: Date.now() },
+      );
+    }
+  };
+
+  updateAgentMeta = async (id: string, patch: SidebarAgentMetaPatch): Promise<void> => {
+    const scope = getCacheScope();
+    const mutationId = ++this.#updateMutationId;
+    this.internal_dispatchAgentList({ id, mutationId, patch, scope, type: 'optimisticUpdate' });
+
+    try {
+      await getAgentStoreState().updateAgentMetaById(id, patch, { rethrow: true });
+      this.internal_dispatchAgentList({ id, mutationId, patch, scope, type: 'commitUpdate' });
+    } catch (error) {
+      this.internal_dispatchAgentList({ id, mutationId, scope, type: 'rollbackUpdate' });
+      throw error;
+    }
   };
 
   useFetchAgentList = (isLogin: boolean | undefined): SWRResponse<SidebarAgentListResponse> => {
-    return useClientDataSWRWithSync<SidebarAgentListResponse>(
-      isLogin === true ? agentKeys.list(isLogin) : null,
+    const scope = getCacheScope();
+    useClientDataSWR(
+      isLogin === true ? agentProjectionKeys.listHydration(scope) : null,
+      async () => {
+        const cached = await agentListProjection.get({ queryKey: AGENT_LIST_QUERY, scope });
+        if (cached && getCacheScope() === scope) {
+          this.internal_dispatchAgentList({ data: cached.data, scope, type: 'hydrate' });
+        }
+        return Date.now();
+      },
+    );
+
+    return useClientDataSWR<SidebarAgentListResponse>(
+      isLogin === true ? agentKeys.list(isLogin, scope) : null,
       () => homeService.getSidebarAgentList(),
       {
-        onData: (data) => {
-          const state = this.#get();
-          const newState = mapResponseToState(data);
-
-          // Skip update if data is the same
-          if (
-            state.isAgentListInit &&
-            isEqual(state.pinnedAgents, newState.pinnedAgents) &&
-            isEqual(state.agentGroups, newState.agentGroups) &&
-            isEqual(state.ungroupedAgents, newState.ungroupedAgents) &&
-            isEqual(state.privateAgentGroups, newState.privateAgentGroups) &&
-            isEqual(state.privatePinnedAgents, newState.privatePinnedAgents) &&
-            isEqual(state.privateUngroupedAgents, newState.privateUngroupedAgents)
-          ) {
-            return;
-          }
-
-          this.#set(
-            {
-              ...newState,
-              isAgentListInit: true,
-            },
-            false,
-            n('useFetchAgentList/onData'),
-          );
+        onSuccess: (data) => {
+          if (getCacheScope() === scope)
+            this.internal_dispatchAgentList({ data, scope, type: 'replace' });
         },
       },
     );

@@ -44,22 +44,28 @@ const AgentContent = memo<AgentContentProps>(({ id, title, avatar, onClose }) =>
     const backgroundColorChanged = newBackgroundColor !== meta.backgroundColor;
 
     if (titleChanged || avatarChanged || backgroundColorChanged) {
-      try {
-        useHomeStore.getState().setAgentUpdatingId(id);
+      const updates: { avatar?: string; backgroundColor?: string; title?: string } = {};
+      if (titleChanged) updates.title = newTitle;
+      if (avatarChanged) updates.avatar = newAvatar || undefined;
+      if (backgroundColorChanged) updates.backgroundColor = newBackgroundColor;
 
-        const updates: { avatar?: string; backgroundColor?: string; title?: string } = {};
-        if (titleChanged) updates.title = newTitle;
-        if (avatarChanged) updates.avatar = newAvatar || undefined;
-        if (backgroundColorChanged) updates.backgroundColor = newBackgroundColor;
-
-        await useAgentStore.getState().optimisticUpdateAgentMeta(id, updates);
-        await useHomeStore.getState().refreshAgentList();
-      } finally {
-        useHomeStore.getState().setAgentUpdatingId(null);
-      }
+      void useHomeStore
+        .getState()
+        .updateAgentMeta(id, updates)
+        .catch(() => toast.error(t('operationFailed', { ns: 'common' })));
     }
     onClose();
-  }, [newTitle, newAvatar, newBackgroundColor, title, avatar, meta.backgroundColor, id, onClose]);
+  }, [
+    newTitle,
+    newAvatar,
+    newBackgroundColor,
+    title,
+    avatar,
+    meta.backgroundColor,
+    id,
+    onClose,
+    t,
+  ]);
 
   const handleAvatarUpload = useCallback(
     async (file: File) => {
