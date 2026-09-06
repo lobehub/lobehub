@@ -735,9 +735,10 @@ export class AgentSliceActionImpl {
       // 2. API call returns updated agent data
       const result = await agentService.updateAgentMeta(id, meta, signal);
 
-      // 3. Use returned data directly (no refetch needed!)
+      // 3. Apply returned data, then refresh related caches for later subscribers.
       if (result?.success && result.agent) {
         internal_dispatchAgentMap(id, result.agent);
+        await this.#get().internal_refreshAgentConfig(id);
         this.#get().invalidateAvailableAgents();
       }
       updateSaveStatus('saved');
@@ -752,7 +753,14 @@ export class AgentSliceActionImpl {
   };
 
   internal_refreshAgentConfig = async (id: string): Promise<void> => {
-    await mutate(agentConfigKeys.config(id));
+    /** Keep related agent and builtin-agent snapshots current after a successful edit. */
+    const slugs = Object.entries(this.#get().builtinAgentIdMap)
+      .filter(([, agentId]) => agentId === id)
+      .map(([slug]) => slug);
+    await Promise.all([
+      mutate(agentConfigKeys.config(id)),
+      ...slugs.map((slug) => this.#get().refreshBuiltinAgent(slug)),
+    ]);
   };
 
   internal_createAbortController = (key: keyof AgentSliceState): AbortController => {

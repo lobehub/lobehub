@@ -1,11 +1,14 @@
 import { CHAT_GROUP_SESSION_ID_PREFIX } from '@lobechat/types';
 import { toast } from '@lobehub/ui/base-ui';
 import { act, renderHook, waitFor } from '@testing-library/react';
+import { createElement, type PropsWithChildren } from 'react';
+import { SWRConfig, unstable_serialize } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as activeWorkspaceModule from '@/business/client/hooks/useActiveWorkspaceId';
 import { setScopedMutate } from '@/libs/swr';
-import { agentConfigKeys } from '@/libs/swr/keys';
+import { agentConfigKeys, builtinAgentKeys } from '@/libs/swr/keys';
+import * as cacheScopeModule from '@/libs/swr/useCacheScope';
 import { agentService } from '@/services/agent';
 import { agentDocumentService } from '@/services/agentDocument';
 import { useGlobalStore } from '@/store/global';
@@ -21,6 +24,7 @@ vi.mock('@/services/agent', () => ({
   agentService: {
     createAgent: vi.fn(),
     getAgentConfigById: vi.fn(),
+    getBuiltinAgent: vi.fn(),
     getSessionConfig: vi.fn(),
     queryAgents: vi.fn(),
     updateAgentConfig: vi.fn(),
@@ -64,6 +68,9 @@ vi.mock('swr', async (importOriginal) => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.spyOn(cacheScopeModule, 'useCacheScope').mockImplementation(() =>
+    cacheScopeModule.getCacheScope(),
+  );
   setScopedMutate(vi.fn() as any);
   useAgentStore.setState({
     activeAgentId: undefined,
@@ -85,6 +92,126 @@ afterEach(() => {
 });
 
 describe('AgentSlice Actions', () => {
+  describe('builtin agent cache hydration', () => {
+    it('does not apply an old user response after switching personal accounts', async () => {
+      let scope = 'user-a:personal';
+      vi.spyOn(cacheScopeModule, 'getCacheScope').mockImplementation(() => scope);
+      let resolveOld!: (value: Awaited<ReturnType<typeof agentService.getBuiltinAgent>>) => void;
+      vi.mocked(agentService.getBuiltinAgent).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            if (scope === 'user-a:personal') resolveOld = resolve;
+          }),
+      );
+      const cachedUserB = { id: 'inbox-b', name: 'Chief B' };
+      const cache = new Map([
+        [
+          unstable_serialize(builtinAgentKeys.init('inbox', 'user-b:personal')),
+          { data: cachedUserB },
+        ],
+      ]);
+      const wrapper = ({ children }: PropsWithChildren) =>
+        createElement(SWRConfig, { value: { provider: () => cache } }, children);
+      const hook = renderHook(
+        () => useAgentStore.getState().useInitBuiltinAgent('inbox', { isLogin: true }),
+        { wrapper },
+      );
+      await waitFor(() => expect(resolveOld).toBeDefined());
+      scope = 'user-b:personal';
+      hook.rerender();
+      expect(useAgentStore.getState().builtinAgentIdMap.inbox).toBe('inbox-b');
+
+      await act(async () => {
+        resolveOld({ id: 'inbox-a', name: 'Chief A' } as Awaited<
+          ReturnType<typeof agentService.getBuiltinAgent>
+        >);
+      });
+      expect(useAgentStore.getState().builtinAgentIdMap.inbox).toBe('inbox-b');
+      expect(useAgentStore.getState().agentMap['inbox-a']).toBeUndefined();
+      hook.unmount();
+    });
+
+    it('revalidates the startup snapshot after changing the builtin agent name', async () => {
+      const scopedMutate = vi.fn().mockResolvedValue(undefined);
+      setScopedMutate(scopedMutate);
+      useAgentStore.setState({ builtinAgentIdMap: { inbox: 'inbox-1' } });
+      vi.mocked(agentService.getBuiltinAgent).mockResolvedValue({
+        id: 'inbox-1',
+        name: 'Renamed chief',
+      } as Awaited<ReturnType<typeof agentService.getBuiltinAgent>>);
+      vi.mocked(agentService.updateAgentMeta).mockResolvedValue({
+        agent: { id: 'inbox-1', name: 'Renamed chief' } as LobeAgentConfig,
+        success: true,
+      });
+
+      await useAgentStore
+        .getState()
+        .optimisticUpdateAgentMeta('inbox-1', { name: 'Renamed chief' });
+
+      expect(
+        scopedMutate.mock.calls.some(
+          ([key]) =>
+            JSON.stringify(key) ===
+            JSON.stringify(builtinAgentKeys.init('inbox', cacheScopeModule.getCacheScope())),
+        ),
+      ).toBe(true);
+    });
+
+    it('restores the inbox identity and custom artwork while revalidation is pending', () => {
+      const data = {
+        id: 'cached-inbox',
+        name: 'Custom chief',
+        profile: { fullBodyArtwork: 'https://example.com/custom-chief.webp' },
+      };
+      vi.mocked(agentService.getBuiltinAgent).mockImplementation(() => new Promise(() => {}));
+      const cache = new Map([
+        [
+          unstable_serialize(builtinAgentKeys.init('inbox', cacheScopeModule.getCacheScope())),
+          { data },
+        ],
+      ]);
+      const wrapper = ({ children }: PropsWithChildren) =>
+        createElement(SWRConfig, { value: { provider: () => cache } }, children);
+
+      const hook = renderHook(
+        () => useAgentStore.getState().useInitBuiltinAgent('inbox', { isLogin: true }),
+        { wrapper },
+      );
+
+      expect(useAgentStore.getState().builtinAgentIdMap.inbox).toBe('cached-inbox');
+      expect(useAgentStore.getState().agentMap['cached-inbox']).toMatchObject(data);
+      hook.unmount();
+    });
+
+    it('reads the workspace inbox cache instead of the personal inbox cache', () => {
+      vi.spyOn(activeWorkspaceModule, 'useActiveWorkspaceId').mockReturnValue('workspace-1');
+      vi.mocked(agentService.getBuiltinAgent).mockImplementation(() => new Promise(() => {}));
+      const cache = new Map([
+        [
+          unstable_serialize(builtinAgentKeys.init('inbox', cacheScopeModule.getCacheScope())),
+          { data: { id: 'personal-inbox' } },
+        ],
+        [
+          unstable_serialize([
+            ...builtinAgentKeys.init('inbox', cacheScopeModule.getCacheScope()),
+            'workspace-1',
+          ]),
+          { data: { id: 'workspace-inbox' } },
+        ],
+      ]);
+      const wrapper = ({ children }: PropsWithChildren) =>
+        createElement(SWRConfig, { value: { provider: () => cache } }, children);
+      const hook = renderHook(
+        () => useAgentStore.getState().useInitBuiltinAgent('inbox', { isLogin: true }),
+        { wrapper },
+      );
+
+      expect(useAgentStore.getState().builtinAgentIdMap.inbox).toBe('workspace-inbox');
+      expect(useAgentStore.getState().agentMap['personal-inbox']).toBeUndefined();
+      hook.unmount();
+    });
+  });
+
   describe('system role streaming', () => {
     it('accepts chunks and lets only the stream owner clear the visual buffer', async () => {
       const { result } = renderHook(() => useAgentStore());

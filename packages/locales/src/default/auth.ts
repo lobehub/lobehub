@@ -1,4 +1,6 @@
 export default {
+  'session.checkFailed.description': 'We could not verify your sign-in session. Please try again.',
+  'session.checkFailed.title': 'Unable to check your session',
   'agreement.checkbox':
     'I have read and agree to the <terms>Terms and Conditions</terms> and <privacy>Privacy Policy</privacy>',
   'agreement.confirm.content':

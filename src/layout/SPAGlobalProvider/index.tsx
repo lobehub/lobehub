@@ -18,7 +18,9 @@ import { FaviconProvider } from '@/layout/GlobalProvider/FaviconProvider';
 import { GroupWizardProvider } from '@/layout/GlobalProvider/GroupWizardProvider';
 import QueryProvider from '@/layout/GlobalProvider/Query';
 import ServerVersionOutdatedAlert from '@/layout/GlobalProvider/ServerVersionOutdatedAlert';
-import StoreInitialization from '@/layout/GlobalProvider/StoreInitialization';
+import StoreInitialization, {
+  BuiltinAgentInitialization,
+} from '@/layout/GlobalProvider/StoreInitialization';
 import { registerNativeContextMenuInterceptor } from '@/libs/contextMenu';
 import { usePostRenderReady } from '@/spa/atoms/app';
 import { ServerConfigStoreProvider } from '@/store/serverConfig/Provider';
@@ -99,6 +101,7 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
                   <StyleProvider speedy={import.meta.env.PROD}>
                     <LobeAnalyticsProviderWrapper>
                       <CacheHydrationGate>
+                        <BuiltinAgentInitialization />
                         <DevDockLayout>{children}</DevDockLayout>
                       </CacheHydrationGate>
                     </LobeAnalyticsProviderWrapper>

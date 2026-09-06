@@ -1,8 +1,8 @@
 ---
 name: acceptance
-version: 0.3.0
+version: 0.4.1
 description: >
-  End-to-end verification and self-evidence for a delivery in any repository,
+  Delegated end-to-end verification with primary-agent evidence review for a delivery in any repository,
   with or without a preconfigured verify plan. Discover an existing plan when
   one was handed to this run; otherwise author checks and publish a standalone
   acceptance. Pick the proving surface (CLI / web / desktop / iOS Simulator),
@@ -14,16 +14,42 @@ description: >
   ambient ids, and never depends on running inside a LobeHub conversation.
 ---
 
-# Acceptance (Builder Self-Evidence)
+# Acceptance (Delegated Execution, Primary Review)
 
-You are the **builder** for a delivery. A separate review step judges it against
-a **plan** — checks you author, or a verify plan handed to this run. A check that
+The primary agent owns the delivery judgment. When a suitable lower-cost model
+can be selected, use one worker for environment inspection, plan drafting, and
+case execution, plus a separate worker for the final independent audit. A check that
 declares `requiredEvidence` **cannot pass on your text alone**: a missing artifact
 marks it `uncertain` and holds the delivery.
 
 ```
-author (or discover) the plan  →  pick the surface  →  capture evidence  →  publish the round  →  self-check coverage
+worker A: environment → plan ↔ primary discussion → cases → primary reviews each case
+worker B: fresh whole-round audit → primary publishes
 ```
+
+## Delegate work, retain judgment
+
+Before dispatch, explicitly select a suitable lower-cost model through the current
+host's supported controls, or verify an explicitly configured worker default.
+An absent setting may inherit the primary model; never assume it means cheap.
+If a lower-cost selection cannot be established, use the reduced workflow in
+[delegation.md](references/delegation.md#when-lower-cost-delegation-is-unavailable)
+instead of multiplying same-model workers. Do not change the user's configuration.
+Reuse worker A across stages and cases; these are stages, not separate agents.
+Delegate a complete case, not individual clicks or commands. The
+primary must inspect each case's original evidence before accepting its result;
+a worker's pass summary is not sufficient. In the full workflow, a fresh-context
+subagent then audits the full requirement, plan, and evidence before publication.
+
+If a case fails, the implementer repairs it, the acceptance worker reruns it,
+and the primary reviews the new evidence. Missing evidence goes back to the
+executor. A repairer's self-check never replaces this re-verification.
+
+Read [delegation.md](references/delegation.md) before dispatch. It defines the
+handoffs, multi-round plan discussion, per-case review, repair loop, and fallback
+when lower-cost selection or delegation is unavailable. These are the responsibilities throughout
+the surface guides; references to "you" do not require the primary to perform
+every tool call. Existing user authorization and host restrictions still apply.
 
 ## Read the project layer first
 
