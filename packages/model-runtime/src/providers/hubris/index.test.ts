@@ -124,7 +124,7 @@ describe('LobeHubrisAI - custom features', () => {
             functionCall: true,
             id: 'anthropic/claude-sonnet-5',
             reasoning: true,
-            releasedAt: '2026-09-05',
+            releasedAt: '2026-09-06',
             video: false,
             vision: true,
           }),
