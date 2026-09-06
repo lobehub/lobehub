@@ -1,12 +1,7 @@
 import { createIoRedisState } from '@chat-adapter/state-ioredis';
 import { agentDisplayName } from '@lobechat/types';
-import {
-  Chat,
-  ConsoleLogger,
-  type Message,
-  type MessageContext,
-  type SlashCommandEvent,
-} from 'chat';
+import type { Message, MessageContext, SlashCommandEvent, WebhookOptions } from 'chat';
+import { Chat, ConsoleLogger } from 'chat';
 import debug from 'debug';
 
 import { getBotFeatureAccessState } from '@/business/server/bot/featureAccess';
@@ -103,6 +98,8 @@ interface MessengerCommandContext {
    *  follow-up webhook, otherwise Discord shows "Thinking..." indefinitely
    *  and eventually flips to "The application did not respond". */
   interaction?: { applicationId: string; token: string };
+  /** Whether this invocation can receive a follow-up interactive picker. */
+  interactiveReplies: boolean;
   /** True when the command was invoked from a 1:1 DM. Commands that surface
    *  user-private UI (e.g. `/agents` picker) widen private replies into
    *  ephemerals when this is false so the channel doesn't see them. */
@@ -275,8 +272,10 @@ export class MessengerRouter {
    *      that chat-sdk doesn't surface
    *   6. Otherwise hand the (reconstructed) request to chat-sdk's webhook handler
    */
-  getWebhookHandler(platform: string): (req: Request) => Promise<Response> {
-    return async (req: Request) => {
+  getWebhookHandler(
+    platform: string,
+  ): (req: Request, options?: WebhookOptions) => Promise<Response> {
+    return async (req: Request, options?: WebhookOptions) => {
       const definition = messengerPlatformRegistry.getPlatform(platform);
       if (!definition) {
         return new Response(`Unknown messenger platform: ${platform}`, { status: 404 });
@@ -346,7 +345,7 @@ export class MessengerRouter {
       if (!handler) {
         return new Response(`Messenger ${platform} webhook unavailable`, { status: 500 });
       }
-      return handler(reconstructRequest(req, rawBody));
+      return handler(reconstructRequest(req, rawBody), options);
     };
   }
 
@@ -482,7 +481,14 @@ export class MessengerRouter {
       // which the binder splits when posting in-thread.
       const isChannelMention = thread.isDM === false;
       const channelThreadTs = isChannelMention ? String(thread.id).split(':')[2] : undefined;
+      const isOneShotMessage = binder.isOneShotMessage?.(message) === true;
+      let oneShotReplySent = false;
       const replyToSender = (text: string): Promise<void> => {
+        if (isOneShotMessage && binder.replyToMessage) {
+          if (oneShotReplySent) return Promise.resolve();
+          oneShotReplySent = true;
+          return binder.replyToMessage(message, text);
+        }
         if (isChannelMention && binder.replyEphemeral) {
           return binder.replyEphemeral({
             channelId: chatId,
@@ -519,6 +525,7 @@ export class MessengerRouter {
               authorUserName: message.author.userName,
               binder,
               chatId,
+              interactiveReplies: !isOneShotMessage,
               isDM: !isChannelMention,
               link,
               message,
@@ -864,7 +871,7 @@ export class MessengerRouter {
           // Only nudge the user toward DM when the link actually went there.
           // For the Slack ephemeral path the prompt is already inline, a
           // second "check your DM" would be misleading.
-          if (!ctx.isDM && !canEphemeralInChannel) {
+          if (!ctx.isDM && !canEphemeralInChannel && ctx.interactiveReplies) {
             await ctx.reply(strings.checkDirectMessage);
           }
         },
@@ -976,7 +983,11 @@ export class MessengerRouter {
             // channel text mention resolves the CHANNEL thread — picker taps
             // would write the DM while this channel's next run reads its own
             // state — so it gets the text status instead.
-            if (ctx.binder.sendAgentPicker && (ctx.isDM || ctx.source === 'slash')) {
+            if (
+              ctx.interactiveReplies &&
+              ctx.binder.sendAgentPicker &&
+              (ctx.isDM || ctx.source === 'slash')
+            ) {
               await ctx.binder.sendAgentPicker(ctx.chatId, {
                 action: 'mode',
                 entries: MessengerRouter.modePickerEntries(current, strings),
@@ -1215,6 +1226,7 @@ export class MessengerRouter {
         binder,
         chatId: replyChatId,
         interaction,
+        interactiveReplies: true,
         // `isDM` lets handlers like `/agents` keep the picker public in
         // DMs (so it stays in history) and widen to an ephemeral when
         // the slash was typed from a public channel.
@@ -1261,7 +1273,7 @@ export class MessengerRouter {
     // Text-fallback path: `/agents 2` switches without needing the keyboard,
     // for platforms (or clients) where tap-buttons aren't available.
     const args = ctx.args.trim();
-    if (args && !binder.sendAgentPicker) {
+    if (args && (!binder.sendAgentPicker || !ctx.interactiveReplies)) {
       const index = Number.parseInt(args, 10);
       if (!Number.isInteger(index) || index < 1 || index > userAgents.length) {
         await ctx.reply(strings.agentsUsage(userAgents.length));
@@ -1277,7 +1289,7 @@ export class MessengerRouter {
       return;
     }
 
-    if (binder.sendAgentPicker) {
+    if (binder.sendAgentPicker && ctx.interactiveReplies) {
       await binder.sendAgentPicker(chatId, {
         entries: this.toPickerEntries(userAgents, link.activeAgentId, strings),
         // Channel invocation → render ephemeral so only the invoker sees
@@ -1362,7 +1374,7 @@ export class MessengerRouter {
     // Text-fallback path: `/switch 2` switches without needing the keyboard,
     // for platforms (or clients) where tap-buttons aren't available.
     const arg = ctx.args.trim();
-    if (arg && !binder.sendAgentPicker) {
+    if (arg && (!binder.sendAgentPicker || !ctx.interactiveReplies)) {
       const index = Number.parseInt(arg, 10);
       if (!Number.isInteger(index) || index < 1 || index > scopes.length) {
         await ctx.reply(strings.scopesUsage(scopes.length));
@@ -1378,7 +1390,7 @@ export class MessengerRouter {
       return;
     }
 
-    if (binder.sendAgentPicker) {
+    if (binder.sendAgentPicker && ctx.interactiveReplies) {
       await binder.sendAgentPicker(chatId, {
         action: 'scope',
         entries: this.toScopeEntries(scopes, link.workspaceId ?? null),

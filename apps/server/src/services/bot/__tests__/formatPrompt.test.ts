@@ -181,4 +181,51 @@ describe('formatPrompt', () => {
 
     expect(result).toContain('nickname="Test User"');
   });
+
+  it('should prepend Telegram reply_to_message as referenced_message', () => {
+    const msg = {
+      ...baseMessage,
+      raw: {
+        reply_to_message: {
+          from: { first_name: 'Dana', username: 'dana' },
+          text: 'please translate this',
+        },
+      },
+      text: '@bot 翻译',
+    };
+    const result = formatPrompt(msg);
+
+    expect(result).toContain(
+      '<referenced_message sender="Dana">please translate this</referenced_message>',
+    );
+    expect(result).toContain('@bot 翻译');
+  });
+
+  it('should use Telegram reply_to_message caption when text is empty', () => {
+    expect(
+      formatReferencedMessage({
+        reply_to_message: { caption: 'photo caption', from: { username: 'eve' } },
+      }),
+    ).toBe('<referenced_message sender="eve">photo caption</referenced_message>');
+  });
+
+  it('should include both the full Telegram reply and the selected quote', () => {
+    expect(
+      formatReferencedMessage({
+        quote: { text: 'selected fragment' },
+        reply_to_message: {
+          from: { first_name: 'Dana' },
+          text: 'full original message',
+        },
+      }),
+    ).toBe(
+      '<referenced_message sender="Dana"><full_message>full original message</full_message>\n<selected_quote>selected fragment</selected_quote></referenced_message>',
+    );
+  });
+
+  it('should preserve a selected Telegram quote when reply_to_message is omitted', () => {
+    expect(formatReferencedMessage({ quote: { text: 'selected fragment' } })).toBe(
+      '<referenced_message sender="unknown"><selected_quote>selected fragment</selected_quote></referenced_message>',
+    );
+  });
 });

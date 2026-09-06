@@ -53,7 +53,7 @@ import {
   isLobeAiAgentSlug,
   resolveAgentSelfIterationCapability,
 } from '@/server/services/agentSignal/featureGate';
-import { platformRegistry } from '@/server/services/bot/platforms';
+import { resolveUnsupportedMessageApis } from '@/server/services/bot/platforms/messageCapabilities';
 import type { ComposioService } from '@/server/services/composio';
 import {
   buildLastSyncedAtMap,
@@ -832,13 +832,16 @@ export const discoverTools = async (
       // in the sandbox.
       // For bot conversations we also pass the IM platform so `lobe-message`
       // can drop APIs the platform can't fulfil (e.g. WeChat has no
-      // `readMessages`).
+      // `readMessages`). Telegram Guest Mode uses a stricter overlay —
+      // the bot is not a chat member and has no regular channel tools.
       manifestContext: {
         ...(botContext?.platform && {
           botPlatform: {
             id: botContext.platform,
-            unsupportedMessageApis: platformRegistry.getPlatform(botContext.platform)
-              ?.unsupportedMessageApis,
+            unsupportedMessageApis: resolveUnsupportedMessageApis(
+              botContext.platform,
+              botContext.platformThreadId,
+            ),
           },
         }),
         executionEnv: executionPlanToManifestExecutionEnv(executionPlan, localDeviceId),

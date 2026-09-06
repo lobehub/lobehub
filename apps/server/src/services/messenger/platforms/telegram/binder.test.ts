@@ -40,6 +40,7 @@ let sendMessageWithUrlButton: ReturnType<typeof vi.fn>;
 let sendMessageWithCallbackKeyboard: ReturnType<typeof vi.fn>;
 let editMessageWithCallbackKeyboard: ReturnType<typeof vi.fn>;
 let answerCallbackQuery: ReturnType<typeof vi.fn>;
+let answerGuestArticle: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   sendMessage = vi.fn().mockResolvedValue({ message_id: 1 });
@@ -47,11 +48,13 @@ beforeEach(() => {
   sendMessageWithCallbackKeyboard = vi.fn().mockResolvedValue({ message_id: 3 });
   editMessageWithCallbackKeyboard = vi.fn().mockResolvedValue(undefined);
   answerCallbackQuery = vi.fn().mockResolvedValue(undefined);
+  answerGuestArticle = vi.fn().mockResolvedValue({ inline_message_id: 'inline-1' });
 
   vi.mocked(TelegramApi).mockImplementation(
     () =>
       ({
         answerCallbackQuery,
+        answerGuestArticle,
         editMessageWithCallbackKeyboard,
         sendMessage,
         sendMessageWithCallbackKeyboard,
@@ -172,6 +175,76 @@ describe('MessengerTelegramBinder.handleUnlinkedMessage', () => {
     expect(sendMessageWithUrlButton).not.toHaveBeenCalled();
   });
 
+  it('answers a Guest Mode summon via answerGuestQuery instead of sendMessage', async () => {
+    const binder = new MessengerTelegramBinder();
+    await binder.handleUnlinkedMessage({
+      authorUserId: '12345',
+      authorUserName: 'alice',
+      chatId: '-100999',
+      message: { id: 'm1', raw: { guest_query_id: 'gq-99' } } as any,
+    });
+
+    expect(answerGuestArticle).toHaveBeenCalledTimes(1);
+    const [guestQueryId, text, extra] = answerGuestArticle.mock.calls[0];
+    expect(guestQueryId).toBe('gq-99');
+    expect(text).toContain('private chat');
+    expect(extra.replyMarkup.inline_keyboard[0][0]).toEqual({
+      text: 'Open Bot',
+      url: 'https://t.me/lobehub_bot?start=link',
+    });
+    expect(issueLinkToken).not.toHaveBeenCalled();
+    expect(sendMessageWithUrlButton).not.toHaveBeenCalled();
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('does not issue a public link token when the bot username is missing', async () => {
+    vi.mocked(getMessengerTelegramConfig).mockResolvedValueOnce({
+      botToken: 'tg-bot-token',
+    } as any);
+
+    await new MessengerTelegramBinder().handleUnlinkedMessage({
+      authorUserId: '12345',
+      chatId: '-100999',
+      message: { id: 'm1', raw: { guest_query_id: 'gq-99' } } as any,
+    });
+
+    expect(issueLinkToken).not.toHaveBeenCalled();
+    expect(answerGuestArticle).toHaveBeenCalledWith(
+      'gq-99',
+      expect.stringContaining('send /start'),
+      expect.objectContaining({ title: 'Link LobeHub' }),
+    );
+    expect(answerGuestArticle.mock.calls[0]?.[2]?.replyMarkup).toBeUndefined();
+  });
+
+  it('localizes the Guest Mode link prompt to the summoner language', async () => {
+    const binder = new MessengerTelegramBinder();
+    await binder.handleUnlinkedMessage({
+      authorUserId: '12345',
+      authorUserName: 'alice',
+      chatId: '-100999',
+      message: {
+        id: 'm1',
+        raw: {
+          from: { id: 7, language_code: 'en' },
+          guest_bot_caller_user: { id: 7, language_code: 'zh-hans' },
+          guest_query_id: 'gq-zh',
+        },
+      } as any,
+    });
+
+    expect(answerGuestArticle).toHaveBeenCalledTimes(1);
+    const [guestQueryId, text, extra] = answerGuestArticle.mock.calls[0];
+    expect(guestQueryId).toBe('gq-zh');
+    expect(text).toBe('请在私聊中继续，以完成 LobeHub 账户关联。');
+    expect(text).not.toContain('private chat');
+    expect(extra.replyMarkup.inline_keyboard[0][0]).toMatchObject({
+      text: '打开机器人',
+      url: 'https://t.me/lobehub_bot?start=link',
+    });
+    expect(extra.title).toBe('关联 LobeHub');
+  });
+
   it('no-ops when telegram is not configured', async () => {
     vi.mocked(getMessengerTelegramConfig).mockResolvedValueOnce(null);
     const binder = new MessengerTelegramBinder();
@@ -237,6 +310,28 @@ describe('MessengerTelegramBinder.notifyLinkSuccess', () => {
     vi.mocked(getMessengerTelegramConfig).mockResolvedValueOnce(null);
     const binder = new MessengerTelegramBinder();
     await binder.notifyLinkSuccess({ platformUserId: '12345' });
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe('MessengerTelegramBinder Guest Mode replies', () => {
+  it('identifies messages that require a one-shot Guest reply', () => {
+    const binder = new MessengerTelegramBinder();
+    expect(binder.isOneShotMessage({ raw: { guest_query_id: 'gq-1' } } as any)).toBe(true);
+    expect(binder.isOneShotMessage({ raw: {} } as any)).toBe(false);
+  });
+
+  it('answers linked-user system text through answerGuestQuery', async () => {
+    const binder = new MessengerTelegramBinder();
+    await binder.replyToMessage(
+      { raw: { guest_query_id: 'gq-linked' } } as any,
+      'No active agent. Run /agents <1>.',
+    );
+
+    expect(answerGuestArticle).toHaveBeenCalledWith(
+      'gq-linked',
+      'No active agent. Run /agents &lt;1&gt;.',
+    );
     expect(sendMessage).not.toHaveBeenCalled();
   });
 });

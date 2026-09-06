@@ -8,11 +8,13 @@ import { resolveTelegramSecretToken } from './helpers';
 
 const { createTelegramAdapterMock } = vi.hoisted(() => ({
   // Typed parameter so `mock.calls[n][0]` is a config object, not `never`.
-  createTelegramAdapterMock: vi.fn((_config: Record<string, unknown>) => ({ name: 'telegram' })),
+  createTelegramAdapterMock: vi.fn((_config: Record<string, unknown>, _sessionScope: string) => ({
+    name: 'telegram',
+  })),
 }));
 
-vi.mock('@chat-adapter/telegram', () => ({
-  createTelegramAdapter: createTelegramAdapterMock,
+vi.mock('./guestAdapter', () => ({
+  createLobeTelegramAdapter: createTelegramAdapterMock,
 }));
 
 vi.mock('@/server/services/gateway/runtimeStatus', () => ({
@@ -27,6 +29,7 @@ vi.mock('@/server/services/gateway/runtimeStatus', () => ({
 }));
 
 const BOT_TOKEN = 'test-bot-token';
+const GUEST_THREAD_ID = 'telegram:guest:-100:bot:test-bot-token:message:10';
 
 const createClient = (credentials: Record<string, string> = {}) =>
   new TelegramClientFactory().createClient(
@@ -60,19 +63,25 @@ describe('TelegramWebhookClient.createAdapter', () => {
   it('treats an empty-string secretToken as not configured and derives the same value', () => {
     createClient({ secretToken: '' }).createAdapter();
 
-    expect(createTelegramAdapterMock).toHaveBeenCalledWith({
-      botToken: BOT_TOKEN,
-      secretToken: resolveTelegramSecretToken({ botToken: BOT_TOKEN }),
-    });
+    expect(createTelegramAdapterMock).toHaveBeenCalledWith(
+      {
+        botToken: BOT_TOKEN,
+        secretToken: resolveTelegramSecretToken({ botToken: BOT_TOKEN }),
+      },
+      BOT_TOKEN,
+    );
   });
 
   it('uses the operator-provided secretToken when configured', () => {
     createClient({ secretToken: 'my-webhook-secret' }).createAdapter();
 
-    expect(createTelegramAdapterMock).toHaveBeenCalledWith({
-      botToken: BOT_TOKEN,
-      secretToken: 'my-webhook-secret',
-    });
+    expect(createTelegramAdapterMock).toHaveBeenCalledWith(
+      {
+        botToken: BOT_TOKEN,
+        secretToken: 'my-webhook-secret',
+      },
+      BOT_TOKEN,
+    );
   });
 });
 
@@ -204,6 +213,30 @@ describe('TelegramWebhookClient.extractFiles', () => {
     expect(downloadFileSpy).toHaveBeenCalledWith('tg-video-1');
     expect((result as ExtractFilesResult)?.files).toEqual([
       { buffer, mimeType: 'video/mp4', name: 'star.mp4', size: 932_036 },
+    ]);
+  });
+
+  it('extracts a direct Telegram video note using raw.video_note', async () => {
+    const buffer = Buffer.from('video-note-bytes');
+    downloadFileSpy.mockResolvedValue(buffer);
+
+    const client = createClient();
+    const result = await client.extractFiles!(
+      makeMessage({
+        attachments: [{ size: 2048, type: 'video' }],
+        raw: {
+          video_note: {
+            file_id: 'tg-video-note',
+            file_size: 2048,
+            length: 320,
+          },
+        },
+      }),
+    );
+
+    expect(downloadFileSpy).toHaveBeenCalledWith('tg-video-note');
+    expect((result as ExtractFilesResult)?.files).toEqual([
+      { buffer, mimeType: 'video/mp4', name: 'video.mp4', size: 2048 },
     ]);
   });
 
@@ -457,6 +490,119 @@ describe('TelegramWebhookClient.extractFiles', () => {
     expect(downloadFileSpy).toHaveBeenCalledTimes(1);
     expect(result).toBeUndefined();
   });
+
+  it('downloads photo/video/document from reply_to_message when the summon has no attachments', async () => {
+    const buffer = Buffer.from('quoted-photo');
+    downloadFileSpy.mockResolvedValue(buffer);
+
+    const client = createClient();
+    const result = await client.extractFiles!(
+      makeMessage({
+        attachments: [],
+        raw: {
+          reply_to_message: {
+            caption: 'a cat',
+            photo: [
+              { file_id: 'small', file_size: 100 },
+              { file_id: 'quoted-large', file_size: 20_000 },
+            ],
+          },
+          text: '@bot what is this',
+        },
+      }),
+    );
+
+    expect(downloadFileSpy).toHaveBeenCalledTimes(1);
+    expect(downloadFileSpy).toHaveBeenCalledWith('quoted-large');
+    expect((result as ExtractFilesResult)?.files).toEqual([
+      { buffer, mimeType: 'image/jpeg', name: 'image.jpg', size: 20_000 },
+    ]);
+  });
+
+  it('downloads a document on reply_to_message', async () => {
+    const buffer = Buffer.from('quoted-pdf');
+    downloadFileSpy.mockResolvedValue(buffer);
+
+    const client = createClient();
+    const result = await client.extractFiles!(
+      makeMessage({
+        raw: {
+          reply_to_message: {
+            document: {
+              file_id: 'quoted-doc',
+              file_name: 'notes.pdf',
+              file_size: 2048,
+              mime_type: 'application/pdf',
+            },
+          },
+        },
+      }),
+    );
+
+    expect(downloadFileSpy).toHaveBeenCalledWith('quoted-doc');
+    expect((result as ExtractFilesResult)?.files).toEqual([
+      { buffer, mimeType: 'application/pdf', name: 'notes.pdf', size: 2048 },
+    ]);
+  });
+
+  it('downloads a video note on reply_to_message', async () => {
+    const buffer = Buffer.from('quoted-video-note');
+    downloadFileSpy.mockResolvedValue(buffer);
+
+    const client = createClient();
+    const result = await client.extractFiles!(
+      makeMessage({
+        raw: {
+          reply_to_message: {
+            video_note: {
+              file_id: 'quoted-video-note',
+              file_size: 4096,
+              length: 320,
+            },
+          },
+        },
+      }),
+    );
+
+    expect(downloadFileSpy).toHaveBeenCalledWith('quoted-video-note');
+    expect((result as ExtractFilesResult)?.files).toEqual([
+      { buffer, mimeType: 'video/mp4', name: 'video.mp4', size: 4096 },
+    ]);
+  });
+
+  it('keeps direct attachments and still pulls reply_to_message media', async () => {
+    downloadFileSpy
+      .mockResolvedValueOnce(Buffer.from('direct'))
+      .mockResolvedValueOnce(Buffer.from('quoted'));
+
+    const client = createClient();
+    const result = await client.extractFiles!(
+      makeMessage({
+        attachments: [{ size: 10, type: 'image' }],
+        raw: {
+          photo: [{ file_id: 'direct-photo' }],
+          reply_to_message: {
+            video: {
+              file_id: 'quoted-video',
+              file_name: 'clip.mp4',
+              file_size: 88,
+              mime_type: 'video/mp4',
+            },
+          },
+        },
+      }),
+    );
+
+    expect(downloadFileSpy).toHaveBeenCalledWith('direct-photo');
+    expect(downloadFileSpy).toHaveBeenCalledWith('quoted-video');
+    expect((result as ExtractFilesResult)?.files).toHaveLength(2);
+    expect((result as ExtractFilesResult)?.files?.[1]).toEqual({
+      buffer: Buffer.from('quoted'),
+      mimeType: 'video/mp4',
+      name: 'clip.mp4',
+      size: 88,
+    });
+  });
 });
 
 describe('TelegramWebhookClient.extractAuthorLocale', () => {
@@ -474,5 +620,70 @@ describe('TelegramWebhookClient.extractAuthorLocale', () => {
     expect(
       client.extractAuthorLocale!(makeMessage({ raw: { from: { language_code: '' } } })),
     ).toBeUndefined();
+  });
+});
+
+describe('TelegramWebhookClient thread ids', () => {
+  it('extractChatId does not return "guest" for guest thread ids', () => {
+    const client = createClient();
+    expect(client.extractChatId('telegram:guest:-100123')).toBe('-100123');
+    expect(client.extractChatId('telegram:-100123')).toBe('-100123');
+    expect(client.extractChatId('telegram:guest:-100123:4')).toBe('-100123');
+  });
+
+  it('does not subscribe one-shot guest threads', () => {
+    const client = createClient();
+    expect(client.shouldSubscribe?.(GUEST_THREAD_ID)).toBe(false);
+    expect(client.shouldSubscribe?.('telegram:-100123')).toBe(true);
+  });
+});
+
+describe('TelegramWebhookClient guest messenger', () => {
+  const okResponse = (body: Record<string, unknown>) =>
+    new Response(JSON.stringify({ ok: true, result: body }), {
+      headers: { 'Content-Type': 'application/json' },
+      status: 200,
+    });
+
+  let fetchSpy: MockInstance<typeof fetch>;
+  let resetSessions: () => void;
+
+  beforeEach(async () => {
+    const guestSession = await import('./guestSession');
+    resetSessions = guestSession.resetTelegramGuestSessionsForTest;
+    resetSessions();
+    const client = createClient();
+    await guestSession.saveTelegramGuestSession(client.applicationId, GUEST_THREAD_ID, {
+      guestQueryId: 'gq-1',
+    });
+    fetchSpy = vi.spyOn(globalThis, 'fetch');
+  });
+
+  afterEach(() => {
+    resetSessions();
+    fetchSpy.mockRestore();
+  });
+
+  it('createMessage answers the guest query instead of sendMessage', async () => {
+    fetchSpy.mockResolvedValueOnce(okResponse({ inline_message_id: 'inline-9' }));
+    const client = createClient();
+    const messenger = client.getMessenger(GUEST_THREAD_ID);
+
+    await messenger.createMessage('thinking');
+    await messenger.addReaction?.('1', '👀');
+
+    // Guest messengers must NOT expose `triggerTyping`: its presence makes
+    // AgentBridgeService treat the thread as typing-capable and skip the
+    // initial placeholder post when the message gateway is enabled, leaving
+    // the one-shot guest query unanswered until agent completion.
+    expect(messenger.triggerTyping).toBeUndefined();
+
+    expect(String(fetchSpy.mock.calls[0]![0])).toContain('/answerGuestQuery');
+    expect(fetchSpy.mock.calls.some((call) => String(call[0]).includes('/sendMessage'))).toBe(
+      false,
+    );
+    expect(fetchSpy.mock.calls.some((call) => String(call[0]).includes('/sendChatAction'))).toBe(
+      false,
+    );
   });
 });

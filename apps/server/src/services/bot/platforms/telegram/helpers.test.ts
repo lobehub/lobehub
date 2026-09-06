@@ -5,6 +5,7 @@ import {
   extractBotId,
   resolveTelegramSecretToken,
   setTelegramWebhook,
+  TELEGRAM_ALLOWED_UPDATES,
 } from './helpers';
 
 const BOT_TOKEN = '8654315085:AAH-fake-token-for-tests';
@@ -64,9 +65,11 @@ describe('setTelegramWebhook', () => {
     vi.unstubAllGlobals();
   });
 
-  it('always sends secret_token together with the webhook url and allowed_updates', async () => {
+  it('always sends secret_token together with the webhook url and allowed_updates including guest_message', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response('{"ok":true}', { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
+
+    expect(TELEGRAM_ALLOWED_UPDATES).toContain('guest_message');
 
     await setTelegramWebhook(
       BOT_TOKEN,
@@ -83,6 +86,7 @@ describe('setTelegramWebhook', () => {
       url: 'https://cloud.example/api/agent/webhooks/telegram/1',
     });
     expect(body.allowed_updates).toContain('message');
+    expect(body.allowed_updates).toContain('guest_message');
   });
 
   it('throws with the Telegram error body when the call fails', async () => {
