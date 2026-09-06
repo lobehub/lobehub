@@ -99,6 +99,25 @@ describe('Verify acceptance lifecycle', () => {
     expect(mocks.acceptanceAttachPolicyRun).toHaveBeenCalledWith('run-1', 'acceptance-1');
   });
 
+  it('skips instantiation for a recurring task, even when an Acceptance policy exists', async () => {
+    // A failed acceptance pauses the task, and `paused` is permanently off the
+    // cron — so a recurring task must never get a verify plan in the first place.
+    mocks.taskFindById.mockResolvedValue({ automationMode: 'schedule', id: 'task-1' });
+    mocks.taskAcceptanceResolve.mockResolvedValue({
+      acceptance: { id: 'acceptance-1' },
+      config: { enabled: true, verifyRubricId: 'rubric-1' },
+    });
+
+    await instantiateVerifyPlanOnStart(db, 'user-1', {
+      operationId: 'operation-1',
+      taskId: 'task-1',
+    });
+
+    expect(mocks.taskAcceptanceResolve).not.toHaveBeenCalled();
+    expect(mocks.generateDraftPlan).not.toHaveBeenCalled();
+    expect(mocks.confirmPlan).not.toHaveBeenCalled();
+  });
+
   it('keeps an empty Acceptance opted out of verification', async () => {
     mocks.taskAcceptanceResolve.mockResolvedValue({
       acceptance: { id: 'acceptance-1' },

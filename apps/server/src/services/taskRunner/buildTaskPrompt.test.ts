@@ -7,7 +7,15 @@ import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
-import { goalEdges, goalEvents, goalNodes, goals, tasks, users } from '@/database/schemas';
+import {
+  acceptances,
+  goalEdges,
+  goalEvents,
+  goalNodes,
+  goals,
+  tasks,
+  users,
+} from '@/database/schemas';
 
 import { buildTaskPrompt } from './buildTaskPrompt';
 
@@ -19,6 +27,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  await db.delete(acceptances);
   await db.delete(goalEdges);
   await db.delete(goalEvents);
   await db.delete(goalNodes);
@@ -58,5 +67,45 @@ describe('buildTaskPrompt Goal loop context', () => {
 
     expect(result.prompt).toContain('Goal loop — round 2 of 2');
     expect(result.prompt).not.toContain('round 2 of 20');
+  });
+});
+
+describe('buildTaskPrompt delivery acceptance', () => {
+  const buildFor = async (taskId: string) => {
+    const taskModel = new TaskModel(db, userId);
+    const currentTask = await taskModel.findById(taskId);
+    return buildTaskPrompt(currentTask!, {
+      briefModel: new BriefModel(db, userId),
+      db,
+      taskModel,
+      taskTopicModel: new TaskTopicModel(db, userId),
+      userId,
+    });
+  };
+
+  it('renders the acceptance section for a plain task with a verify config', async () => {
+    const task = await new TaskModel(db, userId).create({
+      config: { verify: { enabled: true, requirement: 'The report is delivered as a document.' } },
+      instruction: 'Write the report.',
+    });
+
+    const result = await buildFor(task.id);
+
+    expect(result.prompt).toContain('Verify — delivery acceptance');
+  });
+
+  it('omits the acceptance section for a recurring task', async () => {
+    // A recurring task never gets a verify plan instantiated, so its per-tick
+    // prompt must not ask the builder to self-evidence acceptance criteria.
+    const task = await new TaskModel(db, userId).create({
+      automationMode: 'schedule',
+      config: { verify: { enabled: true, requirement: 'The report is delivered as a document.' } },
+      instruction: 'Send the daily report.',
+      schedulePattern: '0 9 * * *',
+    });
+
+    const result = await buildFor(task.id);
+
+    expect(result.prompt).not.toContain('Verify — delivery acceptance');
   });
 });
