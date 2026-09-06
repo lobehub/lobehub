@@ -227,8 +227,8 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
         try {
           setStarting(true);
           await startRun(run.id, run.status !== 'idle');
-        } catch (error: any) {
-          toast.error(error?.message || 'Failed to start run');
+        } catch (error) {
+          toast.error((error as Error)?.message || 'Failed to start run');
         } finally {
           setStarting(false);
         }
