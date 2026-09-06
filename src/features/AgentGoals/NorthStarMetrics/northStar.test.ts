@@ -34,6 +34,22 @@ describe('buildNorthStarCards', () => {
     expect(card.percent).toBeCloseTo(50);
   });
 
+  it("prefers the clause's own display name over the series title and the key", () => {
+    // Review r1: the key is the address, not the label — a declared display
+    // name must win even when the series carries its own title.
+    const [named, fallback] = buildNorthStarCards(
+      [
+        { key: 'followers', target: 1000, title: '粉丝总数' },
+        { key: 'security.open_issues', op: 'lte', target: 0 },
+      ],
+      [series('followers', [500], { title: 'series title' })],
+      NOW,
+    );
+
+    expect(named.label).toBe('粉丝总数');
+    expect(fallback.label).toBe('security.open_issues');
+  });
+
   it('reads a count-down clause in its own direction', () => {
     // 安全 issue 112 → 0，当前 37：清掉 67%，而不是「37/0」的除零。
     const [card] = buildNorthStarCards(

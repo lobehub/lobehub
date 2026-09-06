@@ -113,6 +113,7 @@ export const goalRouter = router({
                       key: z.string().min(1).max(255),
                       op: z.enum(['gte', 'lte', 'gt', 'lt', 'eq']).optional(),
                       target: z.number(),
+                      title: z.string().max(255).optional(),
                     }),
                   )
                   .max(MAX_GOAL_METRIC_CRITERIA)
@@ -220,6 +221,7 @@ export const goalRouter = router({
               key: z.string().min(1).max(255),
               op: z.enum(['gte', 'lte', 'gt', 'lt', 'eq']).optional(),
               target: z.number(),
+              title: z.string().max(255).optional(),
             }),
           )
           .max(MAX_GOAL_METRIC_CRITERIA),

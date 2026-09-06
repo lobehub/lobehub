@@ -106,7 +106,7 @@ export const buildNorthStarCards = (
     return {
       current: latest?.value ?? null,
       key: criterion.key,
-      label: matched?.title || criterion.key,
+      label: criterion.title || matched?.title || criterion.key,
       latestAt: latest?.observedAt,
       met: latest != null && compare(latest.value, op, criterion.target),
       op,

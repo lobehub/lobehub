@@ -214,7 +214,7 @@ export class GoalActionImpl {
    */
   recordGoalObservation = async (
     goalId: string,
-    observation: { key: string; value: number },
+    observation: { key: string; title?: string; value: number },
   ): Promise<void> => {
     await goalService.recordObservation(goalId, observation);
     await this.refreshGoalMetricSeries(goalId);

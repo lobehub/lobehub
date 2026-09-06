@@ -20,8 +20,8 @@ import { useGoalStore } from '@/store/goal';
  * the automated writer; this is the human's entry for numbers only they can
  * see — and the server advances the goal when the observation clears the gate.
  */
-const RecordObservationContent = memo<{ goalId: string; metricKey: string }>(
-  ({ goalId, metricKey }) => {
+const RecordObservationContent = memo<{ goalId: string; metricKey: string; metricTitle?: string }>(
+  ({ goalId, metricKey, metricTitle }) => {
     const { t } = useTranslation('chat');
     const { close } = useModalContext();
     const recordGoalObservation = useGoalStore((s) => s.recordGoalObservation);
@@ -34,7 +34,9 @@ const RecordObservationContent = memo<{ goalId: string; metricKey: string }>(
       if (!Number.isFinite(parsed) || value.trim() === '' || busy) return;
       setBusy(true);
       try {
-        await recordGoalObservation(goalId, { key: metricKey, value: parsed });
+        // The clause's display name rides along so the series created by the
+        // first observation carries it too.
+        await recordGoalObservation(goalId, { key: metricKey, title: metricTitle, value: parsed });
         close();
       } catch (error) {
         console.error('[NorthStar] failed to record observation:', error);
@@ -75,9 +77,15 @@ const RecordObservationContent = memo<{ goalId: string; metricKey: string }>(
 
 RecordObservationContent.displayName = 'RecordObservationContent';
 
-export const openRecordObservationModal = (goalId: string, metricKey: string): ModalInstance =>
+export const openRecordObservationModal = (
+  goalId: string,
+  metricKey: string,
+  metricTitle?: string,
+): ModalInstance =>
   createModal({
-    content: <RecordObservationContent goalId={goalId} metricKey={metricKey} />,
+    content: (
+      <RecordObservationContent goalId={goalId} metricKey={metricKey} metricTitle={metricTitle} />
+    ),
     footer: null,
     maskClosable: true,
     title: t('goalProcess.northStar.record.title', { ns: 'chat' }),

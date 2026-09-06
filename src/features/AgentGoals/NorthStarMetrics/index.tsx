@@ -36,11 +36,7 @@ const styles = createStaticStyles(({ css }) => ({
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  met: css`
-    border-color: ${cssVar.colorSuccessBorder};
-    background: ${cssVar.colorSuccessBg};
+    background: ${cssVar.colorBgContainer};
   `,
   metValue: css`
     color: ${cssVar.colorSuccess};
@@ -66,7 +62,7 @@ const MetricCard = memo<{ canEdit: boolean; card: NorthStarCard; goalId: string 
         : t('goalProcess.northStar.lastObserved', { time: dayjs(card.latestAt).fromNow() });
 
     return (
-      <Flexbox className={`${styles.card} ${card.met ? styles.met : ''}`} gap={6}>
+      <Flexbox className={styles.card} gap={6}>
         <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
           <Text ellipsis fontSize={12} type={'secondary'}>
             {card.label}
@@ -82,7 +78,7 @@ const MetricCard = memo<{ canEdit: boolean; card: NorthStarCard; goalId: string 
                   icon={<Icon icon={Plus} size={13} />}
                   size={'small'}
                   type={'text'}
-                  onClick={() => openRecordObservationModal(goalId, card.key)}
+                  onClick={() => openRecordObservationModal(goalId, card.key, card.label)}
                 />
               </Tooltip>
             )
@@ -103,7 +99,7 @@ const MetricCard = memo<{ canEdit: boolean; card: NorthStarCard; goalId: string 
         <div className={styles.track}>
           <div
             style={{
-              background: card.met ? cssVar.colorSuccess : cssVar.colorPrimary,
+              background: card.met ? cssVar.colorSuccess : cssVar.colorInfo,
               borderRadius: 2,
               height: '100%',
               width: `${card.percent}%`,

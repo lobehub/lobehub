@@ -653,6 +653,8 @@
   "goalProcess.northStar.declare.submit": "Declare",
   "goalProcess.northStar.declare.targetLabel": "Target value",
   "goalProcess.northStar.declare.title": "Declare metric",
+  "goalProcess.northStar.declare.titleLabel": "Display name (optional)",
+  "goalProcess.northStar.declare.titlePlaceholder": "e.g. Followers / Open security issues",
   "goalProcess.northStar.emptyHint": "No measurable target declared yet — e.g. followers ≥ 10,000, or open security issues down to 0",
   "goalProcess.northStar.lastObserved": "Last observed {{time}}",
   "goalProcess.northStar.met": "Met",

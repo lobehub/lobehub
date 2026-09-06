@@ -28,6 +28,7 @@ const DeclareMetricContent = memo<{ goalId: string }>(({ goalId }) => {
   const declareGoalMetric = useGoalStore((s) => s.declareGoalMetric);
 
   const [key, setKey] = useState('');
+  const [title, setTitle] = useState('');
   const [op, setOp] = useState<GoalMetricComparison>('gte');
   const [target, setTarget] = useState('');
   const [busy, setBusy] = useState(false);
@@ -38,7 +39,12 @@ const DeclareMetricContent = memo<{ goalId: string }>(({ goalId }) => {
     if (!trimmedKey || !Number.isFinite(parsedTarget) || busy) return;
     setBusy(true);
     try {
-      await declareGoalMetric(goalId, { key: trimmedKey, op, target: parsedTarget });
+      await declareGoalMetric(goalId, {
+        key: trimmedKey,
+        op,
+        target: parsedTarget,
+        title: title.trim() || undefined,
+      });
       close();
     } catch (error) {
       // Keep the form open — a silent close would be indistinguishable from success.
@@ -60,6 +66,16 @@ const DeclareMetricContent = memo<{ goalId: string }>(({ goalId }) => {
           placeholder={t('goalProcess.northStar.declare.keyPlaceholder')}
           value={key}
           onChange={(e) => setKey(e.target.value)}
+        />
+      </Flexbox>
+      <Flexbox gap={6}>
+        <Text fontSize={13} weight={500}>
+          {t('goalProcess.northStar.declare.titleLabel')}
+        </Text>
+        <Input
+          placeholder={t('goalProcess.northStar.declare.titlePlaceholder')}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
         />
       </Flexbox>
       <Flexbox horizontal gap={12}>

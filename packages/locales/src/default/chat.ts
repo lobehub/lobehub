@@ -1893,6 +1893,8 @@ export default {
   'goalProcess.northStar.op.eq': '=',
   'goalProcess.northStar.declare.title': 'Declare metric',
   'goalProcess.northStar.declare.keyLabel': 'Metric key',
+  'goalProcess.northStar.declare.titleLabel': 'Display name (optional)',
+  'goalProcess.northStar.declare.titlePlaceholder': 'e.g. Followers / Open security issues',
   'goalProcess.northStar.declare.keyPlaceholder': 'e.g. followers / security.open_issues',
   'goalProcess.northStar.declare.opLabel': 'Condition',
   'goalProcess.northStar.declare.targetLabel': 'Target value',

@@ -291,10 +291,6 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
               <Text as={'h1'} fontSize={22} weight={600}>
                 {goal.title}
               </Text>
-              {/* North-star strip above the execution metrics: how far the
-                  world is from the declared numbers outranks what the run
-                  cost. */}
-              <NorthStarMetrics canEdit={canEdit} goalId={goalId} />
               <Flexbox horizontal className={styles.metrics} gap={8} wrap={'wrap'}>
                 <Metric
                   label={t('goalProcess.metrics.status')}
@@ -377,6 +373,11 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
               {goal.requirement && (
                 <GoalRequirement goalId={goal.id} requirement={goal.requirement} />
               )}
+              {/* North-star strip beside the requirement document: the measured
+                  clauses ARE half of the acceptance contract, so they read
+                  with it — not squeezed between the title and the execution
+                  metrics (review feedback, r1). */}
+              <NorthStarMetrics canEdit={canEdit} goalId={goalId} />
             </Flexbox>
 
             <ProcessControl

@@ -653,6 +653,8 @@
   "goalProcess.northStar.declare.submit": "声明",
   "goalProcess.northStar.declare.targetLabel": "目标值",
   "goalProcess.northStar.declare.title": "声明指标",
+  "goalProcess.northStar.declare.titleLabel": "显示名（可选）",
+  "goalProcess.northStar.declare.titlePlaceholder": "如 粉丝总数 / 未关闭安全 issue",
   "goalProcess.northStar.emptyHint": "尚未声明可量测的目标指标——例如：粉丝数 ≥ 10,000、安全 issue 清零",
   "goalProcess.northStar.lastObserved": "最近观测 {{time}}",
   "goalProcess.northStar.met": "已达标",

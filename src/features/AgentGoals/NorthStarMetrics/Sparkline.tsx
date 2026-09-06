@@ -26,7 +26,7 @@ const Sparkline = memo<{ met?: boolean; values: number[] }>(({ met, values }) =>
       <path
         d={d}
         fill={'none'}
-        stroke={met ? cssVar.colorSuccess : cssVar.colorPrimary}
+        stroke={met ? cssVar.colorSuccess : cssVar.colorInfo}
         strokeWidth={1.5}
       />
     </svg>
