@@ -1,8 +1,8 @@
 ---
 name: acceptance
-version: 0.3.0
+version: 0.4.0
 description: >
-  End-to-end verification and self-evidence for a delivery in any repository,
+  Delegated end-to-end verification with primary-agent evidence review for a delivery in any repository,
   with or without a preconfigured verify plan. Discover an existing plan when
   one was handed to this run; otherwise author checks and publish a standalone
   acceptance. Pick the proving surface (CLI / web / desktop / iOS Simulator),
@@ -14,16 +14,36 @@ description: >
   ambient ids, and never depends on running inside a LobeHub conversation.
 ---
 
-# Acceptance (Builder Self-Evidence)
+# Acceptance (Delegated Execution, Primary Review)
 
-You are the **builder** for a delivery. A separate review step judges it against
-a **plan** — checks you author, or a verify plan handed to this run. A check that
+The primary agent owns the delivery judgment; subagents handle environment
+inspection, plan drafting, case execution, and a final independent audit. A check that
 declares `requiredEvidence` **cannot pass on your text alone**: a missing artifact
 marks it `uncertain` and holds the delivery.
 
 ```
-author (or discover) the plan  →  pick the surface  →  capture evidence  →  publish the round  →  self-check coverage
+subagent checks environment → subagent drafts plan ↔ primary challenges plan
+→ subagent runs each case → primary reviews each case
+→ fresh subagent audits the whole round → primary publishes
 ```
+
+## Delegate work, retain judgment
+
+Use the host's configured low-cost worker defaults, not the primary model by
+inheritance. Delegate a complete case, not individual clicks or commands. The
+primary must inspect each case's original evidence before accepting its result;
+a worker's pass summary is not sufficient. A fresh-context subagent then audits
+the full requirement, plan, and evidence before publication.
+
+If a case fails, the implementer repairs it, the acceptance worker reruns it,
+and the primary reviews the new evidence. Missing evidence goes back to the
+executor. A repairer's self-check never replaces this re-verification.
+
+Read [delegation.md](references/delegation.md) before dispatch. It defines the
+handoffs, multi-round plan discussion, per-case review, repair loop, and fallback
+when delegation is unavailable. These are the default responsibilities throughout
+the surface guides; references to "you" do not require the primary to perform
+every tool call. Existing user authorization and host restrictions still apply.
 
 ## Read the project layer first
 
