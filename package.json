@@ -26,6 +26,7 @@
   "author": "LobeHub <i@lobehub.com>",
   "sideEffects": [
     "./src/initialize.ts",
+    "./src/libs/providerIcon.ts",
     "./src/spa/entry.auth.tsx",
     "./src/spa/entry.desktop.tsx",
     "./src/spa/entry.mobile.tsx",

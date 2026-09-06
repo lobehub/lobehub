@@ -1223,6 +1223,38 @@ describe('GoalService', () => {
     expect(rebound?.config?.acceptance?.metrics).toEqual([{ key: 'followers', target: 1000 }]);
   });
 
+  it('merges a declared clause into the server-side list instead of replacing it', async () => {
+    // Two editors declaring from the same stale snapshot must not erase each
+    // other: merge upserts by key against the list as it stands on the server.
+    const service = new GoalService(serverDB, userId);
+    const goalModel = new GoalModel(serverDB, userId);
+    const graph = await service.create({
+      config: { acceptance: { metrics: [{ key: 'followers', target: 1000 }] } },
+      requirement: 'Grow the account',
+      tasks: ['Publish'],
+      title: 'Merge-mode goal',
+    });
+
+    // A "concurrent" declaration this client never saw.
+    await service.setMetricCriteria(
+      graph.goal.id,
+      [{ key: 'retention', op: 'gte', target: 80 }],
+      'merge',
+    );
+    // This client merges its own clause from a snapshot that predates it.
+    await service.setMetricCriteria(
+      graph.goal.id,
+      [{ key: 'followers', target: 2000, title: '粉丝' }],
+      'merge',
+    );
+
+    const metrics = (await goalModel.findById(graph.goal.id))?.config?.acceptance?.metrics;
+    expect(metrics).toHaveLength(2);
+    expect(metrics).toContainEqual({ key: 'retention', op: 'gte', target: 80 });
+    // Same-key merge upserts rather than duplicating.
+    expect(metrics).toContainEqual({ key: 'followers', target: 2000, title: '粉丝' });
+  });
+
   it('declares numeric clauses after creation without touching the criteria binding', async () => {
     const service = new GoalService(serverDB, userId);
     const graph = await service.create({

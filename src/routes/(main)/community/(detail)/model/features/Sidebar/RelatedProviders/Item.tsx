@@ -1,10 +1,10 @@
-import { ProviderIcon } from '@lobehub/icons';
 import { Block, Flexbox } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ProviderIcon } from '@/libs/providerIcon';
 import { type DiscoverModelDetailProviderItem } from '@/types/discover';
 
 const styles = createStaticStyles(({ css, cssVar }) => {

@@ -253,16 +253,17 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   /* No card chrome: the row separators alone carry the list's structure. A
      border plus inline padding stole horizontal room from every row and made a
-     long checklist read as a boxed-in panel rather than a dense inventory. */
+     long checklist read as a boxed-in panel rather than a dense inventory.
+     The inline inset lives on each row/group header instead of the card, so
+     hover washes and the group band still run edge to edge while the text
+     keeps breathing room on both sides. */
   groupCard: css`
     background: ${cssVar.colorBgContainer};
-  `,
-  groupedCard: css`
-    padding-inline: 12px;
   `,
   groupHeader: css`
     cursor: pointer;
     padding-block: 10px;
+    padding-inline: 16px;
     background: ${cssVar.colorFillQuaternary};
 
     .acceptance-group-actions {
@@ -334,6 +335,7 @@ const styles = createStaticStyles(({ css }) => ({
   rowHeader: css`
     cursor: pointer;
     padding-block: 12px;
+    padding-inline: 16px;
 
     &:hover,
     &:focus-within {
@@ -1298,7 +1300,11 @@ export const AcceptanceCheckRow = memo<{
         )}
 
         {expanded && (
-          <Flexbox gap={10} paddingBlock={detailMode ? 0 : '0 14px'} paddingInline={0}>
+          <Flexbox
+            gap={10}
+            paddingBlock={detailMode ? 0 : '0 14px'}
+            paddingInline={detailMode ? 0 : 16}
+          >
             {/* The model's proposal leads the detail: it is a claim about this
               check that the reviewer is being asked to rule on, so it belongs
               above the verifier's narrative rather than buried under it.
@@ -1834,7 +1840,7 @@ const CheckList = memo<CheckListProps>(
     }
 
     return (
-      <Flexbox className={cx(styles.groupCard, styles.groupedCard)}>
+      <Flexbox className={styles.groupCard}>
         {groups.map(({ checks: groupChecks_, key, label, rows }, groupIndex) => {
           const passed = groupChecks_.filter((check) => check.state === 'passed').length;
           const collapsed = collapsedGroups.has(key);

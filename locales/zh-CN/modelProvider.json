@@ -349,6 +349,8 @@
   "sortModal.success": "排序更新成功",
   "sortModal.title": "自定义排序",
   "sortModal.update": "更新",
+  "unsloth.checker.guidance": "浏览器网络错误请检查 Studio 是否通过 CORS 允许当前页面访问；认证错误请填写真实的 Studio API 密钥，终端无密钥访问成功不代表浏览器也能访问。",
+  "unsloth.checker.setupGuide": "Unsloth 连接配置指南",
   "updateAiProvider.confirmDelete": "删除该 AI 服务商？",
   "updateAiProvider.confirmDeleteDescription": "删除后将无法找回。",
   "updateAiProvider.deleteSuccess": "删除成功",

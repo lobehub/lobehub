@@ -72,6 +72,7 @@ import SuperGrokProvider from './superGrok';
 import TaichuProvider from './taichu';
 import TencentcloudProvider from './tencentcloud';
 import TogetherAIProvider from './togetherai';
+import UnslothProvider from './unsloth';
 import UpstageProvider from './upstage';
 import V0Provider from './v0';
 import VercelAIGatewayProvider from './vercelaigateway';
@@ -172,6 +173,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   OllamaProvider,
   OllamaCloudProvider,
   VLLMProvider,
+  UnslothProvider,
   ComfyUIProvider,
   HuggingFaceProvider,
   CloudflareProvider,
@@ -326,6 +328,7 @@ export { default as SuperGrokProviderCard } from './superGrok';
 export { default as TaichuProviderCard } from './taichu';
 export { default as TencentCloudProviderCard } from './tencentcloud';
 export { default as TogetherAIProviderCard } from './togetherai';
+export { default as UnslothProviderCard } from './unsloth';
 export { default as UpstageProviderCard } from './upstage';
 export { default as V0ProviderCard } from './v0';
 export { default as VercelAIGatewayProviderCard } from './vercelaigateway';

@@ -1,6 +1,5 @@
 'use client';
 
-import { ProviderIcon } from '@lobehub/icons';
 import { DropdownMenu } from '@lobehub/ui';
 import { Button, SplitButton } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
@@ -10,6 +9,7 @@ import urlJoin from 'url-join';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import { ProviderIcon } from '@/libs/providerIcon';
 
 import { useDetailContext } from '../../DetailProvider';
 

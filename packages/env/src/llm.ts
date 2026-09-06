@@ -99,6 +99,9 @@ export const getLLMConfig = () => {
       ENABLED_LMSTUDIO: z.boolean(),
       LMSTUDIO_API_KEY: z.string().optional(),
 
+      ENABLED_UNSLOTH: z.boolean(),
+      UNSLOTH_API_KEY: z.string().optional(),
+
       ENABLED_QINIU: z.boolean(),
       QINIU_API_KEY: z.string().optional(),
 
@@ -357,6 +360,9 @@ export const getLLMConfig = () => {
 
       ENABLED_LMSTUDIO: !!process.env.LMSTUDIO_API_KEY,
       LMSTUDIO_API_KEY: process.env.LMSTUDIO_API_KEY,
+
+      ENABLED_UNSLOTH: !!process.env.UNSLOTH_API_KEY,
+      UNSLOTH_API_KEY: process.env.UNSLOTH_API_KEY,
 
       ENABLED_QINIU: !!process.env.QINIU_API_KEY,
       QINIU_API_KEY: process.env.QINIU_API_KEY,

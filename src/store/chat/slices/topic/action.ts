@@ -34,6 +34,10 @@ import { evictMessageCache } from '@/store/chat/utils/evictMessageCache';
 import { snapshotAgentModel, snapshotAgentReasoning } from '@/store/chat/utils/snapshotAgentModel';
 import { topicMapKey, type TopicMapScope } from '@/store/chat/utils/topicMapKey';
 import {
+  isAudioOnlyFirstUserMessage,
+  normalizeTopicTitleMessages,
+} from '@/store/chat/utils/topicTitle';
+import {
   canReadTopicGitTransport,
   getTopicLinkedPullRequestBase,
   isSuccessfulLinkedPullRequestLookup,
@@ -145,6 +149,8 @@ export class ChatTopicActionImpl {
   #switchTopicEpoch = 0;
 
   #staleRunningTopicCleanupInFlight = false;
+
+  #summarizingTopicTitleIds = new Set<string>();
 
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
     void _api;
@@ -304,6 +310,20 @@ export class ChatTopicActionImpl {
     const topic = topicSelectors.getTopicById(topicId)(this.#get());
     if (!topic) return;
 
+    const messagesForTitle = normalizeTopicTitleMessages(messages);
+
+    // A voice-only first message has no text until the assistant responds. Do not
+    // replace the visible default title with a loading placeholder for an empty
+    // summary request; the run lifecycle retries with the completed reply.
+    const hasTextContent = messagesForTitle.some((message) => {
+      const content = message.content?.trim();
+      return !!content && !(message.role === 'assistant' && content === LOADING_FLAT);
+    });
+    if (!hasTextContent && isAudioOnlyFirstUserMessage(messagesForTitle)) return;
+    if (this.#summarizingTopicTitleIds.has(topicId)) return;
+
+    this.#summarizingTopicTitleIds.add(topicId);
+
     // Keep an optimistic title like "阅读下面..." stable while AI rename runs;
     // otherwise the sidebar flickers `title -> ... -> final title`.
     const shouldShowPlaceholder = !topic.title || topic.title === LOADING_FLAT;
@@ -325,7 +345,7 @@ export class ChatTopicActionImpl {
       const { data } = await aiChatService.generateJSON(
         {
           ...chainSummaryTitle(
-            messages,
+            messagesForTitle,
             userGeneralSettingsSelectors.currentResponseLanguage(useUserStore.getState()),
           ),
           model,
@@ -350,6 +370,8 @@ export class ChatTopicActionImpl {
     } catch (error) {
       console.error('[summaryTopicTitle] failed to generate a title:', error);
       restorePreviousTitle();
+    } finally {
+      this.#summarizingTopicTitleIds.delete(topicId);
     }
   };
 

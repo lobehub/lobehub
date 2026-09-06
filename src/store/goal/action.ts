@@ -1,9 +1,10 @@
 import { type GoalStatus, goalStatuses } from '@lobechat/const/goal';
-import type { GoalTickResult } from '@lobechat/types';
+import type { GoalMetricCriterion, GoalTickResult } from '@lobechat/types';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { goalKeys, taskKeys } from '@/libs/swr/keys';
 import { goalService } from '@/services/goal';
+import { metricService } from '@/services/metric';
 import type { StoreSetter } from '@/store/types';
 
 import type { GoalListFilter, GoalState, GoalViewMode } from './initialState';
@@ -161,6 +162,75 @@ export class GoalActionImpl {
         graph && SERVER_ADVANCING_STATUSES.has(graph.goal.status) ? GOAL_GRAPH_POLL_INTERVAL : 0,
       revalidateOnFocus: true,
     });
+
+  /**
+   * North-star data of the goal detail header. Polls on the same cadence logic
+   * as the graph: while the server is advancing, a probe Work or an agent
+   * `recordObservation` can land a fresh point at any time.
+   */
+  useFetchGoalMetricSeries = (goalId?: string | null) =>
+    useClientDataSWR(
+      goalId ? goalKeys.metricSeries(goalId) : null,
+      // Only the declared keys are fetched — the same goal can accumulate any
+      // number of other sampled series, and none of them can affect this view.
+      // Keys are read at fetch time; the declare path revalidates this cache
+      // key right after refreshing the graph, so a newly declared clause is
+      // fetched against fresh criteria.
+      () =>
+        metricService.listSeriesWithPoints(
+          'goal',
+          goalId!,
+          (this.#get().goalGraphById[goalId!]?.goal.config?.acceptance?.metrics ?? []).map(
+            (criterion) => criterion.key,
+          ),
+        ),
+      {
+        onSuccess: (series) => {
+          this.#set(
+            ({ goalMetricSeriesById }) => ({
+              goalMetricSeriesById: { ...goalMetricSeriesById, [goalId!]: series },
+            }),
+            false,
+            'useFetchGoalMetricSeries/success',
+          );
+        },
+        refreshInterval: () => {
+          const graph = this.#get().goalGraphById[goalId!];
+          return graph && SERVER_ADVANCING_STATUSES.has(graph.goal.status)
+            ? GOAL_GRAPH_POLL_INTERVAL
+            : 0;
+        },
+        revalidateOnFocus: true,
+      },
+    );
+
+  refreshGoalMetricSeries = async (goalId: string): Promise<void> => {
+    await mutate(goalKeys.metricSeries(goalId));
+  };
+
+  /** Append one clause to the goal's measured acceptance and refresh both reads. */
+  declareGoalMetric = async (goalId: string, criterion: GoalMetricCriterion): Promise<void> => {
+    // Merged on the server against its current list — a replacement array
+    // built from this client's snapshot would silently drop whatever a
+    // concurrent editor or agent declared since the snapshot was read.
+    await goalService.setMetricCriteria(goalId, [criterion], 'merge');
+    await this.refreshGoalGraph(goalId);
+    await this.refreshGoalMetricSeries(goalId);
+  };
+
+  /**
+   * Record a measurement against the goal. The server schedules an advance
+   * when the observation clears the gate, so the graph refresh may come back
+   * already reopened.
+   */
+  recordGoalObservation = async (
+    goalId: string,
+    observation: { key: string; title?: string; value: number },
+  ): Promise<void> => {
+    await goalService.recordObservation(goalId, observation);
+    await this.refreshGoalMetricSeries(goalId);
+    await this.refreshGoalGraph(goalId);
+  };
 
   loadMoreGoals = (): void => {
     this.#set(

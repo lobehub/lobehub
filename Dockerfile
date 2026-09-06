@@ -328,6 +328,8 @@ ENV \
     TAICHU_API_KEY="" TAICHU_MODEL_LIST="" \
     # TogetherAI
     TOGETHERAI_API_KEY="" TOGETHERAI_MODEL_LIST="" \
+    # Unsloth
+    UNSLOTH_API_KEY="" UNSLOTH_MODEL_LIST="" UNSLOTH_PROXY_URL="" \
     # Upstage
     UPSTAGE_API_KEY="" UPSTAGE_MODEL_LIST="" \
     # v0 (Vercel)

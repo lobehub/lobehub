@@ -24,5 +24,21 @@ export const EDITOR_DOCUMENT_SOURCE_TYPES = [
   DERIVED_DOCUMENT_SOURCE_TYPE,
 ];
 
+/**
+ * `documents.source_type` values machine-generated rows carry. User-facing
+ * page/resource listings exclude these by default so agent working artifacts
+ * (tool outputs, skill bundles) don't flood the library.
+ */
+export const AGENT_ARTIFACT_SOURCE_TYPES = ['agent', 'agent-signal'] as const;
+
+/**
+ * `documents.source_type` values a user-authored Page row carries in the DB.
+ * `DocumentSourceType.EDITOR` ('editor') is stamped client-side on in-memory
+ * drafts only and never reaches the database — keep it out of SQL filters.
+ */
+export const PAGE_DOCUMENT_SOURCE_TYPES: string[] = ['file', 'api'];
+
+export const PAGE_DOCUMENT_FILE_TYPES: string[] = [CUSTOM_DOCUMENT_FILE_TYPE, 'application/pdf'];
+
 export const hasFilenameExtension = (filename: string): boolean =>
   /(?:^|[^.])\.[^.]+$/.test(filename);

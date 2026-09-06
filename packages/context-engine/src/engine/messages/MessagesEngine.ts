@@ -34,6 +34,7 @@ import {
   AgentDocumentMessageInjector,
   AgentDocumentSystemAppendInjector,
   AgentDocumentSystemReplaceInjector,
+  AgentIdentityInjector,
   AgentManagementContextInjector,
   BotPlatformContextInjector,
   ContextSelectionsInjector,
@@ -150,6 +151,7 @@ export class MessagesEngine {
       modelKnowledgeCutoff,
       provider,
       systemRole,
+      agentIdentity,
       inputTemplate,
       enableAgentMode,
       enableHistoryCount,
@@ -277,6 +279,13 @@ export class MessagesEngine {
       new AgentDocumentBeforeSystemInjector(agentDocConfig),
       // Agent's system role (creates the initial system message)
       new SystemRoleInjector({ systemRole }),
+      // Agent identity (name/title) — lets the model answer "who are you?"
+      // with the user-given name. Group chat establishes identity through
+      // GroupContextInjector instead, so it is suppressed there.
+      new AgentIdentityInjector({
+        enabled: !isGroupContextEnabled,
+        identity: agentIdentity,
+      }),
       // Eval context (appends envPrompt)
       new EvalContextSystemInjector({ enabled: !!evalContext?.envPrompt, evalContext }),
       // Bot platform context (formatting instructions for non-Markdown platforms)

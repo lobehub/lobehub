@@ -73,6 +73,8 @@ export interface GoalMetricCriterion {
   /** Defaults to `gte` — the "reach this number" case. */
   op?: GoalMetricComparison;
   target: number;
+  /** Human-facing name shown on tracking surfaces; the key stays the address. */
+  title?: string;
 }
 
 /**

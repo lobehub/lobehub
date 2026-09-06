@@ -146,6 +146,30 @@ describe('MetricModel', () => {
     });
   });
 
+  describe('firstPointsByMetricIds / recentPoints', () => {
+    it('returns the true first observation and the newest window ascending', async () => {
+      const s1 = (await seed('windowed'))!;
+      for (const [at, value] of [
+        ['2026-09-01T00:00:00Z', 0],
+        ['2026-09-02T00:00:00Z', 90],
+        ['2026-09-03T00:00:00Z', 95],
+      ] as const) {
+        await model.addPoint(s1.id, {
+          actorType: 'system',
+          observedAt: new Date(at),
+          sourceType: 'probe',
+          value,
+        });
+      }
+
+      // The window keeps the newest 2 ascending; the baseline read keeps 0.
+      expect((await model.recentPoints(s1.id, 2)).map((p) => p.value)).toEqual([90, 95]);
+      expect((await model.firstPointsByMetricIds([s1.id])).get(s1.id)?.value).toBe(0);
+      expect((await model.firstPointsByMetricIds([])).size).toBe(0);
+      expect(await otherModel.recentPoints(s1.id, 5)).toEqual([]);
+    });
+  });
+
   describe('latestPointsByMetricIds', () => {
     it('returns one newest row per series in a single read', async () => {
       const a = (await seed('a.metric'))!;

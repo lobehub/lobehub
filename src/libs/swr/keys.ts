@@ -347,6 +347,7 @@ export const isMyTaskListKey = (key: unknown): boolean =>
  */
 export const goalKeys = {
   graph: def('goal:graph', (goalId: string) => ['goal:graph', goalId]),
+  metricSeries: def('goal:metricSeries', (goalId: string) => ['goal:metricSeries', goalId]),
 };
 
 export const taskKeys = {

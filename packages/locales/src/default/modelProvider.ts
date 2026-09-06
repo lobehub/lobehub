@@ -441,6 +441,9 @@ export default {
   'sortModal.success': 'Sort update successful',
   'sortModal.title': 'Custom Order',
   'sortModal.update': 'Update',
+  'unsloth.checker.guidance':
+    'For browser network errors, check that Studio allows this page through CORS. For authentication errors, enter a real Studio API key; keyless terminal access does not grant browser access.',
+  'unsloth.checker.setupGuide': 'Unsloth connection setup guide',
   'updateAiProvider.confirmDelete': 'Delete this AI provider?',
   'updateAiProvider.confirmDeleteDescription':
     'Once deleted, this AI provider cannot be recovered.',

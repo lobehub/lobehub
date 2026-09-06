@@ -71,6 +71,7 @@ import { default as supergrok } from './superGrok';
 import { default as taichu } from './taichu';
 import { default as tencentcloud } from './tencentcloud';
 import { default as togetherai } from './togetherai';
+import { default as unsloth } from './unsloth';
 import { default as upstage } from './upstage';
 import { default as v0 } from './v0';
 import { default as vercelaigateway } from './vercelaigateway';
@@ -182,6 +183,7 @@ const staticModelMap: ModelsMap = {
   taichu,
   tencentcloud,
   togetherai,
+  unsloth,
   upstage,
   v0,
   vercelaigateway,
@@ -299,6 +301,7 @@ export { default as supergrok } from './superGrok';
 export { default as taichu } from './taichu';
 export { default as tencentcloud } from './tencentcloud';
 export { default as togetherai } from './togetherai';
+export { default as unsloth } from './unsloth';
 export { default as upstage } from './upstage';
 export { default as v0 } from './v0';
 export { default as vercelaigateway } from './vercelaigateway';

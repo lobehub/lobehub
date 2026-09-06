@@ -33,6 +33,7 @@ import GoalDetailActions from './GoalDetailActions';
 import { formatSpan, formatUsd, goalStatusKey, summarizeGoalBudget } from './goalPresentation';
 import GoalRequirement from './GoalRequirement';
 import GoalStatusGlyph from './GoalStatusGlyph';
+import NorthStarMetrics from './NorthStarMetrics';
 import ProcessControl from './ProcessControl';
 
 /**
@@ -372,6 +373,11 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
               {goal.requirement && (
                 <GoalRequirement goalId={goal.id} requirement={goal.requirement} />
               )}
+              {/* North-star strip beside the requirement document: the measured
+                  clauses ARE half of the acceptance contract, so they read
+                  with it — not squeezed between the title and the execution
+                  metrics (review feedback, r1). */}
+              <NorthStarMetrics canEdit={canEdit} goalId={goalId} />
             </Flexbox>
 
             <ProcessControl

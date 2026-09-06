@@ -1,5 +1,10 @@
 /* eslint-disable perfectionist/sort-interfaces */
-import type { FileContent, KnowledgeBaseInfo, PageContentContext } from '@lobechat/prompts';
+import type {
+  AgentIdentityContext,
+  FileContent,
+  KnowledgeBaseInfo,
+  PageContentContext,
+} from '@lobechat/prompts';
 import type {
   ExpertiseContextSnapshot,
   RuntimeAdditionalContextFragment,
@@ -254,6 +259,12 @@ export interface MessagesEngineParams {
   inputTemplate?: string;
   /** System role */
   systemRole?: string;
+  /**
+   * The agent's identity (personal `name` + role `title`), appended to the
+   * system message so the model can introduce itself by the name the user gave
+   * it. Ignored in group chat, where GroupContextInjector owns identity.
+   */
+  agentIdentity?: AgentIdentityContext;
   /** Agent-materialized presentation contexts for this LLM call */
   additionalContexts?: readonly RuntimeAdditionalContextFragment[];
   /** Immutable expertise captured when the operation started. */

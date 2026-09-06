@@ -705,10 +705,18 @@ export const contextEngineering = async ({
     }
   }
 
+  // The agent's identity lives on the agent row (name/title), not in the
+  // prompt text — inject it so the model can answer "who are you?" with the
+  // name the user gave it instead of the product/model name.
+  const agentIdentityMeta = agentId
+    ? agentSelectors.getAgentMetaById(agentId)(agentStoreState)
+    : undefined;
+
   // Create MessagesEngine with injected dependencies
   const engine = new MessagesEngine({
     additionalContexts,
     // Agent configuration
+    agentIdentity: { name: agentIdentityMeta?.name, title: agentIdentityMeta?.title },
     enableHistoryCount,
     formatHistorySummary: historySummaryPrompt,
     historyCount,

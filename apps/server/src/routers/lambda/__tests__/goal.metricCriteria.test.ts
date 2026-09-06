@@ -66,15 +66,31 @@ describe('goalRouter numeric acceptance', () => {
     );
   });
 
-  it('declares clauses after creation', async () => {
+  it('declares clauses after creation, defaulting to replace mode', async () => {
     await caller.setMetricCriteria({
       id: 'goal_1',
       metrics: [{ key: 'churn', op: 'lte', target: 5 }],
     });
 
-    expect(mockSetMetricCriteria).toHaveBeenCalledWith('goal_1', [
-      { key: 'churn', op: 'lte', target: 5 },
-    ]);
+    expect(mockSetMetricCriteria).toHaveBeenCalledWith(
+      'goal_1',
+      [{ key: 'churn', op: 'lte', target: 5 }],
+      undefined,
+    );
+  });
+
+  it('passes merge mode through, so single-clause declares upsert server-side', async () => {
+    await caller.setMetricCriteria({
+      id: 'goal_1',
+      metrics: [{ key: 'churn', op: 'lte', target: 5 }],
+      mode: 'merge',
+    });
+
+    expect(mockSetMetricCriteria).toHaveBeenCalledWith(
+      'goal_1',
+      [{ key: 'churn', op: 'lte', target: 5 }],
+      'merge',
+    );
   });
 
   it('rejects a comparison the evaluator does not implement', async () => {

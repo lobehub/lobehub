@@ -12,6 +12,9 @@ import ActiveModels from './index';
 
 vi.mock('@lobehub/icons', () => ({
   ModelIcon: ({ model }: { model: string }) => <span>{model}</span>,
+}));
+
+vi.mock('@/libs/providerIcon', () => ({
   ProviderIcon: ({ provider }: { provider: string }) => <span>{provider}</span>,
 }));
 

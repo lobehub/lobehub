@@ -1,4 +1,3 @@
-import { ProviderIcon } from '@lobehub/icons';
 import { Button } from '@lobehub/ui/base-ui';
 import { ModelProvider } from 'model-bank';
 import { memo } from 'react';
@@ -7,6 +6,7 @@ import urlJoin from 'url-join';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useProviderName } from '@/hooks/useProviderName';
+import { ProviderIcon } from '@/libs/providerIcon';
 import { type GlobalLLMProviderKey } from '@/types/user/settings/modelProvider';
 
 import { useConversationStore } from '../store';

@@ -57,6 +57,16 @@ export interface BuiltinAgentRuntimeResult {
  * Runtime Context - context passed to runtime function
  */
 export interface RuntimeContext {
+  /**
+   * The agent's personal name as the user sees it (e.g. a renamed default
+   * assistant). Builtin system roles should introduce themselves by this name
+   * instead of the hardcoded product default.
+   */
+  agentName?: string;
+
+  /** The agent's role title ("Health Assistant"), shown alongside the name. */
+  agentTitle?: string;
+
   /** Document content for PageAgent */
   documentContent?: string;
 

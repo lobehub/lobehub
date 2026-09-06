@@ -77,6 +77,9 @@ export const getServerGlobalConfig = async () => {
       enabledKey: 'ENABLED_TENCENT_CLOUD',
       modelListKey: 'TENCENT_CLOUD_MODEL_LIST',
     },
+    unsloth: {
+      fetchOnClient: isDesktop ? false : undefined,
+    },
     volcengine: {
       withDeploymentName: true,
     },

@@ -2,6 +2,7 @@ export * from './agentArtwork';
 export * from './agentBuilder';
 export * from './agentDocuments';
 export * from './agentGroup';
+export * from './agentIdentity';
 export * from './agentSignal';
 export * from './agentSkillManager';
 export * from './botPlatformContext';

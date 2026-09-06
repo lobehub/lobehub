@@ -1,6 +1,6 @@
 'use client';
 
-import { ModelIcon, ProviderIcon } from '@lobehub/icons';
+import { ModelIcon } from '@lobehub/icons';
 import { Block, Flexbox, Icon, Popover } from '@lobehub/ui';
 import { Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
@@ -14,6 +14,7 @@ import { ModelInfoTags } from '@/components/ModelSelect';
 import PublishedTime from '@/components/PublishedTime';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import { ProviderIcon } from '@/libs/providerIcon';
 import { type DiscoverModelItem } from '@/types/discover';
 
 import ModelTypeIcon from './ModelTypeIcon';

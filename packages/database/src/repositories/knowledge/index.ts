@@ -1,4 +1,5 @@
 import {
+  AGENT_ARTIFACT_SOURCE_TYPES,
   CUSTOM_DOCUMENT_FILE_TYPE,
   CUSTOM_FOLDER_FILE_TYPE,
   MARKDOWN_MIME_TYPES,
@@ -404,10 +405,18 @@ export class KnowledgeRepo {
       .where(and(this.fileScope(sourceFilter), ...where));
   };
 
+  /**
+   * `includeAgentArtifacts` is the only opt-out from hiding machine-generated
+   * rows (`agent` / `agent-signal`): a knowledge-base listing shows exactly the
+   * rows the user filed into that base, agent artifacts included. Every other
+   * listing keeps them out — they are working files of the agent runtime, not
+   * library content, and they arrive by the hundreds.
+   */
   private documentArm = (
     where: (SQL | undefined)[],
     includeContent: boolean = true,
     includeContentPreview: boolean = false,
+    includeAgentArtifacts: boolean = false,
   ) =>
     this.db
       .select(
@@ -415,7 +424,16 @@ export class KnowledgeRepo {
       )
       .from(d)
       .leftJoin(users, eq(users.id, d.userId))
-      .where(and(this.documentScope(), ne(d.sourceType, 'file'), ...where));
+      .where(
+        and(
+          this.documentScope(),
+          ne(d.sourceType, 'file'),
+          includeAgentArtifacts
+            ? undefined
+            : notInArray(d.sourceType, [...AGENT_ARTIFACT_SOURCE_TYPES]),
+          ...where,
+        ),
+      );
 
   /**
    * Query combined results from files and documents tables
@@ -501,6 +519,7 @@ export class KnowledgeRepo {
       ],
       includeContent,
       includeContentPreview,
+      Boolean(knowledgeBaseId),
     );
 
     const rows = await unionAll(fileArm, documentArm)
