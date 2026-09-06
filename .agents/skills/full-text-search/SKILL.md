@@ -36,11 +36,17 @@ router/service -> createFtsSearchRepo -> FtsSearchRepo -> selected backend -> ex
 
 ## Provider and Permission Invariants
 
-- `FTS_SEARCH_PROVIDER` is a deployment-level provider selector with current values `pg_search` and
-  `elasticsearch`. It is not a feature flag or a user rollout. Add another enum value only when its
-  provider is implemented end to end.
-- Elasticsearch errors, missing configuration, and unsupported candidate behavior must remain
-  visible. Never silently retry through PostgreSQL or add an `ilike` fallback.
+- `FTS_SEARCH_PROVIDER` is a deployment-level provider selector with current values `pg_search`,
+  `elasticsearch`, and `pg_like`. It is not a feature flag or a user rollout. Add another enum value
+  only when its provider covers all entities in `FTS_SEARCH_BACKEND_ENTITIES` end to end, including
+  `mode: 'candidates'` when the provider enables `ftsSearchCandidateEnabled`.
+- Provider errors, missing configuration, and unsupported candidate behavior must remain visible.
+  Never silently retry through another provider. `pg_like` is an explicitly selected lightweight
+  provider, not an implicit fallback: a missing extension or unreachable service must still fail.
+- `pg_search` and `pg_like` share the query modules under
+  `packages/database/src/repositories/ftsSearch/pgSearch/`; only `pgSearch/dialect.ts` differs
+  (match predicate, score expression, query preparation). Keep scoping, joins, pagination, and
+  hydration in the shared modules rather than forking per provider.
 - Before selecting Elasticsearch, require coverage tests proving that it supports every entity in
   the provider-neutral backend contract. Do not add per-entity routing between providers.
 - Preserve `userId`, `workspaceId`, and caller-agent visibility throughout every provider. Candidate

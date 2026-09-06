@@ -25,6 +25,7 @@ import { agentOperations } from '../schemas/agentOperations';
 import type { NewVerifyRun, VerifyRunItem } from '../schemas/verify';
 import { verifyCheckResults, verifyRuns } from '../schemas/verify';
 import type { LobeChatDatabase } from '../type';
+import { escapeLike } from '../utils/like';
 import { isUuid } from '../utils/uuid';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
@@ -59,9 +60,6 @@ const decodeCursor = (cursor?: string): { createdAt: Date; id: string } | null =
   if (Number.isNaN(createdAt.getTime()) || !id) return null;
   return { createdAt, id };
 };
-
-/** Escape LIKE/ILIKE metacharacters (`\ % _`) so user input matches literally. */
-const escapeLike = (value: string): string => value.replaceAll(/[\\%_]/g, (c) => `\\${c}`);
 
 const toState = (run: VerifyRunItem | null | undefined): VerifyRunState | null =>
   run

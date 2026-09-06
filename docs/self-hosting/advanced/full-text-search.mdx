@@ -1,6 +1,6 @@
 ---
 title: Full-Text Search
-description: Choose and operate the pg_search or Elasticsearch backend for LobeHub product search.
+description: Choose and operate the pg_search, Elasticsearch, or pg_like backend for LobeHub product search.
 tags:
   - Full-Text Search
   - Elasticsearch
@@ -13,16 +13,17 @@ tags:
 LobeHub uses full-text search for product data such as agents, topics, messages, files, knowledge
 bases, chat groups, and memories. This is separate from the web-search tools that an agent can call.
 
-LobeHub supports two product-search backends:
+LobeHub supports three product-search backends:
 
 | Backend         | Best fit                                                                                                          | Additional operations                                                                                                                                                                                                    |
 | --------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `pg_search`     | A deployment that already runs PostgreSQL with the ParadeDB `pg_search` extension and wants the simplest topology | PostgreSQL maintains the BM25 indexes; no separate search-sync worker is required                                                                                                                                        |
 | `elasticsearch` | A deployment that wants a dedicated, independently scalable search service or must leave `pg_search`              | Requires an Elasticsearch service (external, or the optional single-node service in the official Docker Compose file), an initial backfill, PostgreSQL change capture, and a continuously scheduled incremental consumer |
+| `pg_like`       | A small deployment on plain PostgreSQL that cannot install `pg_search` and does not want to run Elasticsearch     | None; substring matching runs directly against the existing tables without extensions, indexes, or sync workers                                                                                                          |
 
 `FTS_SEARCH_PROVIDER` selects one backend for the whole deployment. The accepted values are
-`pg_search` and `elasticsearch`; the default is `pg_search`. LobeHub does not silently fall back to
-the other backend when the selected provider is unavailable.
+`pg_search`, `elasticsearch`, and `pg_like`; the default is `pg_search`. LobeHub does not silently
+fall back to another backend when the selected provider is unavailable.
 
 <Callout type="warning">
   `FTS_SEARCH_PROVIDER=elasticsearch` does not make historical database migrations skip
@@ -48,6 +49,33 @@ migrations to install the extension and the LobeHub-managed BM25 indexes, then k
 ```bash
 FTS_SEARCH_PROVIDER=pg_search
 ```
+
+### Use `pg_like` on plain PostgreSQL
+
+Choose `pg_like` when your PostgreSQL service cannot install `pg_search` (many managed providers) and
+the deployment is small enough that a dedicated search service is not worth operating. It needs no
+extension, no additional index, and no sync worker: every search runs as case-insensitive substring
+matching (`ILIKE`) over the same tables and permission scopes as `pg_search`.
+
+```bash
+FTS_SEARCH_PROVIDER=pg_like
+```
+
+What to expect compared with the other backends:
+
+- **Matching.** A row matches when every word of the query appears in one searchable field. There is
+  no stemming, no typo tolerance, and no phrase proximity. Chinese, Japanese, and Korean text works
+  without segmentation because matching is substring based.
+- **Ranking.** Results are ordered by a simple relevance score: a whole-field match ranks above a
+  prefix match, which ranks above a phrase match, which ranks above rows that merely contain every
+  word; title-like fields weigh more than body text.
+- **Performance.** Queries scan the scoped rows instead of using a search index. This is fine for
+  personal and small-team instances; for large message or memory tables, prefer `pg_search` or
+  Elasticsearch.
+
+The same migration limitation as Elasticsearch applies: `pg_like` does not remove the historical
+`pg_search` migrations, so a fresh database still has to run on an image that provides the
+extension until those migrations become optional.
 
 ### Use Elasticsearch
 
@@ -216,7 +244,7 @@ Elastic Cloud path is unchanged: without this variable LobeHub still requires HT
 
 | Variable                  | Purpose                                                                                                                                                       |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `FTS_SEARCH_PROVIDER`     | Deployment-wide provider: `pg_search` or `elasticsearch`                                                                                                      |
+| `FTS_SEARCH_PROVIDER`     | Deployment-wide provider: `pg_search`, `elasticsearch`, or `pg_like`                                                                                          |
 | `ES_URL`                  | Elasticsearch endpoint. HTTPS, or plaintext HTTP only for loopback or, with `ES_ALLOW_INSECURE_HTTP=true`, a private Compose hostname such as `elasticsearch` |
 | `ES_API_KEY`              | Elasticsearch API key with index creation, bulk write, refresh, count, alias, and search permissions. Required unless `ES_ALLOW_INSECURE_HTTP=true`           |
 | `ES_ALLOW_INSECURE_HTTP`  | `true` opts in to plaintext HTTP without an API key for an Elasticsearch node reachable only inside a private container network. Never sends a key over HTTP  |

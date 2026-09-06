@@ -44,6 +44,52 @@ describe('full-text search provider selection', () => {
     ).toBe(FTS_SEARCH_PROVIDERS.elasticsearch);
   });
 
+  it('routes pg_like to its own backend with candidate retrieval enabled', async () => {
+    const search = vi.fn<FtsSearchBackend['search']>().mockResolvedValue({
+      candidates: [{ id: agentResult.id, score: 4 }],
+      items: [],
+      total: 1,
+    });
+    const createPgLikeBackend = vi.fn((): FtsSearchBackend => ({ key: 'pg_like', search }));
+    const loadElasticsearchConfig = vi.fn(() => undefined);
+    const repo = await createFtsSearchRepo(
+      { db, userId: 'allowed-user', usage: 'unified_search' },
+      {
+        createPgLikeBackend,
+        loadElasticsearchConfig,
+        loadFtsSearchProvider: () => FTS_SEARCH_PROVIDERS.pgLike,
+      },
+    );
+
+    expect(createPgLikeBackend).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: FTS_SEARCH_PROVIDERS.pgLike }),
+    );
+    expect(loadElasticsearchConfig).not.toHaveBeenCalled();
+    expect(repo.ftsSearchCandidateEnabled).toBe(true);
+
+    await expect(
+      repo.ftsSearchCandidates({
+        entity: 'agents',
+        filters: {},
+        pagination: {},
+        query: { text: 'candidate' },
+      }),
+    ).resolves.toEqual({ candidates: [{ id: agentResult.id, score: 4 }], total: 1 });
+    expect(search).toHaveBeenCalledWith(expect.objectContaining({ mode: 'candidates' }));
+  });
+
+  it('keeps candidate retrieval inline for pg_search', async () => {
+    const repo = await createFtsSearchRepo(
+      { db, userId: 'allowed-user', usage: 'unified_search' },
+      {
+        createPgSearchBackend: () => ({ key: 'pg_search', search: vi.fn() }),
+        loadFtsSearchProvider: () => FTS_SEARCH_PROVIDERS.pgSearch,
+      },
+    );
+
+    expect(repo.ftsSearchCandidateEnabled).toBe(false);
+  });
+
   it('routes the stable repository facade through the selected backend', async () => {
     const search = vi.fn<FtsSearchBackend['search']>().mockResolvedValue({
       candidates: [{ id: agentResult.id, score: 9.5 }],
