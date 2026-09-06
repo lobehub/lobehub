@@ -1,3 +1,4 @@
+import { AGENT_ARTIFACT_SOURCE_TYPES } from '@lobechat/const';
 import { and, asc, count, desc, eq, inArray, isNull, ne, notInArray, or, sum } from 'drizzle-orm';
 
 import type { DocumentItem, NewDocument } from '../schemas';
@@ -175,7 +176,7 @@ export class DocumentModel {
         ),
       );
     } else {
-      conditions.push(notInArray(documents.sourceType, ['agent', 'agent-signal']));
+      conditions.push(notInArray(documents.sourceType, [...AGENT_ARTIFACT_SOURCE_TYPES]));
     }
 
     const whereCondition = and(...conditions);
