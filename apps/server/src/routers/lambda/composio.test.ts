@@ -145,6 +145,8 @@ describe('composioRouter.createConnection dual-write', () => {
 
     await caller().createConnection({ appSlug: 'GMAIL', identifier: 'gmail', label: 'Gmail' });
 
+    // explicit limit — the SDK default page of 20 truncates larger toolkits (#18675)
+    expect(mocks.getRawComposioTools).toHaveBeenCalledWith({ limit: 200, toolkits: ['GMAIL'] });
     // plugin write kept (backward compat)
     expect(mocks.pluginCreate).toHaveBeenCalledTimes(1);
     // connector projection created with PENDING composio metadata

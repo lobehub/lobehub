@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   pluginFindById: vi.fn(),
   processToolCallResult: vi.fn(),
   toolsExecute: vi.fn(),
+  toolsGetRawComposioTools: vi.fn(),
 }));
 
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn(async () => ({})) }));
@@ -26,7 +27,12 @@ vi.mock('@/database/models/plugin', () => ({
 }));
 
 vi.mock('@/libs/composio', () => ({
-  getComposioClient: () => ({ tools: { execute: mocks.toolsExecute } }),
+  getComposioClient: () => ({
+    tools: {
+      execute: mocks.toolsExecute,
+      getRawComposioTools: mocks.toolsGetRawComposioTools,
+    },
+  }),
   isComposioConnectedAccountNotFoundError: mocks.isComposioNotFound,
 }));
 
@@ -130,5 +136,23 @@ describe('composioToolsRouter.executeAction', () => {
 
     await expect(caller().executeAction(input)).rejects.toMatchObject({ code: 'NOT_FOUND' });
     expect(mocks.toolsExecute).not.toHaveBeenCalled();
+  });
+});
+
+describe('composioToolsRouter.getActions', () => {
+  it('requests more than the SDK default page of 20 tools (#18675)', async () => {
+    mocks.toolsGetRawComposioTools.mockResolvedValue({
+      items: [{ description: 'send', inputParameters: { type: 'object' }, slug: 'GMAIL_SEND' }],
+    });
+
+    const result = await caller().getActions({ appSlug: 'gmail' });
+
+    expect(mocks.toolsGetRawComposioTools).toHaveBeenCalledWith({
+      limit: 200,
+      toolkits: ['gmail'],
+    });
+    expect(result.tools).toEqual([
+      { description: 'send', inputSchema: { type: 'object' }, name: 'GMAIL_SEND' },
+    ]);
   });
 });
