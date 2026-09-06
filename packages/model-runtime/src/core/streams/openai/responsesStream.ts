@@ -3,6 +3,7 @@ import type OpenAI from 'openai';
 import type { Stream } from 'openai/streaming';
 
 import { AgentRuntimeErrorType } from '../../../types/error';
+import { isErrorCausedByContentFilter } from '../../../utils/isErrorCausedByContentFilter';
 import { serializeScopedSignature } from '../../../utils/signatureScope';
 import { convertOpenAIResponseUsage } from '../../usageConverters';
 import type {
@@ -203,6 +204,79 @@ const transformOpenAIStream = (
         }
 
         return { data: null, id: chunk.item.id, type: 'text' };
+      }
+
+      case 'error': {
+        const errorData = {
+          body: chunk,
+          message: chunk.message,
+          type: isErrorCausedByContentFilter(chunk)
+            ? AgentRuntimeErrorType.ProviderContentPolicyViolation
+            : AgentRuntimeErrorType.ProviderBizError,
+        } satisfies ChatMessageError;
+
+        return { data: errorData, id: streamContext.id || 'response_error', type: 'error' };
+      }
+
+      case 'response.failed': {
+        const errorData = {
+          body: chunk,
+          message: chunk.response.error?.message || 'The model failed to generate a response.',
+          type: isErrorCausedByContentFilter(chunk.response.error)
+            ? AgentRuntimeErrorType.ProviderContentPolicyViolation
+            : AgentRuntimeErrorType.ProviderBizError,
+        } satisfies ChatMessageError;
+        const errorChunk = {
+          data: errorData,
+          id: chunk.response.id,
+          type: 'error' as const,
+        };
+
+        return chunk.response.usage
+          ? [
+              {
+                data: convertOpenAIResponseUsage(chunk.response.usage, payload),
+                id: chunk.response.id,
+                type: 'usage',
+              },
+              errorChunk,
+            ]
+          : errorChunk;
+      }
+
+      case 'response.incomplete': {
+        const reason = chunk.response.incomplete_details?.reason;
+        const usageChunk: StreamProtocolChunk | undefined = chunk.response.usage
+          ? {
+              data: convertOpenAIResponseUsage(chunk.response.usage, payload),
+              id: chunk.response.id,
+              type: 'usage',
+            }
+          : undefined;
+
+        if (reason === 'max_output_tokens') {
+          return [
+            { data: 'max_tokens', id: chunk.response.id, type: 'stop' },
+            ...(usageChunk ? [usageChunk] : []),
+          ];
+        }
+
+        const errorData = {
+          body: chunk,
+          message:
+            reason === 'content_filter'
+              ? 'Provider blocked the response due to content policy.'
+              : 'The model response ended incomplete.',
+          type:
+            reason === 'content_filter'
+              ? AgentRuntimeErrorType.ProviderContentPolicyViolation
+              : AgentRuntimeErrorType.ProviderBizError,
+        } satisfies ChatMessageError;
+
+        return [
+          ...(usageChunk ? [usageChunk] : []),
+          { data: errorData, id: chunk.response.id, type: 'error' },
+        ];
       }
 
       case 'response.completed': {
