@@ -9,6 +9,7 @@ export {
   AgentDocumentSystemAppendInjector,
   AgentDocumentSystemReplaceInjector,
 } from './AgentDocumentInjector';
+export { AgentIdentityInjector } from './AgentIdentityInjector';
 export { AgentManagementContextInjector } from './AgentManagementContextInjector';
 export { BotPlatformContextInjector } from './BotPlatformContextInjector';
 export { ContextSelectionsInjector } from './ContextSelectionsInjector';
@@ -72,6 +73,7 @@ export type {
   AgentDocumentSystemAppendInjectorConfig,
   AgentDocumentSystemReplaceInjectorConfig,
 } from './AgentDocumentInjector';
+export type { AgentIdentityInjectorConfig } from './AgentIdentityInjector';
 export type {
   AgentManagementContext,
   AgentManagementContextInjectorConfig,

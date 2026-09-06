@@ -18,7 +18,7 @@ import type {
   TopicReferenceItem,
   UserMemoryData,
 } from '@lobechat/context-engine';
-import type { PageContentContext } from '@lobechat/prompts';
+import type { AgentIdentityContext, PageContentContext } from '@lobechat/prompts';
 import type {
   ExpertiseContextSnapshot,
   RuntimeAdditionalContextFragment,
@@ -163,6 +163,9 @@ export interface ServerMessagesEngineParams {
 
   /** System role */
   systemRole?: string;
+
+  /** The agent's identity (personal name + role title) for self-introduction */
+  agentIdentity?: AgentIdentityContext;
 
   // ========== Skills ==========
   /** Skills configuration for <available_skills> injection */

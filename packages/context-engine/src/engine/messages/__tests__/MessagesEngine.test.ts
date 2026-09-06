@@ -72,6 +72,46 @@ describe('MessagesEngine', () => {
   });
 
   describe('process', () => {
+    describe('agent identity', () => {
+      it('appends the agent identity after the system role', async () => {
+        const result = await new MessagesEngine(
+          createBasicParams({
+            agentIdentity: { name: '芙莉莲', title: '魔法使' },
+            systemRole: 'You are a helpful assistant.',
+          }),
+        ).process();
+
+        const system = result.messages[0];
+        expect(system.role).toBe('system');
+        expect(system.content).toContain('You are a helpful assistant.');
+        expect(system.content).toContain('<name>芙莉莲</name>');
+        expect(system.content).toContain('<title>魔法使</title>');
+      });
+
+      it('injects identity even without a system role', async () => {
+        const result = await new MessagesEngine(
+          createBasicParams({ agentIdentity: { name: '芙莉莲' } }),
+        ).process();
+
+        const system = result.messages[0];
+        expect(system.role).toBe('system');
+        expect(system.content).toContain('<name>芙莉莲</name>');
+      });
+
+      it('suppresses identity in group chat — GroupContextInjector owns it there', async () => {
+        const result = await new MessagesEngine(
+          createBasicParams({
+            agentGroup: { currentAgentId: 'agent-1' },
+            agentIdentity: { name: '芙莉莲' },
+            systemRole: 'You are a helpful assistant.',
+          }),
+        ).process();
+
+        const system = result.messages.find((m) => m.role === 'system');
+        expect(system?.content).not.toContain('<agent_identity>');
+      });
+    });
+
     describe('TODO context priority', () => {
       const messageTodos = {
         items: [{ status: 'processing' as const, text: 'Message task' }],
