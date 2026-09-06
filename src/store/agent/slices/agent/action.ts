@@ -696,8 +696,10 @@ export class AgentSliceActionImpl {
         this.#get().invalidateAvailableAgents();
       }
       updateSaveStatus('saved');
-    } catch (error: any) {
-      if (error?.name === 'AbortError' || error?.message?.includes('aborted')) {
+    } catch (error) {
+      const name = error instanceof Error ? error.name : 'Error';
+      const msg = error instanceof Error ? error.message : '';
+      if (name === 'AbortError' || msg.includes('aborted')) {
         updateSaveStatus('idle');
       } else {
         console.error('[AgentStore] Failed to save config:', error);
@@ -741,8 +743,10 @@ export class AgentSliceActionImpl {
         this.#get().invalidateAvailableAgents();
       }
       updateSaveStatus('saved');
-    } catch (error: any) {
-      if (error?.name === 'AbortError' || error?.message?.includes('aborted')) {
+    } catch (error) {
+      const name = error instanceof Error ? error.name : 'Error';
+      const msg = error instanceof Error ? error.message : '';
+      if (name === 'AbortError' || msg.includes('aborted')) {
         updateSaveStatus('idle');
       } else {
         console.error('[AgentStore] Failed to save meta:', error);

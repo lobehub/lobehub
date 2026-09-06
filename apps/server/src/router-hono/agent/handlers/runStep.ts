@@ -211,13 +211,14 @@ export async function runStep(c: Context): Promise<Response> {
     );
 
     return c.json(responseData);
-  } catch (error: any) {
+  } catch (error) {
     const executionTime = Date.now() - startTime;
     console.error('Error in execution: %O', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
 
     return c.json(
       {
-        error: error.message,
+        error: errorMessage,
         executionTime,
         operationId: body?.operationId,
         stepIndex: body?.stepIndex || 0,
