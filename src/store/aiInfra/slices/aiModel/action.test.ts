@@ -1050,4 +1050,25 @@ describe('AiModelAction', () => {
       });
     });
   });
+
+  describe('useFetchAiModelReasoningConfig', () => {
+    it('resolves a missing config as null so SWR data is never undefined', async () => {
+      // The server legitimately returns nothing when the user never customized
+      // this model's reasoning params. SWR suspense mode can only settle on
+      // defined data, so the fetcher must normalize that to null.
+      vi.spyOn(aiModelService, 'getAiModelReasoningConfig').mockResolvedValue(undefined);
+
+      const { result } = renderHook(
+        () => useStore.getState().useFetchAiModelReasoningConfig('test-model', 'test-provider'),
+        { wrapper: withSWR },
+      );
+
+      await waitFor(() => expect(result.current.data).toBeNull());
+      expect(aiModelService.getAiModelReasoningConfig).toHaveBeenCalledTimes(1);
+      // The store map keeps its `| undefined` contract — null never leaks in.
+      expect(
+        useStore.getState().modelReasoningConfigMap['test-provider/test-model'],
+      ).toBeUndefined();
+    });
+  });
 });

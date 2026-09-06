@@ -1,13 +1,25 @@
 import { act, fireEvent, render } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { SWRConfig } from 'swr';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { __resetFloatingChatPanelRegistry } from './guard';
 import FloatingChatPanel from './index';
 
-vi.mock('./ChatBody', () => ({
-  default: () => <div data-testid="chat-body">body</div>,
-}));
+vi.mock('./ChatBody', async () => {
+  const { useSWRConfig } = await import('swr');
+  // Probe the effective SWR config so the suspense opt-out is testable: the
+  // panel must shield its conversation subtree from suspense-mode hosts.
+  const ChatBodyProbe = () => {
+    const { suspense } = useSWRConfig();
+    return (
+      <div data-swr-suspense={String(suspense ?? false)} data-testid="chat-body">
+        body
+      </div>
+    );
+  };
+  return { default: ChatBodyProbe };
+});
 
 const sheetHandlers = vi.hoisted(() => ({
   current: {
@@ -310,6 +322,21 @@ describe('FloatingChatPanel', () => {
     expect(panel).toContainElement(getByTestId('chat-input'));
     expect(queryByTestId('floating-panel-shell')).toBeNull();
     expect(queryByTestId('floating-chat-panel-collapse-button')).toBeNull();
+  });
+
+  it('opts its subtree out of a suspense-mode SWRConfig host', () => {
+    // The agent-doc layout wraps its whole outlet in SWRConfig{suspense:true}.
+    // The panel's loading model is messagesInit gating, not suspense — without
+    // the opt-out any conversation hook whose fetcher resolves undefined
+    // (e.g. a missing model reasoning config) strands the panel on the host's
+    // Suspense fallback forever.
+    const { getByTestId } = render(
+      <SWRConfig value={{ suspense: true }}>
+        <FloatingChatPanel agentId="agent-1" mode="embedded" topicId="topic-1" />
+      </SWRConfig>,
+    );
+
+    expect(getByTestId('chat-body').dataset.swrSuspense).toBe('false');
   });
 
   it('binds the embedded toolbar topic selection to the conversation context', () => {
