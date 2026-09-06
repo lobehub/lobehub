@@ -12,6 +12,12 @@ const dockerPath = '/app/scripts/_shared/checkDeprecatedAuth.js';
 const sharedModulePath = existsSync(localPath) ? localPath : dockerPath;
 
 const { checkDeprecatedAuth } = require(sharedModulePath);
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { normalizeServerHostname } = require(
+  existsSync(localPath)
+    ? path.join(__dirname, '..', '_shared', 'normalizeServerHostname.js')
+    : '/app/scripts/_shared/normalizeServerHostname.js',
+);
 
 // Set file paths
 const DB_MIGRATION_SCRIPT_PATH = '/app/docker.cjs';
@@ -269,5 +275,6 @@ const runServer = async () => {
   createQstashSchedule();
 
   // Run the server in either database or non-database mode
+  normalizeServerHostname();
   await runServer();
 })();
