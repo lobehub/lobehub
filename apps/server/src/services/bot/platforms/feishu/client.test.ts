@@ -3,11 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mockCreateLarkAdapter = vi.hoisted(() => vi.fn());
 const mockDownloadMediaFromRawMessage = vi.hoisted(() => vi.fn());
 const mockGetTenantAccessToken = vi.hoisted(() => vi.fn().mockResolvedValue('tok'));
+const mockAddReaction = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
 vi.mock('@lobechat/chat-adapter-feishu', () => ({
   createLarkAdapter: mockCreateLarkAdapter,
   downloadMediaFromRawMessage: mockDownloadMediaFromRawMessage,
   LarkApiClient: vi.fn().mockImplementation(() => ({
+    addReaction: mockAddReaction,
     getTenantAccessToken: mockGetTenantAccessToken,
   })),
 }));
@@ -194,5 +196,44 @@ describe('FeishuWebhookClient.extractFiles', () => {
     expect(result).toEqual([
       { buffer, mimeType: 'image/jpeg', name: 'image.jpg', size: undefined },
     ]);
+  });
+});
+
+describe('FeishuClient reactions', () => {
+  const createClient = () =>
+    new FeishuClientFactory().createClient(
+      {
+        applicationId: 'cli_test_app',
+        credentials: { appSecret: 'sec', encryptKey: 'enc' },
+        platform: 'feishu',
+        settings: {},
+      },
+      { appUrl: 'https://example.com' },
+    );
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('maps shared status emojis to Feishu reaction identifiers', async () => {
+    const messenger = createClient().getMessenger('lark:p2p:oc_test');
+
+    await messenger.addReaction?.('om_test', '👀');
+    await messenger.replaceReaction?.('om_test', '👀', '🤔');
+    await messenger.replaceReaction?.('om_test', '🤔', '⚡');
+
+    expect(mockAddReaction.mock.calls).toEqual([
+      ['om_test', 'Get'],
+      ['om_test', 'THINKING'],
+      ['om_test', 'OnIt'],
+    ]);
+  });
+
+  it('skips status emojis without a Feishu identifier', async () => {
+    const messenger = createClient().getMessenger('lark:p2p:oc_test');
+
+    await messenger.replaceReaction?.('om_test', null, '🎉');
+
+    expect(mockAddReaction).not.toHaveBeenCalled();
   });
 });

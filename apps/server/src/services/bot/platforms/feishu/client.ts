@@ -28,12 +28,17 @@ import {
 } from '../types';
 import { formatUsageStats } from '../utils';
 import { FeishuWSConnection } from './gateway';
+import { FEISHU_REACTION_TYPES } from './const';
 import { sendFeishuAttachments } from './sendAttachments';
 
 const log = debug('bot-platform:feishu:client');
 
 const CONNECTED_STATUS_TTL_BUFFER_MS = 60 * 1000;
 const DEFAULT_DURATION_MS = 8 * 60 * 60 * 1000; // 8 hours
+
+function toFeishuReactionType(emoji: string): string | undefined {
+  return FEISHU_REACTION_TYPES[emoji];
+}
 
 export interface GatewayListenerOptions {
   durationMs?: number;
@@ -63,7 +68,10 @@ function createMessenger(
   const api = new LarkApiClient(config.applicationId, config.credentials.appSecret, domain);
   const chatId = extractChatId(platformThreadId);
   return {
-    addReaction: (messageId, emoji) => api.addReaction(messageId, emoji).then(() => {}),
+    addReaction: async (messageId, emoji) => {
+      const reactionType = toFeishuReactionType(emoji);
+      if (reactionType) await api.addReaction(messageId, reactionType);
+    },
     createMessage: async (content) => {
       const text = messengerContentText(content);
       const attachments = typeof content === 'string' ? undefined : content.attachments;
@@ -84,7 +92,10 @@ function createMessenger(
       if (prevEmoji === nextEmoji) return;
       // No remove API upstream — we can only add. Step swaps therefore stack
       // emoji on the user's message. Final cleanup is a no-op.
-      if (nextEmoji) await api.addReaction(messageId, nextEmoji);
+      if (nextEmoji) {
+        const reactionType = toFeishuReactionType(nextEmoji);
+        if (reactionType) await api.addReaction(messageId, reactionType);
+      }
     },
   };
 }

@@ -41,7 +41,7 @@ import { DEFAULT_BOT_HISTORY_LIMIT } from '@lobechat/const';
 import type { MessageRuntimeService } from '@/server/services/toolExecution/serverRuntimes/message/adapters/types';
 import { PlatformUnsupportedError } from '@/server/services/toolExecution/serverRuntimes/message/PlatformUnsupportedError';
 
-import { MAX_FEISHU_HISTORY_LIMIT } from './const';
+import { FEISHU_REACTION_TYPES, MAX_FEISHU_HISTORY_LIMIT } from './const';
 import { sendFeishuAttachments } from './sendAttachments';
 
 /**
@@ -136,7 +136,8 @@ export class FeishuMessageService implements MessageRuntimeService {
   // ==================== Reactions ====================
 
   reactToMessage = async (params: ReactToMessageParams): Promise<ReactToMessageState> => {
-    await this.api.addReaction(params.messageId, params.emoji);
+    const reactionType = FEISHU_REACTION_TYPES[params.emoji];
+    if (reactionType) await this.api.addReaction(params.messageId, reactionType);
     return { messageId: params.messageId, success: true };
   };
 
