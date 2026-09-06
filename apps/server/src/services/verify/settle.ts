@@ -130,13 +130,26 @@ export const driveTaskFromVerify = async (
       const pauseSummary = isErrored
         ? 'Verification could not run (internal error); the delivery was not evaluated.'
         : 'Delivery did not pass verification.';
-      // Verification outcomes belong to the task itself. Do not create an inbox
-      // brief here: a verifier rejection/error is not a separate user todo.
-      await taskModel.updateStatus(taskOperation.taskId, 'paused', { error: pauseSummary });
-      log(
-        isErrored ? 'verify errored → task %s paused' : 'verify failed → task %s paused',
-        taskOperation.taskId,
-      );
+      if (task.automationMode) {
+        // Mirror of the pass branch: verify judges THIS tick, not the lifetime
+        // schedule. Pausing here would permanently disarm the cron (the
+        // schedule query never picks `paused` tasks up again), so a recurring
+        // task keeps its schedule and the verdict stays on the run.
+        log(
+          isErrored
+            ? 'verify errored → recurring task %s remains scheduled'
+            : 'verify failed → recurring task %s remains scheduled',
+          taskOperation.taskId,
+        );
+      } else {
+        // Verification outcomes belong to the task itself. Do not create an inbox
+        // brief here: a verifier rejection/error is not a separate user todo.
+        await taskModel.updateStatus(taskOperation.taskId, 'paused', { error: pauseSummary });
+        log(
+          isErrored ? 'verify errored → task %s paused' : 'verify failed → task %s paused',
+          taskOperation.taskId,
+        );
+      }
     }
 
     // Deferred creator callback: verify-bound runs defer

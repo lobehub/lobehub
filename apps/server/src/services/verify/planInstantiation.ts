@@ -41,6 +41,14 @@ export const instantiateVerifyPlanOnStart = async (
   try {
     const taskModel = new TaskModel(db, userId, workspaceId);
 
+    const task = await taskModel.findById(params.taskId);
+    // A recurring task (schedule / heartbeat) is a loop of ticks, not a
+    // delivery: a single tick has no acceptance contract, and a failed
+    // acceptance would pause the task — permanently disarming its schedule,
+    // since the cron query never picks `paused` tasks up again. Verify stays
+    // off for automation tasks even when they inherit an Acceptance policy.
+    if (task?.automationMode) return;
+
     const resolvedAcceptance = await resolveTaskAcceptance(db, userId, params.taskId, workspaceId);
     if (!resolvedAcceptance) return;
     const { acceptance, config: verifyConfig, requirement } = resolvedAcceptance;
@@ -63,7 +71,6 @@ export const instantiateVerifyPlanOnStart = async (
     // Idempotent: a plan already exists for this run (re-fire, or agent/UI-built).
     if (existing?.plan?.length) return;
 
-    const task = await taskModel.findById(params.taskId);
     const goal = task?.instruction ?? task?.name ?? '';
 
     const planGenerator = new VerifyPlanGeneratorService(db, userId, workspaceId);

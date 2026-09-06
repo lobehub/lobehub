@@ -169,6 +169,42 @@ describe('driveTaskFromVerify', () => {
     expect(statusRecompute.mock.calls).toEqual([['repair-op-1'], ['root-op']]);
   });
 
+  it('failed → keeps a recurring task scheduled instead of pausing (disarming) it', async () => {
+    runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'failed' });
+    taskFindById.mockResolvedValue({
+      assigneeAgentId: 'a1',
+      automationMode: 'schedule',
+      id: 'task-1',
+      identifier: 'T-1',
+      status: 'scheduled',
+    });
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    // Pausing would permanently disarm the cron — the schedule query never
+    // picks `paused` tasks up again. The verdict stays on the run.
+    expect(taskUpdateStatus).not.toHaveBeenCalled();
+    expect(serviceUpdateStatus).not.toHaveBeenCalled();
+    // The tick's rejection still reaches the creator callback.
+    expect(deliverMock.mock.calls[0][0]).toMatchObject({ reason: 'error', taskId: 'task-1' });
+  });
+
+  it('errored → keeps a recurring task scheduled', async () => {
+    runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'errored' });
+    taskFindById.mockResolvedValue({
+      assigneeAgentId: 'a1',
+      automationMode: 'heartbeat',
+      id: 'task-1',
+      identifier: 'T-1',
+      status: 'scheduled',
+    });
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    expect(taskUpdateStatus).not.toHaveBeenCalled();
+    expect(serviceUpdateStatus).not.toHaveBeenCalled();
+  });
+
   it('failed → pauses with the reason on the task row without creating an inbox brief', async () => {
     runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'failed' });
     await driveTaskFromVerify(db, 'u1', 'op-1');
