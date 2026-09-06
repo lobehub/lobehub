@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   hierarchySubtreeHoldsSelection,
   isHierarchyNodeActive,
+  resolveDeletedFolderRedirect,
   resolveHierarchySelectedKey,
 } from './selection';
 
@@ -83,5 +84,65 @@ describe('hierarchySubtreeHoldsSelection', () => {
     const cyclic = { folder_a: [folderB], folder_b: [folderA] } as any;
 
     expect(hierarchySubtreeHoldsSelection(folderA, cyclic, 'nothing-here')).toBe(false);
+  });
+});
+
+describe('resolveDeletedFolderRedirect', () => {
+  const folderA = { id: 'folder_a', isFolder: true, slug: 'folder-a' };
+  const folderB = { id: 'folder_b', isFolder: true, slug: 'folder-b' };
+  const page = { id: 'file_1', isFolder: false, slug: 'my-page' };
+  const children = { '': [folderA], 'folder_a': [folderB], 'folder_b': [page] } as any;
+
+  const base = { children, item: folderB, libraryId: 'kb_1', parentKey: 'folder_a' };
+
+  it("steps out to the deleted folder's parent", () => {
+    expect(resolveDeletedFolderRedirect({ ...base, selectedKey: 'folder-b' })).toBe(
+      '/resource/library/kb_1/folder-a',
+    );
+  });
+
+  it('steps out to the library root for a top-level folder', () => {
+    expect(
+      resolveDeletedFolderRedirect({
+        ...base,
+        item: folderA,
+        parentKey: '',
+        selectedKey: 'folder-a',
+      }),
+    ).toBe('/resource/library/kb_1');
+  });
+
+  it('steps out when the selection is below the deleted folder', () => {
+    expect(
+      resolveDeletedFolderRedirect({
+        ...base,
+        item: folderA,
+        parentKey: '',
+        selectedKey: 'file_1',
+      }),
+    ).toBe('/resource/library/kb_1');
+  });
+
+  // Regression: the delete is async. If the user opens another folder while it
+  // is still in flight, the callback captured when the context menu was
+  // rendered used to fire with the stale selection and pull them back to the
+  // deleted folder's parent — after they had already navigated away.
+  it('stays put when the selection moved out of the subtree mid-delete', () => {
+    expect(resolveDeletedFolderRedirect({ ...base, selectedKey: 'somewhere-else' })).toBeNull();
+  });
+
+  it('stays put with no selection at all', () => {
+    expect(resolveDeletedFolderRedirect({ ...base, selectedKey: null })).toBeNull();
+  });
+
+  it('stays put for a file row', () => {
+    expect(resolveDeletedFolderRedirect({ ...base, item: page, selectedKey: 'file_1' })).toBeNull();
+  });
+
+  // The user switched library while the delete was in flight.
+  it('stays put without a live library', () => {
+    expect(
+      resolveDeletedFolderRedirect({ ...base, libraryId: undefined, selectedKey: 'folder-b' }),
+    ).toBeNull();
   });
 });

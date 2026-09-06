@@ -53,3 +53,43 @@ export const hierarchySubtreeHoldsSelection = (
 
   return false;
 };
+
+interface DeletedFolderRedirect {
+  children: Record<string, TreeItem[]>;
+  item: Pick<TreeItem, 'id' | 'isFolder' | 'slug'>;
+  libraryId?: string | null;
+  parentKey?: string;
+  selectedKey: string | null;
+}
+
+/**
+ * Where to send the explorer once a folder row is deleted, or `null` to leave
+ * it where it is.
+ *
+ * Only moves when the explorer would otherwise be stranded — parked in the
+ * deleted folder, or anywhere below it — and then only as far as the deleted
+ * row's own parent (the library root when it sat at the top level).
+ *
+ * Every input is a snapshot the caller reads at call time, never one captured
+ * when the row's menu was opened: the delete is async, so a user who navigates
+ * away mid-request must not be yanked back to a folder they have already left.
+ */
+export const resolveDeletedFolderRedirect = ({
+  children,
+  item,
+  libraryId,
+  parentKey,
+  selectedKey,
+}: DeletedFolderRedirect): string | null => {
+  if (!item.isFolder || !libraryId) return null;
+  if (!hierarchySubtreeHoldsSelection(item, children, selectedKey)) return null;
+
+  const parent = parentKey
+    ? Object.values(children)
+        .flat()
+        .find((row) => row.id === parentKey)
+    : undefined;
+  const navKey = parent ? parent.slug || parent.id : '';
+
+  return `/resource/library/${libraryId}${navKey ? `/${navKey}` : ''}`;
+};
