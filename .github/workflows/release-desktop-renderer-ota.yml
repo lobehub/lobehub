@@ -63,7 +63,7 @@ jobs:
       requires_full_release: ${{ steps.result.outputs.requires_full_release }}
       version: ${{ steps.result.outputs.version }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Resolve update server base URL
         env:

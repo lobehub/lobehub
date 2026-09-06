@@ -202,7 +202,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.configure-build.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup build environment
         uses: ./.github/actions/desktop-build-setup
@@ -307,7 +307,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup environment
         uses: ./.github/actions/setup-env
@@ -394,7 +394,7 @@ jobs:
     # 手动触发时可选择跳过
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_s3_upload) }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/desktop-publish-s3
         with:
           channel: stable
