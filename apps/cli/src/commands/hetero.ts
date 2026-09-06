@@ -158,15 +158,19 @@ const buildExtraArgs = (
               ]
             : options.type === 'cursor' ||
                 options.type === 'kimi-code' ||
-                options.type === 'opencode' ||
-                options.type === 'pi'
+                options.type === 'opencode'
               ? [...(options.model ? ['--model', options.model] : [])]
-              : options.type === 'qoder'
+              : options.type === 'pi'
                 ? [
                     ...(options.model ? ['--model', options.model] : []),
-                    ...(options.effort ? ['--reasoning-effort', options.effort] : []),
+                    ...(options.effort ? ['--thinking', options.effort] : []),
                   ]
-                : [];
+                : options.type === 'qoder'
+                  ? [
+                      ...(options.model ? ['--model', options.model] : []),
+                      ...(options.effort ? ['--reasoning-effort', options.effort] : []),
+                    ]
+                  : [];
   const extraArgs = [...(options.agentArg ?? []), ...selectorArgs];
 
   return extraArgs.length > 0 ? extraArgs : undefined;
