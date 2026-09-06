@@ -27,6 +27,7 @@ import {
   resolveAgentDocumentsContext,
 } from '@/services/agentDocument';
 import { aiAgentService } from '@/services/aiAgent';
+import { ragService } from '@/services/rag';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 import type { StoreSetter } from '@/store/types';
@@ -38,6 +39,7 @@ import type {
   LobeAgentConfig,
   RuntimeEnvConfig,
 } from '@/types/agent';
+import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
 import { merge } from '@/utils/merge';
 
 import type { AgentStore } from '../../store';
@@ -99,10 +101,38 @@ type Setter = StoreSetter<AgentStore>;
 export const createAgentSlice = (set: Setter, get: () => AgentStore, _api?: unknown) =>
   new AgentSliceActionImpl(set, get, _api);
 
+/**
+ * Resolve with `promise`, or reject as soon as `signal` aborts.
+ *
+ * A parse promise is shared between concurrent sends, so it cannot carry any one
+ * caller's signal. Racing it here is what lets a send stop waiting on a parse
+ * another send started.
+ */
+const raceAbortSignal = <T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> => {
+  if (!signal) return promise;
+
+  const abortError = () => {
+    const error = new Error('Knowledge file hydration aborted');
+    error.name = 'AbortError';
+
+    return error;
+  };
+
+  if (signal.aborted) return Promise.reject(abortError());
+
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(abortError());
+
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+  });
+};
+
 export class AgentSliceActionImpl {
   readonly #get: () => AgentStore;
   readonly #set: Setter;
   readonly #pendingAgentDocuments = new Map<string, Promise<AgentContextDocument[] | undefined>>();
+  readonly #pendingAgentFileContents = new Map<string, Promise<string>>();
   readonly #updateAgentConfigControllers = new Map<string, AbortController>();
   readonly #updateAgentMetaControllers = new Map<string, AbortController>();
 
@@ -134,6 +164,21 @@ export class AgentSliceActionImpl {
       false,
       'syncAgentDocuments',
     );
+  };
+
+  #syncAgentFileContent = (agentId: string, fileId: string, content: string) => {
+    const agentMap = produce(this.#get().agentMap, (draft) => {
+      // `agentMap` is typed as the agents row, which carries no `files` column of
+      // its own — the config selectors widen it to `LobeAgentConfig` for exactly
+      // this reason (`getAgentConfigById`), so do the same here.
+      const agent = draft[agentId] as LobeAgentConfig | undefined;
+      const file = agent?.files?.find((item) => item?.id === fileId);
+      if (file) file.content = content;
+    });
+
+    if (isEqual(this.#get().agentMap, agentMap)) return;
+
+    this.#set({ agentMap }, false, 'syncAgentFileContent');
   };
 
   appendStreamingSystemRole = (agentId: string, generation: number, chunk: string): void => {
@@ -628,6 +673,94 @@ export class AgentSliceActionImpl {
     this.#pendingAgentDocuments.set(agentId, request);
 
     return request;
+  };
+
+  /**
+   * Hydrate the parsed content of the agent's enabled knowledge files.
+   *
+   * The agent config carries each enabled file's cached `documents.content`, so
+   * a file whose parse never ran — uploaded through the file manager rather than
+   * as a chat attachment — arrives with no content at all, and the chat context
+   * builder drops those from the prompt entirely. The model then answers as if
+   * the file had never been attached, with nothing to tell the user why. Parse
+   * them on demand through `document.parseFileContent`, the endpoint the
+   * attachment upload already uses, and write the result back into the config
+   * the builder reads.
+   *
+   * Resolves rather than rejects when a parse fails or the send is aborted: that
+   * file stays out of the prompt, which is the behaviour before this hydration
+   * existed. One parse is shared per file id and each send races it against its
+   * own signal, so pressing Stop releases that send alone — the parse keeps
+   * running for whoever is still waiting on it.
+   */
+  ensureAgentFileContents = async (
+    agentId?: string | null,
+    signal?: AbortSignal,
+  ): Promise<void> => {
+    if (!agentId) return;
+
+    // `contextEngineering` reads the knowledge files off the *active* agent
+    // (`currentAgentConfig`) rather than the agent the operation targets, and a
+    // group run targets a member while the active agent is the supervisor. Only
+    // hydrate when the two already agree: filling a different agent's cache
+    // would push its file content into this prompt.
+    if (agentId !== this.#get().activeAgentId) return;
+
+    const files = (this.#get().agentMap[agentId] as LobeAgentConfig | undefined)?.files ?? [];
+    // A cached parse passes through even when it is empty, and a file with no id
+    // has no document to parse under.
+    const missing = files.filter(
+      (file) =>
+        file?.enabled === true &&
+        typeof file.content !== 'string' &&
+        !!file.id &&
+        !isChunkingUnsupported(file.type ?? ''),
+    );
+    if (missing.length === 0) return;
+
+    await Promise.all(
+      missing.map(async (file) => {
+        const fileId = file.id!;
+
+        // The next send can start before this parse settles; one shared promise
+        // per file id keeps concurrent sends from racing into duplicate parse calls.
+        let request = this.#pendingAgentFileContents.get(fileId);
+        if (!request) {
+          // No caller's signal is attached to the shared parse: one send pressing
+          // Stop would otherwise cancel the parse another send is waiting on and
+          // drop that file from its prompt, which is the failure this hydration
+          // exists to remove.
+          const pending = ragService
+            .parseFileContent(fileId)
+            .then((document) => document.content ?? '');
+
+          // Release the entry when the parse settles rather than when a caller
+          // stops waiting on it, so a send that aborts early does not leave the
+          // next one to start a second parse for the same file.
+          const release = () => {
+            this.#pendingAgentFileContents.delete(fileId);
+          };
+          pending.then(release, release);
+
+          request = pending;
+          this.#pendingAgentFileContents.set(fileId, request);
+        }
+
+        try {
+          // Publish each file as it lands rather than after the whole batch: a
+          // send that starts while a slower file is still parsing would otherwise
+          // find this one neither cached nor in flight and parse it again.
+          this.#syncAgentFileContent(agentId, fileId, await raceAbortSignal(request, signal));
+        } catch (error) {
+          // Pressing Stop stops this send from waiting; that is a cancellation,
+          // not a failure worth reporting. Either way the file stays out of this
+          // prompt.
+          if (!signal?.aborted) {
+            console.error('[AgentStore] Failed to parse knowledge file:', fileId, error);
+          }
+        }
+      }),
+    );
   };
 
   internal_dispatchAgentMap = (id: string, config: PartialDeep<LobeAgentConfig>): void => {

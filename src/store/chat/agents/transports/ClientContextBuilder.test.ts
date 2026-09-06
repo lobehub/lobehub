@@ -50,9 +50,11 @@ describe('ClientContextBuilder', () => {
       plugins: [],
       tools: [],
     };
+    const abortController = new AbortController();
     const store = {
       operations: {
         'operation-1': {
+          abortController,
           context: { agentId: 'agent-1', topicId: 'topic-1' },
           metadata: { traceId: 'trace-1' },
         },
@@ -132,7 +134,9 @@ describe('ClientContextBuilder', () => {
         }),
         additionalContexts,
       }),
-      expect.any(Object),
+      // Context assembly can await a knowledge file parse, so the operation's
+      // abort signal has to reach it and not just the model call after it.
+      expect.objectContaining({ signal: abortController.signal }),
     );
     expect(result.resolvedTools).toMatchObject({
       enabledToolIds: ['dynamic-search'],
