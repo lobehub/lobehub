@@ -1,3 +1,4 @@
+import type { RunCommandState } from '@lobechat/builtin-tool-local-system';
 import { localSystemExecutor } from '@lobechat/builtin-tool-local-system/client/executor';
 import type { ToolAfterCallContext } from '@lobechat/types';
 
@@ -17,6 +18,21 @@ const readShellCommand = (params: unknown): string | string[] | undefined => {
   if (Array.isArray(raw) && raw.every((t) => typeof t === 'string')) return raw as string[];
   return undefined;
 };
+
+/**
+ * `result.success` on a native `runCommand` only says the invocation was
+ * dispatched: `ComputerRuntime.runCommand` returns top-level success once the
+ * device answered, even when the spawned command exited nonzero — and the shell
+ * layer's own nested `success` bit means merely "no spawn error". The one
+ * signal that proves the command ran to completion and succeeded is a zero
+ * exit code in the nested {@link RunCommandState}, so require exactly that.
+ * Background commands (spawned, terminal status unknown — no exit code yet)
+ * and timed-out ones fail closed here: recording a `git switch` that never
+ * happened would overwrite the topic's branch and drop its upstream/PR
+ * binding, which is worse than missing a recording.
+ */
+const commandExitedCleanly = (state: unknown): boolean =>
+  !!state && typeof state === 'object' && (state as RunCommandState).exitCode === 0;
 
 /**
  * Local System executor wrapped with the shell side-effect recorder.
@@ -44,10 +60,13 @@ class LocalSystemExecutorWithGitEffects {
     result,
     topicId,
   }: ToolAfterCallContext): Promise<void> => {
-    // Constrain to a SUCCESSFUL `runCommand` bound to a run topic — same gate as
-    // the heterogeneous CLI executors. A failed command made no git side effect.
+    // Constrain to a `runCommand` bound to a run topic whose command is KNOWN to
+    // have exited zero. The hetero CLI executors get away with `result.success`
+    // alone because their CLIs report the command's outcome there; the native
+    // result reports only dispatch, so the exit code carries the gate here.
     if (!result.success || !topicId) return;
     if (apiName !== 'runCommand') return;
+    if (!commandExitedCleanly(result.state)) return;
 
     const command = readShellCommand(params);
     if (command === undefined) return;

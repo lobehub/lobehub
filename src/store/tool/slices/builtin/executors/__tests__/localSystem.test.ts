@@ -50,11 +50,23 @@ vi.mock('@lobechat/builtin-tool-local-system/client/executor', () => ({
   },
 }));
 
+/**
+ * Production result shape for a completed native `runCommand`: the runtime
+ * reports top-level `success: true` once the device answered — even for a
+ * nonzero exit — and the command's terminal outcome rides in `state`.
+ */
+const runResult = (over: Record<string, any> = {}) => ({
+  content: '',
+  state: { exitCode: 0, isBackground: false, success: true },
+  success: true,
+  ...over,
+});
+
 const call = (over: Record<string, any> = {}) => ({
   apiName: 'runCommand',
   identifier: 'local-system',
   params: { command: 'git worktree add /wt' },
-  result: { content: '', success: true },
+  result: runResult(),
   topicId: 't1',
   ...over,
 });
@@ -93,10 +105,7 @@ describe('localSystemExecutorWithGitEffects', () => {
     await localSystemExecutorWithGitEffects.onAfterCall!(
       call({
         params: { command: 'gh pr create --title "fix thing"' },
-        result: {
-          content: 'https://github.com/lobehub/lobehub/pull/19082',
-          success: true,
-        },
+        result: runResult({ content: 'https://github.com/lobehub/lobehub/pull/19082' }),
       }),
     );
 
@@ -107,9 +116,43 @@ describe('localSystemExecutorWithGitEffects', () => {
     });
   });
 
-  it('skips a failed command — it made no git side effect', async () => {
+  it('skips a failed dispatch — the command never ran', async () => {
     await localSystemExecutorWithGitEffects.onAfterCall!(
       call({ result: { content: 'fatal: not a git repository', success: false } }),
+    );
+    expect(detectMocks.recordGitCommandEffects).not.toHaveBeenCalled();
+  });
+
+  it('skips a command that exited nonzero — top-level success only covers dispatch', async () => {
+    // `git switch missing-branch` fails, yet the runtime still answers
+    // `success: true` with the failure nested in state. Recording it would
+    // rewrite the topic branch and drop its upstream/PR binding.
+    await localSystemExecutorWithGitEffects.onAfterCall!(
+      call({
+        params: { command: 'git switch missing-branch' },
+        result: runResult({
+          content: 'fatal: invalid reference: missing-branch\n\nExit code: 1',
+          state: { exitCode: 1, isBackground: false, success: true },
+        }),
+      }),
+    );
+    expect(detectMocks.recordGitCommandEffects).not.toHaveBeenCalled();
+  });
+
+  it('skips a background command — its terminal status is unknown at dispatch', async () => {
+    await localSystemExecutorWithGitEffects.onAfterCall!(
+      call({
+        result: runResult({
+          state: { commandId: 'shell-1', isBackground: true, success: true },
+        }),
+      }),
+    );
+    expect(detectMocks.recordGitCommandEffects).not.toHaveBeenCalled();
+  });
+
+  it('skips when the result carries no command state at all', async () => {
+    await localSystemExecutorWithGitEffects.onAfterCall!(
+      call({ result: { content: '', success: true } }),
     );
     expect(detectMocks.recordGitCommandEffects).not.toHaveBeenCalled();
   });
