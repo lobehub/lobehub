@@ -10,6 +10,7 @@ const prefixes = {
   agentSkills: 'skl',
   agentHistoryJobs: 'ahj',
   briefs: 'brf',
+  taskActivities: 'tac',
   taskComments: 'cmt',
   tasks: 'task',
   agents: 'agt',

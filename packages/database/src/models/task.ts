@@ -30,8 +30,20 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { merge } from '@/utils/merge';
 
 import { documents } from '../schemas/file';
-import type { NewTaskComment, TaskCommentItem } from '../schemas/task';
-import { taskComments, taskDependencies, taskDocuments, tasks, taskTopics } from '../schemas/task';
+import type {
+  NewTaskActivity,
+  NewTaskComment,
+  TaskActivityItem,
+  TaskCommentItem,
+} from '../schemas/task';
+import {
+  taskActivities,
+  taskComments,
+  taskDependencies,
+  taskDocuments,
+  tasks,
+  taskTopics,
+} from '../schemas/task';
 import { topics } from '../schemas/topic';
 import { acceptances } from '../schemas/verify';
 import { works } from '../schemas/work';
@@ -485,6 +497,11 @@ export class TaskModel {
           .update(taskComments)
           .set({ visibility })
           .where(and(inArray(taskComments.taskId, taskIds), this.commentsOwnership()));
+
+        await tx
+          .update(taskActivities)
+          .set({ visibility })
+          .where(and(inArray(taskActivities.taskId, taskIds), this.activitiesOwnership()));
       }
 
       return updated ?? null;
@@ -1826,6 +1843,44 @@ export class TaskModel {
       .where(and(eq(taskComments.id, id), this.commentsOwnership()))
       .returning();
     return comment;
+  }
+
+  // ========== Activities ==========
+
+  private activitiesOwnership = () =>
+    this.childOwnership({
+      userId: taskActivities.userId,
+      visibility: taskActivities.visibility,
+      workspaceId: taskActivities.workspaceId,
+    });
+
+  /**
+   * Append one event row. Mirrors the parent task's visibility onto the row so
+   * subsequent reads can be filtered without a JOIN — same contract as
+   * `addComment`.
+   */
+  async addActivity(
+    data: Omit<NewTaskActivity, 'id' | 'userId' | 'workspaceId' | 'visibility'>,
+  ): Promise<TaskActivityItem> {
+    const visibility = await this.getTaskVisibility(data.taskId);
+    const [activity] = await this.db
+      .insert(taskActivities)
+      .values({
+        ...data,
+        userId: this.userId,
+        visibility,
+        workspaceId: this.workspaceId ?? null,
+      })
+      .returning();
+    return activity;
+  }
+
+  async getActivities(taskId: string): Promise<TaskActivityItem[]> {
+    return this.db
+      .select()
+      .from(taskActivities)
+      .where(and(eq(taskActivities.taskId, taskId), this.activitiesOwnership()))
+      .orderBy(taskActivities.createdAt);
   }
 
   // ========== Transfer / Copy ==========

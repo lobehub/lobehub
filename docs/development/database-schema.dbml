@@ -3148,6 +3148,26 @@ table briefs {
   }
 }
 
+table task_activities {
+  id text [pk, not null]
+  task_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  actor_user_id text
+  actor_agent_id text
+  type text [not null]
+  payload jsonb
+  visibility text [not null, default: 'public']
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    task_id [name: 'task_activities_task_id_idx']
+    user_id [name: 'task_activities_user_id_idx']
+    workspace_id [name: 'task_activities_workspace_id_idx']
+    (workspace_id, visibility, user_id) [name: 'task_activities_workspace_visibility_idx']
+  }
+}
+
 table task_comments {
   id text [pk, not null]
   task_id text [not null]

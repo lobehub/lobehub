@@ -1656,6 +1656,80 @@ describe('TaskModel', () => {
     });
   });
 
+  describe('activities', () => {
+    it('records assignment events and returns them oldest first', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({ instruction: 'Test' });
+      await createAgent('agt_assignee');
+
+      await model.addActivity({
+        actorUserId: userId,
+        payload: { fromId: null, toId: userId2 },
+        taskId: task.id,
+        type: 'assignee_user',
+      });
+      await model.addActivity({
+        actorUserId: userId,
+        payload: { fromId: null, toId: 'agt_assignee' },
+        taskId: task.id,
+        type: 'assignee_agent',
+      });
+
+      const activities = await model.getActivities(task.id);
+      expect(activities).toHaveLength(2);
+      expect(activities[0].type).toBe('assignee_user');
+      expect(activities[0].payload).toEqual({ fromId: null, toId: userId2 });
+      expect(activities[1].type).toBe('assignee_agent');
+      expect(activities[0].userId).toBe(userId);
+    });
+
+    it('mirrors the parent task visibility onto the row', async () => {
+      const model = new TaskModel(serverDB, userId, 'ws_activity');
+      await serverDB
+        .insert(workspaces)
+        .values({ id: 'ws_activity', name: 'WS', primaryOwnerId: userId, slug: 'ws-activity' })
+        .onConflictDoNothing();
+      const task = await model.create({ instruction: 'Test', visibility: 'private' });
+
+      const activity = await model.addActivity({
+        actorUserId: userId,
+        payload: { fromId: null, toId: userId2 },
+        taskId: task.id,
+        type: 'assignee_user',
+      });
+
+      expect(activity.visibility).toBe('private');
+      expect(activity.workspaceId).toBe('ws_activity');
+    });
+
+    it('pulls public-era activities back to private when the task is demoted', async () => {
+      await serverDB
+        .insert(workspaces)
+        .values({
+          id: 'ws_activity_demote',
+          name: 'WS',
+          primaryOwnerId: userId,
+          slug: 'ws-activity-demote',
+        })
+        .onConflictDoNothing();
+      const model = new TaskModel(serverDB, userId, 'ws_activity_demote');
+      const task = await model.create({ instruction: 'Test', visibility: 'public' });
+
+      await model.addActivity({
+        actorUserId: userId,
+        payload: { fromId: null, toId: userId2 },
+        taskId: task.id,
+        type: 'assignee_user',
+      });
+
+      await model.updateVisibility(task.id, 'private');
+
+      const activities = await model.getActivities(task.id);
+      expect(activities).toHaveLength(1);
+      expect(activities[0].visibility).toBe('private');
+    });
+  });
+
   describe('review rubrics', () => {
     it('should store EvalBenchmarkRubric format in config', async () => {
       const model = new TaskModel(serverDB, userId);
