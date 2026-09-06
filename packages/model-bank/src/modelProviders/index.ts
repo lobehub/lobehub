@@ -35,6 +35,7 @@ import HunyuanProvider from './hunyuan';
 import InfiniAIProvider from './infiniai';
 import InternLMProvider from './internlm';
 import JinaProvider from './jina';
+import KevorynProvider from './kevoryn';
 import KimiCodingPlanProvider from './kimiCodingPlan';
 import LMStudioProvider from './lmstudio';
 import LobeHubProvider from './lobehub';
@@ -107,6 +108,7 @@ export const LOBE_DEFAULT_MODEL_LIST: ChatModelCard[] = [
   VLLMProvider.chatModels,
   XinferenceProvider.chatModels,
   OpenRouterProvider.chatModels,
+  KevorynProvider.chatModels,
   TogetherAIProvider.chatModels,
   FireworksAIProvider.chatModels,
   PerplexityProvider.chatModels,
@@ -168,6 +170,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   XiaomiMiMoProvider,
   AiHubMixProvider,
   OpenRouterProvider,
+  KevorynProvider,
   FalProvider,
   OllamaProvider,
   OllamaCloudProvider,
@@ -289,6 +292,7 @@ export { default as HunyuanProviderCard } from './hunyuan';
 export { default as InfiniAIProviderCard } from './infiniai';
 export { default as InternLMProviderCard } from './internlm';
 export { default as JinaProviderCard } from './jina';
+export { default as KevorynProviderCard } from './kevoryn';
 export { default as KimiCodingPlanProviderCard } from './kimiCodingPlan';
 export { default as LMStudioProviderCard } from './lmstudio';
 export { default as LobeHubProviderCard } from './lobehub';
