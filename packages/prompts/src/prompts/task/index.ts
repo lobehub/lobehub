@@ -598,9 +598,10 @@ const briefIcon = (type: string): string => {
  *
  * Priority order:
  * 1. High Priority Instruction (--prompt) — the most important directive for this run
- * 2. User Feedback (user comments only, full content) — what the user wants
- * 3. Activities (topics + briefs + comments + subtasks, chronological) — full timeline
- * 4. Original Task (instruction + description) — the base requirement
+ * 2. Run Instruction — tells the agent this is an actual execution, not task setup
+ * 3. User Feedback (user comments only, full content) — what the user wants
+ * 4. Activities (topics + briefs + comments + subtasks, chronological) — full timeline
+ * 5. Original Task (instruction + description) — the base requirement
  */
 export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): string => {
   const { task, activities, extraPrompt, goalLoop, workspace, parentTask } = input;
@@ -611,7 +612,18 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
     sections.push(`<high_priority_instruction>\n${extraPrompt}\n</high_priority_instruction>`);
   }
 
-  // ── 2. User Feedback (user comments only, full content) ──
+  // ── 2. Run Instruction ──
+  sections.push(
+    [
+      '<run_instruction>',
+      'You are running this saved task now. Produce the concrete result for this execution.',
+      'Do not reply with task setup, scheduling confirmation, or future-start messaging.',
+      'If the task is recurring or scheduled, treat the schedule as already configured and execute one occurrence immediately.',
+      '</run_instruction>',
+    ].join('\n'),
+  );
+
+  // ── 3. User Feedback (user comments only, full content) ──
   const userComments = activities?.comments?.filter((c) => !c.agentId);
   if (userComments && userComments.length > 0) {
     const lines = userComments.map((c) => {
@@ -627,7 +639,7 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
     sections.push(`<user_feedback>\n${lines.join('\n')}\n</user_feedback>`);
   }
 
-  // ── 3. Task context (full detail so agent doesn't need to call viewTask) ──
+  // ── 4. Task context (full detail so agent doesn't need to call viewTask) ──
   const taskLines = [
     `<task>`,
     `<hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>`,

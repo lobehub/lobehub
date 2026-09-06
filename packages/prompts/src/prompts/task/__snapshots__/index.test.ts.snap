@@ -1,7 +1,13 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`buildTaskRunPrompt > should build prompt with only task instruction 1`] = `
-"<task>
+"<run_instruction>
+You are running this saved task now. Produce the concrete result for this execution.
+Do not reply with task setup, scheduling confirmation, or future-start messaging.
+If the task is recurring or scheduled, treat the schedule as already configured and execute one occurrence immediately.
+</run_instruction>
+
+<task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
 TASK-1 写一本书
 Status: ● running     Priority: -
@@ -12,7 +18,13 @@ Review: (not configured)
 `;
 
 exports[`buildTaskRunPrompt > should build prompt with task description + instruction 1`] = `
-"<task>
+"<run_instruction>
+You are running this saved task now. Produce the concrete result for this execution.
+Do not reply with task setup, scheduling confirmation, or future-start messaging.
+If the task is recurring or scheduled, treat the schedule as already configured and execute one occurrence immediately.
+</run_instruction>
+
+<task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
 TASK-1 写一本书
 Status: ● running     Priority: -
@@ -24,7 +36,13 @@ Review: (not configured)
 `;
 
 exports[`buildTaskRunPrompt > should handle empty activities gracefully 1`] = `
-"<task>
+"<run_instruction>
+You are running this saved task now. Produce the concrete result for this execution.
+Do not reply with task setup, scheduling confirmation, or future-start messaging.
+If the task is recurring or scheduled, treat the schedule as already configured and execute one occurrence immediately.
+</run_instruction>
+
+<task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
 TASK-1 写一本书
 Status: ● running     Priority: -
@@ -38,6 +56,12 @@ exports[`buildTaskRunPrompt > should handle full scenario with all sections 1`] 
 "<high_priority_instruction>
 这次直接开始写第1章
 </high_priority_instruction>
+
+<run_instruction>
+You are running this saved task now. Produce the concrete result for this execution.
+Do not reply with task setup, scheduling confirmation, or future-start messaging.
+If the task is recurring or scheduled, treat the schedule as already configured and execute one occurrence immediately.
+</run_instruction>
 
 <user_feedback>
 <comment time="3h ago">第5章后移，增加评测章节</comment>
@@ -63,7 +87,13 @@ Activities:
 `;
 
 exports[`buildTaskRunPrompt > should include activity history with topics and briefs in CLI style 1`] = `
-"<task>
+"<run_instruction>
+You are running this saved task now. Produce the concrete result for this execution.
+Do not reply with task setup, scheduling confirmation, or future-start messaging.
+If the task is recurring or scheduled, treat the schedule as already configured and execute one occurrence immediately.
+</run_instruction>
+
+<task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
 TASK-1 写一本书
 Status: ● running     Priority: -
@@ -83,7 +113,13 @@ Activities:
 `;
 
 exports[`buildTaskRunPrompt > should include agent comments with author label and time 1`] = `
-"<user_feedback>
+"<run_instruction>
+You are running this saved task now. Produce the concrete result for this execution.
+Do not reply with task setup, scheduling confirmation, or future-start messaging.
+If the task is recurring or scheduled, treat the schedule as already configured and execute one occurrence immediately.
+</run_instruction>
+
+<user_feedback>
 <comment time="2h ago">确认，开始写</comment>
 </user_feedback>
 
@@ -102,7 +138,13 @@ Activities:
 `;
 
 exports[`buildTaskRunPrompt > should include parentTask context for subtasks 1`] = `
-"<task>
+"<run_instruction>
+You are running this saved task now. Produce the concrete result for this execution.
+Do not reply with task setup, scheduling confirmation, or future-start messaging.
+If the task is recurring or scheduled, treat the schedule as already configured and execute one occurrence immediately.
+</run_instruction>
+
+<task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
 TASK-4 第2章 核心架构
 Status: ● running     Priority: -
@@ -122,7 +164,13 @@ Review: (not configured)
 `;
 
 exports[`buildTaskRunPrompt > should include subtasks in task section 1`] = `
-"<task>
+"<run_instruction>
+You are running this saved task now. Produce the concrete result for this execution.
+Do not reply with task setup, scheduling confirmation, or future-start messaging.
+If the task is recurring or scheduled, treat the schedule as already configured and execute one occurrence immediately.
+</run_instruction>
+
+<task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
 TASK-1 写一本书
 Status: ● running     Priority: -
@@ -137,7 +185,13 @@ Review: (not configured)
 `;
 
 exports[`buildTaskRunPrompt > should include subtasks in task tag when provided 1`] = `
-"<task>
+"<run_instruction>
+You are running this saved task now. Produce the concrete result for this execution.
+Do not reply with task setup, scheduling confirmation, or future-start messaging.
+If the task is recurring or scheduled, treat the schedule as already configured and execute one occurrence immediately.
+</run_instruction>
+
+<task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
 TASK-1 写一本书
 Status: ● running     Priority: -
@@ -152,8 +206,31 @@ Review: (not configured)
 </task>"
 `;
 
+exports[`buildTaskRunPrompt > should instruct scheduled tasks to execute one occurrence now instead of confirming setup 1`] = `
+"<run_instruction>
+You are running this saved task now. Produce the concrete result for this execution.
+Do not reply with task setup, scheduling confirmation, or future-start messaging.
+If the task is recurring or scheduled, treat the schedule as already configured and execute one occurrence immediately.
+</run_instruction>
+
+<task>
+<hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
+TASK-1 语言早报
+Status: ? scheduled     Priority: -
+Instruction: 每天早上 7:30 推送英语语言早报，包含 3 分钟阅读材料和 5 个生词卡
+
+Review: (not configured)
+</task>"
+`;
+
 exports[`buildTaskRunPrompt > should only include user comments in user_feedback, not agent comments 1`] = `
-"<user_feedback>
+"<run_instruction>
+You are running this saved task now. Produce the concrete result for this execution.
+Do not reply with task setup, scheduling confirmation, or future-start messaging.
+If the task is recurring or scheduled, treat the schedule as already configured and execute one occurrence immediately.
+</run_instruction>
+
+<user_feedback>
 <comment time="2h ago">用户反馈</comment>
 </user_feedback>
 
@@ -176,6 +253,12 @@ exports[`buildTaskRunPrompt > should place high_priority_instruction first, then
 这次重点关注第3章
 </high_priority_instruction>
 
+<run_instruction>
+You are running this saved task now. Produce the concrete result for this execution.
+Do not reply with task setup, scheduling confirmation, or future-start messaging.
+If the task is recurring or scheduled, treat the schedule as already configured and execute one occurrence immediately.
+</run_instruction>
+
 <user_feedback>
 <comment time="1h ago">用户反馈</comment>
 </user_feedback>
@@ -194,7 +277,13 @@ Activities:
 `;
 
 exports[`buildTaskRunPrompt > should prioritize user feedback at the top 1`] = `
-"<user_feedback>
+"<run_instruction>
+You are running this saved task now. Produce the concrete result for this execution.
+Do not reply with task setup, scheduling confirmation, or future-start messaging.
+If the task is recurring or scheduled, treat the schedule as already configured and execute one occurrence immediately.
+</run_instruction>
+
+<user_feedback>
 <comment time="2h ago">第2章改为先上手再讲原理</comment>
 <comment time="1h ago">增加评测章节</comment>
 </user_feedback>
@@ -214,7 +303,13 @@ Activities:
 `;
 
 exports[`buildTaskRunPrompt > should show resolved action and comment on briefs 1`] = `
-"<task>
+"<run_instruction>
+You are running this saved task now. Produce the concrete result for this execution.
+Do not reply with task setup, scheduling confirmation, or future-start messaging.
+If the task is recurring or scheduled, treat the schedule as already configured and execute one occurrence immediately.
+</run_instruction>
+
+<task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
 TASK-2 第2章
 Status: ● running     Priority: -
@@ -228,7 +323,13 @@ Activities:
 `;
 
 exports[`buildTaskRunPrompt > should truncate comments to 80 chars in activities but keep full in user_feedback 1`] = `
-"<user_feedback>
+"<run_instruction>
+You are running this saved task now. Produce the concrete result for this execution.
+Do not reply with task setup, scheduling confirmation, or future-start messaging.
+If the task is recurring or scheduled, treat the schedule as already configured and execute one occurrence immediately.
+</run_instruction>
+
+<user_feedback>
 <comment time="1h ago">AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA — this part should be truncated in activities</comment>
 </user_feedback>
 
