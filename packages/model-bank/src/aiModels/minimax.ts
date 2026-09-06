@@ -1,6 +1,7 @@
 import {
   type AIChatModelCard,
   type AIImageModelCard,
+  type AITTSModelCard,
   type AIVideoModelCard,
 } from '../types/aiModel';
 
@@ -376,6 +377,60 @@ const minimaxImageModels: AIImageModelCard[] = [
   },
 ];
 
+const minimaxTTSModels: AITTSModelCard[] = [
+  {
+    description:
+      'The latest high-fidelity text-to-audio model, tuned for the most natural prosody and expressive delivery.',
+    displayName: 'Speech 2.8 HD',
+    enabled: true,
+    id: 'speech-2.8-hd',
+    type: 'tts',
+  },
+  {
+    description:
+      'The latest text-to-audio model optimized for low latency, for real-time speech synthesis.',
+    displayName: 'Speech 2.8 Turbo',
+    id: 'speech-2.8-turbo',
+    type: 'tts',
+  },
+  {
+    description: 'A high-fidelity text-to-audio model with rich emotional control.',
+    displayName: 'Speech 2.6 HD',
+    id: 'speech-2.6-hd',
+    type: 'tts',
+  },
+  {
+    description: 'A low-latency text-to-audio model with rich emotional control.',
+    displayName: 'Speech 2.6 Turbo',
+    id: 'speech-2.6-turbo',
+    type: 'tts',
+  },
+  {
+    description: 'A high-fidelity text-to-audio model with broad multilingual coverage.',
+    displayName: 'Speech 02 HD',
+    id: 'speech-02-hd',
+    type: 'tts',
+  },
+  {
+    description: 'A low-latency text-to-audio model with broad multilingual coverage.',
+    displayName: 'Speech 02 Turbo',
+    id: 'speech-02-turbo',
+    type: 'tts',
+  },
+  {
+    description: 'A high-fidelity text-to-audio model for general speech synthesis.',
+    displayName: 'Speech 01 HD',
+    id: 'speech-01-hd',
+    type: 'tts',
+  },
+  {
+    description: 'A low-latency text-to-audio model for general speech synthesis.',
+    displayName: 'Speech 01 Turbo',
+    id: 'speech-01-turbo',
+    type: 'tts',
+  },
+];
+
 const minimaxVideoModels: AIVideoModelCard[] = [
   {
     description:
@@ -608,6 +663,11 @@ const minimaxVideoModels: AIVideoModelCard[] = [
   },
 ];
 
-export const allModels = [...minimaxChatModels, ...minimaxImageModels, ...minimaxVideoModels];
+export const allModels = [
+  ...minimaxChatModels,
+  ...minimaxImageModels,
+  ...minimaxTTSModels,
+  ...minimaxVideoModels,
+];
 
 export default allModels;
