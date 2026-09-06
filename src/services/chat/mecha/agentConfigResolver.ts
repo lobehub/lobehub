@@ -447,6 +447,10 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
   // Use basePlugins as fallback when ctx.plugins is not provided
   // This ensures builtin agents (e.g., INBOX) receive user-configured plugins for merging
   const runtimeConfig = getAgentRuntimeConfig(slug, {
+    // The renameable default assistant must introduce itself by the name the
+    // user gave it, not the hardcoded product default.
+    agentName: agent?.name ?? undefined,
+    agentTitle: agent?.title ?? undefined,
     documentContent,
     groupSupervisorContext,
     isDev,

@@ -280,6 +280,10 @@ export const resolveRunAgentConfig = async (
     }
 
     const runtimeConfig = getAgentRuntimeConfig(agentSlug, {
+      // The renameable default assistant must introduce itself by the name the
+      // user gave it, not the hardcoded product default.
+      agentName: agentConfig.name ?? undefined,
+      agentTitle: agentConfig.title ?? undefined,
       model: agentConfig.model,
       plugins: activePluginIds,
       userLocale,
