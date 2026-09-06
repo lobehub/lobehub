@@ -131,8 +131,9 @@ supersedes? }`.
    score. Do NOT repeat the scope block or a case table; those double up on the
    page. Write it in the language the user is conversing in.
 6. **Review, then publish:** complete the primary's per-case evidence reviews and
-   the fresh worker's whole-round audit from [delegation.md](delegation.md).
-   Record role/run provenance and unresolved findings in the narrative tail.
+   the independent stages for the selected mode from [delegation.md](delegation.md).
+   Record mode, role/run/model provenance, reduced-mode omissions, and unresolved
+   findings in the narrative tail.
    The primary owns the final publication decision.
 
    ```bash

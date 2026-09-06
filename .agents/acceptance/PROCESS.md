@@ -14,9 +14,12 @@ PLAN (0–2)  →  EXECUTE (3–5)  →  FINISH (6)
 ```
 
 Use the skill's [delegation workflow](../skills/acceptance/references/delegation.md):
-a worker checks the environment and drafts the plan; the primary challenges the
-plan; workers execute cases and the primary reviews each one's original evidence;
-a fresh worker audits the whole round before publication. The steps below define
+first resolve an explicit suitable lower-cost model selection; an absent default
+may inherit the primary model. Normally reuse one worker for environment, plan,
+and case execution, and one fresh worker for the final audit. The primary
+challenges the plan and reviews each case's original evidence. When lower-cost
+selection is unavailable, use the skill's reduced workflow and disclose omitted
+independent stages. The steps below define
 project mechanics, not a requirement for the primary to run every command. Keep
 environment ownership with the delegated run through teardown.
 For delegated runs, Step 1 is only a tentative scope outline: the worker checks
@@ -238,8 +241,9 @@ made in a real LobeHub round. The generic set is in the skill's SKILL.md.
 
 ### Step 5 — Report and publish
 
-First complete primary review of every executed case and the fresh worker's
-whole-round audit. Resolve findings or record failures and uncertainty explicitly.
+First complete primary review of every executed case and the independent stages
+required by the selected workflow. Resolve findings or record failures and
+uncertainty explicitly; disclose reduced-mode omissions.
 The primary owns publication and final handoff; workers prepare the artifacts.
 Record role/run provenance and evidence reuse in the report narrative using the
 skill's delegation contract.

@@ -7,7 +7,55 @@ Here, "worker" means a subagent. One worker may handle environment inspection,
 plan drafting, and execution; these stages do not require separate dispatches.
 Only the final auditor needs a fresh context and a separate role.
 
+## Choose the execution mode before dispatch
+
+No manual worker-model configuration is required when the host supports a
+per-dispatch choice. Read the current tool schema or host instructions, select
+an available lower-cost model capable of the task, and explicitly pass the value
+accepted by that tool's schema. This may be an enum alias rather than a full
+model ID. Do not pass an invented tier such as `cheap`.
+For Claude Code, use the native agent tool's model selector when exposed; for
+Codex, use its supported spawn model/configuration controls. Tool names, allowed
+models, context inheritance, and resume mechanisms come from the current host,
+not this skill. Never copy one host's API into another or guess a CLI flag.
+When per-dispatch selection is available, use it directly; checking user defaults
+is unnecessary.
+
+An explicitly configured worker default is usable only when its effective
+selection is known and suitable. Missing settings, `inherit`, or an unknown
+effective model do not establish a lower-cost worker. Do not inspect secrets or
+change user settings to resolve this. If the host cannot establish the selection,
+use the reduced workflow below. Record the selected model, how it was selected,
+and the actual reported model when available; leave unreported values unknown.
+Lower per-token cost is not proof of lower total cost. Claim measured savings
+only when comparable usage evidence exists.
+
+With a suitable lower-cost model, default to **two workers total**: A checks the
+environment, drafts the plan, and executes the cases; B independently audits the
+round. Start with the least expensive suitable model for each, including planning
+and audit. Do not automatically upgrade a role because it involves judgment;
+escalate only for a concrete capability gap within host/user limits.
+Split A only for independent cases with isolated state or to replace an unavailable
+worker. Send bounded briefs and artifact paths instead of the full parent history.
+Return decisive evidence and observations, not copied logs; the primary reviews
+the originals without rerunning successful execution.
+
+### When lower-cost delegation is unavailable
+
+Avoid the full pipeline of inherited-model workers. Use at most one independent
+worker by default: if the primary implemented the change, assign that worker
+environment inspection, planning, and execution; the primary reviews its evidence.
+Otherwise, the primary prepares and executes the cases, then uses the worker for
+the final independent audit. This preserves some independence but is a reduced
+workflow: disclose the omitted stage and do not claim the full delegated process
+or cost savings. If delegation itself is unavailable, use the fallback at the end
+of this file. An explicit user requirement for all independent stages still holds;
+report any unmet stage rather than silently lowering that requirement.
+
 ## 1. Worker checks the environment
+
+Sections 1–4 describe the full two-worker workflow. In reduced mode, apply the
+selected role assignment above and disclose omitted independent stages.
 
 Give a worker the user's original requirement, repository, target revision or
 working-tree scope, and authorized surface. The worker reads the project adapter
@@ -18,11 +66,9 @@ process/session in a shared run ledger alongside the report, including its owner
 stop command, fixtures, and probes, so later workers reuse it safely. The
 environment worker owns teardown; the primary collects its completion result.
 Do not inspect credentials or invent authorization to resolve a blocker.
-
-Use configured low-cost worker defaults; do not hardcode a vendor or model in
-this skill or automatically inherit an expensive primary model. If the host has
-no worker default, choose an available inexpensive worker suited to the surface.
-Escalate a bounded difficult judgment only when the evidence warrants it.
+Write the ledger even for a single-worker run. If the host cannot resume a
+worker, hand its replacement the ledger and artifacts, including live session
+identities; a new dispatch does not inherit the old worker's memory or ownership.
 
 ## 2. Worker proposes the plan; primary challenges it
 
@@ -73,6 +119,9 @@ The primary applies the required living-log checklists before accepting a case.
 
 ### Who owns a failed case?
 
+The table describes full mode. In reduced mode, "acceptance worker" means the
+assigned executor, which may be the primary; do not invent an omitted audit role.
+
 | Finding                                      | Who acts next                                                                                          | Who verifies the next result                                                                                                    |
 | -------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
 | Product behavior is wrong                    | The implementer repairs the product; the primary may delegate that repair to an implementation worker. | The acceptance worker reruns affected cases; the primary inspects the new evidence and decides.                                 |
@@ -83,8 +132,9 @@ The primary applies the required living-log checklists before accepting a case.
 Keep the acceptance executor separate from whoever repairs the product. Reuse the
 original acceptance worker when available; otherwise hand the case and failure
 record to a replacement. The repairer's own checks support the handoff but do not
-replace acceptance. The primary retains the final case decision even when it also
-implemented the repair; the independent executor and final audit remain required.
+replace full-mode acceptance. The primary retains the final case decision even
+when it also implemented the repair. Full mode requires the independent executor
+and final audit; reduced mode must disclose whichever independent stage is absent.
 
 After a repair, rerun affected cases against the changed code and check which
 earlier evidence is now stale. A prior pass does not carry across a relevant
@@ -105,7 +155,8 @@ targeted execution when existing evidence cannot settle a concern.
 
 The primary resolves findings, obtains fresh evidence where needed, and has the
 auditor recheck affected conclusions before publication. Collect all delegated
-terminal results. Publish only after per-case reviews and this audit are complete;
+terminal results. Publish only after per-case reviews and the independent stages
+required by the selected mode are complete;
 report remaining failures or uncertainty honestly rather than omitting them.
 If plan discussion, repair, or audit repeats without new evidence or a credible
 next step, stop that loop and report the concrete blocker. Do not lower the
@@ -115,7 +166,8 @@ criterion to obtain a pass. Continue independent cases where useful.
 
 Keep the existing plan/case/evidence schema. In the report's narrative tail record
 which roles performed implementation, execution, primary review, and final audit;
-include worker/run identifiers, tested revisions, reused evidence, and limitations.
+include the execution mode, worker/run identifiers and model selections, tested
+revisions, reused evidence, omitted stages, and limitations.
 Distinguish builder self-verification, independent execution, and evidence-only
 audit. A second agent alone does not guarantee an objective result.
 
