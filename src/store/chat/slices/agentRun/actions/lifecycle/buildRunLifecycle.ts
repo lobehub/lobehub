@@ -371,6 +371,43 @@ export const buildRunLifecycle = (
         });
       };
 
+      // A cancelled run can leave the assistant placeholder empty (aborted before
+      // any content/reasoning/tools/error landed); drop it so it doesn't linger as
+      // a stuck "generating" bubble (#17723). A placeholder with an error is kept.
+      const cleanupEmptyAssistantPlaceholderOnCancel = async () => {
+        if (adapter.runtimeType !== 'client') return;
+        if (adapter.runScope === 'sub_agent') return;
+        if (disposition !== 'cancelled') return;
+        if (!topicId) return;
+
+        const messages = get().messagesMap[messageKey] || [];
+        const assistantMessageId = findCompletionAssistantMessageId(
+          messages,
+          parentMessageId,
+          parentMessageType,
+        );
+        if (!assistantMessageId) return;
+
+        const assistantMessage = messages.find((message) => message.id === assistantMessageId);
+        if (!assistantMessage || assistantMessage.role !== 'assistant') return;
+
+        const isEmptyPlaceholder =
+          !assistantMessage.content?.trim() &&
+          !assistantMessage.error &&
+          (assistantMessage.tools?.length ?? 0) === 0 &&
+          (assistantMessage.imageList?.length ?? 0) === 0 &&
+          !assistantMessage.reasoning?.content?.trim();
+        if (!isEmptyPlaceholder) return;
+
+        try {
+          // Operation-scoped: deleteMessage resolves via the ACTIVE conversation
+          // only, so it no-ops after a topic switch (#17723).
+          await get().optimisticDeleteMessage?.(assistantMessageId, { operationId });
+        } catch (error) {
+          console.error('[completeRun] failed to remove empty aborted assistant message:', error);
+        }
+      };
+
       // 1. afterCompletion callbacks — fire on ALL terminal states (tools that
       //    registered post-run actions: speak / broadcast / delegate).
       const operation = get().operations[operationId];
@@ -458,6 +495,11 @@ export const buildRunLifecycle = (
         // Parked states never reach `completeRun` — the executor routes them to
         // `onRunParked`.
       }
+
+      // Remove the orphan empty assistant placeholder before flipping the topic
+      // status, so a cancelled run leaves neither a stuck spinner nor a blank
+      // "generating" bubble behind.
+      await cleanupEmptyAssistantPlaceholderOnCancel();
 
       // Runs past the requeue early-return, so a run that continues into a queued
       // follow-up (which writes 'running' again) is never reset mid-flight.

@@ -246,3 +246,59 @@ describe('ClientLLMTransport.retryPolicy.onError · terminal operation teardown'
     expect(store.updateTopicStatus).not.toHaveBeenCalled();
   });
 });
+
+describe('ClientLLMTransport.retryPolicy.waitForRetry · abort-aware backoff', () => {
+  const createRetryPolicy = () => {
+    const abortController = new AbortController();
+    const store = {
+      operations: { 'op-1': { abortController, context: {}, status: 'running' } },
+    } as unknown as ChatStore;
+    const transport = new ClientLLMTransport({
+      get: () => store,
+      operationId: 'op-1',
+      session: { assistantMessageId: 'msg-1' } as any,
+    });
+    return { abortController, retryPolicy: transport.retryPolicy };
+  };
+
+  it('resolves immediately when the operation was already aborted', async () => {
+    const { abortController, retryPolicy } = createRetryPolicy();
+    abortController.abort();
+
+    await expect(retryPolicy.waitForRetry!(10_000)).resolves.toBeUndefined();
+  });
+
+  it('resolves as soon as the signal aborts mid-wait, without waiting out the delay', async () => {
+    vi.useFakeTimers();
+    try {
+      const { abortController, retryPolicy } = createRetryPolicy();
+      const waited = retryPolicy.waitForRetry!(10_000);
+      abortController.abort();
+
+      // Resolves off the abort event — no timer advance needed.
+      await expect(waited).resolves.toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('waits out the full delay when no abort arrives', async () => {
+    vi.useFakeTimers();
+    try {
+      const { retryPolicy } = createRetryPolicy();
+      let resolved = false;
+      const waited = retryPolicy.waitForRetry!(1000).then(() => {
+        resolved = true;
+      });
+
+      await vi.advanceTimersByTimeAsync(999);
+      expect(resolved).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(1);
+      await waited;
+      expect(resolved).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

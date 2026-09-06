@@ -27,7 +27,6 @@ import { t } from 'i18next';
 
 import { chatService } from '@/services/chat';
 import { getFileStoreState } from '@/store/file/store';
-import { sleep } from '@/utils/sleep';
 
 import type { ChatStore } from '../../store';
 import { StreamingHandler } from '../StreamingHandler';
@@ -184,7 +183,21 @@ class ClientLLMRetryPolicy implements LLMRetryPolicy {
   }
 
   async waitForRetry(delayMs: number): Promise<void> {
-    await sleep(delayMs);
+    const signal = this.get().operations[this.operationId]?.abortController?.signal;
+    // Already stopped before the backoff even began — don't wait at all.
+    if (signal?.aborted) return;
+
+    // Race the backoff delay against the operation's abort signal so a Stop
+    // mid-backoff is observed immediately instead of after the full delay (#17723).
+    await new Promise<void>((resolve) => {
+      const settle = () => {
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', settle);
+        resolve();
+      };
+      const timer = setTimeout(settle, delayMs);
+      signal?.addEventListener('abort', settle, { once: true });
+    });
   }
 }
 

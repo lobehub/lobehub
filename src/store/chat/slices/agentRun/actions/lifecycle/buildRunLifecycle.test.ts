@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatStore } from '@/store/chat/store';
 
 import { messageMapKey } from '../../../../utils/messageMapKey';
+import { displayMessageSelectors } from '../../../message/selectors/displayMessage';
 import type { AgentRuntimeType } from '../dispatch/agentDispatcher';
 import { buildRunLifecycle } from './buildRunLifecycle';
 import type { RunCompleteEvent, RunTerminalStatus, UserMessagePersistedEvent } from './types';
@@ -40,17 +41,38 @@ const CONTEXT: ConversationContext = {
 } as ConversationContext;
 
 const makeStore = (afterCompletionCallbacks?: Array<() => void>) => {
+  // Shared server-side delete both paths funnel into — asserting on this rather
+  // than on the store action is what makes the topic-switch test non-tautological.
+  const removeMessage = vi.fn(async (_id: string, _context: unknown) => {});
+
+  const resolveContext = (context?: { operationId?: string }) =>
+    context?.operationId
+      ? store.operations[context.operationId as keyof typeof store.operations]?.context
+      : undefined;
+
   const store = {
     activeAgentId: 'a1',
     activeGroupId: undefined,
     activeTopicId: 't1',
     completeOperation: vi.fn(),
     dbMessagesMap: {},
+    // Contrast path: resolves via the REAL getDisplayMessageById selector
+    // (active conversation only), so it misses after a topic switch (#17723).
+    deleteMessage: vi.fn(async (id: string, context?: { operationId?: string }) => {
+      const message = displayMessageSelectors.getDisplayMessageById(id)(store as any);
+      if (!message) return;
+      await removeMessage(id, resolveContext(context));
+    }),
     drainQueuedMessages: vi.fn(() => []),
     failOperation: vi.fn(),
     internal_updateTopic: vi.fn(),
     markTopicUnread: vi.fn(),
     messagesMap: {},
+    // Resolves the conversation from the operation's context, independent of
+    // whichever topic is active.
+    optimisticDeleteMessage: vi.fn(async (id: string, context?: { operationId?: string }) => {
+      await removeMessage(id, resolveContext(context));
+    }),
     operations: {
       [OP]: {
         context: CONTEXT,
@@ -64,7 +86,7 @@ const makeStore = (afterCompletionCallbacks?: Array<() => void>) => {
     topicDataMap: {},
     updateTopicStatus: vi.fn(async () => {}),
   };
-  return { get: (() => store) as unknown as () => ChatStore, store };
+  return { get: (() => store) as unknown as () => ChatStore, removeMessage, store };
 };
 
 const lifecycle = (
@@ -263,6 +285,110 @@ describe('buildRunLifecycle.completeRun — client resets a viewed topic out of 
     );
 
     expect(store.updateTopicStatus).not.toHaveBeenCalled();
+  });
+});
+
+describe('buildRunLifecycle.completeRun — removes the orphan empty placeholder on cancel', () => {
+  const KEY = messageMapKey(CONTEXT);
+  const emptyAssistant = { content: '', id: 'a-empty', parentId: 'u1', role: 'assistant' } as any;
+
+  it('deletes the empty assistant placeholder when a client run is cancelled', async () => {
+    const { get, store } = makeStore();
+    store.messagesMap = { [KEY]: [emptyAssistant] } as any;
+
+    await lifecycle('client', get).completeRun(
+      completeEvent('client', { runtimeStatus: 'interrupted' }),
+    );
+
+    expect(store.optimisticDeleteMessage).toHaveBeenCalledWith('a-empty', { operationId: OP });
+  });
+
+  it('deletes the placeholder when it IS the parentMessage (production main-send shape)', async () => {
+    // The real send path calls executeClientAgent with parentMessageType
+    // 'assistant' and parentMessageId = the placeholder id itself
+    // (skipCreateFirstMessage), so the id resolves via the fallback branch of
+    // findCompletionAssistantMessageId rather than descendant lookup.
+    const { get, store } = makeStore();
+    store.messagesMap = { [KEY]: [{ content: '', id: 'a-empty', role: 'assistant' }] } as any;
+
+    await buildRunLifecycle(get, {
+      context: CONTEXT,
+      parentMessageId: 'a-empty',
+      parentMessageType: 'assistant',
+      runId: OP,
+      runScope: 'top_level',
+      runtimeType: 'client',
+    }).completeRun({
+      context: CONTEXT,
+      operationId: OP,
+      runId: OP,
+      runScope: 'top_level',
+      runtimeStatus: 'interrupted',
+      runtimeType: 'client',
+    });
+
+    expect(store.optimisticDeleteMessage).toHaveBeenCalledWith('a-empty', { operationId: OP });
+  });
+
+  it('keeps a placeholder that has streamed content', async () => {
+    const { get, store } = makeStore();
+    store.messagesMap = {
+      [KEY]: [{ ...emptyAssistant, content: 'partial answer' }],
+    } as any;
+
+    await lifecycle('client', get).completeRun(
+      completeEvent('client', { runtimeStatus: 'interrupted' }),
+    );
+
+    expect(store.optimisticDeleteMessage).not.toHaveBeenCalled();
+  });
+
+  it('keeps a placeholder that recorded an error (so the failure stays visible)', async () => {
+    const { get, store } = makeStore();
+    store.messagesMap = {
+      [KEY]: [{ ...emptyAssistant, error: { type: 'ProviderBizError' } }],
+    } as any;
+
+    await lifecycle('client', get).completeRun(
+      completeEvent('client', { runtimeStatus: 'interrupted' }),
+    );
+
+    expect(store.optimisticDeleteMessage).not.toHaveBeenCalled();
+  });
+
+  it('does NOT delete on a successful client run (only the cancel disposition cleans up)', async () => {
+    const { get, store } = makeStore();
+    store.messagesMap = { [KEY]: [emptyAssistant] } as any;
+
+    await lifecycle('client', get).completeRun(completeEvent('client', { runtimeStatus: 'done' }));
+
+    expect(store.optimisticDeleteMessage).not.toHaveBeenCalled();
+  });
+
+  it('does NOT delete for gateway cancel (client transport owns this cleanup)', async () => {
+    const { get, store } = makeStore();
+    store.messagesMap = { [KEY]: [emptyAssistant] } as any;
+
+    await lifecycle('gateway', get).completeRun(completeEvent('gateway', { status: 'cancelled' }));
+
+    expect(store.optimisticDeleteMessage).not.toHaveBeenCalled();
+  });
+
+  // Regression for #17864: deleteMessage resolves via the active conversation
+  // only, so it must not be the one used once the user has switched topics.
+  it('still deletes the placeholder when the user switched topics before the cleanup ran', async () => {
+    const { get, removeMessage, store } = makeStore();
+
+    store.messagesMap = { [KEY]: [emptyAssistant] } as any;
+    store.activeTopicId = 't2';
+    expect(displayMessageSelectors.getDisplayMessageById('a-empty')(store as any)).toBeUndefined();
+
+    await lifecycle('client', get).completeRun(
+      completeEvent('client', { runtimeStatus: 'interrupted' }),
+    );
+
+    expect(removeMessage).toHaveBeenCalledWith('a-empty', CONTEXT);
+    expect(store.optimisticDeleteMessage).toHaveBeenCalledWith('a-empty', { operationId: OP });
   });
 });
 
