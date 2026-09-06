@@ -11,8 +11,11 @@ import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import TopicEmpty from '@/features/TopicEmpty';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
 
 import TopicItem from '../List/Item';
+import { backfillTopicPages } from './pagination';
 
 const ITEM_HEIGHT = 36; // Each topic item height (NavItem height, no vertical padding)
 
@@ -67,6 +70,7 @@ const Content = memo<ContentProps>(({ open, searchKeyword }) => {
   const searchResults = useChatStore(topicSelectors.searchTopics, isEqual);
   const allTopicList = useChatStore(topicSelectors.displayTopics, isEqual);
   const isSearchingTopic = useChatStore(topicSelectors.isSearchingTopic);
+  const topicPageSize = useGlobalStore(systemStatusSelectors.topicPageSize);
 
   // Use search results if searching, otherwise use regular list
   const activeTopicList = isSearching ? searchResults : allTopicList;
@@ -96,22 +100,33 @@ const Content = memo<ContentProps>(({ open, searchKeyword }) => {
       if (count < itemsNeeded && hasMore) {
         fetchedCountRef.current = count;
 
-        // Calculate pages needed and load once
-        const itemsToLoad = itemsNeeded - count;
-        const pagesNeeded = Math.ceil(itemsToLoad / 20); // Assume 20 items per page
-
         // Load the required pages
-        const loadPages = async () => {
-          for (let i = 0; i < pagesNeeded && hasMore; i++) {
-            await loadMoreTopics();
-          }
-        };
-        loadPages();
+        void backfillTopicPages({
+          canLoadMore: () => {
+            const state = useChatStore.getState();
+            return (
+              topicSelectors.hasMoreTopics(state) && !topicSelectors.loadMoreTopicsError(state)
+            );
+          },
+          count,
+          itemsNeeded,
+          loadMore: loadMoreTopics,
+          pageSize: topicPageSize,
+        });
       }
     }, 100);
 
     return () => clearTimeout(timer);
-  }, [open, count, hasMore, loadMoreTopics, isLoadingMore, loadMoreError, isSearching]);
+  }, [
+    open,
+    count,
+    hasMore,
+    loadMoreTopics,
+    isLoadingMore,
+    loadMoreError,
+    isSearching,
+    topicPageSize,
+  ]);
 
   // Reset initialized flag when drawer closes
   useEffect(() => {
