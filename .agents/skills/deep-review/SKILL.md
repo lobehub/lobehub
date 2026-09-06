@@ -1,6 +1,6 @@
 ---
 name: deep-review
-description: 'Multi-dimensional code review. Use when the user asks to review, evaluate, or audit a PR, diff, branch, or pasted change — including informal review asks like "look at this change for problems" — via light mode: one independent reviewer against the dimension quick checklists. Not for explain-only questions about what a change does or why. Deep mode runs only on explicit invocation (/deep-review), and normally at most once per logical requirement.'
+description: 'Review PRs, diffs, or branches for problems using an independent reviewer. Not for explanation-only requests. Full multi-agent review requires an explicit deep-review request.'
 ---
 
 # Deep Review
