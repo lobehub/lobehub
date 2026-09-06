@@ -8,6 +8,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useChatStore } from '@/store/chat';
+
 import ErrorMessageExtra, { useErrorContent } from './index';
 
 const navigateMock = vi.fn();
@@ -17,10 +19,19 @@ const dynamicComponentPropsMock = vi.hoisted(() => vi.fn());
 const serverConfigMock = vi.hoisted(() => ({ enableBusinessFeatures: false }));
 const delAndRegenerateMessageMock = vi.hoisted(() => vi.fn());
 const detectHeterogeneousAgentCommandMock = vi.hoisted(() => vi.fn());
+const cancelHeteroContinuationMock = vi.hoisted(() => vi.fn());
 // Keyed by message id so a test can decide whether `data.id` is a top-level
 // displayMessage hanging off a user turn — the condition that decides whether a
 // self-contained retry can actually do anything.
 const displayMessageMock = vi.hoisted(() => new Map<string, { parentId?: string }>());
+const conversationContextMock = vi.hoisted(
+  () =>
+    ({ agentId: undefined, topicId: undefined }) as {
+      agentId?: string;
+      topicId?: string;
+    },
+);
+const createTopicForwardModalMock = vi.hoisted(() => vi.fn());
 // Stands in for whatever card a downstream build installs into the business slot.
 const businessSlot = vi.hoisted(() => ({ render: false }));
 const missingTranslationKeys = vi.hoisted(() => new Set<string>());
@@ -110,16 +121,19 @@ vi.mock('@/features/Electron/HeterogeneousAgent/StatusGuide', () => ({
     error,
     onDismiss,
     onRetry,
+    onTransfer,
   }: {
     agentType?: string;
     error?: { code?: string };
     onDismiss?: () => void;
     onRetry?: () => void;
+    onTransfer?: () => void;
   }) => (
     <div>
       {`guide:${agentType}:${error?.code}`}
       {onDismiss && <button onClick={onDismiss}>dismiss</button>}
       {onRetry && <button onClick={onRetry}>guide-retry</button>}
+      {onTransfer && <button onClick={onTransfer}>transfer</button>}
     </div>
   ),
 }));
@@ -128,6 +142,10 @@ vi.mock('@/services/electron/binary', () => ({
   binaryService: {
     detectHeterogeneousAgentCommand: detectHeterogeneousAgentCommandMock,
   },
+}));
+
+vi.mock('@/features/Conversation/MessageForward/TopicForwardModal', () => ({
+  createTopicForwardModal: createTopicForwardModalMock,
 }));
 
 vi.mock('@/hooks/useProviderName', () => ({
@@ -155,11 +173,17 @@ vi.mock('@/store/serverConfig', () => ({
 }));
 
 vi.mock('@/features/Conversation/store', () => ({
+  contextSelectors: {
+    agentId: (state: { context: typeof conversationContextMock }) => state.context.agentId,
+    topicId: (state: { context: typeof conversationContextMock }) => state.context.topicId,
+  },
   dataSelectors: {
     getDisplayMessageById: (id: string) => () => displayMessageMock.get(id),
   },
   useConversationStore: (selector: (state: unknown) => unknown) =>
     selector({
+      context: conversationContextMock,
+      cancelHeteroContinuation: cancelHeteroContinuationMock,
       delAndRegenerateMessage: delAndRegenerateMessageMock,
       deleteMessage: vi.fn(),
       heteroOverloadRetryAttempts: {},
@@ -194,7 +218,12 @@ describe('ErrorMessageExtra', () => {
     });
     updateMessageErrorMock.mockClear();
     delAndRegenerateMessageMock.mockClear();
+    cancelHeteroContinuationMock.mockClear();
     displayMessageMock.clear();
+    conversationContextMock.agentId = undefined;
+    conversationContextMock.topicId = undefined;
+    createTopicForwardModalMock.mockClear();
+    useChatStore.setState({ activeTopicId: null as any, topicDetailMap: {} });
   });
 
   // Regression: the standalone surfaces (Assistant / Task / AgentCouncil) render
@@ -518,6 +547,8 @@ describe('ErrorMessageExtra', () => {
   });
 
   it('renders the rate-limit guide when the refreshed error carries rate_limit code', () => {
+    conversationContextMock.agentId = 'source-agent';
+    conversationContextMock.topicId = 'source-topic';
     render(
       <ErrorMessageExtra
         error={{ message: 'response.undefined' }}
@@ -536,6 +567,58 @@ describe('ErrorMessageExtra', () => {
     );
 
     expect(screen.getByText('guide:claude-code:rate_limit')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('transfer'));
+    expect(createTopicForwardModalMock).toHaveBeenCalledWith({
+      onForwardSuccess: undefined,
+      sourceAgentId: 'source-agent',
+      topicId: 'source-topic',
+      topicTitle: '',
+    });
+  });
+
+  it('cancels the scheduled conversation topic after handoff even when another topic is active', () => {
+    useChatStore.setState({
+      activeTopicId: 'main-topic',
+      topicDetailMap: {
+        'main-topic': {
+          id: 'main-topic',
+          status: 'active',
+          title: 'Main topic',
+        } as any,
+        'source-topic': {
+          id: 'source-topic',
+          metadata: { scheduledRun: { kind: 'resume_after_rate_limit' } },
+          status: 'scheduled',
+          title: 'Review task',
+        } as any,
+      },
+    });
+    conversationContextMock.agentId = 'source-agent';
+    conversationContextMock.topicId = 'source-topic';
+
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.undefined' }}
+        data={{
+          error: {
+            body: {
+              agentType: 'codex',
+              code: HeterogeneousAgentSessionErrorCode.RateLimit,
+              message: 'rate limited',
+            },
+            message: 'rate limited',
+          } as any,
+          id: 'msg-rate-limit',
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('transfer'));
+    expect(cancelHeteroContinuationMock).not.toHaveBeenCalled();
+
+    const props = createTopicForwardModalMock.mock.calls[0][0];
+    props.onForwardSuccess();
+    expect(cancelHeteroContinuationMock).toHaveBeenCalledWith('source-topic');
   });
 
   it('renders the working-directory guide instead of the CLI install guide', () => {

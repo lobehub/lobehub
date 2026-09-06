@@ -97,12 +97,71 @@ export class ChatForwardActionImpl {
   };
 
   forwardTopic = async ({
-    sourceAgentId,
+    header,
     topicId,
-    ...params
+    note,
+    onTopicCreated,
+    roleLabel,
+    sourceAgentId,
+    targets,
   }: ForwardTopicParams): Promise<ForwardResult> => {
-    const messages = await messageService.getMessages({ agentId: sourceAgentId, topicId });
-    return this.forwardMessages({ ...params, messages });
+    if (targets.length === 0) return { failed: [], succeeded: [] };
+
+    const cliInstruction = [
+      `Use the LobeHub CLI to read the full conversation history for topic ${topicId}:`,
+      '',
+      `lh topic view ${topicId} -L 500`,
+      '',
+      'Every message it prints is the context from the previous Agent. If the topic has more than 500 messages, page through the remainder with --from and --to. Continue the work from where it left off and handle the remaining request item by item.',
+      note?.trim() ? `Additional instructions from the user:\n\n${note.trim()}` : undefined,
+    ]
+      .filter(Boolean)
+      .join('\n');
+    let transcriptPromise: Promise<string> | undefined;
+    const getTranscript = () => {
+      transcriptPromise ??= messageService
+        .getMessages({ agentId: sourceAgentId, topicId })
+        .then((messages) => {
+          const transcript = buildForwardedContent(messages, { header, roleLabel });
+          return note?.trim() ? `${transcript}\n\n${note.trim()}` : transcript;
+        });
+      return transcriptPromise;
+    };
+    const settled = await Promise.allSettled(
+      targets.map(async (target) => {
+        let config = agentSelectors.getAgentConfigById(target.id)(getAgentStoreState());
+        if (!config) {
+          const fetchedConfig = await agentService.getAgentConfigById(target.id);
+          if (!fetchedConfig) throw new Error(`Forwarding target agent not found: ${target.id}`);
+          config = fetchedConfig;
+          getAgentStoreState().internal_dispatchAgentMap(target.id, fetchedConfig);
+        }
+
+        const content = config.agencyConfig?.heterogeneousProvider
+          ? cliInstruction
+          : await getTranscript();
+
+        const result = await this.#get().sendMessage({
+          context: { agentId: target.id, isNew: true, isolatedTopic: true, scope: 'main' },
+          message: content,
+          messages: [],
+          onTopicCreated: (createdTopicId) => onTopicCreated?.(target, createdTopicId),
+        });
+        if (!result?.createdTopicId)
+          throw new Error(`Forwarding did not create a topic for ${target.id}`);
+
+        return { agentId: target.id, topicId: result.createdTopicId };
+      }),
+    );
+
+    return settled.reduce<ForwardResult>(
+      (result, item, index) => {
+        if (item.status === 'fulfilled') result.succeeded.push(item.value);
+        else result.failed.push({ agentId: targets[index].id, error: item.reason });
+        return result;
+      },
+      { failed: [], succeeded: [] },
+    );
   };
 }
 

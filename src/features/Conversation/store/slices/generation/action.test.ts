@@ -29,6 +29,8 @@ const mockFailOperation = vi.fn();
 const mockExecuteClientAgent = vi.fn();
 const mockIsGatewayModeEnabled = vi.fn(() => false);
 const mockExecuteGatewayAgent = vi.fn();
+const mockUpdateTopicMetadata = vi.fn();
+const mockUpdateTopicStatus = vi.fn();
 
 vi.mock('@/store/chat', () => ({
   useChatStore: {
@@ -57,6 +59,8 @@ vi.mock('@/store/chat', () => ({
       executeClientAgent: mockExecuteClientAgent,
       isGatewayModeEnabled: mockIsGatewayModeEnabled,
       executeGatewayAgent: mockExecuteGatewayAgent,
+      updateTopicMetadata: mockUpdateTopicMetadata,
+      updateTopicStatus: mockUpdateTopicStatus,
     })),
     setState: vi.fn(),
   },
@@ -69,6 +73,22 @@ describe('Generation Actions', () => {
 
   afterEach(() => {
     vi.clearAllTimers();
+  });
+
+  describe('cancelHeteroContinuation', () => {
+    it('cancels the captured source topic after navigation changes the conversation context', async () => {
+      const store = createStore({
+        context: { agentId: 'target-agent', threadId: null, topicId: 'target-topic' },
+      });
+
+      await store.getState().cancelHeteroContinuation('source-topic');
+
+      expect(mockUpdateTopicStatus).toHaveBeenCalledWith({
+        status: 'failed',
+        topicId: 'source-topic',
+      });
+      expect(mockUpdateTopicMetadata).toHaveBeenCalledWith('source-topic', { scheduledRun: null });
+    });
   });
 
   describe('stopGenerating', () => {

@@ -55,12 +55,14 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 export interface TopicForwardContentProps {
+  onForwardSuccess?: () => void;
   sourceAgentId: string;
   topicId: string;
   topicTitle: string;
 }
 
 export const TopicForwardContent = ({
+  onForwardSuccess,
   sourceAgentId,
   topicId,
   topicTitle,
@@ -71,7 +73,11 @@ export const TopicForwardContent = ({
   const [note, setNote] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const agents = useHomeStore(homeAgentListSelectors.allAgents);
-  const forwardTopic = useForwardTopic({ agentId: sourceAgentId, topicId });
+  const forwardTopic = useForwardTopic({
+    agentId: sourceAgentId,
+    onSuccess: onForwardSuccess,
+    topicId,
+  });
 
   useFetchAgentList();
 

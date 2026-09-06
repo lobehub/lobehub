@@ -1,6 +1,6 @@
 import { Flexbox } from '@lobehub/ui';
 import { Button, Text } from '@lobehub/ui/base-ui';
-import { CalendarClock, Play, RotateCcw } from 'lucide-react';
+import { CalendarClock, Forward, Play, RotateCcw } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -21,6 +21,7 @@ const RateLimitState = ({
   onDismiss,
   onOpenSystemTools,
   onRetry,
+  onTransfer,
   schedule,
   variant,
 }: HeterogeneousAgentGuideStateProps) => {
@@ -106,9 +107,14 @@ const RateLimitState = ({
           <Button size="small" onClick={schedule.onCancel}>
             {t('cliRateLimitGuide.schedule.cancel')}
           </Button>
-          <Button icon={<Play size={14} />} size="small" type="primary" onClick={schedule.onRunNow}>
+          <Button icon={<Play size={14} />} size="small" onClick={schedule.onRunNow}>
             {t('cliRateLimitGuide.schedule.runNow')}
           </Button>
+          {onTransfer && (
+            <Button icon={<Forward size={14} />} size="small" type="primary" onClick={onTransfer}>
+              {t('cliRateLimitGuide.actions.transfer')}
+            </Button>
+          )}
         </Flexbox>
       );
     }
@@ -116,23 +122,23 @@ const RateLimitState = ({
     return (
       <Flexbox horizontal gap={8} justify="flex-end" style={{ flexWrap: 'wrap' }}>
         {onRetry && (
-          <Button icon={<RotateCcw size={14} />} size="small" onClick={onRetry}>
+          <Button icon={<RotateCcw size={14} />} size="small" type="text" onClick={onRetry}>
             {t('cliRateLimitGuide.schedule.retryNow')}
           </Button>
         )}
-        <Button
-          icon={<CalendarClock size={14} />}
-          size="small"
-          type="primary"
-          onClick={schedule.onSchedule}
-        >
+        <Button icon={<CalendarClock size={14} />} size="small" onClick={schedule.onSchedule}>
           {relativeDuration
             ? t('cliRateLimitGuide.schedule.continueAfter', { duration: relativeDuration })
             : t('cliRateLimitGuide.schedule.continueAfterReset')}
         </Button>
+        {onTransfer && (
+          <Button icon={<Forward size={14} />} size="small" type="primary" onClick={onTransfer}>
+            {t('cliRateLimitGuide.actions.transfer')}
+          </Button>
+        )}
       </Flexbox>
     );
-  }, [onRetry, relativeDuration, schedule, t]);
+  }, [onRetry, onTransfer, relativeDuration, schedule, t]);
 
   const isScheduled = Boolean(schedule?.isScheduled);
   const title = isScheduled

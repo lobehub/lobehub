@@ -16,6 +16,7 @@ describe('ChatForwardAction', () => {
     vi.spyOn(agentService, 'getAgentConfigById').mockImplementation(
       async (id) => ({ id }) as never,
     );
+    vi.spyOn(messageService, 'getMessages').mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -90,16 +91,58 @@ describe('ChatForwardAction', () => {
     expect(result.failed[0].agentId).toBe('missing-agent');
   });
 
-  it('loads topic messages before forwarding them', async () => {
-    vi.spyOn(messageService, 'getMessages').mockResolvedValue([message('user', 'from topic')]);
-    const sendMessage = vi.fn().mockResolvedValue({ createdTopicId: 'new-topic' });
+  it('asks the target agent to load the source topic through the LobeHub CLI', async () => {
+    vi.mocked(agentService.getAgentConfigById).mockResolvedValueOnce({
+      agencyConfig: { heterogeneousProvider: { type: 'codex' } },
+      id: 'target-agent',
+    } as never);
+    const onTopicCreated = vi.fn();
+    const sendMessage = vi.fn().mockImplementation(async ({ onTopicCreated: notify }) => {
+      notify('new-topic');
+      return { createdTopicId: 'new-topic' };
+    });
     const action = new ChatForwardActionImpl(vi.fn() as never, () => ({ sendMessage }) as never);
 
     const result = await action.forwardTopic({
       header: 'Forwarded topic',
+      note: 'Finish the review',
+      onTopicCreated,
       roleLabel: (role) => role,
       sourceAgentId: 'source-agent',
       targets: [{ id: 'target-agent' }],
+      topicId: 'source-topic',
+    });
+
+    expect(onTopicCreated).toHaveBeenCalledWith({ id: 'target-agent' }, 'new-topic');
+    expect(sendMessage.mock.calls[0][0].message).toContain('lh topic view source-topic -L 500');
+    expect(sendMessage.mock.calls[0][0].message).toContain('Finish the review');
+    expect(sendMessage.mock.calls[0][0].context).toEqual({
+      agentId: 'target-agent',
+      isNew: true,
+      isolatedTopic: true,
+      scope: 'main',
+    });
+    expect(result.succeeded).toEqual([{ agentId: 'target-agent', topicId: 'new-topic' }]);
+    expect(messageService.getMessages).not.toHaveBeenCalled();
+  });
+
+  it('keeps transcript context when the target agent cannot use the LobeHub CLI', async () => {
+    vi.mocked(messageService.getMessages).mockResolvedValueOnce([
+      message('user', 'question'),
+      message('assistant', 'answer'),
+    ]);
+    const sendMessage = vi.fn().mockImplementation(async ({ onTopicCreated: notify }) => {
+      notify('new-topic');
+      return { createdTopicId: 'new-topic' };
+    });
+    const action = new ChatForwardActionImpl(vi.fn() as never, () => ({ sendMessage }) as never);
+
+    await action.forwardTopic({
+      header: 'Forwarded topic',
+      note: 'Continue carefully',
+      roleLabel: (role) => role,
+      sourceAgentId: 'source-agent',
+      targets: [{ id: 'plain-agent' }],
       topicId: 'source-topic',
     });
 
@@ -107,6 +150,9 @@ describe('ChatForwardAction', () => {
       agentId: 'source-agent',
       topicId: 'source-topic',
     });
-    expect(result.succeeded).toEqual([{ agentId: 'target-agent', topicId: 'new-topic' }]);
+    expect(sendMessage.mock.calls[0][0].message).toBe(
+      'Forwarded topic\n\n---\n\n**user**\n\nquestion\n\n---\n\n**assistant**\n\nanswer\n\nContinue carefully',
+    );
+    expect(sendMessage.mock.calls[0][0].message).not.toContain('lh topic view');
   });
 });
