@@ -14,7 +14,7 @@ Periodic review of the project-local skill set under `.agents/skills/`. The goal
 
 ### 1 — Inventory
 
-Build a fresh census of all SKILL.md files. Do NOT trust any prior cached list.
+Build a current inventory, including symlinked skills. Look for inventory/check helpers in `package.json` scripts and `.agents/scripts/`; reuse them when available and inspect their supported options rather than duplicating their checks. Read each description and inspect bodies where routing, overlap, or stale references need investigation. Without an inventory helper:
 
 ```bash
 find -L .agents/skills -name SKILL.md | wc -l                      # total count, including symlinked skills
@@ -23,19 +23,7 @@ find -L .agents/skills -name SKILL.md -exec wc -l {} \; | sort -rn # by body len
 
 Group by domain in a mental table (DB / state / UI / agent / testing / workflow / docs / etc.). Note new arrivals since last audit (`git log --since="1 week ago" -- .agents/skills/`).
 
-### 2 — Pull frontmatter for all skills
-
-```bash
-# Extract name + description for each SKILL.md
-for f in .agents/skills/*/SKILL.md; do
-  echo "=== $(basename $(dirname $f)) ==="
-  awk '/^---$/{c++; next} c==1' "$f" | head -20
-done
-```
-
-Read the description block of every skill. The body can stay unread unless step 4 flags it.
-
-### 3 — Detect overlap / redundancy
+### 2 — Detect overlap / redundancy
 
 For each pair within the same domain, ask:
 
@@ -50,25 +38,15 @@ Common false positives (do NOT merge):
 - `agent-runtime-hooks` vs `agent-tracing` vs `agent-signal` — different surfaces of the agent system.
 - `testing` vs `acceptance` — different test types.
 
-### 4 — Description format consistency
+### 3 — Description and invocation boundaries
 
-Apply the **standard template**:
+Check whether the description makes the skill's purpose and selection boundary clear and matches its body. Flag broad triggers that attract unrelated tasks, missing distinctions between overlapping skills, and stale names or references.
 
-```
-{Topic + key conventions or scope}. Use when {scenarios — verbs + nouns}. Triggers on {`code-symbols`, 'natural phrases', '中文'}.
-```
+Do not require literal phrases such as `Use when` or `Triggers on`, a fixed sentence structure, or a description length proportional to the body. These are writing choices, not runtime routing controls. Treat script wording heuristics as review hints, not proof of a defect.
 
-Skills with `disable-model-invocation: true` (user-invoked only, slash commands) don't need `Triggers on` — they're never auto-routed.
+Verify explicit-only invocation settings against the active harness's supported metadata, such as frontmatter `disable-model-invocation` or `policy.allow_implicit_invocation` in `agents/openai.yaml`. Do not assume different harnesses recognize the same fields. Preserve the intended policy; do not infer runtime behavior from description wording alone.
 
-Flag descriptions that:
-
-- ❌ Have NO `Use when` clause (model can't decide when to load it).
-- ❌ Have NO `Triggers on` clause (and aren't `disable-model-invocation`).
-- ❌ Use weird formats (numbered lists `(1)(2)(3)`, `Triggers:` colon instead of `Triggers on`, `MUST use when ...` as opening word).
-- ❌ Are dramatically terse for a 200+ line body, or dramatically verbose for a 60-line body.
-- ❌ Reference deleted/renamed skills.
-
-### 5 — Stale-skill check
+### 4 — Stale-skill check
 
 For narrow domain skills (e.g. `response-compliance`, one-off CLI workflows):
 
@@ -80,7 +58,7 @@ git log --since="3 months ago" -- .agents/skills/ < skill > /SKILL.md # is it be
 
 If the underlying surface is gone and the skill hasn't been edited in 3+ months → flag for archival.
 
-### 5b — Living-log freshness (`common-mistakes.md`, `probe-mock-patterns.md`)
+### 4b — Living-log freshness (`common-mistakes.md`, `probe-mock-patterns.md`)
 
 Both layers (`.agents/skills/acceptance/references/` generic, `.agents/acceptance/`
 project) are injected into every acceptance round, so a stale entry is a stale
@@ -96,7 +74,7 @@ rg -n 'holds-while: (?!always)' -P .agents/acceptance/common-mistakes.md # the m
 - An entry that names a project script from the generic layer, or a product noun, is in the wrong layer.
 - Duplicate ids (`rg -o '^### [ML]-?[A-Z]?\d+' | sort | uniq -d`).
 
-### 6 — Cross-reference integrity
+### 5 — Cross-reference integrity
 
 Any skill body mentioning another skill by name:
 
@@ -107,33 +85,9 @@ rg -o '`[a-z][a-z0-9-]+`' .agents/skills/*/SKILL.md | grep -v ':\s*$' | sort -u
 
 For each name extracted, confirm `.agents/skills/<name>/SKILL.md` exists. Broken references happen after renames — fix them in the same audit pass.
 
-### 7 — Output report
+### 6 — Output report
 
-Produce a markdown summary back to the user with the same structure as the original audit (this skill was created during one):
-
-```markdown
-## 📊 Inventory
-
-{count, domain breakdown}
-
-## 🎯 Recommendations
-
-### 🔴 High confidence
-
-- {action} — {reason}
-
-### 🟡 Medium confidence
-
-- {action} — {reason needs verification}
-
-### 🟢 Low confidence / no-op
-
-- {item considered but skipping because ...}
-
-## 📋 Suggested order
-
-{table of actions with risk + LOC estimate}
-```
+Report actionable findings with file references, evidence, and the proposed change. Distinguish confirmed defects from uncertain candidates. Include inventory totals or an execution order only when they help the user decide; no fixed headings, template, or line-count estimates are required.
 
 End by asking the user which actions to apply — do NOT auto-apply unless the user passed `--apply` and even then confirm destructive deletes individually.
 
