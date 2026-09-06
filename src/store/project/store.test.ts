@@ -8,7 +8,9 @@ import { useCurrentProjectDetail, useCurrentProjectList, useProjectStore } from 
 
 const mocks = vi.hoisted(() => ({
   activeWorkspaceId: null as string | null,
-  swrConfigs: [] as Array<{ onSuccess: (response: unknown) => void }>,
+  cacheScopes: [] as string[],
+  swrData: undefined as unknown,
+  swrConfigs: [] as Array<{ onSuccess?: (response: unknown) => void }>,
 }));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
@@ -16,12 +18,20 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => mocks.activeWorkspaceId,
 }));
 
+vi.mock('@/libs/swr/useCacheScope', () => ({
+  getCacheScope: () => mocks.cacheScopes.shift() ?? mocks.activeWorkspaceId ?? 'personal',
+}));
+
 vi.mock('@/libs/swr', () => ({
   mutate: vi.fn(),
   useClientDataSWR: vi.fn(
-    (_key: unknown, _fetcher: unknown, config: { onSuccess: (response: unknown) => void }) => {
+    (
+      _key: unknown,
+      _fetcher: unknown,
+      config: { onSuccess?: (response: unknown) => void } = {},
+    ) => {
       mocks.swrConfigs.push(config);
-      return {};
+      return { data: mocks.swrData };
     },
   ),
 }));
@@ -29,19 +39,41 @@ vi.mock('@/libs/swr', () => ({
 describe('project store workspace scope', () => {
   beforeEach(() => {
     mocks.activeWorkspaceId = null;
+    mocks.cacheScopes = [];
+    mocks.swrData = undefined;
     mocks.swrConfigs = [];
     useProjectStore.setState({ projectDetails: {}, projectLists: {} });
+  });
+
+  it('restores a persisted project list into the store before the first paint', () => {
+    const cachedProject = { id: 'cached-project', name: 'Cached project' } as ProjectListItem;
+    mocks.swrData = { data: [cachedProject], message: 'cached', success: true };
+
+    renderHook(() => useProjectStore.getState().useFetchProjectList());
+
+    expect(useProjectStore.getState().projectLists.personal).toEqual([cachedProject]);
+  });
+
+  it('ignores a project response from a workspace that is no longer active', () => {
+    const staleProject = { id: 'stale-project' } as ProjectListItem;
+    mocks.swrData = { data: [staleProject], message: 'stale', success: true };
+    mocks.cacheScopes = ['user-1:personal', 'user-1:workspace-1'];
+
+    renderHook(() => useProjectStore.getState().useFetchProjectList());
+
+    expect(useProjectStore.getState().projectLists.personal).toBeUndefined();
+    expect(useProjectStore.getState().projectLists['workspace-1']).toBeUndefined();
   });
 
   it('keeps project lists isolated between personal and workspace contexts', () => {
     const personalProject = { id: 'personal-project' } as ProjectListItem;
     const workspaceProject = { id: 'workspace-project' } as ProjectListItem;
+    mocks.swrData = { data: [personalProject], success: true };
     const { rerender } = renderHook(() => useProjectStore.getState().useFetchProjectList());
 
-    act(() => mocks.swrConfigs.at(-1)?.onSuccess({ data: [personalProject], success: true }));
     mocks.activeWorkspaceId = 'workspace-1';
+    mocks.swrData = { data: [workspaceProject], success: true };
     rerender();
-    act(() => mocks.swrConfigs.at(-1)?.onSuccess({ data: [workspaceProject], success: true }));
 
     expect(renderHook(() => useCurrentProjectList()).result.current).toEqual([workspaceProject]);
 

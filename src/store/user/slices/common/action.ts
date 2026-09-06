@@ -17,6 +17,7 @@ import { type UserSettings } from '@/types/user/settings';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
+import { writeUserDisplaySnapshot } from '../../displaySnapshot';
 import { userGeneralSettingsSelectors } from '../settings/selectors';
 
 const n = setNamespace('common');
@@ -128,6 +129,11 @@ export class CommonActionImpl {
             // merge preference
             const isEmpty = Object.keys(data.preference || {}).length === 0;
             const preference = isEmpty ? DEFAULT_PREFERENCE : data.preference;
+
+            writeUserDisplaySnapshot(data.userId, {
+              avatar: data.avatar ?? '',
+              preference,
+            });
 
             // if there is avatar or userId (from client DB), update it into user
             const user =

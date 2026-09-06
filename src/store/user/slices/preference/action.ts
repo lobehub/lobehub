@@ -5,6 +5,8 @@ import { type UserGuide, type UserLab, type UserPreference } from '@/types/user'
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
+import { writeUserDisplaySnapshot } from '../../displaySnapshot';
+
 const n = setNamespace('preference');
 
 type Setter = StoreSetter<UserStore>;
@@ -35,10 +37,15 @@ export class PreferenceActionImpl {
 
   updatePreference = async (preference: Partial<UserPreference>, action?: any): Promise<void> => {
     const nextPreference = merge(this.#get().preference, preference);
+    const userId = this.#get().user?.id;
 
     this.#set({ preference: nextPreference }, false, action || n('updatePreference'));
 
     await userService.updatePreference(nextPreference);
+
+    writeUserDisplaySnapshot(userId, {
+      preference: nextPreference,
+    });
   };
 }
 

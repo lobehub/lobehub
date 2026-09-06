@@ -1,3 +1,4 @@
+import { useLayoutEffect } from 'react';
 import type { SWRResponse } from 'swr';
 import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn } from 'zustand/traditional';
@@ -7,6 +8,7 @@ import {
   useActiveWorkspaceId,
 } from '@/business/client/hooks/useActiveWorkspaceId';
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
 import { projectService } from '@/services/project';
 import { createDevtools } from '@/store/middleware/createDevtools';
 import { expose } from '@/store/middleware/expose';
@@ -103,15 +105,26 @@ export const useProjectStore = createWithEqualityFn<ProjectStore>()(
     useFetchProjectList: (enabled = true) => {
       const workspaceId = useActiveWorkspaceId();
       const scope = projectScopeKey(workspaceId);
+      const cacheScope = getCacheScope();
+      const response = useClientDataSWR(enabled ? LIST_KEY : null, () => projectService.listAll());
+      const { data } = response;
 
-      return useClientDataSWR(enabled ? LIST_KEY : null, () => projectService.listAll(), {
-        onSuccess: (response: ProjectListResponse) =>
-          set(
-            (state) => ({ projectLists: { ...state.projectLists, [scope]: response.data } }),
-            false,
-            'useFetchProjectList/success',
-          ),
-      });
+      useLayoutEffect(() => {
+        /**
+         * SWR cache hits do not invoke onSuccess. Hydrate Zustand before paint
+         * so the sidebar can render the cached list during a cold refresh.
+         * Ignore data captured for an obsolete user or workspace scope.
+         */
+        if (!enabled || !data || cacheScope !== getCacheScope()) return;
+
+        set(
+          (state) => ({ projectLists: { ...state.projectLists, [scope]: data.data } }),
+          false,
+          'useFetchProjectList/hydrate',
+        );
+      }, [cacheScope, data, enabled, scope]);
+
+      return response;
     },
   })),
   shallow,
