@@ -61,13 +61,13 @@ const getToolMessageCreatedAt = (resultMessageId: string | undefined) => (s: Sta
 const findLastBlockId = (block: AssistantContentBlock | undefined): string | undefined => {
   if (!block) return undefined;
 
-  // Check tools for result message ID
-  if (block.tools && block.tools.length > 0) {
-    const lastTool = block.tools.at(-1);
-    return lastTool?.result_msg_id;
-  }
+  // Agent councils are virtual display blocks. Their IDs (`council-*`) are not
+  // persisted messages, so they cannot be used as a parent for a new turn.
+  if (block.council && block.council.length > 0) return undefined;
 
-  // Return block ID
+  // The block owns its tool results. A new conversation turn must continue from
+  // that persisted assistant block, rather than becoming a child of an internal
+  // tool result.
   return block.id;
 };
 
@@ -80,8 +80,10 @@ const findLastMessageIdRecursive = (node: UIChatMessage | undefined): string | u
 
   // Priority 1: Dive into children recursively
   if (node.children && node.children.length > 0) {
-    const lastChild = node.children.at(-1);
-    return findLastBlockId(lastChild);
+    for (const child of node.children.toReversed()) {
+      const childId = findLastBlockId(child);
+      if (childId) return childId;
+    }
   }
 
   // Priority 2: Check tools for result message ID

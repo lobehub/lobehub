@@ -6,12 +6,27 @@ import type { StateCreator } from 'zustand';
 import { getEffectiveConversationModel } from '@/features/Conversation/store/utils/effectiveModel';
 
 import type { Store as ConversationStore } from '../../../action';
+import { dataSelectors } from '../../data/selectors';
 import { isSameConversationContext } from '../../../utils/contextGuard';
 import { type MessageCRUDAction, messageCRUDSlice } from './crud';
 import { type MessageReactionAction, messageReactionSlice } from './reaction';
 import { sendMessage } from './sendMessage';
 import type { MessageStateAction } from './state';
 import { messageStateSlice } from './state';
+
+/**
+ * Resolves the persisted tail of the last rendered message.
+ *
+ * Assistant groups use their first assistant block as a virtual display ID.
+ * New messages must instead parent to the final persisted block in that group
+ * so they remain on the active conversation spine.
+ */
+const getLastPersistedDisplayMessageId = (state: ConversationStore): string | undefined => {
+  const lastDisplayMessage = state.displayMessages.at(-1);
+  if (!lastDisplayMessage) return undefined;
+
+  return dataSelectors.findLastMessageId(lastDisplayMessage.id)(state);
+};
 
 /**
  * Message Actions
@@ -61,9 +76,7 @@ export const messageSlice: StateCreator<
     const { context, hooks } = state;
     const { agentId, topicId, threadId } = context;
 
-    // Get parent message ID
-    const displayMessages = state.displayMessages;
-    const parentId = displayMessages.length > 0 ? displayMessages.at(-1)?.id : undefined;
+    const parentId = getLastPersistedDisplayMessageId(state);
 
     const id = await state.createMessage({
       agentId,
@@ -106,9 +119,7 @@ export const messageSlice: StateCreator<
     const { context, hooks } = state;
     const { agentId, topicId, threadId } = context;
 
-    // Get parent message ID
-    const displayMessages = state.displayMessages;
-    const parentId = displayMessages.length > 0 ? displayMessages.at(-1)?.id : undefined;
+    const parentId = getLastPersistedDisplayMessageId(state);
 
     const id = await state.createMessage({
       agentId,

@@ -1,4 +1,4 @@
-import { type UIChatMessage } from '@lobechat/types';
+import type { AssistantContentBlock, UIChatMessage } from '@lobechat/types';
 import { act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -171,6 +171,84 @@ describe('message convenience actions', () => {
         threadId: undefined,
         topicId: 'topic-1',
       });
+    });
+
+    /**
+     * @example A user presses Alt+Enter after an agent completes a multi-step tool run.
+     */
+    it('continues from the final assistant block instead of the assistant group display id', async () => {
+      const store = createTestStore();
+      const createMessage = vi.fn().mockResolvedValue('message-1');
+      const assistantGroup: UIChatMessage = {
+        children: [
+          { content: 'I will inspect the project.', id: 'assistant-step-1' },
+          { content: 'Here is the final answer.', id: 'assistant-step-2' },
+        ],
+        content: '',
+        createdAt: 1,
+        id: 'assistant-group-root',
+        role: 'assistantGroup',
+        updatedAt: 1,
+      };
+      store.setState({ createMessage, displayMessages: [assistantGroup] });
+
+      await act(async () => {
+        await store.getState().addUserMessage({ message: 'Follow-up without generation' });
+      });
+
+      expect(createMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ parentId: 'assistant-step-2' }),
+      );
+    });
+
+    /**
+     * @example A user presses Alt+Enter after a supervisor broadcasts work to an agent council.
+     */
+    it('continues from the last persisted supervisor block after an in-bubble council', async () => {
+      // ROOT CAUSE:
+      //
+      // FlatListBuilder appends a `council-*` display-only block after the
+      // supervisor's persisted assistant block when a broadcast has no later
+      // supervisor reply. The virtual ID cannot be a database parent ID.
+      //
+      // Before this fix, addUserMessage persisted `council-supervisor-tool-use`
+      // as parentId and the new message could become orphaned from the active
+      // conversation branch.
+      //
+      // We skip the virtual council block and use the preceding persisted
+      // supervisor assistant block as the parent.
+      const store = createTestStore();
+      const createMessage = vi.fn().mockResolvedValue('message-1');
+      const councilBlock: AssistantContentBlock = {
+        content: '',
+        council: [
+          {
+            content: 'Council member response',
+            createdAt: 1,
+            id: 'council-member-1',
+            role: 'assistant',
+            updatedAt: 1,
+          },
+        ],
+        id: 'council-supervisor-tool-use',
+      };
+      const assistantGroup: UIChatMessage = {
+        children: [{ content: 'I will ask the council.', id: 'supervisor-tool-use' }, councilBlock],
+        content: '',
+        createdAt: 1,
+        id: 'assistant-group-root',
+        role: 'assistantGroup',
+        updatedAt: 1,
+      };
+      store.setState({ createMessage, displayMessages: [assistantGroup] });
+
+      await act(async () => {
+        await store.getState().addUserMessage({ message: 'Follow up after broadcast' });
+      });
+
+      expect(createMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ parentId: 'supervisor-tool-use' }),
+      );
     });
 
     it('does not forward groupId to createMessage (canary-aligned context)', async () => {
