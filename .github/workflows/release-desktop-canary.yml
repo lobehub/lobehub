@@ -484,7 +484,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Delete old canary GitHub releases
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const { data: releases } = await github.rest.repos.listReleases({

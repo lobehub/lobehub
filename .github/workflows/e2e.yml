@@ -98,7 +98,7 @@ jobs:
       - name: Find latest canary baseline run
         if: env.SIZE_GATE_ENABLED == 'true'
         id: baseline_run
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           # github-script JSON-encodes return values by default; we need the raw run id string
           result-encoding: string
@@ -143,7 +143,7 @@ jobs:
       - name: Find latest canary entry-graph baseline run
         if: env.SIZE_GATE_ENABLED == 'true'
         id: entry_graph_baseline_run
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           result-encoding: string
           script: |
@@ -184,7 +184,7 @@ jobs:
 
       - name: Comment bundle size report on PR
         if: always() && env.SIZE_GATE_ENABLED == 'true' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
