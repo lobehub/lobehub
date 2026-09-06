@@ -24,6 +24,9 @@ export const getLLMConfig = () => {
       ENABLED_DEEPSEEK: z.boolean(),
       DEEPSEEK_API_KEY: z.string().optional(),
 
+      ENABLED_EDENAI: z.boolean(),
+      EDENAI_API_KEY: z.string().optional(),
+
       ENABLED_GOOGLE: z.boolean(),
       GOOGLE_API_KEY: z.string().optional(),
 
@@ -279,6 +282,9 @@ export const getLLMConfig = () => {
 
       ENABLED_DEEPSEEK: !!process.env.DEEPSEEK_API_KEY,
       DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY,
+
+      ENABLED_EDENAI: !!process.env.EDENAI_API_KEY,
+      EDENAI_API_KEY: process.env.EDENAI_API_KEY,
 
       ENABLED_GOOGLE: process.env.ENABLED_GOOGLE !== '0',
       GOOGLE_API_KEY: process.env.GOOGLE_API_KEY,
