@@ -1,0 +1,47 @@
+---
+title: Using TokenLab in LobeHub
+description: >-
+  Learn how to configure TokenLab in LobeHub and use frontier models through
+  OpenAI-compatible, Responses, Anthropic Messages, and Gemini-native endpoints.
+tags:
+  - LobeHub
+  - TokenLab
+  - API Key
+  - Web UI
+---
+
+# Using TokenLab in LobeHub
+
+[TokenLab](https://tokenlab.sh/) is a unified AI gateway for frontier model access. In LobeHub, TokenLab includes a curated default model list and can also fetch the full model catalog from `https://api.tokenlab.sh/v1/models`.
+
+TokenLab supports multiple API surfaces behind one provider configuration, including OpenAI-compatible Chat Completions, the Responses API, Anthropic Messages, Gemini-native `generateContent`, embeddings, images, videos, audio, realtime, and translations.
+
+<Steps>
+  ### Step 1: Get Your TokenLab API Key
+
+  - Sign in to [TokenLab](https://tokenlab.sh/).
+  - Create an API key from your account settings or developer console.
+  - Keep the key secure, because LobeHub will use it to call TokenLab models.
+
+  ### Step 2: Configure TokenLab in LobeHub
+
+  - Open the `Settings` panel in LobeHub.
+  - Under `AI Providers`, find `TokenLab`.
+  - Enable TokenLab and paste your API key.
+  - Keep the proxy URL as `https://api.tokenlab.sh/v1` unless you use a custom TokenLab-compatible gateway.
+
+  ### Step 3: Choose or Fetch Models
+
+  - Pick one of the built-in TokenLab models, such as GPT-5.5, Claude Sonnet 5, Gemini 3.5 Flash, Grok 4 Fast, DeepSeek V4, GLM 5.2, Qwen 3.7, MiniMax M3, or Kimi K2.7.
+  - Use the model fetcher to pull the latest TokenLab catalog when you need more models than the curated defaults.
+
+  <Callout type={'info'}>
+    LobeHub routes compatible TokenLab models through their native SDK surfaces where possible: Anthropic-family models can use Messages, Gemini-family models can use Gemini-native `generateContent`, and OpenAI-family models can use Chat Completions or Responses.
+  </Callout>
+
+  <Callout type={'warning'}>
+    TokenLab API usage may incur charges. Check your TokenLab account and model pricing before heavy usage.
+  </Callout>
+</Steps>
+
+You are now ready to use TokenLab models in LobeHub.

@@ -841,6 +841,29 @@ NewAPI is a multi-provider model aggregation service that supports automatic mod
 - Default: `-`
 - Example: `-all,+claude-opus-4-1-20250805,+claude-opus-4-20250514=claude-opus-4`
 
+## TokenLab
+
+### `TOKENLAB_API_KEY`
+
+- Type: Required
+- Description: This is the API key you applied for in the TokenLab service.
+- Default: -
+- Example: `sk-xxxxxx...xxxxxx`
+
+### `TOKENLAB_PROXY_URL`
+
+- Type: Optional
+- Description: The base URL of the TokenLab API. TokenLab supports OpenAI-compatible chat, Responses API, Anthropic Messages API, Gemini-native generateContent, embeddings, images, videos, audio, realtime, and translations from the same gateway.
+- Default: `https://api.tokenlab.sh/v1`
+- Example: `https://api.tokenlab.sh/v1`
+
+### `TOKENLAB_MODEL_LIST`
+
+- Type: Optional
+- Description: Used to control the TokenLab model list. Use `+` to add a model, `-` to hide a model, and `model_name=display_name` to customize the display name of a model. Separate multiple entries with commas. The definition syntax follows the same rules as other providers' model lists.
+- Default: `-`
+- Example: `-all,+gpt-5.5,+claude-opus-4-8=Claude Opus 4.8`
+
 ## Straico
 
 ### `STRAICO_API_KEY`
