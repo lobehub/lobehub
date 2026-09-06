@@ -19,7 +19,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Lock closed issues after 7 days of inactivity
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const lockScript = require('./.github/scripts/lock-closed-issues.js');
