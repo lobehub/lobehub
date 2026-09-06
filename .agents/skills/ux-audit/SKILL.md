@@ -232,8 +232,10 @@ An audit is not finished when the findings are written — it is finished when t
   parent (per-page container issue → one sub-issue per finding).
 - **Generalizable gaps → 回灌 `ux` (mandatory).** Every run **must** close the loop back into
   the `ux` skill: for each finding that generalizes beyond this surface, add / strengthen a
-  `ux` checklist item (rule + ✅/❌ example in the right module, **and** mirror a line into the
-  ux Quick review), citing the audited surface as the ❌ example. This is what makes the audit
+  `ux` checklist item (rule + ✅/❌ example in the right module), citing the audited surface
+  as the ❌ example. Add or update a short cue in the ux Quick review only when its existing
+  cues do not cover the requirement; keep examples and implementation details in the module.
+  This is what makes the audit
   _continuous_ — each run leaves the checklists sharper than it found them. If a run genuinely
   surfaces **no** generalizable gap, say so explicitly in the report's Skill-feedback section
   (only validated-existing-rule instances) — silence is not an acceptable close.

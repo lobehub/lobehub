@@ -95,68 +95,65 @@ Read + Edit + Act) — walk each that applies.
 
 ## Quick review checklist
 
-The one-screen scan. Each line links back to a module above for the full rule + examples.
+Use this scan to identify applicable checks, then read the linked module for its full requirements and examples. Keep implementation details and case histories in those modules, not duplicated here.
 
 **Read — viewing data & lists** ([read.md](references/read.md))
 
-- [ ] Empty / loading / error states are all designed; empty is a real page with a CTA. Always-rendered chrome (toolbar/header) still gets a body empty state. If the `Empty` component ships a `search`/no-match variant, **wire it** — don't render `<Empty/>` bare so a zero-result search shows the first-run onboarding.
-- [ ] Error is checked before the empty branch — a failed fetch never renders as empty (read `error`, don't coerce `data ?? [] → Empty`); a detail page reads `error` before falling to `NotFound` (failed-to-load ≠ deleted/404). On a **metrics/dashboard** surface the failure default is a zero-valued object (`?? {…:0}`) that renders as a confident `$0` — read `error` before any aggregate, don't fall through to zeros. A list **merged from a fetched set + a static/frontend set** (`[...fetched, ...placeholders]`) branches `error` before merging — the static half keeps `length > 0`, so a failed fetch renders a plausible partial catalog neither the empty guard nor an error-unread call site catches (channel).
-- [ ] List designed across 1 → 10k rows (virtual scroll / pagination / batch as needed).
-- [ ] Search / filter over a paginated list queries the full set server-side, not just the loaded page (no false "no results" for unfetched rows). Server-side coverage isn't just the search box — **sort, facet filters, the count badges, and any "act on the filtered set" bulk op** run over the full set too; server-side search + client-side sort/filter/counts still false-empties, mis-orders across pages, and under-counts (topics).
-- [ ] Capped/scrollable/virtualized list scrolls the restored active item into view on mount (`block: 'nearest'`, re-run after async rows mount).
-- [ ] Pickers show all valid targets (default/inbox included); empty = truly none.
-- [ ] Large numbers roll the unit at each 1000× (K→M→B→T), never a coefficient ≥ 1000; use the shared `formatUsageValue` / `formatShortenNumber`.
-- [ ] Multi-tab/view surface lands on the tab the entry intent implies (and falls back to a populated view, decided from resolved state); a manual pick sticks.
-- [ ] A data-aware shortcut never makes the collection hub or its collection-level actions unreachable.
-- [ ] Live/polling feed signals new items + offers manual refresh, doesn't reorder under the user, and shows a failed refresh distinctly (not as empty). A bulk/destructive control derived from the live-status map (close-idle / clear-inactive) gates on the query's loaded/error state — "unknown/errored" is ineligible, never treated as the inactive value. Conditional polling starts from **reactive state** (`shouldPoll` → `refreshInterval`), not a function-form `refreshInterval` that never schedules a first timer when its initial value is `0`.
-- [ ] A surface with many navigable entries (a big settings area, a long list) offers search / filter / jump, not browse-only — named as a class norm so an absent box is caught.
-- [ ] Marketplace / registry browse cards carry owned/installed state on the tile (not only on the detail) and trust/verified badges via one card contract, consistent across sibling registries; contribute leads to an in-app submit, not an external repo.
-- [ ] A sidebar / nav / master-detail **list row** composes the canonical `NavItem` (+ `Accordion` / `GroupedAccordion` for groups, `Block variant='filled'` for active), not a hand-rolled `<div>`/`<button>`/`<input>` + bespoke CSS — else the hover/active highlight misaligns from the content box, content bleeds to the panel edge, the search/rename/action-reveal drift from every sibling panel, and the list stays a flat ungrouped dump. Grep `NavItem` before building.
-- [ ] A persistent create/compose affordance above a list is the hero only while the list is **empty**; once populated it doesn't bury the records — cap the editor height (max-height + internal scroll) and/or default it to collapsed when the list has data, so the records keep Center Stage.
-- [ ] A status group/label is true for **every** member — don't fold a distinct lifecycle state (scheduled/queued/snoozed) under a label that asserts another (running/in-progress); give it its own group or a neutral label.
-- [ ] An embedded/quoted document (evidence, log, attached report) folds to a **titled row** (first meaningful line as the label) expanding to full text — not a first-N-px cropped preview with a fade; expanded, it stays in a quiet container with a capped heading scale so it never masquerades as page structure.
+- [ ] Distinguish first-use empty, no search matches, loading, and failure; include a useful body state beneath persistent chrome.
+- [ ] Handle fetch errors before empty, not-found, zero-valued aggregates, or static fallback entries can mask them.
+- [ ] Support lists from 1 to 10k rows with pagination, virtualization, and batch operations as needed.
+- [ ] Search, filters, sort, counts, and bulk scope cover the full dataset, not only loaded pages.
+- [ ] Scroll restored selections into view after their rows exist, without moving already-visible selections.
+- [ ] Pickers include every valid target, including default/inbox options.
+- [ ] Use shared number formatters with K/M/B/T rollover; never display a coefficient ≥ 1000.
+- [ ] Choose the initial view from entry intent and resolved data; preserve manual choices and access to collection-level actions.
+- [ ] Live feeds signal updates, allow manual refresh, preserve reading position, and distinguish refresh failure.
+- [ ] Conditional polling starts reliably; unknown or failed live status never qualifies an item for destructive bulk actions.
+- [ ] Large navigation surfaces offer search, filter, or jump.
+- [ ] Registry cards consistently show owned/installed and trust states; contribution leads to in-app submission.
+- [ ] Reuse canonical list rows and grouping components; see Read §1.10 and the **react** skill.
+- [ ] Keep populated lists visible beneath persistent composers; cap or collapse growing editors.
+- [ ] Status labels describe every member accurately.
+- [ ] Embedded documents collapse to titled rows and expand to full text with subordinate typography.
 
 **Edit — entering & changing content** ([edit.md](references/edit.md))
 
-- [ ] Editors back up in-progress input to durable storage (survives reload, not in-memory only) and recover it after refresh/crash/failed-save; destructive exits warn, never silently discard — including **switching the active item in a master-detail** (a shared form `resetFields()` on selection change silently wipes unsaved input, worst when it's pasted secrets — channel).
-- [ ] Input affordances are stable: static placeholder, no clickable/retrievable content hidden in it.
+- [ ] Persist and recover drafts through reloads, failed saves, and item switches; warn or save before destructive exits.
+- [ ] Keep placeholders stable and meaningful content retrievable outside them.
 
 **Act — operations, flows & buttons** ([act.md](references/act.md))
 
-- [ ] Action leads the user forward; success offers a primary "go to result".
-- [ ] Terminal status screen (success / error `Result`) carries an action: error → escape hatch (retry / back), success → close / go-to-result; no bare `Result` without `extra`, and "auto-closing in Ns" copy only when the close can actually fire.
-- [ ] A result that changes the next step lands in a persistent state (screen / inline), not just a transient toast; "link sent" names the destination + offers resend, failures keep context + offer retry.
-- [ ] Bulk action has a single-item entry (and vice versa).
-- [ ] Async/bulk/irreversible action: confirm → in-progress (locked) → done/error. But a **slow but atomic** confirm-gated op (device/file delete, git op, seconds-long call) closes the confirm **immediately** (non-blocking `onOk`) and shows progress on the **originating surface** (optimistic removal / row spinner), not a confirm dialog held spinning on the round-trip — the modal is not the progress surface.
-- [ ] A long-running / costly async op (generation / export / large upload) offers **Cancel while it runs** (aborts the work, not just delete-after-the-fact) and keeps an in-place **Retry** on error — named as a generation-class norm so an absent Cancel is caught.
-- [ ] Optimistic create / rename / duplicate surfaces failure (caller catches + toasts); never a silent rollback.
-- [ ] Job-control (run / pause / stop / retry) surfaces start/stop failure — a `catch` that only `console.error`s + optimistic-status rollback reads as a dead button; toast at the store-action boundary so every trigger inherits it.
-- [ ] Cross-surface coherence: an entity shown in both a list and its detail stays in sync on edit — shared normalized store or invalidate the sibling (not a gated field subset); a per-surface review misses this seam, so check it explicitly.
-- [ ] Scrollable content + actions/status → pin them in a fixed footer/header, not inside the scroll area (verify at the overflowing state).
-- [ ] Exactly one primary button per surface — and it's the visually dominant control (back / cancel / secondary never out-weighs it; verify on the rendered screen, not from `variant`).
-- [ ] Listed entities have their full lifecycle (not display-only); ops match source (built-in / installed / custom). A protective marker (pin / keep / lock) is honored by every removal path (bulk close, clear-idle, auto-cleanup) — a marker that gates nothing is a decorative no-op.
-- [ ] An action that commits as a specific identity (OAuth consent, send-as, publish-to) shows the identity **and** a switch-account / re-auth path — never locks the user to the currently-logged-in one.
-- [ ] Unrecoverable / wide-blast action (clear-all, delete-account, wipe) needs an explicit gesture (type-to-confirm / checkbox), not one-click danger; and reports partial failure, never silent half-completion.
-- [ ] A minted secret (API key / token) is shown in full once at creation (persistent reveal + Copy), hashed at rest, masked thereafter — never re-revealed from a list.
-- [ ] A store of data _about the user_ (AI memory / personalization / inferred profile) offers correct-or-mark-wrong (not just blind-edit/delete), retain-without-use (per-item pause + global off-switch), export/download, and undo/soft-delete — named as class norms so an absent one is caught.
+- [ ] Success leads to the result; terminal screens provide a working next action or escape.
+- [ ] Persist results that change the next step; keep transient acknowledgements in toasts.
+- [ ] Provide both bulk and single-item action entry points.
+- [ ] Show confirmation, locked progress, and outcome where required. Slow atomic operations close the confirmation and show progress on the originating surface.
+- [ ] Long-running or costly operations support cancellation while running and retry after failure.
+- [ ] Surface optimistic mutation and job-control failures; never silently roll back.
+- [ ] Keep list and detail views synchronized after edits.
+- [ ] Pin actions and status outside scrollable content; verify the overflowing state.
+- [ ] Give each surface one visually dominant primary action.
+- [ ] Provide the lifecycle operations appropriate to each entity's source; honor pin/keep/lock on every removal path.
+- [ ] Show the acting identity and an account-switch or re-authentication path.
+- [ ] Require a deliberate gesture for unrecoverable or broad destructive actions and report partial failure.
+- [ ] Reveal newly minted secrets once with Copy, hash them at rest, and mask subsequent views.
+- [ ] User-memory/profile stores support correction, retaining without use, export, and undo or soft-delete.
 
 **Feedback — loading & system response** ([feedback.md](references/feedback.md))
 
-- [ ] No antd `Spin`; use `NeuralNetworkLoading` / project loaders.
-- [ ] A whole-surface skeleton (route fallback, sidebar panel) matches the settled layout's **structural anchors** — header height, fixed nav block, body start, first group title — measured from the rendered DOM, never derived by reading the JSX. Conditional chrome that changes height (platform flags) is branched with the same condition, a shell with per-route panels drives its skeleton from a per-route shape (a panel with no body gets a skeleton with no body), and data-driven lists align only up to the first group title.
-- [ ] Every loading state can fail: on error or timeout, show a failed state with a Reload/Retry action — never an infinite spinner. In an auto-dismissing surface (upload dock / progress toast), the countdown clears **success only** — a failed item persists with Retry. An error state / retry action that's **modeled in the store but consumed by no surface** (`isXError` selector / `retryX` action with zero `rg` call sites) is still a missing error state — a built-but-orphaned path is a permanent skeleton at the pixel. A **load-more / infinite-scroll** page fetch that fails shows an inline Retry at the list tail (distinct from end-of-list), never a silently vanished "loading more" row with `hasMore` still true that an `IntersectionObserver` re-fires into a silent retry loop (topics).
-- [ ] A compound gate waiting on a secondary/dependent fetch gates on its **in-flight** flag and releases on settled (data / resolved-`null` / error) — never on the dependency being present in a map, or an absent-by-design dependency hangs it forever. An error branch **ordered after** a data-presence gate (`{error && …}` below `if (isLoading = !map[id]) return <Skeleton/>`) is unreachable on first-load failure — it paints only on revalidation, and a resolved-`null` not-found hangs the same permanent skeleton; check error/not-found **before** the gate.
-- [ ] An awaited write that gates navigation/advance resets its busy flag in `finally` + offers retry — a failed write never permanently disables the forward/Back control.
-- [ ] Autosave surfaces a save-state (saving → saved → failed with retry), never a silent write; the save-state enum actually includes a `failed` variant (a catch that resets to `idle` is a silent write); one save-feedback convention across a multi-field surface, ideally in the shared form wrapper.
-- [ ] Error copy is written for a human, not a log line (§4.5): no internal id (`tpc_…` / uuid / `#N` seq) or log framing (`Execution failed:` / `Error:`) in the headline — the id rides a structured field powering "View run", the framing is localized via i18n at the view, and the body doesn't repeat identity the meta row already shows. A **deterministic-cause** failure (budget/quota → top-up・upgrade; permission → request access) leads with the **remedy action**, not a bare Retry that just re-fails.
-- [ ] Capability-gated feature warns (soft, reactive, load-gated) when the model can't deliver it; copy gives the remedy.
+- [ ] Use project loaders rather than antd `Spin`.
+- [ ] Match skeleton structure to measured rendered layouts, including platform and route variants.
+- [ ] Loading and load-more failures have visible recovery paths; failed items persist rather than auto-dismiss.
+- [ ] Dependent-fetch gates release on settled data, absence, or error; error/not-found branches remain reachable.
+- [ ] Failed awaited writes release busy controls; autosave exposes saving, saved, and failed states with retry.
+- [ ] Write localized, human-readable errors; keep internal IDs in structured inspection fields and lead with the remedy for deterministic failures.
+- [ ] Capability warnings are reactive and wait for resolved configuration; distinguish model choices from platform limitations.
 
 **Grow — discoverability & progressive disclosure** ([grow.md](references/grow.md))
 
-- [ ] Advanced capability is progressively disclosed / discoverable at the moment of need.
-- [ ] A control that borrows a keyboard/CLI idiom (numbered `1`/`2`/`3` chips, `⌘K` badge, arrow-nav, keycap hint) actually wires those keys — or is restyled so it doesn't imply an absent shortcut; a keycap-looking chip with no handler is a false affordance, worst in a surface ported from a CLI. Confirm the keys fire at L3.
-- [ ] A config surface for a feature with its own data/management area links to it in-context (close the config → manage loop) — not just a promise in copy.
-- [ ] Multi-step flow (>2 steps: wizard/onboarding) shows a step/progress indicator (position + total) and keeps non-essential steps skippable with a visible escape hatch.
+- [ ] Reveal advanced capabilities when useful without cluttering the novice path.
+- [ ] Keyboard hints correspond to working shortcuts, verified in the running UI.
+- [ ] Configuration surfaces link to the feature's data or management area.
+- [ ] Flows with more than two steps show progress and keep non-essential steps skippable with an escape.
 
 ## Related skills
 
