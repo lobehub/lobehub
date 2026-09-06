@@ -295,7 +295,7 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
     tag: 'thinking.type',
   },
   enableReasoning: { previewWidth: 300, tag: 'thinking.type' },
-  gpt5ReasoningEffort: { previewWidth: 300, tag: 'reasoning_effort' },
+  gpt5ReasoningEffort: { previewWidth: 340, tag: 'reasoning_effort' },
   gpt5_1ReasoningEffort: { labelSuffix: ' (GPT-5.1)', previewWidth: 300, tag: 'reasoning_effort' },
   gpt5_2ProReasoningEffort: {
     labelSuffix: ' (GPT-5.2 Pro)',
@@ -353,15 +353,15 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
     tag: 'preserve_thinking',
   },
   reasoningMode: { labelSuffix: ' (GPT-5.6)', previewWidth: 280, tag: 'reasoning.mode' },
-  reasoningBudgetToken: { previewWidth: 350, tag: 'thinking.budget_tokens' },
+  reasoningBudgetToken: { previewWidth: 440, tag: 'thinking.budget_tokens' },
   reasoningBudgetToken32k: {
     labelSuffix: ' (32k)',
-    previewWidth: 350,
+    previewWidth: 400,
     tag: 'thinking.budget_tokens',
   },
   reasoningBudgetToken80k: {
     labelSuffix: ' (80k)',
-    previewWidth: 350,
+    previewWidth: 500,
     tag: 'thinking.budget_tokens',
   },
   reasoningEffort: { previewWidth: 250, tag: 'reasoning_effort' },
@@ -372,8 +372,8 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
   },
   textVerbosity: { labelSuffix: '', previewWidth: 250, tag: 'text_verbosity' },
   thinking: { labelSuffix: ' (Doubao)', previewWidth: 300, tag: 'thinking.type' },
-  thinkingBudget: { labelSuffix: ' (Gemini)', previewWidth: 500, tag: 'thinkingBudget' },
-  thinkingLevel: { labelSuffix: ' (3 Flash)', previewWidth: 280, tag: 'thinkingLevel' },
+  thinkingBudget: { labelSuffix: ' (Gemini)', previewWidth: 600, tag: 'thinkingBudget' },
+  thinkingLevel: { labelSuffix: ' (3 Flash)', previewWidth: 340, tag: 'thinkingLevel' },
   thinkingLevel2: { labelSuffix: ' (3 Pro)', previewWidth: 200, tag: 'thinkingLevel' },
   thinkingLevel3: { labelSuffix: ' (Gemini 3.1)', previewWidth: 200, tag: 'thinkingLevel' },
   thinkingLevel4: { labelSuffix: ' (Nano Banana 2)', previewWidth: 200, tag: 'thinkingLevel' },
@@ -424,9 +424,12 @@ const PreviewContent = ({
   previewWidth?: number;
 }) => {
   const { token } = theme.useToken();
+  const responsivePreviewWidth = previewWidth
+    ? `min(${previewWidth}px, calc(100vw - 32px))`
+    : undefined;
   const containerStyle = previewWidth
-    ? { minWidth: previewWidth, width: previewWidth }
-    : { minWidth: 240 };
+    ? { minWidth: responsivePreviewWidth, width: responsivePreviewWidth }
+    : { maxWidth: 'calc(100vw - 32px)', minWidth: 240 };
 
   const stop = (e: SyntheticEvent) => e.stopPropagation();
 
@@ -456,7 +459,7 @@ const PreviewContent = ({
               border: `1px solid ${token.colorBorderSecondary}`,
               borderRadius: 10,
               padding: 12,
-              width: previewWidth,
+              width: responsivePreviewWidth,
             }}
           >
             <Flexbox horizontal align={'center'} gap={8}>
