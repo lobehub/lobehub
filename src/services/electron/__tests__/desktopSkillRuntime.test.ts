@@ -4,12 +4,14 @@ import { desktopSkillRuntimeService } from '@/services/electron/desktopSkillRunt
 
 const {
   getByIdMock,
+  getByIdentifierMock,
   getByNameMock,
   getZipUrlMock,
   prepareSkillDirectoryMock,
   resolveSkillResourcePathMock,
 } = vi.hoisted(() => ({
   getByIdMock: vi.fn(),
+  getByIdentifierMock: vi.fn(),
   getByNameMock: vi.fn(),
   getZipUrlMock: vi.fn(),
   prepareSkillDirectoryMock: vi.fn(),
@@ -19,6 +21,7 @@ const {
 vi.mock('@/services/skill', () => ({
   agentSkillService: {
     getById: getByIdMock,
+    getByIdentifier: getByIdentifierMock,
     getByName: getByNameMock,
     getZipUrl: getZipUrlMock,
   },
@@ -193,5 +196,76 @@ describe('desktopSkillRuntimeService', () => {
       zipHash: 'zip-hash-1',
     });
     expect(result).toBe('/tmp/demo-skill/docs/bazi.py');
+  });
+
+  // Regression for #17977 desktop exec path: /skill slash-preloaded skills
+  // persist only the identifier (no DB id), and the identifier may differ from
+  // the DB display name. resolveSkill must resolve them by identifier so
+  // execScript gets the skill's extracted directory as cwd.
+  it('should resolve a slash-preloaded skill by identifier (no DB id)', async () => {
+    getByIdMock.mockResolvedValue(undefined);
+    getByIdentifierMock.mockResolvedValue({
+      id: 'marketing-skill-id',
+      identifier: 'marketing-adapter',
+      name: 'Multi-Size Marketing Adapter',
+      zipFileHash: 'zip-hash-2',
+    });
+    getZipUrlMock.mockResolvedValue({
+      name: 'Multi-Size Marketing Adapter',
+      url: 'https://example.com/marketing.zip',
+    });
+    prepareSkillDirectoryMock.mockResolvedValue({
+      extractedDir: '/tmp/marketing-adapter',
+      success: true,
+      zipPath: '/tmp/marketing-adapter.zip',
+    });
+
+    const result = await desktopSkillRuntimeService.resolveExecutionDirectory([
+      { identifier: 'marketing-adapter', name: 'marketing-adapter' },
+    ]);
+
+    expect(getByIdentifierMock).toHaveBeenCalledWith('marketing-adapter');
+    expect(getByNameMock).not.toHaveBeenCalled();
+    expect(getZipUrlMock).toHaveBeenCalledWith('marketing-skill-id');
+    expect(result).toBe('/tmp/marketing-adapter');
+  });
+
+  // Regression: a slash-preloaded skill's identifier may collide with another
+  // skill's DB display name. identifier must be the primary lookup key so the
+  // wrong package is never extracted/executed.
+  it('should resolve by identifier even when another skill shares that identifier as its name', async () => {
+    getByIdMock.mockResolvedValue(undefined);
+    // A DIFFERENT skill whose display name collides with the target identifier.
+    getByNameMock.mockResolvedValue({
+      id: 'colliding-skill-id',
+      identifier: 'colliding-adapter',
+      name: 'marketing-adapter',
+      zipFileHash: 'colliding-zip-hash',
+    });
+    getByIdentifierMock.mockResolvedValue({
+      id: 'marketing-skill-id',
+      identifier: 'marketing-adapter',
+      name: 'Multi-Size Marketing Adapter',
+      zipFileHash: 'zip-hash-2',
+    });
+    getZipUrlMock.mockResolvedValue({
+      name: 'Multi-Size Marketing Adapter',
+      url: 'https://example.com/marketing.zip',
+    });
+    prepareSkillDirectoryMock.mockResolvedValue({
+      extractedDir: '/tmp/marketing-adapter',
+      success: true,
+      zipPath: '/tmp/marketing-adapter.zip',
+    });
+
+    const result = await desktopSkillRuntimeService.resolveExecutionDirectory([
+      { identifier: 'marketing-adapter', name: 'marketing-adapter' },
+    ]);
+
+    // identifier-first: the colliding skill is never looked up by name.
+    expect(getByIdentifierMock).toHaveBeenCalledWith('marketing-adapter');
+    expect(getByNameMock).not.toHaveBeenCalled();
+    expect(getZipUrlMock).toHaveBeenCalledWith('marketing-skill-id');
+    expect(result).toBe('/tmp/marketing-adapter');
   });
 });

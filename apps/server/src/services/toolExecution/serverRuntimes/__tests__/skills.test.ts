@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => {
     },
     findAll: vi.fn(),
     findById: vi.fn(),
+    findByIdentifier: vi.fn(),
     findByName: vi.fn(),
     isLhCommand: vi.fn(),
     getAgentConfigById: vi.fn(),
@@ -55,6 +56,7 @@ vi.mock('@/database/models/agentSkill', () => ({
   AgentSkillModel: vi.fn(() => ({
     findAll: mocks.findAll,
     findById: mocks.findById,
+    findByIdentifier: mocks.findByIdentifier,
     findByName: mocks.findByName,
   })),
 }));
@@ -142,6 +144,21 @@ describe('skillsRuntime', () => {
 
       return undefined;
     });
+    // /skill slash-preloaded skills resolve by identifier when findByName misses
+    // (their persisted tag carries only the identifier, which may differ from the
+    // DB skill name).
+    mocks.findByIdentifier.mockImplementation(async (identifier: string) => {
+      if (identifier === 'marketing-adapter') {
+        return {
+          id: 'marketing-skill-id',
+          identifier: 'marketing-adapter',
+          name: 'Multi-Size Marketing Adapter',
+          zipFileHash: 'zip-hash-2',
+        };
+      }
+
+      return undefined;
+    });
     mocks.getAgentSkills.mockResolvedValue([]);
     mocks.getUserSettings.mockResolvedValue({ market: { accessToken: 'market-token' } });
     // Pass-through by default: the runtime now routes both runCommand and
@@ -200,6 +217,99 @@ describe('skillsRuntime', () => {
         skillZipUrls: {
           'user-skill': 'https://files.example.com/user-skill.zip',
         },
+      }),
+    );
+  }, 20_000);
+
+  it('resolves slash-preloaded skills by identifier first, without a name lookup', async () => {
+    const { skillsRuntime } = await import('../skills');
+    const runtime = await skillsRuntime.factory({
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    // A /skill slash-preloaded skill: name carries the identifier (the only
+    // key persisted in the <skill> tag), which differs from the DB skill name.
+    const result = await runtime.execScript({
+      activatedSkills: [{ identifier: 'marketing-adapter', name: 'marketing-adapter' }],
+      command: 'python scripts/plan_layouts.py',
+      description: 'Run layout planner',
+    });
+
+    expect(result.success).toBe(true);
+    // identifier is the primary lookup key — findByName must not be tried at
+    // all when the identifier resolves, so a collision with another skill's
+    // display name can't pick the wrong archive.
+    expect(mocks.findByIdentifier).toHaveBeenCalledWith('marketing-adapter');
+    expect(mocks.findByName).not.toHaveBeenCalledWith('marketing-adapter');
+    // The archive is keyed by the activated name (the identifier), which is the
+    // key both the device path (`archiveByName.get(activated.name)`) and the
+    // sandbox path (`skillZipUrls[skill.name]`) look up by — so cwd resolution
+    // does not fall back to the working directory for identifier ≠ name skills.
+    expect(mocks.sandboxService.callTool).toHaveBeenCalledWith(
+      'execScript',
+      expect.objectContaining({
+        skillZipUrls: {
+          'marketing-adapter': 'https://files.example.com/user-skill.zip',
+        },
+      }),
+    );
+  }, 20_000);
+
+  // Regression: a slash-preloaded skill's identifier may collide with another
+  // skill's DB display name. identifier must stay the primary lookup key so
+  // the wrong archive is never prepared/executed.
+  it('resolves by identifier even when another skill shares that identifier as its name', async () => {
+    mocks.findByName.mockImplementation(async (name: string) => {
+      // A DIFFERENT skill whose display name collides with the target identifier.
+      if (name === 'marketing-adapter') {
+        return {
+          id: 'colliding-skill-id',
+          identifier: 'colliding-adapter',
+          name: 'marketing-adapter',
+          zipFileHash: 'colliding-zip-hash',
+        };
+      }
+      return undefined;
+    });
+    mocks.findByIdentifier.mockImplementation(async (identifier: string) => {
+      if (identifier === 'marketing-adapter') {
+        return {
+          id: 'marketing-skill-id',
+          identifier: 'marketing-adapter',
+          name: 'Multi-Size Marketing Adapter',
+          zipFileHash: 'zip-hash-2',
+        };
+      }
+      return undefined;
+    });
+    mocks.checkHash.mockResolvedValue({ isExist: true, url: 'skills/marketing.zip' });
+    mocks.fileService.getFullFileUrl.mockResolvedValue('https://files.example.com/marketing.zip');
+
+    const { skillsRuntime } = await import('../skills');
+    const runtime = await skillsRuntime.factory({
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    const result = await runtime.execScript({
+      activatedSkills: [{ identifier: 'marketing-adapter', name: 'marketing-adapter' }],
+      command: 'python scripts/plan_layouts.py',
+      description: 'Run layout planner',
+    });
+
+    expect(result.success).toBe(true);
+    // identifier-first: the colliding skill's archive is never touched.
+    expect(mocks.checkHash).toHaveBeenCalledWith('zip-hash-2');
+    expect(mocks.checkHash).not.toHaveBeenCalledWith('colliding-zip-hash');
+    expect(mocks.sandboxService.callTool).toHaveBeenCalledWith(
+      'execScript',
+      expect.objectContaining({
+        skillZipUrls: { 'marketing-adapter': 'https://files.example.com/marketing.zip' },
       }),
     );
   }, 20_000);

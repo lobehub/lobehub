@@ -107,10 +107,12 @@ describe('TODO state selectors', () => {
   const item = { status: 'processing' as const, text: 'Ship the fix' };
 
   it('normalizes canonical and legacy states, including empty clear tombstones', () => {
-    expect(normalizeTodosState({ items: [item], updatedAt: 'canonical-time' }, 'fallback')).toEqual({
-      items: [item],
-      updatedAt: 'canonical-time',
-    });
+    expect(normalizeTodosState({ items: [item], updatedAt: 'canonical-time' }, 'fallback')).toEqual(
+      {
+        items: [item],
+        updatedAt: 'canonical-time',
+      },
+    );
     expect(normalizeTodosState([item], 'fallback')).toEqual({
       items: [item],
       updatedAt: 'fallback',
@@ -129,7 +131,9 @@ describe('TODO state selectors', () => {
   it('rejects alternate fields and malformed items', () => {
     expect(normalizeTodosState({ tasks: [item] }, 'fallback')).toBeUndefined();
     expect(normalizeTodosState({ todoList: [item] }, 'fallback')).toBeUndefined();
-    expect(normalizeTodosState({ items: [{ status: 'unknown', text: 'bad' }] }, 'fallback')).toBeUndefined();
+    expect(
+      normalizeTodosState({ items: [{ status: 'unknown', text: 'bad' }] }, 'fallback'),
+    ).toBeUndefined();
     expect(normalizeTodosState({ items: [{ status: 'todo' }] }, 'fallback')).toBeUndefined();
   });
 
@@ -475,6 +479,138 @@ describe('extractActivatedSkillsFromMessages', () => {
     ];
 
     expect(extractActivatedSkillsFromMessages(messages)).toBeUndefined();
+  });
+
+  // Regression: the /skill slash preload path inlines skill content into the
+  // user message as a <selected_skill_context> block WITHOUT a synthetic
+  // activateSkill tool call. extractActivatedSkillsFromMessages must still
+  // recognize these skills so execScript can resolve their cwd.
+  it('should extract skills from /skill slash preload tags in user messages', () => {
+    const messages = [
+      createMessage({
+        content:
+          'Generate marketing images\n\n' +
+          '<system_context_start>\n' +
+          '<selected_skill_context>\n' +
+          '<selected_skills>\n' +
+          '  <skill identifier="multi-size-marketing-adapter" name="Multi-Size Marketing Adapter">\n' +
+          '  SKILL.md content here\n' +
+          '  </skill>\n' +
+          '</selected_skills>\n' +
+          '</selected_skill_context>\n' +
+          '<system_context_end>',
+        role: 'user',
+      } as any),
+    ];
+
+    expect(extractActivatedSkillsFromMessages(messages)).toEqual([
+      { identifier: 'multi-size-marketing-adapter', name: 'multi-size-marketing-adapter' },
+    ]);
+  });
+
+  it('should extract self-closing slash preload skill tags without content', () => {
+    const messages = [
+      createMessage({
+        content:
+          'do thing\n\n<selected_skills>\n  <skill identifier="pdf-tools" name="PDF Tools" />\n</selected_skills>',
+        role: 'user',
+      } as any),
+    ];
+
+    expect(extractActivatedSkillsFromMessages(messages)).toEqual([
+      { identifier: 'pdf-tools', name: 'pdf-tools' },
+    ]);
+  });
+
+  it('should not treat ordinary user messages as skill activations', () => {
+    const messages = [
+      createMessage({ content: 'hi', role: 'user' } as any),
+      createMessage({ content: 'activate the xlsx skill please', role: 'user' } as any),
+    ];
+
+    expect(extractActivatedSkillsFromMessages(messages)).toBeUndefined();
+  });
+
+  // Regression: /skill slash-preloaded skills are scoped to the CURRENT
+  // request (SelectedSkillInjector marks them "for this request"). A skill
+  // slash-selected in an earlier request must NOT leak into a later request
+  // that didn't select it — only the latest user message's tags are parsed.
+  it('should not leak slash-preloaded skills from an earlier user message', () => {
+    const messages = [
+      createMessage({
+        content:
+          '<selected_skills>\n  <skill identifier="pdf-tools" name="PDF Tools" />\n</selected_skills>',
+        role: 'user',
+      } as any),
+      createMessage({ content: 'now do something unrelated', role: 'user' } as any),
+    ];
+
+    expect(extractActivatedSkillsFromMessages(messages)).toBeUndefined();
+  });
+
+  it('should parse only the latest user message slash selection', () => {
+    const messages = [
+      createMessage({
+        content:
+          '<selected_skills>\n  <skill identifier="pdf-tools" name="PDF Tools" />\n</selected_skills>',
+        role: 'user',
+      } as any),
+      createMessage({
+        content:
+          '<selected_skills>\n  <skill identifier="xlsx-tools" name="XLSX Tools" />\n</selected_skills>',
+        role: 'user',
+      } as any),
+    ];
+
+    expect(extractActivatedSkillsFromMessages(messages)).toEqual([
+      { identifier: 'xlsx-tools', name: 'xlsx-tools' },
+    ]);
+  });
+
+  // Explicit activateSkill activations accumulate across the whole
+  // conversation, while slash-preloaded ones are request-scoped — a slash
+  // selection in an earlier request drops out, but an activateSkill from that
+  // same earlier request persists into the current one.
+  it('should keep activateSkill activations but drop earlier slash selections', () => {
+    const messages = [
+      createToolMessage({
+        plugin: { apiName: 'activateSkill', identifier: 'lobe-skills' },
+        pluginState: { id: 'skl_1', name: 'pdf' },
+      } as any),
+      createMessage({
+        content:
+          '<selected_skills>\n  <skill identifier="xlsx-tools" name="XLSX Tools" />\n</selected_skills>',
+        role: 'user',
+      } as any),
+      createMessage({ content: 'follow-up request with no selection', role: 'user' } as any),
+    ];
+
+    expect(extractActivatedSkillsFromMessages(messages)).toEqual([
+      { description: undefined, id: 'skl_1', name: 'pdf' },
+    ]);
+  });
+
+  // "Last activation wins the cwd" must hold across BOTH sources: when the
+  // user slash-selects A and the agent then calls activateSkill(B) in the SAME
+  // turn, B is the more recent activation and must win — the slash entry must
+  // NOT be appended after the later tool result.
+  it('should let a same-turn activateSkill win the cwd over the request slash selection', () => {
+    const messages = [
+      createMessage({
+        content:
+          '<selected_skills>\n  <skill identifier="pdf-tools" name="PDF Tools" />\n</selected_skills>',
+        role: 'user',
+      } as any),
+      createToolMessage({
+        plugin: { apiName: 'activateSkill', identifier: 'lobe-skills' },
+        pluginState: { id: 'skl_1', name: 'xlsx' },
+      } as any),
+    ];
+
+    expect(extractActivatedSkillsFromMessages(messages)).toEqual([
+      { identifier: 'pdf-tools', name: 'pdf-tools' },
+      { description: undefined, id: 'skl_1', name: 'xlsx' },
+    ]);
   });
 });
 

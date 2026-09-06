@@ -40,6 +40,7 @@ class SkillsExecutor extends BaseExecutor<typeof SkillsApiName> {
         activatedSkills: activatedSkills?.map((s) => ({
           description: s.description,
           id: s.id,
+          identifier: s.identifier,
           name: s.name,
         })),
       });

@@ -69,6 +69,45 @@ export const formatSelectedSkillsContext = (
   ].join('\n');
 };
 
+const SKILL_TAG_OPENING_RE = /<skill\b([^>]*?)(?:\/>|>)/g;
+
+const getTagAttr = (attrs: string, name: string): string | undefined => {
+  const match = new RegExp(`${name}="([^"]*)"`, 'i').exec(attrs);
+  return match?.[1];
+};
+
+/**
+ * Parse persisted `<skill identifier="..." name="...">` tags from a user
+ * message content block produced by `formatSelectedSkills`. Co-located with the
+ * writer so the tag format has a single source of truth.
+ *
+ * The `/skill` slash preload path inlines skill content into the user message
+ * WITHOUT emitting a synthetic `activateSkill` tool call — these tags are the
+ * only persisted trace that the skill was activated. Downstream consumers (e.g.
+ * `extractActivatedSkillsFromMessages`) use this to register slash-preloaded
+ * skills as activated so `execScript` can resolve their cwd.
+ *
+ * Returns `{ identifier, name? }` for each tag. Tolerates attribute order,
+ * self-closing (`<skill ... />`) and content-bearing (`<skill ...>...</skill>`)
+ * forms. Returns an empty array when the content carries no
+ * `<selected_skills>` block (fast path for ordinary user messages).
+ */
+export const parseSelectedSkillTags = (
+  content: string,
+): Array<{ identifier: string; name?: string }> => {
+  if (!content.includes('<selected_skills>')) return [];
+
+  const tags: Array<{ identifier: string; name?: string }> = [];
+  for (const match of content.matchAll(SKILL_TAG_OPENING_RE)) {
+    const attrs = match[1] ?? '';
+    const identifier = getTagAttr(attrs, 'identifier');
+    if (!identifier) continue;
+    const name = getTagAttr(attrs, 'name');
+    tags.push({ identifier, ...(name && { name }) });
+  }
+  return tags;
+};
+
 /**
  * Extract skill identifiers @mentioned in earlier messages via their persisted editorData.
  * Walks the Lexical JSON tree looking for action-tag nodes with actionCategory === 'skill'.

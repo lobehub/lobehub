@@ -32,6 +32,12 @@ export interface ExecScriptActivatedSkill {
   description?: string;
   /** DB skill id; absent for filesystem/builtin activations — match by `name`. */
   id?: string;
+  /**
+   * Skill identifier (slug). Carried for /skill slash-preloaded skills, whose
+   * persisted context has only identifier + display name (no DB id). Consumers
+   * fall back to `getByIdentifier` when `id`/`name` lookups miss.
+   */
+  identifier?: string;
   name: string;
 }
 

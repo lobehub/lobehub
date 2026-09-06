@@ -1,3 +1,4 @@
+import { parseSelectedSkillTags } from '@lobechat/context-engine';
 import type { StepActivatedSkill, StepContextTodos, UIChatMessage } from '@lobechat/types';
 import { isNonEmptyString, isPlainRecord } from '@lobechat/utils/object';
 
@@ -173,9 +174,7 @@ export const normalizeTodosState = (
   if (!items || !items.every(isTodoItem)) return undefined;
 
   const updatedAt =
-    isPlainRecord(value) && isNonEmptyString(value.updatedAt)
-      ? value.updatedAt
-      : fallbackUpdatedAt;
+    isPlainRecord(value) && isNonEmptyString(value.updatedAt) ? value.updatedAt : fallbackUpdatedAt;
 
   return { items, updatedAt };
 };
@@ -201,12 +200,23 @@ export const extractTodosFromMessages = (
 };
 
 /**
- * Accumulate activated skills from all activateSkill / activateTools tool
- * messages. Skills once activated remain active for the rest of the
- * conversation; the skill id (or name, for filesystem/builtin activations that
- * persist no id) deduplicates — a reactivation updates the entry AND moves it
- * to the end, since exec paths treat the last entry as the most recent
- * activation when picking the script cwd.
+ * Resolve the active skill set for `execScript` cwd resolution.
+ *
+ * Two activation sources, with different scopes:
+ * - `activateSkill` / `activateTools` tool results accumulate across the whole
+ *   conversation — a skill once activated stays available for later requests.
+ * - `/skill` slash-preloaded skills are scoped to the CURRENT request only
+ *   (SelectedSkillInjector marks them "for this request"), so only the latest
+ *   user message's `<selected_skills>` tags are parsed — older slash selections
+ *   must not leak into a request that didn't select them.
+ *
+ * The skill id (or name, for filesystem/builtin activations that persist no
+ * id) deduplicates — a reactivation updates the entry AND moves it to the end,
+ * since exec paths treat the last entry as the most recent activation when
+ * picking the script cwd. Slash tags are inserted at the latest user message's
+ * natural chronological position (not appended at the end) so an
+ * `activateSkill` call later in the SAME turn still wins the cwd — "last
+ * activation wins" must hold across both sources.
  *
  * Shared by the client transport (chat store dbMessage selector feeding
  * `computeStepContext`) and the server runtime executors (`callTool` /
@@ -220,7 +230,28 @@ export const extractActivatedSkillsFromMessages = (
 ): StepActivatedSkill[] | undefined => {
   const skillsMap = new Map<string, StepActivatedSkill>();
 
-  for (const msg of messages) {
+  // The /skill slash preload path is scoped to the CURRENT request: only the
+  // latest user message's tags are parsed, so older slash selections can't
+  // leak into a request that didn't select them. Resolve its index up front so
+  // the main loop can insert those activations at their natural chronological
+  // position — preserving "last activation wins the cwd" relative to
+  // activateSkill/activateTools tool calls later in the same turn.
+  let slashUserIndex = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'user') {
+      slashUserIndex = i;
+      break;
+    }
+  }
+
+  // Explicit activateSkill / activateTools tool results accumulate across the
+  // whole conversation — a skill once activated stays available for the rest
+  // of the conversation. (The skill id, or name for id-less filesystem/builtin
+  // activations, deduplicates; a reactivation moves it to the end since exec
+  // paths treat the last entry as the most recent activation for the cwd.)
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i];
+
     for (const invocation of collectToolInvocations(msg)) {
       if (!(
         invocation.identifier === SKILLS_IDENTIFIER ||
@@ -268,6 +299,24 @@ export const extractActivatedSkillsFromMessages = (
             });
           }
         }
+      }
+    }
+
+    // /skill slash-preloaded skills: their content is inlined into the user
+    // message as a <selected_skill_context> block (see
+    // formatSelectedSkillsContext in @lobechat/context-engine) WITHOUT a
+    // synthetic activateSkill tool call, so the tool-invocation scan above
+    // can't see them. Parse ONLY the latest user message (slashUserIndex) —
+    // older slash selections must not leak into the current request. Inserted
+    // here, at the message's natural position, so a later activateSkill in the
+    // same turn still wins the cwd. The identifier doubles as `name` (DB skills
+    // commonly have name === identifier); consumers resolve by identifier
+    // first, falling back to name when identifier differs.
+    if (i === slashUserIndex && typeof msg.content === 'string') {
+      for (const tag of parseSelectedSkillTags(msg.content)) {
+        const key = tag.identifier;
+        skillsMap.delete(key);
+        skillsMap.set(key, { identifier: tag.identifier, name: tag.identifier });
       }
     }
   }

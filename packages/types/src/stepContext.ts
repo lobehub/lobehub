@@ -41,6 +41,13 @@ export interface StepActivatedSkill {
    * `name` (the server exec paths resolve archives/project skills by name).
    */
   id?: string;
+  /**
+   * Skill identifier (slug). Carried for skills activated via the `/skill`
+   * slash preload path, whose persisted `<selected_skill_context>` block has
+   * only the identifier + display name — no DB id. Consumers fall back to
+   * `getByIdentifier` when `id` and `name` lookups miss.
+   */
+  identifier?: string;
   name: string;
 }
 

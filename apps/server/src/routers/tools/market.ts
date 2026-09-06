@@ -263,7 +263,20 @@ const execInSandboxHandler = async ({
       for (const activatedSkill of enhancedParams.activatedSkills) {
         if (!activatedSkill.name) continue;
 
-        const skill = await agentSkillModel.findByName(activatedSkill.name);
+        // /skill slash-preloaded skills persist the identifier (the stable
+        // canonical key, which may differ from the DB display name). Resolve by
+        // identifier BEFORE name so a skill whose identifier collides with
+        // another skill's display name doesn't resolve to the wrong archive —
+        // mirroring SkillServerRuntimeService.resolveActivatedSkillArchives.
+        // The activateSkill path carries no identifier, so it still resolves by
+        // name exactly as before.
+        let skill = activatedSkill.identifier
+          ? await agentSkillModel.findByIdentifier(activatedSkill.identifier)
+          : undefined;
+        if (!skill) {
+          skill = await agentSkillModel.findByName(activatedSkill.name);
+        }
+
         if (!skill?.zipFileHash) continue;
 
         const fileInfo = await fileModel.checkHash(skill.zipFileHash);

@@ -279,7 +279,19 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     for (const activatedSkill of activatedSkills) {
       if (!activatedSkill.name) continue;
 
-      const skill = await this.skillModel.findByName(activatedSkill.name);
+      // /skill slash-preloaded skills persist the identifier (the stable
+      // canonical key, which may differ from the DB display name). Resolve by
+      // identifier BEFORE name so a skill whose identifier collides with
+      // another skill's display name doesn't resolve to the wrong archive.
+      // The activateSkill path carries no identifier, so it still resolves by
+      // name exactly as before.
+      let skill = activatedSkill.identifier
+        ? await this.skillModel.findByIdentifier(activatedSkill.identifier)
+        : undefined;
+
+      if (!skill) {
+        skill = await this.skillModel.findByName(activatedSkill.name);
+      }
 
       if (!skill) {
         log('No persisted skill bundle found for activated skill: %s', activatedSkill.name);
@@ -293,7 +305,14 @@ class SkillServerRuntimeService implements SkillRuntimeService {
 
       const fullUrl = await this.fileService.getFullFileUrl(fileInfo.url);
       if (fullUrl) {
-        archives.push({ name: skill.name, url: fullUrl, zipHash: skill.zipFileHash });
+        // Key the archive by the activated name — this is the key both the
+        // device path (`archiveByName.get(activated.name)`) and the sandbox
+        // path (`skillZipUrls[skill.name]` in resolveExecScriptSkillName) look
+        // it up by. For /skill slash-preloaded skills activated.name is the
+        // identifier, which may differ from the DB skill name; keying by
+        // activated.name keeps the lookup consistent so cwd resolution doesn't
+        // silently fall back to the working directory.
+        archives.push({ name: activatedSkill.name, url: fullUrl, zipHash: skill.zipFileHash });
         log('Resolved zipUrl for skill %s', skill.name);
       }
     }
