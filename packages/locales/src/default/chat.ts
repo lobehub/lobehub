@@ -114,6 +114,22 @@ export default {
   'desktopNotification.aiReplyCompleted.title': 'Reply completed',
   'desktopNotification.humanApprovalRequired.body': 'An Agent needs your approval to continue',
   'desktopNotification.humanApprovalRequired.title': 'Approval required',
+  'cliDetectionTimeoutGuide.actions.openSystemTools': 'Open System Tools',
+  'cliDetectionTimeoutGuide.actions.retry': 'Detect again',
+  'cliDetectionTimeoutGuide.desc':
+    'LobeHub took too long to locate `{{command}}` from your login shell environment.',
+  'cliDetectionTimeoutGuide.errorDetails': 'Technical details',
+  'cliDetectionTimeoutGuide.hint':
+    'This is often caused by a slow shell startup script. Try again, or open System Tools to check the detected command path.',
+  'cliDetectionTimeoutGuide.title': 'Detection timed out for {{name}}',
+  'goalDetail.taskResult': 'Task result',
+  'goalDetail.viewOriginalTask': 'View task',
+  'goalProcess.deliverables.empty':
+    'Nothing delivered yet. Documents, generated files and linked resources a task persists show up here — anything left only on a local path does not.',
+  'goalProcess.deliverables.from': 'From “{{title}}”',
+  'goalProcess.deliverables.title': 'Deliverables',
+  'goalProcess.deliverables.untitled': 'Untitled',
+  'taskList.truncated': 'Showing the first {{loaded}} of {{total}} tasks',
   'workingPanel.deployments.copy': 'Copy URL',
   'workingPanel.deployments.copyDebugId': 'Copy debug ID',
   'workingPanel.deployments.copyDebugIdSuccess': 'Debug ID copied',
