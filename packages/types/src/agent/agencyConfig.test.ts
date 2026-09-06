@@ -1101,6 +1101,36 @@ describe('canPublishAgentTopicLink', () => {
 });
 
 describe('applyTopicModelToHeterogeneousProvider - effort pin', () => {
+  it.each(['server-default', 'user-provider'] as const)(
+    'drops an unsupported effort when an API binding rejects the old model pin (%s)',
+    (source) => {
+      const effective = applyTopicModelToHeterogeneousProvider(
+        {
+          type: 'codex',
+          authMode: 'api',
+          apiConfig:
+            source === 'server-default'
+              ? { source, model: 'deepseek-v4-pro' }
+              : { providerId: 'deepseek', model: 'deepseek-v4-pro' },
+          args: ['-c', 'model_reasoning_effort="ultra"'],
+        },
+        { model: 'gpt-5.6-sol', provider: 'codex', effort: 'ultra' },
+      );
+      expect(effective.apiConfig?.model).toBe('deepseek-v4-pro');
+      expect(effective.effort).toBe('default');
+      expect(buildHeteroExecArgs(effective)?.join(' ') ?? '').not.toContain('ultra');
+    },
+  );
+
+  it('validates effort after applying a supported model pin', () => {
+    const effective = applyTopicModelToHeterogeneousProvider(
+      { type: 'codex', model: 'gpt-5.4' },
+      { model: 'gpt-5.6-sol', provider: 'codex', effort: 'ultra' },
+    );
+    expect(effective.effort).toBe('ultra');
+    expect(buildHeteroExecArgs(effective)?.join(' ')).toContain('ultra');
+  });
+
   it('applies a topic effort pin without a model pin', () => {
     const effective = applyTopicModelToHeterogeneousProvider(
       { command: 'claude', effort: 'low', type: 'claude-code' },

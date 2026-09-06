@@ -314,8 +314,8 @@ const applyTopicModelPin = (
  * Overlay a topic's pins (model/provider + reasoning effort) on the agent's
  * heterogeneous provider config. The model pin follows the auth-mode rules of
  * {@link applyTopicModelPin}; the effort pin is a plain CLI-level override, so
- * it applies whenever the runtime exposes an effort selector — independent of
- * whether a model was pinned. `'default'` is a real pin (it means "drop the
+ * it applies when supported by the effective model — independent of whether
+ * a model was pinned. `'default'` is a real pin (it means "drop the
  * agent's effort flag for this topic"), only `undefined` keeps the agent value.
  */
 export const applyTopicModelToHeterogeneousProvider = (
@@ -323,9 +323,18 @@ export const applyTopicModelToHeterogeneousProvider = (
   topicModel: HeterogeneousTopicPin | undefined,
 ): HeterogeneousProviderConfig => {
   const withModel = applyTopicModelPin(config, topicModel);
-  const effort = topicModel?.effort;
+  let effort = topicModel?.effort;
   if (effort === undefined) return withModel;
-  if (!getHeteroSelectorCapability(withModel.type)?.effort) return withModel;
+  const capability = getHeteroSelectorCapability(withModel.type);
+  if (!capability?.effort) return withModel;
+  const model =
+    withModel.authMode === 'api'
+      ? withModel.apiConfig?.model
+      : capability.model?.resolve(withModel);
+  /** Auth-mode changes can reject the topic model while leaving its old effort behind. */
+  if (effort !== 'default' && !capability.effort.levels(model ?? 'default').includes(effort)) {
+    effort = 'default';
+  }
   return {
     ...withModel,
     ...applyHeteroSelection(withModel, { effort }),
