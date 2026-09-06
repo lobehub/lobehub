@@ -48,7 +48,6 @@
   "dashboard.chat.recents": "最近话题",
   "dashboard.chat.running": "正在运行",
   "dashboard.customize.decrease": "减少{{label}}",
-  "dashboard.customize.entry": "自定义",
   "dashboard.customize.group.agent": "Agent",
   "dashboard.customize.group.listSize": "列表条数",
   "dashboard.customize.group.rail": "侧边栏",

@@ -12,8 +12,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   // Prose, not a row of chips: a flex container would make the brief's entity
   // links their own flex items and break the sentence into side-by-side columns.
   bubble: css`
-    position: relative;
-
     overflow: hidden;
     display: block;
 
@@ -29,7 +27,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: ${cssVar.colorBgContainer};
   `,
-  /** Keep the optional daily brief secondary to the greeting and composer. */
+  /**
+   * Match the 24px action row when a brief replaces an announcement. Limit
+   * prose to two lines so optional content cannot push the composer far down.
+   */
   line: css`
     overflow: hidden;
     display: -webkit-box;

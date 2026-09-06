@@ -10,6 +10,10 @@ import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/se
 import AgentSelect from './AgentSelect';
 
 const styles = createStaticStyles(({ css }) => ({
+  root: css`
+    /* Unbroken names must stay inside the start-aligned header's text lane. */
+    max-width: 100%;
+  `,
   greeting: css`
     overflow: hidden;
     display: -webkit-box;
@@ -54,7 +58,7 @@ const HomeHeader = memo<HomeHeaderProps>(({ centered }) => {
     // who speaks, the greeting answers below — but drops the toolbar chrome and
     // its 48px lane, so the pair reads as one compact block flush with the
     // composer. The layout's lift math (MINIMAL_LIFT) counts on these heights.
-    <Flexbox gap={centered ? 8 : 16} justify={'center'}>
+    <Flexbox className={styles.root} gap={centered ? 8 : 16} justify={'center'}>
       {centered ? (
         <AgentSelect />
       ) : (

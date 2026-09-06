@@ -63,13 +63,11 @@ const RAIL_COLUMN_GAP = 28;
 const RAIL_EXIT_OFFSET = 24;
 const RAIL_TRANSITION_DURATION = 220;
 const RAIL_RECLAIMED_WIDTH = RAIL_CARD_WIDTH + RAIL_GUTTER + RAIL_COLUMN_GAP;
-/** Share of the vacated rail track the content keeps; the rest is split as margin. */
-const COLLAPSED_CONTENT_GAIN = 140;
-const COLLAPSED_CONTENT_OFFSET = (RAIL_RECLAIMED_WIDTH - COLLAPSED_CONTENT_GAIN) / 2;
-/** Portrait width plus its inline inset and the gap the bubble keeps from it. */
+/** Portrait width plus its inline inset and the gap it keeps from the text. */
 const PORTRAIT_LANE = HOME_PORTRAIT_WIDTH + HOME_PORTRAIT_INSET + 16;
-/** Keep at least 400px for text before retaining decorative artwork in the main column. */
-const COLLAPSED_PORTRAIT_MIN = COLLAPSED_CONTENT_OFFSET * 2 + PORTRAIT_LANE + 400;
+/** Reclaim the artwork's full lane so collapsing never narrows the text above. */
+const COLLAPSED_CONTENT_GAIN = PORTRAIT_LANE;
+const COLLAPSED_CONTENT_OFFSET = (RAIL_RECLAIMED_WIDTH - COLLAPSED_CONTENT_GAIN) / 2;
 const MINIMAL_STACK_GAP = 24;
 /**
  * The minimal header stacks the agent switcher (24px avatar + 2px paddings,
@@ -131,8 +129,6 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
   header: css`
-    position: relative;
-
     display: flex;
     grid-area: 1 / 1;
     flex-direction: column;
@@ -140,24 +136,15 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: flex-start;
 
     min-width: 0;
-  `,
-  headerWithPortrait: css`
-    /* Only the collapsed rail puts the artwork inside the content column.
-       Keep the greeting and announcement in a stable vertical flow, with
-       decorative artwork yielding first when the text lane gets narrow. */
-    @media (width > 1100px) {
-      @container home (width >= ${COLLAPSED_PORTRAIT_MIN}px) {
-        padding-inline-end: ${PORTRAIT_LANE}px;
-      }
-    }
-  `,
-  identity: css`
-    flex: 0 1 auto;
-    min-width: 0;
+
+    /* Keep the expanded text measure while the composer widens underneath.
+       Rail toggles then only move text horizontally, preserving line breaks
+       and the composer's vertical position even for long names and prose.
+       Keep this measure when artwork is off as well; stability takes priority
+       over filling the extra space above the wider composer. */
     max-width: 100%;
   `,
   bubbleSlot: css`
-    flex: 0 1 auto;
     width: max-content;
     max-width: 100%;
   `,
@@ -201,10 +188,6 @@ const styles = createStaticStyles(({ css }) => ({
   // composer instead of disappearing with the cards — keeping the same dip, so
   // the same half of it stays behind the surface it leans on.
   portraitCollapsed: css`
-    @container home (width < ${COLLAPSED_PORTRAIT_MIN}px) {
-      display: none;
-    }
-
     @media (width > 1100px) {
       transform: translateX(-${COLLAPSED_CONTENT_OFFSET}px);
 
@@ -335,17 +318,8 @@ const Home = memo(() => {
 
   return (
     <Flexbox className={styles.grid}>
-      <div
-        className={cx(
-          styles.header,
-          styles.content,
-          railCollapsed && styles.contentCollapsed,
-          portraitVisible && railCollapsed && styles.headerWithPortrait,
-        )}
-      >
-        <div className={styles.identity}>
-          <HomeHeader />
-        </div>
+      <div className={cx(styles.header, styles.content, railCollapsed && styles.contentCollapsed)}>
+        <HomeHeader />
         {/* The portrait has one voice: a live campaign temporarily speaks in
             place of the daily brief, which returns when the campaign leaves. */}
         {portraitVisible && (
