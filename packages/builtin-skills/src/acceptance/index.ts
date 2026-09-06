@@ -5,6 +5,7 @@ import agentBrowser from './references/agent-browser.md';
 import authWeb from './references/auth-web.md';
 import commonMistakes from './references/common-mistakes.md';
 import computerUse from './references/computer-use.md';
+import delegation from './references/delegation.md';
 import evidence from './references/evidence.md';
 import interactionCost from './references/interaction-cost.md';
 import planFormat from './references/plan-format.md';
@@ -24,13 +25,13 @@ import web from './surfaces/web.md';
 export const AcceptanceIdentifier = 'acceptance';
 
 /**
- * The single builder-side acceptance skill: discover or author the plan → pick a
- * surface → capture evidence per criterion → publish a round → self-check
- * coverage. It runs from any task's working directory, with or without a LobeHub
- * operation/topic, and depends on no repository-local script. Surface-specific
- * tools stay explicit: agent-browser for Web/Electron, shell-level native
- * automation for macOS, and an installed Simulator HID/Accessibility CLI plus
- * Xcode/simctl for iOS.
+ * The delegated acceptance skill: the primary agent owns the delivery judgment;
+ * workers inspect the environment, draft and execute the plan, and perform the
+ * final audit. It runs from any task's working directory, with or without a
+ * LobeHub operation/topic, and depends on no repository-local script.
+ * Surface-specific tools stay explicit: agent-browser for Web/Electron,
+ * shell-level native automation for macOS, and an installed Simulator
+ * HID/Accessibility CLI plus Xcode/simctl for iOS.
  *
  * Everything a specific repository needs on top — its start/stop commands, its
  * approval gate and teardown, its own living logs and probe scripts — lives in
@@ -57,7 +58,7 @@ export const AcceptanceSkill: BuiltinSkill = {
   avatar: '✅',
   content,
   description:
-    'End-to-end verification and self-evidence for a delivery in any repository, with or without a LobeHub operation or verify plan — discover or author checks, drive CLI, web, desktop, or iOS Simulator on the correct surface, capture visually confirmed evidence, and publish a standalone or subject-linked acceptance round. Reads the repository’s own `.agents/acceptance/` project layer when one exists.',
+    'Delegated end-to-end verification with primary-agent evidence review for a delivery in any repository, with or without a LobeHub operation or verify plan — discover or author checks, drive CLI, web, desktop, or iOS Simulator on the correct surface, capture visually confirmed evidence, and publish a standalone or subject-linked acceptance round. Reads the repository’s own `.agents/acceptance/` project layer when one exists.',
   identifier: AcceptanceIdentifier,
   name: 'acceptance',
   resources: toResourceMeta({
@@ -65,6 +66,7 @@ export const AcceptanceSkill: BuiltinSkill = {
     'references/common-mistakes.md': commonMistakes,
     'references/auth-web.md': authWeb,
     'references/computer-use.md': computerUse,
+    'references/delegation.md': delegation,
     'references/evidence.md': evidence,
     'references/interaction-cost.md': interactionCost,
     'references/plan-format.md': planFormat,

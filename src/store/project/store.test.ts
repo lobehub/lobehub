@@ -20,6 +20,7 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
 
 vi.mock('@/libs/swr/useCacheScope', () => ({
   getCacheScope: () => mocks.cacheScopes.shift() ?? mocks.activeWorkspaceId ?? 'personal',
+  useCacheScope: () => mocks.cacheScopes.shift() ?? mocks.activeWorkspaceId ?? 'personal',
 }));
 
 vi.mock('@/libs/swr', () => ({
@@ -88,10 +89,10 @@ describe('project store workspace scope', () => {
       useProjectStore.getState().useFetchProjectDetail('shared-id'),
     );
 
-    act(() => mocks.swrConfigs.at(-1)?.onSuccess({ data: personalDetail, success: true }));
+    act(() => mocks.swrConfigs.at(-1)?.onSuccess?.({ data: personalDetail, success: true }));
     mocks.activeWorkspaceId = 'workspace-1';
     rerender();
-    act(() => mocks.swrConfigs.at(-1)?.onSuccess({ data: workspaceDetail, success: true }));
+    act(() => mocks.swrConfigs.at(-1)?.onSuccess?.({ data: workspaceDetail, success: true }));
 
     expect(renderHook(() => useCurrentProjectDetail('shared-id')).result.current).toBe(
       workspaceDetail,

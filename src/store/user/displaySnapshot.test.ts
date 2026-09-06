@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { readUserDisplaySnapshot, writeUserDisplaySnapshot } from './displaySnapshot';
+import {
+  clearUserDisplaySnapshot,
+  readUserDisplaySnapshot,
+  writeUserDisplaySnapshot,
+} from './displaySnapshot';
 
 beforeEach(() => {
   localStorage.clear();
@@ -36,6 +40,16 @@ describe('user display snapshot', () => {
       avatar: 'avatar-a',
       preference: { lab: { enableProjects: true } },
     });
+  });
+
+  it('clears only the requested user snapshot', () => {
+    writeUserDisplaySnapshot('user-a', { avatar: 'avatar-a' });
+    writeUserDisplaySnapshot('user-b', { avatar: 'avatar-b' });
+
+    clearUserDisplaySnapshot('user-a');
+
+    expect(readUserDisplaySnapshot('user-a')).toBeUndefined();
+    expect(readUserDisplaySnapshot('user-b')).toEqual({ avatar: 'avatar-b' });
   });
 
   it('ignores malformed persisted data', () => {

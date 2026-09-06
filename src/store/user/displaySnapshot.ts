@@ -92,3 +92,17 @@ export const writeUserDisplaySnapshot = (
     // localStorage is best-effort and may be unavailable in restricted browsers.
   }
 };
+
+/**
+ * Remove the persisted display snapshot for one user after that user's session
+ * has been successfully signed out.
+ */
+export const clearUserDisplaySnapshot = (userId: string | undefined): void => {
+  if (!isBrowser() || !userId) return;
+
+  try {
+    window.localStorage.removeItem(getStorageKey(userId));
+  } catch {
+    // localStorage is best-effort and may be unavailable in restricted browsers.
+  }
+};

@@ -68,6 +68,9 @@ vi.mock('swr', async (importOriginal) => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.spyOn(cacheScopeModule, 'useCacheScope').mockImplementation(() =>
+    cacheScopeModule.getCacheScope(),
+  );
   setScopedMutate(vi.fn() as any);
   useAgentStore.setState({
     activeAgentId: undefined,

@@ -80,8 +80,8 @@ describe('createPreferenceSlice', () => {
       let resolveUpdate: (() => void) | undefined;
       const updatePreferenceSpy = vi.spyOn(userService, 'updatePreference').mockImplementation(
         () =>
-          new Promise<void>((resolve) => {
-            resolveUpdate = resolve;
+          new Promise<Awaited<ReturnType<typeof userService.updatePreference>>>((resolve) => {
+            resolveUpdate = () => resolve(undefined);
           }),
       );
 

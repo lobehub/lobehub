@@ -5,7 +5,7 @@ import { type PartialDeep } from 'type-fest';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { builtinAgentKeys } from '@/libs/swr/keys';
-import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getCacheScope, useCacheScope } from '@/libs/swr/useCacheScope';
 import { agentService } from '@/services/agent';
 import { type StoreSetter } from '@/store/types';
 
@@ -59,7 +59,7 @@ export class BuiltinAgentSliceActionImpl {
     slug: string,
     context?: UseInitBuiltinAgentContext,
   ): SWRResponse<AgentItem | null> => {
-    const scope = getCacheScope();
+    const scope = useCacheScope();
     const response = useClientDataSWR<AgentItem | null>(
       context?.isLogin === false ? null : builtinAgentKeys.init(slug, scope),
       async () => {

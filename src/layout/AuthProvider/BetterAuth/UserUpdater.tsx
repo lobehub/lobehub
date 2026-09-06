@@ -1,6 +1,9 @@
 'use client';
 
-import { memo, useEffect, useLayoutEffect, useRef } from 'react';
+import { Flexbox } from '@lobehub/ui';
+import { Alert, Button } from '@lobehub/ui/base-ui';
+import { memo, type PropsWithChildren, useEffect, useLayoutEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_PREFERENCE } from '@/const/user';
 import { useSession } from '@/libs/better-auth/auth-client';
@@ -11,9 +14,13 @@ import { type LobeUser } from '@/types/user';
 /**
  * Sync Better-Auth session state to Zustand store
  */
-const UserUpdater = memo(() => {
+const UserUpdater = memo(({ children }: PropsWithChildren) => {
   const { data: session, isPending, isRefetching, error, refetch } = useSession();
-  const retryAttempt = useRef(0);
+  const { t } = useTranslation(['auth', 'common']);
+  const [retryAttempt, setRetryAttempt] = useState(0);
+  const status = error?.status;
+  const retryable = !!error && (!status || status >= 500 || status === 408 || status === 429);
+  const failed = !!error && status !== 401 && (!retryable || retryAttempt >= 3);
 
   const betterAuthUser = session?.user;
 
@@ -21,18 +28,18 @@ const UserUpdater = memo(() => {
   useEffect(() => {
     if (isPending || isRefetching) return;
     if (!error) {
-      retryAttempt.current = 0;
+      setRetryAttempt(0);
       return;
     }
-    const status = error.status;
-    if (status && status < 500 && status !== 408 && status !== 429) return;
+    if (!retryable || retryAttempt >= 3) return;
 
-    const delay = Math.min(1000 * 2 ** Math.min(retryAttempt.current++, 5), 30_000);
+    const delay = 1000 * 2 ** retryAttempt;
     const timer = setTimeout(() => {
+      setRetryAttempt((attempt) => attempt + 1);
       void refetch();
     }, delay);
     return () => clearTimeout(timer);
-  }, [error, isPending, isRefetching, refetch]);
+  }, [error, isPending, isRefetching, refetch, retryable, retryAttempt]);
 
   // Sync user data from Better-Auth session to Zustand store.
   // Better-Auth refetches the session on tab focus (visibilitychange), which
@@ -50,7 +57,7 @@ const UserUpdater = memo(() => {
   // accounts. `useInitUserState` is `useOnlyFetchOnceSWR` with a constant
   // key, so it won't re-fetch profile data for the new user on its own.
   useLayoutEffect(() => {
-    if (isPending || (error && error.status !== 401)) return;
+    if (isPending || isRefetching || (error && error.status !== 401)) return;
 
     if (betterAuthUser && !error) {
       useUserStore.setState((state) => {
@@ -82,9 +89,36 @@ const UserUpdater = memo(() => {
       preference: DEFAULT_PREFERENCE,
       user: undefined,
     });
-  }, [betterAuthUser, error, isPending]);
+  }, [betterAuthUser, error, isPending, isRefetching]);
 
-  return null;
+  /** Keep auth unresolved on transport failures; show recovery instead of a guest page. */
+  if (failed && !isPending && !isRefetching) {
+    return (
+      <Flexbox
+        align="center"
+        gap={16}
+        justify="center"
+        style={{ minHeight: '100dvh', padding: 24 }}
+      >
+        <Alert
+          showIcon
+          description={t('auth:session.checkFailed.description')}
+          title={t('auth:session.checkFailed.title')}
+          type="error"
+        />
+        <Button
+          onClick={() => {
+            setRetryAttempt(0);
+            void refetch();
+          }}
+        >
+          {t('common:retry')}
+        </Button>
+      </Flexbox>
+    );
+  }
+
+  return children;
 });
 
 export default UserUpdater;

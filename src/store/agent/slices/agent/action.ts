@@ -735,7 +735,7 @@ export class AgentSliceActionImpl {
       // 2. API call returns updated agent data
       const result = await agentService.updateAgentMeta(id, meta, signal);
 
-      // 3. Use returned data directly (no refetch needed!)
+      // 3. Apply returned data, then refresh related caches for later subscribers.
       if (result?.success && result.agent) {
         internal_dispatchAgentMap(id, result.agent);
         await this.#get().internal_refreshAgentConfig(id);
@@ -753,7 +753,7 @@ export class AgentSliceActionImpl {
   };
 
   internal_refreshAgentConfig = async (id: string): Promise<void> => {
-    /** Keep the persisted startup snapshot current after a name or artwork edit. */
+    /** Keep related agent and builtin-agent snapshots current after a successful edit. */
     const slugs = Object.entries(this.#get().builtinAgentIdMap)
       .filter(([, agentId]) => agentId === id)
       .map(([slug]) => slug);

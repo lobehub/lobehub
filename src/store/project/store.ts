@@ -8,7 +8,7 @@ import {
   useActiveWorkspaceId,
 } from '@/business/client/hooks/useActiveWorkspaceId';
 import { mutate, useClientDataSWR } from '@/libs/swr';
-import { getCacheScope } from '@/libs/swr/useCacheScope';
+import { getCacheScope, useCacheScope } from '@/libs/swr/useCacheScope';
 import { projectService } from '@/services/project';
 import { createDevtools } from '@/store/middleware/createDevtools';
 import { expose } from '@/store/middleware/expose';
@@ -105,7 +105,7 @@ export const useProjectStore = createWithEqualityFn<ProjectStore>()(
     useFetchProjectList: (enabled = true) => {
       const workspaceId = useActiveWorkspaceId();
       const scope = projectScopeKey(workspaceId);
-      const cacheScope = getCacheScope();
+      const cacheScope = useCacheScope();
       const response = useClientDataSWR(enabled ? LIST_KEY : null, () => projectService.listAll());
       const { data } = response;
 

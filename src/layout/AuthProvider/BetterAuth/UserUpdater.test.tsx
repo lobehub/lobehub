@@ -1,4 +1,4 @@
-import { act, render } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useUserStore } from '@/store/user';
@@ -37,6 +37,51 @@ describe('UserUpdater', () => {
     localStorage.clear();
     vi.useRealTimers();
     useUserStore.setState({ user: undefined, isSignedIn: false, isLoaded: false });
+  });
+
+  it.each([400, 403, 404])(
+    'shows a recoverable error for terminal session status %s',
+    async (status) => {
+      vi.useFakeTimers();
+      const refetch = vi.fn();
+      useSessionMock.mockReturnValue({ data: null, error: { status }, isPending: false, refetch });
+      const { unmount } = render(<UserUpdater />);
+      expect(screen.getByRole('alert')).toBeTruthy();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000);
+      });
+      expect(refetch).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button'));
+      expect(refetch).toHaveBeenCalledTimes(1);
+      expect(useUserStore.getState().isSignedIn).toBe(false);
+      unmount();
+    },
+  );
+
+  it('stops automatic retries after three attempts and offers manual recovery', async () => {
+    vi.useFakeTimers();
+    const refetch = vi.fn().mockResolvedValue(undefined);
+    useSessionMock.mockReturnValue({
+      data: null,
+      error: { status: 503 },
+      isPending: false,
+      refetch,
+    });
+    const { unmount } = render(<UserUpdater />);
+    for (const delay of [1000, 2000, 4000]) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(delay);
+      });
+    }
+    expect(refetch).toHaveBeenCalledTimes(3);
+    expect(screen.getByRole('alert')).toBeTruthy();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(refetch).toHaveBeenCalledTimes(3);
+    fireEvent.click(screen.getByRole('button'));
+    expect(refetch).toHaveBeenCalledTimes(4);
+    unmount();
   });
 
   it('restores the authenticated user avatar and project preference before user-state returns', () => {
@@ -105,6 +150,46 @@ describe('UserUpdater', () => {
 
     expect(useUserStore.getState().isSignedIn).toBe(true);
     expect(useUserStore.getState().user?.avatar).toBe('/custom.webp');
+    unmount();
+  });
+
+  it('restores the application after a manual retry succeeds', () => {
+    useSessionMock.mockReturnValue({
+      data: null,
+      error: { status: 403 },
+      isPending: false,
+      refetch: vi.fn(),
+    });
+    const { rerender, unmount } = render(
+      <UserUpdater>
+        <span>Application</span>
+      </UserUpdater>,
+    );
+    expect(screen.queryByText('Application')).toBeNull();
+    fireEvent.click(screen.getByRole('button'));
+    useSessionMock.mockReturnValue(sampleSession());
+    rerender(
+      <UserUpdater>
+        <span>Application</span>
+      </UserUpdater>,
+    );
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByText('Application')).toBeTruthy();
+    expect(useUserStore.getState().isSignedIn).toBe(true);
+    unmount();
+  });
+
+  it('does not clear a verified user while a retry is in flight without session data', () => {
+    useUserStore.setState({ user: { id: 'u1' }, isSignedIn: true, isLoaded: true });
+    useSessionMock.mockReturnValue({
+      data: null,
+      error: null,
+      isPending: false,
+      isRefetching: true,
+    });
+    const { unmount } = render(<UserUpdater />);
+    expect(useUserStore.getState().user?.id).toBe('u1');
+    expect(useUserStore.getState().isSignedIn).toBe(true);
     unmount();
   });
 
