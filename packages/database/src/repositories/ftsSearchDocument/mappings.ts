@@ -20,6 +20,13 @@ export interface FtsSearchIndexDefinition<Entity extends FtsSearchDocumentEntity
     >;
   };
   queryFields: readonly (keyof FtsSearchDocumentSourceMap[Entity] & string)[];
+  /**
+   * Physical index generation for this entity. Elasticsearch cannot alter most mapping parameters
+   * in place, so any change to `mappings` or the shared analysis must bump this number; the new
+   * generation is rebuilt from PostgreSQL into `<alias>-v<schemaVersion>` and promoted by moving
+   * the alias. The fingerprint gate test in `mappings.test.ts` enforces the bump.
+   */
+  schemaVersion: number;
 }
 
 const mixedText = { analyzer: 'lobehub_icu_english', type: 'text' } as const;
@@ -133,6 +140,7 @@ export const FTS_SEARCH_INDEX_DEFINITIONS = {
       },
     },
     queryFields: ['title', 'description', 'slug', 'tags', 'system_role'],
+    schemaVersion: 1,
   } satisfies FtsSearchIndexDefinition<'agents'>,
   chatGroups: {
     indexedOnlyFields: ['content'],
@@ -151,6 +159,7 @@ export const FTS_SEARCH_INDEX_DEFINITIONS = {
       },
     },
     queryFields: ['title', 'description', 'content'],
+    schemaVersion: 1,
   } satisfies FtsSearchIndexDefinition<'chatGroups'>,
   documents: {
     longTextFields: ['content'],
@@ -175,6 +184,7 @@ export const FTS_SEARCH_INDEX_DEFINITIONS = {
       },
     },
     queryFields: ['title', 'slug', 'description', 'content'],
+    schemaVersion: 1,
   } satisfies FtsSearchIndexDefinition<'documents'>,
   files: {
     mappings: {
@@ -193,6 +203,7 @@ export const FTS_SEARCH_INDEX_DEFINITIONS = {
     },
     /** Provider-neutral source field; Elasticsearch-only multi-fields are selected by its backend. */
     queryFields: ['name'],
+    schemaVersion: 1,
   } satisfies FtsSearchIndexDefinition<'files'>,
   knowledgeBases: {
     longTextFields: ['description'],
@@ -210,6 +221,7 @@ export const FTS_SEARCH_INDEX_DEFINITIONS = {
       },
     },
     queryFields: ['name', 'description'],
+    schemaVersion: 1,
   } satisfies FtsSearchIndexDefinition<'knowledgeBases'>,
   memoryActivities: {
     longTextFields: ['notes', 'narrative', 'feedback'],
@@ -245,6 +257,7 @@ export const FTS_SEARCH_INDEX_DEFINITIONS = {
       'notes',
       'feedback',
     ],
+    schemaVersion: 1,
   } satisfies FtsSearchIndexDefinition<'memoryActivities'>,
   memoryContexts: {
     longTextFields: ['description', 'current_status'],
@@ -268,6 +281,7 @@ export const FTS_SEARCH_INDEX_DEFINITIONS = {
       },
     },
     queryFields: ['parent_text', 'title', 'description', 'current_status'],
+    schemaVersion: 1,
   } satisfies FtsSearchIndexDefinition<'memoryContexts'>,
   memoryExperiences: {
     longTextFields: ['situation', 'reasoning', 'possible_outcome', 'action', 'key_learning'],
@@ -304,6 +318,7 @@ export const FTS_SEARCH_INDEX_DEFINITIONS = {
       'action',
       'key_learning',
     ],
+    schemaVersion: 1,
   } satisfies FtsSearchIndexDefinition<'memoryExperiences'>,
   memoryIdentities: {
     longTextFields: ['description', 'role'],
@@ -330,6 +345,7 @@ export const FTS_SEARCH_INDEX_DEFINITIONS = {
       },
     },
     queryFields: ['parent_title', 'parent_summary', 'parent_details', 'description', 'role'],
+    schemaVersion: 1,
   } satisfies FtsSearchIndexDefinition<'memoryIdentities'>,
   memoryPreferences: {
     longTextFields: ['conclusion_directives', 'suggestions'],
@@ -360,6 +376,7 @@ export const FTS_SEARCH_INDEX_DEFINITIONS = {
       'conclusion_directives',
       'suggestions',
     ],
+    schemaVersion: 1,
   } satisfies FtsSearchIndexDefinition<'memoryPreferences'>,
   messages: {
     indexedOnlyFields: ['summary'],
@@ -383,6 +400,7 @@ export const FTS_SEARCH_INDEX_DEFINITIONS = {
       },
     },
     queryFields: ['content', 'summary'],
+    schemaVersion: 1,
   } satisfies FtsSearchIndexDefinition<'messages'>,
   personaDocuments: {
     longTextFields: ['persona'],
@@ -401,6 +419,7 @@ export const FTS_SEARCH_INDEX_DEFINITIONS = {
       },
     },
     queryFields: ['tagline', 'persona'],
+    schemaVersion: 1,
   } satisfies FtsSearchIndexDefinition<'personaDocuments'>,
   topics: {
     longTextFields: ['content'],
@@ -422,6 +441,7 @@ export const FTS_SEARCH_INDEX_DEFINITIONS = {
       },
     },
     queryFields: ['title', 'content', 'description'],
+    schemaVersion: 1,
   } satisfies FtsSearchIndexDefinition<'topics'>,
   userMemories: {
     longTextFields: ['details'],
@@ -443,13 +463,23 @@ export const FTS_SEARCH_INDEX_DEFINITIONS = {
       },
     },
     queryFields: ['title', 'summary', 'details'],
+    schemaVersion: 1,
   } satisfies FtsSearchIndexDefinition<'userMemories'>,
 } as const satisfies {
   [Entity in FtsSearchDocumentEntity]: FtsSearchIndexDefinition<Entity>;
 };
 
-/** First production Elasticsearch mapping version. Development-only iterations were never shipped. */
+/**
+ * Generation of the first production rollout, when every entity was built by one reindex run.
+ * Generations are per entity now and `getFtsSearchIndexSchemaVersion` is the authoritative value;
+ * this constant only identifies that initial checkpoint.
+ *
+ * @deprecated Use `getFtsSearchIndexSchemaVersion(entity)`.
+ */
 export const FTS_SEARCH_INDEX_SCHEMA_VERSION = 1;
+
+export const getFtsSearchIndexSchemaVersion = (entity: FtsSearchDocumentEntity): number =>
+  FTS_SEARCH_INDEX_DEFINITIONS[entity].schemaVersion;
 
 const toIndexSegment = (entity: FtsSearchDocumentEntity) =>
   entity.replaceAll(/[A-Z]/g, (character) => `-${character.toLowerCase()}`);
@@ -461,5 +491,5 @@ export const getFtsSearchIndexAlias = (namespace: string, entity: FtsSearchDocum
 export const getFtsSearchPhysicalIndexName = (
   namespace: string,
   entity: FtsSearchDocumentEntity,
-  version: number = FTS_SEARCH_INDEX_SCHEMA_VERSION,
+  version: number = getFtsSearchIndexSchemaVersion(entity),
 ) => `${getFtsSearchIndexAlias(namespace, entity)}-v${version}`;

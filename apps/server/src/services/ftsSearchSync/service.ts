@@ -11,7 +11,10 @@ import type {
   FtsSearchSyncWork,
 } from '@/database/repositories/ftsSearchSyncOutbox';
 
-import type { ElasticsearchFtsSearchBulkResponse } from '../ftsSearch/elasticsearch';
+import type {
+  ElasticsearchFtsSearchBulkItem,
+  ElasticsearchFtsSearchBulkResponse,
+} from '../ftsSearch/elasticsearch';
 
 export const FTS_SEARCH_SYNC_BULK_MAX_BYTES = 50 * 1024 * 1024;
 export const FTS_SEARCH_SYNC_CLAIM_LIMIT = 100;
@@ -20,11 +23,18 @@ export const FTS_SEARCH_SYNC_PROJECTION_BATCH_SIZE = FTS_SEARCH_SYNC_CLAIM_LIMIT
 
 interface FtsSearchSyncElasticsearchClient {
   bulk: (body: string) => Promise<ElasticsearchFtsSearchBulkResponse>;
+  /** Live physical generations per alias; every change is written to all of them. */
+  getFtsSearchSyncGenerationTargets: (aliases: string[]) => Promise<Record<string, string[]>>;
+  /** Mapped top-level fields per physical index, used to prune documents per generation. */
+  getFtsSearchSyncIndexFields: (indexes: string[]) => Promise<Record<string, string[]>>;
 }
 
+/** One Outbox change expanded into one bulk action per live generation of its entity. */
 interface FtsSearchSyncOperation {
   body: string;
   bytes: number;
+  /** Number of bulk actions (= generation targets) this change expands to. */
+  items: number;
   work: FtsSearchSyncWork;
 }
 
@@ -82,20 +92,43 @@ const chunks = <Item>(items: Item[], size: number): Item[][] => {
 
 const buildOperation = (
   work: FtsSearchSyncWork,
-  indexNamespace: string,
+  targets: string[],
   source: Record<string, unknown>,
+  fieldsByIndex: ReadonlyMap<string, ReadonlySet<string>>,
 ): FtsSearchSyncOperation => {
-  const metadata = {
-    index: {
-      _id: work.documentId,
-      _index: getFtsSearchIndexAlias(indexNamespace, work.entity),
-      version: work.revision,
-      version_type: 'external',
-    },
-  };
-  const body = `${JSON.stringify(metadata)}\n${JSON.stringify(source)}\n`;
-  return { body, bytes: Buffer.byteLength(body), work };
+  /**
+   * The same revision goes to every generation with `version_type: external`, so a generation that
+   * a concurrent rebuild already filled with a newer revision answers 409 and is settled as done.
+   * Each generation only receives the fields it maps: the document is projected by the deployed
+   * code, which may already declare fields an older generation lacks, and every generation is
+   * `dynamic: strict`.
+   */
+  const body = targets
+    .map((target) => {
+      const fields = fieldsByIndex.get(target);
+      const projected = fields
+        ? Object.fromEntries(Object.entries(source).filter(([field]) => fields.has(field)))
+        : source;
+      const metadata = {
+        index: {
+          _id: work.documentId,
+          _index: target,
+          version: work.revision,
+          version_type: 'external',
+        },
+      };
+      return `${JSON.stringify(metadata)}\n${JSON.stringify(projected)}\n`;
+    })
+    .join('');
+  return { body, bytes: Buffer.byteLength(body), items: targets.length, work };
 };
+
+const isAcceptedBulkItem = ({ index: item }: ElasticsearchFtsSearchBulkItem) =>
+  (item.status >= 200 && item.status < 300) || item.status === 409;
+
+/** A generation retired between target resolution and the write; the next drain re-resolves. */
+const isRetiredGenerationBulkItem = ({ index: item }: ElasticsearchFtsSearchBulkItem) =>
+  item.error?.type === 'index_not_found_exception' || item.error?.type === 'index_closed_exception';
 
 const summarizeBulkEntities = (
   operations: FtsSearchSyncOperation[],
@@ -104,14 +137,15 @@ const summarizeBulkEntities = (
 ): FtsSearchSyncBulkRequestSample['entities'] => {
   const summaries = new Map<
     FtsSearchSyncWork['entity'],
-    { bytes: number; failed: number; items: number }
+    { bytes: number; failed: number; items: number; works: number }
   >();
 
   for (const operation of operations) {
     const entity = operation.work.entity;
-    const current = summaries.get(entity) ?? { bytes: 0, failed: 0, items: 0 };
+    const current = summaries.get(entity) ?? { bytes: 0, failed: 0, items: 0, works: 0 };
     current.bytes += operation.bytes;
-    current.items += 1;
+    current.items += operation.items;
+    current.works += 1;
     if (failedWorkKeys?.has(workKey(operation.work))) current.failed += 1;
     summaries.set(entity, current);
   }
@@ -123,7 +157,7 @@ const summarizeBulkEntities = (
         ? result
         : summary.failed === 0
           ? 'success'
-          : summary.failed === summary.items
+          : summary.failed === summary.works
             ? 'item_error'
             : 'mixed';
     entitySamples[entity] = {
@@ -216,10 +250,11 @@ export class FtsSearchSyncService {
       const operations = bulk;
       const requestBody = operations.map((operation) => operation.body).join('');
       const requestBytes = bulkBytes;
+      const requestItems = operations.reduce((total, operation) => total + operation.items, 0);
       bulk = [];
       bulkBytes = 0;
       result.bulkBytes += requestBytes;
-      result.bulkItems += operations.length;
+      result.bulkItems += requestItems;
       result.bulkRequests += 1;
 
       let response: ElasticsearchFtsSearchBulkResponse;
@@ -231,7 +266,7 @@ export class FtsSearchSyncService {
           bytes: requestBytes,
           durationMs: Date.now() - startedAt,
           entities: summarizeBulkEntities(operations, 'request_error'),
-          items: operations.length,
+          items: requestItems,
           result: 'request_error',
         });
         /** Request-level failures can be deployment or proxy faults; retry every item durably. */
@@ -239,19 +274,19 @@ export class FtsSearchSyncService {
         return;
       }
 
-      if (response.items.length !== operations.length) {
+      if (response.items.length !== requestItems) {
         result.bulkRequestSamples.push({
           bytes: requestBytes,
           durationMs: Date.now() - startedAt,
           entities: summarizeBulkEntities(operations, 'response_error'),
-          items: operations.length,
+          items: requestItems,
           result: 'response_error',
         });
         await fail(
           operations.map(({ work }) => ({
             ...work,
             error: new Error(
-              `Elasticsearch bulk returned ${response.items.length} items for ${operations.length} operations`,
+              `Elasticsearch bulk returned ${response.items.length} items for ${requestItems} operations`,
             ),
           })),
         );
@@ -260,23 +295,35 @@ export class FtsSearchSyncService {
 
       const acknowledged: FtsSearchSyncWork[] = [];
       const failures: FtsSearchSyncFailure[] = [];
-      for (const [index, operation] of operations.entries()) {
-        const item = response.items[index].index;
-        if ((item.status >= 200 && item.status < 300) || item.status === 409) {
-          /**
-           * A version conflict is safe to settle because two database fences preserve source order:
-           * fresh reindexes reserve their base revision before capture activation, and same-document
-           * Outbox upserts allocate a revision only after locking the unique Outbox row. Settlement
-           * is also revision-and-lease fenced, so a concurrent refresh remains queued.
-           */
+      let offset = 0;
+      for (const operation of operations) {
+        const items = response.items.slice(offset, offset + operation.items);
+        offset += operation.items;
+        /**
+         * A version conflict is safe to settle because two database fences preserve source order:
+         * fresh reindexes reserve their base revision before capture activation, and same-document
+         * Outbox upserts allocate a revision only after locking the unique Outbox row. Settlement
+         * is also revision-and-lease fenced, so a concurrent refresh remains queued.
+         */
+        const accepted = items.filter(isAcceptedBulkItem).length;
+        const rejected = items.filter(
+          (item) => !isAcceptedBulkItem(item) && !isRetiredGenerationBulkItem(item),
+        );
+        /**
+         * A change is done once every generation that still exists holds it. Retired generations
+         * are ignored only when another generation accepted the write; if none did, the alias
+         * itself is gone and the change must not be lost.
+         */
+        if (rejected.length === 0 && accepted > 0) {
           acknowledged.push(operation.work);
-        } else {
-          failures.push({
-            ...operation.work,
-            error: new Error(`Elasticsearch bulk item failed (${item.status})`),
-            permanent: isPermanentElasticsearchStatus(item.status),
-          });
+          continue;
         }
+        const failedItem = (rejected[0] ?? items[0]).index;
+        failures.push({
+          ...operation.work,
+          error: new Error(`Elasticsearch bulk item failed (${failedItem.status})`),
+          permanent: isPermanentElasticsearchStatus(failedItem.status),
+        });
       }
 
       const bulkResult =
@@ -285,7 +332,7 @@ export class FtsSearchSyncService {
         bytes: requestBytes,
         durationMs: Date.now() - startedAt,
         entities: summarizeBulkEntities(operations, bulkResult, new Set(failures.map(workKey))),
-        items: operations.length,
+        items: requestItems,
         result: bulkResult,
       });
 
@@ -340,6 +387,51 @@ export class FtsSearchSyncService {
         }
       }
 
+      /**
+       * Resolve the live generations of every entity in this batch once per drain. Resolution
+       * failures are retried durably like a failed bulk request: the alias table is an
+       * Elasticsearch read that can fail for the same transient reasons.
+       */
+      const targetsByEntity = new Map<FtsSearchSyncWork['entity'], string[]>();
+      const fieldsByIndex = new Map<string, ReadonlySet<string>>();
+      const pendingEntities = [
+        ...new Set(works.filter((work) => unsettled.has(workKey(work))).map((work) => work.entity)),
+      ];
+      if (!stoppedForDeadLetter && pendingEntities.length > 0) {
+        const aliasEntities = new Map(
+          pendingEntities.map(
+            (entity) => [getFtsSearchIndexAlias(this.indexNamespace, entity), entity] as const,
+          ),
+        );
+        try {
+          const targets = await this.client.getFtsSearchSyncGenerationTargets([
+            ...aliasEntities.keys(),
+          ]);
+          for (const [alias, entity] of aliasEntities) {
+            const entityTargets = targets[alias];
+            if (!entityTargets || entityTargets.length === 0) {
+              throw new Error(`Elasticsearch returned no generation targets for alias ${alias}`);
+            }
+            targetsByEntity.set(entity, entityTargets);
+          }
+          const indexes = [...new Set([...targetsByEntity.values()].flat())].sort();
+          const fields = await this.client.getFtsSearchSyncIndexFields(indexes);
+          for (const index of indexes) {
+            if (!fields[index]) {
+              throw new Error(`Elasticsearch returned no mapped fields for index ${index}`);
+            }
+            fieldsByIndex.set(index, new Set(fields[index]));
+          }
+        } catch (error) {
+          await fail(
+            works
+              .filter((work) => unsettled.has(workKey(work)))
+              .map((work) => ({ ...work, error })),
+          );
+          if (result.dead > 0) stoppedForDeadLetter = true;
+        }
+      }
+
       let exhaustedBulkBudget = false;
       operations: for (const work of works) {
         if (stoppedForDeadLetter) break;
@@ -348,14 +440,19 @@ export class FtsSearchSyncService {
         const source =
           projectedSources.get(sourceKey(work.entity, work.documentId)) ??
           ({ id: work.documentId, fts_search_sync_deleted: true } as Record<string, unknown>);
-        const operation = buildOperation(work, this.indexNamespace, source);
+        const operation = buildOperation(
+          work,
+          targetsByEntity.get(work.entity)!,
+          source,
+          fieldsByIndex,
+        );
 
         if (operation.bytes > this.options.bulkMaxBytes) {
           await fail([
             {
               ...work,
               error: new Error(
-                `Full-text search document is ${operation.bytes} bytes and exceeds the ${this.options.bulkMaxBytes}-byte bulk limit`,
+                `Full-text search document is ${operation.bytes} bytes across ${operation.items} generation(s) and exceeds the ${this.options.bulkMaxBytes}-byte bulk limit`,
               ),
               permanent: true,
             },

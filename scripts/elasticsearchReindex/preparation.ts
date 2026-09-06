@@ -1,4 +1,4 @@
-export type FtsSearchReindexCommand = 'apply' | 'skip-failure' | 'status';
+export type FtsSearchReindexCommand = 'apply' | 'promote' | 'retire' | 'skip-failure' | 'status';
 
 interface RunFtsSearchReindexCommandOptions<T> {
   command: FtsSearchReindexCommand;
@@ -10,8 +10,9 @@ interface RunFtsSearchReindexCommandOptions<T> {
 /**
  * Runs one reindex command while keeping capture installation ahead of every apply mutation.
  *
- * Status and failure-skipping commands intentionally execute without installing database
- * triggers, so PG-only self-hosted instances do not pay the Elasticsearch capture overhead.
+ * Status, failure-skipping, promote, and retire commands intentionally execute without installing
+ * database triggers, so PG-only self-hosted instances do not pay the Elasticsearch capture
+ * overhead; promote already requires a drained Outbox, which implies capture is installed.
  */
 export const runFtsSearchReindexCommand = async <T>({
   command,

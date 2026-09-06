@@ -1,6 +1,12 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  FTS_SEARCH_INDEX_DEFINITIONS,
+  getFtsSearchIndexSchemaFingerprint,
+  getFtsSearchIndexSchemaVersion,
+} from '@/database/repositories/ftsSearchDocument';
+
 import { ElasticsearchFtsSearchHttpClient } from './elasticsearch';
 
 const mocks = vi.hoisted(() => ({
@@ -15,6 +21,33 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   vi.clearAllMocks();
+});
+
+/** Identity response body for a physical index that implements the declared generation of `entity`. */
+const identityIndex = (
+  entity: 'agents' | 'topics',
+  uuid: string,
+  meta: Partial<Record<'reindex_run_id' | 'schema_fingerprint' | 'schema_version', unknown>> = {},
+) => ({
+  mappings: {
+    _meta: {
+      reindex_run_id: '00000000-0000-4000-8000-000000000001',
+      schema_fingerprint: getFtsSearchIndexSchemaFingerprint(entity),
+      schema_version: getFtsSearchIndexSchemaVersion(entity),
+      ...meta,
+    },
+    dynamic: 'strict',
+    properties: {
+      id: { type: 'keyword' },
+      fts_search_sync_deleted: { type: 'boolean' },
+    },
+  },
+  settings: {
+    index: {
+      analysis: { analyzer: { lobehub_icu: { type: 'custom' } } },
+      uuid,
+    },
+  },
 });
 
 describe('ElasticsearchFtsSearchHttpClient', () => {
@@ -325,7 +358,7 @@ describe('ElasticsearchFtsSearchHttpClient', () => {
     );
   });
 
-  it('sends bulk payloads to the alias-only endpoint', async () => {
+  it('sends bulk payloads addressed to physical generation indexes', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ errors: false, items: [{ index: { status: 201 } }] }), {
         headers: { 'Content-Type': 'application/json' },
@@ -345,7 +378,7 @@ describe('ElasticsearchFtsSearchHttpClient', () => {
       items: [{ index: { status: 201 } }],
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      new URL('https://search.example.com/_bulk?require_alias=true'),
+      new URL('https://search.example.com/_bulk'),
       expect.objectContaining({
         body,
         headers: {
@@ -357,29 +390,22 @@ describe('ElasticsearchFtsSearchHttpClient', () => {
     );
   });
 
-  it('verifies writable aliases and their soft-delete mappings before synchronization', async () => {
+  it('lists every live generation behind each alias, including the writable index', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
         Response.json({
-          'lobehub-agents-v2': { aliases: { 'lobehub-agents': {} } },
-          'lobehub-topics-v2': {
-            aliases: { 'lobehub-topics': { is_write_index: true } },
-          },
+          'lobehub-agents-v2': { aliases: { 'lobehub-agents': { is_write_index: true } } },
+          'lobehub-agents-v1': { aliases: { 'lobehub-agents': { is_write_index: false } } },
+          'custom-topics': { aliases: { 'lobehub-topics': {} } },
         }),
       )
       .mockResolvedValueOnce(
         Response.json({
-          'lobehub-agents-v2': {
-            mappings: {
-              properties: { fts_search_sync_deleted: { type: 'boolean' } },
-            },
-          },
-          'lobehub-topics-v2': {
-            mappings: {
-              properties: { fts_search_sync_deleted: { type: 'boolean' } },
-            },
-          },
+          'lobehub-agents-v1': { aliases: { 'lobehub-agents': { is_write_index: false } } },
+          'lobehub-agents-v2': { aliases: { 'lobehub-agents': { is_write_index: true } } },
+          'lobehub-agents-v3': { aliases: {} },
+          'lobehub-agents-v3-backup': { aliases: {} },
         }),
       );
     vi.stubGlobal('fetch', fetchMock);
@@ -389,11 +415,87 @@ describe('ElasticsearchFtsSearchHttpClient', () => {
     });
 
     await expect(
+      client.getFtsSearchSyncGenerationTargets(['lobehub-topics', 'lobehub-agents']),
+    ).resolves.toEqual({
+      'lobehub-agents': ['lobehub-agents-v1', 'lobehub-agents-v2', 'lobehub-agents-v3'],
+      'lobehub-topics': ['custom-topics'],
+    });
+    expect(fetchMock.mock.calls.map(([url]) => url.toString())).toEqual([
+      'https://search.example.com/_alias/lobehub-topics,lobehub-agents',
+      'https://search.example.com/lobehub-topics-v*,lobehub-agents-v*/_alias?expand_wildcards=open&allow_no_indices=true',
+    ]);
+  });
+
+  it('refuses generation targets for an alias without a unique writable index', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          Response.json({
+            'lobehub-agents-v1': { aliases: { 'lobehub-agents': {} } },
+            'lobehub-agents-v2': { aliases: { 'lobehub-agents': {} } },
+          }),
+        )
+        .mockResolvedValueOnce(Response.json({})),
+    );
+    const client = new ElasticsearchFtsSearchHttpClient({
+      apiKey: 'test-api-key',
+      url: 'https://search.example.com',
+    });
+
+    await expect(client.getFtsSearchSyncGenerationTargets(['lobehub-agents'])).rejects.toThrow(
+      'is not a writable alias: lobehub-agents',
+    );
+  });
+
+  it('verifies writable aliases, soft-delete mappings, and schema generations before synchronization', async () => {
+    const aliasResponse = () =>
+      Response.json({
+        'lobehub-agents-v1': { aliases: { 'lobehub-agents': {} } },
+        'lobehub-topics-v1': {
+          aliases: { 'lobehub-topics': { is_write_index: true } },
+        },
+      });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(aliasResponse())
+      .mockResolvedValueOnce(
+        Response.json({
+          'lobehub-agents-v1': {
+            mappings: {
+              properties: { fts_search_sync_deleted: { type: 'boolean' } },
+            },
+          },
+          'lobehub-topics-v1': {
+            mappings: {
+              properties: { fts_search_sync_deleted: { type: 'boolean' } },
+            },
+          },
+        }),
+      )
+      .mockResolvedValueOnce(aliasResponse())
+      .mockResolvedValueOnce(
+        Response.json({
+          'lobehub-agents-v1': identityIndex('agents', 'agents-index-uuid'),
+          'lobehub-topics-v1': identityIndex('topics', 'topics-index-uuid'),
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new ElasticsearchFtsSearchHttpClient({
+      apiKey: 'test-api-key',
+      indexNamespace: 'lobehub',
+      url: 'https://search.example.com',
+    });
+
+    await expect(
       client.assertFtsSearchSyncAliases(['lobehub-agents', 'lobehub-topics']),
     ).resolves.toBeUndefined();
     expect(fetchMock.mock.calls.map(([url]) => url.toString())).toEqual([
       'https://search.example.com/_alias/lobehub-agents,lobehub-topics',
-      'https://search.example.com/lobehub-agents-v2,lobehub-topics-v2?filter_path=*.mappings.properties.fts_search_sync_deleted',
+      'https://search.example.com/lobehub-agents-v1,lobehub-topics-v1?filter_path=*.mappings.properties.fts_search_sync_deleted',
+      'https://search.example.com/_alias/lobehub-agents,lobehub-topics',
+      'https://search.example.com/lobehub-agents-v1,lobehub-topics-v1?filter_path=*.mappings,*.settings.index.analysis,*.settings.index.uuid',
     ]);
   });
 
@@ -440,55 +542,29 @@ describe('ElasticsearchFtsSearchHttpClient', () => {
     expect(Object.keys(writeTargets)).toEqual(['lobehub-agents', 'lobehub-topics']);
   });
 
-  it('returns stable runtime identities for indices from one reindex run', async () => {
-    const reindexRunId = '00000000-0000-4000-8000-000000000001';
+  it('returns stable runtime identities for indices that implement the declared generations', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
         Response.json({
-          'lobehub-agents-v2': { aliases: { 'lobehub-agents': {} } },
-          'lobehub-topics-v2': { aliases: { 'lobehub-topics': {} } },
+          'lobehub-agents-v1': { aliases: { 'lobehub-agents': {} } },
+          'lobehub-topics-v1': { aliases: { 'lobehub-topics': {} } },
         }),
       )
       .mockResolvedValueOnce(
         Response.json({
-          'lobehub-agents-v2': {
-            mappings: {
-              _meta: { reindex_run_id: reindexRunId, schema_version: 2 },
-              dynamic: 'strict',
-              properties: {
-                id: { type: 'keyword' },
-                fts_search_sync_deleted: { type: 'boolean' },
-              },
-            },
-            settings: {
-              index: {
-                analysis: { analyzer: { lobehub_icu: { type: 'custom' } } },
-                uuid: 'agents-index-uuid',
-              },
-            },
-          },
-          'lobehub-topics-v2': {
-            mappings: {
-              _meta: { reindex_run_id: reindexRunId, schema_version: 2 },
-              dynamic: 'strict',
-              properties: {
-                id: { type: 'keyword' },
-                fts_search_sync_deleted: { type: 'boolean' },
-              },
-            },
-            settings: {
-              index: {
-                analysis: { analyzer: { lobehub_icu: { type: 'custom' } } },
-                uuid: 'topics-index-uuid',
-              },
-            },
-          },
+          'lobehub-agents-v1': identityIndex('agents', 'agents-index-uuid', {
+            reindex_run_id: '00000000-0000-4000-8000-000000000001',
+          }),
+          'lobehub-topics-v1': identityIndex('topics', 'topics-index-uuid', {
+            reindex_run_id: '00000000-0000-4000-8000-000000000002',
+          }),
         }),
       );
     vi.stubGlobal('fetch', fetchMock);
     const client = new ElasticsearchFtsSearchHttpClient({
       apiKey: 'test-api-key',
+      indexNamespace: 'lobehub',
       url: 'https://search.example.com',
     });
 
@@ -497,35 +573,62 @@ describe('ElasticsearchFtsSearchHttpClient', () => {
       'lobehub-agents',
     ]);
 
+    // Entities are rebuilt and promoted independently, so different reindex runs are expected.
     expect(identities).toEqual({
       'lobehub-agents': {
         indexUuid: 'agents-index-uuid',
         mappingSha256: expect.stringMatching(/^[\da-f]{64}$/),
-        physicalIndex: 'lobehub-agents-v2',
-        reindexRunId,
-        schemaVersion: 2,
+        physicalIndex: 'lobehub-agents-v1',
+        reindexRunId: '00000000-0000-4000-8000-000000000001',
+        schemaFingerprint: getFtsSearchIndexSchemaFingerprint('agents'),
+        schemaVersion: getFtsSearchIndexSchemaVersion('agents'),
         settingsSha256: expect.stringMatching(/^[\da-f]{64}$/),
       },
       'lobehub-topics': {
         indexUuid: 'topics-index-uuid',
         mappingSha256: expect.stringMatching(/^[\da-f]{64}$/),
-        physicalIndex: 'lobehub-topics-v2',
-        reindexRunId,
-        schemaVersion: 2,
+        physicalIndex: 'lobehub-topics-v1',
+        reindexRunId: '00000000-0000-4000-8000-000000000002',
+        schemaFingerprint: getFtsSearchIndexSchemaFingerprint('topics'),
+        schemaVersion: getFtsSearchIndexSchemaVersion('topics'),
         settingsSha256: expect.stringMatching(/^[\da-f]{64}$/),
       },
     });
     expect(Object.keys(identities)).toEqual(['lobehub-agents', 'lobehub-topics']);
-    expect(identities['lobehub-agents'].mappingSha256).toBe(
-      identities['lobehub-topics'].mappingSha256,
-    );
     expect(identities['lobehub-agents'].settingsSha256).toBe(
       identities['lobehub-topics'].settingsSha256,
     );
     expect(fetchMock.mock.calls.map(([url]) => url.toString())).toEqual([
       'https://search.example.com/_alias/lobehub-topics,lobehub-agents',
-      'https://search.example.com/lobehub-agents-v2,lobehub-topics-v2?filter_path=*.mappings,*.settings.index.analysis,*.settings.index.uuid',
+      'https://search.example.com/lobehub-agents-v1,lobehub-topics-v1?filter_path=*.mappings,*.settings.index.analysis,*.settings.index.uuid',
     ]);
+  });
+
+  it('accepts a legacy index without a schema fingerprint on version alone', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          Response.json({ 'lobehub-agents-v1': { aliases: { 'lobehub-agents': {} } } }),
+        )
+        .mockResolvedValueOnce(
+          Response.json({
+            'lobehub-agents-v1': identityIndex('agents', 'agents-index-uuid', {
+              schema_fingerprint: undefined,
+            }),
+          }),
+        ),
+    );
+    const client = new ElasticsearchFtsSearchHttpClient({
+      apiKey: 'test-api-key',
+      indexNamespace: 'lobehub',
+      url: 'https://search.example.com',
+    });
+
+    await expect(client.getFtsSearchSyncIndexIdentities(['lobehub-agents'])).resolves.toEqual({
+      'lobehub-agents': expect.objectContaining({ schemaFingerprint: null }),
+    });
   });
 
   it('rejects a runtime identity response with missing reindex metadata', async () => {
@@ -534,11 +637,11 @@ describe('ElasticsearchFtsSearchHttpClient', () => {
       vi
         .fn()
         .mockResolvedValueOnce(
-          Response.json({ 'lobehub-agents-v2': { aliases: { 'lobehub-agents': {} } } }),
+          Response.json({ 'lobehub-agents-v1': { aliases: { 'lobehub-agents': {} } } }),
         )
         .mockResolvedValueOnce(
           Response.json({
-            'lobehub-agents-v2': {
+            'lobehub-agents-v1': {
               mappings: {
                 properties: { fts_search_sync_deleted: { type: 'boolean' } },
                 sensitive_payload: 'must-not-leak',
@@ -550,6 +653,7 @@ describe('ElasticsearchFtsSearchHttpClient', () => {
     );
     const client = new ElasticsearchFtsSearchHttpClient({
       apiKey: 'test-api-key',
+      indexNamespace: 'lobehub',
       url: 'https://search.example.com',
     });
 
@@ -560,41 +664,111 @@ describe('ElasticsearchFtsSearchHttpClient', () => {
     await expect(request).rejects.not.toThrow(/test-api-key|must-not-leak/);
   });
 
-  it('rejects aliases that point to indices from different reindex runs', async () => {
+  it('accepts an alias that still serves an older generation while the upgrade is in progress', async () => {
+    const liveVersion = getFtsSearchIndexSchemaVersion('topics');
+    const definition = FTS_SEARCH_INDEX_DEFINITIONS.topics as unknown as { schemaVersion: number };
+    // Every entity declares v1 today; pretend the deployed code moved topics one generation ahead.
+    definition.schemaVersion = liveVersion + 1;
+    try {
+      vi.stubGlobal(
+        'fetch',
+        vi
+          .fn()
+          .mockResolvedValueOnce(
+            Response.json({ 'lobehub-topics-v1': { aliases: { 'lobehub-topics': {} } } }),
+          )
+          .mockResolvedValueOnce(
+            Response.json({
+              'lobehub-topics-v1': identityIndex('topics', 'topics-index-uuid', {
+                schema_fingerprint: 'older-generation',
+                schema_version: liveVersion,
+              }),
+            }),
+          ),
+      );
+      const client = new ElasticsearchFtsSearchHttpClient({
+        apiKey: 'test-api-key',
+        indexNamespace: 'lobehub',
+        url: 'https://search.example.com',
+      });
+
+      await expect(
+        client.getFtsSearchSyncIndexIdentities(['lobehub-topics']),
+      ).resolves.toMatchObject({ 'lobehub-topics': { schemaVersion: liveVersion } });
+    } finally {
+      definition.schemaVersion = liveVersion;
+    }
+  });
+
+  it('rejects an alias whose live index implements a newer schema version than the code', async () => {
     vi.stubGlobal(
       'fetch',
       vi
         .fn()
         .mockResolvedValueOnce(
-          Response.json({
-            'lobehub-agents-v2': { aliases: { 'lobehub-agents': {} } },
-            'lobehub-topics-v2': { aliases: { 'lobehub-topics': {} } },
-          }),
+          Response.json({ 'lobehub-topics-v2': { aliases: { 'lobehub-topics': {} } } }),
         )
         .mockResolvedValueOnce(
           Response.json({
-            'lobehub-agents-v2': {
-              mappings: {
-                _meta: {
-                  reindex_run_id: '00000000-0000-4000-8000-000000000001',
-                  schema_version: 2,
-                },
-                properties: { fts_search_sync_deleted: { type: 'boolean' } },
-              },
-              settings: { index: { analysis: {}, uuid: 'agents-index-uuid' } },
-            },
-            'lobehub-topics-v2': {
-              mappings: {
-                _meta: {
-                  reindex_run_id: '00000000-0000-4000-8000-000000000002',
-                  schema_version: 2,
-                },
-                properties: { fts_search_sync_deleted: { type: 'boolean' } },
-              },
-              settings: { index: { analysis: {}, uuid: 'topics-index-uuid' } },
-            },
+            'lobehub-topics-v2': identityIndex('topics', 'topics-index-uuid', {
+              schema_version: getFtsSearchIndexSchemaVersion('topics') + 1,
+            }),
           }),
         ),
+    );
+    const client = new ElasticsearchFtsSearchHttpClient({
+      apiKey: 'test-api-key',
+      indexNamespace: 'lobehub',
+      url: 'https://search.example.com',
+    });
+
+    await expect(client.getFtsSearchSyncIndexIdentities(['lobehub-topics'])).rejects.toThrow(
+      `Elasticsearch full-text search alias lobehub-topics implements schema version ${getFtsSearchIndexSchemaVersion('topics') + 1} but the deployed code declares v${getFtsSearchIndexSchemaVersion('topics')}`,
+    );
+  });
+
+  it('lists the mapped fields of every generation index', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      Response.json({
+        'lobehub-topics-v1': {
+          mappings: { properties: { id: { type: 'keyword' }, title: { type: 'text' } } },
+        },
+        'lobehub-topics-v2': {
+          mappings: {
+            properties: {
+              id: { type: 'keyword' },
+              summary: { type: 'text' },
+              title: { type: 'text' },
+            },
+          },
+        },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new ElasticsearchFtsSearchHttpClient({
+      apiKey: 'test-api-key',
+      url: 'https://search.example.com',
+    });
+
+    await expect(
+      client.getFtsSearchSyncIndexFields(['lobehub-topics-v1', 'lobehub-topics-v2']),
+    ).resolves.toEqual({
+      'lobehub-topics-v1': ['id', 'title'],
+      'lobehub-topics-v2': ['id', 'summary', 'title'],
+    });
+    expect(fetchMock.mock.calls[0][0].toString()).toBe(
+      'https://search.example.com/lobehub-topics-v1,lobehub-topics-v2/_mapping?filter_path=*.mappings.properties',
+    );
+  });
+
+  it('rejects a field lookup that omits a requested generation index', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce(
+        Response.json({
+          'lobehub-topics-v1': { mappings: { properties: { id: { type: 'keyword' } } } },
+        }),
+      ),
     );
     const client = new ElasticsearchFtsSearchHttpClient({
       apiKey: 'test-api-key',
@@ -602,10 +776,53 @@ describe('ElasticsearchFtsSearchHttpClient', () => {
     });
 
     await expect(
-      client.getFtsSearchSyncIndexIdentities(['lobehub-agents', 'lobehub-topics']),
-    ).rejects.toThrow(
-      'Elasticsearch full-text search sync aliases do not share one reindex run identity',
+      client.getFtsSearchSyncIndexFields(['lobehub-topics-v1', 'lobehub-topics-v2']),
+    ).rejects.toThrow('field lookup is missing index lobehub-topics-v2');
+  });
+
+  it('rejects an alias whose live index was built from a drifted mapping of the same version', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          Response.json({ 'lobehub-topics-v1': { aliases: { 'lobehub-topics': {} } } }),
+        )
+        .mockResolvedValueOnce(
+          Response.json({
+            'lobehub-topics-v1': identityIndex('topics', 'topics-index-uuid', {
+              schema_fingerprint: 'f'.repeat(64),
+            }),
+          }),
+        ),
     );
+    const client = new ElasticsearchFtsSearchHttpClient({
+      apiKey: 'test-api-key',
+      indexNamespace: 'lobehub',
+      url: 'https://search.example.com',
+    });
+
+    await expect(client.getFtsSearchSyncIndexIdentities(['lobehub-topics'])).rejects.toThrow(
+      'Elasticsearch full-text search alias lobehub-topics was built from a different v1 mapping than the deployed code declares',
+    );
+  });
+
+  it('rejects identity validation without an index namespace or with a foreign alias', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+
+    await expect(
+      new ElasticsearchFtsSearchHttpClient({
+        apiKey: 'test-api-key',
+        url: 'https://search.example.com',
+      }).getFtsSearchSyncIndexIdentities(['lobehub-topics']),
+    ).rejects.toThrow('index namespace is required');
+    await expect(
+      new ElasticsearchFtsSearchHttpClient({
+        apiKey: 'test-api-key',
+        indexNamespace: 'lobehub',
+        url: 'https://search.example.com',
+      }).getFtsSearchSyncIndexIdentities(['other-topics']),
+    ).rejects.toThrow('alias does not belong to the configured index namespace: other-topics');
   });
 
   it('selects the unique explicit write index for a multi-target alias', async () => {

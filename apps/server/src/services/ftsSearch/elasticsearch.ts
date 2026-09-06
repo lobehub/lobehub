@@ -1,5 +1,4 @@
 import { Buffer } from 'node:buffer';
-import { createHash } from 'node:crypto';
 
 import { trace } from '@lobechat/observability-otel/api';
 import { z } from 'zod';
@@ -10,6 +9,13 @@ import type {
   ElasticsearchFtsSearchResponse,
 } from '@/database/repositories/ftsSearch';
 import { resolveElasticsearchTransport } from '@/database/repositories/ftsSearch/elasticsearch/url';
+import type { FtsSearchDocumentEntity } from '@/database/repositories/ftsSearchDocument';
+import {
+  findFtsSearchIndexSchemaMismatch,
+  FTS_SEARCH_DOCUMENT_ENTITIES,
+  getFtsSearchIndexAlias,
+  sha256Json,
+} from '@/database/repositories/ftsSearchDocument';
 
 import type {
   ElasticsearchFtsSearchErrorCode,
@@ -35,14 +41,17 @@ const searchResponseSchema = z.object({
   took: z.number().nonnegative().optional(),
 });
 
+const bulkItemErrorSchema = z.object({ type: z.string().optional() }).passthrough();
 const bulkResponseSchema = z.object({
   errors: z.boolean().optional(),
   items: z.array(
     z.object({
-      index: z.object({ error: z.unknown().optional(), status: z.number() }),
+      index: z.object({ error: bulkItemErrorSchema.optional(), status: z.number() }),
     }),
   ),
 });
+
+const escapeRegExp = (value: string) => value.replaceAll(/[$()*+.?[\\\]^{|}]/g, String.raw`\$&`);
 
 const aliasResponseSchema = z.record(
   z.string(),
@@ -71,6 +80,7 @@ const indexIdentityResponseSchema = z.record(
         _meta: z
           .object({
             reindex_run_id: z.string().uuid(),
+            schema_fingerprint: z.string().optional(),
             schema_version: z.number().int().positive(),
           })
           .passthrough(),
@@ -92,22 +102,13 @@ const indexIdentityResponseSchema = z.record(
   }),
 );
 
-const stableStringify = (value: unknown): string => {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
-
-  return `{${Object.entries(value)
-    .sort(([leftKey], [rightKey]) => (leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0))
-    .map(([key, item]) => `${JSON.stringify(key)}:${stableStringify(item)}`)
-    .join(',')}}`;
-};
-
-const sha256Json = (value: unknown) =>
-  createHash('sha256').update(stableStringify(value)).digest('hex');
+export interface ElasticsearchFtsSearchBulkItem {
+  index: { error?: { type?: string }; status: number };
+}
 
 export interface ElasticsearchFtsSearchBulkResponse {
   errors?: boolean;
-  items: Array<{ index: { error?: unknown; status: number } }>;
+  items: ElasticsearchFtsSearchBulkItem[];
 }
 
 export interface ElasticsearchFtsSearchHttpClientOptions {
@@ -115,6 +116,8 @@ export interface ElasticsearchFtsSearchHttpClientOptions {
   allowInsecureHttp?: boolean;
   /** Required unless `allowInsecureHttp` is enabled; never sent over plaintext HTTP. */
   apiKey?: string;
+  /** Alias namespace; required to map aliases back to entities when validating index generations. */
+  indexNamespace?: string;
   requestTimeoutMs?: number;
   url: string;
   usage?: FtsSearchUsage;
@@ -125,6 +128,8 @@ export interface ElasticsearchFtsSearchSyncIndexIdentity {
   mappingSha256: string;
   physicalIndex: string;
   reindexRunId: string;
+  /** `null` for indexes created before fingerprints were stamped into `_meta`. */
+  schemaFingerprint: string | null;
   schemaVersion: number;
   settingsSha256: string;
 }
@@ -240,6 +245,7 @@ const getTraceDetails = (): {
 /** HTTP transport that never logs credentials, request text, or Elasticsearch payloads. */
 export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchClient {
   private readonly authorizationHeader: string | undefined;
+  private readonly indexNamespace: string | undefined;
   private readonly requestTimeoutMs: number;
   private readonly url: URL;
   private readonly usage: FtsSearchUsage;
@@ -247,12 +253,14 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
   constructor({
     allowInsecureHttp,
     apiKey,
+    indexNamespace,
     requestTimeoutMs = 10_000,
     url,
     usage = 'unattributed',
   }: ElasticsearchFtsSearchHttpClientOptions) {
     const transport = resolveElasticsearchTransport({ allowInsecureHttp, apiKey, url });
     this.authorizationHeader = transport.authorizationHeader;
+    this.indexNamespace = indexNamespace;
     this.requestTimeoutMs = requestTimeoutMs;
     this.url = transport.url;
     this.usage = usage;
@@ -265,14 +273,44 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
       : { ...extra };
   }
 
-  /** Fails closed unless every incremental destination is a writable alias with tombstone support. */
+  /**
+   * Fails closed unless every incremental destination is a writable alias with tombstone support
+   * whose live index implements the schema generation declared by the deployed code.
+   */
   async assertFtsSearchSyncAliases(aliases: string[]): Promise<void> {
     await this.getFtsSearchSyncWriteTargets(aliases);
+    await this.getFtsSearchSyncIndexIdentities(aliases);
   }
 
-  private async getFtsSearchSyncWriteTargetMap(aliases: string[]) {
-    const aliasPath = aliases.map(encodeURIComponent).join(',');
-    const aliasResponse = await fetch(new URL(`/_alias/${aliasPath}`, this.url), {
+  /** Maps each alias back to its entity so live `_meta` can be compared with the declared mapping. */
+  private resolveAliasEntities(aliases: string[]): Map<string, FtsSearchDocumentEntity> {
+    if (!this.indexNamespace) {
+      throw new ElasticsearchFtsSearchRequestError(
+        'Elasticsearch full-text search index namespace is required to validate index generations',
+      );
+    }
+    const namespace = this.indexNamespace;
+    const entityByAlias = new Map(
+      FTS_SEARCH_DOCUMENT_ENTITIES.map(
+        (entity) => [getFtsSearchIndexAlias(namespace, entity), entity] as const,
+      ),
+    );
+    const resolved = new Map<string, FtsSearchDocumentEntity>();
+    for (const alias of aliases) {
+      const entity = entityByAlias.get(alias);
+      if (!entity) {
+        throw new ElasticsearchFtsSearchRequestError(
+          `Elasticsearch full-text search alias does not belong to the configured index namespace: ${alias}`,
+        );
+      }
+      resolved.set(alias, entity);
+    }
+    return resolved;
+  }
+
+  /** Fetches `GET /_alias/...` or `GET /<indices>/_alias` and validates the shared response shape. */
+  private async fetchAliasTable(path: string): Promise<z.infer<typeof aliasResponseSchema>> {
+    const aliasResponse = await fetch(new URL(path, this.url), {
       headers: this.headers(),
       method: 'GET',
       signal: AbortSignal.timeout(this.requestTimeoutMs),
@@ -300,30 +338,121 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
         aliasResponse.status,
       );
     }
+    return aliasPayload.data;
+  }
+
+  /** Picks the unique writable physical index behind `alias`, failing closed on ambiguity. */
+  private selectWriteTarget(
+    aliasTable: z.infer<typeof aliasResponseSchema>,
+    alias: string,
+  ): string {
+    const targets = Object.entries(aliasTable).filter(([, value]) =>
+      Object.hasOwn(value.aliases, alias),
+    );
+    const explicitWriteTargets = targets.filter(
+      ([, value]) => value.aliases[alias].is_write_index === true,
+    );
+    const writeTarget =
+      explicitWriteTargets.length === 1
+        ? explicitWriteTargets[0]
+        : targets.length === 1 && targets[0][1].aliases[alias].is_write_index !== false
+          ? targets[0]
+          : undefined;
+    if (!writeTarget) {
+      throw new ElasticsearchFtsSearchRequestError(
+        `Elasticsearch full-text search sync destination is not a writable alias: ${alias}`,
+      );
+    }
+    return writeTarget[0];
+  }
+
+  private async getFtsSearchSyncWriteTargetMap(aliases: string[]) {
+    const aliasPath = aliases.map(encodeURIComponent).join(',');
+    const aliasTable = await this.fetchAliasTable(`/_alias/${aliasPath}`);
 
     const writeTargets = new Map<string, string>();
-    for (const alias of aliases) {
-      const targets = Object.entries(aliasPayload.data).filter(([, value]) =>
-        Object.hasOwn(value.aliases, alias),
+    for (const alias of aliases) writeTargets.set(alias, this.selectWriteTarget(aliasTable, alias));
+    return writeTargets;
+  }
+
+  /**
+   * Lists every live physical generation of each alias so incremental sync can write to all of
+   * them. Generations follow `<alias>-v<n>`; the alias's writable index is always included even if
+   * it was named differently by an operator. Only open indexes count: a generation being retired
+   * is closed first, which drops it from this list before it is deleted.
+   *
+   * Resolved on every drain rather than cached so a generation created by a running rebuild starts
+   * receiving writes on the next batch, and a retired one stops without a restart.
+   */
+  async getFtsSearchSyncGenerationTargets(aliases: string[]): Promise<Record<string, string[]>> {
+    if (aliases.length === 0) return {};
+
+    const patternPath = aliases.map((alias) => encodeURIComponent(`${alias}-v*`)).join(',');
+    // Wildcard patterns only expand to physical indexes, so the alias table still has to be fetched
+    // by alias name to learn which generation currently serves reads and writes.
+    const [aliasTable, generationTable] = await Promise.all([
+      this.fetchAliasTable(`/_alias/${aliases.map(encodeURIComponent).join(',')}`),
+      this.fetchAliasTable(`/${patternPath}/_alias?expand_wildcards=open&allow_no_indices=true`),
+    ]);
+
+    const targets: Record<string, string[]> = {};
+    for (const alias of [...aliases].sort()) {
+      const writeIndex = this.selectWriteTarget(aliasTable, alias);
+      const generationPattern = new RegExp(`^${escapeRegExp(alias)}-v\\d+$`);
+      const generations = new Set(
+        Object.keys(generationTable).filter((index) => generationPattern.test(index)),
       );
-      const explicitWriteTargets = targets.filter(
-        ([, value]) => value.aliases[alias].is_write_index === true,
+      generations.add(writeIndex);
+      targets[alias] = [...generations].sort();
+    }
+    return targets;
+  }
+
+  /**
+   * Mapped top-level fields of each physical index. Generations differ in their field sets, and
+   * every generation is `dynamic: strict`, so a document must be pruned to the target's fields
+   * before it is written there.
+   */
+  async getFtsSearchSyncIndexFields(indexes: string[]): Promise<Record<string, string[]>> {
+    if (indexes.length === 0) return {};
+
+    const response = await fetch(
+      new URL(
+        `/${indexes.map(encodeURIComponent).join(',')}/_mapping?filter_path=*.mappings.properties`,
+        this.url,
+      ),
+      {
+        headers: this.headers(),
+        method: 'GET',
+        signal: AbortSignal.timeout(this.requestTimeoutMs),
+      },
+    );
+    if (!response.ok) {
+      throw new ElasticsearchFtsSearchRequestError(
+        `Elasticsearch full-text search sync field lookup failed (${response.status})`,
+        response.status,
       );
-      const writeTarget =
-        explicitWriteTargets.length === 1
-          ? explicitWriteTargets[0]
-          : targets.length === 1 && targets[0][1].aliases[alias].is_write_index !== false
-            ? targets[0]
-            : undefined;
-      if (!writeTarget) {
-        throw new ElasticsearchFtsSearchRequestError(
-          `Elasticsearch full-text search sync destination is not a writable alias: ${alias}`,
-        );
-      }
-      writeTargets.set(alias, writeTarget[0]);
+    }
+    const payload = syncMappingResponseSchema.safeParse(await response.json());
+    if (!payload.success) {
+      throw new ElasticsearchFtsSearchRequestError(
+        'Elasticsearch full-text search sync field lookup response has an invalid shape',
+        response.status,
+        payload.error,
+      );
     }
 
-    return writeTargets;
+    const fields: Record<string, string[]> = {};
+    for (const index of indexes) {
+      const properties = payload.data[index]?.mappings.properties;
+      if (!properties) {
+        throw new ElasticsearchFtsSearchRequestError(
+          `Elasticsearch full-text search sync field lookup is missing index ${index}`,
+        );
+      }
+      fields[index] = Object.keys(properties).sort();
+    }
+    return fields;
   }
 
   /** Returns each alias's unique writable physical index after validating tombstone support. */
@@ -377,12 +506,17 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
     );
   }
 
-  /** Returns stable runtime identities after validating aliases, soft deletes, and reindex metadata. */
+  /**
+   * Returns stable runtime identities after validating aliases, soft deletes, and reindex metadata.
+   * Each alias is checked against its own entity's declared generation; entities may come from
+   * different reindex runs because generations are rebuilt and promoted per entity.
+   */
   async getFtsSearchSyncIndexIdentities(
     aliases: string[],
   ): Promise<Record<string, ElasticsearchFtsSearchSyncIndexIdentity>> {
     if (aliases.length === 0) return {};
 
+    const aliasEntities = this.resolveAliasEntities(aliases);
     const writeTargets = await this.getFtsSearchSyncWriteTargetMap(aliases);
     const physicalPath = [...new Set(writeTargets.values())]
       .sort()
@@ -432,25 +566,36 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
         );
       }
 
+      const mismatch = findFtsSearchIndexSchemaMismatch(
+        aliasEntities.get(alias)!,
+        index.mappings._meta,
+      );
+      /**
+       * An alias still serving an older generation is the normal state while the declared
+       * generation is being built and promoted; sync keeps writing, pruned to each generation's
+       * fields. A newer generation than the code declares means the deployment was rolled back
+       * without moving the alias, which this code cannot serve safely.
+       */
+      if (mismatch?.kind === 'version' && mismatch.actual > mismatch.expected) {
+        throw new ElasticsearchFtsSearchRequestError(
+          `Elasticsearch full-text search alias ${alias} implements schema version ${mismatch.actual} but the deployed code declares v${mismatch.expected}; promote the v${mismatch.expected} generation or deploy matching code`,
+        );
+      }
+      if (mismatch?.kind === 'fingerprint') {
+        throw new ElasticsearchFtsSearchRequestError(
+          `Elasticsearch full-text search alias ${alias} was built from a different v${index.mappings._meta.schema_version} mapping than the deployed code declares; rebuild the index generation`,
+        );
+      }
+
       identities.set(alias, {
         indexUuid: index.settings.index.uuid,
         mappingSha256: sha256Json(index.mappings),
         physicalIndex,
         reindexRunId: index.mappings._meta.reindex_run_id,
+        schemaFingerprint: index.mappings._meta.schema_fingerprint ?? null,
         schemaVersion: index.mappings._meta.schema_version,
         settingsSha256: sha256Json(index.settings.index.analysis),
       });
-    }
-
-    const runIdentities = new Set(
-      [...identities.values()].map(({ reindexRunId, schemaVersion }) =>
-        JSON.stringify([reindexRunId, schemaVersion]),
-      ),
-    );
-    if (runIdentities.size !== 1) {
-      throw new ElasticsearchFtsSearchRequestError(
-        'Elasticsearch full-text search sync aliases do not share one reindex run identity',
-      );
     }
 
     return Object.fromEntries(
@@ -460,8 +605,13 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
     );
   }
 
+  /**
+   * Actions name physical generation indexes (see `getFtsSearchSyncGenerationTargets`), so
+   * `require_alias` cannot be used. The live generation is never deleted while aliased, and retired
+   * generations leave the target list before deletion, so no action can auto-create an index.
+   */
   async bulk(body: string): Promise<ElasticsearchFtsSearchBulkResponse> {
-    const endpoint = new URL('/_bulk?require_alias=true', this.url);
+    const endpoint = new URL('/_bulk', this.url);
     const response = await fetch(endpoint, {
       body,
       headers: this.headers({ 'Content-Type': 'application/x-ndjson' }),

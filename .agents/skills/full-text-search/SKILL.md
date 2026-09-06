@@ -99,10 +99,46 @@ The supported operator entrypoints are:
 bun run db:install-fts-search-capture
 bun run fts-search:reindex -- --status
 bun run fts-search:reindex -- --apply --yes
+bun run fts-search:reindex -- --apply --entity= < entity > --yes            # build a new generation
+bun run fts-search:reindex -- --apply --in-place --entity= < entity > --yes # additive change only
+bun run fts-search:reindex -- --promote --entity= --yes < entity > [--version= < n > ]
+bun run fts-search:reindex -- --retire --entity= < entity > --yes # close first, delete next run
 bun run fts-search:sync -- --max-steps=8 --yes
 bun run scripts/pgSearchCleanup/index.ts --status
 bun run scripts/pgSearchCleanup/index.ts --apply --yes
 ```
+
+## Mapping Generations
+
+Elasticsearch cannot alter an existing field, so the code declares the target and Elasticsearch
+records the live state, per entity:
+
+- `FTS_SEARCH_INDEX_DEFINITIONS[entity].schemaVersion` is the declared generation; the fingerprint is
+  `sha256` of the mapping plus the shared analysis. `mappings.test.ts` holds a snapshot of both and
+  fails when a mapping changes without a version bump, or a bump carries no mapping change. Bump the
+  version and refresh the snapshot in the same change.
+- Every physical index `<alias>-v<n>` carries `_meta.{reindex_run_id, schema_version,
+schema_fingerprint}`; the alias marks the live generation. Indexes created before fingerprints
+  existed are accepted on version alone. `_meta.schema_version` wins over the `-v<n>` suffix because
+  an in-place upgrade advances `_meta` without renaming the index.
+- The sync runtime accepts an alias that still serves an older generation (upgrade in progress) and
+  refuses one that serves a newer generation or a different fingerprint of the declared version. It
+  writes every change to all open `<alias>-v*` indexes plus the alias write index, pruning each
+  document to the fields that index maps (every generation is `dynamic: strict`), so a new
+  generation can be backfilled beside the live one; a bulk work item is acknowledged only when
+  every existing generation accepted it (2xx or 409 conflict).
+- One reindex checkpoint per `(namespace, schemaVersion)` covers the entities on that generation.
+  `--apply` groups the requested entities by declared version, treats existing aliases as an
+  upgrade (no `--fresh-run`), never moves an alias, and emits `promotion_pending`. `--promote`
+  requires a completed checkpoint, a fingerprint match for the declared version, and an idle Outbox;
+  `--retire` requires `in_sync` and closes before it deletes. `--in-place` requires
+  `mappingChange: additive`, widens the live index with `PUT _mapping`, pins the checkpoint to that
+  index, and backfills with `external_gte` so concurrent sync writes win.
+- Reconciliation is exact only on a first install; once an alias serves an entity, concurrent sync
+  writes make a higher Elasticsearch count legitimate and only a shortfall fails.
+- `scripts/elasticsearchReindex/runtime/generationService.ts` owns classification (`missing`,
+  `unmanaged`, `in_sync`, `drift`, `upgrade_available`, `rollback_required`), promotion, and
+  retirement; keep them free of Cloud-specific policy.
 
 Read `docs/self-hosting/advanced/elasticsearch-migration.mdx` or its Chinese counterpart before
 changing the operational sequence. When database rollout or index cost affects the design, also

@@ -83,9 +83,9 @@ Elasticsearch。3.x 迁移工具会把 PostgreSQL 中 14 类可搜索数据复�
 
 5. 保持应用搜索后端为 PostgreSQL，并关闭 Elasticsearch 增量消费。
 
-首次正式映射版本是 `v1`。工具会创建 `lobehub-messages-v1` 这类实体索引；14 类索引全部完成且数量与断点记录一致后，再创建 `lobehub-messages` 这类稳定别名。别名只是 Elasticsearch 内部长期不变的名字，创建别名不会改变用户请求当前使用的搜索后端。
+每类实体索引都在代码里声明自己的映射版本，首次正式映射全部是 `v1`。工具会创建 `lobehub-messages-v1` 这类实体索引，并把声明的版本号和映射指纹写入索引的 `_meta`；14 类索引全部完成且数量与断点记录一致后，再创建 `lobehub-messages` 这类稳定别名。别名只是 Elasticsearch 内部长期不变的名字，创建别名不会改变用户请求当前使用的搜索后端。
 
-如果稳定别名已经指向另一个物理索引，命令会直接失败，不会移动别名。在线升级索引版本需要另外设计受协调的双写迁移；这套首次迁移工具暂不支持该场景。
+如果稳定别名已经指向同一实体的旧一代索引，命令不会移动它，而是报告 `promotion_pending`；移动别名是后文[后续修改映射](#后续修改映射)中显式的 `--promote` 步骤。如果别名指向的索引不符合 `<别名>-v<n>` 命名，命令会直接失败。
 
 ## 在源码中运行
 
@@ -220,7 +220,7 @@ docker run --rm --env-file .env \
 
 这个修订号只用于观察增量追平进度，不是数据库已经提交的快照边界。增量消费器必须处理队列里的每一条记录，不能仅因修订号小于或等于该值就丢弃记录。
 
-启动上面说明的增量消费器前，运行 `--status`，确认 14 类数据全部为 `completed`、所有 `failedCount` 都是 `0`，且增量队列的 `dead` 为 `0`。增量消费器暂停时，队列中有待处理记录是预期现象；这不代表源数据变更采集已暂停。状态会列出未解决记录的文档标识、是否可重试和尝试次数，不会保存或输出可能包含原文的 Elasticsearch 错误原因。
+启动上面说明的增量消费器前，运行 `--status`，确认 `runs` 中 14 类数据全部为 `completed`、所有 `failedCount` 都是 `0`，且增量队列的 `dead` 为 `0`。配置了 `ES_URL` 时，`--status` 还会输出 `generations`：每类实体的别名当前指向哪个物理索引、是否与当前代码声明的映射一致，以及下一步该做什么。增量消费器暂停时，队列中有待处理记录是预期现象；这不代表源数据变更采集已暂停。状态会列出未解决记录的文档标识、是否可重试和尝试次数，不会保存或输出可能包含原文的 Elasticsearch 错误原因。
 
 修正被拒绝的源数据或映射后，再执行 `--apply --yes` 即可重试。如果运维人员明确接受某一条不可重试的数据暂时不进入初始 Elasticsearch 快照，可以显式解除阻塞，然后继续回填：
 
@@ -237,6 +237,54 @@ ES_REINDEX_STATE_DIR=.elasticsearch-reindex bun run fts-search:reindex -- --appl
 <Callout type="info">
   全量回填命令不会代替持续运行的增量消费器，也不会自行宣称应用已经可以切换搜索后端。只要 Elasticsearch 仍在承担搜索，就必须持续调度 `fts-search:sync`。
 </Callout>
+
+## 后续修改映射
+
+Elasticsearch 不能修改已有字段，因此之后每次映射变更都按实体逐个走同一套 "代"（generation）模型：
+
+1. 修改代码中的映射，并在同一次改动里提升该实体的 `schemaVersion`。映射或共享分析器变了却没有提升版本时会有测试失败，保证线上索引的 `_meta` 不会与代码悄悄不一致。
+2. 部署代码。别名仍指向旧一代时增量消费器照常运行：它会把每条变更写入该实体所有打开的索引代，并按每一代实际映射的字段裁剪文档，所以可以在线上索引旁边构建新一代。如果别名指向的一代比代码声明的更新，运行时会拒绝运行，因此回退代码后要先把别名切回去。
+3. 运行 `--status`。每类实体会被归类为 `in_sync`、`upgrade_available`、`drift`（映射变了但没提升版本）、`rollback_required`（别名指向的版本比代码更新）或 `unmanaged`，`mappingChange` 字段会说明这次变更是 `additive`（只新增字段）还是 `breaking`。
+
+### 重建该实体（任何变更都适用）
+
+```bash
+ES_REINDEX_STATE_DIR=.elasticsearch-reindex \
+  bun run fts-search:reindex -- --apply --entity=messages --yes
+```
+
+不带 `--fresh-run` 时，命令会把已存在的别名识别为一次版本升级，在 `lobehub-messages-v1` 旁边构建 `lobehub-messages-v2`，并用独立的断点记录跟踪。只有声明版本变化的实体属于新一代，其余实体继续使用现有索引。由于消费器在并发写入，新索引里的文档数可以合理地多于回填写入的数量，只有少于时才会对账失败。回填完成后别名仍停留在 `v1`，命令会报告 `promotion_pending`。
+
+等 `--status` 显示增量队列空闲（`pending`、`retrying`、`inFlight`、`dead` 都为 `0`）后再切换：
+
+```bash
+ES_REINDEX_STATE_DIR=.elasticsearch-reindex \
+  bun run fts-search:reindex -- --promote --entity=messages --yes
+```
+
+别名会原子地切到已完成回填且与声明映射一致的最新一代，搜索随之切换，不会删除任何索引。需要回退时，显式切回上一代（`--promote --entity=messages --version=1`），重新部署对应版本的代码，之后再重建。只要增量队列还有待处理记录，切换就会被拒绝，因为消费器必须先把所有变更写进新一代。
+
+新一代承担过流量、且确定不再回退后，再回收旧一代：
+
+```bash
+ES_REINDEX_STATE_DIR=.elasticsearch-reindex \
+  bun run fts-search:reindex -- --retire --entity=messages --yes
+```
+
+回收分两阶段：第一次执行只关闭旧索引，使其退出消费器的写入目标；之后再执行一次才会删除已经关闭的索引。先关闭再删除，可以避免仍列着旧索引的消费器把删掉的索引以动态映射重新建出来。
+
+### 原地新增字段（仅限只新增字段的变更）
+
+当 `--status` 报告 `mappingChange: additive`（新映射只是新增了顶层字段）时，可以直接扩展现有索引而不重建：
+
+```bash
+ES_REINDEX_STATE_DIR=.elasticsearch-reindex \
+  bun run fts-search:reindex -- --apply --in-place --entity=messages --yes
+```
+
+命令会把新增字段和新的 `_meta` 加到线上索引上，然后回填全部文档以填充新字段；与消费器并发写入时由 Elasticsearch 的版本号裁决，较新的写入获胜。物理索引仍叫 `lobehub-messages-v1`，但 `_meta` 记录的是 `v2`；`--status` 和运行时都以 `_meta` 中的版本为准。之后不需要 `--promote` 或 `--retire`。
+
+代价是回退能力：没有上一代索引可以切回去。原地升级后如果要回退代码，必须用旧版本代码重建该实体。可能需要回退时优先选择重建；实体很大且变更确定只是安全的新增字段时，再选择原地升级。
 
 ## 在 Neon 截止日期前卸载 pg\_search
 

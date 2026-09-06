@@ -2,33 +2,56 @@ import type { FtsSearchDocumentEntity } from '@lobechat/types';
 import { FTS_SEARCH_DOCUMENT_ENTITIES } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 
-import type { FtsSearchDocumentBuilder } from '../../../packages/database/src/repositories/ftsSearchDocument';
+import type {
+  FtsSearchDocumentBuilder,
+  FtsSearchIndexMeta,
+} from '../../../packages/database/src/repositories/ftsSearchDocument';
 import {
+  buildFtsSearchIndexMeta,
   FTS_SEARCH_INDEX_ANALYSIS,
   FTS_SEARCH_INDEX_DEFINITIONS,
   getFtsSearchIndexAlias,
+  getFtsSearchIndexSchemaVersion,
+  getFtsSearchPhysicalIndexName,
 } from '../../../packages/database/src/repositories/ftsSearchDocument';
 import type {
   FtsSearchReindexBatchFailure,
   FtsSearchReindexFileRepository,
   FtsSearchReindexRunState,
 } from './checkpointRepository';
+import type { FtsSearchReindexGenerationDescription } from './elasticsearchClient';
+import { classifyMappingChange } from './generationService';
 
 export interface FtsSearchReindexBulkItemResult {
   error?: unknown;
   status: number;
 }
 
+/**
+ * `created`: the alias did not exist and now points at the generation. `existing`: it already did.
+ * `kept_other_generation`: it points at another generation of the same entity and was left alone;
+ * moving it is the explicit promote step.
+ */
+export type FtsSearchReindexAliasOutcome = 'created' | 'existing' | 'kept_other_generation';
+
 export interface FtsSearchReindexElasticsearchClient {
   bulk: (body: string) => Promise<FtsSearchReindexBulkItemResult[]>;
   count: (index: string) => Promise<number>;
-  ensureAlias: (alias: string, physicalIndex: string) => Promise<void>;
+  describeGenerations: (alias: string) => Promise<FtsSearchReindexGenerationDescription[]>;
+  ensureAlias: (alias: string, physicalIndex: string) => Promise<FtsSearchReindexAliasOutcome>;
   ensureIndex: (
     index: string,
     body: FtsSearchReindexIndexBody,
     options?: FtsSearchReindexIndexOptions,
   ) => Promise<void>;
+  putMapping: (index: string, mappings: FtsSearchReindexMappingUpgrade) => Promise<void>;
   refresh: (index: string) => Promise<void>;
+}
+
+/** Additive mapping upgrade applied to a live index: the full declared field set plus new `_meta`. */
+export interface FtsSearchReindexMappingUpgrade {
+  _meta: Required<FtsSearchIndexMeta>;
+  properties: (typeof FTS_SEARCH_INDEX_DEFINITIONS)[FtsSearchDocumentEntity]['mappings']['properties'];
 }
 
 export interface FtsSearchReindexIndexOptions {
@@ -37,7 +60,7 @@ export interface FtsSearchReindexIndexOptions {
 
 export interface FtsSearchReindexIndexBody {
   mappings: (typeof FTS_SEARCH_INDEX_DEFINITIONS)[FtsSearchDocumentEntity]['mappings'] & {
-    _meta: { reindex_run_id: string; schema_version: number };
+    _meta: Required<FtsSearchIndexMeta>;
   };
   settings: { analysis: typeof FTS_SEARCH_INDEX_ANALYSIS };
 }
@@ -119,6 +142,8 @@ export type FtsSearchReindexProgressEvent =
       type: 'reconciliation';
     }
   | { type: 'aliases_created' }
+  /** Backfill finished but the alias still serves an older generation; run `--promote`. */
+  | { entities: FtsSearchDocumentEntity[]; type: 'promotion_pending' }
   | { type: 'run_paused' };
 
 export interface FtsSearchReindexResult {
@@ -373,19 +398,33 @@ export class FtsSearchReindexService {
       this.options.entityConcurrency,
       async ({ entity, physicalIndex, status }) => {
         try {
+          if (getFtsSearchIndexSchemaVersion(entity) !== state.run.schemaVersion) {
+            /**
+             * An entity whose declared version moved on is owned by a newer generation's
+             * checkpoint. Skip it unless this invocation explicitly asked to process it, in which
+             * case the checkpoint must not silently stamp the new version onto the old index.
+             */
+            if (!this.options.entities.includes(entity)) return;
+            throw new Error(
+              `Checkpoint targets schema version ${state.run.schemaVersion} but the code declares v${getFtsSearchIndexSchemaVersion(entity)} for ${entity}; start a new run for the declared generation`,
+            );
+          }
+          const meta = buildFtsSearchIndexMeta(entity, state.run.id);
+          const rebuildIndex = getFtsSearchPhysicalIndexName(
+            state.run.namespace,
+            entity,
+            state.run.schemaVersion,
+          );
+          if (physicalIndex !== rebuildIndex && status !== 'completed') {
+            await this.upgradeIndexInPlace(state.run.namespace, entity, physicalIndex, meta);
+          }
           await this.client.ensureIndex(
             physicalIndex,
             {
-              mappings: {
-                ...FTS_SEARCH_INDEX_DEFINITIONS[entity].mappings,
-                _meta: {
-                  reindex_run_id: state.run.id,
-                  schema_version: state.run.schemaVersion,
-                },
-              },
+              mappings: { ...FTS_SEARCH_INDEX_DEFINITIONS[entity].mappings, _meta: meta },
               settings: { analysis: FTS_SEARCH_INDEX_ANALYSIS },
             },
-            { createIfMissing: status !== 'completed' },
+            { createIfMissing: physicalIndex === rebuildIndex && status !== 'completed' },
           );
         } catch (error) {
           throw new FtsSearchReindexEntityError(entity, error);
@@ -393,6 +432,43 @@ export class FtsSearchReindexService {
       },
     );
     this.preparedRunId = state.run.id;
+  }
+
+  /**
+   * An in-place upgrade keeps the older physical index that the alias already serves and widens
+   * its mapping to the declared generation. Only an additive change qualifies; on resume the live
+   * mapping is already identical and the step is a no-op apart from restamping `_meta`. Anything
+   * else means the index was changed behind the checkpoint and needs a rebuild instead.
+   */
+  private async upgradeIndexInPlace(
+    namespace: string,
+    entity: FtsSearchDocumentEntity,
+    physicalIndex: string,
+    meta: FtsSearchReindexIndexBody['mappings']['_meta'],
+  ) {
+    const alias = getFtsSearchIndexAlias(namespace, entity);
+    const generations = await this.client.describeGenerations(alias);
+    const live = generations.find((generation) => generation.index === physicalIndex);
+    if (!live || live.state !== 'open' || !live.mappings) {
+      throw new Error(
+        `Elasticsearch index ${physicalIndex} is not an open generation of ${alias}; an in-place upgrade needs the live index`,
+      );
+    }
+    if (!live.isWriteIndex) {
+      throw new Error(
+        `Elasticsearch alias ${alias} does not serve ${physicalIndex}; upgrade the live generation in place or rebuild`,
+      );
+    }
+    const change = classifyMappingChange(entity, live.mappings, live.analysis);
+    if (change === 'breaking') {
+      throw new Error(
+        `The ${entity} mapping change is not additive; Elasticsearch cannot apply it to ${physicalIndex} in place, rebuild the generation instead`,
+      );
+    }
+    await this.client.putMapping(physicalIndex, {
+      _meta: meta,
+      properties: FTS_SEARCH_INDEX_DEFINITIONS[entity].mappings.properties,
+    });
   }
 
   private async flushBulk(
@@ -805,7 +881,21 @@ export class FtsSearchReindexService {
       entity,
       type: 'reconciliation',
     });
-    if (indexedCount !== finalProgress.indexedCount) {
+    /**
+     * A first install backfills into indexes nothing else writes to, so the counts must agree
+     * exactly. Once an alias serves the entity, incremental sync writes every change to all open
+     * generations while the backfill runs, so the index legitimately holds documents the backfill
+     * never saw (rows created after its scan passed, soft-delete markers). Only a shortfall is a
+     * defect then.
+     */
+    const generations = await this.client.describeGenerations(
+      getFtsSearchIndexAlias(state.run.namespace, entity),
+    );
+    const syncWritesConcurrently = generations.some((generation) => generation.aliased);
+    const mismatch = syncWritesConcurrently
+      ? indexedCount < finalProgress.indexedCount
+      : indexedCount !== finalProgress.indexedCount;
+    if (mismatch) {
       throw new Error(
         `Reindex count mismatch for ${entity}: checkpoint=${finalProgress.indexedCount}, Elasticsearch=${indexedCount}`,
       );
@@ -911,8 +1001,22 @@ export class FtsSearchReindexService {
     return this.completeEntity(state, entity);
   }
 
-  async run(namespace: string, schemaVersion: number): Promise<FtsSearchReindexResult> {
-    const initialState = await this.repository.createOrResume(namespace, schemaVersion);
+  /**
+   * Backfills the `schemaVersion` generation of `runEntities` (default: every entity). Only the
+   * entities selected in `options.entities` are processed in this invocation; aliases are created
+   * once every entity of the generation is complete, and an alias already serving an older
+   * generation is left in place for `--promote`.
+   */
+  async run(
+    namespace: string,
+    schemaVersion: number,
+    runEntities: readonly FtsSearchDocumentEntity[] = FTS_SEARCH_DOCUMENT_ENTITIES,
+  ): Promise<FtsSearchReindexResult> {
+    const initialState = await this.repository.createOrResume(
+      namespace,
+      schemaVersion,
+      runEntities,
+    );
     if (initialState.run.status === 'ready_for_incremental_sync') {
       return {
         runId: initialState.run.id,
@@ -922,8 +1026,9 @@ export class FtsSearchReindexService {
 
     await this.prepareIndices(initialState);
 
+    const generationEntities = new Set(initialState.progress.map(({ entity }) => entity));
     await mapWithConcurrency(
-      this.options.entities,
+      this.options.entities.filter((entity) => generationEntities.has(entity)),
       this.options.entityConcurrency,
       async (entity) => {
         const currentState = await this.repository.getRun(initialState.run.id);
@@ -944,14 +1049,26 @@ export class FtsSearchReindexService {
     }
 
     await this.options.validateIncrementalSyncSource();
+    const outcomes = new Map<FtsSearchDocumentEntity, FtsSearchReindexAliasOutcome>();
     for (const progress of currentState.progress) {
-      await this.client.ensureAlias(
-        getFtsSearchIndexAlias(namespace, progress.entity),
-        progress.physicalIndex,
+      outcomes.set(
+        progress.entity,
+        await this.client.ensureAlias(
+          getFtsSearchIndexAlias(namespace, progress.entity),
+          progress.physicalIndex,
+        ),
       );
     }
     await this.repository.markReadyForIncrementalSync(initialState.run.id);
-    await this.emitProgress({ type: 'aliases_created' });
+    if ([...outcomes.values()].includes('created')) {
+      await this.emitProgress({ type: 'aliases_created' });
+    }
+    const pendingPromotion = [...outcomes]
+      .filter(([, outcome]) => outcome === 'kept_other_generation')
+      .map(([entity]) => entity);
+    if (pendingPromotion.length > 0) {
+      await this.emitProgress({ entities: pendingPromotion, type: 'promotion_pending' });
+    }
 
     return {
       runId: initialState.run.id,
