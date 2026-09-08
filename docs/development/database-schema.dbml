@@ -1340,6 +1340,30 @@ table document_shares {
   }
 }
 
+table environments {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  workspace_id text
+  name varchar(255) [not null]
+  description text
+  provider text [not null]
+  enabled boolean [not null, default: true]
+  configuration jsonb [not null]
+  configuration_version integer [not null, default: 1]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'environments_user_id_idx']
+    workspace_id [name: 'environments_workspace_id_idx']
+
+
+
+
+  }
+}
+
 table expertise_bindings {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   domain_id varchar(255) [not null]
@@ -2753,6 +2777,30 @@ table projects {
     (status, updated_at) [name: 'projects_status_updated_at_idx']
     coordinator_agent_id [name: 'projects_coordinator_agent_id_unique', unique]
     
+  }
+}
+
+table project_environments {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  project_id text [not null]
+  environment_id uuid [not null]
+  workspace_id text
+  added_by_user_id text
+  enabled boolean [not null, default: true]
+  is_default boolean [not null, default: false]
+  sort_order integer [not null, default: 0]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (project_id, environment_id) [name: 'project_environments_project_environment_unique', unique]
+    project_id [name: 'project_environments_project_default_unique', unique]
+    (project_id, sort_order) [name: 'project_environments_project_sort_order_idx']
+    environment_id [name: 'project_environments_environment_id_idx']
+    workspace_id [name: 'project_environments_workspace_id_idx']
+    added_by_user_id [name: 'project_environments_added_by_user_id_idx']
+
   }
 }
 
