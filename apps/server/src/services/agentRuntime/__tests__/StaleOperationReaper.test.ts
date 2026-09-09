@@ -39,7 +39,10 @@ const candidate = (id = 'op_x') => ({
   workspaceId: null,
 });
 
-const buildCoordinator = (state: any) => ({ loadAgentState: vi.fn().mockResolvedValue(state) });
+const buildCoordinator = (state: any, history: any[] = []) => ({
+  getExecutionHistory: vi.fn().mockResolvedValue(history),
+  loadAgentState: vi.fn().mockResolvedValue(state),
+});
 const buildQueue = () => ({ scheduleMessage: vi.fn().mockResolvedValue('msg_1') });
 
 const runningState = (overrides: Record<string, any> = {}) => ({
@@ -49,9 +52,20 @@ const runningState = (overrides: Record<string, any> = {}) => ({
   ...overrides,
 });
 
-const buildReaper = (rows: any[], state: any, queue: any = buildQueue()) =>
+/** `saveStepResult` files the context for step N+1 under producing step N. */
+const historyFor = (stepIndex: number, context: any = { phase: 'tool_result' }) => [
+  { context: { phase: 'llm_result' }, stepIndex: stepIndex - 1 },
+  { context, stepIndex },
+];
+
+const buildReaper = (
+  rows: any[],
+  state: any,
+  queue: any = buildQueue(),
+  history: any[] = historyFor(6),
+) =>
   new StaleOperationReaper(buildDb(rows), {
-    coordinator: buildCoordinator(state) as any,
+    coordinator: buildCoordinator(state, history) as any,
     queueService: queue as any,
   });
 
@@ -69,6 +83,9 @@ describe('StaleOperationReaper', () => {
 
     expect(queue.scheduleMessage).toHaveBeenCalledWith(
       expect.objectContaining({
+        // The context step 6 produced for step 7 — without it `runtime.step`
+        // would synthesize a `user_input` context and drop the pending work.
+        context: { phase: 'tool_result' },
         // stepCount is the count of COMPLETED steps, so it is also the index
         // of the one that never finished.
         endpoint: 'https://app.lobehub.test/api/agent/run',
@@ -91,31 +108,59 @@ describe('StaleOperationReaper', () => {
     );
   });
 
-  it('redrives step 0 for an operation whose first step never executed', async () => {
-    // Born-dead shape: state exists but is still `idle` at step 0.
+  it('redrives step 0 with the context the operation was created with', async () => {
+    // Born-dead shape: state exists but is still `idle` at step 0. There is no
+    // producing step, so the context comes off the state — the same field the
+    // intervention continuation re-publishes from.
     const queue = buildQueue();
-    await buildReaper([candidate()], runningState({ status: 'idle', stepCount: 0 }), queue).sweep();
+    await buildReaper(
+      [candidate()],
+      runningState({ initialContext: { phase: 'user_input' }, status: 'idle', stepCount: 0 }),
+      queue,
+      [],
+    ).sweep();
 
-    expect(queue.scheduleMessage).toHaveBeenCalledWith(expect.objectContaining({ stepIndex: 0 }));
+    expect(queue.scheduleMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ context: { phase: 'user_input' }, stepIndex: 0 }),
+    );
   });
 
-  it('abandons instead of redriving when no resumable state survives', async () => {
+  it('abandons rather than redriving when the step context cannot be recovered', async () => {
+    // Resuming with a synthesized context would re-enter at `user_input` and
+    // silently drop pending tool work — a visible error is the lesser harm.
+    const queue = buildQueue();
+    const result = await buildReaper([candidate()], runningState(), queue, []).sweep();
+
+    expect(queue.scheduleMessage).not.toHaveBeenCalled();
+    expect(claimStaleRedriveMock).not.toHaveBeenCalled();
+    expect(finalizeAbandonedMock).toHaveBeenCalledWith('op_x', 'stale_lease_context_unavailable');
+    expect(result).toMatchObject({ abandoned: 1, redriven: 0 });
+  });
+
+  it('never touches an operation with no coordinator state', async () => {
+    // This is the shape of a HEALTHY heterogeneous run: an external Claude
+    // Code / Codex CLI drives it, it never creates coordinator state, and it
+    // only refreshes its lease on `heteroIngest` batches — so one long tool
+    // call reads as stale here. Retiring it would make `heteroIngest` drop
+    // every subsequent batch of a live session.
     const queue = buildQueue();
     const result = await buildReaper([candidate()], null, queue).sweep();
 
     expect(queue.scheduleMessage).not.toHaveBeenCalled();
     expect(claimStaleRedriveMock).not.toHaveBeenCalled();
-    expect(finalizeAbandonedMock).toHaveBeenCalledWith('op_x', 'stale_lease_unresumable');
-    expect(result).toMatchObject({ abandoned: 1, redriven: 0 });
+    expect(finalizeAbandonedMock).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ abandoned: 0, redriven: 0, skipped: 1 });
   });
 
   it.each(['waiting_for_human', 'waiting_for_async_tool'])(
     'never redrives a deliberately parked operation (%s)',
     async (status) => {
       const queue = buildQueue();
-      await buildReaper([candidate()], runningState({ status }), queue).sweep();
+      const result = await buildReaper([candidate()], runningState({ status }), queue).sweep();
 
       expect(queue.scheduleMessage).not.toHaveBeenCalled();
+      expect(finalizeAbandonedMock).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ skipped: 1 });
     },
   );
 

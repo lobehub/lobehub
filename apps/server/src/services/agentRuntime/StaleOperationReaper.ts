@@ -1,4 +1,4 @@
-import type { AgentState } from '@lobechat/agent-runtime';
+import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
 import debug from 'debug';
 import { and, asc, eq, isNull, lt, or } from 'drizzle-orm';
 import urlJoin from 'url-join';
@@ -44,13 +44,15 @@ export interface ReapStaleOperationsParams {
 }
 
 export interface ReapStaleOperationsResult {
-  /** Operations retired with a user-visible error (no state, or budget spent). */
+  /** Operations retired with a user-visible error (budget spent, or no context). */
   abandoned: number;
   /** Candidates whose lease was refreshed between select and claim. */
   alive: number;
   examined: number;
   /** Operations whose next step was re-queued. */
   redriven: number;
+  /** Candidates this sweep has no authority over — see `recover`. */
+  skipped: number;
 }
 
 /**
@@ -109,6 +111,7 @@ export class StaleOperationReaper {
       alive: 0,
       examined: candidates.length,
       redriven: 0,
+      skipped: 0,
     };
 
     for (const candidate of candidates) {
@@ -163,7 +166,7 @@ export class StaleOperationReaper {
     candidate: { id: string; userId: string; workspaceId: string | null },
     staleBefore: Date,
     maxRedriveAttempts: number,
-  ): Promise<'abandoned' | 'alive' | 'redriven'> {
+  ): Promise<'abandoned' | 'alive' | 'redriven' | 'skipped'> {
     const operationId = candidate.id;
     const operationModel = new AgentOperationModel(
       this.db,
@@ -171,15 +174,47 @@ export class StaleOperationReaper {
       candidate.workspaceId ?? undefined,
     );
 
-    // Read state before claiming: a run with no resumable state can never be
-    // redriven, so spending an attempt on it would only delay the abandon.
+    // Everything that decides *whether* to act is read before the claim, so a
+    // candidate this sweep cannot help never consumes an attempt.
     const state = await this.coordinator.loadAgentState(operationId).catch((e) => {
       log('[%s] state load failed, treating as unresumable: %O', operationId, e);
       return null;
     });
 
-    if (!this.canRedrive(state) || !this.queueService) {
-      await this.abandon(operationId, 'stale_lease_unresumable');
+    // No coordinator state means this sweep has no authority over the run.
+    // Crucially that is the shape of a *healthy* heterogeneous operation: a
+    // Claude Code / Codex run is driven by an external CLI, never creates
+    // coordinator state, and only refreshes its lease when `heteroIngest`
+    // batches arrive — so a single long tool call reads as "stale" here.
+    // Retiring one would be actively destructive rather than merely useless:
+    // `heteroIngest` bails out on `touchRunning` returning false, so every
+    // subsequent batch of a live session would be dropped before persistence.
+    //
+    // Stateless-but-genuinely-dead operations are the inactivity watchdog's
+    // job (it reaches them through `finalize-abandoned`), and it has the
+    // gateway-side evidence to tell the two apart. This sweep deliberately
+    // limits itself to runs it can actually resume.
+    if (!state || !this.queueService) return 'skipped';
+
+    // Parked operations have their own resume paths; a plain step would run
+    // past whatever they are waiting on.
+    if (!this.canRedrive(state)) return 'skipped';
+
+    // `stepCount` is the number of completed steps, so it is also the index of
+    // the step that never finished.
+    const stepIndex = state.stepCount;
+
+    // The context is NOT optional in practice. `runtime.step` falls back to
+    // `createInitialContext(state)` when it gets none, which re-enters the run
+    // at `user_input` — so a step that owed a `tool_result` / graph
+    // continuation would instead start a fresh LLM turn and silently drop the
+    // pending work. Recover the real one, and refuse to redrive without it:
+    // abandoning with a visible error is recoverable, corrupting the run is
+    // not.
+    const context = await this.resolveRedriveContext(operationId, state, stepIndex);
+    if (!context) {
+      log('[%s][%d] no persisted context to resume from', operationId, stepIndex);
+      await this.abandon(operationId, 'stale_lease_context_unavailable');
       return 'abandoned';
     }
 
@@ -202,13 +237,8 @@ export class StaleOperationReaper {
       return 'abandoned';
     }
 
-    // `stepCount` is the number of completed steps, so it is also the index of
-    // the step that never finished. `executeStep` reloads everything else it
-    // needs from this same state, which is why no context or payload has to be
-    // reconstructed here.
-    const stepIndex = state!.stepCount;
-
     await this.queueService.scheduleMessage({
+      context,
       // Distinct per attempt: a shared key would let the provider dedupe a
       // genuinely needed second redrive away and strand the operation again.
       deduplicationId: `stale-redrive:${operationId}:${stepIndex}:${attempt}`,
@@ -216,18 +246,52 @@ export class StaleOperationReaper {
       operationId,
       priority: 'normal',
       retryDelay:
-        typeof state!.metadata?.queueRetryDelay === 'string'
-          ? state!.metadata.queueRetryDelay
+        typeof state.metadata?.queueRetryDelay === 'string'
+          ? state.metadata.queueRetryDelay
           : undefined,
       retries:
-        typeof state!.metadata?.queueRetries === 'number'
-          ? state!.metadata.queueRetries
-          : undefined,
+        typeof state.metadata?.queueRetries === 'number' ? state.metadata.queueRetries : undefined,
       stepIndex,
     });
 
     log('[%s][%d] redriven (attempt %d/%d)', operationId, stepIndex, attempt, maxRedriveAttempts);
     return 'redriven';
+  }
+
+  /**
+   * The context the interrupted step should have received.
+   *
+   * Step 0 carries the context the operation was created with, which the
+   * runtime persists onto the state — the same field the intervention
+   * continuation re-publishes from. Every later step is driven by the
+   * `nextContext` its predecessor produced, which `saveStepResult` stores
+   * alongside the step in the execution history under the *producing* step's
+   * index (so step N's entry holds the context for step N+1).
+   *
+   * Returns undefined rather than a synthesized fallback: the caller must be
+   * able to tell "resume correctly" from "cannot resume".
+   */
+  private async resolveRedriveContext(
+    operationId: string,
+    state: AgentState,
+    stepIndex: number,
+  ): Promise<AgentRuntimeContext | undefined> {
+    if (stepIndex === 0) {
+      return (state as AgentState & { initialContext?: AgentRuntimeContext }).initialContext;
+    }
+
+    try {
+      const history = await this.coordinator.getExecutionHistory(operationId);
+      const producer = history.find(
+        (entry: { context?: AgentRuntimeContext; stepIndex?: number }) =>
+          entry?.stepIndex === stepIndex - 1,
+      );
+
+      return producer?.context;
+    } catch (e) {
+      log('[%s][%d] execution history lookup failed: %O', operationId, stepIndex, e);
+      return undefined;
+    }
   }
 
   /**
