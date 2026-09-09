@@ -5,9 +5,9 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { SAFE_BM25_QUERY_OPTIONS, sanitizeBm25Query } from '../../../utils/bm25';
 import { escapeLike } from '../../../utils/like';
 
-/** One searchable column of a single table together with its ranking weight. */
+/** One searchable field expression together with its ranking weight. */
 export interface PgFtsSearchField {
-  column: AnyPgColumn;
+  column: AnyPgColumn | SQL;
   /**
    * `jsonb` columns are indexed natively by BM25 but must be cast to text before a
    * substring provider can match them.

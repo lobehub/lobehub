@@ -380,9 +380,11 @@ const CANDIDATE_TARGETS: Record<FtsSearchBackendEntity, CandidateTarget | undefi
       current_status: [{ column: userMemoriesContexts.currentStatus }],
       description: [{ column: userMemoriesContexts.description }],
       parent_text: [
-        { column: userMemories.title },
-        { column: userMemories.summary },
-        { column: userMemories.details },
+        {
+          // The search projection combines these columns into one logical field,
+          // so query terms may span a parent's title, summary, and details.
+          column: sql`concat_ws(' ', ${userMemories.title}, ${userMemories.summary}, ${userMemories.details})`,
+        },
       ],
       title: [{ column: userMemoriesContexts.title, weight: 2 }],
     },

@@ -1,6 +1,6 @@
 ---
 name: full-text-search
-description: 'Use for product search: FtsSearchRepo, pg_search/Elasticsearch, mapping migrations, projections, Outbox sync, reindexing and performance. Excludes agent web search.'
+description: 'Use for product search: FtsSearchRepo, pg_search/pg_like/Elasticsearch, mapping migrations, projections, Outbox sync, reindexing and performance. Excludes agent web search.'
 ---
 
 # Product Full-Text Search
@@ -58,6 +58,18 @@ router/service -> createFtsSearchRepo -> FtsSearchRepo -> selected backend -> ex
   not make routers understand provider-specific result shapes.
 
 ## Changing a Searchable Entity
+
+### Scope for pg\_like
+
+`pg_like` primarily serves individual users with small datasets. Review it for correct matching,
+permissions, and usable result ordering at that scale. For richer search quality or larger datasets,
+recommend self-hosted Elasticsearch or Elastic Cloud. Do not add indexes or change the database
+schema as part of pg\_like optimization. Keep repairs bounded; distinguish new implementation bugs
+from shared provider limitations and deliberate lightweight-search trade-offs. Do not infer a
+personal-user performance problem from large shared development datasets without representative
+measurements.
+
+### Entity changes
 
 Treat an entity addition or projection change as one cross-layer change. Inspect and update every
 applicable item:

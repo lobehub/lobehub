@@ -177,7 +177,12 @@ export async function searchTopics(
         dialect.match(TOPIC_FIELDS, preparedQuery),
       ),
     )
-    .orderBy(sql`${score} DESC`)
+    // LIKE scores tie frequently; keep recent hits before the candidate cutoff.
+    // ParadeDB retains its score-only ordering to preserve the TopN scan.
+    .orderBy(
+      sql`${score} DESC`,
+      ...(dialect.isolatesScoredScan ? [] : [desc(topics.updatedAt), topics.id]),
+    )
     // `agent_id` is not a BM25 field, so when score ordering is valid its
     // filter lives above the scan and the pool deepens to compensate.
     .limit(
@@ -290,7 +295,12 @@ export async function searchMessages(
         dialect.match(MESSAGE_FIELDS, preparedQuery),
       ),
     )
-    .orderBy(sql`${score} DESC`)
+    // Message recency follows creation time, even when older messages are edited.
+    // Preserve ParadeDB's score-only TopN scan.
+    .orderBy(
+      sql`${score} DESC`,
+      ...(dialect.isolatesScoredScan ? [] : [desc(messages.createdAt), messages.id]),
+    )
     // `agent_id` is not a BM25 field, so when score ordering is valid its
     // filter lives above the scan and the pool deepens to compensate.
     .limit(

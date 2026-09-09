@@ -210,6 +210,47 @@ describe('FtsSearchRepo (pg_like)', () => {
     );
   });
 
+  describe('recency within relevance ties', () => {
+    beforeEach(async () => {
+      await serverDB.delete(users);
+      await serverDB.insert(users).values([{ id: userId }]);
+    });
+
+    it.each(['topic', 'message'] as const)(
+      'keeps the newest tied %s before limiting the candidate pool',
+      async (type) => {
+        const records = Array.from({ length: 12 }, (_, index) => ({
+          createdAt: new Date(Date.UTC(2026, 0, index + 1)),
+          id: `recency-${index}`,
+          // Editing older messages must not displace newly created messages.
+          updatedAt: new Date(Date.UTC(2026, 0, type === 'message' ? 12 - index : index + 1)),
+          userId,
+        }));
+        if (type === 'topic') {
+          await serverDB
+            .insert(topics)
+            .values(records.map((record) => ({ ...record, title: 'Kubernetes notes' })));
+        } else {
+          await serverDB.insert(messages).values(
+            records.map((record) => ({
+              ...record,
+              content: 'Kubernetes notes',
+              role: 'user',
+            })),
+          );
+        }
+
+        const results = await createRepo(serverDB, userId).search({
+          limitPerType: 1,
+          query: 'kubernetes',
+          type,
+        });
+
+        expect(results.map((item) => item.id)).toEqual(['recency-11']);
+      },
+    );
+  });
+
   describe('candidates mode', () => {
     const workspaceId = 'pg-like-workspace';
     const now = new Date();
@@ -595,6 +636,37 @@ describe('FtsSearchRepo (pg_like)', () => {
         query: { text: 'unrelated' },
       });
       expect(viaOwnText.candidates.map((candidate) => candidate.id)).toEqual([unrelated.id]);
+    });
+
+    it('matches parent_text terms across parent title and details without leaking other users', async () => {
+      const [parent, foreignParent] = await serverDB
+        .insert(userMemories)
+        .values([
+          { details: 'Ingress migration', lastAccessedAt: now, title: 'Kubernetes', userId },
+          {
+            details: 'Ingress migration',
+            lastAccessedAt: now,
+            title: 'Kubernetes',
+            userId: otherUserId,
+          },
+        ])
+        .returning({ id: userMemories.id });
+      const [context] = await serverDB
+        .insert(userMemoriesContexts)
+        .values([
+          { title: 'Infrastructure', userId, userMemoryIds: [parent.id] },
+          { title: 'Foreign reference', userId, userMemoryIds: [foreignParent.id] },
+        ])
+        .returning({ id: userMemoriesContexts.id });
+
+      const response = await createRepo(serverDB, userId).ftsSearchCandidates({
+        entity: 'memoryContexts',
+        filters: {},
+        pagination: {},
+        query: { fields: ['parent_text'], text: 'kubernetes ingress' },
+      });
+
+      expect(response.candidates.map((candidate) => candidate.id)).toEqual([context.id]);
     });
 
     it('deduplicates memory contexts joined to several parent memories', async () => {
