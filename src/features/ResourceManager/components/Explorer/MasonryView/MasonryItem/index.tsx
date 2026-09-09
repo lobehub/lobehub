@@ -20,7 +20,7 @@ import { showContextMenu } from '@/libs/contextMenu';
 import { getChunkTargetId, useFileStore } from '@/store/file';
 import { type FileListItem } from '@/types/files';
 
-import { useFileItemClick } from '../../hooks/useFileItemClick';
+import { useFileItemClick, useFileItemDoubleClick } from '../../hooks/useFileItemClick';
 import DropdownMenu from '../../ItemDropdown/DropdownMenu';
 import { useFileItemDropdown } from '../../ItemDropdown/useFileItemDropdown';
 import AudioFileItem from './AudioFileItem';
@@ -251,6 +251,7 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
       onOpen,
       slug,
     });
+    const handleItemDoubleClick = useFileItemDoubleClick({ id });
 
     // Memoize drag data to prevent recreation
     const dragData = useMemo(
@@ -418,6 +419,7 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
               styles.contentWithPadding,
           )}
           onClick={handleItemClick}
+          onDoubleClick={handleItemDoubleClick}
         >
           {(() => {
             switch (true) {

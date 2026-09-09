@@ -23,6 +23,7 @@ vi.mock(
 const { getOrCreateTabRouter, getTabRouter, resetTabRouterManager } =
   await import('@/features/Electron/TabHost/tabRouterManager');
 const { useElectronStore } = await import('@/store/electron');
+const { useResourceManagerStore } = await import('@/features/ResourceManager/store');
 const { useFileItemClick } = await import('./useFileItemClick');
 
 const TAB_ID = 'tab-1';
@@ -68,7 +69,7 @@ afterEach(() => {
 });
 
 describe('useFileItemClick (desktop shell)', () => {
-  it('writes ?file= to the active tab router, not the shell router', async () => {
+  it('opens the inline detail panel without touching the tab URL', async () => {
     const { result } = renderFileClick({
       id: 'file_1',
       isFolder: false,
@@ -80,8 +81,36 @@ describe('useFileItemClick (desktop shell)', () => {
       result.current();
     });
 
-    expect(getTabRouter(TAB_ID)!.state.location.search).toBe('?view=grid&file=file_1');
+    // A plain click is an in-context preview: it must not write `?file=`,
+    // which doubles as the fullscreen deep-link on restore.
+    expect(getTabRouter(TAB_ID)!.state.location.search).toBe('?view=grid');
     expect(screen.getByTestId('shell-search').textContent).toBe('');
+    expect(useResourceManagerStore.getState().detailPanelId).toBe('file_1');
+  });
+
+  it('fullscreen editor on double click writes ?file= to the tab router', async () => {
+    const { result: clickResult } = renderFileClick({
+      id: 'file_1',
+      isFolder: false,
+      isPage: false,
+      libraryId: 'kb_1',
+    });
+    await act(async () => {
+      clickResult.current();
+    });
+
+    const { useFileItemDoubleClick } = await import('./useFileItemClick');
+    const { result } = renderHook(() => useFileItemDoubleClick({ id: 'file_1' }), {
+      wrapper: shellWrapper,
+    });
+
+    await act(async () => {
+      result.current();
+    });
+
+    expect(getTabRouter(TAB_ID)!.state.location.search).toBe('?view=grid&file=file_1');
+    expect(useResourceManagerStore.getState().mode).toBe('editor');
+    expect(useResourceManagerStore.getState().detailPanelId).toBeUndefined();
   });
 
   it('preserves the tab url view preferences when selecting a page', async () => {

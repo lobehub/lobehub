@@ -31,6 +31,7 @@ export const useFileItemClick = ({
   const { pathname, search } = useActiveLocation();
   const setMode = useResourceManagerStore((s) => s.setMode);
   const setCurrentViewItemId = useResourceManagerStore((s) => s.setCurrentViewItemId);
+  const openDetailPanel = useResourceManagerStore((s) => s.openDetailPanel);
 
   const handleClick = useCallback(() => {
     const selectFile = () => {
@@ -70,11 +71,11 @@ export const useFileItemClick = ({
       // Update URL query parameter for shareable links
       selectFile();
     } else {
-      // Set mode to editor for regular files
-      setCurrentViewItemId(id);
-      setMode('editor');
-      // Update URL query parameter for shareable links
-      selectFile();
+      // Open the in-context detail panel instead of leaving the list. A plain
+      // click is a "look at this" gesture — the promise of this surface is to
+      // keep the working list visible. Fullscreen focus stays available as the
+      // explicit double click (see `openFileEditor`).
+      openDetailPanel(id);
       // Call onOpen if provided for backwards compatibility
       onOpen?.(id);
     }
@@ -89,8 +90,32 @@ export const useFileItemClick = ({
     search,
     setMode,
     setCurrentViewItemId,
+    openDetailPanel,
     onOpen,
   ]);
 
   return handleClick;
+};
+
+/**
+ * Double click = the committed "open this file" gesture: leave the list into
+ * the fullscreen editor, exactly what a single click used to do. Keeps the
+ * `?file=` deep-link write so a restored tab still lands on this file.
+ */
+export const useFileItemDoubleClick = ({ id }: { id: string }) => {
+  const setMode = useResourceManagerStore((s) => s.setMode);
+  const setCurrentViewItemId = useResourceManagerStore((s) => s.setCurrentViewItemId);
+  const closeDetailPanel = useResourceManagerStore((s) => s.closeDetailPanel);
+  const { search } = useActiveLocation();
+  const navigate = useWorkspaceAwareNavigate();
+
+  return useCallback(() => {
+    closeDetailPanel();
+    setCurrentViewItemId(id);
+    setMode('editor');
+
+    const newParams = new URLSearchParams(search);
+    newParams.set('file', id);
+    navigate({ search: `?${newParams.toString()}` }, { replace: true });
+  }, [closeDetailPanel, id, setCurrentViewItemId, setMode, navigate, search]);
 };
