@@ -115,13 +115,13 @@ made a systemic soft-delete filter feasible.
 `schemas/_helpers.ts`, added up front in one migration even though only phase-1 kinds are trashable
 today:
 
-| column       | type                             | role                                                                                                           |
-| ------------ | -------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `is_deleted` | `boolean NOT NULL DEFAULT false` | the flag every ownership-scoped read filters on (`is_deleted = false`); cheap to index, unambiguous in raw SQL |
-| `deleted_at` | `timestamptz NULL`               | when the row was trashed; drives the retention clock and the "deleted 3 days ago" copy                         |
+| column       | type               | role                                                                                                                                                 |
+| ------------ | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `is_deleted` | `boolean NULL`     | nullable compatibility flag; live rows are `NULL` or `false`, so ownership-scoped reads use `is_deleted IS NOT TRUE` (normally through `notTrashed`) |
+| `deleted_at` | `timestamptz NULL` | when the row was trashed; drives the retention clock and the "deleted 3 days ago" copy                                                               |
 
 The two are written together by `trashStamp()` / `restoreStamp()` (`utils/softDelete.ts`) —
-`is_deleted = (deleted_at IS NOT NULL)` is an invariant enforced in code, not by a CHECK (a
+`is_deleted IS TRUE` iff `deleted_at IS NOT NULL` is an invariant enforced in code, not by a CHECK (a
 CHECK would full-scan `messages` at migration time).
 
 Which tables carry them — the rule is _user-visible content with its own delete action and an
@@ -141,9 +141,9 @@ independent lifecycle_:
 | **Deliberately without** (config / security / infra) | `api_keys`, `devices`, `user_connectors`, `user_installed_plugins`, `ai_providers/models`, `oidc_*`, `rbac_*`, `auth_*`, `push_tokens`, `resource_permissions`, `*_jobs`, `*_tracing`, `workspace_*`, eval tables | revoke / audit / cache semantics — a hard delete is the right behaviour, and nothing to "restore"                                                                        |
 
 No new indexes: hot list queries already hit `(user_id | workspace_id, …)` indexes and the extra
-`is_deleted = false` predicate is a cheap filter on the matched rows; the bin never scans source
-tables. Adding `is_deleted … DEFAULT false NOT NULL` is metadata-only in Postgres 11+, so the
-migration is instant even on `messages`.
+`is_deleted IS NOT TRUE` predicate is a cheap filter on the matched rows; the bin never scans source
+tables. Adding nullable columns without a default is metadata-only, so the migration is instant even
+on `messages`.
 
 **`trash_items`** (`schemas/trash.ts`):
 
@@ -194,7 +194,8 @@ Two invariants:
 
 ### 2.4 Read-side filtering — one funnel, not 250 patches
 
-`buildWorkspaceWhere(ctx, cols)` now appends `is_deleted = false` whenever `cols.isDeleted` is the
+`buildWorkspaceWhere(ctx, cols)` now appends `is_deleted IS NOT TRUE` via `notTrashed` whenever
+`cols.isDeleted` is the
 flag of a table in `TRASH_AWARE_TABLES` (matched by the original table name — the nineteen
 trashable tables above plus later filterable tables such as `metrics`;
 `agent_documents`, `topic_comments`, `workspace_members` never carry `is_deleted` and are therefore

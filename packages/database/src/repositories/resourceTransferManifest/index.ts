@@ -140,7 +140,7 @@ export const buildMemberTransferManifest = async (
         })
         .from(chatGroupsAgents)
         .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
-        .where(and(eq(chatGroupsAgents.chatGroupId, resourceId), notTrashed(agents.isDeleted)));
+        .where(eq(chatGroupsAgents.chatGroupId, resourceId));
 
       for (const row of memberRows) {
         if (resolveGroupMembershipType(row) === 'owned') {

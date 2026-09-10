@@ -17,9 +17,9 @@ export const briefRuntime: ServerRuntimeRegistration = {
     const db = context.serverDB;
     const userId = context.userId;
     const { agentId, taskId } = context;
-    // Prefer the workspaceId threaded through the pipeline. Fall back to the
-    // owning task row when an older caller still doesn't populate it.
-    const resolveWs = async () => context.workspaceId ?? (await resolveTaskWorkspaceId(db, taskId));
+    // A present task remains the durable scope anchor even when the pipeline
+    // supplied workspaceId; validate both liveness and scope before writes.
+    const resolveWs = async () => resolveTaskWorkspaceId(db, taskId, context.workspaceId);
 
     return {
       createBrief: async (args: {

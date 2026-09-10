@@ -207,7 +207,7 @@ export class OnboardingService {
     if (!topic || topic.agentId === inboxAgentId) return;
 
     await this.db.transaction(async (tx) => {
-      await tx
+      const [updatedTopic] = await tx
         .update(topics)
         .set({ agentId: inboxAgentId, updatedAt: topics.updatedAt })
         .where(
@@ -217,7 +217,13 @@ export class OnboardingService {
             notTrashed(topics.isDeleted),
             notShareVisitorTopic(),
           ),
-        );
+        )
+        .returning({ id: topics.id });
+
+      // The topic may have been trashed after the creator-scoped pre-read.
+      // The guarded update is the transaction's serialization point: when it
+      // loses that race, do not re-parent children behind the hidden topic.
+      if (!updatedTopic) return;
 
       await tx
         .update(messages)

@@ -23,8 +23,9 @@ type DeviceScopeContext = Pick<
 export const resolveTaskWorkspaceId = async (
   db: LobeChatDatabase,
   taskId: string | undefined,
+  expectedWorkspaceId?: string,
 ): Promise<string | undefined> => {
-  if (!taskId) return undefined;
+  if (!taskId) return expectedWorkspaceId;
 
   const [row] = await db
     .select({ workspaceId: tasks.workspaceId })
@@ -34,7 +35,15 @@ export const resolveTaskWorkspaceId = async (
 
   if (!row)
     throw new Error(`Cannot recover workspace scope from missing or trashed task ${taskId}`);
-  return row.workspaceId ?? undefined;
+
+  const taskWorkspaceId = row.workspaceId ?? undefined;
+  if (expectedWorkspaceId !== undefined && taskWorkspaceId !== expectedWorkspaceId) {
+    throw new Error(
+      `Task ${taskId} belongs to workspace ${taskWorkspaceId ?? 'personal'}, not ${expectedWorkspaceId}`,
+    );
+  }
+
+  return taskWorkspaceId;
 };
 
 /**

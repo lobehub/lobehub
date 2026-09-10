@@ -32,14 +32,12 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
         })
       : ordinaryDocumentAccessScope;
     const { taskId } = context;
-    // Resolve the legacy task-derived scope once, before any document read or
-    // write. A missing/trashed task rejects here instead of letting the service
-    // or pinning model silently fall back to personal scope.
+    // Resolve and validate the task-derived scope once, before any document
+    // read or write. Even when the pipeline supplied workspaceId, a task that
+    // was trashed after dispatch or belongs to another scope must fail closed.
     let workspaceIdPromise: Promise<string | undefined> | undefined;
     const resolveWorkspaceId = () =>
-      (workspaceIdPromise ??= context.workspaceId
-        ? Promise.resolve(context.workspaceId)
-        : resolveTaskWorkspaceId(db, taskId));
+      (workspaceIdPromise ??= resolveTaskWorkspaceId(db, taskId, context.workspaceId));
     let servicePromise: Promise<AgentDocumentsService> | undefined;
     const getService = () =>
       (servicePromise ??= resolveWorkspaceId().then(

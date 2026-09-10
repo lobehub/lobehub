@@ -141,6 +141,34 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
     expect(pinDocument).not.toHaveBeenCalled();
   });
 
+  it('validates a trashed task before mutation when workspace context is present', async () => {
+    const runtime = agentDocumentsRuntime.factory(buildContext('trashed-task', 'workspace-1', []));
+
+    await expect(
+      runtime.createDocument(
+        { content: 'body', title: 'Must not write before task validation' },
+        { agentId: 'agent-1' },
+      ),
+    ).rejects.toThrow('missing or trashed task trashed-task');
+    expect(serviceImpl.createDocument).not.toHaveBeenCalled();
+    expect(pinDocument).not.toHaveBeenCalled();
+  });
+
+  it('fails before document mutation when task and context workspaces differ', async () => {
+    const runtime = agentDocumentsRuntime.factory(
+      buildContext('task-1', 'workspace-1', [{ workspaceId: 'workspace-2' }]),
+    );
+
+    await expect(
+      runtime.createDocument(
+        { content: 'body', title: 'Must not cross workspace scopes' },
+        { agentId: 'agent-1' },
+      ),
+    ).rejects.toThrow('Task task-1 belongs to workspace workspace-2, not workspace-1');
+    expect(serviceImpl.createDocument).not.toHaveBeenCalled();
+    expect(pinDocument).not.toHaveBeenCalled();
+  });
+
   it('uses the recovered task workspace for both document mutation and pinning', async () => {
     const context = buildContext('task-1', undefined, [{ workspaceId: 'workspace-1' }]);
     const runtime = agentDocumentsRuntime.factory(context);
@@ -152,6 +180,7 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
       'user-1',
       'workspace-1',
       undefined,
+      { type: 'ordinary' },
     );
     expect(TaskModel).toHaveBeenLastCalledWith(context.serverDB, 'user-1', 'workspace-1');
   });
@@ -287,19 +316,14 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
 
   it('forces Share creation and listing into the visitor current-topic scope', async () => {
     const runtime = agentDocumentsRuntime.factory(
-      buildContext(
-        undefined,
-        undefined,
-        undefined,
-        {
-          agentShareVisitor: {
-            agentId: 'agent-1',
-            shareId: 'share-1',
-            visitorUserId: 'visitor-1',
-          },
-          topicId: 'topic-1',
+      buildContext(undefined, undefined, undefined, {
+        agentShareVisitor: {
+          agentId: 'agent-1',
+          shareId: 'share-1',
+          visitorUserId: 'visitor-1',
         },
-      ),
+        topicId: 'topic-1',
+      }),
     );
 
     const created = await runtime.createDocument(

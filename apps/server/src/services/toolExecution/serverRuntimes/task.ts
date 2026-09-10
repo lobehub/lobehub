@@ -23,7 +23,6 @@ import {
 } from '@lobechat/prompts';
 import type { TaskAutomationMode, TaskStatus } from '@lobechat/types';
 import { formatInvalidScheduleMessage, validateScheduleUpdate } from '@lobechat/utils/cronEval';
-import { and, eq } from 'drizzle-orm';
 
 import { notifyTaskAssigned } from '@/business/server/task/notifyTaskAssigned';
 import { AgentModel } from '@/database/models/agent';
@@ -1013,28 +1012,26 @@ export const taskRuntime: ServerRuntimeRegistration = {
       taskCaller: taskRouter.createCaller({ actingAgentId: agentId, userId }),
     } as TaskRuntimeDeps;
 
-    let resolved = false;
-    const ensureModels = async () => {
-      if (resolved) return;
-      resolved = true;
-      // Prefer pipeline-threaded `context.workspaceId`. Fall back to looking
-      // up the owning task row for callers that pre-date the propagation work
-      // and still construct `ToolExecutionContext` without `workspaceId`.
-      const wsId = context.workspaceId ?? (await resolveTaskWorkspaceId(db, taskId));
-      workspaceId = wsId;
-      deps.workspaceId = wsId;
-      deps.agentModel = new AgentModel(db, userId, wsId);
-      deps.taskModel = new TaskModel(db, userId, wsId);
-      deps.taskService = new TaskService(db, userId, wsId);
-      // MUST keep `actingAgentId`: this replaces the caller built above, and
-      // every exported method awaits `ensureModels()` first — dropping it here
-      // silently attributes every agent-driven task edit to the session user.
-      deps.taskCaller = taskRouter.createCaller({
-        actingAgentId: agentId,
-        userId,
-        workspaceId: wsId,
-      });
-    };
+    let modelsPromise: Promise<void> | undefined;
+    const ensureModels = () =>
+      (modelsPromise ??= (async () => {
+        // A present task remains the durable scope anchor even when the pipeline
+        // supplied workspaceId; validate both liveness and scope before writes.
+        const wsId = await resolveTaskWorkspaceId(db, taskId, context.workspaceId);
+        workspaceId = wsId;
+        deps.workspaceId = wsId;
+        deps.agentModel = new AgentModel(db, userId, wsId);
+        deps.taskModel = new TaskModel(db, userId, wsId);
+        deps.taskService = new TaskService(db, userId, wsId);
+        // MUST keep `actingAgentId`: this replaces the caller built above, and
+        // every exported method awaits `ensureModels()` first — dropping it here
+        // silently attributes every agent-driven task edit to the session user.
+        deps.taskCaller = taskRouter.createCaller({
+          actingAgentId: agentId,
+          userId,
+          workspaceId: wsId,
+        });
+      })());
 
     const baseRuntime = createTaskRuntime(deps);
 

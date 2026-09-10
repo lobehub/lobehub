@@ -30,6 +30,15 @@ describe('workspace scope recovery', () => {
     await expect(resolveTaskWorkspaceId(createDb([]), undefined)).resolves.toBe(undefined);
   });
 
+  it('validates a supplied workspace against the live task anchor', async () => {
+    await expect(
+      resolveTaskWorkspaceId(createDb([{ workspaceId: 'workspace-1' }]), 'task-1', 'workspace-1'),
+    ).resolves.toBe('workspace-1');
+    await expect(
+      resolveTaskWorkspaceId(createDb([{ workspaceId: 'workspace-2' }]), 'task-1', 'workspace-1'),
+    ).rejects.toThrow('Task task-1 belongs to workspace workspace-2, not workspace-1');
+  });
+
   it('fails closed when an anchored agent is missing or trashed', async () => {
     await expect(
       resolveContentWorkspaceId({ agentId: 'agent-1', serverDB: createDb([]) }),

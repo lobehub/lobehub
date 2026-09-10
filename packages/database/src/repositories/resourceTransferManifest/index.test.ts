@@ -326,6 +326,39 @@ describe('buildMemberTransferManifest', () => {
     expect(manifest?.botPlatforms).toEqual([]);
   });
 
+  it('includes a trashed private referenced member in the group manifest', async () => {
+    const groupModel = new ChatGroupModel(serverDB, ownerId, wsId);
+    const group = await groupModel.create({ title: 'Group', visibility: 'public' });
+    const [referenced] = await serverDB
+      .insert(agents)
+      .values({
+        deletedAt: new Date(),
+        isDeleted: true,
+        title: 'Trashed standalone',
+        userId: teammateId,
+        virtual: false,
+        visibility: 'private',
+        workspaceId: wsId,
+      })
+      .returning();
+    await serverDB.insert(chatGroupsAgents).values({
+      agentId: referenced.id,
+      chatGroupId: group.id,
+      role: 'participant',
+      userId: ownerId,
+      workspaceId: wsId,
+    });
+
+    const manifest = await buildMemberTransferManifest(serverDB, {
+      recipientId,
+      resourceId: group.id,
+      resourceType: 'agentGroup',
+      workspaceId: wsId,
+    });
+
+    expect(manifest?.hiddenReferencedMember).toBe(true);
+  });
+
   it('returns null for a resource outside the workspace', async () => {
     await expect(
       buildMemberTransferManifest(serverDB, {

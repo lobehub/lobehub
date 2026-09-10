@@ -614,12 +614,7 @@ export class AgentShareModel {
       .select({ id: agentShares.id, visibility: agentShares.visibility })
       .from(agentShares)
       .innerJoin(agents, eq(agentShares.agentId, agents.id))
-      .where(
-        and(
-          eq(agentShares.agentId, params.agentId),
-          notTrashed(agents.isDeleted),
-        ),
-      )
+      .where(and(eq(agentShares.agentId, params.agentId), notTrashed(agents.isDeleted)))
       .limit(1);
 
     return !!share && share.id === params.shareId && share.visibility === 'link';
