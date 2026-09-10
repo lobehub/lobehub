@@ -171,6 +171,25 @@ describe('HeteroSessionImporterRepo.importSessions', () => {
     expect(rows).toHaveLength(3);
   });
 
+  it('treats a trashed imported message as an existing client identity on re-import', async () => {
+    const repo = new HeteroSessionImporterRepo(serverDB, userId);
+    await repo.importSessions({ agentId, sessions: [basePayload()] });
+    await serverDB
+      .update(messages)
+      .set({ deletedAt: new Date('2026-09-10T00:00:00Z'), isDeleted: true })
+      .where(eq(messages.clientId, 'cc-s1-a1'));
+
+    const [second] = await repo.importSessions({ agentId, sessions: [basePayload()] });
+
+    expect(second.insertedMessages).toBe(0);
+    expect(second.skippedMessages).toBe(3);
+    const rows = await serverDB
+      .select({ id: messages.id })
+      .from(messages)
+      .where(eq(messages.clientId, 'cc-s1-a1'));
+    expect(rows).toHaveLength(1);
+  });
+
   it('imports incrementally: a grown transcript only inserts the new tail', async () => {
     const repo = new HeteroSessionImporterRepo(serverDB, userId);
     const [first] = await repo.importSessions({ agentId, sessions: [basePayload()] });

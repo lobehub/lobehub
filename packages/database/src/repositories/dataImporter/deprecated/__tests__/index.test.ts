@@ -663,6 +663,30 @@ describe('DataImporter', () => {
       expect(result.messages.errors).toBe(0);
     });
 
+    it('skips a trashed message identity when the same data is imported again', async () => {
+      const data: ImporterEntryData = {
+        messages: [
+          {
+            content: 'Imported once',
+            createdAt: 1715186011586,
+            id: 'trashed-import-message',
+            role: 'user',
+            updatedAt: 1715186015053,
+          },
+        ],
+        version: CURRENT_CONFIG_VERSION,
+      };
+      await importer.importData(data);
+      await serverDB
+        .update(messages)
+        .set({ deletedAt: new Date('2026-09-10T01:00:00Z'), isDeleted: true })
+        .where(eq(messages.clientId, 'trashed-import-message'));
+
+      const second = await new DeprecatedDataImporterRepos(serverDB, userId).importData(data);
+
+      expect(second.messages).toMatchObject({ added: 0, errors: 0, skips: 1 });
+    });
+
     it('should associate imported messages with sessions and topics', async () => {
       const data: ImporterEntryData = {
         version: CURRENT_CONFIG_VERSION,
