@@ -25,8 +25,8 @@ export class UserMemoryExperienceModel {
     this.ftsSearchCandidateSource = ftsSearchCandidateSource;
   }
 
-  private memoryWhere(table: Parameters<typeof buildUserMemoryWhere>[1]) {
-    return buildUserMemoryWhere(this.userId, table);
+  private memoryWhere(table: Parameters<typeof buildUserMemoryWhere>[2]) {
+    return buildUserMemoryWhere(this.db, this.userId, table);
   }
 
   create = async (params: Omit<NewUserMemoryExperience, 'userId'>) => {

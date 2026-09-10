@@ -1024,13 +1024,28 @@ export class MessageModel {
   }
 
   /**
-   * Raw workspace/user scope, WITHOUT the visitor exclusion. Backing store
-   * for {@link ownership} and the escape hatch for methods that resolve the
+   * Workspace/user scope plus the live parent-topic fence, WITHOUT the visitor
+   * exclusion. Topic-less rows remain valid. Backing store for
+   * {@link ownership} and the escape hatch for methods that resolve the
    * effective visitor gate per-call ({@link deleteMessage},
    * {@link deleteMessages}, {@link query} via `allowShareVisitor`, …).
    */
   private workspaceScope = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages);
+    and(
+      buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages),
+      or(
+        isNull(messages.topicId),
+        inArray(
+          messages.topicId,
+          this.db
+            .select({ id: topics.id })
+            .from(topics)
+            .where(
+              buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics),
+            ),
+        ),
+      ),
+    );
 
   /**
    * Default visitor exclusion applied by {@link ownership} — see

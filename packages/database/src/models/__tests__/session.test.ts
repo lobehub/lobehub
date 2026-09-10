@@ -583,7 +583,7 @@ describe('SessionModel', () => {
           groupId: 'non-existent-group',
         },
       ];
-      const result = await sessionModel.batchCreate(sessions);
+      await sessionModel.batchCreate(sessions);
 
       // Assert results
       // expect(result[0].group).toBe('default');

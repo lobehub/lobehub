@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { RelationshipEnum } from '@lobechat/types';
+import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
@@ -675,6 +676,32 @@ describe('UserMemoryIdentityModel', () => {
       expect(result[0]).toHaveProperty('capturedAt');
       expect(result[0]).toHaveProperty('createdAt');
       expect(result[0]).toHaveProperty('updatedAt');
+    });
+
+    it('does not inject an identity whose base memory is in the recycle bin', async () => {
+      const [memory] = await serverDB
+        .insert(userMemories)
+        .values({
+          id: 'trashed-injection-memory',
+          lastAccessedAt: new Date(),
+          userId,
+        })
+        .returning();
+      await serverDB.insert(userMemoriesIdentities).values({
+        description: 'must stay hidden',
+        id: 'trashed-injection-identity',
+        relationship: RelationshipEnum.Self,
+        userId,
+        userMemoryId: memory.id,
+      });
+      await serverDB
+        .update(userMemories)
+        .set({ deletedAt: new Date(), isDeleted: true })
+        .where(eq(userMemories.id, memory.id));
+
+      const result = await identityModel.queryForInjection();
+
+      expect(result.some(({ id }) => id === 'trashed-injection-identity')).toBe(false);
     });
   });
 });

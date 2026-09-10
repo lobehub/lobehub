@@ -1567,6 +1567,16 @@ describe('UserMemoryModel', () => {
       const result = await memoryModel.getAllIdentities();
       expect(result).toEqual([]);
     });
+
+    it('should not return an identity whose base memory is in the recycle bin', async () => {
+      const { memory } = await createIdentityPair({});
+      await serverDB
+        .update(userMemories)
+        .set({ deletedAt: new Date(), isDeleted: true })
+        .where(eq(userMemories.id, memory.id));
+
+      expect(await memoryModel.getAllIdentities()).toEqual([]);
+    });
   });
 
   // ========== getAllIdentitiesWithMemory ==========
@@ -1589,6 +1599,16 @@ describe('UserMemoryModel', () => {
       const result = await memoryModel.getAllIdentitiesWithMemory();
 
       expect(result).toHaveLength(1);
+    });
+
+    it('should not join an identity whose base memory is in the recycle bin', async () => {
+      const { memory } = await createIdentityPair({});
+      await serverDB
+        .update(userMemories)
+        .set({ deletedAt: new Date(), isDeleted: true })
+        .where(eq(userMemories.id, memory.id));
+
+      expect(await memoryModel.getAllIdentitiesWithMemory()).toEqual([]);
     });
   });
 

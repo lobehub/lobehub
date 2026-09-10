@@ -561,8 +561,8 @@ export class UserMemoryModel {
     this.topicModel = new TopicModel(db, userId);
   }
 
-  private memoryWhere(table: Parameters<typeof buildUserMemoryWhere>[1]) {
-    return buildUserMemoryWhere(this.userId, table);
+  private memoryWhere(table: Parameters<typeof buildUserMemoryWhere>[2]) {
+    return buildUserMemoryWhere(this.db, this.userId, table);
   }
 
   private extractSourceMetadata(metadata?: Record<string, unknown> | null): {
@@ -2496,16 +2496,17 @@ export class UserMemoryModel {
       const memoryIds = Array.isArray(context.userMemoryIds)
         ? (context.userMemoryIds as string[])
         : [];
+
+      // Delete the authorized child while its live-parent guard still matches.
+      await tx
+        .delete(userMemoriesContexts)
+        .where(and(eq(userMemoriesContexts.id, contextId), this.memoryWhere(userMemoriesContexts)));
+
       if (memoryIds.length > 0) {
         await tx
           .delete(userMemories)
           .where(and(inArray(userMemories.id, memoryIds), this.memoryWhere(userMemories)));
       }
-
-      // Delete the context entry
-      await tx
-        .delete(userMemoriesContexts)
-        .where(and(eq(userMemoriesContexts.id, contextId), this.memoryWhere(userMemoriesContexts)));
 
       return true;
     });

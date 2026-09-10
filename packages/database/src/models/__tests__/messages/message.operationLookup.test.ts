@@ -148,3 +148,35 @@ describe('MessageModel.findLatestAssistantByOperationId', () => {
     ).resolves.toBeUndefined();
   });
 });
+
+describe('MessageModel.findVerifyMessageByOperationId', () => {
+  it('resolves a verify card under a live topic', async () => {
+    const verifyMessage = await messageModel.create({
+      content: 'verify result',
+      metadata: { verifyOperationId: 'verify-live-topic' },
+      role: 'verify',
+      topicId,
+    });
+
+    await expect(
+      messageModel.findVerifyMessageByOperationId('verify-live-topic'),
+    ).resolves.toMatchObject({ id: verifyMessage.id });
+  });
+
+  it('does not resolve a verify card whose parent topic is in the recycle bin', async () => {
+    await messageModel.create({
+      content: 'hidden verify result',
+      metadata: { verifyOperationId: 'verify-trashed-topic' },
+      role: 'verify',
+      topicId,
+    });
+    await serverDB
+      .update(topics)
+      .set({ deletedAt: new Date(), isDeleted: true })
+      .where(eq(topics.id, topicId));
+
+    await expect(
+      messageModel.findVerifyMessageByOperationId('verify-trashed-topic'),
+    ).resolves.toBeUndefined();
+  });
+});

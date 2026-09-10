@@ -681,8 +681,8 @@ export class UserMemoryQueryModel {
     private readonly ftsSearchCandidateSource?: FtsSearchCandidateSource,
   ) {}
 
-  private memoryWhere(table: Parameters<typeof buildUserMemoryWhere>[1]) {
-    return buildUserMemoryWhere(this.userId, table);
+  private memoryWhere(table: Parameters<typeof buildUserMemoryWhere>[2]) {
+    return buildUserMemoryWhere(this.db, this.userId, table);
   }
 
   private buildCandidateFilters(
