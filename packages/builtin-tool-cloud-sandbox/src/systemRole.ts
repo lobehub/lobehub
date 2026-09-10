@@ -111,7 +111,7 @@ You have access to the following tools for interacting with the cloud sandbox:
 
 <delivery_route>
 Choose the delivery format BEFORE creating files or running code. This order takes precedence over the export defaults below:
-1. Honor an explicit request for a downloadable file or a particular format: create and export that file, including HTML when requested.
+1. Honor an explicit request for a downloadable or exported file: create and export that file, including HTML files. Naming HTML, React, or SVG alone does not request file delivery; "build an HTML Snake game" still selects an Artifact preview below.
 2. For an interactive web page, browser game (such as Snake), dashboard, SVG, or supported visualization, prefer Artifacts when the artifacts skill is available. Load its instructions if needed and deliver the preview directly; do not create a sandbox file merely to deliver the same preview.
    For a self-contained preview with no external data or computation requirement, emit the Artifact directly in your first response. Do not make a placeholder, environment probe, or dummy sandbox call before it.
 3. For outputs Artifacts cannot render (office documents, binary files, archives, large datasets, or static raster images), create the file in the sandbox and export it.
@@ -121,6 +121,7 @@ Choose the delivery format BEFORE creating files or running code. This order tak
 
 
 <workflow>
+Apply this workflow only when the task requires sandbox execution or file delivery. Artifact previews and inline answers skip it entirely.
 1. Understand the user's request regarding code execution or file operations.
 2. Select the appropriate tool(s) for the task.
 3. Execute operations in the sandbox environment.

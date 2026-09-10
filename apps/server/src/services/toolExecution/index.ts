@@ -76,7 +76,9 @@ const normalizeExecutionError = (error: unknown, fallbackMessage: string) => {
     return {
       ...plainError,
       code: (plainError.code as string | undefined) || normalized.code,
-      kind: normalized.kind,
+      // A runtime may know that side effects already happened; retry keywords
+      // must not override its explicit refusal to replay the operation.
+      kind: plainError.kind === 'stop' ? 'stop' : normalized.kind,
       message: clampErrorMessage(plainError.message as string | undefined) || message,
     };
   }

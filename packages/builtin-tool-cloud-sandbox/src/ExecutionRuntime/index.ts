@@ -62,7 +62,13 @@ export class CloudSandboxExecutionRuntime extends ComputerRuntime {
             result.error?.message || 'Failed to execute code in sandbox',
             result.sessionExpiredAndRecreated,
           ),
-          error: result.error || { message: 'Failed to execute code in sandbox' },
+          // Execution may have completed before its response failed. Preserve
+          // diagnostics without automatically replaying arbitrary code.
+          error: {
+            ...result.error,
+            kind: 'stop',
+            message: result.error?.message || 'Failed to execute code in sandbox',
+          },
           state,
           success: false,
         };
@@ -110,7 +116,12 @@ export class CloudSandboxExecutionRuntime extends ComputerRuntime {
             filename,
             success: false,
           }),
-          error: result.error || { message: 'Failed to export file from sandbox' },
+          // Upload or registration may already have succeeded before the error.
+          error: {
+            ...result.error,
+            kind: 'stop',
+            message: result.error?.message || 'Failed to export file from sandbox',
+          },
           state,
           success: false,
         };

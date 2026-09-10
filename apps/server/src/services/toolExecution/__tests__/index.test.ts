@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { executeToolWithRetry } from '@lobechat/agent-runtime';
+import { CloudSandboxExecutionRuntime } from '@lobechat/builtin-tool-cloud-sandbox/executionRuntime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { deviceGateway } from '@/server/services/deviceGateway';
@@ -23,6 +25,63 @@ vi.mock('@/server/services/deviceGateway/scopedDevices', () => ({
 }));
 
 describe('ToolExecutionService', () => {
+  describe.each(['writeFile', 'runCommand', 'executeCode', 'exportFile'] as const)(
+    'non-retryable sandbox %s failures',
+    (api) => {
+      it.each(['returned', 'thrown'])(
+        'does not repeat side effects after a %s network error',
+        async (mode) => {
+          const error = {
+            code: 'SERVICE_UNAVAILABLE',
+            message: 'Network error after execution',
+            status: 503,
+          };
+          const call =
+            mode === 'returned'
+              ? vi
+                  .fn()
+                  .mockResolvedValue({ error, result: null, filename: 'page.html', success: false })
+              : vi.fn().mockRejectedValue(Object.assign(new Error(error.message), error));
+          const runtime = new CloudSandboxExecutionRuntime({
+            callTool: call,
+            exportAndUploadFile: call,
+          });
+          const execute = () =>
+            api === 'writeFile'
+              ? runtime.writeFile({ content: 'content', path: '/page.html' })
+              : api === 'runCommand'
+                ? runtime.runCommand({ command: 'echo effect' })
+                : api === 'executeCode'
+                  ? runtime.executeCode({ code: 'print("effect")' })
+                  : runtime.exportFile({ path: '/page.html' });
+          const service = new ToolExecutionService({
+            builtinToolsExecutor: { execute } as any,
+            mcpService: {} as any,
+          });
+          const { attempts, result } = await executeToolWithRetry(
+            () =>
+              service.executeTool(
+                {
+                  apiName: api,
+                  arguments: '{}',
+                  id: 'side-effect',
+                  identifier: 'lobe-cloud-sandbox',
+                  type: 'builtin',
+                },
+                { toolManifestMap: {} },
+              ),
+            { maxRetries: 2 },
+          );
+
+          expect(result.success).toBe(false);
+          expect(result.error).toMatchObject({ kind: 'stop', message: error.message });
+          expect(attempts).toBe(1);
+          expect(call).toHaveBeenCalledTimes(1);
+        },
+      );
+    },
+  );
+
   it.each([
     { identifier: 'lobe-cloud-sandbox', error: { message: 'Forbidden' } },
     { identifier: 'linear', error: { code: 'LOBEHUB_SKILL_ERROR', message: 'Forbidden' } },

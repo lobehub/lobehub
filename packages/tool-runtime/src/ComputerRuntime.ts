@@ -541,8 +541,24 @@ export abstract class ComputerRuntime {
   // ==================== Helpers ====================
 
   protected handleError(error: unknown): BuiltinServerRuntimeOutput {
+    const diagnostics =
+      error && typeof error === 'object' ? (error as ServiceResult['error']) : undefined;
     const errorMessage = error instanceof Error ? error.message : String(error);
-    return { content: errorMessage, error, success: false };
+    // A transport error cannot prove that a file or command operation had no
+    // side effects. Keep the failure visible without automatically replaying it.
+    return {
+      content: errorMessage,
+      error: {
+        code: diagnostics?.code,
+        doc_url: diagnostics?.doc_url,
+        hint: diagnostics?.hint,
+        kind: 'stop',
+        message: errorMessage,
+        name: diagnostics?.name,
+        status: diagnostics?.status,
+      },
+      success: false,
+    };
   }
 
   private errorOutput(result: ServiceResult, state: any): BuiltinServerRuntimeOutput {
@@ -589,6 +605,7 @@ export abstract class ComputerRuntime {
         code: result.error?.code,
         doc_url: result.error?.doc_url,
         hint: result.error?.hint,
+        kind: 'stop',
         message: errorText,
         name: result.error?.name,
         status: result.error?.status,
