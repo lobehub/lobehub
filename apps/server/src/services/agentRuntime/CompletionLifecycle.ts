@@ -31,6 +31,7 @@ import { registerWorksForOperation } from '@/server/services/workRegistration';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 import { buildRuntimeInterventionNotification } from './agentInterventionNotification';
+import { extractFinalReplyImageUrls } from './finalReplyImages';
 import { CriticalHookDeliveryError, hookDispatcher, type SerializedHook } from './hooks';
 
 const log = debug('lobe-server:completion-lifecycle');
@@ -1461,8 +1462,18 @@ const extractOutboundAttachments = (messages: any[]): OutboundAttachment[] => {
 
     if (role === 'assistant') {
       if (!crossedFinalAssistant) {
-        // The final assistant turn: harvest its multimodal parts.
-        collected.push(...extractAttachmentsFromContent(content));
+        // Only the final reply's Markdown expresses an intent to send images.
+        // Do not promote generation state or intermediate tool Markdown.
+        const attachments: OutboundAttachment[] = [];
+        const text = extractTextFromMessageContent(content);
+        if (text) {
+          for (const url of extractFinalReplyImageUrls(text)) {
+            const attachment = buildAttachmentFromUrl(url, 'image');
+            if (attachment) attachments.push(attachment);
+          }
+        }
+        attachments.push(...extractAttachmentsFromContent(content));
+        collected.unshift(...attachments);
         crossedFinalAssistant = true;
         continue;
       }
@@ -1473,12 +1484,11 @@ const extractOutboundAttachments = (messages: any[]): OutboundAttachment[] => {
 
     if (role === 'tool') {
       // Tool results between the previous assistant turn and the final one.
-      collected.push(...extractAttachmentsFromContent(content));
+      collected.unshift(...extractAttachmentsFromContent(content));
     }
   }
 
-  // Reverse so message-order (older first) is preserved, then dedupe.
-  collected.reverse();
+  // Prepending each message preserves both message and within-message order.
   const seen = new Set<string>();
   const result: OutboundAttachment[] = [];
   for (const att of collected) {
