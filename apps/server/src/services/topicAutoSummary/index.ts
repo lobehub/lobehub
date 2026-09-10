@@ -60,11 +60,18 @@ export class TopicAutoSummaryService {
       .from(topics)
       .where(and(eq(topics.id, topicId), topicOwnership, notTrashed(topics.isDeleted)))
       .limit(1);
+    // The job may have been queued before the topic was moved to trash. Stop
+    // before loading child messages or resolving a billable model when the
+    // live-topic fence no longer finds it.
+    if (!topic) {
+      log('skipping missing or trashed topic %s', topicId);
+      return { reason: 'stale', summarized: false };
+    }
     // Share-visitor topics are creator-billed only through the share spend
     // gate. Reject them defensively before any LLM call — the dispatch query
     // and TopicSummaryModel.updateSummaryIfCurrent both filter them out, this
     // guard covers replays / direct callers that skip the dispatch path.
-    if (topic?.senderId) {
+    if (topic.senderId) {
       log(
         'skipping share-visitor topic %s: visitor turns are outside the auto-summary scope',
         topicId,

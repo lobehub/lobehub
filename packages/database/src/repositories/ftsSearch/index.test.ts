@@ -1561,6 +1561,40 @@ describe.skipIf(!isServerDB)('FtsSearchRepo', () => {
         expect(['user', 'assistant']).toContain(message.role);
       }
     });
+
+    it('hides messages whose parent topic is trashed and keeps topic-less messages', async () => {
+      await serverDB.insert(topics).values({
+        deletedAt: new Date('2026-09-10T00:00:00Z'),
+        id: 'fts-trashed-parent-topic',
+        isDeleted: true,
+        title: 'Trashed parent',
+        userId,
+      });
+      await serverDB.insert(messages).values([
+        {
+          content: 'parentfenceprobe hidden child',
+          id: 'fts-trashed-parent-message',
+          role: 'user',
+          topicId: 'fts-trashed-parent-topic',
+          userId,
+        },
+        {
+          content: 'parentfenceprobe visible standalone',
+          id: 'fts-topicless-message',
+          role: 'user',
+          userId,
+        },
+      ]);
+
+      const results = await ftsSearchRepo.search({
+        query: 'parentfenceprobe',
+        type: 'message',
+      });
+      const resultIds = results.map(({ id }) => id);
+
+      expect(resultIds).toContain('fts-topicless-message');
+      expect(resultIds).not.toContain('fts-trashed-parent-message');
+    });
   });
 
   // Agent-share visitor conversations are persisted under the CREATOR's
