@@ -22,11 +22,11 @@ export type SemanticShellPredicate =
   | 'rmRecursiveHomeTarget' // rm with recursive flag on the home directory itself
   | 'rmForceDotTarget'; // rm -rf on '.' — cwd blast radius
 
-export const SEMANTIC_SHELL_PREDICATES: SemanticShellPredicate[] = [
+export const SEMANTIC_SHELL_PREDICATES = [
   'rmRecursiveRootTarget',
   'rmRecursiveHomeTarget',
   'rmForceDotTarget',
-];
+] as const satisfies readonly SemanticShellPredicate[];
 
 /**
  * Argument Matcher for parameter-level filtering
@@ -57,7 +57,7 @@ export const ArgumentMatcherSchema: z.ZodType<ArgumentMatcher> = z.union([
   }),
   z.object({
     type: z.literal('semanticShell'),
-    predicate: z.enum(['rmRecursiveRootTarget', 'rmRecursiveHomeTarget', 'rmForceDotTarget']),
+    predicate: z.enum(SEMANTIC_SHELL_PREDICATES),
   }),
 ]);
 

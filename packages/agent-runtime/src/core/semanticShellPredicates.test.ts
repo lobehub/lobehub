@@ -191,6 +191,73 @@ describe('matchSemanticShellPredicate', () => {
     });
   });
 
+  describe('independent review regressions (SEC-1/SEC-2 hardening)', () => {
+    it.each([
+      // Value-taking sudo options the old whitelist missed — the flag's VALUE
+      // used to resolve as the command, letting real rm slip through.
+      'sudo -p password: rm -rf /',
+      'sudo -R /chroot rm -rf /',
+      'sudo -r sys_t rm -rf /',
+      'sudo -T 10 rm -rf /',
+      'env -u FOO rm -rf /',
+      // Positional wrapper values (timeout DURATION, flock LOCKFILE).
+      'timeout 30 rm -rf /',
+      'timeout 30 rm -rf ~',
+      'flock /tmp/lock rm -rf /',
+      // Option values that ARE the payload (ambiguous-shape fallback).
+      'env -S rm -rf /',
+      'bash -c rm -rf /',
+      'bash -c "rm -rf /"',
+      'sh -c rm -rf ~',
+      // Embedded option values (stdbuf -o0 style, no '=' present).
+      'stdbuf -o0 rm -rf /',
+      // Exec-prefix wrappers previously unwrapped nowhere (SEC-2).
+      'exec rm -rf /',
+      'exec rm -rf ~',
+      'xargs rm -rf /',
+      'nice rm -rf /',
+      'setsid rm -rf /',
+      'ionice rm -rf /',
+      'strace rm -rf /',
+      'time rm -rf /',
+      // Compounds and multi-line shapes sharing these wrappers.
+      'echo ok\nxargs rm -rf /',
+      'find . | xargs rm -rf /',
+    ])('blocks review-found bypass: %s', (command) => {
+      expect(
+        matchSemanticShellPredicate('rmRecursiveRootTarget', command) ||
+          matchSemanticShellPredicate('rmRecursiveHomeTarget', command) ||
+          matchSemanticShellPredicate('rmForceDotTarget', command),
+      ).toBe(true);
+    });
+
+    it.each([
+      // Value-free whitelist flags must NOT over-consume: rm stays resolvable
+      // and the (safe) target decides the verdict.
+      'sudo -n rm -rf /tmp/build',
+      'sudo -v && echo ok',
+      'sudo -l',
+      'sudo -A rm -rf /tmp/build-cache',
+      'env -i ls /',
+      'command -v rm',
+      'time ls /',
+      'nice -n 10 ls /',
+      'timeout 30 ls /',
+      'flock /tmp/lock ls /',
+      'stdbuf -o0 ls /',
+      // Quoted/argument rm strings under confident non-rm commands stay
+      // allowed — no re-creation of the substring false-positive class.
+      "echo 'rm -rf /'",
+      'echo $(date) && ls /',
+    ])('allows legitimate usage: %s', (command) => {
+      expect(
+        matchSemanticShellPredicate('rmRecursiveRootTarget', command) ||
+          matchSemanticShellPredicate('rmRecursiveHomeTarget', command) ||
+          matchSemanticShellPredicate('rmForceDotTarget', command),
+      ).toBe(false);
+    });
+  });
+
   describe('command substitution containment', () => {
     // Substitution bodies stay embedded inside words rather than splitting the
     // outer command. The predicates above only fire on `rm` as the RESOLVED

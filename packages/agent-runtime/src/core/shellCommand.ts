@@ -17,17 +17,11 @@
  */
 
 export interface ShellSegment {
-  /** True when the command could not be split/parsed with confidence. */
-  ambiguous: boolean;
-
   /**
    * Flag words as they appeared (e.g. '-rf', '--recursive'), collected from
    * dash-prefixed words. Quoted words never count as flags.
    */
   flags: string[];
-
-  /** Whether this segment contains command substitution (backticks or $()) / variables. */
-  hasCommandSubstitution: boolean;
 
   /** Check whether a single-letter flag is active (expands combined flags like -rf). */
   hasFlag: (letter: string) => boolean;
@@ -54,17 +48,11 @@ export interface ShellSegment {
   words: string[];
 }
 
-/** Words that wrap the real command and must be skipped during resolution. */
-const WRAPPER_COMMANDS = new Set(['sudo', 'env', 'nohup']);
-
 /**
  * Bash builtin that executes its argument as a command, bypassing aliases and
  * functions: `command rm -rf /` runs rm directly. Unwrapped like sudo/env.
- * Options `-p` (default PATH), `-v`/`-V` (describe) take no value; `-p` with
- * an attached `path` (`-p/bin:/usr/bin`) embeds it, so nothing value-consuming.
+ * Options `-p` (default PATH), `-v`/`-V` (describe) take no value.
  */
-const SHELL_BUILTIN_EXEC_WRAPPERS = new Set(['command']);
-
 const ASSIGNMENT_PATTERN = /^[A-Z_]\w*=.*$/i;
 
 /**
@@ -297,25 +285,6 @@ const tokenizeWords = (raw: string): string[] => {
   return words;
 };
 
-const doesSegmentContainSubstitution = (raw: string): boolean => {
-  let quote: '"' | "'" | null = null;
-  for (let i = 0; i < raw.length; i++) {
-    const char = raw[i];
-    if (quote) {
-      if (quote === '"' && char === '\\') i++;
-      else if (char === quote) quote = null;
-      continue;
-    }
-    if (char === '"' || char === "'") {
-      quote = char;
-      continue;
-    }
-    if (char === '`') return true;
-    if (char === '$' && (raw[i + 1] === '(' || /\{/.test(raw[i + 1] ?? ''))) return true;
-  }
-  return false;
-};
-
 const isHomePath = (word: string): boolean =>
   word === '~' ||
   word.startsWith('~/') ||
@@ -363,21 +332,83 @@ const collectFlagLettersAndNames = (
 };
 
 /**
- * Wrapper single-letter options that CONSUME a following word as their value.
- * Anything not listed here is value-free: `sudo -n rm` → rm is the command,
- * NOT a value of -n. (sudo -n = non-interactive, env -i = ignore-environment,
- * nohup has no short options.)
+ * Security-first wrapper option model: a single-letter wrapper flag is
+ * presumed to CONSUME the next word unless it is whitelisted here as
+ * value-free. The whitelist direction matters: a missed value-free flag only
+ * over-skips one harmless token (over-detection), whereas a missed
+ * value-taking flag resolves the wrapper's VALUE as the command and lets a
+ * real `rm -rf /` slip through (under-detection) — e.g. `sudo -p x rm -rf /`
+ * previously resolved to command "x:".
+ *
+ * Flags not valid for a wrapper (typo/foreign) also consume a value under
+ * this model — acceptable: unknown-flag invocations fail at exec time anyway,
+ * and erring toward over-detection is the safe direction for a blacklist.
  */
-const WRAPPER_VALUE_FLAGS: Record<string, Set<string>> = {
-  sudo: new Set(['u', 'g', 'C']), // -u user, -g group, -C fd (closefrom)
-  env: new Set(['S']), // -S 'string' (split-string); -i/-0 take no value
+const WRAPPER_VALUE_FREE_FLAGS: Record<string, ReadonlySet<string>> = {
+  // GNU sudo value-free flags only (verified against sudo 1.9 --help):
+  // -A askpass, -B beep, -b badge, -e edit, -H set HOME, -h help,
+  // -i login, -k kill ticket, -K kill all, -l list, -n non-interactive,
+  // -s shell, -v validate. Value-taking (deliberately NOT whitelisted):
+  // -p prompt, -u user, -g group, -C fd, -R chroot, -r role, -t type,
+  // -T timeout, -D cwd.
+  sudo: new Set(['A', 'B', 'b', 'e', 'H', 'h', 'i', 'k', 'K', 'l', 'n', 's', 'v']),
+  // GNU env value-free flags: -i ignore-env, -0 null-sep, -v verbose.
+  // Value-taking: -u unset NAME, -S split-string (its value IS a command —
+  // consumed as a value word, which hides it; covered by the predicate-level
+  // ambiguity fallback in semanticShellPredicates.ts).
+  env: new Set(['i', '0', 'v']),
   nohup: new Set(),
-  command: new Set(),
+  // bash command builtin: -p default PATH, -v/-V describe.
+  command: new Set(['p', 'v', 'V']),
 };
 
 /**
- * Unwrap wrapper commands (sudo/env/nohup/command) plus leading VAR=value
- * assignments and reveal the real command word.
+ * Exec-prefix commands that run their first non-flag argument as a program.
+ * Unwrapped so `exec rm -rf /`, `xargs rm -rf /`, `timeout 30 rm -rf /`,
+ * `nice rm -rf /` … resolve to the real command. (The old substring regex
+ * blocked these shapes incidentally; semantic matching must unwrap them
+ * explicitly or coverage narrows.)
+ */
+const EXEC_PREFIX_WRAPPERS = new Set([
+  'sudo', // superuser exec
+  'env', // env VAR=… cmd
+  'nohup', // hangup-immune exec
+  'command', // bash builtin: bypass aliases/functions
+  'exec', // bash builtin: replace the shell with the command
+  'xargs', // stdin-driven invocation: `find … | xargs rm …`
+  'time', // bash keyword + binary: runs the command
+  'nice', // runs the command with niceness
+  'setsid', // runs the command in a new session
+  'ionice', // runs the command with I/O niceness
+  'stdbuf', // runs the command with adjusted stdio buffering
+  'timeout', // runs the command with a time limit (first arg = duration value)
+  'flock', // runs the command holding a lock (first arg = lockfile value)
+  'strace', // traces execution by running the command
+  'ltrace', // traces execution by running the command
+]);
+
+/**
+ * Exec-prefix wrappers whose FIRST POSITIONAL argument is a value (not the
+ * wrapped command): `timeout 30 rm …`, `flock /tmp/lock rm …`. The unwrap
+ * loop consumes that many bare words after the wrapper before treating the
+ * next bare word as the command. Flags and assignments are always skipped.
+ */
+const WRAPPER_POSITIONAL_VALUES: Record<string, number> = {
+  timeout: 1, // DURATION
+  flock: 1, // LOCKFILE (when not -n form with command only)
+  nice: 0, // nice -N cmd handled by flag model; bare `nice cmd` has none
+  time: 0,
+};
+
+/**
+ * Unwrap exec-prefix wrappers (sudo/env/nohup/command/exec/xargs/timeout/…)
+ * plus leading VAR=value assignments and reveal the real command word.
+ *
+ * Option model is security-first: a single-letter flag is presumed to
+ * consume the next word unless whitelisted value-free (see
+ * WRAPPER_VALUE_FREE_FLAGS); long flags are presumed value-free unless they
+ * embed `=value`. A bare word after a value-consuming flag is that flag's
+ * value, not the command.
  */
 const resolveCommandWord = (words: string[]): string | null => {
   let index = 0;
@@ -392,44 +423,51 @@ const resolveCommandWord = (words: string[]): string | null => {
     break;
   }
 
-  // Unwrap wrappers. The loop naturally terminates: `index` strictly increases
-  // every iteration and is bounded by words.length. No artificial counter —
-  // pathologically chained wrappers (e.g. 50x `sudo`) still resolve fully.
+  // Unwrap exec-prefix wrappers. The loop naturally terminates: `index`
+  // strictly increases every iteration and is bounded by words.length. No
+  // artificial counter — pathologically chained wrappers still resolve fully.
   while (index < words.length) {
     const word = words[index];
-    const isWrapper = WRAPPER_COMMANDS.has(word) || SHELL_BUILTIN_EXEC_WRAPPERS.has(word);
-    if (isWrapper) {
-      const valueFlags = WRAPPER_VALUE_FLAGS[word];
-      index++;
-      // Skip wrapper-owned tokens: assignments after `env`, value-free
-      // wrapper flags (`sudo -n`, `env -i`, `command -p`), and — only for
-      // flags registered as value-taking — their value word (`sudo -u alice`).
-      // Never skip the real command itself.
-      while (index < words.length) {
-        const token = words[index];
-        const previous = words[index - 1];
-        const previousConsumesValue =
-          /^-[a-z]$/i.test(previous) &&
-          valueFlags !== undefined &&
-          valueFlags.has(previous[1].toLowerCase());
-        if (ASSIGNMENT_PATTERN.test(token) || isDashWord(token)) {
-          // Wrapper-owned token (assignment or flag). One subtlety: a
-          // dash-word right after a value-taking flag could be the value
-          // itself in theory, but flags consuming negative-looking values
-          // are not a wrapper pattern — safe to treat as a flag.
-          index++;
-          continue;
-        }
-        if (previousConsumesValue) {
-          // Bare word after a value-taking wrapper flag = that flag's value.
-          index++;
-          continue;
-        }
-        break;
+    if (!EXEC_PREFIX_WRAPPERS.has(word)) break;
+    const valueFreeFlags = WRAPPER_VALUE_FREE_FLAGS[word];
+    index++;
+    // Consume wrapper-owned positional values first (timeout DURATION, flock
+    // LOCKFILE): bare words that are NOT the wrapped command.
+    let positional = WRAPPER_POSITIONAL_VALUES[word] ?? 0;
+    // Skip wrapper-owned tokens: assignments after `env`, wrapper flags, and
+    // the value word of any flag presumed to consume one (security-first
+    // default, see WRAPPER_VALUE_FREE_FLAGS).
+    while (index < words.length) {
+      const token = words[index];
+      if (ASSIGNMENT_PATTERN.test(token)) {
+        index++;
+        continue;
       }
-      continue;
+      if (isDashWord(token)) {
+        // `--flag=value` / `-u=value` embed the value: consume nothing extra.
+        if (token.includes('=')) {
+          index++;
+          continue;
+        }
+        // `-abc` combined short flags: consumes a value unless EVERY letter
+        // is whitelisted value-free. Unknown/foreign flags consume — the
+        // safe direction for a blacklist (over-detection).
+        const letters = /^-([a-z]+)$/i.exec(token);
+        const consumesValue =
+          letters === null || !letters[1].split('').every((letter) => valueFreeFlags?.has(letter));
+        index += consumesValue ? 2 : 1;
+        continue;
+      }
+      // Bare word: either a positional wrapper value (timeout 30) or the
+      // wrapped command itself (the common case).
+      if (positional > 0) {
+        positional--;
+        index++;
+        continue;
+      }
+      break;
     }
-    break;
+    continue;
   }
 
   const commandWord = words[index];
@@ -475,8 +513,6 @@ export const analyzeShellCommand = (command: string): ShellSegment[] => {
 
     const { letters, names } = collectFlagLettersAndNames(flags);
 
-    const ambiguous = words.length === 0;
-
     return {
       raw: rawSegment,
       words,
@@ -484,12 +520,8 @@ export const analyzeShellCommand = (command: string): ShellSegment[] => {
       flags,
       trailingSlashTargets,
       homeTargets,
-      hasCommandSubstitution: doesSegmentContainSubstitution(rawSegment),
-      ambiguous,
       hasFlag: (letter: string) => letters.has(letter) || names.has(letter),
       hasLongFlag: (name: string) => names.has(name),
     };
   });
 };
-
-export const SHELL_SEGMENT_TYPE = 'shellSemantic';
