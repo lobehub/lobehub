@@ -102,6 +102,28 @@ describe('taskRuntime.factory', () => {
       expect(ctx).toMatchObject({ actingAgentId: 'agt-manager' });
     }
   });
+
+  it('fails closed when a task anchor was trashed before workspace recovery', async () => {
+    const limit = vi.fn().mockResolvedValue([]);
+    const serverDB = {
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({ where: vi.fn(() => ({ limit })) })),
+      })),
+    };
+    const runtime = taskRuntime.factory({
+      agentId: 'agt-manager',
+      serverDB,
+      taskId: 'trashed-task',
+      userId: 'user-1',
+    } as never);
+
+    await expect(
+      (runtime as unknown as { editTask: (a: unknown) => Promise<unknown> }).editTask({
+        identifier: 'T-1',
+        name: 'Must not write to personal scope',
+      }),
+    ).rejects.toThrow('missing or trashed task trashed-task');
+  });
 });
 
 describe('createTaskRuntime', () => {

@@ -1,7 +1,8 @@
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
 
-import { agents } from '@/database/schemas';
+import { agents, tasks } from '@/database/schemas';
+import type { LobeChatDatabase } from '@/database/type';
 import { notTrashed } from '@/database/utils/softDelete';
 
 import { type ToolExecutionContext } from '../types';
@@ -12,6 +13,29 @@ type DeviceScopeContext = Pick<
   ToolExecutionContext,
   'activeDeviceScope' | 'agentId' | 'serverDB' | 'workspaceId'
 >;
+
+/**
+ * Recover a task's content scope for runtimes whose older execution context
+ * did not preserve workspaceId. A present task anchor must fail closed when
+ * its live row has disappeared; only a live personal task resolves to
+ * `undefined` legitimately.
+ */
+export const resolveTaskWorkspaceId = async (
+  db: LobeChatDatabase,
+  taskId: string | undefined,
+): Promise<string | undefined> => {
+  if (!taskId) return undefined;
+
+  const [row] = await db
+    .select({ workspaceId: tasks.workspaceId })
+    .from(tasks)
+    .where(and(eq(tasks.id, taskId), notTrashed(tasks.isDeleted)))
+    .limit(1);
+
+  if (!row)
+    throw new Error(`Cannot recover workspace scope from missing or trashed task ${taskId}`);
+  return row.workspaceId ?? undefined;
+};
 
 /**
  * The workspace whose CONTENT this run reads and writes: the run-scoped
@@ -43,10 +67,12 @@ export const resolveContentWorkspaceId = async (
       .from(agents)
       .where(and(eq(agents.id, agentId), notTrashed(agents.isDeleted)))
       .limit(1);
-    return row?.workspaceId ?? undefined;
+    if (!row)
+      throw new Error(`Cannot recover workspace scope from missing or trashed agent ${agentId}`);
+    return row.workspaceId ?? undefined;
   } catch (error) {
     log('failed to recover workspaceId from agent %s: %O', agentId, error);
-    return undefined;
+    throw error;
   }
 };
 

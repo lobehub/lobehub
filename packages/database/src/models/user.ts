@@ -28,6 +28,7 @@ import {
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { notTrashed } from '../utils/softDelete';
+import { hasLiveParentTopic } from '../utils/topicVisibility';
 import { AGENT_TRANSFER_PENDING_OWNER_DELETE, AgentTransferJobModel } from './agentTransferJob';
 
 type DecryptUserKeyVaults = (
@@ -105,6 +106,7 @@ export class UserModel {
           eq(messages.userId, users.id),
           eq(messages.role, 'user'),
           notTrashed(messages.isDeleted),
+          hasLiveParentTopic(messages.topicId),
         ),
       )
       .where(eq(users.id, this.userId))

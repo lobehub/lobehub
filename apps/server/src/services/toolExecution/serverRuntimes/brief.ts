@@ -1,32 +1,12 @@
 import { BriefIdentifier } from '@lobechat/builtin-tool-brief';
-import type { LobeChatDatabase } from '@lobechat/database';
 import { formatBriefCreated, formatCheckpointCreated } from '@lobechat/prompts';
 import { DEFAULT_BRIEF_ACTIONS } from '@lobechat/types';
-import { and, eq } from 'drizzle-orm';
 
 import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
-import { tasks } from '@/database/schemas';
-import { notTrashed } from '@/database/utils/softDelete';
 
+import { resolveTaskWorkspaceId } from './resolveWorkspaceScope';
 import { type ServerRuntimeRegistration } from './types';
-
-// Row-level fallback: the agent-runtime hasn't threaded `workspaceId` into
-// `ToolExecutionContext` yet, so we resolve it from the task row when the
-// runtime fires inside a task. Falls back to undefined (personal mode) when
-// there is no task association.
-const resolveWorkspaceId = async (
-  db: LobeChatDatabase,
-  taskId: string | undefined,
-): Promise<string | undefined> => {
-  if (!taskId) return undefined;
-  const [row] = await db
-    .select({ workspaceId: tasks.workspaceId })
-    .from(tasks)
-    .where(and(eq(tasks.id, taskId), notTrashed(tasks.isDeleted)))
-    .limit(1);
-  return row?.workspaceId ?? undefined;
-};
 
 export const briefRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
@@ -39,7 +19,7 @@ export const briefRuntime: ServerRuntimeRegistration = {
     const { agentId, taskId } = context;
     // Prefer the workspaceId threaded through the pipeline. Fall back to the
     // owning task row when an older caller still doesn't populate it.
-    const resolveWs = async () => context.workspaceId ?? (await resolveWorkspaceId(db, taskId));
+    const resolveWs = async () => context.workspaceId ?? (await resolveTaskWorkspaceId(db, taskId));
 
     return {
       createBrief: async (args: {
