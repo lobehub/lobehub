@@ -937,7 +937,13 @@ export class CompletionLifecycle {
           runOrigin.userId || this.userId,
           typeof runOrigin.topicId === 'string' ? runOrigin.topicId : undefined,
         );
-        if (recovered) event.lastAssistantContent = recovered;
+        if (recovered) {
+          event.lastAssistantContent = recovered;
+          const attachments = extractOutboundAttachments([
+            { content: recovered, role: 'assistant' },
+          ]);
+          event.attachments = attachments.length > 0 ? attachments : undefined;
+        }
       }
 
       await hookDispatcher.dispatch(operationId, 'onComplete', event, state?.host?.hooks);

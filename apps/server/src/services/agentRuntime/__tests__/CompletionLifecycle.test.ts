@@ -1311,6 +1311,27 @@ describe('CompletionLifecycle.dispatchHooks — lastAssistantContent DB recovery
     );
   });
 
+  it('extracts final Markdown images when the reply is recovered from the database', async () => {
+    const lifecycle = buildLifecycle();
+    const dispatchSpy = setupSpies(lifecycle);
+    const content = '![Result](https://cdn.example.com/recovered.png)';
+    (lifecycle as any).messageModel = {
+      findById: vi.fn().mockResolvedValue({ content, id: 'msg-assistant' }),
+    };
+
+    await lifecycle.dispatchHooks('op-1', buildDoneState(''), 'done');
+
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      'op-1',
+      'onComplete',
+      expect.objectContaining({
+        attachments: [{ fetchUrl: 'https://cdn.example.com/recovered.png', type: 'image' }],
+        lastAssistantContent: content,
+      }),
+      [],
+    );
+  });
+
   it('recovers by the final assistantGroup child id when grouped state carries no text', async () => {
     const lifecycle = buildLifecycle();
     const dispatchSpy = setupSpies(lifecycle);
