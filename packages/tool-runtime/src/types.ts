@@ -3,7 +3,14 @@
  * Each ComputerRuntime subclass maps its raw service response into this shape.
  */
 export interface ServiceResult {
-  error?: { message: string; name?: string };
+  error?: {
+    code?: string;
+    doc_url?: string;
+    hint?: string;
+    message: string;
+    name?: string;
+    status?: number;
+  };
   result: any;
   /** The execution workspace was recreated before this call. */
   sessionExpiredAndRecreated?: boolean;

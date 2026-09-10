@@ -1,3 +1,5 @@
+import { pickString, toRecord } from '@lobechat/utils/object';
+
 export type ToolErrorKind = 'replan' | 'retry' | 'stop';
 
 interface ToolErrorSignal {
@@ -21,6 +23,7 @@ const REPLAN_CODES = new Set([
   'MCP_EXECUTION_ERROR',
 ]);
 const STOP_CODES = new Set([
+  'CONTENT_POLICY_VIOLATION',
   'FORBIDDEN',
   'INSUFFICIENT_PERMISSIONS',
   'NOT_IMPLEMENTED',
@@ -63,10 +66,11 @@ const STOP_KEYWORDS = [
 const hasAnyKeyword = (text: string, keywords: string[]) =>
   keywords.some((keyword) => text.includes(keyword));
 
-const normalizeCode = (value?: string): string | undefined => {
-  if (!value) return;
+const normalizeCode = (value?: unknown): string | undefined => {
+  const code = typeof value === 'number' ? String(value) : pickString(value);
+  if (!code) return;
 
-  return value
+  return code
     .trim()
     .toUpperCase()
     .replaceAll(/[\s-]+/g, '_');
@@ -160,5 +164,54 @@ export const classifyToolError = (error: unknown): ClassifiedToolError => {
     code: signal.code,
     kind: classifyKind(signal),
     message: signal.message,
+  };
+};
+
+const DENIAL_CODES = new Set([
+  '403',
+  'CONTENT_POLICY_VIOLATION',
+  'FORBIDDEN',
+  'INSUFFICIENT_PERMISSIONS',
+  'PERMISSION_DENIED',
+]);
+const GENERIC_ERROR_CODES = new Set([
+  '403',
+  'CLOUD_MCP_EXECUTION_ERROR',
+  'LOBEHUB_SKILL_ERROR',
+  'MCP_EXECUTION_ERROR',
+]);
+
+/**
+ * A transport refusal must explain the next action in the model-visible content.
+ * A bare 403 cannot identify whether authorization or request filtering rejected
+ * the call, so never infer a content policy or a matched rule from its message.
+ */
+export const getToolAccessDeniedError = (error: unknown, fallbackMessage: string) => {
+  const raw = toRecord(error);
+  const nested = toRecord(toRecord(raw?.errorBody)?.error) || toRecord(raw?.error);
+  const signal = normalizeSignal(error || fallbackMessage);
+  const code = normalizeCode(nested?.code) || signal.code;
+  const bareForbidden = /^\s*(?:403[ :-]*)?forbidden\s*$/i;
+  const message =
+    pickString(raw?.message) ||
+    pickString(nested?.message) ||
+    pickString(error) ||
+    fallbackMessage ||
+    'Tool access was denied';
+
+  if (signal.status !== 403 && !DENIAL_CODES.has(code || '') && !bareForbidden.test(message)) {
+    return;
+  }
+
+  return {
+    code: code && !GENERIC_ERROR_CODES.has(code) ? code : 'FORBIDDEN',
+    doc_url: pickString(raw?.doc_url) || pickString(nested?.doc_url),
+    hint:
+      pickString(raw?.hint) ||
+      pickString(nested?.hint) ||
+      'Do not retry this call or encode/split its arguments to bypass the refusal. Ask the user or administrator to check tool permissions and upstream request filtering. The upstream response did not identify the blocking rule.',
+    kind: 'stop' as const,
+    message,
+    status: signal.status,
   };
 };

@@ -582,16 +582,17 @@ export abstract class ComputerRuntime {
       // unset a failed edit had neither a diff nor an error to draw and
       // rendered as an empty card.
       //
-      // What the model sees is unchanged: `ToolMessageReorder` prefers a
-      // non-empty `content` over `pluginError.message`, and `content` still
-      // carries the same text.
-      //
-      // Deliberately a fresh `{ message }` rather than forwarding
-      // `result.error`: `executeToolWithRetry` escalates on
-      // `error.kind === 'retry'`, and these failures were never retried while
-      // they claimed success. Flipping the flag should not quietly enrol them
-      // in the retry loop.
-      error: { message: errorText },
+      // Preserve service diagnostics for the common tool-result formatter,
+      // but do not forward arbitrary fields such as `kind: 'retry'` that
+      // could silently enroll a side-effecting failure in the retry loop.
+      error: {
+        code: result.error?.code,
+        doc_url: result.error?.doc_url,
+        hint: result.error?.hint,
+        message: errorText,
+        name: result.error?.name,
+        status: result.error?.status,
+      },
       state,
       success: false,
     };

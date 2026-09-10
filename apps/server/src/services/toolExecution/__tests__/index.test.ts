@@ -23,6 +23,85 @@ vi.mock('@/server/services/deviceGateway/scopedDevices', () => ({
 }));
 
 describe('ToolExecutionService', () => {
+  it.each([
+    { identifier: 'lobe-cloud-sandbox', error: { message: 'Forbidden' } },
+    { identifier: 'linear', error: { code: 'LOBEHUB_SKILL_ERROR', message: 'Forbidden' } },
+  ])('makes a bare denial actionable for $identifier', async ({ identifier, error }) => {
+    const service = new ToolExecutionService({
+      builtinToolsExecutor: {
+        execute: vi.fn().mockResolvedValue({ content: 'Forbidden', error, success: false }),
+      } as any,
+      mcpService: {} as any,
+    });
+
+    const result = await service.executeTool(
+      { apiName: 'writeFile', arguments: '{}', id: 'denied-call', identifier, type: 'builtin' },
+      { toolManifestMap: {} },
+    );
+
+    expect(result.success).toBe(false);
+    expect(JSON.parse(result.content).error).toMatchObject({
+      code: 'FORBIDDEN',
+      hint: expect.stringContaining('Do not retry'),
+      kind: 'stop',
+      message: 'Forbidden',
+    });
+    expect(result.error).toMatchObject({ code: 'FORBIDDEN', kind: 'stop' });
+    expect(result.content).not.toContain('matched_pattern');
+  });
+
+  it('preserves upstream refusal details in the model-visible content', async () => {
+    const error = {
+      code: 'PERMISSION_DENIED',
+      hint: 'Ask the workspace administrator to grant access.',
+      message: 'Access denied',
+      status: 403,
+    };
+    const service = new ToolExecutionService({
+      builtinToolsExecutor: {
+        execute: vi.fn().mockRejectedValue(Object.assign(new Error(error.message), error)),
+      } as any,
+      mcpService: {} as any,
+    });
+
+    const result = await service.executeTool(
+      {
+        apiName: 'writeFile',
+        arguments: '{}',
+        id: 'denied-call',
+        identifier: 'tool',
+        type: 'builtin',
+      },
+      { toolManifestMap: {} },
+    );
+
+    expect(JSON.parse(result.content).error).toMatchObject({ ...error, kind: 'stop' });
+    expect(result.error).toMatchObject(error);
+  });
+
+  it('does not reinterpret successful content containing Forbidden as a denial', async () => {
+    const service = new ToolExecutionService({
+      builtinToolsExecutor: {
+        execute: vi.fn().mockResolvedValue({ content: 'Forbidden', success: true }),
+      } as any,
+      mcpService: {} as any,
+    });
+
+    const result = await service.executeTool(
+      {
+        apiName: 'readFile',
+        arguments: '{}',
+        id: 'read-call',
+        identifier: 'tool',
+        type: 'builtin',
+      },
+      { toolManifestMap: {} },
+    );
+
+    expect(result.content).toBe('Forbidden');
+    expect(result.success).toBe(true);
+  });
+
   it('can skip low-level result truncation for AgentRuntime archival', async () => {
     const builtinToolsExecutor = {
       execute: vi.fn().mockResolvedValue({
