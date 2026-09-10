@@ -682,7 +682,7 @@ describe('DataImporter', () => {
         .set({ deletedAt: new Date('2026-09-10T01:00:00Z'), isDeleted: true })
         .where(eq(messages.clientId, 'trashed-import-message'));
 
-      const second = await new DeprecatedDataImporterRepos(serverDB, userId).importData(data);
+      const second = await new DataImporterRepos(serverDB, userId).importData(data);
 
       expect(second.messages).toMatchObject({ added: 0, errors: 0, skips: 1 });
     });
