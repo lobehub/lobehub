@@ -57,6 +57,14 @@ export interface ShellSegment {
 /** Words that wrap the real command and must be skipped during resolution. */
 const WRAPPER_COMMANDS = new Set(['sudo', 'env', 'nohup']);
 
+/**
+ * Bash builtin that executes its argument as a command, bypassing aliases and
+ * functions: `command rm -rf /` runs rm directly. Unwrapped like sudo/env.
+ * Options `-p` (default PATH), `-v`/`-V` (describe) take no value; `-p` with
+ * an attached `path` (`-p/bin:/usr/bin`) embeds it, so nothing value-consuming.
+ */
+const SHELL_BUILTIN_EXEC_WRAPPERS = new Set(['command']);
+
 const ASSIGNMENT_PATTERN = /^[A-Z_]\w*=.*$/i;
 
 /**
@@ -117,6 +125,16 @@ const splitIntoRawSegments = (command: string): string[] => {
 
     if (inBacktick) {
       current += char;
+      continue;
+    }
+
+    // Unescaped CR/LF is a command separator just like `;` (multi-line
+    // commands are legal shell). Inside quotes/substitutions they are inert.
+    if (char === '\n' || char === '\r') {
+      parts.push(current);
+      current = '';
+      // Treat \r\n as one separator
+      if (char === '\r' && command[i + 1] === '\n') i++;
       continue;
     }
 
@@ -345,8 +363,21 @@ const collectFlagLettersAndNames = (
 };
 
 /**
- * Unwrap wrapper commands (sudo/env/nohup) plus leading VAR=value assignments
- * and reveal the real command word.
+ * Wrapper single-letter options that CONSUME a following word as their value.
+ * Anything not listed here is value-free: `sudo -n rm` → rm is the command,
+ * NOT a value of -n. (sudo -n = non-interactive, env -i = ignore-environment,
+ * nohup has no short options.)
+ */
+const WRAPPER_VALUE_FLAGS: Record<string, Set<string>> = {
+  sudo: new Set(['u', 'g', 'C']), // -u user, -g group, -C fd (closefrom)
+  env: new Set(['S']), // -S 'string' (split-string); -i/-0 take no value
+  nohup: new Set(),
+  command: new Set(),
+};
+
+/**
+ * Unwrap wrapper commands (sudo/env/nohup/command) plus leading VAR=value
+ * assignments and reveal the real command word.
  */
 const resolveCommandWord = (words: string[]): string | null => {
   let index = 0;
@@ -366,23 +397,31 @@ const resolveCommandWord = (words: string[]): string | null => {
   // pathologically chained wrappers (e.g. 50x `sudo`) still resolve fully.
   while (index < words.length) {
     const word = words[index];
-    if (WRAPPER_COMMANDS.has(word)) {
+    const isWrapper = WRAPPER_COMMANDS.has(word) || SHELL_BUILTIN_EXEC_WRAPPERS.has(word);
+    if (isWrapper) {
+      const valueFlags = WRAPPER_VALUE_FLAGS[word];
       index++;
-      // Skip wrapper-owned tokens: inline assignments after `env`, wrapper
-      // flags like `sudo -u alice` / `env -i` / `nohup --`, and the VALUE
-      // argument of wrapper flags that take one (`-u alice`, `-g group`).
+      // Skip wrapper-owned tokens: assignments after `env`, value-free
+      // wrapper flags (`sudo -n`, `env -i`, `command -p`), and — only for
+      // flags registered as value-taking — their value word (`sudo -u alice`).
       // Never skip the real command itself.
       while (index < words.length) {
         const token = words[index];
+        const previous = words[index - 1];
+        const previousConsumesValue =
+          /^-[a-z]$/i.test(previous) &&
+          valueFlags !== undefined &&
+          valueFlags.has(previous[1].toLowerCase());
         if (ASSIGNMENT_PATTERN.test(token) || isDashWord(token)) {
+          // Wrapper-owned token (assignment or flag). One subtlety: a
+          // dash-word right after a value-taking flag could be the value
+          // itself in theory, but flags consuming negative-looking values
+          // are not a wrapper pattern — safe to treat as a flag.
           index++;
           continue;
         }
-        // A bare word right after a value-taking wrapper flag is that flag's
-        // value, not the command. Only `-u`/`-g` style single-letter flags
-        // consume a value; `--user=alice` already embeds it.
-        const previous = words[index - 1];
-        if (/^-[a-z]$/i.test(previous)) {
+        if (previousConsumesValue) {
+          // Bare word after a value-taking wrapper flag = that flag's value.
           index++;
           continue;
         }
@@ -396,7 +435,13 @@ const resolveCommandWord = (words: string[]): string | null => {
   const commandWord = words[index];
   if (!commandWord) return null;
   if (isDashWord(commandWord) || ASSIGNMENT_PATTERN.test(commandWord)) return null;
-  return commandWord;
+  // Normalize path-qualified executables to their basename so predicates can
+  // compare on the bare command name: /bin/rm → rm, ./script.sh → script.sh,
+  // /usr/bin/env → env. Bare `/` (root target) has no basename and stays.
+  const lastSlash = commandWord.lastIndexOf('/');
+  return lastSlash >= 0 && lastSlash + 1 < commandWord.length
+    ? commandWord.slice(lastSlash + 1)
+    : commandWord;
 };
 
 /**
@@ -416,8 +461,12 @@ export const analyzeShellCommand = (command: string): ShellSegment[] => {
     const resolvedCommand = resolveCommandWord(words);
     const flags = collectFlags(words);
 
-    // Targets: non-flag words after the command word
-    const commandIndex = resolvedCommand ? words.indexOf(resolvedCommand) : -1;
+    // Targets: non-flag words after the command word. Match on the raw word
+    // index (basename normalization is display-level only; /bin/rm and rm
+    // occupy the same slot), so arg extraction works for both spellings.
+    const commandIndex = resolvedCommand
+      ? words.findIndex((word) => word === resolvedCommand || word.endsWith(`/${resolvedCommand}`))
+      : -1;
     const argWords = commandIndex >= 0 ? words.slice(commandIndex + 1) : [];
     const trailingSlashTargets = argWords.filter(
       (word) => !isDashWord(word) && (word.endsWith('/') || isBareSlash(word)),
