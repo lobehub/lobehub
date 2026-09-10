@@ -24,6 +24,15 @@ vi.mock('@/server/services/file', () => ({
 // Import after mock setup
 const { browserRuntime } = await import('../browser');
 
+/** Minimal drizzle chain for the live personal agent used by these tests. */
+const personalAgentServerDB = {
+  select: () => ({
+    from: () => ({
+      where: () => ({ limit: () => Promise.resolve([{ workspaceId: null }]) }),
+    }),
+  }),
+} as any;
+
 describe('browserRuntime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -117,7 +126,7 @@ describe('browserRuntime', () => {
       activeDeviceId: 'device-1',
       agentId: 'agt-1',
       operationId: 'op-1',
-      serverDB: {} as any,
+      serverDB: personalAgentServerDB,
       toolManifestMap: {},
       topicId: 'tpc-1',
       userId: 'user-1',
