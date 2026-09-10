@@ -11,19 +11,42 @@ export type HumanInterventionPolicy =
 export const HumanInterventionPolicySchema = z.enum(['never', 'required', 'always']);
 
 /**
+ * Semantic shell predicate names evaluated by the runtime against a parsed
+ * shell command (see `analyzeShellCommand` in @lobechat/agent-runtime).
+ *
+ * Each predicate receives (segment, whole-command-segments) and returns true
+ * when the command is dangerous per that predicate.
+ */
+export type SemanticShellPredicate =
+  | 'rmRecursiveRootTarget' // rm with recursive flag and a target resolving to '/'
+  | 'rmRecursiveHomeTarget' // rm with recursive flag on the home directory itself
+  | 'rmForceDotTarget'; // rm -rf on '.' — cwd blast radius
+
+export const SEMANTIC_SHELL_PREDICATES: SemanticShellPredicate[] = [
+  'rmRecursiveRootTarget',
+  'rmRecursiveHomeTarget',
+  'rmForceDotTarget',
+];
+
+/**
  * Argument Matcher for parameter-level filtering
- * Supports wildcard patterns, prefix matching, and regex
+ * Supports wildcard patterns, prefix matching, regex, and semantic shell checks
  *
  * Examples:
  * - "git add:*" - matches any git add command
  * - "/Users/project/*" - matches paths under /Users/project/
  * - { pattern: "^rm.*", type: "regex" } - regex matching
+ * - { type: 'semanticShell', predicate: 'rmRecursiveRootTarget' } - parsed-command check
  */
 export type ArgumentMatcher =
   | string // Simple string or wildcard pattern
   | {
       pattern: string;
       type: 'exact' | 'prefix' | 'wildcard' | 'regex';
+    }
+  | {
+      type: 'semanticShell';
+      predicate: SemanticShellPredicate;
     };
 
 export const ArgumentMatcherSchema: z.ZodType<ArgumentMatcher> = z.union([
@@ -31,6 +54,10 @@ export const ArgumentMatcherSchema: z.ZodType<ArgumentMatcher> = z.union([
   z.object({
     pattern: z.string(),
     type: z.enum(['exact', 'prefix', 'wildcard', 'regex']),
+  }),
+  z.object({
+    type: z.literal('semanticShell'),
+    predicate: z.enum(['rmRecursiveRootTarget', 'rmRecursiveHomeTarget', 'rmForceDotTarget']),
   }),
 ]);
 

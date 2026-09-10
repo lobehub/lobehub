@@ -11,31 +11,35 @@ import { type SecurityBlacklistConfig } from '@lobechat/types';
  */
 export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
   // ==================== File System Dangers ====================
+  //
+  // rm rules use `semanticShell` predicates evaluated against the PARSED
+  // command (segmented on ; | && with quote awareness, wrappers like
+  // sudo/env/nohup unwrapped, targets classified) instead of raw-string
+  // regex. Regex forms like `rm.*-r.*/\s*$` catastrophically false-positive:
+  // `ls .../terminal-bench-regex-log/` matched because "term**rm**inal"
+  // supplied `rm`, "-**r**egex" supplied `-r`, and the trailing `/` supplied
+  // the root target — three harmless fragments spanning unrelated commands.
+  //
+  // The semantic predicates require: the resolved command IS `rm`, a
+  // recursive flag is active, AND a target actually resolves to '/' or a
+  // home directory. Note quoting cannot hide danger (`rm '-rf' /` is still
+  // caught) because the shell strips quotes before argv.
   {
     description: 'securityBlacklist.rmHomeDir',
     match: {
-      command: {
-        pattern: 'rm.*-r.*(~|\\$HOME|/Users/[^/]+|/home/[^/]+)/?\\s*$',
-        type: 'regex',
-      },
+      command: { type: 'semanticShell', predicate: 'rmRecursiveHomeTarget' },
     },
   },
   {
     description: 'securityBlacklist.rmRootDir',
     match: {
-      command: {
-        pattern: 'rm.*-r.*/\\s*$',
-        type: 'regex',
-      },
+      command: { type: 'semanticShell', predicate: 'rmRecursiveRootTarget' },
     },
   },
   {
     description: 'securityBlacklist.rmForceRecursive',
     match: {
-      command: {
-        pattern: 'rm\\s+-rf\\s+[~./]\\s*$',
-        type: 'regex',
-      },
+      command: { type: 'semanticShell', predicate: 'rmForceDotTarget' },
     },
   },
 
