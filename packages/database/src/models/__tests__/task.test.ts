@@ -8,6 +8,7 @@ import {
   agents,
   briefs,
   documents,
+  taskDocuments,
   tasks,
   topics,
   users,
@@ -1195,6 +1196,35 @@ describe('TaskModel', () => {
       const pinned = await model.getPinnedDocuments(task.id);
       expect(pinned).toHaveLength(1);
       expect(pinned[0].documentId).toBe(doc.id);
+    });
+
+    it('refuses to pin a document after the task is trashed', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({ instruction: 'Soon deleted' });
+      const [doc] = await serverDB
+        .insert(documents)
+        .values({
+          content: '',
+          fileType: 'text/plain',
+          source: 'test',
+          sourceType: 'file',
+          title: 'Must not pin',
+          totalCharCount: 0,
+          totalLineCount: 0,
+          userId,
+        })
+        .returning();
+      await serverDB
+        .update(tasks)
+        .set({ deletedAt: new Date('2026-09-10T00:00:00Z'), isDeleted: true })
+        .where(eq(tasks.id, task.id));
+
+      await expect(model.pinDocument(task.id, doc.id)).rejects.toThrow('Task not found');
+      const pins = await serverDB
+        .select({ taskId: taskDocuments.taskId })
+        .from(taskDocuments)
+        .where(eq(taskDocuments.taskId, task.id));
+      expect(pins).toHaveLength(0);
     });
 
     it('tombstones a pinned document in the workspace tree once its owner flips it back to private', async () => {
