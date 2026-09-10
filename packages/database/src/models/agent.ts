@@ -303,11 +303,7 @@ export class AgentModel {
       .from(agents)
       .leftJoin(
         topics,
-        and(
-          eq(topics.agentId, agents.id),
-          notShareVisitorTopic(),
-          notTrashed(topics.isDeleted),
-        ),
+        and(eq(topics.agentId, agents.id), notShareVisitorTopic(), notTrashed(topics.isDeleted)),
       )
       .where(and(this.ownership(), or(eq(agents.slug, INBOX_SESSION_ID), ne(agents.virtual, true))))
       .groupBy(agents.id)
