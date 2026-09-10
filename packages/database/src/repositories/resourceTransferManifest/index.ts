@@ -21,6 +21,7 @@ import { countAssociatedAgentDocumentsToDetach } from '../../utils/agentDocument
 import { countAgentExpertiseAffected } from '../../utils/agentExpertise';
 import { countAgentKnowledgeMountsToDetach } from '../../utils/agentKnowledgeMounts';
 import { resolveGroupMembershipType } from '../../utils/groupMembership';
+import { notTrashed } from '../../utils/softDelete';
 
 /**
  * What a member-to-member handover of this resource will actually carry, so
@@ -90,7 +91,13 @@ export const buildMemberTransferManifest = async (
           visibility: agents.visibility,
         })
         .from(agents)
-        .where(and(eq(agents.id, resourceId), eq(agents.workspaceId, workspaceId)));
+        .where(
+          and(
+            eq(agents.id, resourceId),
+            eq(agents.workspaceId, workspaceId),
+            notTrashed(agents.isDeleted),
+          ),
+        );
       if (!agent) return null;
       ownerId = agent.userId;
       agentIds = [agent.id];
@@ -101,7 +108,7 @@ export const buildMemberTransferManifest = async (
           .select({ groupOwnerId: chatGroups.userId })
           .from(chatGroupsAgents)
           .innerJoin(chatGroups, eq(chatGroupsAgents.chatGroupId, chatGroups.id))
-          .where(eq(chatGroupsAgents.agentId, agent.id));
+          .where(and(eq(chatGroupsAgents.agentId, agent.id), notTrashed(chatGroups.isDeleted)));
         groupsToLeave = groupLinks.filter((link) => link.groupOwnerId !== recipientId).length;
       }
       break;
@@ -110,7 +117,13 @@ export const buildMemberTransferManifest = async (
       const [group] = await db
         .select({ id: chatGroups.id, userId: chatGroups.userId })
         .from(chatGroups)
-        .where(and(eq(chatGroups.id, resourceId), eq(chatGroups.workspaceId, workspaceId)));
+        .where(
+          and(
+            eq(chatGroups.id, resourceId),
+            eq(chatGroups.workspaceId, workspaceId),
+            notTrashed(chatGroups.isDeleted),
+          ),
+        );
       if (!group) return null;
       ownerId = group.userId;
 
@@ -127,7 +140,7 @@ export const buildMemberTransferManifest = async (
         })
         .from(chatGroupsAgents)
         .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
-        .where(eq(chatGroupsAgents.chatGroupId, resourceId));
+        .where(and(eq(chatGroupsAgents.chatGroupId, resourceId), notTrashed(agents.isDeleted)));
 
       for (const row of memberRows) {
         if (resolveGroupMembershipType(row) === 'owned') {
@@ -169,7 +182,13 @@ export const buildMemberTransferManifest = async (
       ? db
           .select({ value: count() })
           .from(agentCronJobs)
-          .where(and(inArray(agentCronJobs.agentId, agentIds), eq(agentCronJobs.userId, ownerId)))
+          .where(
+            and(
+              inArray(agentCronJobs.agentId, agentIds),
+              eq(agentCronJobs.userId, ownerId),
+              notTrashed(agentCronJobs.isDeleted),
+            ),
+          )
       : Promise.resolve([{ value: 0 }]),
     privateAgentIds.length > 0
       ? db
@@ -179,6 +198,7 @@ export const buildMemberTransferManifest = async (
             and(
               inArray(tasks.assigneeAgentId, privateAgentIds),
               ne(tasks.createdByUserId, recipientId),
+              notTrashed(tasks.isDeleted),
             ),
           )
       : Promise.resolve([{ value: 0 }]),
@@ -221,7 +241,7 @@ export const buildMemberTransferManifest = async (
       .select({ projectOwnerId: projects.userId })
       .from(projectAgents)
       .innerJoin(projects, eq(projectAgents.projectId, projects.id))
-      .where(inArray(projectAgents.agentId, privateAgentIds));
+      .where(and(inArray(projectAgents.agentId, privateAgentIds), notTrashed(projects.isDeleted)));
     projectsToLeave = projectLinks.filter((link) => link.projectOwnerId !== recipientId).length;
   }
 

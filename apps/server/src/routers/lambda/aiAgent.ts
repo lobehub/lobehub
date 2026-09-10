@@ -64,6 +64,7 @@ import { UserModel } from '@/database/models/user';
 import { agentOperations, topics, workspaceMembers } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { notShareVisitorTopicRef } from '@/database/utils/shareVisitor';
+import { notTrashed } from '@/database/utils/softDelete';
 import { heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { signHeteroOperationJWT, signUserJWT } from '@/libs/trpc/utils/internalJwt';
@@ -767,7 +768,7 @@ const resolveHeteroTopicWorkspace = async (params: {
   const [topic] = await db
     .select({ userId: topics.userId, workspaceId: topics.workspaceId })
     .from(topics)
-    .where(eq(topics.id, topicId))
+    .where(and(eq(topics.id, topicId), notTrashed(topics.isDeleted)))
     .limit(1);
 
   if (!topic || (requestedWorkspaceId != null && requestedWorkspaceId !== topic.workspaceId)) {

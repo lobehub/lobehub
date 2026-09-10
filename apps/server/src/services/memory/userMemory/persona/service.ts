@@ -10,7 +10,7 @@ import {
   UserPersonaExtractor,
 } from '@lobechat/memory-user-memory';
 import type { UserServiceModelConfig } from '@lobechat/types';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 
 import { getBusinessModelRuntimeHooks } from '@/business/server/model-runtime';
 import { UserModel } from '@/database/models/user';
@@ -18,6 +18,7 @@ import { UserMemoryModel } from '@/database/models/userMemory';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
 import { type LobeChatDatabase } from '@/database/type';
+import { notTrashed } from '@/database/utils/softDelete';
 import { type MemoryAgentConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
@@ -197,7 +198,7 @@ export const buildUserPersonaJobInput = async (db: LobeChatDatabase, userId: str
     db.query.userMemories.findMany({
       limit: 20,
       orderBy: [desc(userMemories.capturedAt)],
-      where: eq(userMemories.userId, userId),
+      where: and(eq(userMemories.userId, userId), notTrashed(userMemories.isDeleted)),
     }),
   ]);
 

@@ -29,6 +29,7 @@ import { topics } from '../schemas/topic';
 import type { TopicCommentAnchorPreview, TopicCommentItem } from '../schemas/topicComment';
 import { topicCommentMentions, topicComments } from '../schemas/topicComment';
 import type { LobeChatDatabase, Transaction } from '../type';
+import { notTrashed } from '../utils/softDelete';
 
 export const TOPIC_COMMENT_WORKSPACE_REQUIRED =
   'Topic comments are workspace-scoped; a workspaceId is required';
@@ -371,7 +372,7 @@ export class TopicCommentModel {
       const [topic] = await tx
         .select({ id: topics.id, userId: topics.userId, workspaceId: topics.workspaceId })
         .from(topics)
-        .where(eq(topics.id, params.topicId))
+        .where(and(eq(topics.id, params.topicId), notTrashed(topics.isDeleted)))
         .limit(1)
         .for('update');
 
@@ -417,7 +418,7 @@ export class TopicCommentModel {
             userId: messages.userId,
           })
           .from(messages)
-          .where(eq(messages.id, params.messageId))
+          .where(and(eq(messages.id, params.messageId), notTrashed(messages.isDeleted)))
           .limit(1);
 
         if (!message || message.topicId !== params.topicId)

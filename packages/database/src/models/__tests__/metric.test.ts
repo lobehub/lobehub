@@ -1,8 +1,9 @@
 // @vitest-environment node
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { users } from '../../schemas';
+import { metrics, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { MetricModel } from '../metric';
 
@@ -61,6 +62,17 @@ describe('MetricModel', () => {
       const listed = await model.findBySubject('goal', 'goal_metric_test');
       expect(listed.map((s) => s.key)).toEqual(['a.metric', 'b.metric']);
       expect(await otherModel.findBySubject('goal', 'goal_metric_test')).toEqual([]);
+    });
+
+    it('hides a series stamped into the recycle bin', async () => {
+      const series = (await seed())!;
+      await serverDB
+        .update(metrics)
+        .set({ deletedAt: new Date(), isDeleted: true })
+        .where(eq(metrics.id, series.id));
+
+      expect(await model.findById(series.id)).toBeUndefined();
+      expect(await model.findBySubject('goal', 'goal_metric_test')).toEqual([]);
     });
 
     it('updates definition fields under ownership only', async () => {

@@ -27,6 +27,7 @@ import {
 import { tasks } from '../schemas/task';
 import { works, workVersions } from '../schemas/work';
 import type { LobeChatDatabase, Transaction } from '../type';
+import { notTrashed } from '../utils/softDelete';
 import { buildWorkspaceWhere } from '../utils/workspace';
 import { workOwnership } from './work/context';
 
@@ -336,6 +337,7 @@ export class GoalGraphModel {
           eq(goalNodes.goalId, goalId),
           eq(goalNodes.kind, 'task'),
           inArray(tasks.status, ['running', 'scheduled']),
+          notTrashed(tasks.isDeleted),
         ),
       );
     return row?.count ?? 0;

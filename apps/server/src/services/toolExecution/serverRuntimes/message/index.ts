@@ -24,6 +24,7 @@ import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLin
 import { MessengerInstallationModel } from '@/database/models/messengerInstallation';
 import { TopicModel } from '@/database/models/topic';
 import { agents } from '@/database/schemas';
+import { notTrashed } from '@/database/utils/softDelete';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
@@ -790,7 +791,13 @@ export const messageRuntime: ServerRuntimeRegistration = {
           const [agentRow] = await context.serverDB
             .select({ id: agents.id })
             .from(agents)
-            .where(and(eq(agents.id, params.agentId), eq(agents.userId, context.userId)))
+            .where(
+              and(
+                eq(agents.id, params.agentId),
+                eq(agents.userId, context.userId),
+                notTrashed(agents.isDeleted),
+              ),
+            )
             .limit(1);
           if (!agentRow) {
             throw new TRPCError({

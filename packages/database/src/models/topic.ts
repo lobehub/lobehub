@@ -539,13 +539,15 @@ export class TopicModel {
     const firstUserMessageSubquery = this.db
       .select({ value: messages.content })
       .from(messages)
-      .where(and(eq(messages.topicId, topics.id), eq(messages.role, 'user')))
+      .where(
+        and(eq(messages.topicId, topics.id), eq(messages.role, 'user'), this.messageOwnership()),
+      )
       .orderBy(asc(messages.createdAt))
       .limit(1);
     const messageCountSubquery = this.db
       .select({ value: sql<number>`count(*)::int` })
       .from(messages)
-      .where(eq(messages.topicId, topics.id));
+      .where(and(eq(messages.topicId, topics.id), this.messageOwnership()));
     const latestMessageAtSubquery = this.db
       .select({ value: messages.updatedAt })
       .from(messages)

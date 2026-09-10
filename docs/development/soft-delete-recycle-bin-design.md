@@ -195,7 +195,8 @@ Two invariants:
 ### 2.4 Read-side filtering — one funnel, not 250 patches
 
 `buildWorkspaceWhere(ctx, cols)` now appends `is_deleted = false` whenever `cols.isDeleted` is the
-flag of a table in `TRASH_AWARE_TABLES` (matched by table name — the nineteen tables above;
+flag of a table in `TRASH_AWARE_TABLES` (matched by the original table name — the nineteen
+trashable tables above plus later filterable tables such as `metrics`;
 `agent_documents`, `topic_comments`, `workspace_members` never carry `is_deleted` and are therefore
 never matched). Passing the whole table object — the dominant style — opts in automatically; the few
 explicit `{ userId, workspaceId, visibility }` call sites (agents, chat groups, tasks, goals, works,

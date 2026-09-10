@@ -2,11 +2,12 @@ import { BriefIdentifier } from '@lobechat/builtin-tool-brief';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { formatBriefCreated, formatCheckpointCreated } from '@lobechat/prompts';
 import { DEFAULT_BRIEF_ACTIONS } from '@lobechat/types';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import { tasks } from '@/database/schemas';
+import { notTrashed } from '@/database/utils/softDelete';
 
 import { type ServerRuntimeRegistration } from './types';
 
@@ -22,7 +23,7 @@ const resolveWorkspaceId = async (
   const [row] = await db
     .select({ workspaceId: tasks.workspaceId })
     .from(tasks)
-    .where(eq(tasks.id, taskId))
+    .where(and(eq(tasks.id, taskId), notTrashed(tasks.isDeleted)))
     .limit(1);
   return row?.workspaceId ?? undefined;
 };

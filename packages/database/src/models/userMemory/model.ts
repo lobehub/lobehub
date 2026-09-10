@@ -53,6 +53,7 @@ import { inJsonStringArray } from '../../utils/inJsonStringArray';
 import { TopicModel } from '../topic';
 import type { UserMemoryHybridSearchAggregatedResult } from './query';
 import { UserMemoryQueryModel } from './query';
+import { buildUserMemoryWhere } from './where';
 
 const normalizeRelationshipValue = (input: unknown): RelationshipEnum | null => {
   if (input === null) return null;
@@ -560,8 +561,8 @@ export class UserMemoryModel {
     this.topicModel = new TopicModel(db, userId);
   }
 
-  private memoryWhere(table: { userId: any }) {
-    return eq(table.userId, this.userId);
+  private memoryWhere(table: Parameters<typeof buildUserMemoryWhere>[1]) {
+    return buildUserMemoryWhere(this.userId, table);
   }
 
   private extractSourceMetadata(metadata?: Record<string, unknown> | null): {

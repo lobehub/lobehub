@@ -44,6 +44,7 @@ import {
   userMemoriesPreferences,
   userSettings,
 } from '@/database/schemas';
+import { notTrashed } from '@/database/utils/softDelete';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
@@ -508,6 +509,7 @@ export const userMemoriesRouter = router({
         await run('userMemories', async () => {
           const where = combineConditions([
             eq(userMemories.userId, ctx.userId),
+            notTrashed(userMemories.isDeleted),
             options.startDate ? gte(userMemories.createdAt, options.startDate) : undefined,
             options.endDate ? lte(userMemories.createdAt, options.endDate) : undefined,
           ]);

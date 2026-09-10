@@ -19,6 +19,7 @@ import type {
 import { agents, agentShares, users } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { normalizeInboxAgentAvatar, normalizeInboxAgentTitle } from '../utils/inboxAgent';
+import { notTrashed } from '../utils/softDelete';
 import { isUuid } from '../utils/uuid';
 import { AgentShareProfileModel } from './agentShareProfile';
 
@@ -127,11 +128,16 @@ export class AgentShareModel {
         .from(agents)
         .where(
           this.workspaceId
-            ? and(eq(agents.id, agentShares.agentId), eq(agents.workspaceId, this.workspaceId))
+            ? and(
+                eq(agents.id, agentShares.agentId),
+                eq(agents.workspaceId, this.workspaceId),
+                notTrashed(agents.isDeleted),
+              )
             : and(
                 eq(agents.id, agentShares.agentId),
                 eq(agents.userId, this.userId),
                 isNull(agents.workspaceId),
+                notTrashed(agents.isDeleted),
               ),
         ),
     );
@@ -158,11 +164,16 @@ export class AgentShareModel {
       .from(agents)
       .where(
         params.workspaceId
-          ? and(eq(agents.id, agentId), eq(agents.workspaceId, params.workspaceId))
+          ? and(
+              eq(agents.id, agentId),
+              eq(agents.workspaceId, params.workspaceId),
+              notTrashed(agents.isDeleted),
+            )
           : and(
               eq(agents.id, agentId),
               eq(agents.userId, params.userId),
               isNull(agents.workspaceId),
+              notTrashed(agents.isDeleted),
             ),
       )
       .for('update');
@@ -603,7 +614,12 @@ export class AgentShareModel {
       .select({ id: agentShares.id, visibility: agentShares.visibility })
       .from(agentShares)
       .innerJoin(agents, eq(agentShares.agentId, agents.id))
-      .where(eq(agentShares.agentId, params.agentId))
+      .where(
+        and(
+          eq(agentShares.agentId, params.agentId),
+          notTrashed(agents.isDeleted),
+        ),
+      )
       .limit(1);
 
     return !!share && share.id === params.shareId && share.visibility === 'link';
@@ -647,7 +663,7 @@ export class AgentShareModel {
       .from(agentShares)
       .innerJoin(agents, eq(agentShares.agentId, agents.id))
       .leftJoin(users, eq(agents.userId, users.id))
-      .where(eq(agentShares.id, shareId))
+      .where(and(eq(agentShares.id, shareId), notTrashed(agents.isDeleted)))
       .limit(1);
 
     if (!share) return null;

@@ -14,6 +14,7 @@ import { topicSummaryEligibleMessage, TopicSummaryModel } from '@/database/model
 import { UserModel } from '@/database/models/user';
 import { messages, topics } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { notTrashed } from '@/database/utils/softDelete';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 import { resolveSystemAgentModelConfig } from '@/server/services/systemAgent/modelConfig';
 
@@ -57,7 +58,7 @@ export class TopicAutoSummaryService {
     const [topic] = await this.db
       .select({ historySummary: topics.historySummary, senderId: topics.senderId })
       .from(topics)
-      .where(and(eq(topics.id, topicId), topicOwnership))
+      .where(and(eq(topics.id, topicId), topicOwnership, notTrashed(topics.isDeleted)))
       .limit(1);
     // Share-visitor topics are creator-billed only through the share spend
     // gate. Reject them defensively before any LLM call — the dispatch query

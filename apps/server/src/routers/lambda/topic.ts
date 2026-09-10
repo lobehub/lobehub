@@ -12,7 +12,7 @@ import {
 } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
 import { TRPCError } from '@trpc/server';
-import { inArray } from 'drizzle-orm';
+import { and, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -32,6 +32,7 @@ import { HeteroSessionImporterRepo } from '@/database/repositories/heteroSession
 import { TopicImporterRepo } from '@/database/repositories/topicImporter';
 import { chatGroups } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { notTrashed } from '@/database/utils/softDelete';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
@@ -846,7 +847,7 @@ export const topicRouter = router({
             title: chatGroups.title,
           })
           .from(chatGroups)
-          .where(inArray(chatGroups.id, allGroupIds));
+          .where(and(inArray(chatGroups.id, allGroupIds), notTrashed(chatGroups.isDeleted)));
 
         // Query group member avatars (already normalized for the inbox agent)
         const groupMembersMap: Map<string, RecentTopicGroupMember[]> =

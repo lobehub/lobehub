@@ -1,4 +1,4 @@
-import { PgDialect } from 'drizzle-orm/pg-core';
+import { alias, PgDialect } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
 
 import { agents } from '../schemas/agent';
@@ -148,6 +148,14 @@ describe('workspace utils', () => {
 
       expect(built.sql).toContain('"agents"."is_deleted" IS NOT TRUE');
       expect(built.sql.startsWith('(("agents"."workspace_id" = $1')).toBe(true);
+    });
+
+    it('recognizes a trash-aware table through a Drizzle alias', () => {
+      const aliasedAgents = alias(agents, 'candidate_agents');
+      const condition = buildWorkspaceWhere({ userId: 'user-1' }, aliasedAgents);
+      const built = new PgDialect().sqlToQuery(condition);
+
+      expect(built.sql).toContain('"candidate_agents"."is_deleted" IS NOT TRUE');
     });
 
     it('skips the filter with `includeTrashed` (restore / purge internals)', () => {

@@ -2753,7 +2753,18 @@ export class MessageModel {
       where: and(
         this.ownership(),
         eq(messages.agentId, agentId),
-        eq(messages.topicId, topicId),
+        inArray(
+          messages.topicId,
+          this.db
+            .select({ id: topics.id })
+            .from(topics)
+            .where(
+              and(
+                eq(topics.id, topicId),
+                buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics),
+              ),
+            ),
+        ),
         eq(messages.threadId, threadId),
         eq(messages.role, 'assistant'),
       ),
@@ -2767,7 +2778,7 @@ export class MessageModel {
   findVerifyMessageByOperationId = async (operationId: string) => {
     return this.db.query.messages.findFirst({
       where: and(
-        eq(messages.userId, this.userId),
+        this.ownership(),
         eq(messages.role, 'verify'),
         sql`${messages.metadata}->>'verifyOperationId' = ${operationId}`,
       ),
@@ -2794,8 +2805,19 @@ export class MessageModel {
   }) => {
     return this.db.query.messages.findFirst({
       where: and(
-        eq(messages.userId, this.userId),
-        eq(messages.topicId, topicId),
+        this.ownership(),
+        inArray(
+          messages.topicId,
+          this.db
+            .select({ id: topics.id })
+            .from(topics)
+            .where(
+              and(
+                eq(topics.id, topicId),
+                buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics),
+              ),
+            ),
+        ),
         eq(messages.role, 'assistant'),
         sql`${messages.metadata}->>'operationId' = ${operationId}`,
       ),

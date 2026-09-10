@@ -1,4 +1,4 @@
-import { and, eq, getTableName, isNull, or, type SQL } from 'drizzle-orm';
+import { and, eq, isNull, or, type SQL } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import { notTrashed } from './softDelete';
@@ -30,6 +30,7 @@ export const TRASH_AWARE_TABLES: ReadonlySet<string> = new Set([
   'goals',
   'knowledge_bases',
   'messages',
+  'metrics',
   'projects',
   'session_groups',
   'tasks',
@@ -40,7 +41,9 @@ export const TRASH_AWARE_TABLES: ReadonlySet<string> = new Set([
 ]);
 
 const isTrashFlag = (col: AnyPgColumn | undefined): col is AnyPgColumn =>
-  !!col && col.name === 'is_deleted' && TRASH_AWARE_TABLES.has(getTableName(col.table));
+  !!col &&
+  col.name === 'is_deleted' &&
+  TRASH_AWARE_TABLES.has(Reflect.get(col.table, Symbol.for('drizzle:OriginalName')) as string);
 
 /**
  * Workspace-aware ownership predicate for content tables.

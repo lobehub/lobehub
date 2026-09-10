@@ -37,6 +37,7 @@ import {
 } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { notShareVisitorTopic, notShareVisitorTopicRef } from '@/database/utils/shareVisitor';
+import { notTrashed } from '@/database/utils/softDelete';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { AgentService } from '@/server/services/agent';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
@@ -209,7 +210,14 @@ export class OnboardingService {
       await tx
         .update(topics)
         .set({ agentId: inboxAgentId, updatedAt: topics.updatedAt })
-        .where(and(eq(topics.id, topicId), eq(topics.userId, this.userId), notShareVisitorTopic()));
+        .where(
+          and(
+            eq(topics.id, topicId),
+            eq(topics.userId, this.userId),
+            notTrashed(topics.isDeleted),
+            notShareVisitorTopic(),
+          ),
+        );
 
       await tx
         .update(messages)
@@ -218,6 +226,7 @@ export class OnboardingService {
           and(
             eq(messages.topicId, topicId),
             eq(messages.userId, this.userId),
+            notTrashed(messages.isDeleted),
             notShareVisitorTopicRef(messages.topicId),
           ),
         );
@@ -229,6 +238,7 @@ export class OnboardingService {
           and(
             eq(threads.topicId, topicId),
             eq(threads.userId, this.userId),
+            notTrashed(threads.isDeleted),
             notShareVisitorTopicRef(threads.topicId),
           ),
         );
@@ -339,6 +349,7 @@ export class OnboardingService {
           eq(messages.topicId, topicId),
           eq(messages.userId, this.userId),
           eq(messages.role, 'user'),
+          notTrashed(messages.isDeleted),
         ),
       );
 

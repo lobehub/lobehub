@@ -2,10 +2,11 @@ import type { DocumentLoadRule } from '@lobechat/agent-templates';
 import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
 import { AgentDocumentsExecutionRuntime } from '@lobechat/builtin-tool-agent-documents/executionRuntime';
 import { agentShareDocumentAccessScope, ordinaryDocumentAccessScope } from '@lobechat/types';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import { TaskModel } from '@/database/models/task';
 import { tasks } from '@/database/schemas';
+import { notTrashed } from '@/database/utils/softDelete';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { createDocumentWorkRegistrar } from '@/server/services/agentDocuments/documentWork';
 import { emitAgentDocumentToolOutcomeSafely } from '@/server/services/agentDocuments/toolOutcome';
@@ -125,7 +126,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
           const [row] = await db
             .select({ workspaceId: tasks.workspaceId })
             .from(tasks)
-            .where(eq(tasks.id, taskId))
+            .where(and(eq(tasks.id, taskId), notTrashed(tasks.isDeleted)))
             .limit(1);
           wsId = row?.workspaceId ?? undefined;
         }

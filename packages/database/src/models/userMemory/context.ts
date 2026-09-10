@@ -3,6 +3,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import type { NewUserMemoryContext, UserMemoryContext } from '../../schemas';
 import { userMemories, userMemoriesContexts } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { buildUserMemoryWhere } from './where';
 
 export class UserMemoryContextModel {
   private userId: string;
@@ -13,8 +14,8 @@ export class UserMemoryContextModel {
     this.db = db;
   }
 
-  private memoryWhere(table: { userId: any }) {
-    return eq(table.userId, this.userId);
+  private memoryWhere(table: Parameters<typeof buildUserMemoryWhere>[1]) {
+    return buildUserMemoryWhere(this.userId, table);
   }
 
   create = async (params: Omit<NewUserMemoryContext, 'userId'>) => {

@@ -1,7 +1,8 @@
 import debug from 'debug';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import { agents } from '@/database/schemas';
+import { notTrashed } from '@/database/utils/softDelete';
 
 import { type ToolExecutionContext } from '../types';
 
@@ -40,7 +41,7 @@ export const resolveContentWorkspaceId = async (
     const [row] = await serverDB
       .select({ workspaceId: agents.workspaceId })
       .from(agents)
-      .where(eq(agents.id, agentId))
+      .where(and(eq(agents.id, agentId), notTrashed(agents.isDeleted)))
       .limit(1);
     return row?.workspaceId ?? undefined;
   } catch (error) {

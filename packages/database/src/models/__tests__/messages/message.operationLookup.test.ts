@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { topics, users } from '../../../schemas';
+import { messages, topics, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { MessageModel } from '../../message';
 
@@ -106,5 +106,45 @@ describe('MessageModel.findLatestAssistantByOperationId', () => {
     });
 
     expect(asOther).toBeUndefined();
+  });
+
+  it('does not return a reply in the recycle bin', async () => {
+    const message = await messageModel.create({
+      content: 'trashed reply',
+      metadata: { operationId: 'op-trashed' },
+      role: 'assistant',
+      topicId,
+    });
+    await serverDB
+      .update(messages)
+      .set({ deletedAt: new Date(), isDeleted: true })
+      .where(eq(messages.id, message.id));
+
+    await expect(
+      messageModel.findLatestAssistantByOperationId({
+        operationId: 'op-trashed',
+        topicId,
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('does not return a reply whose topic is in the recycle bin', async () => {
+    await messageModel.create({
+      content: 'reply under trashed topic',
+      metadata: { operationId: 'op-trashed-topic' },
+      role: 'assistant',
+      topicId,
+    });
+    await serverDB
+      .update(topics)
+      .set({ deletedAt: new Date(), isDeleted: true })
+      .where(eq(topics.id, topicId));
+
+    await expect(
+      messageModel.findLatestAssistantByOperationId({
+        operationId: 'op-trashed-topic',
+        topicId,
+      }),
+    ).resolves.toBeUndefined();
   });
 });
