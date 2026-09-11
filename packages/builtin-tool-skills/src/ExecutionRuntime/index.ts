@@ -34,6 +34,8 @@ export interface SkillImportServiceResult {
 }
 
 export interface ExportFileResult {
+  /** Preserve upstream failures for the outer tool error classifier. */
+  error?: unknown;
   fileId?: string;
   filename: string;
   mimeType?: string;
@@ -254,6 +256,7 @@ export class SkillsExecutionRuntime {
       if (!result.success) {
         return {
           content: `Failed to export file: ${filename}`,
+          error: result.error,
           success: false,
         };
       }
@@ -530,6 +533,7 @@ export class SkillsExecutionRuntime {
 
     return {
       content: formatSandboxRecreation(content, result.sessionExpiredAndRecreated),
+      error: result.error,
       state: {
         command,
         ...(result.sessionExpiredAndRecreated && { sessionExpiredAndRecreated: true }),
