@@ -308,7 +308,8 @@ export const CloudSandboxManifest: BuiltinToolManifest = {
   identifier: CloudSandboxIdentifier,
   meta: {
     avatar: '💻',
-    description: 'Execute code, run commands, and manage files in a secure cloud environment',
+    description:
+      'Run code for computation or validation, process files, and create downloadable files (including HTML when explicitly requested). For self-contained web pages, games, or SVG previews, use the artifacts skill when available; do not activate this tool just to generate their code. Answer code snippets and explanations directly without activation.',
     readme:
       'Execute Python, JavaScript, and TypeScript code in an isolated cloud environment. Run shell commands, manage files, search content with regex, and export results securely.',
     title: 'Cloud Sandbox',
