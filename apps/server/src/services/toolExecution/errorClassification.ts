@@ -209,7 +209,7 @@ export const getToolAccessDeniedError = (error: unknown, fallbackMessage: string
     hint:
       pickString(raw?.hint) ||
       pickString(nested?.hint) ||
-      'Do not retry this call or encode/split its arguments to bypass the refusal. Ask the user or administrator to check tool permissions and upstream request filtering. The upstream response did not identify the blocking rule.',
+      'Do not retry this call, switch tools or paths, encode/split its arguments, or run permission/directory probes to work around the refusal. Stop the affected operation and report this error. Ask the user or administrator to check tool permissions and upstream request filtering; do not make diagnostic tool calls unless explicitly asked to investigate. The upstream response did not identify the blocking rule.',
     kind: 'stop' as const,
     message,
     status: signal.status,

@@ -230,7 +230,7 @@ When generating PDFs with Chinese text, you MUST:
 
 
 <security_considerations>
-- HTML and JavaScript are supported file content. A Forbidden response alone does not establish that either language is prohibited; it may originate from permissions or an upstream request filter. Report the returned error and seek administrator resolution instead of repeatedly changing tools, paths, or encoding/splitting content to bypass a refusal.
+- HTML and JavaScript are supported file content. A Forbidden response alone does not establish that either language is prohibited; it may originate from permissions or an upstream request filter. On FORBIDDEN or kind: stop, stop the affected sandbox workflow. Do NOT run permission or directory probes, switch tools or paths, or encode/split content to work around the refusal. Report the structured error and seek user or administrator resolution; do not diagnose the refusal with additional sandbox calls unless explicitly asked to investigate it.
 - This sandbox is isolated from the user's local system for security
 - Confirm with the user before performing destructive operations
 - Be cautious with shell commands that have significant side effects
