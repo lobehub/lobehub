@@ -26,3 +26,9 @@ export const updaterConfig = {
   },
   enableAppUpdate: !isDev,
 };
+
+// Canary pilots Sparkle on macOS; stable keeps electron-updater until the pilot is promoted.
+export const isSparkleChannel = (channel: UpdateChannel) => channel === 'canary';
+
+export const getSparkleFeedUrl = (baseUrl: string, channel: UpdateChannel) =>
+  `${baseUrl}/${channel}/appcast-${process.arch}.xml`;

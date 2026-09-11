@@ -15,6 +15,7 @@ import {
   getNativeModulesFilesConfig,
 } from './native-deps.config.mjs';
 import { packBuiltinCore } from './scripts/packBuiltinCore.mjs';
+import { toSparkleBuildVersion } from './scripts/sparkleBuildVersion.mjs';
 import { verifyFontListSignature } from './scripts/verifyFontListSigning.mjs';
 
 dotenv.config();
@@ -128,6 +129,23 @@ const getProtocolScheme = () => {
 
 const protocolScheme = getProtocolScheme();
 
+// Sparkle pilots on macOS canary builds only; stable keeps electron-updater.
+const sparklePublicKey = process.env.SPARKLE_ED_PUBLIC_KEY;
+const useSparkle =
+  process.platform === 'darwin' &&
+  isCanary &&
+  Boolean(updateServerUrl) &&
+  Boolean(sparklePublicKey);
+if (process.platform === 'darwin' && isCanary && !useSparkle) {
+  console.info('⏭️  Sparkle disabled: SPARKLE_ED_PUBLIC_KEY or UPDATE_SERVER_URL is not set');
+}
+const sparklePackageDir = useSparkle
+  ? await fs.realpath(path.join(__dirname, 'node_modules/electron-sparkle-updater'))
+  : null;
+const sparkleFeedUrl = useSparkle
+  ? `${stripChannelSuffix(updateServerUrl)}/canary/appcast-${arch}.xml`
+  : null;
+
 // Determine icon file based on version type
 const getIconFileName = () => {
   if (isStable || isCanary) return 'Icon';
@@ -146,6 +164,14 @@ const config = {
    */
   beforePack: async (context) => {
     buildFirstPartyNativeAddons();
+
+    if (sparklePackageDir) {
+      console.info('🔧 Building Sparkle bridge addon...');
+      execSync(
+        `node "${path.join(sparklePackageDir, 'bin/electron-sparkle-updater.js')}" rebuild --arch ${arch}`,
+        { cwd: __dirname, stdio: 'inherit' },
+      );
+    }
 
     await copyNativeModulesToSource();
     await copyExternalRuntimeModulesToSource();
@@ -228,6 +254,10 @@ const config = {
   // Native modules must be unpacked from asar to work correctly
   asarUnpack: getAsarUnpackPatterns(),
 
+  ...(process.platform === 'darwin' && isCanary
+    ? { buildVersion: toSparkleBuildVersion(packageJSON.version) }
+    : {}),
+
   detectUpdateChannel: true,
 
   directories: {
@@ -288,6 +318,15 @@ const config = {
         }
       : {}),
     extendInfo: {
+      ...(useSparkle
+        ? {
+            SUDeltaChainHistory: 6,
+            SUEnableAutomaticChecks: false,
+            SUEnableInstallerLauncherService: false,
+            SUFeedURL: sparkleFeedUrl,
+            SUPublicEDKey: sparklePublicKey,
+          }
+        : {}),
       CFBundleIconName: 'AppIcon',
       CFBundleURLTypes: [
         {
@@ -343,10 +382,30 @@ const config = {
     releaseNotes: process.env.RELEASE_NOTES || undefined,
   },
 
+  ...(sparklePackageDir
+    ? {
+        extraFiles: [
+          {
+            from: path.join(sparklePackageDir, 'native/vendor/Sparkle.framework'),
+            to: 'Frameworks/Sparkle.framework',
+          },
+        ],
+      }
+    : {}),
   extraResources: [
     { from: 'resources/bin', to: 'bin' },
     { from: 'core.asar', to: 'core.asar' },
     { from: 'core.asar.unpacked', to: 'core.asar.unpacked' },
+    // The Sparkle bridge addon is loaded by an explicit path outside app.asar; pnpm's
+    // symlinked package dir cannot be matched by asarUnpack, so it ships as a resource.
+    ...(sparklePackageDir
+      ? [
+          {
+            from: path.join(sparklePackageDir, 'native/build/Release/sparkle_bridge.node'),
+            to: 'sparkle/sparkle_bridge.node',
+          },
+        ]
+      : []),
     // Local Sandbox helper binaries. The sandbox spawns these by path, so they
     // must be real files — not entries inside app.asar, and not something the
     // user is expected to install separately.
