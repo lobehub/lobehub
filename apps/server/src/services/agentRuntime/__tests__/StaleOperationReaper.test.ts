@@ -4,19 +4,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { StaleOperationReaper } from '../StaleOperationReaper';
 
 const claimStaleRedriveMock = vi.fn();
-const findByIdMock = vi.fn();
+const settleStaleRunningMock = vi.fn();
 vi.mock('@/database/models/agentOperation', () => ({
-  AgentOperationModel: vi.fn().mockImplementation(() => ({
-    claimStaleRedrive: claimStaleRedriveMock,
-    findById: findByIdMock,
-  })),
+  AgentOperationModel: vi.fn().mockImplementation(function () {
+    return {
+      claimStaleRedrive: claimStaleRedriveMock,
+      settleStaleRunning: settleStaleRunningMock,
+    };
+  }),
 }));
 
 const finalizeAbandonedMock = vi.fn().mockResolvedValue({});
 vi.mock('../AbandonOperationService', () => ({
-  AbandonOperationService: vi.fn().mockImplementation(() => ({
-    finalizeAbandoned: finalizeAbandonedMock,
-  })),
+  AbandonOperationService: vi.fn().mockImplementation(function () {
+    return { finalizeAbandoned: finalizeAbandonedMock };
+  }),
 }));
 
 /** Minimal drizzle select chain returning `rows`. */
@@ -72,7 +74,7 @@ const buildReaper = (
 describe('StaleOperationReaper', () => {
   beforeEach(() => {
     claimStaleRedriveMock.mockReset().mockResolvedValue(1);
-    findByIdMock.mockReset().mockResolvedValue(null);
+    settleStaleRunningMock.mockReset().mockResolvedValue(true);
     finalizeAbandonedMock.mockClear();
     process.env.APP_URL = 'https://app.lobehub.test';
   });
@@ -133,6 +135,8 @@ describe('StaleOperationReaper', () => {
 
     expect(queue.scheduleMessage).not.toHaveBeenCalled();
     expect(claimStaleRedriveMock).not.toHaveBeenCalled();
+    // Irreversible cleanup only after the lease is re-checked atomically.
+    expect(settleStaleRunningMock).toHaveBeenCalledWith('op_x', expect.any(Date));
     expect(finalizeAbandonedMock).toHaveBeenCalledWith('op_x', 'stale_lease_context_unavailable');
     expect(result).toMatchObject({ abandoned: 1, redriven: 0 });
   });
@@ -167,8 +171,9 @@ describe('StaleOperationReaper', () => {
   it('leaves an operation alone when a heartbeat wins the claim race', async () => {
     const queue = buildQueue();
     claimStaleRedriveMock.mockResolvedValue(null);
-    // Row is no longer stale → the step is alive and owns itself again.
-    findByIdMock.mockResolvedValue({ status: 'running', updatedAt: new Date() });
+    // The stale CAS finds the row refreshed → the step is alive and owns itself
+    // again, so nothing irreversible may happen to it.
+    settleStaleRunningMock.mockResolvedValue(false);
 
     const result = await buildReaper([candidate()], runningState(), queue).sweep();
 
@@ -180,14 +185,30 @@ describe('StaleOperationReaper', () => {
   it('abandons once the redrive budget is spent', async () => {
     const queue = buildQueue();
     claimStaleRedriveMock.mockResolvedValue(null);
-    // Still stale → the claim failed on the attempt budget, not a heartbeat.
-    findByIdMock.mockResolvedValue({ status: 'running', updatedAt: new Date(0) });
+    // CAS still matches → the claim failed on the attempt budget, not a heartbeat.
+    settleStaleRunningMock.mockResolvedValue(true);
 
     const result = await buildReaper([candidate()], runningState(), queue).sweep();
 
     expect(queue.scheduleMessage).not.toHaveBeenCalled();
+    expect(settleStaleRunningMock).toHaveBeenCalledWith('op_x', expect.any(Date));
     expect(finalizeAbandonedMock).toHaveBeenCalledWith('op_x', 'stale_lease_redrive_exhausted');
     expect(result).toMatchObject({ abandoned: 1 });
+  });
+
+  it('refuses to abandon a run that heartbeated while its context was being read', async () => {
+    // The window Codex flagged: `listStaleRunning` selected this row, then the
+    // worker resumed while `resolveRedriveContext` was doing its Redis reads.
+    // Abandoning is irreversible and user-visible, so it must re-check the
+    // lease atomically rather than trust the stale select.
+    const queue = buildQueue();
+    settleStaleRunningMock.mockResolvedValue(false);
+
+    const result = await buildReaper([candidate()], runningState(), queue, []).sweep();
+
+    expect(finalizeAbandonedMock).not.toHaveBeenCalled();
+    expect(queue.scheduleMessage).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ abandoned: 0, alive: 1 });
   });
 
   it('keeps sweeping after one operation throws', async () => {

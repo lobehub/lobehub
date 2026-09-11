@@ -214,8 +214,12 @@ export class StaleOperationReaper {
     const context = await this.resolveRedriveContext(operationId, state, stepIndex);
     if (!context) {
       log('[%s][%d] no persisted context to resume from', operationId, stepIndex);
-      await this.abandon(operationId, 'stale_lease_context_unavailable');
-      return 'abandoned';
+      return this.abandonIfStillStale(
+        operationModel,
+        operationId,
+        staleBefore,
+        'context_unavailable',
+      );
     }
 
     const attempt = await operationModel.claimStaleRedrive(
@@ -226,15 +230,15 @@ export class StaleOperationReaper {
 
     if (attempt === null) {
       // Either a heartbeat landed while we were reading state (the step is
-      // alive and owns itself again), or the redrive budget is spent. Only the
-      // latter should be retired, so re-read the row to tell them apart
-      // instead of guessing.
-      const row = await operationModel.findById(operationId);
-      const stale = row?.status === 'running' && row.updatedAt < staleBefore;
-      if (!stale) return 'alive';
-
-      await this.abandon(operationId, 'stale_lease_redrive_exhausted');
-      return 'abandoned';
+      // alive and owns itself again) or the redrive budget is spent. The CAS
+      // below distinguishes them without a separate read: only a row that is
+      // still both running and past its lease can be retired.
+      return this.abandonIfStillStale(
+        operationModel,
+        operationId,
+        staleBefore,
+        'redrive_exhausted',
+      );
     }
 
     await this.queueService.scheduleMessage({
@@ -318,8 +322,42 @@ export class StaleOperationReaper {
     );
   }
 
-  private async abandon(operationId: string, reason: string): Promise<void> {
-    await new AbandonOperationService(this.db).finalizeAbandoned(operationId, reason);
+  /**
+   * Retire an operation, but only if it is *still* past its lease at this
+   * instant.
+   *
+   * Abandonment is irreversible and user-visible — it settles the durable row,
+   * errors the conversation tail and clears the topic's running pointer — so it
+   * must never act on a stale read. Minutes can pass between
+   * `listStaleRunning` selecting a candidate and this line running (the sweep
+   * walks candidates serially, and reading state plus execution history costs
+   * two Redis round trips each), which is ample room for the worker to resume
+   * and heartbeat. A transiently empty history read reaches here the same way.
+   *
+   * `settleStaleRunning` is the compare-and-set that closes it: its WHERE
+   * clause re-checks `status = 'running' AND updatedAt < staleBefore` inside
+   * the UPDATE, so a heartbeat that landed in the meantime wins and this
+   * returns `alive` untouched. Only once the row is claimed do the
+   * irreversible side effects run.
+   */
+  private async abandonIfStillStale(
+    operationModel: AgentOperationModel,
+    operationId: string,
+    staleBefore: Date,
+    reason: string,
+  ): Promise<'abandoned' | 'alive'> {
+    const claimed = await operationModel.settleStaleRunning(operationId, staleBefore);
+    if (!claimed) {
+      log('[%s] lease was refreshed before abandon could claim it', operationId);
+      return 'alive';
+    }
+
+    await new AbandonOperationService(this.db).finalizeAbandoned(
+      operationId,
+      `stale_lease_${reason}`,
+    );
     log('[%s] abandoned (reason=%s)', operationId, reason);
+
+    return 'abandoned';
   }
 }
