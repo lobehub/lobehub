@@ -17,6 +17,7 @@ const detailResult = (
     commits: [],
     deletions: 0,
     headRefName: 'feature',
+    isCrossRepository: false,
     isDraft: false,
     mergeable: 'MERGEABLE',
     mergeStateStatus: 'CLEAN',
