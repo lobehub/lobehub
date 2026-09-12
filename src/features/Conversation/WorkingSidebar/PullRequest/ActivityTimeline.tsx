@@ -139,7 +139,7 @@ const ActivityTimeline = memo<ActivityTimelineProps>(({ busy, detail, onAction }
                 <strong>{entry.author}</strong>
                 <span>{timeAgo(entry.at)}</span>
               </Flexbox>
-              <Markdown className={styles.commentBody} fontSize={13} variant={'chat'}>
+              <Markdown allowHtml className={styles.commentBody} fontSize={13} variant={'chat'}>
                 {entry.body}
               </Markdown>
             </div>

@@ -104,7 +104,7 @@ const Sections = memo<SectionsProps>(({ busy, detail, onAction, onOpenTab }) => 
           title={t('workingPanel.pr.section.description')}
           onToggle={toggle('description')}
         >
-          <Markdown className={styles.body} fontSize={13} variant={'chat'}>
+          <Markdown allowHtml className={styles.body} fontSize={13} variant={'chat'}>
             {detail.body}
           </Markdown>
         </Section>
