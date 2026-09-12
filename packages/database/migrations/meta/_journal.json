@@ -1134,6 +1134,13 @@
       "when": 1789038060245,
       "tag": "0161_acceptance_comments",
       "breakpoints": true
+    },
+    {
+      "idx": 162,
+      "version": "7",
+      "when": 1789243834513,
+      "tag": "0162_device_architecture",
+      "breakpoints": true
     }
   ],
   "version": "6"
