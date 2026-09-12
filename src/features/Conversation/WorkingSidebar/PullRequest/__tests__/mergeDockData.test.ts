@@ -99,6 +99,8 @@ describe('resolveMergeDock', () => {
     expect(result.checksStatus).toBe('failure');
     expect(result.action).toEqual({ kind: 'disabled', labelKey: PR_KEYS.method.squash });
     expect(result.showBypass).toBe(false);
+    const rules = result.rows.find((row) => row.key === 'rules')!;
+    expect(rules.labelKey).toBe(PR_KEYS.row.rules.blocked);
   });
 
   it('ciFailed+bypass: viewerCanBypass with bypass ticked merges with --admin', () => {
@@ -117,17 +119,17 @@ describe('resolveMergeDock', () => {
     expect(result.hintKey).toBe(PR_KEYS.hint.bypass);
     const rules = result.rows.find((row) => row.key === 'rules')!;
     expect(rules.tone).toBe('error');
+    expect(rules.labelKey).toBe(PR_KEYS.row.rules.bypass);
     expect(rules.trailingKey).toBeUndefined();
   });
 
-  it('reviewRequired: red review row with 0 of 1 trailing', () => {
+  it('reviewRequired: red review row with no trailing', () => {
     const result = resolveMergeDock(
       makeInput({ detail: makeDetail({ reviewDecision: 'REVIEW_REQUIRED' }) }),
     );
     const review = result.rows.find((row) => row.key === 'review')!;
     expect(review.tone).toBe('error');
-    expect(review.trailingKey).toBe(PR_KEYS.row.review.trailingCount);
-    expect(review.trailingParams).toEqual({ approved: 0, required: 1 });
+    expect(review.trailingKey).toBeUndefined();
   });
 
   it('changesRequested: red review row lists requesting authors', () => {

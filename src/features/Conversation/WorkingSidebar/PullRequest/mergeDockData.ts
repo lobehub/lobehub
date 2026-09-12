@@ -120,7 +120,6 @@ export const PR_KEYS = {
       reviewRequired: 'workingPanel.pr.row.review.reviewRequired',
       trailingApproved: 'workingPanel.pr.row.review.trailingApproved',
       trailingAuthors: 'workingPanel.pr.row.review.trailingAuthors',
-      trailingCount: 'workingPanel.pr.row.review.trailingCount',
     },
     rules: {
       blocked: 'workingPanel.pr.row.rules.blocked',
@@ -199,8 +198,6 @@ const buildReviewRow = (detail: DeviceGitPullRequestDetail): DockRow => {
       key: 'review',
       labelKey: PR_KEYS.row.review.reviewRequired,
       tone: 'error',
-      trailingKey: PR_KEYS.row.review.trailingCount,
-      trailingParams: { approved: 0, required: 1 },
     };
   }
 
@@ -241,14 +238,14 @@ const buildRulesRow = (
   ui: MergeDockInput['ui'],
   blocked: boolean,
 ): DockRow => {
-  if (blocked) {
+  if (blocked && !ui.bypass) {
     const row: DockRow = {
       icon: 'shieldAlert',
       key: 'rules',
       labelKey: PR_KEYS.row.rules.blocked,
       tone: 'error',
     };
-    if (detail.viewerCanBypass && !ui.bypass) row.trailingKey = PR_KEYS.rules.admin;
+    if (detail.viewerCanBypass) row.trailingKey = PR_KEYS.rules.admin;
     return row;
   }
 
@@ -356,7 +353,7 @@ export const resolveMergeDock = ({ detail, local, ui }: MergeDockInput): MergeDo
     blocked &&
     detail.state === 'open' &&
     !detail.isDraft;
-  const showPush = hasLocalChanges && (local?.ahead ?? 0) > 0 && action?.kind === 'merge';
+  const showPush = (local?.ahead ?? 0) > 0 && action?.kind === 'merge';
 
   let hintKey: string | undefined;
   let hintParams: Record<string, string | number> | undefined;
