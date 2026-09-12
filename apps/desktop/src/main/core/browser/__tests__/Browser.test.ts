@@ -43,6 +43,7 @@ const {
     webContents: {
       ipc: { once: vi.fn() },
       openDevTools: vi.fn(),
+      reloadIgnoringCache: vi.fn(),
       send: vi.fn(),
       session: {
         webRequest: {
@@ -941,6 +942,20 @@ describe('Browser', () => {
       willPreventUnloadHandler(mockEvent);
 
       expect(mockEvent.preventDefault).not.toHaveBeenCalled();
+    });
+
+    it('should bypass beforeunload once for a renderer OTA reload', () => {
+      const reloadEvent = { preventDefault: vi.fn() };
+      const laterEvent = { preventDefault: vi.fn() };
+      mockBrowserWindow.webContents.reloadIgnoringCache.mockImplementationOnce(() => {
+        willPreventUnloadHandler(reloadEvent);
+      });
+
+      browser.reloadIgnoringCache(true);
+      willPreventUnloadHandler(laterEvent);
+
+      expect(reloadEvent.preventDefault).toHaveBeenCalledOnce();
+      expect(laterEvent.preventDefault).not.toHaveBeenCalled();
     });
   });
 

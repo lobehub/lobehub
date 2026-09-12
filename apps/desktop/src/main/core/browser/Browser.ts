@@ -87,6 +87,7 @@ export default class Browser {
 
   private _browserWindow?: BrowserWindow;
   private hasPresentedFirstFrame = false;
+  private ignoreNextPreventUnload = false;
   private resolveFirstFrame!: () => void;
   private readonly firstFramePromise = new Promise<void>((resolve) => {
     this.resolveFirstFrame = resolve;
@@ -105,6 +106,17 @@ export default class Browser {
     if (this._browserWindow?.isDestroyed()) return null;
     return this._browserWindow?.webContents ?? null;
   }
+
+  reloadIgnoringCache = (ignoreBeforeUnload = false) => {
+    const webContents = this.browserWindow.webContents;
+    this.ignoreNextPreventUnload = ignoreBeforeUnload;
+    try {
+      webContents.reloadIgnoringCache();
+    } catch (error) {
+      this.ignoreNextPreventUnload = false;
+      throw error;
+    }
+  };
 
   // ==================== Constructor ====================
 
@@ -324,12 +336,17 @@ export default class Browser {
 
   private setupWillPreventUnloadListener(browserWindow: BrowserWindow): void {
     logger.debug(`[${this.identifier}] Setting up 'will-prevent-unload' event listener.`);
+    browserWindow.webContents.on('did-start-loading', () => {
+      this.ignoreNextPreventUnload = false;
+    });
     browserWindow.webContents.on('will-prevent-unload', (event) => {
       logger.debug(
         `[${this.identifier}] 'will-prevent-unload' fired. isQuiting: ${this.app.isQuiting}`,
       );
-      if (this.app.isQuiting) {
-        logger.info(`[${this.identifier}] App is quitting, ignoring beforeunload cancellation.`);
+      const ignorePreventUnload = this.ignoreNextPreventUnload;
+      this.ignoreNextPreventUnload = false;
+      if (this.app.isQuiting || ignorePreventUnload) {
+        logger.info(`[${this.identifier}] Ignoring beforeunload cancellation.`);
         event.preventDefault();
       }
     });

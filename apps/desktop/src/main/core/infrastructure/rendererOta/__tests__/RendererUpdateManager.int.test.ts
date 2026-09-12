@@ -230,7 +230,7 @@ describe('RendererUpdateManager V2 lifecycle', () => {
       expect(manager.getStatus().staged).toBe('r1');
       expect(app.browserManager.broadcastToAllWindows).toHaveBeenCalledWith('updateReady', {
         kind: 'renderer',
-        version: APP_VERSION,
+        version: `${APP_VERSION}_r1`,
       });
     },
   );
@@ -282,7 +282,7 @@ describe('RendererUpdateManager V2 lifecycle', () => {
     const app = makeApp();
     const reloadIgnoringCache = vi.fn();
     app.browserManager.browsers.set('app', {
-      browserWindow: { webContents: { reloadIgnoringCache } },
+      reloadIgnoringCache,
     });
     const manager = await loadManager(app);
     manager.initialize();
@@ -306,7 +306,7 @@ describe('RendererUpdateManager V2 lifecycle', () => {
     );
     expect(app.browserManager.broadcastToAllWindows).toHaveBeenCalledWith('updateReady', {
       kind: 'renderer',
-      version: APP_VERSION,
+      version: `${APP_VERSION}_r1`,
     });
     const fetchedUrls = (fetch as ReturnType<typeof vi.fn>).mock.calls.map((call) => call[0]);
     expect(fetchedUrls).toEqual([
@@ -316,7 +316,7 @@ describe('RendererUpdateManager V2 lifecycle', () => {
     expect(fetchedUrls.some((url: string) => url.includes('/renderer/files/'))).toBe(false);
 
     expect(manager.applyStagedNow()).toBe(true);
-    expect(reloadIgnoringCache).toHaveBeenCalledOnce();
+    expect(reloadIgnoringCache).toHaveBeenCalledWith(true);
     expect(
       readFileSync(path.join(otaDir, 'versions', 'r1', 'apps', 'desktop', 'index.html'), 'utf8'),
     ).toBe(entryHtml('v1'));

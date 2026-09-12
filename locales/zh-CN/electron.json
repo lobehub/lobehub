@@ -155,6 +155,8 @@
   "updater.later": "稍后",
   "updater.newVersionAvailable": "新版本可用",
   "updater.newVersionAvailableDesc": "发现新版本 {{version}}，是否立即下载？",
+  "updater.rendererReady": "新版本 {{version}} 已就绪",
+  "updater.rendererUpdateError": "更新失败，请重试。",
   "updater.restartAndInstall": "安装更新并重启",
   "updater.updateError": "更新错误",
   "updater.updateReady": "有新版本可用",
