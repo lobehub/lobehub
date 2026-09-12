@@ -438,6 +438,11 @@ export const prepareAttachmentsForBudget = async (
   return { attachments: kept, degradations, degraded, fallbackLines, keptOriginals };
 };
 
+export interface FallbackMessageBatch<T> {
+  items: T[];
+  message: string;
+}
+
 /**
  * Pack fallback link lines into as few follow-up text messages as fit under
  * `maxChars`. Batching is by whole line: Discord rejects a message over its
@@ -445,20 +450,33 @@ export const prepareAttachmentsForBudget = async (
  * cut a URL in half and hand the user a dead link. Lines are already length
  * capped (see MAX_FALLBACK_NAME_CHARS), so a single line always fits.
  */
-export const splitFallbackMessages = (fallbackLines: string[], maxChars: number): string[] => {
-  const messages: string[] = [];
+export function splitFallbackMessageBatches<T>(
+  items: T[],
+  getLine: (item: T) => string,
+  maxChars: number,
+): FallbackMessageBatch<T>[] {
+  const batches: FallbackMessageBatch<T>[] = [];
   let current = '';
+  let currentItems: T[] = [];
 
-  for (const line of fallbackLines) {
+  for (const item of items) {
+    const line = getLine(item);
     const candidate = current ? `${current}\n\n${line}` : line;
     if (current && candidate.length > maxChars) {
-      messages.push(current);
+      batches.push({ items: currentItems, message: current });
       current = line;
+      currentItems = [item];
     } else {
       current = candidate;
+      currentItems.push(item);
     }
   }
-  if (current) messages.push(current);
+  if (current) batches.push({ items: currentItems, message: current });
 
-  return messages;
-};
+  return batches;
+}
+
+export const splitFallbackMessages = (fallbackLines: string[], maxChars: number): string[] =>
+  splitFallbackMessageBatches(fallbackLines, (line) => line, maxChars).map(
+    (batch) => batch.message,
+  );

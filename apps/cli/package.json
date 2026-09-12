@@ -33,6 +33,7 @@
   "devDependencies": {
     "@lobechat/agent-gateway-client": "workspace:*",
     "@lobechat/agent-tracing": "workspace:*",
+    "@lobechat/builtin-tool-message": "workspace:*",
     "@lobechat/const": "workspace:*",
     "@lobechat/device-control": "workspace:*",
     "@lobechat/device-gateway-client": "workspace:*",

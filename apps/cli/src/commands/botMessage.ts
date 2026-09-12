@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import type { SendMessageState } from '@lobechat/builtin-tool-message/delivery';
+import { getSendMessagePresentation } from '@lobechat/builtin-tool-message/delivery';
 import { DEFAULT_BOT_HISTORY_LIMIT } from '@lobechat/const';
 import { getMimeType, resolveMimeType } from '@lobechat/utils/mimeType';
 import type { Command } from 'commander';
@@ -111,7 +113,8 @@ export function registerBotMessageCommands(bot: Command) {
     .command('send <botIdOrAtKey>')
     .description(
       'Send a message to a channel. Pass a per-agent bot id, or "@<messenger-install-id>" ' +
-        'to send through a System Bot messenger installation (see `lh bot messengers list`).',
+        'to send through a System Bot messenger installation (see `lh bot messengers list`). ' +
+        'A nonzero exit code can include partial or uncertain sends; inspect --json before a targeted retry.',
     )
     .requiredOption('--target <channelId>', 'Target channel / conversation ID')
     .requiredOption('--message <text>', 'Message content')
@@ -146,13 +149,22 @@ export function registerBotMessageCommands(bot: Command) {
           content: options.message,
           replyTo: options.replyTo,
         });
+        const r = result as SendMessageState;
+        const presentation =
+          r.delivery || r.platform === 'wechat' ? getSendMessagePresentation(r) : undefined;
 
         if (options.json) {
           outputJson(result);
+          if (presentation && !presentation.success) process.exitCode = 1;
           return;
         }
 
-        const r = result as any;
+        if (presentation) {
+          console.log(presentation.content);
+          if (!presentation.success) process.exitCode = 1;
+          return;
+        }
+
         const suffix = attachments?.length ? ` with ${attachments.length} attachment(s)` : '';
         console.log(
           `${pc.green('✓')} Message sent${r.messageId ? ` (${pc.dim(r.messageId)})` : ''}${suffix}`,

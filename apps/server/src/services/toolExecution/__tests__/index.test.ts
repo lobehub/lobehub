@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 
+import type { MCPService } from '../../mcp';
+import type { BuiltinToolsExecutor } from '../builtin';
 import { ToolExecutionService } from '../index';
 
 vi.mock('@/server/services/deviceGateway', () => ({
@@ -23,6 +25,39 @@ vi.mock('@/server/services/deviceGateway/scopedDevices', () => ({
 }));
 
 describe('ToolExecutionService', () => {
+  it('preserves partial message content and state when normalizing a failed tool result', async () => {
+    const content = 'Send partially completed. Do not resend the entire request automatically.';
+    const state = {
+      channelId: 'fixture',
+      delivery: {
+        attachments: [{ index: 0, reason: 'upload_failed', status: 'failed', type: 'image' }],
+        receipt: 'unconfirmed',
+        status: 'partial',
+        text: { status: 'accepted' },
+      },
+      platform: 'wechat',
+    };
+    const execute = vi.fn().mockResolvedValue({ content, state, success: false });
+    const service = new ToolExecutionService({
+      builtinToolsExecutor: { execute } as unknown as BuiltinToolsExecutor,
+      mcpService: {} as MCPService,
+    });
+
+    const result = await service.executeTool(
+      {
+        apiName: 'sendMessage',
+        arguments: '{}',
+        id: 'fixture-call',
+        identifier: 'lobe-message',
+        type: 'builtin',
+      },
+      { toolManifestMap: {} },
+    );
+
+    expect(result).toMatchObject({ content, error: { message: content }, state, success: false });
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
   it('can skip low-level result truncation for AgentRuntime archival', async () => {
     const builtinToolsExecutor = {
       execute: vi.fn().mockResolvedValue({

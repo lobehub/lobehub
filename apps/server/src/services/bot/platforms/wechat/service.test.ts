@@ -1,6 +1,10 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { MessageExecutionRuntime } from '@lobechat/builtin-tool-message/executionRuntime';
+import type * as WechatAdapterModule from '@lobechat/chat-adapter-wechat';
+import type { WechatApiClient } from '@lobechat/chat-adapter-wechat';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as AttachmentBudgetModule from '../attachmentBudget';
 import type * as PublicUrlFetchModule from '../publicUrlFetch';
 
 // These tests stub `fetch` directly; the SSRF guard in front of it resolves DNS
@@ -51,6 +55,19 @@ vi.mock('@/server/modules/AgentRuntime/redis', () => ({
 }));
 
 const { WechatMessageService } = await import('./service');
+const { PLATFORM_ATTACHMENT_BUDGETS } = await import('../attachmentBudget');
+
+vi.mock('../attachmentBudget', async (importOriginal) => {
+  const original = await importOriginal<typeof AttachmentBudgetModule>();
+  return {
+    ...original,
+    PLATFORM_ATTACHMENT_BUDGETS: {
+      ...original.PLATFORM_ATTACHMENT_BUDGETS,
+      wechat: { ...original.PLATFORM_ATTACHMENT_BUDGETS.wechat },
+    },
+  };
+});
+const defaultWechatBudget = { ...PLATFORM_ATTACHMENT_BUDGETS.wechat };
 
 const makeApi = () => ({
   sendItem: vi.fn().mockResolvedValue({ ret: 0 }),
@@ -67,13 +84,54 @@ describe('WechatMessageService.sendMessage', () => {
     vi.clearAllMocks();
     vi.stubGlobal('fetch', vi.fn());
     mockRedisGet.mockResolvedValue(null);
+    Object.assign(PLATFORM_ATTACHMENT_BUDGETS.wechat, defaultWechatBudget);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('preserves text success and reports an attachment upload failure to the runtime', async () => {
+    const api = makeApi();
+    api.uploadCdnMedia.mockRejectedValueOnce(new Error('synthetic upload failure'));
+    const service = new WechatMessageService(api as unknown as WechatApiClient, 'app-1');
+    const runtime = new MessageExecutionRuntime({ service });
+
+    const result = await runtime.sendMessage({
+      attachments: [
+        {
+          data: Buffer.from('synthetic-image').toString('base64'),
+          name: 'fixture.png',
+          type: 'image',
+        },
+      ],
+      channelId: 'user-1@im.wechat',
+      content: 'fixture text',
+      platform: 'wechat',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.state).toMatchObject({
+      delivery: {
+        attachments: [{ index: 0, reason: 'upload_failed', status: 'failed', type: 'image' }],
+        receipt: 'unconfirmed',
+        status: 'partial',
+        text: { status: 'accepted' },
+      },
+    });
+    expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    expect(api.uploadCdnMedia).toHaveBeenCalledTimes(1);
+    expect(api.sendItem).not.toHaveBeenCalled();
+    expect(result.content).not.toContain('messageId: undefined');
+    expect(result.content).toContain('Do not resend the entire request');
   });
 
   it('forwards text via api.sendMessage', async () => {
     const api = makeApi();
     const service = new WechatMessageService(api as any, 'app-1');
 
-    await service.sendMessage({
+    const result = await service.sendMessage({
       channelId: 'user-1@im.wechat',
       content: 'hello',
       platform: 'wechat',
@@ -82,6 +140,12 @@ describe('WechatMessageService.sendMessage', () => {
     expect(api.sendMessage).toHaveBeenCalledWith('user-1@im.wechat', 'hello', '');
     expect(api.uploadCdnMedia).not.toHaveBeenCalled();
     expect(api.sendItem).not.toHaveBeenCalled();
+    expect(result.delivery).toEqual({
+      attachments: [],
+      receipt: 'unconfirmed',
+      status: 'accepted',
+      text: { status: 'accepted' },
+    });
   });
 
   it('consumes one send-window credit per long-text chunk', async () => {
@@ -151,7 +215,7 @@ describe('WechatMessageService.sendMessage', () => {
     const api = makeApi();
     const service = new WechatMessageService(api as any, 'app-1');
 
-    await service.sendMessage({
+    const result = await service.sendMessage({
       attachments: [
         { data: Buffer.from('pdf-bytes').toString('base64'), name: 'a.pdf', type: 'file' },
       ],
@@ -163,6 +227,12 @@ describe('WechatMessageService.sendMessage', () => {
     expect(api.sendMessage).not.toHaveBeenCalled();
     expect(api.uploadCdnMedia).toHaveBeenCalledTimes(1);
     expect(api.sendItem).toHaveBeenCalledTimes(1);
+    expect(result.delivery).toEqual({
+      attachments: [{ index: 0, status: 'accepted', type: 'file' }],
+      receipt: 'unconfirmed',
+      status: 'accepted',
+      text: { status: 'not_requested' },
+    });
   });
 
   it('fetches attachments delivered as fetchUrl', async () => {
@@ -186,5 +256,145 @@ describe('WechatMessageService.sendMessage', () => {
     expect(fetchMock).toHaveBeenCalledWith('https://cdn.example.com/pic.png', expect.any(Object));
     expect(api.uploadCdnMedia).toHaveBeenCalledTimes(1);
     expect(api.sendItem).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not consume quota or call the platform for an empty request', async () => {
+    const api = makeApi();
+    const service = new WechatMessageService(api as unknown as WechatApiClient, 'app-1');
+
+    const result = await service.sendMessage({
+      channelId: 'fixture',
+      content: '',
+      platform: 'wechat',
+    });
+
+    expect(result.delivery).toEqual({
+      attachments: [],
+      receipt: 'unconfirmed',
+      status: 'failed',
+      text: { status: 'not_requested' },
+    });
+    expect(mockWindowRedis.hincrby).not.toHaveBeenCalled();
+    expect(api.sendMessage).not.toHaveBeenCalled();
+    expect(api.uploadCdnMedia).not.toHaveBeenCalled();
+  });
+
+  it('reports attachment-only failures without inventing a successful text leg', async () => {
+    const api = makeApi();
+    const service = new WechatMessageService(api as unknown as WechatApiClient, 'app-1');
+
+    const result = await service.sendMessage({
+      attachments: [{ type: 'image' }],
+      channelId: 'fixture',
+      content: '',
+      platform: 'wechat',
+    });
+
+    expect(result.delivery).toEqual({
+      attachments: [{ index: 0, reason: 'source_unavailable', status: 'failed', type: 'image' }],
+      receipt: 'unconfirmed',
+      status: 'failed',
+      text: { status: 'not_requested' },
+    });
+    expect(api.sendItem).not.toHaveBeenCalled();
+  });
+
+  it('preserves uncertain long-text submission and does not begin attachments', async () => {
+    const { WechatApiClient: ActualWechatApiClient } = await vi.importActual<
+      typeof WechatAdapterModule
+    >('@lobechat/chat-adapter-wechat');
+    const api = new ActualWechatApiClient('fixture-token', 'fixture-bot');
+    const sendItem = vi.spyOn(api, 'sendItem').mockResolvedValueOnce({ ret: 0 });
+    sendItem.mockRejectedValueOnce(new Error('second chunk response lost'));
+    const upload = vi.spyOn(api, 'uploadCdnMedia');
+    const runtime = new MessageExecutionRuntime({
+      service: new WechatMessageService(api, 'app-1'),
+    });
+
+    const result = await runtime.sendMessage({
+      attachments: [{ data: 'YQ==', type: 'file' }],
+      channelId: 'fixture',
+      content: 'a'.repeat(6000),
+      platform: 'wechat',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.state.delivery).toEqual({
+      attachments: [
+        { index: 0, reason: 'text_not_accepted', status: 'not_attempted', type: 'file' },
+      ],
+      receipt: 'unconfirmed',
+      status: 'unknown',
+      text: { reason: 'text_send_unconfirmed', status: 'unknown' },
+    });
+    expect(sendItem).toHaveBeenCalledTimes(2);
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])(
+    'preserves text acceptance when a fallback link rejects: %s',
+    async (rejectLink) => {
+      const api = makeApi();
+      PLATFORM_ATTACHMENT_BUDGETS.wechat.fileMaxBytes = 2;
+      if (rejectLink) {
+        api.sendMessage.mockResolvedValueOnce({ ret: 0 });
+        api.sendMessage.mockRejectedValueOnce(new Error('fallback response lost'));
+      }
+      const runtime = new MessageExecutionRuntime({
+        service: new WechatMessageService(api as unknown as WechatApiClient, 'app-1'),
+      });
+
+      const result = await runtime.sendMessage({
+        attachments: [{ data: 'Ymln', fetchUrl: 'https://example.com/fixture', type: 'file' }],
+        channelId: 'fixture',
+        content: 'fixture text',
+        platform: 'wechat',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.state.delivery).toEqual({
+        attachments: [
+          {
+            index: 0,
+            reason: rejectLink ? 'link_send_unconfirmed' : 'over_budget',
+            status: rejectLink ? 'unknown' : 'link_fallback',
+            type: 'file',
+          },
+        ],
+        receipt: 'unconfirmed',
+        status: rejectLink ? 'unknown' : 'degraded',
+        text: { status: 'accepted' },
+      });
+      expect(api.sendMessage).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it('publishes only outcome fields when a media submission error includes request details', async () => {
+    const api = makeApi();
+    const markers = [
+      'https://example.com/private-source',
+      'fixture-private-token',
+      'fixture-base64',
+    ];
+    api.sendItem.mockRejectedValueOnce(new Error(markers.join(' ')));
+    const runtime = new MessageExecutionRuntime({
+      service: new WechatMessageService(api as unknown as WechatApiClient, 'app-1'),
+    });
+
+    const result = await runtime.sendMessage({
+      attachments: [{ data: 'YQ==', fetchUrl: markers[0], type: 'image' }],
+      channelId: 'fixture',
+      content: 'fixture text',
+      platform: 'wechat',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.state.delivery).toMatchObject({
+      attachments: [{ index: 0, reason: 'send_unconfirmed', status: 'unknown', type: 'image' }],
+      status: 'unknown',
+      text: { status: 'accepted' },
+    });
+    for (const marker of markers) expect(JSON.stringify(result)).not.toContain(marker);
+    expect(JSON.parse(JSON.stringify(result))).toEqual(result);
   });
 });

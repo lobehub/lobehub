@@ -1,4 +1,9 @@
 import type {
+  SendMessageAttachmentOutcome,
+  SendMessageTextOutcome,
+} from '@lobechat/builtin-tool-message/delivery';
+import { resolveDeliveryStatus } from '@lobechat/builtin-tool-message/delivery';
+import type {
   CreatePollParams,
   CreatePollState,
   CreateThreadParams,
@@ -42,7 +47,24 @@ import type { MessageRuntimeService } from '@/server/services/toolExecution/serv
 import { PlatformUnsupportedError } from '@/server/services/toolExecution/serverRuntimes/message/PlatformUnsupportedError';
 
 import { consumeSendCredits, type WechatWindowRedis } from './contextWindow';
-import { sendWechatAttachments } from './sendAttachments';
+import { sendWechatAttachments, WechatAttachmentSendError } from './sendAttachments';
+
+function buildWechatSendState(
+  channelId: string,
+  text: SendMessageTextOutcome,
+  attachments: SendMessageAttachmentOutcome[],
+): SendMessageState {
+  return {
+    channelId,
+    delivery: {
+      attachments,
+      receipt: 'unconfirmed',
+      status: resolveDeliveryStatus({ attachments, text }),
+      text,
+    },
+    platform: 'wechat',
+  };
+}
 
 /**
  * WeChat iLink Bot message adapter.
@@ -92,20 +114,58 @@ export class WechatMessageService implements MessageRuntimeService {
   // ==================== Core Message Operations ====================
 
   sendMessage = async (params: SendMessageParams): Promise<SendMessageState> => {
+    const attachments = params.attachments ?? [];
+    let text: SendMessageTextOutcome = { status: 'not_requested' };
+    if (!params.content && attachments.length === 0) {
+      return buildWechatSendState(params.channelId, text, []);
+    }
+
     const sendCount =
       (params.content ? getWechatTextSendCount(params.content) : 0) +
       (params.attachments?.length ?? 0);
     const contextToken = await this.resolveContextToken(params.channelId, Math.max(1, sendCount));
     if (params.content) {
-      await this.api.sendMessage(params.channelId, params.content, contextToken);
+      try {
+        await this.api.sendMessage(params.channelId, params.content, contextToken);
+        text = { status: 'accepted' };
+      } catch {
+        // Earlier text chunks may already have been accepted.
+        return buildWechatSendState(
+          params.channelId,
+          { reason: 'text_send_unconfirmed', status: 'unknown' },
+          attachments.map((attachment, index) => ({
+            index,
+            reason: 'text_not_accepted',
+            status: 'not_attempted',
+            type: attachment.type,
+          })),
+        );
+      }
     }
-    if (params.attachments?.length) {
-      await sendWechatAttachments(this.api, params.channelId, params.attachments, contextToken);
+
+    let outcomes: SendMessageAttachmentOutcome[] = [];
+    if (attachments.length) {
+      try {
+        const result = await sendWechatAttachments(
+          this.api,
+          params.channelId,
+          attachments,
+          contextToken,
+        );
+        outcomes = result.outcomes;
+      } catch (error) {
+        outcomes =
+          error instanceof WechatAttachmentSendError
+            ? error.result.outcomes
+            : attachments.map((attachment, index) => ({
+                index,
+                reason: 'execution_unconfirmed',
+                status: 'unknown',
+                type: attachment.type,
+              }));
+      }
     }
-    return {
-      channelId: params.channelId,
-      platform: 'wechat',
-    };
+    return buildWechatSendState(params.channelId, text, outcomes);
   };
 
   readMessages = async (_params: ReadMessagesParams): Promise<ReadMessagesState> => {

@@ -2,6 +2,10 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+import type {
+  SendMessageDelivery,
+  SendMessageState,
+} from '@lobechat/builtin-tool-message/delivery';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -22,6 +26,148 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
 }));
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
+
+describe('bot message send delivery outcomes', () => {
+  let originalExitCode: typeof process.exitCode;
+  let consoleSpy: ReturnType<typeof vi.spyOn>;
+  let exitSpy: ReturnType<typeof vi.spyOn>;
+  let exitCodesAtOutput: Array<typeof process.exitCode>;
+
+  beforeEach(() => {
+    originalExitCode = process.exitCode;
+    process.exitCode = 0;
+    exitCodesAtOutput = [];
+    consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {
+      exitCodesAtOutput.push(process.exitCode);
+    });
+    exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => {
+      throw new Error('Output must finish before setting the exit status');
+    });
+    mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
+    mockTrpcClient.botMessage.sendMessage.mutate.mockReset();
+  });
+
+  afterEach(() => {
+    process.exitCode = originalExitCode;
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+
+  const deliveries: SendMessageDelivery[] = [
+    {
+      attachments: [{ index: 0, status: 'accepted', type: 'image' }],
+      receipt: 'unconfirmed',
+      status: 'accepted',
+      text: { status: 'accepted' },
+    },
+    {
+      attachments: [{ index: 0, reason: 'over_budget', status: 'link_fallback', type: 'image' }],
+      receipt: 'unconfirmed',
+      status: 'degraded',
+      text: { status: 'accepted' },
+    },
+    {
+      attachments: [{ index: 0, reason: 'upload_failed', status: 'failed', type: 'image' }],
+      receipt: 'unconfirmed',
+      status: 'partial',
+      text: { status: 'accepted' },
+    },
+    {
+      attachments: [{ index: 0, reason: 'upload_failed', status: 'failed', type: 'image' }],
+      receipt: 'unconfirmed',
+      status: 'failed',
+      text: { status: 'not_requested' },
+    },
+    {
+      attachments: [{ index: 0, reason: 'send_unconfirmed', status: 'unknown', type: 'image' }],
+      receipt: 'unconfirmed',
+      status: 'unknown',
+      text: { status: 'accepted' },
+    },
+  ];
+
+  const runSend = async (json: boolean, message = 'fixture text') => {
+    const program = new Command();
+    program.exitOverride();
+    registerBotMessageCommands(program.command('bot'));
+    await program.parseAsync([
+      'node',
+      'test',
+      'bot',
+      'message',
+      'send',
+      'fixture-bot',
+      '--target',
+      'fixture',
+      '--message',
+      message,
+      '--attachment',
+      'https://example.com/fixture.png',
+      ...(json ? ['--json'] : []),
+    ]);
+    return consoleSpy.mock.calls.map(([text]) => String(text)).join('\n');
+  };
+
+  it.each(
+    deliveries.flatMap((delivery) => [
+      { delivery, json: false },
+      { delivery, json: true },
+    ]),
+  )(
+    'reports $delivery.status with json=$json before setting the exit code',
+    async ({ delivery, json }) => {
+      const state: SendMessageState = { channelId: 'fixture', delivery, platform: 'wechat' };
+      mockTrpcClient.botMessage.sendMessage.mutate.mockResolvedValueOnce(state);
+
+      const output = await runSend(json, delivery.status === 'failed' ? '' : 'fixture text');
+
+      expect(process.exitCode).toBe(delivery.status === 'accepted' ? 0 : 1);
+      expect(exitSpy).not.toHaveBeenCalled();
+      expect(exitCodesAtOutput).toEqual([0]);
+      expect(mockTrpcClient.botMessage.sendMessage.mutate).toHaveBeenCalledTimes(1);
+      if (json) {
+        expect(JSON.parse(output)).toEqual(state);
+      } else {
+        expect(output).toContain(JSON.stringify(delivery, null, 2));
+        expect(output).not.toContain('with 1 attachment(s)');
+        if (delivery.status !== 'accepted') {
+          expect(output).toContain('Do not resend the entire request');
+          expect(output).not.toContain('Message sent');
+        }
+      }
+    },
+  );
+
+  it.each([false, true])(
+    'reports an old WeChat response as unconfirmed with json=%s',
+    async (json) => {
+      const state = { channelId: 'fixture', platform: 'wechat' };
+      mockTrpcClient.botMessage.sendMessage.mutate.mockResolvedValueOnce(state);
+
+      const output = await runSend(json);
+
+      expect(process.exitCode).toBe(1);
+      if (json) expect(JSON.parse(output)).toEqual(state);
+      else expect(output).toContain('did not provide per-item send results');
+    },
+  );
+
+  it.each([false, true])('preserves legacy non-WeChat results with json=%s', async (json) => {
+    const state = { channelId: 'fixture', messageId: 'actual-id', platform: 'discord' };
+    mockTrpcClient.botMessage.sendMessage.mutate.mockResolvedValueOnce(state);
+
+    const output = await runSend(json);
+
+    expect(process.exitCode).toBe(0);
+    if (json) expect(JSON.parse(output)).toEqual(state);
+    else {
+      expect(output).toContain('Message sent');
+      expect(output).toContain('actual-id');
+      expect(output).toContain('with 1 attachment(s)');
+    }
+  });
+});
+
 describe('bot message send --attachment', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
   let consoleSpy: ReturnType<typeof vi.spyOn>;

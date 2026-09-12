@@ -1,5 +1,6 @@
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
+import { getSendMessagePresentation } from '../delivery';
 import type {
   ConfiguredBotInfo,
   ConnectBotParams,
@@ -267,10 +268,11 @@ export class MessageExecutionRuntime {
   async sendMessage(params: SendMessageParams): Promise<BuiltinServerRuntimeOutput> {
     try {
       const result = await this.service.sendMessage(params);
+      const presentation = getSendMessagePresentation(result, params);
       return {
-        content: `Message sent to ${params.platform}:${params.channelId} (messageId: ${result.messageId})`,
+        content: presentation.content,
         state: result,
-        success: true,
+        success: presentation.success,
       };
     } catch (e) {
       return {

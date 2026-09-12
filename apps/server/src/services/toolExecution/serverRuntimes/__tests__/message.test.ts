@@ -1,4 +1,5 @@
 import { MessageToolIdentifier } from '@lobechat/builtin-tool-message';
+import { WechatApiClient } from '@lobechat/chat-adapter-wechat';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ToolExecutionContext } from '../../types';
@@ -260,6 +261,42 @@ const mockProviderFor = (platform: string, credentials: Record<string, string>) 
 // ==================== Tests ====================
 
 describe('messageRuntime', () => {
+  it('carries partial WeChat attachment failures through the actual runtime factory', async () => {
+    mockProviderFor('wechat', { botId: 'fixture-bot', botToken: 'fixture-token' });
+    const sendText = vi
+      .spyOn(WechatApiClient.prototype, 'sendMessage')
+      .mockResolvedValue({ ret: 0 });
+    const upload = vi
+      .spyOn(WechatApiClient.prototype, 'uploadCdnMedia')
+      .mockRejectedValue(new Error('upload failed'));
+    const sendItem = vi.spyOn(WechatApiClient.prototype, 'sendItem').mockResolvedValue({ ret: 0 });
+    try {
+      const runtime = await messageRuntime.factory(validContext);
+
+      const result = await runtime.sendMessage({
+        attachments: [{ data: 'YQ==', type: 'image' }],
+        channelId: 'fixture',
+        content: 'fixture text',
+        platform: 'wechat',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.state.delivery).toEqual({
+        attachments: [{ index: 0, reason: 'upload_failed', status: 'failed', type: 'image' }],
+        receipt: 'unconfirmed',
+        status: 'partial',
+        text: { status: 'accepted' },
+      });
+      expect(result.content).toContain('Do not resend the entire request');
+      expect(sendText).toHaveBeenCalledTimes(1);
+      expect(sendItem).not.toHaveBeenCalled();
+    } finally {
+      sendText.mockRestore();
+      upload.mockRestore();
+      sendItem.mockRestore();
+    }
+  });
+
   it('should have correct identifier', () => {
     expect(messageRuntime.identifier).toBe(MessageToolIdentifier);
   });
