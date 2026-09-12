@@ -26,6 +26,8 @@ export class WorkspaceDevicePrivateConflictError extends Error {
 }
 
 export interface RegisterDeviceParams {
+  /** CPU architecture reported by the client (`process.arch`); optional for older clients. */
+  architecture?: string | null;
   deviceId: string;
   hostname?: string | null;
   identitySource: string;
@@ -102,6 +104,7 @@ export class DeviceModel {
     const [result] = await this.db
       .insert(devices)
       .values({
+        architecture: params.architecture,
         deviceId: params.deviceId,
         hostname: params.hostname,
         identitySource: params.identitySource,
@@ -111,6 +114,7 @@ export class DeviceModel {
       })
       .onConflictDoUpdate({
         set: {
+          architecture: params.architecture,
           hostname: params.hostname,
           identitySource: params.identitySource,
           lastSeenAt: now,
@@ -167,6 +171,7 @@ export class DeviceModel {
     const [result] = await this.db
       .insert(devices)
       .values({
+        architecture: params.architecture,
         deviceId: params.deviceId,
         hostname: params.hostname,
         identitySource: params.identitySource,
@@ -203,6 +208,7 @@ export class DeviceModel {
       // `targetWhere`.
       .onConflictDoUpdate({
         set: {
+          architecture: params.architecture,
           hostname: params.hostname,
           identitySource: params.identitySource,
           lastSeenAt: now,

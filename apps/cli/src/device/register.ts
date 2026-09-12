@@ -47,6 +47,7 @@ export async function registerDevice(
 ): Promise<void> {
   const trpc = createLambdaClient(auth);
   await trpc.device.register.mutate({
+    architecture: os.arch(),
     deviceId: identity.deviceId,
     hostname: os.hostname(),
     identitySource: identity.identitySource,
@@ -105,6 +106,7 @@ export async function registerWorkspaceDevice(
 ): Promise<void> {
   const trpc = createLambdaClient(auth, workspaceId);
   await trpc.device.registerWorkspaceDevice.mutate({
+    architecture: os.arch(),
     deviceId: identity.deviceId,
     hostname: os.hostname(),
     identitySource: identity.identitySource,

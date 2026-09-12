@@ -28,6 +28,7 @@ describe('DeviceModel', () => {
   describe('register', () => {
     it('should insert a new device', async () => {
       const result = await deviceModel.register({
+        architecture: 'arm64',
         deviceId: 'dev-1',
         hostname: 'My-Mac.local',
         identitySource: 'machine-id',
@@ -36,6 +37,7 @@ describe('DeviceModel', () => {
 
       expect(result.id).toBeDefined();
       expect(result).toMatchObject({
+        architecture: 'arm64',
         deviceId: 'dev-1',
         hostname: 'My-Mac.local',
         identitySource: 'machine-id',
@@ -44,8 +46,17 @@ describe('DeviceModel', () => {
       });
     });
 
+    it('should default architecture to NULL for older clients that omit it', async () => {
+      const result = await deviceModel.register({
+        deviceId: 'dev-noarch',
+        identitySource: 'machine-id',
+      });
+      expect(result.architecture).toBeNull();
+    });
+
     it('should upsert on (userId, deviceId) and refresh machine fields', async () => {
       await deviceModel.register({
+        architecture: 'x64',
         deviceId: 'dev-1',
         hostname: 'old-host',
         identitySource: 'fallback',
@@ -53,6 +64,7 @@ describe('DeviceModel', () => {
       });
 
       await deviceModel.register({
+        architecture: 'arm64',
         deviceId: 'dev-1',
         hostname: 'new-host',
         identitySource: 'machine-id',
@@ -64,6 +76,7 @@ describe('DeviceModel', () => {
       });
       expect(rows).toHaveLength(1);
       expect(rows[0]).toMatchObject({
+        architecture: 'arm64',
         hostname: 'new-host',
         identitySource: 'machine-id',
         platform: 'darwin',

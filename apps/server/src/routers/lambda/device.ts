@@ -1124,6 +1124,7 @@ export const deviceRouter = router({
     .use(serverDatabase)
     .input(
       z.object({
+        architecture: z.string().max(20).nullish(),
         deviceId: z.string().min(1).max(64),
         hostname: z.string().nullish(),
         identitySource: z.enum(['machine-id', 'fallback']),
@@ -1448,6 +1449,7 @@ export const deviceRouter = router({
   register: deviceProcedure
     .input(
       z.object({
+        architecture: z.string().max(20).nullish(),
         deviceId: z.string().min(1).max(64),
         hostname: z.string().nullish(),
         identitySource: z.enum(['machine-id', 'fallback']),

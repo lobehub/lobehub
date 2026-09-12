@@ -104,6 +104,7 @@ interface RpcHandler {
 
 interface DeviceRegistrar {
   (info: {
+    architecture: string;
     deviceId: string;
     hostname: string;
     identitySource: IdentitySource;
@@ -383,6 +384,7 @@ export default class GatewayConnectionService extends ServiceModule {
     if (userId) {
       const identity = await this.resolveDeviceIdentity(userId);
       await this.deviceRegistrar?.({
+        architecture: os.arch(),
         deviceId: identity.deviceId,
         hostname: os.hostname(),
         identitySource: identity.identitySource,
