@@ -1232,6 +1232,7 @@ table devices {
   identity_source varchar(20) [not null]
   hostname text
   platform varchar(20)
+  architecture varchar(20)
   friendly_name text
   default_cwd text
   recent_cwds text[] [not null, default: `[]`]
