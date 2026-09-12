@@ -31,7 +31,9 @@ export type PullRequestState = 'open' | 'merged' | 'closed';
  * Resolve a GitHub PR's lifecycle state. GitHub's `state` is only open|closed;
  * "merged" is a closed PR carrying a `mergedAt`, so check that first.
  */
-export const getPullRequestState = (pr: DeviceGitLinkedPullRequest): PullRequestState => {
+export const getPullRequestState = (
+  pr: Pick<DeviceGitLinkedPullRequest, 'mergedAt' | 'state'>,
+): PullRequestState => {
   if (pr.mergedAt || pr.state === 'merged') return 'merged';
   if (pr.state === 'closed') return 'closed';
   return 'open';
@@ -39,7 +41,7 @@ export const getPullRequestState = (pr: DeviceGitLinkedPullRequest): PullRequest
 
 // GitHub merged-PR purple. Kept as a constant since antd's token set has no
 // semantic "merged" color; the green (success) / red (error) come from tokens.
-const MERGED_PURPLE = '#8957e5';
+export const MERGED_PURPLE = '#8957e5';
 
 export interface PullRequestStateVisual {
   color: string;
