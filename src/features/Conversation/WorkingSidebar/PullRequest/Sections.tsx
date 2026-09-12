@@ -19,8 +19,29 @@ import type { PullRequestBusy } from './usePullRequestActions';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   body: css`
+    overflow: hidden;
+
+    min-width: 0;
     padding-block: 2px 6px;
     padding-inline: 8px;
+
+    overflow-wrap: anywhere;
+
+    table {
+      overflow-x: auto;
+      display: block;
+      max-width: 100%;
+    }
+
+    img,
+    video {
+      max-width: 100%;
+    }
+
+    pre {
+      overflow-x: auto;
+      max-width: 100%;
+    }
   `,
   header: css`
     cursor: pointer;

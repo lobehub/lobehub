@@ -26,9 +26,30 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   commentBody: css`
+    overflow: hidden;
+
+    min-width: 0;
     margin-inline-start: 26px;
+
     font-size: 13px;
     line-height: 20px;
+    overflow-wrap: anywhere;
+
+    table {
+      overflow-x: auto;
+      display: block;
+      max-width: 100%;
+    }
+
+    img,
+    video {
+      max-width: 100%;
+    }
+
+    pre {
+      overflow-x: auto;
+      max-width: 100%;
+    }
   `,
   commentHead: css`
     font-size: 12px;

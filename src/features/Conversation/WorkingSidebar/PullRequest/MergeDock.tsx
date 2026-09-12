@@ -1,6 +1,6 @@
 import type { DeviceGitPullRequestAction, DeviceGitPullRequestDetail } from '@lobechat/types';
 import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Checkbox } from '@lobehub/ui/base-ui';
+import { Button, Checkbox, ScrollArea } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ArrowUpIcon, ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -33,7 +33,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextSecondary};
   `,
   checks: css`
-    overflow-y: auto;
     max-height: 200px;
   `,
   dock: css`
@@ -133,9 +132,9 @@ const MergeDock = memo<MergeDockProps>(
                 onClick={row.expandable ? () => setChecksOpen((open) => !open) : undefined}
               />
               {row.key === 'checks' && checksOpen && (
-                <div className={styles.checks}>
+                <ScrollArea disableContentFit className={styles.checks}>
                   <ChecksList checks={detail.checks} />
-                </div>
+                </ScrollArea>
               )}
             </Flexbox>
           );

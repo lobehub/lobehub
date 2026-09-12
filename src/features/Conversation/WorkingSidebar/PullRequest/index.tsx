@@ -1,5 +1,5 @@
 import { Empty, Flexbox, Icon } from '@lobehub/ui';
-import { Button, Skeleton } from '@lobehub/ui/base-ui';
+import { Button, ScrollArea, Skeleton } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { GlobeIcon, RefreshCwIcon, TriangleAlertIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -25,9 +25,10 @@ const styles = createStaticStyles(({ css }) => ({
     min-height: 0;
   `,
   scroll: css`
-    overflow-y: auto;
     flex: 1;
     min-height: 0;
+  `,
+  scrollContent: css`
     padding-block: 0 10px;
   `,
 }));
@@ -125,7 +126,12 @@ const PullRequest = memo<PullRequestProps>(
 
     return (
       <Flexbox className={styles.root}>
-        <Flexbox className={styles.scroll}>
+        <ScrollArea
+          disableContentFit
+          scrollFade
+          className={styles.scroll}
+          contentProps={{ className: styles.scrollContent }}
+        >
           <Header detail={detail} onAction={actions.run} />
           <Sections
             busy={actions.busy}
@@ -133,7 +139,7 @@ const PullRequest = memo<PullRequestProps>(
             onAction={actions.run}
             onOpenTab={onOpenTab}
           />
-        </Flexbox>
+        </ScrollArea>
         <MergeDock
           busy={actions.busy}
           detail={detail}
