@@ -490,6 +490,7 @@ export interface DeviceGitPullRequestDetail {
   commits: DeviceGitPullRequestCommit[];
   deletions: number;
   headRefName: string;
+  isCrossRepository: boolean;
   isDraft: boolean;
   mergeable: 'CONFLICTING' | 'MERGEABLE' | 'UNKNOWN';
   mergedAt?: string;

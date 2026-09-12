@@ -17,6 +17,7 @@ const makeDetail = (
   commits: [{ author: 'innei', committedAt: '2026-09-13T00:00:00Z', message: 'fix', sha: 'abc' }],
   deletions: 2,
   headRefName: 'feat/x',
+  isCrossRepository: false,
   isDraft: false,
   mergeable: 'MERGEABLE',
   mergeStateStatus: 'CLEAN',
@@ -184,6 +185,22 @@ describe('resolveMergeDock', () => {
     expect(result.action).toEqual({ kind: 'deleteBranch' });
     expect(result.hintKey).toBe(PR_KEYS.hint.merged);
     expect(result.hintParams).toEqual({ head: 'feat/x' });
+  });
+
+  it('merged+fork: no deleteBranch action offered for a cross-repository PR', () => {
+    const result = resolveMergeDock(
+      makeInput({ detail: makeDetail({ isCrossRepository: true, state: 'merged' }) }),
+    );
+    expect(result.action).toBeUndefined();
+    expect(result.hintKey).toBe(PR_KEYS.hint.merged);
+  });
+
+  it('merged+readOnly: still shows the merged hint, not the readOnly hint', () => {
+    const result = resolveMergeDock(
+      makeInput({ detail: makeDetail({ state: 'merged', viewerCanWrite: false }) }),
+    );
+    expect(result.action).toBeUndefined();
+    expect(result.hintKey).toBe(PR_KEYS.hint.merged);
   });
 
   it('closed: single error-tone row and reopen action', () => {

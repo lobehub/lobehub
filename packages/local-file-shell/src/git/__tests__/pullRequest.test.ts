@@ -42,6 +42,7 @@ describe('normalizePullRequestDetail', () => {
     ],
     deletions: 4,
     headRefName: 'fix/bug',
+    isCrossRepository: true,
     isDraft: false,
     mergeable: 'MERGEABLE',
     mergedAt: null as string | null,
@@ -70,6 +71,7 @@ describe('normalizePullRequestDetail', () => {
   it('normalizes a mixed CheckRun/StatusContext payload with required tagging', () => {
     const detail = normalizePullRequestDetail(basePayload, repo, new Set(['legacy-status']));
 
+    expect(detail.isCrossRepository).toBe(true);
     expect(detail.checks).toEqual([
       {
         completedAt: '2026-09-01T00:01:00Z',
@@ -156,6 +158,15 @@ describe('pullRequestActionArgs', () => {
   it.each(cases)('maps %o to argv', (action, expected) => {
     expect(pullRequestActionArgs(42, action)).toEqual(expected);
   });
+
+  it.each([['../fix'], ['fix/../../etc'], ['fix bug'], ['fix;rm -rf']])(
+    'rejects an unsafe branch name %s for deleteBranch',
+    (head) => {
+      expect(() => pullRequestActionArgs(42, { head, type: 'deleteBranch' })).toThrow(
+        'Invalid branch name',
+      );
+    },
+  );
 });
 
 describe('getPullRequestDetail', () => {

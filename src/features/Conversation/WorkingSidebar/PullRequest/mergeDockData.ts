@@ -319,7 +319,7 @@ export const resolveMergeDock = ({ detail, local, ui }: MergeDockInput): MergeDo
   if (!detail.viewerCanWrite) {
     action = undefined;
   } else if (detail.state === 'merged') {
-    action = { kind: 'deleteBranch' };
+    action = detail.isCrossRepository ? undefined : { kind: 'deleteBranch' };
   } else if (detail.state === 'closed') {
     action = { kind: 'reopen' };
   } else if (detail.isDraft) {
@@ -358,7 +358,7 @@ export const resolveMergeDock = ({ detail, local, ui }: MergeDockInput): MergeDo
   let hintKey: string | undefined;
   let hintParams: Record<string, string | number> | undefined;
 
-  if (!detail.viewerCanWrite) {
+  if (!detail.viewerCanWrite && detail.state === 'open') {
     hintKey = PR_KEYS.hint.readOnly;
     hintParams = { repo: `${detail.repo.owner}/${detail.repo.name}` };
   } else if (ui.error) {

@@ -14,7 +14,7 @@ const log = createLogger('local-file-shell:git');
 const execFileAsync = promisify(execFile);
 
 const GITHUB_PULL_REQUEST_DETAIL_FIELDS =
-  'number,title,body,state,isDraft,mergedAt,mergeable,mergeStateStatus,reviewDecision,autoMergeRequest,baseRefName,headRefName,url,author,additions,deletions,changedFiles,commits,comments,reviews,statusCheckRollup';
+  'number,title,body,state,isDraft,isCrossRepository,mergedAt,mergeable,mergeStateStatus,reviewDecision,autoMergeRequest,baseRefName,headRefName,url,author,additions,deletions,changedFiles,commits,comments,reviews,statusCheckRollup';
 
 type GithubPullRequestAuthor = { login?: string | null } | null;
 
@@ -62,6 +62,7 @@ type GithubPullRequestDetailPayload = {
   commits?: GithubPullRequestCommit[] | null;
   deletions: number;
   headRefName: string;
+  isCrossRepository?: boolean;
   isDraft?: boolean;
   mergeable?: string | null;
   mergedAt?: string | null;
@@ -162,6 +163,7 @@ export const normalizePullRequestDetail = (
     })),
     deletions: raw.deletions,
     headRefName: raw.headRefName,
+    isCrossRepository: raw.isCrossRepository ?? false,
     isDraft: raw.isDraft ?? false,
     mergeable: (raw.mergeable as GitPullRequestDetail['mergeable']) ?? 'UNKNOWN',
     ...(raw.mergedAt ? { mergedAt: raw.mergedAt } : {}),
@@ -268,6 +270,8 @@ export const getPullRequestDetail = async (payload: {
   }
 };
 
+const VALID_BRANCH_NAME = /^[\w./-]+$/;
+
 export const pullRequestActionArgs = (number: number, action: GitPullRequestAction): string[][] => {
   const n = String(number);
 
@@ -304,6 +308,9 @@ export const pullRequestActionArgs = (number: number, action: GitPullRequestActi
       return [['pr', 'reopen', n]];
     }
     case 'deleteBranch': {
+      const segments = action.head.split('/');
+      if (!VALID_BRANCH_NAME.test(action.head) || segments.includes('..'))
+        throw new Error('Invalid branch name');
       return [['api', '-X', 'DELETE', `repos/{owner}/{repo}/git/refs/heads/${action.head}`]];
     }
   }
@@ -318,7 +325,7 @@ export const runPullRequestAction = async (payload: {
 
   try {
     for (const argv of pullRequestActionArgs(number, action)) {
-      await execFileAsync('gh', argv, { cwd: dirPath, timeout: 15_000 });
+      await execFileAsync('gh', argv, { cwd: dirPath, timeout: 60_000 });
     }
     return { success: true };
   } catch (error: any) {

@@ -25,9 +25,10 @@ interface ChecksListProps {
 
 const ChecksList = memo<ChecksListProps>(({ checks }) => {
   const { t } = useTranslation('chat');
+  const hasRequiredCheck = checks.some((check) => check.required);
   return (
     <div className={styles.list}>
-      {checks.map((check) => {
+      {checks.map((check, index) => {
         const visual = getCheckVisual(check.status);
         const duration =
           check.status === 'pending' && !check.startedAt
@@ -38,13 +39,15 @@ const ChecksList = memo<ChecksListProps>(({ checks }) => {
             weak
             icon={visual.icon}
             iconColor={TONE_COLOR[visual.tone]}
-            key={check.name}
+            key={`${check.name}:${index}`}
             spin={visual.spin}
             title={check.name}
             value={check.name}
             trailing={
               <>
-                {!check.required && <span>{t('workingPanel.pr.check.optional')}</span>}
+                {hasRequiredCheck && !check.required && (
+                  <span>{t('workingPanel.pr.check.optional')}</span>
+                )}
                 {duration && <span className={styles.duration}>{duration}</span>}
                 {check.detailsUrl && <Icon icon={ExternalLinkIcon} size={12} />}
               </>

@@ -256,7 +256,9 @@ export const deviceRouter = router({
     }),
 
   gitPullRequestDetail: deviceProcedure
-    .input(z.object({ deviceId: z.string(), number: z.number(), path: z.string() }))
+    .input(
+      z.object({ deviceId: z.string(), number: z.number().int().positive(), path: z.string() }),
+    )
     .query(async ({ ctx, input }) => {
       const result = await deviceGateway.gitPullRequestDetail({
         deviceId: input.deviceId,
@@ -564,7 +566,7 @@ export const deviceRouter = router({
           z.object({ head: z.string(), type: z.literal('deleteBranch') }),
         ]),
         deviceId: z.string(),
-        number: z.number(),
+        number: z.number().int().positive(),
         path: z.string(),
       }),
     )

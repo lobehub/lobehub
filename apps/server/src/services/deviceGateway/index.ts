@@ -468,10 +468,14 @@ export class DeviceGateway {
     userId: string;
     workspaceId?: string;
   }) {
-    return this.invokeDeviceRead<DeviceGitPullRequestDetailResult>('getPullRequestDetail', params, {
-      number: params.number,
-      path: params.path,
-    });
+    return this.invokeDeviceRead<DeviceGitPullRequestDetailResult>(
+      'getPullRequestDetail',
+      { ...params, timeout: 20_000 },
+      {
+        number: params.number,
+        path: params.path,
+      },
+    );
   }
 
   /** Working-tree dirty-file counts for a directory on a remote device. */
