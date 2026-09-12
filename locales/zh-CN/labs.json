@@ -14,6 +14,8 @@
   "features.codexAppServer.title": "Codex App Server 运行时",
   "features.desktopSplitView.desc": "在桌面端并排显示两个标签页，支持独立导航和拖拽调整分栏宽度。",
   "features.desktopSplitView.title": "标签页分栏",
+  "features.devicePools.desc": "将设备分组，并配置设备池和 Agent 权限。关闭后恢复现有设备行为，保留设备池配置。",
+  "features.devicePools.title": "设备池",
   "features.evalCapture.desc": "在消息动作里增加一项，把一轮对话（前置上下文、本轮输入与它产生的回答）捕获成评测用例。",
   "features.evalCapture.title": "把对话保存为评测用例",
   "features.groupChat.desc": "启用多代理协同群聊功能。",

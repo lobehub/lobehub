@@ -6,6 +6,7 @@ import type {
   ChatFileItem,
   ChatTopicMetadata,
   ChatVideoItem,
+  DevicePoolRunContext,
   HeterogeneousProviderConfig,
   HeterogeneousTopicPin,
 } from '@lobechat/types';
@@ -26,6 +27,7 @@ import { resolveModelExtendParamsForUser } from '@/server/modules/AgentRuntime/a
 import type { AgentConfigWithId } from '@/server/services/agent';
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { shouldSuppressSignal } from '@/server/services/agentSignal/suppressSignal';
+import { DevicePoolAccessService } from '@/server/services/deviceGateway/poolAccess';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { resolveAttachmentsByFileIds } from '@/server/services/file/resolveAttachments';
@@ -331,6 +333,7 @@ export interface TurnSetupInput {
   modelOverride?: string;
   operationTaskId?: string;
   parentMessageId?: string;
+  parentOperationId?: string;
   prompt: string;
   providerOverride?: string;
   requestedDeviceId?: string;
@@ -349,6 +352,7 @@ export interface TurnSetupResult {
   assistantMessageId: string;
   canUseDevice: boolean;
   deviceAccessReason: DeviceAccessReason;
+  devicePoolContext?: DevicePoolRunContext;
   effectiveRequestedDeviceId?: string;
   heterogeneousProvider?: NonNullable<AgentConfigWithId['agencyConfig']>['heterogeneousProvider'];
   heteroType: HeterogeneousAgentType;
@@ -635,17 +639,26 @@ export const setupTurn = async (
 
   await throwIfExecutionAborted('topic setup');
 
-  // Resolve device-tool access ONCE per turn, BEFORE the hetero early exit —
-  // hetero dispatch routes the whole run to a user machine, so it must honour
-  // the same policy as native device tools. Discord-only flows (no
-  // botContext) keep the legacy first-party allow path; an external bot
-  // sender returns canUseDevice=false and reason='bot-external-sender',
-  // which degrades device-capable targets (hetero → sandbox, native → plain
-  // chat) and stops the device list from leaking into the LLM context.
-  const { canUseDevice, reason: deviceAccessReason } = resolveDeviceAccessPolicy({
-    botContext,
+  // Resolve eligibility before the hetero early exit, preserving the original
+  // entry identity across descendants. The previous one-time owner/Bot gate
+  // is replaced by pool evaluation only while the execution principal opts in through Labs.
+  // Otherwise the original owner/Bot gate and device discovery remain in use.
+  const poolAccess = new DevicePoolAccessService(deps.db, deps.userId, deps.workspaceId);
+  const devicePoolContext = await poolAccess.createContext({
+    actorUserId: botContext?.senderUserId,
+    agentId: resolvedAgentId,
+    bot: !!botContext || trigger === RequestTrigger.Bot,
+    parentOperationId: input.parentOperationId,
     shareVisitor: !!shareGate,
+    task: !!input.operationTaskId,
+    trigger,
   });
+  const { canUseDevice, reason: deviceAccessReason } = devicePoolContext
+    ? {
+        canUseDevice: (await poolAccess.authorizedDevices(devicePoolContext)).length > 0,
+        reason: 'pool-policy' as const,
+      }
+    : resolveDeviceAccessPolicy({ botContext, shareVisitor: !!shareGate });
   log(
     'execAgent: device access policy → canUseDevice=%s, reason=%s, hasBotContext=%s',
     canUseDevice,
@@ -880,6 +893,7 @@ export const setupTurn = async (
   return {
     assistantMessageId: assistantMessageRecord.id,
     canUseDevice,
+    devicePoolContext,
     deviceAccessReason,
     effectiveRequestedDeviceId,
     heteroType,

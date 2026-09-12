@@ -173,6 +173,8 @@ export const UserLabSchema = z.object({
    * enable displaying two desktop tabs side by side
    */
   enableDesktopSplitView: z.boolean().optional(),
+  /** Enable experimental device pools and their permission policies. @default false */
+  enableDevicePools: z.boolean().optional(),
   /**
    * one-click import of local Claude Code / Codex CLI sessions as topics (desktop only)
    */

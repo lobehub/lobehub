@@ -287,6 +287,7 @@ const ProfileEditor = memo(() => {
           ) : null}
         </Flexbox>
       </Flexbox>
+      {isHeterogeneous && <AgentTool />}
       {/* Main Content: Prompt Editor — built-in model runtime only. Hetero agents
           (Claude Code / Codex + remote platforms) run an external CLI with its own
           system prompt, so the agent's systemRole never reaches them. Hide the

@@ -82,6 +82,15 @@ describe('preferenceSelectors', () => {
   });
 
   describe('labPreferSelectors', () => {
+    /** @example Only explicit opt-in exposes device pools; switching off hides them again. */
+    it('keeps device pools disabled until explicitly enabled', () => {
+      store.preference.lab = undefined;
+      expect(labPreferSelectors.enableDevicePools(store)).toBe(false);
+      store.preference.lab = { enableDevicePools: true };
+      expect(labPreferSelectors.enableDevicePools(store)).toBe(true);
+      store.preference.lab.enableDevicePools = false;
+      expect(labPreferSelectors.enableDevicePools(store)).toBe(false);
+    });
     it('keeps desktop split view disabled by default', () => {
       store.preference.lab = undefined;
 

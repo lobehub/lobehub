@@ -912,9 +912,12 @@ export class AgentRuntimeService {
       // Persist the Agent Signal run marker on the operation row so server-side
       // self-iteration tools can read it back (metadata.agentSignal) at tool-call
       // time — the trimmed appContext above intentionally drops it.
-      ...(appContext?.agentSignal || interventionResolution
+      ...(appContext?.agentSignal || interventionResolution || deviceAccessPolicy?.context
         ? {
             metadata: {
+              ...(deviceAccessPolicy?.context
+                ? { devicePoolContext: deviceAccessPolicy.context }
+                : {}),
               ...(appContext?.agentSignal ? { agentSignal: appContext.agentSignal } : {}),
               ...(interventionResolution
                 ? { agentInterventionContinuation: interventionResolution }

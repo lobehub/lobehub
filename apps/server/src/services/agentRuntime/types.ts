@@ -11,6 +11,7 @@ import type {
 import type {
   AgentShareVisitorContext,
   ChatTopicBotContext,
+  DevicePoolRunContext,
   EvalToolForwardingConfig,
   ExpertiseContextSnapshot,
   UserInterventionConfig,
@@ -484,7 +485,11 @@ export interface OperationCreationParams {
    * so the dispatch site can include `reason` in the audit entry without
    * re-deriving it.
    */
-  deviceAccessPolicy?: { canUseDevice: boolean; reason: DeviceAccessReason };
+  deviceAccessPolicy?: {
+    canUseDevice: boolean;
+    context?: DevicePoolRunContext;
+    reason: DeviceAccessReason;
+  };
   /** Device system info for placeholder variable replacement in Local System systemRole */
   deviceSystemInfo?: Record<string, string>;
   /** Discord context for injecting channel/guild info into agent system message */

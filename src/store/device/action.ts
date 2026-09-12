@@ -4,6 +4,7 @@ import { type SWRResponse } from 'swr';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { deviceKeys } from '@/libs/swr/keys';
 import { deviceService } from '@/services/device';
+import { devicePoolService } from '@/services/devicePool';
 import { type StoreSetter } from '@/store/types';
 
 import { nextWorkingDirs, removeWorkingDir, WORKING_DIRS_MAX } from './deviceCwd';
@@ -15,6 +16,15 @@ export const deviceSlice = (set: Setter, get: () => DeviceStore, _api?: unknown)
   new DeviceActionImpl(set, get, _api);
 
 export class DeviceActionImpl {
+  /** Loads workspace-keyed pool configuration for the selected resource scope. */
+  useFetchDevicePools = (scope: 'personal' | 'workspace') =>
+    useClientDataSWR(deviceKeys.pools(scope), () => devicePoolService.list({ scope }));
+
+  /** Loads one pool only after selection; errors remain available to the caller. */
+  useFetchDevicePool = (scope: 'personal' | 'workspace', id?: string) =>
+    useClientDataSWR(id ? deviceKeys.pool(scope, id) : null, () =>
+      devicePoolService.detail({ scope, id: id! }),
+    );
   readonly #get: () => DeviceStore;
   readonly #set: Setter;
 

@@ -1486,6 +1486,35 @@ describe('createServerAgentToolsEngine', () => {
       expect(result.enabledToolIds).toContain(LocalSystemManifest.identifier);
     });
 
+    /** @example Two authorized online devices in auto mode still require a device picker. */
+    it('keeps RemoteDevice available for an authorized ambiguous auto plan', () => {
+      // ROOT CAUSE:
+      //
+      // The old target-only gate recognized local/device but omitted auto,
+      // hiding the picker exactly when multiple permitted devices needed selection.
+      // Device capability now follows the resolved execution plan.
+      const engine = createServerAgentToolsEngine(createMockContext(), {
+        agentConfig: { plugins: [RemoteDeviceManifest.identifier] },
+        canUseDevice: true,
+        enableDevicePools: true,
+        deviceContext: { gatewayConfigured: true },
+        executionPlan: {
+          kind: 'device-unrouted',
+          reason: 'ambiguous-online-devices',
+          target: 'auto',
+        },
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+      const result = engine.generateToolsDetailed({
+        toolIds: [RemoteDeviceManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+      /** @example An authorized run can select one of the eligible devices. */
+      expect(result.enabledToolIds).toContain(RemoteDeviceManifest.identifier);
+    });
+
     it('keeps RemoteDevice enabled for an unbound unrouted run — a selection is still needed', () => {
       const context = createMockContext();
       const engine = createServerAgentToolsEngine(context, {

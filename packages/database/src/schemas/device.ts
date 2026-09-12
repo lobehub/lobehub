@@ -1,6 +1,15 @@
 import type { WorkingDirEntry } from '@lobechat/types';
 import { sql } from 'drizzle-orm';
-import { index, jsonb, pgTable, text, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  index,
+  jsonb,
+  pgTable,
+  text,
+  uniqueIndex,
+  uuid,
+  varchar,
+} from 'drizzle-orm/pg-core';
 
 import { timestamps, timestamptz } from './_helpers';
 import { users } from './user';
@@ -69,6 +78,8 @@ export const devices = pgTable(
     friendlyName: text('friendly_name'),
 
     defaultCwd: text('default_cwd'),
+    /** Once explicitly pooled, removing the last grant must not restore legacy public access. */
+    poolManaged: boolean('pool_managed').default(false).notNull(),
     /** @deprecated superseded by `workingDirs` (structured). Kept as a legacy column; no longer read/written. */
     recentCwds: text('recent_cwds').array().default([]).notNull(),
     workingDirs: jsonb('working_dirs').$type<WorkingDirEntry[]>().default([]),

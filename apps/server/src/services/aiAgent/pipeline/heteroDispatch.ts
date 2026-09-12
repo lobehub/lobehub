@@ -349,6 +349,7 @@ export const dispatchHeteroAgent = async (
     maxSteps,
     metadata: {
       _hooks: serializedHooks,
+      devicePoolContext: ctx.devicePoolContext,
       assistantMessageId,
     },
     operationId,
@@ -781,6 +782,7 @@ export const dispatchHeteroAgent = async (
       deps.userId,
       remoteDeviceId,
       remoteDeviceWorkspaceId,
+      operationId,
     );
     const result = authorizationError
       ? {
@@ -977,6 +979,7 @@ export const dispatchHeteroAgent = async (
         deps.userId,
         dispatchDeviceId,
         dispatchWorkspaceId,
+        operationId,
       );
       const result = authorizationError
         ? { error: 'DEVICE_NOT_FOUND', errorData: authorizationError, success: false }

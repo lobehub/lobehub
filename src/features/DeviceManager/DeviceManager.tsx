@@ -4,7 +4,7 @@ import { isDesktop } from '@lobechat/const';
 import type { DeviceScope, DeviceVisibility } from '@lobechat/types';
 import { Flexbox, Icon } from '@lobehub/ui';
 import { Button, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   ChevronRightIcon,
   FolderCogIcon,
@@ -23,6 +23,7 @@ import { useElectronStore } from '@/store/electron';
 
 import DeviceDetailPanel from './DeviceDetailPanel';
 import DeviceItem from './DeviceItem';
+import { deviceSurfaceStyles } from './deviceSurfaceStyles';
 import { useDeviceList } from './useDeviceList';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -134,21 +135,9 @@ const styles = createStaticStyles(({ css }) => ({
   // ─── Master-detail surfaces ───
   detailCol: css`
     align-self: stretch;
-
-    min-width: 0;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
   `,
   listCol: css`
     overflow: hidden;
-
-    min-width: 0;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
   `,
   listScroll: css`
     overflow-y: auto;
@@ -245,7 +234,10 @@ const Capabilities = memo(() => {
 // Loading placeholder that reuses the list-card chrome and only skeletonises the
 // row text — loading → loaded is a content swap, not a relayout (ux §4.1).
 const ListSkeleton = memo<{ bordered?: boolean }>(({ bordered }) => (
-  <Flexbox className={bordered ? styles.listCol : styles.plainCol} flex={1}>
+  <Flexbox
+    className={bordered ? cx(deviceSurfaceStyles.card, styles.listCol) : styles.plainCol}
+    flex={1}
+  >
     <Flexbox padding={bordered ? 4 : 0}>
       <SharedListSkeleton />
     </Flexbox>
@@ -368,7 +360,10 @@ const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope, visibility }
       onRetry={() => mutate()}
     >
       <Flexbox horizontal align={'flex-start'} gap={16}>
-        <Flexbox className={isWorkspace ? styles.listCol : styles.plainCol} flex={1}>
+        <Flexbox
+          className={isWorkspace ? cx(deviceSurfaceStyles.card, styles.listCol) : styles.plainCol}
+          flex={1}
+        >
           <Flexbox className={styles.listScroll} gap={2} padding={isWorkspace ? 4 : 0}>
             {devices.map((device) => (
               <DeviceItem
@@ -384,7 +379,7 @@ const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope, visibility }
           </Flexbox>
         </Flexbox>
         {selected && (
-          <Flexbox className={styles.detailCol} flex={1}>
+          <Flexbox className={cx(deviceSurfaceStyles.card, styles.detailCol)} flex={1}>
             {/* keyed on deviceId so the form state resets when the selection changes */}
             <DeviceDetailPanel
               device={selected}

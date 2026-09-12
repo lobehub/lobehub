@@ -15,6 +15,7 @@ import {
 } from '@/libs/mcp/connectorPermissionCheck';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { resolveDeviceDispatchAuthorizationFailure } from '@/server/services/deviceGateway/dispatchAuthorization';
+import { DevicePoolAccessService } from '@/server/services/deviceGateway/poolAccess';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import { contentBlocksToString } from '@/server/services/mcp/contentProcessor';
 import {
@@ -322,7 +323,17 @@ export class ToolExecutionService {
     // apply visibility → fail closed.
     if (!context.userId || !context.serverDB) return undefined;
     try {
-      const devices = await getScopedOnlineDevices(context.serverDB, context.userId, undefined);
+      const provenance = context.operationId
+        ? await new DevicePoolAccessService(context.serverDB, context.userId).loadContext(
+            context.operationId,
+          )
+        : undefined;
+      const devices = await getScopedOnlineDevices(
+        context.serverDB,
+        context.userId,
+        undefined,
+        provenance,
+      );
       // Already sorted online-first / most-recently-active; drop offline rows.
       // Only the desktop app handles `mcp` tool calls — the CLI's
       // tool_call_request handler ignores `toolCall.type`/`params`, so a
@@ -361,6 +372,7 @@ export class ToolExecutionService {
       context.userId!,
       target.deviceId,
       target.workspaceId,
+      context.operationId,
     );
     if (authorizationError) {
       return {

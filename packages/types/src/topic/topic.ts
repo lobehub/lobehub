@@ -80,6 +80,8 @@ export interface ChatTopicBotContext {
    * platform-specific message shapes.
    */
   senderExternalUserId: string;
+  /** Verified LobeHub sender from account-link routing; never the Bot storage owner by default. */
+  senderUserId?: string;
 }
 
 export interface OnboardingFeedbackEntry {

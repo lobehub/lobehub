@@ -110,6 +110,8 @@ export interface ServerCreateAgentToolsEngineParams {
   disabledPluginIds?: string[];
   /** Whether to suppress the local-system builtin while preserving other tools. */
   disableLocalSystem?: boolean;
+  /** Enable pool-aware device selection for Labs participants. @default false */
+  enableDevicePools?: boolean;
   /**
    * The run's resolved execution plan (see `resolveExecutionPlan`). When
    * provided, its effective `target` drives the runtime tool gate; when

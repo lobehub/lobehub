@@ -551,7 +551,12 @@ export const discoverTools = async (
         // downstream `onlineDeviceIds` / `deviceOnline` treat this list as the
         // online set.
         onlineDevices = (
-          await getScopedOnlineDevices(deps.db, deps.userId, deps.workspaceId)
+          await getScopedOnlineDevices(
+            deps.db,
+            deps.userId,
+            deps.workspaceId,
+            ctx.devicePoolContext,
+          )
         ).filter((d) => d.online);
         // A workspace agent whose caller pinned this desktop's personal
         // deviceId via `users.preference.agentDeviceOverrides` (
@@ -563,7 +568,7 @@ export const discoverTools = async (
         // scope), so union the specific personal device in here. The device
         // is dispatchable because the gateway routes it by
         // `(userId, deviceId)` — the caller owns it.
-        if (deps.workspaceId && agentConfig.agencyConfig?.boundDeviceId) {
+        if (!ctx.devicePoolContext && deps.workspaceId && agentConfig.agencyConfig?.boundDeviceId) {
           const boundId = agentConfig.agencyConfig.boundDeviceId;
           const alreadyIncluded = onlineDevices.some((d) => d.deviceId === boundId);
           if (!alreadyIncluded) {
@@ -856,6 +861,7 @@ export const discoverTools = async (
       disableLocalSystem,
       disabledPluginIds,
       executionPlan,
+      enableDevicePools: !!ctx.devicePoolContext,
       globalMemoryEnabled,
       hasEnabledKnowledgeBases,
       isBotConversation,

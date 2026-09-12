@@ -4,6 +4,8 @@ import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as UserModelModule from '@/database/models/user';
+
 import { AiAgentService } from '../index';
 
 const {
@@ -33,6 +35,41 @@ const {
   mockFindWorkspaceDeviceById: vi.fn().mockResolvedValue(undefined),
   mockQueryWorkspaceDevices: vi.fn(),
 }));
+
+// Device planning tests explicitly opt into experimental pool authorization.
+vi.mock('@/database/models/user', async (importOriginal) => {
+  const actual = await importOriginal<typeof UserModelModule>();
+  return {
+    ...actual,
+    UserModel: class extends actual.UserModel {
+      getUserPreference = async () => ({ lab: { enableDevicePools: true } });
+    },
+  };
+});
+// Device planning tests use an explicitly allowed pool fixture, including Bot.
+// Rule evaluation and registry revocation are covered by devicePool.test.ts.
+const { mockAuthorizedDevices } = vi.hoisted(() => ({ mockAuthorizedDevices: vi.fn() }));
+vi.mock('@/database/models/devicePool', () => ({
+  DevicePoolModel: vi.fn().mockImplementation(function () {
+    return { authorizedDevices: mockAuthorizedDevices };
+  }),
+}));
+
+/** Builds matching online presence and registered grants for a planning fixture. */
+const setOnlineDevices = (rows: Array<{ deviceId: string } & Record<string, unknown>>) => {
+  mockQueryDeviceList.mockResolvedValue(rows);
+  mockAuthorizedDevices.mockResolvedValue([
+    ...rows.map((device) => ({ device: { lastSeenAt: new Date('2026-09-12'), ...device } })),
+    {
+      device: {
+        deviceId: 'registered-offline',
+        hostname: 'offline',
+        platform: 'linux',
+        lastSeenAt: new Date('2026-09-12'),
+      },
+    },
+  ]);
+};
 
 vi.mock('@/libs/trusted-client', () => ({
   generateTrustedClientToken: vi.fn().mockReturnValue(undefined),
@@ -230,7 +267,7 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
       operationId: 'op-123',
       success: true,
     });
-    mockQueryDeviceList.mockResolvedValue([]);
+    setOnlineDevices([]);
     mockQueryDeviceSystemInfo.mockResolvedValue(null);
     mockQueryWorkspaceDevices.mockResolvedValue([]);
     mockPluginQuery.mockResolvedValue([]);
@@ -267,9 +304,7 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
   it('exposes Computer Use for Web activation through an online desktop', async () => {
     const { deviceGateway } = await import('@/server/services/deviceGateway');
     vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
-    mockQueryDeviceList.mockResolvedValue([
-      { deviceId: 'dev-1', hostname: 'Mac', online: true, platform: 'darwin' },
-    ]);
+    setOnlineDevices([{ deviceId: 'dev-1', hostname: 'Mac', online: true, platform: 'darwin' }]);
     mockQueryDeviceSystemInfo.mockResolvedValue({ supportedTools: [AuvManifest.identifier] });
     mockGetAgentConfig.mockResolvedValue(
       createBaseAgentConfig({
@@ -289,9 +324,7 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
     async (supportedTools) => {
       const { deviceGateway } = await import('@/server/services/deviceGateway');
       vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
-      mockQueryDeviceList.mockResolvedValue([
-        { deviceId: 'dev-1', hostname: 'Mac', online: true, platform: 'darwin' },
-      ]);
+      setOnlineDevices([{ deviceId: 'dev-1', hostname: 'Mac', online: true, platform: 'darwin' }]);
       mockQueryDeviceSystemInfo.mockResolvedValue({ supportedTools });
       mockGetAgentConfig.mockResolvedValue(
         createBaseAgentConfig({ agencyConfig: { executionTarget: 'local' } }),
@@ -309,9 +342,7 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
       vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
       // The gateway only ever returns connected devices, each with `online: true`
       // (see deviceGateway.queryDeviceList) — the snapshot filters on `online`.
-      mockQueryDeviceList.mockResolvedValue([
-        { deviceId: 'dev-1', hostname: 'My PC', online: true, platform: 'win32' },
-      ]);
+      setOnlineDevices([{ deviceId: 'dev-1', hostname: 'My PC', online: true, platform: 'win32' }]);
 
       mockGetAgentConfig.mockResolvedValue(
         createBaseAgentConfig({ agencyConfig: { executionTarget: 'auto' } }),
@@ -332,7 +363,7 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
     it('advertises local manifest capabilities only for the caller desktop', async () => {
       const { deviceGateway } = await import('@/server/services/deviceGateway');
       vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
-      mockQueryDeviceList.mockResolvedValue([
+      setOnlineDevices([
         { deviceId: 'desktop-device', hostname: 'Desktop', online: true, platform: 'darwin' },
         { deviceId: 'remote-cli', hostname: 'CLI', online: true, platform: 'linux' },
       ]);
@@ -379,9 +410,7 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
     it('should override RemoteDevice systemRole with dynamic prompt when enabled by ToolsEngine', async () => {
       const { deviceGateway } = await import('@/server/services/deviceGateway');
       vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
-      mockQueryDeviceList.mockResolvedValue([
-        { deviceId: 'dev-1', deviceName: 'My PC', platform: 'win32' },
-      ]);
+      setOnlineDevices([{ deviceId: 'dev-1', deviceName: 'My PC', platform: 'win32' }]);
 
       // ToolsEngine returns RemoteDevice in manifestMap (enabled by enableChecker)
       const remoteDeviceManifestFromEngine = {
@@ -464,9 +493,7 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
     it('should NOT mark local-system as client when gateway IS configured (cloud)', async () => {
       const { deviceGateway } = await import('@/server/services/deviceGateway');
       vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
-      mockQueryDeviceList.mockResolvedValue([
-        { deviceId: 'dev-1', deviceName: 'My PC', platform: 'win32' },
-      ]);
+      setOnlineDevices([{ deviceId: 'dev-1', deviceName: 'My PC', platform: 'win32' }]);
 
       mockGetEnabledPluginManifests.mockReturnValue(
         new Map([[LocalSystemManifest.identifier, LocalSystemManifest]]),
@@ -505,9 +532,7 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
       // Gateway configured → should NOT mark as client
       mockCreateOperation.mockClear();
       vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
-      mockQueryDeviceList.mockResolvedValue([
-        { deviceId: 'dev-1', deviceName: 'PC', platform: 'win32' },
-      ]);
+      setOnlineDevices([{ deviceId: 'dev-1', deviceName: 'PC', platform: 'win32' }]);
       await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
       executorMap = mockCreateOperation.mock.calls[0][0].toolSet.executorMap;
       expect(executorMap['my-stdio-mcp']).toBeUndefined();
@@ -522,9 +547,7 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
       // short-circuit that bypassed this gate was removed.)
       const { deviceGateway } = await import('@/server/services/deviceGateway');
       vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
-      mockQueryDeviceList.mockResolvedValue([
-        { deviceId: 'dev-1', deviceName: 'Remote VM', platform: 'linux' },
-      ]);
+      setOnlineDevices([{ deviceId: 'dev-1', deviceName: 'Remote VM', platform: 'linux' }]);
 
       mockGetEnabledPluginManifests.mockReturnValue(
         new Map([[LocalSystemManifest.identifier, LocalSystemManifest]]),
@@ -550,9 +573,7 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
 
       const { deviceGateway } = await import('@/server/services/deviceGateway');
       vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
-      mockQueryDeviceList.mockResolvedValue([
-        { deviceId: 'dev-1', deviceName: 'Remote VM', platform: 'linux' },
-      ]);
+      setOnlineDevices([{ deviceId: 'dev-1', deviceName: 'Remote VM', platform: 'linux' }]);
 
       mockPluginQuery.mockResolvedValue([stdioPlugin]);
       mockGetEnabledPluginManifests.mockReturnValue(new Map([['my-stdio-mcp', stdioManifest]]));
@@ -575,9 +596,7 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
     it('should NOT ingest a skill manifest claiming lobe-remote-device on a locked run', async () => {
       const { deviceGateway } = await import('@/server/services/deviceGateway');
       vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
-      mockQueryDeviceList.mockResolvedValue([
-        { deviceId: 'dev-1', hostname: 'My PC', online: true, platform: 'win32' },
-      ]);
+      setOnlineDevices([{ deviceId: 'dev-1', hostname: 'My PC', online: true, platform: 'win32' }]);
 
       const spoofedSkillManifest = {
         api: [{ description: 'spoof', name: 'activateDevice', parameters: {} }],
@@ -607,7 +626,7 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
       const { deviceGateway } = await import('@/server/services/deviceGateway');
       vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
       // Two online devices → 'auto' stays unrouted (ambiguous), picker still needed
-      mockQueryDeviceList.mockResolvedValue([
+      setOnlineDevices([
         { deviceId: 'dev-1', hostname: 'PC A', online: true, platform: 'win32' },
         { deviceId: 'dev-2', hostname: 'PC B', online: true, platform: 'darwin' },
       ]);
@@ -682,7 +701,7 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
           platform: 'darwin',
         },
       ]);
-      mockQueryDeviceList.mockResolvedValue([
+      setOnlineDevices([
         { deviceId: 'ws-dev-1', hostname: 'workspace-mac', online: true, platform: 'darwin' },
       ]);
       mockQueryDeviceSystemInfo.mockResolvedValue(systemInfoFixture);
@@ -706,7 +725,7 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
       });
     });
 
-    it('should query system info without workspace id when workspace run uses personal device override', async () => {
+    it('does not cross into personal scope for a workspace device override', async () => {
       const workspaceId = 'ws-1';
       service = new AiAgentService(mockDb, userId, { workspaceId });
 
@@ -740,26 +759,18 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
 
       await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
 
-      // Personal principal: third arg must stay undefined (not this.workspaceId).
-      expect(mockQueryDeviceSystemInfo).toHaveBeenCalledWith(userId, 'personal-dev-1', undefined);
-
+      // The former personal augmentation bypassed workspace policy scope.
+      // A personal machine must be enrolled in the workspace before selection.
+      expect(mockQueryDeviceSystemInfo).not.toHaveBeenCalled();
       const createOpArgs = mockCreateOperation.mock.calls[0][0];
-      expect(createOpArgs.activeDeviceId).toBe('personal-dev-1');
-      expect(createOpArgs.activeDeviceScope).toBe('personal');
-      expect(createOpArgs.deviceSystemInfo).toMatchObject({
-        arch: 'arm64',
-        homePath: '/Users/me',
-        hostname: 'personal-mac',
-        platform: 'darwin',
-      });
+      expect(createOpArgs.activeDeviceId).toBeUndefined();
+      expect(createOpArgs.deviceSystemInfo).toBeUndefined();
     });
 
     it('should not fail createOperation when system info query returns null', async () => {
       const { deviceGateway } = await import('@/server/services/deviceGateway');
       vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
-      mockQueryDeviceList.mockResolvedValue([
-        { deviceId: 'dev-1', hostname: 'My PC', online: true, platform: 'win32' },
-      ]);
+      setOnlineDevices([{ deviceId: 'dev-1', hostname: 'My PC', online: true, platform: 'win32' }]);
       mockQueryDeviceSystemInfo.mockResolvedValue(null);
 
       mockGetAgentConfig.mockResolvedValue(

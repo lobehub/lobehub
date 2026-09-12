@@ -1234,6 +1234,7 @@ table devices {
   platform varchar(20)
   friendly_name text
   default_cwd text
+  pool_managed boolean [not null, default: false]
   recent_cwds text[] [not null, default: `[]`]
   working_dirs jsonb [default: `[]`]
   first_seen_at "timestamp with time zone" [not null, default: `now()`]
@@ -1248,6 +1249,50 @@ table devices {
     user_id [name: 'devices_user_id_idx']
     workspace_id [name: 'devices_workspace_id_idx']
     (workspace_id, visibility, user_id) [name: 'devices_workspace_visibility_idx']
+  }
+}
+
+table agent_device_pool_policies {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  pool_id text [not null]
+  agent_id text [not null]
+  rules jsonb [not null]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (pool_id, agent_id) [name: 'agent_device_pool_policies_pool_agent_unique', unique]
+    agent_id [name: 'agent_device_pool_policies_agent_idx']
+  }
+}
+
+table device_pool_devices {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  pool_id text [not null]
+  device_id uuid [not null]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (pool_id, device_id) [name: 'device_pool_devices_pool_device_unique', unique]
+    device_id [name: 'device_pool_devices_device_idx']
+  }
+}
+
+table device_pools {
+  id text [pk, not null]
+  user_id text [not null]
+  workspace_id text
+  name text [not null]
+  policy jsonb [not null]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (workspace_id, user_id) [name: 'device_pools_scope_idx']
   }
 }
 

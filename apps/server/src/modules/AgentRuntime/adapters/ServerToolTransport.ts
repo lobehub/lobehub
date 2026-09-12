@@ -22,6 +22,8 @@ import {
   isDeviceToolIdentifier,
   logDeviceToolAudit,
 } from '@/server/services/aiAgent/deviceToolAudit';
+import { resolveDeviceDispatchAuthorizationFailure } from '@/server/services/deviceGateway/dispatchAuthorization';
+import { DevicePoolAccessService } from '@/server/services/deviceGateway/poolAccess';
 
 import type { RuntimeExecutorContext } from '../context';
 import { dispatchClientTool } from '../dispatchClientTool';
@@ -148,6 +150,25 @@ export class ServerToolTransport implements ToolTransport {
         chatToolPayload.executor === 'client' &&
         typeof streamManager.sendToolExecute === 'function'
       ) {
+        if (
+          isDeviceToolIdentifier(chatToolPayload.identifier) &&
+          serverDB &&
+          userId &&
+          (await new DevicePoolAccessService(serverDB, userId).isEnabled())
+        ) {
+          const deviceId = resolveRunActiveDeviceId(context.state);
+          const failure =
+            deviceId &&
+            (await resolveDeviceDispatchAuthorizationFailure(
+              this.ctx.serverDB,
+              userId,
+              deviceId,
+              context.state.metadata?.workspaceId ?? this.ctx.workspaceId,
+              operationId,
+            ));
+          if (!deviceId || failure)
+            throw new Error('Device use is not permitted by its current policy');
+        }
         log(`[${operationLogId}] Dispatching tool ${context.toolName} to client via Agent Gateway`);
         const timeoutMs = resolveToolTimeoutMs({
           apiName: chatToolPayload.apiName,

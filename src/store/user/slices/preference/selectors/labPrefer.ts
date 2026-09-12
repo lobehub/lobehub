@@ -3,6 +3,7 @@ import { DEFAULT_PREFERENCE } from '@lobechat/const';
 import { type UserState } from '@/store/user/initialState';
 
 export const labPreferSelectors = {
+  enableDevicePools: (s: UserState): boolean => s.preference.lab?.enableDevicePools === true,
   enableAgentGraphConfig: (s: UserState): boolean =>
     s.preference.lab?.enableAgentGraphConfig ??
     DEFAULT_PREFERENCE.lab?.enableAgentGraphConfig ??

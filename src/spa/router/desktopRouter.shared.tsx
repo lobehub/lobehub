@@ -247,6 +247,14 @@ export const sharedMainAreaChildren: RouteObject[] = [
             handle: { meta: agentShareRouteMeta },
             path: 'share',
           },
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/agent/devices'),
+              'Desktop > Chat > Device Permissions',
+            ),
+            handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('form') }) },
+            path: 'devices',
+          },
           // Legacy `/agent/:aid/stats` URLs — kept for deep-links.
           {
             element: redirectElement('../statistics'),

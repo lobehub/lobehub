@@ -2069,6 +2069,7 @@ export class MessengerRouter {
     const bridgeOpts = {
       agentId,
       botContext: {
+        senderUserId: message.author?.userId === link.platformUserId ? link.userId : undefined,
         ...buildBotContext({
           // Per-install applicationId so the agent runtime can distinguish
           // workspaces in its own bookkeeping (logs, traces, dedupe).

@@ -60,6 +60,27 @@ describe('assertWorkspaceRootApproved', () => {
     ).rejects.toBeInstanceOf(TRPCError);
   });
 
+  /** @example A pool-authorized device owned by another member supplies its own approved roots. */
+  it('uses the authorized registry row without falling back to caller ownership', async () => {
+    // ROOT CAUSE:
+    //
+    // The legacy findByDeviceId lookup is restricted to the caller's userId.
+    // A valid pool grant for another owner's machine therefore lost its roots.
+    // The execution guard now forwards the exact authorized device record.
+    const model = mockModel(null);
+    const registered = { defaultCwd: '/workspace/approved', workingDirs: [] };
+    /** @example An authorized child directory is usable. */
+    await expect(
+      assertWorkspaceRootApproved(model, 'shared-device', '/workspace/approved/src', registered),
+    ).resolves.toBeUndefined();
+    /** @example Pool use does not grant arbitrary filesystem roots. */
+    await expect(
+      assertWorkspaceRootApproved(model, 'shared-device', '/workspace', registered),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    /** @example Caller ownership no longer overrides the successful pool grant. */
+    expect(model.findByDeviceId).not.toHaveBeenCalled();
+  });
+
   it('rejects an empty workspace root with BAD_REQUEST before hitting the DB', async () => {
     const model = mockModel({ workingDirs: [{ path: '/Users/me/proj' }] });
     await expect(assertWorkspaceRootApproved(model, 'dev-1', '')).rejects.toMatchObject({

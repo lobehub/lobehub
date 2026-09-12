@@ -1,4 +1,7 @@
 export default {
+  'features.devicePools.title': 'Device pools',
+  'features.devicePools.desc':
+    'Group devices and configure pool and Agent permissions. Turning this off restores existing device behavior and keeps your pool configuration.',
   'description':
     "These features are experimental. We might remove them, and they might have bugs. We'd love your feedback while using them.",
   'features.agentGraphConfig.desc':

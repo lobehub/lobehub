@@ -6,6 +6,7 @@ import type { ChatTopicBotContext } from '@lobechat/types';
  * which branch granted or denied access for a given turn.
  */
 export type DeviceAccessReason =
+  | 'pool-policy'
   /** Non-bot caller (web / desktop / mobile UI). */
   | 'first-party'
   /** Bot caller, sender matches the configured owner platform ID. */

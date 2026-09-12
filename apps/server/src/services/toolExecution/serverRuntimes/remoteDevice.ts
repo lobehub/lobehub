@@ -6,6 +6,7 @@ import { RemoteDeviceExecutionRuntime } from '@lobechat/builtin-tool-remote-devi
 import debug from 'debug';
 
 import { deviceGateway } from '@/server/services/deviceGateway';
+import { DevicePoolAccessService } from '@/server/services/deviceGateway/poolAccess';
 import {
   filterAuthorizedDevicePresence,
   isGatewayOnlyDevicePresenceAllowed,
@@ -74,7 +75,18 @@ export const remoteDeviceRuntime: ServerRuntimeRegistration = {
           }));
         }
 
-        const devices = await getScopedOnlineDevices(serverDB, userId, workspaceId);
+        const poolContext = context.operationId
+          ? await new DevicePoolAccessService(serverDB, userId, workspaceId).loadContext(
+              context.operationId,
+            )
+          : {
+              actorUserId: userId,
+              agentId: context.agentId ?? '',
+              blocked: true,
+              trigger: 'chat' as const,
+              workspaceId,
+            };
+        const devices = await getScopedOnlineDevices(serverDB, userId, workspaceId, poolContext);
         log(
           'listOnlineDevices: workspaceId=%o -> %d device(s): %o',
           workspaceId,

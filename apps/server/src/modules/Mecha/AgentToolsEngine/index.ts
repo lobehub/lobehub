@@ -38,6 +38,7 @@ import debug from 'debug';
 
 import {
   executionTargetToRuntimeMode,
+  isDeviceCapablePlan,
   isDeviceLockedPlan,
   resolveExecutionTarget,
   resolveToolMode,
@@ -201,6 +202,7 @@ export const createServerAgentToolsEngine = (
     additionalManifests,
     agentConfig,
     canUseDevice = false,
+    enableDevicePools = false,
     deviceContext,
     disableLocalSystem = false,
     disabledPluginIds = [],
@@ -242,7 +244,11 @@ export const createServerAgentToolsEngine = (
   // device-capable targets. `none` means NO device — the proxy that could
   // activate one mid-run must not be offered either; `sandbox` and devices
   // are mutually exclusive.
-  const deviceCapable = executionTarget === 'local' || executionTarget === 'device';
+  const deviceCapable = enableDevicePools
+    ? executionPlan
+      ? isDeviceCapablePlan(executionPlan)
+      : executionTarget === 'local' || executionTarget === 'device' || executionTarget === 'auto'
+    : executionTarget === 'local' || executionTarget === 'device';
   // The run is locked to ONE device (routed, or explicitly bound but
   // offline): there is no device decision left, so the remote-device picker
   // must not exist — physically, not just rule-disabled, because

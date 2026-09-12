@@ -995,6 +995,7 @@ export class AiAgentService {
         files,
         modelOverride,
         operationTaskId,
+        parentOperationId,
         parentMessageId,
         prompt,
         providerOverride,
@@ -1026,6 +1027,7 @@ export class AiAgentService {
     // persisted anchors; `agentConfig` stays the same mutable object so stage
     // systemRole appends remain visible to `createOperation` below.
     const runContext: ExecRunContext = {
+      devicePoolContext: turn.devicePoolContext,
       agentConfig,
       appContext,
       assistantMessageId: turn.assistantMessageId,

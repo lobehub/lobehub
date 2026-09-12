@@ -22,6 +22,19 @@ vi.mock('@/server/services/deviceGateway/scopedDevices', () => ({
   getScopedOnlineDevices: vi.fn().mockResolvedValue([]),
 }));
 
+vi.mock('@/server/services/deviceGateway/poolAccess', () => ({
+  DevicePoolAccessService: vi.fn().mockImplementation(function () {
+    return {
+      loadContext: vi.fn().mockResolvedValue({
+        actorUserId: 'user-1',
+        agentId: 'agent-1',
+        blocked: false,
+        trigger: 'chat',
+      }),
+    };
+  }),
+}));
+
 describe('ToolExecutionService', () => {
   it('can skip low-level result truncation for AgentRuntime archival', async () => {
     const builtinToolsExecutor = {
@@ -144,6 +157,7 @@ describe('ToolExecutionService', () => {
 
     const contextWith = (mcpParams: Record<string, unknown>, over: Record<string, unknown> = {}) =>
       ({
+        operationId: 'operation-1',
         serverDB: {},
         toolManifestMap: { 'my-mcp': { mcpParams } },
         userId: 'user-1',
@@ -230,7 +244,12 @@ describe('ToolExecutionService', () => {
 
       await service.executeTool(mcpPayload, context);
 
-      expect(getScopedOnlineDevices).toHaveBeenCalledWith(context.serverDB, 'user-1', undefined);
+      expect(getScopedOnlineDevices).toHaveBeenCalledWith(
+        context.serverDB,
+        'user-1',
+        undefined,
+        expect.objectContaining({ agentId: 'agent-1', trigger: 'chat' }),
+      );
       expect(deviceGateway.queryDeviceList).not.toHaveBeenCalled();
       expect(deviceGateway.executeMcpCall).toHaveBeenCalledWith(
         expect.objectContaining({ deviceId: 'newest' }),

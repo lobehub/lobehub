@@ -8,6 +8,7 @@ import {
 
 const labels = {
   channel: 'tab.integration',
+  devices: 'Devices',
   profile: 'tab.profile',
   share: 'share',
   statistics: 'usageStats.title',
@@ -36,6 +37,7 @@ describe('buildAgentProfileTabOptions', () => {
     const options = buildAgentProfileTabOptions({
       active: 'profile',
       canConfigure: true,
+      devicePoolsEnabled: true,
       channelsSupported: true,
       labels,
       shareSupported: true,
@@ -44,6 +46,7 @@ describe('buildAgentProfileTabOptions', () => {
     expect(options.map((option) => option.value)).toEqual([
       'profile',
       'channel',
+      'devices',
       'statistics',
       'share',
     ]);
@@ -53,18 +56,20 @@ describe('buildAgentProfileTabOptions', () => {
     const options = buildAgentProfileTabOptions({
       active: 'profile',
       canConfigure: true,
+      devicePoolsEnabled: true,
       channelsSupported: false,
       labels,
       shareSupported: false,
     });
 
-    expect(options.map((option) => option.value)).toEqual(['profile', 'statistics']);
+    expect(options.map((option) => option.value)).toEqual(['profile', 'devices', 'statistics']);
   });
 
   it('drops the config tabs for a member without edit access', () => {
     const options = buildAgentProfileTabOptions({
       active: 'statistics',
       canConfigure: false,
+      devicePoolsEnabled: true,
       channelsSupported: true,
       labels,
       shareSupported: true,
@@ -77,6 +82,7 @@ describe('buildAgentProfileTabOptions', () => {
     const options = buildAgentProfileTabOptions({
       active: 'channel',
       canConfigure: false,
+      devicePoolsEnabled: true,
       channelsSupported: false,
       labels,
       shareSupported: false,
@@ -89,18 +95,25 @@ describe('buildAgentProfileTabOptions', () => {
     const options = buildAgentProfileTabOptions({
       active: 'profile',
       canConfigure: true,
+      devicePoolsEnabled: true,
       channelsSupported: true,
       labels,
       shareSupported: false,
     });
 
-    expect(options.map((option) => option.value)).toEqual(['profile', 'channel', 'statistics']);
+    expect(options.map((option) => option.value)).toEqual([
+      'profile',
+      'channel',
+      'devices',
+      'statistics',
+    ]);
   });
 
   it('keeps share when it owns the current page even though it is gated off', () => {
     const options = buildAgentProfileTabOptions({
       active: 'share',
       canConfigure: false,
+      devicePoolsEnabled: true,
       channelsSupported: false,
       labels,
       shareSupported: false,
@@ -108,4 +121,16 @@ describe('buildAgentProfileTabOptions', () => {
 
     expect(options.map((option) => option.value)).toEqual(['statistics', 'share']);
   });
+});
+
+/** @example A direct Devices link must not force the tab visible before Labs opt-in. */
+it('omits Devices when the experiment is disabled, even on its route', () => {
+  const options = buildAgentProfileTabOptions({
+    active: 'devices',
+    canConfigure: true,
+    channelsSupported: true,
+    labels,
+    shareSupported: false,
+  });
+  expect(options.map((option) => option.value)).not.toContain('devices');
 });

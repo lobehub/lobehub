@@ -232,7 +232,11 @@ export const startOperation = async (
       autoStart,
       botContext,
       botPlatformContext,
-      deviceAccessPolicy: { canUseDevice, reason: deviceAccessReason },
+      deviceAccessPolicy: {
+        canUseDevice,
+        context: ctx.devicePoolContext,
+        reason: deviceAccessReason,
+      },
       discordContext,
       // Run context the context engine injects into the system message —
       // carried on the operation like `expertise`, not on the agent config.

@@ -11,6 +11,8 @@ import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 import {
   type AgentProfileTab,
@@ -55,8 +57,9 @@ interface AgentProfileTabsProps {
  * URL rather than holding local state: deep links and back/forward keep working.
  */
 const AgentProfileTabs = memo<AgentProfileTabsProps>(({ active, agentId }) => {
-  const { t } = useTranslation(['chat', 'common', 'spend']);
+  const { t } = useTranslation(['chat', 'common', 'spend', 'setting']);
   const navigate = useWorkspaceAwareNavigate();
+  const devicePoolsEnabled = useUserStore(labPreferSelectors.enableDevicePools);
 
   const heterogeneousProviderType = useAgentStore(
     agentSelectors.currentAgentHeterogeneousProviderType,
@@ -75,8 +78,10 @@ const AgentProfileTabs = memo<AgentProfileTabsProps>(({ active, agentId }) => {
         active,
         canConfigure,
         channelsSupported,
+        devicePoolsEnabled,
         labels: {
           channel: t('tab.integration'),
+          devices: t('devicePools.agentDevices', { ns: 'setting' }),
           // Inside the profile group the whole surface *is* the agent profile,
           // so the first segment is the "basic" tab, not "Agent Profile" again —
           // that broader name stays on the sidebar entry that opens the group.
@@ -86,7 +91,7 @@ const AgentProfileTabs = memo<AgentProfileTabsProps>(({ active, agentId }) => {
         },
         shareSupported: shareVisible === true,
       }),
-    [active, canConfigure, channelsSupported, shareVisible, t],
+    [active, canConfigure, channelsSupported, devicePoolsEnabled, shareVisible, t],
   );
 
   // A lone segment is a label, not a switcher.

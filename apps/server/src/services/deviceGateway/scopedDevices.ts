@@ -1,11 +1,13 @@
 import { type DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
 import { type LobeChatDatabase } from '@lobechat/database';
+import type { DevicePoolRunContext } from '@lobechat/types';
 import { sortDevicesByActivity } from '@lobechat/types';
 import debug from 'debug';
 
 import { DeviceModel } from '@/database/models/device';
 
 import { deviceGateway } from './index';
+import { DevicePoolAccessService } from './poolAccess';
 import { filterAuthorizedDevicePresence } from './scopedDevicePresence';
 
 const log = debug('lobe-server:device-scope');
@@ -43,33 +45,43 @@ const log = debug('lobe-server:device-scope');
  * - `workspaceId`, when present, has already passed an authorized workspace scope
  *
  * Returns:
- * - Registered devices with scoped liveness, plus personal-only transient devices
+ * - With Labs enabled: only registered pool-authorized devices
+ * - Otherwise: existing scoped visibility, including personal-only transient devices
  */
 export const getScopedOnlineDevices = async (
   serverDB: LobeChatDatabase,
   userId: string,
   workspaceId?: string,
+  context?: DevicePoolRunContext,
 ): Promise<DeviceAttachment[]> => {
   const deviceModel = new DeviceModel(serverDB, userId, workspaceId);
+  const access = new DevicePoolAccessService(serverDB, userId, workspaceId);
+  const enabled = await access.isEnabled();
   const scope: 'personal' | 'workspace' = workspaceId ? 'workspace' : 'personal';
 
   const [rows, online] = await Promise.all([
-    (workspaceId ? deviceModel.queryWorkspaceDevices() : deviceModel.queryPersonal()).catch(
-      (error) => {
-        log(
-          'DB device lookup failed (scope=%s); %s: %O',
-          scope,
-          workspaceId ? 'failing closed' : 'using gateway only',
-          error,
-        );
-        return [] as Awaited<ReturnType<typeof deviceModel.queryPersonal>>;
-      },
-    ),
+    enabled
+      ? context
+        ? access.authorizedDevices(context).then((grants) => grants.map((grant) => grant.device))
+        : Promise.resolve([])
+      : (workspaceId ? deviceModel.queryWorkspaceDevices() : deviceModel.queryPersonal()).catch(
+          (error) => {
+            log(
+              'DB device lookup failed (scope=%s); %s: %O',
+              scope,
+              workspaceId ? 'failing closed' : 'using gateway only',
+              error,
+            );
+            return [] as Awaited<ReturnType<typeof deviceModel.queryPersonal>>;
+          },
+        ),
     deviceGateway.queryDeviceList(userId, workspaceId),
   ]);
 
   const registeredDeviceIds = new Set(rows.map((device) => device.deviceId));
-  const authorizedOnline = filterAuthorizedDevicePresence(registeredDeviceIds, online, scope);
+  const authorizedOnline = enabled
+    ? online.filter((device) => registeredDeviceIds.has(device.deviceId))
+    : filterAuthorizedDevicePresence(registeredDeviceIds, online, scope);
   const liveById = new Map(authorizedOnline.map((d) => [d.deviceId, d]));
   const seen = new Set<string>();
   const fromDb = rows.map((row): DeviceAttachment => {

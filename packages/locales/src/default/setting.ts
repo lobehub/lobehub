@@ -1,4 +1,81 @@
 export default {
+  'devicePools.personHelp':
+    'Applies only to this verified workspace member, before group rules. Channel callers must have a linked account.',
+  'devicePools.removePerson': 'Remove person override',
+  'devicePools.addPerson': 'Add person…',
+  'devicePools.overrideInheritance':
+    'This Agent’s explicit rules take precedence over pool rules. Within each layer, named people override Workspace members, then Everyone. Inherit follows the pool; if no rule decides, only device owners may use Chat and Task, and Channel access is denied.',
+  'devicePools.legacyPolicy':
+    'This pool retains earlier restrictions: blocked entry types: {{triggers}}; shared fallback: {{effect}}. These remain active and are not removed by editing identity rules.',
+  'devicePools.devicesTab': 'Devices',
+  'devicePools.settings': 'Settings',
+  'devicePools.viewerCreator': 'Your role: Pool creator',
+  'devicePools.viewerMember': 'Your role: Workspace member',
+  'devicePools.managementHelp':
+    'Only the pool creator can edit permissions. Device owners keep control of which pools their devices join.',
+  'devicePools.subjectHelp.everyone':
+    'All callers, including workspace members and Channel senders without a linked account.',
+  'devicePools.subjectHelp.workspaceMember':
+    'Verified current members of this workspace, including linked Channel callers.',
+  'devicePools.inheritance':
+    'Named people override Workspace members, which overrides Everyone. Inherit uses the broader rule. If no rule decides, callers may use their own devices through Chat and Task; Channel access is denied.',
+  'devicePools.effectiveResult': 'For callers without device ownership: {{result}} · {{source}}',
+
+  'devicePools.agentDevices': 'Devices',
+
+  'devicePools.back': 'Back to pools',
+  'devicePools.permissions': 'Permissions',
+  'devicePools.deviceCount_one': '{{count}} device',
+  'devicePools.deviceCount_other': '{{count}} devices',
+  'devicePools.deviceCount': '{{count}} devices',
+  'devicePools.permissionTitle.chat': 'Use devices through Chat',
+  'devicePools.permissionTitle.bot': 'Use devices through Channel',
+  'devicePools.permissionTitle.task': 'Use devices through Task',
+  'devicePools.triggerHelp.chat':
+    'Allow this identity to ask an Agent to use devices in this pool during a direct conversation.',
+  'devicePools.triggerHelp.bot':
+    'Allow this identity to use pool devices through a connected channel. This applies across all channels.',
+  'devicePools.triggerHelp.task':
+    'Allow this identity to use pool devices when running an execution Task.',
+  'devicePools.source.hard-limit': 'Pool restriction',
+  'devicePools.source.agent-override': 'Agent override',
+  'devicePools.source.pool-rule': 'Pool rule',
+  'devicePools.source.pool-default': 'Pool fallback',
+  'devicePools.source.system-default': 'System default',
+
+  'devicePools.identity': 'Identity',
+
+  'devicePools.title': 'Device pools',
+  'devicePools.description':
+    'Group devices and configure who may use them through Chat, Channel, or Task.',
+  'devicePools.name': 'Pool name',
+  'devicePools.create': 'Create pool',
+  'devicePools.empty': 'No device pools yet. Create a pool in device settings to configure access.',
+  'devicePools.readOnly': 'You can view this policy and add or revoke your own devices.',
+  'devicePools.effect.allow': 'Allow',
+  'devicePools.effect.deny': 'Deny',
+  'devicePools.effect.inherit': 'Inherit',
+  'devicePools.subject.everyone': 'Everyone',
+  'devicePools.subject.workspaceMember': 'Workspace members',
+  'devicePools.trigger.chat': 'Chat',
+  'devicePools.trigger.bot': 'Channel',
+  'devicePools.trigger.task': 'Task',
+  'devicePools.devices': 'Devices in this pool',
+  'devicePools.shareHelp':
+    'Only device owners can add their devices. Adding a device delegates its use permissions to pool policies. A device may join multiple pools; one allowed pool is enough. Revoking all memberships leaves the device denied until it is added to an allowed pool again.',
+  'devicePools.revoke': 'Revoke membership',
+  'devicePools.noDevices': 'No devices in this pool',
+  'devicePools.chooseDevice': 'Choose one of your devices',
+  'devicePools.addDevice': 'Add device',
+  'devicePools.overrideHelp':
+    'Configure who may use pool devices through this Agent. Changes save automatically. Restore synchronization to follow pool rules again.',
+  'devicePools.custom': 'Custom policy',
+  'devicePools.synced': 'Following pool defaults',
+  'devicePools.restore': 'Restore synchronization',
+  'devicePools.delete': 'Delete pool',
+  'devicePools.deleteHelp':
+    'Delete this pool and its grants? Devices remain registered, but this pool will no longer authorize their use.',
+
   'marketSubmission.entry': 'Publish',
   'marketSubmission.title': 'Publish to Market',
   'marketSubmission.submit': 'Publish',
@@ -701,6 +778,8 @@ export default {
   'devices.status.online': 'Online',
   'devices.status.onlineConnections_one': 'Online · {{count}} connection',
   'devices.status.onlineConnections_other': 'Online · {{count}} connections',
+  'devices.tabs.private': 'Private Devices',
+  'devices.tabs.shared': 'Shared Devices',
   'devices.title': 'My Devices',
   'devices.visibility.publish': 'Publish to Workspace',
   'devices.visibility.publishConfirmTitle': 'Publish this device to the workspace?',

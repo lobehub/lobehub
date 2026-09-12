@@ -828,6 +828,8 @@ export const knowledgeBaseKeys = {
 
 // ---- device -------------------------------------------------------------
 export const deviceKeys = {
+  pools: def('device:pools', (scope: string) => ['device:pools', scope]),
+  pool: def('device:pool', (scope: string, id: string) => ['device:pool', scope, id]),
   browseDirectory: def(
     'device:browseDirectory',
     (workspaceId: string | null, deviceId: string, path?: string, cursor?: string) =>

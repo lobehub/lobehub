@@ -2,6 +2,7 @@ import type { BotPlatformContext } from '@lobechat/context-engine';
 import type {
   BotSenderMetadata,
   ChatTopicBotContext,
+  DevicePoolRunContext,
   ExecAgentParams,
   LobeAgentChatConfig,
   RuntimeMentionedAgent,
@@ -36,6 +37,7 @@ export interface ExecRunContext {
   assistantMessageId: string;
   canUseDevice: boolean;
   deviceAccessReason: DeviceAccessReason;
+  devicePoolContext?: DevicePoolRunContext;
   /** Effective model for this run (topic-pinned model already applied). */
   model: string;
   parentMessageId?: string;

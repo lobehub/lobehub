@@ -26,6 +26,12 @@ export const assertWorkspaceRootApproved = async (
   deviceModel: DeviceModel,
   deviceId: string,
   workingDirectory: string,
+  // Pool-authorized workspace devices may belong to another member. Use that
+  // exact registry row; the legacy personal lookup filters by caller ownership.
+  authorizedDevice?: Pick<
+    NonNullable<Awaited<ReturnType<DeviceModel['findByDeviceId']>>>,
+    'workingDirs' | 'defaultCwd'
+  >,
 ): Promise<void> => {
   if (!workingDirectory) {
     throw new TRPCError({
@@ -34,7 +40,7 @@ export const assertWorkspaceRootApproved = async (
     });
   }
 
-  const device = await deviceModel.findByDeviceId(deviceId);
+  const device = authorizedDevice ?? (await deviceModel.findByDeviceId(deviceId));
 
   const approvedRoots = [
     ...(device?.workingDirs ?? []).map((dir) => dir.path),

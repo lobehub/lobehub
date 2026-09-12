@@ -17,6 +17,7 @@ type LabFeatureI18nKey =
   | 'claudeCodeSdk'
   | 'codexAppServer'
   | 'desktopSplitView'
+  | 'devicePools'
   | 'evalCapture'
   | 'heteroSessionImport'
   | 'imessage'
@@ -46,6 +47,12 @@ export interface LabFeatureItem {
  * visible and searchable without a second registration.
  */
 export const LAB_FEATURES: LabFeatureItem[] = [
+  {
+    flag: 'enableDevicePools',
+    i18nKey: 'devicePools',
+    searchKeywords: ['device pool', 'device permissions'],
+    stage: 'alpha',
+  },
   {
     flag: 'enableAgentGraphConfig',
     i18nKey: 'agentGraphConfig',

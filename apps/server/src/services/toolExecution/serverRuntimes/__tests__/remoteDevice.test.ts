@@ -12,16 +12,29 @@ vi.mock('@/server/services/deviceGateway', () => ({
   },
 }));
 
-// Mock the DeviceModel so the runtime's DB-backed lookups are observable.
+// Device discovery uses the authorization boundary.
+// SQL policy behavior is covered by the DevicePoolModel integration tests.
 const mockQueryPersonal = vi.fn();
 const mockQueryWorkspaceDevices = vi.fn();
-const mockQueryWorkspaceHiddenDeviceIds = vi.fn();
-vi.mock('@/database/models/device', () => ({
-  DeviceModel: vi.fn().mockImplementation(function () {
+vi.mock('@/server/services/deviceGateway/poolAccess', () => ({
+  DevicePoolAccessService: vi.fn().mockImplementation(function (
+    _db: unknown,
+    _user: string,
+    workspaceId?: string,
+  ) {
     return {
-      queryPersonal: mockQueryPersonal,
-      queryWorkspaceDevices: mockQueryWorkspaceDevices,
-      queryWorkspaceHiddenDeviceIds: mockQueryWorkspaceHiddenDeviceIds,
+      isEnabled: vi.fn().mockResolvedValue(true),
+      authorizedDevices: async () =>
+        (await (workspaceId ? mockQueryWorkspaceDevices() : mockQueryPersonal())).map(
+          (device: unknown) => ({ device }),
+        ),
+      loadContext: vi.fn().mockResolvedValue({
+        actorUserId: 'user-1',
+        agentId: 'agent-1',
+        blocked: false,
+        trigger: 'chat',
+        workspaceId,
+      }),
     };
   }),
 }));
@@ -47,8 +60,6 @@ beforeEach(() => {
   mockQueryPersonal.mockResolvedValue([]);
   mockQueryWorkspaceDevices.mockReset();
   mockQueryWorkspaceDevices.mockResolvedValue([]);
-  mockQueryWorkspaceHiddenDeviceIds.mockReset();
-  mockQueryWorkspaceHiddenDeviceIds.mockResolvedValue([]);
 });
 
 describe('remoteDeviceRuntime', () => {
@@ -104,6 +115,8 @@ describe('remoteDeviceRuntime', () => {
 
     it('should query only the personal pool when no workspaceId is in context', async () => {
       const context: ToolExecutionContext = {
+        serverDB: makeServerDB(null),
+        operationId: 'operation-1',
         toolManifestMap: {},
         userId: 'user-1',
       };
@@ -118,6 +131,9 @@ describe('remoteDeviceRuntime', () => {
         },
       ];
       mockQueryDeviceList.mockResolvedValue(mockDevices);
+      mockQueryPersonal.mockResolvedValue(
+        mockDevices.map((device) => ({ ...device, lastSeenAt: new Date(device.lastSeen) })),
+      );
 
       const runtime = remoteDeviceRuntime.factory(context) as RemoteDeviceExecutionRuntime;
 
@@ -130,6 +146,7 @@ describe('remoteDeviceRuntime', () => {
 
     it('lists ONLY workspace devices in a workspace run (personal devices excluded)', async () => {
       const context: ToolExecutionContext = {
+        operationId: 'operation-1',
         serverDB: makeServerDB('ws-1'),
         toolManifestMap: {},
         userId: 'user-1',
@@ -177,6 +194,7 @@ describe('remoteDeviceRuntime', () => {
     it('recovers the workspace scope from the running agent when context.workspaceId is missing', async () => {
       const context: ToolExecutionContext = {
         agentId: 'agt-1',
+        operationId: 'operation-1',
         serverDB: makeServerDB('ws-1'),
         toolManifestMap: {},
         userId: 'user-1',
@@ -218,6 +236,7 @@ describe('remoteDeviceRuntime', () => {
     it('stays personal-only when the running agent has no workspace', async () => {
       const context: ToolExecutionContext = {
         agentId: 'agt-personal',
+        operationId: 'operation-1',
         serverDB: makeServerDB(null),
         toolManifestMap: {},
         userId: 'user-1',
@@ -241,6 +260,7 @@ describe('remoteDeviceRuntime', () => {
 
     it('surfaces a DB-registered workspace device (with its alias) merged with gateway online status (no duplicate)', async () => {
       const context: ToolExecutionContext = {
+        operationId: 'operation-1',
         serverDB: makeServerDB('ws-1'),
         toolManifestMap: {},
         userId: 'user-1',
@@ -285,6 +305,7 @@ describe('remoteDeviceRuntime', () => {
     /** @example A registry outage cannot authorize raw workspace Gateway presence. */
     it('fails closed when the workspace DB lookup fails', async () => {
       const context: ToolExecutionContext = {
+        operationId: 'operation-1',
         serverDB: makeServerDB('ws-1'),
         toolManifestMap: {},
         userId: 'user-1',
@@ -311,8 +332,9 @@ describe('remoteDeviceRuntime', () => {
       const runtime = remoteDeviceRuntime.factory(context) as RemoteDeviceExecutionRuntime;
       const result = await runtime.listOnlineDevices();
 
-      expect(result.state).toEqual({ devices: [] });
-      expect(result.content).toContain('No online devices found');
+      expect(result.success).toBe(false);
+      expect(result.state).toBeUndefined();
+      expect(result.content).toContain('db down');
     });
   });
 });

@@ -1,6 +1,6 @@
 import urlJoin from 'url-join';
 
-export type AgentProfileTab = 'channel' | 'profile' | 'share' | 'statistics';
+export type AgentProfileTab = 'channel' | 'devices' | 'profile' | 'share' | 'statistics';
 
 export interface AgentProfileTabOption {
   label: string;
@@ -36,12 +36,15 @@ export const buildAgentProfileTabOptions = ({
   active,
   canConfigure,
   channelsSupported,
+  devicePoolsEnabled = false,
   labels,
   shareSupported,
 }: {
   active: AgentProfileTab;
   canConfigure: boolean;
   channelsSupported: boolean;
+  /** Whether the user opted into Device pools in Labs. @default false */
+  devicePoolsEnabled?: boolean;
   labels: Record<AgentProfileTab, string>;
   shareSupported: boolean;
 }): AgentProfileTabOption[] => {
@@ -55,6 +58,9 @@ export const buildAgentProfileTabOptions = ({
   return [
     showProfile ? { label: labels.profile, value: 'profile' as const } : null,
     showChannel ? { label: labels.channel, value: 'channel' as const } : null,
+    devicePoolsEnabled && (canConfigure || active === 'devices')
+      ? { label: labels.devices, value: 'devices' as const }
+      : null,
     { label: labels.statistics, value: 'statistics' as const },
     showShare ? { label: labels.share, value: 'share' as const } : null,
   ].filter((option) => !!option);

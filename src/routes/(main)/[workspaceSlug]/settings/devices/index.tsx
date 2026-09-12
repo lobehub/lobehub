@@ -8,6 +8,9 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DeviceConnectModal, DeviceManager, useDeviceList } from '@/features/DeviceManager';
+import { DevicePoolManager } from '@/features/DeviceManager/DevicePoolManager';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 /**
  * Workspace device settings: two pools behind tabs —
@@ -18,6 +21,8 @@ import { DeviceConnectModal, DeviceManager, useDeviceList } from '@/features/Dev
  */
 const WorkspaceDevicesSetting = memo(() => {
   const { t } = useTranslation('setting');
+  const [section, setSection] = useState('devices');
+  const enableDevicePools = useUserStore(labPreferSelectors.enableDevicePools);
   const [open, setOpen] = useState(false);
   const [visibility, setVisibility] = useState<DeviceVisibility>('public');
 
@@ -28,48 +33,62 @@ const WorkspaceDevicesSetting = memo(() => {
 
   return (
     <>
-      <Flexbox gap={16}>
-        <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
-          <Tabs
-            activeKey={visibility}
-            items={[
-              {
-                icon: <Icon icon={UsersIcon} />,
-                key: 'public',
-                label: t('devices.visibilityTabs.workspace'),
-              },
-              {
-                icon: <Icon icon={LockIcon} />,
-                key: 'private',
-                label: t('devices.visibilityTabs.private'),
-              },
-            ]}
-            onChange={(key) => setVisibility(key as DeviceVisibility)}
-          />
-          <Flexbox horizontal align={'center'} gap={8}>
-            <Button
-              icon={<Icon icon={RefreshCwIcon} />}
-              loading={isValidating}
-              title={t('devices.actions.refresh')}
-              onClick={() => mutate()}
-            />
-            <Button
-              icon={<Icon icon={TerminalIcon} />}
-              type={'primary'}
-              onClick={() => setOpen(true)}
-            >
-              {t('devices.empty.methodCli.title')}
-            </Button>
-          </Flexbox>
-        </Flexbox>
-
-        <DeviceManager
-          key={visibility}
-          scope={'workspace'}
-          visibility={visibility}
-          onConnect={() => setOpen(true)}
+      {enableDevicePools && (
+        <Tabs
+          activeKey={section}
+          items={[
+            { key: 'devices', label: t('devices.tabs.private') },
+            { key: 'pools', label: t('devices.tabs.shared') },
+          ]}
+          onChange={setSection}
         />
-      </Flexbox>
+      )}
+      {!enableDevicePools || section === 'devices' ? (
+        <Flexbox gap={16}>
+          <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
+            <Tabs
+              activeKey={visibility}
+              items={[
+                {
+                  icon: <Icon icon={UsersIcon} />,
+                  key: 'public',
+                  label: t('devices.visibilityTabs.workspace'),
+                },
+                {
+                  icon: <Icon icon={LockIcon} />,
+                  key: 'private',
+                  label: t('devices.visibilityTabs.private'),
+                },
+              ]}
+              onChange={(key) => setVisibility(key as DeviceVisibility)}
+            />
+            <Flexbox horizontal align={'center'} gap={8}>
+              <Button
+                icon={<Icon icon={RefreshCwIcon} />}
+                loading={isValidating}
+                title={t('devices.actions.refresh')}
+                onClick={() => mutate()}
+              />
+              <Button
+                icon={<Icon icon={TerminalIcon} />}
+                type={'primary'}
+                onClick={() => setOpen(true)}
+              >
+                {t('devices.empty.methodCli.title')}
+              </Button>
+            </Flexbox>
+          </Flexbox>
+
+          <DeviceManager
+            key={visibility}
+            scope={'workspace'}
+            visibility={visibility}
+            onConnect={() => setOpen(true)}
+          />
+        </Flexbox>
+      ) : (
+        <DevicePoolManager scope="workspace" />
+      )}
 
       <DeviceConnectModal
         open={open}
