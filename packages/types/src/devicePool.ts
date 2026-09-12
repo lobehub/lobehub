@@ -15,7 +15,7 @@ export type DevicePoolEffect = (typeof devicePoolEffects)[number];
 
 /** One trigger's subject-specific settings. Absent subjects inherit. */
 export const devicePoolRuleSchema = z.record(
-  z.string().regex(/^(everyone|workspaceMember|user:[\w-]+)$/),
+  z.union([z.enum(devicePoolSubjects), z.string().startsWith('user:').min(6)]),
   z.enum(devicePoolEffects),
 );
 /** Sparse trigger matrix, shared by default policies and Agent overrides. */
