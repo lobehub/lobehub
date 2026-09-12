@@ -32,6 +32,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
   `,
+  checks: css`
+    overflow-y: auto;
+    max-height: 200px;
+  `,
   dock: css`
     flex-shrink: 0;
 
@@ -128,7 +132,11 @@ const MergeDock = memo<MergeDockProps>(
                 weak={row.tone === 'neutral'}
                 onClick={row.expandable ? () => setChecksOpen((open) => !open) : undefined}
               />
-              {row.key === 'checks' && checksOpen && <ChecksList checks={detail.checks} />}
+              {row.key === 'checks' && checksOpen && (
+                <div className={styles.checks}>
+                  <ChecksList checks={detail.checks} />
+                </div>
+              )}
             </Flexbox>
           );
         })}
