@@ -13,34 +13,36 @@ import { isModifierClick } from '@/utils/navigation';
 import { type LazyActions, useLazyActions } from './useLazyActions';
 
 const ACTION_CLASS_NAME = 'nav-item-actions';
+const CONTENT_CLASS_NAME = 'nav-item-content';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
-    --nav-item-fill: transparent;
-
     user-select: none;
     overflow: hidden;
     min-width: 32px;
 
-    &:hover {
-      --nav-item-fill: ${cssVar.colorFillTertiary};
-
+    /* focus-visible, not focus-within: closing a dropdown hands focus back to its
+       trigger, which would pin the actions open after the pointer has left. */
+    &:hover,
+    &:has(.${ACTION_CLASS_NAME} :focus-visible),
+    &:has([data-popup-open]) {
       .${ACTION_CLASS_NAME} {
         pointer-events: auto;
         opacity: 1;
       }
-    }
 
-    &[data-active='true'] {
-      --nav-item-fill: ${cssVar.colorFillTertiary};
-
-      &:hover {
-        --nav-item-fill: ${cssVar.colorFillSecondary};
+      /* Fade the covered text itself instead of painting a row-colored plate over it,
+         so the overlay matches any row background (hover / active / none). */
+      .${CONTENT_CLASS_NAME} {
+        mask-image: linear-gradient(
+          to right,
+          #000 calc(100% - 56px),
+          transparent calc(100% - 28px)
+        );
       }
     }
 
-    /* Overlay instead of in-flow so revealing the actions never re-truncates the
-       title. The gradient fades the covered text into the row background. */
+    /* Overlay instead of in-flow so revealing the actions never re-truncates the title. */
     .${ACTION_CLASS_NAME} {
       pointer-events: none;
 
@@ -48,18 +50,9 @@ const styles = createStaticStyles(({ css }) => ({
       inset-block: 0;
       inset-inline-end: 0;
 
-      padding-inline: 24px 6px;
+      padding-inline-end: 6px;
 
       opacity: 0;
-      background:
-        linear-gradient(to right, transparent 0, var(--nav-item-fill) 24px),
-        linear-gradient(to right, transparent 0, ${cssVar.colorBgLayout} 24px);
-
-      &:has([data-popup-open]),
-      &:focus-within {
-        pointer-events: auto;
-        opacity: 1;
-      }
     }
   `,
 }));
@@ -173,7 +166,6 @@ const NavItem = memo<NavItemProps>(
         align={'center'}
         className={cx(styles.container, className)}
         clickable={!disabled}
-        data-active={active}
         gap={8}
         height={description ? undefined : 36}
         paddingBlock={description ? 8 : undefined}
@@ -213,7 +205,14 @@ const NavItem = memo<NavItemProps>(
         )}
 
         {iconPostfix}
-        <Flexbox horizontal align={'center'} flex={1} gap={8} style={{ overflow: 'hidden' }}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={CONTENT_CLASS_NAME}
+          flex={1}
+          gap={8}
+          style={{ overflow: 'hidden' }}
+        >
           {titlePrefix}
           {description ? (
             <Flexbox flex={1} gap={3} style={{ overflow: 'hidden' }}>

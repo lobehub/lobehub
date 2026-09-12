@@ -224,8 +224,8 @@ export const buildServerVirtualSubAgentRunner = (
   const topicId = ctx.topicId ?? state.metadata?.topicId;
   if (!agentId || !topicId) return undefined;
 
-  const parentAgentConfig = state.metadata?.agentConfig as LobeAgentConfig | undefined;
-  // The model the parent run ACTUALLY uses. `metadata.agentConfig` alone is not
+  const parentAgentConfig = state.world?.agent as LobeAgentConfig | undefined;
+  // The model the parent run ACTUALLY uses. `world.agent` alone is not
   // enough: when a run continues a topic whose model was switched, execAgent
   // keeps the topic-pinned model only in `modelRuntimeConfig` while the
   // metadata config retains the agent default.
@@ -359,7 +359,7 @@ export const buildServerAgentMemberRunner = (
   return {
     run: async ({ members, mode, onComplete, disableTools, timeout }) => {
       const agentMap = (
-        state.metadata?.agentGroup as { agentMap?: Record<string, { name: string }> } | undefined
+        state.world?.group as { agentMap?: Record<string, { name: string }> } | undefined
       )?.agentMap;
       const resolvedMembers = members.map((member) => ({
         ...member,

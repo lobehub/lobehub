@@ -2,7 +2,12 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
 import { buildGoalManagerPrompt } from '@lobechat/prompts';
-import type { GoalGraphSnapshot, GoalManagerState, GoalTickResult } from '@lobechat/types';
+import type {
+  GoalGraphSnapshot,
+  GoalManagerState,
+  GoalTickResult,
+  TaskItem,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -73,6 +78,27 @@ export const managerSnapshot = (graph: GoalGraphSnapshot) => {
 };
 
 /** Durable wakeups around ordinary CLI-capable Agent runs. No supervisor builtin tools. */
+/** A takeover problem is identified by the task it blocked, not by its wording
+ *  alone: "Task attempt budget was exhausted" is the same sentence for every task
+ *  that reaches it, so a reason-only key makes the second task inherit the first
+ *  one's answer. */
+export const problemKey = (problem: { reason: string; taskId?: string }) =>
+  `${problem.taskId ?? 'goal'}::${problem.reason}`;
+
+/**
+ * The problem a settled takeover turn already answered, with the answer.
+ *
+ * Reading it is how the coordinator tells "nobody has looked at this yet" from
+ * "the main Agent looked and this is what it said". Any committed answer counts,
+ * not just `escalate`: if the Agent's plan did not unstick the Goal, handing the
+ * same problem over again only buys the same plan, so the Gate is the honest next
+ * step and the Agent's reasoning rides along on it.
+ */
+export const answeredProblem = (state?: GoalManagerState) =>
+  state?.consumed && state.problem && state.submitted
+    ? { key: state.problem, reason: state.submitted.reason }
+    : undefined;
+
 export class GoalManagerService {
   constructor(
     private readonly db: LobeChatDatabase,
@@ -198,15 +224,65 @@ export class GoalManagerService {
       });
   };
 
-  advance = async (graph: GoalGraphSnapshot): Promise<GoalTickResult | null> => {
+  /**
+   * Advance the goal through its main Agent.
+   *
+   * `mayStartTurn` is what orders the two planners. The system's own
+   * exploration planner owns the ordinary path; a main Agent is the fallback for
+   * problems that planner cannot express, so on a Goal that has exploration
+   * configured this only settles a turn already in flight and otherwise declines.
+   * A Goal whose only planner IS the main Agent keeps starting turns here.
+   */
+  advance = async (
+    graph: GoalGraphSnapshot,
+    options?: { mayStartTurn?: boolean },
+  ): Promise<GoalTickResult | null> => {
+    if (!this.eligible(graph)) return null;
+    const settled = await this.settleInFlight(graph);
+    if (settled) return settled;
+    if (options?.mayStartTurn === false) return null;
+    return this.startTurn(graph);
+  };
+
+  /**
+   * Hand a problem the coordinator could not route to the main Agent, instead of
+   * stopping the Goal on a person.
+   *
+   * The invitation IS the authorization: the caller has already decided it would
+   * otherwise open a human gate, so the ordinary "is there unfinished work" and
+   * "is this a recognised transport failure" narrowings do not apply — those
+   * exist to stop an uninvited turn from preempting running work. Turn limits,
+   * budgets and the compare-and-swap claim still hold, and a main Agent that
+   * cannot help answers `escalate`, which puts the gate back.
+   */
+  takeOver = async (
+    graph: GoalGraphSnapshot,
+    problem: { reason: string; taskId?: string },
+  ): Promise<GoalTickResult | null> => {
+    if (!this.eligible(graph)) return null;
+    // Already answered: a takeover turn that ran for THIS problem has had its say,
+    // so handing it over again would buy the same plan instead of asking a person.
+    // `answeredProblem` is what the caller attaches to the gate.
+    if (answeredProblem(graph.goal.config?.managerState)?.key === problemKey(problem)) return null;
+    const settled = await this.settleInFlight(graph);
+    if (settled) return settled;
+    return this.startTurn(graph, problem);
+  };
+
+  /** Shared entry conditions: a policy, an active Goal, and nobody waiting on a person. */
+  private eligible = (graph: GoalGraphSnapshot) =>
+    Boolean(
+      graph.goal.config?.manager &&
+      activeStatuses.has(graph.goal.status) &&
+      !graph.decisions.some((d) => d.status === 'pending'),
+    );
+
+  /**
+   * Poll a dispatched turn. Runs on every tick regardless of who leads planning:
+   * a turn already paid for has to be settled, or its plan would never land.
+   */
+  private settleInFlight = async (graph: GoalGraphSnapshot): Promise<GoalTickResult | null> => {
     const { goal } = graph;
-    const policy = goal.config?.manager;
-    if (
-      !policy ||
-      !activeStatuses.has(goal.status) ||
-      graph.decisions.some((d) => d.status === 'pending')
-    )
-      return null;
     const state = goal.config?.managerState;
     if (state && !state.consumed) {
       const operation = await new AgentOperationModel(
@@ -252,27 +328,68 @@ export class GoalManagerService {
           : 'Main Agent exited without a plan; a new bounded turn will reread durable state',
       };
     }
-    const nodes = graph.nodes.filter((n) => n.kind === 'task');
-    if (state?.readyForAcceptance || nodes.some((n) => n.title === GOAL_ACCEPTANCE_TASK_TITLE))
-      return null;
-    const unfinished = nodes.filter((n) => !terminalNodes.has(n.status));
-    const tasks = await new TaskModel(this.db, this.userId, this.workspaceId).findByIds(
-      unfinished.flatMap((n) => (n.taskId ? [n.taskId] : [])),
-    );
+    return null;
+  };
+
+  /**
+   * Whether an UNINVITED turn must stand down. A main Agent that nobody asked for
+   * may only plan when the graph is quiet, or recover a failure the transport
+   * whitelist recognises — anything else is work in flight that it would preempt.
+   */
+  private uninvitedTurnBlocked = async (
+    graph: GoalGraphSnapshot,
+    unfinished: GoalGraphSnapshot['nodes'],
+    tasks: TaskItem[],
+  ) => {
     const failed = tasks.find((t) => t.status === 'failed');
-    // Only confirmed recoverable failures enter autonomous diagnosis; all other failures keep the normal Gate path.
-    if (failed) {
-      const runs = await new TaskTopicModel(this.db, this.userId, this.workspaceId).findByTaskId(
-        failed.id,
+    if (!failed) return unfinished.length > 0;
+    // Supervision owns recognised transport failures, and it is both cheaper than
+    // a planning turn and stricter about who authored the status. Claiming one
+    // uninvited would reverse that order and spend a turn on a failure the
+    // supervisor recovers on its own; whatever it declines reaches
+    // `gateOrTakeOver`, which invites this Agent properly.
+    if (graph.goal.config?.supervision?.enabled) return true;
+    const runs = await new TaskTopicModel(this.db, this.userId, this.workspaceId).findByTaskId(
+      failed.id,
+    );
+    const op = runs[0]?.operationId
+      ? await new AgentOperationModel(this.db, this.userId, this.workspaceId).findById(
+          runs[0].operationId,
+        )
+      : undefined;
+    return !recoveryEligibility(graph, failed, op).eligible;
+  };
+
+  private startTurn = async (
+    graph: GoalGraphSnapshot,
+    problem?: { reason: string; taskId?: string },
+  ): Promise<GoalTickResult | null> => {
+    const { goal } = graph;
+    const policy = goal.config!.manager!;
+    const state = goal.config?.managerState;
+    const nodes = graph.nodes.filter((n) => n.kind === 'task');
+    const unfinished = nodes.filter((n) => !terminalNodes.has(n.status));
+    // An invited turn skips the checks below. They ask "should an uninvited main
+    // Agent interrupt what is running", and the caller has already answered a
+    // harder question: the coordinator is out of moves and the alternative is
+    // stopping the Goal on a person. The acceptance guard belongs to that set too:
+    // it means "verification exists, stop planning more work", which is right for an
+    // uninvited turn and wrong for a takeover invited BECAUSE the terminal
+    // acceptance is the thing that failed.
+    if (!problem) {
+      if (state?.readyForAcceptance || nodes.some((n) => n.title === GOAL_ACCEPTANCE_TASK_TITLE))
+        return null;
+      const tasks = await new TaskModel(this.db, this.userId, this.workspaceId).findByIds(
+        unfinished.flatMap((n) => (n.taskId ? [n.taskId] : [])),
       );
-      const op = runs[0]?.operationId
-        ? await new AgentOperationModel(this.db, this.userId, this.workspaceId).findById(
-            runs[0].operationId,
-          )
-        : undefined;
-      if (!recoveryEligibility(graph, failed, op).eligible) return null;
-    } else if (unfinished.length) return null;
+      const blocked = await this.uninvitedTurnBlocked(graph, unfinished, tasks);
+      if (blocked) return null;
+    }
     if ((state?.turns ?? 0) >= (policy.maxTurns ?? 12) || (await this.budgetBlocked(graph))) {
+      // An invited turn declines instead of pausing. The caller was about to open
+      // a gate carrying the actual problem; pausing here would replace that
+      // question with "the main Agent is out of turns" and lose it.
+      if (problem) return null;
       return this.pause(goal.id, 'Goal or main Agent turn budget exhausted');
     }
     const claimed = await this.db.transaction(async (db) => {
@@ -303,6 +420,12 @@ export class GoalManagerService {
         ).id;
       const reviews = await this.reviews(current, db);
       const next: GoalManagerState = {
+        ...(problem
+          ? {
+              problem: problemKey(problem),
+              ...(problem.taskId && { problemTaskId: problem.taskId }),
+            }
+          : {}),
         reviewSnapshot: reviews.hash,
         topicId,
         turns: (state?.turns ?? 0) + 1,
@@ -331,6 +454,7 @@ export class GoalManagerService {
           instruction: policy.instruction,
           token: claimed.token,
           feedback: claimed.reviewNotes,
+          problem: problem?.reason,
         }),
       });
       await this.db.transaction(async (db) => {
@@ -393,9 +517,36 @@ export class GoalManagerService {
       const unfinished = graph.nodes.filter(
         (n) => n.kind === 'task' && !terminalNodes.has(n.status),
       );
+      // A takeover of the terminal acceptance can only be answered with `escalate`.
+      // The acceptance task is matched by TITLE regardless of status, so a corrective
+      // task returns to that same failed node and `verify` sets `readyForAcceptance`
+      // without producing a fresh run — both end at the Gate. Refusing here keeps the
+      // prompt's offer and the server's answer the same; letting the acceptance be
+      // superseded is a lifecycle change, not a validation one.
+      if (
+        state.problem &&
+        (plan.action === 'tasks' || plan.action === 'verify') &&
+        graph.nodes.some(
+          (n) =>
+            n.kind === 'task' &&
+            n.taskId === state.problemTaskId &&
+            n.title === GOAL_ACCEPTANCE_TASK_TITLE,
+        )
+      )
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message:
+            'A failed Goal acceptance can only be escalated; it cannot be superseded by new work yet',
+        });
+      // The unfinished-work guard asks whether an UNINVITED turn may plan while
+      // work is in flight; it would double-plan the frontier. A takeover turn
+      // inherits work that is stuck by definition — the coordinator only handed it
+      // over because nothing else moves it — so a corrective task is the answer
+      // rather than the thing to forbid. Without this exemption the prompt
+      // advertises four actions and only `escalate` can ever commit.
       if (
         (plan.action === 'tasks' || plan.action === 'verify') &&
-        (unfinished.length ||
+        ((unfinished.length && !state.problem) ||
           (plan.action === 'verify' &&
             !graph.nodes.some((n) => n.kind === 'task' && n.status === 'resolved')))
       )
@@ -407,6 +558,33 @@ export class GoalManagerService {
         id: goal.config.manager.agentId,
         type: 'agent',
       });
+      // Accepting a plan that REPLACES the inherited work has to settle it too.
+      // Validation alone was not enough: the blocked node stayed nonterminal, so
+      // the next tick's frontier reached it before the corrective node and routed
+      // straight back to the Gate, and terminal verification could not start at
+      // all. Retiring is the same move the human Gate offers, scoped to the one
+      // node this turn was invited about and attributed to the Agent.
+      if (
+        state.problem &&
+        state.problemTaskId &&
+        (plan.action === 'tasks' || plan.action === 'verify')
+      ) {
+        const inherited = graph.nodes.find(
+          (n) => n.kind === 'task' && n.taskId === state.problemTaskId,
+        );
+        // A prerequisite only counts as met when it is `resolved`, so retiring a node
+        // that something depends on leaves the dependent blocked forever and the Goal
+        // lands on `no_frontier`. Rewiring the dependents onto the replacement would
+        // be the answer, but the graph has no edge removal, so the old edge would keep
+        // pointing at the retired node. Leave it alone and let the Gate handle it.
+        const hasDependents =
+          inherited &&
+          graph.edges.some(
+            (edge) => edge.kind === 'depends_on' && edge.targetNodeId === inherited.id,
+          );
+        if (inherited && !hasDependents && !terminalNodes.has(inherited.status))
+          await authored.updateNodeStatus(goalId, inherited.id, 'retired', plan.reason);
+      }
       if (plan.action === 'tasks') {
         const problem = graph.nodes.find((n) => n.kind === 'problem');
         for (const task of plan.tasks) {
@@ -449,7 +627,11 @@ export class GoalManagerService {
           ))
         )
           throw new TRPCError({ code: 'CONFLICT', message: 'Task changed before retry' });
-      } else if (plan.action === 'escalate') {
+      } else if (plan.action === 'escalate' && !state.problem) {
+        // Only an ORDINARY planning turn pauses the Goal here. A takeover turn has
+        // a gate waiting behind it for this exact problem, and the coordinator
+        // opens that gate on the next tick — a paused Goal would stop the tick from
+        // ever reaching it, leaving the escalation with no answerable question.
         await model.updateStatus(goalId, 'paused');
         await authored.recordGoalStatus(goalId, goal.status, 'paused', plan.reason);
       }

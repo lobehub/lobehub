@@ -5,7 +5,7 @@ import { ActionIcon, Button } from '@lobehub/ui/base-ui';
 import { Carousel as AntCarousel } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { X } from 'lucide-react';
-import { m } from 'motion/react';
+import * as m from 'motion/react-m';
 import {
   type ComponentRef,
   memo,

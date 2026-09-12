@@ -2,6 +2,7 @@ import {
   type AgentEvent,
   type AgentRuntimeContext,
   type AgentState,
+  normalizeAgentState,
 } from '@lobechat/agent-runtime';
 import debug from 'debug';
 import { type Redis } from 'ioredis';
@@ -13,8 +14,36 @@ const log = debug('lobe-server:agent-runtime:agent-state-manager');
 
 const REFRESH_OWNED_LOCK_SCRIPT =
   "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('expire', KEYS[1], ARGV[2]) else return 0 end";
+/**
+ * Drop the inline envelope only while this worker still owns the operation lock.
+ *
+ * An unconditional DEL is unsafe: a redelivery can read envelope k, stall while
+ * the active worker finishes k and parks k+1, then lose the lock race and be
+ * told its step is stale. Clearing there would delete a live worker's newer
+ * recovery pointer. Ownership of the lock is exactly the right predicate —
+ * whoever holds it is the worker whose envelope this is.
+ *
+ * KEYS[1] = operation lock, KEYS[2] = inline resume envelope, ARGV[1] = owner.
+ */
+const CLEAR_OWNED_INLINE_RESUME_SCRIPT =
+  "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[2]) else return 0 end";
 const RELEASE_OWNED_LOCK_SCRIPT =
   "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
+/**
+ * Claim the lock, or re-enter it when this exact owner already holds it.
+ *
+ * Re-entry exists for the inline step loop, which runs several steps under one
+ * lock. Owner ids carry a random UUID (see `createStepLockOwner`), so only the
+ * invocation that took the lock can present its owner id — a redelivery from
+ * the queue always mints a different one and still loses the race.
+ */
+const CLAIM_OR_REENTER_LOCK_SCRIPT = `
+if redis.call('set', KEYS[1], ARGV[1], 'EX', ARGV[2], 'NX') then return 1 end
+if redis.call('get', KEYS[1]) == ARGV[1] then
+  redis.call('expire', KEYS[1], ARGV[2])
+  return 1
+end
+return 0`;
 
 export interface StepResult {
   events?: AgentEvent[];
@@ -71,6 +100,7 @@ export class AgentStateManager {
   private readonly STEPS_PREFIX = 'agent_runtime_steps';
   private readonly METADATA_PREFIX = 'agent_runtime_meta';
   private readonly INTERRUPT_PREFIX = 'agent_runtime_interrupt';
+  private readonly INLINE_RESUME_PREFIX = 'agent_runtime_inline_resume';
   private readonly DEFAULT_TTL = 2 * 3600; // 2h
 
   constructor() {
@@ -152,7 +182,9 @@ export class AgentStateManager {
         return null;
       }
 
-      const state = JSON.parse(serializedState) as AgentState;
+      // Blobs written before the typed `world` / `binding` slots existed carry
+      // that context in `metadata`; lift it once here so readers see one shape.
+      const state = normalizeAgentState(JSON.parse(serializedState) as AgentState);
       log('[%s] Loaded state (step %d)', operationId, state.stepCount);
 
       return state;
@@ -390,6 +422,7 @@ export class AgentStateManager {
       `${this.STEPS_PREFIX}:${operationId}`,
       `${this.METADATA_PREFIX}:${operationId}`,
       `${this.INTERRUPT_PREFIX}:${operationId}`,
+      `${this.INLINE_RESUME_PREFIX}:${operationId}`,
     ];
 
     try {
@@ -500,6 +533,60 @@ export class AgentStateManager {
     }
   }
 
+  /**
+   * The inline step loop's envelope for the step it is about to run. This is the
+   * queue message that would otherwise be in flight — parked here instead, so a
+   * redelivery arriving after the loop died can pick the operation back up from
+   * where it actually stopped rather than from the delivered (older) step index.
+   */
+  async saveInlineResume(operationId: string, serialized: string): Promise<boolean> {
+    try {
+      await this.redis.setex(
+        `${this.INLINE_RESUME_PREFIX}:${operationId}`,
+        this.DEFAULT_TTL,
+        serialized,
+      );
+      return true;
+    } catch (error) {
+      // Reported, never swallowed: the caller must fall back to the queue, or
+      // it would run the next step with no recovery path behind it at all.
+      console.error('Failed to save inline resume pointer:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Deliberately not wrapped in a try/catch. "No envelope" and "could not read
+   * the envelope" have opposite consequences: the first means run the delivered
+   * step, the second means an operation may be mid-loop with nothing queued
+   * behind it. Swallowing the error would ACK that delivery as stale and strand
+   * the run, so the failure propagates and the queue retries instead.
+   */
+  async loadInlineResume(operationId: string): Promise<null | string> {
+    return this.redis.get(`${this.INLINE_RESUME_PREFIX}:${operationId}`);
+  }
+
+  /**
+   * Owner-scoped, and best-effort on failure: a stale envelope is harmless. It
+   * only ever resumes a step whose index is ahead of the delivered one, and the
+   * next step to park overwrites it — worst case it expires with the
+   * operation's TTL. Deleting someone else's envelope is not harmless, hence
+   * the ownership check.
+   */
+  async clearInlineResume(operationId: string, ownerId: string): Promise<void> {
+    try {
+      await this.redis.eval(
+        CLEAR_OWNED_INLINE_RESUME_SCRIPT,
+        2,
+        this.executionLockKey(operationId),
+        `${this.INLINE_RESUME_PREFIX}:${operationId}`,
+        ownerId,
+      );
+    } catch (error) {
+      console.error('Failed to clear inline resume pointer:', error);
+    }
+  }
+
   private executionLockKey(operationId: string): string {
     return `agent_runtime_operation_lock:${operationId}`;
   }
@@ -511,15 +598,15 @@ export class AgentStateManager {
     ownerId: string = Date.now().toString(),
   ): Promise<boolean> {
     try {
-      const result = await this.redis.set(
+      const result = await this.redis.eval(
+        CLAIM_OR_REENTER_LOCK_SCRIPT,
+        1,
         this.executionLockKey(operationId),
         ownerId,
-        'EX',
-        ttlSeconds,
-        'NX',
+        ttlSeconds.toString(),
       );
 
-      return result === 'OK';
+      return result === 1;
     } catch (error) {
       // Fail-open: on Redis error, allow execution to proceed
       console.error('Failed to acquire step lock:', error);

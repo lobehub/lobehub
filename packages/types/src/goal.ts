@@ -222,6 +222,17 @@ export interface GoalManagerPolicy {
 export interface GoalManagerState {
   consumed?: boolean;
   operationId?: string;
+  /**
+   * The problem this turn was invited to take over, when the coordinator handed
+   * one over instead of opening a human gate. Its presence is what separates a
+   * takeover turn from ordinary planning: an `escalate` from a takeover turn puts
+   * the gate back rather than pausing the Goal, and the same problem is not handed
+   * over twice.
+   */
+  problem?: string;
+  /** The blocked task that problem belongs to, so accepting a plan that replaces
+   *  it can retire exactly that node without parsing the key. */
+  problemTaskId?: string;
   readyForAcceptance?: boolean;
   reviewSnapshot?: string;
   snapshot: string;

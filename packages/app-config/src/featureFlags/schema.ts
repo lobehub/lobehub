@@ -44,6 +44,12 @@ export const FeatureFlagsSchema = z.object({
   agent_onboarding: FeatureFlagValue.optional(),
   dev_dock: FeatureFlagValue.optional(),
   dev_dock_workspaces: z.array(z.string()).optional(),
+  /**
+   * Rollout gate for the queue worker's inline step loop. Array values are user
+   * IDs, so the loop can be switched on for a slice of traffic before everyone.
+   * Off by default: the worker then runs one step per delivery, unchanged.
+   */
+  inline_agent_steps: FeatureFlagValue.optional(),
   // Cloud feature flag. Keep here until cloud owns a separate runtime flag domain.
   auth_captcha: FeatureFlagValue.optional(),
   cloud_promotion: FeatureFlagValue.optional(),
@@ -105,6 +111,7 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   agent_self_iteration: isDev,
   agent_onboarding: isDev,
   dev_dock: isDev,
+  inline_agent_steps: false,
   auth_captcha: true,
   cloud_promotion: false,
   onboarding_v2: isDev,
@@ -152,6 +159,7 @@ export const mapFeatureFlagsEnvToState = (
     enableAgentSelfIteration: evaluateFeatureFlag(config.agent_self_iteration, userId),
     enableAgentOnboarding: evaluateFeatureFlag(config.agent_onboarding, userId),
     enableDevDock: evaluateFeatureFlag(config.dev_dock, userId),
+    enableInlineAgentSteps: evaluateFeatureFlag(config.inline_agent_steps, userId),
     enableAuthCaptcha: evaluateFeatureFlag(config.auth_captcha, userId),
     enableOnboardingV2: evaluateFeatureFlag(config.onboarding_v2, userId),
     enableStorageOverage: evaluateFeatureFlag(config.storage_overage, userId),

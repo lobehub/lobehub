@@ -1,18 +1,114 @@
 import type {
   ActivatedStepSkill,
   ActivatedStepTool,
+  AgentGroupConfig,
+  BotPlatformContext,
+  DiscordContext,
+  EvalContext,
   OperationToolSet,
+  ProjectInstructionFile,
   ToolExecutor,
   ToolSource,
+  UserMemoryConfig,
 } from '@lobechat/context-engine';
 import type {
   ChatToolPayload,
   ExpertiseContextSnapshot,
+  LobeAgentChatConfig,
+  LobeAgentConfig,
   SecurityBlacklistConfig,
   UserInterventionConfig,
 } from '@lobechat/types';
 
 import type { Cost, CostLimit, Usage } from './usage';
+
+/**
+ * Search route resolved once before the run starts. Declared here rather than
+ * imported so the runtime package does not depend on the model catalog;
+ * structurally identical to the resolver output in `model-bank`.
+ */
+export interface SearchDecisionSnapshot {
+  enabledSearch: boolean;
+  isModelHasBuiltinSearch: boolean;
+  isProviderHasBuiltinSearch: boolean;
+  useApplicationBuiltinSearchTool: boolean;
+  useModelSearch: boolean;
+}
+
+/**
+ * The agent definition as the host resolved it for this run.
+ *
+ * `Partial` because hosts snapshot only what the run needs; the identity
+ * fields and the sub-agent override are run-level facts the host stamps on
+ * top of the stored agent config.
+ */
+export interface RunAgentSnapshot extends Partial<LobeAgentConfig> {
+  /** Agent-row description; surfaces in tracing spans and skill placeholders. */
+  description?: string | null;
+  id?: string;
+  slug?: string | null;
+  /**
+   * Raw callSubAgent chatConfig override, stamped alongside the merged
+   * chatConfig so explicit sub-agent reasoning choices can be re-applied over
+   * the user's model-instance defaults.
+   */
+  subAgentChatConfigOverride?: Partial<LobeAgentChatConfig>;
+}
+
+/**
+ * What the model is told about the run's world.
+ *
+ * Frozen when the operation is created: every field is a fact the host
+ * resolved once (agent definition, group roster, project instructions, user
+ * memory, channel facts) and the context engine only reads it back on each
+ * step to assemble the system message. Nothing in here changes while the run
+ * executes — a run that needs a different world is a different operation.
+ */
+export interface AgentWorldSnapshot {
+  /** Agent definition snapshot: systemRole, chatConfig, agencyConfig … */
+  agent?: RunAgentSnapshot;
+  /** Channel-specific facts the model should know (bot platform, Discord …). */
+  channel?: {
+    botPlatform?: BotPlatformContext;
+    discord?: DiscordContext;
+  };
+  /** Borrowed-connector attribution rendered into the system message. */
+  connectorOwnershipNote?: string;
+  /** Evaluation prompt data for eval runs. */
+  eval?: EvalContext;
+  /** Multi-agent group roster (or bot-conversation fallback). */
+  group?: AgentGroupConfig;
+  /** Root instruction files of the bound project. */
+  projectInstructions?: ProjectInstructionFile[];
+  /** Search route resolved before the run started. */
+  searchDecision?: SearchDecisionSnapshot;
+  /** User memory the model may recall from. */
+  userMemory?: UserMemoryConfig;
+  /** IANA timezone used to render "now" for the model. */
+  userTimezone?: string;
+}
+
+/**
+ * Execution facts that are bound late.
+ *
+ * Unlike {@link AgentWorldSnapshot} and the execution plan, this is the one
+ * business slot the runtime host may rewrite at a step boundary: a device
+ * that was unrouted at creation can be bound once a tool result names it
+ * (`computeDeviceContext`), and the bound device's system info feeds both
+ * prompt placeholders and tool cwd resolution.
+ */
+export interface AgentRunBinding {
+  /**
+   * Device routed for this run. `id` stays absent until a device is bound;
+   * `systemInfo` may already carry a working directory for runs whose cwd was
+   * resolved from a persisted device row.
+   */
+  device?: {
+    id?: string;
+    platform?: string;
+    systemInfo?: Record<string, string>;
+  };
+}
 
 /**
  * Agent's serializable state.
@@ -23,12 +119,18 @@ export interface AgentState {
   activatedStepSkills?: ActivatedStepSkill[];
   /** Cumulative record of tools activated at step level */
   activatedStepTools?: ActivatedStepTool[];
+  // --- Late-bound execution facts ---
+  /**
+   * Execution facts bound at a step boundary (device routing). The only
+   * business slot the host may write after creation.
+   */
+  binding?: AgentRunBinding;
+
   /**
    * Current calculated cost for this session.
    * Updated after each billable operation.
    */
   cost: Cost;
-
   /**
    * Optional cost limits configuration.
    * If set, execution will stop when limits are exceeded.
@@ -73,7 +175,12 @@ export interface AgentState {
   // --- Core Context ---
   messages: any[];
 
-  // --- Extensible metadata ---
+  /**
+   * Un-converged run context. Keys that have a business home live in the
+   * typed slots (`world`, `binding`, …); anything left here is either host
+   * plumbing the runtime does not interpret or context that has not been
+   * placed yet. `normalizeAgentState` lifts legacy keys out on load.
+   */
   metadata?: Record<string, any>;
 
   /**
@@ -210,6 +317,13 @@ export interface AgentState {
    * Controls how tools requiring approval are handled
    */
   userInterventionConfig?: UserInterventionConfig;
+
+  // --- World snapshot ---
+  /**
+   * What the model is told about the run's world. Frozen at creation and
+   * read by the context engine on every step.
+   */
+  world?: AgentWorldSnapshot;
 }
 
 /**

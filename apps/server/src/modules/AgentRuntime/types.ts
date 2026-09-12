@@ -29,6 +29,9 @@ export interface IAgentStateManager {
    */
   cleanupExpiredOperations: () => Promise<number>;
 
+  /** Drop the inline step loop's parked envelope, if this owner still holds the lock. */
+  clearInlineResume: (operationId: string, ownerId: string) => Promise<void>;
+
   /**
    * Create new operation metadata
    */
@@ -97,6 +100,9 @@ export interface IAgentStateManager {
    */
   loadAgentState: (operationId: string) => Promise<AgentState | null>;
 
+  /** Read the inline step loop's parked envelope, if any. */
+  loadInlineResume: (operationId: string) => Promise<null | string>;
+
   /**
    * Set the interrupt sentinel for the operation, alongside the
    * authoritative `status: 'interrupted'` in the persisted state.
@@ -122,6 +128,12 @@ export interface IAgentStateManager {
    * Save Agent state
    */
   saveAgentState: (operationId: string, state: AgentState) => Promise<void>;
+
+  /**
+   * Park the envelope for the step an inline loop is about to run, so a
+   * redelivery can resume from it if the loop dies mid-run.
+   */
+  saveInlineResume: (operationId: string, serialized: string) => Promise<boolean>;
 
   /**
    * Save step execution result

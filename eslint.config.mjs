@@ -39,9 +39,9 @@ const performanceRestrictedImportPaths = [
   },
   {
     allowTypeImports: true,
-    importNames: ['motion'],
+    importNames: ['motion', 'm'],
     message:
-      'The app runs under <LazyMotion features={domMax}>; `motion` bundles every feature again. Use `m` from "motion/react" (or "motion/react-m").',
+      'The app runs under <LazyMotion features={domMax}>; `motion` bundles every feature again and `m` from the barrel drags it along. Use `import * as m from "motion/react-m"`.',
     name: 'motion/react',
   },
   {

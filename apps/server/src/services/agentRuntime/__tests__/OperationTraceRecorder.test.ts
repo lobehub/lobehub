@@ -49,7 +49,7 @@ describe('OperationTraceRecorder', () => {
         afterStepSignalEvents: [],
         agentState: {
           messages: [],
-          metadata: { agentConfig: { model: 'claude-sonnet-4-6', provider: 'lobehub' } },
+          world: { agent: { model: 'claude-sonnet-4-6', provider: 'lobehub' } },
         },
         beforeStepSignalEvents: [],
         currentContext: { phase: 'user_input' },

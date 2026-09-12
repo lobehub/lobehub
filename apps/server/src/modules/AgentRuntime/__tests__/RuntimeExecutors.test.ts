@@ -1,6 +1,6 @@
 import { type AgentState } from '@lobechat/agent-runtime';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
-import { ToolNameResolver } from '@lobechat/context-engine';
+import { type AgentGroupConfig, ToolNameResolver } from '@lobechat/context-engine';
 import { consumeStreamUntilDone, ModelEmptyError } from '@lobechat/model-runtime';
 import type * as ModelBank from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -409,18 +409,6 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
       const executors = createRuntimeExecutors({
         ...ctx,
-        agentConfig: {
-          chatConfig: {},
-          plugins: [],
-          systemRole: 'test',
-        },
-        searchDecision: {
-          enabledSearch: true,
-          isModelHasBuiltinSearch: false,
-          isProviderHasBuiltinSearch: true,
-          useApplicationBuiltinSearchTool: false,
-          useModelSearch: true,
-        },
       });
 
       await executors.call_llm!(
@@ -433,7 +421,22 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           },
           type: 'call_llm' as const,
         },
-        createMockState(),
+        createMockState({
+          world: {
+            agent: {
+              chatConfig: {},
+              plugins: [],
+              systemRole: 'test',
+            },
+            searchDecision: {
+              enabledSearch: true,
+              isModelHasBuiltinSearch: false,
+              isProviderHasBuiltinSearch: true,
+              useApplicationBuiltinSearchTool: false,
+              useModelSearch: true,
+            },
+          },
+        }),
       );
 
       expect(mockChat).toHaveBeenCalledWith(
@@ -463,9 +466,9 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       const engineSpy = vi.spyOn(ContextEngineering, 'serverMessagesEngine');
       const executors = createRuntimeExecutors({
         ...ctx,
-        agentConfig: { plugins: [], systemRole: 'test' },
       });
       const state = createMockState({
+        world: { agent: { plugins: [], systemRole: 'test' } },
         operationToolSet: {
           enabledToolIds: ['workspace'],
           manifestMap: {
@@ -873,15 +876,17 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
         const ctxWithConfig: RuntimeExecutorContext = {
           ...ctx,
-          agentConfig: {
-            chatConfig: { preserveThinking: true },
-            plugins: [],
-            systemRole: 'test',
-          },
         };
 
         const executors = createRuntimeExecutors(ctxWithConfig);
         const state = createMockState({
+          world: {
+            agent: {
+              chatConfig: { preserveThinking: true },
+              plugins: [],
+              systemRole: 'test',
+            },
+          },
           modelRuntimeConfig: {
             model: 'qwen3.6-plus',
             provider: 'qwen',
@@ -954,15 +959,17 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
         const ctxWithConfig: RuntimeExecutorContext = {
           ...ctx,
-          agentConfig: {
-            chatConfig: { preserveThinking: true },
-            plugins: [],
-            systemRole: 'test',
-          },
         };
 
         const executors = createRuntimeExecutors(ctxWithConfig);
         const state = createMockState({
+          world: {
+            agent: {
+              chatConfig: { preserveThinking: true },
+              plugins: [],
+              systemRole: 'test',
+            },
+          },
           modelRuntimeConfig: {
             model: 'qwen3.6-plus',
             provider: 'qwen',
@@ -1000,15 +1007,17 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
         const ctxWithConfig: RuntimeExecutorContext = {
           ...ctx,
-          agentConfig: {
-            chatConfig: { preserveThinking: false },
-            plugins: [],
-            systemRole: 'test',
-          },
         };
 
         const executors = createRuntimeExecutors(ctxWithConfig);
         const state = createMockState({
+          world: {
+            agent: {
+              chatConfig: { preserveThinking: false },
+              plugins: [],
+              systemRole: 'test',
+            },
+          },
           modelRuntimeConfig: {
             model: 'kimi-k2.7-code',
             provider: 'moonshot',
@@ -1046,15 +1055,17 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
         const ctxWithConfig: RuntimeExecutorContext = {
           ...ctx,
-          agentConfig: {
-            chatConfig: { preserveThinking: false },
-            plugins: [],
-            systemRole: 'test',
-          },
         };
 
         const executors = createRuntimeExecutors(ctxWithConfig);
         const state = createMockState({
+          world: {
+            agent: {
+              chatConfig: { preserveThinking: false },
+              plugins: [],
+              systemRole: 'test',
+            },
+          },
           modelRuntimeConfig: {
             model: 'kimi-k2.7-code',
             provider: BRANDING_PROVIDER,
@@ -1092,15 +1103,17 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
         const ctxWithConfig: RuntimeExecutorContext = {
           ...ctx,
-          agentConfig: {
-            chatConfig: { preserveThinking: true },
-            plugins: [],
-            systemRole: 'test',
-          },
         };
 
         const executors = createRuntimeExecutors(ctxWithConfig);
         const state = createMockState({
+          world: {
+            agent: {
+              chatConfig: { preserveThinking: true },
+              plugins: [],
+              systemRole: 'test',
+            },
+          },
           modelRuntimeConfig: {
             model: 'my-qwen-custom-deployment',
             provider: 'qwen',
@@ -1138,15 +1151,17 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
         const ctxWithConfig: RuntimeExecutorContext = {
           ...ctx,
-          agentConfig: {
-            chatConfig: { preserveThinking: true },
-            plugins: [],
-            systemRole: 'test',
-          },
         };
 
         const executors = createRuntimeExecutors(ctxWithConfig);
         const state = createMockState({
+          world: {
+            agent: {
+              chatConfig: { preserveThinking: true },
+              plugins: [],
+              systemRole: 'test',
+            },
+          },
           modelRuntimeConfig: {
             model: 'gpt-4',
             provider: 'openai',
@@ -1406,10 +1421,16 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         // reasoning_part capture via the state replay path.
         const ctxWithThinking: RuntimeExecutorContext = {
           ...ctx,
-          agentConfig: { chatConfig: { preserveThinking: true }, plugins: [], systemRole: 'test' },
         };
         const executors = createRuntimeExecutors(ctxWithThinking);
-        const result = await executors.call_llm!(geminiInstruction(), createMockState());
+        const result = await executors.call_llm!(
+          geminiInstruction(),
+          createMockState({
+            world: {
+              agent: { chatConfig: { preserveThinking: true }, plugins: [], systemRole: 'test' },
+            },
+          }),
+        );
 
         expect(result.newState.messages.at(-1)).toEqual(
           expect.objectContaining({
@@ -2185,6 +2206,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             sourceMap: {},
             tools: [],
           },
+          world: { agent: { plugins: [], systemRole: 'test' } as any },
           ...overrides,
         });
 
@@ -2195,7 +2217,6 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       ) => {
         const ctxWithConfig: RuntimeExecutorContext = {
           ...ctx,
-          agentConfig: { plugins: [], systemRole: 'test' },
           ...contextOverrides,
         };
         await createRuntimeExecutors(ctxWithConfig).call_llm!(
@@ -2350,13 +2371,16 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should process messages through serverMessagesEngine when agentConfig is set', async () => {
         const ctxWithConfig: RuntimeExecutorContext = {
           ...ctx,
-          agentConfig: {
-            plugins: [],
-            systemRole: 'You are a helpful assistant',
-          },
         };
         const executors = createRuntimeExecutors(ctxWithConfig);
-        const state = createMockState();
+        const state = createMockState({
+          world: {
+            agent: {
+              plugins: [],
+              systemRole: 'You are a helpful assistant',
+            },
+          },
+        });
 
         const instruction = {
           payload: {
@@ -2390,7 +2414,6 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should forward additional contexts without leaking model parameters', async () => {
         const ctxWithConfig: RuntimeExecutorContext = {
           ...ctx,
-          agentConfig: { plugins: [], systemRole: 'test' },
         };
         const additionalContexts = [
           {
@@ -2418,7 +2441,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             },
             type: 'call_llm',
           },
-          createMockState(),
+          createMockState({ world: { agent: { plugins: [], systemRole: 'test' } } }),
         );
 
         expect(engineSpy).toHaveBeenCalledWith(expect.objectContaining({ additionalContexts }));
@@ -2431,13 +2454,16 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should pass model knowledge cutoff into serverMessagesEngine', async () => {
         const ctxWithConfig: RuntimeExecutorContext = {
           ...ctx,
-          agentConfig: {
-            plugins: [],
-            systemRole: 'You are a helpful assistant',
-          },
         };
         const executors = createRuntimeExecutors(ctxWithConfig);
-        const state = createMockState();
+        const state = createMockState({
+          world: {
+            agent: {
+              plugins: [],
+              systemRole: 'You are a helpful assistant',
+            },
+          },
+        });
 
         const instruction = {
           payload: {
@@ -2458,13 +2484,16 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should resolve LobeHub routed model knowledge cutoff by model id fallback', async () => {
         const ctxWithConfig: RuntimeExecutorContext = {
           ...ctx,
-          agentConfig: {
-            plugins: [],
-            systemRole: 'You are a helpful assistant',
-          },
         };
         const executors = createRuntimeExecutors(ctxWithConfig);
-        const state = createMockState();
+        const state = createMockState({
+          world: {
+            agent: {
+              plugins: [],
+              systemRole: 'You are a helpful assistant',
+            },
+          },
+        });
 
         await executors.call_llm!(
           {
@@ -2486,13 +2515,16 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should omit model knowledge cutoff for unknown non-LobeHub providers', async () => {
         const ctxWithConfig: RuntimeExecutorContext = {
           ...ctx,
-          agentConfig: {
-            plugins: [],
-            systemRole: 'You are a helpful assistant',
-          },
         };
         const executors = createRuntimeExecutors(ctxWithConfig);
-        const state = createMockState();
+        const state = createMockState({
+          world: {
+            agent: {
+              plugins: [],
+              systemRole: 'You are a helpful assistant',
+            },
+          },
+        });
 
         await executors.call_llm!(
           {
@@ -2512,13 +2544,16 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should keep current turn when agent historyCount is 0', async () => {
         const ctxWithConfig: RuntimeExecutorContext = {
           ...ctx,
-          agentConfig: {
-            chatConfig: { enableHistoryCount: true, historyCount: 0 },
-            plugins: [],
-          },
         };
         const executors = createRuntimeExecutors(ctxWithConfig);
-        const state = createMockState();
+        const state = createMockState({
+          world: {
+            agent: {
+              chatConfig: { enableHistoryCount: true, historyCount: 0 },
+              plugins: [],
+            },
+          },
+        });
 
         const instruction = {
           payload: {
@@ -2552,13 +2587,16 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should strip stored assistant reasoning before context processing when replay gate is off', async () => {
         const ctxWithConfig: RuntimeExecutorContext = {
           ...ctx,
-          agentConfig: {
-            plugins: [],
-            systemRole: 'test',
-          },
         };
         const executors = createRuntimeExecutors(ctxWithConfig);
-        const state = createMockState();
+        const state = createMockState({
+          world: {
+            agent: {
+              plugins: [],
+              systemRole: 'test',
+            },
+          },
+        });
         const messages = [
           {
             content: 'Previous answer',
@@ -2595,13 +2633,16 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should strip stored reasoning from grouped assistant messages before context processing when replay gate is off', async () => {
         const ctxWithConfig: RuntimeExecutorContext = {
           ...ctx,
-          agentConfig: {
-            plugins: [],
-            systemRole: 'test',
-          },
         };
         const executors = createRuntimeExecutors(ctxWithConfig);
-        const state = createMockState();
+        const state = createMockState({
+          world: {
+            agent: {
+              plugins: [],
+              systemRole: 'test',
+            },
+          },
+        });
         const groupedChild = {
           content: 'Grouped answer',
           id: 'group-child-1',
@@ -2668,14 +2709,16 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should keep stored assistant reasoning before context processing when replay gate is enabled', async () => {
         const ctxWithConfig: RuntimeExecutorContext = {
           ...ctx,
-          agentConfig: {
-            chatConfig: { preserveThinking: true },
-            plugins: [],
-            systemRole: 'test',
-          },
         };
         const executors = createRuntimeExecutors(ctxWithConfig);
         const state = createMockState({
+          world: {
+            agent: {
+              chatConfig: { preserveThinking: true },
+              plugins: [],
+              systemRole: 'test',
+            },
+          },
           modelRuntimeConfig: {
             model: 'qwen3.6-plus',
             provider: 'qwen',
@@ -2739,10 +2782,12 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should pass forceFinish flag to serverMessagesEngine and inject summary', async () => {
         const ctxWithConfig: RuntimeExecutorContext = {
           ...ctx,
-          agentConfig: { plugins: [], systemRole: 'test' },
         };
         const executors = createRuntimeExecutors(ctxWithConfig);
-        const state = createMockState({ forceFinish: true });
+        const state = createMockState({
+          world: { agent: { plugins: [], systemRole: 'test' } },
+          forceFinish: true,
+        });
 
         const instruction = {
           payload: {
@@ -2773,11 +2818,11 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         const evalContext = { expectedOutput: 'test answer', evalMode: true };
         const ctxWithEval: RuntimeExecutorContext = {
           ...ctx,
-          agentConfig: { plugins: [], systemRole: 'test' },
-          evalContext: evalContext as any,
         };
         const executors = createRuntimeExecutors(ctxWithEval);
-        const state = createMockState();
+        const state = createMockState({
+          world: { agent: { plugins: [], systemRole: 'test' }, eval: evalContext as any },
+        });
 
         const instruction = {
           payload: {
@@ -2796,9 +2841,9 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('forwards the bot-originated agent identity snapshot to serverMessagesEngine', async () => {
         // The bot/group member roster is resolved once at op creation
         // (AiAgentService.execAgent → buildBotConversationGroupContext) and
-        // snapshotted into op metadata as `agentGroup`. The per-step executor no
+        // snapshotted into the op's world slot as `group`. The per-step executor no
         // longer rebuilds it — it just forwards the snapshot to the engine.
-        const agentGroup = {
+        const agentGroup: AgentGroupConfig = {
           agentMap: {
             'agent-support': {
               name: 'Support Bot',
@@ -2819,12 +2864,6 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         };
         const ctxWithConfig: RuntimeExecutorContext = {
           ...ctx,
-          agentConfig: {
-            description: 'Answers customer support questions.',
-            plugins: [],
-            systemRole: 'test',
-            title: 'Support Bot',
-          },
           botContext: {
             applicationId: 'discord-app',
             isOwner: true,
@@ -2835,8 +2874,16 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         };
         const executors = createRuntimeExecutors(ctxWithConfig);
         const state = createMockState({
+          world: {
+            agent: {
+              description: 'Answers customer support questions.',
+              plugins: [],
+              systemRole: 'test',
+              title: 'Support Bot',
+            },
+            group: agentGroup,
+          },
           metadata: {
-            agentGroup,
             agentId: 'agent-support',
             botContext: ctxWithConfig.botContext,
             topicId: 'topic-123',
@@ -2860,10 +2907,9 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should build capabilities from LOBE_DEFAULT_MODEL_LIST', async () => {
         const ctxWithConfig: RuntimeExecutorContext = {
           ...ctx,
-          agentConfig: { plugins: [], systemRole: 'test' },
         };
         const executors = createRuntimeExecutors(ctxWithConfig);
-        const state = createMockState();
+        const state = createMockState({ world: { agent: { plugins: [], systemRole: 'test' } } });
 
         const instruction = {
           payload: {
@@ -2905,22 +2951,25 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should filter disabled files and knowledgeBases from agentConfig', async () => {
         const ctxWithConfig: RuntimeExecutorContext = {
           ...ctx,
-          agentConfig: {
-            files: [
-              { content: 'yes', enabled: true, id: 'f1', name: 'enabled.pdf' },
-              { content: 'no', enabled: false, id: 'f2', name: 'disabled.pdf' },
-              { content: 'maybe', enabled: null, id: 'f3', name: 'null.pdf' },
-            ],
-            knowledgeBases: [
-              { enabled: true, id: 'kb1', name: 'Enabled KB' },
-              { enabled: false, id: 'kb2', name: 'Disabled KB' },
-            ],
-            plugins: [],
-            systemRole: 'test',
-          },
         };
         const executors = createRuntimeExecutors(ctxWithConfig);
-        const state = createMockState();
+        const state = createMockState({
+          world: {
+            agent: {
+              files: [
+                { content: 'yes', enabled: true, id: 'f1', name: 'enabled.pdf' },
+                { content: 'no', enabled: false, id: 'f2', name: 'disabled.pdf' },
+                { content: 'maybe', enabled: null, id: 'f3', name: 'null.pdf' },
+              ],
+              knowledgeBases: [
+                { enabled: true, id: 'kb1', name: 'Enabled KB' },
+                { enabled: false, id: 'kb2', name: 'Disabled KB' },
+              ],
+              plugins: [],
+              systemRole: 'test',
+            } as any,
+          },
+        });
 
         const instruction = {
           payload: {
@@ -2954,10 +3003,9 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should skip topic reference resolution when messages already contain topic_reference_context', async () => {
         const ctxWithConfig: RuntimeExecutorContext = {
           ...ctx,
-          agentConfig: { plugins: [], systemRole: 'test' },
         };
         const executors = createRuntimeExecutors(ctxWithConfig);
-        const state = createMockState();
+        const state = createMockState({ world: { agent: { plugins: [], systemRole: 'test' } } });
 
         const instruction = {
           payload: {
@@ -2984,10 +3032,9 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should resolve topic references when messages do not contain topic_reference_context', async () => {
         const ctxWithConfig: RuntimeExecutorContext = {
           ...ctx,
-          agentConfig: { plugins: [], systemRole: 'test' },
         };
         const executors = createRuntimeExecutors(ctxWithConfig);
-        const state = createMockState();
+        const state = createMockState({ world: { agent: { plugins: [], systemRole: 'test' } } });
 
         const instruction = {
           payload: {
@@ -3009,14 +3056,17 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should skip rebuilding onboarding context when messages already contain onboarding injection', async () => {
         const ctxWithConfig: RuntimeExecutorContext = {
           ...ctx,
-          agentConfig: {
-            plugins: ['lobe-web-onboarding'],
-            slug: 'web-onboarding',
-            systemRole: 'test',
-          } as any,
         };
         const executors = createRuntimeExecutors(ctxWithConfig);
-        const state = createMockState();
+        const state = createMockState({
+          world: {
+            agent: {
+              plugins: ['lobe-web-onboarding'],
+              slug: 'web-onboarding',
+              systemRole: 'test',
+            } as any,
+          },
+        });
 
         const instruction = {
           payload: {
@@ -4832,12 +4882,14 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
     it('should pass toolResultMaxLength from agentConfig to executeTool', async () => {
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState({
-        metadata: {
-          agentConfig: {
+        world: {
+          agent: {
             chatConfig: {
               toolResultMaxLength: 5000,
             },
           },
+        },
+        metadata: {
           agentId: 'agent-123',
           threadId: 'thread-123',
           topicId: 'topic-123',

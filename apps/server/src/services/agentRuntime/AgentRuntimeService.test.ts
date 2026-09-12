@@ -451,11 +451,11 @@ describe('AgentRuntimeService', () => {
           stepCount: 0,
           messages: [],
           metadata: {
-            agentConfig: mockParams.agentConfig,
             modelRuntimeConfig: mockParams.modelRuntimeConfig,
             userId: mockParams.userId,
           },
           toolManifestMap: {},
+          world: expect.objectContaining({ agent: mockParams.agentConfig }),
         }),
       );
 
@@ -509,7 +509,7 @@ describe('AgentRuntimeService', () => {
       );
     });
 
-    it('should pass evalContext to metadata when provided', async () => {
+    it('should place evalContext on the world snapshot when provided', async () => {
       mockQueueService.scheduleMessage.mockResolvedValueOnce('message-123');
 
       const evalContext = { envPrompt: 'You are in a test environment' };
@@ -518,9 +518,29 @@ describe('AgentRuntimeService', () => {
       expect(mockCoordinator.saveAgentState).toHaveBeenCalledWith(
         'test-operation-1',
         expect.objectContaining({
-          metadata: expect.objectContaining({
-            evalContext,
-          }),
+          world: expect.objectContaining({ eval: evalContext }),
+        }),
+      );
+    });
+
+    it('should persist the system-message context on the world snapshot', async () => {
+      mockQueueService.scheduleMessage.mockResolvedValueOnce('message-123');
+
+      const projectInstructions = [{ content: 'Use bun.', source: 'AGENTS.md' }];
+      const connectorOwnershipNote = 'Gmail runs on Alice’s account.';
+      await service.createOperation({
+        ...mockParams,
+        connectorOwnershipNote,
+        projectInstructions,
+      });
+
+      // Steps can be claimed by another worker, so anything the context engine
+      // needs has to survive on the persisted operation state — in the typed
+      // `world` slot, which is the only place the engine reads it from.
+      expect(mockCoordinator.saveAgentState).toHaveBeenCalledWith(
+        'test-operation-1',
+        expect.objectContaining({
+          world: expect.objectContaining({ connectorOwnershipNote, projectInstructions }),
         }),
       );
     });
@@ -735,8 +755,8 @@ describe('AgentRuntimeService', () => {
       });
 
       await (serviceWithFactory as any).createAgentRuntime({
+        world: { agent: { chatConfig: { enableContextCompression: true } } as any },
         metadata: {
-          agentConfig: { chatConfig: { enableContextCompression: true } },
           modelRuntimeConfig: { model: 'gpt-4o-mini', provider: 'openai' },
         },
         operationId: 'test-operation-1',
@@ -770,8 +790,8 @@ describe('AgentRuntimeService', () => {
       });
 
       await (serviceWithFactory as any).createAgentRuntime({
+        world: { agent: { chatConfig: { enableContextCompression: true } } as any },
         metadata: {
-          agentConfig: { chatConfig: { enableContextCompression: true } },
           modelRuntimeConfig: { model: 'unknown-model', provider: 'openai' },
         },
         operationId: 'test-operation-1',

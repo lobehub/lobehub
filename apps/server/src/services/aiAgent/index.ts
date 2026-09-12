@@ -40,6 +40,7 @@ import type {
   AgentExecutionParams,
   AgentExecutionResult,
   AgentRuntimeServiceOptions,
+  AgentStepContinuation,
   SubAgentBridgeParams,
 } from '@/server/services/agentRuntime';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
@@ -300,6 +301,21 @@ export class AiAgentService {
    */
   executeStep(params: AgentExecutionParams): Promise<AgentExecutionResult> {
     return this.agentRuntimeService.executeStep(params);
+  }
+
+  /** Mint a lock owner that spans a whole inline step loop. */
+  createOperationLockOwner(operationId: string): string {
+    return this.agentRuntimeService.createOperationLockOwner(operationId);
+  }
+
+  /** Publish a step that an inline loop deferred instead of running. */
+  scheduleContinuation(continuation: AgentStepContinuation): Promise<void> {
+    return this.agentRuntimeService.scheduleContinuation(continuation);
+  }
+
+  /** Release a lock retained across an inline step loop. */
+  releaseOperationLock(operationId: string, stepLockOwner: string): Promise<void> {
+    return this.agentRuntimeService.releaseOperationLock(operationId, stepLockOwner);
   }
 
   /**

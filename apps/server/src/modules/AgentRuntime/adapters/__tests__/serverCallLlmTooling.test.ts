@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 
 import { resolveServerCallLlmTooling } from '../serverCallLlmTooling';
 
-const buildState = (metadata?: AgentState['metadata']): AgentState => ({ metadata }) as AgentState;
+const buildState = (state: Pick<AgentState, 'binding' | 'metadata'> = {}): AgentState =>
+  state as AgentState;
 
 describe('resolveServerCallLlmTooling', () => {
   // Regression: `serverCallLlmContextBuilder` needs this to compute
@@ -16,9 +17,9 @@ describe('resolveServerCallLlmTooling', () => {
     const result = resolveServerCallLlmTooling(
       { operationId: 'op-1', stepIndex: 0 },
       buildState({
-        activeDeviceId: 'device-1',
-        executionPlan: { deviceId: 'device-1', kind: 'device' },
-      } as AgentState['metadata']),
+        binding: { device: { id: 'device-1' } },
+        metadata: { executionPlan: { deviceId: 'device-1', kind: 'device' } },
+      }),
     );
 
     expect(result.activeDeviceId).toBe('device-1');
@@ -27,13 +28,13 @@ describe('resolveServerCallLlmTooling', () => {
   it('leaves the active device id undefined when no device is routed', () => {
     const result = resolveServerCallLlmTooling(
       { operationId: 'op-1', stepIndex: 0 },
-      buildState({ executionPlan: { kind: 'sandbox' } } as AgentState['metadata']),
+      buildState({ metadata: { executionPlan: { kind: 'sandbox' } } }),
     );
 
     expect(result.activeDeviceId).toBeUndefined();
   });
 
-  it('leaves the active device id undefined with no metadata at all', () => {
+  it('leaves the active device id undefined with no binding at all', () => {
     const result = resolveServerCallLlmTooling({ operationId: 'op-1', stepIndex: 0 }, buildState());
 
     expect(result.activeDeviceId).toBeUndefined();

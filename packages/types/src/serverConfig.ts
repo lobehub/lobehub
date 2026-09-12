@@ -28,6 +28,12 @@ export type IFeatureFlagsState = {
   enableAuthCaptcha: boolean | undefined;
   enableCheckUpdates: boolean | undefined;
   enableDevDock: boolean | undefined;
+  /**
+   * Lets the queue worker run consecutive agent steps inside one invocation
+   * instead of paying a queue round-trip per step. Rollout switch only — with it
+   * off the worker runs exactly one step per delivery, as it always has.
+   */
+  enableInlineAgentSteps: boolean | undefined;
   enableKnowledgeBase: boolean | undefined;
   enableOnboardingV2: boolean | undefined;
   enableRAGEval: boolean | undefined;

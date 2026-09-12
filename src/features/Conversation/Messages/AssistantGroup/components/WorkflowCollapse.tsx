@@ -3,7 +3,8 @@ import { Accordion, AccordionItem, Block, Flexbox, Icon } from '@lobehub/ui';
 import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { Check, HandIcon, Maximize2, Minimize2, X } from 'lucide-react';
-import { AnimatePresence, m as motion } from 'motion/react';
+import { AnimatePresence } from 'motion/react';
+import * as motion from 'motion/react-m';
 import { type Key, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

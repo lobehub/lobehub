@@ -232,11 +232,9 @@ export class OperationTraceRecorder {
   private initPartialHeader(partial: any, agentState: any): void {
     if (partial.startedAt) return;
     partial.startedAt = Date.now();
-    partial.model =
-      (agentState?.metadata as any)?.agentConfig?.model ?? agentState?.modelRuntimeConfig?.model;
+    partial.model = agentState?.world?.agent?.model ?? agentState?.modelRuntimeConfig?.model;
     partial.provider =
-      (agentState?.metadata as any)?.agentConfig?.provider ??
-      agentState?.modelRuntimeConfig?.provider;
+      agentState?.world?.agent?.provider ?? agentState?.modelRuntimeConfig?.provider;
   }
 
   private buildStepSnapshot(params: AppendStepParams): StepSnapshot {

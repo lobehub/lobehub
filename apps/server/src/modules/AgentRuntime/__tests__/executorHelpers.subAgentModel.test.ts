@@ -7,9 +7,9 @@ import { buildServerAgentMemberRunner, buildServerVirtualSubAgentRunner } from '
 
 /**
  * The parent model a spawned `callSubAgent` follows must be the model the
- * parent run ACTUALLY uses. `metadata.agentConfig` alone is not enough: when a
+ * parent run ACTUALLY uses. `world.agent` alone is not enough: when a
  * run continues a topic whose model was switched, execAgent keeps the
- * topic-pinned model only in `modelRuntimeConfig` while the metadata config
+ * topic-pinned model only in `modelRuntimeConfig` while the world config
  * retains the agent default.
  */
 describe('buildServerVirtualSubAgentRunner sub-agent model resolution', () => {
@@ -36,12 +36,11 @@ describe('buildServerVirtualSubAgentRunner sub-agent model resolution', () => {
     return { execVirtualSubAgent, runner };
   };
 
-  it('follows the topic-pinned runtime model over the metadata agent default', async () => {
+  it('follows the topic-pinned runtime model over the world agent default', async () => {
     const { execVirtualSubAgent, runner } = buildRunner({
-      metadata: {
-        agentConfig: { model: 'agent-default-model', provider: 'agent-default-provider' },
-        agentId: 'agent-1',
-        topicId: 'topic-1',
+      metadata: { agentId: 'agent-1', topicId: 'topic-1' },
+      world: {
+        agent: { model: 'agent-default-model', provider: 'agent-default-provider' } as any,
       },
       modelRuntimeConfig: { model: 'topic-pinned-model', provider: 'topic-pinned-provider' },
     });
@@ -53,12 +52,11 @@ describe('buildServerVirtualSubAgentRunner sub-agent model resolution', () => {
     );
   });
 
-  it('falls back to the metadata agent config when no runtime model exists', async () => {
+  it('falls back to the world agent config when no runtime model exists', async () => {
     const { execVirtualSubAgent, runner } = buildRunner({
-      metadata: {
-        agentConfig: { model: 'agent-default-model', provider: 'agent-default-provider' },
-        agentId: 'agent-1',
-        topicId: 'topic-1',
+      metadata: { agentId: 'agent-1', topicId: 'topic-1' },
+      world: {
+        agent: { model: 'agent-default-model', provider: 'agent-default-provider' } as any,
       },
     });
 

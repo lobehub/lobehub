@@ -24,6 +24,14 @@ and schedules a Goal advance. The Goal model then chooses one of three actions:
 - `verify`: request the existing independent terminal acceptance Task. The
   planner cannot declare the Goal achieved.
 
+These three are the whole vocabulary, and that bounds what exploration can say: it
+can move within the graph, but it cannot express "this goal is mis-framed", "the
+judge was wrong" or "stop and ask". Those belong to an optional main Agent, which
+`config.manager` adds as a second layer rather than a replacement — exploration
+keeps the ordinary path and the main Agent is handed the problem at the moment the
+coordinator would otherwise stop the Goal on a person. See `manager.README.md`;
+the handover point is `gateOrTakeOver`.
+
 A correction is a Task inside the experiment it corrects, not a new container, so
 it does not consume an experiment slot: fixing an instrument should not cost an
 exploration budget. `MAX_PROTOCOL_REVISIONS` bounds them per experiment, and

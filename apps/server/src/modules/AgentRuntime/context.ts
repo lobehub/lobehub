@@ -1,16 +1,13 @@
 import { type AgentState } from '@lobechat/agent-runtime';
-import { type BotPlatformContext } from '@lobechat/context-engine';
 import {
   type AgentShareVisitorContext,
   type ExecSubAgentParams,
   type ExecSubAgentResult,
   type ExecVirtualSubAgentParams,
 } from '@lobechat/types';
-import type { SearchDecision } from 'model-bank';
 
 import { type MessageModel } from '@/database/models/message';
 import { type LobeChatDatabase } from '@/database/type';
-import { type EvalContext } from '@/server/modules/Mecha/ContextEngineering/types';
 import type { HookDispatcher } from '@/server/services/agentRuntime/hooks/HookDispatcher';
 import type {
   ExecGroupMemberParams,
@@ -27,7 +24,6 @@ export interface RuntimeExecutorContext {
    * is no in-process controller to share with whoever requested the stop).
    */
   abortSignal?: AbortSignal;
-  agentConfig?: any;
   /**
    * Shared-agent visitor marker, read back from
    * `state.metadata.agentShareVisitor`. Present ONLY for a share-visitor run;
@@ -45,9 +41,6 @@ export interface RuntimeExecutorContext {
    */
   allowEarlyFinalAnswerVisibleOutputEnd?: boolean;
   botContext?: unknown;
-  botPlatformContext?: BotPlatformContext;
-  discordContext?: any;
-  evalContext?: EvalContext;
   /**
    * Callback to fork a group member ("call agent member") under a
    * `lobe-group-management` tool call. Injected by AiAgentService; powers the
@@ -71,7 +64,6 @@ export interface RuntimeExecutorContext {
   messageModel: MessageModel;
   modelRuntimeConfig?: AgentState['modelRuntimeConfig'];
   operationId: string;
-  searchDecision?: SearchDecision;
   serverDB: LobeChatDatabase;
   stepIndex: number;
   stream?: boolean;
@@ -91,7 +83,6 @@ export interface RuntimeExecutorContext {
    */
   tracingContextEngine?: (input: unknown, output: unknown) => void;
   userId?: string;
-  userTimezone?: string;
   /**
    * Workspace scoping for ownership filters on models/services constructed
    * inside the agent runtime. Threaded down from the originating request

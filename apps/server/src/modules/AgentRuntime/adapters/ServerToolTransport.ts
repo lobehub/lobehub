@@ -197,7 +197,7 @@ export class ServerToolTransport implements ToolTransport {
           () =>
             toolExecutionService.executeTool(chatToolPayload, {
               activatedSkills: context.activatedSkills as any,
-              activeDeviceId: resolveRunActiveDeviceId(context.state.metadata),
+              activeDeviceId: resolveRunActiveDeviceId(context.state),
               activeDeviceScope: context.state.metadata?.activeDeviceScope,
               agentId: context.state.metadata?.agentId,
               agentMember: buildServerAgentMemberRunner(
@@ -230,14 +230,13 @@ export class ServerToolTransport implements ToolTransport {
               // and telling the device otherwise would fence the wrong run.
               localSandbox: context.state.metadata?.executionPlan
                 ? isLocalSandboxEnabled(
-                    context.state.metadata?.agentConfig?.agencyConfig,
+                    context.state.world?.agent?.agencyConfig,
                     context.state.metadata.executionPlan.target,
                   )
                 : undefined,
               localSandboxNetwork:
-                context.state.metadata?.agentConfig?.agencyConfig?.localSandboxNetwork === true,
-              memoryToolPermission:
-                context.state.metadata?.agentConfig?.chatConfig?.memory?.toolPermission,
+                context.state.world?.agent?.agencyConfig?.localSandboxNetwork === true,
+              memoryToolPermission: context.state.world?.agent?.chatConfig?.memory?.toolPermission,
               messageId: context.state.metadata?.sourceMessageId,
               operationId,
               projectSkills: resolveRunProjectSkills(context.state.metadata),
@@ -259,7 +258,7 @@ export class ServerToolTransport implements ToolTransport {
               toolResultMaxLength: context.toolResultMaxLength,
               topicId: this.ctx.topicId,
               userId,
-              workingDirectory: context.state.metadata?.deviceSystemInfo?.workingDirectory,
+              workingDirectory: context.state.binding?.device?.systemInfo?.workingDirectory,
               workspaceId: context.state.metadata?.workspaceId ?? this.ctx.workspaceId,
             }),
           {

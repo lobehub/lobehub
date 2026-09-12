@@ -30,14 +30,15 @@ vi.mock('@lobehub/ui', async (importOriginal) => ({
 
 vi.mock('motion/react', () => ({
   AnimatePresence: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  m: {
-    div: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
-      <div {...props}>{children}</div>
-    ),
-    span: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
-      <span {...props}>{children}</span>
-    ),
-  },
+}));
+
+vi.mock('motion/react-m', () => ({
+  div: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
+    <div {...props}>{children}</div>
+  ),
+  span: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
+    <span {...props}>{children}</span>
+  ),
 }));
 
 vi.mock('@/const/version', () => ({ isDesktop: false }));

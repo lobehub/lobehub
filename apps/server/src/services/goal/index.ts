@@ -54,7 +54,7 @@ import {
   TERMINAL_NODE_STATUSES,
 } from './decideNextMove';
 import { experimentResults, exploreGraph } from './exploreGraph';
-import { GoalManagerService } from './manager';
+import { answeredProblem, GoalManagerService, problemKey } from './manager';
 import {
   resolveMaxConcurrentTasks,
   resolveOperationLeaseTimeout,
@@ -217,13 +217,11 @@ export class GoalService {
           code: 'BAD_REQUEST',
           message: 'Main Agent requires 1–100 management turns',
         });
-      if (options.exploration || options.supervision?.enabled || input.tasks?.length) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message:
-            'Manager mode owns initial and subsequent planning; do not combine with exploration, supervision or seed tasks',
-        });
-      }
+      // Exploration, supervision and seed tasks used to be rejected here, on the
+      // premise that a main Agent owns planning outright. They are layers, not
+      // rivals: the system planner leads, supervision recovers known transport
+      // failures, and the main Agent is handed whatever neither can route (see
+      // `gateOrTakeOver`). Ordering resolves what exclusivity used to.
       await assertAgentUsableBy(this.db, creatorAgentId, {
         userId: this.userId,
         workspaceId: this.workspaceId,
@@ -1230,8 +1228,15 @@ export class GoalService {
     const at = Date.now();
     const graph = await this.requireGraph(goalId);
     if (graph.goal.config?.manager) {
+      // The system's own planner leads whenever the Goal has one: a main Agent is
+      // the fallback for problems that planner cannot express, not a replacement
+      // for it. With exploration configured this call only settles a turn already
+      // in flight; new turns start from `gateOrTakeOver` below, where the
+      // coordinator has run out of moves. A Goal whose only planner is the main
+      // Agent keeps being led by it.
       const result = await new GoalManagerService(this.db, this.userId, this.workspaceId).advance(
         graph,
+        { mayStartTurn: !graph.goal.config.exploration },
       );
       if (result) return result;
     }
@@ -1430,7 +1435,7 @@ export class GoalService {
             ).reviewFailure(graph, acting!.id, task);
             if (supervision) return observe(supervision);
             return observe(
-              await this.openFailureDecision(graph, acting!.id, task.id, move.message, effects),
+              await this.gateOrTakeOver(graph, acting!.id, task.id, move.message, effects),
             );
           }
 
@@ -1733,7 +1738,7 @@ export class GoalService {
         : recovery.outcome === 'exhausted-rounds'
           ? 'Task attempt budget was exhausted'
           : 'Automatic recovery could not start the next attempt';
-    return this.openFailureDecision(graph, nodeId, task.id, exhaustedReason, effects);
+    return this.gateOrTakeOver(graph, nodeId, task.id, exhaustedReason, effects);
   };
 
   /** Claim the task for dispatch and start its run. */
@@ -2023,7 +2028,7 @@ export class GoalService {
         : recovery.outcome === 'exhausted-rounds'
           ? 'Task attempt budget was exhausted after an operation was abandoned'
           : 'Automatic recovery could not restart an abandoned operation';
-    return this.openFailureDecision(graph, nodeId, task.id, reason, effects);
+    return this.gateOrTakeOver(graph, nodeId, task.id, reason, effects);
   };
 
   private buildTaskInstruction = (
@@ -2371,6 +2376,44 @@ export class GoalService {
       outcome: 'advanced',
       taskId,
     };
+  };
+
+  /**
+   * Every stop-on-a-person funnels through here, so this is the one place a main
+   * Agent can be offered the problem before the Goal parks on its owner.
+   *
+   * The coordinator only reaches this point once its own policy is out of moves:
+   * the failure matched no recovery branch, the attempt budget ran out, or the
+   * reason is one it cannot classify. That is precisely the class of problem the
+   * deterministic lane cannot express, so it is handed over rather than escalated.
+   * A main Agent that cannot help answers `escalate`, and the gate opens anyway —
+   * one turn later, with a diagnosis attached.
+   */
+  private gateOrTakeOver = async (
+    graph: GoalGraphSnapshot,
+    nodeId: string,
+    taskId: string,
+    reason: string,
+    effects: GoalAdvanceEffect[] = [],
+  ): Promise<GoalTickResult> => {
+    const takeover = await new GoalManagerService(this.db, this.userId, this.workspaceId).takeOver(
+      graph,
+      { reason, taskId },
+    );
+    if (takeover) return takeover;
+    // When the main Agent already looked at THIS problem, the gate carries what it
+    // said: the person answering should see the Agent's reasoning, not just the
+    // coordinator's own reason for stopping.
+    const answered = answeredProblem(graph.goal.config?.managerState);
+    const diagnosis =
+      answered?.key === problemKey({ reason, taskId }) ? answered.reason.slice(0, 600) : undefined;
+    return this.openFailureDecision(
+      graph,
+      nodeId,
+      taskId,
+      diagnosis ? `${reason} — main Agent: ${diagnosis}` : reason,
+      effects,
+    );
   };
 
   private openFailureDecision = async (

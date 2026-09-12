@@ -234,10 +234,14 @@ export const startOperation = async (
       botPlatformContext,
       deviceAccessPolicy: { canUseDevice, reason: deviceAccessReason },
       discordContext,
+      // Run context the context engine injects into the system message —
+      // carried on the operation like `expertise`, not on the agent config.
+      connectorOwnershipNote: discovery.connectorOwnershipNote,
       evalContext,
       evalRuntime,
       enableExpertise,
       expertise: prep.expertise,
+      projectInstructions: prep.projectInstructions,
       initialContext,
       initialMessages: prep.allMessages,
       initialStepCount,

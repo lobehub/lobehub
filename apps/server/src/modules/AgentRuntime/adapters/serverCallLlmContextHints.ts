@@ -1,4 +1,8 @@
-import { type CallLLMPayload, stripAssistantReasoningForReplay } from '@lobechat/agent-runtime';
+import {
+  type AgentWorldSnapshot,
+  type CallLLMPayload,
+  stripAssistantReasoningForReplay,
+} from '@lobechat/agent-runtime';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import {
   applyModelExtendParams,
@@ -29,6 +33,7 @@ interface ResolveServerCallLlmContextHintsInput {
   llmPayload: CallLLMPayload;
   model: string;
   provider: string;
+  world?: AgentWorldSnapshot;
 }
 
 export interface ServerCallLlmContextHints {
@@ -148,8 +153,9 @@ export const resolveServerCallLlmContextHints = async ({
   llmPayload,
   model,
   provider,
+  world,
 }: ResolveServerCallLlmContextHintsInput): Promise<ServerCallLlmContextHints> => {
-  const agentConfig = ctx.agentConfig;
+  const agentConfig = world?.agent;
   const { loadModels } = await import('@/business/client/model-bank/loadModels');
   const builtinModels = await loadModels();
 
@@ -208,7 +214,7 @@ export const resolveServerCallLlmContextHints = async ({
         if (
           topic?.model === model &&
           topic.provider === provider &&
-          (!topic.groupId || topic.agentId === ctx.agentConfig?.id)
+          (!topic.groupId || topic.agentId === agentConfig?.id)
         ) {
           modelReasoningConfig = topic.metadata?.reasoningConfig;
         }
@@ -297,7 +303,7 @@ export const resolveServerCallLlmContextHints = async ({
         model,
       })
     : undefined;
-  const searchDecision = ctx.searchDecision;
+  const searchDecision = world?.searchDecision;
   const enabledSearch =
     searchDecision?.enabledSearch && searchDecision.useModelSearch ? true : undefined;
   const resolvedExtendParams =

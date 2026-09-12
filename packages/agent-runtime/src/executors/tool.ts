@@ -178,7 +178,7 @@ const createRunContext = ({
 }): ToolRunContext => {
   const toolName = toolNameOf(tool);
   const toolSource = resolveToolSource(state, tool);
-  const agentConfig = state.metadata?.agentConfig as
+  const agentConfig = state.world?.agent as
     { chatConfig?: { toolResultMaxLength?: number } } | undefined;
 
   return {

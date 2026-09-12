@@ -57,7 +57,7 @@ export const resolveServerCallLlmTooling = (
   // enabled tools), so any id that reaches it WILL inject local-system.
   // `resolveRunActiveDeviceId` swallows the id whenever the plan/policy
   // forbids devices — the same filter the tool executors apply.
-  const activeDeviceId = resolveRunActiveDeviceId(state.metadata);
+  const activeDeviceId = resolveRunActiveDeviceId(state);
   const executionTarget = (state.metadata?.executionPlan as ExecutionPlan | undefined)?.target;
   const operationToolSet: OperationToolSet = state.operationToolSet ?? {
     enabledToolIds: [],

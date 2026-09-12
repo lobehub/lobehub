@@ -85,14 +85,15 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
 
 vi.mock('motion/react', () => ({
   AnimatePresence: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  m: {
-    div: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
-      <div {...props}>{children}</div>
-    ),
-    span: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
-      <span {...props}>{children}</span>
-    ),
-  },
+}));
+
+vi.mock('motion/react-m', () => ({
+  div: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
+    <div {...props}>{children}</div>
+  ),
+  span: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
+    <span {...props}>{children}</span>
+  ),
 }));
 
 vi.mock('react-i18next', () => ({

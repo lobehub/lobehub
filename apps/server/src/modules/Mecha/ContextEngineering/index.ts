@@ -153,10 +153,14 @@ export const serverMessagesEngine = async ({
   planTodo,
   topicReferences,
   additionalVariables,
+  connectorOwnershipNote,
+  projectInstructions,
   userTimezone,
 }: ServerMessagesEngineParams): Promise<OpenAIChatMessage[]> => {
   const engine = new MessagesEngine({
     additionalContexts,
+    connectorOwnershipNote,
+    projectInstructions,
     // Capability injection
     capabilities: {
       isCanUseAudio: capabilities?.isCanUseAudio,
