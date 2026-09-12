@@ -200,10 +200,6 @@ export const useFetchGitWorktrees = (deviceId: string | undefined, path?: string
     { focusThrottleInterval: 5 * 1000, revalidateOnFocus: true, shouldRetryOnError: false },
   );
 
-/**
- * Lazy-loaded list of remote branches under `refs/remotes/origin/*`.
- * Disabled until the Review base-ref picker opens.
- */
 export const pullRequestDetailRefreshInterval = (
   detail: DeviceGitPullRequestDetailResult | undefined,
   active: boolean,
@@ -239,6 +235,10 @@ export const useFetchGitPullRequestDetail = (
     },
   );
 
+/**
+ * Lazy-loaded list of remote branches under `refs/remotes/origin/*`.
+ * Disabled until the Review base-ref picker opens.
+ */
 export const useGitRemoteBranches = (
   dirPath: string | undefined,
   enabled: boolean,
