@@ -170,18 +170,34 @@ export class AbandonOperationService {
     const includeShareVisitor = Boolean(metadata.streamOwnerUserId);
 
     if (origin.userId) {
-      // `assistantMessageId` is only set once a step has created its
-      // placeholder. A step killed before its first token — the usual shape
-      // when the host is recycled mid-LLM-call — never created one, so there
-      // is nothing to mark and the turn ends up carrying no error at all. The
-      // client keys its retry affordance off `message.error`, so that silence
-      // is exactly why an abandoned turn renders as frozen rather than failed.
-      // Fall back to the conversation's tail message so the failure always has
-      // somewhere to land.
-      const targetMessageId =
-        metadata.assistantMessageId ??
-        (origin.topicId
-          ? await this.resolveTailMessageId(
+      const messageModel = new MessageModel(this.db, origin.userId, origin.workspaceId, undefined, {
+        includeShareVisitor,
+      });
+
+      try {
+        if (metadata.assistantMessageId) {
+          // The dying step got as far as creating its placeholder, so the
+          // failure belongs on exactly that row.
+          await messageModel.update(metadata.assistantMessageId, { error });
+          result.assistantMessageUpdated = true;
+        } else if (origin.topicId) {
+          // No placeholder: the step was killed before its first token, which
+          // is the usual shape when the host is recycled mid-LLM-call. The
+          // turn would otherwise carry no error anywhere, and the client keys
+          // its failure banner and retry action off `message.error` — that
+          // silence is exactly why an abandoned turn renders as frozen rather
+          // than failed.
+          //
+          // A fresh assistant row rather than marking the conversation tail:
+          // the tail here is either the user's own turn, whose renderer reads
+          // `error` for nothing but the double-click-to-edit guard and so
+          // would show the user nothing at all, or a *previous* assistant turn
+          // that genuinely succeeded and must not be relabelled as failed.
+          await messageModel.create({
+            agentId: origin.agentId,
+            content: '',
+            error,
+            parentId: await this.resolveTailMessageId(
               {
                 threadId: origin.threadId,
                 topicId: origin.topicId,
@@ -189,23 +205,17 @@ export class AbandonOperationService {
                 workspaceId: origin.workspaceId,
               },
               includeShareVisitor,
-            )
-          : undefined);
-
-      if (targetMessageId) {
-        try {
-          const messageModel = new MessageModel(
-            this.db,
-            origin.userId,
-            origin.workspaceId,
-            undefined,
-            { includeShareVisitor },
-          );
-          await messageModel.update(targetMessageId, { error });
+            ),
+            model: state.modelRuntimeConfig?.model,
+            provider: state.modelRuntimeConfig?.provider,
+            role: 'assistant',
+            threadId: origin.threadId ?? null,
+            topicId: origin.topicId,
+          });
           result.assistantMessageUpdated = true;
-        } catch (e) {
-          log('[%s] assistant message update failed (non-fatal): %O', operationId, e);
         }
+      } catch (e) {
+        log('[%s] assistant failure row write failed (non-fatal): %O', operationId, e);
       }
     }
 

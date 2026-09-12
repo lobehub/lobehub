@@ -537,6 +537,39 @@ export class AgentOperationModel {
   }
 
   /**
+   * Give back an attempt claimed by {@link claimStaleRedrive} when the redrive
+   * it was claimed for never actually went out.
+   *
+   * The budget exists to bound LLM spend on a step that dies deterministically,
+   * so a delivery that failed to publish must not consume it — otherwise a
+   * brief queue outage walks an otherwise healthy operation to its attempt
+   * limit and retires it without a single recovery ever having been attempted.
+   *
+   * The claimed attempt number is checked in SQL so this can only ever undo
+   * *its own* increment: a concurrent sweep that claimed the next attempt in
+   * between moves the counter past `attempt` and this becomes a no-op.
+   * `updatedAt` is deliberately left where the claim moved it, so the release
+   * shortens no stall window — the next sweep still waits out a full lease.
+   */
+  async releaseStaleRedrive(operationId: string, attempt: number): Promise<boolean> {
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({
+        metadata: sql`jsonb_set(coalesce(${agentOperations.metadata}, '{}'::jsonb), '{staleRedrive,attempts}', to_jsonb(${attempt - 1}::int))`,
+      })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          sql`(${agentOperations.metadata} #>> '{staleRedrive,attempts}')::int = ${attempt}::int`,
+          this.ownership(),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+
+    return Boolean(row);
+  }
+
+  /**
    * Sum the terminal usage of every child operation forked from `parentOperationId`
    * (`callSubAgent` children, isolated group members).
    *

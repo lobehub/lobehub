@@ -213,13 +213,16 @@ export class StaleOperationReaper {
     // not.
     const context = await this.resolveRedriveContext(operationId, state, stepIndex);
     if (!context) {
+      // Skipped rather than abandoned, because "no context" is not a reliable
+      // signal: `AgentStateManager.getExecutionHistory` swallows a failed
+      // LRANGE or a JSON parse error and returns an empty array, so a
+      // transient Redis blip is indistinguishable here from a genuinely
+      // missing entry. Retiring an operation is irreversible and user-visible,
+      // and this one is otherwise resumable — a later tick may well recover it
+      // once the read succeeds, and the inactivity watchdog still declares it
+      // dead if it never does.
       log('[%s][%d] no persisted context to resume from', operationId, stepIndex);
-      return this.abandonIfStillStale(
-        operationModel,
-        operationId,
-        staleBefore,
-        'context_unavailable',
-      );
+      return 'skipped';
     }
 
     const attempt = await operationModel.claimStaleRedrive(
@@ -241,22 +244,37 @@ export class StaleOperationReaper {
       );
     }
 
-    await this.queueService.scheduleMessage({
-      context,
-      // Distinct per attempt: a shared key would let the provider dedupe a
-      // genuinely needed second redrive away and strand the operation again.
-      deduplicationId: `stale-redrive:${operationId}:${stepIndex}:${attempt}`,
-      endpoint: urlJoin(this.baseURL, '/run'),
-      operationId,
-      priority: 'normal',
-      retryDelay:
-        typeof state.metadata?.queueRetryDelay === 'string'
-          ? state.metadata.queueRetryDelay
-          : undefined,
-      retries:
-        typeof state.metadata?.queueRetries === 'number' ? state.metadata.queueRetries : undefined,
-      stepIndex,
-    });
+    try {
+      await this.queueService.scheduleMessage({
+        context,
+        // Distinct per attempt: a shared key would let the provider dedupe a
+        // genuinely needed second redrive away and strand the operation again.
+        deduplicationId: `stale-redrive:${operationId}:${stepIndex}:${attempt}`,
+        endpoint: urlJoin(this.baseURL, '/run'),
+        operationId,
+        priority: 'normal',
+        retryDelay:
+          typeof state.metadata?.queueRetryDelay === 'string'
+            ? state.metadata.queueRetryDelay
+            : undefined,
+        retries:
+          typeof state.metadata?.queueRetries === 'number'
+            ? state.metadata.queueRetries
+            : undefined,
+        stepIndex,
+      });
+    } catch (e) {
+      // The attempt was claimed before publishing, because the claim is also
+      // the mutual exclusion between overlapping sweeps. Publishing is what it
+      // was claimed *for*, so a failure has to give it back — the budget
+      // bounds LLM spend, and nothing was spent. Without this, a brief queue
+      // outage walks a healthy operation to its limit and retires it having
+      // never attempted a single recovery.
+      await operationModel.releaseStaleRedrive(operationId, attempt).catch((releaseError) => {
+        log('[%s] failed to release redrive attempt %d: %O', operationId, attempt, releaseError);
+      });
+      throw e;
+    }
 
     log('[%s][%d] redriven (attempt %d/%d)', operationId, stepIndex, attempt, maxRedriveAttempts);
     return 'redriven';

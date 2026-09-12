@@ -649,6 +649,48 @@ describe('AgentOperationModel', () => {
       });
     });
 
+    it('gives an attempt back so a failed publish costs no budget', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-redrive-release';
+      await model.recordStart({ operationId });
+
+      await makeStale(operationId);
+      expect(await model.claimStaleRedrive(operationId, staleBefore(), 2)).toBe(1);
+      expect(await model.releaseStaleRedrive(operationId, 1)).toBe(true);
+
+      // Budget restored: the next claim hands out attempt 1 again.
+      await makeStale(operationId);
+      expect(await model.claimStaleRedrive(operationId, staleBefore(), 2)).toBe(1);
+    });
+
+    it('only ever undoes its own increment', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-redrive-release-race';
+      await model.recordStart({ operationId });
+
+      await makeStale(operationId);
+      await model.claimStaleRedrive(operationId, staleBefore(), 3);
+      await makeStale(operationId);
+      expect(await model.claimStaleRedrive(operationId, staleBefore(), 3)).toBe(2);
+
+      // A late release for attempt 1 must not walk the counter backwards past
+      // the attempt another sweep has since claimed.
+      expect(await model.releaseStaleRedrive(operationId, 1)).toBe(false);
+      const row = await model.findById(operationId);
+      expect(row?.metadata).toMatchObject({ staleRedrive: { attempts: 2 } });
+    });
+
+    it('scopes the release to the owning user', async () => {
+      const operationId = 'op-redrive-release-ownership';
+      const model = new AgentOperationModel(serverDB, userId);
+      await model.recordStart({ operationId });
+      await makeStale(operationId);
+      await model.claimStaleRedrive(operationId, staleBefore(), 3);
+
+      const intruder = new AgentOperationModel(serverDB, otherUserId);
+      expect(await intruder.releaseStaleRedrive(operationId, 1)).toBe(false);
+    });
+
     it('is scoped to the owning user', async () => {
       const operationId = 'op-redrive-ownership';
       await new AgentOperationModel(serverDB, userId).recordStart({ operationId });

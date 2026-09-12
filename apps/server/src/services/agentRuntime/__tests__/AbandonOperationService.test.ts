@@ -30,10 +30,12 @@ const buildCoordinator = (
 });
 
 const messageUpdateMock = vi.fn().mockResolvedValue({ success: true });
+const messageCreateMock = vi.fn().mockResolvedValue({ id: 'msg_new_failure' });
 const latestSpineMessageIdMock = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn().mockImplementation(function () {
     return {
+      create: messageCreateMock,
       getLatestSpineMessageId: latestSpineMessageIdMock,
       update: messageUpdateMock,
     };
@@ -126,6 +128,7 @@ describe('AbandonOperationService', () => {
     findThreadMock.mockReset().mockResolvedValue(null);
     settleRunningMock.mockReset().mockResolvedValue(true);
     latestSpineMessageIdMock.mockReset().mockResolvedValue(undefined);
+    messageCreateMock.mockReset().mockResolvedValue({ id: 'msg_new_failure' });
     topicSettleRunningOperationMock
       .mockReset()
       .mockResolvedValue({ assistantMessageId: undefined, status: 'missing' });
@@ -846,7 +849,7 @@ describe('AbandonOperationService', () => {
     expect(settleRunningMock).toHaveBeenCalledWith('op_idle', 'error');
   });
 
-  it('errors the conversation tail when the dying step never created a placeholder', async () => {
+  it('creates an assistant failure row when the dying step never made a placeholder', async () => {
     // A host recycled mid-LLM-call leaves no assistant placeholder, so there
     // was nothing carrying `error` — and the client keys its retry affordance
     // off `message.error`, which is why the turn rendered as frozen.
@@ -854,7 +857,8 @@ describe('AbandonOperationService', () => {
     const coord = buildCoordinator({
       loadAgentState: vi.fn().mockResolvedValue(
         stateWith({
-          metadata: { agentId: 'agt_x', topicId: 'tpc_x', userId: 'user_x' },
+          metadata: {},
+          origin: { agentId: 'agt_x', topicId: 'tpc_x', userId: 'user_x' },
         }),
       ),
     });
@@ -864,18 +868,28 @@ describe('AbandonOperationService', () => {
       snapshotStore: buildPartiallessStore() as any,
     }).finalizeAbandoned('op_no_placeholder', 'stale_lease');
 
+    // Anchored to the tail, but written as a NEW assistant row: the tail is
+    // either the user's own turn — whose renderer never passes `error` to
+    // ChatItem, so the user would see nothing — or an earlier assistant turn
+    // that actually succeeded and must not be relabelled as failed.
     expect(latestSpineMessageIdMock).toHaveBeenCalledWith({
       threadId: null,
       topicId: 'tpc_x',
     });
-    expect(messageUpdateMock).toHaveBeenCalledWith(
-      'msg_tail',
-      expect.objectContaining({ error: expect.objectContaining({ message: expect.any(String) }) }),
+    expect(messageUpdateMock).not.toHaveBeenCalled();
+    expect(messageCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: '',
+        error: expect.objectContaining({ message: expect.any(String) }),
+        parentId: 'msg_tail',
+        role: 'assistant',
+        topicId: 'tpc_x',
+      }),
     );
     expect(result.assistantMessageUpdated).toBe(true);
   });
 
-  it('prefers the placeholder over the tail when the step did create one', async () => {
+  it('marks the existing placeholder rather than creating a row when the step made one', async () => {
     latestSpineMessageIdMock.mockResolvedValue('msg_tail');
     const coord = buildCoordinator({
       loadAgentState: vi.fn().mockResolvedValue(stateWith()),
@@ -887,6 +901,7 @@ describe('AbandonOperationService', () => {
     }).finalizeAbandoned('op_x', 'stale_lease');
 
     expect(latestSpineMessageIdMock).not.toHaveBeenCalled();
+    expect(messageCreateMock).not.toHaveBeenCalled();
     expect(messageUpdateMock).toHaveBeenCalledWith('msg_assist_1', expect.anything());
   });
 
@@ -895,7 +910,8 @@ describe('AbandonOperationService', () => {
     const coord = buildCoordinator({
       loadAgentState: vi.fn().mockResolvedValue(
         stateWith({
-          metadata: {
+          metadata: {},
+          origin: {
             agentId: 'agt_x',
             threadId: 'thr_x',
             topicId: 'tpc_x',

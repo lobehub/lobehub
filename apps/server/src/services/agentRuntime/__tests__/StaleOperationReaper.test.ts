@@ -5,10 +5,12 @@ import { StaleOperationReaper } from '../StaleOperationReaper';
 
 const claimStaleRedriveMock = vi.fn();
 const settleStaleRunningMock = vi.fn();
+const releaseStaleRedriveMock = vi.fn();
 vi.mock('@/database/models/agentOperation', () => ({
   AgentOperationModel: vi.fn().mockImplementation(function () {
     return {
       claimStaleRedrive: claimStaleRedriveMock,
+      releaseStaleRedrive: releaseStaleRedriveMock,
       settleStaleRunning: settleStaleRunningMock,
     };
   }),
@@ -75,6 +77,7 @@ describe('StaleOperationReaper', () => {
   beforeEach(() => {
     claimStaleRedriveMock.mockReset().mockResolvedValue(1);
     settleStaleRunningMock.mockReset().mockResolvedValue(true);
+    releaseStaleRedriveMock.mockReset().mockResolvedValue(true);
     finalizeAbandonedMock.mockClear();
     process.env.APP_URL = 'https://app.lobehub.test';
   });
@@ -127,18 +130,18 @@ describe('StaleOperationReaper', () => {
     );
   });
 
-  it('abandons rather than redriving when the step context cannot be recovered', async () => {
-    // Resuming with a synthesized context would re-enter at `user_input` and
-    // silently drop pending tool work — a visible error is the lesser harm.
+  it('skips rather than abandons when the step context cannot be recovered', async () => {
+    // `getExecutionHistory` swallows a failed LRANGE and returns [], so an
+    // empty result cannot be told apart from a transient Redis failure.
+    // Retiring is irreversible, and this operation is otherwise resumable.
     const queue = buildQueue();
     const result = await buildReaper([candidate()], runningState(), queue, []).sweep();
 
     expect(queue.scheduleMessage).not.toHaveBeenCalled();
     expect(claimStaleRedriveMock).not.toHaveBeenCalled();
-    // Irreversible cleanup only after the lease is re-checked atomically.
-    expect(settleStaleRunningMock).toHaveBeenCalledWith('op_x', expect.any(Date));
-    expect(finalizeAbandonedMock).toHaveBeenCalledWith('op_x', 'stale_lease_context_unavailable');
-    expect(result).toMatchObject({ abandoned: 1, redriven: 0 });
+    expect(settleStaleRunningMock).not.toHaveBeenCalled();
+    expect(finalizeAbandonedMock).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ abandoned: 0, redriven: 0, skipped: 1 });
   });
 
   it('never touches an operation with no coordinator state', async () => {
@@ -196,19 +199,42 @@ describe('StaleOperationReaper', () => {
     expect(result).toMatchObject({ abandoned: 1 });
   });
 
-  it('refuses to abandon a run that heartbeated while its context was being read', async () => {
-    // The window Codex flagged: `listStaleRunning` selected this row, then the
-    // worker resumed while `resolveRedriveContext` was doing its Redis reads.
-    // Abandoning is irreversible and user-visible, so it must re-check the
-    // lease atomically rather than trust the stale select.
+  it('refuses to abandon a run that heartbeated after the candidate was selected', async () => {
+    // `listStaleRunning` selected this row, then the worker resumed while the
+    // sweep was doing its Redis reads. Abandoning is irreversible and
+    // user-visible, so it must re-check the lease atomically rather than
+    // trust the stale select.
     const queue = buildQueue();
+    claimStaleRedriveMock.mockResolvedValue(null);
     settleStaleRunningMock.mockResolvedValue(false);
 
-    const result = await buildReaper([candidate()], runningState(), queue, []).sweep();
+    const result = await buildReaper([candidate()], runningState(), queue).sweep();
 
     expect(finalizeAbandonedMock).not.toHaveBeenCalled();
     expect(queue.scheduleMessage).not.toHaveBeenCalled();
     expect(result).toMatchObject({ abandoned: 0, alive: 1 });
+  });
+
+  it('gives the attempt back when the redrive fails to publish', async () => {
+    // The budget bounds LLM spend; a delivery that never went out spent
+    // nothing. Without the release, a brief queue outage walks a healthy
+    // operation to its attempt limit and retires it having never recovered.
+    const queue = buildQueue();
+    queue.scheduleMessage.mockRejectedValue(new Error('qstash down'));
+    claimStaleRedriveMock.mockResolvedValue(2);
+
+    const result = await buildReaper([candidate()], runningState(), queue).sweep();
+
+    expect(releaseStaleRedriveMock).toHaveBeenCalledWith('op_x', 2);
+    expect(finalizeAbandonedMock).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ abandoned: 0, redriven: 0 });
+  });
+
+  it('keeps the attempt when the redrive publishes successfully', async () => {
+    const result = await buildReaper([candidate()], runningState()).sweep();
+
+    expect(releaseStaleRedriveMock).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ redriven: 1 });
   });
 
   it('keeps sweeping after one operation throws', async () => {
