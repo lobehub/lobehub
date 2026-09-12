@@ -3,64 +3,37 @@ import type {
   DeviceGitPullRequestDetail,
   DeviceGitPullRequestMergeMethod,
 } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, type DropdownItem, DropdownMenu } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
-import { ChevronDownIcon } from 'lucide-react';
+import { Button, type DropdownItem, SplitButton } from '@lobehub/ui/base-ui';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type DockAction, PR_KEYS } from './mergeDockData';
 import { MERGE_METHODS } from './mergeMethodStorage';
+import type { TranslateKey } from './prVisual';
 import type { PullRequestBusy } from './usePullRequestActions';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  caret: css`
-    && {
-      margin-inline-start: -1px;
-      padding-inline: 4px;
-      border-start-start-radius: 0;
-      border-end-start-radius: 0;
-    }
-  `,
-  main: css`
-    && {
-      border-start-end-radius: 0;
-      border-end-end-radius: 0;
-    }
-  `,
-  toneError: css`
-    && {
-      border-color: ${cssVar.colorError};
-      background: ${cssVar.colorError};
-    }
+const tone = (base: string, hover: string) => `
+  && > :where(button, a) {
+    border-color: ${base};
+    background: ${base};
+  }
 
-    &&:hover:not(:disabled) {
-      border-color: ${cssVar.colorErrorHover};
-      background: ${cssVar.colorErrorHover};
-    }
+  &&:has(> :where(button, a):hover:not(:disabled, [aria-disabled='true'])) > :where(button, a) {
+    border-color: ${hover};
+    background: ${hover};
+  }
+`;
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  toneError: css`
+    ${tone(cssVar.colorError, cssVar.colorErrorHover)}
   `,
   toneSuccess: css`
-    && {
-      border-color: ${cssVar.colorSuccess};
-      background: ${cssVar.colorSuccess};
-    }
-
-    &&:hover:not(:disabled) {
-      border-color: ${cssVar.colorSuccessHover};
-      background: ${cssVar.colorSuccessHover};
-    }
+    ${tone(cssVar.colorSuccess, cssVar.colorSuccessHover)}
   `,
   toneWarning: css`
-    && {
-      border-color: ${cssVar.colorWarning};
-      background: ${cssVar.colorWarning};
-    }
-
-    &&:hover:not(:disabled) {
-      border-color: ${cssVar.colorWarningHover};
-      background: ${cssVar.colorWarningHover};
-    }
+    ${tone(cssVar.colorWarning, cssVar.colorWarningHover)}
   `,
 }));
 
@@ -83,7 +56,7 @@ interface DockActionButtonProps {
 const DockActionButton = memo<DockActionButtonProps>(
   ({ action, busy, detail, onAction, onPickMethod }) => {
     const { t } = useTranslation('chat');
-    const tr = t as unknown as (key: string, params?: Record<string, string | number>) => string;
+    const tr = t as unknown as TranslateKey;
 
     const methodItems: DropdownItem[] = MERGE_METHODS.map((item) => ({
       desc: tr(`workingPanel.pr.method.${item}.desc`, { base: detail.baseRefName }),
@@ -98,28 +71,17 @@ const DockActionButton = memo<DockActionButtonProps>(
       items: DropdownItem[],
       onClick: () => void,
     ) => (
-      <Flexbox horizontal>
-        <Button
-          className={cx(styles.main, TONE_CLASS[split.tone])}
-          data-testid={'pr-primary-action'}
-          data-tone={split.tone}
-          loading={split.busy}
-          size={'small'}
-          type={'primary'}
-          onClick={onClick}
-        >
+      <SplitButton
+        className={TONE_CLASS[split.tone]}
+        loading={split.busy}
+        size={'small'}
+        type={'primary'}
+      >
+        <SplitButton.Main onClick={onClick}>
           {split.busy && split.busyLabelKey ? tr(split.busyLabelKey) : label}
-        </Button>
-        <DropdownMenu items={items} placement={'topRight'}>
-          <Button
-            className={cx(styles.caret, TONE_CLASS[split.tone])}
-            disabled={split.busy}
-            icon={<Icon icon={ChevronDownIcon} size={12} />}
-            size={'small'}
-            type={'primary'}
-          />
-        </DropdownMenu>
-      </Flexbox>
+        </SplitButton.Main>
+        <SplitButton.Menu items={items} placement={'topRight'} />
+      </SplitButton>
     );
 
     switch (action.kind) {
@@ -164,7 +126,6 @@ const DockActionButton = memo<DockActionButtonProps>(
       case 'ready': {
         return (
           <Button
-            data-testid={'pr-primary-action'}
             loading={action.busy}
             size={'small'}
             type={'primary'}
@@ -179,7 +140,6 @@ const DockActionButton = memo<DockActionButtonProps>(
       case 'deleteBranch': {
         return (
           <Button
-            data-testid={'pr-primary-action'}
             loading={busy === 'deleteBranch'}
             size={'small'}
             onClick={() => void onAction({ head: detail.headRefName, type: 'deleteBranch' })}
@@ -191,7 +151,6 @@ const DockActionButton = memo<DockActionButtonProps>(
       case 'reopen': {
         return (
           <Button
-            data-testid={'pr-primary-action'}
             loading={busy === 'reopen'}
             size={'small'}
             onClick={() => void onAction({ type: 'reopen' })}
@@ -202,7 +161,7 @@ const DockActionButton = memo<DockActionButtonProps>(
       }
       case 'disabled': {
         return (
-          <Button disabled data-testid={'pr-primary-action'} size={'small'} type={'primary'}>
+          <Button disabled size={'small'} type={'primary'}>
             {tr(action.labelKey)}
           </Button>
         );

@@ -11,13 +11,12 @@ import ChecksList from './ChecksList';
 import DockActionButton from './DockActionButton';
 import { type DockRow, type MergeDockInput, resolveMergeDock } from './mergeDockData';
 import { readMergeMethod, writeMergeMethod } from './mergeMethodStorage';
-import { DOCK_ICON, TONE_COLOR } from './prVisual';
+import { DOCK_ICON, TONE_COLOR, type TranslateKey } from './prVisual';
 import type { PullRequestBusy } from './usePullRequestActions';
 
 const BUSY_MAP: Partial<Record<PullRequestBusy, NonNullable<MergeDockInput['ui']['busy']>>> = {
   autoMerge: 'autoMerge',
   merge: 'merge',
-  push: 'push',
   ready: 'ready',
   updateBranch: 'update',
 };
@@ -66,7 +65,8 @@ interface MergeDockProps {
 const MergeDock = memo<MergeDockProps>(
   ({ busy, detail, error, local, onAction, onDismissError, onPush, onRetry }) => {
     const { t } = useTranslation('chat');
-    const tr = t as unknown as (key: string, params?: Record<string, string | number>) => string;
+    const { t: tCommon } = useTranslation('common');
+    const tr = t as unknown as TranslateKey;
     const [bypass, setBypass] = useState(false);
     const [method, setMethod] = useState(readMergeMethod);
     const [checksOpen, setChecksOpen] = useState(false);
@@ -101,7 +101,7 @@ const MergeDock = memo<MergeDockProps>(
                 {t('workingPanel.pr.dismiss')}
               </Button>
               <Button size={'small'} type={'text'} onClick={onRetry}>
-                {t('workingPanel.pr.retry')}
+                {tCommon('retry')}
               </Button>
             </>
           );

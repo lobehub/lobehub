@@ -12,9 +12,10 @@ import { useTranslation } from 'react-i18next';
 
 import { ChevronRight, OverviewRow, rowStyles } from '../Overview/OverviewRow';
 import { sectionStyles } from '../Overview/sectionStyles';
-import Activity from './Activity';
+import ActivityTimeline from './ActivityTimeline';
 import ChecksList from './ChecksList';
 import { timeAgo } from './prVisual';
+import type { PullRequestBusy } from './usePullRequestActions';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   body: css`
@@ -63,7 +64,7 @@ const Section = memo<SectionProps>(({ children, count, onToggle, open = true, ti
 Section.displayName = 'PullRequestSection';
 
 interface SectionsProps {
-  busy?: boolean;
+  busy?: PullRequestBusy;
   detail: DeviceGitPullRequestDetail;
   onAction: (action: DeviceGitPullRequestAction) => Promise<boolean>;
   onOpenTab: (tab: string) => void;
@@ -160,7 +161,7 @@ const Sections = memo<SectionsProps>(({ busy, detail, onAction, onOpenTab }) => 
         title={t('workingPanel.pr.section.activity')}
         onToggle={toggle('activity')}
       >
-        <Activity busy={busy} detail={detail} onAction={onAction} />
+        <ActivityTimeline busy={busy} detail={detail} onAction={onAction} />
       </Section>
     </>
   );

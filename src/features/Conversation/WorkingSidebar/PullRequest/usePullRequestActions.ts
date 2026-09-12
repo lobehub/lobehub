@@ -1,11 +1,20 @@
 import type { DeviceGitPullRequestAction, DeviceGitPullRequestActionResult } from '@lobechat/types';
-import { useCallback, useState } from 'react';
+import { toast } from '@lobehub/ui/base-ui';
+import { useCallback, useRef, useState } from 'react';
 
 import { mutate } from '@/libs/swr';
 import { deviceKeys } from '@/libs/swr/keys';
 import { gitService } from '@/services/git';
 
 export type PullRequestBusy = DeviceGitPullRequestAction['type'] | 'push';
+
+const DOCK_KINDS = new Set<PullRequestBusy>([
+  'autoMerge',
+  'merge',
+  'push',
+  'ready',
+  'updateBranch',
+]);
 
 interface UsePullRequestActionsParams {
   deviceId?: string;
@@ -22,19 +31,28 @@ export const usePullRequestActions = ({
 }: UsePullRequestActionsParams) => {
   const [busy, setBusy] = useState<PullRequestBusy>();
   const [error, setError] = useState<string>();
-  const [lastAction, setLastAction] = useState<DeviceGitPullRequestAction>();
+  const busyRef = useRef(false);
+  const retryRef = useRef<() => Promise<boolean>>(undefined);
 
   const perform = useCallback(
     async (kind: PullRequestBusy, request: () => Promise<DeviceGitPullRequestActionResult>) => {
-      if (busy) return false;
+      if (busyRef.current) return false;
+      busyRef.current = true;
       setBusy(kind);
-      setError(undefined);
+      const isDockAction = DOCK_KINDS.has(kind);
+      if (isDockAction) setError(undefined);
+      const fail = (message: string) => {
+        if (isDockAction) {
+          setError(message);
+          retryRef.current = () => perform(kind, request);
+        } else {
+          toast.error(message);
+        }
+        return false;
+      };
       try {
         const result = await request();
-        if (!result.success) {
-          setError(result.error || 'unknown error');
-          return false;
-        }
+        if (!result.success) return fail(result.error || 'unknown error');
         const cacheDeviceId = deviceId ?? 'local';
         await Promise.all([
           mutateDetail(),
@@ -50,22 +68,20 @@ export const usePullRequestActions = ({
         ]);
         return true;
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-        return false;
+        return fail(err instanceof Error ? err.message : String(err));
       } finally {
+        busyRef.current = false;
         setBusy(undefined);
       }
     },
-    [busy, deviceId, mutateDetail, workingDirectory],
+    [deviceId, mutateDetail, workingDirectory],
   );
 
   const run = useCallback(
-    (action: DeviceGitPullRequestAction) => {
-      setLastAction(action);
-      return perform(action.type, () =>
+    (action: DeviceGitPullRequestAction) =>
+      perform(action.type, () =>
         gitService.runPullRequestAction({ action, deviceId, number, path: workingDirectory }),
-      );
-    },
+      ),
     [deviceId, number, perform, workingDirectory],
   );
 
@@ -74,9 +90,7 @@ export const usePullRequestActions = ({
     [deviceId, perform, workingDirectory],
   );
 
-  const retry = useCallback(() => {
-    if (lastAction) void run(lastAction);
-  }, [lastAction, run]);
+  const retry = useCallback(() => void retryRef.current?.(), []);
 
   const dismissError = useCallback(() => setError(undefined), []);
 

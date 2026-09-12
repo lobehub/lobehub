@@ -12,7 +12,8 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { Tone } from './mergeDockData';
-import { timeAgo, TONE_COLOR } from './prVisual';
+import { timeAgo, TONE_COLOR, type TranslateKey } from './prVisual';
+import type { PullRequestBusy } from './usePullRequestActions';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   comment: css`
@@ -109,14 +110,15 @@ const buildTimeline = (detail: DeviceGitPullRequestDetail): Entry[] =>
     })),
   ].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 
-interface ActivityProps {
-  busy?: boolean;
+interface ActivityTimelineProps {
+  busy?: PullRequestBusy;
   detail: DeviceGitPullRequestDetail;
   onAction: (action: DeviceGitPullRequestAction) => Promise<boolean>;
 }
 
-const Activity = memo<ActivityProps>(({ busy, detail, onAction }) => {
+const ActivityTimeline = memo<ActivityTimelineProps>(({ busy, detail, onAction }) => {
   const { t } = useTranslation('chat');
+  const tr = t as unknown as TranslateKey;
   const [draft, setDraft] = useState('');
   const timeline = useMemo(() => buildTimeline(detail), [detail]);
 
@@ -156,7 +158,7 @@ const Activity = memo<ActivityProps>(({ busy, detail, onAction }) => {
             align={'center'}
             className={styles.event}
             gap={8}
-            key={`${entry.kind}:${entry.author}:${entry.at}`}
+            key={entry.kind === 'commit' ? entry.sha : `review:${entry.author}:${entry.at}`}
           >
             <Icon
               icon={visual.icon}
@@ -164,7 +166,7 @@ const Activity = memo<ActivityProps>(({ busy, detail, onAction }) => {
               style={visual.tone === 'neutral' ? undefined : { color: TONE_COLOR[visual.tone] }}
             />
             <span>
-              <strong>{entry.author}</strong> {t(visual.labelKey as never)}{' '}
+              <strong>{entry.author}</strong> {tr(visual.labelKey)}{' '}
               {entry.kind === 'commit' && <code>{entry.sha.slice(0, 7)}</code>} ·{' '}
               {timeAgo(entry.at)}
             </span>
@@ -181,8 +183,8 @@ const Activity = memo<ActivityProps>(({ busy, detail, onAction }) => {
         />
         <Flexbox horizontal justify={'flex-end'}>
           <Button
-            disabled={!draft.trim()}
-            loading={busy}
+            disabled={!draft.trim() || !!busy}
+            loading={busy === 'comment'}
             size={'small'}
             onClick={() => void submit()}
           >
@@ -194,6 +196,6 @@ const Activity = memo<ActivityProps>(({ busy, detail, onAction }) => {
   );
 });
 
-Activity.displayName = 'PullRequestActivity';
+ActivityTimeline.displayName = 'PullRequestActivityTimeline';
 
-export default Activity;
+export default ActivityTimeline;

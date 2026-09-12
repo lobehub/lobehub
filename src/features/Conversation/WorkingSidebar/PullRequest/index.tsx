@@ -128,7 +128,7 @@ const PullRequest = memo<PullRequestProps>(
         <Flexbox className={styles.scroll}>
           <Header detail={detail} onAction={actions.run} />
           <Sections
-            busy={actions.busy === 'comment'}
+            busy={actions.busy}
             detail={detail}
             onAction={actions.run}
             onOpenTab={onOpenTab}

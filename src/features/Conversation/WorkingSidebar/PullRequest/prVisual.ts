@@ -29,6 +29,8 @@ import type { DockRow, Tone } from './mergeDockData';
 
 dayjs.extend(relativeTime);
 
+export type TranslateKey = (key: string, params?: Record<string, string | number>) => string;
+
 export const TONE_COLOR: Record<Tone, string> = {
   error: cssVar.colorError,
   merged: MERGED_PURPLE,
