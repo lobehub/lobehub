@@ -47,6 +47,86 @@ export interface GitLinkedPullRequestResult {
   upstream?: GitUpstreamRef;
 }
 
+export interface GitPullRequestCheck {
+  completedAt?: string;
+  detailsUrl?: string;
+  name: string;
+  required: boolean;
+  startedAt?: string;
+  status: 'cancelled' | 'failure' | 'neutral' | 'pending' | 'skipped' | 'success';
+}
+
+export interface GitPullRequestComment {
+  author: string;
+  body: string;
+  createdAt: string;
+  id: string;
+}
+
+export interface GitPullRequestReview {
+  author: string;
+  state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED' | 'PENDING';
+  submittedAt: string;
+}
+
+export interface GitPullRequestCommit {
+  author: string;
+  committedAt: string;
+  message: string;
+  sha: string;
+}
+
+export interface GitPullRequestDetail {
+  additions: number;
+  author: string;
+  autoMerge?: { method: 'merge' | 'rebase' | 'squash' } | null;
+  baseRefName: string;
+  body: string;
+  changedFiles: number;
+  checks: GitPullRequestCheck[];
+  comments: GitPullRequestComment[];
+  commits: GitPullRequestCommit[];
+  deletions: number;
+  headRefName: string;
+  isDraft: boolean;
+  mergeable: 'CONFLICTING' | 'MERGEABLE' | 'UNKNOWN';
+  mergedAt?: string;
+  mergeStateStatus:
+    'BEHIND' | 'BLOCKED' | 'CLEAN' | 'DIRTY' | 'DRAFT' | 'HAS_HOOKS' | 'UNKNOWN' | 'UNSTABLE';
+  number: number;
+  repo: { name: string; owner: string };
+  reviewDecision: 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED' | null;
+  reviews: GitPullRequestReview[];
+  state: 'closed' | 'merged' | 'open';
+  title: string;
+  url: string;
+  viewerCanBypass: boolean;
+  viewerCanWrite: boolean;
+}
+
+export interface GitPullRequestDetailResult {
+  detail: GitPullRequestDetail | null;
+  status: GitLinkedPullRequestLookupStatus;
+}
+
+export type GitPullRequestMergeMethod = 'merge' | 'rebase' | 'squash';
+
+export type GitPullRequestAction =
+  | { admin?: boolean; deleteBranch?: boolean; method: GitPullRequestMergeMethod; type: 'merge' }
+  | { method: GitPullRequestMergeMethod; type: 'autoMerge' }
+  | { type: 'disableAutoMerge' }
+  | { method: 'merge' | 'rebase'; type: 'updateBranch' }
+  | { type: 'ready' }
+  | { body: string; type: 'comment' }
+  | { type: 'close' }
+  | { type: 'reopen' }
+  | { head: string; type: 'deleteBranch' };
+
+export interface GitPullRequestActionResult {
+  error?: string;
+  success: boolean;
+}
+
 export interface GitBranchListItem {
   current: boolean;
   name: string;
