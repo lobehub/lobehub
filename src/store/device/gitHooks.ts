@@ -5,6 +5,7 @@ import type {
 } from '@lobechat/electron-client-ipc';
 import type {
   DeviceGitAheadBehind,
+  DeviceGitPullRequestDetailResult,
   DeviceGitWorkingTreeStatus,
   DeviceGitWorktreeListItem,
 } from '@lobechat/types';
@@ -17,6 +18,7 @@ export type ReviewMode = 'unstaged' | 'branch';
 
 const UNSTAGED_REVIEW_REFRESH_INTERVAL = 10 * 1000;
 const BRANCH_REVIEW_REFRESH_INTERVAL = 30 * 1000;
+const PULL_REQUEST_DETAIL_REFRESH_INTERVAL = 30 * 1000;
 
 export interface ReviewPatchesData {
   baseRef?: string;
@@ -202,6 +204,41 @@ export const useFetchGitWorktrees = (deviceId: string | undefined, path?: string
  * Lazy-loaded list of remote branches under `refs/remotes/origin/*`.
  * Disabled until the Review base-ref picker opens.
  */
+export const pullRequestDetailRefreshInterval = (
+  detail: DeviceGitPullRequestDetailResult | undefined,
+  active: boolean,
+): number => {
+  if (!active || !detail?.detail) return 0;
+  const isPending =
+    detail.detail.mergeable === 'UNKNOWN' ||
+    detail.detail.checks.some((c) => c.status === 'pending');
+  return isPending ? PULL_REQUEST_DETAIL_REFRESH_INTERVAL : 0;
+};
+
+/**
+ * Full pull request detail for the Working Sidebar's Pull Request tab. Polls
+ * every 30s while a check is still pending or mergeability hasn't resolved
+ * yet, and stops once the PR settles into a steady state.
+ */
+export const useFetchGitPullRequestDetail = (
+  deviceId: string | undefined,
+  path: string | undefined,
+  number: number | undefined,
+  { active = true }: { active?: boolean } = {},
+) =>
+  useClientDataSWR<DeviceGitPullRequestDetailResult | undefined>(
+    number !== undefined && isEnabled(deviceId, path)
+      ? deviceKeys.gitPullRequestDetail(deviceId ?? 'local', path, number)
+      : null,
+    () => gitService.getPullRequestDetail({ deviceId, number: number!, path: path! }),
+    {
+      focusThrottleInterval: 60 * 1000,
+      refreshInterval: (detail) => pullRequestDetailRefreshInterval(detail, active),
+      revalidateOnFocus: true,
+      shouldRetryOnError: false,
+    },
+  );
+
 export const useGitRemoteBranches = (
   dirPath: string | undefined,
   enabled: boolean,

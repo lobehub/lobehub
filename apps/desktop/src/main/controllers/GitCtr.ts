@@ -9,6 +9,9 @@ import type {
   GitDeleteBranchResult,
   GitFileRevertResult,
   GitLinkedPullRequestResult,
+  GitPullRequestAction,
+  GitPullRequestActionResult,
+  GitPullRequestDetailResult,
   GitPullResult,
   GitPushResult,
   GitRemoteBranchListItem,
@@ -61,6 +64,25 @@ export default class GitController extends ControllerModule {
   }): Promise<GitLinkedPullRequestResult> {
     const { getLinkedPullRequest: computeLinkedPullRequest } = await loadGit();
     return computeLinkedPullRequest(payload);
+  }
+
+  @IpcMethod()
+  async getPullRequestDetail(payload: {
+    number: number;
+    path: string;
+  }): Promise<GitPullRequestDetailResult> {
+    const { getPullRequestDetail: computePullRequestDetail } = await loadGit();
+    return computePullRequestDetail(payload);
+  }
+
+  @IpcMethod()
+  async runPullRequestAction(payload: {
+    action: GitPullRequestAction;
+    number: number;
+    path: string;
+  }): Promise<GitPullRequestActionResult> {
+    const { runPullRequestAction: runPullRequestActionRpc } = await loadGit();
+    return runPullRequestActionRpc(payload);
   }
 
   @IpcMethod()
