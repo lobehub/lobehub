@@ -25,11 +25,15 @@ const styles = createStaticStyles(({ css }) => ({
     min-height: 0;
   `,
   scroll: css`
+    overflow: hidden;
     flex: 1;
     min-height: 0;
   `,
   scrollContent: css`
     padding-block: 0 10px;
+  `,
+  viewport: css`
+    overflow-x: hidden;
   `,
 }));
 
@@ -131,6 +135,7 @@ const PullRequest = memo<PullRequestProps>(
           scrollFade
           className={styles.scroll}
           contentProps={{ className: styles.scrollContent }}
+          viewportProps={{ className: styles.viewport, style: { overflowX: 'hidden' } }}
         >
           <Header detail={detail} onAction={actions.run} />
           <Sections

@@ -25,11 +25,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       background: ${cssVar.colorFillQuaternary};
     }
   `,
+  commentBodyWrap: css`
+    overflow: hidden;
+    min-width: 0;
+    padding-inline-start: 26px;
+  `,
   commentBody: css`
     overflow: hidden;
 
     min-width: 0;
-    margin-inline-start: 26px;
 
     font-size: 13px;
     line-height: 20px;
@@ -160,9 +164,11 @@ const ActivityTimeline = memo<ActivityTimelineProps>(({ busy, detail, onAction }
                 <strong>{entry.author}</strong>
                 <span>{timeAgo(entry.at)}</span>
               </Flexbox>
-              <Markdown allowHtml className={styles.commentBody} fontSize={13} variant={'chat'}>
-                {entry.body}
-              </Markdown>
+              <div className={styles.commentBodyWrap}>
+                <Markdown allowHtml className={styles.commentBody} fontSize={13} variant={'chat'}>
+                  {entry.body}
+                </Markdown>
+              </div>
             </div>
           );
         const visual =

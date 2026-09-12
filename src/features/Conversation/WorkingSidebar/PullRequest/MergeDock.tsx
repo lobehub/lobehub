@@ -33,6 +33,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextSecondary};
   `,
   checks: css`
+    overflow: hidden;
+  `,
+  checksViewport: css`
+    overflow-x: hidden;
     max-height: 200px;
   `,
   dock: css`
@@ -132,7 +136,14 @@ const MergeDock = memo<MergeDockProps>(
                 onClick={row.expandable ? () => setChecksOpen((open) => !open) : undefined}
               />
               {row.key === 'checks' && checksOpen && (
-                <ScrollArea disableContentFit className={styles.checks}>
+                <ScrollArea
+                  disableContentFit
+                  className={styles.checks}
+                  viewportProps={{
+                    className: styles.checksViewport,
+                    style: { overflowX: 'hidden' },
+                  }}
+                >
                   <ChecksList checks={detail.checks} />
                 </ScrollArea>
               )}
