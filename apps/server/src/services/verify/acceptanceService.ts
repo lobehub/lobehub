@@ -701,6 +701,7 @@ export class AcceptanceService {
     }
 
     await this.assertPlanLeavesAcceptedChecksAlone(existing, acceptanceId);
+    if (acceptance.archivedAt) await this.acceptanceModel.unarchivePolicy(acceptanceId);
 
     // A round that is still only planned has nothing to preserve: the incoming
     // run folds into it instead of pushing the ledger to yet another number.

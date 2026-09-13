@@ -378,6 +378,7 @@
   "acceptance.workspace.deleteConfirm.filesValue": "{{count}} 个（截图 {{images}} · 录屏 {{videos}} · 其他 {{other}}）",
   "acceptance.workspace.deleteConfirm.ok": "删除并释放 {{size}}",
   "acceptance.workspace.deleteConfirm.okBatch": "删除 {{count}} 项并释放 {{size}}",
+  "acceptance.workspace.deleteConfirm.okBatchPlain": "删除 {{count}} 项",
   "acceptance.workspace.deleteConfirm.rounds": "验收轮次",
   "acceptance.workspace.deleteConfirm.roundsValue": "{{count}} 轮",
   "acceptance.workspace.deleteConfirm.space": "释放空间",

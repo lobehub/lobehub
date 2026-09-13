@@ -573,6 +573,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
       if (targets.length === 0) return;
 
       openAcceptanceDeleteConfirm({
+        archived: filter === 'archived',
         ids: targets,
         onArchive: archiveSelected,
         onDelete: async () => {

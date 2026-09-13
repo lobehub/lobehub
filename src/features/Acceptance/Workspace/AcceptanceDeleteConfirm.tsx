@@ -21,7 +21,8 @@ import { formatSize } from '@/utils/format';
 
 import { frostedModalStyles } from '../Viewer/Review/modals';
 import { sumPurgePreviews } from './acceptanceArchive';
-import { ACCEPTANCE_BATCH_CHUNK } from './batchSelection';
+
+const PREVIEW_FAN_OUT_LIMIT = 20;
 
 const styles = createStaticStyles(({ css }) => ({
   facts: css`
@@ -75,14 +76,12 @@ interface DeleteConfirmProps {
 }
 
 const usePurgePreview = (ids: string[]) =>
-  useClientDataSWR(verifyKeys.acceptancePurgePreview(ids.join(',')), async () =>
-    sumPurgePreviews(
-      await Promise.all(
-        ids
-          .slice(0, ACCEPTANCE_BATCH_CHUNK)
-          .map((id) => verifyService.getAcceptancePurgePreview(id)),
+  useClientDataSWR(
+    ids.length > PREVIEW_FAN_OUT_LIMIT ? null : verifyKeys.acceptancePurgePreview(ids.join(',')),
+    async () =>
+      sumPurgePreviews(
+        await Promise.all(ids.map((id) => verifyService.getAcceptancePurgePreview(id))),
       ),
-    ),
   );
 
 const DeleteConfirmContent = memo<DeleteConfirmProps>(({ archived, ids, onArchive, onDelete }) => {
@@ -109,7 +108,9 @@ const DeleteConfirmContent = memo<DeleteConfirmProps>(({ archived, ids, onArchiv
   };
 
   const okLabel = !preview
-    ? translate('actions.delete')
+    ? batch
+      ? translate('acceptance.workspace.deleteConfirm.okBatchPlain', { count: ids.length })
+      : translate('actions.delete')
     : batch
       ? translate('acceptance.workspace.deleteConfirm.okBatch', {
           count: ids.length,

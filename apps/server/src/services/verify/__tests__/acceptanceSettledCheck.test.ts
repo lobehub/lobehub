@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   listByAcceptance: vi.fn(),
   listByRuns: vi.fn(),
   runFindById: vi.fn(),
+  unarchivePolicy: vi.fn(),
 }));
 
 vi.mock('@/database/models/acceptance', () => ({
@@ -14,6 +15,7 @@ vi.mock('@/database/models/acceptance', () => ({
     return {
       findById: mocks.acceptanceFindById,
       findPolicyById: mocks.acceptanceFindById,
+      unarchivePolicy: mocks.unarchivePolicy,
       update: vi.fn(),
       updatePolicyStatus: vi.fn(),
     };
@@ -172,5 +174,19 @@ describe('attaching a round that targets an accepted check', () => {
 
     await expect(service().attachRun('run-2', 'acc-1')).resolves.toMatchObject({ roundIndex: 2 });
     expect(mocks.attachToAcceptance).toHaveBeenCalledOnce();
+    expect(mocks.unarchivePolicy).not.toHaveBeenCalled();
+  });
+
+  it('un-archives the aggregate when a new round lands on an archived acceptance', async () => {
+    mocks.acceptanceFindById.mockResolvedValue({ ...ACCEPTANCE, archivedAt: new Date() });
+    mocks.runFindById.mockResolvedValue({
+      acceptanceId: null,
+      id: 'run-2',
+      plan: planned('open-check'),
+      userId: 'u1',
+    });
+
+    await expect(service().attachRun('run-2', 'acc-1')).resolves.toMatchObject({ roundIndex: 2 });
+    expect(mocks.unarchivePolicy).toHaveBeenCalledWith('acc-1');
   });
 });

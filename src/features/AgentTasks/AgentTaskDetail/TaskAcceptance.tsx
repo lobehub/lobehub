@@ -226,8 +226,13 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
   // follows the bundle's isOwner rather than dead-ending in FORBIDDEN.
   const unarchive = async () => {
     if (!acceptanceSubject) return;
-    await verifyService.unarchiveAcceptance(acceptanceSubject.id);
-    await mutateSubject();
+    try {
+      await verifyService.unarchiveAcceptance(acceptanceSubject.id);
+      await mutateSubject();
+    } catch (error) {
+      console.error('[acceptance:unarchive]', error);
+      toast.error(t('acceptance.workspace.archive.unarchiveError', { ns: 'verify' }));
+    }
   };
 
   const reportButton = acceptanceSubject && (

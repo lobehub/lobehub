@@ -511,6 +511,7 @@ export default {
     '{{count}} (screenshots {{images}} · recordings {{videos}} · other {{other}})',
   'acceptance.workspace.deleteConfirm.ok': 'Delete and free {{size}}',
   'acceptance.workspace.deleteConfirm.okBatch': 'Delete {{count}} and free {{size}}',
+  'acceptance.workspace.deleteConfirm.okBatchPlain': 'Delete {{count}}',
   'acceptance.workspace.deleteConfirm.rounds': 'Rounds',
   'acceptance.workspace.deleteConfirm.roundsValue': '{{count}} rounds',
   'acceptance.workspace.deleteConfirm.space': 'Space freed',

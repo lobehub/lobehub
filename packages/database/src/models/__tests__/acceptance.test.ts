@@ -435,6 +435,17 @@ describe('AcceptanceModel', () => {
     ).resolves.toBeUndefined();
   });
 
+  it('ensureForSubject un-archives an existing archived aggregate', async () => {
+    const model = new AcceptanceModel(serverDB, userId);
+    const row = await model.ensureForSubject('topic', topicId);
+    await model.archive(row.id);
+
+    const reused = await model.ensureForSubject('topic', topicId);
+    expect(reused.id).toBe(row.id);
+    expect(reused.archivedAt).toBeNull();
+    expect((await model.findById(row.id))?.archivedAt).toBeNull();
+  });
+
   it('query and queryPage exclude archived rows by default and include them when asked', async () => {
     const model = new AcceptanceModel(serverDB, userId);
     const live = await model.create({ subjectId: 'archive-live', subjectType: 'standalone' });

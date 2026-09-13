@@ -218,22 +218,16 @@ export class AcceptanceModel {
         !existing.metadata?.title && typeof defaults?.metadata?.title === 'string'
           ? defaults.metadata.title
           : undefined;
-      if (nextProjectId || nextRequirement || nextTitle) {
+      if (nextProjectId || nextRequirement || nextTitle || existing.archivedAt) {
         const metadata = nextTitle ? { ...existing.metadata, title: nextTitle } : existing.metadata;
-        await this.db
-          .update(acceptances)
-          .set({
-            metadata,
-            projectId: nextProjectId ?? existing.projectId,
-            requirement: nextRequirement ?? existing.requirement,
-          })
-          .where(eq(acceptances.id, existing.id));
-        return {
-          ...existing,
+        const patch = {
+          archivedAt: null,
           metadata,
           projectId: nextProjectId ?? existing.projectId,
           requirement: nextRequirement ?? existing.requirement,
         };
+        await this.db.update(acceptances).set(patch).where(eq(acceptances.id, existing.id));
+        return { ...existing, ...patch };
       }
       return existing;
     }
@@ -421,6 +415,18 @@ export class AcceptanceModel {
       .where(and(eq(acceptances.id, id), this.ownership()))
       .returning();
     return row;
+  };
+
+  /** Internal lifecycle counterpart to `unarchive`: a new round re-activates the aggregate. */
+  unarchivePolicy = async (id: string): Promise<void> => {
+    const policyScope = buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+    );
+    await this.db
+      .update(acceptances)
+      .set({ archivedAt: null })
+      .where(and(eq(acceptances.id, id), isNotNull(acceptances.archivedAt), policyScope));
   };
 
   delete = async (id: string) => {
