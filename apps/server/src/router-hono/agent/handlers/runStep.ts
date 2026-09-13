@@ -6,7 +6,6 @@ import { getServerDB } from '@/database/core/db-adaptor';
 import { agentOperations } from '@/database/schemas/agentOperations';
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime';
 import type { AgentExecutionResult, AgentStepContinuation } from '@/server/services/agentRuntime';
-import { isInlineAgentStepsEnabledForUser } from '@/server/services/agentRuntime/inlineStepsGate';
 import { AiAgentService } from '@/server/services/aiAgent';
 
 const log = debug('lobe-server:agent:run-step');
@@ -174,10 +173,6 @@ export async function runStep(c: Context): Promise<Response> {
     // round-trip per step. One lock owner spans the whole loop: the operation
     // lock is re-entrant for its owner, so a redelivery from the queue still
     // loses the race the same way it does for a single step.
-    // Rollout switch, resolved once per invocation from RuntimeConfig (Redis,
-    // cached ~5s per instance). Off means exactly one step per delivery, which
-    // is what the worker has always done.
-    const inlineEnabled = await isInlineAgentStepsEnabledForUser(metadata.userId);
 
     const stepLockOwner = aiAgentService.createOperationLockOwner(operationId);
     let pendingContinuation: AgentStepContinuation | undefined;
@@ -206,9 +201,6 @@ export async function runStep(c: Context): Promise<Response> {
       !verifyAsyncToolBarrier &&
       !groupMemberTimeout;
 
-    // Deliberately not gated on `inlineEnabled`: switching the flag off while
-    // operations are mid-loop must not strand the ones that already have an
-    // envelope parked and nothing queued behind them.
     // A previous invocation may have died part-way through its own inline loop.
     // It parks the envelope for each step before running it, so an envelope
     // ahead of the delivered index means exactly that: resume from there. Going
@@ -242,7 +234,7 @@ export async function runStep(c: Context): Promise<Response> {
         ? await aiAgentService.executeStep({
             context: resumeFrom.context,
             externalRetryCount,
-            inlineContinuation: inlineEnabled,
+            inlineContinuation: true,
             operationId,
             retainStepLock: true,
             stepIndex: resumeFrom.stepIndex,
@@ -256,7 +248,7 @@ export async function runStep(c: Context): Promise<Response> {
             finishAfterAsyncTool,
             groupMemberTimeout,
             humanInput,
-            inlineContinuation: inlineEnabled,
+            inlineContinuation: true,
             lockRetryAttempt,
             operationId,
             rejectAndContinue,
@@ -286,7 +278,7 @@ export async function runStep(c: Context): Promise<Response> {
 
         result = await aiAgentService.executeStep({
           context: next.context,
-          inlineContinuation: inlineEnabled,
+          inlineContinuation: true,
           operationId,
           retainStepLock: true,
           stepIndex: next.stepIndex,
