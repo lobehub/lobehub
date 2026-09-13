@@ -9,9 +9,11 @@
   },
   "dependencies": {
     "@lobechat/builtin-agents": "workspace:*",
+    "@lobechat/builtin-tool-local-system": "workspace:*",
     "@lobechat/builtin-tool-page-agent": "workspace:*",
     "@lobechat/builtin-tool-task": "workspace:*",
     "@lobechat/context-engine": "workspace:*",
+    "@lobechat/prompts": "workspace:*",
     "@lobechat/types": "workspace:*",
     "debug": "^4.4.3",
     "immer": "^10.1.3"
