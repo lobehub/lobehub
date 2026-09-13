@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '@/server/services/aiAgent';
+import { after } from '@/server/utils/scheduleAfterResponse';
 
 import { runStep, runStepHealth } from '../runStep';
 
@@ -669,6 +670,37 @@ describe('runStep inline step loop', () => {
     await runStep(ctx);
 
     expect(mockClearInlineResume).toHaveBeenCalledWith('op-1', 'op-1:owner');
+  });
+
+  it('settles work a step deferred before the next inline step starts', async () => {
+    // Budget holds are released in work deferred with `after()`. If that work
+    // waited for the end of the invocation, every earlier step's hold would
+    // still be reserved when the next step reserves, and users with enough
+    // credit get rejected as over budget.
+    const events: string[] = [];
+    mockExecuteStep
+      .mockImplementationOnce(async () => {
+        after(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          events.push('step 2 settled');
+        });
+        events.push('step 2 done');
+        return {
+          continuation: continuationFor(3),
+          nextStepScheduled: false,
+          state: { status: 'running', stepCount: 3 },
+          success: true,
+        };
+      })
+      .mockImplementationOnce(async () => {
+        events.push('step 3 started');
+        return { nextStepScheduled: false, state: doneState, success: true };
+      });
+
+    const { ctx } = buildContext({ body: validBody });
+    await runStep(ctx);
+
+    expect(events).toEqual(['step 2 done', 'step 2 settled', 'step 3 started']);
   });
 
   it('ignores a parked envelope that is not ahead of the delivered step', async () => {
