@@ -295,13 +295,6 @@ type SystemStrings = {
   guestTextTruncated: (limit: number) => string;
   inlineError: (message: string) => string;
   processing: string;
-  /**
-   * Generic "user is not on the allowlist" copy used when the global
-   * `allowFrom` gate rejects an inbound non-DM event. Delivered via
-   * ephemeral (Slack) or as an out-of-band DM (Discord/Telegram fallback),
-   * so the wording avoids "direct messages" — the sender did not try to DM.
-   */
-  senderRejected: string;
   stoppedDefault: string;
   toolsCallingHeader: (count: number, time: string) => string;
 };
@@ -431,8 +424,6 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       `Response truncated because Telegram Guest Mode supports one ${limit}-character reply.`,
     inlineError: (message) => `**Error**: ${message}`,
     processing: 'Processing...',
-    senderRejected:
-      "Sorry, you aren't authorized to interact with this bot. Please contact the bot's owner if you need access.",
     stoppedDefault: 'Execution stopped.',
     toolsCallingHeader: (count, time) => `> total **${count}** tools calling ${time}\n\n`,
   },
@@ -548,7 +539,6 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       `回复已被截断：Telegram 访客模式仅支持一条 ${limit} 字符的回复。`,
     inlineError: (message) => `**错误**：${message}`,
     processing: '处理中…',
-    senderRejected: '抱歉，您没有与该机器人交互的权限。如需访问请联系机器人管理员。',
     stoppedDefault: '执行已停止。',
     toolsCallingHeader: (count, time) => `> 共 **${count}** 次工具调用 ${time}\n\n`,
   },
@@ -933,17 +923,6 @@ export function renderGuestRejected(
 ): string {
   const strings = getSystemStrings(lng);
   return reason === 'disabled' ? strings.guestRejectedDisabled : strings.guestRejectedAllowlist;
-}
-
-/**
- * Render the system message shown when the **global `allowFrom`** gate
- * rejected the sender of a non-DM event (group / channel / thread). The
- * notice is delivered out-of-band — ephemerally on Slack, via DM fallback
- * on Discord/Telegram — so the copy intentionally avoids "direct messages"
- * (the sender did not try to DM, they @-mentioned in a group).
- */
-export function renderSenderRejected(lng?: BotReplyLocale): string {
-  return getSystemStrings(lng).senderRejected;
 }
 
 // ==================== Dispatcher ====================

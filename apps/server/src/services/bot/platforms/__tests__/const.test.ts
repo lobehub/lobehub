@@ -17,7 +17,6 @@ import {
   messageMatchesWatchKeyword,
   normalizeAllowFromEntries,
   normalizeBotReplyLocale,
-  shouldAllowSender,
   shouldHandleDm,
   shouldHandleGroup,
   shouldHandleGuest,
@@ -348,28 +347,6 @@ describe('extractGroupSettings', () => {
   });
 });
 
-describe('shouldAllowSender (global user allowlist)', () => {
-  const empty = { ids: [] as string[] };
-  const aliceAndBob = { ids: ['alice-id', 'bob-id'] };
-
-  it('passes any sender when the allowlist is empty (no global filter)', () => {
-    expect(shouldAllowSender({ authorUserId: 'anyone', userAllowlist: empty })).toBe(true);
-    expect(shouldAllowSender({ authorUserId: undefined, userAllowlist: empty })).toBe(true);
-  });
-
-  it('passes senders in the populated allowlist', () => {
-    expect(shouldAllowSender({ authorUserId: 'alice-id', userAllowlist: aliceAndBob })).toBe(true);
-  });
-
-  it('blocks senders outside the populated allowlist', () => {
-    expect(shouldAllowSender({ authorUserId: 'carol-id', userAllowlist: aliceAndBob })).toBe(false);
-  });
-
-  it('fails closed for a missing user id when the allowlist is populated', () => {
-    expect(shouldAllowSender({ authorUserId: undefined, userAllowlist: aliceAndBob })).toBe(false);
-  });
-});
-
 describe('shouldHandleDm', () => {
   const open = { policy: 'open' as const };
   const disabled = { policy: 'disabled' as const };
@@ -409,8 +386,8 @@ describe('shouldHandleDm', () => {
         userAllowlist: emptyUserAllowlist,
       }),
     ).toBe('allow');
-    // The global gate (shouldAllowSender) is the runtime filter for `open`;
-    // shouldHandleDm itself does not re-check it.
+    // Regression: Open must remain open even when this shared list contains
+    // users approved for another access policy.
     expect(
       shouldHandleDm({
         authorUserId: 'anyone',
@@ -643,6 +620,16 @@ describe('shouldHandleGroup', () => {
       shouldHandleGroup({
         candidateChannelIds: ['any-channel'],
         groupSettings: open,
+        isDM: false,
+      }),
+    ).toBe(true);
+  });
+
+  it('ignores a populated channel allowlist under the open policy', () => {
+    expect(
+      shouldHandleGroup({
+        candidateChannelIds: ['external-channel'],
+        groupSettings: { allowFrom: ['approved-channel'], policy: 'open' },
         isDM: false,
       }),
     ).toBe(true);

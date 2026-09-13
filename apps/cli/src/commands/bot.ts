@@ -160,13 +160,33 @@ function registerAllowlistCommand(bot: Command, opts: AllowlistGroupOptions) {
     normalizeAllowList((bot.settings as Record<string, unknown> | null)?.[opts.fieldKey]);
 
   // Build the next settings payload from existing settings + the new entries.
-  const buildPayload = (bot: any, nextEntries: AllowEntry[]) => ({
-    id: bot.id,
-    settings: {
+  const buildPayload = (bot: any, nextEntries: AllowEntry[], activate = false) => {
+    const settings = {
       ...(bot.settings as Record<string, unknown>),
       [opts.fieldKey]: nextEntries,
-    },
-  });
+    };
+
+    if (activate && opts.fieldKey === 'allowFrom') {
+      if (settings.dmPolicy === undefined || settings.dmPolicy === 'open') {
+        settings.dmPolicy = 'allowlist';
+      }
+      if (
+        bot.platform === 'telegram' &&
+        (settings.guestPolicy === undefined || settings.guestPolicy === 'open')
+      ) {
+        settings.guestPolicy = 'allowlist';
+      }
+    }
+    if (
+      activate &&
+      opts.fieldKey === 'groupAllowFrom' &&
+      (settings.groupPolicy === undefined || settings.groupPolicy === 'open')
+    ) {
+      settings.groupPolicy = 'allowlist';
+    }
+
+    return { id: bot.id, settings };
+  };
 
   group
     .command('list <botId>')
@@ -220,7 +240,7 @@ function registerAllowlistCommand(bot: Command, opts: AllowlistGroupOptions) {
         trimmedName ? { id: trimmedId, name: trimmedName } : { id: trimmedId },
       ];
 
-      await client.agentBotProvider.update.mutate(buildPayload(b, next) as any);
+      await client.agentBotProvider.update.mutate(buildPayload(b, next, true) as any);
       console.log(
         `${pc.green('✓')} Added ${pc.bold(trimmedId)}${trimmedName ? ` (${trimmedName})` : ''} to ${opts.fieldKey} (now ${next.length} entr${next.length === 1 ? 'y' : 'ies'})`,
       );
@@ -794,17 +814,17 @@ export function registerBotCommand(program: Command) {
       },
     );
 
-  // ── allowlist (DM / group user gate) ──────────────────
+  // ── allowlist (DM / Telegram Guest user gate) ─────────
 
   registerAllowlistCommand(bot, {
-    description: 'Manage the global user allowlist (gates DMs and group @mentions)',
+    description: 'Manage allowed DM and Telegram Guest users (add restricts open surfaces)',
     fieldKey: 'allowFrom',
     idLabel: 'platform user ID',
     name: 'allowlist',
   });
 
   registerAllowlistCommand(bot, {
-    description: 'Manage the group/channel allowlist (used when groupPolicy=allowlist)',
+    description: 'Manage allowed groups/channels (add restricts open group access)',
     fieldKey: 'groupAllowFrom',
     idLabel: 'channel / group / thread ID',
     name: 'group-allowlist',

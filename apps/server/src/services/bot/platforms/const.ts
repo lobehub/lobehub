@@ -147,19 +147,15 @@ export function normalizeBotReplyLocale(
  * every saved channel.
  *
  * Allowlists are split by what they hold:
- * - `allowFrom` (top level, unprefixed) — **user IDs**. A *global* identity
- *   gate: when populated, **only** these users can interact with the bot
- *   anywhere — DMs, group @mentions, threads — regardless of `dmPolicy` /
- *   `groupPolicy` mode. Empty means "no user-level filter". Setting
- *   `dmPolicy='allowlist'` is an explicit "DMs require this list" signal
- *   that fails closed when the list is empty; otherwise the global gate
- *   already does the work.
+ * - `allowFrom` (top level, unprefixed) — **user IDs** shared by the DM and
+ *   Telegram Guest `allowlist` / `pairing` policies. Open policies do not
+ *   consult it. Empty allowlists fail closed only when the selected policy
+ *   is `allowlist`; pairing uses the same list as its approved-user set.
  * - `groupAllowFrom` — **channel / group / thread IDs**. Owned by
  *   `groupPolicy` because the value type is unrelated to user IDs.
  *
- * The naming rule: a name without a scope prefix advertises that the value
- * crosses scopes (`allowFrom` is consulted by every gate); a prefixed name
- * advertises the field is the property of one specific scope.
+ * The naming rule: a name without a scope prefix is shared by more than one
+ * user-scoped policy; a prefixed name belongs to one specific scope.
  */
 export type DmPolicy = 'open' | 'allowlist' | 'pairing' | 'disabled';
 
@@ -199,9 +195,8 @@ const GROUP_POLICIES: ReadonlySet<GroupPolicy> = new Set(['open', 'allowlist', '
 /**
  * DM Policy: gate inbound 1:1 messages.
  *
- * - `open` (default): accept DMs from anyone (subject to the global
- *   `allowFrom` gate when that is populated)
- * - `allowlist`: DMs require the sender to be in the global `allowFrom`
+ * - `open` (default): accept DMs from anyone
+ * - `allowlist`: DMs require the sender to be in the shared `allowFrom`
  *   list. Distinct from `open` only when `allowFrom` is empty: `allowlist`
  *   then **fails closed** (no DMs), while `open` still lets anyone DM.
  * - `pairing`: same gate as `allowlist`, but a non-listed sender receives a
@@ -241,7 +236,7 @@ export function makeDmPolicyField(defaults: { policy: DmPolicy }): FieldSchema {
  * from DMs and groups the bot has joined.
  *
  * Guest Mode is a user-scoped surface, so `allowlist` and `pairing` reuse
- * the global `allowFrom` user IDs rather than the channel-ID based
+ * the shared `allowFrom` user IDs rather than the channel-ID based
  * `groupAllowFrom` list.
  */
 export function makeGuestPolicyField(defaults: { policy: GuestPolicy }): FieldSchema {
@@ -268,15 +263,11 @@ export function makeGuestPolicyField(defaults: { policy: GuestPolicy }): FieldSc
 }
 
 /**
- * Global user-ID allowlist. Always visible — when populated, the runtime
- * applies it to **all** inbound traffic (DM, group, and Telegram Guest
- * Mode), independently of the per-scope policy. Empty means "no user-level
- * filter".
+ * User-ID allowlist shared by DM and Telegram Guest `allowlist` / `pairing`
+ * policies. Open policies ignore it. Empty means no approved users.
  *
- * Tying visibility to `dmPolicy='allowlist'` was tried earlier and rejected
- * because it forced operators who only wanted to scope group @mentions to
- * also flip DM mode, which is misleading. Always-visible matches the
- * field's actual semantics.
+ * The field stays visible because Telegram Guest and DM policies share it,
+ * and pairing approvals append to it at runtime.
  *
  * Stored as `Array<{ id, name? }>` so the operator can label each entry
  * (e.g. `name: 'Product colleague Ada'`) and recognise IDs months later. The runtime
@@ -664,7 +655,7 @@ export function extractGuestSettings(
 }
 
 /**
- * Read the global user-ID allowlist from `settings.allowFrom`.
+ * Read the shared user-ID allowlist from `settings.allowFrom`.
  *
  * When `allowFrom` is non-empty and `settings.userId` (the operator's own
  * platform ID, used by AI tools to push notifications back to them) is
@@ -698,25 +689,6 @@ export function extractGroupSettings(
 }
 
 /**
- * Global user-level gate. The router applies this **before** every per-scope
- * policy check, so a populated `allowFrom` restricts who can interact with
- * the bot anywhere — DMs, group @mentions, threads.
- *
- * - Empty `allowFrom` → no filter, anyone passes.
- * - Populated `allowFrom` → sender's user ID must be in the list. A missing
- *   `authorUserId` fails closed.
- */
-export function shouldAllowSender(params: {
-  authorUserId: string | undefined;
-  userAllowlist: UserAllowlist;
-}): boolean {
-  const { authorUserId, userAllowlist } = params;
-  if (userAllowlist.ids.length === 0) return true;
-  if (!authorUserId) return false;
-  return userAllowlist.ids.includes(authorUserId);
-}
-
-/**
  * Three-state outcome of the DM gate. `pair` is distinct from `reject`
  * because the router branches on it (issue a pairing code instead of
  * dropping the sender). Existing pass / fail call-sites can keep treating
@@ -731,12 +703,8 @@ export type GuestDecision = 'allow' | 'pair' | 'reject';
  * Gate inbound DM handling. Non-DM threads pass through unconditionally —
  * those are governed by `shouldHandleGroup` instead.
  *
- * Callers are expected to apply {@link shouldAllowSender} first, so this
- * function only encodes the per-scope semantics:
- *
  * - `policy='disabled'` → `'reject'` for everyone.
- * - `policy='open'` → `'allow'` (the global `allowFrom` filter, when
- *   populated, is enforced earlier by the caller).
+ * - `policy='open'` → `'allow'`, regardless of `allowFrom`.
  * - `policy='allowlist'` → `'allow'` for senders in `userAllowlist`,
  *   `'reject'` otherwise. Fails closed when the list is empty (this is
  *   the only behavioural difference from `open`).
@@ -778,7 +746,7 @@ export function shouldHandleDm(params: {
  * Gate Telegram Guest Mode handling. Non-Guest threads pass through
  * unconditionally and continue to the normal DM / group gates.
  *
- * `allowlist` and `pairing` use the global user allowlist because Guest
+ * `allowlist` and `pairing` use the shared user allowlist because Guest
  * access belongs to the summoning user, not to a chat the bot joined.
  * Pairing reuses the existing approval lifecycle and owner override.
  */

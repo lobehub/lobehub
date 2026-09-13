@@ -41,7 +41,6 @@ export {
   normalizeAllowFromEntries,
   normalizeBotReplyLocale,
   RECEIVED_REACTION_EMOJI,
-  shouldAllowSender,
   shouldHandleDm,
   shouldHandleGroup,
   shouldHandleGuest,

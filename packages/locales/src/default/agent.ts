@@ -306,13 +306,13 @@ export default {
   'channel.guestPolicyPairingHint': 'Strangers need /approve to use Guest Mode',
   'channel.allowFrom': 'Allowed Users',
   'channel.allowFromHint':
-    "Only listed users can interact with the bot in DMs, groups, and Guest Mode; your 'Platform User ID' is auto-included.",
+    "Used by Allowlist and Pairing policies for DMs and Telegram Guest Mode; your 'Platform User ID' is auto-included.",
   'channel.allowFromIdLabel': 'User ID',
   'channel.allowFromIdPlaceholder': 'Platform user ID',
   'channel.allowFromNameLabel': 'Note',
   'channel.allowFromNamePlaceholder': 'e.g. Alice (your reminder)',
   'channel.allowFromAdd': 'Add user',
-  'channel.allowFromEmpty': 'No users added yet — anyone can interact with the bot.',
+  'channel.allowFromEmpty': 'No approved users added yet.',
   'channel.groupPolicy': 'Group Policy',
   'channel.groupPolicyHint': 'Where the bot responds in groups, channels, and threads',
   'channel.groupPolicyAllowlist': 'Allowlist',
@@ -361,7 +361,7 @@ export default {
     'Workspace ID (starts with T). Find it under Settings & administration → Workspace settings, or in the workspace URL.',
   'channel.userId': 'Your Platform User ID',
   'channel.userIdHint':
-    'Lets AI tools reach you proactively (e.g. reminders); auto-trusted by the global allowlist',
+    'Lets AI tools reach you proactively (e.g. reminders); auto-trusted by Allowlist and Pairing policies',
   'channel.userIdMissingDesc':
     "Without it, AI tools can't reach you with reminders, and pairing approvals will fail. Send /whoami to the bot to get your ID, then fill it in under Advanced Settings.",
   'channel.userIdMissingTitle': 'Add your platform User ID',

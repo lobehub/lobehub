@@ -16,7 +16,6 @@ import {
   renderGuestTruncated,
   renderInlineError,
   renderLLMGenerating,
-  renderSenderRejected,
   renderStart,
   renderStepProgress,
   renderStopped,
@@ -820,26 +819,6 @@ describe('replyTemplate', () => {
       expect(renderGuestPairing('code', 'en-US', { code: 'PAIR123' })).toContain('Guest Mode');
       expect(renderGuestPairing('capacity-exceeded')).toContain('too many Guest Mode');
       expect(renderGuestPairing('unavailable', 'zh-CN')).toContain('暂时不可用');
-    });
-  });
-
-  // ==================== renderSenderRejected ====================
-
-  describe('renderSenderRejected', () => {
-    it("uses generic 'interact with this bot' phrasing — never 'direct messages'", () => {
-      // The notice is shown out-of-band when a user @-mentioned in a
-      // group; saying "you aren't authorized to send direct messages"
-      // would misdescribe what the user actually did.
-      const en = renderSenderRejected();
-      expect(en).toContain("aren't authorized");
-      expect(en).toContain('interact with this bot');
-      expect(en).not.toContain('direct messages');
-    });
-
-    it('renders Chinese copy when locale is zh-CN, also avoiding DM phrasing', () => {
-      const zh = renderSenderRejected('zh-CN');
-      expect(zh).toContain('交互的权限');
-      expect(zh).not.toContain('私信');
     });
   });
 

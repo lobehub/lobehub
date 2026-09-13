@@ -52,7 +52,6 @@ import {
   platformRegistry,
   resolveBotConcurrency,
   resolveBotProviderConfig,
-  shouldAllowSender,
   shouldHandleDm,
   shouldHandleGroup,
   shouldHandleGuest,
@@ -72,7 +71,6 @@ import {
   renderGuestRejected,
   renderInlineError,
   renderModeStatus,
-  renderSenderRejected,
   renderWhoami,
 } from './replyTemplate';
 
@@ -771,17 +769,6 @@ export class BotMessageRouter {
     };
 
     /**
-     * Global user-level gate. Applied **before** any per-scope policy so a
-     * populated `allowFrom` restricts every inbound surface (DMs, group
-     * @mentions, threads) to listed users. Empty list = no filter.
-     */
-    const passesGlobalAllowlist = (message: { author?: { userId?: string } }): boolean =>
-      shouldAllowSender({
-        authorUserId: message.author?.userId,
-        userAllowlist,
-      });
-
-    /**
      * Gate inbound events on DM policy. Non-DM threads pass through — their
      * group-policy / @mention rules apply instead. The `'pair'` decision
      * is distinct from `'reject'` because the router branches on it (issue
@@ -842,36 +829,6 @@ export class BotMessageRouter {
         groupSettings,
         isDM: thread.isDM === true,
       });
-    };
-
-    /**
-     * Handle a sender that the global `allowFrom` rejected. Posts the
-     * notice in the same thread the inbound event arrived on, mirroring
-     * `notifyGroupRejected` / `notifyDmRejected` rather than escalating
-     * to ephemeral / out-of-band DM.
-     *
-     * - DM scope: uses the DM-allowlist copy ("you aren't authorized to
-     *   send direct messages…") since the sender is on the DM surface.
-     * - Group scope: uses the generic `senderRejected` copy that avoids
-     *   "direct messages" — the sender @-mentioned in a group, not in a
-     *   DM. On Discord this lands inside the auto-created reply thread,
-     *   so it doesn't pollute the parent channel; on Telegram / Slack /
-     *   Feishu it's visible to the group, which is consistent with how
-     *   `notifyGroupRejected` already handles policy-driven rejections.
-     */
-    const handleSenderRejected = async (
-      thread: { isDM?: boolean; post: (text: string) => Promise<unknown> },
-      replyLocale: BotReplyLocale,
-    ): Promise<void> => {
-      const text =
-        thread.isDM === true
-          ? renderDmRejected('allowlist', replyLocale)
-          : renderSenderRejected(replyLocale);
-      try {
-        await thread.post(text);
-      } catch (error) {
-        log('handleSenderRejected: failed to post rejection notice: %O', error);
-      }
     };
 
     /**
@@ -1065,8 +1022,8 @@ export class BotMessageRouter {
     };
 
     /**
-     * Run all three access gates (global `allowFrom`, group policy, DM policy)
-     * and post the appropriate rejection notice in the thread on failure.
+     * Run the applicable Guest, group, and DM policy gates and post the
+     * appropriate rejection notice in the thread on failure.
      * Returns true when the inbound passes every gate.
      *
      * Centralised so every entry point — @-mentions, subscribed-message
@@ -1143,25 +1100,6 @@ export class BotMessageRouter {
       // which already treats the operator as always-allowed.
       if (operatorUserId && author.userId === operatorUserId) {
         return finishFeatureAccess();
-      }
-      // Pairing redefines what `allowFrom` means: it's the post-approval
-      // list. Pairing applicants must reach their scope gate so it can issue
-      // a code instead of being short-circuited by the global allowlist.
-      const isGuest = platform === 'telegram' && isGuestTelegramThreadId(thread.id);
-      const isPairingDm = thread.isDM === true && dmSettings.policy === 'pairing';
-      const isPairingGuest = isGuest && guestSettings.policy === 'pairing';
-      if (!isPairingDm && !isPairingGuest && !passesGlobalAllowlist({ author })) {
-        log(
-          '%s: sender blocked by allowFrom, agent=%s, platform=%s, thread=%s, author=%s',
-          caller,
-          agentId,
-          platform,
-          thread.id,
-          author.userName ?? author.userId,
-        );
-        await ensureRejectionVisible();
-        await handleSenderRejected(thread, replyLocale);
-        return false;
       }
       const guestDecision = passesGuestPolicy(thread, { author });
       if (guestDecision !== 'allow') {
@@ -2237,8 +2175,8 @@ export class BotMessageRouter {
       fallback: BotReplyLocale;
     },
     /**
-     * Apply the same access stack the message handlers use (allowFrom +
-     * group policy + DM policy) before dispatching a command. Returns true
+     * Apply the same access stack the message handlers use (Guest, group,
+     * and DM policy) before dispatching a command. Returns true
      * when the dispatch is allowed; on rejection the helper has already
      * posted the appropriate notice in the thread.
      */

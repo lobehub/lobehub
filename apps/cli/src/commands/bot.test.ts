@@ -267,6 +267,83 @@ describe('bot command', () => {
     });
   });
 
+  describe('allowlists', () => {
+    it('should activate open DM and Telegram Guest policies when adding an allowed user', async () => {
+      mockTrpcClient.agentBotProvider.list.query.mockResolvedValue([
+        {
+          id: 'b1',
+          platform: 'telegram',
+          settings: { dmPolicy: 'open', guestPolicy: 'open' },
+        },
+      ]);
+      mockTrpcClient.agentBotProvider.getByAgentId.query.mockResolvedValue([]);
+      mockTrpcClient.agentBotProvider.update.mutate.mockResolvedValue({});
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'bot', 'allowlist', 'add', 'b1', 'alice']);
+
+      expect(mockTrpcClient.agentBotProvider.update.mutate).toHaveBeenCalledWith({
+        id: 'b1',
+        settings: {
+          allowFrom: [{ id: 'alice' }],
+          dmPolicy: 'allowlist',
+          guestPolicy: 'allowlist',
+        },
+      });
+    });
+
+    it('should activate the group policy when adding an allowed channel', async () => {
+      mockTrpcClient.agentBotProvider.list.query.mockResolvedValue([
+        { id: 'b1', platform: 'discord', settings: { groupPolicy: 'open' } },
+      ]);
+      mockTrpcClient.agentBotProvider.getByAgentId.query.mockResolvedValue([]);
+      mockTrpcClient.agentBotProvider.update.mutate.mockResolvedValue({});
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'bot',
+        'group-allowlist',
+        'add',
+        'b1',
+        'channel-1',
+      ]);
+
+      expect(mockTrpcClient.agentBotProvider.update.mutate).toHaveBeenCalledWith({
+        id: 'b1',
+        settings: {
+          groupAllowFrom: [{ id: 'channel-1' }],
+          groupPolicy: 'allowlist',
+        },
+      });
+    });
+
+    it('should preserve restrictive policies when adding an allowed user', async () => {
+      mockTrpcClient.agentBotProvider.list.query.mockResolvedValue([
+        {
+          id: 'b1',
+          platform: 'telegram',
+          settings: { dmPolicy: 'disabled', guestPolicy: 'pairing' },
+        },
+      ]);
+      mockTrpcClient.agentBotProvider.getByAgentId.query.mockResolvedValue([]);
+      mockTrpcClient.agentBotProvider.update.mutate.mockResolvedValue({});
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'bot', 'allowlist', 'add', 'b1', 'alice']);
+
+      expect(mockTrpcClient.agentBotProvider.update.mutate).toHaveBeenCalledWith({
+        id: 'b1',
+        settings: {
+          allowFrom: [{ id: 'alice' }],
+          dmPolicy: 'disabled',
+          guestPolicy: 'pairing',
+        },
+      });
+    });
+  });
+
   describe('remove', () => {
     it('should remove with --yes', async () => {
       mockTrpcClient.agentBotProvider.delete.mutate.mockResolvedValue([{ id: 'b1' }]);

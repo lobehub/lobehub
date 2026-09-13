@@ -109,13 +109,13 @@ Guest summons use their own **Guest Policy** and are not gated by **Group Policy
 
 Three independent policies gate inbound traffic. All default to **Open**.
 
-### Allowed User IDs (global)
+### Allowed User IDs
 
-A populated **Allowed User IDs** field acts as a global gate — DMs, group `@mentions`, and Guest Mode summons are restricted to listed Telegram numeric user IDs. Empty means "no user-level filter". Grab a user's numeric ID via [@userinfobot](https://t.me/userinfobot), or read the `from.id` field from the bot's incoming update.
+The approved-user list shared by DM and Guest **Allowlist** / **Pairing** policies. Both **Open** policies ignore it, and group `@mentions` are controlled independently by **Group Policy**. Grab a user's numeric ID via [@userinfobot](https://t.me/userinfobot), or read the `from.id` field from the bot's incoming update.
 
 ### DM Policy
 
-- **Open (default)** — Anyone on Telegram can DM the bot (subject to the global allowlist when set).
+- **Open (default)** — Anyone on Telegram can DM the bot. **Allowed User IDs** is ignored.
 - **Allowlist** — DMs require the sender to be in **Allowed User IDs**. Differs from `Open` only when the list is empty: `Allowlist` then fails closed (no DMs).
 - **Pairing** — Same gate as `Allowlist`, but a non-listed sender receives a one-time pairing code instead of a flat rejection. Approve via `/approve <code>` and the applicant is auto-appended to **Allowed User IDs**. Requires **Your Platform User ID** to be set (the runtime checks the `/approve` sender against it) and a configured Redis backend.
 - **Disabled** — The bot ignores all DMs and only responds to group `@mentions`.
@@ -132,7 +132,7 @@ Controls which Telegram groups / channels the bot will respond in.
 
 Controls who can summon the bot through Telegram Guest Mode without adding it to the chat.
 
-- **Open (default)** — Accept Guest Mode summons from anyone. A populated **Allowed User IDs** list still acts as a global user gate.
+- **Open (default)** — Accept Guest Mode summons from anyone. **Allowed User IDs** is ignored.
 - **Allowlist** — Only users in **Allowed User IDs** can summon the bot. An empty list fails closed.
 - **Pairing** — Non-listed users receive a one-time pairing code in the Guest reply. Approve via `/approve <code>` and ask them to summon the bot again. Requires **Your Platform User ID** and Redis.
 - **Disabled** — Reject all Guest Mode summons. This does not affect DMs or groups the bot has joined.
@@ -141,15 +141,15 @@ See the [Channels overview](/docs/usage/channels/overview#direct-message-policy)
 
 ## Configuration Reference
 
-| Field                    | Required | Description                                                                                                             |
-| ------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------- |
-| **Bot Token**            | Yes      | API token from BotFather                                                                                                |
-| **Webhook Secret Token** | No       | Optional secret for verifying webhook requests                                                                          |
-| **Allowed User IDs**     | No       | Comma- or whitespace-separated Telegram numeric user IDs. Global gate — applies to DMs, group @mentions, and Guest Mode |
-| **DM Policy**            | No       | `open` (default), `allowlist`, `pairing`, or `disabled` — who is allowed to DM the bot                                  |
-| **Group Policy**         | No       | `open` (default), `allowlist`, or `disabled` — where the bot responds in groups                                         |
-| **Guest Policy**         | No       | `open` (default), `allowlist`, `pairing`, or `disabled` — who can use Telegram Guest Mode                               |
-| **Allowed Channel IDs**  | No       | Comma- or whitespace-separated Telegram chat IDs (group IDs are negative). Used when Group Policy is Allowlist          |
+| Field                    | Required | Description                                                                                                    |
+| ------------------------ | -------- | -------------------------------------------------------------------------------------------------------------- |
+| **Bot Token**            | Yes      | API token from BotFather                                                                                       |
+| **Webhook Secret Token** | No       | Optional secret for verifying webhook requests                                                                 |
+| **Allowed User IDs**     | No       | Telegram numeric user IDs shared by DM and Guest Allowlist / Pairing policies                                  |
+| **DM Policy**            | No       | `open` (default), `allowlist`, `pairing`, or `disabled` — who is allowed to DM the bot                         |
+| **Group Policy**         | No       | `open` (default), `allowlist`, or `disabled` — where the bot responds in groups                                |
+| **Guest Policy**         | No       | `open` (default), `allowlist`, `pairing`, or `disabled` — who can use Telegram Guest Mode                      |
+| **Allowed Channel IDs**  | No       | Comma- or whitespace-separated Telegram chat IDs (group IDs are negative). Used when Group Policy is Allowlist |
 
 ## Troubleshooting
 
