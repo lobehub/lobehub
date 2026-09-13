@@ -84,7 +84,9 @@ const TaskParentBar = memo(() => {
         size={'small'}
         style={{ maxWidth: '100%', minWidth: 0 }}
         type={'text'}
-        onClick={() => navigate(taskDetailPath(parent.identifier, parentAgentId ?? undefined))}
+        onClick={() =>
+          navigate(taskDetailPath(parent.identifier, parentAgentId ?? undefined, parent.name))
+        }
       >
         <Text ellipsis style={{ minWidth: 0 }} weight={500}>
           {parent.name}
@@ -95,8 +97,8 @@ const TaskParentBar = memo(() => {
           <TaskSubtaskProgressTag
             currentIdentifier={currentIdentifier}
             subtasks={parentSubtasks}
-            onSubtaskClick={(identifier, assigneeAgentId) =>
-              navigate(taskDetailPath(identifier, assigneeAgentId))
+            onSubtaskClick={(identifier, assigneeAgentId, name) =>
+              navigate(taskDetailPath(identifier, assigneeAgentId, name))
             }
           />
         </span>

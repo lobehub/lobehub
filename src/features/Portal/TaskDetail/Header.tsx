@@ -23,10 +23,14 @@ const TaskDetailHeader = memo(() => {
   const agentId = useTaskStore((state) =>
     taskId ? (state.taskDetailMap[taskId]?.agentId ?? undefined) : undefined,
   );
+  const taskName = useTaskStore((state) =>
+    taskId ? (state.taskDetailMap[taskId]?.name ?? undefined) : undefined,
+  );
   const pageUrl = getTaskDetailPageUrl({
     agentId,
     appOrigin,
     taskId,
+    title: taskName,
     workspaceSlug: activeWorkspaceSlug,
   });
 

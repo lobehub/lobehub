@@ -39,7 +39,14 @@ export const readAgentSignalMarker = (
   metadata: unknown,
 ): AgentSignalOperationMarker | undefined => {
   if (!isRecord(metadata)) return undefined;
-  const marker = metadata.agentSignal;
+  return parseAgentSignalMarker(metadata.agentSignal);
+};
+
+/**
+ * Validates a raw marker value (`operation.metadata.agentSignal` or
+ * `state.origin.signal`). Returns `undefined` unless it names a known kind.
+ */
+export const parseAgentSignalMarker = (marker: unknown): AgentSignalOperationMarker | undefined => {
   if (!isRecord(marker)) return undefined;
 
   const kind = marker.kind;

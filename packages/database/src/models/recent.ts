@@ -1,6 +1,6 @@
 import type { ChatTopicStatus, TaskStatus } from '@lobechat/types';
 import { and, desc, eq, inArray, isNotNull, isNull, ne, not, or, sql } from 'drizzle-orm';
-import { unionAll } from 'drizzle-orm/pg-core';
+import { type AnyPgColumn, unionAll } from 'drizzle-orm/pg-core';
 import removeMarkdown from 'remove-markdown';
 
 import {
@@ -45,6 +45,15 @@ const TASK_FINAL_STATUSES = ['completed', 'canceled'];
 const TOPIC_INBOX_STATUSES: ChatTopicStatus[] = ['running', 'unread'];
 const LAST_MESSAGE_PREVIEW_LENGTH = 2000;
 
+// A shared feed answers "what is the workspace working on", so a conversation
+// owned by a PRIVATE agent/group never belongs in it — not even the viewer's
+// own. `buildWorkspaceWhere` deliberately keeps a member's own private rows
+// visible (correct for the "mine" feed), which is exactly what let a private
+// agent's topic surface under the team tab. NULL counts as shared for rows
+// that pre-date the column, matching `buildWorkspaceWhere`.
+const sharedParentWhere = (visibility: AnyPgColumn) =>
+  or(isNull(visibility), eq(visibility, 'public'));
+
 // Best-effort markdown → plain text; previews render in a plain-text row, so
 // syntax noise (**, #, []() …) would show up literally.
 const toPlainTextPreview = (markdown: string): string => {
@@ -71,6 +80,14 @@ export class RecentModel {
     types?: RecentDbItem['type'][],
     withTopicPreview?: boolean,
     mineOnly?: boolean,
+    /**
+     * Restrict a workspace feed to conversations the whole team can see, i.e.
+     * drop topics whose owning agent/group is `visibility: 'private'`. Set by
+     * the home "team" tab; the sidebar feed and the "mine" tab leave it off so
+     * a member keeps their own private conversations. A no-op in personal mode,
+     * where every row is the owner's already.
+     */
+    sharedOnly?: boolean,
   ): Promise<RecentDbItem[]> => {
     const scope = { userId: this.userId, workspaceId: this.workspaceId };
     const requestedTypes = types ? new Set(types) : undefined;
@@ -119,10 +136,15 @@ export class RecentModel {
               // point at a personal or foreign-workspace agent/group. Check
               // the parent scope before returning titles or loading previews.
               or(
-                and(isNotNull(topics.groupId), buildWorkspaceWhere(scope, chatGroups)),
+                and(
+                  isNotNull(topics.groupId),
+                  buildWorkspaceWhere(scope, chatGroups),
+                  sharedOnly ? sharedParentWhere(chatGroups.visibility) : undefined,
+                ),
                 and(
                   isNull(topics.groupId),
                   buildWorkspaceWhere(scope, agents),
+                  sharedOnly ? sharedParentWhere(agents.visibility) : undefined,
                   or(eq(agents.slug, 'inbox'), ne(agents.virtual, true)),
                 ),
               ),

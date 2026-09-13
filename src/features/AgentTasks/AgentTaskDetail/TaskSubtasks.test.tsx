@@ -193,7 +193,7 @@ describe('TaskSubtasks', () => {
 
     fireEvent.click(screen.getByTestId('subtask-tree-node'));
 
-    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_child/task/T-child');
+    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_child/task/T-child/child-task');
   });
 
   it('routes right-click on a subtask through @/libs/contextMenu', () => {
@@ -270,7 +270,7 @@ describe('TaskSubtasks', () => {
 
     fireEvent.click(screen.getByTestId('subtask-tree-node'));
 
-    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-child');
+    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-child/child-task');
   });
 
   it('uses the running topic status icon when a subtask has an active topic run', () => {

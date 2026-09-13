@@ -96,17 +96,23 @@ const Breakdown = memo(() => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const capture = async () => {
+  const run = async (task: () => Promise<void>) => {
     setLoading(true);
     setError(null);
     try {
-      setDump(await electronDevtoolsService.captureMemoryDump());
+      await task();
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setLoading(false);
     }
   };
+  const capture = () => run(async () => setDump(await electronDevtoolsService.captureMemoryDump()));
+  const collectGarbage = () =>
+    run(async () => {
+      await electronDevtoolsService.collectRendererGarbage();
+      setDump(await electronDevtoolsService.captureMemoryDump());
+    });
 
   const [caller, ...others] = dump?.processes ?? [];
 
@@ -121,6 +127,9 @@ const Breakdown = memo(() => {
         </span>
         <span style={{ flex: 1 }} />
         {error && <span className={cx(styles.error, styles.mono)}>{error}</span>}
+        <Button disabled={loading} size={'small'} onClick={collectGarbage}>
+          {'GC'}
+        </Button>
         <Button loading={loading} size={'small'} onClick={capture}>
           {dump ? 'Re-capture' : 'Capture'}
         </Button>

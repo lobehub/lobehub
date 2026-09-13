@@ -98,7 +98,8 @@ describe('completion Work anchors with persisted messages and registered outputs
     expect(folded.some((message) => message.role === 'assistantGroup')).toBe(true);
     const state = {
       messages: folded,
-      metadata: { workAssistantMessageId: 'final', sourceMessageId: 'source' },
+      metadata: { workAssistantMessageId: 'final' },
+      origin: { sourceMessageId: 'source' },
     };
     await lifecycle.registerFileWorks(operationId, state);
     const result = await messageModel.query({ topicId });

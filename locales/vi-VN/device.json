@@ -13,6 +13,7 @@
   "workingDirectory.branchesLoadFailed": "Không thể tải các nhánh",
   "workingDirectory.branchesLoading": "Đang tải các nhánh…",
   "workingDirectory.branchesNoMatch": "Không có nhánh phù hợp",
+  "workingDirectory.branchesTruncated": "{{count}} thêm — nhập để lọc",
   "workingDirectory.browseDescription": "Chọn một thư mục trên thiết bị được kết nối.",
   "workingDirectory.browseFolders": "Duyệt thư mục",
   "workingDirectory.cancel": "Hủy",

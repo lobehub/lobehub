@@ -161,8 +161,14 @@ export class GeneralChatAgent implements Agent {
     // Get security blacklist for resolver metadata
     const securityBlacklist = state.securityBlacklist ?? DEFAULT_SECURITY_BLACKLIST;
 
-    // Build resolver metadata: merge state.metadata with security blacklist
-    const resolverMetadata = { ...state.metadata, securityBlacklist };
+    // Resolvers see one flat record: the run ledger plus the facts they audit
+    // against — the security blacklist and the plan's working directory (the
+    // path-scope audit fences file paths to it).
+    const resolverMetadata = {
+      ...state.metadata,
+      securityBlacklist,
+      workingDirectory: state.plan?.workingDirectory,
+    };
 
     // Get user config (default to 'manual' mode)
     const userConfig = state.userInterventionConfig || { approvalMode: 'manual' };
@@ -216,7 +222,7 @@ export class GeneralChatAgent implements Agent {
       // Phase 3: Per-tool dynamic resolver
       const config = this.getToolInterventionConfig(toolCalling, state);
       const isDynamicConfig = this.isDynamicInterventionConfig(config);
-      const dynamicPolicy = await this.resolveDynamicPolicy(config, toolArgs, state.metadata);
+      const dynamicPolicy = await this.resolveDynamicPolicy(config, toolArgs, resolverMetadata);
       const staticConfig = isDynamicConfig
         ? undefined
         : (config as HumanInterventionConfig | undefined);

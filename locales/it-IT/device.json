@@ -13,6 +13,7 @@
   "workingDirectory.branchesLoadFailed": "Caricamento dei rami fallito",
   "workingDirectory.branchesLoading": "Caricamento rami…",
   "workingDirectory.branchesNoMatch": "Nessun ramo corrispondente",
+  "workingDirectory.branchesTruncated": "{{count}} in più — digita per filtrare",
   "workingDirectory.browseDescription": "Scegli una cartella sul dispositivo connesso.",
   "workingDirectory.browseFolders": "Sfoglia cartelle",
   "workingDirectory.cancel": "Annulla",

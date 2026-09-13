@@ -7,7 +7,7 @@ describe('resolveRunActiveDeviceId', () => {
     expect(
       resolveRunActiveDeviceId({
         binding: { device: { id: 'device-1' } },
-        metadata: { executionPlan: { deviceId: 'device-1', kind: 'device' } },
+        plan: { execution: { deviceId: 'device-1', kind: 'device', target: 'device' } },
       }),
     ).toBe('device-1');
   });
@@ -19,17 +19,17 @@ describe('resolveRunActiveDeviceId', () => {
     expect(
       resolveRunActiveDeviceId({
         binding: { device: { id: 'device-1' } },
-        metadata: { executionPlan: { kind: 'device-unrouted', reason: 'no-bound-device' } },
+        plan: { execution: { kind: 'device-unrouted', reason: 'no-bound-device', target: 'auto' } },
       }),
     ).toBe('device-1');
   });
 
   it('swallows a preset/stale id when the plan is not device-capable', () => {
-    for (const kind of ['sandbox', 'none']) {
+    for (const kind of ['sandbox', 'none'] as const) {
       expect(
         resolveRunActiveDeviceId({
           binding: { device: { id: 'device-1' } },
-          metadata: { executionPlan: { kind } },
+          plan: { execution: { kind, target: kind } },
         }),
       ).toBeUndefined();
     }
@@ -39,9 +39,13 @@ describe('resolveRunActiveDeviceId', () => {
     expect(
       resolveRunActiveDeviceId({
         binding: { device: { id: 'device-1' } },
-        metadata: {
-          deviceAccessPolicy: { canUseDevice: false, reason: 'external-bot' },
-          executionPlan: { deviceId: 'device-1', kind: 'device' },
+        principal: {
+          policy: {
+            deviceAccess: { canUseDevice: false, reason: 'external-bot' },
+          },
+        },
+        plan: {
+          execution: { deviceId: 'device-1', kind: 'device', target: 'device' },
         },
       }),
     ).toBeUndefined();

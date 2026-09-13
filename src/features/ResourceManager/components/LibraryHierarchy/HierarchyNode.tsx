@@ -2,14 +2,16 @@
 
 import { CaretDownFilled, LoadingOutlined } from '@ant-design/icons';
 import { DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
-import { Block, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
+import { Block, Flexbox, Icon, stopPropagation, Tooltip } from '@lobehub/ui';
 import { ActionIcon, toast } from '@lobehub/ui/base-ui';
 import { Input } from 'antd';
 import { cx } from 'antd-style';
-import { FileText, FolderIcon, FolderOpenIcon } from 'lucide-react';
+import { FileText, FolderIcon, FolderOpenIcon, LockIcon } from 'lucide-react';
 import * as m from 'motion/react-m';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import FileIcon from '@/components/FileIcon';
 import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
 import {
@@ -58,6 +60,12 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
     ]);
 
     const renameItem = useTreeStore((s) => s.renameItem);
+
+    const { t } = useTranslation('chat');
+    // Personal mode has no second audience, so `visibility` carries no meaning
+    // there and every node would wear a lock for nothing.
+    const activeWorkspaceId = useActiveWorkspaceId();
+    const isPrivate = Boolean(activeWorkspaceId) && item.visibility === 'private';
 
     const [isRenaming, setIsRenaming] = useState(false);
     const [renamingValue, setRenamingValue] = useState(item.name);
@@ -417,7 +425,11 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
             gap={8}
             style={{ minHeight: 28, minWidth: 0, overflow: 'hidden' }}
           >
-            {isPage ? (
+            {isPrivate ? (
+              <Tooltip title={t('resources.visibility.privateTooltip', { ns: 'chat' })}>
+                <Icon icon={LockIcon} size={18} />
+              </Tooltip>
+            ) : isPage ? (
               emoji ? (
                 <span style={{ fontSize: 18 }}>{emoji}</span>
               ) : (

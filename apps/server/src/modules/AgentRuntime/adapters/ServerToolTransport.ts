@@ -51,7 +51,7 @@ export class ServerToolTransport implements ToolTransport {
 
   async registerWork(registration: ToolWorkRegistration, state: AgentState): Promise<void> {
     await registerWorkFromIntent({
-      agentId: state.metadata?.agentId ?? null,
+      agentId: state.origin?.agentId ?? null,
       intent: registration.intent,
       rootOperationId: this.ctx.operationId,
       serverDB: this.ctx.serverDB,
@@ -60,10 +60,10 @@ export class ServerToolTransport implements ToolTransport {
       sourceToolIdentifier: registration.sourceToolIdentifier,
       sourceToolName: registration.sourceToolName,
       state: registration.state,
-      threadId: state.metadata?.threadId,
-      topicId: state.metadata?.topicId,
+      threadId: state.origin?.threadId,
+      topicId: state.origin?.topicId,
       userId: this.ctx.userId,
-      workspaceId: state.metadata?.workspaceId ?? this.ctx.workspaceId,
+      workspaceId: state.origin?.workspaceId ?? this.ctx.workspaceId,
     });
   }
 
@@ -89,7 +89,7 @@ export class ServerToolTransport implements ToolTransport {
             stepIndex,
             userId,
           },
-          context.state.metadata?._hooks,
+          context.state.host?.hooks,
         )
         .catch(() => {});
     }
@@ -120,13 +120,13 @@ export class ServerToolTransport implements ToolTransport {
       let toolCallMocked = false;
 
       if (isDeviceToolIdentifier(chatToolPayload.identifier) && !hookResult?.isMocked) {
-        const policy = context.state.metadata?.deviceAccessPolicy as
+        const policy = context.state.principal?.policy?.deviceAccess as
           { canUseDevice: boolean; reason: DeviceAccessReason } | undefined;
         logDeviceToolAudit({
           apiName: chatToolPayload.apiName,
-          botContext: context.state.metadata?.botContext,
+          botContext: context.state.principal?.actor?.bot,
           canUseDevice: policy?.canUseDevice ?? true,
-          messageId: context.state.metadata?.sourceMessageId,
+          messageId: context.state.origin?.sourceMessageId,
           operationId,
           reason: policy?.reason ?? 'first-party',
           toolIdentifier: chatToolPayload.identifier,
@@ -161,19 +161,19 @@ export class ServerToolTransport implements ToolTransport {
         if (context.abortSignal?.aborted) return this.abortedBeforeLaunch();
 
         const dispatchResult = await dispatchClientTool(chatToolPayload, {
-          agentId: context.state.metadata?.agentId,
+          agentId: context.state.origin?.agentId,
           assistantMessageId: context.parentMessageId,
-          documentId: context.state.metadata?.documentId,
-          groupId: context.state.metadata?.groupId,
+          documentId: context.state.origin?.documentId,
+          groupId: context.state.origin?.groupId,
           operationId,
           rootOperationId: operationId,
-          scope: context.state.metadata?.scope,
-          sourceMessageId: context.state.metadata?.sourceMessageId,
+          scope: context.state.origin?.scope,
+          sourceMessageId: context.state.origin?.sourceMessageId,
           streamManager,
-          taskId: context.state.metadata?.taskId,
-          threadId: context.state.metadata?.threadId,
+          taskId: context.state.origin?.taskId,
+          threadId: context.state.origin?.threadId,
           timeoutMs,
-          topicId: context.state.metadata?.topicId ?? this.ctx.topicId,
+          topicId: context.state.origin?.topicId ?? this.ctx.topicId,
         });
         execution = { attempts: 1, result: dispatchResult };
       } else {
@@ -198,8 +198,8 @@ export class ServerToolTransport implements ToolTransport {
             toolExecutionService.executeTool(chatToolPayload, {
               activatedSkills: context.activatedSkills as any,
               activeDeviceId: resolveRunActiveDeviceId(context.state),
-              activeDeviceScope: context.state.metadata?.activeDeviceScope,
-              agentId: context.state.metadata?.agentId,
+              activeDeviceScope: context.state.principal?.actor?.deviceScope,
+              agentId: context.state.origin?.agentId,
               agentMember: buildServerAgentMemberRunner(
                 this.ctx,
                 context.state,
@@ -212,36 +212,36 @@ export class ServerToolTransport implements ToolTransport {
               ...(agentVisibility !== undefined && { agentVisibility }),
               // Assistant message owning this tool call (≠ source user message).
               assistantMessageId: context.parentMessageId,
-              clientIp: context.state.metadata?.clientIp,
+              clientIp: context.state.principal?.audit?.clientIp,
               currentTodos: context.currentTodos,
-              deviceCapable: context.state.metadata?.executionPlan
-                ? isDeviceCapablePlan(context.state.metadata.executionPlan)
+              deviceCapable: context.state.plan?.execution
+                ? isDeviceCapablePlan(context.state.plan?.execution)
                 : undefined,
-              documentId: context.state.metadata?.documentId,
+              documentId: context.state.origin?.documentId,
               editingAgentId: context.state.metadata?.editingAgentId,
               editingGroupId: context.state.metadata?.editingGroupId,
               execSubAgent: this.ctx.execSubAgent,
               executionTimeoutMs: timeoutMs,
-              groupId: context.state.metadata?.groupId,
-              isSubAgent: context.state.metadata?.isSubAgent === true,
+              groupId: context.state.origin?.groupId,
+              isSubAgent: context.state.origin?.lineage?.isSubAgent === true,
               // Sandboxing qualifies a `local` run, so it is gated on the plan's
               // resolved target rather than the stored flag: a config that says
               // `localSandbox` but landed on `sandbox`/`device` was never fenced,
               // and telling the device otherwise would fence the wrong run.
-              localSandbox: context.state.metadata?.executionPlan
+              localSandbox: context.state.plan?.execution
                 ? isLocalSandboxEnabled(
                     context.state.world?.agent?.agencyConfig,
-                    context.state.metadata.executionPlan.target,
+                    context.state.plan?.execution.target,
                   )
                 : undefined,
               localSandboxNetwork:
                 context.state.world?.agent?.agencyConfig?.localSandboxNetwork === true,
               memoryToolPermission: context.state.world?.agent?.chatConfig?.memory?.toolPermission,
-              messageId: context.state.metadata?.sourceMessageId,
+              messageId: context.state.origin?.sourceMessageId,
               operationId,
-              projectSkills: resolveRunProjectSkills(context.state.metadata),
+              projectSkills: resolveRunProjectSkills(context.state.plan),
               rootOperationId: operationId,
-              scope: context.state.metadata?.scope,
+              scope: context.state.origin?.scope,
               serverDB,
               skipResultTruncation: true,
               subAgent: buildServerVirtualSubAgentRunner(
@@ -250,8 +250,8 @@ export class ServerToolTransport implements ToolTransport {
                 chatToolPayload,
                 context.parentMessageId,
               ),
-              taskId: context.state.metadata?.taskId,
-              threadId: context.state.metadata?.threadId,
+              taskId: context.state.origin?.taskId,
+              threadId: context.state.origin?.threadId,
               toolCallId: chatToolPayload.id,
               toolManifestMap: context.effectiveManifestMap,
               toolMessageId: context.toolMessageId,
@@ -259,7 +259,7 @@ export class ServerToolTransport implements ToolTransport {
               topicId: this.ctx.topicId,
               userId,
               workingDirectory: context.state.binding?.device?.systemInfo?.workingDirectory,
-              workspaceId: context.state.metadata?.workspaceId ?? this.ctx.workspaceId,
+              workspaceId: context.state.origin?.workspaceId ?? this.ctx.workspaceId,
             }),
           {
             isInterrupted: () => isOperationInterrupted(this.ctx),
@@ -289,14 +289,14 @@ export class ServerToolTransport implements ToolTransport {
         executionTime: execution.result.executionTime ?? 0,
       };
       const executionResult = await archiveRuntimeToolResult(resultWithExecutionTime, {
-        agentId: context.state.metadata?.agentId,
+        agentId: context.state.origin?.agentId,
         identifier: chatToolPayload.identifier,
         limit: context.toolResultMaxLength,
         serverDB,
         toolCallId: chatToolPayload.id,
-        topicId: this.ctx.topicId ?? context.state.metadata?.topicId,
+        topicId: this.ctx.topicId ?? context.state.origin?.topicId,
         userId,
-        workspaceId: context.state.metadata?.workspaceId ?? this.ctx.workspaceId,
+        workspaceId: context.state.origin?.workspaceId ?? this.ctx.workspaceId,
       });
 
       await this.dispatchAfterToolCall(chatToolPayload, context, executionResult, toolCallMocked);
@@ -358,7 +358,7 @@ export class ServerToolTransport implements ToolTransport {
           stepIndex,
           userId,
         },
-        context.state.metadata?._hooks,
+        context.state.host?.hooks,
       )
       .catch(() => {});
 
@@ -405,7 +405,7 @@ export class ServerToolTransport implements ToolTransport {
           success: result.success,
           userId,
         },
-        context.state.metadata?._hooks,
+        context.state.host?.hooks,
       )
       .catch(() => {});
   }
@@ -413,8 +413,8 @@ export class ServerToolTransport implements ToolTransport {
   private async resolveAgentVisibility(context: ToolRunContext) {
     if (context.mode !== 'single') return undefined;
 
-    const agentId = context.state.metadata?.agentId;
-    const workspaceId = context.state.metadata?.workspaceId ?? this.ctx.workspaceId;
+    const agentId = context.state.origin?.agentId;
+    const workspaceId = context.state.origin?.workspaceId ?? this.ctx.workspaceId;
     if (!agentId || !this.ctx.serverDB || !this.ctx.userId) return null;
 
     try {

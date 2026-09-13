@@ -158,6 +158,8 @@ export default {
   'updater.newVersionAvailable': 'New version available',
   'updater.newVersionAvailableDesc':
     'A new version {{version}} has been found, would you like to download it now?',
+  'updater.rendererReady': 'Version {{version}} is ready',
+  'updater.rendererUpdateError': "Couldn't install the update. Try again.",
   'updater.restartAndInstall': 'Install updates and restart',
   'updater.updateError': 'Update error',
   'updater.updateReady': 'A new version is available',

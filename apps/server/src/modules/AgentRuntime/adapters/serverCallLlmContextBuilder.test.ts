@@ -218,7 +218,7 @@ describe('buildServerCallLlmContext - workspace context', () => {
       llmPayload,
       model: 'gpt-4',
       provider: 'openai',
-      state: createState({ metadata: { workspaceId: 'workspace-2' } }),
+      state: createState({ origin: { workspaceId: 'workspace-2' } }),
       tooling,
     });
 

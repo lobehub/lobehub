@@ -148,7 +148,7 @@ const buildWorkAnchor = ({
 }): MessageMetadata['work'] => {
   if (output.toolsCalling.length > 0 || output.toolCalls.length > 0) return undefined;
 
-  const sourceMessageId = state.metadata?.sourceMessageId;
+  const sourceMessageId = state.origin?.sourceMessageId;
   const sourceMessageIndex =
     typeof sourceMessageId === 'string'
       ? state.messages.findIndex((message) => message.id === sourceMessageId)

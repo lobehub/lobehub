@@ -155,6 +155,8 @@
   "updater.later": "Później",
   "updater.newVersionAvailable": "Dostępna nowa wersja",
   "updater.newVersionAvailableDesc": "Znaleziono nową wersję {{version}}, czy chcesz ją teraz pobrać?",
+  "updater.rendererReady": "Wersja {{version}} jest gotowa",
+  "updater.rendererUpdateError": "Nie udało się zainstalować aktualizacji. Spróbuj ponownie.",
   "updater.restartAndInstall": "Zainstaluj aktualizację i uruchom ponownie",
   "updater.updateError": "Błąd aktualizacji",
   "updater.updateReady": "Dostępna nowa wersja",

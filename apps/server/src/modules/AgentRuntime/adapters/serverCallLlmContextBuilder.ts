@@ -177,13 +177,13 @@ export const buildServerCallLlmContext = async ({
   // no setting that could grant file access.
   const agentDocumentsAllowedForShare = !ctx.agentShareVisitor;
   let agentDocuments: AgentContextDocument[] | undefined;
-  const agentId = state.metadata?.agentId;
+  const agentId = state.origin?.agentId;
   if (agentId && ctx.serverDB && ctx.userId && agentDocumentsAllowedForShare) {
     try {
       const agentDocService = new AgentDocumentsService(
         ctx.serverDB,
         ctx.userId,
-        state.metadata?.workspaceId ?? ctx.workspaceId,
+        state.origin?.workspaceId ?? ctx.workspaceId,
       );
       const docs = await agentDocService.getAgentContextDocuments(agentId);
       if (docs.length > 0) {
@@ -233,7 +233,7 @@ export const buildServerCallLlmContext = async ({
       const docService = new AgentDocumentsService(
         ctx.serverDB,
         ctx.userId,
-        state.metadata?.workspaceId ?? ctx.workspaceId,
+        state.origin?.workspaceId ?? ctx.workspaceId,
       );
       const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
 
@@ -276,8 +276,8 @@ export const buildServerCallLlmContext = async ({
   // (`packages/builtin-skills/src/lobehub/content.ts`) so it can render
   // `{{agent_id}}` / `{{agent_title}}` / `{{topic_id}}` etc. into the
   // model's prompt without needing a separate context injector.
-  const lobehubSkillAgentId = state.metadata?.agentId;
-  const lobehubSkillTopicId = ctx.topicId ?? state.metadata?.topicId;
+  const lobehubSkillAgentId = state.origin?.agentId;
+  const lobehubSkillTopicId = ctx.topicId ?? state.origin?.topicId;
   const lobehubSkillAgentMeta = state.world?.agent as
     { description?: string | null; title?: string | null } | undefined;
 
@@ -380,7 +380,7 @@ export const buildServerCallLlmContext = async ({
       const topicDocumentModel = new TopicDocumentModel(
         ctx.serverDB,
         ctx.userId,
-        state.metadata?.workspaceId ?? ctx.workspaceId,
+        state.origin?.workspaceId ?? ctx.workspaceId,
       );
       const [planDocument] = await topicDocumentModel.findByTopicId(lobehubSkillTopicId, {
         type: AGENT_PLAN_FILE_TYPE,
@@ -826,7 +826,7 @@ const resolveWorkspaceContext = async (
   if (ctx.agentShareVisitor) return undefined;
 
   const appUrl = getAppUrl();
-  const workspaceId = state.metadata?.workspaceId ?? ctx.workspaceId;
+  const workspaceId = state.origin?.workspaceId ?? ctx.workspaceId;
 
   // Personal space: the origin alone is enough to anchor links.
   if (!workspaceId) return appUrl ? { appUrl } : undefined;

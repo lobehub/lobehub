@@ -16,6 +16,7 @@ import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
 import Breadcrumb from '../shared/Breadcrumb';
+import TaskDetailCopyActions from './TaskDetailCopyActions';
 import TaskDetailHeaderActions from './TaskDetailHeaderActions';
 import TaskDetailSections from './TaskDetailSections';
 import TaskDetailSkeleton from './TaskDetailSkeleton';
@@ -88,13 +89,16 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId, showTaskAgentPanelTo
           </>
         }
         right={
-          showTaskAgentPanelToggle ? (
-            <ToggleRightPanelButton
-              hideWhenExpanded
-              expand={showTaskAgentPanel}
-              onToggle={() => toggleTaskAgentPanel()}
-            />
-          ) : undefined
+          <>
+            <TaskDetailCopyActions />
+            {showTaskAgentPanelToggle ? (
+              <ToggleRightPanelButton
+                hideWhenExpanded
+                expand={showTaskAgentPanel}
+                onToggle={() => toggleTaskAgentPanel()}
+              />
+            ) : undefined}
+          </>
         }
         styles={{
           left: {

@@ -211,7 +211,7 @@ const assertPreparedCallContext = (
   if (!messages.some((message) => message.role !== 'system')) {
     throw new Error(
       `call_llm produced no non-system messages for ${prepared.provider}/${prepared.model} ` +
-        `(topic=${prepared.state.metadata?.topicId ?? 'n/a'}, step=${stepIndex}); refusing to dispatch`,
+        `(topic=${prepared.state.origin?.topicId ?? 'n/a'}, step=${stepIndex}); refusing to dispatch`,
     );
   }
 };
@@ -323,9 +323,9 @@ export const callLlm =
       ? { id: existingAssistantMessageId }
       : await transports.messages.createAssistantMessage(
           {
-            agentId: state.metadata!.agentId!,
+            agentId: (operation.agentId ?? state.origin?.agentId) as string,
             content: '',
-            groupId: state.metadata?.groupId ?? undefined,
+            groupId: state.origin?.groupId ?? undefined,
             // Creation provenance (metadata.operationId): ties the row to the
             // operation that produced it so the id survives client reloads.
             metadata: { operationId: operation.operationId },
@@ -333,8 +333,8 @@ export const callLlm =
             parentId,
             provider,
             role: 'assistant',
-            threadId: state.metadata?.threadId,
-            topicId: state.metadata?.topicId,
+            threadId: state.origin?.threadId,
+            topicId: state.origin?.topicId,
           },
           {
             /**
@@ -391,7 +391,7 @@ export const callLlm =
       assertPreparedCallContext(prepared, operation.stepIndex);
       const trace = llm.createTrace?.({
         assistantMessageId: assistantMessage.id,
-        conversationId: state.metadata?.topicId,
+        conversationId: state.origin?.topicId,
         model,
         provider,
       });

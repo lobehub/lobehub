@@ -65,7 +65,7 @@ describe('callLlmFinalizer', () => {
   it('retains the final assistant id independently of the rehydrated message shape', async () => {
     const state = AgentRuntime.createInitialState({
       messages: [{ id: 'group-1', role: 'assistantGroup', children: [] }],
-      metadata: { sourceMessageId: 'user-1' },
+      origin: { sourceMessageId: 'user-1' },
       operationId: 'operation-1',
     });
     const result = await finalizeCallLlmTurn({
@@ -79,10 +79,8 @@ describe('callLlmFinalizer', () => {
       state,
     });
 
-    expect(result.newState.metadata).toMatchObject({
-      sourceMessageId: 'user-1',
-      workAssistantMessageId: 'final-assistant',
-    });
+    expect(result.newState.origin).toMatchObject({ sourceMessageId: 'user-1' });
+    expect(result.newState.metadata).toMatchObject({ workAssistantMessageId: 'final-assistant' });
     // This key belongs to error recovery; a completed tool turn must not
     // redirect a subsequent LLM failure to the previous assistant message.
     expect(result.newState.metadata).not.toHaveProperty('assistantMessageId');
@@ -223,7 +221,7 @@ describe('callLlmFinalizer', () => {
     const host = createHost(messages, stream);
     const state = AgentRuntime.createInitialState({
       messages: [{ content: 'Question', role: 'user' }],
-      metadata: { topicId: 'topic-1' },
+      origin: { topicId: 'topic-1' },
       operationId: 'operation-1',
     });
     const usage = {
@@ -423,7 +421,7 @@ describe('callLlmFinalizer', () => {
         },
         { content: 'created', id: 'tool-1', role: 'tool' },
       ],
-      metadata: { sourceMessageId: 'user-1' },
+      origin: { sourceMessageId: 'user-1' },
       operationId: 'operation-1',
     });
 
@@ -459,7 +457,7 @@ describe('callLlmFinalizer', () => {
       shouldReplayAssistantReasoning: false,
       state: AgentRuntime.createInitialState({
         messages: [{ content: 'Hi', id: 'user-2', role: 'user' }],
-        metadata: { sourceMessageId: 'user-2' },
+        origin: { sourceMessageId: 'user-2' },
         operationId: 'operation-1',
       }),
     });

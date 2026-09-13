@@ -257,7 +257,7 @@ describe('OperationTraceRecorder', () => {
         completionReason: 'done',
         state: {
           cost: { total: 0.5 },
-          metadata: { agentId: 'agt-1', topicId: 'tpc-1', userId: 'u-1' },
+          origin: { agentId: 'agt-1', topicId: 'tpc-1', userId: 'u-1' },
           stepCount: 1,
           usage: { llm: { tokens: { total: 200 } } },
         },

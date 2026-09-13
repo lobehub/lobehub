@@ -155,6 +155,8 @@
   "updater.later": "Later",
   "updater.newVersionAvailable": "Nieuwe versie beschikbaar",
   "updater.newVersionAvailableDesc": "Er is een nieuwe versie {{version}} gevonden, wilt u deze nu downloaden?",
+  "updater.rendererReady": "Versie {{version}} is klaar",
+  "updater.rendererUpdateError": "Kon de update niet installeren. Probeer het opnieuw.",
   "updater.restartAndInstall": "Updates installeren en herstarten",
   "updater.updateError": "Updatefout",
   "updater.updateReady": "Een nieuwe versie is beschikbaar",

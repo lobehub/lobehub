@@ -113,15 +113,10 @@ export class AbandonOperationService {
 
     const metadata = (state.metadata ?? {}) as {
       assistantMessageId?: string;
-      isSubAgent?: boolean;
-      orchestrationRole?: 'supervisor' | 'member';
       /** Present only for shared-agent visitor runs (visitor owns the stream). */
       streamOwnerUserId?: string;
-      threadId?: string | null;
-      topicId?: string | null;
-      userId?: string;
-      workspaceId?: string;
     };
+    const origin = state.origin ?? {};
     const shouldDispatchAbandonedLifecycle =
       state.status === 'running' ||
       state.status === 'waiting_for_human' ||
@@ -166,12 +161,12 @@ export class AbandonOperationService {
     // path must opt in when this flag is present.
     const includeShareVisitor = Boolean(metadata.streamOwnerUserId);
 
-    if (metadata.userId && metadata.assistantMessageId) {
+    if (origin.userId && metadata.assistantMessageId) {
       try {
         const messageModel = new MessageModel(
           this.db,
-          metadata.userId,
-          metadata.workspaceId,
+          origin.userId,
+          origin.workspaceId,
           undefined,
           { includeShareVisitor },
         );
@@ -182,24 +177,20 @@ export class AbandonOperationService {
       }
     }
 
-    if (metadata.topicId && metadata.userId) {
+    if (origin.topicId && origin.userId) {
       try {
-        const topicModel = new TopicModel(
-          this.db,
-          metadata.userId,
-          metadata.workspaceId,
-          undefined,
-          { includeShareVisitor },
-        );
-        await topicModel.settleRunningOperation(metadata.topicId, operationId);
+        const topicModel = new TopicModel(this.db, origin.userId, origin.workspaceId, undefined, {
+          includeShareVisitor,
+        });
+        await topicModel.settleRunningOperation(origin.topicId, operationId);
       } catch (e) {
         log('[%s] abandoned op runningOperation cleanup failed (non-fatal): %O', operationId, e);
       }
     }
 
-    if (!metadata.isSubAgent && metadata.userId && shouldDispatchAbandonedLifecycle) {
+    if (!origin.lineage?.isSubAgent && origin.userId && shouldDispatchAbandonedLifecycle) {
       try {
-        await new CompletionLifecycle(this.db, metadata.userId, metadata.workspaceId, {
+        await new CompletionLifecycle(this.db, origin.userId, origin.workspaceId, {
           includeShareVisitor,
         }).dispatchHooks(operationId, finalState, 'error', {
           skipErrorMessageWrite: result.assistantMessageUpdated,
@@ -224,21 +215,23 @@ export class AbandonOperationService {
     // `scheduleGroupMemberTimeout`) — routing them through the sub-agent bridge
     // would backfill the wrong message and never satisfy the group barrier. They
     // are tagged `orchestrationRole: 'member'`, so skip them here.
-    if (metadata.isSubAgent && metadata.orchestrationRole !== 'member' && metadata.userId) {
+    if (
+      origin.lineage?.isSubAgent &&
+      origin.lineage?.orchestrationRole !== 'member' &&
+      origin.userId
+    ) {
       try {
         const opRow = await new AgentOperationModel(
           this.db,
-          metadata.userId,
-          metadata.workspaceId,
+          origin.userId,
+          origin.workspaceId,
         ).findById(operationId);
         const parentOperationId = opRow?.parentOperationId ?? undefined;
-        const threadId = opRow?.threadId ?? metadata.threadId ?? undefined;
+        const threadId = opRow?.threadId ?? origin.threadId ?? undefined;
         if (parentOperationId && threadId) {
-          const thread = await new ThreadModel(
-            this.db,
-            metadata.userId,
-            metadata.workspaceId,
-          ).findById(threadId);
+          const thread = await new ThreadModel(this.db, origin.userId, origin.workspaceId).findById(
+            threadId,
+          );
           const toolMessageId = thread?.sourceMessageId ?? undefined;
           if (toolMessageId) {
             result.subAgentResume = {
@@ -250,8 +243,8 @@ export class AbandonOperationService {
               streamOwnerUserId: metadata.streamOwnerUserId,
               threadId,
               toolMessageId,
-              userId: metadata.userId,
-              workspaceId: metadata.workspaceId,
+              userId: origin.userId,
+              workspaceId: origin.workspaceId,
             };
           } else {
             log('[%s] sub-agent abandon: thread %s has no sourceMessageId', operationId, threadId);

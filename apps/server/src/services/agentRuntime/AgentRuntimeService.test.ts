@@ -450,10 +450,8 @@ describe('AgentRuntimeService', () => {
           status: 'idle',
           stepCount: 0,
           messages: [],
-          metadata: {
-            modelRuntimeConfig: mockParams.modelRuntimeConfig,
-            userId: mockParams.userId,
-          },
+          modelRuntimeConfig: mockParams.modelRuntimeConfig,
+          origin: expect.objectContaining({ userId: mockParams.userId }),
           toolManifestMap: {},
           world: expect.objectContaining({ agent: mockParams.agentConfig }),
         }),
@@ -755,8 +753,8 @@ describe('AgentRuntimeService', () => {
       });
 
       await (serviceWithFactory as any).createAgentRuntime({
-        world: { agent: { chatConfig: { enableContextCompression: true } } as any },
-        metadata: {
+        agentState: {
+          world: { agent: { chatConfig: { enableContextCompression: true } } as any },
           modelRuntimeConfig: { model: 'gpt-4o-mini', provider: 'openai' },
         },
         operationId: 'test-operation-1',
@@ -790,8 +788,8 @@ describe('AgentRuntimeService', () => {
       });
 
       await (serviceWithFactory as any).createAgentRuntime({
-        world: { agent: { chatConfig: { enableContextCompression: true } } as any },
-        metadata: {
+        agentState: {
+          world: { agent: { chatConfig: { enableContextCompression: true } } as any },
           modelRuntimeConfig: { model: 'unknown-model', provider: 'openai' },
         },
         operationId: 'test-operation-1',
@@ -2090,7 +2088,7 @@ describe('AgentRuntimeService', () => {
       stubMessageService(service, queryMessages);
 
       const result = await service.queryUiMessages({
-        metadata: { agentId: 'agt_1', topicId: 'tpc_1' },
+        origin: { agentId: 'agt_1', topicId: 'tpc_1' },
       } as any);
 
       expect(queryMessages).toHaveBeenCalledWith(
@@ -2110,7 +2108,7 @@ describe('AgentRuntimeService', () => {
       stubMessageService(service, queryMessages);
 
       await service.queryUiMessages({
-        metadata: { agentId: 'agt_1', topicId: 'tpc_1' },
+        origin: { agentId: 'agt_1', topicId: 'tpc_1' },
       } as any);
 
       expect(queryMessages).toHaveBeenCalledWith(expect.anything(), { allowShareVisitor: true });
@@ -2125,7 +2123,7 @@ describe('AgentRuntimeService', () => {
       stubMessageService(service, queryMessages);
 
       await service.queryUiMessages({
-        metadata: { agentId: 'agt_1', threadId: 'thd_1', topicId: 'tpc_1' },
+        origin: { agentId: 'agt_1', threadId: 'thd_1', topicId: 'tpc_1' },
       } as any);
 
       expect(queryMessages).toHaveBeenCalledWith(
@@ -2139,7 +2137,7 @@ describe('AgentRuntimeService', () => {
       stubMessageService(service, queryMessages);
 
       await service.queryUiMessages({
-        metadata: { agentId: 'agt_1', topicId: 'tpc_1' },
+        origin: { agentId: 'agt_1', topicId: 'tpc_1' },
       } as any);
 
       expect(queryMessages.mock.calls[0][0].threadId).toBeUndefined();
@@ -2150,10 +2148,10 @@ describe('AgentRuntimeService', () => {
       stubMessageService(service, queryMessages);
 
       const noAgent = await service.queryUiMessages({
-        metadata: { topicId: 'tpc_1' },
+        origin: { topicId: 'tpc_1' },
       } as any);
       const noTopic = await service.queryUiMessages({
-        metadata: { agentId: 'agt_1' },
+        origin: { agentId: 'agt_1' },
       } as any);
       const noMeta = await service.queryUiMessages({} as any);
 
@@ -2168,7 +2166,7 @@ describe('AgentRuntimeService', () => {
       stubMessageService(service, queryMessages);
 
       const result = await service.queryUiMessages({
-        metadata: { agentId: 'agt_1', topicId: 'tpc_1' },
+        origin: { agentId: 'agt_1', topicId: 'tpc_1' },
       } as any);
 
       expect(result).toBeUndefined();
@@ -2491,7 +2489,7 @@ describe('AgentRuntimeService', () => {
         { content: 'question', role: 'user' },
         { content: 'final answer', role: 'assistant' },
       ],
-      metadata: { agentId: 'agent-a' },
+      origin: { agentId: 'agent-a' },
       modelRuntimeConfig: { model: 'gpt-test' },
       status: 'done',
       usage: { llm: { tokens: { total: 42 } }, tools: { totalCalls: 2 } },

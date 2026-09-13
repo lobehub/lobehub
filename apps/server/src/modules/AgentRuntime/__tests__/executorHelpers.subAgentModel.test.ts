@@ -25,7 +25,7 @@ describe('buildServerVirtualSubAgentRunner sub-agent model resolution', () => {
     const runner = buildServerVirtualSubAgentRunner(
       ctx,
       {
-        metadata: { agentId: 'agent-1', topicId: 'topic-1' },
+        origin: { agentId: 'agent-1', topicId: 'topic-1' },
         operationId: 'parent-op',
         ...state,
       } as AgentState,
@@ -38,7 +38,7 @@ describe('buildServerVirtualSubAgentRunner sub-agent model resolution', () => {
 
   it('follows the topic-pinned runtime model over the world agent default', async () => {
     const { execVirtualSubAgent, runner } = buildRunner({
-      metadata: { agentId: 'agent-1', topicId: 'topic-1' },
+      origin: { agentId: 'agent-1', topicId: 'topic-1' },
       world: {
         agent: { model: 'agent-default-model', provider: 'agent-default-provider' } as any,
       },
@@ -54,7 +54,7 @@ describe('buildServerVirtualSubAgentRunner sub-agent model resolution', () => {
 
   it('falls back to the world agent config when no runtime model exists', async () => {
     const { execVirtualSubAgent, runner } = buildRunner({
-      metadata: { agentId: 'agent-1', topicId: 'topic-1' },
+      origin: { agentId: 'agent-1', topicId: 'topic-1' },
       world: {
         agent: { model: 'agent-default-model', provider: 'agent-default-provider' } as any,
       },
@@ -98,7 +98,7 @@ describe('runner builders fail closed for share-visitor runs', () => {
   } as unknown as RuntimeExecutorContext;
 
   const state = {
-    metadata: { agentId: 'agent-1', groupId: 'group-1', topicId: 'topic-1' },
+    origin: { agentId: 'agent-1', groupId: 'group-1', topicId: 'topic-1' },
     operationId: 'parent-op',
   } as unknown as AgentState;
 

@@ -410,6 +410,7 @@
   "share.visitor.profile.terms.account": "它运行在创建者的账号上，每一次回复都由创建者付费。",
   "share.visitor.profile.terms.desc": "这几条规则今天只在你撞上时以报错的形式出现，这里把它们提前讲清楚。",
   "share.visitor.profile.terms.title": "开始之前",
+  "share.visitor.profile.terms.tools_one": "{{count}} 个工具对访客开放。",
   "share.visitor.profile.terms.tools_other": "有 {{count}} 个工具对访客开放。",
   "share.visitor.profile.terms.topics": "你最多可以开 {{count}} 个会话。",
   "share.visitor.profile.terms.turns": "每个会话最多 {{count}} 轮。",

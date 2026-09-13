@@ -362,8 +362,7 @@ const probeRuntimeActionDispatch = async (
       : { state: 'conflict' };
   }
 
-  const stateProvenance = state.metadata?.agentInterventionContinuation as
-    typeof provenance | undefined;
+  const stateProvenance = state.origin?.continuation as typeof provenance | undefined;
   const statePreparation = state.metadata?.agentInterventionPreparation as
     | {
         deduplicationId?: unknown;
@@ -374,20 +373,20 @@ const probeRuntimeActionDispatch = async (
     | undefined;
   const stateContextMatches =
     state.operationId === continuationOperationId &&
-    state.metadata?.userId === resolution.ownerUserId &&
+    state.origin?.userId === resolution.ownerUserId &&
     sameNullable(
-      state.metadata?.workspaceId,
+      state.origin?.workspaceId,
       resolution.workspaceId ?? ctx.workspaceId ?? undefined,
     ) &&
-    state.metadata?.agentId === continuation.agentId &&
-    state.metadata?.topicId === continuation.appContext.topicId &&
-    sameNullable(state.metadata?.threadId, continuation.appContext.threadId) &&
-    sameNullable(state.metadata?.taskId, continuation.appContext.taskId) &&
-    sameNullable(state.metadata?.groupId, continuation.appContext.groupId) &&
-    sameNullable(state.metadata?.documentId, continuation.appContext.documentId) &&
-    sameNullable(state.metadata?.scope, continuation.appContext.scope) &&
-    sameNullable(state.metadata?.sessionId, continuation.appContext.sessionId) &&
-    state.metadata?.sourceMessageId === continuation.parentMessageId &&
+    state.origin?.agentId === continuation.agentId &&
+    state.origin?.topicId === continuation.appContext.topicId &&
+    sameNullable(state.origin?.threadId, continuation.appContext.threadId) &&
+    sameNullable(state.origin?.taskId, continuation.appContext.taskId) &&
+    sameNullable(state.origin?.groupId, continuation.appContext.groupId) &&
+    sameNullable(state.origin?.documentId, continuation.appContext.documentId) &&
+    sameNullable(state.origin?.scope, continuation.appContext.scope) &&
+    sameNullable(state.origin?.sessionId, continuation.appContext.sessionId) &&
+    state.origin?.sourceMessageId === continuation.parentMessageId &&
     stateProvenance?.resolutionRequestId === resolution.resolutionRequestId &&
     stateProvenance.sourceOperationId === continuation.operationId &&
     Array.isArray(stateProvenance.sourceToolMessageIds) &&

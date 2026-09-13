@@ -220,17 +220,16 @@ export const buildServerVirtualSubAgentRunner = (
   const execVirtualSubAgent = ctx.execVirtualSubAgent;
   if (!execVirtualSubAgent) return undefined;
 
-  const agentId = state.metadata?.agentId;
-  const topicId = ctx.topicId ?? state.metadata?.topicId;
+  const agentId = state.origin?.agentId;
+  const topicId = ctx.topicId ?? state.origin?.topicId;
   if (!agentId || !topicId) return undefined;
 
   const parentAgentConfig = state.world?.agent as LobeAgentConfig | undefined;
   // The model the parent run ACTUALLY uses. `world.agent` alone is not
   // enough: when a run continues a topic whose model was switched, execAgent
   // keeps the topic-pinned model only in `modelRuntimeConfig` while the
-  // metadata config retains the agent default.
-  const parentEffectiveModel =
-    state.modelRuntimeConfig ?? state.metadata?.modelRuntimeConfig ?? parentAgentConfig;
+  // world config retains the agent default.
+  const parentEffectiveModel = state.modelRuntimeConfig ?? parentAgentConfig;
 
   return {
     run: async ({ agentId: targetAgentId, description, instruction, timeout }) => {
@@ -259,12 +258,12 @@ export const buildServerVirtualSubAgentRunner = (
       const placeholder = await ctx.messageModel.create({
         agentId,
         content: '',
-        groupId: state.metadata?.groupId ?? undefined,
+        groupId: state.origin?.groupId ?? undefined,
         parentId: parentMessageId,
         plugin: chatToolPayload as any,
         pluginState: { status: 'pending' },
         role: 'tool',
-        threadId: state.metadata?.threadId,
+        threadId: state.origin?.threadId,
         tool_call_id: chatToolPayload.id,
         topicId,
       });
@@ -275,7 +274,7 @@ export const buildServerVirtualSubAgentRunner = (
       const result = (await execVirtualSubAgent({
         agentId: targetAgentId ?? agentId,
         chatConfig: subAgentChatConfig,
-        groupId: state.metadata?.groupId ?? undefined,
+        groupId: state.origin?.groupId ?? undefined,
         instruction,
         model: subAgentModel?.model,
         parentMessageId: placeholder.id,
@@ -351,9 +350,9 @@ export const buildServerAgentMemberRunner = (
   const execGroupMember = ctx.execGroupMember;
   if (!execGroupMember) return undefined;
 
-  const agentId = state.metadata?.agentId;
-  const topicId = ctx.topicId ?? state.metadata?.topicId;
-  const groupId = state.metadata?.groupId ?? undefined;
+  const agentId = state.origin?.agentId;
+  const topicId = ctx.topicId ?? state.origin?.topicId;
+  const groupId = state.origin?.groupId ?? undefined;
   if (!agentId || !topicId || !groupId) return undefined;
 
   return {
@@ -388,7 +387,7 @@ export const buildServerAgentMemberRunner = (
         plugin: chatToolPayload as any,
         pluginState: { expectedMembers, onComplete, status: 'pending' },
         role: 'tool',
-        threadId: state.metadata?.threadId,
+        threadId: state.origin?.threadId,
         tool_call_id: chatToolPayload.id,
         topicId,
       });
@@ -413,7 +412,7 @@ export const buildServerAgentMemberRunner = (
             plugin: { ...(chatToolPayload as any), id: memberToolCallId },
             pluginState: { status: 'pending' },
             role: 'tool',
-            threadId: state.metadata?.threadId,
+            threadId: state.origin?.threadId,
             tool_call_id: memberToolCallId,
             topicId,
           });

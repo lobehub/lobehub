@@ -2,6 +2,7 @@ import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import type {
   AgentDeviceOverride,
   DeviceExecutionTarget,
+  ExecutionPlan,
   LobeAgentAgencyConfig,
   LobeAgentChatConfig,
   RuntimeEnvMode,
@@ -307,44 +308,7 @@ export const resolveRuntimeMode = (
     }),
   );
 
-export type ExecutionPlanUnroutedReason =
-  /** `auto` mode with more than one device online — the model must pick one */
-  | 'ambiguous-online-devices'
-  /** an explicitly bound device exists but is offline — never silently fall back */
-  | 'bound-device-offline'
-  /**
-   * device-capable target (`auto` / `local` / `device`) but no device selected —
-   * nothing bound/requested, and not the `auto` single-online-device case
-   */
-  | 'no-bound-device'
-  /** `auto` mode but no device online at all */
-  | 'no-online-device';
-
-/**
- * Where (and whether) a run executes, resolved ONCE at the entry point.
- * Downstream layers consume the plan instead of re-deriving the answer from
- * `executionTarget` / `boundDeviceId` / online state themselves.
- *
- * `target` is the EFFECTIVE execution target (platform defaults and coercions
- * applied; degraded to `none` when device access is denied) — consumers must
- * read it instead of re-resolving `agencyConfig.executionTarget`.
- */
-export type ExecutionPlan = { target: DeviceExecutionTarget } &
-  /** route execution / device tools to this device (the local machine is a registered device) */
-  (
-    | { deviceId: string; kind: 'device' }
-    /**
-     * Device-targeted but no routable device right now. The run proceeds without
-     * an active device; the remote-device proxy may let the model activate one
-     * mid-run (native agents), or the caller may treat this as a hard error
-     * (hetero dispatch).
-     */
-    | { kind: 'device-unrouted'; reason: ExecutionPlanUnroutedReason }
-    /** plain chat — no execution environment, no run tools, no device ever */
-    | { kind: 'none' }
-    /** ephemeral cloud sandbox */
-    | { kind: 'sandbox' }
-  );
+export type { ExecutionPlan, ExecutionPlanUnroutedReason } from '@lobechat/types';
 
 export type ExecutionManifestEnvironment = ExecutionPlan['kind'] | 'local';
 

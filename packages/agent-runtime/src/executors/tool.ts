@@ -184,7 +184,7 @@ const createRunContext = ({
   return {
     abortSignal: host.operation.abortSignal,
     activatedSkills: extractActivatedSkillsFromMessages(state.messages),
-    agentId: host.operation.agentId ?? state.metadata?.agentId,
+    agentId: host.operation.agentId ?? state.origin?.agentId,
     assistantMessageId: parentMessageId,
     callIndex: resolveCallIndex(state, toolName),
     // Todo state is reconstructed from message history for the same reason the
@@ -193,8 +193,8 @@ const createRunContext = ({
     // tool-execution side must not treat it as the source of truth.
     currentTodos: extractTodosFromMessages(state.messages)?.items,
     effectiveManifestMap: buildEffectiveManifestMap(state),
-    groupId: host.operation.groupId ?? state.metadata?.groupId,
-    messageId: state.metadata?.sourceMessageId,
+    groupId: host.operation.groupId ?? state.origin?.groupId,
+    messageId: state.origin?.sourceMessageId,
     mode,
     operationId: host.operation.operationId,
     parentMessageId,
@@ -203,13 +203,13 @@ const createRunContext = ({
     state,
     stepIndex: host.operation.stepIndex,
     stepContext,
-    threadId: host.operation.threadId ?? state.metadata?.threadId,
+    threadId: host.operation.threadId ?? state.origin?.threadId,
     toolMessageId,
     toolName,
     toolResultMaxLength: agentConfig?.chatConfig?.toolResultMaxLength,
     toolSource,
-    topicId: host.operation.topicId ?? state.metadata?.topicId,
-    workspaceId: state.metadata?.workspaceId ?? host.operation.workspaceId,
+    topicId: host.operation.topicId ?? state.origin?.topicId,
+    workspaceId: state.origin?.workspaceId ?? host.operation.workspaceId,
   };
 };
 
@@ -428,7 +428,7 @@ const createToolMessage = async ({
   tool: ChatToolPayload;
 }) => {
   try {
-    const agentId = host.operation.agentId ?? state.metadata?.agentId;
+    const agentId = host.operation.agentId ?? state.origin?.agentId;
     if (!agentId) {
       throw new Error(
         `[call_tool] Missing agentId for tool message (op=${host.operation.operationId})`,
@@ -438,16 +438,16 @@ const createToolMessage = async ({
     return await host.transports.messages.createToolMessage({
       agentId,
       content: result.content,
-      groupId: host.operation.groupId ?? state.metadata?.groupId ?? undefined,
+      groupId: host.operation.groupId ?? state.origin?.groupId ?? undefined,
       metadata: { toolExecutionTimeMs: result.executionTime ?? 0 },
       parentId: parentMessageId,
       plugin: tool as any,
       pluginError: result.error,
       pluginState: result.state,
       role: 'tool',
-      threadId: host.operation.threadId ?? state.metadata?.threadId,
+      threadId: host.operation.threadId ?? state.origin?.threadId,
       tool_call_id: tool.id,
-      topicId: host.operation.topicId ?? state.metadata?.topicId,
+      topicId: host.operation.topicId ?? state.origin?.topicId,
     });
   } catch (error) {
     await publishError(host, error, TOOL_MESSAGE_PERSIST_PHASE);
@@ -1076,10 +1076,10 @@ export const callToolsBatch =
 
     newState.messages = await host.transports.messages.query(
       {
-        agentId: state.metadata?.agentId,
-        groupId: state.metadata?.groupId,
-        threadId: state.metadata?.threadId,
-        topicId: state.metadata?.topicId,
+        agentId: state.origin?.agentId,
+        groupId: state.origin?.groupId,
+        threadId: state.origin?.threadId,
+        topicId: state.origin?.topicId,
       },
       { flatten: true, resolveAssetUrls: true },
     );

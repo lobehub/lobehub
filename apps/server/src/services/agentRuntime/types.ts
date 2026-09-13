@@ -404,7 +404,7 @@ export interface OperationCreationParams {
   agentGroup?: AgentGroupConfig;
   /**
    * Shared-agent visitor marker. Persisted to
-   * `state.metadata.agentShareVisitor` so every later step can re-derive the
+   * `state.principal.actor.shareVisitor` so every later step can re-derive the
    * share's restrictions without re-reading the share, and so
    * `AgentRuntimeService.executeStep` can re-prove the run's authorization at
    * each step boundary.
@@ -414,12 +414,12 @@ export interface OperationCreationParams {
     agentId?: string;
     /**
      * Run-scoped Agent Signal marker. Stamped at dispatch for background
-     * self-iteration / memory runs; lands in `state.metadata.agentSignal` and is
+     * self-iteration / memory runs; lands in `state.origin.signal` and is
      * read on the completion path to project receipts.
      */
     agentSignal?: AgentSignalOperationMarker;
     /**
-     * Client IP of the originating request. Spread onto `state.metadata.clientIp`
+     * Client IP of the originating request. Spread onto `state.principal.audit.clientIp`
      * so downstream LLM-call metadata can carry it for auditing and spend
      * attribution.
      */
@@ -429,7 +429,7 @@ export interface OperationCreationParams {
     groupId?: string | null;
     isSubAgent?: boolean;
     /**
-     * Group orchestration role, spread onto `state.metadata.orchestrationRole`.
+     * Group orchestration role, stored on `state.origin.lineage.orchestrationRole`.
      * Lets the inactivity-watchdog abandon path tell an isolated group member
      * (`'member'`, resumed via the group K=N bridge) apart from a genuine
      * callSubAgent child (which shares `isSubAgent: true`).
@@ -441,8 +441,8 @@ export interface OperationCreationParams {
     /** Source user message ID used for same-turn Agent Signal procedure suppression. */
     sourceMessageId?: string;
     /**
-     * Live-progress anchor for a `callSubAgent` child, spread onto
-     * `state.metadata.subAgentProgress`.
+     * Live-progress anchor for a `callSubAgent` child, stored on
+     * `state.origin.lineage.progressAnchor`.
      *
      * The child runs on its own operationId, but the client only ever subscribes
      * to the PARENT's gateway channel — which stays open across the sub-agent run
@@ -459,7 +459,7 @@ export interface OperationCreationParams {
     trigger?: string;
     /**
      * User agent of the originating request. Spread onto
-     * `state.metadata.userAgent` so downstream LLM-call metadata can carry it for
+     * `state.principal.audit.userAgent` so downstream LLM-call metadata can carry it for
      * auditing and spend attribution.
      */
     userAgent?: string;
@@ -467,7 +467,7 @@ export interface OperationCreationParams {
   autoStart?: boolean;
   /**
    * Sender/owner identity for bot-originated runs. Forwarded into
-   * `state.metadata.botContext` so device-tool dispatch can audit who
+   * `state.principal.actor.bot` so device-tool dispatch can audit who
    * triggered the call. `undefined` for first-party (web/desktop) callers.
    */
   botContext?: ChatTopicBotContext;
@@ -480,7 +480,7 @@ export interface OperationCreationParams {
   connectorOwnershipNote?: string;
   /**
    * Device-access policy decision computed once per turn by
-   * `resolveDeviceAccessPolicy`. Forwarded into `state.metadata.deviceAccessPolicy`
+   * `resolveDeviceAccessPolicy`. Forwarded into `state.principal.policy.deviceAccess`
    * so the dispatch site can include `reason` in the audit entry without
    * re-deriving it.
    */
@@ -497,7 +497,7 @@ export interface OperationCreationParams {
   evalRuntime?: EvalRuntimeContext;
   /**
    * Resolved execution plan for the run (see `resolveExecutionPlan`).
-   * Forwarded into `state.metadata.executionPlan` so step-level layers (the
+   * Forwarded into `state.plan.execution` so step-level layers (the
    * `call_llm` device-tool injection) consume the plan instead of re-deriving
    * device capability from raw config.
    */
@@ -569,7 +569,7 @@ export interface OperationCreationParams {
   /**
    * Workspace ID propagated down from the originating chat/task router so
    * tool executions (createBrief / pinTask / etc.) ownership-filter to the
-   * caller's workspace. Stored on `state.metadata.workspaceId`.
+   * caller's workspace. Stored on `state.origin.workspaceId`.
    */
   workspaceId?: string;
 }

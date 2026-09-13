@@ -26,7 +26,7 @@ export interface RuntimeExecutorContext {
   abortSignal?: AbortSignal;
   /**
    * Shared-agent visitor marker, read back from
-   * `state.metadata.agentShareVisitor`. Present ONLY for a share-visitor run;
+   * `state.principal.actor.shareVisitor`. Present ONLY for a share-visitor run;
    * its presence alone is the signal every per-step consumer keys off. Forwarded
    * into `ToolExecutionContext.agentShareVisitor` so
    * `BuiltinToolsExecutor.execute` can re-check the visitor's grants right
