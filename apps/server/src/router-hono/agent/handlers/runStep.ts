@@ -20,14 +20,22 @@ const log = debug('lobe-server:agent:run-step');
  * steps inside one invocation removes that cost; this deadline is what keeps
  * the invocation inside the platform's function timeout.
  *
- * It must stay comfortably below the route's `maxDuration`, because a step that
- * starts just under the deadline still runs to completion — production LLM
- * steps are ~42s at p90 and ~125s at p99. The 450s default leaves ~150s of
- * headroom under a 600s `maxDuration`, which covers p99. Raise it only
- * alongside `maxDuration`. Once past the deadline the pending step goes back to
- * the queue and a fresh invocation picks it up.
+ * The deadline only decides whether a step may START; a step that starts just
+ * under it still runs to completion, so what protects the invocation is the
+ * headroom between this deadline and the route's `maxDuration`. That headroom
+ * has to cover a long LLM step, and step length varies a lot by model: most
+ * models finish LLM steps within ~40s at p99, but some run into several
+ * minutes (one model family measured ~317s at p99, ~439s max). With 450s under
+ * a 600s `maxDuration`, steps started before the deadline were observed ending
+ * within seconds of the kill.
+ *
+ * 300s leaves 300s of headroom under 600s. A killed step is not lost — it
+ * resumes from the parked envelope — but it is paid for twice, so keep this
+ * conservative and raise it only alongside `maxDuration`. Once past the
+ * deadline the pending step goes back to the queue and a fresh invocation
+ * picks it up.
  */
-const INLINE_STEP_START_DEADLINE_MS = Number(process.env.AGENT_INLINE_STEP_DEADLINE_MS ?? 450_000);
+const INLINE_STEP_START_DEADLINE_MS = Number(process.env.AGENT_INLINE_STEP_DEADLINE_MS ?? 300_000);
 
 const toIsoString = (value: Date | string | null | undefined): null | string => {
   if (!value) return null;
