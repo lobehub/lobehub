@@ -545,7 +545,8 @@ export const acceptanceRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance not found' });
       }
 
-      if (!(await canReadAcceptance(ctx, acceptance))) {
+      const isOwner = Boolean(ctx.userId) && ctx.userId === acceptance.userId;
+      if (!isOwner && !(await canReadAcceptance(ctx, acceptance))) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance not found' });
       }
 
