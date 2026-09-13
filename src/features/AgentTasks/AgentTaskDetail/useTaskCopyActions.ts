@@ -22,10 +22,7 @@ export const useTaskCopyActions = () => {
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const taskAgentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
-  // Slug title, not `name`: a task with only an instruction still has a title
-  // on screen, so the copied link has to carry the same slug the address bar
-  // shows rather than degrading to a bare `/task/:id`.
-  const taskTitle = useTaskStore(taskDetailSelectors.activeTaskSlugTitle);
+  const taskTitle = useTaskStore(taskDetailSelectors.activeTaskName);
 
   const copyId = useCallback(async () => {
     if (!taskId) return;

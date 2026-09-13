@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { TASK_SLUG_MAX_LENGTH, taskSlugTitle, taskTitleSlug } from './taskSlug';
+import { TASK_SLUG_MAX_LENGTH, taskTitleSlug } from './taskSlug';
 
 const toGraphemes = (value: string) =>
   [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(value)].map(
@@ -66,37 +66,17 @@ describe('taskTitleSlug', () => {
     expect(slug).toBe('कि'.repeat(TASK_SLUG_MAX_LENGTH));
   });
 
+  it('bounds the slug by code points, not only by grapheme count', () => {
+    // One base letter plus 10k combining accents is a SINGLE grapheme, so a
+    // grapheme-only cap left it whole — a ~20KB path segment past what browsers
+    // and proxies accept. Titles arrive from imported and generated content,
+    // so the bound has to hold for input nobody typed.
+    const slug = taskTitleSlug(`a${'\u0301'.repeat(10_000)}`);
+
+    expect([...slug].length).toBeLessThanOrEqual(4 * TASK_SLUG_MAX_LENGTH);
+  });
+
   it('emits only characters that are legal in a path segment', () => {
     expect(taskTitleSlug('a/b?c#d e%f')).toBe('a-b-c-d-e-f');
-  });
-});
-
-describe('taskSlugTitle', () => {
-  it('prefers the name when the task has one', () => {
-    expect(taskSlugTitle({ instruction: 'do the thing', name: 'Ship it' })).toBe('Ship it');
-  });
-
-  // Regression: `ConnectedItem` linked a nameless task with the instruction
-  // slug (the Recent query coalesces the two), while `useCanonicalTaskSlug`
-  // read `name` alone and flattened the URL right back to `/task/:id`.
-  it('falls back to the instruction when the name is absent', () => {
-    expect(taskSlugTitle({ instruction: 'fallback to instruction', name: null })).toBe(
-      'fallback to instruction',
-    );
-    expect(taskSlugTitle({ instruction: 'fallback to instruction' })).toBe(
-      'fallback to instruction',
-    );
-  });
-
-  it('treats a cleared name as a resolved empty title, matching COALESCE', () => {
-    // `??`, not `||`: clearing the title input persists `name: ''`, and SQL
-    // COALESCE does not treat '' as NULL either. Falling through to the
-    // instruction here would re-slug a task the user just untitled.
-    expect(taskSlugTitle({ instruction: 'do the thing', name: '' })).toBe('');
-  });
-
-  it('returns an empty title for a missing task', () => {
-    expect(taskSlugTitle()).toBe('');
-    expect(taskSlugTitle(null)).toBe('');
   });
 });

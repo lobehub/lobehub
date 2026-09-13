@@ -10,7 +10,6 @@ import { electronSystemService } from '@/services/electron/system';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useTaskStore } from '@/store/task';
-import { taskDetailSelectors } from '@/store/task/selectors';
 
 import PortalHeader from '../components/Header';
 import Title from './Title';
@@ -24,10 +23,8 @@ const TaskDetailHeader = memo(() => {
   const agentId = useTaskStore((state) =>
     taskId ? (state.taskDetailMap[taskId]?.agentId ?? undefined) : undefined,
   );
-  // Slug title, not `name`, so the link this button opens matches the one the
-  // task page canonicalises to for a task that has only an instruction.
   const taskTitle = useTaskStore((state) =>
-    taskId ? taskDetailSelectors.taskSlugTitleById(taskId)(state) : undefined,
+    taskId ? (state.taskDetailMap[taskId]?.name ?? undefined) : undefined,
   );
   const pageUrl = getTaskDetailPageUrl({
     agentId,

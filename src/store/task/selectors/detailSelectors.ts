@@ -1,5 +1,4 @@
 import type { TaskDetailData, TaskVerifyConfig } from '@lobechat/types';
-import { taskSlugTitle } from '@lobechat/utils/taskSlug';
 
 import type { SaveStatus } from '@/types/saveState';
 
@@ -18,19 +17,6 @@ const isTaskDetailLoading = (s: TaskStoreState): boolean =>
   !s.activeTaskId || !s.taskDetailMap[s.activeTaskId];
 
 const activeTaskName = (s: TaskStoreState) => activeTaskDetail(s)?.name;
-
-/**
- * Title the task's URL slug is built from — `name`, falling back to
- * `instruction` exactly as the server's Recent query coalesces the two.
- *
- * Every surface that builds or repairs a task link reads the slug title from
- * here rather than `name`, so a link copied from one surface and the URL the
- * detail page canonicalises to cannot disagree (they did: a nameless task
- * opened from Recent had its slug stripped on arrival).
- */
-const taskSlugTitleById = (id: string) => (s: TaskStoreState) => taskSlugTitle(s.taskDetailMap[id]);
-
-const activeTaskSlugTitle = (s: TaskStoreState) => taskSlugTitle(activeTaskDetail(s));
 
 const activeTaskStatus = (s: TaskStoreState) => activeTaskDetail(s)?.status;
 
@@ -165,7 +151,6 @@ export const taskDetailSelectors = {
   activeTaskScheduleMaxExecutions,
   activeTaskSchedulePattern,
   activeTaskScheduleTimezone,
-  activeTaskSlugTitle,
   activeTaskStatus,
   activeTaskSubtasks,
   activeTaskTopicCount,
@@ -180,7 +165,6 @@ export const taskDetailSelectors = {
   isTaskDetailLoading,
   taskDetailById,
   taskSaveStatus,
-  taskSlugTitleById,
   topicDrawerAgentId,
   topicDrawerTitle,
 };

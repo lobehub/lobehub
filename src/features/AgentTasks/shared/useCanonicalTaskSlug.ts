@@ -7,7 +7,6 @@ import { useLocation } from 'react-router';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { useTaskStore } from '@/store/task';
-import { taskDetailSelectors } from '@/store/task/selectors';
 
 import { taskDetailPath } from './taskDetailPath';
 
@@ -37,12 +36,9 @@ export const useCanonicalTaskSlug = (taskId?: string) => {
   // resolved state (clearing the input persists `name: ''`), and folding it in
   // with "not loaded yet" would pin the URL to the slug of the old title.
   const isLoaded = useTaskStore((s) => (taskId ? Boolean(s.taskDetailMap[taskId]) : false));
-  // `name` falling back to `instruction`, via the same helper the link builders
-  // use. Reading `name` alone is what made this hook strip the slug off a
-  // nameless task opened from Recent, which links it by its instruction.
-  const title = useTaskStore((s) =>
-    taskId ? taskDetailSelectors.taskSlugTitleById(taskId)(s) : '',
-  );
+  // `name` only, and the link builders agree: a task's instruction is a prompt
+  // body, not a title, and must never reach a URL (see `taskTitleSlug`).
+  const title = useTaskStore((s) => (taskId ? (s.taskDetailMap[taskId]?.name ?? '') : ''));
 
   useEffect(() => {
     // Before the detail resolves the title is unknown — leaving the URL alone

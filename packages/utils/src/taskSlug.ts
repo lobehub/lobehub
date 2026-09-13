@@ -8,6 +8,18 @@
 /** Long enough to read the task at a glance, short enough to stay pasteable. */
 export const TASK_SLUG_MAX_LENGTH = 60;
 
+/**
+ * Ceiling on the code points a slug may carry, independent of how many
+ * graphemes that is.
+ *
+ * Grapheme counting alone is not a size bound: a single cluster accepts an
+ * unlimited run of combining marks, so `a` plus 10k accents is one grapheme and
+ * a ~20KB path segment — past what browsers and proxies accept in a request
+ * line. Titles arrive from imported and generated content, so the bound has to
+ * hold for input nobody typed by hand.
+ */
+const TASK_SLUG_MAX_CODE_POINTS = 4 * TASK_SLUG_MAX_LENGTH;
+
 const SEPARATOR_RUN = /^-+|-+$/g;
 
 /**
@@ -44,30 +56,6 @@ const toGraphemes = (value: string): string[] =>
     ? [...graphemeSegmenter.segment(value)].map((entry) => entry.segment)
     : [...value];
 
-/** The two fields a task slug may be built from, in fallback order. */
-export interface TaskSlugTitleSource {
-  instruction?: string | null;
-  name?: string | null;
-}
-
-/**
- * Resolve the title a task's slug is built from.
- *
- * Mirrors the server-side `COALESCE(tasks.name, tasks.instruction)` that the
- * Recent feed applies (`packages/database/src/models/recent.ts`), so a link
- * built from a list row and the URL `useCanonicalTaskSlug` canonicalises to
- * agree. They disagreed before: Recent linked a nameless task to
- * `/task/:id/<instruction-slug>` and the canonicaliser, reading `name` alone,
- * immediately flattened it back to `/task/:id`.
- *
- * `??` and not `||`, again to match `COALESCE`: a name cleared to `''` is a
- * resolved "no title" state that must collapse the URL, not fall through to the
- * instruction. `'Untitled Task'` is display copy and deliberately not part of
- * this chain — it must never reach a URL.
- */
-export const taskSlugTitle = (task?: TaskSlugTitleSource | null): string =>
-  task?.name ?? task?.instruction ?? '';
-
 /**
  * Build the slug segment for a task title.
  *
@@ -90,7 +78,22 @@ export const taskTitleSlug = (title?: string | null): string => {
   // either halves a surrogate pair or strands a combining mark without its base
   // letter, both of which put a broken character in the URL.
   const graphemes = toGraphemes(normalized);
-  if (graphemes.length <= TASK_SLUG_MAX_LENGTH) return normalized;
+  const kept: string[] = [];
+  let codePoints = 0;
 
-  return trimSeparators(graphemes.slice(0, TASK_SLUG_MAX_LENGTH).join(''));
+  for (const grapheme of graphemes) {
+    if (kept.length >= TASK_SLUG_MAX_LENGTH) break;
+
+    const size = [...grapheme].length;
+    // Keep whole clusters only: dropping the one that would breach the ceiling
+    // beats emitting a half-cluster to fill the remaining budget.
+    if (codePoints + size > TASK_SLUG_MAX_CODE_POINTS) break;
+
+    kept.push(grapheme);
+    codePoints += size;
+  }
+
+  if (kept.length === graphemes.length) return normalized;
+
+  return trimSeparators(kept.join(''));
 };

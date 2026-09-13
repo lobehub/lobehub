@@ -104,12 +104,10 @@ describe('useCanonicalTaskSlug', () => {
     expect(mocks.navigate).toHaveBeenCalledWith('/task/T-1', { replace: true });
   });
 
-  it('keeps the instruction slug of a task that has no name', () => {
-    // Regression: Recent links a nameless task by its instruction (the query
-    // coalesces `name → instruction`), but this hook read `name` alone and
-    // flattened the incoming URL to `/task/T-1` the moment the detail landed —
-    // and the link copied from there came out bare too.
-    mocks.params = { slug: 'fallback-to-instruction' };
+  it('leaves a nameless task at its bare id instead of slugging the instruction', () => {
+    // A task's instruction is a prompt body: putting it in the path would leak
+    // it into history, analytics page views and every copied link. A task with
+    // no name simply has no slug.
     setTaskDetail({ instruction: 'Fallback to instruction', name: null });
 
     renderHook(() => useCanonicalTaskSlug('T-1'));
@@ -117,22 +115,9 @@ describe('useCanonicalTaskSlug', () => {
     expect(mocks.navigate).not.toHaveBeenCalled();
   });
 
-  it('upgrades a bare link of a nameless task to its instruction slug', () => {
+  it('strips an instruction slug someone hand-edited into the URL', () => {
+    mocks.params = { slug: 'fallback-to-instruction' };
     setTaskDetail({ instruction: 'Fallback to instruction', name: null });
-
-    renderHook(() => useCanonicalTaskSlug('T-1'));
-
-    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-1/fallback-to-instruction', {
-      replace: true,
-    });
-  });
-
-  it('does not fall through to the instruction once the name is cleared', () => {
-    // `name: ''` is a resolved "no title", matching the server's COALESCE —
-    // re-slugging from the instruction would resurrect a title the user just
-    // deleted.
-    mocks.params = { slug: 'ship-the-thing' };
-    setTaskDetail({ instruction: 'Fallback to instruction', name: '' });
 
     renderHook(() => useCanonicalTaskSlug('T-1'));
 

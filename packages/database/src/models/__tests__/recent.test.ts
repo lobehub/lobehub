@@ -526,6 +526,13 @@ describe('RecentModel', () => {
         const byId = Object.fromEntries(result.map((r) => [r.id, r.title]));
         expect(byId['task-named']).toBe('Named');
         expect(byId['task-instruction']).toBe('fallback to instruction');
+
+        // `slugTitle` deliberately does NOT take that fallback: it feeds the
+        // task link, and a prompt body in the path would reach browser history,
+        // analytics page views and every copied link.
+        const slugById = Object.fromEntries(result.map((r) => [r.id, r.slugTitle]));
+        expect(slugById['task-named']).toBe('Named');
+        expect(slugById['task-instruction']).toBeNull();
       });
     });
 
