@@ -39,7 +39,7 @@ describe('document tree and code tree are styled independently', () => {
 
   it('confines the row treatment (folder weight, focus ring, trailing ellipsis) to the document tree', () => {
     expect(DOCUMENT_TREE_ROW_CSS).toContain('font-weight: 500');
-    expect(DOCUMENT_TREE_ROW_CSS).toContain('data-truncate-segment-priority');
+    expect(DOCUMENT_TREE_ROW_CSS).toContain('text-overflow: ellipsis');
     expect(DOCUMENT_TREE_ROW_CSS).toContain('outline: none');
     expect(FOLDER_ICON_CSS).not.toContain(DOCUMENT_TREE_ROW_CSS.trim());
   });
