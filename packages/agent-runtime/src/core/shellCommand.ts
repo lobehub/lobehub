@@ -48,12 +48,14 @@ export interface ShellSegment {
   words: string[];
 }
 
-/**
- * Bash builtin that executes its argument as a command, bypassing aliases and
- * functions: `command rm -rf /` runs rm directly. Unwrapped like sudo/env.
- * Options `-p` (default PATH), `-v`/`-V` (describe) take no value.
- */
+/** VAR=value environment assignment prefix (FOO=bar cmd), not a command word. */
 const ASSIGNMENT_PATTERN = /^[A-Z_]\w*=.*$/i;
+
+/** Basename of a path-qualified command word: /bin/rm → rm, ./x.sh → x.sh. */
+const commandBasename = (word: string): string => {
+  const lastSlash = word.lastIndexOf('/');
+  return lastSlash >= 0 && lastSlash + 1 < word.length ? word.slice(lastSlash + 1) : word;
+};
 
 /**
  * Split command string into segments on `;`, `&`, `|`, `&&`, `||` while
@@ -75,13 +77,23 @@ const splitIntoRawSegments = (command: string): string[] => {
 
     if (quote) {
       current += char;
-      // No escapes inside single quotes; \" and \\ possible in double quotes
+      // Escape handling inside quotes. In double quotes `\<newline>` is a
+      // line continuation (removed by the shell); other escaped chars stay.
       if (quote === '"' && char === '\\' && i + 1 < command.length) {
-        current += command[i + 1];
+        if (command[i + 1] !== '\n' && command[i + 1] !== '\r') {
+          current += command[i + 1];
+        }
         i++;
         continue;
       }
       if (char === quote) quote = null;
+      continue;
+    }
+
+    // Backslash-newline outside quotes is a line continuation: the shell
+    // removes it (`rm -rf \<newline>/` deletes '/') — never a separator.
+    if (char === '\\' && (command[i + 1] === '\n' || command[i + 1] === '\r')) {
+      i++;
       continue;
     }
 
@@ -203,6 +215,33 @@ const tokenizeWords = (raw: string): string[] => {
       continue;
     }
 
+    if (char === '\\' && i + 1 < raw.length) {
+      const escaped = raw[i + 1];
+      // Backslash-newline is a line continuation: the shell removes it, so
+      // argv keeps the surrounding words as-is (`rm -rf \\<newline>/` → '/').
+      if (escaped === '\n' || escaped === '\r') {
+        i += 2;
+        continue;
+      }
+      // POSIX unquoted backslash escape: the next character is LITERAL (`\/`
+      // passes `/` as the target; `\rm` invokes rm). Consume the escape so the
+      // safe surface (argv) is what security matching sees.
+      word += escaped;
+      hasWord = true;
+      i += 2;
+      continue;
+    }
+
+    // ANSI-C quoting $'…': the payload behaves like a quoted word. Keep the
+    // '$' so value-taking flags still consume the word, and let the quote
+    // scanner strip the payload below.
+    if (char === '$' && raw[i + 1] === "'") {
+      quote = "'";
+      hasWord = true;
+      i += 2;
+      continue;
+    }
+
     if (char === '"' || char === "'") {
       quote = char;
       hasWord = true;
@@ -229,10 +268,8 @@ const tokenizeWords = (raw: string): string[] => {
     if (inSubstitution) {
       if (char === '(') inSubstitution++;
       if (char === ')') inSubstitution--;
+      // On ')' the substitution closes but the word continues.
       word += char;
-      if (inSubstitution === 0) {
-        // substitution closed; continue same word
-      }
       hasWord = true;
       i++;
       continue;
@@ -306,7 +343,7 @@ const collectFlags = (words: string[]): string[] => words.filter(isDashWord);
  * Collect all long-flag names (e.g. 'recursive' from --recursive / --recursive=yes)
  * and all single-letter flags from short-flag words (e.g. r, f from -rf).
  */
-const collectFlagLettersAndNames = (
+export const collectFlagLettersAndNames = (
   flags: string[],
 ): { letters: Set<string>; names: Set<string> } => {
   const letters = new Set<string>();
@@ -360,6 +397,12 @@ const WRAPPER_VALUE_FREE_FLAGS: Record<string, ReadonlySet<string>> = {
   nohup: new Set(),
   // bash command builtin: -p default PATH, -v/-V describe.
   command: new Set(['p', 'v', 'V']),
+  // GNU xargs value-free flags: -0/--null NUL-separated input, -r/--no-run-if-empty,
+  // -a FILE (value!), -E EOF-str, -I replstr, -L lines, -n max-args, -P procs,
+  // -s size, -d delim — all value-taking besides -0/-r. Note the -0 form: an
+  // unwhitelisted `-0` would swallow the wrapped command (`xargs -0 rm -rf /
+  // harmless` resolved the harmless word as the command).
+  xargs: new Set(['0', 'r']),
 };
 
 /**
@@ -423,17 +466,24 @@ const resolveCommandWord = (words: string[]): string | null => {
     break;
   }
 
+  // `!` is the shell negation keyword: `! rm -rf ~` still RUNS the deletion
+  // (only its exit status is inverted). It is syntax, not an executable —
+  // skip it like any other exec prefix.
+  if (words[index] === '!') index++;
+
   // Unwrap exec-prefix wrappers. The loop naturally terminates: `index`
   // strictly increases every iteration and is bounded by words.length. No
   // artificial counter — pathologically chained wrappers still resolve fully.
   while (index < words.length) {
     const word = words[index];
-    if (!EXEC_PREFIX_WRAPPERS.has(word)) break;
-    const valueFreeFlags = WRAPPER_VALUE_FREE_FLAGS[word];
+    // Path-qualified wrappers execute identically to bare ones
+    // (/usr/bin/sudo rm …). Normalize to basename before lookup.
+    if (!EXEC_PREFIX_WRAPPERS.has(commandBasename(word))) break;
+    const valueFreeFlags = WRAPPER_VALUE_FREE_FLAGS[commandBasename(word)];
     index++;
     // Consume wrapper-owned positional values first (timeout DURATION, flock
     // LOCKFILE): bare words that are NOT the wrapped command.
-    let positional = WRAPPER_POSITIONAL_VALUES[word] ?? 0;
+    let positional = WRAPPER_POSITIONAL_VALUES[commandBasename(word)] ?? 0;
     // Skip wrapper-owned tokens: assignments after `env`, wrapper flags, and
     // the value word of any flag presumed to consume one (security-first
     // default, see WRAPPER_VALUE_FREE_FLAGS).
@@ -449,10 +499,10 @@ const resolveCommandWord = (words: string[]): string | null => {
           index++;
           continue;
         }
-        // `-abc` combined short flags: consumes a value unless EVERY letter
-        // is whitelisted value-free. Unknown/foreign flags consume — the
-        // safe direction for a blacklist (over-detection).
-        const letters = /^-([a-z]+)$/i.exec(token);
+        // `-abc` / `-0` combined short flags: consumes a value unless EVERY
+        // letter/digit is whitelisted value-free. Unknown/foreign flags
+        // consume — the safe direction for a blacklist (over-detection).
+        const letters = /^-([a-z0-9]+)$/i.exec(token);
         const consumesValue =
           letters === null || !letters[1].split('').every((letter) => valueFreeFlags?.has(letter));
         index += consumesValue ? 2 : 1;
@@ -476,10 +526,7 @@ const resolveCommandWord = (words: string[]): string | null => {
   // Normalize path-qualified executables to their basename so predicates can
   // compare on the bare command name: /bin/rm → rm, ./script.sh → script.sh,
   // /usr/bin/env → env. Bare `/` (root target) has no basename and stays.
-  const lastSlash = commandWord.lastIndexOf('/');
-  return lastSlash >= 0 && lastSlash + 1 < commandWord.length
-    ? commandWord.slice(lastSlash + 1)
-    : commandWord;
+  return commandBasename(commandWord);
 };
 
 /**

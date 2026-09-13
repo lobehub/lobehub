@@ -223,6 +223,25 @@ describe('matchSemanticShellPredicate', () => {
       // Compounds and multi-line shapes sharing these wrappers.
       'echo ok\nxargs rm -rf /',
       'find . | xargs rm -rf /',
+      // Second codex round: escapes, negation, path-qualified wrappers,
+      // xargs value-free flags, long-flag fallback, brace targets.
+      'rm -rf \\/',
+      '\\rm -rf /',
+      '! rm -rf ~',
+      '/usr/bin/sudo rm -rf ~',
+      '/usr/bin/nohup rm -rf ~',
+      '/usr/bin/nice rm -rf ~',
+      'xargs -0 rm -rf /',
+      'xargs -0 rm -rf harmless /home/alice',
+      'xargs rm --recursive /',
+      'bash -c " rm -rf /"',
+      'bash -c "cd / && rm -rf /"',
+      `bash -c $'rm -rf /'`,
+      'bash -c "cd x && rm -rf ~"',
+      `env -S$'rm -rf /'`,
+      'env -S"rm -rf /"',
+      'rm -rf {/,/etc}',
+      'rm -rf /.',
     ])('blocks review-found bypass: %s', (command) => {
       expect(
         matchSemanticShellPredicate('rmRecursiveRootTarget', command) ||
@@ -249,6 +268,13 @@ describe('matchSemanticShellPredicate', () => {
       // allowed — no re-creation of the substring false-positive class.
       "echo 'rm -rf /'",
       'echo $(date) && ls /',
+      // -c payloads whose PARSED segments are not dangerous no longer
+      // over-detect (the old prefix-regex fallback flagged these).
+      'bash -c "rm -rf /tmp/build-cache"',
+      'bash -c "rm -rf ~/notes/old"',
+      'env -S"rm -rf /tmp/build-cache"',
+      // Escapes that only quote SAFE words must not flip the verdict.
+      'rm -rf \\/tmp/build-cache',
     ])('allows legitimate usage: %s', (command) => {
       expect(
         matchSemanticShellPredicate('rmRecursiveRootTarget', command) ||

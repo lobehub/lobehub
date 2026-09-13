@@ -289,5 +289,42 @@ describe('analyzeShellCommand', () => {
       expect(seg.hasFlag('r')).toBe(true);
       expect(seg.homeTargets).toContain('~');
     });
+
+    it('unquoted backslash escapes are consumed to the safe argv surface', () => {
+      // `rm -rf \/` passes '/' as the target; matching must see '/', not '\/'.
+      const segments = analyzeShellCommand('rm -rf \\/');
+      expect(segments[0].trailingSlashTargets).toContain('/');
+      // `\rm -rf /` executes rm: the escaped word resolves to command rm.
+      expect(analyzeShellCommand('\\rm -rf /')[0].resolvedCommand).toBe('rm');
+      // Backslash-newline is a line continuation, not a separator or literal.
+      expect(analyzeShellCommand('rm -rf \\\n/')[0].trailingSlashTargets).toContain('/');
+      // Double backslash stays a literal backslash (path escapes).
+      expect(analyzeShellCommand('ls C:\\\\')[0].words).toContain('C:\\');
+    });
+
+    it("ANSI-C quoting $'…' strips to its payload like a quoted word", () => {
+      expect(analyzeShellCommand(`bash -c $'rm -rf /'`)[0].words).toContain('rm -rf /');
+    });
+
+    it('path-qualified wrappers unwrap to the wrapped command', () => {
+      for (const command of [
+        '/usr/bin/sudo rm -rf ~',
+        '/usr/bin/nohup rm -rf ~',
+        '/usr/bin/nice rm -rf ~',
+        '/bin/xargs rm -rf /',
+      ]) {
+        expect(analyzeShellCommand(command)[0].resolvedCommand).toBe('rm');
+      }
+    });
+
+    it('xargs value-free flags do not swallow the wrapped command', () => {
+      const seg = analyzeShellCommand('xargs -0 rm -rf harmless /home/alice')[0];
+      expect(seg.resolvedCommand).toBe('rm');
+      expect(seg.hasFlag('r')).toBe(true);
+    });
+
+    it('shell negation `!` is skipped as syntax, not treated as a command', () => {
+      expect(analyzeShellCommand('! rm -rf ~')[0].resolvedCommand).toBe('rm');
+    });
   });
 });
