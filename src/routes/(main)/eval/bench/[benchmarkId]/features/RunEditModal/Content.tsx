@@ -229,6 +229,7 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
       )}
 
       <Accordion
+        keepMounted
         defaultValue={[]}
         indicatorPlacement="inline"
         styles={{ header: { paddingBlock: 8, paddingInline: 4 } }}

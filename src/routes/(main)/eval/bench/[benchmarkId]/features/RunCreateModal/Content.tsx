@@ -310,6 +310,7 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
       )}
 
       <Accordion
+        keepMounted
         defaultValue={[]}
         indicatorPlacement="inline"
         styles={{ header: { paddingBlock: 8, paddingInline: 4 } }}

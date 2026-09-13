@@ -417,6 +417,7 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
         </Form.Item>
 
         <Accordion
+          keepMounted
           defaultValue={isSetup ? [] : ['optional']}
           indicatorPlacement="end"
           styles={{ trigger: { paddingInline: 0 } }}
