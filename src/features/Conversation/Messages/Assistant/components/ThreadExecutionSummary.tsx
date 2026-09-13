@@ -43,7 +43,11 @@ const ThreadExecutionSummary = memo<ThreadExecutionSummaryProps>(({ messageId })
         itemKey={'execution-record'}
         paddingBlock={4}
         paddingInline={4}
-        title={<Text type={'secondary'}>{label}</Text>}
+        title={
+          <Text style={{ whiteSpace: 'nowrap' }} type={'secondary'}>
+            {label}
+          </Text>
+        }
       />
     </Accordion>
   );
