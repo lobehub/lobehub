@@ -2026,6 +2026,7 @@
   "workspace.billingPage.billing.change.preview": "{{seats}} مقعد · معاينة الفوترة {{interval}}",
   "workspace.billingPage.billing.change.purchasedSeats": "مقاعد إضافية مدفوعة مسبقًا",
   "workspace.billingPage.billing.change.purchasedSeatsWithMax": "المقاعد المدفوعة مسبقًا (بحد أقصى {{max}} مقعد)",
+  "workspace.billingPage.billing.change.seatFloorPending": "يحتوي مساحة العمل هذه على {{members}} أعضاء قابلين للفوترة و{{pending}} دعوات معلقة، باستخدام {{used}} مقاعد. قم بإلغاء دعوة معلقة قبل تقليل المقاعد أكثر.",
   "workspace.billingPage.billing.change.seatReductionHint": "تخفيض المقاعد يتم تطبيقه في دورة الفوترة التالية. الدورة الحالية غير مستردة.",
   "workspace.billingPage.billing.change.title": "تعديل الخطة",
   "workspace.billingPage.billing.changeFailed": "فشل في تحديث الاشتراك.",

@@ -2026,6 +2026,7 @@
   "workspace.billingPage.billing.change.preview": "{{seats}} мест · предварительный расчет {{interval}}",
   "workspace.billingPage.billing.change.purchasedSeats": "Дополнительно оплаченные места",
   "workspace.billingPage.billing.change.purchasedSeatsWithMax": "Предоплаченные места (максимум {{max}} мест)",
+  "workspace.billingPage.billing.change.seatFloorPending": "В этом рабочем пространстве {{members}} оплачиваемых участников и {{pending}} ожидающих приглашений, используется {{used}} мест. Отмените ожидающее приглашение, прежде чем уменьшать количество мест дальше.",
   "workspace.billingPage.billing.change.seatReductionHint": "Уменьшение количества мест вступает в силу в следующем платежном цикле. Текущий цикл не возмещается.",
   "workspace.billingPage.billing.change.title": "Настроить план",
   "workspace.billingPage.billing.changeFailed": "Не удалось обновить подписку.",

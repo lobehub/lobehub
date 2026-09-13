@@ -2026,6 +2026,7 @@
   "workspace.billingPage.billing.change.preview": "{{seats}} places · aperçu de la facturation {{interval}}",
   "workspace.billingPage.billing.change.purchasedSeats": "Places supplémentaires prépayées",
   "workspace.billingPage.billing.change.purchasedSeatsWithMax": "Sièges prépayés (max {{max}} sièges)",
+  "workspace.billingPage.billing.change.seatFloorPending": "Cet espace de travail compte {{members}} membres facturables et {{pending}} invitations en attente, utilisant {{used}} places. Révoquez une invitation en attente avant de réduire davantage les places.",
   "workspace.billingPage.billing.change.seatReductionHint": "La réduction des sièges prend effet au prochain cycle de facturation. Le cycle actuel n'est pas remboursé.",
   "workspace.billingPage.billing.change.title": "Ajuster le plan",
   "workspace.billingPage.billing.changeFailed": "Échec de la mise à jour de l'abonnement.",

@@ -2026,6 +2026,7 @@
   "workspace.billingPage.billing.change.preview": "{{seats}} assentos · prévia de cobrança {{interval}}",
   "workspace.billingPage.billing.change.purchasedSeats": "Assentos extras pré-pagos",
   "workspace.billingPage.billing.change.purchasedSeatsWithMax": "Assentos pré-pagos (máx. {{max}} assentos)",
+  "workspace.billingPage.billing.change.seatFloorPending": "Este espaço de trabalho tem {{members}} membros faturáveis e {{pending}} convites pendentes, utilizando {{used}} assentos. Revogue um convite pendente antes de reduzir ainda mais os assentos.",
   "workspace.billingPage.billing.change.seatReductionHint": "A redução de assentos entra em vigor no próximo ciclo de cobrança. O ciclo atual não é reembolsado.",
   "workspace.billingPage.billing.change.title": "Ajustar plano",
   "workspace.billingPage.billing.changeFailed": "Falha ao atualizar a assinatura.",

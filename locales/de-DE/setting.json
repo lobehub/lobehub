@@ -2026,6 +2026,7 @@
   "workspace.billingPage.billing.change.preview": "{{seats}} Plätze · Vorschau für {{interval}} Abrechnung",
   "workspace.billingPage.billing.change.purchasedSeats": "Vorausbezahlte zusätzliche Plätze",
   "workspace.billingPage.billing.change.purchasedSeatsWithMax": "Vorausbezahlte Plätze (max. {{max}} Plätze)",
+  "workspace.billingPage.billing.change.seatFloorPending": "Dieser Arbeitsbereich hat {{members}} abrechenbare Mitglieder und {{pending}} ausstehende Einladungen, wobei {{used}} Plätze genutzt werden. Widerrufen Sie eine ausstehende Einladung, bevor Sie die Plätze weiter reduzieren.",
   "workspace.billingPage.billing.change.seatReductionHint": "Die Reduzierung der Plätze tritt im nächsten Abrechnungszyklus in Kraft. Der aktuelle Zyklus wird nicht erstattet.",
   "workspace.billingPage.billing.change.title": "Plan anpassen",
   "workspace.billingPage.billing.changeFailed": "Abonnement konnte nicht aktualisiert werden.",

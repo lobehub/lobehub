@@ -2026,6 +2026,7 @@
   "workspace.billingPage.billing.change.preview": "{{seats}} места · предварителен преглед на {{interval}} фактуриране",
   "workspace.billingPage.billing.change.purchasedSeats": "Предплатени допълнителни места",
   "workspace.billingPage.billing.change.purchasedSeatsWithMax": "Предплатени места (макс. {{max}} места)",
+  "workspace.billingPage.billing.change.seatFloorPending": "Това работно пространство има {{members}} платени членове и {{pending}} чакащи покани, използвайки {{used}} места. Отменете чакаща покана, преди да намалите местата допълнително.",
   "workspace.billingPage.billing.change.seatReductionHint": "Намаляването на местата влиза в сила в следващия цикъл на фактуриране. Текущият цикъл не се възстановява.",
   "workspace.billingPage.billing.change.title": "Коригиране на плана",
   "workspace.billingPage.billing.changeFailed": "Неуспешно актуализиране на абонамента.",

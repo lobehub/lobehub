@@ -2026,6 +2026,7 @@
   "workspace.billingPage.billing.change.preview": "{{seats}}席 · {{interval}}請求プレビュー",
   "workspace.billingPage.billing.change.purchasedSeats": "事前購入された追加席",
   "workspace.billingPage.billing.change.purchasedSeatsWithMax": "事前購入済みの座席（最大{{max}}席）",
+  "workspace.billingPage.billing.change.seatFloorPending": "このワークスペースには{{members}}人の課金対象メンバーと{{pending}}件の保留中の招待があり、{{used}}席が使用されています。さらに席数を減らす前に、保留中の招待を取り消してください。",
   "workspace.billingPage.billing.change.seatReductionHint": "座席数の削減は次の請求サイクルで有効になります。現在のサイクルでは返金されません。",
   "workspace.billingPage.billing.change.title": "プランを調整",
   "workspace.billingPage.billing.changeFailed": "サブスクリプションの更新に失敗しました。",
