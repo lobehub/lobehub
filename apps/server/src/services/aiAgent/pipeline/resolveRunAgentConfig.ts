@@ -29,6 +29,12 @@ export interface ResolveRunAgentConfigInput {
   instructions?: string;
   modelOverride?: string;
   providerOverride?: string;
+  /**
+   * The share visitor actually driving a shared-agent run. The service is
+   * constructed as the share owner, so caller-scoped facts (the reply
+   * language appended to the system role) must be read for this user instead.
+   */
+  shareVisitorUserId?: string;
   throwIfExecutionAborted: (stage: string) => Promise<void>;
   toolModeOverride?: InternalExecAgentParams['toolModeOverride'];
 }
@@ -124,9 +130,12 @@ const resolveCanManage = async (
   }
 };
 
-const loadUserLocale = async (deps: ResolveRunAgentConfigDeps): Promise<string | undefined> => {
+const loadUserLocale = async (
+  deps: ResolveRunAgentConfigDeps,
+  userId: string,
+): Promise<string | undefined> => {
   try {
-    const userInfo = await UserModel.getInfoForAIGeneration(deps.db, deps.userId);
+    const userInfo = await UserModel.getInfoForAIGeneration(deps.db, userId);
     return userInfo.responseLanguage;
   } catch (error) {
     log('execAgent: failed to load user locale for agent config resolution: %O', error);
@@ -157,6 +166,7 @@ export const resolveRunAgentConfig = async (
     instructions,
     modelOverride,
     providerOverride,
+    shareVisitorUserId,
     throwIfExecutionAborted,
     toolModeOverride,
   } = input;
@@ -170,7 +180,8 @@ export const resolveRunAgentConfig = async (
   const [overrides, canManageAgent, userLocale] = await Promise.all([
     loadWorkspaceMemberOverrides(deps, resolvedAgentId),
     resolveCanManage(deps, row, agentWorkspaceId, isPublicWorkspaceAgent),
-    loadUserLocale(deps),
+    // A share visitor replies in their own language, not the owner's.
+    loadUserLocale(deps, shareVisitorUserId ?? deps.userId),
   ]);
 
   // The caller's device preference layers onto the shared row BEFORE the
