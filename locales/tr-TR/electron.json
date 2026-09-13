@@ -155,6 +155,8 @@
   "updater.later": "Daha Sonra",
   "updater.newVersionAvailable": "Yeni sürüm mevcut",
   "updater.newVersionAvailableDesc": "Yeni bir {{version}} sürümü bulundu, şimdi indirmek ister misiniz?",
+  "updater.rendererReady": "Sürüm {{version}} hazır",
+  "updater.rendererUpdateError": "Güncelleme yüklenemedi. Tekrar deneyin.",
   "updater.restartAndInstall": "Güncellemeyi yükle ve yeniden başlat",
   "updater.updateError": "Güncelleme hatası",
   "updater.updateReady": "Yeni sürüm hazır",

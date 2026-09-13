@@ -51,6 +51,8 @@
   "back": "戻る",
   "batchDelete": "一括削除",
   "betaFeedback.collapse": "折りたたむ",
+  "betaFeedback.createWorkspacePromo": "ベータ版に参加中です — 最初のワークスペースを作成しましょう",
+  "betaFeedback.createWorkspaceTitle": "最初のワークスペースを作成する",
   "betaFeedback.desc": "ワークスペースはベータ版です。問題を報告したり、機能をリクエストしたり、他のベータユーザーと意見交換をしてください。",
   "betaFeedback.discord.action": "Discordを開く",
   "betaFeedback.discord.desc": "携帯電話のカメラでスキャンして参加してください。",

@@ -51,6 +51,8 @@
   "back": "Назад",
   "batchDelete": "Массовое удаление",
   "betaFeedback.collapse": "Свернуть",
+  "betaFeedback.createWorkspacePromo": "Вы участвуете в бета-тестировании — создайте своё первое рабочее пространство",
+  "betaFeedback.createWorkspaceTitle": "Создайте своё первое рабочее пространство",
   "betaFeedback.desc": "Рабочая область находится в бета-версии. Сообщайте о проблемах, запрашивайте функции или сравнивайте заметки с другими пользователями бета-версии.",
   "betaFeedback.discord.action": "Открыть Discord",
   "betaFeedback.discord.desc": "Сканируйте камерой телефона, чтобы присоединиться.",

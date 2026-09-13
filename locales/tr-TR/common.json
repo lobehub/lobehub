@@ -51,6 +51,8 @@
   "back": "Geri",
   "batchDelete": "Toplu Sil",
   "betaFeedback.collapse": "Daralt",
+  "betaFeedback.createWorkspacePromo": "Beta sürümündesiniz — ilk çalışma alanınızı oluşturun",
+  "betaFeedback.createWorkspaceTitle": "İlk çalışma alanınızı oluşturun",
   "betaFeedback.desc": "Çalışma alanı beta sürümündedir. Sorunları bildirin, özellikler talep edin veya diğer beta kullanıcılarıyla notlarınızı karşılaştırın.",
   "betaFeedback.discord.action": "Discord'u Aç",
   "betaFeedback.discord.desc": "Katılmak için telefon kameranızla tarayın.",

@@ -51,6 +51,8 @@
   "back": "Quay lại",
   "batchDelete": "Xóa hàng loạt",
   "betaFeedback.collapse": "Thu gọn",
+  "betaFeedback.createWorkspacePromo": "Bạn đang ở phiên bản beta — tạo không gian làm việc đầu tiên của bạn",
+  "betaFeedback.createWorkspaceTitle": "Tạo không gian làm việc đầu tiên của bạn",
   "betaFeedback.desc": "Workspace đang trong giai đoạn beta. Báo cáo sự cố, yêu cầu tính năng hoặc trao đổi với các người dùng beta khác.",
   "betaFeedback.discord.action": "Mở Discord",
   "betaFeedback.discord.desc": "Quét bằng camera điện thoại của bạn để tham gia.",

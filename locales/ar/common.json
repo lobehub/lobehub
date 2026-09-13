@@ -51,6 +51,8 @@
   "back": "رجوع",
   "batchDelete": "حذف جماعي",
   "betaFeedback.collapse": "طي",
+  "betaFeedback.createWorkspacePromo": "أنت في النسخة التجريبية - أنشئ مساحة العمل الأولى الخاصة بك",
+  "betaFeedback.createWorkspaceTitle": "أنشئ مساحة العمل الأولى الخاصة بك",
   "betaFeedback.desc": "مساحة العمل في مرحلة البيتا. أبلغ عن المشكلات، واطلب الميزات، أو قارن الملاحظات مع مستخدمين آخرين في مرحلة البيتا.",
   "betaFeedback.discord.action": "افتح ديسكورد",
   "betaFeedback.discord.desc": "امسح باستخدام كاميرا هاتفك للانضمام.",

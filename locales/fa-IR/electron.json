@@ -155,6 +155,8 @@
   "updater.later": "بعداً",
   "updater.newVersionAvailable": "نسخه جدید در دسترس است",
   "updater.newVersionAvailableDesc": "نسخه جدیدی با شماره {{version}} یافت شد، آیا مایل به دانلود آن هستید؟",
+  "updater.rendererReady": "نسخه {{version}} آماده است",
+  "updater.rendererUpdateError": "نصب به‌روزرسانی انجام نشد. دوباره تلاش کنید.",
   "updater.restartAndInstall": "نصب به‌روزرسانی و راه‌اندازی مجدد",
   "updater.updateError": "خطا در به‌روزرسانی",
   "updater.updateReady": "نسخه جدید آماده است",

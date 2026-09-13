@@ -51,6 +51,8 @@
   "back": "Retour",
   "batchDelete": "Suppression en lot",
   "betaFeedback.collapse": "Réduire",
+  "betaFeedback.createWorkspacePromo": "Vous êtes dans la version bêta — créez votre premier espace de travail",
+  "betaFeedback.createWorkspaceTitle": "Créez votre premier espace de travail",
   "betaFeedback.desc": "L'espace de travail est en version bêta. Signalez les problèmes, demandez des fonctionnalités ou échangez avec d'autres utilisateurs bêta.",
   "betaFeedback.discord.action": "Ouvrir Discord",
   "betaFeedback.discord.desc": "Scannez avec l'appareil photo de votre téléphone pour rejoindre.",

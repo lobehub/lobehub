@@ -51,6 +51,8 @@
   "back": "بازگشت",
   "batchDelete": "حذف گروهی",
   "betaFeedback.collapse": "بستن",
+  "betaFeedback.createWorkspacePromo": "شما در نسخه بتا هستید — اولین فضای کاری خود را ایجاد کنید",
+  "betaFeedback.createWorkspaceTitle": "اولین فضای کاری خود را ایجاد کنید",
   "betaFeedback.desc": "فضای کاری در حالت بتا است. مشکلات را گزارش دهید، ویژگی‌ها را درخواست کنید یا با دیگر کاربران بتا تبادل نظر کنید.",
   "betaFeedback.discord.action": "باز کردن دیسکورد",
   "betaFeedback.discord.desc": "با دوربین گوشی خود اسکن کنید تا بپیوندید.",

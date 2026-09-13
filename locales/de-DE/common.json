@@ -51,6 +51,8 @@
   "back": "Zurück",
   "batchDelete": "Mehrfach löschen",
   "betaFeedback.collapse": "Einklappen",
+  "betaFeedback.createWorkspacePromo": "Sie sind in der Beta — erstellen Sie Ihren ersten Arbeitsbereich",
+  "betaFeedback.createWorkspaceTitle": "Erstellen Sie Ihren ersten Arbeitsbereich",
   "betaFeedback.desc": "Workspace befindet sich in der Beta-Phase. Melden Sie Probleme, fordern Sie Funktionen an oder tauschen Sie sich mit anderen Beta-Nutzern aus.",
   "betaFeedback.discord.action": "Discord öffnen",
   "betaFeedback.discord.desc": "Scannen Sie mit der Kamera Ihres Telefons, um beizutreten.",
