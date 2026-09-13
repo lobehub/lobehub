@@ -17,10 +17,21 @@ describe('getSkillInstructionsUrl', () => {
     );
   });
 
+  it('should keep official links when only the Market API URL is configured', () => {
+    vi.stubGlobal('__SERVER_CONFIG__', { clientEnv: { marketBaseUrl: 'https://api.example.com' } });
+    vi.stubEnv('NEXT_PUBLIC_MARKET_BASE_URL', 'https://build.example.com');
+
+    expect(getSkillInstructionsUrl('meeting-notes')).toBe(
+      'https://lobehub.com/skills/meeting-notes/skill.md',
+    );
+  });
+
   it.each(['https://market.example.com', 'https://market.example.com/'])(
-    'should use the runtime Market configuration: %s',
-    (marketBaseUrl) => {
-      vi.stubGlobal('__SERVER_CONFIG__', { clientEnv: { marketBaseUrl } });
+    'should use the dedicated installation URL configuration: %s',
+    (marketSkillInstallBaseUrl) => {
+      vi.stubGlobal('__SERVER_CONFIG__', {
+        clientEnv: { marketBaseUrl: 'https://api.example.com', marketSkillInstallBaseUrl },
+      });
       vi.stubEnv('NEXT_PUBLIC_MARKET_BASE_URL', 'https://build.example.com');
 
       expect(getSkillInstructionsUrl('meeting-notes')).toBe(
@@ -29,9 +40,10 @@ describe('getSkillInstructionsUrl', () => {
     },
   );
 
-  it('should support a configured frontend Market URL and encode the identifier', () => {
-    vi.stubGlobal('__SERVER_CONFIG__', undefined);
-    vi.stubEnv('NEXT_PUBLIC_MARKET_BASE_URL', 'https://market.example.com/base/');
+  it('should preserve a configured base path and encode the identifier', () => {
+    vi.stubGlobal('__SERVER_CONFIG__', {
+      clientEnv: { marketSkillInstallBaseUrl: 'https://market.example.com/base/' },
+    });
 
     expect(getSkillInstructionsUrl('team/meeting notes')).toBe(
       'https://market.example.com/base/s/skills/team%2Fmeeting%20notes',

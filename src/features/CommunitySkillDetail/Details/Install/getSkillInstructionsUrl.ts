@@ -1,7 +1,6 @@
 export const getSkillInstructionsUrl = (identifier: string) => {
-  // MARKET_BASE_URL is injected at runtime so self-hosted images need no rebuild.
-  const marketBaseUrl =
-    window.__SERVER_CONFIG__?.clientEnv?.marketBaseUrl || process.env.NEXT_PUBLIC_MARKET_BASE_URL;
+  // Installation links are opt-in and independent of the Market API used by SaaS.
+  const marketBaseUrl = window.__SERVER_CONFIG__?.clientEnv?.marketSkillInstallBaseUrl;
   const id = encodeURIComponent(identifier);
 
   return marketBaseUrl
