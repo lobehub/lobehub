@@ -38,6 +38,8 @@ const SideBarLayout = memo<SidebarLayoutProps>(({ header, body }) => {
       <ScrollArea
         disableContentFit
         scrollFade
+        // Preserve the height chain for sidebar bodies containing virtual lists.
+        contentProps={{ style: { height: '100%' } }}
         style={{ flex: 1, minHeight: 0 }}
         viewportProps={{ onScroll: handleScroll, ref: scrollerRef }}
       >
