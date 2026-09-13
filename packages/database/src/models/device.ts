@@ -31,6 +31,8 @@ export interface RegisterDeviceParams {
   deviceId: string;
   hostname?: string | null;
   identitySource: string;
+  /** Extensible client-reported info bag (app version, runtime versions, OS release). */
+  metadata?: Record<string, string> | null;
   platform?: string | null;
 }
 
@@ -108,6 +110,7 @@ export class DeviceModel {
         deviceId: params.deviceId,
         hostname: params.hostname,
         identitySource: params.identitySource,
+        metadata: params.metadata,
         lastSeenAt: now,
         platform: params.platform,
         userId: this.userId,
@@ -118,6 +121,7 @@ export class DeviceModel {
           hostname: params.hostname,
           identitySource: params.identitySource,
           lastSeenAt: now,
+          metadata: params.metadata,
           platform: params.platform,
         },
         target: [devices.userId, devices.deviceId],
@@ -175,6 +179,7 @@ export class DeviceModel {
         deviceId: params.deviceId,
         hostname: params.hostname,
         identitySource: params.identitySource,
+        metadata: params.metadata,
         lastSeenAt: now,
         platform: params.platform,
         // Set for enrollments driven from the owner's personal device list —
@@ -212,6 +217,7 @@ export class DeviceModel {
           hostname: params.hostname,
           identitySource: params.identitySource,
           lastSeenAt: now,
+          metadata: params.metadata,
           platform: params.platform,
           visibility: params.visibility === 'public' ? 'public' : sql`${devices.visibility}`,
         },

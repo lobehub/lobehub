@@ -1233,6 +1233,7 @@ table devices {
   hostname text
   platform varchar(20)
   architecture varchar(20)
+  metadata jsonb
   friendly_name text
   default_cwd text
   recent_cwds text[] [not null, default: `[]`]

@@ -4,6 +4,7 @@ import type { DeviceIdentity } from '@lobechat/device-identity';
 import { deriveDeviceId, deriveScopedFallbackId } from '@lobechat/device-identity';
 
 import { createLambdaClient } from '../api/client';
+import { cliVersion } from '../pkg';
 import { isTransientNetworkError } from '../utils/error';
 
 const WORKSPACE_TOKEN_RETRY_DELAYS_MS = [250, 1000, 2500];
@@ -51,6 +52,11 @@ export async function registerDevice(
     deviceId: identity.deviceId,
     hostname: os.hostname(),
     identitySource: identity.identitySource,
+    metadata: {
+      cliVersion,
+      node: process.versions.node,
+      osRelease: os.release(),
+    },
     platform: process.platform,
   });
 }
@@ -110,6 +116,11 @@ export async function registerWorkspaceDevice(
     deviceId: identity.deviceId,
     hostname: os.hostname(),
     identitySource: identity.identitySource,
+    metadata: {
+      cliVersion,
+      node: process.versions.node,
+      osRelease: os.release(),
+    },
     platform: process.platform,
     visibility,
   });

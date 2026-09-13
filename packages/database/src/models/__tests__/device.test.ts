@@ -32,6 +32,7 @@ describe('DeviceModel', () => {
         deviceId: 'dev-1',
         hostname: 'My-Mac.local',
         identitySource: 'machine-id',
+        metadata: { cliVersion: '1.2.3' },
         platform: 'darwin',
       });
 
@@ -41,6 +42,7 @@ describe('DeviceModel', () => {
         deviceId: 'dev-1',
         hostname: 'My-Mac.local',
         identitySource: 'machine-id',
+        metadata: { cliVersion: '1.2.3' },
         platform: 'darwin',
         userId,
       });
@@ -52,6 +54,7 @@ describe('DeviceModel', () => {
         identitySource: 'machine-id',
       });
       expect(result.architecture).toBeNull();
+      expect(result.metadata).toBeNull();
     });
 
     it('should upsert on (userId, deviceId) and refresh machine fields', async () => {
@@ -68,6 +71,7 @@ describe('DeviceModel', () => {
         deviceId: 'dev-1',
         hostname: 'new-host',
         identitySource: 'machine-id',
+        metadata: { appVersion: '2.0.0' },
         platform: 'darwin',
       });
 
@@ -79,6 +83,7 @@ describe('DeviceModel', () => {
         architecture: 'arm64',
         hostname: 'new-host',
         identitySource: 'machine-id',
+        metadata: { appVersion: '2.0.0' },
         platform: 'darwin',
       });
     });
