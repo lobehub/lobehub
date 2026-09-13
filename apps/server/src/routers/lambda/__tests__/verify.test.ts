@@ -8,6 +8,7 @@ import type * as VerifyServiceModule from '@/server/services/verify';
 
 const modelMocks = vi.hoisted(() => ({
   createEvidence: vi.fn(),
+  purgeVerifyRun: vi.fn(),
   createRun: vi.fn(),
   deleteResult: vi.fn(),
   deleteRun: vi.fn(),
@@ -65,6 +66,10 @@ vi.mock('@/server/services/verify', async (importOriginal) => ({
     generateCriteria = modelMocks.generateCriteria;
   },
   VerifyReporterService: class VerifyReporterService {},
+}));
+
+vi.mock('@/server/services/verify/acceptancePurge', () => ({
+  purgeVerifyRun: modelMocks.purgeVerifyRun,
 }));
 
 vi.mock('@/server/services/goal/criteriaGenerator', () => ({
@@ -248,15 +253,26 @@ describe('verifyRouter', () => {
       );
 
       expect(modelMocks.findRunById).toHaveBeenCalledWith('other-user-run');
-      expect(modelMocks.deleteRun).not.toHaveBeenCalled();
+      expect(modelMocks.purgeVerifyRun).not.toHaveBeenCalled();
     });
 
-    it('deletes a run the caller owns and returns its id', async () => {
-      modelMocks.findRunById.mockResolvedValueOnce({ id: 'run-1' });
+    it('purges a run the caller owns in its own scope and returns its id', async () => {
+      modelMocks.findRunById.mockResolvedValueOnce({
+        id: 'run-1',
+        userId: 'verify-router-test-user',
+        workspaceId: 'ws-1',
+      });
 
       const res = await createCaller().deleteRun({ verifyRunId: 'run-1' });
 
-      expect(modelMocks.deleteRun).toHaveBeenCalledWith('run-1');
+      expect(modelMocks.purgeVerifyRun).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        'verify-router-test-user',
+        'ws-1',
+        'run-1',
+      );
+      expect(modelMocks.deleteRun).not.toHaveBeenCalled();
       expect(res).toEqual({ id: 'run-1', success: true });
     });
   });

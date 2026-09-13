@@ -423,14 +423,28 @@ export interface AcceptanceSubjectSummary {
   type: AcceptanceSubjectType;
 }
 
-/** The list filter as a status set — one definition for the flat and paged reads. */
-export type AcceptanceListFilter = 'active' | 'all' | 'completed';
+/** The list filter as a query scope — one definition for the flat and paged reads. */
+export type AcceptanceListFilter = 'active' | 'all' | 'archived' | 'completed';
 
-const statusesForFilter = (filter: AcceptanceListFilter): AcceptanceStatus[] | undefined => {
+const scopeForFilter = (
+  filter: AcceptanceListFilter,
+): { archived: boolean; statuses?: AcceptanceStatus[] } => {
+  if (filter === 'archived') return { archived: true };
   if (filter === 'active')
-    return ['pending', 'planned', 'verifying', 'repairing', 'delivered', 'rejected', 'errored'];
-  if (filter === 'completed') return ['accepted', 'closed'];
-  return undefined;
+    return {
+      archived: false,
+      statuses: [
+        'pending',
+        'planned',
+        'verifying',
+        'repairing',
+        'delivered',
+        'rejected',
+        'errored',
+      ],
+    };
+  if (filter === 'completed') return { archived: false, statuses: ['accepted', 'closed'] };
+  return { archived: false };
 };
 
 export class AcceptanceService {
@@ -1222,22 +1236,21 @@ export class AcceptanceService {
    */
   listWithSubjects = async (
     options: {
-      filter?: 'active' | 'all' | 'completed';
+      filter?: AcceptanceListFilter;
       limit?: number;
       projectId?: string;
       q?: string;
     } = {},
   ) => {
     const { filter = 'all', limit = 50, q } = options;
-    const statuses = statusesForFilter(filter);
     const normalizedQuery = q?.trim().toLocaleLowerCase();
 
     // A title search must span the complete owned set. Subject titles live in
     // their source entities (task/topic/document), so resolve them before
     // applying the result cap instead of searching only the latest page.
     const candidates = await this.acceptanceModel.query({
+      ...scopeForFilter(filter),
       limit: normalizedQuery ? undefined : limit,
-      statuses,
       unbounded: Boolean(normalizedQuery),
       ...(options.projectId ? { projectId: options.projectId } : {}),
     });
@@ -1284,9 +1297,9 @@ export class AcceptanceService {
     projectId?: string;
   }) => {
     const { items, nextCursor } = await this.acceptanceModel.queryPage({
+      ...scopeForFilter(options.filter ?? 'all'),
       cursor: options.cursor,
       limit: options.limit,
-      statuses: statusesForFilter(options.filter ?? 'all'),
       ...(options.projectId ? { projectId: options.projectId } : {}),
     });
 
