@@ -30,6 +30,9 @@ export type FileType = z.infer<typeof fileSchema>;
 
 const DEFAULT_S3_REGION = 'us-east-1';
 const PUBLIC_READ_ACL_HEADER = 'public-read';
+// S3 allows at most 10,000 parts per upload and a well-behaved listing returns at
+// least one part per page, so no legitimate listing needs more pages than this.
+const MAX_LIST_PARTS_PAGES = 10_000;
 
 const encodeContentDispositionFilename = (fileName: string) =>
   encodeURIComponent(fileName || 'download').replaceAll(
@@ -218,6 +221,8 @@ export class S3 {
       uploadedParts && !expectedFile ? [...uploadedParts] : [];
 
     if (!uploadedParts || expectedFile) {
+      let pages = 0;
+      let lastMarker: string | undefined;
       for await (const page of paginateListParts(
         { client: this.client },
         { Bucket: this.bucket, Key: key, UploadId: uploadId },
@@ -225,6 +230,31 @@ export class S3 {
         for (const part of page.Parts ?? []) {
           if (!part.ETag || !part.PartNumber) continue;
           parts.push({ ETag: part.ETag, PartNumber: part.PartNumber, Size: part.Size });
+        }
+
+        if (parts.length > expectedPartCount) {
+          throw new Error(
+            `S3 multipart upload ${uploadId} listed more than ${expectedPartCount} parts`,
+          );
+        }
+
+        // Stop on the last page explicitly. The SDK paginator only checks whether
+        // NextPartNumberMarker is truthy, and S3-compatible stores such as MinIO
+        // return "0" on the final page, so without this the loop never terminates.
+        // Only an explicit `false` is trusted so that a store omitting the flag on a
+        // truncated page is not cut short.
+        if (page.IsTruncated === false) break;
+
+        // Bound the loop independently of the part count: a page that repeats the
+        // previous marker can never make progress, and no listing needs more pages
+        // than the S3 part limit.
+        if (page.NextPartNumberMarker !== undefined && page.NextPartNumberMarker === lastMarker) {
+          throw new Error(`S3 multipart upload ${uploadId} part listing did not advance`);
+        }
+        lastMarker = page.NextPartNumberMarker;
+
+        if (++pages > MAX_LIST_PARTS_PAGES) {
+          throw new Error(`S3 multipart upload ${uploadId} part listing did not terminate`);
         }
       }
     }
