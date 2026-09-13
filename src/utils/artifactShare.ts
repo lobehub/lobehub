@@ -1,4 +1,1 @@
-export const artifactSharePath = (deploymentId: string) => `/share/artifact/${deploymentId}`;
-
-export const artifactShareUrl = (origin: string, deploymentId: string) =>
-  `${origin.replace(/\/+$/, '')}${artifactSharePath(deploymentId)}`;
+export { artifactSharePath, artifactShareUrl } from '@lobechat/utils/artifactShare';
