@@ -308,6 +308,8 @@ export default {
   'betaFeedback.collapse': 'Collapse',
   'betaFeedback.desc':
     'Workspace is in beta. Report issues, request features, or compare notes with other beta users.',
+  'betaFeedback.createWorkspacePromo': "You're in the beta — create your first workspace",
+  'betaFeedback.createWorkspaceTitle': 'Create your first workspace',
   'betaFeedback.discord.action': 'Open Discord',
   'betaFeedback.discord.desc': 'Scan with your phone camera to join.',
   'betaFeedback.discord.title': 'Discord',

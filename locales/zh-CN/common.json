@@ -51,6 +51,8 @@
   "back": "返回",
   "batchDelete": "批量删除",
   "betaFeedback.collapse": "收起",
+  "betaFeedback.createWorkspacePromo": "内测已开通，点此创建你的第一个工作区",
+  "betaFeedback.createWorkspaceTitle": "创建你的第一个工作区",
   "betaFeedback.desc": "工作区正在内测中。在这里可以直接向团队反馈问题、提出需求，也可以与其他内测用户交流。",
   "betaFeedback.discord.action": "打开 Discord",
   "betaFeedback.discord.desc": "用手机相机扫码即可加入。",
