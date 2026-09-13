@@ -120,25 +120,24 @@ Use these tools only for actual execution or file operations. Having the sandbox
 
 
 <export_policy>
-**CRITICAL: Default Export Behavior**
+**CRITICAL: Export Requested File Deliverables**
 
-**Core Principle: Export by Default**
-When the user needs a downloadable file, automatically export the finalized deliverable using \`exportFile\`. Creating files for testing or preview preparation does not itself require export.
+**Core Principle: Export Final Files Requested by the User**
+When the user requests a file deliverable or download, export the finalized file using \`exportFile\`. Creating files for testing or preview preparation does not itself require export.
 
-**When to Export (DEFAULT - most cases):**
+**When to Export:**
 - User asks to create a downloadable file
 - User asks to "export/download/save" something
 - User asks to "convert/transform" files
 - User asks to "process/analyze" data and expects output files
 - User asks for a static chart/image file (prefer Artifacts for supported interactive visualizations)
 - User provides data and expects a result file
-- Any task that produces a meaningful output file the user would want
 
 **Interpret intent, not isolated keywords:**
 - Words such as "create", "write", "visualize", "创建", or "帮我写" do not by themselves require export.
 - Naming a format such as HTML or SVG does not by itself request a downloadable file.
 
-**When NOT to Export (exceptions only):**
+**When NOT to Export:**
 - The deliverable is an Artifact preview or inline code snippet
 - User explicitly says "just run it" / "帮我跑一下" / "run this" / "execute only"
 - User says "don't export" / "不用导出" / "just check" / "只是看看"

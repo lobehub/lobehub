@@ -25,6 +25,73 @@ vi.mock('@/server/services/deviceGateway/scopedDevices', () => ({
 }));
 
 describe('ToolExecutionService', () => {
+  it('keeps a failed command HTTP status as command output', async () => {
+    const output = 'curl: (22) The requested URL returned error: 403';
+    const service = new ToolExecutionService({
+      builtinToolsExecutor: {
+        execute: vi.fn().mockResolvedValue({ content: output, success: false }),
+      } as any,
+      mcpService: {} as any,
+    });
+
+    const result = await service.executeTool(
+      {
+        apiName: 'runCommand',
+        arguments: '{}',
+        id: 'http-command',
+        identifier: 'lobe-cloud-sandbox',
+        type: 'builtin',
+      },
+      { toolManifestMap: {} },
+    );
+
+    expect(result.content).toBe(output);
+    expect(result.error).not.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it.each(['returned', 'thrown'])(
+    'retries a read-only sandbox %s network failure',
+    async (mode) => {
+      const error = { code: 'SERVICE_UNAVAILABLE', message: 'Network error', status: 503 };
+      const call =
+        mode === 'returned'
+          ? vi
+              .fn()
+              .mockResolvedValueOnce({ error, result: null, success: false })
+              .mockResolvedValue({ result: { content: 'ok' }, success: true })
+          : vi
+              .fn()
+              .mockRejectedValueOnce(Object.assign(new Error(error.message), error))
+              .mockResolvedValue({ result: { content: 'ok' }, success: true });
+      const runtime = new CloudSandboxExecutionRuntime({
+        callTool: call,
+        exportAndUploadFile: vi.fn(),
+      });
+      const service = new ToolExecutionService({
+        builtinToolsExecutor: { execute: () => runtime.readFile({ path: '/page.html' }) } as any,
+        mcpService: {} as any,
+      });
+      const { attempts, result } = await executeToolWithRetry(
+        () =>
+          service.executeTool(
+            {
+              apiName: 'readFile',
+              arguments: '{}',
+              id: 'read-retry',
+              identifier: 'lobe-cloud-sandbox',
+              type: 'builtin',
+            },
+            { toolManifestMap: {} },
+          ),
+        { maxRetries: 2 },
+      );
+
+      expect(result.success).toBe(true);
+      expect(attempts).toBe(2);
+      expect(call).toHaveBeenCalledTimes(2);
+    },
+  );
+
   describe.each(['writeFile', 'runCommand', 'executeCode', 'exportFile'] as const)(
     'non-retryable sandbox %s failures',
     (api) => {

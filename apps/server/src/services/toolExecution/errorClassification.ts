@@ -191,6 +191,11 @@ export const getToolAccessDeniedError = (error: unknown, fallbackMessage: string
   const nested = toRecord(toRecord(raw?.errorBody)?.error) || toRecord(raw?.error);
   const signal = normalizeSignal(error || fallbackMessage);
   const code = normalizeCode(nested?.code) || signal.code;
+  const structuredStatus =
+    raw?.status === 403 ||
+    raw?.statusCode === 403 ||
+    nested?.status === 403 ||
+    nested?.statusCode === 403;
   const bareForbidden = /^\s*(?:403[ :-]*)?forbidden\s*$/i;
   const message =
     pickString(raw?.message) ||
@@ -199,7 +204,7 @@ export const getToolAccessDeniedError = (error: unknown, fallbackMessage: string
     fallbackMessage ||
     'Tool access was denied';
 
-  if (signal.status !== 403 && !DENIAL_CODES.has(code || '') && !bareForbidden.test(message)) {
+  if (!structuredStatus && !DENIAL_CODES.has(code || '') && !bareForbidden.test(message)) {
     return;
   }
 

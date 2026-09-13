@@ -64,6 +64,13 @@ describe('getToolAccessDeniedError', () => {
   });
 
   it.each([
+    [undefined, 'curl: (22) The requested URL returned error: 403'],
+    [new Error('AssertionError: expected 200 but got 403'), ''],
+  ])('does not infer a platform refusal from an HTTP status in tool output', (error, content) => {
+    expect(getToolAccessDeniedError(error, content)).toBeUndefined();
+  });
+
+  it.each([
     { code: 'BAD_REQUEST', message: 'The word forbidden is not a supported option' },
     { message: 'ENOENT: /tmp/forbidden.txt' },
     { message: 'Network error', status: 503 },

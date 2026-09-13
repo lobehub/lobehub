@@ -70,7 +70,7 @@ export abstract class ComputerRuntime {
       const result = await this.callService('listLocalFiles', args);
 
       if (!result.success) {
-        return this.errorOutput(result, { files: [], totalCount: 0 });
+        return this.errorOutput(result, { files: [], totalCount: 0 }, true);
       }
 
       const files = result.result?.files || [];
@@ -91,7 +91,7 @@ export abstract class ComputerRuntime {
 
       return { content, state, success: true };
     } catch (error) {
-      return this.handleError(error);
+      return this.handleError(error, true);
     }
   }
 
@@ -100,12 +100,16 @@ export abstract class ComputerRuntime {
       const result = await this.callService('readLocalFile', args);
 
       if (!result.success) {
-        return this.errorOutput(result, {
-          content: '',
-          endLine: args.endLine,
-          path: args.path,
-          startLine: args.startLine,
-        });
+        return this.errorOutput(
+          result,
+          {
+            content: '',
+            endLine: args.endLine,
+            path: args.path,
+            startLine: args.startLine,
+          },
+          true,
+        );
       }
 
       const r = result.result || {};
@@ -163,7 +167,7 @@ export abstract class ComputerRuntime {
 
       return { content, state, success: true };
     } catch (error) {
-      return this.handleError(error);
+      return this.handleError(error, true);
     }
   }
 
@@ -223,7 +227,7 @@ export abstract class ComputerRuntime {
       const result = await this.callService('searchLocalFiles', args);
 
       if (!result.success) {
-        return this.errorOutput(result, { results: [], totalCount: 0 });
+        return this.errorOutput(result, { results: [], totalCount: 0 }, true);
       }
 
       const rawResults = result.result?.results || result.result;
@@ -239,7 +243,7 @@ export abstract class ComputerRuntime {
 
       return { content, state, success: true };
     } catch (error) {
-      return this.handleError(error);
+      return this.handleError(error, true);
     }
   }
 
@@ -389,11 +393,15 @@ export abstract class ComputerRuntime {
         : {};
 
       if (!result.success) {
-        const output = this.errorOutput(result, {
-          ...sessionState,
-          error: result.error?.message,
-          success: false,
-        });
+        const output = this.errorOutput(
+          result,
+          {
+            ...sessionState,
+            error: result.error?.message,
+            success: false,
+          },
+          true,
+        );
         return {
           ...output,
           content: formatSandboxRecreation(output.content, result.sessionExpiredAndRecreated),
@@ -433,7 +441,7 @@ export abstract class ComputerRuntime {
         success: true,
       };
     } catch (error) {
-      return this.handleError(error);
+      return this.handleError(error, true);
     }
   }
 
@@ -477,11 +485,15 @@ export abstract class ComputerRuntime {
       const result = await this.callService('grepContent', args);
 
       if (!result.success) {
-        return this.errorOutput(result, {
-          matches: [],
-          pattern: args.pattern,
-          totalMatches: 0,
-        });
+        return this.errorOutput(
+          result,
+          {
+            matches: [],
+            pattern: args.pattern,
+            totalMatches: 0,
+          },
+          true,
+        );
       }
 
       const r = result.result || {};
@@ -498,7 +510,7 @@ export abstract class ComputerRuntime {
 
       return { content, state, success: true };
     } catch (error) {
-      return this.handleError(error);
+      return this.handleError(error, true);
     }
   }
 
@@ -514,11 +526,15 @@ export abstract class ComputerRuntime {
       });
 
       if (!result.success) {
-        return this.errorOutput(result, {
-          files: [],
-          pattern: args.pattern,
-          totalCount: 0,
-        });
+        return this.errorOutput(
+          result,
+          {
+            files: [],
+            pattern: args.pattern,
+            totalCount: 0,
+          },
+          true,
+        );
       }
 
       const files = result.result?.files || [];
@@ -534,25 +550,25 @@ export abstract class ComputerRuntime {
 
       return { content, state, success: true };
     } catch (error) {
-      return this.handleError(error);
+      return this.handleError(error, true);
     }
   }
 
   // ==================== Helpers ====================
 
-  protected handleError(error: unknown): BuiltinServerRuntimeOutput {
+  protected handleError(error: unknown, retrySafe = false): BuiltinServerRuntimeOutput {
     const diagnostics =
       error && typeof error === 'object' ? (error as ServiceResult['error']) : undefined;
     const errorMessage = error instanceof Error ? error.message : String(error);
-    // A transport error cannot prove that a file or command operation had no
-    // side effects. Keep the failure visible without automatically replaying it.
+    // Side-effecting operations may complete before a transport error. Reads
+    // can use the normal error classifier to retry a transient failure.
     return {
       content: errorMessage,
       error: {
         code: diagnostics?.code,
         doc_url: diagnostics?.doc_url,
         hint: diagnostics?.hint,
-        kind: 'stop',
+        kind: retrySafe ? undefined : 'stop',
         message: errorMessage,
         name: diagnostics?.name,
         status: diagnostics?.status,
@@ -561,7 +577,11 @@ export abstract class ComputerRuntime {
     };
   }
 
-  private errorOutput(result: ServiceResult, state: any): BuiltinServerRuntimeOutput {
+  private errorOutput(
+    result: ServiceResult,
+    state: any,
+    retrySafe = false,
+  ): BuiltinServerRuntimeOutput {
     // Defensive fallback: when a service reports success: false without an
     // error object, JSON.stringify(undefined) returns the value `undefined`
     // (not the string "undefined"), which collapsed downstream into an empty
@@ -598,14 +618,14 @@ export abstract class ComputerRuntime {
       // unset a failed edit had neither a diff nor an error to draw and
       // rendered as an empty card.
       //
-      // Preserve service diagnostics for the common tool-result formatter,
-      // but do not forward arbitrary fields such as `kind: 'retry'` that
-      // could silently enroll a side-effecting failure in the retry loop.
+      // Preserve service diagnostics for the common tool-result formatter.
+      // Only read-only callers may use its retry classification; a service's
+      // `kind: 'retry'` must not replay an operation with possible side effects.
       error: {
         code: result.error?.code,
         doc_url: result.error?.doc_url,
         hint: result.error?.hint,
-        kind: 'stop',
+        kind: retrySafe ? undefined : 'stop',
         message: errorText,
         name: result.error?.name,
         status: result.error?.status,
