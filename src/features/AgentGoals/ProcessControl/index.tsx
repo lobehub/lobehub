@@ -19,7 +19,7 @@ import Activity from './Activity';
 import Deliverables from './Deliverables';
 import Findings from './Findings';
 import Frontier, { type FrontierActions } from './Frontier';
-import { buildGoalGraphView, hasReviewableResult } from './goalGraphViewModel';
+import { buildGoalGraphView, opensOnResultSurface } from './goalGraphViewModel';
 import Graph from './Graph';
 
 /**
@@ -75,11 +75,10 @@ const ProcessControl = memo<ProcessControlProps>(
     );
 
     // Every click funnels here: keep the map highlight (spatial continuity) and
-    // open the drill-down. Only a Task with a delivery to read — settled, or
-    // delivered and under Acceptance judgment — lands on its result-focused
-    // review surface; a Task still running, waiting, or in trouble opens the
-    // original Task detail, because its result panel would be an empty shell
-    // and the question is what the run is doing, not what it produced.
+    // open the drill-down. A Task with a delivery to read, or a healthy run in
+    // flight, lands on its result surface — the live run while it works, the
+    // report once it settles. A Task waiting or in trouble opens the original
+    // Task detail, where configuration and failure context live.
     const select = useCallback(
       (nodeId: string) => {
         setSelectedId(nodeId);
@@ -97,7 +96,7 @@ const ProcessControl = memo<ProcessControlProps>(
           )
         )
           openTaskDetail(taskId);
-        else if (view && hasReviewableResult(view)) openTaskResult(taskId);
+        else if (view && opensOnResultSurface(view)) openTaskResult(taskId);
         else openTaskDetail(taskId);
       },
       [goalId, graph, openGoalNode, openTaskDetail, openTaskResult],

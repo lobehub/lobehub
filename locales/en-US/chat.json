@@ -450,6 +450,7 @@
   "goalDetail.openExecution": "Open execution task",
   "goalDetail.subtasks": "Subtasks",
   "goalDetail.taskResult": "Task result",
+  "goalDetail.taskRunLive": "Live run",
   "goalDetail.taskStatus": "Execution status",
   "goalDetail.unnamedRun": "Untitled run",
   "goalDetail.viewOriginalTask": "View task",

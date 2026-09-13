@@ -163,6 +163,7 @@ export default {
     'This is often caused by a slow shell startup script. Try again, or open System Tools to check the detected command path.',
   'cliDetectionTimeoutGuide.title': 'Detection timed out for {{name}}',
   'goalDetail.taskResult': 'Task result',
+  'goalDetail.taskRunLive': 'Live run',
   'goalDetail.viewOriginalTask': 'View task',
   'goalProcess.deliverables.empty':
     'Nothing delivered yet. Documents, generated files and linked resources a task persists show up here — anything left only on a local path does not.',

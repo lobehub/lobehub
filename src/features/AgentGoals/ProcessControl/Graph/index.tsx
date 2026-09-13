@@ -39,6 +39,7 @@ import ExplorationEdge from './ExplorationEdge';
 import { explorationMap } from './explorationMap';
 import GraphNodeView, { GhostNodeView, type GraphNodeData } from './GraphNode';
 import { hideKinds, layoutGraph, NODE_WIDTH } from './layout';
+import { revealCenter } from './revealNode';
 import { useExplorationNavigation } from './useExplorationNavigation';
 import { useFitViewOnResize } from './useFitViewOnResize';
 
@@ -299,7 +300,7 @@ const Canvas = memo<
     className: string;
     fullscreen: boolean;
     hiddenKinds: ReadonlySet<GoalGraphNodeKind>;
-    /** Bump to refit after the frame around the canvas changes size. */
+    /** Bump after the frame around the canvas changes size to keep the selection in view. */
     refitKey?: boolean;
     view: GraphViewMode;
     collapsed: ReadonlySet<string>;
@@ -323,7 +324,7 @@ const Canvas = memo<
     navigation,
     view,
   }) => {
-    const { fitView } = useReactFlow();
+    const { fitView, getInternalNode, getViewport, setCenter } = useReactFlow();
     const hasNavigation = !!navigation;
     const fitOptions = useMemo(
       () => ({
@@ -568,13 +569,31 @@ const Canvas = memo<
       return () => clearTimeout(timer);
     }, [view, collapsed, allNodes.length, hiddenKinds, fitView, fitOptions]);
 
-    // The portal panel borrows width from the canvas; wait out its slide
-    // animation before refitting, or the fit is computed mid-transition.
+    // The portal panel borrows width from the canvas. Refitting the whole map
+    // when it slid open rescaled the graph on every first click; keep the zoom
+    // and only pan when the selected card ended up under the panel. Wait out
+    // the slide animation, or the canvas is measured mid-transition.
     useEffect(() => {
-      if (refitKey === undefined) return;
-      const timer = setTimeout(() => fitView(fitOptions), 280);
+      if (refitKey === undefined || !selectedId) return;
+      const timer = setTimeout(() => {
+        const node = getInternalNode(selectedId);
+        const container = containerRef.current;
+        if (!node || !container) return;
+        const viewport = getViewport();
+        const { height, width } = container.getBoundingClientRect();
+        const center = revealCenter(
+          {
+            ...node.internals.positionAbsolute,
+            height: node.measured.height ?? 0,
+            width: node.measured.width ?? 0,
+          },
+          viewport,
+          { height, width },
+        );
+        if (center) void setCenter(center.x, center.y, { duration: 200, zoom: viewport.zoom });
+      }, 280);
       return () => clearTimeout(timer);
-    }, [refitKey, fitView, fitOptions]);
+    }, [refitKey, selectedId, getInternalNode, getViewport, setCenter]);
 
     return (
       <div

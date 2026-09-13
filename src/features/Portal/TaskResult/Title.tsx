@@ -9,15 +9,18 @@ import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useTaskStore } from '@/store/task';
 import { oneLineEllipsis } from '@/styles';
 
+import { useLiveRun } from './useLiveRun';
+
 const Title = memo(() => {
   const { t } = useTranslation('chat');
   const taskId = useChatStore(chatPortalSelectors.taskResultId);
   const detail = useTaskStore((state) => (taskId ? state.taskDetailMap[taskId] : undefined));
+  const liveRun = useLiveRun();
 
   return (
     <Flexbox horizontal align={'center'} flex={1} gap={8} style={{ minWidth: 0 }}>
       <Text fontSize={14} weight={500}>
-        {t('goalDetail.taskResult')}
+        {t(liveRun ? 'goalDetail.taskRunLive' : 'goalDetail.taskResult')}
       </Text>
       {(detail?.identifier || detail?.name) && (
         <Text

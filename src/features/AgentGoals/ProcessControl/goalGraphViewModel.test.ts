@@ -15,6 +15,7 @@ import {
   hasReviewableResult,
   isRunningNode,
   isTroubledTaskNode,
+  opensOnResultSurface,
 } from './goalGraphViewModel';
 
 const T0 = new Date('2026-08-01T00:00:00Z');
@@ -679,6 +680,57 @@ describe('hasReviewableResult', () => {
 
     expect(view.byId.w1.isStale).toBe(true);
     expect(hasReviewableResult(view.byId.w1)).toBe(false);
+  });
+});
+
+describe('opensOnResultSurface', () => {
+  it('opens a healthy running task on the result surface to watch the live run', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [event('w1', 'activated', 110)],
+        nodes: [node('w1', { status: 'active', taskId: 'task-1', updatedAt: at(115) })],
+      }),
+      NOW,
+    );
+
+    expect(opensOnResultSurface(view.byId.w1)).toBe(true);
+  });
+
+  it('opens a settled task on the result surface', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [event('w1', 'activated', 100), event('w1', 'resolved', 110)],
+        nodes: [
+          node('w1', {
+            resolvedAt: at(110),
+            status: 'resolved',
+            taskId: 'task-1',
+            updatedAt: at(110),
+          }),
+        ],
+      }),
+      NOW,
+    );
+
+    expect(opensOnResultSurface(view.byId.w1)).toBe(true);
+  });
+
+  it('keeps undispatched and stale tasks on the original task detail', () => {
+    const proposed = buildGoalGraphView(
+      snapshot({ nodes: [node('w1', { status: 'proposed', taskId: 'task-1' })] }),
+      NOW,
+    );
+    const stale = buildGoalGraphView(
+      snapshot({
+        events: [event('w1', 'activated', 30)],
+        nodes: [node('w1', { status: 'active', taskId: 'task-1', updatedAt: at(0) })],
+      }),
+      NOW,
+    );
+
+    expect(opensOnResultSurface(proposed.byId.w1)).toBe(false);
+    expect(stale.byId.w1.isStale).toBe(true);
+    expect(opensOnResultSurface(stale.byId.w1)).toBe(false);
   });
 });
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
-import type { ConversationContext } from '@lobechat/types';
+import type { ConversationContext, TaskDetailActivity } from '@lobechat/types';
 import type { DropdownItem } from '@lobehub/ui';
 import { copyToClipboard, DropdownMenu, Flexbox, Freeze } from '@lobehub/ui';
 import { ActionIcon, confirmModal, FloatingPanel, Tag, Text, toast } from '@lobehub/ui/base-ui';
@@ -52,11 +52,16 @@ export interface TopicChatDrawerBodyProps {
   agentId: string;
   defaultInputExpanded?: boolean;
   disableInputCollapse?: boolean;
+  /**
+   * The run to resume streaming from. Hosts that embed the body outside the
+   * drawer pass it themselves; the drawer falls back to its own topic's run.
+   */
+  runningOperation?: TaskDetailActivity['runningOperation'];
   topicId: string;
 }
 
 export const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(
-  ({ agentId, defaultInputExpanded, disableInputCollapse, topicId }) => {
+  ({ agentId, defaultInputExpanded, disableInputCollapse, runningOperation, topicId }) => {
     const isLogin = useUserStore(authSelectors.isLogin);
     const useHydrateAgentConfig = useAgentStore((s) => s.useHydrateAgentConfig);
 
@@ -77,12 +82,12 @@ export const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(
     const replaceMessages = useChatStore((s) => s.replaceMessages);
     const operationState = useOperationState(context);
 
-    const runningOperation = useTaskStore(
+    const drawerRunningOperation = useTaskStore(
       (s) => taskActivitySelectors.activeDrawerTopicActivity(s)?.runningOperation,
     );
     // Pass this drawer's agent explicitly — the run drawer also mounts on the
     // home surface, where the chat store's `activeAgentId` is unset.
-    useGatewayReconnect(topicId, runningOperation, agentId);
+    useGatewayReconnect(topicId, runningOperation ?? drawerRunningOperation, agentId);
 
     const itemContent = useCallback(
       (index: number, id: string) => <MessageItem disableEditing id={id} index={index} key={id} />,

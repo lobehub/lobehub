@@ -450,6 +450,7 @@
   "goalDetail.openExecution": "打开执行任务",
   "goalDetail.subtasks": "子任务",
   "goalDetail.taskResult": "任务结果",
+  "goalDetail.taskRunLive": "运行过程",
   "goalDetail.taskStatus": "执行状态",
   "goalDetail.unnamedRun": "未命名运行",
   "goalDetail.viewOriginalTask": "查看原始任务",
