@@ -1,5 +1,5 @@
-import { Accordion, AccordionItem, Center, Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Center, Flexbox } from '@lobehub/ui';
+import { Accordion, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, type ReactNode, useState } from 'react';
 
@@ -143,19 +143,14 @@ const SkillSection = memo<SkillSectionProps>(
 
     return (
       <Accordion
-        expandedKeys={expanded ? [ITEM_KEY] : []}
         gap={4}
-        onExpandedChange={(keys) => setExpanded(keys.length > 0)}
-      >
-        <AccordionItem
-          itemKey={ITEM_KEY}
-          paddingBlock={2}
-          paddingInline={4}
-          title={<HeaderRow count={count} title={title} />}
-        >
-          {body}
-        </AccordionItem>
-      </Accordion>
+        items={[
+          { key: ITEM_KEY, title: <HeaderRow count={count} title={title} />, children: body },
+        ]}
+        styles={{ trigger: { paddingBlock: 2, paddingInline: 4 } }}
+        value={expanded ? [ITEM_KEY] : []}
+        onValueChange={(keys) => setExpanded(keys.length > 0)}
+      />
     );
   },
 );

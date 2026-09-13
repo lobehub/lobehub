@@ -1,11 +1,11 @@
 import { type ChatToolPayloadWithResult } from '@lobechat/types';
-import { Accordion, AccordionItem, Block, Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Text } from '@lobehub/ui/base-ui';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
+import { Accordion, ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { Check, HandIcon, Maximize2, Minimize2, X } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import * as motion from 'motion/react-m';
-import { type Key, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
@@ -340,7 +340,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
     // every nested AccordionItem (each GroupTool) re-renders due to "context
     // changed" on every streaming chunk.
     const handleExpandedChange = useCallback(
-      (keys: Key[]) => {
+      (keys: string[]) => {
         const nowExpanded = keys.includes('workflow');
         if (forceExpanded && !nowExpanded) return;
 
@@ -512,28 +512,29 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
 
     return (
       <Accordion
-        expandedKeys={expandedKeys}
+        styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
+        value={expandedKeys}
         variant="borderless"
-        onExpandedChange={handleExpandedChange}
-      >
-        <AccordionItem
-          alwaysShowAction
-          action={expandToggleNode}
-          itemKey="workflow"
-          paddingBlock={4}
-          paddingInline={4}
-          title={title}
-        >
-          <WorkflowExpandedList
-            assistantId={assistantMessageId}
-            blocks={blocks}
-            constrained={constrained}
-            disableEditing={disableEditing}
-            scrollRef={scrollRef}
-            onScroll={handleAutoScroll}
-          />
-        </AccordionItem>
-      </Accordion>
+        items={[
+          {
+            action: expandToggleNode,
+            alwaysShowAction: true,
+            children: (
+              <WorkflowExpandedList
+                assistantId={assistantMessageId}
+                blocks={blocks}
+                constrained={constrained}
+                disableEditing={disableEditing}
+                scrollRef={scrollRef}
+                onScroll={handleAutoScroll}
+              />
+            ),
+            key: 'workflow',
+            title,
+          },
+        ]}
+        onValueChange={handleExpandedChange}
+      />
     );
   },
 );

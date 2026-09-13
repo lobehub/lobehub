@@ -1,7 +1,7 @@
 'use client';
 
-import { AccordionItem, Block } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Block } from '@lobehub/ui';
+import { Accordion, Text } from '@lobehub/ui/base-ui';
 import { memo, useMemo, useState } from 'react';
 
 import { useAgentGroupStore } from '@/store/agentGroup';
@@ -132,54 +132,59 @@ const ClientTaskItem = memo<ClientTaskItemProps>(({ item }) => {
   const hasBlocks = blocks && childrenCount > 0;
 
   return (
-    <AccordionItem
-      expand={expanded}
-      itemKey={id}
-      paddingBlock={4}
-      paddingInline={4}
-      title={
-        <TaskTitle
-          metrics={metrics}
-          status={status}
-          title={title}
-          agent={
-            agent
-              ? { avatar: agent.avatar || undefined, backgroundColor: agent.backgroundColor }
-              : undefined
-          }
-        />
-      }
-      onExpandChange={setExpanded}
-    >
-      <Block gap={16} padding={12} style={{ marginBlock: 8 }} variant={'outlined'}>
-        {instruction && (
-          <Block padding={12}>
-            <Text fontSize={13} type={'secondary'}>
-              {instruction}
-            </Text>
-          </Block>
-        )}
+    <Accordion
+      keepMounted
+      styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
+      value={expanded ? [id] : []}
+      items={[
+        {
+          children: (
+            <Block gap={16} padding={12} style={{ marginBlock: 8 }} variant={'outlined'}>
+              {instruction && (
+                <Block padding={12}>
+                  <Text fontSize={13} type={'secondary'}>
+                    {instruction}
+                  </Text>
+                </Block>
+              )}
 
-        {/* Initializing State - no taskDetail yet or no blocks */}
-        {(isInitializing || (isProcessing && !hasBlocks)) && <InitializingState />}
+              {/* Initializing State - no taskDetail yet or no blocks */}
+              {(isInitializing || (isProcessing && !hasBlocks)) && <InitializingState />}
 
-        {/* Processing or Completed State - show blocks via TaskMessages */}
-        {!isInitializing && (isProcessing || isCompleted) && hasBlocks && threadMessages && (
-          <TaskMessages
-            duration={taskDetail?.duration}
-            isProcessing={isProcessing}
-            messages={threadMessages}
-            model={model ?? undefined}
-            provider={provider ?? undefined}
-            startTime={item.createdAt}
-            totalCost={taskDetail?.totalCost}
-          />
-        )}
+              {/* Processing or Completed State - show blocks via TaskMessages */}
+              {!isInitializing && (isProcessing || isCompleted) && hasBlocks && threadMessages && (
+                <TaskMessages
+                  duration={taskDetail?.duration}
+                  isProcessing={isProcessing}
+                  messages={threadMessages}
+                  model={model ?? undefined}
+                  provider={provider ?? undefined}
+                  startTime={item.createdAt}
+                  totalCost={taskDetail?.totalCost}
+                />
+              )}
 
-        {/* Error State */}
-        {!isInitializing && isError && taskDetail && <ErrorState taskDetail={taskDetail} />}
-      </Block>
-    </AccordionItem>
+              {/* Error State */}
+              {!isInitializing && isError && taskDetail && <ErrorState taskDetail={taskDetail} />}
+            </Block>
+          ),
+          key: id,
+          title: (
+            <TaskTitle
+              metrics={metrics}
+              status={status}
+              title={title}
+              agent={
+                agent
+                  ? { avatar: agent.avatar || undefined, backgroundColor: agent.backgroundColor }
+                  : undefined
+              }
+            />
+          ),
+        },
+      ]}
+      onValueChange={(value) => setExpanded(value.includes(id))}
+    />
   );
 }, Object.is);
 

@@ -1,7 +1,7 @@
 'use client';
 
-import { Accordion, AccordionItem, Flexbox, Input, TextArea } from '@lobehub/ui';
-import { Select, Text, toast, useModalContext } from '@lobehub/ui/base-ui';
+import { Flexbox, Input, TextArea } from '@lobehub/ui';
+import { Accordion, Select, Text, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { Form } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { type FC, useEffect } from 'react';
@@ -135,46 +135,48 @@ const TestCaseEditContent: FC<TestCaseEditContentProps> = ({
           />
         </Form.Item>
       )}
-      <Accordion>
-        <AccordionItem
-          itemKey="advanced"
-          paddingBlock={8}
-          paddingInline={4}
-          title={t('testCase.create.advanced')}
-        >
-          <Flexbox gap={16} style={{ paddingBlockStart: 8 }}>
-            <Form.Item
-              label={t('table.columns.category')}
-              name="category"
-              style={{ marginBottom: 0 }}
-            >
-              <Input placeholder={t('dataset.import.categoryDesc')} />
-            </Form.Item>
-            <Form.Item
-              label={t('testCase.create.difficulty.label')}
-              name="difficulty"
-              style={{ marginBottom: 0 }}
-            >
-              <Select
-                allowClear
-                placeholder={t('testCase.create.difficulty.label')}
-                options={[
-                  { label: t('difficulty.easy'), value: 'easy' },
-                  { label: t('difficulty.medium'), value: 'medium' },
-                  { label: t('difficulty.hard'), value: 'hard' },
-                ]}
-              />
-            </Form.Item>
-            <Form.Item
-              label={t('testCase.create.tags.label')}
-              name="tags"
-              style={{ marginBottom: 0 }}
-            >
-              <Input placeholder={t('testCase.create.tags.placeholder')} />
-            </Form.Item>
-          </Flexbox>
-        </AccordionItem>
-      </Accordion>
+      <Accordion
+        styles={{ header: { paddingBlock: 8, paddingInline: 4 } }}
+        items={[
+          {
+            children: (
+              <Flexbox gap={16} style={{ paddingBlockStart: 8 }}>
+                <Form.Item
+                  label={t('table.columns.category')}
+                  name="category"
+                  style={{ marginBottom: 0 }}
+                >
+                  <Input placeholder={t('dataset.import.categoryDesc')} />
+                </Form.Item>
+                <Form.Item
+                  label={t('testCase.create.difficulty.label')}
+                  name="difficulty"
+                  style={{ marginBottom: 0 }}
+                >
+                  <Select
+                    allowClear
+                    placeholder={t('testCase.create.difficulty.label')}
+                    options={[
+                      { label: t('difficulty.easy'), value: 'easy' },
+                      { label: t('difficulty.medium'), value: 'medium' },
+                      { label: t('difficulty.hard'), value: 'hard' },
+                    ]}
+                  />
+                </Form.Item>
+                <Form.Item
+                  label={t('testCase.create.tags.label')}
+                  name="tags"
+                  style={{ marginBottom: 0 }}
+                >
+                  <Input placeholder={t('testCase.create.tags.placeholder')} />
+                </Form.Item>
+              </Flexbox>
+            ),
+            key: 'advanced',
+            title: t('testCase.create.advanced'),
+          },
+        ]}
+      />
     </Form>
   );
 };

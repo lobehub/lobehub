@@ -4,8 +4,8 @@ import type {
   TaskDetailActivity,
   TaskDetailActivityAuthor,
 } from '@lobechat/types';
-import { Accordion, AccordionItem, Empty, Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Text } from '@lobehub/ui/base-ui';
+import { Empty, Flexbox, Icon } from '@lobehub/ui';
+import { Accordion, Avatar, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import type { TFunction } from 'i18next';
 import type { LucideIcon } from 'lucide-react';
@@ -495,26 +495,30 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
   if (variant === 'result') return <Flexbox gap={12}>{rows}</Flexbox>;
 
   return (
-    <Accordion defaultExpandedKeys={['activities']} gap={0}>
-      <AccordionItem
-        itemKey="activities"
-        paddingBlock={4}
-        paddingInline={8}
-        title={
-          <Flexbox horizontal align="center" gap={8}>
-            <Icon color={cssVar.colorTextDescription} icon={BotMessageSquare} size={16} />
-            <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
-              {t('taskDetail.activities')}
-            </Text>
-          </Flexbox>
-        }
-      >
-        <Flexbox gap={12} paddingBlock={12} paddingInline={12}>
-          {commentInput}
-          {rows}
-        </Flexbox>
-      </AccordionItem>
-    </Accordion>
+    <Accordion
+      defaultValue={['activities']}
+      gap={0}
+      styles={{ header: { paddingBlock: 4, paddingInline: 8 } }}
+      items={[
+        {
+          children: (
+            <Flexbox gap={12} paddingBlock={12} paddingInline={12}>
+              {commentInput}
+              {rows}
+            </Flexbox>
+          ),
+          key: 'activities',
+          title: (
+            <Flexbox horizontal align="center" gap={8}>
+              <Icon color={cssVar.colorTextDescription} icon={BotMessageSquare} size={16} />
+              <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
+                {t('taskDetail.activities')}
+              </Text>
+            </Flexbox>
+          ),
+        },
+      ]}
+    />
   );
 });
 

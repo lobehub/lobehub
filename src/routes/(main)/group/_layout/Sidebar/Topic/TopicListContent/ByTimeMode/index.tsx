@@ -1,6 +1,7 @@
 'use client';
 
-import { Accordion, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { AccordionRoot } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { MoreHorizontal } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -50,10 +51,10 @@ const ByTimeMode = memo(() => {
   return (
     <Flexbox gap={2}>
       {/* Grouped topics */}
-      <Accordion
-        expandedKeys={expandedKeys}
-        gap={2}
-        onExpandedChange={(keys) => setExpandedKeys(keys as string[])}
+      <AccordionRoot
+        style={{ gap: 2 }}
+        value={expandedKeys}
+        onValueChange={(next) => setExpandedKeys(next as string[])}
       >
         {groupTopics.map((group) => (
           <GroupItem
@@ -63,7 +64,7 @@ const ByTimeMode = memo(() => {
             key={group.id}
           />
         ))}
-      </Accordion>
+      </AccordionRoot>
       {isExpandingPageSize && <SkeletonList rows={3} />}
       {hasMore && !isExpandingPageSize && (
         <NavItem icon={MoreHorizontal} title={t('loadMore')} onClick={openAllTopicsDrawer} />

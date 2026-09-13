@@ -1,6 +1,6 @@
 import { CategoryBar, useThemeColorRange } from '@lobehub/charts';
-import { Collapse, Flexbox } from '@lobehub/ui';
-import { Avatar, Skeleton, Tag } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Accordion, Avatar, Skeleton, Tag } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -142,13 +142,16 @@ const ModelTable = memo<UsageChartProps>(({ data, isLoading, groupBy, resolveUse
   return isLoading ? (
     <Skeleton.Text rows={8} />
   ) : (
-    <Collapse
-      defaultActiveKey={formattedData.map((item) => item.id)}
-      expandIconPlacement={'end'}
+    <Accordion
+      defaultValue={formattedData.map((item) => item.id)}
       gap={16}
+      indicatorPlacement={'end'}
+      variant={'outlined'}
       items={formattedData.map((item) => {
         const key = item.id;
         return {
+          action: <Tag>{item?.childrens?.length ?? 0}</Tag>,
+          alwaysShowAction: true,
           children: (
             <Flexbox>
               <CategoryBar
@@ -189,14 +192,10 @@ const ModelTable = memo<UsageChartProps>(({ data, isLoading, groupBy, resolveUse
               />
             </Flexbox>
           ),
-          extra: <Tag>{item?.childrens?.length ?? 0}</Tag>,
           key,
-          label: renderOuterLabel(key),
+          title: renderOuterLabel(key),
         };
       })}
-      padding={{
-        body: 0,
-      }}
     />
   );
 });

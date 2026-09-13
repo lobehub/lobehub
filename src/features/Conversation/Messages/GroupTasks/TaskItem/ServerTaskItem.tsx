@@ -2,7 +2,8 @@
 
 import { type UIChatMessage } from '@lobechat/types';
 import { ThreadStatus } from '@lobechat/types';
-import { AccordionItem, Block } from '@lobehub/ui';
+import { Block } from '@lobehub/ui';
+import { Accordion } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useMemo, useState } from 'react';
 
@@ -55,38 +56,43 @@ const ServerTaskItem = memo<ServerTaskItemProps>(({ item }) => {
   ]);
 
   return (
-    <AccordionItem
-      expand={expanded}
-      itemKey={id}
-      paddingBlock={4}
-      paddingInline={4}
-      title={
-        <TaskTitle
-          metrics={metrics}
-          status={status}
-          title={title}
-          agent={
-            agent
-              ? { avatar: agent.avatar || undefined, backgroundColor: agent.backgroundColor }
-              : undefined
-          }
-        />
-      }
-      onExpandChange={setExpanded}
-    >
-      <Block gap={16} padding={12} style={{ marginBlock: 8 }} variant={'outlined'}>
-        {expanded && (
-          <TaskContent
-            id={id}
-            isError={isError}
-            messages={tasks}
-            status={status}
-            taskDetail={taskDetail}
-            threadId={threadId}
-          />
-        )}
-      </Block>
-    </AccordionItem>
+    <Accordion
+      keepMounted
+      styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
+      value={expanded ? [id] : []}
+      items={[
+        {
+          children: (
+            <Block gap={16} padding={12} style={{ marginBlock: 8 }} variant={'outlined'}>
+              {expanded && (
+                <TaskContent
+                  id={id}
+                  isError={isError}
+                  messages={tasks}
+                  status={status}
+                  taskDetail={taskDetail}
+                  threadId={threadId}
+                />
+              )}
+            </Block>
+          ),
+          key: id,
+          title: (
+            <TaskTitle
+              metrics={metrics}
+              status={status}
+              title={title}
+              agent={
+                agent
+                  ? { avatar: agent.avatar || undefined, backgroundColor: agent.backgroundColor }
+                  : undefined
+              }
+            />
+          ),
+        },
+      ]}
+      onValueChange={(value) => setExpanded(value.includes(id))}
+    />
   );
 }, isEqual);
 

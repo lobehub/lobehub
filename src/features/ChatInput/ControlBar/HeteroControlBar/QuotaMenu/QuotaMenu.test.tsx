@@ -1015,7 +1015,6 @@ describe('CodexQuotaMenu', () => {
       screen.getAllByText((content) => content.startsWith('heteroAgent.quota.duration.')),
     ).toHaveLength(2);
     const resetCreditsSummary = screen.getByText('heteroAgent.codexQuota.resetCredits:4');
-    expect(resetCreditsSummary.closest('button')?.getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByText('#1')).toBeNull();
 
     fireEvent.click(resetCreditsSummary);

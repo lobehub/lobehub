@@ -1,6 +1,6 @@
 import type { GoalGraphSnapshot } from '@lobechat/types';
-import { Accordion, AccordionItem, Flexbox, Markdown } from '@lobehub/ui';
-import { Button, Tag, Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Markdown } from '@lobehub/ui';
+import { Accordion, Button, Tag, Text } from '@lobehub/ui/base-ui';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -110,31 +110,40 @@ export const ExperimentDetail = ({
             )),
           )}
         </Flexbox>
-        <Accordion defaultExpandedKeys={['instruction']} style={{ flexShrink: 0 }}>
-          <AccordionItem itemKey={'instruction'} title={t('goalExperiment.instruction')}>
-            <Text style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-              {view.node.description ?? view.node.title}
-            </Text>
-          </AccordionItem>
-          <AccordionItem
-            itemKey={'inputs'}
-            title={t('goalExperiment.inputs', { count: inputs.length })}
-          >
-            <Flexbox gap={8}>
-              <Text fontSize={12} type={'secondary'}>
-                {t('goalExperiment.inputHint')}
-              </Text>
-              {inputs.map((input) => (
-                <Flexbox gap={4} key={input.workVersionId}>
-                  <Text>{input.work?.title ?? t('goalExperiment.unavailableInput')}</Text>
-                  <Text fontSize={12} style={{ overflowWrap: 'anywhere' }} type={'secondary'}>
-                    {input.workVersionId}
+        <Accordion
+          defaultValue={['instruction']}
+          style={{ flexShrink: 0 }}
+          items={[
+            {
+              children: (
+                <Text style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                  {view.node.description ?? view.node.title}
+                </Text>
+              ),
+              key: 'instruction',
+              title: t('goalExperiment.instruction'),
+            },
+            {
+              children: (
+                <Flexbox gap={8}>
+                  <Text fontSize={12} type={'secondary'}>
+                    {t('goalExperiment.inputHint')}
                   </Text>
+                  {inputs.map((input) => (
+                    <Flexbox gap={4} key={input.workVersionId}>
+                      <Text>{input.work?.title ?? t('goalExperiment.unavailableInput')}</Text>
+                      <Text fontSize={12} style={{ overflowWrap: 'anywhere' }} type={'secondary'}>
+                        {input.workVersionId}
+                      </Text>
+                    </Flexbox>
+                  ))}
                 </Flexbox>
-              ))}
-            </Flexbox>
-          </AccordionItem>
-        </Accordion>
+              ),
+              key: 'inputs',
+              title: t('goalExperiment.inputs', { count: inputs.length }),
+            },
+          ]}
+        />
         {children}
       </Flexbox>
     </Flexbox>

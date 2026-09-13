@@ -3,8 +3,20 @@
 import { imageUrl } from '@lobechat/const';
 import type { AgentArtworkComposition, AgentArtworkStyle } from '@lobechat/prompts';
 import { AGENT_ARTWORK_STYLES } from '@lobechat/prompts';
-import { Accordion, AccordionItem, Center, Flexbox, Icon, Input } from '@lobehub/ui';
-import { ActionIcon, Alert, Avatar, Button, Text, useModalContext } from '@lobehub/ui/base-ui';
+import { Center, Flexbox, Icon, Input } from '@lobehub/ui';
+import {
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
+  AccordionRoot,
+  AccordionTrigger,
+  ActionIcon,
+  Alert,
+  Avatar,
+  Button,
+  Text,
+  useModalContext,
+} from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   CircleUserRound,
@@ -626,124 +638,124 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
 
         {canGenerate ? (
           <>
-            <Accordion
-              expandedKeys={generateExpanded ? [GENERATE_SECTION_KEY] : []}
-              gap={4}
-              onExpandedChange={(keys) => setGenerateExpanded(keys.length > 0)}
+            <AccordionRoot
+              style={{ gap: 4 }}
+              value={generateExpanded ? [GENERATE_SECTION_KEY] : []}
+              onValueChange={(keys) => setGenerateExpanded(keys.length > 0)}
             >
-              <AccordionItem
-                itemKey={GENERATE_SECTION_KEY}
-                paddingBlock={2}
-                paddingInline={0}
-                title={
-                  <Text className={styles.controlLabel}>{t('artworkStudio.generateTitle')}</Text>
-                }
-              >
-                <Flexbox gap={12} paddingBlock={'4px 0'}>
-                  <div className={styles.galleryGrid}>
-                    {GALLERY_STYLES.map((item) => (
-                      <Flexbox
-                        className={`${styles.galleryItem} ${style === item && !useReference ? styles.galleryItemActive : ''}`}
-                        gap={6}
-                        key={item}
-                        role={'button'}
-                        tabIndex={0}
-                        onClick={() => selectStyle(item)}
-                        onKeyDown={keySelect(item)}
-                      >
-                        <div className={styles.galleryThumbWrap}>
-                          <img
-                            alt={t(`artworkStudio.style.${item}`)}
-                            className={styles.galleryThumb}
-                            src={
-                              item === 'lobe'
-                                ? LOBE_STYLE_PREVIEW
-                                : imageUrl(`agent-artwork-styles/style-${item}.webp`)
-                            }
-                          />
-                        </div>
-                        <Text ellipsis className={styles.galleryLabel}>
-                          {t(`artworkStudio.style.${item}`)}
-                        </Text>
-                      </Flexbox>
-                    ))}
-                    {/*
+              <AccordionItem value={GENERATE_SECTION_KEY}>
+                <AccordionHeader>
+                  <AccordionTrigger style={{ paddingBlock: 2, paddingInline: 0 }}>
+                    <Text className={styles.controlLabel}>{t('artworkStudio.generateTitle')}</Text>
+                  </AccordionTrigger>
+                </AccordionHeader>
+                <AccordionPanel>
+                  <Flexbox gap={12} paddingBlock={'4px 0'}>
+                    <div className={styles.galleryGrid}>
+                      {GALLERY_STYLES.map((item) => (
+                        <Flexbox
+                          className={`${styles.galleryItem} ${style === item && !useReference ? styles.galleryItemActive : ''}`}
+                          gap={6}
+                          key={item}
+                          role={'button'}
+                          tabIndex={0}
+                          onClick={() => selectStyle(item)}
+                          onKeyDown={keySelect(item)}
+                        >
+                          <div className={styles.galleryThumbWrap}>
+                            <img
+                              alt={t(`artworkStudio.style.${item}`)}
+                              className={styles.galleryThumb}
+                              src={
+                                item === 'lobe'
+                                  ? LOBE_STYLE_PREVIEW
+                                  : imageUrl(`agent-artwork-styles/style-${item}.webp`)
+                              }
+                            />
+                          </div>
+                          <Text ellipsis className={styles.galleryLabel}>
+                            {t(`artworkStudio.style.${item}`)}
+                          </Text>
+                        </Flexbox>
+                      ))}
+                      {/*
                       A preset says "look like this kind of art"; this says "look
                       like THIS character". It sits in the same row because it is
                       the same choice — what the generation follows — and only one
                       of them can be in effect.
                     */}
-                    <Flexbox
-                      className={`${styles.galleryItem} ${useReference ? styles.galleryItemActive : ''}`}
-                      gap={6}
-                      role={'button'}
-                      tabIndex={0}
-                      onClick={() =>
-                        referenceImage
-                          ? setUseReference(true)
-                          : referenceInputRef.current && openFilePicker(referenceInputRef.current)
-                      }
-                      onKeyDown={(event) => {
-                        if (event.key !== 'Enter' && event.key !== ' ') return;
-                        event.preventDefault();
-                        if (referenceImage) setUseReference(true);
-                        else if (referenceInputRef.current)
-                          openFilePicker(referenceInputRef.current);
-                      }}
-                    >
-                      <div className={styles.galleryThumbWrap}>
-                        {referenceImage ? (
-                          <>
-                            <img
-                              alt={t('artworkStudio.reference.title')}
-                              className={styles.galleryThumb}
-                              src={referenceImage}
-                            />
-                            <ActionIcon
-                              className={styles.referenceRemove}
-                              icon={Trash2}
-                              size={'small'}
-                              title={t('artworkStudio.reference.remove')}
-                              onClick={(event: MouseEvent<HTMLDivElement>) => {
-                                event.stopPropagation();
-                                setUseReference(false);
-                                onReferenceChange();
-                              }}
-                            />
-                          </>
-                        ) : (
-                          <Center className={styles.referenceEmpty}>
-                            <Icon icon={ImagePlus} size={18} />
-                          </Center>
-                        )}
-                      </div>
-                      <Text ellipsis className={styles.galleryLabel}>
-                        {t('artworkStudio.reference.title')}
-                      </Text>
-                    </Flexbox>
-                  </div>
-                  <Input
-                    disabled={generating}
-                    placeholder={t('artworkStudio.direction.placeholder')}
-                    value={direction}
-                    onChange={(event) => setDirection(event.target.value)}
-                  />
-                  <Flexbox horizontal>
-                    <Button
+                      <Flexbox
+                        className={`${styles.galleryItem} ${useReference ? styles.galleryItemActive : ''}`}
+                        gap={6}
+                        role={'button'}
+                        tabIndex={0}
+                        onClick={() =>
+                          referenceImage
+                            ? setUseReference(true)
+                            : referenceInputRef.current && openFilePicker(referenceInputRef.current)
+                        }
+                        onKeyDown={(event) => {
+                          if (event.key !== 'Enter' && event.key !== ' ') return;
+                          event.preventDefault();
+                          if (referenceImage) setUseReference(true);
+                          else if (referenceInputRef.current)
+                            openFilePicker(referenceInputRef.current);
+                        }}
+                      >
+                        <div className={styles.galleryThumbWrap}>
+                          {referenceImage ? (
+                            <>
+                              <img
+                                alt={t('artworkStudio.reference.title')}
+                                className={styles.galleryThumb}
+                                src={referenceImage}
+                              />
+                              <ActionIcon
+                                className={styles.referenceRemove}
+                                icon={Trash2}
+                                size={'small'}
+                                title={t('artworkStudio.reference.remove')}
+                                onClick={(event: MouseEvent<HTMLDivElement>) => {
+                                  event.stopPropagation();
+                                  setUseReference(false);
+                                  onReferenceChange();
+                                }}
+                              />
+                            </>
+                          ) : (
+                            <Center className={styles.referenceEmpty}>
+                              <Icon icon={ImagePlus} size={18} />
+                            </Center>
+                          )}
+                        </div>
+                        <Text ellipsis className={styles.galleryLabel}>
+                          {t('artworkStudio.reference.title')}
+                        </Text>
+                      </Flexbox>
+                    </div>
+                    <Input
                       disabled={generating}
-                      icon={WandSparkles}
-                      type={'fill'}
-                      onClick={() => onGenerate(style, undefined, direction, useReference)}
-                    >
-                      {t('artworkStudio.generate.characterSet')}
-                    </Button>
+                      placeholder={t('artworkStudio.direction.placeholder')}
+                      value={direction}
+                      onChange={(event) => setDirection(event.target.value)}
+                    />
+                    <Flexbox horizontal>
+                      <Button
+                        disabled={generating}
+                        icon={WandSparkles}
+                        type={'fill'}
+                        onClick={() => onGenerate(style, undefined, direction, useReference)}
+                      >
+                        {t('artworkStudio.generate.characterSet')}
+                      </Button>
+                    </Flexbox>
+                    {generationFailed ? (
+                      <Alert showIcon title={t('artworkStudio.generateFailed')} type={'error'} />
+                    ) : null}
                   </Flexbox>
-                  {generationFailed ? (
-                    <Alert showIcon title={t('artworkStudio.generateFailed')} type={'error'} />
-                  ) : null}
-                </Flexbox>
+                </AccordionPanel>
               </AccordionItem>
-            </Accordion>
+            </AccordionRoot>
           </>
         ) : (
           <Center className={styles.noModelBlock} flex={1} gap={12} padding={24}>

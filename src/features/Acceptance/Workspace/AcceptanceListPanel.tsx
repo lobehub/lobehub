@@ -1,8 +1,9 @@
 'use client';
 
-import { Accordion, AccordionItem, Center, Empty, Flexbox, Icon } from '@lobehub/ui';
+import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
 import type { DraggablePanelProps, DropdownItem } from '@lobehub/ui/base-ui';
 import {
+  Accordion,
   ActionIcon,
   Button,
   Checkbox,
@@ -804,46 +805,36 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
             <div className={styles.list}>
               {showGroups ? (
                 <Accordion
-                  expandedKeys={expandedAcceptanceGroupKeys(groups, collapsedGroups)}
                   gap={4}
-                  onExpandedChange={(keys) =>
-                    setCollapsedGroups((previous) =>
-                      nextCollapsedGroupKeys(previous, groups, keys.map(String)),
-                    )
-                  }
-                >
-                  {groups.map((group) => (
-                    <AccordionItem
-                      itemKey={group.key}
-                      key={group.key}
-                      paddingBlock={4}
-                      paddingInline={8}
-                      action={
-                        groupMode === 'project' && projectActionItems ? (
-                          <DropdownMenu
-                            items={projectActionItems(group.projectName ? group.key : undefined)}
-                            placement={'bottomRight'}
-                          >
-                            <ActionIcon
-                              icon={MoreHorizontal}
-                              size={'small'}
-                              title={t('acceptance.workspace.groups.actions')}
-                            />
-                          </DropdownMenu>
-                        ) : undefined
-                      }
-                      title={
-                        <span className={styles.groupTitle}>
-                          {/* The folder reads as "project"; a status or age
-                                bucket is not a folder and must not wear one. */}
-                          {groupMode === 'project' && <Icon icon={FolderClosed} size={14} />}
-                          <span>
-                            {group.name ??
-                              t(group.labelKey as 'acceptance.workspace.groups.ungrouped')}
-                          </span>
+                  styles={{ trigger: { paddingBlock: 4, paddingInline: 8 } }}
+                  value={expandedAcceptanceGroupKeys(groups, collapsedGroups)}
+                  items={groups.map((group) => ({
+                    key: group.key,
+                    action:
+                      groupMode === 'project' && projectActionItems ? (
+                        <DropdownMenu
+                          items={projectActionItems(group.projectName ? group.key : undefined)}
+                          placement={'bottomRight'}
+                        >
+                          <ActionIcon
+                            icon={MoreHorizontal}
+                            size={'small'}
+                            title={t('acceptance.workspace.groups.actions')}
+                          />
+                        </DropdownMenu>
+                      ) : undefined,
+                    title: (
+                      <span className={styles.groupTitle}>
+                        {/* The folder reads as "project"; a status or age
+                              bucket is not a folder and must not wear one. */}
+                        {groupMode === 'project' && <Icon icon={FolderClosed} size={14} />}
+                        <span>
+                          {group.name ??
+                            t(group.labelKey as 'acceptance.workspace.groups.ungrouped')}
                         </span>
-                      }
-                    >
+                      </span>
+                    ),
+                    children: (
                       <div className={styles.groupList}>
                         {group.items.map((item) => (
                           <AcceptanceRow
@@ -856,9 +847,14 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                           />
                         ))}
                       </div>
-                    </AccordionItem>
-                  ))}
-                </Accordion>
+                    ),
+                  }))}
+                  onValueChange={(keys) =>
+                    setCollapsedGroups((previous) =>
+                      nextCollapsedGroupKeys(previous, groups, keys.map(String)),
+                    )
+                  }
+                />
               ) : (
                 items.map((item) => (
                   <AcceptanceRow

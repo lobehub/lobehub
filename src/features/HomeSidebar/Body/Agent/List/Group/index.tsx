@@ -1,5 +1,5 @@
 import { type SidebarGroup } from '@lobechat/types';
-import { Accordion } from '@lobehub/ui';
+import { AccordionRoot } from '@lobehub/ui/base-ui';
 import React, { memo } from 'react';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
@@ -20,14 +20,14 @@ const Group = memo<GroupProps>(({ dataSource }) => {
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
   return (
-    <Accordion
-      expandedKeys={sessionGroupKeys}
-      onExpandedChange={(keys) => updateSystemStatus({ expandSessionGroupKeys: keys as any })}
+    <AccordionRoot
+      value={sessionGroupKeys}
+      onValueChange={(keys) => updateSystemStatus({ expandSessionGroupKeys: keys as any })}
     >
       {dataSource.map((item) => (
         <Item {...item} key={item.id} />
       ))}
-    </Accordion>
+    </AccordionRoot>
   );
 });
 
