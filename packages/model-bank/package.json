@@ -82,6 +82,7 @@
     "./superGrok": "./src/aiModels/superGrok.ts",
     "./taichu": "./src/aiModels/taichu.ts",
     "./tencentcloud": "./src/aiModels/tencentcloud.ts",
+    "./thegrid": "./src/aiModels/thegrid.ts",
     "./togetherai": "./src/aiModels/togetherai.ts",
     "./unsloth": "./src/aiModels/unsloth.ts",
     "./upstage": "./src/aiModels/upstage.ts",
